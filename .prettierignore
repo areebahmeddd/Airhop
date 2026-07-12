@@ -1,0 +1,8 @@
+node_modules/
+bitchat/
+android/
+ios/
+.expo/
+dist/
+build/
+coverage/

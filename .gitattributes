@@ -1,0 +1,82 @@
+# Default: normalize all text files to LF
+* text=auto eol=lf
+
+# JavaScript / TypeScript
+*.ts text eol=lf
+*.tsx text eol=lf
+*.js text eol=lf
+*.jsx text eol=lf
+*.mjs text eol=lf
+*.cjs text eol=lf
+
+# Styles, data, and documentation
+*.css text eol=lf
+*.json text eol=lf
+*.json5 text eol=lf
+*.md text eol=lf
+*.yaml text eol=lf
+*.yml text eol=lf
+*.toml text eol=lf
+*.env text eol=lf
+
+# Android / Kotlin / Gradle
+*.kt text eol=lf
+*.kts text eol=lf
+*.gradle text eol=lf
+*.xml text eol=lf
+*.pro text eol=lf
+
+# iOS / Swift / Xcode
+*.swift text eol=lf
+*.plist text eol=lf
+*.storyboard text eol=lf
+*.xib text eol=lf
+*.xcscheme text eol=lf
+*.xcworkspacedata text eol=lf
+*.strings text eol=lf
+*.xcstrings text eol=lf
+*.entitlements text eol=lf
+*.pbxproj text eol=lf merge=union
+
+# Ruby / CocoaPods
+Podfile text eol=lf
+Gemfile text eol=lf
+*.rb text eol=lf
+*.gemspec text eol=lf
+
+# Unix shell scripts
+*.sh text eol=lf
+
+# Windows scripts
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+# Binary assets
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.webp binary
+*.ico binary
+*.svg binary
+
+# Fonts
+*.ttf binary
+*.otf binary
+*.woff binary
+*.woff2 binary
+*.eot binary
+
+# Media
+*.mp4 binary
+*.mov binary
+
+# Archives
+*.zip binary
+*.gz binary
+*.tar binary
+
+# Compiled and packaged files
+*.aar binary
+*.jar binary
+*.keystore binary

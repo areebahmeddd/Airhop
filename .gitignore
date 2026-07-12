@@ -1,0 +1,90 @@
+# Dependencies
+node_modules/
+.yarn/cache
+.yarn/unplugged
+.yarn/build-state.yml
+.pnp.*
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# React Native
+*.jsbundle
+.metro-health-check*
+
+# Expo
+.expo/
+expo-env.d.ts
+dist/
+web-build/
+
+# TypeScript
+*.tsbuildinfo
+
+# Build output
+build/
+.cache/
+
+# Testing
+coverage/
+.jest-cache/
+
+# Environment and secrets
+.env
+.env.*
+!.env.example
+secrets/
+*.pem
+*.p8
+*.p12
+
+# iOS
+ios/Pods/
+ios/build/
+ios/DerivedData/
+ios/.xcode.env.local
+*.xcworkspace
+!ios/*.xcworkspace
+*.xcuserdata
+*.xccheckout
+*.xcscmblueprint
+
+# Android
+android/.gradle/
+android/app/build/
+android/build/
+android/local.properties
+android/.idea/
+android/captures/
+*.iml
+*.keystore
+!debug.keystore
+
+# Editors and IDEs
+.idea/
+*.swp
+*.swo
+*.sublime-project
+*.sublime-workspace
+
+# Reference implementations (local only)
+bitchat/
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# Temporary and patch files
+*.log
+*.orig
+*.rej
+.temp/
+.tmp/
