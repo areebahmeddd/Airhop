@@ -97,6 +97,7 @@ bitchat is an excellent foundation. Airhop fills the gaps it left open.
 - [ ] `src/core/mesh/packet-codec.ts`: binary encode/decode matching bitchat v2 (`PROTOCOLS.md`, section 2)
 - [ ] `src/core/mesh/flood-router.ts`: TTL flood, jitter 10-220ms, dedup
 - [ ] `src/core/mesh/announce-manager.ts`: signed presence broadcasts
+- [ ] `src/core/crypto/identity.ts`: key generation, Keychain storage, peer ID
 
 **Milestone:** Two phones discover each other and exchange signed ANNOUNCE packets.
 
@@ -105,7 +106,6 @@ bitchat is an excellent foundation. Airhop fills the gaps it left open.
 **Goal:** Full offline BLE mesh chat, bitchat wire-compatible.
 
 - [ ] `src/core/crypto/noise-xx.ts`: Noise XX handshake using `@noble`
-- [ ] `src/core/crypto/identity.ts`: key generation, Keychain storage, peer ID
 - [ ] `src/core/mesh/fragment-manager.ts`: fragmentation / reassembly (469B chunks)
 - [ ] `src/core/mesh/gossip-sync.ts`: GCS filter reconciliation (15s interval)
 - [ ] `src/core/mesh/courier-store.ts`: sealed envelopes, trust tiers
@@ -179,26 +179,7 @@ No new features ship in this range. The focus is production bugs found after lau
 
 **Milestone:** Zero open P0/P1 bugs. BLE state machine stable across Pixel, Samsung, and Xiaomi device classes. Ready to expand to new platforms.
 
-### v1.4.0: Desktop (macOS + Windows)
-
-**Goal:** Native desktop apps, macOS first.
-
-**macOS** is the priority. CoreBluetooth runs on macOS with the same API surface as iOS. The existing Swift `AirhopBLEModule` requires minimal changes. The bitchat project already ships a macOS target, so this path is well-understood.
-
-**Windows** is secondary. BLE is supported via WinRT Bluetooth APIs, but it requires a new native module since the Swift code does not run on Windows. The `react-native-windows` target is the React Native path. This is a separate work stream and ships as a point release after macOS stabilizes.
-
-- [ ] `react-native-macos` target added to the project
-- [ ] `AirhopBLEModule.swift` audited and tested on macOS (CoreBluetooth is identical)
-- [ ] macOS-specific entitlements and sandbox config (`bitchat-macOS.entitlements` as reference)
-- [ ] MultipeerConnectivity enabled on macOS
-- [ ] Mac App Store submission
-- [ ] `react-native-windows` target scoped and scheduled
-- [ ] Windows BLE native module via WinRT Bluetooth APIs
-- [ ] Microsoft Store submission
-
-**Milestone:** A macOS node joins the BLE mesh alongside iOS and Android peers. Windows target scoped and in progress.
-
-### v1.5.0: Web / Browser
+### v1.4.0: Web / Browser
 
 **Goal:** A Nostr-only web companion that shares the TypeScript protocol core.
 
@@ -215,11 +196,25 @@ Browser support is limited by the Web Bluetooth API. Chrome and Edge support it.
 
 **Milestone:** A browser tab exchanges encrypted DMs with an Airhop mobile node over Nostr.
 
+### v1.5.0: Terminal / CLI
+
+**Goal:** A headless Node.js node for Linux, Raspberry Pi, or any server.
+
+The TypeScript protocol core runs in Node.js without React Native. A terminal node participates in the Nostr bridge, acts as a persistent store-and-forward courier, and can run BLE on Linux via BlueZ. Useful for fixed relay infrastructure in a space where phones are not always present.
+
+- [ ] Node.js build target for `src/core/` (strip React Native platform imports)
+- [ ] Linux BLE via `@abandonware/noble` (BlueZ wrapper for Node.js)
+- [ ] CLI interface: join channel, send message, peer list, relay stats
+- [ ] Daemonize support for always-on relay nodes
+- [ ] Docker image for straightforward deployment
+
+**Milestone:** A Raspberry Pi running Airhop CLI relays BLE packets between two mobile nodes.
+
 ### v1.6.0: Smartwatch Companions
 
 **Goal:** Lightweight companion apps for Apple Watch and Wear OS that extend Airhop's interface to the wrist without requiring any change to the core protocol.
 
-Neither watchOS nor Wear OS provide the background BLE execution primitives needed to act as a full mesh relay node. The watch apps are companion interfaces that communicate with the Airhop phone app -- not standalone nodes.
+Neither watchOS nor Wear OS provide the background BLE execution primitives needed to act as a full mesh relay node. The watch apps are companion interfaces that communicate with the Airhop phone app, not standalone nodes.
 
 **Apple Watch (watchOS)**
 Built in SwiftUI using WatchConnectivity to communicate with the iOS Airhop app.
@@ -240,25 +235,30 @@ Built in Kotlin with Jetpack Compose for Wear, using the Wearable Data Layer API
 
 **Milestone:** A user can read incoming messages and trigger a full panic wipe from their wrist on both Apple Watch and Wear OS.
 
-### v1.7.0: Terminal / CLI
+### v1.7.0: Desktop (macOS + Windows)
 
-**Goal:** A headless Node.js node for Linux, Raspberry Pi, or any server.
+**Goal:** Native desktop apps, macOS first.
 
-The TypeScript protocol core runs in Node.js without React Native. A terminal node participates in the Nostr bridge, acts as a persistent store-and-forward courier, and can run BLE on Linux via BlueZ. Useful for fixed relay infrastructure in a space where phones are not always present.
+**macOS** is the priority. CoreBluetooth runs on macOS with the same API surface as iOS. The existing Swift `AirhopBLEModule` requires minimal changes. The bitchat project already ships a macOS target, so this path is well-understood.
 
-- [ ] Node.js build target for `src/core/` (strip React Native platform imports)
-- [ ] Linux BLE via `@abandonware/noble` (BlueZ wrapper for Node.js)
-- [ ] CLI interface: join channel, send message, peer list, relay stats
-- [ ] Daemonize support for always-on relay nodes
-- [ ] Docker image for straightforward deployment
+**Windows** is secondary. BLE is supported via WinRT Bluetooth APIs, but it requires a new native module since the Swift code does not run on Windows. The `react-native-windows` target is the React Native path. This is a separate work stream and ships as a point release after macOS stabilizes.
 
-**Milestone:** A Raspberry Pi running Airhop CLI relays BLE packets between two mobile nodes.
+- [ ] `react-native-macos` target added to the project
+- [ ] `AirhopBLEModule.swift` audited and tested on macOS (CoreBluetooth is identical)
+- [ ] macOS-specific entitlements and sandbox config (`bitchat-macOS.entitlements` as reference)
+- [ ] MultipeerConnectivity enabled on macOS
+- [ ] Mac App Store submission
+- [ ] `react-native-windows` target scoped and scheduled
+- [ ] Windows BLE native module via WinRT Bluetooth APIs
+- [ ] Microsoft Store submission
+
+**Milestone:** A macOS node joins the BLE mesh alongside iOS and Android peers. Windows target scoped and in progress.
 
 ### v1.8.0: SDK / Library
 
 **Goal:** Extract the protocol core into a versioned, documented public package and extend it to other languages before the security audit locks down the API surface.
 
-`src/core/` is already structured as a pure TypeScript library -- named exports, strict mode, no UI coupling. v1.8.0 formalises this into a standalone package. Shipping the SDK before the audit means v1.9.0 covers the public API as well as the internal protocol, and third-party developers building on `@airhop/core` inherit the same cryptographic guarantees.
+`src/core/` is already structured as a pure TypeScript library: named exports, strict mode, no UI coupling. v1.8.0 formalises this into a standalone package. Shipping the SDK before the audit means v1.9.0 covers the public API as well as the internal protocol, and third-party developers building on `@airhop/core` inherit the same cryptographic guarantees.
 
 Developers will be able to build bitchat-compatible applications without reimplementing Noise XX, the GCS gossip filter, Double Ratchet, or the packet codec. More independent implementations of the same wire protocol means a larger, more resilient mesh network for everyone.
 
@@ -288,7 +288,7 @@ The SDK enables organizations and developers to ship purpose-built versions of A
 
 **Goal:** Independent verification of every security guarantee before the v2.0.0 flagship release.
 
-This phase exists because cryptographic correctness cannot be self-certified. The Noise XX state machine, Double Ratchet ratchet steps, key storage boundaries, and packet signing paths all require external eyes before Airhop can be recommended for high-risk use. The v1.8.0 SDK packages (`@airhop/core`, `@airhop/ble`) are included in audit scope -- a public API that ships without independent review is a liability for every downstream developer building on it.
+This phase exists because cryptographic correctness cannot be self-certified. The Noise XX state machine, Double Ratchet ratchet steps, key storage boundaries, and packet signing paths all require external eyes before Airhop can be recommended for high-risk use. The v1.8.0 SDK packages (`@airhop/core`, `@airhop/ble`) are included in the audit scope, because a public API that ships without independent review is a liability for every downstream developer building on it.
 
 - [ ] Engage a third-party security firm (Cure53 or equivalent) for a full cryptographic audit covering `src/core/crypto/`, packet signing, key storage, and the public API surface of `@airhop/core`
 - [ ] Engage a second independent auditor for the BLE mesh layer, Nostr bridge, and `@airhop/ble` (two firms, separate scopes)
@@ -330,13 +330,13 @@ Airhop is built on the premise that private communication should be understandab
 - [ ] Each guide written for developers who want to build on top of Airhop or implement compatible systems independently
 - [ ] YouTube deep-dive series: how the BLE mesh works, how Noise XX is implemented, how Double Ratchet provides forward secrecy, how Cashu tokens transfer offline
 
-### v3.0.0: Federated Protocol Integration
+### v3.0.0: Plugin Integrations
 
-**Goal:** Connect Airhop's identity and messaging layer to the broader decentralized social web via an optional, plugin-based system.
+**Goal:** Extend Airhop with opt-in plugins for social federation and regional payment systems, without touching the core protocol.
 
-Airhop's identity model (Ed25519 keypairs, no accounts) is compatible in spirit with both the [AT Protocol](https://atproto.com) (ATProto, used by Bluesky) and [ActivityPub](https://w3.org/TR/activitypub/) (the W3C standard used by Mastodon, Pixelfed, PeerTube, and the broader Fediverse). v3.0.0 introduces a `FederationPlugin` interface that lets users opt in to bridging their Airhop identity and conversations to these networks.
+Airhop's identity model (Ed25519 keypairs, no accounts) is compatible in spirit with both the [AT Protocol](https://atproto.com) (ATProto, used by Bluesky) and [ActivityPub](https://w3.org/TR/activitypub/) (the W3C standard used by Mastodon, Pixelfed, PeerTube, and the broader Fediverse). v3.0.0 introduces `SocialPlugin` and `PaymentPlugin` interfaces that let users opt in to bridging their Airhop identity to these networks and payment systems. Each plugin is a discrete, auditable integration that users enable individually.
 
-All federation is strictly opt-in. Users who do not enable any plugin are unaffected. The BLE mesh protocol, wire format, and on-device encryption are unchanged.
+All plugins are strictly opt-in. Users who do not enable any plugin are unaffected. The BLE mesh protocol, wire format, and on-device encryption are unchanged. No plugin can access private keys or relay traffic without explicit per-action user confirmation.
 
 #### AT Protocol (Bluesky)
 
@@ -353,14 +353,29 @@ All federation is strictly opt-in. Users who do not enable any plugin are unaffe
 - [ ] Outbound posting: optionally broadcast Airhop public channel messages as ActivityPub Notes
 - [ ] WebFinger lookup for Fediverse contact discovery
 
+#### UPI Payment Plugin (India)
+
+UPI is an overlay on India's IMPS infrastructure operated by NPCI under RBI. Every transaction is a real-time bank-to-bank transfer with full KYC linkage, visible to NPCI and the Indian government. This is structurally incompatible with Airhop's core threat model, so Cashu remains the correct offline payment system.
+
+For Indian users who want to transact in Rupees when online, UPI works cleanly as an opt-in plugin. Android's standard UPI deep link (`upi://pay?pa=...`) lets any UPI-registered app (GPay, PhonePe, BHIM) handle payment initiation with no NPCI API keys required.
+
+- [ ] `UPIPaymentPlugin` implementing the `PaymentPlugin` interface
+- [ ] Deep link payment initiation: `upi://pay?pa=recipient@upi&am=...&cu=INR` (Android only)
+- [ ] Opt-in only, disabled by default
+- [ ] Disclosure shown on enable: "UPI transactions are linked to your verified identity and visible to NPCI. Do not use for sensitive communications."
+- [ ] Only activates when internet is available; no offline UPI
+- [ ] Shares UPI ID as contact info only; no bank details transmitted
+
+> Additional plugins for other integrations can be proposed and documented here as the ecosystem grows.
+
 #### Plugin Architecture
 
-- [ ] Define a `FederationPlugin` interface in `src/core/` that any future protocol can implement
+- [ ] Define a generic `Plugin` interface in `src/core/` with typed subtypes for each integration category, so any future integration can be added without modifying core protocol code
 - [ ] Plugin registry: users see available plugins and opt in per-plugin with explicit permission prompts
-- [ ] Strict data boundary: federation plugins can only access content the user explicitly marks as shareable; BLE mesh traffic is never exposed to plugins
+- [ ] Strict data boundary: plugins can only access content the user explicitly marks as shareable; BLE mesh traffic is never exposed to plugins
 - [ ] Plugin capability model: no plugin can access private keys or contact the network on behalf of the user without a per-action confirmation
 
-**Milestone:** A user can link their Airhop identity to a Bluesky DID and a Mastodon actor, view their Bluesky feed inside Airhop, and optionally cross-post to both networks from a single message input.
+**Milestone:** A user can link their Airhop identity to a Bluesky DID and a Mastodon actor, view their Bluesky feed inside Airhop, and optionally cross-post to both networks. Indian users can initiate UPI payments from a contact's profile when online.
 
 _Personal goal: I hope this thing takes off and I become a millionaire_
 
@@ -459,12 +474,13 @@ Everything else is a TypeScript port of existing bitchat code or an existing npm
 
 ## 7. Competitive Landscape
 
-| Project        | Transport                | Crypto        | Offline | Platform                   |
-| -------------- | ------------------------ | ------------- | ------- | -------------------------- |
-| **bitchat**    | BLE + Nostr              | Noise XX      | Yes     | Native iOS + Android       |
-| **Meshtastic** | LoRa                     | AES-256       | Yes     | Requires hardware          |
-| **Briar**      | BLE + WiFi + Tor         | Signal        | Yes     | Android-only               |
-| **Session**    | Onion routing            | Signal        | Partial | iOS + Android, no BLE      |
-| **Bridgefy**   | BLE + WiFi               | Proprietary   | Yes     | Closed source              |
-| **GoTenna**    | Proprietary radio        | Proprietary   | Yes     | Requires hardware          |
-| **Airhop**     | BLE + WiFi Aware + Nostr | Noise XX + DR | Yes     | React Native iOS + Android |
+| Project                              | Transport                | Crypto        | Offline | Platform                    |
+| ------------------------------------ | ------------------------ | ------------- | ------- | --------------------------- |
+| [Session](https://getsession.org)    | Onion routing            | Signal        | Partial | iOS + Android               |
+| [Bridgefy](https://bridgefy.me)      | BLE + WiFi               | Proprietary   | Yes     | iOS + Android               |
+| [Briar](https://briarproject.org)    | BLE + WiFi + Tor         | Signal        | Yes     | Android                     |
+| [Meshtastic](https://meshtastic.org) | LoRa                     | AES-256       | Yes     | Requires hardware           |
+| [Berty](https://berty.tech)          | BLE + mDNS + Tor         | Noise XX      | Yes     | iOS + Android (open source) |
+| [GoTenna](https://gotennamesh.com)   | Proprietary radio        | Proprietary   | Yes     | Requires hardware           |
+| [bitchat](https://bitchat.free)      | BLE + Nostr              | Noise XX      | Yes     | Native iOS + Android        |
+| [Airhop](https://airhop.free)        | BLE + WiFi Aware + Nostr | Noise XX + DR | Yes     | iOS + Android + Desktop     |

@@ -99,9 +99,9 @@
 - [ ] WiFi Aware native module (Android) + MultipeerConnectivity (iOS)
 - [ ] Chunked file transfer >1 MiB
 - [ ] Video frame capture (react-native-vision-camera)
-- [ ] `0x30 VIDEO_FRAME` packet type
+- [ ] `0x30: videoFrame` packet type (WiFi Direct only)
 
-**Milestone:** Offline video calling over WiFi Aware between two Android phones.
+**Milestone:** Offline video calling over WiFi Aware. Double Ratchet passing test vectors.
 
 ## v0.9.0: Production Hardening
 
@@ -132,28 +132,28 @@ No new features. Production bug fixes, race condition resolution in BLE and cryp
 
 **Milestone:** Zero open P0/P1 bugs. BLE state machine stable across Pixel, Samsung, and Xiaomi device classes. Ready to expand to new platforms.
 
-## v1.4.0: Desktop (macOS + Windows)
-
-- [ ] `react-native-macos` target, macOS BLE via CoreBluetooth
-- [ ] `react-native-windows` target, Windows BLE via WinRT
-- [ ] Mac App Store + Microsoft Store submission
-
-## v1.5.0: Web / Browser
+## v1.4.0: Web / Browser
 
 - [ ] `react-native-web` build, Nostr-only (no BLE mesh in browser)
 - [ ] Chrome and Edge supported; Firefox and Safari unsupported (Web Bluetooth limitation)
 - [ ] PWA manifest, static hosting
+
+## v1.5.0: Terminal / CLI
+
+- [ ] Node.js build target for `src/core/`
+- [ ] Linux BLE via `@abandonware/noble` (BlueZ)
+- [ ] CLI interface + daemonize support + Docker image
 
 ## v1.6.0: Smartwatch Companions
 
 - [ ] Apple Watch app (SwiftUI, WatchConnectivity): message notifications, quick reply, panic wipe trigger
 - [ ] Wear OS app (Kotlin, Compose for Wear, Wearable Data Layer): notifications, quick reply, panic wipe trigger
 
-## v1.7.0: Terminal / CLI
+## v1.7.0: Desktop (macOS + Windows)
 
-- [ ] Node.js build target for `src/core/`
-- [ ] Linux BLE via `@abandonware/noble` (BlueZ)
-- [ ] CLI interface + daemonize support + Docker image
+- [ ] `react-native-macos` target, macOS BLE via CoreBluetooth
+- [ ] `react-native-windows` target, Windows BLE via WinRT
+- [ ] Mac App Store + Microsoft Store submission
 
 ## v1.8.0: SDK / Library
 
@@ -178,11 +178,12 @@ No new features. Production bug fixes, race condition resolution in BLE and cryp
 - [ ] All docs kept in sync with every release; CVEs disclosed publicly with timeline and impact
 - [ ] Audit reports published in full; blog series on building private decentralized applications
 
-## v3.0.0: Federated Protocol Integration
+## v3.0.0: Plugin Integrations
 
-- [ ] `FederationPlugin` interface in `src/core/`
+- [ ] Generic `SocialPlugin` and `PaymentPlugin` interfaces in `src/core/`
 - [ ] AT Protocol (Bluesky): DID association, feed integration, post bridge, follow graph import
 - [ ] ActivityPub (Fediverse): Actor construction, Mastodon inbox/outbox, outbound posting
+- [ ] UPI Payment Plugin: deep link initiation, opt-in only, KYC disclosure required
 - [ ] Plugin registry, per-plugin opt-in, strict data boundary and capability model
 
 ## Blockers

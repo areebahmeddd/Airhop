@@ -22,14 +22,27 @@
   <a href="https://securityscorecards.dev/viewer/?uri=github.com/areebahmeddd/airhop"><img src="https://api.securityscorecards.dev/projects/github.com/areebahmeddd/airhop/badge?style=flat-square" alt="OpenSSF Scorecard" /></a>
 </p>
 
+<p align="center">
+  <a href="https://apps.apple.com/app/bitchat/id000000000">
+    <img src="https://developer.apple.com/assets/elements/badges/download-on-the-app-store.svg" alt="Download on the App Store" height="48" />
+  </a>
+  &nbsp;
+  <a href="https://play.google.com/store/apps/details?id=com.1mindlabs.airhop">
+    <img src="https://play.google.com/intl/en_us/badges/static/images/badges/en_badge_web_generic.png" alt="Get it on Google Play" height="48" />
+  </a>
+</p>
+
 <br />
 
 Airhop is an iOS + Android app (macOS and Windows coming soon) for private, offline-first peer-to-peer communication over [Bluetooth mesh](https://en.wikipedia.org/wiki/Mesh_networking) networks, with [Nostr](https://nostr.com) internet bridging and [Cashu](https://cashu.space) ecash payments. **Our goal is to make censorship-resistant communication available to anyone: during natural disasters, internet blackouts, mass protests, or any situation where networks are unavailable, surveilled, or shut down.**
 
-Built on the foundation of [bitchat](https://bitchat.free), sharing the same [BLE wire protocol](docs/spec/PROTOCOLS.md), [service UUIDs](docs/spec/PROTOCOLS.md#1-ble-identifiers), and security model (extending it with [Double Ratchet](https://signal.org/docs/specifications/doubleratchet/) forward secrecy, [Tor](https://torproject.org) on both platforms, and offline Cashu payments over the mesh).
+Built on the foundation of [bitchat](https://bitchat.free), using the same [BLE wire protocol](docs/spec/PROTOCOLS.md), [service UUIDs](docs/spec/PROTOCOLS.md#1-ble-identifiers) and security model, meaning a device with Airhop installed can automatically discover and join the same mesh as nearby bitchat devices, relay messages and exchange DMs with zero setup. Airhop also extends the protocol with [Double Ratchet](https://signal.org/docs/specifications/doubleratchet/) forward secrecy, [Tor](https://torproject.org) on both platforms and offline Cashu payments (not present in bitchat at the time of writing).
 
 > [!NOTE]
 > Airhop is an independent side project built and maintained by [Areeb Ahmed](https://github.com/areebahmeddd) in his free time. It is not backed by any company or organization, not affiliated with or endorsed by permissionlesstech or the bitchat project, and not an impersonation of any existing app or service.
+
+> [!WARNING]
+> **WIP.** Not externally security-reviewed. All code is personally reviewed and run through the [security review agent](.github/agents/security-review.md) before shipping, but this is not a substitute for a formal audit. Do not rely on its security for sensitive use cases. External audit planned for v1.9.0.
 
 ## Features
 
@@ -121,3 +134,17 @@ Airhop would not exist without the work of the bitchat community. Thank you to e
 | [qalandarov](https://github.com/qalandarov)     | Major contributor to bitchat iOS                                                           |
 | [lollerfirst](https://github.com/lollerfirst)   | Built the georelays toolkit powering `assets/data/relays.csv`                              |
 | [Nadim Kobeissi](https://github.com/mimoo)      | Noise Protocol implementation in bitchat iOS                                               |
+
+## Support
+
+Help keep the project going by making a voluntary donation through our app or website, or simply give this repository a star.
+
+<p align="center">
+  <a href="https://www.star-history.com/#areebahmeddd/Airhop">
+    <picture>
+      <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=areebahmeddd/Airhop&type=Date&theme=dark" />
+      <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=areebahmeddd/Airhop&type=Date" />
+      <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=areebahmeddd/Airhop&type=Date" />
+    </picture>
+  </a>
+</p>

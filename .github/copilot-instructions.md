@@ -86,6 +86,13 @@ Full constant table: [`docs/spec/PROTOCOLS.md`](docs/spec/PROTOCOLS.md)
 - `kebab-case.ts` file naming
 - Files under 400 lines. Split by responsibility if longer.
 
+## Code Style
+
+- Write code and comments in a clear, concise, and factual style that follows standard language and platform conventions.
+- Comment intent, assumptions, constraints, or non-obvious decisions, not the implementation.
+- Prefer clear names over unnecessary comments.
+- Do not use em dashes (`—`) or double hyphens (`--`) in comments or documentation. Avoid AI-style, robotic wording. Keep the language natural and human.
+
 ## Agents Available
 
 - **`@architect`**: architectural compliance review (build order, layer boundaries, protocol compat)
