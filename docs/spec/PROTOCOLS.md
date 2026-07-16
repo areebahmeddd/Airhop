@@ -73,16 +73,16 @@ Offset  Size  Type    Field
 
 > **iOS vs Android divergence:** bitchat-iOS and bitchat-android have different default values for these constants. Airhop uses bitchat-iOS values as canonical unless noted.
 
-| Constant                       | Airhop / iOS                                        | bitchat-Android                                | Notes                                     |
-| ------------------------------ | --------------------------------------------------- | ---------------------------------------------- | ----------------------------------------- |
-| Sync interval                  | `15 seconds`                                        | `30 seconds`                                   | How often REQUEST_SYNC is broadcast       |
-| Triggered sync delay           | `5 seconds`                                         | `5 seconds`                                    | After first announce from new direct peer |
-| Gossip cache size              | `1000 packets`                                      | `100 packets`                                  | Rolling seen-packet set for GCS           |
-| GCS filter false positive rate | `1/10000`                                           | `1%` (configurable 0.1%–5%)                    | iOS is 100× stricter                      |
-| GCS filter size (Android)      | n/a                                                 | `128–1024 bytes` (default 256)                 | iOS uses different sizing                 |
-| GCS hash function              | [SipHash-2-4](https://www.131002.net/siphash/)      | [SipHash-2-4](https://www.131002.net/siphash/) | Same                                      |
-| Packet ID for GCS              | `SHA-256(type\|senderID\|timestamp\|payload)[0:16]` | same                                           | 128-bit deterministic ID                  |
-| Sync scope                     | local only                                          | local only                                     | REQUEST_SYNC is not relayed               |
+| Constant                       | Airhop / iOS                                        | bitchat-Android                            | Notes                                     |
+| ------------------------------ | --------------------------------------------------- | ------------------------------------------ | ----------------------------------------- |
+| Sync interval                  | `15 seconds`                                        | `30 seconds`                               | How often REQUEST_SYNC is broadcast       |
+| Triggered sync delay           | `5 seconds`                                         | `5 seconds`                                | After first announce from new direct peer |
+| Gossip cache size              | `1000 packets`                                      | `100 packets`                              | Rolling seen-packet set for GCS           |
+| GCS filter false positive rate | `1/10000`                                           | `1%` (configurable 0.1%–5%)                | iOS is 100× stricter                      |
+| GCS filter size (Android)      | n/a                                                 | `128–1024 bytes` (default 256)             | iOS uses different sizing                 |
+| GCS hash function              | [SipHash-2-4](https://131002.net/siphash/)          | [SipHash-2-4](https://131002.net/siphash/) | Same                                      |
+| Packet ID for GCS              | `SHA-256(type\|senderID\|timestamp\|payload)[0:16]` | same                                       | 128-bit deterministic ID                  |
+| Sync scope                     | local only                                          | local only                                 | REQUEST_SYNC is not relayed               |
 
 ## 6. Store-and-Forward (Courier) Constants
 

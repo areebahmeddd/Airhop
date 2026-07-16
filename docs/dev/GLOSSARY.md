@@ -10,7 +10,7 @@
 
 **[HKDF](https://datatracker.ietf.org/doc/html/rfc5869)**: HMAC-based Key Derivation Function. Derives session keys and subkeys from Diffie-Hellman shared secrets inside the Noise handshake and Double Ratchet.
 
-**[SipHash-2-4](https://www.131002.net/siphash/)**: A fast keyed hash designed to resist hash-flooding attacks. Used as the hash function inside GCS filters during gossip sync.
+**[SipHash-2-4](https://131002.net/siphash/)**: A fast keyed hash designed to resist hash-flooding attacks. Used as the hash function inside GCS filters during gossip sync.
 
 **[ChaCha20-Poly1305](https://datatracker.ietf.org/doc/html/rfc7539)**: An authenticated encryption cipher (AEAD). Used as the symmetric cipher inside the Noise XX and Noise X handshakes.
 
@@ -26,11 +26,11 @@
 
 **[BLE (Bluetooth Low Energy)](https://en.wikipedia.org/wiki/Bluetooth_Low_Energy)**: A low-power Bluetooth variant for short-range device communication. The primary offline transport in Airhop; every device acts as both a GATT Central and GATT Peripheral simultaneously.
 
-**[GATT (Generic Attribute Profile)](https://www.bluetooth.com/specifications/specs/)**: The client-server protocol layered on top of BLE. A GATT Central scans and connects; a GATT Peripheral advertises and accepts connections. Airhop runs both roles on the same device to form a mesh.
+**[GATT (Generic Attribute Profile)](https://bluetooth.com/specifications/specs/)**: The client-server protocol layered on top of BLE. A GATT Central scans and connects; a GATT Peripheral advertises and accepts connections. Airhop runs both roles on the same device to form a mesh.
 
 **TTL (Time To Live)**: A counter embedded in each BLE packet. Every relay node decrements it by one before forwarding; the packet is dropped when TTL reaches zero. Default TTL is 7, bounding propagation to 7 hops.
 
-**[WiFi Aware](https://www.wi-fi.org/discover-wi-fi/wi-fi-aware)**: An Android API (API 26+) for direct device-to-device WiFi connections without a router or internet connection. Provides up to 250 Mbps at ~30 m range. Used in v0.8.0 for high-bandwidth transfers on Android.
+**[WiFi Aware](https://wi-fi.org/discover-wi-fi/wi-fi-aware)**: An Android API (API 26+) for direct device-to-device WiFi connections without a router or internet connection. Provides up to 250 Mbps at ~30 m range. Used in v0.8.0 for high-bandwidth transfers on Android.
 
 **[MultipeerConnectivity](https://developer.apple.com/documentation/multipeerconnectivity)**: Apple's framework for peer-to-peer networking between iOS and macOS devices over WiFi or Bluetooth without a router. Used in v0.8.0 for high-bandwidth transfers on iOS.
 

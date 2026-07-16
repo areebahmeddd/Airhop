@@ -334,7 +334,7 @@ Airhop is built on the premise that private communication should be understandab
 
 **Goal:** Connect Airhop's identity and messaging layer to the broader decentralized social web via an optional, plugin-based system.
 
-Airhop's identity model (Ed25519 keypairs, no accounts) is compatible in spirit with both the [AT Protocol](https://atproto.com) (ATProto, used by Bluesky) and [ActivityPub](https://www.w3.org/TR/activitypub/) (the W3C standard used by Mastodon, Pixelfed, PeerTube, and the broader Fediverse). v3.0.0 introduces a `FederationPlugin` interface that lets users opt in to bridging their Airhop identity and conversations to these networks.
+Airhop's identity model (Ed25519 keypairs, no accounts) is compatible in spirit with both the [AT Protocol](https://atproto.com) (ATProto, used by Bluesky) and [ActivityPub](https://w3.org/TR/activitypub/) (the W3C standard used by Mastodon, Pixelfed, PeerTube, and the broader Fediverse). v3.0.0 introduces a `FederationPlugin` interface that lets users opt in to bridging their Airhop identity and conversations to these networks.
 
 All federation is strictly opt-in. Users who do not enable any plugin are unaffected. The BLE mesh protocol, wire format, and on-device encryption are unchanged.
 
