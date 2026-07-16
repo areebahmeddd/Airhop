@@ -9,11 +9,11 @@ Airhop is a **cross-platform (iOS + Android) React Native application** for priv
 It is a **spiritual fork of bitchat** ([permissionlesstech/bitchat](https://github.com/permissionlesstech/bitchat)). We share bitchat's BLE wire protocol, service UUIDs, security model, and Nostr transport. We are not competitors. We are builders on the same open foundation, extending it with:
 
 - A single TypeScript codebase (vs. two diverging native apps that regularly break cross-platform compat)
-- Live PTT voice from day 1 (designed but never shipped in bitchat)
+- Live PTT voice from day 1 (designed but never shipped in bitchat _at the time of writing_)
 - Cashu ecash payments that work offline over BLE
 - Double Ratchet forward secrecy for all stored messages
 - WiFi Aware / Multipeer transport for high-bandwidth use cases (video, large files)
-- Tor on both iOS and Android (bitchat iOS only)
+- Tor on both iOS and Android (bitchat iOS only _at the time of writing_)
 - Human-readable identities and QR contact exchange
 
 ## Core Principles
@@ -64,3 +64,4 @@ Do not open a PR for a UI component until the underlying `src/core/` service bac
 - Live PTT voice works clearly across a 3-device BLE relay chain
 - The cryptographic implementation (Noise XX + Double Ratchet) passes an independent security audit
 - Both iOS and Android ship the same features, with the same behavior, on the same day
+- Censorship-resistant communication is available to anyone, anywhere: during natural disasters, internet blackouts, mass protests, or any situation where networks are unavailable, surveilled, or shut down

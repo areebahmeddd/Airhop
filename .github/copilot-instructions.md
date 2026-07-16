@@ -4,7 +4,7 @@
 
 ## What This Project Is
 
-**Airhop** is a React Native (Expo bare workflow, RN 0.86+ New Architecture) cross-platform iOS + Android application for **offline-first, private peer-to-peer communication** over Bluetooth mesh networks, with Nostr internet bridging and Cashu ecash payments.
+**Airhop** is a React Native (Expo SDK 57, RN 0.86+, bare workflow, New Architecture) cross-platform iOS + Android application for **offline-first, private peer-to-peer communication** over Bluetooth mesh networks, with Nostr internet bridging and Cashu ecash payments.
 
 It is **wire-protocol-compatible with bitchat** (`permissionlesstech/bitchat`, `permissionlesstech/bitchat-android`), both under the Unlicense (public domain). Airhop nodes and bitchat nodes communicate over BLE without configuration. The source code for both bitchat implementations is in this workspace as reference:
 
@@ -63,7 +63,7 @@ assets/data/    # relays.csv (bundled from bitchat/georelays/, CI-refreshed)
 docs/
   design/       # VISION.md, ROADMAP.md
   spec/         # ARCHITECTURE.md, PROTOCOLS.md
-  dev/          # CONTRIBUTING.md, PROGRESS.md, REFERENCE.md
+  dev/          # PROGRESS.md, REFERENCE.md
 .github/agents/ # specialized Copilot agents
 ```
 

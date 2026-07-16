@@ -1,4 +1,8 @@
-# Airhop: Contributing & Development Guide
+# Contributing & Development Guide
+
+Thanks for your interest in contributing to Airhop. This guide covers coding standards, crypto rules, testing requirements, and the pull request process.
+
+By participating, you agree to follow our [Code of Conduct](CODE_OF_CONDUCT.md).
 
 > Standards for everyone working in this codebase, for human contributors and AI agents alike. If it isn't in the code and isn't here, it doesn't exist as a standard.
 
@@ -6,10 +10,10 @@
 
 Every contributor reads these documents before writing a single line of code, in this order:
 
-1. [`docs/design/VISION.md`](../design/VISION.md): what Airhop is and what it will never compromise on
-2. [`docs/spec/PROTOCOLS.md`](../spec/PROTOCOLS.md): the wire format and exact constants you must not break
-3. [`docs/spec/ARCHITECTURE.md`](../spec/ARCHITECTURE.md): the architecture decisions and why they were made
-4. [`docs/dev/PROGRESS.md`](PROGRESS.md): current build state; what's done and what's next
+1. [`docs/design/VISION.md`](docs/design/VISION.md): what Airhop is and what it will never compromise on
+2. [`docs/spec/PROTOCOLS.md`](docs/spec/PROTOCOLS.md): the wire format and exact constants you must not break
+3. [`docs/spec/ARCHITECTURE.md`](docs/spec/ARCHITECTURE.md): the architecture decisions and why they were made
+4. [`docs/dev/PROGRESS.md`](docs/dev/PROGRESS.md): current build state; what's done and what's next
 
 Skipping this step causes rework.
 
@@ -97,7 +101,17 @@ Before opening any pull request:
 - [ ] `docs/dev/PROGRESS.md` updated if a milestone was completed or a decision was made
 - [ ] If touching `src/core/` or `android/` or `ios/`: invoke `@architect` agent for review
 
-## 8. AI Agent Usage
+## 8. Commit Sign-Off (DCO)
+
+All commits must include a `Signed-off-by` trailer. Use `git commit -s` to add it automatically:
+
+```
+Signed-off-by: Your Name <your@email.com>
+```
+
+This certifies that you agree to the [Developer Certificate of Origin](https://developercertificate.org/): that you wrote the contribution or have the right to submit it under this project's license.
+
+## 9. AI Agent Usage
 
 Three specialized agents are available in `.github/agents/`. Invoke them via VS Code Copilot chat.
 
@@ -116,7 +130,7 @@ Three specialized agents are available in `.github/agents/`. Invoke them via VS 
 **When:** Before any PR touching `src/core/crypto/`, key storage, or packet signing code.  
 **What it checks:** Crypto compliance, key storage, packet signing, OWASP Mobile Top 10.
 
-## 9. Upstream bitchat Sync Process
+## 10. Upstream bitchat Sync Process
 
 When bitchat publishes a new version:
 
@@ -129,7 +143,7 @@ When bitchat publishes a new version:
 3. Adopt security patches within 48 hours of identification.
 4. Record each decision in `docs/dev/PROGRESS.md` decision log with date and rationale.
 
-## 10. Dependency Policy
+## 11. Dependency Policy
 
 - No new dependencies without discussion.
 - New production dependencies must be: audited (Cure53 or equivalent), actively maintained (commit in last 6 months), and have a clear TypeScript interface.

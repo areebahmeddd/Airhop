@@ -193,15 +193,15 @@ Identical to bitchat's proven design:
 
 ### WiFi Aware / Multipeer Transport (Phase 3)
 
-- **Android**: `WifiAwareManager` API (API 26+): 250 Mbps, no internet, no router
-- **iOS**: `MultipeerConnectivity`: 30–100 Mbps between nearby iOS devices
+- **Android**: [`WifiAwareManager`](https://developer.android.com/develop/connectivity/wifi/wifi-aware) API (API 26+): 250 Mbps, no internet, no router
+- **iOS**: [`MultipeerConnectivity`](https://developer.apple.com/documentation/multipeerconnectivity): 30–100 Mbps between nearby iOS devices
 - Same `Transport` interface as BLE; mesh engine doesn't care which radio
 - Enables: live video, large files, high-quality voice (anything BLE can't support
 
 ### Nostr Internet Transport
 
-- **290+ public relays** (georelays dataset, bundled as `assets/data/relays.csv`)
-- **Geographic relay selection**: Haversine distance from device location to relay server → lowest latency
+- **350+ public relays** (georelays dataset, bundled as `assets/data/relays.csv`)
+- **Geographic relay selection**: [Haversine](https://en.wikipedia.org/wiki/Haversine_formula) distance from device location to relay server → lowest latency
 - **NIP-17 gift-wrap** for private DMs (metadata-minimal, no message content on relays)
 - **Kind 20000/20001**: geohash public channels and presence heartbeats
 - **Tor-proxied by default** on iOS (Arti); optional via Orbot on Android
@@ -221,9 +221,9 @@ Used for all live BLE DM sessions:
 - **Forward secrecy**: ephemeral keys generated fresh per session; compromise of static key doesn't expose past sessions
 - **Deniability**: after session, neither party can prove to a third party what was said
 
-The XX handshake produces two symmetric keys (`send`, `recv`). Messages are then encrypted with ChaCha20-Poly1305 using a counter nonce (preventing replay).
+The XX handshake produces two symmetric keys (`send`, `recv`). Messages are then encrypted with [ChaCha20-Poly1305](https://datatracker.ietf.org/doc/html/rfc7539) using a counter nonce (preventing replay).
 
-### Persistent Message Encryption: Double Ratchet
+### Persistent Message Encryption: [Double Ratchet](https://signal.org/docs/specifications/doubleratchet/)
 
 ```
 Algorithm: Signal Double Ratchet (same as Signal/WhatsApp)
@@ -234,9 +234,9 @@ Used for all DMs stored in the courier / offline outbox:
 
 - **Per-message forward secrecy**: compromise of message N does not expose messages N-1 or N+1
 - **Break-in recovery**: if an attacker learns current keys, future messages are still protected after a few ratchet steps
-- **Prekey bundles**: published to Nostr, allowing initiating a ratchet to an offline peer
+- **Prekey bundles**: initialized via [X3DH](https://signal.org/docs/specifications/x3dh/) and published to Nostr, allowing initiating a ratchet to an offline peer
 
-### Packet Signing: Ed25519
+### Packet Signing: [Ed25519](https://ed25519.cr.yp.to/)
 
 Every packet carries an Ed25519 signature from the sender:
 
@@ -258,7 +258,7 @@ Nostr DM:             NIP-44 encryption (XChaCha20-Poly1305, versioned) + NIP-17
 
 ### Wire format (bitchat v2, binary)
 
-Airhop is **100% wire-compatible with bitchat**. Airhop nodes appear as normal peers to bitchat devices on the mesh. Unknown packet types (Airhop extensions) are silently dropped by bitchat. No disruption..
+Airhop is **100% wire-compatible with bitchat**. Airhop nodes appear as normal peers to bitchat devices on the mesh. Unknown packet types (Airhop extensions) are silently dropped by bitchat. No disruption.
 
 > **See [`docs/spec/PROTOCOLS.md`](../spec/PROTOCOLS.md) for the complete byte layout (section 2), packet type registry (section 3), routing constants (section 4), and all other protocol constants.**
 
@@ -370,11 +370,11 @@ When internet is available, users can send **Nutzaps** (NIP-61):
 
 ### Tor: Both Platforms
 
-| Platform        | Tor Integration                                                           | Default               |
-| --------------- | ------------------------------------------------------------------------- | --------------------- |
-| iOS             | **Arti** Rust xcframework (same as bitchat-ios), embedded in app binary   | On by default         |
-| Android Phase 1 | **Orbot** proxy detection: SOCKS5 on `localhost:9050` if Orbot is running | Optional, with prompt |
-| Android Phase 2 | Embed `tor` binary in APK (legal, Tor Project permits)                    | On by default         |
+| Platform        | Tor Integration                                                                                                                        | Default               |
+| --------------- | -------------------------------------------------------------------------------------------------------------------------------------- | --------------------- |
+| iOS             | **[Arti](https://gitlab.torproject.org/tpo/core/arti)** Rust xcframework (same as bitchat-ios), embedded in app binary                 | On by default         |
+| Android Phase 1 | **[Orbot](https://guardianproject.info/apps/org.torproject.android/)** proxy detection: SOCKS5 on `localhost:9050` if Orbot is running | Optional, with prompt |
+| Android Phase 2 | Embed `tor` binary in APK (legal, Tor Project permits)                                                                                 | On by default         |
 
 Tor is used exclusively for **Nostr relay connections**. BLE traffic is radio-local and cannot be routed through Tor.
 
@@ -493,7 +493,7 @@ Each decision records what was considered, what was chosen, and why.
 | **XMPP**            | ❌              | Same: requires always-on server. Complex extension ecosystem. Limited offline story.                                                                                      |
 | **Signal Protocol** | ❌ (as network) | Signal the company owns the relay infrastructure. Requires phone number. Not permissionless.                                                                              |
 | **SimpleX**         | ✅ Close second | No persistent identifiers, privacy-first. But no BLE mesh story, smaller ecosystem, fewer relays.                                                                         |
-| **Nostr**           | ✅ Chosen       | Permissionless keypair identity. 290+ independent relays. Active ecosystem. NIP-17 gift-wrap for private DMs. NIP-61 for payments. bitchat already validated this choice. |
+| **Nostr**           | ✅ Chosen       | Permissionless keypair identity. 350+ independent relays. Active ecosystem. NIP-17 gift-wrap for private DMs. NIP-61 for payments. bitchat already validated this choice. |
 
 ### Why Noise XX and not TLS/Signal's X3DH?
 
@@ -962,7 +962,7 @@ export class NostrDMTransport {
 
 | Package                  | Version  | Purpose                   | License |
 | ------------------------ | -------- | ------------------------- | ------- |
-| Custom `AirhopBLEModule` | internal | BLE GATT Server + Central | —       |
+| Custom `AirhopBLEModule` | internal | BLE GATT Server + Central | N/A     |
 
 ### Media / Voice (Phase 2)
 

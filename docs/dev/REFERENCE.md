@@ -59,7 +59,7 @@ The tagline: _"the side-groupchat."_
  │  BLE Mesh        │             │  Nostr Transport   │
  │  (Transport 1)   │             │  (Transport 2)     │
  │  - GATT Central  │             │  - NIP-17 gift-wrap│
- │  - GATT Periph.  │             │  - 290+ relays     │
+ │  - GATT Periph.  │             │  - 350+ relays     │
  │  - TTL=7 flood   │             │  - Tor by default  │
  │  - Noise XX E2E  │             │  - Geohash channels│
  └──────────────────┘             └────────────────────┘
@@ -117,7 +117,7 @@ Every BLE packet is a compact binary structure:
 - **Version 2** packets may carry an explicit **source route** (array of peer ID hops).
 - **Signatures** (Ed25519) exclude the TTL byte so relays can decrement it without invalidating them.
 - Packets are **padded** toward uniform sizes to defeat traffic analysis.
-- **LZ4 compression** is applied to message payloads before they are sent.
+- **[LZ4](https://lz4.github.io/lz4/) compression** is applied to message payloads before they are sent.
 
 ### 3.3 Controlled Flood Routing
 
@@ -219,7 +219,8 @@ This means relays learn neither who is talking to whom nor what they are saying.
 
 All Nostr and geodata traffic on iOS routes through a **Tor SOCKS5 proxy** by default (fail-closed):
 
-- Uses **Arti** (Rust implementation of Tor) bundled as an xcframework.
+Uses **Arti** (Rust implementation of Tor) bundled as an xcframework.
+
 - SOCKS5 on `127.0.0.1:39050`.
 - `TorURLSession` wraps all URL sessions; `TorManager` manages lifecycle.
 - `NostrRelayManager` and `GeoRelayDirectory` both await Tor readiness before starting.
@@ -228,7 +229,7 @@ All Nostr and geodata traffic on iOS routes through a **Tor SOCKS5 proxy** by de
 
 ### 4.5 Relay Network
 
-- **290+ relays** worldwide (as of mid-2026).
+- **350+ relays** worldwide (as of mid-2026).
 - The `georelays` repository tracks and geolocates all bitchat-capable relays.
 - The iOS app bundles a `nostr_relays.csv` fallback and fetches live updates from `georelays`.
 - The `GeoRelayDirectory` selects the closest relay(s) to a geohash coordinate for location channels.
@@ -353,7 +354,7 @@ The most novel mechanism. When no transport can deliver:
 ### 6.3 Gossip Sync (Public History)
 
 - Public broadcast messages are **cached (1,000 packets)** and reconciled between peers every **~15 seconds**.
-- Uses **Golomb-Coded Set (GCS) filters** (like Bitcoin's compact block filters): each side advertises what it holds, the other returns what is missing.
+- Uses **[Golomb-Coded Set](https://en.wikipedia.org/wiki/Golomb_coding) (GCS) filters** (like Bitcoin's compact block filters): each side advertises what it holds, the other returns what is missing.
 - Messages stay sync-able for **6 hours** (fragments and file transfers: 15 minutes).
 - Cache persists to disk so a device that walks between two partitions, or relaunches later, serves the room's recent history.
 
@@ -661,7 +662,7 @@ The iOS `GeoRelayDirectory` class:
 
 ### Scale
 
-- ~290+ total Nostr relays worldwide.
+- ~350+ total Nostr relays worldwide.
 - Subset support kind 20000 (bitchat-specific).
 - Coverage maps and heatmaps tracked in `georelays/assets/`.
 - IPv4-only geolocation (IPv6-only relays are skipped).
@@ -823,7 +824,7 @@ No forensic recovery is possible after panic wipe without the Keychain, which is
 | **Push notifications**           | Background delivery is limited by OS restrictions (especially iOS)                                              |
 | **Large file transfers**         | 1 MiB cap; no chunked streaming or resumable transfers                                                          |
 | **No read receipts on Nostr**    | Read receipts work on BLE but not reliably over Nostr                                                           |
-| **Relay quality variance**       | Not all 290+ relays reliably accept kind 20000; `filter_bitchat_relays.sh` filters but results change over time |
+| **Relay quality variance**       | Not all 350+ relays reliably accept kind 20000; `filter_bitchat_relays.sh` filters but results change over time |
 | **Android battery optimization** | Many Android OEMs aggressively kill background apps, disrupting BLE mesh                                        |
 
 ### Protocol Gaps

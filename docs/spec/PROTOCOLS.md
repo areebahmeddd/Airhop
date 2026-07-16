@@ -2,7 +2,7 @@
 
 > **This is the spec sheet.** Exact constants, byte layouts, and UUIDs. When writing `packet-codec.ts` or the native BLE module, read this document. When in doubt about a value, this document wins.
 >
-> Source of truth cross-referenced with: `bitchat-ios/BLEService.swift`, `bitchat-android/MeshCore.kt`, `bitchat-android/BluetoothGattClientManager.kt`
+> Source of truth cross-referenced with: `bitchat/ios/BLEService.swift`, `bitchat/android/MeshCore.kt`, `bitchat/android/BluetoothGattClientManager.kt`
 
 ## 1. BLE Identifiers
 
@@ -73,16 +73,16 @@ Offset  Size  Type    Field
 
 > **iOS vs Android divergence:** bitchat-iOS and bitchat-android have different default values for these constants. Airhop uses bitchat-iOS values as canonical unless noted.
 
-| Constant                       | Airhop / iOS                                        | bitchat-Android                | Notes                                     |
-| ------------------------------ | --------------------------------------------------- | ------------------------------ | ----------------------------------------- |
-| Sync interval                  | `15 seconds`                                        | `30 seconds`                   | How often REQUEST_SYNC is broadcast       |
-| Triggered sync delay           | `5 seconds`                                         | `5 seconds`                    | After first announce from new direct peer |
-| Gossip cache size              | `1000 packets`                                      | `100 packets`                  | Rolling seen-packet set for GCS           |
-| GCS filter false positive rate | `1/10000`                                           | `1%` (configurable 0.1%–5%)    | iOS is 100× stricter                      |
-| GCS filter size (Android)      | n/a                                                 | `128–1024 bytes` (default 256) | iOS uses different sizing                 |
-| GCS hash function              | SipHash-2-4                                         | SipHash-2-4                    | Same                                      |
-| Packet ID for GCS              | `SHA-256(type\|senderID\|timestamp\|payload)[0:16]` | same                           | 128-bit deterministic ID                  |
-| Sync scope                     | local only                                          | local only                     | REQUEST_SYNC is not relayed               |
+| Constant                       | Airhop / iOS                                        | bitchat-Android                                | Notes                                     |
+| ------------------------------ | --------------------------------------------------- | ---------------------------------------------- | ----------------------------------------- |
+| Sync interval                  | `15 seconds`                                        | `30 seconds`                                   | How often REQUEST_SYNC is broadcast       |
+| Triggered sync delay           | `5 seconds`                                         | `5 seconds`                                    | After first announce from new direct peer |
+| Gossip cache size              | `1000 packets`                                      | `100 packets`                                  | Rolling seen-packet set for GCS           |
+| GCS filter false positive rate | `1/10000`                                           | `1%` (configurable 0.1%–5%)                    | iOS is 100× stricter                      |
+| GCS filter size (Android)      | n/a                                                 | `128–1024 bytes` (default 256)                 | iOS uses different sizing                 |
+| GCS hash function              | [SipHash-2-4](https://www.131002.net/siphash/)      | [SipHash-2-4](https://www.131002.net/siphash/) | Same                                      |
+| Packet ID for GCS              | `SHA-256(type\|senderID\|timestamp\|payload)[0:16]` | same                                           | 128-bit deterministic ID                  |
+| Sync scope                     | local only                                          | local only                                     | REQUEST_SYNC is not relayed               |
 
 ## 6. Store-and-Forward (Courier) Constants
 
@@ -97,17 +97,17 @@ Offset  Size  Type    Field
 
 ## 7. Cryptographic Constants
 
-| Constant                      | Value                                          |
-| ----------------------------- | ---------------------------------------------- |
-| **Noise XX algorithm string** | `Noise_XX_25519_ChaChaPoly_SHA256`             |
-| **Noise X algorithm string**  | `Noise_X_25519_ChaChaPoly_SHA256`              |
-| DH function                   | Curve25519 (X25519)                            |
-| AEAD cipher                   | ChaCha20-Poly1305                              |
-| Hash function                 | SHA-256                                        |
-| Noise static key type         | X25519 (32-byte scalar)                        |
-| Signing key type              | Ed25519                                        |
-| Peer ID derivation            | `hex(SHA-256(noiseStaticPubKey)).slice(0, 16)` |
-| Nostr DM encryption           | NIP-44 (XChaCha20-Poly1305, versioned)         |
+| Constant                      | Value                                                              |
+| ----------------------------- | ------------------------------------------------------------------ |
+| **Noise XX algorithm string** | `Noise_XX_25519_ChaChaPoly_SHA256`                                 |
+| **Noise X algorithm string**  | `Noise_X_25519_ChaChaPoly_SHA256`                                  |
+| DH function                   | Curve25519 (X25519)                                                |
+| AEAD cipher                   | [ChaCha20-Poly1305](https://datatracker.ietf.org/doc/html/rfc7539) |
+| Hash function                 | SHA-256                                                            |
+| Noise static key type         | X25519 (32-byte scalar)                                            |
+| Signing key type              | [Ed25519](https://ed25519.cr.yp.to/)                               |
+| Peer ID derivation            | `hex(SHA-256(noiseStaticPubKey)).slice(0, 16)`                     |
+| Nostr DM encryption           | NIP-44 (XChaCha20-Poly1305, versioned)                             |
 
 ## 8. Identity & Nostr Constants
 
