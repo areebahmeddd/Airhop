@@ -29,7 +29,7 @@ bitchat is an excellent foundation. Airhop fills the gaps it left open.
 ### Gap 5: Tor on iOS and Android
 
 **bitchat problem:** Tor on iOS only (via Arti xcframework) at the time of writing. Android has no Tor integration.  
-**Airhop:** Orbot (SOCKS5 on localhost:9050) detection for short-term. Long-term: embedded `tor` binary in APK.
+**Airhop (v0.7.0):** iOS embeds `arti.xcframework` with a full `AirhopTorManager` (SOCKS5 on port 39050, bootstrap monitor, network path recovery). Android detects Orbot via a TCP probe on localhost:9050. Both platforms route Nostr traffic through the detected proxy.
 
 ### Gap 6: Double Ratchet for Offline Mail
 
@@ -116,22 +116,26 @@ bitchat is an excellent foundation. Airhop fills the gaps it left open.
 
 **Milestone:** Full offline BLE mesh chat. Airhop ↔ bitchat message delivery verified.
 
-### v0.7.0: Internet Bridge + Voice + Payments
+### v0.7.0: Internet Bridge + Voice + Payments ✅
 
 **Goal:** Nostr fallback, live PTT voice, Cashu ecash.
 
-- [ ] `src/core/nostr/client.ts`: SimplePool, auto-reconnect
-- [ ] `src/core/nostr/gift-wrap.ts`: NIP-17/59 gift-wrap DMs
-- [ ] `src/core/nostr/geo-relay.ts`: Haversine nearest relay from bundled CSV
-- [ ] `src/core/nostr/presence.ts`: kind 20001 geohash heartbeats
-- [ ] `CourierStore.ts`: Nostr bridge courier drops (kind 1401)
-- [ ] iOS: Arti Tor integration (copy from `bitchat/ios/`)
-- [ ] Android: Orbot SOCKS5 proxy detection
-- [ ] `src/core/payments/cashu.ts`: token parse/embed/redeem
-- [ ] `src/core/payments/nutzap.ts`: NIP-61 online zaps
-- [ ] `VoiceCapture.ts` + `VoicePlayer.ts`: PTT AAC 16 kHz, jitter buffer
+- [x] `src/core/nostr/client.ts`: SimplePool, auto-reconnect, Tor proxy config
+- [x] `src/core/nostr/gift-wrap.ts`: NIP-17/59 gift-wrap DMs (HKDF key derivation, seal/unwrap round-trip)
+- [x] `src/core/nostr/geo-relay.ts`: Haversine nearest relay from bundled relays.csv
+- [x] `src/core/nostr/presence.ts`: kind 20001 geohash heartbeats (40–80s jitter, precision-5)
+- [x] `src/core/nostr/courier-relay.ts`: Nostr bridge courier drops (kind 1401, NIP-40 expiry)
+- [x] iOS: `AirhopTorManager` + `AirhopTorSession` + `AirhopTorModule` — full Arti integration (SOCKS5 port 39050), bundled `ios/Frameworks/arti.xcframework`
+- [x] Android: Orbot SOCKS5 detection via `getTorProxyPort()` (probes localhost:9050)
+- [x] `src/core/payments/cashu.ts`: token parse/embed/DLEQ validation
+- [x] `src/core/payments/nutzap.ts`: NIP-61 online zaps (kind 9321/10019)
+- [x] `src/core/payments/wallet-store.ts`: MMKV-backed local proof storage, balance selectors
+- [x] `src/core/mesh/voice-capture.ts`: PTT frame encoder (VOICE_FRAME 0x29, AAC/Opus 16 kHz)
+- [x] `src/core/mesh/voice-player.ts`: 350ms jitter buffer, ordered frame delivery
+- [x] `src/bridge/NativeAirhopTor.ts`: TurboModule spec for Tor module
+- [x] `src/core/router/message-router.ts`: Nostr added as priority-2 transport (BLE > Nostr > Courier)
 
-**Milestone:** Cross-city DMs via Nostr. Live voice PTT over BLE. Cashu offline payment working.
+**Milestone:** Cross-city DMs via Nostr. Live voice PTT over BLE. Cashu offline payment working. Tor routing on iOS via Arti.
 
 ### v0.8.0: High Bandwidth + Double Ratchet
 

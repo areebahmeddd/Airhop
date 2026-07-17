@@ -114,18 +114,20 @@ All type values match bitchat `MessageType.swift` (public domain). Types `0x01�
 
 ## 8. Identity & Nostr Constants
 
-| Constant             | Value                                 |
-| -------------------- | ------------------------------------- |
-| Nostr public key     | Ed25519 signing pubkey (hex) = `npub` |
-| Nostr channel kind   | `20000` (geohash channel message)     |
-| Nostr presence kind  | `20001` (geohash heartbeat)           |
-| Nostr DM kind        | `14` (NIP-17 gift wrap inner event)   |
-| Nostr gift wrap kind | `1059` (NIP-17 outer envelope)        |
-| Nutzap event kind    | `9321` (NIP-61)                       |
-| Wallet info kind     | `10019` (NIP-61 receiver info)        |
-| Cashu wallet kind    | `17375` (NIP-60)                      |
-| Token event kind     | `7375` (NIP-60)                       |
-| Geohash precision    | 5 characters (~5 km × 5 km cell)      |
+| Constant             | Value                                                                                                   |
+| -------------------- | ------------------------------------------------------------------------------------------------------- |
+| Nostr public key     | secp256k1 pubkey (hex), derived via HKDF-SHA256 from Ed25519 signing key (info=`"airhop-nostr-key-v1"`) |
+| Nostr channel kind   | `20000` (geohash channel message)                                                                       |
+| Nostr presence kind  | `20001` (geohash heartbeat)                                                                             |
+| Nostr DM rumor kind  | `14` (NIP-17 unsigned inner event)                                                                      |
+| Nostr seal kind      | `13` (NIP-17 seal, signed by real sender, encrypts rumor to recipient)                                  |
+| Nostr gift wrap kind | `1059` (NIP-17 outer envelope, signed by ephemeral key)                                                 |
+| Nostr courier drop   | `1401` (Nostr store-and-forward envelope; `#x` tag = recipient tag hex; NIP-40 expiry)                  |
+| Nutzap event kind    | `9321` (NIP-61)                                                                                         |
+| Wallet info kind     | `10019` (NIP-61 receiver info)                                                                          |
+| Cashu wallet kind    | `17375` (NIP-60)                                                                                        |
+| Token event kind     | `7375` (NIP-60)                                                                                         |
+| Geohash precision    | 5 characters (~5 km × 5 km cell)                                                                        |
 
 ## 9. bitchat Wire Compatibility Table
 
