@@ -71,7 +71,7 @@
     "preset": "jest-expo",
     "testEnvironment": "node",
     "transformIgnorePatterns": [
-      "node_modules/(?!(@noble|react-native|@react-native|expo|@expo|@unimodules|unimodules|nativewind|react-native-reanimated))"
+      "node_modules/(?!(@noble|@scure|nostr-tools|@cashu|react-native|@react-native|expo|@expo|@unimodules|unimodules|nativewind|react-native-reanimated))"
     ],
     "moduleNameMapper": {
       "^@noble/curves/(.+?)(\\.js)?$": "<rootDir>/node_modules/@noble/curves/$1.js",
