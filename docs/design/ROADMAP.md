@@ -85,19 +85,19 @@ bitchat is an excellent foundation. Airhop fills the gaps it left open.
 
 ## 3. Version Targets
 
-### v0.5.0: Foundation
+### v0.5.0: Foundation ✅
 
 **Goal:** Hello World BLE mesh between two phones.
 
-- [ ] Set up Expo bare workflow with TypeScript strict
-- [ ] `AirhopBLEModule` iOS (Swift, ~400 lines): dual-role GATT server + client
-- [ ] `AirhopBLEModule` Android (Kotlin, ~500 lines): dual-role GATT
-- [ ] `AirhopForegroundService.kt`: background keepalive
-- [ ] Wire TurboModule to `src/bridge/NativeAirhopBLE.ts`
-- [ ] `src/core/mesh/packet-codec.ts`: binary encode/decode matching bitchat v2 (`PROTOCOLS.md`, section 2)
-- [ ] `src/core/mesh/flood-router.ts`: TTL flood, jitter 10-220ms, dedup
-- [ ] `src/core/mesh/announce-manager.ts`: signed presence broadcasts
-- [ ] `src/core/crypto/identity.ts`: key generation, Keychain storage, peer ID
+- [x] Set up Expo bare workflow with TypeScript strict
+- [x] `AirhopBLEModule` iOS (Swift, ~400 lines): dual-role GATT server + client
+- [x] `AirhopBLEModule` Android (Kotlin, ~490 lines): dual-role GATT
+- [x] `AirhopForegroundService.kt`: background keepalive (foreground service, `connectedDevice` type)
+- [x] Wire TurboModule to `src/bridge/NativeAirhopBLE.ts`
+- [x] `src/core/mesh/packet-codec.ts`: binary encode/decode matching bitchat v2 (`PROTOCOLS.md`, section 2)
+- [x] `src/core/mesh/flood-router.ts`: TTL flood, jitter 10-220ms, dedup
+- [x] `src/core/mesh/announce-manager.ts`: signed presence broadcasts
+- [x] `src/core/crypto/identity.ts`: key generation, Keychain storage, peer ID
 
 **Milestone:** Two phones discover each other and exchange signed ANNOUNCE packets.
 
@@ -366,7 +366,7 @@ For Indian users who want to transact in Rupees when online, UPI works cleanly a
 - [ ] Only activates when internet is available; no offline UPI
 - [ ] Shares UPI ID as contact info only; no bank details transmitted
 
-> Additional plugins for other integrations can be proposed and documented here as the ecosystem grows.
+> Additional plugins for new integrations can be proposed and documented here as the ecosystem grows.
 
 #### Plugin Architecture
 

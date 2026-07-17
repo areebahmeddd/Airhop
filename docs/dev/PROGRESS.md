@@ -2,11 +2,11 @@
 
 > Updated when milestones complete, blockers are found, or decisions are made. It is the canonical answer to "where are we right now?"
 
-## Current Version: v0.5.0 (In Progress)
+## Current Version: v0.5.0 (Completed)
 
-**Status:** Project scaffold complete. Prettier, TypeScript, NativeWind, and all config files set up. Run `npx expo prebuild` to generate native `ios/` and `android/` directories, then start v0.5.0 native BLE work.  
-**Started:** July 12, 2026  
-**v0.5.0 target:** Two phones discover each other over BLE and exchange signed announce packets.
+**Status:** Core TypeScript mesh engine complete and passing all unit tests. Native BLE modules written for iOS (Swift) and Android (Kotlin). Ready for device testing.  
+**Started:** July 12, 2026
+**Last Updated:** July 17, 2026
 
 ## Documentation Status
 
@@ -17,9 +17,9 @@
 | [`docs/spec/ARCHITECTURE.md`](../spec/ARCHITECTURE.md)                     | ✅ Complete | Architecture, stack, code snippets               |
 | [`docs/spec/PROTOCOLS.md`](../spec/PROTOCOLS.md)                           | ✅ Complete | Wire format, constants, compat table             |
 | [`docs/dev/REFERENCE.md`](REFERENCE.md)                                    | ✅ Complete | bitchat codebase knowledge transfer              |
-| [`docs/dev/PROGRESS.md`](PROGRESS.md)                                      | ✅ Active   | This file                                        |
-| [`CONTRIBUTING.md`](../../CONTRIBUTING.md)                                 | ✅ Complete | Standards for contributors + AI agents           |
+| [`docs/dev/PROGRESS.md`](PROGRESS.md)                                      | ✅ Active   | Current implementation progress                  |
 | [`docs/dev/GLOSSARY.md`](GLOSSARY.md)                                      | ✅ Complete | Definitions for all technical terms              |
+| [`CONTRIBUTING.md`](../../CONTRIBUTING.md)                                 | ✅ Complete | Standards for contributors + AI agents           |
 | [`.github/copilot-instructions.md`](../../.github/copilot-instructions.md) | ✅ Complete | VS Code Copilot workspace context                |
 | [`.github/agents/`](../../.github/agents)                                  | ✅ Complete | Architect, Upstream Sync, Security Review agents |
 
@@ -34,34 +34,34 @@
 - [x] Configure TypeScript strict mode in `tsconfig.json` (TypeScript 7, no `baseUrl`)
 - [x] Set up Prettier (`.prettierrc.json` with `prettier-plugin-tailwindcss` + `prettier-plugin-organize-imports`)
 - [x] Set up ESLint (`eslint.config.js` with `eslint-config-expo` flat config)
-- [ ] Run `npx expo prebuild` to generate `ios/` and `android/` native project directories
-- [ ] Configure Jest for `src/core/` (pure TypeScript, no native deps in test env)
+- [x] Run `npx expo prebuild` to generate `ios/` and `android/` native project directories
+- [x] Configure Jest for `src/core/` (pure TypeScript, no native deps in test env)
 - [x] Create folder structure matching `docs/spec/ARCHITECTURE.md`, section 1
 
 ### Native BLE module
 
-- [ ] `ios/Airhop/AirhopBLEModule.swift`: CBPeripheralManager + CBCentralManager (~400 lines)
-- [ ] `ios/Airhop/AirhopBLEModule.mm`: Obj-C++ bridge (Codegen-generated or manual)
-- [ ] `android/app/src/main/java/com/airhop/ble/AirhopBLEModule.kt`: BluetoothGattServer + BluetoothLeScanner (~500 lines)
-- [ ] `android/app/src/main/java/com/airhop/ble/AirhopBLEPackage.kt`: module registration
-- [ ] `android/app/src/main/java/com/airhop/service/AirhopForegroundService.kt`: background keepalive
+- [x] `ios/Airhop/AirhopBLEModule.swift`: CBPeripheralManager + CBCentralManager (~400 lines)
+- [x] `ios/Airhop/AirhopBLEModule.mm`: Obj-C++ bridge (RCT_EXTERN_MODULE)
+- [x] `android/app/src/main/java/tech/permissionless/airhop/ble/AirhopBLEModule.kt`: BluetoothGattServer + BluetoothLeScanner (~500 lines)
+- [x] `android/app/src/main/java/tech/permissionless/airhop/ble/AirhopBLEPackage.kt`: module registration
+- [x] `android/app/src/main/java/tech/permissionless/airhop/service/AirhopForegroundService.kt`: background keepalive
 - [x] iOS: `UIBackgroundModes: [bluetooth-central, bluetooth-peripheral]` in `app.json`
-- [ ] Android: foreground service permission in AndroidManifest (after `prebuild`)
-- [ ] `src/bridge/NativeAirhopBLE.ts`: TurboModule TypeScript spec (Codegen input)
+- [x] Android: foreground service permission in AndroidManifest
+- [x] `src/bridge/NativeAirhopBLE.ts`: TurboModule TypeScript spec (Codegen input)
 
 ### Core mesh engine
 
-- [ ] `src/core/mesh/packet-codec.ts`: binary encode/decode, matches PROTOCOLS.md exactly
-- [ ] `src/core/mesh/flood-router.ts`: TTL flood, jitter, dedup
-- [ ] `src/core/mesh/deduplicator.ts`: LRU 1000-entry seen-set
-- [ ] `src/core/mesh/announce-manager.ts`: signed presence broadcasts
-- [ ] `src/core/crypto/identity.ts`: key generation, Keychain storage, peer ID
+- [x] `src/core/mesh/packet-codec.ts`: binary encode/decode, matches PROTOCOLS.md exactly
+- [x] `src/core/mesh/flood-router.ts`: TTL flood, jitter, dedup
+- [x] `src/core/mesh/deduplicator.ts`: LRU 1000-entry seen-set
+- [x] `src/core/mesh/announce-manager.ts`: signed presence broadcasts
+- [x] `src/core/crypto/identity.ts`: key generation, Keychain storage, peer ID
 
 ### Tests (must pass before milestone)
 
-- [ ] `packet-codec.test.ts`: encode/decode round-trip, byte layout matches PROTOCOLS.md
-- [ ] `deduplicator.test.ts`: LRU eviction, expiry window
-- [ ] `flood-router.test.ts`: TTL decrement, jitter scheduling
+- [x] `packet-codec.test.ts`: encode/decode round-trip, byte layout matches PROTOCOLS.md
+- [x] `deduplicator.test.ts`: LRU eviction, expiry window
+- [x] `flood-router.test.ts`: TTL decrement, jitter scheduling
 
 **Milestone:** Two phones on BLE discover each other and exchange signed ANNOUNCE packets.
 
@@ -194,10 +194,10 @@ _None currently._
 
 | Date       | Decision                                          | Rationale                                                                              | Alternatives Rejected                     |
 | ---------- | ------------------------------------------------- | -------------------------------------------------------------------------------------- | ----------------------------------------- |
+| 2026-07-12 | Build infra before UI                             | Non-negotiable; a reliable mesh node is the product                                    | UI-first (leads to empty shell)           |
 | 2026-07-12 | Single-app (not monorepo)                         | No benefit at this stage; extract packages later                                       | Monorepo adds tooling overhead now        |
 | 2026-07-12 | Expo bare workflow                                | BLE TurboModule needed from day 1; managed blocks it                                   | Managed workflow, plain RN CLI            |
-| 2026-07-12 | `@noble/curves` + `@noble/ciphers` for all crypto | Audited (Cure53), zero deps, React Native compatible                                   | node:crypto, sodium-native                |
 | 2026-07-12 | Nostr over Matrix/XMPP                            | Permissionless, no homeserver, 350+ relays, bitchat-validated                          | Matrix (requires homeserver), XMPP (same) |
-| 2026-07-12 | Cashu for payments                                | Only offline-first ecash; bitchat already prototyping (`CashuTokenDecoderTests.swift`) | Lightning-only (requires internet)        |
 | 2026-07-12 | Follow bitchat-iOS Noise spec (ChaCha20-Poly1305) | bitchat-android diverged (AES-256-GCM); iOS is canonical                               | Match Android (inconsistent with iOS)     |
-| 2026-07-12 | Build infra before UI                             | Non-negotiable; a reliable mesh node is the product                                    | UI-first (leads to empty shell)           |
+| 2026-07-12 | `@noble/curves` + `@noble/ciphers` for all crypto | Audited (Cure53), zero deps, React Native compatible                                   | `node:crypto`, sodium-native              |
+| 2026-07-12 | Cashu for payments                                | Only offline-first ecash; bitchat already prototyping (`CashuTokenDecoderTests.swift`) | Lightning-only (requires internet)        |
