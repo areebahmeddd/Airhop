@@ -176,6 +176,51 @@ final class AirhopBLEModule: RCTEventEmitter {
         }
     }
 
+    // MARK: Tor proxy detection
+
+    // Probe whether a SOCKS5 proxy is reachable at localhost:port.
+    // Resolves with the port if reachable, 0 if not. Runs off the main queue.
+    // On iOS, Orbot (if installed and active) exposes a SOCKS5 proxy on port 9050.
+    // Full Arti (embedded Tor) integration requires adding the Arti xcframework
+    // as a Swift Package dependency (see bitchat/ios/Package.swift for reference).
+    @objc
+    func getTorProxyPort(_ resolve: @escaping RCTPromiseResolveBlock,
+                         rejecter reject: @escaping RCTPromiseRejectBlock) {
+        let port = 9050
+        DispatchQueue.global(qos: .utility).async {
+            let host = CFHostCreateWithName(nil, "127.0.0.1" as CFString).takeRetainedValue()
+            var ctx = CFStreamClientContext()
+            var readStream:  Unmanaged<CFReadStream>?
+            var writeStream: Unmanaged<CFWriteStream>?
+            CFStreamCreatePairWithSocketToHost(nil, "127.0.0.1" as CFString, UInt32(port),
+                                               &readStream, &writeStream)
+            guard let read = readStream?.takeRetainedValue(),
+                  let write = writeStream?.takeRetainedValue() else {
+                resolve(0)
+                return
+            }
+            CFReadStreamOpen(read)
+            CFWriteStreamOpen(write)
+            // Give the connection 500 ms to open
+            let deadline = CFAbsoluteTimeGetCurrent() + 0.5
+            while CFAbsoluteTimeGetCurrent() < deadline {
+                let rs = CFReadStreamGetStatus(read)
+                let ws = CFWriteStreamGetStatus(write)
+                if rs == .open && ws == .open {
+                    CFReadStreamClose(read)
+                    CFWriteStreamClose(write)
+                    resolve(port)
+                    return
+                }
+                if rs == .error || ws == .error { break }
+                Thread.sleep(forTimeInterval: 0.02)
+            }
+            CFReadStreamClose(read)
+            CFWriteStreamClose(write)
+            resolve(0)
+        }
+    }
+
     // Helper: find the cached characteristic for a connected peripheral
     private func discoverCharacteristic(on peripheral: CBPeripheral) -> CBCharacteristic? {
         return peripheral.services?

@@ -27,6 +27,10 @@ prepare_react_native_project!
 target 'Airhop' do
   use_expo_modules!
 
+  # Arti xcframework: provides the Rust Tor client binary linked by AirhopTorManager.swift.
+  # The framework binary lives at ios/Frameworks/arti.xcframework (bundled with Airhop).
+  pod 'Arti', :path => './'
+
   if ENV['EXPO_USE_COMMUNITY_AUTOLINKING'] == '1'
     config_command = ['node', '-e', "process.argv=['', '', 'config'];require('@react-native-community/cli').run()"];
   else

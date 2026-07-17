@@ -26,3 +26,6 @@ RCT_EXTERN_METHOD(writeToLink:(NSString *)linkID
                   dataBase64:(NSString *)dataBase64
                   resolver:(RCTPromiseResolveBlock)resolve
                   rejecter:(RCTPromiseRejectBlock)reject)
+
+RCT_EXTERN_METHOD(getTorProxyPort:(RCTPromiseResolveBlock)resolve
+                  rejecter:(RCTPromiseRejectBlock)reject)
