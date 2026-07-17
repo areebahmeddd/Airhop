@@ -88,7 +88,6 @@ export function fragmentPacket(
       senderID: senderIDBytes,
       recipientID: new Uint8Array(8), // broadcast
       timestamp: Math.floor(Date.now() / 1000),
-      nonce: crypto.getRandomValues(new Uint8Array(8)),
       signature: new Uint8Array(64),
       payload,
     };

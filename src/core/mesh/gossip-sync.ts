@@ -8,8 +8,9 @@
 //   2. On receiving a REQUEST_SYNC from a peer, decode the filter and send
 //      back any packets we have that the peer appears to be missing.
 //
-// Packet ID (per PacketIdUtil.swift):
-//   SHA-256(type[1] | senderID[8] | timestamp[4 BE] | payload)[0:16]
+// Packet ID (per PacketIdUtil.swift / PacketIdUtil.kt):
+//   SHA-256(type[1] | senderID[8] | timestamp_u64_BE[8] | payload)[0:16]
+//   See computePacketId in packet-codec.ts.
 //
 // GCS hash for filter membership:
 //   h64 = first 8 bytes of SHA-256(packetID) as big-endian u64
@@ -22,7 +23,13 @@
 
 import { sha256 } from "@noble/hashes/sha2.js";
 import { concatBytes } from "@noble/hashes/utils.js";
-import { Flags, PacketType, signPacket, type Packet } from "./packet-codec";
+import {
+  computePacketId,
+  Flags,
+  PacketType,
+  signPacket,
+  type Packet,
+} from "./packet-codec";
 
 // Constants per PROTOCOLS.md section 5.
 const SYNC_INTERVAL_MS = 15_000;
@@ -34,21 +41,7 @@ const GCS_TARGET_FPR = 0.01; // 1%
 const TYPE_BIT_ANNOUNCE = 0; // bit 0
 const TYPE_BIT_MESSAGE = 1; // bit 1
 
-// ---- Packet ID ---------------------------------------------------------------
-
-// Deterministic 16-byte packet ID used as the GCS membership key.
-// ID = SHA-256(type | senderID | timestamp_BE4 | payload)[0:16]
-export function computePacketId(p: Packet): Uint8Array {
-  const tsBuf = new Uint8Array(4);
-  new DataView(tsBuf.buffer).setUint32(0, p.timestamp, false);
-  const combined = concatBytes(
-    new Uint8Array([p.type]),
-    p.senderID.slice(0, 8),
-    tsBuf,
-    p.payload,
-  );
-  return sha256(combined).slice(0, 16);
-}
+// ---- GCS h64 derivation -----------------------------------------------------
 
 // 8-byte value for GCS membership check:
 // h64 = first 8 bytes of SHA-256(packetID) as big-endian u64, sign bit cleared.
@@ -368,7 +361,6 @@ export class GossipSync {
       senderID: senderIDBytes,
       recipientID: new Uint8Array(8),
       timestamp: Math.floor(Date.now() / 1000),
-      nonce: crypto.getRandomValues(new Uint8Array(8)),
       signature: new Uint8Array(64),
       payload,
     };

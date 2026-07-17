@@ -4,13 +4,17 @@
 import { ed25519 } from "@noble/curves/ed25519.js";
 import {
   buildGcsFilter,
-  computePacketId,
   decodeGcsFilter,
   decodeGossipFilterPayload,
   encodeGossipFilterPayload,
   GossipSync,
 } from "../gossip-sync";
-import { Flags, PacketType, type Packet } from "../packet-codec";
+import {
+  computePacketId,
+  Flags,
+  PacketType,
+  type Packet,
+} from "../packet-codec";
 
 function makeIdentity() {
   const signingPrivKey = ed25519.utils.randomSecretKey();
@@ -33,7 +37,6 @@ function makePacket(
     senderID: new Uint8Array(8).fill(1),
     recipientID: new Uint8Array(8),
     timestamp,
-    nonce: new Uint8Array(8),
     signature: new Uint8Array(64),
     payload,
   };
@@ -176,7 +179,6 @@ describe("GossipSync class", () => {
       senderID: new Uint8Array(8),
       recipientID: new Uint8Array(8),
       timestamp: 1000,
-      nonce: new Uint8Array(8),
       signature: new Uint8Array(64),
       payload: emptyPayload,
     };

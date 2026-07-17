@@ -15,6 +15,8 @@
       "infoPlist": {
         "NSBluetoothAlwaysUsageDescription": "Airhop uses Bluetooth to communicate with nearby devices on the mesh.",
         "NSBluetoothPeripheralUsageDescription": "Airhop uses Bluetooth to advertise your presence to nearby peers.",
+        "NSLocalNetworkUsageDescription": "Airhop uses the local network to connect directly to nearby devices for high-bandwidth transfers (video, large files).",
+        "NSBonjourServices": ["_airhop-mesh._tcp"],
         "UIBackgroundModes": ["bluetooth-central", "bluetooth-peripheral"]
       }
     },
@@ -29,7 +31,10 @@
         "BLUETOOTH_SCAN",
         "BLUETOOTH_CONNECT",
         "BLUETOOTH_ADVERTISE",
-        "ACCESS_FINE_LOCATION"
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_WIFI_STATE",
+        "CHANGE_WIFI_STATE",
+        "ACCESS_NETWORK_STATE"
       ]
     },
     "plugins": [

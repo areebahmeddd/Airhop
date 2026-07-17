@@ -48,6 +48,15 @@
 	<string>Airhop uses Bluetooth to communicate with nearby devices on the mesh.</string>
 	<key>NSBluetoothPeripheralUsageDescription</key>
 	<string>Airhop uses Bluetooth to advertise your presence to nearby peers.</string>
+	<!-- Required for MultipeerConnectivity on iOS 14+. Without this the system
+	     cannot show the local network access prompt and MC discovery will fail. -->
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>Airhop uses the local network to connect directly to nearby devices for high-bandwidth transfers (video, large files).</string>
+	<!-- Bonjour service type declared by AirhopMCModule (MCConst.serviceType). -->
+	<key>NSBonjourServices</key>
+	<array>
+		<string>_airhop-mesh._tcp</string>
+	</array>
 	<key>RCTNewArchEnabled</key>
 	<true/>
 	<key>UIBackgroundModes</key>

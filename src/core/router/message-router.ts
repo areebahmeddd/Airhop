@@ -1,13 +1,14 @@
 // Message router: decides which transport carries each message.
 //
 // Priority order (per ARCHITECTURE.md section 4):
-//   1. BLE mesh direct (Noise session established)
-//   2. Nostr gift-wrap DM (if recipient's Nostr pubkey is known)
-//   3. Courier (store-and-forward via connected mesh peers)
+//   1. WiFi Aware / MultipeerConnectivity direct (high-bandwidth, same Noise session)
+//   2. BLE mesh direct (Noise session established)
+//   3. Nostr gift-wrap DM (if recipient's Nostr pubkey is known)
+//   4. Courier (store-and-forward via connected mesh peers)
 //
 // The router does not own a network connection. BLE and Courier are injected
-// as plain callbacks. The optional Nostr send function is injected at
-// construction time so the router stays testable without a live relay pool.
+// as plain callbacks. The optional Nostr and WiFi send functions are injected at
+// construction time so the router stays testable without a live transport.
 
 import { type NoiseSession } from "../crypto/noise-xx";
 import {
@@ -17,8 +18,14 @@ import {
   type Packet,
 } from "../mesh/packet-codec";
 
-// How long a peer remains "reachable" after their last ANNOUNCE. Matches
-// bitchat's reachability timeout.
+// Timeout for a peer directly connected over BLE (no ANNOUNCE heard within
+// this window means the radio link is gone). Matches bitchat's 15-second
+// direct-link timeout in BLEMaintenancePolicy.
+const DIRECT_PEER_TTL_MS = 15_000;
+
+// Timeout for mesh peers learned via relayed ANNOUNCEs (not directly connected).
+// Longer because relayed packets can take several hops and arrive late.
+// Matches bitchat's 60-second mesh reachability window.
 const PEER_REACHABLE_TTL_MS = 60_000;
 
 // ---- Peer registry ----------------------------------------------------------
@@ -29,8 +36,11 @@ export interface PeerEntry {
   signingPubKey: Uint8Array; // 32-byte Ed25519
   nickname: string;
   lastSeenMs: number;
+  // Whether this peer is directly connected over BLE (link event received).
+  // Direct peers use a shorter TTL (15s); mesh peers use 60s.
+  isDirect: boolean;
   // Nostr public key (secp256k1 hex) announced by this peer, if known.
-  // Used as priority-2 transport when the BLE session is unavailable.
+  // Used as priority-3 transport when direct transports are unavailable.
   nostrPubkey?: string;
   // Active Noise XX session, set once handshake is complete.
   session?: NoiseSession;
@@ -41,19 +51,38 @@ export class PeerRegistry {
   private readonly peers = new Map<string, PeerEntry>();
 
   update(
-    entry: Omit<PeerEntry, "lastSeenMs" | "session"> & {
+    entry: Omit<PeerEntry, "lastSeenMs" | "session" | "isDirect"> & {
+      isDirect?: boolean;
       session?: NoiseSession;
     },
   ): void {
     const existing = this.peers.get(entry.peerID);
     this.peers.set(entry.peerID, {
       ...entry,
+      isDirect: entry.isDirect ?? existing?.isDirect ?? false,
       lastSeenMs: Date.now(),
       // Preserve the learned Nostr pubkey across BLE re-announces, which do
       // not carry a nostrPubkey field. Same pattern as session.
       nostrPubkey: entry.nostrPubkey ?? existing?.nostrPubkey,
       session: entry.session ?? existing?.session,
     });
+  }
+
+  // Mark a peer as directly BLE-connected. Called when the BLE native module
+  // fires a linkConnected event for this peerID. Direct peers use DIRECT_PEER_TTL_MS.
+  markDirect(peerID: string): void {
+    const e = this.peers.get(peerID);
+    if (e) {
+      e.isDirect = true;
+      e.lastSeenMs = Date.now();
+    }
+  }
+
+  // Mark a peer as no longer directly connected (BLE link dropped).
+  // The peer may still be reachable as a mesh peer until their ANNOUNCE expires.
+  markIndirect(peerID: string): void {
+    const e = this.peers.get(peerID);
+    if (e) e.isDirect = false;
   }
 
   setSession(peerID: string, session: NoiseSession): void {
@@ -69,7 +98,8 @@ export class PeerRegistry {
   get(peerID: string): PeerEntry | undefined {
     const e = this.peers.get(peerID);
     if (!e) return undefined;
-    if (Date.now() - e.lastSeenMs > PEER_REACHABLE_TTL_MS) return undefined;
+    const ttl = e.isDirect ? DIRECT_PEER_TTL_MS : PEER_REACHABLE_TTL_MS;
+    if (Date.now() - e.lastSeenMs > ttl) return undefined;
     return e;
   }
 
@@ -78,14 +108,18 @@ export class PeerRegistry {
   }
 
   reachablePeers(): PeerEntry[] {
-    const cutoff = Date.now() - PEER_REACHABLE_TTL_MS;
-    return [...this.peers.values()].filter((e) => e.lastSeenMs >= cutoff);
+    const now = Date.now();
+    return [...this.peers.values()].filter((e) => {
+      const ttl = e.isDirect ? DIRECT_PEER_TTL_MS : PEER_REACHABLE_TTL_MS;
+      return now - e.lastSeenMs <= ttl;
+    });
   }
 
   evictStale(): void {
-    const cutoff = Date.now() - PEER_REACHABLE_TTL_MS;
+    const now = Date.now();
     for (const [id, e] of this.peers) {
-      if (e.lastSeenMs < cutoff) this.peers.delete(id);
+      const ttl = e.isDirect ? DIRECT_PEER_TTL_MS : PEER_REACHABLE_TTL_MS;
+      if (now - e.lastSeenMs > ttl) this.peers.delete(id);
     }
   }
 
@@ -122,6 +156,16 @@ export type NostrSendFn = (
   recipientNostrPubkey: string,
   text: string,
 ) => Promise<void>;
+
+// Attempts to send an encrypted packet directly to a peer via the WiFi
+// transport (MultipeerConnectivity on iOS, WiFi Aware on Android).
+// Returns true if the peer was reachable via WiFi and the packet was dispatched;
+// returns false to fall through to the next transport tier.
+// Implemented by the feature layer when the WiFi native module is active.
+export type WiFiUnicastFn = (
+  recipientPeerID: string,
+  packet: Packet,
+) => boolean;
 
 // Encodes the CHANNEL_MSG payload:
 //   [channel_utf8_len (u8)][channel_utf8][text_utf8]
@@ -165,9 +209,13 @@ export class MessageRouter {
     private readonly registry: PeerRegistry,
     private readonly broadcast: BroadcastFn,
     private readonly unicast: UnicastFn,
-    // Priority-2 transport: Nostr gift-wrap DM. Optional — when absent, DMs
-    // fall through to courier if BLE session is unavailable.
+    // Priority-3 transport: Nostr gift-wrap DM. Optional — when absent, DMs
+    // fall through to courier if both BLE and WiFi sessions are unavailable.
     private readonly nostrSend?: NostrSendFn,
+    // Priority-2 transport: WiFi direct (MC / WiFi Aware). Optional — when
+    // injected, tried before BLE for peers with an active WiFi link. Both tiers
+    // share the same Noise session (the session is transport-agnostic).
+    private readonly wifiUnicast?: WiFiUnicastFn,
   ) {}
 
   // Send a message to a public channel. Always broadcast over mesh.
@@ -182,7 +230,6 @@ export class MessageRouter {
       senderID: senderIDBytes,
       recipientID: new Uint8Array(8), // broadcast
       timestamp: Math.floor(Date.now() / 1000),
-      nonce: crypto.getRandomValues(new Uint8Array(8)),
       signature: new Uint8Array(64),
       payload,
     };
@@ -193,12 +240,16 @@ export class MessageRouter {
   // Send a direct message.
   //
   // Transport selection:
-  //   1. BLE direct: if the recipient has an active Noise session, encrypt and
+  //   1. WiFi direct: if a WiFiUnicastFn is injected and the peer is in WiFi
+  //      range, encrypt the packet with the active Noise session and send via
+  //      MultipeerConnectivity (iOS) or WiFi Aware (Android). Falls back to BLE
+  //      if WiFi is unavailable. Both tiers share the same Noise session.
+  //   2. BLE direct: if the recipient has an active Noise session, encrypt and
   //      unicast over the mesh immediately.
-  //   2. Nostr: if a NostrSendFn was injected and the recipient's Nostr pubkey
+  //   3. Nostr: if a NostrSendFn was injected and the recipient's Nostr pubkey
   //      is known, fire-and-forget a gift-wrap DM over the internet. Returns
   //      'sent-nostr' so the caller can show a pending indicator.
-  //   3. Courier: returns 'needs-courier' so the caller can seal the message
+  //   4. Courier: returns 'needs-courier' so the caller can seal the message
   //      and hand it to connected peers.
   sendDm(
     recipientPeerID: string,
@@ -206,7 +257,8 @@ export class MessageRouter {
   ): "sent" | "sent-nostr" | "needs-courier" {
     const peer = this.registry.get(recipientPeerID);
 
-    // Priority 1: BLE direct.
+    // Priority 1 + 2: Direct transport (WiFi or BLE) — both require an active
+    // Noise session so the payload can be encrypted end-to-end.
     if (peer?.session !== undefined) {
       const payload = encodeDmPayload(text, peer.session);
       const senderIDBytes = hexToBytes(this.identity.peerID);
@@ -219,16 +271,22 @@ export class MessageRouter {
         senderID: senderIDBytes,
         recipientID: recipientIDBytes,
         timestamp: Math.floor(Date.now() / 1000),
-        nonce: crypto.getRandomValues(new Uint8Array(8)),
         signature: new Uint8Array(64),
         payload,
       };
       packet.signature = signPacket(packet, this.identity.signingPrivKey);
+
+      // WiFi direct: prefer when an MC/WiFi Aware link exists (higher throughput,
+      // device-to-device path). Falls back to BLE mesh when unavailable.
+      if (this.wifiUnicast?.(recipientPeerID, packet) === true) {
+        return "sent";
+      }
+      // BLE fallback.
       this.unicast(recipientPeerID, packet);
       return "sent";
     }
 
-    // Priority 2: Nostr gift-wrap DM when recipient pubkey is known.
+    // Priority 3: Nostr gift-wrap DM when recipient pubkey is known.
     if (this.nostrSend !== undefined && peer?.nostrPubkey !== undefined) {
       void this.nostrSend(peer.nostrPubkey, text).catch(() => {
         // Delivery failure is handled at the feature layer via Nostr client

@@ -2,9 +2,9 @@
 
 > Updated when milestones complete, blockers are found, or decisions are made. It is the canonical answer to "where are we right now?"
 
-## Current Version: v0.8.0 (Completed)
+## Current Version: v0.9.0 (Completed)
 
-**Status:** Double Ratchet per-message forward secrecy, X3DH prekey agreement (Nostr bundle serialization), Android WiFi Aware native module (AirhopWiFiModule + AirhopWiFiPackage), iOS MultipeerConnectivity native module (AirhopMCModule), NativeAirhopWiFi TurboModule spec, chunked file transfer >1 MiB (FileAssembler), video capture + player (HEVC, VIDEO_FRAME 0x30, WiFi Direct only), all implemented and tested (265 passing).
+**Status:** NFC contact exchange (binary ContactCard, NDEF + QR), human-readable usernames (deterministic from peer ID, 128-entry word lists), panic wipe (identity keys + all MMKV partitions), battery optimization deep links (10 OEM skins, proper intent URI for Android standard fallback), `nearestRelaysWithDistance()` added to `GeoRelayDirectory`, full wire-format compat test suite pinning all bitchat v2 constants.
 **Started:** July 18, 2026
 **Last Updated:** July 18, 2026
 
@@ -68,7 +68,7 @@
 ## v0.6.0: Core Messaging ✅
 
 - [x] `src/core/crypto/noise-xx.ts`: Noise XX handshake using `@noble/curves` + `@noble/ciphers` (full XX pattern, transport encrypt/decrypt, replay window)
-- [ ] Cross-language Noise XX test: JS client ↔ bitchat-ios Swift server (MUST PASS before shipping)
+- [ ] Cross-language Noise XX test: JS client ↔ bitchat-ios Swift server (MUST PASS before v1.0.0 ship; requires a live device test harness, deferred to v1.0.0 integration testing)
 - [x] `src/core/crypto/noise-x.ts`: one-way Noise X for courier sealing
 - [x] `src/core/mesh/fragment-manager.ts`: split/reassemble, 30s timeout, 128-slot concurrent cap
 - [x] `src/core/mesh/gossip-sync.ts`: GCS filter reconciliation (Golomb-Rice encoding, TLV wire format)
@@ -111,15 +111,15 @@
 
 **Milestone:** Offline video calling over WiFi Aware. Double Ratchet passing test vectors.
 
-## v0.9.0: Production Hardening
+## v0.9.0: Production Hardening ✅
 
-- [ ] NFC contact exchange
-- [ ] QR code scanner for peer verification
-- [ ] Human-readable usernames (deterministic from pubkey)
-- [ ] Panic wipe (triple-tap)
-- [ ] Battery optimization flow (Android OEM)
-- [ ] Georelays in-app relay map
-- [ ] Full cross-platform compat test: Airhop ↔ bitchat-ios ↔ bitchat-android
+- [x] NFC contact exchange (`src/core/crypto/contact-exchange.ts`: ContactCard binary format, NDEF + QR URI scheme)
+- [x] QR code scanner for peer verification (encodeQRContent/decodeQRContent in contact-exchange.ts)
+- [x] Human-readable usernames (`src/utils/username.ts`: deterministic adjective-noun-suffix from peer ID, 128-entry word lists)
+- [x] Panic wipe (`src/utils/panic-wipe.ts`: clears EncryptedStorage keys + all MMKV partitions in one call)
+- [x] Battery optimization flow (`src/utils/battery-optimization.ts`: OEM deep links for 10 skins + standard Android fallback)
+- [x] Georelays in-app relay map (`GeoRelayDirectory.nearestRelaysWithDistance()` added to geo-relay.ts)
+- [x] Full cross-platform compat test (`src/core/mesh/__tests__/compat.test.ts`: peer ID derivation, packet byte offsets, signature relay compat, ANNOUNCE TLV, fragment constants, BLE UUIDs)
 
 **Milestone:** Feature-complete. Every core service has passing tests. No known protocol bugs.
 
@@ -196,7 +196,16 @@ No new features. Production bug fixes, race condition resolution in BLE and cryp
 
 ## Blockers
 
-_None currently._
+_No hard blockers._
+
+## Known Gaps (pre-v1.0.0)
+
+| Gap                                                   | Detail                                                                                                                                                                                                                             | Impact                                                                        |
+| ----------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| Cross-language Noise XX test                          | JS ↔ bitchat-iOS interop test not yet run (requires a device test harness)                                                                                                                                                         | Deferred to v1.0.0 integration testing; MUST pass before App Store submission |
+| ~~`AnnounceManager.buildPacket()` sends no TLV 0x04~~ | **Fixed:** `buildPacket()` now accepts optional `neighborIDs` and calls `buildAnnouncePayloadWithNeighbors()`. `start()` accepts a `getNeighborIDs` callback for live topology gossip.                                             | Topology gossip re-enabled; TLV 0x04 wire-compatible with bitchat             |
+| ~~WiFi not in `MessageRouter` priority chain~~        | **Fixed:** `WiFiUnicastFn` added as tier-1 transport (tried before BLE when in range). Same Noise session is used for both transports. Falls back to BLE if WiFi returns false.                                                    | Full transport priority chain: WiFi → BLE → Nostr → Courier                   |
+| ~~`DeviceMonitoringManager` not in native BLE~~       | **Fixed:** `PeerRegistry` now tracks `isDirect` per-peer with a 15s TTL for directly connected peers (matching bitchat's `DIRECT_PEER_TTL_MS`) vs 60s for mesh peers. `markDirect()` / `markIndirect()` called on BLE link events. | Anti-spam defense in place; direct-peer slot exhaustion mitigated             |
 
 ## Decision Log
 

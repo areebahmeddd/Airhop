@@ -23,7 +23,6 @@ function makePacket(overrides: Partial<Packet> = {}): Packet {
     senderID: new Uint8Array([0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88]),
     recipientID: new Uint8Array(8),
     timestamp: 1700000000,
-    nonce: new Uint8Array([0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0xff, 0x01, 0x02]),
     signature: new Uint8Array(64),
     payload: new TextEncoder().encode("hello"),
     ...overrides,
@@ -40,25 +39,29 @@ describe("packet-codec", () => {
       expect(decoded).not.toBeNull();
       expect(decoded!.type).toBe(PacketType.ANNOUNCE);
       expect(decoded!.ttl).toBe(7);
-      expect(decoded!.flags).toBe(Flags.SIGNED); // flags preserved through wire
+      expect(decoded!.flags).toBe(Flags.SIGNED);
       expect(Array.from(decoded!.senderID)).toEqual(Array.from(p.senderID));
       expect(Array.from(decoded!.recipientID)).toEqual(
         Array.from(BROADCAST_ID),
       );
       expect(decoded!.timestamp).toBe(1700000000);
-      expect(Array.from(decoded!.nonce)).toEqual(Array.from(p.nonce));
       expect(Array.from(decoded!.payload)).toEqual(
         Array.from(new TextEncoder().encode("hello")),
       );
     });
 
     it("preserves combined flags through encode/decode", () => {
-      // Simulates a unicast compressed packet arriving from a bitchat peer
+      // Simulates a unicast compressed+signed packet from a bitchat peer
       const combinedFlags =
         Flags.HAS_RECIPIENT | Flags.COMPRESSED | Flags.SIGNED;
-      const p = makePacket({ flags: combinedFlags });
+      const p = makePacket({
+        flags: combinedFlags,
+        // recipientID must be non-zero for HAS_RECIPIENT to be preserved on wire
+        recipientID: new Uint8Array([1, 2, 3, 4, 5, 6, 7, 8]),
+      });
       const encoded = encodePacket(p);
-      expect(encoded[3]).toBe(combinedFlags);
+      // Flags live at byte [11] in v2 format
+      expect(encoded[11]).toBe(combinedFlags);
       const decoded = decodePacket(encoded);
       expect(decoded!.flags).toBe(combinedFlags);
     });
@@ -80,22 +83,37 @@ describe("packet-codec", () => {
       expect(encoded[2]).toBe(5);
     });
 
-    it("encodes timestamp big-endian at offsets 20–23", () => {
+    it("encodes timestamp as u64 BE at bytes [3–10]", () => {
       const ts = 0x12345678;
       const encoded = encodePacket(makePacket({ timestamp: ts }));
       const view = new DataView(encoded.buffer);
-      expect(view.getUint32(20, false)).toBe(ts);
+      // High 32 bits at [3], low 32 bits at [7]
+      const hi = view.getUint32(3, false);
+      const lo = view.getUint32(7, false);
+      const decoded = hi * 0x100000000 + lo;
+      expect(decoded).toBe(ts);
     });
 
-    it("places payload starting at offset 96", () => {
+    it("timestamp > u32 max survives round-trip", () => {
+      // Year 2100 timestamp (> 2^32)
+      const ts = 4_102_444_800;
+      const encoded = encodePacket(makePacket({ timestamp: ts }));
+      const decoded = decodePacket(encoded);
+      expect(decoded!.timestamp).toBe(ts);
+    });
+
+    it("broadcast payload starts at offset 24 (header + senderID)", () => {
+      // 16 header + 8 senderID = 24; no recipientID for broadcast
       const payload = new Uint8Array([0xde, 0xad, 0xbe, 0xef]);
-      const encoded = encodePacket(makePacket({ payload }));
-      expect(encoded.length).toBe(100);
-      expect(Array.from(encoded.slice(96))).toEqual([0xde, 0xad, 0xbe, 0xef]);
+      const p = makePacket({ payload, flags: 0x00 }); // no SIGNED, no HAS_RECIPIENT
+      const encoded = encodePacket(p);
+      // 16 + 8 + 4 = 28 total (no signature)
+      expect(encoded.length).toBe(28);
+      expect(Array.from(encoded.slice(24))).toEqual([0xde, 0xad, 0xbe, 0xef]);
     });
 
-    it("returns null for packets shorter than 96 bytes", () => {
-      expect(decodePacket(new Uint8Array(95))).toBeNull();
+    it("returns null for packets shorter than minimum (16-byte header)", () => {
+      expect(decodePacket(new Uint8Array(15))).toBeNull();
     });
 
     it("returns null for version != 2", () => {
@@ -169,8 +187,10 @@ describe("packet-codec", () => {
       expect(isBroadcast(makePacket())).toBe(true);
     });
 
-    it("isBroadcast returns false for non-zero recipientID", () => {
+    it("isBroadcast returns false for non-zero recipientID with HAS_RECIPIENT set", () => {
+      // HAS_RECIPIENT flag must be set for the packet to be treated as unicast
       const p = makePacket({
+        flags: Flags.SIGNED | Flags.HAS_RECIPIENT,
         recipientID: new Uint8Array([1, 0, 0, 0, 0, 0, 0, 0]),
       });
       expect(isBroadcast(p)).toBe(false);

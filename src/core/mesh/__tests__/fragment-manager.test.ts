@@ -37,7 +37,6 @@ function makeLargePacket(
     senderID: senderIDBytes,
     recipientID: new Uint8Array(8),
     timestamp: 1000,
-    nonce: new Uint8Array(8),
     signature: new Uint8Array(64),
     payload: new Uint8Array(payloadSize).fill(0xab),
   };
@@ -56,7 +55,6 @@ describe("fragmentPacket", () => {
       senderID: new Uint8Array(8),
       recipientID: new Uint8Array(8),
       timestamp: 0,
-      nonce: new Uint8Array(8),
       signature: new Uint8Array(64),
       payload: new Uint8Array(10),
     };

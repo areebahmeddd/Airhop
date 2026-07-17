@@ -2,20 +2,16 @@
  * @jest-environment node
  */
 import { FloodRouter } from "../flood-router";
-import type { Packet } from "../packet-codec";
-import { PacketType } from "../packet-codec";
+import { Flags, PacketType, type Packet } from "../packet-codec";
 
-function makePacket(nonceByte: number = 0x01, ttl: number = 7): Packet {
-  const nonce = new Uint8Array(8);
-  nonce[0] = nonceByte;
+function makePacket(_nonceByte: number = 0x01, ttl: number = 7): Packet {
   return {
     type: PacketType.ANNOUNCE,
     ttl,
-    flags: 0x04, // Flags.SIGNED
+    flags: Flags.SIGNED, // 0x02
     senderID: new Uint8Array(8),
     recipientID: new Uint8Array(8),
     timestamp: Math.floor(Date.now() / 1000),
-    nonce,
     signature: new Uint8Array(64),
     payload: new Uint8Array(0),
   };

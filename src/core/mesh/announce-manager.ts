@@ -127,8 +127,16 @@ export class AnnounceManager {
   private timer: ReturnType<typeof setInterval> | null = null;
 
   // Build and return a signed ANNOUNCE packet ready to send.
-  buildPacket(identity: Identity, nickname: string): Packet {
-    const payload = buildAnnouncePayload(identity, nickname);
+  // Pass neighborIDs (each 8 bytes) to include TLV 0x04 so topology gossip works.
+  // The caller should provide the IDs of directly connected peers (up to 10).
+  buildPacket(
+    identity: Identity,
+    nickname: string,
+    neighborIDs: readonly Uint8Array[] = [],
+  ): Packet {
+    const payload = buildAnnouncePayloadWithNeighbors(identity, nickname, [
+      ...neighborIDs,
+    ]);
     const senderIDBytes = hexToBytes(identity.peerID);
 
     const packet: Packet = {
@@ -138,7 +146,6 @@ export class AnnounceManager {
       senderID: senderIDBytes,
       recipientID: new Uint8Array(8), // all-zeros = broadcast
       timestamp: Math.floor(Date.now() / 1000),
-      nonce: crypto.getRandomValues(new Uint8Array(8)),
       signature: new Uint8Array(64),
       payload,
     };
@@ -149,11 +156,21 @@ export class AnnounceManager {
 
   // Start broadcasting ANNOUNCE packets every 30 seconds.
   // Sends an initial packet immediately then repeats on the interval.
-  start(identity: Identity, nickname: string, send: SendPacketFn): void {
+  //
+  // Pass getNeighborIDs to include TLV 0x04 in each ANNOUNCE. The callback is
+  // called on every broadcast tick so the neighbor list stays current. Omit it
+  // (or return []) when neighbor tracking is not yet wired at the feature layer.
+  start(
+    identity: Identity,
+    nickname: string,
+    send: SendPacketFn,
+    getNeighborIDs?: () => readonly Uint8Array[],
+  ): void {
     if (this.timer !== null) this.stop();
 
     const broadcast = (): void => {
-      send(this.buildPacket(identity, nickname));
+      const neighbors = getNeighborIDs?.() ?? [];
+      send(this.buildPacket(identity, nickname, neighbors));
     };
 
     broadcast(); // immediate first announce

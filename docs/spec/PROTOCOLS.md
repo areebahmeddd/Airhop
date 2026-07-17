@@ -2,7 +2,7 @@
 
 > **This is the spec sheet.** Exact constants, byte layouts, and UUIDs. When writing `packet-codec.ts` or the native BLE module, read this document. When in doubt about a value, this document wins.
 >
-> Source of truth cross-referenced with: `bitchat/ios/BLEService.swift`, `bitchat/android/MeshCore.kt`, `bitchat/android/BluetoothGattClientManager.kt`
+> Source of truth: `bitchat/ios/localPackages/BitFoundation/Sources/BitFoundation/BinaryProtocol.swift` and `bitchat/android/.../protocol/BinaryProtocol.kt`. Both iOS and Android use the same binary format.
 
 ## 1. BLE Identifiers
 
@@ -15,49 +15,58 @@
 
 ## 2. Packet Frame Layout
 
-Every packet over BLE uses this exact binary format (bitchat v2):
+Every packet over BLE uses this exact binary format.
 
 ```
-Offset  Size  Type    Field
-------  ----  ------  ----------------------------------------
-[0]       1   u8      version = 2
-[1]       1   u8      type (see section 3 for packet types)
-[2]       1   u8      ttl (default 7, decremented each hop)
-[3]       1   u8      flags
-                        bit 0: hasRecipient (1 = unicast)
-                        bit 1: compressed (1 = LZ4 payload)
-                        bit 2: signed (1 = signature present)
-                        bit 3: hasRoute (1 = source route present, v2 only)
-[4–11]    8   bytes   senderID   (first 8 bytes of SHA-256(noiseStaticPubKey))
-[12–19]   8   bytes   recipientID (all-zeros = broadcast)
-[20–23]   4   u32-BE  timestamp  (Unix seconds)
-[24–31]   8   bytes   nonce      (random, for dedup)
-[32–95]  64   bytes   signature  (Ed25519 over bytes [0–31] + payload)
-[96+]    var  bytes   payload    (LZ4-compressed content)
+Fixed header (v2 = 16 bytes):
+Offset  Size  Type     Field
+------  ----  -------  ----------------------------------------
+[0]        1   u8       version = 2
+[1]        1   u8       type (see section 3 for packet types)
+[2]        1   u8       ttl (default 7, decremented each hop; set to 0 for signing)
+[3 to 10]  8   u64-BE   timestamp (Unix seconds)
+[11]       1   u8       flags
+                          bit 0 (0x01): hasRecipient: recipientID field present
+                          bit 1 (0x02): hasSignature: 64-byte Ed25519 signature appended
+                          bit 2 (0x04): isCompressed: zlib payload (reserved, not used)
+                          bit 3 (0x08): hasRoute: source-route hop list present
+                          bit 4 (0x10): isRSR: solicited sync response
+[12 to 15] 4   u32-BE   payloadLength
+
+Variable sections (in this exact order after the header):
+  senderID    (8 bytes, always present)
+  recipientID (8 bytes, only when hasRecipient = 1)
+  route       (when hasRoute = 1: [count: u8][hop1: 8 bytes]...[hopN: 8 bytes])
+  payload     (payloadLength bytes)
+  signature   (64 bytes Ed25519, only when hasSignature = 1)
 ```
 
-**Signature coverage:** bytes `[0–31]` (header) plus the full payload, with TTL byte `[2]` **normalized to `0`** before signing. This allows relays to decrement TTL without invalidating the signature.
+**Broadcast packets** omit the recipientID field entirely (hasRecipient = 0). Decoders set recipientID to all-zeros when hasRecipient = 0.
 
-**Source route field (when `hasRoute=1`):** Inserted between `recipientID` and `payload`. Format: `count` (1 byte) followed by `count × 8` bytes of intermediate hop Peer IDs. The sender and recipient are NOT included in the route list; they are already in the header.
+**Signature coverage** (`toBinaryDataForSigning()`): encode the full packet with `ttl=0`, `isRSR=false`, `hasSignature=0` (no signature field), then Ed25519-sign the resulting bytes. This allows relays to decrement TTL and tag solicited responses without invalidating the original signature.
+
+**Packet deduplication** uses `PacketID = SHA-256(type[1] | senderID[8] | timestamp_u64_BE[8] | payload)[0:16]` per `PacketIdUtil.swift` / `PacketIdUtil.kt`. There is no nonce field.
+
+**Source route field** (when `hasRoute=1`): `count` (1 byte) followed by `count × 8` bytes of intermediate hop Peer IDs. The sender and final recipient are NOT in the route list; they are in the header.
 
 ## 3. Packet Type Registry
 
-All type values match bitchat `MessageType.swift` (public domain). Types `0x01–0x28` are bitchat-defined; `0x29+` are Airhop extensions. bitchat nodes silently drop unknown types.
+All type values match bitchat `MessageType.swift` / `MessageType.kt` (public domain). Types `0x01–0x28` are bitchat-defined; `0x29+` are Airhop extensions. bitchat nodes silently drop unknown types.
 
-| Name              | Hex    | Direction         | Description                                                                                                                                                                                     |
-| ----------------- | ------ | ----------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `ANNOUNCE`        | `0x01` | Broadcast         | Signed presence heartbeat. Payload is TLV-encoded: `0x01` nickname, `0x02` Noise pubkey (32B), `0x03` Ed25519 signing pubkey (32B), `0x04` direct neighbors (optional, up to 10 × 8B peer IDs). |
-| `CHANNEL_MSG`     | `0x02` | Broadcast         | Public channel message. Plaintext + signed. Channel name embedded in payload.                                                                                                                   |
-| `LEAVE`           | `0x03` | Broadcast         | Peer departing notification.                                                                                                                                                                    |
-| `COURIER_ENV`     | `0x04` | Broadcast         | Store-and-forward sealed envelope. Noise X encrypted. TLV format (see section 6).                                                                                                               |
-| `NOISE_HANDSHAKE` | `0x10` | Unicast           | Noise XX handshake message (initiator msg1 / responder msg2 / initiator msg3). recipientID set.                                                                                                 |
-| `NOISE_ENCRYPTED` | `0x11` | Unicast           | Post-handshake encrypted payload: DM text, receipts, metadata. recipientID set. HAS_RECIPIENT flag set.                                                                                         |
-| `FRAGMENT`        | `0x20` | Broadcast/Unicast | BLE fragment of a larger message. Stream ID + index + total in payload header. See section 7.                                                                                                   |
-| `REQUEST_SYNC`    | `0x21` | Broadcast         | GCS filter gossip request. TTL=2 (local-only). Payload TLV format (see section 5).                                                                                                              |
-| `FILE_TRANSFER`   | `0x22` | Broadcast/Unicast | Binary file / audio / image payload.                                                                                                                                                            |
-| `VOICE_FRAME`     | `0x29` | Broadcast         | PTT audio burst. AAC 16 kHz mono frame. (Airhop extension)                                                                                                                                      |
-| `VIDEO_FRAME`     | `0x30` | Unicast           | Video frame (WiFi Aware only, Airhop extension). HEVC.                                                                                                                                          |
-| `CASHU_TOKEN`     | `0x40` | Unicast           | Cashu ecash token transfer (Airhop extension).                                                                                                                                                  |
+| Name              | Hex    | Direction         | Description                                                                                                                                                                                                     |
+| ----------------- | ------ | ----------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ANNOUNCE`        | `0x01` | Broadcast         | Signed presence heartbeat. Payload is TLV-encoded (1-byte length): `0x01` nickname, `0x02` Noise pubkey (32B), `0x03` Ed25519 signing pubkey (32B), `0x04` direct neighbors (optional, up to 10 × 8B peer IDs). |
+| `CHANNEL_MSG`     | `0x02` | Broadcast         | Public channel message. Plaintext + signed. Channel name embedded in payload.                                                                                                                                   |
+| `LEAVE`           | `0x03` | Broadcast         | Peer departing notification.                                                                                                                                                                                    |
+| `COURIER_ENV`     | `0x04` | Broadcast         | Store-and-forward sealed envelope. Noise X encrypted. TLV format (see section 6).                                                                                                                               |
+| `NOISE_HANDSHAKE` | `0x10` | Unicast           | Noise XX handshake message (initiator msg1 / responder msg2 / initiator msg3). recipientID set.                                                                                                                 |
+| `NOISE_ENCRYPTED` | `0x11` | Unicast           | Post-handshake encrypted payload: DM text, receipts, metadata. recipientID set. HAS_RECIPIENT flag set.                                                                                                         |
+| `FRAGMENT`        | `0x20` | Broadcast/Unicast | BLE fragment of a larger message. Stream ID + index + total in payload header. See section 7.                                                                                                                   |
+| `REQUEST_SYNC`    | `0x21` | Broadcast         | GCS filter gossip request. TTL=2 (local-only). Payload TLV format (see section 5).                                                                                                                              |
+| `FILE_TRANSFER`   | `0x22` | Broadcast/Unicast | Binary file / audio / image payload.                                                                                                                                                                            |
+| `VOICE_FRAME`     | `0x29` | Broadcast         | PTT audio burst. Matches `VoiceBurstPacket.swift` wire format. (Airhop extension)                                                                                                                               |
+| `VIDEO_FRAME`     | `0x30` | Unicast           | Video frame (WiFi Aware only, Airhop extension). HEVC.                                                                                                                                                          |
+| `CASHU_TOKEN`     | `0x40` | Unicast           | Cashu ecash token transfer (Airhop extension).                                                                                                                                                                  |
 
 ## 4. Routing Constants
 
@@ -67,8 +76,8 @@ All type values match bitchat `MessageType.swift` (public domain). Types `0x01�
 | Relay jitter range        | `10–220 ms`    | Random delay before re-broadcast            |
 | Fragment size             | `469 bytes`    | Max BLE payload per fragment                |
 | Max concurrent assemblies | `128`          | In-flight fragment reassembly slots         |
-| Dedup LRU size            | `1000 entries` | Seen-nonce cache                            |
-| Dedup expiry window       | `5 minutes`    | Nonce expiry in dedup cache                 |
+| Dedup LRU size            | `1000 entries` | Seen-packetID cache (16-byte IDs)           |
+| Dedup expiry window       | `5 minutes`    | PacketID expiry in dedup cache              |
 | Fanout subset size        | `~⌈sqrt(n)⌉`   | Deterministic fanout, excludes ingress peer |
 
 ## 5. Gossip Sync Constants

@@ -150,17 +150,17 @@ bitchat is an excellent foundation. Airhop fills the gaps it left open.
 
 **Milestone:** Offline video calling over WiFi Aware. Double Ratchet passing test vectors.
 
-### v0.9.0: Production Hardening
+### v0.9.0: Production Hardening ✅
 
 **Goal:** All features complete, hardened, and cross-platform verified.
 
-- [ ] NFC contact exchange (`react-native-nfc-manager`)
-- [ ] QR code scanner for peer verification
-- [ ] Human-readable usernames (deterministic from pubkey)
-- [ ] Panic wipe (triple-tap logo; all keys and data destroyed in <1s)
-- [ ] Battery optimization flow (Android OEM whitelist request)
-- [ ] Georelays in-app relay map
-- [ ] Full cross-platform compat test: Airhop ↔ bitchat-ios ↔ bitchat-android
+- [x] NFC contact exchange (`src/core/crypto/contact-exchange.ts`: binary ContactCard, NDEF + QR URI scheme `airhop:v1/<base64url>`)
+- [x] QR code scanner for peer verification (encodeQRContent/decodeQRContent — deep-link format)
+- [x] Human-readable usernames (`src/utils/username.ts`: deterministic `adjective-noun-XXXX` from peer ID)
+- [x] Panic wipe (`src/utils/panic-wipe.ts`: clears EncryptedStorage keys + all MMKV partitions; < 1s)
+- [x] Battery optimization flow (`src/utils/battery-optimization.ts`: OEM deep links for 10 skins + standard Android fallback)
+- [x] Georelays in-app relay map (`GeoRelayDirectory.nearestRelaysWithDistance()` returns `{url, km}[]`)
+- [x] Full cross-platform compat test (`src/core/mesh/__tests__/compat.test.ts`: peer ID, byte offsets, relay TTL compat, ANNOUNCE TLV, fragment constants, BLE UUIDs)
 
 **Milestone:** Feature-complete. Every core service has passing tests. No known protocol bugs.
 

@@ -40,6 +40,10 @@ export const VIDEO_FRAME_HEADER_SIZE = 14;
 
 export interface VideoSessionConfig {
   senderPeerID: string; // 16 hex chars
+  // Recipient peer ID (16 hex chars). When set the packet uses the unicast
+  // recipientID and HAS_RECIPIENT flag per PROTOCOLS.md section 3 (VIDEO_FRAME
+  // is a unicast type). Omit only for broadcast-to-all-session scenarios.
+  recipientPeerID?: string;
   signingPrivKey: Uint8Array;
   width?: number; // default 854 (480p landscape)
   height?: number; // default 480
@@ -126,6 +130,7 @@ export class VideoCapture {
   private sessionId = 0;
   private frameSeq = 0;
   private readonly senderIDBytes: Uint8Array;
+  private readonly recipientIDBytes: Uint8Array;
 
   constructor(config: VideoSessionConfig, backend: VideoCaptureBackend) {
     this.config = config;
@@ -134,13 +139,12 @@ export class VideoCapture {
     this.width = config.width ?? 854; // 480p landscape
     this.height = config.height ?? 480;
 
-    this.senderIDBytes = new Uint8Array(8);
-    for (let i = 0; i < 8; i++) {
-      this.senderIDBytes[i] = parseInt(
-        config.senderPeerID.slice(i * 2, i * 2 + 2),
-        16,
-      );
-    }
+    this.senderIDBytes = peerIDToBytes(config.senderPeerID);
+    // If a recipient is specified, set recipientID for proper unicast framing
+    // (HAS_RECIPIENT flag + non-zero recipientID), per PROTOCOLS.md VIDEO_FRAME.
+    this.recipientIDBytes = config.recipientPeerID
+      ? peerIDToBytes(config.recipientPeerID)
+      : new Uint8Array(8); // all-zeros = broadcast within session
   }
 
   // Begin a video call session. Resolves once the encoder is running.
@@ -186,14 +190,14 @@ export class VideoCapture {
 
     const payload = encodeVideoFramePayload(header, frameData);
 
+    const isUnicast = this.recipientIDBytes.some((b) => b !== 0);
     const packet: Packet = {
       type: PacketType.VIDEO_FRAME,
       ttl: 1, // WiFi Direct only; must not be relayed over BLE mesh
-      flags: Flags.SIGNED,
+      flags: isUnicast ? Flags.SIGNED | Flags.HAS_RECIPIENT : Flags.SIGNED,
       senderID: this.senderIDBytes,
-      recipientID: new Uint8Array(8), // broadcast within WiFi session
+      recipientID: this.recipientIDBytes,
       timestamp: Math.floor(Date.now() / 1000),
-      nonce: randomBytes(8),
       signature: new Uint8Array(64),
       payload,
     };
@@ -210,4 +214,13 @@ export class VideoCapture {
 function generateSessionId(): number {
   const b = randomBytes(4);
   return ((b[0] << 24) | (b[1] << 16) | (b[2] << 8) | b[3]) >>> 0;
+}
+
+// Parse a 16-hex-char peer ID into an 8-byte Uint8Array.
+function peerIDToBytes(peerID: string): Uint8Array {
+  const out = new Uint8Array(8);
+  for (let i = 0; i < 8; i++) {
+    out[i] = parseInt(peerID.slice(i * 2, i * 2 + 2), 16);
+  }
+  return out;
 }

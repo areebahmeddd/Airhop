@@ -106,6 +106,20 @@ export class GeoRelayDirectory {
     return sorted.slice(0, count).map((e) => e.url);
   }
 
+  // Return the N nearest relays with their distance in kilometres.
+  // Useful for the in-app relay map that labels each pin with a distance.
+  nearestRelaysWithDistance(
+    lat: number,
+    lng: number,
+    count: number = 5,
+  ): { url: string; km: number }[] {
+    const pool = this.entries.length > 0 ? this.entries : FALLBACK_RELAYS;
+    return pool
+      .map((e) => ({ url: e.url, km: haversineKm(lat, lng, e.lat, e.lng) }))
+      .sort((a, b) => a.km - b.km)
+      .slice(0, count);
+  }
+
   // Return all relay entries (for diagnostics / UI relay browser).
   allRelays(): RelayEntry[] {
     return [...this.entries];

@@ -9,12 +9,9 @@
 // automatically cleaned up when a last-frame is received or after an inactivity
 // timeout.
 
+import { bytesToHex } from "@noble/hashes/utils.js";
 import type { Packet } from "./packet-codec";
-import {
-  parseVoiceFramePayload,
-  type VoiceCodecId,
-  type VoiceFrameHeader,
-} from "./voice-capture";
+import { decodeBurstPacket, type VoiceCodecId } from "./voice-capture";
 
 // 350 ms jitter buffer per ROADMAP.md.
 const JITTER_BUFFER_MS = 350;
@@ -33,46 +30,47 @@ export interface AudioPlaybackBackend {
   // Called when the jitter buffer delivers a batch of ordered frames.
   // frames are in sequence order, ready for decoding and playback.
   playFrames(
-    sessionId: number,
+    burstIDHex: string,
     codec: VoiceCodecId,
     frames: Uint8Array[],
   ): Promise<void>;
-  // Called when a PTT session ends (last frame received + buffer flushed).
-  endSession(sessionId: number): void;
+  // Called when a PTT session ends (END/CANCELED received + buffer flushed).
+  endSession(burstIDHex: string): void;
 }
 
 interface BufferedFrame {
   seq: number;
-  frameData: Uint8Array;
-  isLast: boolean;
+  // A single DATA packet may carry multiple compressed frames.
+  frames: Uint8Array[];
   arrivedMs: number;
 }
 
 // ---- VoiceSession -----------------------------------------------------------
 
-// Manages the jitter buffer for a single (peer, sessionId) PTT burst.
+// Manages the jitter buffer for a single (peer, burstID) PTT burst.
 class VoiceSession {
-  readonly sessionId: number;
+  readonly burstIDHex: string;
   readonly senderPeerID: string;
   readonly codec: VoiceCodecId;
   private readonly backend: AudioPlaybackBackend;
-  private readonly onDone: (sessionId: number) => void;
+  private readonly onDone: (burstIDHex: string) => void;
 
   private buffer: BufferedFrame[] = [];
-  private nextExpectedSeq = 0;
+  private nextExpectedSeq = 1; // DATA seq starts at 1 (0 is START)
   private flushTimer: ReturnType<typeof setTimeout> | null = null;
   private timeoutTimer: ReturnType<typeof setTimeout> | null = null;
   private ended = false;
+  private endReceived = false;
   private startMs = Date.now();
 
   constructor(
-    sessionId: number,
+    burstIDHex: string,
     senderPeerID: string,
     codec: VoiceCodecId,
     backend: AudioPlaybackBackend,
-    onDone: (sessionId: number) => void,
+    onDone: (burstIDHex: string) => void,
   ) {
-    this.sessionId = sessionId;
+    this.burstIDHex = burstIDHex;
     this.senderPeerID = senderPeerID;
     this.codec = codec;
     this.backend = backend;
@@ -80,25 +78,26 @@ class VoiceSession {
     this.resetTimeout();
   }
 
-  addFrame(header: VoiceFrameHeader, frameData: Uint8Array): void {
+  // Called for each DATA burst packet.
+  addFrames(seq: number, frames: Uint8Array[]): void {
     if (this.ended) return;
     if (this.buffer.length >= MAX_BUFFERED_FRAMES) {
-      // Drop oldest frame to make room (buffer overrun protection).
+      // Drop oldest entry to make room (buffer overrun protection).
       this.buffer.shift();
     }
 
-    this.buffer.push({
-      seq: header.seq,
-      frameData,
-      isLast: header.isLast,
-      arrivedMs: Date.now(),
-    });
+    this.buffer.push({ seq, frames, arrivedMs: Date.now() });
 
     // Sort buffer by sequence number (handles reordering).
     this.buffer.sort((a, b) => a.seq - b.seq);
 
     this.resetTimeout();
     this.scheduleFlush();
+  }
+
+  // Called when the END burst packet is received.
+  markEnded(): void {
+    this.endReceived = true;
   }
 
   // Force-flush all buffered frames now (called on session end or timeout).
@@ -131,9 +130,16 @@ class VoiceSession {
   }
 
   private deliverFrames(isFinal: boolean): void {
-    if (this.buffer.length === 0) return;
+    if (this.buffer.length === 0) {
+      // Nothing to deliver. If END was received and no more data is expected,
+      // still signal completion.
+      if (isFinal && this.endReceived && !this.ended) {
+        this.signalDone();
+      }
+      return;
+    }
 
-    // Collect all contiguous frames starting from nextExpectedSeq.
+    // Collect all contiguous DATA entries starting from nextExpectedSeq.
     const toDeliver: BufferedFrame[] = [];
     while (this.buffer.length > 0) {
       const next = this.buffer[0];
@@ -150,27 +156,36 @@ class VoiceSession {
 
     if (toDeliver.length === 0) return;
 
-    const rawFrames = toDeliver.map((f) => f.frameData);
-    const hasLastFrame = toDeliver.some((f) => f.isLast);
+    // Flatten all frames from all DATA packets in sequence order.
+    const rawFrames = toDeliver.flatMap((entry) => entry.frames);
 
-    this.backend.playFrames(this.sessionId, this.codec, rawFrames).catch(() => {
-      // Best-effort: playback errors are non-fatal
-    });
+    this.backend
+      .playFrames(this.burstIDHex, this.codec, rawFrames)
+      .catch(() => {
+        // Best-effort: playback errors are non-fatal.
+      });
 
-    if (hasLastFrame || (isFinal && this.buffer.length === 0)) {
-      this.ended = true;
-      this.backend.endSession(this.sessionId);
-      this.onDone(this.sessionId);
+    if (isFinal && this.buffer.length === 0 && this.endReceived) {
+      this.signalDone();
     }
+  }
+
+  private signalDone(): void {
+    if (this.ended) return;
+    if (this.timeoutTimer !== null) {
+      clearTimeout(this.timeoutTimer);
+      this.timeoutTimer = null;
+    }
+    this.ended = true;
+    this.backend.endSession(this.burstIDHex);
+    this.onDone(this.burstIDHex);
   }
 
   private resetTimeout(): void {
     if (this.timeoutTimer !== null) clearTimeout(this.timeoutTimer);
     this.timeoutTimer = setTimeout(() => {
+      this.markEnded();
       this.flush();
-      this.ended = true;
-      this.backend.endSession(this.sessionId);
-      this.onDone(this.sessionId);
     }, SESSION_TIMEOUT_MS);
   }
 }
@@ -186,37 +201,59 @@ export class VoicePlayer {
     this.backend = backend;
   }
 
-  // Feed a raw VOICE_FRAME packet into the player. Handles session creation and
+  // Feed a raw VOICE_FRAME packet into the player. Handles session lifecycle and
   // frame routing automatically. Call this from the BLE packet receive path.
   handlePacket(packet: Packet, senderPeerID: string): void {
-    const parsed = parseVoiceFramePayload(packet.payload);
-    if (!parsed) return;
+    const burst = decodeBurstPacket(packet.payload);
+    if (!burst) return;
 
-    const { header, frameData } = parsed;
-    const key = `${senderPeerID}:${header.sessionId}`;
+    const burstIDHex = bytesToHex(burst.burstID);
+    const key = `${senderPeerID}:${burstIDHex}`;
 
-    let session = this.sessions.get(key);
-    if (!session) {
-      session = new VoiceSession(
-        header.sessionId,
-        senderPeerID,
-        header.codec,
-        this.backend,
-        (id) => {
-          this.sessions.delete(`${senderPeerID}:${id}`);
-        },
-      );
-      this.sessions.set(key, session);
+    switch (burst.kind) {
+      case "start": {
+        if (!this.sessions.has(key)) {
+          const session = new VoiceSession(
+            burstIDHex,
+            senderPeerID,
+            burst.codec,
+            this.backend,
+            (id) => {
+              this.sessions.delete(`${senderPeerID}:${id}`);
+            },
+          );
+          this.sessions.set(key, session);
+        }
+        break;
+      }
+      case "data": {
+        const session = this.sessions.get(key);
+        // Discard DATA packets for unknown sessions (no START received).
+        if (!session) break;
+        session.addFrames(burst.seq, burst.frames);
+        break;
+      }
+      case "end": {
+        const session = this.sessions.get(key);
+        if (!session) break;
+        session.markEnded();
+        session.flush();
+        break;
+      }
+      case "canceled": {
+        const session = this.sessions.get(key);
+        if (session) session.destroy();
+        this.sessions.delete(key);
+        break;
+      }
     }
-
-    session.addFrame(header, frameData);
   }
 
   // Active PTT sessions (for UI display).
-  get activeSessions(): { senderPeerID: string; sessionId: number }[] {
+  get activeSessions(): { senderPeerID: string; burstIDHex: string }[] {
     return [...this.sessions.values()].map((s) => ({
       senderPeerID: s.senderPeerID,
-      sessionId: s.sessionId,
+      burstIDHex: s.burstIDHex,
     }));
   }
 

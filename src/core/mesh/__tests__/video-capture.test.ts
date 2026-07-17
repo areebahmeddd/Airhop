@@ -209,7 +209,6 @@ function makeFakePacket(
     senderID: senderPeerIDBytes,
     recipientID: new Uint8Array(8),
     timestamp: Math.floor(Date.now() / 1000),
-    nonce: new Uint8Array(8),
     signature: new Uint8Array(64),
     payload: encodeVideoFramePayload(header, frameData),
   };
@@ -247,7 +246,6 @@ describe("VideoPlayer", () => {
       senderID: sender,
       recipientID: new Uint8Array(8),
       timestamp: 0,
-      nonce: new Uint8Array(8),
       signature: new Uint8Array(64),
       payload: new Uint8Array(3), // too short
     };

@@ -10,6 +10,7 @@ import {
   decodeChannelMsgPayload,
   encodeChannelMsgPayload,
   type RouterIdentity,
+  type WiFiUnicastFn,
 } from "../message-router";
 
 function makeIdentity(): RouterIdentity {
@@ -117,6 +118,42 @@ describe("PeerRegistry", () => {
     r.evictStale();
     expect(r.size).toBe(1);
   });
+
+  test("isDirect defaults to false when not provided", () => {
+    const r = new PeerRegistry();
+    r.update({
+      peerID: "aabb",
+      noisePubKey: new Uint8Array(32),
+      signingPubKey: new Uint8Array(32),
+      nickname: "alice",
+    });
+    expect(r.get("aabb")?.isDirect).toBe(false);
+  });
+
+  test("markDirect sets isDirect=true on a known peer", () => {
+    const r = new PeerRegistry();
+    r.update({
+      peerID: "aabb",
+      noisePubKey: new Uint8Array(32),
+      signingPubKey: new Uint8Array(32),
+      nickname: "alice",
+    });
+    r.markDirect("aabb");
+    expect(r.get("aabb")?.isDirect).toBe(true);
+  });
+
+  test("markIndirect clears isDirect on a known peer", () => {
+    const r = new PeerRegistry();
+    r.update({
+      peerID: "aabb",
+      noisePubKey: new Uint8Array(32),
+      signingPubKey: new Uint8Array(32),
+      nickname: "alice",
+      isDirect: true,
+    });
+    r.markIndirect("aabb");
+    expect(r.get("aabb")?.isDirect).toBe(false);
+  });
 });
 
 describe("MessageRouter", () => {
@@ -219,7 +256,6 @@ describe("MessageRouter", () => {
       senderID: new Uint8Array(8),
       recipientID: new Uint8Array(8),
       timestamp: 1000,
-      nonce: new Uint8Array(8),
       signature: new Uint8Array(64),
       payload: ciphertext,
     };
@@ -250,7 +286,6 @@ describe("MessageRouter", () => {
       senderID: new Uint8Array(8),
       recipientID: new Uint8Array(8),
       timestamp: 0,
-      nonce: new Uint8Array(8),
       signature: new Uint8Array(64),
       payload: new Uint8Array(0),
     };
@@ -384,5 +419,111 @@ describe("MessageRouter", () => {
     expect(registry.get(peerID)?.nostrPubkey).toBe("d".repeat(64));
     // Nickname should be updated to reflect the new announce.
     expect(registry.get(peerID)?.nickname).toBe("frank-v2");
+  });
+
+  test("sendDm sends via WiFi when wifiUnicast is injected and returns true", () => {
+    const identity = makeIdentity();
+    const registry = new PeerRegistry();
+    const recipientPeerID = "aabbccdd00112233";
+
+    registry.update({
+      peerID: recipientPeerID,
+      noisePubKey: new Uint8Array(32),
+      signingPubKey: new Uint8Array(32),
+      nickname: "alice",
+    });
+    const { sessionI } = makePeerNoiseSession();
+    registry.setSession(recipientPeerID, sessionI);
+
+    const wifiSent: string[] = [];
+    const bleUnicasts: Packet[] = [];
+    const wifiUnicast: WiFiUnicastFn = (peerID) => {
+      wifiSent.push(peerID);
+      return true;
+    };
+
+    const router = new MessageRouter(
+      identity,
+      registry,
+      () => {},
+      (_, p) => bleUnicasts.push(p),
+      undefined,
+      wifiUnicast,
+    );
+
+    const result = router.sendDm(recipientPeerID, "via wifi");
+    expect(result).toBe("sent");
+    expect(wifiSent).toHaveLength(1);
+    expect(wifiSent[0]).toBe(recipientPeerID);
+    // BLE unicast must not be called when WiFi succeeds.
+    expect(bleUnicasts).toHaveLength(0);
+  });
+
+  test("sendDm falls back to BLE when wifiUnicast returns false", () => {
+    const identity = makeIdentity();
+    const registry = new PeerRegistry();
+    const recipientPeerID = "bbccddee11223344";
+
+    registry.update({
+      peerID: recipientPeerID,
+      noisePubKey: new Uint8Array(32),
+      signingPubKey: new Uint8Array(32),
+      nickname: "bob",
+    });
+    const { sessionI } = makePeerNoiseSession();
+    registry.setSession(recipientPeerID, sessionI);
+
+    const bleUnicasts: Packet[] = [];
+    const wifiUnicast: WiFiUnicastFn = () => false; // peer not in WiFi range
+
+    const router = new MessageRouter(
+      identity,
+      registry,
+      () => {},
+      (_, p) => bleUnicasts.push(p),
+      undefined,
+      wifiUnicast,
+    );
+
+    const result = router.sendDm(recipientPeerID, "fallback ble");
+    expect(result).toBe("sent");
+    expect(bleUnicasts).toHaveLength(1);
+    expect(bleUnicasts[0].type).toBe(PacketType.NOISE_ENCRYPTED);
+  });
+
+  test("WiFi tier is skipped entirely when no Noise session exists", () => {
+    // Without a session the router cannot encrypt a DM for any direct transport.
+    const identity = makeIdentity();
+    const registry = new PeerRegistry();
+    const recipientPeerID = "ccddee0011223344";
+
+    registry.update({
+      peerID: recipientPeerID,
+      noisePubKey: new Uint8Array(32),
+      signingPubKey: new Uint8Array(32),
+      nickname: "carol",
+    });
+    registry.setNostrPubkey(recipientPeerID, "e".repeat(64));
+
+    const wifiCalled: string[] = [];
+    const nostrSent: string[] = [];
+    const router = new MessageRouter(
+      identity,
+      registry,
+      () => {},
+      () => {},
+      async (pubkey) => {
+        nostrSent.push(pubkey);
+      },
+      (peerID) => {
+        wifiCalled.push(peerID);
+        return true;
+      },
+    );
+
+    const result = router.sendDm(recipientPeerID, "no session");
+    expect(result).toBe("sent-nostr");
+    expect(wifiCalled).toHaveLength(0);
+    expect(nostrSent).toHaveLength(1);
   });
 });

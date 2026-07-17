@@ -5,18 +5,21 @@
 // raw PCM callbacks; this module handles PTT session state, frame sequencing,
 // and packet construction.
 //
-// VOICE_FRAME payload format (Airhop extension, not part of bitchat v2):
-//   [0–3]  u32-BE  session_id   groups all frames from one PTT press
-//   [4–5]  u16-BE  seq          frame index within session (0-based)
-//   [6]    u8      codec        0x00 = AAC-LC 16kHz mono, 0x01 = Opus 16kHz mono
-//   [7]    u8      flags        bit 0: is_last (end of session)
-//   [8+]   bytes   frame_data   encoded audio bytes
+// VOICE_FRAME payload format (matches bitchat VoiceBurstPacket.swift):
+//   [burstID: 8 bytes][seq: u16 BE][flags: u8][type-specific payload]
 //
-// Broadcast cadence: frames are sent as they are produced by the encoder
-// (typically 20–40 ms per frame for AAC/Opus). The TTL flood delivers them
-// to all nearby peers simultaneously.
-
-import { bytesToHex } from "@noble/hashes/utils.js";
+//   flags 0x01 (START):    payload = [codec: u8]
+//   flags 0x00 (DATA):     payload = [len: u16 BE][AAC frame]... (1+ frames)
+//   flags 0x02 (END):      payload = [totalDataPackets: u16 BE][durationMs: u32 BE]
+//   flags 0x04 (CANCELED): payload empty; receivers discard the burst
+//
+// seq 0 is reserved for the START packet. DATA packets start at seq 1.
+// Codec 0x01 = AAC-LC 16 kHz mono (matches VoiceBurstCodec.aacLC16kMono).
+//
+// DATA packets batch multiple encoded frames (each prefixed with a u16 length)
+// into a single VOICE_FRAME packet up to PTT_MAX_BURST_BYTES (210 bytes) so
+// the packet never needs BLE fragmentation.
+import { randomBytes } from "@noble/hashes/utils.js";
 import {
   Flags,
   PacketType,
@@ -24,19 +27,34 @@ import {
   type Packet,
 } from "../mesh/packet-codec";
 
-// ---- Voice frame payload format ---------------------------------------------
+// ---- Constants (per PUSH-TO-TALK-DESIGN.md / VoiceBurstPacket.swift) --------
 
+// Codec values — must match VoiceBurstCodec in bitchat.
 export const VoiceCodec = {
-  AAC_LC_16KHZ_MONO: 0x00,
-  OPUS_16KHZ_MONO: 0x01,
+  AAC_LC_16KHZ_MONO: 0x01, // VoiceBurstCodec.aacLC16kMono
 } as const;
 
 export type VoiceCodecId = (typeof VoiceCodec)[keyof typeof VoiceCodec];
 
-const FLAG_IS_LAST = 0x01;
+// Burst packet flag values.
+export const BurstFlags = {
+  DATA: 0x00, // Audio data frames
+  START: 0x01, // Session open (carries codec byte)
+  END: 0x02, // Session close (carries stats)
+  CANCELED: 0x04, // Session aborted
+} as const;
 
-// Header is 8 bytes: session_id(4) + seq(2) + codec(1) + flags(1)
-const VOICE_FRAME_HEADER_SIZE = 8;
+// Maximum encoded bytes per DATA packet payload (content budget per packet).
+// Matches TransportConfig.pttMaxBurstContentBytes = 210 in bitchat.
+const PTT_MAX_BURST_BYTES = 210;
+
+// Maximum frames per DATA packet (guard against misconfiguration).
+const MAX_FRAMES_PER_PACKET = 8;
+
+// Fixed burst packet header size: burstID(8) + seq(2) + flags(1) = 11 bytes.
+const BURST_HEADER_SIZE = 11;
+
+const BURST_ID_SIZE = 8;
 
 // ---- Types ------------------------------------------------------------------
 
@@ -44,15 +62,11 @@ export interface VoiceCaptureConfig {
   senderPeerID: string; // 16 hex chars
   signingPrivKey: Uint8Array;
   codec?: VoiceCodecId;
-  onPacket: (packet: Packet) => void; // called per encoded frame
+  onPacket: (packet: Packet) => void;
 }
 
-// Injected audio backend - the platform implementation satisfies this interface.
-// Keeps VoiceCapture free of react-native dependencies and fully testable.
 export interface AudioCaptureBackend {
-  // Start capturing audio. The backend calls onFrame with each encoded chunk.
   startCapture(onFrame: (frameData: Uint8Array) => void): Promise<void>;
-  // Stop capturing and flush any pending frames.
   stopCapture(): Promise<void>;
 }
 
@@ -64,8 +78,12 @@ export class VoiceCaptureSession {
   private readonly codec: VoiceCodecId;
 
   private active = false;
-  private sessionId = 0;
-  private seq = 0;
+  private burstID = new Uint8Array(BURST_ID_SIZE);
+  private seq = 0; // next seq to emit (0 = START, 1+ = DATA)
+  private dataPacketCount = 0;
+  private burstStartMs = 0;
+  private pendingFrames: Uint8Array[] = [];
+  private pendingSize = 0;
   private readonly senderIDBytes: Uint8Array;
 
   constructor(config: VoiceCaptureConfig, backend: AudioCaptureBackend) {
@@ -82,44 +100,83 @@ export class VoiceCaptureSession {
     }
   }
 
-  // Begin a PTT burst. Resolves once audio capture starts.
+  // Begin a PTT burst: sends START packet, begins capturing.
   async startPtt(): Promise<void> {
     if (this.active) return;
     this.active = true;
-    this.sessionId = generateSessionId();
+    this.burstID = randomBytes(BURST_ID_SIZE);
     this.seq = 0;
+    this.dataPacketCount = 0;
+    this.burstStartMs = Date.now();
+    this.pendingFrames = [];
+    this.pendingSize = 0;
+
+    // Send START packet (seq=0).
+    this.emit(encodeBurstStart(this.burstID, this.codec));
+    this.seq = 1;
 
     await this.backend.startCapture((frameData) => {
-      if (this.active) this.emitFrame(frameData, false);
+      if (this.active) this.addFrame(frameData);
     });
   }
 
-  // End the PTT burst. Sends a final frame with is_last=1.
+  // End the PTT burst: flush pending frames, send END packet.
   async stopPtt(): Promise<void> {
     if (!this.active) return;
     this.active = false;
-
     await this.backend.stopCapture();
-    // Emit a zero-byte last frame so receivers know the burst ended.
-    this.emitFrame(new Uint8Array(0), true);
+
+    // Flush any buffered frames.
+    this.flushPending();
+
+    const durationMs = Date.now() - this.burstStartMs;
+    this.emit(
+      encodeBurstEnd(this.burstID, this.seq, this.dataPacketCount, durationMs),
+    );
+  }
+
+  // Abort the PTT burst: send CANCELED packet, discard pending frames.
+  async cancelPtt(): Promise<void> {
+    if (!this.active) return;
+    this.active = false;
+    await this.backend.stopCapture();
+    this.pendingFrames = [];
+    this.pendingSize = 0;
+    this.emit(encodeBurstCanceled(this.burstID, this.seq));
   }
 
   get isActive(): boolean {
     return this.active;
   }
 
-  // ---- Private ---------------------------------------------------------------
+  // ---- Private ----------------------------------------------------------------
 
-  private emitFrame(frameData: Uint8Array, isLast: boolean): void {
-    const payload = buildVoiceFramePayload(
-      this.sessionId,
-      this.seq,
-      this.codec,
-      isLast,
-      frameData,
-    );
+  private addFrame(frameData: Uint8Array): void {
+    const frameCost = 2 + frameData.length; // u16 length prefix + data
+    // If adding this frame would exceed the budget or the frame count limit,
+    // flush what we have first.
+    if (
+      this.pendingFrames.length > 0 &&
+      (BURST_HEADER_SIZE + this.pendingSize + frameCost > PTT_MAX_BURST_BYTES ||
+        this.pendingFrames.length >= MAX_FRAMES_PER_PACKET)
+    ) {
+      this.flushPending();
+    }
+    this.pendingFrames.push(frameData);
+    this.pendingSize += frameCost;
+  }
+
+  private flushPending(): void {
+    if (this.pendingFrames.length === 0) return;
+    const payload = encodeBurstData(this.burstID, this.seq, this.pendingFrames);
     this.seq = (this.seq + 1) & 0xffff;
+    this.dataPacketCount = (this.dataPacketCount + 1) & 0xffff;
+    this.pendingFrames = [];
+    this.pendingSize = 0;
+    this.emit(payload);
+  }
 
+  private emit(burstPayload: Uint8Array): void {
     const packet: Packet = {
       type: PacketType.VOICE_FRAME,
       ttl: 7,
@@ -127,72 +184,141 @@ export class VoiceCaptureSession {
       senderID: this.senderIDBytes,
       recipientID: new Uint8Array(8), // broadcast
       timestamp: Math.floor(Date.now() / 1000),
-      nonce: crypto.getRandomValues(new Uint8Array(8)),
       signature: new Uint8Array(64),
-      payload,
+      payload: burstPayload,
     };
     packet.signature = signPacket(packet, this.config.signingPrivKey);
     this.config.onPacket(packet);
   }
 }
 
-// ---- Voice frame payload codec ----------------------------------------------
+// ---- VoiceBurstPacket encode/decode -----------------------------------------
+// Matches VoiceBurstPacket.swift / encode() and decode() exactly.
 
-export function buildVoiceFramePayload(
-  sessionId: number,
+function writeBurstHeader(
+  buf: Uint8Array,
+  burstID: Uint8Array,
   seq: number,
+  flags: number,
+): void {
+  buf.set(burstID.slice(0, BURST_ID_SIZE), 0);
+  new DataView(buf.buffer).setUint16(BURST_ID_SIZE, seq & 0xffff, false);
+  buf[BURST_ID_SIZE + 2] = flags;
+}
+
+// START packet: [burstID:8][seq:2][0x01][codec:1]
+export function encodeBurstStart(
+  burstID: Uint8Array,
   codec: VoiceCodecId,
-  isLast: boolean,
-  frameData: Uint8Array,
 ): Uint8Array {
-  const buf = new Uint8Array(VOICE_FRAME_HEADER_SIZE + frameData.length);
-  const view = new DataView(buf.buffer);
-  view.setUint32(0, sessionId >>> 0, false); // u32-BE
-  view.setUint16(4, seq & 0xffff, false); // u16-BE
-  buf[6] = codec;
-  buf[7] = isLast ? FLAG_IS_LAST : 0;
-  buf.set(frameData, VOICE_FRAME_HEADER_SIZE);
+  const buf = new Uint8Array(BURST_HEADER_SIZE + 1);
+  writeBurstHeader(buf, burstID, 0, BurstFlags.START);
+  buf[BURST_HEADER_SIZE] = codec;
   return buf;
 }
 
-export interface VoiceFrameHeader {
-  sessionId: number;
-  seq: number;
-  codec: VoiceCodecId;
-  isLast: boolean;
+// DATA packet: [burstID:8][seq:2][0x00][len:2][frame]...(repeating)
+export function encodeBurstData(
+  burstID: Uint8Array,
+  seq: number,
+  frames: readonly Uint8Array[],
+): Uint8Array {
+  let dataSize = 0;
+  for (const f of frames) dataSize += 2 + f.length;
+  const buf = new Uint8Array(BURST_HEADER_SIZE + dataSize);
+  writeBurstHeader(buf, burstID, seq, BurstFlags.DATA);
+  let off = BURST_HEADER_SIZE;
+  for (const f of frames) {
+    new DataView(buf.buffer).setUint16(off, f.length, false);
+    off += 2;
+    buf.set(f, off);
+    off += f.length;
+  }
+  return buf;
 }
 
-export function parseVoiceFramePayload(payload: Uint8Array): {
-  header: VoiceFrameHeader;
-  frameData: Uint8Array;
-} | null {
-  if (payload.length < VOICE_FRAME_HEADER_SIZE) return null;
-  const view = new DataView(payload.buffer, payload.byteOffset);
-  const sessionId = view.getUint32(0, false);
-  const seq = view.getUint16(4, false);
-  const codec = payload[6] as VoiceCodecId;
-  const flags = payload[7];
-  const isLast = (flags & FLAG_IS_LAST) !== 0;
-  const frameData = payload.slice(VOICE_FRAME_HEADER_SIZE);
-
-  return {
-    header: { sessionId, seq, codec, isLast },
-    frameData,
-  };
+// END packet: [burstID:8][seq:2][0x02][totalDataPackets:2][durationMs:4]
+export function encodeBurstEnd(
+  burstID: Uint8Array,
+  seq: number,
+  totalDataPackets: number,
+  durationMs: number,
+): Uint8Array {
+  const buf = new Uint8Array(BURST_HEADER_SIZE + 6);
+  writeBurstHeader(buf, burstID, seq, BurstFlags.END);
+  const view = new DataView(buf.buffer);
+  view.setUint16(BURST_HEADER_SIZE, totalDataPackets & 0xffff, false);
+  view.setUint32(BURST_HEADER_SIZE + 2, durationMs >>> 0, false);
+  return buf;
 }
 
-// ---- Helpers ----------------------------------------------------------------
-
-function generateSessionId(): number {
-  // 32-bit random session ID; collisions are astronomically unlikely in
-  // a local mesh with short session lifetimes.
-  const buf = crypto.getRandomValues(new Uint8Array(4));
-  return new DataView(buf.buffer).getUint32(0, false);
+// CANCELED packet: [burstID:8][seq:2][0x04]
+export function encodeBurstCanceled(
+  burstID: Uint8Array,
+  seq: number,
+): Uint8Array {
+  const buf = new Uint8Array(BURST_HEADER_SIZE);
+  writeBurstHeader(buf, burstID, seq, BurstFlags.CANCELED);
+  return buf;
 }
 
-// Export for use in store/UI to display active PTT sessions.
-export function sessionIdHex(sessionId: number): string {
-  const buf = new Uint8Array(4);
-  new DataView(buf.buffer).setUint32(0, sessionId >>> 0, false);
-  return bytesToHex(buf);
+// ---- Parsed burst packet types ----------------------------------------------
+
+export type BurstPacket =
+  | { kind: "start"; burstID: Uint8Array; seq: number; codec: VoiceCodecId }
+  | { kind: "data"; burstID: Uint8Array; seq: number; frames: Uint8Array[] }
+  | {
+      kind: "end";
+      burstID: Uint8Array;
+      seq: number;
+      totalDataPackets: number;
+      durationMs: number;
+    }
+  | { kind: "canceled"; burstID: Uint8Array; seq: number };
+
+export function decodeBurstPacket(payload: Uint8Array): BurstPacket | null {
+  if (payload.length < BURST_HEADER_SIZE) return null;
+  const burstID = payload.slice(0, BURST_ID_SIZE);
+  const seq = new DataView(
+    payload.buffer,
+    payload.byteOffset + BURST_ID_SIZE,
+  ).getUint16(0, false);
+  const flags = payload[BURST_ID_SIZE + 2];
+  const rest = payload.slice(BURST_HEADER_SIZE);
+
+  switch (flags) {
+    case BurstFlags.START: {
+      if (rest.length < 1) return null;
+      const codec = rest[0] as VoiceCodecId;
+      if (codec !== VoiceCodec.AAC_LC_16KHZ_MONO) return null;
+      return { kind: "start", burstID, seq, codec };
+    }
+    case BurstFlags.DATA: {
+      const frames: Uint8Array[] = [];
+      let off = 0;
+      while (off + 2 <= rest.length && frames.length < MAX_FRAMES_PER_PACKET) {
+        const len = new DataView(rest.buffer, rest.byteOffset + off).getUint16(
+          0,
+          false,
+        );
+        off += 2;
+        if (off + len > rest.length) return null;
+        frames.push(rest.slice(off, off + len));
+        off += len;
+      }
+      if (frames.length === 0) return null;
+      return { kind: "data", burstID, seq, frames };
+    }
+    case BurstFlags.END: {
+      if (rest.length < 6) return null;
+      const view = new DataView(rest.buffer, rest.byteOffset);
+      const totalDataPackets = view.getUint16(0, false);
+      const durationMs = view.getUint32(2, false);
+      return { kind: "end", burstID, seq, totalDataPackets, durationMs };
+    }
+    case BurstFlags.CANCELED:
+      return { kind: "canceled", burstID, seq };
+    default:
+      return null;
+  }
 }

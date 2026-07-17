@@ -102,8 +102,12 @@ class VideoSession {
     });
 
     if (header.isLast) {
-      // Flush immediately: session is ending.
+      // Cancel both timers before flushing so no timer fires after ended = true.
       this.cancelFlushTimer();
+      if (this.timeoutTimer !== null) {
+        clearTimeout(this.timeoutTimer);
+        this.timeoutTimer = null;
+      }
       this.flushAll();
       return;
     }
