@@ -5,6 +5,7 @@
     "noUnusedLocals": true,
     "noUnusedParameters": true,
     "noImplicitReturns": true,
+    "types": ["jest"],
     "paths": {
       "@bridge/*": ["./src/bridge/*"],
       "@core/*": ["./src/core/*"],
