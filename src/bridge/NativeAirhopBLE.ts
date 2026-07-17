@@ -16,6 +16,10 @@ export interface Spec extends TurboModule {
   // Write raw bytes to a connected peer (base64-encoded for bridge safety)
   writeToLink(linkID: string, dataBase64: string): Promise<void>;
 
+  // Tor proxy: probe localhost for an active SOCKS5 proxy (Orbot on Android,
+  // Orbot/Arti on iOS). Returns the port (9050) if reachable, or 0 if not.
+  getTorProxyPort(): Promise<number>;
+
   // Required by React Native NativeEventEmitter contract
   addListener(eventName: string): void;
   removeListeners(count: number): void;
