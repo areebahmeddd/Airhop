@@ -5,6 +5,9 @@
   <uses-permission android:name="android.permission.BLUETOOTH_ADVERTISE"/>
   <uses-permission android:name="android.permission.BLUETOOTH_CONNECT"/>
   <uses-permission android:name="android.permission.BLUETOOTH_SCAN"/>
+  <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
+  <!-- Required for Android 14+ to keep BLE active in a foreground service -->
+  <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE"/>
   <uses-permission android:name="android.permission.INTERNET"/>
   <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" tools:replace="android:maxSdkVersion"/>
   <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW"/>
@@ -28,5 +31,10 @@
         <category android:name="android.intent.category.LAUNCHER"/>
       </intent-filter>
     </activity>
+    <!-- Foreground service that keeps BLE scanning/advertising alive in the background -->
+    <service
+      android:name="tech.permissionless.airhop.service.AirhopForegroundService"
+      android:foregroundServiceType="connectedDevice"
+      android:exported="false"/>
   </application>
 </manifest>
