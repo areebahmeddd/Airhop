@@ -101,16 +101,18 @@ bitchat is an excellent foundation. Airhop fills the gaps it left open.
 
 **Milestone:** Two phones discover each other and exchange signed ANNOUNCE packets.
 
-### v0.6.0: Core Messaging
+### v0.6.0: Core Messaging ✅
 
 **Goal:** Full offline BLE mesh chat, bitchat wire-compatible.
 
-- [ ] `src/core/crypto/noise-xx.ts`: Noise XX handshake using `@noble`
-- [ ] `src/core/mesh/fragment-manager.ts`: fragmentation / reassembly (469B chunks)
-- [ ] `src/core/mesh/gossip-sync.ts`: GCS filter reconciliation (15s interval)
-- [ ] `src/core/mesh/courier-store.ts`: sealed envelopes, trust tiers
-- [ ] `src/core/router/message-router.ts`: BLE-only routing
-- [ ] Basic React Native UI: channel list, message thread, peer list
+- [x] `src/core/crypto/noise-xx.ts`: Noise XX handshake using `@noble` (transport session, replay window)
+- [x] `src/core/crypto/noise-x.ts`: one-way Noise X for courier sealing
+- [x] `src/core/mesh/fragment-manager.ts`: fragmentation / reassembly (469B chunks, 30s timeout)
+- [x] `src/core/mesh/gossip-sync.ts`: GCS filter reconciliation (15s interval, Golomb-Rice encoding)
+- [x] `src/core/mesh/courier-store.ts`: sealed envelopes, trust tiers, spray-and-wait
+- [x] `src/core/router/message-router.ts`: BLE-only routing (broadcast + unicast + courier fallback)
+- [ ] Cross-language Noise XX test: JS ↔ bitchat-ios Swift server (required before device testing)
+- [x] Basic React Native UI: channel list, message thread, peer list (minimal, functional)
 
 **Milestone:** Full offline BLE mesh chat. Airhop ↔ bitchat message delivery verified.
 

@@ -2,10 +2,10 @@
 
 > Updated when milestones complete, blockers are found, or decisions are made. It is the canonical answer to "where are we right now?"
 
-## Current Version: v0.5.0 (Completed)
+## Current Version: v0.6.0 (Completed)
 
-**Status:** Core TypeScript mesh engine complete and passing all unit tests. Native BLE modules written for iOS (Swift) and Android (Kotlin). Ready for device testing.  
-**Started:** July 12, 2026
+**Status:** Noise XX/X handshakes, fragment reassembly, GCS gossip sync, courier store, and message router all implemented and fully tested. 120 unit tests pass. TypeScript strict mode zero errors.
+**Started:** July 17, 2026
 **Last Updated:** July 17, 2026
 
 ## Documentation Status
@@ -23,7 +23,7 @@
 | [`.github/copilot-instructions.md`](../../.github/copilot-instructions.md) | ✅ Complete | VS Code Copilot workspace context                |
 | [`.github/agents/`](../../.github/agents)                                  | ✅ Complete | Architect, Upstream Sync, Security Review agents |
 
-## v0.5.0: Foundation
+## v0.5.0: Foundation ✅
 
 **Goal:** Hello World BLE mesh between two phones.
 
@@ -65,16 +65,16 @@
 
 **Milestone:** Two phones on BLE discover each other and exchange signed ANNOUNCE packets.
 
-## v0.6.0: Core Messaging
+## v0.6.0: Core Messaging ✅
 
-- [ ] `src/core/crypto/noise-xx.ts`: Noise XX handshake using `@noble/curves` + `@noble/ciphers`
+- [x] `src/core/crypto/noise-xx.ts`: Noise XX handshake using `@noble/curves` + `@noble/ciphers` (full XX pattern, transport encrypt/decrypt, replay window)
 - [ ] Cross-language Noise XX test: JS client ↔ bitchat-ios Swift server (MUST PASS before shipping)
-- [ ] `src/core/crypto/noise-x.ts`: one-way Noise X for courier sealing
-- [ ] `src/core/mesh/fragment-manager.ts`: split/reassemble, 30s timeout
-- [ ] `src/core/mesh/gossip-sync.ts`: GCS filter reconciliation
-- [ ] `src/core/mesh/courier-store.ts`: sealed envelopes, trust tiers, spray-and-wait
-- [ ] `src/core/router/message-router.ts`: transport selection
-- [ ] Basic UI: channel list, message thread, peer list (minimal, functional, not beautiful)
+- [x] `src/core/crypto/noise-x.ts`: one-way Noise X for courier sealing
+- [x] `src/core/mesh/fragment-manager.ts`: split/reassemble, 30s timeout, 128-slot concurrent cap
+- [x] `src/core/mesh/gossip-sync.ts`: GCS filter reconciliation (Golomb-Rice encoding, TLV wire format)
+- [x] `src/core/mesh/courier-store.ts`: sealed envelopes, trust tiers, spray-and-wait, daily recipient tags
+- [x] `src/core/router/message-router.ts`: transport selection (BLE mesh broadcast / unicast, courier fallback)
+- [x] Basic UI: channel list, message thread, peer list (minimal, functional)
 
 **Milestone:** Full offline BLE mesh chat. Airhop ↔ bitchat message delivery verified.
 

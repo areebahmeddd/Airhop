@@ -42,20 +42,22 @@ Offset  Size  Type    Field
 
 ## 3. Packet Type Registry
 
-| Name            | Hex    | Direction         | Description                                                                                                                                                                                     |
-| --------------- | ------ | ----------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `ANNOUNCE`      | `0x01` | Broadcast         | Signed presence heartbeat. Payload is TLV-encoded: `0x01` nickname, `0x02` Noise pubkey (32B), `0x03` Ed25519 signing pubkey (32B), `0x04` direct neighbors (optional, up to 10 × 8B peer IDs). |
-| `CHANNEL_MSG`   | `0x02` | Broadcast         | Public channel message. Plaintext + signed. Channel name embedded in payload.                                                                                                                   |
-| `DM`            | `0x03` | Unicast           | Direct message. Noise XX encrypted. recipientID set.                                                                                                                                            |
-| `DM_ACK`        | `0x04` | Unicast           | Delivery acknowledgment for DM.                                                                                                                                                                 |
-| `FILE_CHUNK`    | `0x05` | Broadcast/Unicast | File transfer fragment. Sequence + total in payload header.                                                                                                                                     |
-| `COURIER_ENV`   | `0x06` | Broadcast         | Store-and-forward sealed envelope. Noise X encrypted.                                                                                                                                           |
-| `GOSSIP_FILTER` | `0x07` | Broadcast         | Golomb-Coded Set filter for gossip sync reconciliation.                                                                                                                                         |
-| `VOICE_FRAME`   | `0x29` | Broadcast         | PTT audio burst. AAC 16 kHz mono frame.                                                                                                                                                         |
-| `VIDEO_FRAME`   | `0x30` | Unicast           | Video frame (WiFi Aware only, Airhop extension). HEVC.                                                                                                                                          |
-| `CASHU_TOKEN`   | `0x40` | Unicast           | Cashu ecash token transfer (Airhop extension).                                                                                                                                                  |
+All type values match bitchat `MessageType.swift` (public domain). Types `0x01–0x28` are bitchat-defined; `0x29+` are Airhop extensions. bitchat nodes silently drop unknown types.
 
-**Compatibility note:** Types `0x01-0x28` are bitchat-defined. bitchat nodes silently drop unknown types (`0x29+`). Airhop extensions are safe to broadcast and do not disrupt bitchat peers.
+| Name              | Hex    | Direction         | Description                                                                                                                                                                                     |
+| ----------------- | ------ | ----------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ANNOUNCE`        | `0x01` | Broadcast         | Signed presence heartbeat. Payload is TLV-encoded: `0x01` nickname, `0x02` Noise pubkey (32B), `0x03` Ed25519 signing pubkey (32B), `0x04` direct neighbors (optional, up to 10 × 8B peer IDs). |
+| `CHANNEL_MSG`     | `0x02` | Broadcast         | Public channel message. Plaintext + signed. Channel name embedded in payload.                                                                                                                   |
+| `LEAVE`           | `0x03` | Broadcast         | Peer departing notification.                                                                                                                                                                    |
+| `COURIER_ENV`     | `0x04` | Broadcast         | Store-and-forward sealed envelope. Noise X encrypted. TLV format (see section 6).                                                                                                               |
+| `NOISE_HANDSHAKE` | `0x10` | Unicast           | Noise XX handshake message (initiator msg1 / responder msg2 / initiator msg3). recipientID set.                                                                                                 |
+| `NOISE_ENCRYPTED` | `0x11` | Unicast           | Post-handshake encrypted payload: DM text, receipts, metadata. recipientID set. HAS_RECIPIENT flag set.                                                                                         |
+| `FRAGMENT`        | `0x20` | Broadcast/Unicast | BLE fragment of a larger message. Stream ID + index + total in payload header. See section 7.                                                                                                   |
+| `REQUEST_SYNC`    | `0x21` | Broadcast         | GCS filter gossip request. TTL=2 (local-only). Payload TLV format (see section 5).                                                                                                              |
+| `FILE_TRANSFER`   | `0x22` | Broadcast/Unicast | Binary file / audio / image payload.                                                                                                                                                            |
+| `VOICE_FRAME`     | `0x29` | Broadcast         | PTT audio burst. AAC 16 kHz mono frame. (Airhop extension)                                                                                                                                      |
+| `VIDEO_FRAME`     | `0x30` | Unicast           | Video frame (WiFi Aware only, Airhop extension). HEVC.                                                                                                                                          |
+| `CASHU_TOKEN`     | `0x40` | Unicast           | Cashu ecash token transfer (Airhop extension).                                                                                                                                                  |
 
 ## 4. Routing Constants
 
@@ -73,41 +75,42 @@ Offset  Size  Type    Field
 
 > **iOS vs Android divergence:** bitchat-iOS and bitchat-android have different default values for these constants. Airhop uses bitchat-iOS values as canonical unless noted.
 
-| Constant                       | Airhop / iOS                                        | bitchat-Android                            | Notes                                     |
-| ------------------------------ | --------------------------------------------------- | ------------------------------------------ | ----------------------------------------- |
-| Sync interval                  | `15 seconds`                                        | `30 seconds`                               | How often REQUEST_SYNC is broadcast       |
-| Triggered sync delay           | `5 seconds`                                         | `5 seconds`                                | After first announce from new direct peer |
-| Gossip cache size              | `1000 packets`                                      | `100 packets`                              | Rolling seen-packet set for GCS           |
-| GCS filter false positive rate | `1/10000`                                           | `1%` (configurable 0.1%–5%)                | iOS is 100× stricter                      |
-| GCS filter size (Android)      | n/a                                                 | `128–1024 bytes` (default 256)             | iOS uses different sizing                 |
-| GCS hash function              | [SipHash-2-4](https://131002.net/siphash/)          | [SipHash-2-4](https://131002.net/siphash/) | Same                                      |
-| Packet ID for GCS              | `SHA-256(type\|senderID\|timestamp\|payload)[0:16]` | same                                       | 128-bit deterministic ID                  |
-| Sync scope                     | local only                                          | local only                                 | REQUEST_SYNC is not relayed               |
+| Constant                       | Airhop / iOS                                          | bitchat-Android                    | Notes                                         |
+| ------------------------------ | ----------------------------------------------------- | ---------------------------------- | --------------------------------------------- |
+| Sync interval                  | `15 seconds`                                          | `30 seconds`                       | How often REQUEST_SYNC is broadcast           |
+| Triggered sync delay           | `5 seconds`                                           | `5 seconds`                        | After first announce from new direct peer     |
+| Gossip cache size              | `1000 packets`                                        | `100 packets`                      | Rolling seen-packet set for GCS               |
+| GCS filter false positive rate | `1%` (`targetFpr = 0.01`)                             | `1%` (configurable 0.1%–5%)        | Same default; P = ceil(log2(1/fpr)) = 7       |
+| GCS hash modulus M             | `count × 2^P`                                         | configurable                       | Gives FPR ≈ 1/2^P per element; u32 on wire    |
+| GCS filter size budget         | `400 bytes`                                           | `128–1024 bytes` (default 256)     | `gcsMaxBytes` in `GossipSyncManager`          |
+| GCS hash function              | `SHA-256(packetID)[0:8]` as u63 BE (sign bit cleared) | `SHA-256(packetID)[0:8]` as u63 BE | Not SipHash; both implementations use SHA-256 |
+| Packet ID for GCS              | `SHA-256(type\|senderID\|timestamp\|payload)[0:16]`   | same                               | 128-bit deterministic ID                      |
+| Sync scope                     | local only                                            | local only                         | REQUEST_SYNC is not relayed                   |
 
 ## 6. Store-and-Forward (Courier) Constants
 
-| Constant                          | Value          | Notes                                               |
-| --------------------------------- | -------------- | --------------------------------------------------- |
-| Courier pool size                 | `40 envelopes` | Max carried per device                              |
-| Envelope TTL                      | `24 hours`     | Dropped after expiry                                |
-| Per-envelope size cap             | `16 KiB`       | Text only; media not couriered                      |
-| Per-peer deposit quota (favorite) | `5 envelopes`  | Trust tier: favorite                                |
-| Per-peer deposit quota (verified) | `2 envelopes`  | Trust tier: verified/known                          |
-| Recipient tag rotation            | `Daily`        | HMAC-SHA256(recipientKey \|\| dayEpoch).slice(0,16) |
+| Constant                          | Value                                                                                   | Notes                                     |
+| --------------------------------- | --------------------------------------------------------------------------------------- | ----------------------------------------- |
+| Courier pool size                 | `40 envelopes`                                                                          | Max carried per device                    |
+| Envelope TTL                      | `24 hours`                                                                              | Dropped after expiry                      |
+| Per-envelope size cap             | `16 KiB`                                                                                | Text only; media not couriered            |
+| Per-peer deposit quota (favorite) | `5 envelopes`                                                                           | Trust tier: favorite                      |
+| Per-peer deposit quota (verified) | `2 envelopes`                                                                           | Trust tier: verified/known                |
+| Recipient tag derivation          | HMAC-SHA256(key=noiseStaticKey, msg=`"bitchat-courier-tag-v1"` \|\| epochDay_BE4)[0:16] | epochDay = floor(unixSec/86400) as u32 BE |
 
 ## 7. Cryptographic Constants
 
-| Constant                      | Value                                                              |
-| ----------------------------- | ------------------------------------------------------------------ |
-| **Noise XX algorithm string** | `Noise_XX_25519_ChaChaPoly_SHA256`                                 |
-| **Noise X algorithm string**  | `Noise_X_25519_ChaChaPoly_SHA256`                                  |
-| DH function                   | Curve25519 (X25519)                                                |
-| AEAD cipher                   | [ChaCha20-Poly1305](https://datatracker.ietf.org/doc/html/rfc7539) |
-| Hash function                 | SHA-256                                                            |
-| Noise static key type         | X25519 (32-byte scalar)                                            |
-| Signing key type              | [Ed25519](https://ed25519.cr.yp.to/)                               |
-| Peer ID derivation            | `hex(SHA-256(noiseStaticPubKey)).slice(0, 16)`                     |
-| Nostr DM encryption           | NIP-44 (XChaCha20-Poly1305, versioned)                             |
+| Constant                      | Value                                          |
+| ----------------------------- | ---------------------------------------------- |
+| **Noise XX algorithm string** | `Noise_XX_25519_ChaChaPoly_SHA256`             |
+| **Noise X algorithm string**  | `Noise_X_25519_ChaChaPoly_SHA256`              |
+| DH function                   | Curve25519 (X25519)                            |
+| AEAD cipher                   | ChaCha20-Poly1305                              |
+| Hash function                 | SHA-256                                        |
+| Noise static key type         | X25519 (32-byte scalar)                        |
+| Signing key type              | Ed25519                                        |
+| Peer ID derivation            | `hex(SHA-256(noiseStaticPubKey)).slice(0, 16)` |
+| Nostr DM encryption           | NIP-44 (XChaCha20-Poly1305, versioned)         |
 
 ## 8. Identity & Nostr Constants
 
