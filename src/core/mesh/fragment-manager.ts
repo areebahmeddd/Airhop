@@ -125,7 +125,7 @@ export interface FragmentHeader {
   data: Uint8Array;
 }
 
-export function parseFragmentPayload(
+export function decodeFragmentPayload(
   payload: Uint8Array,
 ): FragmentHeader | null {
   if (payload.length < FRAG_HEADER_LEN) return null;
@@ -175,7 +175,7 @@ export class FragmentManager {
     payload: Uint8Array,
     onComplete: FragmentCallback,
   ): void {
-    const header = parseFragmentPayload(payload);
+    const header = decodeFragmentPayload(payload);
     if (header === null) return;
 
     const key = buildKey(fromSenderID, header.streamU64);

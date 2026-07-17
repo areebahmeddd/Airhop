@@ -13,9 +13,8 @@ import { sha256 } from "@noble/hashes/sha2.js";
 import { bytesToHex } from "@noble/hashes/utils.js";
 import {
   AnnounceManager,
-  buildAnnouncePayload,
-  buildAnnouncePayloadWithNeighbors,
-  parseAnnouncePayload,
+  decodeAnnouncePayload,
+  encodeAnnouncePayload,
 } from "../announce-manager";
 import { FRAG_DATA_SIZE, FRAGMENT_SIZE } from "../fragment-manager";
 import {
@@ -439,14 +438,14 @@ describe("ANNOUNCE TLV encoding", () => {
   };
 
   test("payload contains 0x01 TLV for nickname", () => {
-    const payload = buildAnnouncePayload(identity, "alice");
+    const payload = encodeAnnouncePayload(identity, "alice");
     const tlvs = parseTLVs(payload);
     expect(tlvs.has(0x01)).toBe(true);
     expect(new TextDecoder().decode(tlvs.get(0x01)!)).toBe("alice");
   });
 
   test("payload contains 0x02 TLV (32-byte noisePub)", () => {
-    const payload = buildAnnouncePayload(identity, "bob");
+    const payload = encodeAnnouncePayload(identity, "bob");
     const tlvs = parseTLVs(payload);
     expect(tlvs.has(0x02)).toBe(true);
     expect(tlvs.get(0x02)!.length).toBe(32);
@@ -454,35 +453,33 @@ describe("ANNOUNCE TLV encoding", () => {
   });
 
   test("payload contains 0x03 TLV (32-byte signingPub)", () => {
-    const payload = buildAnnouncePayload(identity, "bob");
+    const payload = encodeAnnouncePayload(identity, "bob");
     const tlvs = parseTLVs(payload);
     expect(tlvs.has(0x03)).toBe(true);
     expect(tlvs.get(0x03)!.length).toBe(32);
     expect(Array.from(tlvs.get(0x03)!)).toEqual(Array.from(signingPub));
   });
 
-  test("parse round-trip recovers all fields", () => {
+  test("encode/decode round-trip recovers all fields", () => {
     const senderID = new Uint8Array(8).fill(0x11);
-    const payload = buildAnnouncePayload(identity, "charlie");
-    const parsed = parseAnnouncePayload(payload, senderID);
-    expect(parsed).not.toBeNull();
-    expect(parsed!.nickname).toBe("charlie");
-    expect(Array.from(parsed!.noisePubKey)).toEqual(Array.from(noisePub));
-    expect(Array.from(parsed!.signingPubKey)).toEqual(Array.from(signingPub));
+    const payload = encodeAnnouncePayload(identity, "charlie");
+    const decoded = decodeAnnouncePayload(payload, senderID);
+    expect(decoded).not.toBeNull();
+    expect(decoded!.nickname).toBe("charlie");
+    expect(Array.from(decoded!.noisePubKey)).toEqual(Array.from(noisePub));
+    expect(Array.from(decoded!.signingPubKey)).toEqual(Array.from(signingPub));
   });
 
   test("nickname longer than 32 chars is truncated to 32", () => {
     const long = "x".repeat(60);
-    const payload = buildAnnouncePayload(identity, long);
-    const parsed = parseAnnouncePayload(payload, new Uint8Array(8));
-    expect(parsed!.nickname.length).toBeLessThanOrEqual(32);
+    const payload = encodeAnnouncePayload(identity, long);
+    const decoded = decodeAnnouncePayload(payload, new Uint8Array(8));
+    expect(decoded!.nickname.length).toBeLessThanOrEqual(32);
   });
 
-  test("buildAnnouncePayloadWithNeighbors includes TLV 0x04", () => {
+  test("encodeAnnouncePayload includes TLV 0x04 when neighborIDs provided", () => {
     const neighbor = new Uint8Array(8).fill(0xcc);
-    const payload = buildAnnouncePayloadWithNeighbors(identity, "dave", [
-      neighbor,
-    ]);
+    const payload = encodeAnnouncePayload(identity, "dave", [neighbor]);
     const tlvs = parseTLVs(payload);
     expect(tlvs.has(0x04)).toBe(true);
     // TLV 0x04 is 8 bytes per neighbor
@@ -490,22 +487,18 @@ describe("ANNOUNCE TLV encoding", () => {
     expect(Array.from(tlvs.get(0x04)!)).toEqual(Array.from(neighbor));
   });
 
-  test("buildAnnouncePayloadWithNeighbors caps at 10 neighbors", () => {
+  test("encodeAnnouncePayload caps neighbor TLV at 10 entries", () => {
     const neighbors = Array.from({ length: 15 }, (_, i) =>
       new Uint8Array(8).fill(i),
     );
-    const payload = buildAnnouncePayloadWithNeighbors(
-      identity,
-      "eve",
-      neighbors,
-    );
+    const payload = encodeAnnouncePayload(identity, "eve", neighbors);
     const tlvs = parseTLVs(payload);
     expect(tlvs.has(0x04)).toBe(true);
     expect(tlvs.get(0x04)!.length).toBe(10 * 8);
   });
 
-  test("buildAnnouncePayloadWithNeighbors omits TLV 0x04 when no neighbors", () => {
-    const payload = buildAnnouncePayloadWithNeighbors(identity, "frank", []);
+  test("encodeAnnouncePayload omits TLV 0x04 when no neighbors", () => {
+    const payload = encodeAnnouncePayload(identity, "frank", []);
     const tlvs = parseTLVs(payload);
     expect(tlvs.has(0x04)).toBe(false);
   });

@@ -4,6 +4,7 @@
 import { ed25519 } from "@noble/curves/ed25519.js";
 import {
   BROADCAST_ID,
+  computePacketId,
   decodePacket,
   encodePacket,
   Flags,
@@ -229,5 +230,28 @@ describe("packet-codec", () => {
     it("REQUEST_SYNC = 0x21", () => expect(PacketType.REQUEST_SYNC).toBe(0x21));
     it("VOICE_FRAME = 0x29", () => expect(PacketType.VOICE_FRAME).toBe(0x29));
     it("CASHU_TOKEN = 0x40", () => expect(PacketType.CASHU_TOKEN).toBe(0x40));
+  });
+
+  describe("computePacketId", () => {
+    it("produces 16 bytes", () => {
+      expect(computePacketId(makePacket())).toHaveLength(16);
+    });
+
+    it("is deterministic", () => {
+      const p = makePacket({ payload: new Uint8Array([1, 2, 3]) });
+      expect(computePacketId(p)).toEqual(computePacketId(p));
+    });
+
+    it("differs for packets with different type or payload", () => {
+      const p1 = makePacket({
+        type: PacketType.ANNOUNCE,
+        payload: new Uint8Array([1]),
+      });
+      const p2 = makePacket({
+        type: PacketType.CHANNEL_MSG,
+        payload: new Uint8Array([1]),
+      });
+      expect(computePacketId(p1)).not.toEqual(computePacketId(p2));
+    });
   });
 });

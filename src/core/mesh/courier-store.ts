@@ -40,7 +40,7 @@ const INITIAL_COPIES = 4;
 // epochDay = floor(unixSeconds / 86400) as u32 BE (rotates daily).
 const TAG_CONTEXT = new TextEncoder().encode("bitchat-courier-tag-v1");
 
-export function recipientTag(
+export function computeRecipientTag(
   recipientNoisePubKey: Uint8Array,
   nowMs: number = Date.now(),
 ): Uint8Array {
@@ -263,7 +263,7 @@ export class CourierStore {
       recipientNoisePubKey,
       plaintext,
     );
-    const tag = recipientTag(recipientNoisePubKey);
+    const tag = computeRecipientTag(recipientNoisePubKey);
     const expiryMs = Date.now() + ENVELOPE_TTL_MS;
 
     const env: SealedEnvelope = {

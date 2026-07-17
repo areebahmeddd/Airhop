@@ -9,7 +9,7 @@
 
 import { type Packet } from "./packet-codec";
 import {
-  parseVideoFramePayload,
+  decodeVideoFramePayload,
   type VideoCodecId,
   type VideoFrameHeader,
 } from "./video-capture";
@@ -208,7 +208,7 @@ export class VideoPlayer {
 
   // Feed an inbound VIDEO_FRAME packet. Returns false if the payload is invalid.
   receivePacket(packet: Packet): boolean {
-    const parsed = parseVideoFramePayload(packet.payload);
+    const parsed = decodeVideoFramePayload(packet.payload);
     if (!parsed) return false;
 
     const { header, frameData } = parsed;

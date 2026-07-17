@@ -6,8 +6,8 @@ import {
   FRAGMENT_SIZE,
   FRAG_DATA_SIZE,
   FragmentManager,
+  decodeFragmentPayload,
   fragmentPacket,
-  parseFragmentPayload,
 } from "../fragment-manager";
 import { Flags, PacketType, signPacket, type Packet } from "../packet-codec";
 
@@ -81,7 +81,7 @@ describe("fragmentPacket", () => {
   test("all fragments share the same stream ID", () => {
     const packet = makeLargePacket(FRAG_DATA_SIZE * 2 + 1, identity);
     const frags = fragmentPacket(packet, identity, signPacket);
-    const headers = frags.map((f) => parseFragmentPayload(f.payload)!);
+    const headers = frags.map((f) => decodeFragmentPayload(f.payload)!);
     const streamIds = headers.map((h) => h.streamU64);
     expect(streamIds.every((s) => s === streamIds[0])).toBe(true);
   });
@@ -89,7 +89,7 @@ describe("fragmentPacket", () => {
   test("index and total are set correctly", () => {
     const packet = makeLargePacket(FRAG_DATA_SIZE * 2 + 1, identity);
     const frags = fragmentPacket(packet, identity, signPacket);
-    const headers = frags.map((f) => parseFragmentPayload(f.payload)!);
+    const headers = frags.map((f) => decodeFragmentPayload(f.payload)!);
     expect(headers.map((h) => h.index)).toEqual([0, 1, 2]);
     expect(headers.every((h) => h.total === 3)).toBe(true);
   });
@@ -97,7 +97,7 @@ describe("fragmentPacket", () => {
   test("original packet type is encoded in each fragment header", () => {
     const packet = makeLargePacket(FRAG_DATA_SIZE + 1, identity);
     const frags = fragmentPacket(packet, identity, signPacket);
-    const headers = frags.map((f) => parseFragmentPayload(f.payload)!);
+    const headers = frags.map((f) => decodeFragmentPayload(f.payload)!);
     expect(
       headers.every((h) => h.originalType === PacketType.CHANNEL_MSG),
     ).toBe(true);
@@ -106,7 +106,7 @@ describe("fragmentPacket", () => {
 
 describe("parseFragmentPayload", () => {
   test("returns null for payload shorter than header", () => {
-    expect(parseFragmentPayload(new Uint8Array(5))).toBeNull();
+    expect(decodeFragmentPayload(new Uint8Array(5))).toBeNull();
   });
 
   test("returns null when index >= total", () => {
@@ -115,13 +115,13 @@ describe("parseFragmentPayload", () => {
     // stream (8), index=5, total=3 → invalid
     view.setUint16(8, 5, false);
     view.setUint16(10, 3, false);
-    expect(parseFragmentPayload(buf)).toBeNull();
+    expect(decodeFragmentPayload(buf)).toBeNull();
   });
 
   test("returns null when total=0", () => {
     const buf = new Uint8Array(13 + 4);
     // total=0
-    expect(parseFragmentPayload(buf)).toBeNull();
+    expect(decodeFragmentPayload(buf)).toBeNull();
   });
 });
 

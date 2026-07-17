@@ -5,10 +5,10 @@ import { ed25519, x25519 } from "@noble/curves/ed25519.js";
 import { bytesToHex } from "@noble/hashes/utils.js";
 import { noiseXOpen } from "../../crypto/noise-x";
 import {
+  computeRecipientTag,
   CourierStore,
   decodeEnvelopePayload,
   encodeEnvelopePayload,
-  recipientTag,
 } from "../courier-store";
 
 function makeNoiseKeypair() {
@@ -39,14 +39,14 @@ function makeEnvelopePayload(
 describe("recipientTag", () => {
   test("produces 16 bytes", () => {
     const keys = makeNoiseKeypair();
-    expect(recipientTag(keys.pub)).toHaveLength(16);
+    expect(computeRecipientTag(keys.pub)).toHaveLength(16);
   });
 
   test("same pubkey + same day → same tag", () => {
     const keys = makeNoiseKeypair();
     const nowMs = Date.now();
-    expect(bytesToHex(recipientTag(keys.pub, nowMs))).toBe(
-      bytesToHex(recipientTag(keys.pub, nowMs)),
+    expect(bytesToHex(computeRecipientTag(keys.pub, nowMs))).toBe(
+      bytesToHex(computeRecipientTag(keys.pub, nowMs)),
     );
   });
 
@@ -54,8 +54,8 @@ describe("recipientTag", () => {
     const k1 = makeNoiseKeypair();
     const k2 = makeNoiseKeypair();
     const nowMs = Date.now();
-    expect(bytesToHex(recipientTag(k1.pub, nowMs))).not.toBe(
-      bytesToHex(recipientTag(k2.pub, nowMs)),
+    expect(bytesToHex(computeRecipientTag(k1.pub, nowMs))).not.toBe(
+      bytesToHex(computeRecipientTag(k2.pub, nowMs)),
     );
   });
 
@@ -63,8 +63,8 @@ describe("recipientTag", () => {
     const keys = makeNoiseKeypair();
     const day0 = 0;
     const day1 = 86400 * 1000;
-    expect(bytesToHex(recipientTag(keys.pub, day0))).not.toBe(
-      bytesToHex(recipientTag(keys.pub, day1)),
+    expect(bytesToHex(computeRecipientTag(keys.pub, day0))).not.toBe(
+      bytesToHex(computeRecipientTag(keys.pub, day1)),
     );
   });
 });

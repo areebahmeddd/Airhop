@@ -18,7 +18,7 @@
 
 import type { Proof } from "@cashu/cashu-ts";
 import { finalizeEvent, type Event } from "nostr-tools";
-import type { NostrClient } from "../nostr/client";
+import type { NostrClient } from "../nostr/nostr-client";
 
 // Event kinds per PROTOCOLS.md section 8.
 const KIND_NUTZAP = 9321;

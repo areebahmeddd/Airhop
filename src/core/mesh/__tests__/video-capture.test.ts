@@ -7,8 +7,8 @@ import {
   VIDEO_FRAME_HEADER_SIZE,
   VideoCapture,
   VideoCodec,
+  decodeVideoFramePayload,
   encodeVideoFramePayload,
-  parseVideoFramePayload,
   type VideoCaptureBackend,
   type VideoFrameHeader,
 } from "../video-capture";
@@ -30,7 +30,7 @@ describe("encodeVideoFramePayload / parseVideoFramePayload", () => {
   test("round-trip: header and frame data survive encode/parse", () => {
     const frameData = new Uint8Array([0x00, 0x01, 0x02, 0x03]);
     const payload = encodeVideoFramePayload(baseHeader, frameData);
-    const result = parseVideoFramePayload(payload);
+    const result = decodeVideoFramePayload(payload);
 
     expect(result).not.toBeNull();
     const { header, frameData: out } = result!;
@@ -47,7 +47,7 @@ describe("encodeVideoFramePayload / parseVideoFramePayload", () => {
   test("is_last flag round-trips", () => {
     const h = { ...baseHeader, isLast: true, isKeyFrame: false };
     const payload = encodeVideoFramePayload(h, new Uint8Array(0));
-    const result = parseVideoFramePayload(payload);
+    const result = decodeVideoFramePayload(payload);
     expect(result!.header.isLast).toBe(true);
     expect(result!.header.isKeyFrame).toBe(false);
   });
@@ -57,20 +57,20 @@ describe("encodeVideoFramePayload / parseVideoFramePayload", () => {
       { ...baseHeader, isLast: true },
       new Uint8Array(0),
     );
-    const result = parseVideoFramePayload(payload);
+    const result = decodeVideoFramePayload(payload);
     expect(result!.frameData).toHaveLength(0);
   });
 
   test("minimum valid payload is exactly VIDEO_FRAME_HEADER_SIZE bytes", () => {
     const payload = new Uint8Array(VIDEO_FRAME_HEADER_SIZE);
-    expect(parseVideoFramePayload(payload)).not.toBeNull();
+    expect(decodeVideoFramePayload(payload)).not.toBeNull();
   });
 
   test("too-short payload returns null", () => {
     expect(
-      parseVideoFramePayload(new Uint8Array(VIDEO_FRAME_HEADER_SIZE - 1)),
+      decodeVideoFramePayload(new Uint8Array(VIDEO_FRAME_HEADER_SIZE - 1)),
     ).toBeNull();
-    expect(parseVideoFramePayload(new Uint8Array(0))).toBeNull();
+    expect(decodeVideoFramePayload(new Uint8Array(0))).toBeNull();
   });
 });
 
@@ -140,7 +140,7 @@ describe("VideoCapture", () => {
     await capture.stopSession();
 
     expect(packets.length).toBe(1);
-    const result = parseVideoFramePayload(packets[0].payload);
+    const result = decodeVideoFramePayload(packets[0].payload);
     expect(result!.header.isLast).toBe(true);
   });
 

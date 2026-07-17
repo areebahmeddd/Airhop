@@ -9,12 +9,7 @@ import {
   encodeGossipFilterPayload,
   GossipSync,
 } from "../gossip-sync";
-import {
-  computePacketId,
-  Flags,
-  PacketType,
-  type Packet,
-} from "../packet-codec";
+import { Flags, PacketType, type Packet } from "../packet-codec";
 
 function makeIdentity() {
   const signingPrivKey = ed25519.utils.randomSecretKey();
@@ -41,26 +36,6 @@ function makePacket(
     payload,
   };
 }
-
-describe("computePacketId", () => {
-  test("produces 16 bytes", () => {
-    const p = makePacket(PacketType.ANNOUNCE, 1000, new Uint8Array(4));
-    expect(computePacketId(p)).toHaveLength(16);
-  });
-
-  test("is deterministic", () => {
-    const p = makePacket(PacketType.ANNOUNCE, 1000, new Uint8Array([1, 2, 3]));
-    const id1 = computePacketId(p);
-    const id2 = computePacketId(p);
-    expect(id1).toEqual(id2);
-  });
-
-  test("differs for different packets", () => {
-    const p1 = makePacket(PacketType.ANNOUNCE, 1000, new Uint8Array([1]));
-    const p2 = makePacket(PacketType.CHANNEL_MSG, 1000, new Uint8Array([1]));
-    expect(computePacketId(p1)).not.toEqual(computePacketId(p2));
-  });
-});
 
 describe("GCS filter build/decode", () => {
   test("empty h64s produces empty data", () => {

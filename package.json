@@ -27,6 +27,7 @@
     "prebuild": "expo prebuild",
     "test": "jest --watchAll",
     "format": "prettier --write \"**/*.{ts,tsx,js,json,md}\"",
+    "format:check": "prettier --check \"**/*.{ts,tsx,js,json,md}\"",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit"
   },

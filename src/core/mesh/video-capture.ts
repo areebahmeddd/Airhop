@@ -97,7 +97,7 @@ export function encodeVideoFramePayload(
   return payload;
 }
 
-export function parseVideoFramePayload(
+export function decodeVideoFramePayload(
   payload: Uint8Array,
 ): { header: VideoFrameHeader; frameData: Uint8Array } | null {
   if (payload.length < VIDEO_FRAME_HEADER_SIZE) return null;

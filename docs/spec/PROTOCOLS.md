@@ -15,7 +15,7 @@
 
 ## 2. Packet Frame Layout
 
-Every packet over BLE uses this exact binary format.
+Every packet over BLE uses this exact binary format (bitchat v2):
 
 ```
 Fixed header (v2 = 16 bytes):

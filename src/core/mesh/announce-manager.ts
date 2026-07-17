@@ -41,24 +41,10 @@ function writeTlv(buf: number[], type: number, value: Uint8Array): void {
   buf.push(type, value.length, ...value);
 }
 
-export function buildAnnouncePayload(
+export function encodeAnnouncePayload(
   identity: Identity,
   nickname: string,
-): Uint8Array {
-  const nicknameBytes = new TextEncoder().encode(nickname.slice(0, 32));
-  const buf: number[] = [];
-
-  writeTlv(buf, TLV_NICKNAME, nicknameBytes);
-  writeTlv(buf, TLV_NOISE_PUB, identity.noiseStaticPubKey);
-  writeTlv(buf, TLV_SIGNING_PUB, identity.signingPubKey);
-
-  return new Uint8Array(buf);
-}
-
-export function buildAnnouncePayloadWithNeighbors(
-  identity: Identity,
-  nickname: string,
-  neighborIDs: Uint8Array[], // each 8 bytes
+  neighborIDs: readonly Uint8Array[] = [],
 ): Uint8Array {
   const nicknameBytes = new TextEncoder().encode(nickname.slice(0, 32));
   const buf: number[] = [];
@@ -68,10 +54,10 @@ export function buildAnnouncePayloadWithNeighbors(
   writeTlv(buf, TLV_SIGNING_PUB, identity.signingPubKey);
 
   if (neighborIDs.length > 0) {
-    const neighbors = neighborIDs.slice(0, 10);
-    const neighborBytes = new Uint8Array(neighbors.length * 8);
-    for (let i = 0; i < neighbors.length; i++) {
-      neighborBytes.set(neighbors[i].slice(0, 8), i * 8);
+    const capped = neighborIDs.slice(0, 10);
+    const neighborBytes = new Uint8Array(capped.length * 8);
+    for (let i = 0; i < capped.length; i++) {
+      neighborBytes.set(capped[i].slice(0, 8), i * 8);
     }
     writeTlv(buf, TLV_NEIGHBORS, neighborBytes);
   }
@@ -79,7 +65,7 @@ export function buildAnnouncePayloadWithNeighbors(
   return new Uint8Array(buf);
 }
 
-export function parseAnnouncePayload(
+export function decodeAnnouncePayload(
   payload: Uint8Array,
   senderID: Uint8Array,
 ): AnnounceInfo | null {
@@ -134,9 +120,7 @@ export class AnnounceManager {
     nickname: string,
     neighborIDs: readonly Uint8Array[] = [],
   ): Packet {
-    const payload = buildAnnouncePayloadWithNeighbors(identity, nickname, [
-      ...neighborIDs,
-    ]);
+    const payload = encodeAnnouncePayload(identity, nickname, [...neighborIDs]);
     const senderIDBytes = hexToBytes(identity.peerID);
 
     const packet: Packet = {
@@ -188,7 +172,7 @@ export class AnnounceManager {
   // the signature must verify against the signing key declared in the payload.
   // Returns parsed info on success, null on failure (caller must drop the packet).
   validateAndParse(packet: Packet): AnnounceInfo | null {
-    const info = parseAnnouncePayload(packet.payload, packet.senderID);
+    const info = decodeAnnouncePayload(packet.payload, packet.senderID);
     if (!info) return null;
     if (!verifyPacket(packet, info.signingPubKey)) return null;
     return info;

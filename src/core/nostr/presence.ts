@@ -14,7 +14,7 @@
 
 import type { Event } from "nostr-tools";
 import { finalizeEvent } from "nostr-tools";
-import type { EventHandler, NostrClient } from "./client";
+import type { EventHandler, NostrClient } from "./nostr-client";
 
 // Event kind constants per PROTOCOLS.md section 8.
 const KIND_PRESENCE = 20001;

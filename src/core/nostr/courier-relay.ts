@@ -20,7 +20,7 @@ import {
   encodeEnvelopePayload,
   type SealedEnvelope,
 } from "../mesh/courier-store";
-import type { NostrClient } from "./client";
+import type { NostrClient } from "./nostr-client";
 
 // Event kind per PROTOCOLS.md section 8 / bitchat NostrProtocol.swift.
 const KIND_COURIER_DROP = 1401;

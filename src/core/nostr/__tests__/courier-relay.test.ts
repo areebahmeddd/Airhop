@@ -7,12 +7,12 @@
 import { bytesToHex } from "@noble/hashes/utils.js";
 import { finalizeEvent, generateSecretKey, type Event } from "nostr-tools";
 import type { SealedEnvelope } from "../../mesh/courier-store";
-import type { NostrClient } from "../client";
 import {
   fetchCourierDrops,
   publishCourierDrop,
   subscribeCourierDrops,
 } from "../courier-relay";
+import type { NostrClient } from "../nostr-client";
 
 // ---- Mock helpers -----------------------------------------------------------
 

@@ -44,7 +44,9 @@ airhop/
 │
 ├── src/
 │   ├── bridge/                         # TurboModule TypeScript specs (Codegen input)
-│   │   └── NativeAirhopBLE.ts          # The ONLY file that talks to native
+│   │   ├── NativeAirhopBLE.ts          # BLE peripheral + central raw byte I/O
+│   │   ├── NativeAirhopTor.ts          # Tor lifecycle (startTor, stopTor, awaitReady)
+│   │   └── NativeAirhopWiFi.ts         # WiFi Aware / Multipeer raw byte I/O
 │   │
 │   ├── core/                           # Pure TypeScript - zero native deps - fully testable in CI
 │   │   ├── crypto/
@@ -52,7 +54,8 @@ airhop/
 │   │   │   ├── noise-xx.ts             # Noise XX handshake (session encryption)
 │   │   │   ├── noise-x.ts              # Noise X one-way (courier sealing)
 │   │   │   ├── double-ratchet.ts       # Signal DR (per-message forward secrecy)
-│   │   │   └── x3dh.ts                 # Extended Triple DH (DR initialization)
+│   │   │   ├── x3dh.ts                 # Extended Triple DH (DR initialization)
+│   │   │   └── contact-exchange.ts     # QR/NFC contact card encode/decode
 │   │   ├── mesh/
 │   │   │   ├── packet-codec.ts         # Binary encode/decode - bitchat v2 wire format
 │   │   │   ├── flood-router.ts         # TTL flood, jitter, deterministic fanout
@@ -60,16 +63,21 @@ airhop/
 │   │   │   ├── gossip-sync.ts          # GCS filter reconciliation
 │   │   │   ├── courier-store.ts        # Store-and-forward sealed envelopes
 │   │   │   ├── deduplicator.ts         # LRU seen-set, 5-min window
-│   │   │   └── announce-manager.ts     # Signed presence broadcasts
+│   │   │   ├── announce-manager.ts     # Signed presence broadcasts
+│   │   │   ├── file-transfer.ts        # Chunked file streaming
+│   │   │   ├── voice-capture.ts        # PTT frame encoder (AAC/Opus bursts)
+│   │   │   ├── voice-player.ts         # 350ms jitter buffer, ordered delivery
+│   │   │   ├── video-capture.ts        # Video frame encoder (WiFi Aware)
+│   │   │   └── video-player.ts         # Video frame decoder
 │   │   ├── nostr/
-│   │   │   ├── client.ts               # SimplePool + auto-reconnect
+│   │   │   ├── nostr-client.ts         # SimplePool + auto-reconnect
 │   │   │   ├── gift-wrap.ts            # NIP-17/59 gift-wrap DMs
 │   │   │   ├── geo-relay.ts            # CSV load, Haversine nearest relay
-│   │   │   └── presence.ts             # Kind 20001 geohash heartbeats
+│   │   │   ├── presence.ts             # Kind 20001 geohash heartbeats
+│   │   │   └── courier-relay.ts        # Nostr courier bridge (kind 1401)
 │   │   └── payments/
 │   │       ├── cashu.ts                # Token encode/decode/embed in messages
-│   │       ├── nutzap.ts               # NIP-61 online zaps via Nostr
-│   │       └── wallet-store.ts         # Local proof storage (MMKV)
+│   │       └── nutzap.ts               # NIP-61 online zaps via Nostr
 │   │
 │   ├── features/                       # Product features: UI + screen-level logic
 │   │   ├── discovery/                  # Nearby peers, public channel browser
@@ -79,8 +87,11 @@ airhop/
 │   │   └── settings/                   # Privacy, Tor config, panic wipe
 │   │
 │   ├── store/                          # Zustand state + MMKV persistence
+│   │   ├── chat-store.ts               # Message history, channel state
+│   │   ├── peer-store.ts               # Nearby peer list
+│   │   └── wallet-store.ts             # Local Cashu proof storage, balance selectors
 │   ├── ui/                             # Shared components, theme tokens, icons
-│   └── utils/                          # Byte/hex helpers, geohash, time formatting
+│   └── utils/                          # Stateless helpers (username, panic-wipe, battery)
 │
 ├── assets/
 │   └── data/

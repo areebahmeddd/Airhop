@@ -56,19 +56,19 @@ Never suggest UI code for a feature whose `src/core/` service isn't tested.
 
 ## Where Things Live
 
-| Thing                                                 | Location                 |
-| ----------------------------------------------------- | ------------------------ |
-| Crypto (Noise XX, identity, DR)                       | `src/core/crypto/`       |
-| BLE mesh (routing, codec, fragments, gossip, courier) | `src/core/mesh/`         |
-| Nostr (client, gift-wrap, geo-relay, presence)        | `src/core/nostr/`        |
-| Payments (Cashu, Nutzap)                              | `src/core/payments/`     |
-| Screen logic                                          | `src/features/`          |
-| UI components                                         | `src/ui/`                |
-| State management                                      | `src/store/`             |
-| TurboModule specs (Codegen input)                     | `src/bridge/`            |
-| iOS native                                            | `ios/`                   |
-| Android native                                        | `android/`               |
-| All protocol constants                                | `docs/spec/PROTOCOLS.md` |
+| Thing                                                         | Location                 |
+| ------------------------------------------------------------- | ------------------------ |
+| Crypto (Noise XX, identity, DR)                               | `src/core/crypto/`       |
+| BLE mesh (routing, codec, fragments, gossip, courier)         | `src/core/mesh/`         |
+| Nostr (client, gift-wrap, geo-relay, presence, courier-relay) | `src/core/nostr/`        |
+| Payments (Cashu, Nutzap)                                      | `src/core/payments/`     |
+| Screen logic                                                  | `src/features/`          |
+| UI components                                                 | `src/ui/`                |
+| State management                                              | `src/store/`             |
+| TurboModule specs (Codegen input)                             | `src/bridge/`            |
+| iOS native                                                    | `ios/`                   |
+| Android native                                                | `android/`               |
+| All protocol constants                                        | `docs/spec/PROTOCOLS.md` |
 
 ## Specialized Agents
 
@@ -79,6 +79,18 @@ Invoke these when needed (via VS Code Copilot chat):
 | `@architect`       | Before merging any `src/core/`, `android/`, or `ios/` change  |
 | `@upstream-sync`   | When bitchat releases a new version                           |
 | `@security-review` | Before any PR touching crypto, key storage, or packet signing |
+
+## Skills
+
+Skills are reference files in `.github/skills/`. Read the relevant one before working on a subsystem. They contain dense, accurate reference material cross-checked against the source code and the bitchat implementations.
+
+| Skill                                                                     | Read before working on                                                        |
+| ------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| [`bitchat-wire-format.md`](.github/skills/bitchat-wire-format.md)         | `packet-codec.ts`, BLE native modules, any packet encoding or decoding        |
+| [`noise-session-lifecycle.md`](.github/skills/noise-session-lifecycle.md) | `noise-xx.ts`, `noise-x.ts`, handshake logic, transport encryption            |
+| [`ble-native-boundary.md`](.github/skills/ble-native-boundary.md)         | `android/`, `ios/`, `src/bridge/`, TurboModule specs                          |
+| [`mesh-routing.md`](.github/skills/mesh-routing.md)                       | `flood-router.ts`, `deduplicator.ts`, `fragment-manager.ts`, `gossip-sync.ts` |
+| [`nostr-gift-wrap.md`](.github/skills/nostr-gift-wrap.md)                 | `gift-wrap.ts`, `courier-relay.ts`, any Nostr DM or event handling            |
 
 ## TypeScript Conventions
 

@@ -80,14 +80,14 @@
 
 ## v0.7.0: Internet Bridge + Voice + Payments ✅
 
-- [x] `src/core/nostr/client.ts`: SimplePool, auto-reconnect, Tor proxy config
+- [x] `src/core/nostr/nostr-client.ts`: SimplePool, auto-reconnect, Tor proxy config
 - [x] `src/core/nostr/gift-wrap.ts`: NIP-17/59 gift-wrap DMs (HKDF key derivation, round-trip tested)
 - [x] `src/core/nostr/geo-relay.ts`: load `assets/data/relays.csv`, Haversine nearest relay
 - [x] `src/core/nostr/presence.ts`: kind 20001 geohash heartbeats
 - [x] `src/core/nostr/courier-relay.ts`: Nostr bridge courier drops (kind 1401, tested)
 - [x] `src/core/payments/cashu.ts`: token parse/embed/redeem with offline DLEQ validation
 - [x] `src/core/payments/nutzap.ts`: NIP-61 online zaps
-- [x] `src/core/payments/wallet-store.ts`: MMKV-backed local Cashu proof storage (balances, dedup)
+- [x] `src/store/wallet-store.ts`: MMKV-backed local Cashu proof storage (balances, dedup)
 - [x] `src/core/router/message-router.ts`: Nostr added as priority-2 transport (BLE > Nostr > Courier)
 - [x] PTT voice: `src/core/mesh/voice-capture.ts` + `src/core/mesh/voice-player.ts`
 - [x] iOS: `AirhopTorManager.swift`: full Arti lifecycle management (FFI, bootstrap, SOCKS probe)

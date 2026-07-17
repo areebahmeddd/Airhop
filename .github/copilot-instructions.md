@@ -49,7 +49,7 @@ src/
   core/
     crypto/     # identity, noise-xx, noise-x, double-ratchet, x3dh
     mesh/       # packet-codec, flood-router, deduplicator, fragments, gossip, courier
-    nostr/      # client, gift-wrap, geo-relay, presence
+    nostr/      # nostr-client, courier-relay, gift-wrap, geo-relay, presence
     payments/   # cashu, nutzap
   features/     # screen-level logic (chat, contacts, wallet, discovery, settings)
   ui/           # shared components, theming
@@ -65,6 +65,7 @@ docs/
   spec/         # ARCHITECTURE.md, PROTOCOLS.md
   dev/          # PROGRESS.md, REFERENCE.md
 .github/agents/ # specialized Copilot agents
+.github/skills/ # domain reference files (read before working on a subsystem)
 ```
 
 ## Key Protocol Constants (Never Change Without Version Bump)
@@ -80,11 +81,11 @@ Full constant table: [`docs/spec/PROTOCOLS.md`](docs/spec/PROTOCOLS.md)
 
 ## TypeScript Conventions
 
-- Strict mode: `tsc --strict` must pass with zero errors
+- `tsc --strict` must pass with zero errors
 - No `any` in `src/core/` or `src/bridge/`
 - Named exports only in `src/core/` and `src/bridge/`
-- `kebab-case.ts` file naming
-- Files under 400 lines. Split by responsibility if longer.
+- File naming: `kebab-case.ts`
+- Max 400 lines per file. Split by responsibility if longer.
 
 ## Code Style
 
@@ -98,3 +99,15 @@ Full constant table: [`docs/spec/PROTOCOLS.md`](docs/spec/PROTOCOLS.md)
 - **`@architect`**: architectural compliance review (build order, layer boundaries, protocol compat)
 - **`@upstream-sync`**: analyze bitchat upstream changes and generate integration checklist
 - **`@security-review`**: crypto, key storage, packet signing, OWASP Mobile Top 10 audit
+
+## Skills Available
+
+Skills are reference files in `.github/skills/`. Read the relevant one before working on a subsystem.
+
+| Skill                                                                     | Read before working on                                                        |
+| ------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| [`bitchat-wire-format.md`](.github/skills/bitchat-wire-format.md)         | `packet-codec.ts`, BLE native modules, any packet encoding or decoding        |
+| [`noise-session-lifecycle.md`](.github/skills/noise-session-lifecycle.md) | `noise-xx.ts`, `noise-x.ts`, handshake logic, transport encryption            |
+| [`ble-native-boundary.md`](.github/skills/ble-native-boundary.md)         | `android/`, `ios/`, `src/bridge/`, TurboModule specs                          |
+| [`mesh-routing.md`](.github/skills/mesh-routing.md)                       | `flood-router.ts`, `deduplicator.ts`, `fragment-manager.ts`, `gossip-sync.ts` |
+| [`nostr-gift-wrap.md`](.github/skills/nostr-gift-wrap.md)                 | `gift-wrap.ts`, `courier-relay.ts`, any Nostr DM or event handling            |

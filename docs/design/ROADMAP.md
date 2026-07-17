@@ -120,7 +120,7 @@ bitchat is an excellent foundation. Airhop fills the gaps it left open.
 
 **Goal:** Nostr fallback, live PTT voice, Cashu ecash.
 
-- [x] `src/core/nostr/client.ts`: SimplePool, auto-reconnect, Tor proxy config
+- [x] `src/core/nostr/nostr-client.ts`: SimplePool, auto-reconnect, Tor proxy config
 - [x] `src/core/nostr/gift-wrap.ts`: NIP-17/59 gift-wrap DMs (HKDF key derivation, seal/unwrap round-trip)
 - [x] `src/core/nostr/geo-relay.ts`: Haversine nearest relay from bundled relays.csv
 - [x] `src/core/nostr/presence.ts`: kind 20001 geohash heartbeats (40–80s jitter, precision-5)
@@ -129,7 +129,7 @@ bitchat is an excellent foundation. Airhop fills the gaps it left open.
 - [x] Android: Orbot SOCKS5 detection via `getTorProxyPort()` (probes localhost:9050)
 - [x] `src/core/payments/cashu.ts`: token parse/embed/DLEQ validation
 - [x] `src/core/payments/nutzap.ts`: NIP-61 online zaps (kind 9321/10019)
-- [x] `src/core/payments/wallet-store.ts`: MMKV-backed local proof storage, balance selectors
+- [x] `src/store/wallet-store.ts`: MMKV-backed local proof storage, balance selectors
 - [x] `src/core/mesh/voice-capture.ts`: PTT frame encoder (VOICE_FRAME 0x29, AAC/Opus 16 kHz)
 - [x] `src/core/mesh/voice-player.ts`: 350ms jitter buffer, ordered frame delivery
 - [x] `src/bridge/NativeAirhopTor.ts`: TurboModule spec for Tor module
