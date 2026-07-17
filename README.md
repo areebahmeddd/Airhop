@@ -15,15 +15,15 @@
 </div>
 
 <p align="center">
-  <a href="https://github.com/areebahmeddd/airhop/releases"><img src="https://img.shields.io/github/v/release/areebahmeddd/airhop?style=flat-square" alt="release" /></a>
+  <a href="https://github.com/areebahmeddd/Airhop/releases"><img src="https://img.shields.io/github/v/release/areebahmeddd/Airhop?style=flat-square" alt="release" /></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue?style=flat-square" alt="license" /></a>
-  <a href="https://github.com/areebahmeddd/airhop/actions/workflows/ci.yaml"><img src="https://img.shields.io/github/actions/workflow/status/areebahmeddd/airhop/ci.yaml?style=flat-square&label=CI" alt="CI" /></a>
-  <a href="https://codecov.io/gh/areebahmeddd/airhop"><img src="https://img.shields.io/codecov/c/github/areebahmeddd/airhop?style=flat-square" alt="coverage" /></a>
-  <a href="https://securityscorecards.dev/viewer/?uri=github.com/areebahmeddd/airhop"><img src="https://api.securityscorecards.dev/projects/github.com/areebahmeddd/airhop/badge?style=flat-square" alt="OpenSSF Scorecard" /></a>
+  <a href="https://github.com/areebahmeddd/Airhop/actions/workflows/ci.yaml"><img src="https://img.shields.io/github/actions/workflow/status/areebahmeddd/Airhop/ci.yaml?style=flat-square&label=CI" alt="CI" /></a>
+  <a href="https://codecov.io/gh/areebahmeddd/Airhop"><img src="https://img.shields.io/codecov/c/github/areebahmeddd/Airhop?style=flat-square" alt="coverage" /></a>
+  <a href="https://securityscorecards.dev/viewer/?uri=github.com/areebahmeddd/Airhop"><img src="https://api.securityscorecards.dev/projects/github.com/areebahmeddd/Airhop/badge?style=flat-square" alt="OpenSSF Scorecard" /></a>
 </p>
 
 <p align="center">
-  <a href="https://apps.apple.com/app/bitchat/id000000000">
+  <a href="https://apps.apple.com/app/airhop/id000000000">
     <img src="https://developer.apple.com/assets/elements/badges/download-on-the-app-store.svg" alt="Download on the App Store" height="48" />
   </a>
   &nbsp;
@@ -42,33 +42,33 @@ Built on the foundation of [bitchat](https://bitchat.free), using the same [BLE 
 > Airhop is an independent side project built and maintained by [Areeb Ahmed](https://github.com/areebahmeddd) in his free time. It is not backed by any company or organization, not affiliated with or endorsed by permissionlesstech or the bitchat project, and not an impersonation of any existing app or service.
 
 > [!WARNING]
-> **WIP.** Not externally security-reviewed. All code is personally reviewed and run through the [security review agent](.github/agents/security-review.md) before shipping, but this is not a substitute for a formal audit. Do not rely on its security for sensitive use cases. External audit planned for v1.9.0.
+> **WIP.** Not externally security-reviewed. All code is personally reviewed and run through the [security review agent](.github/agents/security-review.md) before shipping, but this is not a substitute for a formal audit. Do not rely on its security for sensitive use cases. External audit planned for [v1.9.0](docs/design/ROADMAP.md#v190-security-hardening).
 
 ## Features
 
-| Category                  | Feature                   | Description                                                                        |
-| ------------------------- | ------------------------- | ---------------------------------------------------------------------------------- |
-| 💬 **Messaging**          | Private DMs               | One-on-one end-to-end encrypted messaging                                          |
-|                           | Public channels           | IRC-style group chat rooms anyone nearby can join                                  |
-|                           | Push-to-talk voice        | Live voice conversations over the local mesh                                       |
-|                           | Video                     | 480p/15fps video over WiFi Aware or MultipeerConnectivity                          |
-|                           | File transfer             | Send files of any size with chunked streaming                                      |
-|                           | Store-and-forward courier | Messages are delivered automatically when a route becomes available                |
-| 💰 **Payments**           | Cashu ecash               | Send and receive offline ecash payments over BLE                                   |
-|                           | Nutzaps                   | NIP-61 Lightning payments when internet is available                               |
-| 🔒 **Identity & Privacy** | No-account identity       | Identity is an Ed25519 key pair stored only on your device                         |
-|                           | Human-readable names      | Deterministic usernames derived from your public key                               |
-|                           | QR & NFC contacts         | Add contacts by scanning a QR code or tapping phones together                      |
-|                           | End-to-end encryption     | Secure sessions using the Noise XX protocol                                        |
-|                           | Forward secrecy           | Double Ratchet protects past messages even if keys are later compromised           |
-|                           | Panic wipe                | Triple-tap instantly erases keys and local messages (nuke your account)            |
-| 🕸️ **Connectivity**       | Bluetooth mesh            | Communicate with nearby devices without internet                                   |
-|                           | Multi-hop routing         | Messages automatically relay across nearby devices (up to 7 hops)                  |
-|                           | WiFi high-bandwidth mode  | Android WiFi Aware and iOS MultipeerConnectivity for fast file and video transfers |
-|                           | bitchat compatibility     | Airhop nodes communicate directly with bitchat on iOS and Android                  |
-| 🌐 **Internet Bridge**    | Nostr bridge              | Continue conversations over Nostr relays when Bluetooth range ends                 |
-|                           | Geo-relay discovery       | Discover location-based channels across 350+ distributed Nostr relays              |
-|                           | Tor integration           | Route Nostr traffic through Tor (Arti on iOS, Orbot on Android)                    |
+| Category                  | Feature                   | Description                                                                         |
+| ------------------------- | ------------------------- | ----------------------------------------------------------------------------------- |
+| 💬 **Messaging**          | Private DMs               | One-on-one end-to-end encrypted messaging                                           |
+|                           | Public channels           | IRC-style group chat rooms anyone nearby can join                                   |
+|                           | Push-to-talk voice        | Live voice and voice notes over the local mesh (AAC, 16 kHz mono, only `.m4a`)      |
+|                           | Video                     | 480p/15fps HEVC video over WiFi Aware or MultipeerConnectivity (only `.mp4`)        |
+|                           | File transfer             | Send any file format and size using chunked streaming (images, documents, archives) |
+|                           | Store-and-forward courier | Messages are delivered automatically when a route becomes available                 |
+| 💰 **Payments**           | Cashu ecash               | Send and receive offline ecash payments over BLE                                    |
+|                           | Nutzaps                   | NIP-61 Lightning payments when internet is available                                |
+| 🔒 **Identity & Privacy** | No-account identity       | Identity is an Ed25519 key pair stored only on your device                          |
+|                           | Human-readable names      | Deterministic usernames derived from your public key                                |
+|                           | QR & NFC contacts         | Add contacts by scanning a QR code or tapping phones together                       |
+|                           | End-to-end encryption     | Secure sessions using the Noise XX protocol                                         |
+|                           | Forward secrecy           | Double Ratchet protects past messages even if keys are later compromised            |
+|                           | Panic wipe                | Triple-tap instantly erases keys and local messages (nuke your account)             |
+| 🕸️ **Connectivity**       | Bluetooth mesh            | Communicate with nearby devices without internet                                    |
+|                           | Multi-hop routing         | Messages automatically relay across nearby devices (up to 7 hops)                   |
+|                           | WiFi high-bandwidth mode  | Android WiFi Aware and iOS MultipeerConnectivity for fast file and video transfers  |
+|                           | bitchat compatibility     | Airhop nodes communicate directly with bitchat on iOS and Android                   |
+| 🌐 **Internet Bridge**    | Nostr bridge              | Continue conversations over Nostr relays when Bluetooth range ends                  |
+|                           | Geo-relay discovery       | Discover location-based channels across 350+ distributed Nostr relays               |
+|                           | Tor integration           | Route Nostr traffic through Tor (Arti on iOS, Orbot on Android)                     |
 
 **TL;DR -- No internet required. No central servers. No accounts. No tracking.**
 
@@ -83,7 +83,7 @@ Built on the foundation of [bitchat](https://bitchat.free), using the same [BLE 
 | Privacy     | [Arti](https://gitlab.torproject.org/tpo/core/arti) on iOS, [Orbot](https://guardianproject.info/apps/org.torproject.android/) on Android                                                                                                                         |
 | Payments    | [Cashu](https://cashu.space) ecash (offline), [NIP-61](https://github.com/nostr-protocol/nips/blob/master/61.md) Nutzaps (online)                                                                                                                                 |
 | State       | [Zustand](https://github.com/pmndrs/zustand) + [MMKV](https://github.com/mrousavy/react-native-mmkv)                                                                                                                                                              |
-| Key Storage | iOS Keychain / Android Keystore                                                                                                                                                                                                                                   |
+| Key Storage | [iOS Keychain](https://developer.apple.com/documentation/security/storing-keys-in-the-keychain) / [Android Keystore](https://developer.android.com/privacy-and-security/keystore)                                                                                 |
 
 ## Getting Started
 

@@ -178,7 +178,7 @@ No new features. Production bug fixes, race condition resolution in BLE and cryp
 - [ ] All docs kept in sync with every release; CVEs disclosed publicly with timeline and impact
 - [ ] Audit reports published in full; blog series on building private decentralized applications
 
-## v3.0.0: Plugin Integrations
+## v2.5.0: Plugin Integrations
 
 - [ ] Generic `SocialPlugin` and `PaymentPlugin` interfaces in `src/core/`
 - [ ] AT Protocol (Bluesky): DID association, feed integration, post bridge, follow graph import
