@@ -34,9 +34,9 @@
 
 <br />
 
-Airhop is an iOS + Android app (macOS and Windows coming soon) for private, offline-first peer-to-peer communication over [Bluetooth mesh](https://en.wikipedia.org/wiki/Mesh_networking) networks, with [Nostr](https://nostr.com) internet bridging and [Cashu](https://cashu.space) ecash payments. **Our goal is to make censorship-resistant communication available to anyone: during natural disasters, internet blackouts, mass protests, or any situation where networks are unavailable, surveilled, or shut down.**
+Airhop is an iOS + Android app (macOS and Windows coming soon) for private, offline-first peer-to-peer communication over [Bluetooth mesh](https://en.wikipedia.org/wiki/Mesh_networking) networks, with [Nostr](https://nostr.com) internet bridging and [Cashu](https://cashu.space) ecash payments. **Our mission is to make censorship-resistant communication available to anyone: during natural disasters, internet blackouts, mass protests, or any situation where networks are unavailable, surveilled, or shut down.**
 
-Built on the foundation of [bitchat](https://bitchat.free), using the same [BLE wire protocol](docs/spec/PROTOCOLS.md), [service UUIDs](docs/spec/PROTOCOLS.md#1-ble-identifiers) and security model, meaning a device with Airhop installed can automatically discover and join the same mesh as nearby Bitchat devices, relay messages and exchange DMs with zero setup. Airhop also extends the protocol with [Double Ratchet](https://signal.org/docs/specifications/doubleratchet/) forward secrecy, [Tor](https://torproject.org) on both platforms and offline Cashu payments (not present in bitchat at the time of writing).
+Built on the foundation of [bitchat](https://bitchat.free), using the same [BLE wire protocol](docs/spec/PROTOCOLS.md), [service UUIDs](docs/spec/PROTOCOLS.md#1-ble-identifiers), and security model, meaning **Airhop-installed devices** can automatically discover and join the same mesh as nearby **Bitchat-installed devices**, relay messages, and exchange DMs with zero setup. Airhop also extends the protocol with [Double Ratchet](https://signal.org/docs/specifications/doubleratchet/) forward secrecy, [Tor](https://torproject.org) on both platforms, and offline Cashu payments (not present in bitchat _at the time of writing_).
 
 > [!NOTE]
 > Airhop is an independent side project built and maintained by [Areeb Ahmed](https://github.com/areebahmeddd) in his free time. It is not backed by any company or organization, not affiliated with or endorsed by permissionlesstech or the bitchat project, and not an impersonation of any existing app or service.
@@ -110,18 +110,18 @@ npx react-native run-android
 
 ## Documentation
 
-| Document                                     | Description                                                      |
-| -------------------------------------------- | ---------------------------------------------------------------- |
-| [VISION.md](docs/design/VISION.md)           | Why Airhop exists and what it will never compromise on           |
-| [ROADMAP.md](docs/design/ROADMAP.md)         | Version targets (v0.5.0 to v3.0.0), milestones, and gap analysis |
-| [PROTOCOLS.md](docs/spec/PROTOCOLS.md)       | Wire format, BLE UUIDs, and all protocol constants               |
-| [ARCHITECTURE.md](docs/spec/ARCHITECTURE.md) | Architecture decisions and stack rationale                       |
-| [PROGRESS.md](docs/dev/PROGRESS.md)          | Current build state and phase checklists                         |
-| [CONTRIBUTING.md](CONTRIBUTING.md)           | Coding standards, crypto rules, and PR checklist                 |
-| [REFERENCE.md](docs/dev/REFERENCE.md)        | bitchat codebase deep-dive and knowledge transfer                |
-| [GLOSSARY.md](docs/dev/GLOSSARY.md)          | Definitions for all technical terms used across the docs         |
-| [SECURITY.md](SECURITY.md)                   | How to report a vulnerability                                    |
-| [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md)     | Community standards and expectations                             |
+| Document                                     | Description                                                                 |
+| -------------------------------------------- | --------------------------------------------------------------------------- |
+| [VISION.md](docs/design/VISION.md)           | Why Airhop exists and what it will never compromise on                      |
+| [ROADMAP.md](docs/design/ROADMAP.md)         | Version targets (v0.5.0 to v3.0.0), gap analysis, and competitive landscape |
+| [PROTOCOLS.md](docs/spec/PROTOCOLS.md)       | Wire format, BLE UUIDs, and all protocol constants                          |
+| [ARCHITECTURE.md](docs/spec/ARCHITECTURE.md) | Architecture decisions and stack rationale                                  |
+| [PROGRESS.md](docs/dev/PROGRESS.md)          | Current build state and phase checklists                                    |
+| [CONTRIBUTING.md](CONTRIBUTING.md)           | Coding standards, crypto rules, and PR checklist                            |
+| [REFERENCE.md](docs/dev/REFERENCE.md)        | bitchat codebase deep-dive and knowledge transfer                           |
+| [GLOSSARY.md](docs/dev/GLOSSARY.md)          | Definitions for all technical terms used across the docs                    |
+| [SECURITY.md](SECURITY.md)                   | How to report a vulnerability                                               |
+| [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md)     | Community standards and expectations                                        |
 
 ## Acknowledgements
 
@@ -141,8 +141,8 @@ Help keep the project going by making a voluntary donation through our app or we
 
 <a href="https://www.star-history.com/?repos=areebahmeddd%2FAirhop&type=date&logscale=&legend=top-left">
  <picture>
-   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=areebahmeddd/Airhop&type=date&theme=dark&logscale&legend=top-left&sealed_token=yAlx-tVyFrbyR60ihBx8P4GuQXc930etD_HlhEyUlGIDYaur9ExlXY1otA9vg8B-iujUruleB3qPS5hO1BNleAfcQ8VkfMTxPqNY9IgMUt1goQx8YIBPEL0IZnnmV_pUK9dJfe5J7cuHPFX7UxsGKlaU3AQcGNHkTjVvzt8Lglo60S_49g_gbX5Y-QvA" />
-   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=areebahmeddd/Airhop&type=date&logscale&legend=top-left&sealed_token=yAlx-tVyFrbyR60ihBx8P4GuQXc930etD_HlhEyUlGIDYaur9ExlXY1otA9vg8B-iujUruleB3qPS5hO1BNleAfcQ8VkfMTxPqNY9IgMUt1goQx8YIBPEL0IZnnmV_pUK9dJfe5J7cuHPFX7UxsGKlaU3AQcGNHkTjVvzt8Lglo60S_49g_gbX5Y-QvA" />
-   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=areebahmeddd/Airhop&type=date&logscale&legend=top-left&sealed_token=yAlx-tVyFrbyR60ihBx8P4GuQXc930etD_HlhEyUlGIDYaur9ExlXY1otA9vg8B-iujUruleB3qPS5hO1BNleAfcQ8VkfMTxPqNY9IgMUt1goQx8YIBPEL0IZnnmV_pUK9dJfe5J7cuHPFX7UxsGKlaU3AQcGNHkTjVvzt8Lglo60S_49g_gbX5Y-QvA" />
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=areebahmeddd/Airhop&type=date&theme=dark&logscale&legend=top-left&sealed_token=-WkVGqvQDeQazbrkJu_cQRz5cPPAO6r0amRCkxBz9TDWfy-pvo-a8Iwuc-JqmwgWoWIBOfDJcjvCf8BEJyd0vbq4heI9MeZJiAnMahoWYaYeFSVS7g5StAqbZFATBHow8IpRrAoT2L41KWJqTUKqlA2x0Ksf3PuBSpr5X_REc7lIyWLGqNv_8BG7wv44" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=areebahmeddd/Airhop&type=date&logscale&legend=top-left&sealed_token=-WkVGqvQDeQazbrkJu_cQRz5cPPAO6r0amRCkxBz9TDWfy-pvo-a8Iwuc-JqmwgWoWIBOfDJcjvCf8BEJyd0vbq4heI9MeZJiAnMahoWYaYeFSVS7g5StAqbZFATBHow8IpRrAoT2L41KWJqTUKqlA2x0Ksf3PuBSpr5X_REc7lIyWLGqNv_8BG7wv44" />
+   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=areebahmeddd/Airhop&type=date&logscale&legend=top-left&sealed_token=-WkVGqvQDeQazbrkJu_cQRz5cPPAO6r0amRCkxBz9TDWfy-pvo-a8Iwuc-JqmwgWoWIBOfDJcjvCf8BEJyd0vbq4heI9MeZJiAnMahoWYaYeFSVS7g5StAqbZFATBHow8IpRrAoT2L41KWJqTUKqlA2x0Ksf3PuBSpr5X_REc7lIyWLGqNv_8BG7wv44" />
  </picture>
 </a>
