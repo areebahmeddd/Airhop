@@ -36,7 +36,7 @@
 
 Airhop is an iOS + Android app (macOS and Windows coming soon) for private, offline-first peer-to-peer communication over [Bluetooth mesh](https://en.wikipedia.org/wiki/Mesh_networking) networks, with [Nostr](https://nostr.com) internet bridging and [Cashu](https://cashu.space) ecash payments. **Our goal is to make censorship-resistant communication available to anyone: during natural disasters, internet blackouts, mass protests, or any situation where networks are unavailable, surveilled, or shut down.**
 
-Built on the foundation of [bitchat](https://bitchat.free), using the same [BLE wire protocol](docs/spec/PROTOCOLS.md), [service UUIDs](docs/spec/PROTOCOLS.md#1-ble-identifiers) and security model, meaning a device with Airhop installed can automatically discover and join the same mesh as nearby bitchat devices, relay messages and exchange DMs with zero setup. Airhop also extends the protocol with [Double Ratchet](https://signal.org/docs/specifications/doubleratchet/) forward secrecy, [Tor](https://torproject.org) on both platforms and offline Cashu payments (not present in bitchat at the time of writing).
+Built on the foundation of [bitchat](https://bitchat.free), using the same [BLE wire protocol](docs/spec/PROTOCOLS.md), [service UUIDs](docs/spec/PROTOCOLS.md#1-ble-identifiers) and security model, meaning a device with Airhop installed can automatically discover and join the same mesh as nearby Bitchat devices, relay messages and exchange DMs with zero setup. Airhop also extends the protocol with [Double Ratchet](https://signal.org/docs/specifications/doubleratchet/) forward secrecy, [Tor](https://torproject.org) on both platforms and offline Cashu payments (not present in bitchat at the time of writing).
 
 > [!NOTE]
 > Airhop is an independent side project built and maintained by [Areeb Ahmed](https://github.com/areebahmeddd) in his free time. It is not backed by any company or organization, not affiliated with or endorsed by permissionlesstech or the bitchat project, and not an impersonation of any existing app or service.
@@ -139,12 +139,10 @@ Airhop would not exist without the work of the bitchat community. Thank you to e
 
 Help keep the project going by making a voluntary donation through our app or website, or simply give this repository a star.
 
-<p align="center">
-  <a href="https://www.star-history.com/#areebahmeddd/Airhop">
-    <picture>
-      <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=areebahmeddd/Airhop&type=Date&theme=dark" />
-      <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=areebahmeddd/Airhop&type=Date" />
-      <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=areebahmeddd/Airhop&type=Date" />
-    </picture>
-  </a>
-</p>
+<a href="https://www.star-history.com/?repos=areebahmeddd%2FAirhop&type=date&logscale=&legend=top-left">
+ <picture>
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=areebahmeddd/Airhop&type=date&theme=dark&logscale&legend=top-left&sealed_token=yAlx-tVyFrbyR60ihBx8P4GuQXc930etD_HlhEyUlGIDYaur9ExlXY1otA9vg8B-iujUruleB3qPS5hO1BNleAfcQ8VkfMTxPqNY9IgMUt1goQx8YIBPEL0IZnnmV_pUK9dJfe5J7cuHPFX7UxsGKlaU3AQcGNHkTjVvzt8Lglo60S_49g_gbX5Y-QvA" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=areebahmeddd/Airhop&type=date&logscale&legend=top-left&sealed_token=yAlx-tVyFrbyR60ihBx8P4GuQXc930etD_HlhEyUlGIDYaur9ExlXY1otA9vg8B-iujUruleB3qPS5hO1BNleAfcQ8VkfMTxPqNY9IgMUt1goQx8YIBPEL0IZnnmV_pUK9dJfe5J7cuHPFX7UxsGKlaU3AQcGNHkTjVvzt8Lglo60S_49g_gbX5Y-QvA" />
+   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=areebahmeddd/Airhop&type=date&logscale&legend=top-left&sealed_token=yAlx-tVyFrbyR60ihBx8P4GuQXc930etD_HlhEyUlGIDYaur9ExlXY1otA9vg8B-iujUruleB3qPS5hO1BNleAfcQ8VkfMTxPqNY9IgMUt1goQx8YIBPEL0IZnnmV_pUK9dJfe5J7cuHPFX7UxsGKlaU3AQcGNHkTjVvzt8Lglo60S_49g_gbX5Y-QvA" />
+ </picture>
+</a>

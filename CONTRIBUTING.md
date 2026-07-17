@@ -91,15 +91,14 @@ Run tests: `npm test -- --testPathPattern=src/core`
 
 Before opening any pull request:
 
-- [ ] `npm test` passes with zero failures
+- [ ] `npm run test` passes with zero failures
+- [ ] `npm run format` run (no uncommitted format changes)
 - [ ] `npm run lint` passes with zero errors
 - [ ] `npm run typecheck` passes with zero errors
-- [ ] `npm run format` run (no uncommitted format changes)
-- [ ] No `any` types added to `src/core/` or `src/bridge/`
-- [ ] No crypto library other than `@noble/*` imported
-- [ ] Protocol wire format unchanged (or version bumped with compat path)
 - [ ] `docs/dev/PROGRESS.md` updated if a milestone was completed or a decision was made
+- [ ] `docs/design/ROADMAP.md` updated if a feature was added, removed, or reprioritized
 - [ ] If touching `src/core/` or `android/` or `ios/`: invoke `@architect` agent for review
+- [ ] If touching `src/core/crypto/`, key storage, or packet signing: invoke `@security-review` agent
 
 ## 8. Commit Sign-Off (DCO)
 
