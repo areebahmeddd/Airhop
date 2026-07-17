@@ -40,7 +40,7 @@
 
 ## Nostr Protocol
 
-**[Nostr](https://nostr.com)**: Notes and Other Stuff Transmitted by Relays. A simple, open, decentralized protocol where clients sign events with keypairs and publish them to relays. Airhop uses Nostr as its internet bridge transport when BLE range is insufficient.
+**[Nostr](https://nostr.org)**: Notes and Other Stuff Transmitted by Relays. A simple, open, decentralized protocol where clients sign events with keypairs and publish them to relays. Airhop uses Nostr as its internet bridge transport when BLE range is insufficient.
 
 **NIP (Nostr Improvement Proposal)**: A numbered specification defining a Nostr protocol feature or extension. The full list is at [github.com/nostr-protocol/nips](https://github.com/nostr-protocol/nips).
 

@@ -11,8 +11,8 @@ By participating, you agree to follow our [Code of Conduct](CODE_OF_CONDUCT.md).
 Every contributor reads these documents before writing a single line of code, in this order:
 
 1. [`docs/design/VISION.md`](docs/design/VISION.md): what Airhop is and what it will never compromise on
-2. [`docs/spec/PROTOCOLS.md`](docs/spec/PROTOCOLS.md): the wire format and exact constants you must not break
-3. [`docs/spec/ARCHITECTURE.md`](docs/spec/ARCHITECTURE.md): the architecture decisions and why they were made
+2. [`docs/spec/ARCHITECTURE.md`](docs/spec/ARCHITECTURE.md): the architecture decisions and why they were made
+3. [`docs/spec/PROTOCOLS.md`](docs/spec/PROTOCOLS.md): the wire format and exact constants you must not break
 4. [`docs/dev/PROGRESS.md`](docs/dev/PROGRESS.md): current build state; what's done and what's next
 
 Skipping this step causes rework.

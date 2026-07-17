@@ -17,8 +17,8 @@ It is **wire-protocol-compatible with bitchat** (`permissionlesstech/bitchat`, `
 Before working on any code, read in this order:
 
 1. [`docs/design/VISION.md`](docs/design/VISION.md): why + principles
-2. [`docs/spec/PROTOCOLS.md`](docs/spec/PROTOCOLS.md): wire format and constants you must not break
-3. [`docs/spec/ARCHITECTURE.md`](docs/spec/ARCHITECTURE.md): architecture, stack decisions, code snippets
+2. [`docs/spec/ARCHITECTURE.md`](docs/spec/ARCHITECTURE.md): architecture, stack decisions, code snippets
+3. [`docs/spec/PROTOCOLS.md`](docs/spec/PROTOCOLS.md): wire format and constants you must not break
 4. [`docs/dev/PROGRESS.md`](docs/dev/PROGRESS.md): current build state
 
 ## Non-Negotiable Rules

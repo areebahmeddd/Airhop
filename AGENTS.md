@@ -17,8 +17,8 @@ The workspace contains the bitchat reference implementation alongside the Airhop
 You must read these four documents before making any code suggestions:
 
 1. [`docs/design/VISION.md`](docs/design/VISION.md): non-negotiable principles
-2. [`docs/spec/PROTOCOLS.md`](docs/spec/PROTOCOLS.md): the wire format you must not break
-3. [`docs/spec/ARCHITECTURE.md`](docs/spec/ARCHITECTURE.md): architecture and stack decisions
+2. [`docs/spec/ARCHITECTURE.md`](docs/spec/ARCHITECTURE.md): architecture and stack decisions
+3. [`docs/spec/PROTOCOLS.md`](docs/spec/PROTOCOLS.md): the wire format you must not break
 4. [`docs/dev/PROGRESS.md`](docs/dev/PROGRESS.md): what exists, what's next, what's blocked
 
 ## Rules Every Agent Must Follow

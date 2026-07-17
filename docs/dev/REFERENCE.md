@@ -192,7 +192,7 @@ The Android implementation (`BluetoothMeshService.kt`, `MeshCore.kt`) uses:
 
 ### 4.1 What Nostr Is
 
-[Nostr](https://nostr.com) is an open protocol for censorship-resistant social networking. It uses WebSocket connections to **relays** (simple servers) and signs all events with cryptographic keys. bitchat uses Nostr as its internet bridge.
+[Nostr](https://nostr.org) is an open protocol for censorship-resistant social networking. It uses WebSocket connections to **relays** (simple servers) and signs all events with cryptographic keys. bitchat uses Nostr as its internet bridge.
 
 ### 4.2 How bitchat Uses Nostr
 
