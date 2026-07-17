@@ -58,6 +58,11 @@ private const val EVT_LINK_CONNECTED    = "AirhopBLE.linkConnected"
 private const val EVT_LINK_DISCONNECTED = "AirhopBLE.linkDisconnected"
 private const val EVT_RSSI_UPDATED      = "AirhopBLE.rssiUpdated"
 
+// Orbot SOCKS5 proxy defaults (Tor via Orbot, per ARCHITECTURE.md section 9).
+// Phase 1: detect existing Orbot session. Phase 2: embedded tor binary.
+private const val ORBOT_SOCKS5_PORT       = 9050
+private const val ORBOT_PROBE_TIMEOUT_MS  = 500
+
 class AirhopBLEModule(
     private val reactContext: ReactApplicationContext,
 ) : ReactContextBaseJavaModule(reactContext) {
@@ -228,6 +233,29 @@ class AirhopBLEModule(
     @ReactMethod
     fun removeListeners(count: Double) {
         listenerCount = maxOf(0, listenerCount - count.toInt())
+    }
+
+    // MARK: - Tor proxy detection (Orbot)
+
+    // Probe whether a SOCKS5 proxy is reachable at localhost:port (Orbot default: 9050).
+    // Runs a non-blocking TCP connect attempt on a background thread. The promise
+    // resolves with the port number if reachable, or 0 if not.
+    //
+    // This does NOT start Orbot; it only detects whether it is already running.
+    // TypeScript callers use the returned port to configure the Nostr WebSocket proxy.
+    @ReactMethod
+    fun getTorProxyPort(promise: Promise) {
+        Thread {
+            val port = ORBOT_SOCKS5_PORT
+            try {
+                java.net.Socket().use { socket ->
+                    socket.connect(java.net.InetSocketAddress("127.0.0.1", port), ORBOT_PROBE_TIMEOUT_MS)
+                    promise.resolve(port)
+                }
+            } catch (_: Exception) {
+                promise.resolve(0)
+            }
+        }.start()
     }
 
     // MARK: - GATT server setup
