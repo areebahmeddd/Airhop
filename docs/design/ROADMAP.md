@@ -137,16 +137,16 @@ bitchat is an excellent foundation. Airhop fills the gaps it left open.
 
 **Milestone:** Cross-city DMs via Nostr. Live voice PTT over BLE. Cashu offline payment working. Tor routing on iOS via Arti.
 
-### v0.8.0: High Bandwidth + Double Ratchet
+### v0.8.0: High Bandwidth + Double Ratchet ✅
 
 **Goal:** High-bandwidth transport and per-message forward secrecy.
 
-- [ ] `src/core/crypto/double-ratchet.ts`: Signal DR per-message forward secrecy
-- [ ] `src/core/crypto/x3dh.ts`: X3DH prekey agreement; bundles published to Nostr
-- [ ] WiFi Aware native module (Android) + MultipeerConnectivity (iOS)
-- [ ] Chunked file transfer >1 MiB (streaming reassembly)
-- [ ] Video frame capture (react-native-vision-camera v4, HEVC)
-- [ ] `0x30: videoFrame` packet type (WiFi Direct only)
+- [x] `src/core/crypto/double-ratchet.ts`: Signal DR per-message forward secrecy
+- [x] `src/core/crypto/x3dh.ts`: X3DH prekey agreement; bundles published to Nostr
+- [x] WiFi Aware native module (Android) + MultipeerConnectivity (iOS)
+- [x] Chunked file transfer >1 MiB (streaming reassembly)
+- [x] Video frame capture (react-native-vision-camera v5, HEVC)
+- [x] `0x30: videoFrame` packet type (WiFi Direct only)
 
 **Milestone:** Offline video calling over WiFi Aware. Double Ratchet passing test vectors.
 

@@ -2,10 +2,10 @@
 
 > Updated when milestones complete, blockers are found, or decisions are made. It is the canonical answer to "where are we right now?"
 
-## Current Version: v0.7.0 (Completed)
+## Current Version: v0.8.0 (Completed)
 
-**Status:** Nostr internet bridge (client, gift-wrap, geo-relay, presence, courier relay), Cashu ecash + wallet store, NIP-61 nutzaps, PTT voice (capture + jitter buffer player), Android Orbot detection, iOS Arti Tor module (AirhopTorManager, AirhopTorModule, AirhopTorSession), message-router Nostr transport, all implemented and tested.
-**Started:** July 17, 2026
+**Status:** Double Ratchet per-message forward secrecy, X3DH prekey agreement (Nostr bundle serialization), Android WiFi Aware native module (AirhopWiFiModule + AirhopWiFiPackage), iOS MultipeerConnectivity native module (AirhopMCModule), NativeAirhopWiFi TurboModule spec, chunked file transfer >1 MiB (FileAssembler), video capture + player (HEVC, VIDEO_FRAME 0x30, WiFi Direct only), all implemented and tested (265 passing).
+**Started:** July 18, 2026
 **Last Updated:** July 18, 2026
 
 ## Documentation Status
@@ -100,14 +100,14 @@
 
 **Milestone:** Cross-city DMs via Nostr. Live voice PTT over BLE. Cashu offline payment working. Tor routing available on iOS via Arti.
 
-## v0.8.0: High Bandwidth + Double Ratchet
+## v0.8.0: High Bandwidth + Double Ratchet ✅
 
-- [ ] `src/core/crypto/double-ratchet.ts`: Signal DR per-message forward secrecy
-- [ ] `src/core/crypto/x3dh.ts`: X3DH prekey agreement
-- [ ] WiFi Aware native module (Android) + MultipeerConnectivity (iOS)
-- [ ] Chunked file transfer >1 MiB
-- [ ] Video frame capture (react-native-vision-camera)
-- [ ] `0x30: videoFrame` packet type (WiFi Direct only)
+- [x] `src/core/crypto/double-ratchet.ts`: Signal DR per-message forward secrecy
+- [x] `src/core/crypto/x3dh.ts`: X3DH prekey agreement; bundles published to Nostr
+- [x] WiFi Aware native module (Android) + MultipeerConnectivity (iOS)
+- [x] Chunked file transfer >1 MiB
+- [x] Video frame capture (react-native-vision-camera v5, HEVC)
+- [x] `0x30: videoFrame` packet type (WiFi Direct only)
 
 **Milestone:** Offline video calling over WiFi Aware. Double Ratchet passing test vectors.
 
