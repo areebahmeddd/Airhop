@@ -199,8 +199,14 @@ describe("packet-codec", () => {
   describe("packet type constants", () => {
     it("ANNOUNCE = 0x01", () => expect(PacketType.ANNOUNCE).toBe(0x01));
     it("CHANNEL_MSG = 0x02", () => expect(PacketType.CHANNEL_MSG).toBe(0x02));
-    it("DM = 0x03", () => expect(PacketType.DM).toBe(0x03));
-    it("COURIER_ENV = 0x06", () => expect(PacketType.COURIER_ENV).toBe(0x06));
+    it("LEAVE = 0x03", () => expect(PacketType.LEAVE).toBe(0x03));
+    it("COURIER_ENV = 0x04", () => expect(PacketType.COURIER_ENV).toBe(0x04));
+    it("NOISE_HANDSHAKE = 0x10", () =>
+      expect(PacketType.NOISE_HANDSHAKE).toBe(0x10));
+    it("NOISE_ENCRYPTED = 0x11", () =>
+      expect(PacketType.NOISE_ENCRYPTED).toBe(0x11));
+    it("FRAGMENT = 0x20", () => expect(PacketType.FRAGMENT).toBe(0x20));
+    it("REQUEST_SYNC = 0x21", () => expect(PacketType.REQUEST_SYNC).toBe(0x21));
     it("VOICE_FRAME = 0x29", () => expect(PacketType.VOICE_FRAME).toBe(0x29));
     it("CASHU_TOKEN = 0x40", () => expect(PacketType.CASHU_TOKEN).toBe(0x40));
   });

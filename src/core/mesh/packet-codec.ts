@@ -22,15 +22,18 @@
 import { ed25519 } from "@noble/curves/ed25519.js";
 
 // Packet type registry per PROTOCOLS.md section 3.
-// Types 0x01–0x28 are bitchat-defined; 0x29+ are Airhop extensions.
+// All values match bitchat MessageType.swift (public domain, unlicense).
+// 0x01–0x28 are bitchat-defined; 0x29+ are Airhop extensions.
 export const enum PacketType {
-  ANNOUNCE = 0x01,
-  CHANNEL_MSG = 0x02,
-  DM = 0x03,
-  DM_ACK = 0x04,
-  FILE_CHUNK = 0x05,
-  COURIER_ENV = 0x06,
-  GOSSIP_FILTER = 0x07,
+  ANNOUNCE = 0x01, // "I'm here" with nickname
+  CHANNEL_MSG = 0x02, // Public channel message
+  LEAVE = 0x03, // Peer departing
+  COURIER_ENV = 0x04, // Store-and-forward envelope
+  NOISE_HANDSHAKE = 0x10, // Noise XX handshake (init or response)
+  NOISE_ENCRYPTED = 0x11, // Post-handshake encrypted payload (DM, receipts, etc.)
+  FRAGMENT = 0x20, // Single BLE fragment of a larger message
+  REQUEST_SYNC = 0x21, // GCS filter gossip request (local-only, TTL=2)
+  FILE_TRANSFER = 0x22, // Binary file / audio / image payload
   VOICE_FRAME = 0x29,
   VIDEO_FRAME = 0x30,
   CASHU_TOKEN = 0x40,
