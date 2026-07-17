@@ -256,4 +256,133 @@ describe("MessageRouter", () => {
     };
     expect(router.decryptDm(packet, "unknown000000000")).toBeNull();
   });
+
+  test("sendDm returns sent-nostr when Nostr pubkey is known and no BLE session", () => {
+    const identity = makeIdentity();
+    const registry = new PeerRegistry();
+    const recipientPeerID = "aabbccdd00112233";
+
+    registry.update({
+      peerID: recipientPeerID,
+      noisePubKey: new Uint8Array(32),
+      signingPubKey: new Uint8Array(32),
+      nickname: "alice",
+    });
+    registry.setNostrPubkey(
+      recipientPeerID,
+      "a".repeat(64), // fake secp256k1 hex pubkey
+    );
+
+    const nostrSent: Array<{ pubkey: string; text: string }> = [];
+    const router = new MessageRouter(
+      identity,
+      registry,
+      () => {},
+      () => {},
+      async (pubkey, text) => {
+        nostrSent.push({ pubkey, text });
+      },
+    );
+
+    const result = router.sendDm(recipientPeerID, "via nostr");
+    expect(result).toBe("sent-nostr");
+  });
+
+  test("sendDm falls back to needs-courier when Nostr pubkey unknown and no BLE session", () => {
+    const identity = makeIdentity();
+    const registry = new PeerRegistry();
+    const recipientPeerID = "bbccddee11223344";
+
+    registry.update({
+      peerID: recipientPeerID,
+      noisePubKey: new Uint8Array(32),
+      signingPubKey: new Uint8Array(32),
+      nickname: "bob",
+    });
+    // No nostrPubkey set, no nostrSend fn injected.
+    const router = new MessageRouter(
+      identity,
+      registry,
+      () => {},
+      () => {},
+    );
+
+    expect(router.sendDm(recipientPeerID, "offline")).toBe("needs-courier");
+  });
+
+  test("sendDm prefers BLE over Nostr even when both are available", () => {
+    const identity = makeIdentity();
+    const registry = new PeerRegistry();
+    const recipientPeerID = "ccddee0011223344";
+
+    registry.update({
+      peerID: recipientPeerID,
+      noisePubKey: new Uint8Array(32),
+      signingPubKey: new Uint8Array(32),
+      nickname: "charlie",
+    });
+    registry.setNostrPubkey(recipientPeerID, "b".repeat(64));
+    const { sessionI } = makePeerNoiseSession();
+    registry.setSession(recipientPeerID, sessionI);
+
+    const nostrSent: string[] = [];
+    const unicasts: Packet[] = [];
+    const router = new MessageRouter(
+      identity,
+      registry,
+      () => {},
+      (_, p) => unicasts.push(p),
+      async (pubkey) => {
+        nostrSent.push(pubkey);
+      },
+    );
+
+    const result = router.sendDm(recipientPeerID, "prefer ble");
+    expect(result).toBe("sent");
+    expect(unicasts).toHaveLength(1);
+    expect(nostrSent).toHaveLength(0);
+  });
+
+  test("setNostrPubkey stores the key and is retrievable", () => {
+    const registry = new PeerRegistry();
+    const peerID = "1122334455667788";
+    registry.update({
+      peerID,
+      noisePubKey: new Uint8Array(32),
+      signingPubKey: new Uint8Array(32),
+      nickname: "eve",
+    });
+
+    registry.setNostrPubkey(peerID, "c".repeat(64));
+
+    expect(registry.get(peerID)?.nostrPubkey).toBe("c".repeat(64));
+  });
+
+  test("update() preserves nostrPubkey across BLE re-announces", () => {
+    // BLE ANNOUNCE packets do not carry a nostrPubkey field, so update() is
+    // called without one. The previously learned nostrPubkey must survive.
+    const registry = new PeerRegistry();
+    const peerID = "aabbccdd11223344";
+
+    registry.update({
+      peerID,
+      noisePubKey: new Uint8Array(32),
+      signingPubKey: new Uint8Array(32),
+      nickname: "frank",
+    });
+    registry.setNostrPubkey(peerID, "d".repeat(64));
+
+    // Simulate a second ANNOUNCE with no nostrPubkey field.
+    registry.update({
+      peerID,
+      noisePubKey: new Uint8Array(32),
+      signingPubKey: new Uint8Array(32),
+      nickname: "frank-v2",
+    });
+
+    // nostrPubkey must still be present.
+    expect(registry.get(peerID)?.nostrPubkey).toBe("d".repeat(64));
+    // Nickname should be updated to reflect the new announce.
+    expect(registry.get(peerID)?.nickname).toBe("frank-v2");
+  });
 });

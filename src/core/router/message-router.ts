@@ -1,14 +1,13 @@
 // Message router: decides which transport carries each message.
 //
 // Priority order (per ARCHITECTURE.md section 4):
-//   1. BLE mesh (direct, if recipient has been announced recently)
-//   2. Courier (store-and-forward via connected peers)
-//   3. (Nostr added in v0.7.0)
+//   1. BLE mesh direct (Noise session established)
+//   2. Nostr gift-wrap DM (if recipient's Nostr pubkey is known)
+//   3. Courier (store-and-forward via connected mesh peers)
 //
-// For v0.6.0, BLE is the only live transport. The router's job is to:
-//   - Route CHANNEL_MSG as a signed broadcast over BLE
-//   - Route DM as a signed unicast if the recipient is reachable, or seal
-//     into a courier envelope and hand to connected peers otherwise
+// The router does not own a network connection. BLE and Courier are injected
+// as plain callbacks. The optional Nostr send function is injected at
+// construction time so the router stays testable without a live relay pool.
 
 import { type NoiseSession } from "../crypto/noise-xx";
 import {
@@ -30,6 +29,9 @@ export interface PeerEntry {
   signingPubKey: Uint8Array; // 32-byte Ed25519
   nickname: string;
   lastSeenMs: number;
+  // Nostr public key (secp256k1 hex) announced by this peer, if known.
+  // Used as priority-2 transport when the BLE session is unavailable.
+  nostrPubkey?: string;
   // Active Noise XX session, set once handshake is complete.
   session?: NoiseSession;
 }
@@ -47,6 +49,9 @@ export class PeerRegistry {
     this.peers.set(entry.peerID, {
       ...entry,
       lastSeenMs: Date.now(),
+      // Preserve the learned Nostr pubkey across BLE re-announces, which do
+      // not carry a nostrPubkey field. Same pattern as session.
+      nostrPubkey: entry.nostrPubkey ?? existing?.nostrPubkey,
       session: entry.session ?? existing?.session,
     });
   }
@@ -54,6 +59,11 @@ export class PeerRegistry {
   setSession(peerID: string, session: NoiseSession): void {
     const e = this.peers.get(peerID);
     if (e) e.session = session;
+  }
+
+  setNostrPubkey(peerID: string, nostrPubkey: string): void {
+    const e = this.peers.get(peerID);
+    if (e) e.nostrPubkey = nostrPubkey;
   }
 
   get(peerID: string): PeerEntry | undefined {
@@ -106,6 +116,12 @@ export interface RouterIdentity {
 
 export type BroadcastFn = (packet: Packet) => void;
 export type UnicastFn = (recipientPeerID: string, packet: Packet) => void;
+// Sends a gift-wrapped Nostr DM to a recipient by their secp256k1 pubkey.
+// Implemented by the feature layer; swapped for a test double in unit tests.
+export type NostrSendFn = (
+  recipientNostrPubkey: string,
+  text: string,
+) => Promise<void>;
 
 // Encodes the CHANNEL_MSG payload:
 //   [channel_utf8_len (u8)][channel_utf8][text_utf8]
@@ -149,6 +165,9 @@ export class MessageRouter {
     private readonly registry: PeerRegistry,
     private readonly broadcast: BroadcastFn,
     private readonly unicast: UnicastFn,
+    // Priority-2 transport: Nostr gift-wrap DM. Optional — when absent, DMs
+    // fall through to courier if BLE session is unavailable.
+    private readonly nostrSend?: NostrSendFn,
   ) {}
 
   // Send a message to a public channel. Always broadcast over mesh.
@@ -171,31 +190,55 @@ export class MessageRouter {
     this.broadcast(packet);
   }
 
-  // Send a direct message. If the recipient has an established Noise session,
-  // encrypt and send as DM unicast. Otherwise, caller must seal and courier.
-  // Returns 'sent' | 'needs-courier'.
-  sendDm(recipientPeerID: string, text: string): "sent" | "needs-courier" {
+  // Send a direct message.
+  //
+  // Transport selection:
+  //   1. BLE direct: if the recipient has an active Noise session, encrypt and
+  //      unicast over the mesh immediately.
+  //   2. Nostr: if a NostrSendFn was injected and the recipient's Nostr pubkey
+  //      is known, fire-and-forget a gift-wrap DM over the internet. Returns
+  //      'sent-nostr' so the caller can show a pending indicator.
+  //   3. Courier: returns 'needs-courier' so the caller can seal the message
+  //      and hand it to connected peers.
+  sendDm(
+    recipientPeerID: string,
+    text: string,
+  ): "sent" | "sent-nostr" | "needs-courier" {
     const peer = this.registry.get(recipientPeerID);
-    if (peer?.session === undefined) return "needs-courier";
 
-    const payload = encodeDmPayload(text, peer.session);
-    const senderIDBytes = hexToBytes(this.identity.peerID);
-    const recipientIDBytes = hexToBytes(recipientPeerID);
+    // Priority 1: BLE direct.
+    if (peer?.session !== undefined) {
+      const payload = encodeDmPayload(text, peer.session);
+      const senderIDBytes = hexToBytes(this.identity.peerID);
+      const recipientIDBytes = hexToBytes(recipientPeerID);
 
-    const packet: Packet = {
-      type: PacketType.NOISE_ENCRYPTED,
-      ttl: 7,
-      flags: Flags.HAS_RECIPIENT | Flags.SIGNED,
-      senderID: senderIDBytes,
-      recipientID: recipientIDBytes,
-      timestamp: Math.floor(Date.now() / 1000),
-      nonce: crypto.getRandomValues(new Uint8Array(8)),
-      signature: new Uint8Array(64),
-      payload,
-    };
-    packet.signature = signPacket(packet, this.identity.signingPrivKey);
-    this.unicast(recipientPeerID, packet);
-    return "sent";
+      const packet: Packet = {
+        type: PacketType.NOISE_ENCRYPTED,
+        ttl: 7,
+        flags: Flags.HAS_RECIPIENT | Flags.SIGNED,
+        senderID: senderIDBytes,
+        recipientID: recipientIDBytes,
+        timestamp: Math.floor(Date.now() / 1000),
+        nonce: crypto.getRandomValues(new Uint8Array(8)),
+        signature: new Uint8Array(64),
+        payload,
+      };
+      packet.signature = signPacket(packet, this.identity.signingPrivKey);
+      this.unicast(recipientPeerID, packet);
+      return "sent";
+    }
+
+    // Priority 2: Nostr gift-wrap DM when recipient pubkey is known.
+    if (this.nostrSend !== undefined && peer?.nostrPubkey !== undefined) {
+      void this.nostrSend(peer.nostrPubkey, text).catch(() => {
+        // Delivery failure is handled at the feature layer via Nostr client
+        // events. Silently dropping here keeps the router side-effect-free.
+      });
+      return "sent-nostr";
+    }
+
+    // Priority 3: Courier store-and-forward.
+    return "needs-courier";
   }
 
   // Decrypt an incoming DM payload.
