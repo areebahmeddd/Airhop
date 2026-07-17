@@ -14,6 +14,7 @@ import com.facebook.react.defaults.DefaultNewArchitectureEntryPoint
 import expo.modules.ApplicationLifecycleDispatcher
 import expo.modules.ExpoReactHostFactory
 import tech.permissionless.airhop.ble.AirhopBLEPackage
+import tech.permissionless.airhop.wifi.AirhopWiFiPackage
 
 class MainApplication : Application(), ReactApplication {
 
@@ -23,6 +24,7 @@ class MainApplication : Application(), ReactApplication {
       packageList =
         PackageList(this).packages.apply {
           add(AirhopBLEPackage())
+          add(AirhopWiFiPackage())
         }
     )
   }
