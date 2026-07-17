@@ -20,7 +20,11 @@ Application source code, organized by architectural layer. See [docs/spec/ARCHIT
 ## Tests
 
 ```sh
+# Run all tests
 npx jest
+
+# Run with coverage report
+npm run coverage
 ```
 
 Tests are co-located with their module in a `__tests__/` directory. All `src/core/` tests use `@jest-environment node`, so no React Native runtime is required.

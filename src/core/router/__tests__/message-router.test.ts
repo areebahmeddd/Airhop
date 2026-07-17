@@ -211,7 +211,7 @@ describe("MessageRouter", () => {
     const { sessionI, sessionR } = makePeerNoiseSession();
     registry.setSession(recipientPeerID, sessionI);
 
-    const unicasts: Array<{ peerID: string; packet: Packet }> = [];
+    const unicasts: { peerID: string; packet: Packet }[] = [];
     const router = new MessageRouter(
       identity,
       registry,
@@ -308,7 +308,7 @@ describe("MessageRouter", () => {
       "a".repeat(64), // fake secp256k1 hex pubkey
     );
 
-    const nostrSent: Array<{ pubkey: string; text: string }> = [];
+    const nostrSent: { pubkey: string; text: string }[] = [];
     const router = new MessageRouter(
       identity,
       registry,
