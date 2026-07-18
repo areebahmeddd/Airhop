@@ -3,10 +3,15 @@
 // Triple-tap the logo triggers panic wipe per the spec.
 
 import Feather from "@expo/vector-icons/Feather";
-import React, { useRef, useState } from "react";
+import * as Clipboard from "expo-clipboard";
+import React, { useEffect, useRef, useState } from "react";
 import {
   Alert,
   Linking,
+  Modal,
+  NativeEventEmitter,
+  NativeModules,
+  Platform,
   Pressable,
   ScrollView,
   Share,
@@ -15,7 +20,9 @@ import {
   Text,
   View,
 } from "react-native";
+import NfcManager, { Ndef, NfcTech } from "react-native-nfc-manager";
 import QRCode from "react-native-qrcode-svg";
+import NativeAirhopTor from "../../bridge/NativeAirhopTor";
 import Avatar from "../../ui/components/avatar";
 import { Colors, FontSize, FontWeight, Radius, Spacing } from "../../ui/theme";
 import { panicWipe } from "../../utils/panic-wipe";
@@ -23,15 +30,55 @@ import { panicWipe } from "../../utils/panic-wipe";
 interface Props {
   peerID: string;
   username: string;
+  onWipe?: () => void;
 }
 
 export default function ProfileScreen({
   peerID,
   username,
+  onWipe,
 }: Props): React.JSX.Element {
   const [torEnabled, setTorEnabled] = useState(false);
+  const [torStarting, setTorStarting] = useState(false);
+  const [torProgress, setTorProgress] = useState(0);
+  const [torSummary, setTorSummary] = useState("");
+  const [showQRModal, setShowQRModal] = useState(false);
+  const [idCopied, setIdCopied] = useState(false);
+  const idCopiedTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [nfcSupported, setNfcSupported] = useState(false);
+  const [isNfcWriting, setIsNfcWriting] = useState(false);
   const logoTapCount = useRef(0);
   const logoTapTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Subscribe to Tor bootstrap events (iOS only; NativeAirhopTor is null on Android).
+  useEffect(() => {
+    if (!NativeAirhopTor || !NativeModules.AirhopTorModule) return;
+    const emitter = new NativeEventEmitter(NativeModules.AirhopTorModule);
+    const sub = emitter.addListener(
+      "TorStatusChanged",
+      (event: {
+        isReady: boolean;
+        isStarting: boolean;
+        progress: number;
+        bootstrapSummary: string;
+      }) => {
+        setTorProgress(event.progress);
+        setTorSummary(event.bootstrapSummary);
+        if (event.isReady) {
+          setTorEnabled(true);
+          setTorStarting(false);
+        }
+        if (!event.isStarting && !event.isReady) {
+          // Tor has stopped or failed outside of our control.
+          setTorEnabled(false);
+          setTorStarting(false);
+          setTorProgress(0);
+          setTorSummary("");
+        }
+      },
+    );
+    return () => sub.remove();
+  }, []);
 
   // Triple-tap on the identity card triggers panic wipe.
   function handleLogoTap(): void {
@@ -62,7 +109,8 @@ export default function ProfileScreen({
             await panicWipe();
             Alert.alert(
               "Wiped",
-              "All keys and data have been destroyed. Restart the app to generate a new identity.",
+              "All keys and data have been destroyed. Tap OK to set up a new identity.",
+              [{ text: "OK", onPress: () => onWipe?.() }],
             );
           },
         },
@@ -73,8 +121,122 @@ export default function ProfileScreen({
   const shortPubKey =
     peerID.slice(0, 8) + "\u2009\u00b7\u2009" + peerID.slice(8);
 
+  // Check NFC support each time the QR modal opens.
+  useEffect(() => {
+    if (!showQRModal) return;
+    NfcManager.isSupported()
+      .then(setNfcSupported)
+      .catch(() => {});
+  }, [showQRModal]);
+
+  async function handleCopyID(): Promise<void> {
+    await Clipboard.setStringAsync(peerID);
+    if (idCopiedTimer.current) clearTimeout(idCopiedTimer.current);
+    setIdCopied(true);
+    idCopiedTimer.current = setTimeout(() => setIdCopied(false), 2000);
+  }
+
   async function handleSharePeerID(): Promise<void> {
     await Share.share({ message: peerID });
+  }
+
+  async function handleWriteNfc(): Promise<void> {
+    setIsNfcWriting(true);
+    try {
+      await NfcManager.start();
+      await NfcManager.requestTechnology(NfcTech.Ndef);
+      const bytes = Ndef.encodeMessage([
+        Ndef.uriRecord(`airhop://peer/${peerID}`),
+      ]);
+      if (bytes) {
+        await NfcManager.ndefHandler.writeNdefMessage(bytes);
+        Alert.alert(
+          "NFC tag written",
+          "Your Peer ID is now on the NFC tag. Anyone who scans it will be prompted to add you as a contact.",
+        );
+      }
+    } catch {
+      Alert.alert(
+        "Write failed",
+        "Could not write to the NFC tag. Make sure it is writable and held close to your phone.",
+      );
+    } finally {
+      NfcManager.cancelTechnologyRequest().catch(() => {});
+      setIsNfcWriting(false);
+    }
+  }
+
+  async function handleShareQR(): Promise<void> {
+    // Share a deep-link URL that any Airhop / bitchat-compatible app can open.
+    await Share.share({
+      message: `airhop://peer/${peerID}`,
+      title: "Scan to add me on Airhop",
+    });
+  }
+
+  // Wire the Tor toggle to the native AirhopTorModule.
+  // On Android NativeAirhopTor is null; Orbot detection is done natively.
+  async function handleTorToggle(value: boolean): Promise<void> {
+    if (!NativeAirhopTor) {
+      // Android: Tor routing goes through Orbot (SOCKS5 on port 9050).
+      // The app cannot start Orbot itself; the user must install and enable it.
+      if (value) {
+        Alert.alert(
+          "Tor on Android",
+          "Airhop routes Tor traffic through Orbot. Install and enable Orbot from the Play Store, then turn this on.",
+          [
+            {
+              text: "Get Orbot",
+              onPress: () =>
+                void Linking.openURL(
+                  "https://play.google.com/store/apps/details?id=org.torproject.android",
+                ),
+            },
+            { text: "Later", style: "cancel" },
+          ],
+        );
+        // Keep the switch off until the user comes back with Orbot running.
+        return;
+      }
+      setTorEnabled(false);
+      return;
+    }
+    try {
+      setTorStarting(true);
+      if (value) {
+        await NativeAirhopTor.startTor();
+        // Block until Tor has fully bootstrapped (SOCKS5 ready) or times out.
+        const ready = await NativeAirhopTor.awaitTorReady(60);
+        if (ready) {
+          setTorEnabled(true);
+          setTorProgress(100);
+        } else {
+          await NativeAirhopTor.stopTor().catch(() => {});
+          setTorEnabled(false);
+          setTorProgress(0);
+          setTorSummary("");
+          Alert.alert(
+            "Tor",
+            "Could not connect through Tor within 60 seconds. Check your network connection and try again.",
+          );
+        }
+      } else {
+        await NativeAirhopTor.stopTor();
+        setTorEnabled(false);
+        setTorProgress(0);
+        setTorSummary("");
+      }
+    } catch {
+      Alert.alert(
+        "Tor",
+        value
+          ? "Could not start Tor. Ensure the app has network access."
+          : "Could not stop Tor.",
+      );
+      setTorEnabled(false);
+    } finally {
+      setTorStarting(false);
+    }
   }
 
   return (
@@ -97,27 +259,45 @@ export default function ProfileScreen({
           <Text style={styles.peerIDLabel}>Peer ID</Text>
           <Text style={styles.peerID}>{shortPubKey}</Text>
         </View>
-        <View style={styles.qrContainer}>
+        {/* Tap QR to open the full-screen QR modal */}
+        <Pressable
+          style={styles.qrContainer}
+          onPress={() => setShowQRModal(true)}
+          accessibilityRole="button"
+          accessibilityLabel="View full-size QR code"
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+        >
           <QRCode
             value={peerID}
             size={48}
             color={Colors.textPrimary}
             backgroundColor={Colors.surfaceRaised}
           />
-        </View>
+        </Pressable>
       </Pressable>
       <Text style={styles.tripleHint}>Triple-tap card for panic wipe</Text>
 
-      {/* Share peer ID */}
-      <Pressable
-        style={styles.shareRow}
-        onPress={() => void handleSharePeerID()}
-        accessibilityRole="button"
-        accessibilityLabel="Share your Peer ID"
-      >
-        <Feather name="share-2" size={14} color={Colors.textSecondary} />
-        <Text style={styles.shareRowText}>Share Peer ID</Text>
-      </Pressable>
+      {/* Share action pills: side by side below the identity card */}
+      <View style={styles.sharePills}>
+        <Pressable
+          style={styles.sharePill}
+          onPress={() => void handleSharePeerID()}
+          accessibilityRole="button"
+          accessibilityLabel="Share your Peer ID"
+        >
+          <Feather name="share-2" size={13} color={Colors.textSecondary} />
+          <Text style={styles.sharePillText}>Share ID</Text>
+        </Pressable>
+        <Pressable
+          style={styles.sharePill}
+          onPress={() => setShowQRModal(true)}
+          accessibilityRole="button"
+          accessibilityLabel="Share QR code"
+        >
+          <Feather name="share-2" size={13} color={Colors.textSecondary} />
+          <Text style={styles.sharePillText}>Share QR</Text>
+        </Pressable>
+      </View>
 
       {/* Security */}
       <View style={styles.section}>
@@ -125,11 +305,22 @@ export default function ProfileScreen({
         <View style={styles.settingsGroup}>
           <SettingRow
             label="Tor routing"
-            description="Route Nostr traffic through Tor"
+            description={
+              Platform.OS === "android"
+                ? "Requires Orbot \u00b7 Install from the Play Store"
+                : torEnabled && !torStarting
+                  ? "Active \u00b7 Nostr traffic routed via Tor"
+                  : torStarting
+                    ? torProgress > 0
+                      ? `Connecting\u2026 ${torProgress}%${torSummary ? ` \u00b7 ${torSummary}` : ""}`
+                      : "Starting Tor\u2026"
+                    : "Route Nostr traffic through Tor for enhanced privacy"
+            }
             control={
               <Switch
                 value={torEnabled}
-                onValueChange={setTorEnabled}
+                onValueChange={(v) => void handleTorToggle(v)}
+                disabled={torStarting}
                 trackColor={{
                   false: Colors.surfaceRaised,
                   true: Colors.online,
@@ -205,7 +396,8 @@ export default function ProfileScreen({
           <Pressable
             style={styles.settingRow}
             onPress={() => void Linking.openURL("mailto:hi@areeb.dev")}
-            accessibilityRole="button"
+            accessibilityRole="link"
+            accessibilityLabel="Email hi@areeb.dev"
           >
             <View style={styles.settingLabelGroup}>
               <Text style={styles.settingLabel}>Get help</Text>
@@ -217,7 +409,8 @@ export default function ProfileScreen({
           <Pressable
             style={styles.settingRow}
             onPress={() => void Linking.openURL("https://airhop.1mindlabs.org")}
-            accessibilityRole="button"
+            accessibilityRole="link"
+            accessibilityLabel="Open airhop.1mindlabs.org"
           >
             <View style={styles.settingLabelGroup}>
               <Text style={styles.settingLabel}>Website</Text>
@@ -253,9 +446,12 @@ export default function ProfileScreen({
           <Pressable
             style={styles.settingRow}
             onPress={() =>
-              void Linking.openURL("upi://pay?pa=areebahmed0709@okaxis")
+              void Linking.openURL(
+                "upi://pay?pa=areebahmed0709@okaxis&pn=Areeb",
+              )
             }
-            accessibilityRole="button"
+            accessibilityRole="link"
+            accessibilityLabel="Pay via UPI"
           >
             <View style={styles.settingLabelGroup}>
               <Text style={styles.settingLabel}>UPI</Text>
@@ -268,26 +464,123 @@ export default function ProfileScreen({
         </View>
       </View>
 
-      {/* Danger zone */}
+      {/* Danger zone, same settingsGroup box pattern as other sections */}
       <View style={styles.section}>
         <Text style={[styles.sectionTitle, { color: Colors.danger }]}>
           Danger
         </Text>
-        <Pressable
-          style={({ pressed }) => [
-            styles.dangerButton,
-            pressed && styles.dangerButtonPressed,
-          ]}
-          onPress={confirmPanicWipe}
-          accessibilityRole="button"
-          accessibilityLabel="Trigger panic wipe"
-        >
-          <Text style={styles.dangerButtonText}>Panic wipe</Text>
-          <Text style={styles.dangerButtonSubtext}>
-            Instantly destroy all keys, messages, and proofs
-          </Text>
-        </Pressable>
+        <View style={[styles.settingsGroup, styles.dangerGroup]}>
+          <Pressable
+            style={({ pressed }) => [
+              styles.dangerRow,
+              pressed && styles.dangerRowPressed,
+            ]}
+            onPress={confirmPanicWipe}
+            accessibilityRole="button"
+            accessibilityLabel="Trigger panic wipe"
+          >
+            {/* Inner View owns the row layout. Pressable does not reliably
+                propagate flexDirection on all RN versions. */}
+            <View style={styles.dangerRowInner}>
+              <View style={styles.dangerIconWrap}>
+                <Feather
+                  name="alert-triangle"
+                  size={16}
+                  color={Colors.danger}
+                />
+              </View>
+              <View style={styles.dangerRowContent}>
+                <Text style={styles.dangerLabel}>Panic wipe</Text>
+                <Text style={styles.dangerDescription}>
+                  Instantly destroy all keys, messages, and proofs
+                </Text>
+              </View>
+            </View>
+          </Pressable>
+        </View>
       </View>
+
+      {/* QR code modal: bottom sheet with large QR, peerID, and share actions */}
+      <Modal
+        visible={showQRModal}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowQRModal(false)}
+      >
+        <Pressable
+          style={styles.qrOverlay}
+          onPress={() => setShowQRModal(false)}
+        >
+          <View style={styles.qrSheet}>
+            <View style={styles.qrSheetHandle} />
+            <Text style={styles.qrSheetTitle}>Your QR Code</Text>
+            <Text style={styles.qrSheetSubtitle}>
+              Share this code to let anyone on Airhop or bitchat add you as a
+              contact.
+            </Text>
+            <View style={styles.qrLarge}>
+              <QRCode
+                value={peerID}
+                size={200}
+                color={Colors.textPrimary}
+                backgroundColor={Colors.surface}
+              />
+            </View>
+            <Text style={styles.qrSheetPeerID}>{peerID}</Text>
+            <View style={styles.qrSheetActions}>
+              <Pressable
+                style={({ pressed }) => [
+                  styles.qrSheetBtn,
+                  pressed && styles.qrSheetBtnPressed,
+                ]}
+                onPress={() => void handleCopyID()}
+                accessibilityRole="button"
+                accessibilityLabel="Copy Peer ID to clipboard"
+              >
+                <Feather
+                  name={idCopied ? "check" : "copy"}
+                  size={15}
+                  color={idCopied ? Colors.online : Colors.textPrimary}
+                />
+                <Text style={styles.qrSheetBtnText}>
+                  {idCopied ? "Copied!" : "Copy ID"}
+                </Text>
+              </Pressable>
+              <Pressable
+                style={({ pressed }) => [
+                  styles.qrSheetBtn,
+                  styles.qrSheetBtnPrimary,
+                  pressed && styles.qrSheetBtnPressed,
+                ]}
+                onPress={() => void handleShareQR()}
+                accessibilityRole="button"
+                accessibilityLabel="Share QR code"
+              >
+                <Feather name="share-2" size={15} color={Colors.textInverse} />
+                <Text style={styles.qrSheetBtnTextPrimary}>Share QR</Text>
+              </Pressable>
+            </View>
+            {/* NFC tag write: shown only on NFC-capable devices */}
+            {nfcSupported && (
+              <Pressable
+                style={({ pressed }) => [
+                  styles.qrSheetNfcBtn,
+                  (pressed || isNfcWriting) && { opacity: 0.7 },
+                ]}
+                onPress={() => void handleWriteNfc()}
+                disabled={isNfcWriting}
+                accessibilityRole="button"
+                accessibilityLabel="Write Peer ID to NFC tag"
+              >
+                <Feather name="wifi" size={15} color={Colors.textSecondary} />
+                <Text style={styles.qrSheetBtnText}>
+                  {isNfcWriting ? "Hold phone near tag…" : "Write NFC Tag"}
+                </Text>
+              </Pressable>
+            )}
+          </View>
+        </Pressable>
+      </Modal>
     </ScrollView>
   );
 }
@@ -378,14 +671,25 @@ const styles = StyleSheet.create({
     letterSpacing: 0.3,
     marginTop: -Spacing.xs,
   },
-  shareRow: {
+  // Two pill buttons below the identity card
+  sharePills: {
+    flexDirection: "row",
+    gap: Spacing.sm,
+    marginTop: Spacing.xs,
+  },
+  sharePill: {
+    flex: 1,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     gap: Spacing.xs,
-    paddingVertical: Spacing.sm,
+    paddingVertical: Spacing.sm + 2,
+    borderRadius: Radius.full,
+    backgroundColor: Colors.surface,
+    borderWidth: 1,
+    borderColor: Colors.border,
   },
-  shareRowText: {
+  sharePillText: {
     fontSize: FontSize.sm,
     color: Colors.textSecondary,
     fontWeight: FontWeight.medium,
@@ -449,27 +753,145 @@ const styles = StyleSheet.create({
     color: Colors.online,
     fontWeight: FontWeight.medium,
   },
-  // Danger zone
-  dangerButton: {
-    backgroundColor: Colors.dangerDim,
-    borderRadius: Radius.lg,
-    borderWidth: 1,
-    borderColor: "rgba(239,68,68,0.2)",
+  // Danger zone, uses settingsGroup box for consistency with other sections
+  dangerGroup: {
+    borderColor: "rgba(220,38,38,0.2)",
+  },
+  // Pressable fills the cell; inner View owns the row direction.
+  dangerRow: {
+    overflow: "hidden",
+  },
+  dangerRowInner: {
+    flexDirection: "row",
+    alignItems: "center",
     paddingHorizontal: Spacing.base,
-    paddingVertical: Spacing.base,
-    gap: Spacing.xs,
+    paddingVertical: Spacing.md,
+    gap: Spacing.md,
   },
-  dangerButtonPressed: {
-    opacity: 0.8,
+  dangerRowPressed: {
+    backgroundColor: Colors.dangerDim,
   },
-  dangerButtonText: {
+  dangerIconWrap: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: Colors.dangerDim,
+    borderWidth: 1,
+    borderColor: "rgba(220,38,38,0.2)",
+    alignItems: "center",
+    justifyContent: "center",
+    flexShrink: 0,
+  },
+  dangerRowContent: {
+    flex: 1,
+    gap: 2,
+  },
+  dangerLabel: {
     fontSize: FontSize.base,
     fontWeight: FontWeight.semibold,
     color: Colors.danger,
   },
-  dangerButtonSubtext: {
-    fontSize: FontSize.sm,
+  dangerDescription: {
+    fontSize: FontSize.xs,
     color: Colors.danger,
     opacity: 0.7,
+    lineHeight: FontSize.xs * 1.5,
+  },
+  // QR code modal
+  qrOverlay: {
+    flex: 1,
+    backgroundColor: Colors.overlay,
+    justifyContent: "flex-end",
+  },
+  qrSheet: {
+    width: "100%",
+    backgroundColor: Colors.surface,
+    borderTopLeftRadius: Radius["2xl"],
+    borderTopRightRadius: Radius["2xl"],
+    paddingHorizontal: Spacing.xl,
+    paddingTop: Spacing.base,
+    paddingBottom: Spacing["2xl"],
+    alignItems: "center",
+    gap: Spacing.md,
+  },
+  qrSheetHandle: {
+    width: 36,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: Colors.borderStrong,
+    alignSelf: "center",
+    marginBottom: Spacing.xs,
+  },
+  qrSheetTitle: {
+    fontSize: FontSize.md,
+    fontWeight: FontWeight.bold,
+    color: Colors.textPrimary,
+  },
+  qrSheetSubtitle: {
+    fontSize: FontSize.sm,
+    color: Colors.textMuted,
+    textAlign: "center",
+    lineHeight: FontSize.sm * 1.5,
+  },
+  qrLarge: {
+    padding: Spacing.xl,
+    backgroundColor: Colors.surface,
+    borderRadius: Radius.xl,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  qrSheetPeerID: {
+    fontSize: FontSize.xs,
+    color: Colors.textMuted,
+    fontFamily: "monospace",
+    letterSpacing: 0.8,
+    textAlign: "center",
+  },
+  qrSheetActions: {
+    flexDirection: "row",
+    gap: Spacing.sm,
+    width: "100%",
+    marginTop: Spacing.xs,
+  },
+  qrSheetBtn: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: Spacing.xs,
+    paddingVertical: Spacing.md,
+    borderRadius: Radius.md,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    backgroundColor: Colors.surfaceRaised,
+  },
+  qrSheetBtnPrimary: {
+    backgroundColor: Colors.accent,
+    borderColor: "transparent",
+  },
+  qrSheetBtnPressed: {
+    opacity: 0.8,
+  },
+  qrSheetBtnText: {
+    fontSize: FontSize.sm,
+    fontWeight: FontWeight.medium,
+    color: Colors.textPrimary,
+  },
+  qrSheetBtnTextPrimary: {
+    fontSize: FontSize.sm,
+    fontWeight: FontWeight.medium,
+    color: Colors.textInverse,
+  },
+  qrSheetNfcBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: Spacing.xs,
+    paddingVertical: Spacing.md,
+    borderRadius: Radius.md,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    backgroundColor: Colors.surfaceRaised,
+    width: "100%",
   },
 });
