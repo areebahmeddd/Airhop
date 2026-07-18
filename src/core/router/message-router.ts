@@ -209,10 +209,10 @@ export class MessageRouter {
     private readonly registry: PeerRegistry,
     private readonly broadcast: BroadcastFn,
     private readonly unicast: UnicastFn,
-    // Priority-3 transport: Nostr gift-wrap DM. Optional — when absent, DMs
+    // Priority-3 transport: Nostr gift-wrap DM. Optional. When absent, DMs
     // fall through to courier if both BLE and WiFi sessions are unavailable.
     private readonly nostrSend?: NostrSendFn,
-    // Priority-2 transport: WiFi direct (MC / WiFi Aware). Optional — when
+    // Priority-2 transport: WiFi direct (MC / WiFi Aware). Optional. When
     // injected, tried before BLE for peers with an active WiFi link. Both tiers
     // share the same Noise session (the session is transport-agnostic).
     private readonly wifiUnicast?: WiFiUnicastFn,
@@ -257,7 +257,7 @@ export class MessageRouter {
   ): "sent" | "sent-nostr" | "needs-courier" {
     const peer = this.registry.get(recipientPeerID);
 
-    // Priority 1 + 2: Direct transport (WiFi or BLE) — both require an active
+    // Priority 1 + 2: Direct transport (WiFi or BLE). Both require an active
     // Noise session so the payload can be encrypted end-to-end.
     if (peer?.session !== undefined) {
       const payload = encodeDmPayload(text, peer.session);
