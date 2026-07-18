@@ -50,7 +50,7 @@ export const enum PacketType {
   CASHU_TOKEN = 0x40, // Cashu ecash token (Airhop extension)
 }
 
-// Flag bit values — must match bitchat BinaryProtocol.Flags exactly.
+// Flag bit values: must match bitchat BinaryProtocol.Flags exactly.
 export const Flags = {
   HAS_RECIPIENT: 0x01, // bit 0: recipientID field is present (unicast)
   SIGNED: 0x02, // bit 1: 64-byte Ed25519 signature is appended
@@ -92,7 +92,7 @@ export interface Packet {
   timestamp: number; // Unix seconds (u64 on wire; JS number is safe up to 2^53)
   signature: Uint8Array; // 64 bytes (zeros when unsigned)
   payload: Uint8Array;
-  // Optional fields — encoder derives HAS_ROUTE and IS_RSR flags from these.
+  // Optional fields: encoder derives HAS_ROUTE and IS_RSR flags from these.
   isRSR?: boolean;
   route?: readonly Uint8Array[]; // intermediate hop peerIDs, each 8 bytes
 }
@@ -123,7 +123,7 @@ export function encodePacket(p: Packet): Uint8Array {
   const hasRoute = route.length > 0;
   const isRSR = p.isRSR === true;
 
-  // Derive the wire flags byte — always computed from struct fields.
+  // Derive the wire flags byte: always computed from struct fields.
   let wireFlags = 0;
   if (hasRecipient) wireFlags |= Flags.HAS_RECIPIENT;
   if (isSigned) wireFlags |= Flags.SIGNED;
@@ -298,7 +298,7 @@ export function isForMe(p: Packet, myPeerIDBytes: Uint8Array): boolean {
 }
 
 // Check whether the packet is a broadcast (recipientID all-zeros, or
-// HAS_RECIPIENT flag not set — both mean "no specific recipient").
+// HAS_RECIPIENT flag not set: both mean "no specific recipient").
 export function isBroadcast(p: Packet): boolean {
   if (!(p.flags & Flags.HAS_RECIPIENT)) return true;
   return p.recipientID.every((b) => b === 0);

@@ -146,7 +146,7 @@ class VideoSession {
     }
   }
 
-  // Flush everything remaining — used on is_last.
+  // Flush everything remaining: used on is_last.
   private flushAll(): void {
     this.buffer.sort((a, b) => a.seq - b.seq);
     const batch = this.buffer.map((f) => f.frameData);

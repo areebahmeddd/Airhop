@@ -5,7 +5,7 @@
  *
  * Every test pins a known-value expectation against the byte layout in
  * PROTOCOLS.md and implemented in packet-codec.ts. These tests match
- * bitchat BinaryProtocol.swift / BinaryProtocol.kt exactly — if any fail,
+ * bitchat BinaryProtocol.swift / BinaryProtocol.kt exactly. If any fail,
  * the change is likely a protocol-breaking regression.
  */
 import { ed25519 } from "@noble/curves/ed25519.js";
@@ -327,7 +327,7 @@ describe("Signature coverage (relay TTL compat)", () => {
   test("isRSR flag cleared in signing bytes (does not break sig)", () => {
     const p = makePacket(7);
     p.signature = signPacket(p, privKey);
-    // Packet arrives with isRSR tagged by the relay — must still verify.
+    // Packet arrives with isRSR tagged by the relay: must still verify.
     const relayTagged = { ...p, isRSR: true };
     expect(verifyPacket(relayTagged, pubKey)).toBe(true);
   });

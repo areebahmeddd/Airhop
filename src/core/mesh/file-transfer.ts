@@ -29,7 +29,7 @@ const OFF_STREAM_ID = 0; // u32-BE
 const OFF_CHUNK_INDEX = 4; // u32-BE
 const OFF_TOTAL_CHUNKS = 8; // u32-BE
 const OFF_FLAGS = 12; // u8
-const OFF_FILE_SIZE = 13; // u64-BE (only in chunk 0 — upper 32 bits then lower 32)
+const OFF_FILE_SIZE = 13; // u64-BE (only in chunk 0: upper 32 bits then lower 32)
 const HEADER_SIZE_C0 = 21; // header size for chunk 0 (includes file_size)
 const HEADER_SIZE = 13; // header size for chunks > 0
 

@@ -141,7 +141,7 @@ describe("file-transfer: receive side (FileAssembler)", () => {
     const asm = new FileAssembler(() => {
       throw new Error("should not complete");
     });
-    asm.receiveChunk(new Uint8Array(4)); // too short — no header
+    asm.receiveChunk(new Uint8Array(4)); // too short: no header
     expect(asm.pendingCount).toBe(0);
   });
 

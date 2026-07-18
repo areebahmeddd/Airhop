@@ -5,7 +5,7 @@
 // The cache is bounded to 1000 entries; oldest entries are evicted on overflow.
 //
 // Packet ID is SHA-256(type | senderID | timestamp_u64 | payload)[0:16] per
-// bitchat PacketIdUtil.swift / PacketIdUtil.kt — see packet-codec.computePacketId.
+// bitchat PacketIdUtil.swift / PacketIdUtil.kt: see packet-codec.computePacketId.
 //
 // Constants per PROTOCOLS.md section 4:
 //   - LRU size:      1000 entries
@@ -14,7 +14,7 @@ const MAX_SIZE = 1000;
 const EXPIRY_MS = 5 * 60 * 1000; // 5 minutes
 
 function packetIdKey(id: Uint8Array): string {
-  // Hex-encode 16 bytes (32 chars) as a Map key — fast and collision-free.
+  // Hex-encode 16 bytes (32 chars) as a Map key: fast and collision-free.
   let s = "";
   for (let i = 0; i < 16; i++) {
     s += id[i].toString(16).padStart(2, "0");

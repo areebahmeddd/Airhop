@@ -9,7 +9,8 @@
 //   0x01  nickname           (UTF-8, up to 32 bytes)
 //   0x02  Noise static pub   (32 bytes X25519)
 //   0x03  Ed25519 signing pub (32 bytes)
-//   0x04  neighbor IDs       (optional, up to 10 × 8 bytes)
+//   0x04  neighbor IDs       (optional, up to 10 x 8 bytes)
+//   0x05  Nostr secp256k1 pub (32 bytes X-only, Airhop extension, ignored by bitchat)
 //
 // Broadcast interval: 30 seconds.
 import { hexToBytes } from "@noble/hashes/utils.js";
@@ -28,13 +29,15 @@ const TLV_NICKNAME = 0x01;
 const TLV_NOISE_PUB = 0x02;
 const TLV_SIGNING_PUB = 0x03;
 const TLV_NEIGHBORS = 0x04;
+const TLV_NOSTR_PUB = 0x05;
 
 export interface AnnounceInfo {
   senderID: Uint8Array; // 8 bytes
   nickname: string;
   noisePubKey: Uint8Array; // 32 bytes X25519
   signingPubKey: Uint8Array; // 32 bytes Ed25519
-  neighborIDs: Uint8Array[]; // up to 10 × 8 bytes
+  neighborIDs: Uint8Array[]; // up to 10 x 8 bytes
+  nostrPubKey?: Uint8Array; // 32 bytes secp256k1 X-only (Airhop extension)
 }
 
 function writeTlv(buf: number[], type: number, value: Uint8Array): void {
@@ -45,6 +48,7 @@ export function encodeAnnouncePayload(
   identity: Identity,
   nickname: string,
   neighborIDs: readonly Uint8Array[] = [],
+  nostrPubKey?: Uint8Array,
 ): Uint8Array {
   const nicknameBytes = new TextEncoder().encode(nickname.slice(0, 32));
   const buf: number[] = [];
@@ -62,6 +66,10 @@ export function encodeAnnouncePayload(
     writeTlv(buf, TLV_NEIGHBORS, neighborBytes);
   }
 
+  if (nostrPubKey !== undefined && nostrPubKey.length === 32) {
+    writeTlv(buf, TLV_NOSTR_PUB, nostrPubKey);
+  }
+
   return new Uint8Array(buf);
 }
 
@@ -73,6 +81,7 @@ export function decodeAnnouncePayload(
   let nickname = "";
   let noisePubKey: Uint8Array | null = null;
   let signingPubKey: Uint8Array | null = null;
+  let nostrPubKey: Uint8Array | undefined;
   const neighborIDs: Uint8Array[] = [];
 
   while (offset + 2 <= payload.length) {
@@ -99,12 +108,22 @@ export function decodeAnnouncePayload(
           neighborIDs.push(value.slice(i, i + 8));
         }
         break;
+      case TLV_NOSTR_PUB:
+        if (value.length === 32) nostrPubKey = value;
+        break;
     }
   }
 
   if (!noisePubKey || !signingPubKey) return null;
 
-  return { senderID, nickname, noisePubKey, signingPubKey, neighborIDs };
+  return {
+    senderID,
+    nickname,
+    noisePubKey,
+    signingPubKey,
+    neighborIDs,
+    nostrPubKey,
+  };
 }
 
 export type SendPacketFn = (packet: Packet) => void;
@@ -114,13 +133,19 @@ export class AnnounceManager {
 
   // Build and return a signed ANNOUNCE packet ready to send.
   // Pass neighborIDs (each 8 bytes) to include TLV 0x04 so topology gossip works.
-  // The caller should provide the IDs of directly connected peers (up to 10).
+  // Pass nostrPubKey (32 bytes secp256k1 X-only) to include TLV 0x05 for Nostr DMs.
   buildPacket(
     identity: Identity,
     nickname: string,
     neighborIDs: readonly Uint8Array[] = [],
+    nostrPubKey?: Uint8Array,
   ): Packet {
-    const payload = encodeAnnouncePayload(identity, nickname, [...neighborIDs]);
+    const payload = encodeAnnouncePayload(
+      identity,
+      nickname,
+      [...neighborIDs],
+      nostrPubKey,
+    );
     const senderIDBytes = hexToBytes(identity.peerID);
 
     const packet: Packet = {
@@ -142,19 +167,20 @@ export class AnnounceManager {
   // Sends an initial packet immediately then repeats on the interval.
   //
   // Pass getNeighborIDs to include TLV 0x04 in each ANNOUNCE. The callback is
-  // called on every broadcast tick so the neighbor list stays current. Omit it
-  // (or return []) when neighbor tracking is not yet wired at the feature layer.
+  // called on every broadcast tick so the neighbor list stays current.
+  // Pass nostrPubKey to include TLV 0x05 (constant for the session lifetime).
   start(
     identity: Identity,
     nickname: string,
     send: SendPacketFn,
     getNeighborIDs?: () => readonly Uint8Array[],
+    nostrPubKey?: Uint8Array,
   ): void {
     if (this.timer !== null) this.stop();
 
     const broadcast = (): void => {
       const neighbors = getNeighborIDs?.() ?? [];
-      send(this.buildPacket(identity, nickname, neighbors));
+      send(this.buildPacket(identity, nickname, neighbors, nostrPubKey));
     };
 
     broadcast(); // immediate first announce

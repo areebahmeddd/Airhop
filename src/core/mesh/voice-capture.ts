@@ -29,7 +29,7 @@ import {
 
 // ---- Constants (per PUSH-TO-TALK-DESIGN.md / VoiceBurstPacket.swift) --------
 
-// Codec values — must match VoiceBurstCodec in bitchat.
+// Codec values: must match VoiceBurstCodec in bitchat.
 export const VoiceCodec = {
   AAC_LC_16KHZ_MONO: 0x01, // VoiceBurstCodec.aacLC16kMono
 } as const;
