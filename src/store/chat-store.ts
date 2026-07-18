@@ -17,20 +17,32 @@ export interface ChatMessage {
 
 interface ChatState {
   channels: string[];
-  // Map of channel name → messages (chronological, oldest first)
+  // Map of channel name to messages (chronological, oldest first)
   messages: Record<string, ChatMessage[]>;
   activeChannel: string;
+  // Unread count per channel, cleared when the thread is opened
+  unreadCounts: Record<string, number>;
 
   addChannel: (channel: string) => void;
+  removeChannel: (channel: string) => void;
   addMessage: (msg: ChatMessage) => void;
   setActiveChannel: (channel: string) => void;
+  markChannelRead: (channel: string) => void;
 }
 
 // Max messages kept in memory per channel. Oldest are trimmed.
 const MAX_PER_CHANNEL = 200;
 
-// Default channels shown on first launch.
-const DEFAULT_CHANNELS = ["#general", "#local"];
+// Default channels shown on first launch, mirroring bitchat's channel hierarchy.
+// Mesh: BLE-only broadcast channel. Location channels: Nostr, sorted by coverage.
+const DEFAULT_CHANNELS = [
+  "#bluetooth",
+  "#block",
+  "#neighborhood",
+  "#city",
+  "#province",
+  "#region",
+];
 
 const storage = createMMKV({ id: "chat-store" });
 
@@ -48,6 +60,7 @@ export const useChatStore = create<ChatState>()(
       channels: DEFAULT_CHANNELS,
       messages: {},
       activeChannel: DEFAULT_CHANNELS[0],
+      unreadCounts: {},
 
       addChannel(channel: string) {
         set((state) => {
@@ -67,14 +80,43 @@ export const useChatStore = create<ChatState>()(
             next.length > MAX_PER_CHANNEL
               ? next.slice(next.length - MAX_PER_CHANNEL)
               : next;
+          // Increment unread count if the message is incoming and not in the active thread
+          const isUnread = !msg.isMine && msg.channel !== state.activeChannel;
           return {
             messages: { ...state.messages, [msg.channel]: trimmed },
+            unreadCounts: isUnread
+              ? {
+                  ...state.unreadCounts,
+                  [msg.channel]: (state.unreadCounts[msg.channel] ?? 0) + 1,
+                }
+              : state.unreadCounts,
           };
         });
       },
 
       setActiveChannel(channel: string) {
         set({ activeChannel: channel });
+      },
+
+      removeChannel(channel: string) {
+        set((state) => {
+          const channels = state.channels.filter((c) => c !== channel);
+          const messages = { ...state.messages };
+          delete messages[channel];
+          const unreadCounts = { ...state.unreadCounts };
+          delete unreadCounts[channel];
+          const activeChannel =
+            state.activeChannel === channel
+              ? (channels.find((c) => !c.startsWith("dm:")) ?? "")
+              : state.activeChannel;
+          return { channels, messages, unreadCounts, activeChannel };
+        });
+      },
+
+      markChannelRead(channel: string) {
+        set((state) => ({
+          unreadCounts: { ...state.unreadCounts, [channel]: 0 },
+        }));
       },
     }),
     {

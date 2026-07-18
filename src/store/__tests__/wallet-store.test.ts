@@ -2,7 +2,7 @@
  * @jest-environment node
  */
 // Local Cashu proof wallet-store tests.
-// Uses the in-memory MMKV mock — no native or network required.
+// Uses the in-memory MMKV mock: no native or network required.
 
 import {
   selectMintBalances,

@@ -1,5 +1,5 @@
 // Peer state: nearby peers discovered via ANNOUNCE packets.
-// Not persisted — peer list is always rebuilt from live BLE discovery.
+// Not persisted: peer list is always rebuilt from live BLE discovery.
 
 import { create } from "zustand";
 
@@ -8,6 +8,7 @@ export interface NearbyPeer {
   nickname: string;
   lastSeenMs: number;
   noisePubKeyHex: string; // hex of 32-byte X25519 pub
+  rssi?: number; // dBm, populated once BLE service is wired in v0.7+
 }
 
 interface PeerState {

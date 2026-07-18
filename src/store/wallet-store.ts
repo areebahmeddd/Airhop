@@ -66,6 +66,8 @@ interface WalletState {
   // Default unit assumed for all proofs (sats per NUT-00 default).
   unit: string;
 
+  // Register a new mint URL (zero proofs). No-op if already registered.
+  addMint: (mintUrl: string) => void;
   // Add proofs from a received token.
   addProofs: (mintUrl: string, proofs: StoredProof[]) => void;
   // Remove specific proofs by their secret (called after mint swap/redemption).
@@ -98,7 +100,7 @@ export function selectMintBalances(state: WalletState): MintBalance[] {
   }));
 }
 
-// Proof secrets as a Set — used to prevent duplicate deposits.
+// Proof secrets as a Set: used to prevent duplicate deposits.
 export function selectSecrets(
   state: WalletState,
   mintUrl: string,
@@ -123,6 +125,15 @@ export const useWalletStore = create<WalletState>()(
     (set, _get) => ({
       proofsByMint: {},
       unit: "sat",
+
+      addMint(mintUrl: string) {
+        set((state) => {
+          if (mintUrl in state.proofsByMint) return state;
+          return {
+            proofsByMint: { ...state.proofsByMint, [mintUrl]: [] },
+          };
+        });
+      },
 
       addProofs(mintUrl: string, proofs: StoredProof[]) {
         if (proofs.length === 0) return;
