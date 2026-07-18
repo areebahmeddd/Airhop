@@ -5,11 +5,11 @@ header = """
 All notable changes are documented here.
 """
 body = """
-## What's Changed
-{% for commit in commits %}
-- {{ commit.message }} (by @{{ commit.author.name }}){% if commit.github.pr_number %} (#{{ commit.github.pr_number }}){% endif %} [{{ commit.id | truncate(length=7, end="") }}]
-{% endfor %}
-{% if previous.version %}**Full changelog:** {{ previous.version }}..{{ version }}{% endif %}
+## What's Changed in {{ version }}
+
+{% for commit in commits %}{% if commit.author.name is not containing("[bot]") %}- {{ commit.message }} (by @{{ commit.author.name }}){% if commit.github.pr_number %} (#{{ commit.github.pr_number }}){% endif %} [{{ commit.id | truncate(length=7, end="") }}]
+{% endif %}{% endfor %}
+{% if previous.version %}**Full changelog:** [{{ previous.version }}..{{ version }}](https://github.com/areebahmeddd/Airhop/compare/{{ previous.version }}..{{ version }}){% endif %}
 """
 footer = ""
 trim = true
