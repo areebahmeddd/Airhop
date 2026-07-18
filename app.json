@@ -16,8 +16,15 @@
         "NSBluetoothAlwaysUsageDescription": "Airhop uses Bluetooth to communicate with nearby devices on the mesh.",
         "NSBluetoothPeripheralUsageDescription": "Airhop uses Bluetooth to advertise your presence to nearby peers.",
         "NSLocalNetworkUsageDescription": "Airhop uses the local network to connect directly to nearby devices for high-bandwidth transfers (video, large files).",
+        "NSCameraUsageDescription": "Airhop uses the camera to capture photos and videos to share with nearby peers.",
+        "NSMicrophoneUsageDescription": "Airhop uses the microphone to record voice notes for peer-to-peer messaging.",
+        "NSPhotoLibraryUsageDescription": "Airhop accesses your photo library to share images and videos over the mesh.",
+        "NFCReaderUsageDescription": "Airhop uses NFC to exchange contact Peer IDs by tapping phones together.",
         "NSBonjourServices": ["_airhop-mesh._tcp"],
         "UIBackgroundModes": ["bluetooth-central", "bluetooth-peripheral"]
+      },
+      "entitlements": {
+        "com.apple.developer.nfc.readersession.formats": ["NDEF"]
       }
     },
     "android": {
@@ -34,10 +41,28 @@
         "ACCESS_FINE_LOCATION",
         "ACCESS_WIFI_STATE",
         "CHANGE_WIFI_STATE",
-        "ACCESS_NETWORK_STATE"
+        "ACCESS_NETWORK_STATE",
+        "CAMERA",
+        "RECORD_AUDIO",
+        "READ_MEDIA_IMAGES",
+        "READ_MEDIA_VIDEO",
+        "NFC"
       ]
     },
     "plugins": [
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Airhop accesses your photo library to share images and videos over the mesh.",
+          "cameraPermission": "Airhop uses the camera to capture photos and videos to share with nearby peers."
+        }
+      ],
+      [
+        "expo-av",
+        {
+          "microphonePermission": "Airhop uses the microphone to record voice notes for peer-to-peer messaging."
+        }
+      ],
       [
         "expo-build-properties",
         {
