@@ -3,6 +3,9 @@
 // This mock provides the same API surface backed by a simple in-memory Map
 // so store modules (wallet-store, chat-store, etc.) can be exercised in CI.
 
+// Shared spy so tests can assert on clearAll calls across all instances.
+const clearAllSpy = jest.fn();
+
 class MMKVInstance {
   constructor() {
     this._store = new Map();
@@ -15,6 +18,11 @@ class MMKVInstance {
 
   set(key, value) {
     this._store.set(key, value);
+  }
+
+  // Alias used by chat-store and wallet-store mmkvStorage adapters.
+  remove(key) {
+    this._store.delete(key);
   }
 
   delete(key) {
@@ -31,6 +39,7 @@ class MMKVInstance {
 
   clearAll() {
     this._store.clear();
+    clearAllSpy();
   }
 }
 
@@ -43,9 +52,9 @@ function createMMKV({ id = "default" } = {}) {
   return instanceCache.get(id);
 }
 
-// Allow tests to reset state between runs.
+// Allow tests to reset all instance state between runs.
 function __resetAll() {
   instanceCache.clear();
 }
 
-module.exports = { createMMKV, __resetAll };
+module.exports = { createMMKV, __resetAll, __mockClearAll: clearAllSpy };

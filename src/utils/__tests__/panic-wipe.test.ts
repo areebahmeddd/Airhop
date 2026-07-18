@@ -6,26 +6,44 @@
 import { panicWipe as identityPanicWipe } from "../../core/crypto/identity";
 import { panicWipe } from "../panic-wipe";
 
-// Mocks are hoisted before variable declarations by Babel. We call jest.fn()
-// inside each factory so the functions are always valid when the module loads.
+// identity.panicWipe wipes the Keychain/Keystore; mock it out in tests.
 jest.mock("../../core/crypto/identity", () => ({
   panicWipe: jest.fn().mockResolvedValue(undefined),
 }));
 
+// Provide a full in-memory MMKV implementation so Zustand's persist middleware
+// (which calls getString/set/remove) works correctly, while still exposing a
+// shared clearAll spy so tests can assert on it.
 jest.mock("react-native-mmkv", () => {
   const clearAll = jest.fn();
-  const instances = new Map<string, { clearAll: jest.Mock }>();
+
+  class MockMMKV {
+    private _store = new Map<string, string>();
+    getString(key: string): string | undefined {
+      return this._store.get(key);
+    }
+    set(key: string, value: string): void {
+      this._store.set(key, value);
+    }
+    remove(key: string): void {
+      this._store.delete(key);
+    }
+    clearAll(): void {
+      this._store.clear();
+      clearAll();
+    }
+  }
+
+  const instances = new Map<string, MockMMKV>();
   return {
-    createMMKV: ({ id }: { id: string }) => {
-      if (!instances.has(id)) instances.set(id, { clearAll });
+    createMMKV: ({ id = "default" }: { id?: string } = {}) => {
+      if (!instances.has(id)) instances.set(id, new MockMMKV());
       return instances.get(id)!;
     },
-    // Expose the shared clearAll mock so tests can assert on it.
     __mockClearAll: clearAll,
   };
 });
 
-// Convenience aliases for the mocks created inside the factories above.
 const mockClearKeys = identityPanicWipe as jest.Mock;
 const mockClearAll = (
   jest.requireMock("react-native-mmkv") as { __mockClearAll: jest.Mock }
@@ -45,7 +63,7 @@ describe("panicWipe", () => {
   test("clears all MMKV partitions", async () => {
     await panicWipe();
     // One clearAll call per persisted store: chat-store + wallet-store.
-    expect(mockClearAll.mock.calls.length).toBe(2);
+    expect(mockClearAll).toHaveBeenCalledTimes(2);
   });
 
   test("clears keys before MMKV (order: secure first)", async () => {
