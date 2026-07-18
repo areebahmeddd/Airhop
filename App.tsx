@@ -20,7 +20,7 @@ import UsernameScreen from "./src/features/onboarding/username-screen";
 import WelcomeScreen from "./src/features/onboarding/welcome-screen";
 import ProfileScreen from "./src/features/settings/profile-screen";
 import WalletScreen from "./src/features/wallet/wallet-screen";
-import { initMeshService } from "./src/services/mesh-service";
+import { getMeshService, initMeshService } from "./src/services/mesh-service";
 import { useChatStore } from "./src/store/chat-store";
 import { Colors, FontSize, FontWeight, Radius, Spacing } from "./src/ui/theme";
 import { peerIDToUsername } from "./src/utils/username";
@@ -53,7 +53,10 @@ export default function App(): React.JSX.Element {
   const [tab, setTab] = useState<MainTab>("chats");
   const [chatSubTab, setChatSubTab] = useState<ChatSubTab>("channels");
   const [chatView, setChatView] = useState<ChatView>({ kind: "list" });
-  const { setActiveChannel, unreadCounts, markChannelRead } = useChatStore();
+  // Counter-based trigger: incrementing tells ChannelList to open its join modal.
+  const [newChanCounter, setNewChanCounter] = useState(0);
+  const { setActiveChannel, unreadCounts, markChannelRead, setLastThread } =
+    useChatStore();
 
   // On mount: check for an existing persisted identity. If found, skip
   // onboarding and start the BLE mesh service immediately.
@@ -64,6 +67,13 @@ export default function App(): React.JSX.Element {
           setGeneratedPeerID(existing.peerID);
           setOnboardingStep(null);
           initMeshService(existing, peerIDToUsername(existing.peerID));
+          // Restore the last open thread after an OS-kill-and-reopen. The
+          // channel name is persisted by setLastThread and cleared by closeThread.
+          const { lastThread } = useChatStore.getState();
+          if (lastThread) {
+            if (lastThread.startsWith("dm:")) setChatSubTab("dms");
+            setChatView({ kind: "thread", channel: lastThread });
+          }
         } else {
           // First launch: show the welcome/onboarding flow.
           setOnboardingStep("welcome");
@@ -101,16 +111,22 @@ export default function App(): React.JSX.Element {
 
   function openChannel(channel: string): void {
     setActiveChannel(channel);
+    setLastThread(channel);
     markChannelRead(channel);
     setChatView({ kind: "thread", channel });
   }
 
   function closeThread(): void {
+    // Clear the active channel so messages arriving after the user leaves the
+    // thread are correctly counted as unread in the list view.
+    setActiveChannel("");
+    setLastThread("");
     setChatView({ kind: "list" });
   }
 
   function openDMFromMesh(channel: string): void {
     setActiveChannel(channel);
+    setLastThread(channel);
     markChannelRead(channel);
     setChatSubTab("dms");
     setTab("chats");
@@ -175,42 +191,58 @@ export default function App(): React.JSX.Element {
           {!isInThread && (
             <View style={styles.header}>
               {tab === "chats" && chatView.kind === "list" ? (
-                // Chats header: title left, segment right
+                // Chats header: title left, segmented + New button right
                 <>
                   <Text style={styles.headerTitle}>Chats</Text>
-                  <View style={styles.segmented}>
-                    <Pressable
-                      style={[
-                        styles.seg,
-                        chatSubTab === "channels" && styles.segActive,
-                      ]}
-                      onPress={() => setChatSubTab("channels")}
-                    >
-                      <Text
+                  <View style={styles.headerControls}>
+                    <View style={styles.segmented}>
+                      <Pressable
                         style={[
-                          styles.segText,
-                          chatSubTab === "channels" && styles.segTextActive,
+                          styles.seg,
+                          chatSubTab === "channels" && styles.segActive,
                         ]}
+                        onPress={() => setChatSubTab("channels")}
                       >
-                        Channels
-                      </Text>
-                    </Pressable>
-                    <Pressable
-                      style={[
-                        styles.seg,
-                        chatSubTab === "dms" && styles.segActive,
-                      ]}
-                      onPress={() => setChatSubTab("dms")}
-                    >
-                      <Text
+                        <Text
+                          style={[
+                            styles.segText,
+                            chatSubTab === "channels" && styles.segTextActive,
+                          ]}
+                        >
+                          Channels
+                        </Text>
+                      </Pressable>
+                      <Pressable
                         style={[
-                          styles.segText,
-                          chatSubTab === "dms" && styles.segTextActive,
+                          styles.seg,
+                          chatSubTab === "dms" && styles.segActive,
                         ]}
+                        onPress={() => setChatSubTab("dms")}
                       >
-                        Direct
-                      </Text>
-                    </Pressable>
+                        <Text
+                          style={[
+                            styles.segText,
+                            chatSubTab === "dms" && styles.segTextActive,
+                          ]}
+                        >
+                          Direct
+                        </Text>
+                      </Pressable>
+                    </View>
+                    {chatSubTab === "channels" && (
+                      <Pressable
+                        style={styles.newChannelPill}
+                        onPress={() => setNewChanCounter((c) => c + 1)}
+                        accessibilityRole="button"
+                        accessibilityLabel="Create a channel"
+                      >
+                        <Feather
+                          name="plus"
+                          size={18}
+                          color={Colors.textSecondary}
+                        />
+                      </Pressable>
+                    )}
                   </View>
                 </>
               ) : (
@@ -230,7 +262,10 @@ export default function App(): React.JSX.Element {
                 onBack={closeThread}
               />
             ) : tab === "chats" && chatSubTab === "channels" ? (
-              <ChannelList onSelectChannel={openChannel} />
+              <ChannelList
+                onSelectChannel={openChannel}
+                newChannelTrigger={newChanCounter}
+              />
             ) : tab === "chats" ? (
               <DmList onSelectDM={openChannel} />
             ) : tab === "mesh" ? (
@@ -238,7 +273,16 @@ export default function App(): React.JSX.Element {
             ) : tab === "wallet" ? (
               <WalletScreen />
             ) : (
-              <ProfileScreen peerID={generatedPeerID} username={username} />
+              <ProfileScreen
+                peerID={generatedPeerID}
+                username={username}
+                onWipe={() => {
+                  // Stop BLE mesh immediately so old keys are flushed from memory.
+                  getMeshService()?.stop();
+                  setGeneratedPeerID(FALLBACK_PEER_ID);
+                  setOnboardingStep("welcome");
+                }}
+              />
             )}
           </View>
 
@@ -340,6 +384,11 @@ const styles = StyleSheet.create({
     letterSpacing: -0.2,
   },
   // Segmented control (Channels / Direct)
+  headerControls: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.sm,
+  },
   segmented: {
     flexDirection: "row",
     backgroundColor: Colors.surfaceRaised,
@@ -366,6 +415,15 @@ const styles = StyleSheet.create({
   },
   segTextActive: {
     color: Colors.textPrimary,
+  },
+  // Circular + channel button
+  newChannelPill: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: Colors.surfaceRaised,
   },
   content: {
     flex: 1,
