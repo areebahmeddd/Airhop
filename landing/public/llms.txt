@@ -1,0 +1,30 @@
+# Airhop
+
+> Private, offline-first peer-to-peer messaging over Bluetooth mesh for iOS and Android.
+
+Airhop is an open-source iOS and Android app for censorship-resistant communication. It works with zero internet connectivity using Bluetooth Low Energy mesh networking with multi-hop relay (up to 7 hops). When internet is available, Nostr relays serve as an internet bridge.
+
+## Key Features
+
+- Bluetooth mesh: communicate with no internet, messages relay up to 7 hops
+- End-to-end encryption: Noise XX handshake, Double Ratchet forward secrecy
+- Offline payments: ecash tokens sent directly over BLE
+- No accounts: identity is an Ed25519 key pair stored in OS Keychain
+- Tor integration: iOS (Arti) and Android (Orbot)
+- bitchat compatible: Airhop and bitchat nodes interoperate on the same mesh
+- Panic wipe: triple-tap destroys all keys and messages in under one second
+
+## Pages
+
+- / - Home
+- /faq - Frequently asked questions
+- /blogs - Blog (coming soon)
+- /privacy-policy - Privacy policy
+- /terms-of-service - Terms of service
+
+## Links
+
+- Website: https://airhop.1mindlabs.org
+- GitHub: https://github.com/areebahmeddd/Airhop
+- iOS: https://apps.apple.com/app/airhop/id000000000
+- Android: https://play.google.com/store/apps/details?id=com.1mindlabs.airhop

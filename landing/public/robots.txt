@@ -1,0 +1,36 @@
+# Search engines
+User-agent: Googlebot
+Allow: /
+
+User-agent: Bingbot
+Allow: /
+
+# AI search crawlers (explicitly allowed for citation in AI answers)
+User-agent: OAI-SearchBot
+Allow: /
+
+User-agent: PerplexityBot
+Allow: /
+
+User-agent: ClaudeBot
+Allow: /
+
+# AI training crawlers (open-source project, no restriction)
+User-agent: GPTBot
+Allow: /
+
+User-agent: Google-Extended
+Allow: /
+
+User-agent: Meta-ExternalAgent
+Allow: /
+
+# Aggressive scrapers known to ignore crawl limits
+User-agent: Bytespider
+Disallow: /
+
+# Default
+User-agent: *
+Allow: /
+
+Sitemap: https://airhop.1mindlabs.org/sitemap.xml
