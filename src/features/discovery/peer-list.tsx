@@ -6,15 +6,23 @@
 import { Feather } from "@expo/vector-icons";
 import React, { useEffect, useState } from "react";
 import {
+  Alert,
   FlatList,
   Modal,
   Pressable,
   StyleSheet,
   Text,
+  TextInput,
   View,
 } from "react-native";
+import {
+  buildOfflineToken,
+  selectProofsForAmount,
+} from "../../core/payments/cashu";
+import { getMeshService } from "../../services/mesh-service";
 import { useChatStore } from "../../store/chat-store";
 import { usePeerStore, type NearbyPeer } from "../../store/peer-store";
+import { useWalletStore } from "../../store/wallet-store";
 import Avatar from "../../ui/components/avatar";
 import StatusDot from "../../ui/components/status-dot";
 import { Colors, FontSize, FontWeight, Radius, Spacing } from "../../ui/theme";
@@ -35,6 +43,8 @@ export default function PeerList({ onOpenDM }: Props): React.JSX.Element {
   const [viewMode, setViewMode] = useState<ViewMode>("radar");
   const [showQRScan, setShowQRScan] = useState(false);
   const [selectedPeer, setSelectedPeer] = useState<NearbyPeer | null>(null);
+  const [sendSatsAmount, setSendSatsAmount] = useState("");
+  const [showSendSats, setShowSendSats] = useState(false);
 
   // Refresh "last seen" every 10 seconds and evict stale peers.
   useEffect(() => {
@@ -64,7 +74,83 @@ export default function PeerList({ onOpenDM }: Props): React.JSX.Element {
   function handleSendDM(peer: NearbyPeer): void {
     const channel = `dm:${peer.peerID}`;
     addChannel(channel);
+    closeSheet();
+    onOpenDM?.(channel);
+  }
+
+  // Reset all peer-detail sheet state and close.
+  function closeSheet(): void {
     setSelectedPeer(null);
+    setShowSendSats(false);
+    setSendSatsAmount("");
+  }
+
+  function handleSendSats(peer: NearbyPeer): void {
+    const amount = parseInt(sendSatsAmount, 10);
+    if (!amount || amount <= 0) return;
+
+    const { proofsByMint, unit, removeProofs } = useWalletStore.getState();
+    const { addMessage } = useChatStore.getState();
+    const service = getMeshService();
+
+    if (!service) {
+      Alert.alert("Mesh offline", "Mesh service is not running.");
+      return;
+    }
+
+    const totalBalance = Object.values(proofsByMint).reduce(
+      (s, ps) => s + ps.reduce((a, p) => a + p.amount, 0),
+      0,
+    );
+    if (amount > totalBalance) {
+      Alert.alert(
+        "Insufficient balance",
+        `You have ${totalBalance.toLocaleString()} sats but tried to send ${amount.toLocaleString()}.`,
+      );
+      return;
+    }
+
+    const mintEntry = Object.entries(proofsByMint)
+      .map(([url, ps]) => ({
+        url,
+        ps,
+        balance: ps.reduce((s, p) => s + p.amount, 0),
+      }))
+      .find((m) => m.balance >= amount);
+
+    if (!mintEntry) {
+      Alert.alert(
+        "Balance split across mints",
+        "No single mint holds the full amount. Use the Wallet tab to consolidate.",
+      );
+      return;
+    }
+
+    const selection = selectProofsForAmount(mintEntry.ps, amount);
+    if (!selection) return;
+
+    const tokenStr = buildOfflineToken(mintEntry.url, selection.selected, unit);
+    removeProofs(
+      mintEntry.url,
+      selection.selected.map((p) => p.secret),
+    );
+
+    const channel = `dm:${peer.peerID}`;
+    addChannel(channel);
+    addMessage({
+      id: `wallet-sats-${peer.peerID}-${Date.now()}`,
+      channel,
+      senderID: "local",
+      senderNickname: "You",
+      text: tokenStr,
+      timestampMs: Date.now(),
+      isMine: true,
+    });
+    service.sendDm(peer.peerID, tokenStr);
+
+    setSendSatsAmount("");
+    setShowSendSats(false);
+    closeSheet();
     onOpenDM?.(channel);
   }
 
@@ -78,18 +164,8 @@ export default function PeerList({ onOpenDM }: Props): React.JSX.Element {
 
   return (
     <View style={styles.container}>
-      {/* Controls row: view toggle + add contact */}
+      {/* Controls row: view toggle left, add contact circular button right */}
       <View style={styles.controlsRow}>
-        <Pressable
-          style={styles.addContactBtn}
-          onPress={() => setShowQRScan(true)}
-          accessibilityRole="button"
-          accessibilityLabel="Add contact by peer ID"
-        >
-          <Feather name="user-plus" size={14} color={Colors.textSecondary} />
-          <Text style={styles.addContactText}>Add</Text>
-        </Pressable>
-
         <View style={styles.viewToggle}>
           <Pressable
             style={[
@@ -124,6 +200,15 @@ export default function PeerList({ onOpenDM }: Props): React.JSX.Element {
             />
           </Pressable>
         </View>
+
+        <Pressable
+          style={styles.addContactBtn}
+          onPress={() => setShowQRScan(true)}
+          accessibilityRole="button"
+          accessibilityLabel="Add contact"
+        >
+          <Feather name="user-plus" size={16} color={Colors.textSecondary} />
+        </Pressable>
       </View>
 
       {viewMode === "radar" ? (
@@ -206,13 +291,10 @@ export default function PeerList({ onOpenDM }: Props): React.JSX.Element {
         visible={selectedPeer !== null}
         transparent
         animationType="slide"
-        onRequestClose={() => setSelectedPeer(null)}
+        onRequestClose={closeSheet}
       >
         {selectedPeer && (
-          <Pressable
-            style={styles.sheetOverlay}
-            onPress={() => setSelectedPeer(null)}
-          >
+          <Pressable style={styles.sheetOverlay} onPress={closeSheet}>
             <Pressable style={styles.sheet} onPress={() => {}}>
               {/* Drag handle */}
               <View style={styles.handle} />
@@ -241,7 +323,7 @@ export default function PeerList({ onOpenDM }: Props): React.JSX.Element {
                 </View>
               </View>
 
-              {/* Message action: full width */}
+              {/* Message action */}
               <Pressable
                 style={styles.sheetMessageBtn}
                 onPress={() => handleSendDM(selectedPeer)}
@@ -255,6 +337,61 @@ export default function PeerList({ onOpenDM }: Props): React.JSX.Element {
                 />
                 <Text style={styles.sheetMessageBtnText}>Message</Text>
               </Pressable>
+
+              {/* Send sats inline block */}
+              {!showSendSats ? (
+                <Pressable
+                  style={styles.sheetSatsBtn}
+                  onPress={() => setShowSendSats(true)}
+                  accessibilityRole="button"
+                  accessibilityLabel="Send sats"
+                >
+                  <Feather name="zap" size={16} color={Colors.textSecondary} />
+                  <Text style={styles.sheetSatsBtnText}>Send sats</Text>
+                </Pressable>
+              ) : (
+                <View style={styles.sendSatsRow}>
+                  <TextInput
+                    style={styles.sendSatsInput}
+                    value={sendSatsAmount}
+                    onChangeText={setSendSatsAmount}
+                    placeholder="Amount in sats"
+                    placeholderTextColor={Colors.textMuted}
+                    keyboardType="number-pad"
+                    returnKeyType="send"
+                    autoFocus
+                    selectionColor={Colors.accent}
+                    onSubmitEditing={() => handleSendSats(selectedPeer)}
+                  />
+                  <Pressable
+                    style={[
+                      styles.sendSatsConfirm,
+                      !sendSatsAmount.trim() && { opacity: 0.4 },
+                    ]}
+                    onPress={() => handleSendSats(selectedPeer)}
+                    disabled={!sendSatsAmount.trim()}
+                    accessibilityRole="button"
+                    accessibilityLabel="Confirm send sats"
+                  >
+                    <Feather
+                      name="arrow-right"
+                      size={16}
+                      color={Colors.textInverse}
+                    />
+                  </Pressable>
+                  <Pressable
+                    style={styles.sendSatsCancel}
+                    onPress={() => {
+                      setShowSendSats(false);
+                      setSendSatsAmount("");
+                    }}
+                    accessibilityRole="button"
+                    accessibilityLabel="Cancel send sats"
+                  >
+                    <Feather name="x" size={16} color={Colors.textSecondary} />
+                  </Pressable>
+                </View>
+              )}
             </Pressable>
           </Pressable>
         )}
@@ -281,22 +418,17 @@ const styles = StyleSheet.create({
     justifyContent: "flex-end",
     gap: Spacing.sm,
     marginRight: Spacing.base,
+    marginLeft: Spacing.base,
     marginTop: Spacing.sm,
     marginBottom: Spacing.xs,
   },
   addContactBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 5,
-    paddingHorizontal: Spacing.md,
+    width: 32,
     height: 32,
+    borderRadius: 16,
+    alignItems: "center",
+    justifyContent: "center",
     backgroundColor: Colors.surfaceRaised,
-    borderRadius: Radius.md,
-  },
-  addContactText: {
-    fontSize: FontSize.sm,
-    color: Colors.textSecondary,
-    fontWeight: FontWeight.medium,
   },
   // View toggle
   viewToggle: {
@@ -486,5 +618,57 @@ const styles = StyleSheet.create({
     fontSize: FontSize.base,
     fontWeight: FontWeight.semibold,
     color: Colors.textInverse,
+  },
+  sheetSatsBtn: {
+    marginTop: Spacing.sm,
+    borderRadius: Radius.md,
+    paddingVertical: Spacing.md,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: Spacing.sm,
+    backgroundColor: Colors.surfaceRaised,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  sheetSatsBtnText: {
+    fontSize: FontSize.base,
+    fontWeight: FontWeight.semibold,
+    color: Colors.textSecondary,
+  },
+  sendSatsRow: {
+    marginTop: Spacing.sm,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.sm,
+  },
+  sendSatsInput: {
+    flex: 1,
+    backgroundColor: Colors.surfaceRaised,
+    borderRadius: Radius.md,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
+    fontSize: FontSize.base,
+    color: Colors.textPrimary,
+  },
+  sendSatsConfirm: {
+    width: 40,
+    height: 40,
+    borderRadius: Radius.md,
+    backgroundColor: Colors.accent,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  sendSatsCancel: {
+    width: 40,
+    height: 40,
+    borderRadius: Radius.md,
+    backgroundColor: Colors.surfaceRaised,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    alignItems: "center",
+    justifyContent: "center",
   },
 });
