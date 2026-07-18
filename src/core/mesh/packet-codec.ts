@@ -41,7 +41,8 @@ export const enum PacketType {
   LEAVE = 0x03, // Peer departing
   COURIER_ENV = 0x04, // Store-and-forward envelope
   NOISE_HANDSHAKE = 0x10, // Noise XX handshake (init or response)
-  NOISE_ENCRYPTED = 0x11, // Post-handshake encrypted payload (DM, receipts, etc.)
+  NOISE_ENCRYPTED = 0x11, // Post-handshake Noise-transport encrypted DM
+  DR_ENCRYPTED = 0x12, // Double Ratchet encrypted DM (Airhop-to-Airhop only)
   FRAGMENT = 0x20, // Single BLE fragment of a larger message
   REQUEST_SYNC = 0x21, // GCS filter gossip request (local-only, TTL=2)
   FILE_TRANSFER = 0x22, // Binary file / audio / image payload
