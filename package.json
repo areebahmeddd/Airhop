@@ -30,7 +30,14 @@
     "format": "prettier --write \"**/*.{ts,tsx,js,json,md}\"",
     "format:check": "prettier --check \"**/*.{ts,tsx,js,json,md}\"",
     "lint": "eslint .",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "landing:dev": "npm --prefix landing run dev",
+    "landing:build": "npm --prefix landing run build",
+    "landing:start": "npm --prefix landing run start",
+    "landing:format": "npm --prefix landing run format",
+    "landing:format:check": "npm --prefix landing run format:check",
+    "landing:lint": "npm --prefix landing run lint",
+    "landing:typecheck": "npm --prefix landing run typecheck"
   },
   "dependencies": {
     "@cashu/cashu-ts": "^4.7.1",

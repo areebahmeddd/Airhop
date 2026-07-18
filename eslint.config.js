@@ -41,6 +41,7 @@ module.exports = defineConfig([
       "bitchat/",
       "android/",
       "ios/",
+      "landing/",
       ".expo/",
       "dist/",
       "build/",
