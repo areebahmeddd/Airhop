@@ -105,7 +105,7 @@ describe("Double Ratchet", () => {
     const { alice, bob } = makeAliceBob();
     const ct = ratchetEncrypt(alice, encode("replay me"));
 
-    ratchetDecrypt(bob, ct); // first delivery — succeeds
+    ratchetDecrypt(bob, ct); // first delivery: succeeds
     // The MK was deleted from MKSKIPPED on first use; replaying the same
     // header will not find a key and will fail with a chain error.
     expect(() => ratchetDecrypt(bob, ct)).toThrow();

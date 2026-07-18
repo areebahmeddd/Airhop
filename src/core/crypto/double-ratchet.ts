@@ -202,7 +202,7 @@ export function ratchetEncrypt(
 ): Uint8Array {
   if (state.CKs === null) {
     throw new Error(
-      "DR: sending chain not initialized — ensure initSender was called",
+      "DR: sending chain not initialized. Call initSender before sending.",
     );
   }
 

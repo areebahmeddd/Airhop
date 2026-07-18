@@ -392,7 +392,7 @@ export class NoiseHandshake {
     return session;
   }
 
-  // -- Symmetric state helpers -----------------------------------------------
+  // Symmetric state helpers
 
   private mixHash(data: Uint8Array): void {
     this.h = sha256(concatBytes(this.h, data));
