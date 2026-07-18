@@ -19,6 +19,8 @@ module.exports = defineConfig([
       "import/namespace": "off",
       "import/no-unresolved": "off",
       "import/no-duplicates": "off",
+      // BOM is harmless on Windows and handled by editors/git.
+      "unicode-bom": "off",
     },
   },
   {
