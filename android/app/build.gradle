@@ -87,9 +87,9 @@ android {
     buildToolsVersion rootProject.ext.buildToolsVersion
     compileSdk rootProject.ext.compileSdkVersion
 
-    namespace 'tech.permissionless.airhop'
+    namespace 'org.onemindlabs.airhop'
     defaultConfig {
-        applicationId 'tech.permissionless.airhop'
+        applicationId 'org.onemindlabs.airhop'
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1

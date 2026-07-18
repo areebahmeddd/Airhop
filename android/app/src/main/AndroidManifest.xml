@@ -38,7 +38,7 @@
     </activity>
     <!-- Foreground service that keeps BLE scanning/advertising alive in the background -->
     <service
-      android:name="tech.permissionless.airhop.service.AirhopForegroundService"
+      android:name="org.onemindlabs.airhop.service.AirhopForegroundService"
       android:foregroundServiceType="connectedDevice"
       android:exported="false"/>
   </application>
