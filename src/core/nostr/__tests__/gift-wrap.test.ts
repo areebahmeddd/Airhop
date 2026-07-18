@@ -2,7 +2,7 @@
  * @jest-environment node
  */
 // NIP-17/59 gift-wrap round-trip tests.
-// No network — pure crypto using @noble and nostr-tools.
+// No network: pure crypto using @noble and nostr-tools.
 
 import { ed25519 } from "@noble/curves/ed25519.js";
 import { generateSecretKey, getPublicKey } from "nostr-tools";

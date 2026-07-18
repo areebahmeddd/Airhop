@@ -2,7 +2,7 @@
  * @jest-environment node
  */
 // Tests for courier-relay event encode/subscribe/fetch.
-// NostrClient is mocked — no network required.
+// NostrClient is mocked: no network required.
 
 import { bytesToHex } from "@noble/hashes/utils.js";
 import { finalizeEvent, generateSecretKey, type Event } from "nostr-tools";

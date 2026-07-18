@@ -6,7 +6,7 @@
 // sender's Nostr pubkey is in that geohash cell.
 //
 // Privacy: presence is only broadcast at precision-5 (~5 km × 5 km) and
-// coarser cells — never at precision 6+ which would reveal exact location.
+// coarser cells: never at precision 6+ which would reveal exact location.
 // Presence heartbeats are ephemeral (kind 2xxxx in Nostr) and are not
 // persisted by relays.
 //

@@ -8,7 +8,7 @@
 // Event format (kind 1401):
 //   kind:    1401
 //   tags:    [["x", recipientTagHex], ["expiration", unixSecString]]
-//   content: base64(ciphertext)  -- the Noise X ciphertext from courier-store
+//   content: base64(ciphertext)  - the Noise X ciphertext from courier-store
 //
 // The "x" tag is a 16-byte HMAC-derived daily tag (see courier-store.ts
 // recipientTag()). Relays supporting NIP-40 will auto-expire the event at

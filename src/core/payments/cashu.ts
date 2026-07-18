@@ -6,10 +6,10 @@
 // mint (not handled here; that is the user's wallet responsibility).
 //
 // Supported token formats (per NUT-00):
-//   cashuA<base64url>  -- V3 token (JSON, human-readable)
-//   cashuB<base64url>  -- V4 token (CBOR, compact)
-//   cashu:<token>      -- URI form
-//   cashu://<token>    -- URI form (alternative)
+//   cashuA<base64url>  - V3 token (JSON, human-readable)
+//   cashuB<base64url>  - V4 token (CBOR, compact)
+//   cashu:<token>      - URI form
+//   cashu://<token>    - URI form (alternative)
 //
 // DLEQ proof verification (hasValidDleq) runs offline and is performed on every
 // received proof to catch malformed/forged tokens before displaying them.
