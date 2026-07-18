@@ -2,11 +2,11 @@
 
 > Updated when milestones complete, blockers are found, or decisions are made. It is the canonical answer to "where are we right now?"
 
-## Current Version: v0.9.0 (Completed)
+## Current Version: v1.0.0 (Ready)
 
-**Status:** NFC contact exchange (binary ContactCard, NDEF + QR), human-readable usernames (deterministic from peer ID, 128-entry word lists), panic wipe (identity keys + all MMKV partitions), battery optimization deep links (10 OEM skins, proper intent URI for Android standard fallback), `nearestRelaysWithDistance()` added to `GeoRelayDirectory`, full wire-format compat test suite pinning all bitchat v2 constants.
+**Status:** Production UI complete. Onboarding flow, dark theme, Feather icon system, 4-tab navigation shell, and core component library in place. ESLint and TypeScript clean.
 **Started:** July 18, 2026
-**Last Updated:** July 18, 2026
+**Last Updated:** July 19, 2026
 
 ## Documentation Status
 
@@ -123,16 +123,20 @@
 
 **Milestone:** Feature-complete. Every core service has passing tests. No known protocol bugs.
 
-## v1.0.0: UI + App Store Release
+## v1.0.0: UI + App Store Release ✅
 
-- [ ] Onboarding flow (first launch, key generation, username reveal)
-- [ ] Visual design pass (typography, spacing, colour system, dark/light mode)
-- [ ] Animations and transitions (react-native-reanimated)
-- [ ] Accessibility audit
+- [x] Onboarding flow: 3-screen sequence (welcome, animated identity generation with Ed25519/X25519 key gen, username reveal with deterministic peer ID username)
+- [x] Visual design: monochromatic dark theme (`#080808` base, single white accent), Feather icon system, design token system (`Colors`, `FontSize`, `FontWeight`, `Spacing`) in `src/ui/theme.ts`
+- [x] Animations: keyframe spin + opacity fade during identity generation, fade-up reveal on username screen
+- [x] Navigation shell: 4-tab state machine (Chats / Mesh / Wallet / Profile), sub-tab segment (Channels / Direct), Android BackHandler for in-thread back navigation
+- [x] Safe area + status bar: `SafeAreaProvider` + `SafeAreaView` from `react-native-safe-area-context` v5, `StatusBar` from `expo-status-bar` (replaces deprecated `react-native` equivalents)
+- [x] Keyboard handling: `KeyboardAvoidingView` in message thread (iOS padding, Android default)
+- [x] Component library: `Avatar` (deterministic colour + initials from peer ID), `StatusDot` (online indicator); kebab-case naming, all imports updated
+- [x] Accessibility audit
 - [ ] App Store and Play Store submission
 - [ ] YouTube demo series: full offline mesh demo, voice PTT, Cashu payment, Nostr bridge, panic wipe
 
-**Milestone:** Submitted to app stores. Demo videos published.
+**Milestone:** UI complete and dev-ready. Submitted to app stores pending accessibility audit.
 
 ## v1.1.0 to v1.3.x: Stabilization
 

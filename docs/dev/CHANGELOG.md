@@ -73,7 +73,7 @@ All notable changes are documented here.
 - update deps + add relays csv (by @areebahmeddd) [0e67041]
 - update docs (by @areebahmeddd) [2bd9c79]
 - run npm prebuild for android (by @areebahmeddd) [a9637bb]
-- run npm prebuild for ios (by @areebahmeddd) [c33b4b1]
+- run npm prebuild for ios (by @rishichirchi) [c33b4b1]
 - docs: adjust roadmap, pretty readme (by @areebahmeddd) [5d73340]
 - docs: minor fixes (by @areebahmeddd) [fad3a49]
 - chore: configure Jest and TypeScript for @noble ESM modules (by @areebahmeddd) [c674718]

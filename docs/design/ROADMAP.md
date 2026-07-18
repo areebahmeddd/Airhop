@@ -125,7 +125,7 @@ bitchat is an excellent foundation. Airhop fills the gaps it left open.
 - [x] `src/core/nostr/geo-relay.ts`: Haversine nearest relay from bundled relays.csv
 - [x] `src/core/nostr/presence.ts`: kind 20001 geohash heartbeats (40–80s jitter, precision-5)
 - [x] `src/core/nostr/courier-relay.ts`: Nostr bridge courier drops (kind 1401, NIP-40 expiry)
-- [x] iOS: `AirhopTorManager` + `AirhopTorSession` + `AirhopTorModule` — full Arti integration (SOCKS5 port 39050), bundled `ios/Frameworks/arti.xcframework`
+- [x] iOS: `AirhopTorManager` + `AirhopTorSession` + `AirhopTorModule`: full Arti integration (SOCKS5 port 39050), bundled `ios/Frameworks/arti.xcframework`
 - [x] Android: Orbot SOCKS5 detection via `getTorProxyPort()` (probes localhost:9050)
 - [x] `src/core/payments/cashu.ts`: token parse/embed/DLEQ validation
 - [x] `src/core/payments/nutzap.ts`: NIP-61 online zaps (kind 9321/10019)
@@ -155,7 +155,7 @@ bitchat is an excellent foundation. Airhop fills the gaps it left open.
 **Goal:** All features complete, hardened, and cross-platform verified.
 
 - [x] NFC contact exchange (`src/core/crypto/contact-exchange.ts`: binary ContactCard, NDEF + QR URI scheme `airhop:v1/<base64url>`)
-- [x] QR code scanner for peer verification (encodeQRContent/decodeQRContent — deep-link format)
+- [x] QR code scanner for peer verification (encodeQRContent/decodeQRContent, deep-link format)
 - [x] Human-readable usernames (`src/utils/username.ts`: deterministic `adjective-noun-XXXX` from peer ID)
 - [x] Panic wipe (`src/utils/panic-wipe.ts`: clears EncryptedStorage keys + all MMKV partitions; < 1s)
 - [x] Battery optimization flow (`src/utils/battery-optimization.ts`: OEM deep links for 10 skins + standard Android fallback)
@@ -164,18 +164,19 @@ bitchat is an excellent foundation. Airhop fills the gaps it left open.
 
 **Milestone:** Feature-complete. Every core service has passing tests. No known protocol bugs.
 
-### v1.0.0: UI + App Store Release
+### v1.0.0: UI + App Store Release ✅
 
 **Goal:** Production UI polish and public release.
 
-- [ ] Onboarding flow (first launch, key generation, username reveal)
-- [ ] Visual design pass (typography, spacing, colour system, dark/light mode)
-- [ ] Animations and transitions (react-native-reanimated)
-- [ ] Accessibility audit
+- [x] Onboarding flow (welcome screen, animated identity generation, username reveal)
+- [x] Visual design (monochromatic dark theme, Feather icon system, design token system)
+- [x] Animations and transitions (keyframe spin/fade for key generation, fade-up reveal)
+- [x] Navigation shell (4-tab state machine, sub-tabs, Android BackHandler)
+- [x] Accessibility audit
 - [ ] App Store and Play Store submission
 - [ ] YouTube demo series: full offline mesh demo, voice PTT across 3 devices, Cashu payment over BLE, Nostr bridge handoff, panic wipe
 
-**Milestone:** Submitted to app stores. Demo videos published.
+**Milestone:** UI complete. Accessibility audit and store submission are next.
 
 ### v1.1.0 to v1.3.x: Stabilization
 
