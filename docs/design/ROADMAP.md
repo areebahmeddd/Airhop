@@ -178,13 +178,60 @@ bitchat is an excellent foundation. Airhop fills the gaps it left open.
 
 **Milestone:** UI complete. Accessibility audit and store submission are next.
 
-### v1.1.0 to v1.3.x: Stabilization
+### v1.1.0 to v1.2.0: Stabilization
 
 **Goal:** Harden the v1.0.0 release before expanding to new platforms.
 
 No new features ship in this range. The focus is production bugs found after launch, race conditions in the BLE and crypto state machines, UI iteration from real user feedback, and extended cross-device battery and compatibility testing. The mesh backend gets battle-tested across as many device and OS combinations as possible before the codebase expands to new targets.
 
 **Milestone:** Zero open P0/P1 bugs. BLE state machine stable across Pixel, Samsung, and Xiaomi device classes. Ready to expand to new platforms.
+
+### v1.3.0: Plugin Integrations
+
+**Goal:** Extend Airhop with opt-in plugins for social federation and regional payment systems, without touching the core protocol.
+
+Airhop's identity model (Ed25519 keypairs, no accounts) is compatible in spirit with both the [AT Protocol](https://atproto.com) (ATProto, used by Bluesky) and [ActivityPub](https://w3.org/TR/activitypub/) (the W3C standard used by Mastodon, Pixelfed, PeerTube, and the broader Fediverse). v1.3.0 introduces `SocialPlugin` and `PaymentPlugin` interfaces that let users opt in to bridging their Airhop identity to these networks and payment systems. Each plugin is a discrete, auditable integration that users enable individually.
+
+All plugins are strictly opt-in. Users who do not enable any plugin are unaffected. The BLE mesh protocol, wire format, and on-device encryption are unchanged. No plugin can access private keys or relay traffic without explicit per-action user confirmation.
+
+#### AT Protocol (Bluesky)
+
+- [ ] AT Protocol DID resolution and keypair association (`did:key` derived from Airhop's Ed25519 identity)
+- [ ] Read feed integration: pull Bluesky home and discovery feeds into a dedicated Airhop tab
+- [ ] Post bridge: optionally publish Airhop channel messages as Bluesky records (`app.bsky.feed.post` lexicon)
+- [ ] Follow graph import: discover which Bluesky contacts are also Airhop users via DID cross-referencing
+- [ ] PDS (Personal Data Server) self-hosting option for users who want full data sovereignty
+
+#### ActivityPub / Fediverse
+
+- [ ] ActivityPub Actor construction from Airhop's Ed25519 identity
+- [ ] Mastodon-compatible inbox and outbox: receive mentions and DMs from any ActivityPub-compliant server
+- [ ] Outbound posting: optionally broadcast Airhop public channel messages as ActivityPub Notes
+- [ ] WebFinger lookup for Fediverse contact discovery
+
+#### UPI Payment Plugin (India)
+
+UPI is an overlay on India's IMPS infrastructure operated by NPCI under RBI. Every transaction is a real-time bank-to-bank transfer with full KYC linkage, visible to NPCI and the Indian government. This is structurally incompatible with Airhop's core threat model, so Cashu remains the correct offline payment system.
+
+For Indian users who want to transact in Rupees when online, UPI works cleanly as an opt-in plugin. Android's standard UPI deep link (`upi://pay?pa=...`) lets any UPI-registered app (GPay, PhonePe, BHIM) handle payment initiation with no NPCI API keys required.
+
+- [ ] `UPIPaymentPlugin` implementing the `PaymentPlugin` interface
+- [ ] Deep link payment initiation: `upi://pay?pa=recipient@upi&am=...&cu=INR` (Android only)
+- [ ] Opt-in only, disabled by default
+- [ ] Disclosure shown on enable: "UPI transactions are linked to your verified identity and visible to NPCI. Do not use for sensitive communications."
+- [ ] Only activates when internet is available; no offline UPI
+- [ ] Shares UPI ID as contact info only; no bank details transmitted
+
+> Additional plugins for new integrations can be proposed and documented here as the ecosystem grows.
+
+#### Plugin Architecture
+
+- [ ] Define a generic `Plugin` interface in `src/core/` with typed subtypes for each integration category, so any future integration can be added without modifying core protocol code
+- [ ] Plugin registry: users see available plugins and opt in per-plugin with explicit permission prompts
+- [ ] Strict data boundary: plugins can only access content the user explicitly marks as shareable; BLE mesh traffic is never exposed to plugins
+- [ ] Plugin capability model: no plugin can access private keys or contact the network on behalf of the user without a per-action confirmation
+
+**Milestone:** A user can link their Airhop identity to a Bluesky DID and a Mastodon actor, view their Bluesky feed inside Airhop, and optionally cross-post to both networks. Indian users can initiate UPI payments from a contact's profile when online.
 
 ### v1.4.0: Web / Browser
 
@@ -336,53 +383,6 @@ Airhop is built on the premise that private communication should be understandab
 - [ ] Blog series: practical guides on building truly private, decentralized applications covering topics such as Noise protocol implementation, offline-first architecture, BLE mesh design, Cashu integration, and Nostr identity management
 - [ ] Each guide written for developers who want to build on top of Airhop or implement compatible systems independently
 - [ ] YouTube deep-dive series: how the BLE mesh works, how Noise XX is implemented, how Double Ratchet provides forward secrecy, how Cashu tokens transfer offline
-
-### v2.5.0: Plugin Integrations
-
-**Goal:** Extend Airhop with opt-in plugins for social federation and regional payment systems, without touching the core protocol.
-
-Airhop's identity model (Ed25519 keypairs, no accounts) is compatible in spirit with both the [AT Protocol](https://atproto.com) (ATProto, used by Bluesky) and [ActivityPub](https://w3.org/TR/activitypub/) (the W3C standard used by Mastodon, Pixelfed, PeerTube, and the broader Fediverse). v2.5.0 introduces `SocialPlugin` and `PaymentPlugin` interfaces that let users opt in to bridging their Airhop identity to these networks and payment systems. Each plugin is a discrete, auditable integration that users enable individually.
-
-All plugins are strictly opt-in. Users who do not enable any plugin are unaffected. The BLE mesh protocol, wire format, and on-device encryption are unchanged. No plugin can access private keys or relay traffic without explicit per-action user confirmation.
-
-#### AT Protocol (Bluesky)
-
-- [ ] AT Protocol DID resolution and keypair association (`did:key` derived from Airhop's Ed25519 identity)
-- [ ] Read feed integration: pull Bluesky home and discovery feeds into a dedicated Airhop tab
-- [ ] Post bridge: optionally publish Airhop channel messages as Bluesky records (`app.bsky.feed.post` lexicon)
-- [ ] Follow graph import: discover which Bluesky contacts are also Airhop users via DID cross-referencing
-- [ ] PDS (Personal Data Server) self-hosting option for users who want full data sovereignty
-
-#### ActivityPub / Fediverse
-
-- [ ] ActivityPub Actor construction from Airhop's Ed25519 identity
-- [ ] Mastodon-compatible inbox and outbox: receive mentions and DMs from any ActivityPub-compliant server
-- [ ] Outbound posting: optionally broadcast Airhop public channel messages as ActivityPub Notes
-- [ ] WebFinger lookup for Fediverse contact discovery
-
-#### UPI Payment Plugin (India)
-
-UPI is an overlay on India's IMPS infrastructure operated by NPCI under RBI. Every transaction is a real-time bank-to-bank transfer with full KYC linkage, visible to NPCI and the Indian government. This is structurally incompatible with Airhop's core threat model, so Cashu remains the correct offline payment system.
-
-For Indian users who want to transact in Rupees when online, UPI works cleanly as an opt-in plugin. Android's standard UPI deep link (`upi://pay?pa=...`) lets any UPI-registered app (GPay, PhonePe, BHIM) handle payment initiation with no NPCI API keys required.
-
-- [ ] `UPIPaymentPlugin` implementing the `PaymentPlugin` interface
-- [ ] Deep link payment initiation: `upi://pay?pa=recipient@upi&am=...&cu=INR` (Android only)
-- [ ] Opt-in only, disabled by default
-- [ ] Disclosure shown on enable: "UPI transactions are linked to your verified identity and visible to NPCI. Do not use for sensitive communications."
-- [ ] Only activates when internet is available; no offline UPI
-- [ ] Shares UPI ID as contact info only; no bank details transmitted
-
-> Additional plugins for new integrations can be proposed and documented here as the ecosystem grows.
-
-#### Plugin Architecture
-
-- [ ] Define a generic `Plugin` interface in `src/core/` with typed subtypes for each integration category, so any future integration can be added without modifying core protocol code
-- [ ] Plugin registry: users see available plugins and opt in per-plugin with explicit permission prompts
-- [ ] Strict data boundary: plugins can only access content the user explicitly marks as shareable; BLE mesh traffic is never exposed to plugins
-- [ ] Plugin capability model: no plugin can access private keys or contact the network on behalf of the user without a per-action confirmation
-
-**Milestone:** A user can link their Airhop identity to a Bluesky DID and a Mastodon actor, view their Bluesky feed inside Airhop, and optionally cross-post to both networks. Indian users can initiate UPI payments from a contact's profile when online.
 
 _Personal goal: I hope this thing takes off and I become a millionaire_
 

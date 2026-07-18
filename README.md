@@ -27,7 +27,7 @@
     <img src="https://developer.apple.com/assets/elements/badges/download-on-the-app-store.svg" alt="Download on the App Store" height="48" />
   </a>
   &nbsp;
-  <a href="https://play.google.com/store/apps/details?id=com.1mindlabs.airhop">
+  <a href="https://play.google.com/store/apps/details?id=org.onemindlabs.airhop">
     <img src="https://play.google.com/intl/en_us/badges/static/images/badges/en_badge_web_generic.png" alt="Get it on Google Play" height="48" />
   </a>
 </p>
@@ -70,7 +70,7 @@ Built on the foundation of [bitchat](https://bitchat.free), using the same [BLE 
 |                   | Geo-relay discovery       | Discover location-based channels across 350+ distributed Nostr relays                   |
 |                   | Tor integration           | Route Nostr traffic through Tor (Arti on iOS, Orbot on Android)                         |
 
-**TL;DR -- No internet required. No central servers. No accounts. No tracking.**
+**TL;DR: No internet required. No central servers. No accounts. No tracking.**
 
 ## Stack
 
@@ -114,7 +114,7 @@ npx react-native run-android
 | Document                                     | Description                                                                 |
 | -------------------------------------------- | --------------------------------------------------------------------------- |
 | [VISION.md](docs/design/VISION.md)           | Why Airhop exists and what it will never compromise on                      |
-| [ROADMAP.md](docs/design/ROADMAP.md)         | Version targets (v0.5.0 to v3.0.0), gap analysis, and competitive landscape |
+| [ROADMAP.md](docs/design/ROADMAP.md)         | Version targets (v0.5.0 to v2.0.0), gap analysis, and competitive landscape |
 | [ARCHITECTURE.md](docs/spec/ARCHITECTURE.md) | System architecture, design decisions, and stack rationale                  |
 | [PROTOCOLS.md](docs/spec/PROTOCOLS.md)       | Wire format, BLE UUIDs, and protocol specifications                         |
 | [REFERENCE.md](docs/dev/REFERENCE.md)        | Bitchat codebase deep dive and implementation reference                     |

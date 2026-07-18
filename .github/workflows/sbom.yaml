@@ -1,14 +1,6 @@
 name: Software Bill of Materials
 
 on:
-  push:
-    branches: [main]
-    paths-ignore:
-      - "assets/data/**"
-      - "cliff.toml"
-      - "docs/**"
-      - "landing/**"
-      - "**/*.md"
   release:
     types: [published]
   workflow_dispatch:

@@ -138,11 +138,19 @@
 
 **Milestone:** UI complete and dev-ready. Submitted to app stores pending accessibility audit.
 
-## v1.1.0 to v1.3.x: Stabilization
+## v1.1.0 to v1.2.0: Stabilization
 
 No new features. Production bug fixes, race condition resolution in BLE and crypto layers, UI iteration from user feedback, and extended cross-device compatibility testing.
 
 **Milestone:** Zero open P0/P1 bugs. BLE state machine stable across Pixel, Samsung, and Xiaomi device classes. Ready to expand to new platforms.
+
+## v1.3.0: Plugin Integrations
+
+- [ ] `SocialPlugin` and `PaymentPlugin` interfaces in `src/core/`
+- [ ] AT Protocol (Bluesky): DID association, feed integration, post bridge, follow graph import
+- [ ] ActivityPub (Fediverse): Actor construction, Mastodon inbox/outbox, outbound posting
+- [ ] UPI Payment Plugin: deep link initiation, opt-in only, KYC disclosure required
+- [ ] Plugin registry, per-plugin opt-in, strict data boundary and capability model
 
 ## v1.4.0: Web / Browser
 
@@ -189,14 +197,6 @@ No new features. Production bug fixes, race condition resolution in BLE and cryp
 - [ ] Android API 21+ (Android 5.0) and iOS 14+ compatibility verified
 - [ ] All docs kept in sync with every release; CVEs disclosed publicly with timeline and impact
 - [ ] Audit reports published in full; blog series on building private decentralized applications
-
-## v2.5.0: Plugin Integrations
-
-- [ ] Generic `SocialPlugin` and `PaymentPlugin` interfaces in `src/core/`
-- [ ] AT Protocol (Bluesky): DID association, feed integration, post bridge, follow graph import
-- [ ] ActivityPub (Fediverse): Actor construction, Mastodon inbox/outbox, outbound posting
-- [ ] UPI Payment Plugin: deep link initiation, opt-in only, KYC disclosure required
-- [ ] Plugin registry, per-plugin opt-in, strict data boundary and capability model
 
 ## Blockers
 
