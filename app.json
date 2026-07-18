@@ -11,7 +11,7 @@
     },
     "ios": {
       "supportsTablet": false,
-      "bundleIdentifier": "tech.permissionless.airhop",
+      "bundleIdentifier": "org.onemindlabs.airhop",
       "infoPlist": {
         "NSBluetoothAlwaysUsageDescription": "Airhop uses Bluetooth to communicate with nearby devices on the mesh.",
         "NSBluetoothPeripheralUsageDescription": "Airhop uses Bluetooth to advertise your presence to nearby peers.",
@@ -24,7 +24,7 @@
       "adaptiveIcon": {
         "backgroundColor": "#000000"
       },
-      "package": "tech.permissionless.airhop",
+      "package": "org.onemindlabs.airhop",
       "permissions": [
         "BLUETOOTH",
         "BLUETOOTH_ADMIN",

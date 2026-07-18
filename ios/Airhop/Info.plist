@@ -27,7 +27,7 @@
 		<dict>
 			<key>CFBundleURLSchemes</key>
 			<array>
-				<string>tech.permissionless.airhop</string>
+				<string>org.onemindlabs.airhop</string>
 			</array>
 		</dict>
 	</array>
