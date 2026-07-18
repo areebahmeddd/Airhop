@@ -13,6 +13,9 @@
 
 import { createMMKV } from "react-native-mmkv";
 import { panicWipe as clearKeys } from "../core/crypto/identity";
+import { useChatStore } from "../store/chat-store";
+import { usePeerStore } from "../store/peer-store";
+import { useWalletStore } from "../store/wallet-store";
 
 // The IDs used by all MMKV storage instances in src/store/ and src/core/.
 // peer-store is intentionally absent: it uses in-memory Zustand with no MMKV
@@ -29,4 +32,10 @@ export async function panicWipe(): Promise<void> {
   for (const id of MMKV_STORE_IDS) {
     createMMKV({ id }).clearAll();
   }
+
+  // 3. Reset Zustand in-memory state so stale data does not appear after wipe.
+  //    MMKV clearing above only affects persistence; live store state is separate.
+  useChatStore.getState().clearAll();
+  useWalletStore.getState().clearAll();
+  usePeerStore.getState().clearAll();
 }

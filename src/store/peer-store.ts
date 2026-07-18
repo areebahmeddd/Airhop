@@ -19,6 +19,7 @@ interface PeerState {
   evictStale: (ttlMs?: number) => void;
   getPeer: (peerID: string) => NearbyPeer | undefined;
   reachablePeers: () => NearbyPeer[];
+  clearAll: () => void;
 }
 
 // A peer is "reachable" if seen within the last 60 seconds (matches
@@ -62,5 +63,9 @@ export const usePeerStore = create<PeerState>()((set, get) => ({
   reachablePeers() {
     const cutoff = Date.now() - REACHABLE_TTL_MS;
     return [...get().peers.values()].filter((p) => p.lastSeenMs >= cutoff);
+  },
+
+  clearAll() {
+    set({ peers: new Map() });
   },
 }));
