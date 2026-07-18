@@ -3,9 +3,10 @@
 // with "dm:<peerID>". These use Noise XX + Double Ratchet for E2E encryption.
 
 import { Feather } from "@expo/vector-icons";
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { FlatList, Pressable, StyleSheet, Text, View } from "react-native";
 import { useChatStore } from "../../store/chat-store";
+import { usePeerStore } from "../../store/peer-store";
 import Avatar from "../../ui/components/avatar";
 import { Colors, FontSize, FontWeight, Radius, Spacing } from "../../ui/theme";
 import { peerIDToUsername } from "../../utils/username";
@@ -16,6 +17,16 @@ interface Props {
 
 export default function DmList({ onSelectDM }: Props): React.JSX.Element {
   const { channels, messages, unreadCounts } = useChatStore();
+  // Subscribe to the peers Map so the list re-renders when any peer
+  // comes online or goes offline (Map reference changes on every upsert).
+  const peerMap = usePeerStore((s) => s.peers);
+  // Snapshot of Date.now() refreshed every 15 s; avoids calling the impure
+  // function inside renderItem (React Compiler / react-hooks/purity rule).
+  const [nowMs, setNowMs] = useState(Date.now);
+  useEffect(() => {
+    const id = setInterval(() => setNowMs(Date.now()), 15_000);
+    return () => clearInterval(id);
+  }, []);
 
   // DM channels are prefixed "dm:<16-hex peerID>".
   const dmChannels = channels.filter((c) => c.startsWith("dm:"));
@@ -30,6 +41,9 @@ export default function DmList({ onSelectDM }: Props): React.JSX.Element {
           const username = peerIDToUsername(peerID);
           const msgs = messages[item] ?? [];
           const last = msgs[msgs.length - 1];
+          const peerEntry = peerMap.get(peerID);
+          const isOnline =
+            peerEntry !== undefined && nowMs - peerEntry.lastSeenMs < 60_000;
 
           return (
             <Pressable
@@ -39,11 +53,12 @@ export default function DmList({ onSelectDM }: Props): React.JSX.Element {
               ]}
               onPress={() => onSelectDM(item)}
               accessibilityRole="button"
-              accessibilityLabel={`Open DM with ${username}`}
+              accessibilityLabel={`Open DM with ${username}${isOnline ? ", online" : ""}`}
             >
-              {/* Avatar */}
+              {/* Avatar with optional online indicator */}
               <View style={styles.avatarWrapper}>
                 <Avatar username={username} peerID={peerID} size={46} />
+                {isOnline && <View style={styles.onlineDot} />}
               </View>
 
               {/* Content */}
@@ -64,7 +79,16 @@ export default function DmList({ onSelectDM }: Props): React.JSX.Element {
                       {last.isMine ? (
                         <Text style={styles.previewSender}>You: </Text>
                       ) : null}
-                      {last.text}
+                      {last.text ||
+                        (last.attachment?.type === "voice"
+                          ? "Voice note"
+                          : last.attachment?.type === "image"
+                            ? "Photo"
+                            : last.attachment?.type === "video"
+                              ? "Video"
+                              : last.attachment?.type === "document"
+                                ? (last.attachment.name ?? "Document")
+                                : "")}
                     </Text>
                   ) : (
                     <Text style={styles.previewEmpty}>No messages yet</Text>
@@ -234,5 +258,16 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: FontWeight.bold,
     color: Colors.textInverse,
+  },
+  onlineDot: {
+    position: "absolute",
+    bottom: 1,
+    right: 1,
+    width: 11,
+    height: 11,
+    borderRadius: 6,
+    backgroundColor: Colors.online,
+    borderWidth: 2,
+    borderColor: Colors.bg,
   },
 });

@@ -1,23 +1,44 @@
-﻿// Channel list screen.
-// Shows all joined public channels with last-message preview and unread counts.
+// Channel list screen.
+// Two sections: Default Channels (bitchat-compatible, cannot be left) and
+// Your Channels (user-created, joinable / leaveable).
 // Tap a channel to open its message thread.
-// Long-press (or tap the info icon) to see channel details and leave.
+// Tap the info icon (top-right of each row) to see channel details.
 // FAB at bottom-right to join or create a new channel.
 
 import { Feather } from "@expo/vector-icons";
-import React, { useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
-  FlatList,
   Modal,
   Pressable,
-  ScrollView,
+  SectionList,
   StyleSheet,
   Text,
   TextInput,
   View,
 } from "react-native";
 import { useChatStore } from "../../store/chat-store";
+import { usePeerStore } from "../../store/peer-store";
 import { Colors, FontSize, FontWeight, Radius, Spacing } from "../../ui/theme";
+import ChannelInfoSheet from "./channel-info-sheet";
+
+// Transport options for new channels.
+const TRANSPORT_OPTIONS = ["BLE", "Nostr", "BLE + Nostr"] as const;
+type TransportOption = (typeof TRANSPORT_OPTIONS)[number];
+
+// Visibility options for new channels.
+const VISIBILITY_OPTIONS = ["Public", "Private"] as const;
+type VisibilityOption = (typeof VISIBILITY_OPTIONS)[number];
+
+// The 6 bitchat-compatible default channels. These are always present and
+// cannot be removed; they are part of the mesh protocol.
+const DEFAULT_CHANNEL_NAMES = new Set([
+  "#bluetooth",
+  "#block",
+  "#neighborhood",
+  "#city",
+  "#province",
+  "#region",
+]);
 
 // Scope info for built-in bitchat-compatible channels.
 const CHANNEL_SCOPE: Record<
@@ -62,24 +83,83 @@ const CHANNEL_SCOPE: Record<
   },
 };
 
+interface ChannelSection {
+  title: string;
+  isDefault: boolean;
+  isArchived: boolean;
+  data: string[];
+}
+
 interface Props {
   onSelectChannel: (channel: string) => void;
+  // Increment this to programmatically open the join/create modal (e.g. from
+  // the App.tsx header + New button). Counter pattern avoids boolean edge cases.
+  newChannelTrigger?: number;
 }
 
 export default function ChannelList({
   onSelectChannel,
+  newChannelTrigger,
 }: Props): React.JSX.Element {
-  const { channels, messages, addChannel, removeChannel, unreadCounts } =
-    useChatStore();
+  const {
+    channels,
+    messages,
+    addChannel,
+    removeChannel,
+    unreadCounts,
+    setChannelTransport,
+    setChannelVisibility,
+    archivedChannels,
+  } = useChatStore();
+  // Live peer count, real BLE data, not a stub.
+  const peerCount = usePeerStore((s) => s.peers.size);
+
   const [showJoinModal, setShowJoinModal] = useState(false);
   const [newChannel, setNewChannel] = useState("");
+  const [newTransport, setNewTransport] =
+    useState<TransportOption>("BLE + Nostr");
+  const [newVisibility, setNewVisibility] =
+    useState<VisibilityOption>("Public");
   const [infoChannel, setInfoChannel] = useState<string | null>(null);
+  const [collapsedSections, setCollapsedSections] = useState<Set<string>>(
+    new Set(),
+  );
+
+  // Watch the trigger counter from App.tsx header button.
+  // Initialise with the current counter value so a component remount (e.g.
+  // after navigating back from a thread) does not reopen the modal.
+  const prevTrigger = useRef(newChannelTrigger ?? 0);
+  useEffect(() => {
+    if (
+      newChannelTrigger !== undefined &&
+      newChannelTrigger > prevTrigger.current
+    ) {
+      prevTrigger.current = newChannelTrigger;
+      setShowJoinModal(true);
+    }
+  }, [newChannelTrigger]);
+
+  function toggleSection(title: string): void {
+    setCollapsedSections((prev) => {
+      const next = new Set(prev);
+      if (next.has(title)) next.delete(title);
+      else next.add(title);
+      return next;
+    });
+  }
 
   function handleAdd(): void {
     const name = newChannel.trim().replace(/^#*/, "#");
     if (name.length < 2) return;
+    // Duplicate guard: normalise for case-insensitive comparison.
+    if (publicChannels.some((c) => c.toLowerCase() === name.toLowerCase()))
+      return;
     addChannel(name);
+    setChannelTransport(name, newTransport);
+    setChannelVisibility(name, newVisibility);
     setNewChannel("");
+    setNewTransport("BLE + Nostr");
+    setNewVisibility("Public");
     setShowJoinModal(false);
   }
 
@@ -87,114 +167,214 @@ export default function ChannelList({
     removeChannel(channel);
     setInfoChannel(null);
   }
+  void handleLeave;
 
   // Public channels only (filter out dm: prefixed channels).
   const publicChannels = channels.filter((c) => !c.startsWith("dm:"));
+  const defaultChannels = publicChannels.filter((c) =>
+    DEFAULT_CHANNEL_NAMES.has(c),
+  );
+  const ownChannels = publicChannels.filter(
+    (c) => !DEFAULT_CHANNEL_NAMES.has(c) && !archivedChannels.includes(c),
+  );
+  const archivedList = publicChannels.filter(
+    (c) => !DEFAULT_CHANNEL_NAMES.has(c) && archivedChannels.includes(c),
+  );
 
-  const channelInfoData = infoChannel ? CHANNEL_SCOPE[infoChannel] : undefined;
+  // Normalised input for duplicate detection (shown while typing).
+  const normalizedInput = newChannel.trim().replace(/^#*/, "#").toLowerCase();
+  const nameAlreadyExists =
+    normalizedInput.length > 1 &&
+    publicChannels.some((c) => c.toLowerCase() === normalizedInput);
+
+  // Pass empty data array for collapsed sections.
+  const sections: ChannelSection[] = [
+    {
+      title: "Default Channels",
+      isDefault: true,
+      isArchived: false,
+      data: collapsedSections.has("Default Channels") ? [] : defaultChannels,
+    },
+    {
+      title: "Your Channels",
+      isDefault: false,
+      isArchived: false,
+      data: collapsedSections.has("Your Channels") ? [] : ownChannels,
+    },
+    ...(archivedList.length > 0
+      ? [
+          {
+            title: "Archived",
+            isDefault: false,
+            isArchived: true,
+            data: collapsedSections.has("Archived") ? [] : archivedList,
+          },
+        ]
+      : []),
+  ];
+
+  const isDefaultChannel =
+    infoChannel !== null && DEFAULT_CHANNEL_NAMES.has(infoChannel);
+  void isDefaultChannel;
+
+  function renderChannelRow(
+    item: string,
+    isArchived: boolean,
+  ): React.JSX.Element {
+    const msgs = messages[item] ?? [];
+    const last = msgs[msgs.length - 1];
+    const unread = unreadCounts[item] ?? 0;
+    const scopeTag = CHANNEL_SCOPE[item]?.tag;
+    const isDefault = DEFAULT_CHANNEL_NAMES.has(item);
+
+    return (
+      <Pressable
+        style={({ pressed }) => [
+          styles.row,
+          isArchived && styles.rowArchived,
+          pressed && styles.rowPressed,
+        ]}
+        onPress={() => {
+          if (isArchived) {
+            setInfoChannel(item);
+          } else {
+            onSelectChannel(item);
+          }
+        }}
+        accessibilityRole="button"
+        accessibilityLabel={
+          isArchived ? `Archived channel ${item}` : `Open channel ${item}`
+        }
+      >
+        <View style={styles.rowContent}>
+          {/* Top row: channel name + timestamp + info icon */}
+          <View style={styles.rowTop}>
+            <View style={styles.rowNameWrap}>
+              {isArchived && (
+                <Feather
+                  name="archive"
+                  size={12}
+                  color={Colors.textMuted}
+                  style={styles.rowArchiveIcon}
+                />
+              )}
+              <Text
+                style={[
+                  styles.channelName,
+                  isArchived && styles.channelNameMuted,
+                ]}
+                numberOfLines={1}
+              >
+                <Text style={styles.channelHash}>#</Text>
+                {item.replace(/^#/, "")}
+              </Text>
+            </View>
+            <View style={styles.rowTopRight}>
+              {last && !isArchived ? (
+                <Text style={styles.timestamp}>
+                  {formatTime(last.timestampMs)}
+                </Text>
+              ) : null}
+              {!isArchived && (
+                <Pressable
+                  style={styles.infoBtn}
+                  onPress={() => setInfoChannel(item)}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Info for channel ${item}`}
+                >
+                  <Feather name="info" size={14} color={Colors.textMuted} />
+                </Pressable>
+              )}
+            </View>
+          </View>
+
+          {/* Scope tag + live peer count for default channels */}
+          {scopeTag !== undefined ? (
+            <Text style={styles.channelScope} numberOfLines={1}>
+              {scopeTag}
+              {isDefault
+                ? peerCount > 0
+                  ? `  \u00b7  ${peerCount} nearby`
+                  : "  \u00b7  0 nearby"
+                : null}
+            </Text>
+          ) : null}
+
+          {/* Bottom row: preview + badge (hidden when archived) */}
+          {!isArchived && (
+            <View style={styles.rowBottom}>
+              {last ? (
+                <Text style={styles.preview} numberOfLines={1}>
+                  <Text style={styles.previewSender}>
+                    {last.isMine ? "You" : last.senderNickname}:{" "}
+                  </Text>
+                  {last.text}
+                </Text>
+              ) : (
+                <Text style={styles.previewEmpty}>No messages yet</Text>
+              )}
+              {unread > 0 && (
+                <View style={styles.badge}>
+                  <Text style={styles.badgeText}>
+                    {unread > 99 ? "99+" : unread}
+                  </Text>
+                </View>
+              )}
+            </View>
+          )}
+        </View>
+      </Pressable>
+    );
+  }
 
   return (
     <View style={styles.container}>
-      <FlatList
-        data={publicChannels}
+      <SectionList<string, ChannelSection>
+        sections={sections}
         keyExtractor={(item) => item}
-        renderItem={({ item }) => {
-          const msgs = messages[item] ?? [];
-          const last = msgs[msgs.length - 1];
-          const unread = unreadCounts[item] ?? 0;
-          const scopeTag = CHANNEL_SCOPE[item]?.tag;
-
+        renderItem={({ item, section }) =>
+          renderChannelRow(item, section.isArchived)
+        }
+        renderSectionHeader={({ section }) => {
+          const isCollapsed = collapsedSections.has(section.title);
           return (
             <Pressable
-              style={({ pressed }) => [
-                styles.row,
-                pressed && styles.rowPressed,
-              ]}
-              onPress={() => onSelectChannel(item)}
-              onLongPress={() => setInfoChannel(item)}
+              style={styles.sectionHeader}
+              onPress={() => toggleSection(section.title)}
               accessibilityRole="button"
-              accessibilityLabel={`Open channel ${item}`}
+              accessibilityLabel={`${isCollapsed ? "Expand" : "Collapse"} ${section.title}`}
             >
-              <View style={styles.rowContent}>
-                <View style={styles.rowTop}>
-                  <View style={styles.rowNameGroup}>
-                    <Text style={styles.channelName} numberOfLines={1}>
-                      <Text style={styles.channelHash}>#</Text>
-                      {item.replace(/^#/, "")}
-                    </Text>
-                    {scopeTag !== undefined ? (
-                      <Text style={styles.channelScope} numberOfLines={1}>
-                        {scopeTag}
-                      </Text>
-                    ) : null}
-                  </View>
-                  {last ? (
-                    <Text style={styles.timestamp}>
-                      {formatTime(last.timestampMs)}
-                    </Text>
-                  ) : null}
-                </View>
-                <View style={styles.rowBottom}>
-                  {last ? (
-                    <Text style={styles.preview} numberOfLines={1}>
-                      <Text style={styles.previewSender}>
-                        {last.isMine ? "You" : last.senderNickname}:{" "}
-                      </Text>
-                      {last.text}
-                    </Text>
-                  ) : (
-                    <Text style={styles.previewEmpty}>No messages yet</Text>
-                  )}
-                  <View style={styles.rowRight}>
-                    {unread > 0 && (
-                      <View style={styles.badge}>
-                        <Text style={styles.badgeText}>
-                          {unread > 99 ? "99+" : unread}
-                        </Text>
-                      </View>
-                    )}
-                    <Pressable
-                      style={styles.infoBtn}
-                      onPress={() => setInfoChannel(item)}
-                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 0 }}
-                      accessibilityRole="button"
-                      accessibilityLabel={`Info for channel ${item}`}
-                    >
-                      <Feather name="info" size={14} color={Colors.textMuted} />
-                    </Pressable>
-                  </View>
-                </View>
+              <Text style={styles.sectionTitle}>{section.title}</Text>
+              <View style={styles.sectionChevron}>
+                <Feather
+                  name={isCollapsed ? "chevron-right" : "chevron-down"}
+                  size={14}
+                  color={Colors.textMuted}
+                />
               </View>
             </Pressable>
           );
         }}
+        renderSectionFooter={({ section }) => {
+          if (section.isDefault || collapsedSections.has(section.title))
+            return null;
+          if (section.isArchived) return null;
+          if (ownChannels.length > 0) return null;
+          return (
+            <View style={styles.ownEmpty}>
+              <Text style={styles.ownEmptyText}>
+                No custom channels yet. Tap{" "}
+                <Text style={styles.ownEmptyAccent}>New</Text> above to join or
+                create one.
+              </Text>
+            </View>
+          );
+        }}
         ItemSeparatorComponent={() => <View style={styles.separator} />}
-        ListEmptyComponent={
-          <View style={styles.emptyState}>
-            <Feather
-              name="hash"
-              size={36}
-              color={Colors.textMuted}
-              style={{ opacity: 0.4 }}
-            />
-            <Text style={styles.emptyTitle}>No channels</Text>
-            <Text style={styles.emptySubtitle}>
-              Tap + to join or create a channel.
-            </Text>
-          </View>
-        }
+        stickySectionHeadersEnabled={false}
         contentContainerStyle={styles.list}
       />
-
-      {/* Floating action button */}
-      <Pressable
-        style={({ pressed }) => [styles.fab, pressed && styles.fabPressed]}
-        onPress={() => setShowJoinModal(true)}
-        accessibilityRole="button"
-        accessibilityLabel="Add or join a channel"
-      >
-        <Feather name="plus" size={22} color={Colors.textInverse} />
-      </Pressable>
 
       {/* Join or create channel modal */}
       <Modal
@@ -209,127 +389,133 @@ export default function ChannelList({
         >
           <Pressable style={styles.modalSheet} onPress={() => {}}>
             <View style={styles.handle} />
-            <Text style={styles.modalTitle}>Join or create</Text>
+            <Text style={styles.modalTitle}>Create a channel</Text>
             <Text style={styles.modalHint}>
-              Type a channel name to join an existing one or create a new one.
-              Anyone with the same name can join.
+              Choose a name, visibility, and transport for your channel. Anyone
+              with the same name can find and join it.
             </Text>
-            <TextInput
-              style={styles.modalInput}
-              value={newChannel}
-              onChangeText={setNewChannel}
-              placeholder="#channel-name"
-              placeholderTextColor={Colors.textMuted}
-              autoCapitalize="none"
-              autoFocus
-              onSubmitEditing={handleAdd}
-              returnKeyType="done"
-              selectionColor={Colors.accent}
-            />
+            <View>
+              <TextInput
+                style={[
+                  styles.modalInput,
+                  nameAlreadyExists && styles.modalInputError,
+                ]}
+                value={newChannel}
+                onChangeText={setNewChannel}
+                placeholder="#channel-name"
+                placeholderTextColor={Colors.textMuted}
+                autoCapitalize="none"
+                autoFocus
+                onSubmitEditing={handleAdd}
+                returnKeyType="done"
+                selectionColor={Colors.accent}
+              />
+              {nameAlreadyExists && (
+                <Text style={styles.inputError}>
+                  A channel with this name already exists.
+                </Text>
+              )}
+            </View>
+
+            {/* Visibility */}
+            <View style={styles.optionGroup}>
+              <Text style={styles.optionLabel}>Visibility</Text>
+              <View style={styles.optionRow}>
+                {VISIBILITY_OPTIONS.map((opt) => (
+                  <Pressable
+                    key={opt}
+                    style={[
+                      styles.optionChip,
+                      newVisibility === opt && styles.optionChipActive,
+                    ]}
+                    onPress={() => setNewVisibility(opt)}
+                    accessibilityRole="radio"
+                    accessibilityState={{ checked: newVisibility === opt }}
+                  >
+                    <Feather
+                      name={opt === "Private" ? "lock" : "globe"}
+                      size={13}
+                      color={
+                        newVisibility === opt
+                          ? Colors.textPrimary
+                          : Colors.textMuted
+                      }
+                    />
+                    <Text
+                      style={
+                        newVisibility === opt
+                          ? styles.optionChipTextActive
+                          : styles.optionChipText
+                      }
+                    >
+                      {opt}
+                    </Text>
+                  </Pressable>
+                ))}
+              </View>
+            </View>
+
+            {/* Transport */}
+            <View style={styles.optionGroup}>
+              <Text style={styles.optionLabel}>Transport</Text>
+              <View style={styles.optionRow}>
+                {TRANSPORT_OPTIONS.map((opt) => (
+                  <Pressable
+                    key={opt}
+                    style={[
+                      styles.optionChip,
+                      newTransport === opt && styles.optionChipActive,
+                    ]}
+                    onPress={() => setNewTransport(opt)}
+                    accessibilityRole="radio"
+                    accessibilityState={{ checked: newTransport === opt }}
+                  >
+                    <Text
+                      style={
+                        newTransport === opt
+                          ? styles.optionChipTextActive
+                          : styles.optionChipText
+                      }
+                    >
+                      {opt}
+                    </Text>
+                  </Pressable>
+                ))}
+              </View>
+            </View>
             <View style={styles.modalActions}>
               <Pressable
                 style={styles.modalCancel}
-                onPress={() => setShowJoinModal(false)}
+                onPress={() => {
+                  setNewChannel("");
+                  setNewTransport("BLE + Nostr");
+                  setNewVisibility("Public");
+                  setShowJoinModal(false);
+                }}
               >
                 <Text style={styles.modalCancelText}>Cancel</Text>
               </Pressable>
-              <Pressable style={styles.modalConfirm} onPress={handleAdd}>
-                <Text style={styles.modalConfirmText}>Join</Text>
+              <Pressable
+                style={[
+                  styles.modalConfirm,
+                  nameAlreadyExists && styles.modalConfirmDisabled,
+                ]}
+                onPress={handleAdd}
+                disabled={nameAlreadyExists}
+              >
+                <Text style={styles.modalConfirmText}>Create</Text>
               </Pressable>
             </View>
           </Pressable>
         </Pressable>
       </Modal>
 
-      {/* Channel info sheet */}
-      <Modal
-        visible={infoChannel !== null}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setInfoChannel(null)}
-      >
-        {infoChannel !== null && (
-          <Pressable
-            style={styles.modalOverlay}
-            onPress={() => setInfoChannel(null)}
-          >
-            <Pressable style={styles.infoSheet} onPress={() => {}}>
-              <View style={styles.handleCentered} />
-
-              <ScrollView
-                showsVerticalScrollIndicator={false}
-                contentContainerStyle={styles.infoContent}
-              >
-                {/* Channel header */}
-                <View style={styles.infoHeader}>
-                  <View style={styles.infoIconWrap}>
-                    <Feather name="hash" size={22} color={Colors.textPrimary} />
-                  </View>
-                  <Text style={styles.infoChannelName}>
-                    {infoChannel.replace(/^#/, "")}
-                  </Text>
-                  <Text style={styles.infoScopeTag}>
-                    {channelInfoData ? channelInfoData.tag : "Custom channel"}
-                  </Text>
-                </View>
-
-                {/* About */}
-                <View style={styles.infoSection}>
-                  <Text style={styles.infoSectionTitle}>About</Text>
-                  <Text style={styles.infoDescription}>
-                    {channelInfoData
-                      ? channelInfoData.description
-                      : "A custom channel. Anyone who knows the name can join from any Airhop or bitchat device."}
-                  </Text>
-                </View>
-
-                {/* Transport */}
-                <View style={styles.infoSection}>
-                  <Text style={styles.infoSectionTitle}>Transport</Text>
-                  <View style={styles.transportRow}>
-                    <Feather
-                      name="radio"
-                      size={14}
-                      color={Colors.textSecondary}
-                    />
-                    <Text style={styles.transportLabel}>
-                      {channelInfoData?.transport ?? "BLE + Nostr"}
-                    </Text>
-                  </View>
-                </View>
-
-                {/* Join from another device */}
-                <View style={styles.infoSection}>
-                  <Text style={styles.infoSectionTitle}>
-                    Join from another device
-                  </Text>
-                  <View style={styles.shareHint}>
-                    <Text style={styles.shareCode}>{infoChannel}</Text>
-                  </View>
-                  <Text style={styles.shareNote}>
-                    Share this channel name. Open Airhop or bitchat and tap + to
-                    join.
-                  </Text>
-                </View>
-
-                {/* Leave */}
-                <Pressable
-                  style={({ pressed }) => [
-                    styles.leaveBtn,
-                    pressed && styles.leaveBtnPressed,
-                  ]}
-                  onPress={() => handleLeave(infoChannel)}
-                  accessibilityRole="button"
-                  accessibilityLabel={`Leave channel ${infoChannel}`}
-                >
-                  <Feather name="log-out" size={16} color={Colors.danger} />
-                  <Text style={styles.leaveBtnText}>Leave channel</Text>
-                </Pressable>
-              </ScrollView>
-            </Pressable>
-          </Pressable>
-        )}
-      </Modal>
+      {/* Channel info sheet (shared component) */}
+      <ChannelInfoSheet
+        channel={infoChannel}
+        onClose={() => setInfoChannel(null)}
+        onRename={(newName) => setInfoChannel(newName)}
+      />
     </View>
   );
 }
@@ -356,44 +542,67 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     paddingBottom: 88,
   },
+  // ---- Section headers -------------------------------------------------------
+  sectionHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: Spacing.base,
+    paddingTop: Spacing.lg,
+    paddingBottom: Spacing.md,
+    backgroundColor: Colors.bg,
+  },
+  sectionTitle: {
+    fontSize: FontSize.xs,
+    fontWeight: FontWeight.semibold,
+    color: Colors.textMuted,
+    textTransform: "uppercase",
+    letterSpacing: 0.8,
+  },
+  sectionChevron: {
+    width: 20,
+    height: 20,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  // ---- Channel rows ----------------------------------------------------------
   row: {
     flexDirection: "row",
     alignItems: "center",
     paddingHorizontal: Spacing.base,
-    paddingVertical: Spacing.md,
+    paddingVertical: Spacing.base,
     gap: Spacing.md,
-    minHeight: 68,
+    minHeight: 72,
+    backgroundColor: Colors.surface,
   },
   rowPressed: {
-    backgroundColor: Colors.surface,
+    backgroundColor: Colors.surfacePressed,
   },
   rowContent: {
     flex: 1,
-    gap: 3,
+    gap: Spacing.xs,
   },
   rowTop: {
     flexDirection: "row",
     justifyContent: "space-between",
-    alignItems: "flex-start",
+    alignItems: "center",
+  },
+  rowTopRight: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.xs,
+    flexShrink: 0,
   },
   rowBottom: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
   },
-  rowNameGroup: {
-    flex: 1,
-    marginRight: Spacing.sm,
-  },
-  rowRight: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: Spacing.sm,
-  },
   channelName: {
     fontSize: FontSize.base,
     fontWeight: FontWeight.semibold,
     color: Colors.textPrimary,
+    flexShrink: 1,
   },
   channelHash: {
     color: Colors.textMuted,
@@ -402,13 +611,18 @@ const styles = StyleSheet.create({
   channelScope: {
     fontSize: FontSize.xs,
     color: Colors.textMuted,
-    marginTop: 2,
     letterSpacing: 0.1,
   },
   timestamp: {
     fontSize: FontSize.xs,
     color: Colors.textMuted,
-    marginLeft: Spacing.sm,
+  },
+  infoBtn: {
+    width: 20,
+    height: 20,
+    alignItems: "center",
+    justifyContent: "center",
+    opacity: 0.7,
   },
   preview: {
     fontSize: FontSize.sm,
@@ -437,47 +651,69 @@ const styles = StyleSheet.create({
     fontWeight: FontWeight.bold,
     color: Colors.textInverse,
   },
-  infoBtn: {
-    paddingLeft: Spacing.xs,
-    opacity: 0.6,
-  },
   separator: {
     height: StyleSheet.hairlineWidth,
     backgroundColor: Colors.border,
     marginLeft: Spacing.base,
   },
-  emptyState: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: Spacing["4xl"],
+  // ---- Option chips (create modal) ------------------------------------------
+  optionGroup: {
+    gap: Spacing.xs,
+  },
+  optionLabel: {
+    fontSize: FontSize.xs,
+    fontWeight: FontWeight.semibold,
+    color: Colors.textMuted,
+    textTransform: "uppercase",
+    letterSpacing: 0.8,
+  },
+  optionRow: {
+    flexDirection: "row",
     gap: Spacing.sm,
   },
-  emptyTitle: {
-    fontSize: FontSize.md,
-    fontWeight: FontWeight.semibold,
-    color: Colors.textSecondary,
+  optionChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: 7,
+    borderRadius: Radius.md,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    backgroundColor: Colors.bg,
   },
-  emptySubtitle: {
+  optionChipActive: {
+    borderColor: Colors.accent,
+    backgroundColor: Colors.surface,
+  },
+  optionChipText: {
     fontSize: FontSize.sm,
     color: Colors.textMuted,
-    textAlign: "center",
+    fontWeight: FontWeight.medium,
   },
-  fab: {
-    position: "absolute",
-    right: Spacing.xl,
-    bottom: Spacing.xl,
-    width: 52,
-    height: 52,
-    borderRadius: 26,
-    backgroundColor: Colors.accent,
-    alignItems: "center",
-    justifyContent: "center",
-    elevation: 4,
+  optionChipTextActive: {
+    fontSize: FontSize.sm,
+    color: Colors.textPrimary,
+    fontWeight: FontWeight.semibold,
   },
-  fabPressed: {
-    opacity: 0.88,
+  // ---- Your Channels empty state ---------------------------------------------
+  ownEmpty: {
+    paddingHorizontal: Spacing.base,
+    paddingVertical: Spacing.md,
+    backgroundColor: Colors.surface,
   },
+  ownEmptyText: {
+    fontSize: FontSize.sm,
+    color: Colors.textMuted,
+    fontStyle: "italic",
+    lineHeight: 18,
+  },
+  ownEmptyAccent: {
+    color: Colors.accent,
+    fontStyle: "normal",
+    fontWeight: FontWeight.semibold,
+  },
+  // ---- Modals ----------------------------------------------------------------
   modalOverlay: {
     flex: 1,
     backgroundColor: Colors.overlay,
@@ -496,15 +732,6 @@ const styles = StyleSheet.create({
     borderRadius: 2,
     backgroundColor: Colors.borderStrong,
     alignSelf: "center",
-    marginBottom: Spacing.xs,
-  },
-  handleCentered: {
-    width: 36,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: Colors.borderStrong,
-    alignSelf: "center",
-    marginTop: Spacing.sm,
     marginBottom: Spacing.xs,
   },
   modalTitle: {
@@ -526,6 +753,14 @@ const styles = StyleSheet.create({
     fontSize: FontSize.base,
     borderWidth: 1,
     borderColor: Colors.border,
+  },
+  modalInputError: {
+    borderColor: Colors.danger,
+  },
+  inputError: {
+    fontSize: FontSize.xs,
+    color: Colors.danger,
+    marginTop: 4,
   },
   modalActions: {
     flexDirection: "row",
@@ -551,108 +786,30 @@ const styles = StyleSheet.create({
     paddingVertical: Spacing.md,
     alignItems: "center",
   },
+  modalConfirmDisabled: {
+    backgroundColor: Colors.border,
+  },
   modalConfirmText: {
     fontSize: FontSize.base,
     color: Colors.textInverse,
     fontWeight: FontWeight.semibold,
   },
-  // Channel info sheet
-  infoSheet: {
-    backgroundColor: Colors.surface,
-    borderTopLeftRadius: Radius["2xl"],
-    borderTopRightRadius: Radius["2xl"],
-    maxHeight: "80%",
+  // ---- Archived channel rows -------------------------------------------------
+  rowArchived: {
+    opacity: 0.55,
   },
-  infoContent: {
-    padding: Spacing.xl,
-    gap: Spacing.xl,
-    paddingBottom: Spacing["3xl"],
-  },
-  infoHeader: {
-    alignItems: "center",
-    gap: Spacing.sm,
-  },
-  infoIconWrap: {
-    width: 52,
-    height: 52,
-    borderRadius: Radius.lg,
-    backgroundColor: Colors.surfaceRaised,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  infoChannelName: {
-    fontSize: FontSize.xl,
-    fontWeight: FontWeight.bold,
-    color: Colors.textPrimary,
-  },
-  infoScopeTag: {
-    fontSize: FontSize.sm,
-    color: Colors.textMuted,
-    textAlign: "center",
-  },
-  infoSection: {
-    gap: Spacing.sm,
-  },
-  infoSectionTitle: {
-    fontSize: FontSize.xs,
-    fontWeight: FontWeight.semibold,
-    color: Colors.textMuted,
-    textTransform: "uppercase",
-    letterSpacing: 0.8,
-  },
-  infoDescription: {
-    fontSize: FontSize.base,
-    color: Colors.textSecondary,
-    lineHeight: 22,
-  },
-  transportRow: {
+  rowNameWrap: {
     flexDirection: "row",
     alignItems: "center",
-    gap: Spacing.sm,
+    gap: 4,
+    flex: 1,
+    marginRight: Spacing.sm,
+    overflow: "hidden",
   },
-  transportLabel: {
-    fontSize: FontSize.base,
-    color: Colors.textPrimary,
+  rowArchiveIcon: {
+    flexShrink: 0,
   },
-  shareHint: {
-    backgroundColor: Colors.surfaceRaised,
-    borderRadius: Radius.md,
-    paddingVertical: Spacing.md,
-    paddingHorizontal: Spacing.base,
-    borderWidth: 1,
-    borderColor: Colors.border,
-  },
-  shareCode: {
-    fontSize: FontSize.base,
-    fontWeight: FontWeight.semibold,
-    color: Colors.textPrimary,
-    fontFamily: "monospace",
-    letterSpacing: 0.5,
-  },
-  shareNote: {
-    fontSize: FontSize.sm,
+  channelNameMuted: {
     color: Colors.textMuted,
-    lineHeight: 18,
-  },
-  leaveBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: Spacing.sm,
-    paddingVertical: Spacing.md,
-    borderRadius: Radius.md,
-    borderWidth: 1,
-    borderColor: Colors.danger,
-    marginTop: Spacing.sm,
-  },
-  leaveBtnPressed: {
-    backgroundColor: Colors.dangerDim,
-  },
-  leaveBtnText: {
-    fontSize: FontSize.base,
-    fontWeight: FontWeight.medium,
-    color: Colors.danger,
   },
 });
