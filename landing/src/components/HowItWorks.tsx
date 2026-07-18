@@ -327,7 +327,7 @@ export default function HowItWorks() {
               </div>
             </div>
 
-            {/* Nostr global reach — real relay map */}
+            {/* Nostr global reach, real relay map */}
             <RelayMap />
           </div>
         </motion.div>

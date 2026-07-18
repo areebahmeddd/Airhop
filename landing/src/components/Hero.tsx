@@ -8,7 +8,7 @@ function SpiderIllustration() {
       className="h-auto w-full max-w-[400px] select-none"
       aria-hidden="true"
     >
-      {/* Right legs — front to back */}
+      {/* Right legs, front to back */}
       <path
         d="M 274,162 L 330,115 L 398,122"
         stroke="black"
@@ -42,7 +42,7 @@ function SpiderIllustration() {
         strokeLinejoin="round"
       />
 
-      {/* Left legs — mirror */}
+      {/* Left legs, mirrored */}
       <path
         d="M 206,162 L 150,115 L 82,122"
         stroke="black"
@@ -144,7 +144,7 @@ export default function Hero() {
           setStars(data.stargazers_count);
         }
       })
-      .catch(() => {});
+      .catch(() => { });
 
     fetch("https://api.github.com/repos/areebahmeddd/Airhop/releases/latest")
       .then((res) => res.json())
@@ -153,7 +153,7 @@ export default function Hero() {
           setLatestRelease(data.tag_name);
         }
       })
-      .catch(() => {});
+      .catch(() => { });
   }, []);
 
   return (

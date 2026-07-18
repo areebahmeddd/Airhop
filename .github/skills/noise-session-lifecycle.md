@@ -33,7 +33,7 @@ After msg3 both sides call `split()` to derive two independent transport keys.
 
 The node that **sends msg1** is the initiator. The node that **receives msg1** is the responder. This is determined by which side opens the connection, not by comparing peer IDs.
 
-If both sides try to initiate simultaneously (race condition), the side that receives a 32-byte msg1 while its own handshake is still in progress drops its own attempt and switches to responder. Bitchat iOS implements this in `NoiseSessionManager.handleIncomingHandshake()` — a 32-byte incoming message when already handshaking resets and starts fresh as responder.
+If both sides try to initiate simultaneously (race condition), the side that receives a 32-byte msg1 while its own handshake is still in progress drops its own attempt and switches to responder. Bitchat iOS implements this in `NoiseSessionManager.handleIncomingHandshake()`. A 32-byte incoming message when already handshaking resets and starts fresh as responder.
 
 ### Session State
 

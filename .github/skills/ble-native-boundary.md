@@ -32,7 +32,7 @@ Every feature is implemented in `src/core/`. Native code is a thin I/O driver.
 
 ## TurboModule Contract
 
-The spec file is `src/bridge/NativeAirhopBLE.ts`. It is Codegen input only — React Native generates the native bridge headers from it automatically. Do not add business logic to this file.
+The spec file is `src/bridge/NativeAirhopBLE.ts`. It is Codegen input only. React Native generates the native bridge headers from it automatically. Do not add business logic to this file.
 
 ### Methods
 

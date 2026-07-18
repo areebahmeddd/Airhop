@@ -44,7 +44,7 @@ plaintext
 
 ### Layer 1: Rumor (kind 14)
 
-An `UnsignedEvent`. Never signed — per NIP-17 a rumor must not have a signature.
+An `UnsignedEvent`. Never signed, per NIP-17 a rumor must not have a signature.
 
 ```typescript
 {
