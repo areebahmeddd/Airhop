@@ -1,6 +1,6 @@
-// Peer list screen — Mesh tab.
+// Peer list screen: Mesh tab.
 // Shows nearby peers discovered via signed ANNOUNCE broadcasts.
-// Tapping a peer opens a detail sheet with DM and contact actions.
+// Toggle between list and radar view. Tap a peer to open their detail sheet.
 // Peer data is populated from the BLE service (wired in v0.7+).
 
 import { Feather } from "@expo/vector-icons";
@@ -19,6 +19,10 @@ import Avatar from "../../ui/components/avatar";
 import StatusDot from "../../ui/components/status-dot";
 import { Colors, FontSize, FontWeight, Radius, Spacing } from "../../ui/theme";
 import { peerIDToUsername } from "../../utils/username";
+import QrScanScreen from "../contacts/qr-scan-screen";
+import RadarView from "./radar-view";
+
+type ViewMode = "list" | "radar";
 
 interface Props {
   onOpenDM?: (channel: string) => void;
@@ -28,6 +32,8 @@ export default function PeerList({ onOpenDM }: Props): React.JSX.Element {
   const { peers, evictStale } = usePeerStore();
   const { addChannel } = useChatStore();
   const [now, setNow] = useState(() => Date.now());
+  const [viewMode, setViewMode] = useState<ViewMode>("radar");
+  const [showQRScan, setShowQRScan] = useState(false);
   const [selectedPeer, setSelectedPeer] = useState<NearbyPeer | null>(null);
 
   // Refresh "last seen" every 10 seconds and evict stale peers.
@@ -62,71 +68,138 @@ export default function PeerList({ onOpenDM }: Props): React.JSX.Element {
     onOpenDM?.(channel);
   }
 
+  function handleQRScanned(peerID: string): void {
+    const channel = `dm:${peerID}`;
+    addChannel(channel);
+    setShowQRScan(false);
+    setSelectedPeer(null);
+    onOpenDM?.(channel);
+  }
+
   return (
     <View style={styles.container}>
-      <FlatList
-        data={peerList}
-        keyExtractor={(item) => item.peerID}
-        renderItem={({ item }) => {
-          const online = isOnline(item);
-          const username = peerIDToUsername(item.peerID);
+      {/* Controls row: view toggle + add contact */}
+      <View style={styles.controlsRow}>
+        <Pressable
+          style={styles.addContactBtn}
+          onPress={() => setShowQRScan(true)}
+          accessibilityRole="button"
+          accessibilityLabel="Add contact by peer ID"
+        >
+          <Feather name="user-plus" size={14} color={Colors.textSecondary} />
+          <Text style={styles.addContactText}>Add</Text>
+        </Pressable>
 
-          return (
-            <Pressable
-              style={({ pressed }) => [
-                styles.row,
-                pressed && styles.rowPressed,
-              ]}
-              onPress={() => setSelectedPeer(item)}
-              accessibilityRole="button"
-              accessibilityLabel={`View peer ${username}`}
-            >
-              {/* Avatar with status */}
-              <View style={styles.avatarWrapper}>
-                <Avatar username={username} peerID={item.peerID} size={46} />
-                <View style={styles.statusBadge}>
-                  <StatusDot status={online ? "online" : "offline"} size={10} />
+        <View style={styles.viewToggle}>
+          <Pressable
+            style={[
+              styles.toggleBtn,
+              viewMode === "list" && styles.toggleBtnActive,
+            ]}
+            onPress={() => setViewMode("list")}
+            accessibilityRole="button"
+            accessibilityLabel="List view"
+            accessibilityState={{ selected: viewMode === "list" }}
+          >
+            <Feather
+              name="list"
+              size={16}
+              color={viewMode === "list" ? Colors.accent : Colors.textMuted}
+            />
+          </Pressable>
+          <Pressable
+            style={[
+              styles.toggleBtn,
+              viewMode === "radar" && styles.toggleBtnActive,
+            ]}
+            onPress={() => setViewMode("radar")}
+            accessibilityRole="button"
+            accessibilityLabel="Radar view"
+            accessibilityState={{ selected: viewMode === "radar" }}
+          >
+            <Feather
+              name="radio"
+              size={16}
+              color={viewMode === "radar" ? Colors.accent : Colors.textMuted}
+            />
+          </Pressable>
+        </View>
+      </View>
+
+      {viewMode === "radar" ? (
+        <RadarView peers={peerList} now={now} onSelectPeer={setSelectedPeer} />
+      ) : (
+        <FlatList
+          data={peerList}
+          keyExtractor={(item) => item.peerID}
+          renderItem={({ item }) => {
+            const online = isOnline(item);
+            const username = peerIDToUsername(item.peerID);
+
+            return (
+              <Pressable
+                style={({ pressed }) => [
+                  styles.row,
+                  pressed && styles.rowPressed,
+                ]}
+                onPress={() => setSelectedPeer(item)}
+                accessibilityRole="button"
+                accessibilityLabel={`View peer ${username}`}
+              >
+                {/* Avatar with status */}
+                <View style={styles.avatarWrapper}>
+                  <Avatar username={username} peerID={item.peerID} size={46} />
+                  <View style={styles.statusBadge}>
+                    <StatusDot
+                      status={online ? "online" : "offline"}
+                      size={10}
+                    />
+                  </View>
                 </View>
-              </View>
 
-              {/* Info */}
-              <View style={styles.rowContent}>
-                <Text style={styles.username} numberOfLines={1}>
-                  {username}
-                </Text>
-                <Text style={styles.peerID}>
-                  {item.peerID.slice(0, 8)}\u2009\u00b7\u2009
-                  {item.peerID.slice(8)}
-                </Text>
-              </View>
+                {/* Info */}
+                <View style={styles.rowContent}>
+                  <Text style={styles.username} numberOfLines={1}>
+                    {username}
+                  </Text>
+                  <Text style={styles.peerID}>
+                    {item.peerID.slice(0, 8)}\u2009\u00b7\u2009
+                    {item.peerID.slice(8)}
+                  </Text>
+                </View>
 
-              {/* Last seen */}
-              <View style={styles.rowRight}>
-                <Text
-                  style={[styles.lastSeen, online && { color: Colors.online }]}
-                >
-                  {online ? "now" : formatLastSeen(item.lastSeenMs)}
-                </Text>
+                {/* Last seen */}
+                <View style={styles.rowRight}>
+                  <Text
+                    style={[
+                      styles.lastSeen,
+                      online && { color: Colors.online },
+                    ]}
+                  >
+                    {online ? "now" : formatLastSeen(item.lastSeenMs)}
+                  </Text>
+                </View>
+              </Pressable>
+            );
+          }}
+          ItemSeparatorComponent={() => <View style={styles.separator} />}
+          ListEmptyComponent={
+            <View style={styles.emptyState}>
+              <View style={styles.emptyIcon}>
+                <View style={styles.emptyRing2} />
+                <View style={styles.emptyRing1} />
+                <View style={styles.emptyDot} />
               </View>
-            </Pressable>
-          );
-        }}
-        ItemSeparatorComponent={() => <View style={styles.separator} />}
-        ListEmptyComponent={
-          <View style={styles.emptyState}>
-            <View style={styles.emptyIcon}>
-              <View style={styles.emptyRing2} />
-              <View style={styles.emptyRing1} />
-              <View style={styles.emptyDot} />
+              <Text style={styles.emptyTitle}>Scanning for peers</Text>
+              <Text style={styles.emptySubtitle}>
+                Other Airhop or bitchat devices{"\n"}within BLE range appear
+                here.
+              </Text>
             </View>
-            <Text style={styles.emptyTitle}>Scanning for peers</Text>
-            <Text style={styles.emptySubtitle}>
-              Other Airhop or bitchat devices{"\n"}within BLE range appear here.
-            </Text>
-          </View>
-        }
-        contentContainerStyle={styles.list}
-      />
+          }
+          contentContainerStyle={styles.list}
+        />
+      )}
 
       {/* Peer detail sheet */}
       <Modal
@@ -168,52 +241,31 @@ export default function PeerList({ onOpenDM }: Props): React.JSX.Element {
                 </View>
               </View>
 
-              {/* Actions */}
-              <View style={styles.sheetActions}>
-                <Pressable
-                  style={styles.sheetAction}
-                  onPress={() => handleSendDM(selectedPeer)}
-                  accessibilityRole="button"
-                  accessibilityLabel="Send a direct message"
-                >
-                  <View style={styles.sheetActionIcon}>
-                    <Feather
-                      name="message-circle"
-                      size={22}
-                      color={Colors.textSecondary}
-                    />
-                  </View>
-                  <Text style={styles.sheetActionLabel}>Message</Text>
-                </Pressable>
-
-                <Pressable
-                  style={styles.sheetAction}
-                  onPress={() => setSelectedPeer(null)}
-                  accessibilityRole="button"
-                  accessibilityLabel="Add contact via QR"
-                >
-                  <View style={styles.sheetActionIcon}>
-                    <Feather
-                      name="user-plus"
-                      size={22}
-                      color={Colors.textSecondary}
-                    />
-                  </View>
-                  <Text style={styles.sheetActionLabel}>Add contact</Text>
-                </Pressable>
-              </View>
-
-              {/* Tech detail */}
-              <View style={styles.sheetMeta}>
-                <Text style={styles.sheetMetaLabel}>Noise public key</Text>
-                <Text style={styles.sheetMetaValue} numberOfLines={2}>
-                  {selectedPeer.noisePubKeyHex}
-                </Text>
-              </View>
+              {/* Message action: full width */}
+              <Pressable
+                style={styles.sheetMessageBtn}
+                onPress={() => handleSendDM(selectedPeer)}
+                accessibilityRole="button"
+                accessibilityLabel="Send a direct message"
+              >
+                <Feather
+                  name="message-circle"
+                  size={18}
+                  color={Colors.textInverse}
+                />
+                <Text style={styles.sheetMessageBtnText}>Message</Text>
+              </Pressable>
             </Pressable>
           </Pressable>
         )}
       </Modal>
+
+      {/* QR scanner */}
+      <QrScanScreen
+        visible={showQRScan}
+        onClose={() => setShowQRScan(false)}
+        onPeerFound={handleQRScanned}
+      />
     </View>
   );
 }
@@ -223,7 +275,53 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: Colors.bg,
   },
-  // Stats bar styles removed — counts surfaced in App.tsx header.
+  controlsRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "flex-end",
+    gap: Spacing.sm,
+    marginRight: Spacing.base,
+    marginTop: Spacing.sm,
+    marginBottom: Spacing.xs,
+  },
+  addContactBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    paddingHorizontal: Spacing.md,
+    height: 32,
+    backgroundColor: Colors.surfaceRaised,
+    borderRadius: Radius.md,
+  },
+  addContactText: {
+    fontSize: FontSize.sm,
+    color: Colors.textSecondary,
+    fontWeight: FontWeight.medium,
+  },
+  // View toggle
+  viewToggle: {
+    flexDirection: "row",
+    backgroundColor: Colors.surfaceRaised,
+    borderRadius: Radius.md,
+    padding: 2,
+    gap: 2,
+  },
+  toggleBtn: {
+    width: 32,
+    height: 28,
+    borderRadius: Radius.sm,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  toggleBtnActive: {
+    backgroundColor: Colors.surface,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.08,
+    shadowRadius: 1,
+    elevation: 1,
+  },
+  // Stats bar styles removed: counts surfaced in App.tsx header.
   // List
   list: {
     flexGrow: 1,
@@ -375,46 +473,18 @@ const styles = StyleSheet.create({
     fontSize: FontSize.sm,
     color: Colors.textMuted,
   },
-  sheetActions: {
+  sheetMessageBtn: {
+    backgroundColor: Colors.accent,
+    borderRadius: Radius.md,
+    paddingVertical: Spacing.md,
     flexDirection: "row",
-    justifyContent: "center",
-    gap: Spacing.xl,
-  },
-  sheetAction: {
     alignItems: "center",
+    justifyContent: "center",
     gap: Spacing.sm,
   },
-  sheetActionIcon: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: Colors.surfaceRaised,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  sheetActionLabel: {
-    fontSize: FontSize.sm,
-    color: Colors.textSecondary,
-    fontWeight: FontWeight.medium,
-  },
-  sheetMeta: {
-    backgroundColor: Colors.surfaceRaised,
-    borderRadius: Radius.md,
-    padding: Spacing.md,
-    gap: Spacing.xs,
-  },
-  sheetMetaLabel: {
-    fontSize: FontSize.xs,
-    color: Colors.textMuted,
-    textTransform: "uppercase",
-    letterSpacing: 0.8,
-  },
-  sheetMetaValue: {
-    fontSize: FontSize.xs,
-    color: Colors.textSecondary,
-    fontFamily: "monospace",
-    letterSpacing: 0.5,
+  sheetMessageBtnText: {
+    fontSize: FontSize.base,
+    fontWeight: FontWeight.semibold,
+    color: Colors.textInverse,
   },
 });

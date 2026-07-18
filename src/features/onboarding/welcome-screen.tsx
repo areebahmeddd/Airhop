@@ -52,7 +52,7 @@ const styles = StyleSheet.create({
     alignItems: "flex-start",
     justifyContent: "flex-end",
     paddingHorizontal: Spacing["2xl"],
-    paddingBottom: Spacing["4xl"],
+    paddingBottom: Spacing["2xl"],
     gap: Spacing.base,
   },
   wordmark: {
@@ -70,7 +70,7 @@ const styles = StyleSheet.create({
   },
   footer: {
     paddingHorizontal: Spacing["2xl"],
-    paddingBottom: Spacing["2xl"],
+    paddingBottom: Spacing.base,
     gap: Spacing.base,
   },
   cta: {

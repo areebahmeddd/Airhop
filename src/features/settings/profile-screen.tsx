@@ -2,16 +2,20 @@
 // Identity, security controls, network settings, and danger zone.
 // Triple-tap the logo triggers panic wipe per the spec.
 
+import Feather from "@expo/vector-icons/Feather";
 import React, { useRef, useState } from "react";
 import {
   Alert,
+  Linking,
   Pressable,
   ScrollView,
+  Share,
   StyleSheet,
   Switch,
   Text,
   View,
 } from "react-native";
+import QRCode from "react-native-qrcode-svg";
 import Avatar from "../../ui/components/avatar";
 import { Colors, FontSize, FontWeight, Radius, Spacing } from "../../ui/theme";
 import { panicWipe } from "../../utils/panic-wipe";
@@ -69,13 +73,17 @@ export default function ProfileScreen({
   const shortPubKey =
     peerID.slice(0, 8) + "\u2009\u00b7\u2009" + peerID.slice(8);
 
+  async function handleSharePeerID(): Promise<void> {
+    await Share.share({ message: peerID });
+  }
+
   return (
     <ScrollView
       style={styles.container}
       contentContainerStyle={styles.content}
       showsVerticalScrollIndicator={false}
     >
-      {/* Identity card — triple-tap triggers panic wipe */}
+      {/* Identity card: triple-tap triggers panic wipe */}
       <Pressable
         style={styles.identityCard}
         onPress={handleLogoTap}
@@ -89,11 +97,27 @@ export default function ProfileScreen({
           <Text style={styles.peerIDLabel}>Peer ID</Text>
           <Text style={styles.peerID}>{shortPubKey}</Text>
         </View>
-        <View style={styles.qrPlaceholder}>
-          <Text style={styles.qrPlaceholderText}>QR</Text>
+        <View style={styles.qrContainer}>
+          <QRCode
+            value={peerID}
+            size={48}
+            color={Colors.textPrimary}
+            backgroundColor={Colors.surfaceRaised}
+          />
         </View>
       </Pressable>
       <Text style={styles.tripleHint}>Triple-tap card for panic wipe</Text>
+
+      {/* Share peer ID */}
+      <Pressable
+        style={styles.shareRow}
+        onPress={() => void handleSharePeerID()}
+        accessibilityRole="button"
+        accessibilityLabel="Share your Peer ID"
+      >
+        <Feather name="share-2" size={14} color={Colors.textSecondary} />
+        <Text style={styles.shareRowText}>Share Peer ID</Text>
+      </Pressable>
 
       {/* Security */}
       <View style={styles.section}>
@@ -101,7 +125,7 @@ export default function ProfileScreen({
         <View style={styles.settingsGroup}>
           <SettingRow
             label="Tor routing"
-            description="Route Nostr traffic through Tor (iOS: Arti, Android: Orbot)"
+            description="Route Nostr traffic through Tor"
             control={
               <Switch
                 value={torEnabled}
@@ -168,14 +192,79 @@ export default function ProfileScreen({
           </View>
           <View style={styles.groupDivider} />
           <View style={styles.settingRow}>
-            <Text style={styles.settingLabel}>Crypto</Text>
-            <Text style={styles.settingValue}>@noble (Cure53 audited)</Text>
-          </View>
-          <View style={styles.groupDivider} />
-          <View style={styles.settingRow}>
             <Text style={styles.settingLabel}>License</Text>
             <Text style={styles.settingValue}>MIT</Text>
           </View>
+        </View>
+      </View>
+
+      {/* Support */}
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Support</Text>
+        <View style={styles.settingsGroup}>
+          <Pressable
+            style={styles.settingRow}
+            onPress={() => void Linking.openURL("mailto:hi@areeb.dev")}
+            accessibilityRole="button"
+          >
+            <View style={styles.settingLabelGroup}>
+              <Text style={styles.settingLabel}>Get help</Text>
+              <Text style={styles.settingDescription}>hi@areeb.dev</Text>
+            </View>
+            <Feather name="mail" size={16} color={Colors.textMuted} />
+          </Pressable>
+          <View style={styles.groupDivider} />
+          <Pressable
+            style={styles.settingRow}
+            onPress={() => void Linking.openURL("https://airhop.1mindlabs.org")}
+            accessibilityRole="button"
+          >
+            <View style={styles.settingLabelGroup}>
+              <Text style={styles.settingLabel}>Website</Text>
+              <Text style={styles.settingDescription}>
+                airhop.1mindlabs.org
+              </Text>
+            </View>
+            <Feather name="external-link" size={16} color={Colors.textMuted} />
+          </Pressable>
+        </View>
+      </View>
+
+      {/* Donate */}
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Donate</Text>
+        <View style={styles.settingsGroup}>
+          <View style={styles.settingRow}>
+            <View style={styles.settingLabelGroup}>
+              <Text style={styles.settingLabel}>Bitcoin</Text>
+              <Text style={styles.settingDescription}>Coming soon</Text>
+            </View>
+            <Feather name="dollar-sign" size={16} color={Colors.textMuted} />
+          </View>
+          <View style={styles.groupDivider} />
+          <View style={styles.settingRow}>
+            <View style={styles.settingLabelGroup}>
+              <Text style={styles.settingLabel}>Ecash</Text>
+              <Text style={styles.settingDescription}>Coming soon</Text>
+            </View>
+            <Feather name="zap" size={16} color={Colors.textMuted} />
+          </View>
+          <View style={styles.groupDivider} />
+          <Pressable
+            style={styles.settingRow}
+            onPress={() =>
+              void Linking.openURL("upi://pay?pa=areebahmed0709@okaxis")
+            }
+            accessibilityRole="button"
+          >
+            <View style={styles.settingLabelGroup}>
+              <Text style={styles.settingLabel}>UPI</Text>
+              <Text style={styles.settingDescription}>
+                areebahmed0709@okaxis
+              </Text>
+            </View>
+            <Feather name="credit-card" size={16} color={Colors.textMuted} />
+          </Pressable>
         </View>
       </View>
 
@@ -199,9 +288,6 @@ export default function ProfileScreen({
           </Text>
         </Pressable>
       </View>
-
-      {/* Footer */}
-      <Text style={styles.footer}>No account. No server. No tracking.</Text>
     </ScrollView>
   );
 }
@@ -274,9 +360,9 @@ const styles = StyleSheet.create({
     fontFamily: "monospace",
     letterSpacing: 0.8,
   },
-  qrPlaceholder: {
-    width: 56,
-    height: 56,
+  qrContainer: {
+    width: 60,
+    height: 60,
     borderRadius: Radius.sm,
     backgroundColor: Colors.surfaceRaised,
     borderWidth: 1,
@@ -285,18 +371,24 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     flexShrink: 0,
   },
-  qrPlaceholderText: {
-    fontSize: FontSize.xs,
-    color: Colors.textMuted,
-    letterSpacing: 0.6,
-    fontFamily: "monospace",
-  },
   tripleHint: {
     fontSize: FontSize.xs,
     color: Colors.textMuted,
     textAlign: "center",
     letterSpacing: 0.3,
     marginTop: -Spacing.xs,
+  },
+  shareRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: Spacing.xs,
+    paddingVertical: Spacing.sm,
+  },
+  shareRowText: {
+    fontSize: FontSize.sm,
+    color: Colors.textSecondary,
+    fontWeight: FontWeight.medium,
   },
   // Sections
   section: {
@@ -379,13 +471,5 @@ const styles = StyleSheet.create({
     fontSize: FontSize.sm,
     color: Colors.danger,
     opacity: 0.7,
-  },
-  // Footer
-  footer: {
-    fontSize: FontSize.xs,
-    color: Colors.textMuted,
-    textAlign: "center",
-    paddingTop: Spacing.sm,
-    letterSpacing: 0.3,
   },
 });

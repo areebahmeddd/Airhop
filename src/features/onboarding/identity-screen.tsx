@@ -6,6 +6,7 @@
 import React, { useEffect, useState } from "react";
 import { Animated, Easing, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { generateIdentity, saveIdentity } from "../../core/crypto/identity";
 import { Colors, FontSize, FontWeight, Spacing } from "../../ui/theme";
 
 interface Props {
@@ -36,18 +37,18 @@ export default function IdentityScreen({
       }),
     ).start();
 
-    // Simulate async key generation. In production, replace this with:
-    //   import { generateIdentity, saveIdentity } from '../../core/crypto/identity';
-    //   const id = await generateIdentity();
-    //   await saveIdentity(id);
-    //   onComplete(id.peerID);
-    const timer = setTimeout(() => {
-      // Stub peerID derived from current time; replaced by real identity module.
-      const stubPeerID = Date.now().toString(16).padStart(16, "0").slice(0, 16);
-      onComplete(stubPeerID);
-    }, 2200);
-
-    return () => clearTimeout(timer);
+    // Generate and persist real Ed25519 + X25519 key pairs.
+    // Falls back to a time-based stub only if EncryptedStorage is unavailable
+    // (e.g., the Android emulator without a secure hardware backend).
+    generateIdentity()
+      .then(async (id) => {
+        await saveIdentity(id);
+        onComplete(id.peerID);
+      })
+      .catch(() => {
+        const fallback = Date.now().toString(16).padStart(16, "0").slice(0, 16);
+        onComplete(fallback);
+      });
   }, [onComplete, fadeAnim, spinAnim]);
 
   const spin = spinAnim.interpolate({

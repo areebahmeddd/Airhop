@@ -7,7 +7,7 @@ import React from "react";
 import { FlatList, Pressable, StyleSheet, Text, View } from "react-native";
 import { useChatStore } from "../../store/chat-store";
 import Avatar from "../../ui/components/avatar";
-import { Colors, FontSize, FontWeight, Spacing } from "../../ui/theme";
+import { Colors, FontSize, FontWeight, Radius, Spacing } from "../../ui/theme";
 import { peerIDToUsername } from "../../utils/username";
 
 interface Props {
@@ -15,7 +15,7 @@ interface Props {
 }
 
 export default function DmList({ onSelectDM }: Props): React.JSX.Element {
-  const { channels, messages } = useChatStore();
+  const { channels, messages, unreadCounts } = useChatStore();
 
   // DM channels are prefixed "dm:<16-hex peerID>".
   const dmChannels = channels.filter((c) => c.startsWith("dm:"));
@@ -68,6 +68,15 @@ export default function DmList({ onSelectDM }: Props): React.JSX.Element {
                     </Text>
                   ) : (
                     <Text style={styles.previewEmpty}>No messages yet</Text>
+                  )}
+                  {(unreadCounts[item] ?? 0) > 0 && (
+                    <View style={styles.badge}>
+                      <Text style={styles.badgeText}>
+                        {(unreadCounts[item] ?? 0) > 99
+                          ? "99+"
+                          : String(unreadCounts[item] ?? 0)}
+                      </Text>
+                    </View>
                   )}
                 </View>
               </View>
@@ -209,5 +218,21 @@ const styles = StyleSheet.create({
     color: Colors.textMuted,
     textAlign: "center",
     lineHeight: FontSize.sm * 1.6,
+  },
+  badge: {
+    backgroundColor: Colors.accent,
+    borderRadius: Radius.full,
+    minWidth: 18,
+    height: 18,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 5,
+    marginLeft: Spacing.sm,
+    flexShrink: 0,
+  },
+  badgeText: {
+    fontSize: 10,
+    fontWeight: FontWeight.bold,
+    color: Colors.textInverse,
   },
 });

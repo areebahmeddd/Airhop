@@ -4,19 +4,34 @@
 import { Feather } from "@expo/vector-icons";
 import React, { useCallback, useRef, useState } from "react";
 import {
+  Alert,
   FlatList,
   KeyboardAvoidingView,
+  Modal,
   Platform,
   Pressable,
+  Share,
   StyleSheet,
   Text,
   TextInput,
   View,
 } from "react-native";
+import { getMeshService } from "../../services/mesh-service";
 import { useChatStore, type ChatMessage } from "../../store/chat-store";
 import Avatar from "../../ui/components/avatar";
 import { Colors, FontSize, FontWeight, Radius, Spacing } from "../../ui/theme";
 import { peerIDToUsername } from "../../utils/username";
+
+const ATTACH_OPTIONS: {
+  icon: React.ComponentProps<typeof Feather>["name"];
+  label: string;
+  desc: string;
+}[] = [
+  { icon: "camera", label: "Camera", desc: "Take a photo or video" },
+  { icon: "image", label: "Photo library", desc: "Choose from your library" },
+  { icon: "file", label: "Document", desc: "Send a file or PDF" },
+  { icon: "mic", label: "Voice note", desc: "Record a voice message" },
+];
 
 interface Props {
   channel: string;
@@ -34,6 +49,7 @@ export default function MessageThread({
   const { messages, addMessage } = useChatStore();
   const [draft, setDraft] = useState("");
   const [isPTTActive, setIsPTTActive] = useState(false);
+  const [showAttachMenu, setShowAttachMenu] = useState(false);
   const listRef = useRef<FlatList<ChatMessage>>(null);
 
   const msgs = messages[channel] ?? [];
@@ -53,8 +69,27 @@ export default function MessageThread({
     };
     addMessage(msg);
     setDraft("");
-    // BLE send wired in message-router.ts; this stores locally for v0.6 UI.
-  }, [draft, channel, localPeerID, localNickname, addMessage]);
+
+    // Broadcast over BLE mesh (channel) or route as DM.
+    const service = getMeshService();
+    if (service) {
+      if (isDM) {
+        service.sendDm(channel.slice(3), text);
+      } else {
+        service.sendChannelMessage(channel, text);
+      }
+    }
+  }, [draft, channel, localPeerID, localNickname, addMessage, isDM]);
+
+  function handleAttach(): void {
+    setShowAttachMenu(true);
+  }
+
+  function handleInvite(): void {
+    void Share.share({
+      message: `Join me in ${channel} on Airhop - offline-first, private mesh messaging.`,
+    });
+  }
 
   function formatTime(ms: number): string {
     const d = new Date(ms);
@@ -128,7 +163,26 @@ export default function MessageThread({
         </View>
 
         <View style={styles.headerRight}>
-          <Feather name="radio" size={14} color={Colors.online} />
+          {isDM ? (
+            <Avatar
+              username={peerIDToUsername(channel.slice(3))}
+              peerID={channel.slice(3)}
+              size={28}
+            />
+          ) : (
+            <Pressable
+              onPress={handleInvite}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              accessibilityRole="button"
+              accessibilityLabel="Invite someone to this channel"
+            >
+              <Feather
+                name="user-plus"
+                size={18}
+                color={Colors.textSecondary}
+              />
+            </Pressable>
+          )}
         </View>
       </View>
 
@@ -237,11 +291,19 @@ export default function MessageThread({
 
       {/* Compose bar */}
       <View style={styles.composeBar}>
+        <Pressable
+          style={styles.attachButton}
+          onPress={handleAttach}
+          accessibilityRole="button"
+          accessibilityLabel="Attach a file"
+        >
+          <Feather name="paperclip" size={18} color={Colors.textMuted} />
+        </Pressable>
         <TextInput
           style={styles.input}
           value={draft}
           onChangeText={setDraft}
-          placeholder="Message\u2026"
+          placeholder={"Message\u2026"}
           placeholderTextColor={Colors.textMuted}
           multiline
           maxLength={2000}
@@ -252,7 +314,7 @@ export default function MessageThread({
         />
 
         {draft.trim().length > 0 ? (
-          // Send button — shown when there's text
+          // Send button: shown when there is text
           <Pressable
             style={styles.sendButton}
             onPress={handleSend}
@@ -262,7 +324,7 @@ export default function MessageThread({
             <Feather name="arrow-up" size={18} color={Colors.textInverse} />
           </Pressable>
         ) : (
-          // PTT button — hold to talk
+          // PTT button: hold to talk
           <Pressable
             style={[styles.pttButton, isPTTActive && styles.pttButtonActive]}
             onPressIn={() => setIsPTTActive(true)}
@@ -278,6 +340,63 @@ export default function MessageThread({
           </Pressable>
         )}
       </View>
+
+      {/* Attachment picker */}
+      <Modal
+        visible={showAttachMenu}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowAttachMenu(false)}
+      >
+        <Pressable
+          style={styles.attachOverlay}
+          onPress={() => setShowAttachMenu(false)}
+        >
+          <Pressable style={styles.attachSheet} onPress={() => {}}>
+            <View style={styles.handle} />
+            <Text style={styles.attachSheetTitle}>Attach</Text>
+            {ATTACH_OPTIONS.map(({ icon, label, desc }, i) => (
+              <React.Fragment key={label}>
+                {i > 0 && <View style={styles.attachSeparator} />}
+                <Pressable
+                  style={({ pressed }) => [
+                    styles.attachOption,
+                    pressed && styles.attachOptionPressed,
+                  ]}
+                  onPress={() => {
+                    setShowAttachMenu(false);
+                    Alert.alert(
+                      label,
+                      `${desc}. File transfer is built into the mesh core and will connect to this UI in an upcoming update.`,
+                    );
+                  }}
+                  accessibilityRole="button"
+                  accessibilityLabel={label}
+                >
+                  <View style={styles.attachOptionIcon}>
+                    <Feather
+                      name={icon}
+                      size={20}
+                      color={Colors.textSecondary}
+                    />
+                  </View>
+                  <View style={styles.attachOptionBody}>
+                    <Text style={styles.attachOptionLabel}>{label}</Text>
+                    <Text style={styles.attachOptionDesc}>{desc}</Text>
+                  </View>
+                </Pressable>
+              </React.Fragment>
+            ))}
+            <Pressable
+              style={styles.attachCancel}
+              onPress={() => setShowAttachMenu(false)}
+              accessibilityRole="button"
+            >
+              <Text style={styles.attachCancelText}>Cancel</Text>
+            </Pressable>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </KeyboardAvoidingView>
   );
 }
@@ -453,6 +572,14 @@ const styles = StyleSheet.create({
     gap: Spacing.sm,
     backgroundColor: Colors.bg,
   },
+  attachButton: {
+    width: 36,
+    height: 36,
+    alignItems: "center",
+    justifyContent: "center",
+    flexShrink: 0,
+    marginBottom: 3,
+  },
   input: {
     flex: 1,
     backgroundColor: Colors.surface,
@@ -490,5 +617,89 @@ const styles = StyleSheet.create({
   pttButtonActive: {
     backgroundColor: Colors.dangerDim,
     borderColor: Colors.danger,
+  },
+  // Attachment picker sheet
+  attachOverlay: {
+    flex: 1,
+    backgroundColor: Colors.overlay,
+    justifyContent: "flex-end",
+  },
+  attachSheet: {
+    alignSelf: "stretch",
+    backgroundColor: Colors.surface,
+    borderTopLeftRadius: Radius["2xl"],
+    borderTopRightRadius: Radius["2xl"],
+    paddingHorizontal: Spacing.base,
+    paddingTop: Spacing.base,
+    paddingBottom: Spacing["2xl"],
+  },
+  handle: {
+    width: 36,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: Colors.borderStrong,
+    alignSelf: "center",
+    marginBottom: Spacing.md,
+  },
+  attachSheetTitle: {
+    fontSize: FontSize.md,
+    fontWeight: FontWeight.semibold,
+    color: Colors.textPrimary,
+    paddingHorizontal: Spacing.sm,
+    marginBottom: Spacing.sm,
+  },
+  attachOption: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.base,
+    paddingVertical: Spacing.base,
+    paddingHorizontal: Spacing.sm,
+    borderRadius: Radius.md,
+  },
+  attachOptionPressed: {
+    backgroundColor: Colors.surfaceRaised,
+  },
+  attachOptionIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: Radius.md,
+    backgroundColor: Colors.surfaceRaised,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    alignItems: "center",
+    justifyContent: "center",
+    flexShrink: 0,
+  },
+  attachOptionBody: {
+    flex: 1,
+  },
+  attachOptionLabel: {
+    fontSize: FontSize.base,
+    fontWeight: FontWeight.semibold,
+    color: Colors.textPrimary,
+  },
+  attachOptionDesc: {
+    fontSize: FontSize.sm,
+    color: Colors.textMuted,
+    marginTop: 2,
+  },
+  attachSeparator: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: Colors.border,
+    marginLeft: 44 + Spacing.base + Spacing.sm,
+  },
+  attachCancel: {
+    backgroundColor: Colors.surfaceRaised,
+    borderRadius: Radius.md,
+    paddingVertical: Spacing.base,
+    alignItems: "center",
+    marginTop: Spacing.base,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  attachCancelText: {
+    fontSize: FontSize.base,
+    color: Colors.textSecondary,
+    fontWeight: FontWeight.medium,
   },
 });
