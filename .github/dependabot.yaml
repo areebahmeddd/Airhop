@@ -15,7 +15,7 @@ updates:
       prefix: "chore(ci)"
       include: "scope"
 
-  # NPM Dependencies
+  # NPM - root (React Native / Expo)
   - package-ecosystem: "npm"
     directory: "/"
     schedule:
@@ -26,5 +26,19 @@ updates:
         patterns:
           - "*"
     commit-message:
-      prefix: "chore(deps)"
+      prefix: "chore(deps/root)"
+      include: "scope"
+
+  # NPM - landing page (Vite / React)
+  - package-ecosystem: "npm"
+    directory: "/landing"
+    schedule:
+      interval: "monthly"
+    open-pull-requests-limit: 1
+    groups:
+      all-dependencies:
+        patterns:
+          - "*"
+    commit-message:
+      prefix: "chore(deps/landing)"
       include: "scope"

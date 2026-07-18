@@ -70,6 +70,10 @@ android/captures/
 # Reference implementations (local only)
 bitchat/
 
+# Landing page generated artifacts
+landing/node_modules/
+landing/dist/
+
 # macOS
 .DS_Store
 .AppleDouble
