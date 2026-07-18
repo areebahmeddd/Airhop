@@ -5,6 +5,20 @@ import { createMMKV } from "react-native-mmkv";
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 
+export type AttachmentType = "image" | "voice" | "document" | "video";
+
+// Metadata for a file attached to a chat message.
+// The `uri` field holds a local file URI on the sender's device.
+// When received over the mesh the uri is populated from the decoded bytes.
+export interface ChatAttachment {
+  type: AttachmentType;
+  uri: string;
+  name?: string; // original filename (documents / video)
+  mimeType?: string;
+  durationMs?: number; // voice notes and video
+  sizeBytes?: number;
+}
+
 export interface ChatMessage {
   id: string;
   channel: string;
@@ -13,6 +27,7 @@ export interface ChatMessage {
   text: string;
   timestampMs: number;
   isMine: boolean;
+  attachment?: ChatAttachment;
 }
 
 interface ChatState {
@@ -20,14 +35,33 @@ interface ChatState {
   // Map of channel name to messages (chronological, oldest first)
   messages: Record<string, ChatMessage[]>;
   activeChannel: string;
+  // Last open thread channel, persisted so the UI can restore on re-launch after
+  // the OS kills the process. Empty string means the user was at the list view.
+  lastThread: string;
   // Unread count per channel, cleared when the thread is opened
   unreadCounts: Record<string, number>;
+  // User-written descriptions for custom channels (persisted via MMKV).
+  channelDescriptions: Record<string, string>;
+  // Transport preference for custom channels: "BLE" | "Nostr" | "BLE + Nostr".
+  channelTransports: Record<string, string>;
+  // Visibility preference for custom channels: "Public" | "Private".
+  channelVisibilities: Record<string, string>;
+  // Channels the user has archived (hidden but messages preserved).
+  archivedChannels: string[];
 
   addChannel: (channel: string) => void;
   removeChannel: (channel: string) => void;
+  renameChannel: (oldName: string, newName: string) => void;
+  archiveChannel: (channel: string) => void;
+  unarchiveChannel: (channel: string) => void;
   addMessage: (msg: ChatMessage) => void;
   setActiveChannel: (channel: string) => void;
   markChannelRead: (channel: string) => void;
+  setLastThread: (channel: string) => void;
+  setChannelDescription: (channel: string, description: string) => void;
+  setChannelTransport: (channel: string, transport: string) => void;
+  setChannelVisibility: (channel: string, visibility: string) => void;
+  clearAll: () => void;
 }
 
 // Max messages kept in memory per channel. Oldest are trimmed.
@@ -59,8 +93,16 @@ export const useChatStore = create<ChatState>()(
     (set) => ({
       channels: DEFAULT_CHANNELS,
       messages: {},
-      activeChannel: DEFAULT_CHANNELS[0],
+      // Empty string: user at list, not inside any thread.
+      // Changing from DEFAULT_CHANNELS[0] so new messages to #bluetooth are
+      // counted as unread until the user explicitly opens that channel.
+      activeChannel: "",
+      lastThread: "",
       unreadCounts: {},
+      channelDescriptions: {},
+      channelTransports: {},
+      channelVisibilities: {},
+      archivedChannels: [],
 
       addChannel(channel: string) {
         set((state) => {
@@ -75,21 +117,19 @@ export const useChatStore = create<ChatState>()(
           // Deduplicate by id
           if (existing.some((m) => m.id === msg.id)) return state;
           const next = [...existing, msg];
-          // Trim to cap
-          const trimmed =
-            next.length > MAX_PER_CHANNEL
-              ? next.slice(next.length - MAX_PER_CHANNEL)
-              : next;
-          // Increment unread count if the message is incoming and not in the active thread
+          // Trim to cap and track how many unread messages were dropped.
+          const overflow = next.length - MAX_PER_CHANNEL;
+          const dropped = overflow > 0 ? next.slice(0, overflow) : [];
+          const trimmed = overflow > 0 ? next.slice(overflow) : next;
+          // Keep unread count consistent: subtract any unread messages lost to trimming.
+          const droppedUnread = dropped.filter((m) => !m.isMine).length;
           const isUnread = !msg.isMine && msg.channel !== state.activeChannel;
+          const prevUnread = state.unreadCounts[msg.channel] ?? 0;
+          const newUnread =
+            Math.max(0, prevUnread - droppedUnread) + (isUnread ? 1 : 0);
           return {
             messages: { ...state.messages, [msg.channel]: trimmed },
-            unreadCounts: isUnread
-              ? {
-                  ...state.unreadCounts,
-                  [msg.channel]: (state.unreadCounts[msg.channel] ?? 0) + 1,
-                }
-              : state.unreadCounts,
+            unreadCounts: { ...state.unreadCounts, [msg.channel]: newUnread },
           };
         });
       },
@@ -113,10 +153,113 @@ export const useChatStore = create<ChatState>()(
         });
       },
 
+      renameChannel(oldName: string, newName: string) {
+        // Normalise: ensure exactly one leading #.
+        const clean = "#" + newName.replace(/^#+/, "");
+        set((state) => {
+          // No-op if the name is unchanged or already taken.
+          if (clean === oldName || state.channels.includes(clean)) return state;
+          const channels = state.channels.map((c) =>
+            c === oldName ? clean : c,
+          );
+          const messages = { ...state.messages };
+          if (messages[oldName]) {
+            messages[clean] = messages[oldName].map((m) => ({
+              ...m,
+              channel: clean,
+            }));
+            delete messages[oldName];
+          }
+          const unreadCounts = { ...state.unreadCounts };
+          if (unreadCounts[oldName] !== undefined) {
+            unreadCounts[clean] = unreadCounts[oldName];
+            delete unreadCounts[oldName];
+          }
+          const channelDescriptions = { ...state.channelDescriptions };
+          if (channelDescriptions[oldName] !== undefined) {
+            channelDescriptions[clean] = channelDescriptions[oldName];
+            delete channelDescriptions[oldName];
+          }
+          const channelTransports = { ...state.channelTransports };
+          if (channelTransports[oldName] !== undefined) {
+            channelTransports[clean] = channelTransports[oldName];
+            delete channelTransports[oldName];
+          }
+          const activeChannel =
+            state.activeChannel === oldName ? clean : state.activeChannel;
+          return {
+            channels,
+            messages,
+            unreadCounts,
+            channelDescriptions,
+            channelTransports,
+            activeChannel,
+          };
+        });
+      },
+
+      archiveChannel(channel: string) {
+        set((state) => {
+          if (state.archivedChannels.includes(channel)) return state;
+          return { archivedChannels: [...state.archivedChannels, channel] };
+        });
+      },
+
+      unarchiveChannel(channel: string) {
+        set((state) => ({
+          archivedChannels: state.archivedChannels.filter((c) => c !== channel),
+        }));
+      },
+
       markChannelRead(channel: string) {
         set((state) => ({
           unreadCounts: { ...state.unreadCounts, [channel]: 0 },
         }));
+      },
+
+      setLastThread(channel: string) {
+        set({ lastThread: channel });
+      },
+
+      setChannelDescription(channel: string, description: string) {
+        set((state) => ({
+          channelDescriptions: {
+            ...state.channelDescriptions,
+            [channel]: description,
+          },
+        }));
+      },
+
+      setChannelTransport(channel: string, transport: string) {
+        set((state) => ({
+          channelTransports: {
+            ...state.channelTransports,
+            [channel]: transport,
+          },
+        }));
+      },
+
+      setChannelVisibility(channel: string, visibility: string) {
+        set((state) => ({
+          channelVisibilities: {
+            ...state.channelVisibilities,
+            [channel]: visibility,
+          },
+        }));
+      },
+
+      clearAll() {
+        set({
+          channels: DEFAULT_CHANNELS,
+          messages: {},
+          activeChannel: "",
+          lastThread: "",
+          unreadCounts: {},
+          channelDescriptions: {},
+          channelTransports: {},
+          channelVisibilities: {},
+          archivedChannels: [],
+        });
       },
     }),
     {
