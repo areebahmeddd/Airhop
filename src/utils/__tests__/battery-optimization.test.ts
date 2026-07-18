@@ -57,7 +57,7 @@ describe("resolveSettingsURI", () => {
 
   test("returns Samsung URI for Samsung brand", () => {
     expect(resolveSettingsURI("android", "Samsung")).toBe(
-      "package:tech.permissionless.airhop",
+      "package:org.onemindlabs.airhop",
     );
   });
 

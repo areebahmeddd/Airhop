@@ -7,7 +7,7 @@
 
 export const Colors = {
   // ---- Backgrounds ----------------------------------------------------------
-  bg: "#F8F8F8", // off-white — screen background
+  bg: "#F8F8F8", // off-white screen background
   surface: "#FFFFFF", // cards, list rows, sheets
   surfaceRaised: "#F0F0F0", // inputs, segmented controls
   surfacePressed: "#E8E8E8", // pressed state background
@@ -23,7 +23,7 @@ export const Colors = {
   textInverse: "#FFFFFF", // text on near-black (accent) surfaces
 
   // ---- Interactive accent (single: near-black) ------------------------------
-  // Everything interactive — buttons, active tabs, send, CTAs — uses near-black.
+  // Everything interactive: buttons, active tabs, send, CTAs. Uses near-black.
   // On a light canvas this is maximally legible and unambiguous.
   accent: "#111111",
   accentGhost: "rgba(17,17,17,0.05)", // subtle pressed/hover bg
@@ -102,7 +102,7 @@ export const Radius = {
   full: 999,
 } as const;
 
-// Muted avatar colors — used only for identity circles.
+// Muted avatar colors: used only for identity circles.
 // Deeper palette for adequate contrast on light backgrounds.
 const AVATAR_PALETTE = [
   "#3B5CE0", // indigo

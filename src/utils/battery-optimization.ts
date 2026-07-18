@@ -33,15 +33,15 @@ export const OEM_DEEP_LINKS: readonly { brand: string; uri: string }[] = [
   { brand: "redmi", uri: "miui://battery/autostart" },
   { brand: "poco", uri: "miui://battery/autostart" },
   // Samsung One UI
-  { brand: "samsung", uri: "package:tech.permissionless.airhop" },
+  { brand: "samsung", uri: "package:org.onemindlabs.airhop" },
   // Huawei / EMUI / HarmonyOS
   {
     brand: "huawei",
-    uri: "hwappmarket://details?id=tech.permissionless.airhop",
+    uri: "hwappmarket://details?id=org.onemindlabs.airhop",
   },
   {
     brand: "honor",
-    uri: "hwappmarket://details?id=tech.permissionless.airhop",
+    uri: "hwappmarket://details?id=org.onemindlabs.airhop",
   },
   // Oppo / ColorOS
   { brand: "oppo", uri: "opporinotoast://openintent/battery_optimize" },
