@@ -19,8 +19,10 @@ import {
   getEncodedToken,
   getTokenMetadata,
   type Proof,
+  type ProofLike,
   type Token,
 } from "@cashu/cashu-ts";
+import type { StoredProof } from "../../store/wallet-store";
 
 // ---- Constants --------------------------------------------------------------
 
@@ -211,4 +213,58 @@ export function formatTokenSummary(info: TokenInfo): string {
 // (lightweight pre-check before running the full scanner).
 export function mayContainToken(text: string): boolean {
   return TOKEN_PREFIXES.some((p) => text.includes(p));
+}
+
+// ---- Offline send helpers ---------------------------------------------------
+
+// Select the minimum set of proofs from `proofs` whose total covers
+// `targetAmount`. Uses a greedy-largest-first strategy. Returns null if
+// the available proofs are insufficient.
+export function selectProofsForAmount(
+  proofs: StoredProof[],
+  targetAmount: number,
+): { selected: StoredProof[]; total: number } | null {
+  if (targetAmount <= 0 || proofs.length === 0) return null;
+  const totalAvailable = proofs.reduce((s, p) => s + p.amount, 0);
+  if (totalAvailable < targetAmount) return null;
+
+  // Sort descending so we pick as few proofs as possible.
+  const sorted = [...proofs].sort((a, b) => b.amount - a.amount);
+  const selected: StoredProof[] = [];
+  let sum = 0;
+  for (const p of sorted) {
+    if (sum >= targetAmount) break;
+    selected.push(p);
+    sum += p.amount;
+  }
+  return { selected, total: sum };
+}
+
+// Build a cashuA token string from locally stored proofs without any network
+// call. This is pure serialization: pick proofs, encode them, hand off the
+// string. The caller must remove the selected proofs from the wallet store to
+// prevent double-spending from the same device.
+export function buildOfflineToken(
+  mintUrl: string,
+  proofs: StoredProof[],
+  unit: string = "sat",
+  memo?: string,
+): string {
+  // ProofLike accepts AmountLike (number), so our StoredProof.amount (number)
+  // maps directly. getEncodedToken internally normalises via Amount.from().
+  const cashuProofs = proofs.map((p): ProofLike => ({
+    id: p.id,
+    amount: p.amount,
+    secret: p.secret,
+    C: p.C,
+    ...(p.dleq ? { dleq: p.dleq as Proof["dleq"] } : {}),
+  }));
+
+  const token = {
+    mint: mintUrl,
+    proofs: cashuProofs,
+    unit,
+    ...(memo ? { memo } : {}),
+  };
+  return getEncodedToken(token as unknown as Token);
 }
