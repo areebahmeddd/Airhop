@@ -1,14 +1,26 @@
 {
   "name": "airhop-landing",
   "description": "Landing page for Airhop, a private offline-first peer-to-peer messaging app over Bluetooth mesh.",
-  "keywords": ["airhop", "bluetooth", "mesh", "p2p", "privacy", "offline"],
+  "keywords": [
+    "airhop",
+    "bluetooth",
+    "mesh",
+    "p2p",
+    "privacy",
+    "offline"
+  ],
   "author": "Areeb Ahmed <hi@areeb.dev>",
   "license": "MIT",
   "homepage": "https://airhop.1mindlabs.org",
-  "repository": { "type": "git", "url": "https://github.com/areebahmeddd/Airhop" },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/areebahmeddd/Airhop"
+  },
   "version": "1.0.0",
   "type": "module",
-  "engines": { "node": ">=22" },
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
@@ -19,17 +31,21 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@types/topojson-client": "^3.1.5",
     "lucide-react": "^1.25.0",
     "motion": "^12.42.2",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
-    "react-router-dom": "^7.18.1"
+    "react-router-dom": "^7.18.1",
+    "react-simple-maps": "^3.0.0",
+    "topojson-client": "^3.1.0"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.3.3",
     "@types/node": "^26.1.1",
     "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",
+    "@types/react-simple-maps": "^3.0.6",
     "@vitejs/plugin-react": "^6.0.3",
     "prettier": "^3.9.5",
     "prettier-plugin-organize-imports": "^4.3.0",

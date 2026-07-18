@@ -23,30 +23,25 @@ export default function TermsPage() {
 
         <div className="mt-10 space-y-10 text-gray-700">
           <section className="space-y-3">
-            <h2 className="text-base font-semibold text-gray-900">Overview</h2>
+            <h2 className="text-base font-semibold text-gray-900">About Airhop</h2>
             <p className="text-sm leading-relaxed">
-              Airhop is a free, open-source mobile app for offline peer-to-peer messaging over
-              Bluetooth mesh. By using this site or the app, you agree to these terms. If you do not
-              agree, please do not use them.
+              Airhop is a free, open-source mobile application for offline peer-to-peer
+              communication over Bluetooth mesh networks. It is an independent project, not backed
+              by any company. By using this website or the Airhop app, you agree to these terms.
             </p>
           </section>
 
           <section className="space-y-3">
-            <h2 className="text-base font-semibold text-gray-900">Use of the site</h2>
+            <h2 className="text-base font-semibold text-gray-900">Acceptable use</h2>
             <p className="text-sm leading-relaxed">
-              airhop.1mindlabs.org is provided for informational purposes. You may not use automated
-              tools to scrape or bulk-download content from this site. You may not use it for any
-              unlawful purpose or in a way that could harm the project or its users.
+              You may use Airhop for lawful purposes only. You are responsible for complying with
+              the laws of your jurisdiction, including any regulations governing encrypted
+              communications, radio frequency use, and peer-to-peer networks. Do not use Airhop to
+              facilitate illegal activity or to harm others.
             </p>
-          </section>
-
-          <section className="space-y-3">
-            <h2 className="text-base font-semibold text-gray-900">Use of the app</h2>
             <p className="text-sm leading-relaxed">
-              Airhop is provided as a communication tool for lawful purposes. You are responsible
-              for complying with the laws of your jurisdiction, including any regulations governing
-              encrypted communications, radio frequency use, and peer-to-peer networks. Do not use
-              Airhop to facilitate illegal activity.
+              This website is for informational purposes. Do not use automated tools to
+              bulk-download or scrape content from it.
             </p>
           </section>
 
@@ -54,36 +49,43 @@ export default function TermsPage() {
             <h2 className="text-base font-semibold text-gray-900">No warranty</h2>
             <p className="text-sm leading-relaxed">
               Airhop is provided &quot;as is&quot; without any warranty of any kind. We make no
-              guarantees about reliability, security, or fitness for a particular purpose.{" "}
+              guarantees about reliability, availability, or fitness for a particular purpose.
+            </p>
+            <p className="text-sm leading-relaxed">
+              The app has not been formally security-audited by an external firm. An audit is
+              planned but has not been completed.{" "}
               <strong>
-                Do not rely on Airhop as your sole means of communication in life-safety situations.
-              </strong>{" "}
-              The app has not been formally security-audited. An external audit is planned but has
-              not been completed.
+                Do not rely on Airhop as your only means of communication in life-safety situations.
+              </strong>
             </p>
           </section>
 
           <section className="space-y-3">
             <h2 className="text-base font-semibold text-gray-900">Offline payments</h2>
             <p className="text-sm leading-relaxed">
-              Airhop supports transferring ecash tokens over the mesh. We do not operate any payment
-              infrastructure. We are not a financial institution, payment processor, or money
-              services business. Token transfers occur directly between devices. We have no ability
-              to reverse, recover, or mediate any transaction.
+              Airhop supports transferring Cashu ecash tokens directly between devices over the
+              mesh.{" "}
+              <strong>
+                We do not operate any payment infrastructure. We are not a financial institution,
+                payment processor, or money services business.
+              </strong>{" "}
+              Token transfers occur between devices without any involvement from this project. We
+              have no ability to reverse, recover, or mediate any transaction.
             </p>
           </section>
 
           <section className="space-y-3">
             <h2 className="text-base font-semibold text-gray-900">Limitation of liability</h2>
             <p className="text-sm leading-relaxed">
-              To the fullest extent permitted by law, we are not liable for any direct, indirect,
-              incidental, or consequential damages arising from your use of this site or the Airhop
-              app, including but not limited to loss of data or failed token transfers.
+              To the fullest extent permitted by applicable law, we are not liable for any direct,
+              indirect, incidental, or consequential damages arising from your use of this website
+              or the Airhop app, including loss of data, failed token transfers, or communication
+              failures.
             </p>
           </section>
 
           <section className="space-y-3">
-            <h2 className="text-base font-semibold text-gray-900">Open source</h2>
+            <h2 className="text-base font-semibold text-gray-900">Open source license</h2>
             <p className="text-sm leading-relaxed">
               The source code for Airhop is published under the MIT License on{" "}
               <a
@@ -95,16 +97,17 @@ export default function TermsPage() {
                 GitHub
               </a>
               . The MIT License governs use, modification, and distribution of the code. These terms
-              of service apply only to use of the hosted website at airhop.1mindlabs.org.
+              of service apply to use of this website and the Airhop app, not to the source code
+              itself.
             </p>
           </section>
 
           <section className="space-y-3">
             <h2 className="text-base font-semibold text-gray-900">Changes to these terms</h2>
             <p className="text-sm leading-relaxed">
-              We may update these terms from time to time. The date at the top of this page reflects
-              the most recent revision. Continued use of the site after changes are posted means you
-              accept the updated terms.
+              These terms may be updated from time to time. The date at the top of this page
+              reflects the most recent revision. Continued use of the site or app after changes are
+              posted means you accept the updated terms.
             </p>
           </section>
 

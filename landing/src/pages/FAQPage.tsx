@@ -23,6 +23,50 @@ const SECTIONS: {
     ],
   },
   {
+    heading: "Mesh network",
+    questions: [
+      {
+        q: "Does Airhop require internet?",
+        a: "Not for core messaging. BLE mesh chat, multi-hop relay, voice notes, images, file transfers, store-and-forward delivery, and gossip sync all work with zero internet. Location channels, direct messages to contacts currently outside Bluetooth range, and the Nostr internet bridge each require a connection.",
+      },
+      {
+        q: "How does the mesh relay messages?",
+        a: "Every device acts as both a Bluetooth scanner and advertiser simultaneously. Incoming messages are verified, deduplicated against a 1,000-entry recent-seen cache, and re-broadcast with the hop counter decremented. Relay timing is randomized between 10 and 220 milliseconds to prevent collisions. Each node forwards to a deterministic subset of peers rather than every peer in range, which keeps network traffic flat regardless of mesh density.",
+      },
+      {
+        q: "How far can messages travel?",
+        a: "Each Bluetooth hop covers roughly 30 to 50 meters. With a 7-hop maximum, a message can traverse 105 to 350 meters in open conditions. Range scales naturally with user density: every additional device running Airhop in the area is a relay node. Store-and-forward courier messages have no hard range limit and deliver whenever a mesh path eventually exists between sender and recipient.",
+      },
+      {
+        q: "What media can I send?",
+        a: "Over BLE: images up to 1 MB (JPEG, PNG, GIF, WebP), voice notes (AAC, .m4a), push-to-talk live voice, and any file format via chunked streaming. Video (480p/15fps HEVC, .mp4) is supported over WiFi Aware on Android and MultipeerConnectivity on iOS, not over the BLE mesh. Bluetooth bandwidth is roughly 15 KB/s, which makes video over BLE infeasible.",
+      },
+      {
+        q: "Is Airhop compatible with bitchat?",
+        a: (
+          <>
+            Yes. Wire compatibility means both apps agree on the exact binary format of every byte
+            sent over the radio, so no translation layer is needed. Airhop and bitchat share the
+            same BLE service identifiers, the same packet byte layout, the same peer identity
+            derivation, and the same Noise XX parameters. Place an Airhop device and a bitchat
+            device in the same room and they automatically join one mesh, relay each other's
+            messages, and exchange direct messages with no configuration and no awareness that
+            different software is running. The full wire format is documented in{" "}
+            <a
+              href="https://github.com/areebahmeddd/Airhop/blob/main/docs/spec/PROTOCOLS.md"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-gray-900 underline underline-offset-2 transition-colors hover:text-gray-600"
+            >
+              PROTOCOLS.md
+            </a>
+            .
+          </>
+        ),
+      },
+    ],
+  },
+  {
     heading: "Privacy & security",
     questions: [
       {
@@ -30,33 +74,47 @@ const SECTIONS: {
         a: "No. Your identity is an Ed25519 key pair generated on-device and stored in iOS Keychain or Android Keystore. There is no sign-up, no email, no phone number, and nothing that registers with any server.",
       },
       {
+        q: "Can someone impersonate me?",
+        a: "No. Your identity is your private key, and every packet you send is Ed25519-signed. Nodes on the mesh verify signatures before relaying anything, so a forged packet claiming to be from you is dropped at every hop. Display names are derived deterministically from your public key and cannot be registered or squatted by anyone else. Noise XX mutual authentication prevents man-in-the-middle attacks on direct message sessions. For contacts you want to fully trust, QR code or NFC verification pins their key fingerprint to a human name, the same model Signal uses with safety numbers.",
+      },
+      {
         q: "How is encryption handled?",
-        a: "Every direct session uses the Noise XX protocol for the handshake and key exchange. All stored messages use Double Ratchet forward secrecy, meaning past messages stay protected even if keys are later compromised. No plaintext ever touches disk.",
+        a: (
+          <>
+            Every direct session uses the{" "}
+            <a
+              href="https://noiseprotocol.org/noise.html"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-gray-900 underline underline-offset-2 transition-colors hover:text-gray-600"
+            >
+              Noise XX protocol
+            </a>{" "}
+            for the handshake and key exchange. All stored messages use{" "}
+            <a
+              href="https://signal.org/docs/specifications/doubleratchet/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-gray-900 underline underline-offset-2 transition-colors hover:text-gray-600"
+            >
+              Double Ratchet
+            </a>{" "}
+            forward secrecy, meaning past messages stay protected even if keys are later
+            compromised. No plaintext ever touches disk.
+          </>
+        ),
+      },
+      {
+        q: "What happens if I lose my phone or uninstall the app?",
+        a: "Your identity and message history are permanently gone. The key pair is stored only on your device and cannot be recovered from any server because no server has it. There is no account recovery and no backup mechanism. This is intentional: there is nothing for a third party to hand over, subpoena, or breach.",
       },
       {
         q: "What is panic wipe?",
-        a: "Triple-tapping the logo triggers an immediate wipe of all identity keys and message data in under one second. It is designed for high-stakes situations where you need to destroy the app's contents instantly.",
+        a: "Triple-tapping the logo triggers an immediate wipe of all identity keys and message data in under one second. It is designed for high-stakes situations where you need to destroy the app contents instantly.",
       },
       {
         q: "Does Airhop use Tor?",
         a: "Tor is available as an optional transport on both platforms. iOS uses Arti, Android uses Orbot. When enabled, all Nostr relay traffic is routed over Tor.",
-      },
-    ],
-  },
-  {
-    heading: "Mesh network",
-    questions: [
-      {
-        q: "Does Airhop require internet?",
-        a: "No. The core mesh works entirely over Bluetooth Low Energy. As long as devices have Airhop installed and Bluetooth enabled, they can communicate. No SIM card, no Wi-Fi, no data plan required.",
-      },
-      {
-        q: "How far can messages travel?",
-        a: "Messages relay automatically across nearby nodes up to 7 hops. In a dense mesh, this can cover a surprisingly large area. Each hop is a participating device in Bluetooth range of the previous one.",
-      },
-      {
-        q: "Is Airhop compatible with bitchat?",
-        a: "Yes. Airhop uses the same BLE wire protocol and service UUIDs as bitchat. An Airhop device and a bitchat device on the same mesh discover each other automatically and can exchange messages with zero configuration.",
       },
     ],
   },
@@ -81,12 +139,20 @@ const SECTIONS: {
     heading: "Offline payments",
     questions: [
       {
+        q: "Do I need Bitcoin or a Lightning wallet to use Airhop?",
+        a: "No. Payments are entirely optional and Airhop works fully without them. If you want to use payments, you need a Lightning wallet once to load Cashu tokens from a mint. After that, tokens live on your device and can be sent and received over the mesh with no ongoing Lightning connection required.",
+      },
+      {
         q: "How do offline payments work?",
-        a: "Airhop includes built-in offline ecash payments. Tokens travel the same BLE mesh as messages. You send tokens directly to a contact over Bluetooth with no internet and no payment processor involved. The recipient can redeem them when back online.",
+        a: "Airhop uses Cashu ecash tokens as payment tokens. Before going offline, you load tokens from a Cashu mint by depositing via Lightning. The mint returns cryptographically signed token blobs worth the deposited amount, which live on your device like digital cash. To pay a contact offline, you select tokens and send them as a BLE mesh message. The recipient holds them and redeems with the mint later when back online. No internet is involved in the transfer itself.",
+      },
+      {
+        q: "What stops someone from spending the same tokens twice?",
+        a: "The Cashu mint keeps a record of all redeemed token signatures. When a recipient redeems, the mint checks whether those exact signatures have been spent before. If they have, the redemption fails. The first person to redeem wins. This requires trusting the mint to maintain an honest ledger, similar to trusting a bank not to miscount withdrawals. Fedimint, a variant, distributes that trust across multiple operators so no single party controls the ledger.",
       },
       {
         q: "Are there transaction fees?",
-        a: "There are no fees at the point of transfer over the mesh. Normal ecash mint fees may apply when a recipient redeems tokens online.",
+        a: "There are no fees at the point of transfer over the mesh. Normal Cashu mint fees may apply when a recipient redeems tokens online.",
       },
     ],
   },

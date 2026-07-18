@@ -23,76 +23,210 @@ export default function PrivacyPage() {
 
         <div className="mt-10 space-y-10 text-gray-700">
           <section className="space-y-3">
-            <h2 className="text-base font-semibold text-gray-900">Overview</h2>
+            <h2 className="text-base font-semibold text-gray-900">Summary</h2>
+            <ul className="space-y-1.5 text-sm leading-relaxed">
+              <li className="flex items-start gap-2">
+                <span className="mt-1.5 h-1 w-1 flex-shrink-0 rounded-full bg-gray-400" />
+                <span>No project-operated accounts or messaging servers.</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="mt-1.5 h-1 w-1 flex-shrink-0 rounded-full bg-gray-400" />
+                <span>No analytics, advertising, telemetry, or tracking of any kind.</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="mt-1.5 h-1 w-1 flex-shrink-0 rounded-full bg-gray-400" />
+                <span>No sale of user data.</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="mt-1.5 h-1 w-1 flex-shrink-0 rounded-full bg-gray-400" />
+                <span>
+                  Your identity is a cryptographic key pair that never leaves your device.
+                </span>
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="mt-1.5 h-1 w-1 flex-shrink-0 rounded-full bg-gray-400" />
+                <span>
+                  All source code is{" "}
+                  <a
+                    href="https://github.com/areebahmeddd/Airhop"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="underline underline-offset-2 transition-colors hover:text-gray-900"
+                  >
+                    open source
+                  </a>
+                  . The storage, networking, and cryptography described here can be verified in the
+                  code.
+                </span>
+              </li>
+            </ul>
+          </section>
+
+          <section className="space-y-3">
+            <h2 className="text-base font-semibold text-gray-900">
+              What Airhop stores on your device
+            </h2>
             <p className="text-sm leading-relaxed">
-              airhop.1mindlabs.org is a static informational website for the Airhop open-source
-              project. <strong>We do not collect personal information from visitors.</strong> This
-              policy explains what data exists, where it comes from, and how it is handled.
+              Airhop stores data only on your device. None of it is transmitted to us.
+            </p>
+            <ul className="space-y-2 text-sm leading-relaxed">
+              <li>
+                <strong>Identity keys.</strong> An Ed25519 signing key and Noise static key are
+                generated locally on first launch. Both are stored in your device's secure storage
+                (iOS Keychain or Android Keystore). Your public key is shared with peers you
+                communicate with. <strong>Private keys never leave your device.</strong>
+              </li>
+              <li>
+                <strong>Nickname and preferences.</strong> Your chosen display name and app settings
+                are stored locally.
+              </li>
+              <li>
+                <strong>Message history.</strong> Conversation content is stored encrypted on your
+                device using ChaCha20-Poly1305. You can delete it at any time, or wipe everything
+                instantly with panic wipe.
+              </li>
+              <li>
+                <strong>Queued outgoing messages.</strong> A private message that has not yet been
+                delivered may remain in an encrypted local queue. It is{" "}
+                <strong>dropped after 24 hours</strong> if unacknowledged.
+              </li>
+              <li>
+                <strong>Courier envelopes.</strong> If your device acts as a mesh courier for
+                another user, it may hold an opaque end-to-end encrypted envelope for up to 24
+                hours. <strong>The courier cannot read the contents.</strong>
+              </li>
+              <li>
+                <strong>Cashu tokens.</strong> Ecash tokens are stored locally and transferred
+                directly between devices. No payment backend is involved.
+              </li>
+            </ul>
+          </section>
+
+          <section className="space-y-3">
+            <h2 className="text-base font-semibold text-gray-900">
+              What is shared with nearby peers
+            </h2>
+            <p className="text-sm leading-relaxed">
+              When the app is running, nearby mesh devices can receive:
+            </p>
+            <ul className="space-y-1.5 text-sm leading-relaxed">
+              <li>Your chosen nickname and public identity keys.</li>
+              <li>Messages you send to public channels or directly to another peer.</li>
+              <li>
+                Approximate Bluetooth signal strength (radio metadata visible to any nearby
+                receiver).
+              </li>
+            </ul>
+            <p className="text-sm leading-relaxed">
+              Private messages are encrypted end-to-end and readable only by the intended recipient.
+              Public channel messages are visible to all participants in that channel.
             </p>
           </section>
 
           <section className="space-y-3">
-            <h2 className="text-base font-semibold text-gray-900">Data we do not collect</h2>
+            <h2 className="text-base font-semibold text-gray-900">
+              Nostr internet bridge (optional)
+            </h2>
             <p className="text-sm leading-relaxed">
-              This site has no user accounts, no login, no sign-up forms, and no analytics tracking.
-              We do not set cookies. We do not collect your name, email address, IP address, or any
-              other identifying information just from visiting the site.
+              When the Nostr bridge is enabled, Airhop connects to public or user-selected Nostr
+              relays to extend conversations beyond Bluetooth range. This feature is optional and
+              off by default.
+            </p>
+            <p className="text-sm leading-relaxed">
+              Private fallback messages use NIP-17 gift wraps. Relay operators can observe event
+              timestamps and network metadata but not message content. Public channel messages
+              include a channel identifier, timestamp, and your public key. Nostr relays are
+              operated by third parties whose retention and privacy practices are outside this
+              project's control.
             </p>
           </section>
 
           <section className="space-y-3">
-            <h2 className="text-base font-semibold text-gray-900">Server logs</h2>
+            <h2 className="text-base font-semibold text-gray-900">Tor routing (optional)</h2>
             <p className="text-sm leading-relaxed">
-              Standard web server logs may record IP addresses, browser types, and page requests.
-              These logs exist solely to diagnose technical issues and are not shared with third
-              parties or used for any analytics purpose.
+              Airhop supports routing Nostr traffic through Tor using Arti on iOS or Orbot on
+              Android. When enabled,{" "}
+              <strong>relay operators cannot observe your IP address.</strong> Tor is off by
+              default.
             </p>
           </section>
 
           <section className="space-y-3">
-            <h2 className="text-base font-semibold text-gray-900">GitHub API</h2>
+            <h2 className="text-base font-semibold text-gray-900">Cryptography</h2>
             <p className="text-sm leading-relaxed">
-              The site fetches the public GitHub star count for the Airhop repository from the
-              GitHub API. This request is made from your browser and does not include any user data.
-              It is equivalent to loading any public page on GitHub.
-            </p>
-          </section>
-
-          <section className="space-y-3">
-            <h2 className="text-base font-semibold text-gray-900">The Airhop app</h2>
-            <p className="text-sm leading-relaxed">
-              The Airhop mobile app is designed with privacy as a foundational principle. Your
-              identity is a cryptographic key pair stored locally on your device. No account
-              information, message content, or metadata is transmitted to any server operated by
-              this project. For a full technical description of how the app handles data, see the
-              source code and documentation at{" "}
+              Private sessions use Noise XX with X25519 and ChaCha20-Poly1305. Forward secrecy is
+              provided by Double Ratchet. All cryptographic operations use the{" "}
               <a
-                href="https://github.com/areebahmeddd/Airhop"
+                href="https://github.com/paulmillr/noble-curves"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="underline underline-offset-2 transition-colors hover:text-gray-900"
               >
-                github.com/areebahmeddd/Airhop
-              </a>
-              .
+                @noble
+              </a>{" "}
+              library suite, which has been independently audited by Cure53. No cryptographic
+              protection prevents a recipient from copying, screenshotting, or forwarding a message
+              after reading it.
             </p>
           </section>
 
           <section className="space-y-3">
-            <h2 className="text-base font-semibold text-gray-900">External links</h2>
+            <h2 className="text-base font-semibold text-gray-900">Your controls</h2>
+            <ul className="space-y-1.5 text-sm leading-relaxed">
+              <li>
+                <strong>Panic wipe.</strong> Triple-tap the logo to instantly erase all local keys,
+                messages, queued mail, and app data.
+              </li>
+              <li>
+                <strong>Feature controls.</strong> The Nostr bridge, Tor routing, and internet
+                features can be disabled in settings.
+              </li>
+              <li>
+                <strong>System permissions.</strong> Bluetooth and microphone access can be revoked
+                in your device settings at any time.
+              </li>
+            </ul>
+          </section>
+
+          <section className="space-y-3">
+            <h2 className="text-base font-semibold text-gray-900">This website</h2>
             <p className="text-sm leading-relaxed">
-              This site links to external services including GitHub and app stores. Once you leave
-              airhop.1mindlabs.org, this privacy policy no longer applies. We have no control over
-              what those services collect.
+              airhop.1mindlabs.org is a static informational site deployed on{" "}
+              <a
+                href="https://pages.cloudflare.com"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="underline underline-offset-2 transition-colors hover:text-gray-900"
+              >
+                Cloudflare Pages
+              </a>
+              . It has no user accounts, no cookies, and no analytics.{" "}
+              <strong>We have no interest in your personal data and collect none of it.</strong>
+            </p>
+            <p className="text-sm leading-relaxed">
+              Cloudflare's infrastructure may log standard request metadata (IP address, browser,
+              page path) for security and availability purposes. We do not access these logs for
+              analytics or share them with any third party. The site makes two browser-side requests
+              to the GitHub API: one for the latest release tag and one for the public star count.
+              No user data is included in either request.
+            </p>
+          </section>
+
+          <section className="space-y-3">
+            <h2 className="text-base font-semibold text-gray-900">Children's privacy</h2>
+            <p className="text-sm leading-relaxed">
+              Airhop has no account registration or age-verification system. The project does not
+              knowingly collect personal data from children. Public channel messages and mesh
+              traffic are visible to other nearby participants.
             </p>
           </section>
 
           <section className="space-y-3">
             <h2 className="text-base font-semibold text-gray-900">Changes to this policy</h2>
             <p className="text-sm leading-relaxed">
-              If this policy changes in a meaningful way, the updated date at the top of this page
-              will reflect it. Since we collect no personal data, changes are unlikely to affect you
-              in practice.
+              Material changes will be reflected in this document and its updated date. Because no
+              personal data is held on project servers, a policy change cannot affect data that
+              exists only on your device.
             </p>
           </section>
 

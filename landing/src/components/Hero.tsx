@@ -134,6 +134,7 @@ function SpiderIllustration() {
 
 export default function Hero() {
   const [stars, setStars] = useState<number | null>(null);
+  const [latestRelease, setLatestRelease] = useState<string | null>(null);
 
   useEffect(() => {
     fetch("https://api.github.com/repos/areebahmeddd/Airhop")
@@ -141,6 +142,15 @@ export default function Hero() {
       .then((data) => {
         if (typeof data.stargazers_count === "number") {
           setStars(data.stargazers_count);
+        }
+      })
+      .catch(() => {});
+
+    fetch("https://api.github.com/repos/areebahmeddd/Airhop/releases/latest")
+      .then((res) => res.json())
+      .then((data) => {
+        if (typeof data.tag_name === "string") {
+          setLatestRelease(data.tag_name);
         }
       })
       .catch(() => {});
@@ -158,7 +168,7 @@ export default function Hero() {
           <div className="inline-flex w-fit items-center space-x-2 border border-gray-200 bg-gray-100 px-3 py-1">
             <span className="h-2 w-2 animate-pulse rounded-full bg-green-500" />
             <span className="font-mono text-xs font-semibold tracking-widest text-gray-600 uppercase">
-              v0.9.0 released
+              {latestRelease ? `${latestRelease} released` : "v1.0.0 released"}
             </span>
           </div>
 
@@ -182,7 +192,7 @@ export default function Hero() {
               APP STORE
             </a>
             <a
-              href="https://play.google.com/store/apps/details?id=com.1mindlabs.airhop"
+              href="https://play.google.com/store/apps/details?id=org.onemindlabs.airhop"
               target="_blank"
               rel="noopener noreferrer"
               className="border border-black/20 bg-white px-6 py-3.5 text-center text-sm font-bold tracking-widest text-black transition-all select-none hover:border-black hover:bg-gray-50"
@@ -196,11 +206,9 @@ export default function Hero() {
               className="inline-flex items-center justify-center gap-2 border border-black/20 bg-white px-6 py-3.5 text-sm font-bold tracking-widest text-black transition-all select-none hover:border-black hover:bg-gray-50"
             >
               GITHUB
-              {stars !== null && (
-                <span className="font-mono text-xs font-normal text-yellow-500">
-                  &#9733; {stars.toLocaleString()}
-                </span>
-              )}
+              <span className="font-mono text-xs font-normal text-yellow-500">
+                &#9733; {stars !== null ? stars.toLocaleString() : "—"}
+              </span>
             </a>
           </div>
         </motion.div>

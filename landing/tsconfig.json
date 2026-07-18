@@ -22,6 +22,7 @@
     },
     "skipLibCheck": true,
     "target": "ES2022",
+    "typeRoots": ["./node_modules/@types"],
     "useDefineForClassFields": false
   },
   "exclude": [

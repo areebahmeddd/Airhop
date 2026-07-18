@@ -60,21 +60,20 @@ export default function Contribute() {
             <div className="absolute top-0 left-0 h-0.5 w-full origin-left scale-x-0 bg-black transition-transform duration-300 group-hover:scale-x-100" />
             <div className="space-y-4">
               <div className="font-mono text-[10px] font-bold tracking-widest text-gray-400 uppercase">
-                BUILD WITH US
+                SUPPORT
               </div>
-              <h3 className="text-lg font-bold text-black">Join the project</h3>
+              <h3 className="text-lg font-bold text-black">Keep the project going</h3>
               <p className="font-mono text-xs leading-relaxed font-light text-gray-600 sm:text-sm">
-                We are actively building for iOS and Android. If you know React Native, BLE, or
-                cryptographic protocols, read CONTRIBUTING.md and open a discussion before starting
-                a large change.
+                I build Airhop in my free time. There are no investors and no ads. If it is useful
+                to you, a small donation goes a long way toward keeping development active.
               </p>
               <a
-                href="https://github.com/areebahmeddd/Airhop/blob/main/CONTRIBUTING.md"
+                href="https://razorpay.me/@1mindlabs"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="group/btn mt-2 inline-flex items-center gap-2 border border-black px-5 py-2.5 font-mono text-xs font-bold tracking-widest text-black transition-all hover:bg-gray-50"
               >
-                CONTRIBUTING GUIDE
+                DONATE VIA RAZORPAY
                 <ArrowUpRight
                   size={13}
                   className="transition-transform group-hover/btn:translate-x-0.5 group-hover/btn:-translate-y-0.5"

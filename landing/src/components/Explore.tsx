@@ -3,42 +3,17 @@ import { motion } from "motion/react";
 
 const sections = [
   {
-    category: "PROTOCOL",
-    items: [
-      {
-        title: "BLE Wire Format",
-        desc: "Airhop uses the bitchat BLE wire format. The full spec is in PROTOCOLS.md.",
-        href: "https://github.com/areebahmeddd/Airhop/blob/main/PROTOCOLS.md",
-      },
-      {
-        title: "Compatibility",
-        desc: "Airhop and bitchat nodes interoperate automatically on the same mesh.",
-        href: "https://github.com/areebahmeddd/Airhop#compatibility",
-      },
-      {
-        title: "Noise XX",
-        desc: "Session handshake and key exchange using the Noise Protocol Framework.",
-        href: "https://noiseprotocol.org/noise.html",
-      },
-      {
-        title: "Double Ratchet",
-        desc: "Forward-secret message encryption. Signal-compatible implementation.",
-        href: "https://signal.org/docs/specifications/doubleratchet/",
-      },
-    ],
-  },
-  {
     category: "DOWNLOAD",
     items: [
       {
-        title: "iOS (App Store)",
+        title: "iOS",
         desc: "Requires iOS 16 or later. Bluetooth background mode enabled.",
         href: "https://apps.apple.com/app/airhop/id000000000",
       },
       {
-        title: "Android (Google Play)",
-        desc: "Requires Android 10+. Grants Bluetooth and nearby devices permissions.",
-        href: "https://play.google.com/store/apps/details?id=com.1mindlabs.airhop",
+        title: "Android",
+        desc: "Requires Android 10 or later. Needs Bluetooth and nearby devices permissions.",
+        href: "https://play.google.com/store/apps/details?id=org.onemindlabs.airhop",
       },
       {
         title: "Build from Source",
@@ -48,27 +23,42 @@ const sections = [
     ],
   },
   {
+    category: "PROTOCOL",
+    items: [
+      {
+        title: "Wire Format",
+        desc: "Full BLE packet spec shared with bitchat. Airhop and bitchat nodes interoperate automatically.",
+        href: "https://github.com/areebahmeddd/Airhop/blob/main/docs/spec/PROTOCOLS.md",
+      },
+      {
+        title: "Session Encryption",
+        desc: "Noise XX with X25519 and ChaCha20-Poly1305 for authenticated key exchange and transport.",
+        href: "https://noiseprotocol.org/noise.html",
+      },
+      {
+        title: "Forward Secrecy",
+        desc: "Double Ratchet ensures past messages stay protected even if current keys are compromised.",
+        href: "https://signal.org/docs/specifications/doubleratchet/",
+      },
+    ],
+  },
+  {
     category: "SOURCE & DOCS",
     items: [
       {
         title: "GitHub",
-        desc: "All source code under MIT. Issues, PRs, and discussions welcome.",
+        desc: "All source code under MIT. Issues, pull requests, and discussions welcome.",
         href: "https://github.com/areebahmeddd/Airhop",
       },
       {
         title: "Documentation",
-        desc: "Architecture, wire format, Nostr bridge, and offline payment integration.",
+        desc: "Architecture, wire format, Nostr bridge, and offline payment specs.",
         href: "https://github.com/areebahmeddd/Airhop/tree/main/docs",
       },
       {
         title: "Contributing",
-        desc: "Read CONTRIBUTING.md before opening your first PR.",
+        desc: "Read CONTRIBUTING.md before opening your first pull request.",
         href: "https://github.com/areebahmeddd/Airhop/blob/main/CONTRIBUTING.md",
-      },
-      {
-        title: "Discussions",
-        desc: "Questions, feature requests, and community conversations.",
-        href: "https://github.com/areebahmeddd/Airhop/discussions",
       },
     ],
   },
