@@ -10,6 +10,9 @@ import com.facebook.react.uimanager.ViewManager
 
 class AirhopWiFiPackage : ReactPackage {
 
+    // ReactPackage.createNativeModules is deprecated in New Architecture (use codegen TurboModules),
+    // but legacy interop still requires it until AirhopWiFiModule is fully migrated.
+    @Suppress("OVERRIDE_DEPRECATION")
     override fun createNativeModules(
         reactContext: ReactApplicationContext,
     ): List<NativeModule> {
@@ -22,6 +25,7 @@ class AirhopWiFiPackage : ReactPackage {
         }
     }
 
+    @Suppress("OVERRIDE_DEPRECATION")
     override fun createViewManagers(
         reactContext: ReactApplicationContext,
     ): List<ViewManager<*, *>> = emptyList()

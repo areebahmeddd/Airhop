@@ -9,10 +9,14 @@ import com.facebook.react.uimanager.ViewManager
 
 class AirhopBLEPackage : ReactPackage {
 
+    // ReactPackage.createNativeModules is deprecated in New Architecture (use codegen TurboModules),
+    // but legacy interop still requires it until AirhopBLEModule is fully migrated.
+    @Suppress("OVERRIDE_DEPRECATION")
     override fun createNativeModules(
         reactContext: ReactApplicationContext,
     ): List<NativeModule> = listOf(AirhopBLEModule(reactContext))
 
+    @Suppress("OVERRIDE_DEPRECATION")
     override fun createViewManagers(
         reactContext: ReactApplicationContext,
     ): List<ViewManager<*, *>> = emptyList()
