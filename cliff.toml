@@ -5,38 +5,19 @@ header = """
 All notable changes are documented here.
 """
 body = """
-{% if version %}
-{{ timestamp | date(format="%Y-%m-%d") }}, Version {{ version | trim_start_matches(pat="v") }}
-{% else %}
-Unreleased
-{% endif %}
-{% for group, commits in commits | group_by(attribute="group") %}
-### {{ group | upper_first }}
+## What's Changed
 {% for commit in commits %}
-- {% if commit.scope %}**{{ commit.scope }}:** {% endif %}{{ commit.message | upper_first }} (by {{ commit.author.name }}) [`{{ commit.id | truncate(length=7, end="") }}`](https://github.com/areebahmeddd/Airhop/commit/{{ commit.id }})
+- {{ commit.message }} (by @{{ commit.author.name }}){% if commit.github.pr_number %} (#{{ commit.github.pr_number }}){% endif %} [{{ commit.id | truncate(length=7, end="") }}]
 {% endfor %}
-{% endfor %}
+{% if previous.version %}**Full changelog:** {{ previous.version }}..{{ version }}{% endif %}
 """
 footer = ""
 trim = true
 
 [git]
-conventional_commits = true
-filter_unconventional = true
+conventional_commits = false
+filter_unconventional = false
 filter_commits = false
 tag_pattern = "v[0-9].*"
 topo_order = false
 sort_commits = "oldest"
-commit_parsers = [
-  { message = "^feat", group = "Features" },
-  { message = "^fix", group = "Bug Fixes" },
-  { message = "^perf", group = "Performance" },
-  { message = "^refactor", group = "Refactoring" },
-  { message = "^test", group = "Tests" },
-  { message = "^revert", group = "Reverts" },
-  { message = "^docs", skip = true },
-  { message = "^chore", skip = true },
-  { message = "^ci", skip = true },
-  { message = "^build", skip = true },
-  { message = "^style", skip = true },
-]
