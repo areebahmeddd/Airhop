@@ -4,19 +4,13 @@ import "react-native-get-random-values";
 import { Feather } from "@expo/vector-icons";
 import { StatusBar } from "expo-status-bar";
 import React, { useEffect, useState } from "react";
-import {
-  BackHandler,
-  Platform,
-  Pressable,
-  StyleSheet,
-  Text,
-  View,
-} from "react-native";
+import { BackHandler, Pressable, StyleSheet, Text, View } from "react-native";
 import {
   SafeAreaProvider,
   SafeAreaView,
   initialWindowMetrics,
 } from "react-native-safe-area-context";
+import { loadIdentity } from "./src/core/crypto/identity";
 import ChannelList from "./src/features/chat/channel-list";
 import DmList from "./src/features/chat/dm-list";
 import MessageThread from "./src/features/chat/message-thread";
@@ -26,8 +20,9 @@ import UsernameScreen from "./src/features/onboarding/username-screen";
 import WelcomeScreen from "./src/features/onboarding/welcome-screen";
 import ProfileScreen from "./src/features/settings/profile-screen";
 import WalletScreen from "./src/features/wallet/wallet-screen";
+import { initMeshService } from "./src/services/mesh-service";
 import { useChatStore } from "./src/store/chat-store";
-import { Colors, FontSize, FontWeight, Spacing } from "./src/ui/theme";
+import { Colors, FontSize, FontWeight, Radius, Spacing } from "./src/ui/theme";
 import { peerIDToUsername } from "./src/utils/username";
 
 // ---------------------------------------------------------------------------
@@ -39,24 +34,57 @@ type MainTab = "chats" | "mesh" | "wallet" | "profile";
 type ChatSubTab = "channels" | "dms";
 type ChatView = { kind: "list" } | { kind: "thread"; channel: string };
 
-// Identity stub â€” wire to loadIdentity() / generateIdentity() before ship.
-const STUB_PEER_ID = "a7f3b192c8d04e15";
+// Placeholder peer ID shown before identity is loaded from secure storage.
+const FALLBACK_PEER_ID = "0000000000000000";
 
 // ---------------------------------------------------------------------------
 // Root component
 // ---------------------------------------------------------------------------
 
 export default function App(): React.JSX.Element {
+  // appReady guards against a flash of the welcome screen on every launch.
+  // The identity check is async, so we render nothing until it resolves.
+  const [appReady, setAppReady] = useState(false);
   const [onboardingStep, setOnboardingStep] = useState<OnboardingStep | null>(
-    "welcome",
+    null,
   );
-  const [generatedPeerID, setGeneratedPeerID] = useState<string>(STUB_PEER_ID);
+  const [generatedPeerID, setGeneratedPeerID] =
+    useState<string>(FALLBACK_PEER_ID);
   const [tab, setTab] = useState<MainTab>("chats");
   const [chatSubTab, setChatSubTab] = useState<ChatSubTab>("channels");
   const [chatView, setChatView] = useState<ChatView>({ kind: "list" });
-  const { setActiveChannel } = useChatStore();
+  const { setActiveChannel, unreadCounts, markChannelRead } = useChatStore();
 
-  // Derived state — computed before any early return so hook call order is stable.
+  // On mount: check for an existing persisted identity. If found, skip
+  // onboarding and start the BLE mesh service immediately.
+  useEffect(() => {
+    loadIdentity()
+      .then((existing) => {
+        if (existing) {
+          setGeneratedPeerID(existing.peerID);
+          setOnboardingStep(null);
+          initMeshService(existing, peerIDToUsername(existing.peerID));
+        } else {
+          // First launch: show the welcome/onboarding flow.
+          setOnboardingStep("welcome");
+        }
+        setAppReady(true);
+      })
+      .catch(() => {
+        // EncryptedStorage unavailable (e.g. simulator without secure enclave).
+        // Fall through to onboarding so identity can be generated and stored later.
+        setOnboardingStep("welcome");
+        setAppReady(true);
+      });
+  }, []);
+
+  // Total unread across all channels, shown as a badge on the Chats tab.
+  const chatsUnread = Object.values(unreadCounts).reduce(
+    (sum, n) => sum + n,
+    0,
+  );
+
+  // Derived state computed before any early return so hook call order is stable.
   const isInThread =
     onboardingStep === null && tab === "chats" && chatView.kind === "thread";
   const username = peerIDToUsername(generatedPeerID);
@@ -73,6 +101,7 @@ export default function App(): React.JSX.Element {
 
   function openChannel(channel: string): void {
     setActiveChannel(channel);
+    markChannelRead(channel);
     setChatView({ kind: "thread", channel });
   }
 
@@ -82,12 +111,23 @@ export default function App(): React.JSX.Element {
 
   function openDMFromMesh(channel: string): void {
     setActiveChannel(channel);
+    markChannelRead(channel);
     setChatSubTab("dms");
     setTab("chats");
     setChatView({ kind: "thread", channel });
   }
 
   // ---- Render ------------------------------------------------------------
+
+  // Render nothing until the identity check resolves. This prevents a flash
+  // of the welcome screen for returning users on every app launch.
+  if (!appReady) {
+    return (
+      <SafeAreaProvider initialMetrics={initialWindowMetrics}>
+        <View style={{ flex: 1, backgroundColor: Colors.bg }} />
+      </SafeAreaProvider>
+    );
+  }
 
   return (
     <SafeAreaProvider initialMetrics={initialWindowMetrics}>
@@ -110,7 +150,19 @@ export default function App(): React.JSX.Element {
           {onboardingStep === "reveal" && (
             <UsernameScreen
               peerID={generatedPeerID}
-              onEnter={() => setOnboardingStep(null)}
+              onEnter={() => {
+                setOnboardingStep(null);
+                // Identity was just generated and saved by IdentityScreen.
+                // Load it and start the mesh service for the first time.
+                loadIdentity()
+                  .then((id) => {
+                    if (id) {
+                      setGeneratedPeerID(id.peerID);
+                      initMeshService(id, peerIDToUsername(id.peerID));
+                    }
+                  })
+                  .catch(() => {});
+              }}
             />
           )}
         </>
@@ -207,14 +259,28 @@ export default function App(): React.JSX.Element {
                     accessibilityLabel={label}
                     accessibilityState={{ selected: active }}
                   >
-                    {active && <View style={styles.tabLine} />}
-                    <Feather
-                      name={
-                        icon as React.ComponentProps<typeof Feather>["name"]
-                      }
-                      size={22}
-                      color={active ? Colors.accent : Colors.textMuted}
+                    <View
+                      style={[
+                        styles.tabIndicator,
+                        active && styles.tabIndicatorActive,
+                      ]}
                     />
+                    <View style={styles.tabIconWrap}>
+                      <Feather
+                        name={
+                          icon as React.ComponentProps<typeof Feather>["name"]
+                        }
+                        size={22}
+                        color={active ? Colors.accent : Colors.textMuted}
+                      />
+                      {id === "chats" && chatsUnread > 0 && (
+                        <View style={styles.tabBadge}>
+                          <Text style={styles.tabBadgeText}>
+                            {chatsUnread > 99 ? "99+" : String(chatsUnread)}
+                          </Text>
+                        </View>
+                      )}
+                    </View>
                     <Text
                       style={[styles.tabLabel, active && styles.tabLabelActive]}
                     >
@@ -262,7 +328,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    paddingHorizontal: Spacing.lg,
+    paddingHorizontal: Spacing.base,
     height: 56,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: Colors.border,
@@ -304,31 +370,60 @@ const styles = StyleSheet.create({
   content: {
     flex: 1,
   },
-  // Tab bar
+  // Tab bar: floating pill
   tabBar: {
     flexDirection: "row",
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: Colors.border,
     backgroundColor: Colors.surface,
-    paddingBottom: Platform.OS === "ios" ? 0 : Spacing.xs,
+    marginHorizontal: Spacing.base,
+    marginBottom: Spacing.md,
+    borderRadius: Radius["2xl"],
+    paddingBottom: Spacing.sm,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    elevation: 8,
   },
   tabItem: {
     flex: 1,
     alignItems: "center",
-    paddingTop: Spacing.sm,
-    paddingBottom: Platform.OS === "ios" ? Spacing.xs : Spacing.sm,
+    paddingBottom: Spacing.xs,
     gap: 4,
-    overflow: "hidden",
   },
-  tabLine: {
-    position: "absolute",
-    top: 0,
-    left: "20%",
-    right: "20%",
-    height: 1.5,
+  tabIndicator: {
+    width: 24,
+    height: 3,
+    borderRadius: 2,
+    backgroundColor: "transparent",
+    marginBottom: 2,
+  },
+  tabIndicatorActive: {
     backgroundColor: Colors.accent,
-    borderRadius: 1,
   },
+  tabIconWrap: {
+    position: "relative",
+  },
+  tabBadge: {
+    position: "absolute",
+    top: -4,
+    right: -8,
+    minWidth: 16,
+    height: 16,
+    borderRadius: Radius.full,
+    backgroundColor: Colors.danger,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 3,
+    borderWidth: 1.5,
+    borderColor: Colors.surface,
+  },
+  tabBadgeText: {
+    fontSize: 9,
+    fontWeight: FontWeight.bold,
+    color: "#FFFFFF",
+    lineHeight: 12,
+  },
+  tabLine: {},
   tabLabel: {
     fontSize: 10,
     fontWeight: FontWeight.medium,
