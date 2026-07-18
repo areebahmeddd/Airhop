@@ -3,8 +3,9 @@
 // A valid peer ID is 16 lowercase hex characters.
 
 import { Feather } from "@expo/vector-icons";
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
+  Alert,
   Modal,
   Pressable,
   StyleSheet,
@@ -12,6 +13,7 @@ import {
   TextInput,
   View,
 } from "react-native";
+import NfcManager, { NfcTech } from "react-native-nfc-manager";
 import { Colors, FontSize, FontWeight, Radius, Spacing } from "../../ui/theme";
 
 // ---------------------------------------------------------------------------
@@ -25,6 +27,16 @@ interface Props {
 }
 
 const PEER_ID_RE = /^[0-9a-f]{16}$/;
+// Deep-link format exported by Profile → "Share QR".
+const AIRHOP_LINK_RE = /^airhop:\/\/peer\/([0-9a-f]{16})$/i;
+
+// Accept a raw 16-char hex peer ID or an airhop://peer/<id> deep-link URL.
+function parsePeerID(raw: string): string | null {
+  const t = raw.trim().toLowerCase();
+  if (PEER_ID_RE.test(t)) return t;
+  const m = AIRHOP_LINK_RE.exec(t);
+  return m ? (m[1] ?? null) : null;
+}
 
 // ---------------------------------------------------------------------------
 // Component
@@ -37,24 +49,98 @@ export default function QrScanScreen({
 }: Props): React.JSX.Element {
   const [input, setInput] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [nfcSupported, setNfcSupported] = useState(false);
+  const [isNfcScanning, setIsNfcScanning] = useState(false);
 
-  const trimmed = input.trim().toLowerCase();
-  const isValid = PEER_ID_RE.test(trimmed);
+  // Check NFC availability each time the modal opens.
+  useEffect(() => {
+    if (!visible) return;
+    NfcManager.isSupported()
+      .then(setNfcSupported)
+      .catch(() => {});
+  }, [visible]);
+
+  const parsed = parsePeerID(input);
+  const isValid = parsed !== null;
 
   function handleAdd(): void {
-    if (!isValid) {
-      setError("Enter a valid 16-character hex peer ID.");
+    if (!parsed) {
+      setError(
+        "Enter a valid 16-character peer ID or paste an airhop://peer/\u2026 link.",
+      );
       return;
     }
     setError(null);
     setInput("");
-    onPeerFound(trimmed);
+    onPeerFound(parsed);
   }
 
   function handleClose(): void {
     setInput("");
     setError(null);
     onClose();
+  }
+
+  // Read an NDEF URI or text record from an NFC tag and extract the peer ID.
+  async function handleNfcScan(): Promise<void> {
+    setIsNfcScanning(true);
+    try {
+      await NfcManager.start();
+      await NfcManager.requestTechnology(NfcTech.Ndef);
+      const tag = await NfcManager.getTag();
+      let foundID: string | null = null;
+      for (const record of tag?.ndefMessage ?? []) {
+        if (!record.payload || typeof record.payload === "string") continue;
+        const payload = new Uint8Array(record.payload);
+        const rawType = record.type;
+        const type =
+          rawType && typeof rawType !== "string"
+            ? new Uint8Array(rawType)
+            : new Uint8Array(0);
+        // URI record (TNF=1, type='U'=0x55)
+        if (record.tnf === 0x01 && type.length === 1 && type[0] === 0x55) {
+          const URIPrefixes: Record<number, string> = {
+            0x01: "http://www.",
+            0x02: "https://www.",
+            0x03: "http://",
+            0x04: "https://",
+          };
+          const prefix = URIPrefixes[payload[0] ?? 0] ?? "";
+          const uri = prefix + new TextDecoder().decode(payload.slice(1));
+          const m = /airhop:\/\/peer\/([0-9a-f]{16})/i.exec(uri);
+          if (m?.[1]) {
+            foundID = m[1];
+            break;
+          }
+        }
+        // Text record (TNF=1, type='T'=0x54)
+        if (record.tnf === 0x01 && type.length === 1 && type[0] === 0x54) {
+          const langLen = (payload[0] ?? 0) & 0x3f;
+          const text = new TextDecoder().decode(payload.slice(1 + langLen));
+          const m =
+            /airhop:\/\/peer\/([0-9a-f]{16})/i.exec(text) ??
+            /^([0-9a-f]{16})$/i.exec(text.trim());
+          if (m?.[1]) {
+            foundID = m[1];
+            break;
+          }
+        }
+      }
+      if (foundID) {
+        setInput(foundID);
+        setError(null);
+      } else {
+        Alert.alert(
+          "Tag not recognized",
+          "This NFC tag does not contain an Airhop peer ID.",
+        );
+      }
+    } catch {
+      // User cancelled the NFC session or the device returned an error.
+    } finally {
+      NfcManager.cancelTechnologyRequest().catch(() => {});
+      setIsNfcScanning(false);
+    }
   }
 
   return (
@@ -94,7 +180,7 @@ export default function QrScanScreen({
               setInput(v);
               setError(null);
             }}
-            placeholder="16-character peer ID (e.g. a7f3b192c8d04e15)"
+            placeholder="Peer ID or airhop://peer/\u2026 link"
             placeholderTextColor={Colors.textMuted}
             autoCapitalize="none"
             autoCorrect={false}
@@ -106,13 +192,33 @@ export default function QrScanScreen({
 
           {/* Guidance */}
           <View style={styles.scanNote}>
-            <Feather name="share-2" size={13} color={Colors.textMuted} />
+            <Feather name="info" size={13} color={Colors.textMuted} />
             <Text style={styles.scanNoteText}>
-              Your Peer ID is in your Profile tab. Tap{" "}
-              <Text style={styles.scanNoteEmphasis}>Share</Text> there to let
-              others add you as a contact.
+              Paste a raw Peer ID or the{" "}
+              <Text style={styles.scanNoteEmphasis}>airhop://peer/\u2026</Text>{" "}
+              link from someone\u2019s Profile \u2192 Share QR. Your own ID is
+              on your Profile tab.
             </Text>
           </View>
+
+          {/* NFC scan — shown only on devices with NFC support */}
+          {nfcSupported && (
+            <Pressable
+              style={({ pressed }) => [
+                styles.nfcBtn,
+                (pressed || isNfcScanning) && { opacity: 0.7 },
+              ]}
+              onPress={() => void handleNfcScan()}
+              disabled={isNfcScanning}
+              accessibilityRole="button"
+              accessibilityLabel="Scan NFC tag"
+            >
+              <Feather name="wifi" size={15} color={Colors.textSecondary} />
+              <Text style={styles.nfcBtnText}>
+                {isNfcScanning ? "Hold near NFC tag…" : "Scan NFC Tag"}
+              </Text>
+            </Pressable>
+          )}
 
           {/* Actions */}
           <View style={styles.actions}>
@@ -255,5 +361,21 @@ const styles = StyleSheet.create({
     fontSize: FontSize.base,
     color: Colors.textInverse,
     fontWeight: FontWeight.semibold,
+  },
+  nfcBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: Spacing.xs,
+    borderRadius: Radius.md,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    backgroundColor: Colors.surfaceRaised,
+    paddingVertical: Spacing.md,
+  },
+  nfcBtnText: {
+    fontSize: FontSize.sm,
+    color: Colors.textSecondary,
+    fontWeight: FontWeight.medium,
   },
 });
