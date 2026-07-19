@@ -5,7 +5,7 @@
 import { Mint, Wallet } from "@cashu/cashu-ts";
 import { Feather } from "@expo/vector-icons";
 import { nip19 } from "nostr-tools";
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   Alert,
   Modal,
@@ -38,9 +38,17 @@ import { peerIDToUsername } from "../../utils/username";
 export default function WalletScreen(): React.JSX.Element {
   const { proofsByMint, unit, addMint, addProofs, removeProofs, clearMint } =
     useWalletStore();
-  // reachablePeers() is computed inside the store module, keeping Date.now()
-  // out of this component's render function (required for purity).
-  const onlinePeers = usePeerStore((s) => s.reachablePeers());
+  // Subscribe to the stable peer map and derive the reachable list locally.
+  const peers = usePeerStore((s) => s.peers);
+  const [peerClock, setPeerClock] = useState(() => Date.now());
+  useEffect(() => {
+    const timer = setInterval(() => setPeerClock(Date.now()), 30_000);
+    return () => clearInterval(timer);
+  }, []);
+  const onlinePeers = useMemo(() => {
+    const cutoff = peerClock - 60_000;
+    return [...peers.values()].filter((peer) => peer.lastSeenMs >= cutoff);
+  }, [peerClock, peers]);
   const [showReceive, setShowReceive] = useState(false);
   const [showSend, setShowSend] = useState(false);
   const [showZap, setShowZap] = useState(false);

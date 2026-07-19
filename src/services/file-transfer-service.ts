@@ -236,7 +236,7 @@ export class FileTransferService {
     const safeName = (meta.n || "file")
       .replace(/[^a-zA-Z0-9._-]/g, "_")
       .slice(0, 64);
-    const cacheDir = FileSystem.cacheDirectory ?? "";
+    const cacheDir = FileSystem.Paths.cache;
     const cacheUri = `${cacheDir}airhop_${Date.now()}_${safeName}`;
 
     try {

@@ -2,11 +2,25 @@
 // Shows messages with sender and timestamp. Text input to compose and PTT button.
 
 import { Feather } from "@expo/vector-icons";
-import { Audio } from "expo-av";
+import {
+  AudioModule,
+  RecordingPresets,
+  setAudioModeAsync,
+  useAudioPlayer,
+  useAudioPlayerStatus,
+  useAudioRecorder,
+  useAudioRecorderState,
+} from "expo-audio";
 import * as DocumentPicker from "expo-document-picker";
 import * as FileSystem from "expo-file-system";
 import * as ImagePicker from "expo-image-picker";
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
   Alert,
   FlatList,
@@ -80,6 +94,79 @@ interface Props {
   onBack: () => void;
 }
 
+interface VoiceNoteBubbleProps {
+  uri: string;
+  durationMs: number;
+  isPlaying: boolean;
+  onToggle: () => void;
+  onFinished: () => void;
+}
+
+function formatDuration(secs: number): string {
+  const m = Math.floor(secs / 60);
+  const s = secs % 60;
+  return `${m}:${s.toString().padStart(2, "0")}`;
+}
+
+function VoiceNoteBubble({
+  uri,
+  durationMs,
+  isPlaying,
+  onToggle,
+  onFinished,
+}: VoiceNoteBubbleProps): React.JSX.Element {
+  const player = useAudioPlayer(uri);
+  const status = useAudioPlayerStatus(player);
+
+  useEffect(() => {
+    if (isPlaying) {
+      player.play();
+      return;
+    }
+
+    player.pause();
+  }, [isPlaying, player]);
+
+  useEffect(() => {
+    if (status.didJustFinish && isPlaying) {
+      player.pause();
+      void player.seekTo(0).catch(() => {});
+      onFinished();
+    }
+  }, [isPlaying, onFinished, player, status.didJustFinish]);
+
+  return (
+    <View style={styles.attachVoice}>
+      <Pressable
+        style={styles.attachVoicePlay}
+        onPress={onToggle}
+        accessibilityRole="button"
+        accessibilityLabel={isPlaying ? "Pause voice note" : "Play voice note"}
+      >
+        <Feather
+          name={isPlaying ? "pause" : "play"}
+          size={16}
+          color={Colors.textPrimary}
+        />
+      </Pressable>
+      <View style={styles.attachVoiceWave}>
+        {[6, 12, 8, 16, 10, 14, 8, 6, 12, 10, 8, 14].map((h, i) => (
+          <View
+            key={i}
+            style={[
+              styles.attachVoiceBar,
+              { height: h, opacity: isPlaying ? 1 : 0.5 },
+            ]}
+          />
+        ))}
+      </View>
+      <Text style={styles.attachVoiceDuration}>
+        {formatDuration(Math.round(durationMs / 1000))}
+      </Text>
+    </View>
+  );
+}
+
 export default function MessageThread({
   channel,
   localNickname,
@@ -88,20 +175,29 @@ export default function MessageThread({
 }: Props): React.JSX.Element {
   const { messages, addMessage } = useChatStore();
   // Live peer count, real data from BLE discovery, not a stub.
-  // Reachable peer list, evaluated inside the store module to keep Date.now() off render.
-  const onlinePeers = usePeerStore((s) => s.reachablePeers());
+  // Subscribe to the stable peer map and derive the reachable list locally.
+  const peers = usePeerStore((s) => s.peers);
+  const [peerClock, setPeerClock] = useState(() => Date.now());
+  useEffect(() => {
+    const timer = setInterval(() => setPeerClock(Date.now()), 30_000);
+    return () => clearInterval(timer);
+  }, []);
+  const onlinePeers = useMemo(() => {
+    const cutoff = peerClock - 60_000;
+    return [...peers.values()].filter((peer) => peer.lastSeenMs >= cutoff);
+  }, [peerClock, peers]);
   const peerCount = onlinePeers.length;
+  const audioRecorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
+  const recorderState = useAudioRecorderState(audioRecorder);
   const dmPeerID = channel.startsWith("dm:") ? channel.slice(3) : null;
   const isDMPeerOnline =
     dmPeerID !== null && onlinePeers.some((p) => p.peerID === dmPeerID);
   const [draft, setDraft] = useState("");
   const [isPTTActive, setIsPTTActive] = useState(false);
+  const isRecording = recorderState.isRecording;
   // Voice recording
-  const [isRecording, setIsRecording] = useState(false);
   const [recordingSecs, setRecordingSecs] = useState(0);
   const recordingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const recordingRef = useRef<Audio.Recording | null>(null);
-  const soundRef = useRef<Audio.Sound | null>(null);
   const [playingUri, setPlayingUri] = useState<string | null>(null);
   const [showAttachMenu, setShowAttachMenu] = useState(false);
   const [showChannelInfo, setShowChannelInfo] = useState(false);
@@ -117,11 +213,9 @@ export default function MessageThread({
     return () => {
       if (recordingTimerRef.current) clearInterval(recordingTimerRef.current);
       if (dmStatusTimerRef.current) clearTimeout(dmStatusTimerRef.current);
-      if (soundRef.current) void soundRef.current.unloadAsync();
-      if (recordingRef.current)
-        void recordingRef.current.stopAndUnloadAsync().catch(() => {});
+      void audioRecorder.stop().catch(() => {});
     };
-  }, []);
+  }, [audioRecorder]);
 
   const msgs = messages[channel] ?? [];
   const isDM = channel.startsWith("dm:");
@@ -320,24 +414,21 @@ export default function MessageThread({
   }
 
   async function startRecording(): Promise<void> {
-    const { status } = await Audio.requestPermissionsAsync();
-    if (status !== "granted") {
+    const { granted } = await AudioModule.requestRecordingPermissionsAsync();
+    if (!granted) {
       Alert.alert(
         "Permission needed",
         "Grant microphone access in Settings to record voice notes.",
       );
       return;
     }
-    await Audio.setAudioModeAsync({
-      allowsRecordingIOS: true,
-      playsInSilentModeIOS: true,
+    await setAudioModeAsync({
+      allowsRecording: true,
+      playsInSilentMode: true,
     });
     try {
-      const { recording } = await Audio.Recording.createAsync(
-        Audio.RecordingOptionsPresets.HIGH_QUALITY,
-      );
-      recordingRef.current = recording;
-      setIsRecording(true);
+      await audioRecorder.prepareToRecordAsync();
+      audioRecorder.record();
       setRecordingSecs(0);
       recordingTimerRef.current = setInterval(() => {
         setRecordingSecs((s) => s + 1);
@@ -356,17 +447,11 @@ export default function MessageThread({
       recordingTimerRef.current = null;
     }
     const duration = recordingSecs;
-    setIsRecording(false);
     setRecordingSecs(0);
-
-    const rec = recordingRef.current;
-    recordingRef.current = null;
-    if (!rec || duration < 1) return;
-
     try {
-      await rec.stopAndUnloadAsync();
-      await Audio.setAudioModeAsync({ allowsRecordingIOS: false });
-      const uri = rec.getURI();
+      await audioRecorder.stop();
+      await setAudioModeAsync({ allowsRecording: false });
+      const uri = audioRecorder.uri;
       if (!uri) return;
       sendAttachmentMessage(
         "voice",
@@ -385,58 +470,9 @@ export default function MessageThread({
       clearInterval(recordingTimerRef.current);
       recordingTimerRef.current = null;
     }
-    setIsRecording(false);
     setRecordingSecs(0);
-    const rec = recordingRef.current;
-    recordingRef.current = null;
-    if (rec) await rec.stopAndUnloadAsync().catch(() => {});
-  }
-
-  async function playVoiceNote(uri: string): Promise<void> {
-    if (!uri) return;
-    // Toggle playback off if already playing this clip.
-    if (playingUri === uri) {
-      if (soundRef.current) {
-        await soundRef.current.stopAsync();
-        await soundRef.current.unloadAsync();
-        soundRef.current = null;
-      }
-      setPlayingUri(null);
-      return;
-    }
-    // Stop any previous clip.
-    if (soundRef.current) {
-      await soundRef.current.stopAsync();
-      await soundRef.current.unloadAsync();
-      soundRef.current = null;
-    }
-    try {
-      await Audio.setAudioModeAsync({
-        allowsRecordingIOS: false,
-        playsInSilentModeIOS: true,
-      });
-      const { sound } = await Audio.Sound.createAsync(
-        { uri },
-        { shouldPlay: true },
-        (status) => {
-          if ("isLoaded" in status && status.isLoaded && status.didJustFinish) {
-            setPlayingUri(null);
-            sound.unloadAsync().catch(() => {});
-            soundRef.current = null;
-          }
-        },
-      );
-      soundRef.current = sound;
-      setPlayingUri(uri);
-    } catch {
-      setPlayingUri(null);
-    }
-  }
-
-  function formatDuration(secs: number): string {
-    const m = Math.floor(secs / 60);
-    const s = secs % 60;
-    return `${m}:${s.toString().padStart(2, "0")}`;
+    await audioRecorder.stop().catch(() => {});
+    await setAudioModeAsync({ allowsRecording: false }).catch(() => {});
   }
 
   function handleInvite(): void {
@@ -468,37 +504,17 @@ export default function MessageThread({
       case "voice": {
         const isPlaying = playingUri === attachment.uri;
         return (
-          <View style={styles.attachVoice}>
-            <Pressable
-              style={styles.attachVoicePlay}
-              onPress={() => void playVoiceNote(attachment.uri)}
-              accessibilityRole="button"
-              accessibilityLabel={
-                isPlaying ? "Pause voice note" : "Play voice note"
-              }
-            >
-              <Feather
-                name={isPlaying ? "pause" : "play"}
-                size={16}
-                color={Colors.textPrimary}
-              />
-            </Pressable>
-            {/* Static waveform bars */}
-            <View style={styles.attachVoiceWave}>
-              {[6, 12, 8, 16, 10, 14, 8, 6, 12, 10, 8, 14].map((h, i) => (
-                <View
-                  key={i}
-                  style={[
-                    styles.attachVoiceBar,
-                    { height: h, opacity: isPlaying ? 1 : 0.5 },
-                  ]}
-                />
-              ))}
-            </View>
-            <Text style={styles.attachVoiceDuration}>
-              {formatDuration(Math.round((attachment.durationMs ?? 0) / 1000))}
-            </Text>
-          </View>
+          <VoiceNoteBubble
+            uri={attachment.uri}
+            durationMs={attachment.durationMs ?? 0}
+            isPlaying={isPlaying}
+            onToggle={() =>
+              setPlayingUri((current) =>
+                current === attachment.uri ? null : attachment.uri,
+              )
+            }
+            onFinished={() => setPlayingUri(null)}
+          />
         );
       }
       case "document":
