@@ -1,7 +1,8 @@
-import { Bluetooth, Coins, EyeOff, Key, Smartphone } from "lucide-react";
-import { motion } from "motion/react";
+import { Bluetooth, Coins, EyeOff, Smartphone } from "lucide-react";
+import { motion, useReducedMotion } from "motion/react";
 
 function BLEMeshIllustration() {
+  const reduceMotion = useReducedMotion();
   const nodes = [
     { x: "20%", y: "50%", label: "You", primary: true },
     { x: "50%", y: "22%", label: "Node A" },
@@ -48,7 +49,7 @@ function BLEMeshIllustration() {
           className="absolute flex -translate-x-1/2 -translate-y-1/2 flex-col items-center"
           style={{ left: node.x, top: node.y }}
         >
-          {node.primary && (
+          {node.primary && !reduceMotion && (
             <motion.div
               animate={{ scale: [1, 2.2], opacity: [0.5, 0] }}
               transition={{ repeat: Infinity, duration: 2.2, ease: "easeOut", repeatDelay: 0.6 }}
@@ -67,16 +68,14 @@ function BLEMeshIllustration() {
           </span>
         </div>
       ))}
-      <div className="absolute top-2 right-2 rounded border border-gray-200 bg-white px-1.5 py-0.5 font-mono text-[8px] tracking-widest text-gray-500 uppercase">
-        BLE MESH
-      </div>
     </div>
   );
 }
 
 function EncryptionIllustration() {
+  const reduceMotion = useReducedMotion();
   return (
-    <div className="relative flex h-48 w-full items-center justify-center overflow-hidden border-b border-gray-100 bg-gray-50">
+    <div className="relative h-48 w-full overflow-hidden border-b border-gray-100 bg-gray-50">
       <style>{`
         @keyframes encryptFlow { to { stroke-dashoffset: -30; } }
         .encrypt-line { animation: encryptFlow 3s linear infinite; }
@@ -86,7 +85,7 @@ function EncryptionIllustration() {
         xmlns="http://www.w3.org/2000/svg"
       >
         <line
-          x1="25%"
+          x1="18%"
           y1="50%"
           x2="50%"
           y2="50%"
@@ -97,7 +96,7 @@ function EncryptionIllustration() {
           style={{ animationDelay: "0s" }}
         />
         <line
-          x1="75%"
+          x1="82%"
           y1="50%"
           x2="50%"
           y2="50%"
@@ -109,46 +108,79 @@ function EncryptionIllustration() {
         />
         <line
           x1="50%"
-          y1="18%"
+          y1="16%"
           x2="50%"
-          y2="46%"
+          y2="50%"
           stroke="currentColor"
-          strokeWidth="1.5"
-          strokeDasharray="4 4"
+          strokeWidth="1"
+          strokeDasharray="2 4"
+          opacity="0.5"
           className="encrypt-line"
           style={{ animationDelay: "0.75s" }}
         />
       </svg>
 
-      <div className="absolute top-[40%] left-[20%]">
+      <div
+        className="absolute flex -translate-x-1/2 -translate-y-1/2 flex-col items-center"
+        style={{ left: "18%", top: "50%" }}
+      >
         <div className="flex h-8 w-8 items-center justify-center rounded-full border border-gray-200 bg-white font-mono text-xs text-gray-500 shadow-sm">
           A
         </div>
       </div>
-      <div className="absolute top-[40%] right-[20%]">
+      <div
+        className="absolute flex -translate-x-1/2 -translate-y-1/2 flex-col items-center"
+        style={{ left: "82%", top: "50%" }}
+      >
         <div className="flex h-8 w-8 items-center justify-center rounded-full border border-gray-200 bg-white font-mono text-xs text-gray-500 shadow-sm">
           B
         </div>
       </div>
-      <div className="absolute top-[8%] left-[45%]">
-        <div className="flex h-8 w-8 items-center justify-center rounded-full border border-gray-200 bg-white font-mono text-xs text-gray-500 shadow-sm">
+      <div
+        className="absolute flex -translate-x-1/2 -translate-y-1/2 flex-col items-center"
+        style={{ left: "50%", top: "16%" }}
+      >
+        <div className="flex h-6 w-6 items-center justify-center rounded-full border border-dashed border-gray-300 bg-white font-mono text-[10px] text-gray-400 shadow-sm">
           C
         </div>
+        <span className="mt-1 font-mono text-[7px] tracking-widest text-gray-400 uppercase">
+          relay
+        </span>
       </div>
 
-      <div className="relative flex h-14 w-14 items-center justify-center">
+      <div className="absolute top-1/2 left-1/2 flex h-14 w-14 -translate-x-1/2 -translate-y-1/2 items-center justify-center">
+        <svg
+          viewBox="0 0 140 140"
+          className="pointer-events-none absolute top-1/2 left-1/2 h-[140px] w-[140px] -translate-x-1/2 -translate-y-1/2"
+          aria-hidden="true"
+        >
+          {!reduceMotion && (
+            <>
+              <motion.circle
+                cx={70}
+                cy={70}
+                fill="none"
+                stroke="#374151"
+                strokeWidth={1}
+                initial={{ r: 28 }}
+                animate={{ r: [28, 67], opacity: [0.3, 0] }}
+                transition={{ repeat: Infinity, duration: 2.5, ease: "easeOut" }}
+              />
+              <motion.circle
+                cx={70}
+                cy={70}
+                fill="none"
+                stroke="#374151"
+                strokeWidth={1}
+                initial={{ r: 28 }}
+                animate={{ r: [28, 67], opacity: [0.3, 0] }}
+                transition={{ repeat: Infinity, duration: 2.5, ease: "easeOut", delay: 1.25 }}
+              />
+            </>
+          )}
+        </svg>
         <motion.div
-          animate={{ scale: [1, 2.4], opacity: [0.3, 0] }}
-          transition={{ repeat: Infinity, duration: 2.5, ease: "easeOut" }}
-          className="absolute inset-0 rounded-full border border-gray-500"
-        />
-        <motion.div
-          animate={{ scale: [1, 2.4], opacity: [0.3, 0] }}
-          transition={{ repeat: Infinity, duration: 2.5, ease: "easeOut", delay: 1.25 }}
-          className="absolute inset-0 rounded-full border border-gray-500"
-        />
-        <motion.div
-          animate={{ scale: [1, 1.05, 1] }}
+          animate={reduceMotion ? undefined : { scale: [1, 1.05, 1] }}
           transition={{ repeat: Infinity, duration: 3.5, ease: "easeInOut" }}
           className="relative z-10 flex h-14 w-14 flex-col items-center justify-center rounded-full border border-gray-800 bg-black text-white shadow-lg"
         >
@@ -163,6 +195,7 @@ function EncryptionIllustration() {
 }
 
 function PaymentIllustration() {
+  const reduceMotion = useReducedMotion();
   return (
     <div className="relative flex h-48 w-full items-center justify-center overflow-hidden border-b border-gray-100 bg-gray-50">
       <div className="absolute h-40 w-40 animate-[spin_60s_linear_infinite] rounded-full border border-dashed border-gray-200" />
@@ -183,26 +216,30 @@ function PaymentIllustration() {
       </div>
 
       <motion.div
-        animate={{
-          x: [-65, -28, 0, 28, 65],
-          y: [4, -26, -36, -26, 4],
-          opacity: [0, 1, 1, 1, 0],
-          scale: [0.75, 1, 1.1, 1, 0.75],
-        }}
-        transition={{
-          duration: 2.8,
-          ease: "easeInOut",
-          repeat: Infinity,
-          repeatDelay: 1.2,
-        }}
+        animate={
+          reduceMotion
+            ? { x: 0, y: -36, opacity: 1, scale: 1.1 }
+            : {
+                x: [-65, -28, 0, 28, 65],
+                y: [4, -26, -36, -26, 4],
+                opacity: [0, 1, 1, 1, 0],
+                scale: [0.75, 1, 1.1, 1, 0.75],
+              }
+        }
+        transition={
+          reduceMotion
+            ? { duration: 0 }
+            : {
+                duration: 2.8,
+                ease: "easeInOut",
+                repeat: Infinity,
+                repeatDelay: 1.2,
+              }
+        }
         className="z-10 flex h-9 w-9 items-center justify-center rounded-full bg-black text-white shadow-lg"
       >
         <Coins size={16} />
       </motion.div>
-
-      <div className="absolute top-2 right-2 rounded border border-gray-200 bg-white px-1.5 py-0.5 font-mono text-[8px] tracking-widest text-gray-500 uppercase">
-        ECASH
-      </div>
     </div>
   );
 }
@@ -219,10 +256,6 @@ function NoAccountsIllustration() {
 
   return (
     <div className="relative flex h-48 w-full flex-col justify-center overflow-hidden border-b border-gray-100 bg-gray-50 p-4 font-mono text-[9px] text-gray-400 sm:text-[10px]">
-      <div className="absolute top-2 right-2 flex items-center space-x-1.5 rounded border border-gray-200 bg-gray-100 px-1.5 py-0.5 text-[8px] font-bold tracking-widest text-gray-600 uppercase">
-        <Key size={10} />
-        <span>IDENTITY</span>
-      </div>
       <div className="space-y-1 select-none">
         {lines.map((line, i) => (
           <motion.div
