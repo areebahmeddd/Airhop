@@ -111,14 +111,14 @@ bitchat is an excellent foundation. Airhop fills the gaps it left open.
 - [x] `src/core/mesh/gossip-sync.ts`: GCS filter reconciliation (15s interval, Golomb-Rice encoding)
 - [x] `src/core/mesh/courier-store.ts`: sealed envelopes, trust tiers, spray-and-wait
 - [x] `src/core/router/message-router.ts`: BLE-only routing (broadcast + unicast + courier fallback)
-- [ ] Cross-language Noise XX test: JS ↔ bitchat-ios Swift server (required before device testing)
+- [x] Cross-language Noise XX test: JS ↔ bitchat-ios Swift server (required before device testing)
 - [x] Basic React Native UI: channel list, message thread, peer list (minimal, functional)
 
 **Milestone:** Full offline BLE mesh chat. Airhop ↔ bitchat message delivery verified.
 
-### v0.7.0: Internet Bridge + Voice + Payments ✅
+### v0.7.0: Internet Bridge + Voice ✅
 
-**Goal:** Nostr fallback, live PTT voice, Cashu ecash.
+**Goal:** Nostr fallback, live PTT voice.
 
 - [x] `src/core/nostr/nostr-client.ts`: SimplePool, auto-reconnect, Tor proxy config
 - [x] `src/core/nostr/gift-wrap.ts`: NIP-17/59 gift-wrap DMs (HKDF key derivation, seal/unwrap round-trip)
@@ -127,15 +127,12 @@ bitchat is an excellent foundation. Airhop fills the gaps it left open.
 - [x] `src/core/nostr/courier-relay.ts`: Nostr bridge courier drops (kind 1401, NIP-40 expiry)
 - [x] iOS: `AirhopTorManager` + `AirhopTorSession` + `AirhopTorModule`: full Arti integration (SOCKS5 port 39050), bundled `ios/Frameworks/arti.xcframework`
 - [x] Android: Orbot SOCKS5 detection via `getTorProxyPort()` (probes localhost:9050)
-- [x] `src/core/payments/cashu.ts`: token parse/embed/DLEQ validation
-- [x] `src/core/payments/nutzap.ts`: NIP-61 online zaps (kind 9321/10019)
-- [x] `src/store/wallet-store.ts`: MMKV-backed local proof storage, balance selectors
 - [x] `src/core/mesh/voice-capture.ts`: PTT frame encoder (VOICE_FRAME 0x29, AAC/Opus 16 kHz)
 - [x] `src/core/mesh/voice-player.ts`: 350ms jitter buffer, ordered frame delivery
 - [x] `src/bridge/NativeAirhopTor.ts`: TurboModule spec for Tor module
 - [x] `src/core/router/message-router.ts`: Nostr added as priority-2 transport (BLE > Nostr > Courier)
 
-**Milestone:** Cross-city DMs via Nostr. Live voice PTT over BLE. Cashu offline payment working. Tor routing on iOS via Arti.
+**Milestone:** Cross-city DMs via Nostr. Live voice PTT over BLE. Tor routing on iOS via Arti.
 
 ### v0.8.0: High Bandwidth + Double Ratchet ✅
 
@@ -171,14 +168,48 @@ bitchat is an excellent foundation. Airhop fills the gaps it left open.
 - [x] Onboarding flow (welcome screen, animated identity generation, username reveal)
 - [x] Visual design (monochromatic dark theme, Feather icon system, design token system)
 - [x] Animations and transitions (keyframe spin/fade for key generation, fade-up reveal)
-- [x] Navigation shell (4-tab state machine, sub-tabs, Android BackHandler)
+- [x] Navigation shell (5-tab state machine, sub-tabs, Android BackHandler)
 - [x] Accessibility audit
-- [ ] App Store and Play Store submission
-- [ ] YouTube demo series: full offline mesh demo, voice PTT across 3 devices, Cashu payment over BLE, Nostr bridge handoff, panic wipe
+- [x] App Store and Play Store submission
+- [x] YouTube demo series: full offline mesh demo, voice PTT across 3 devices, Nostr bridge handoff, panic wipe
 
 **Milestone:** UI complete. Accessibility audit and store submission are next.
 
-### v1.1.0 to v1.2.0: Stabilization
+### v1.1.0: AI + Wallets
+
+**Goal:** An offline local AI assistant and a Cashu ecash wallet, shipped as two independent, self-contained additions to the existing tab shell.
+
+Both features are built to Airhop's core constraint: no network dependency for the on-device experience. The AI assistant never phones home for inference, and the wallet's primary path (Cashu) never requires internet either. Neither feature touches the BLE mesh protocol, wire format, or crypto layer.
+
+#### AI Assistant
+
+The existing `AI` tab (`src/features/ai/ai-screen.tsx`) is currently a placeholder. v1.1.0 wires up a real, fully local inference path: a user downloads a small open-weight model once, and every question after that is answered entirely on-device, with zero network calls, so it works mid-blackout or deep off-grid exactly the same as with a full signal.
+
+- [ ] Model picker and download flow: a short list of small, offline-capable GGUF models (1–3B parameters, e.g. Gemma 4) with size and RAM shown before download
+- [ ] On-device inference engine (e.g. `llama.rn` / `llama.cpp` bindings) running fully offline, no server, no API key, no telemetry
+- [ ] `src/core/ai/model-manager.ts`: download, verify checksum, store under app sandbox, delete/swap models
+- [ ] `src/core/ai/inference.ts`: prompt/response loop against the loaded model, streamed token output
+- [ ] Chat-style AI UI in the existing `ai-screen.tsx`: ask critical or general questions (first-aid, survival, navigation, general knowledge) when there is no network at all
+- [ ] Conversation history kept local-only (MMKV), never leaves the device
+- [ ] Clear on-screen indicator that the model is fully offline and no data is transmitted
+- [ ] Low-end device fallback: warn and block download if the device lacks the RAM/storage for the selected model
+
+**Milestone:** A user with zero connectivity downloads a model once, then asks it questions and gets answered fully offline, with no server round-trip of any kind.
+
+#### Cashu Wallet
+
+The existing `Wallet` tab (`src/features/wallet/wallet-screen.tsx`) gets the payment core it currently lacks. Cashu remains the primary rail because it is the only ecash system that settles fully offline over BLE; Nutzaps are a secondary online path for when internet is available.
+
+- [ ] `src/core/payments/cashu.ts`: token parse/embed/redeem with offline DLEQ validation
+- [ ] `src/core/payments/nutzap.ts`: NIP-61 online zaps (kind 9321/10019)
+- [ ] `src/store/wallet-store.ts`: MMKV-backed local proof storage, balance selectors, dedup
+- [ ] Wallet UI in `wallet-screen.tsx`: balance view, send/receive over BLE, QR-based token exchange for out-of-mesh transfers
+- [ ] Nutzap send/receive when online, clearly distinguished from the offline Cashu flow
+- [ ] Mint management: add/remove trusted mints, per-mint balance breakdown
+
+**Milestone:** A user sends and receives Cashu ecash entirely offline over BLE, and optionally sends a Nutzap when internet is available.
+
+### v1.2.0: Stabilization
 
 **Goal:** Harden the v1.0.0 release before expanding to new platforms.
 

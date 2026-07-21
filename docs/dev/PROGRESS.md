@@ -78,16 +78,13 @@
 
 **Milestone:** Full offline BLE mesh chat. Airhop ↔ bitchat message delivery verified.
 
-## v0.7.0: Internet Bridge + Voice + Payments ✅
+## v0.7.0: Internet Bridge + Voice ✅
 
 - [x] `src/core/nostr/nostr-client.ts`: SimplePool, auto-reconnect, Tor proxy config
 - [x] `src/core/nostr/gift-wrap.ts`: NIP-17/59 gift-wrap DMs (HKDF key derivation, round-trip tested)
 - [x] `src/core/nostr/geo-relay.ts`: load `assets/data/relays.csv`, Haversine nearest relay
 - [x] `src/core/nostr/presence.ts`: kind 20001 geohash heartbeats
 - [x] `src/core/nostr/courier-relay.ts`: Nostr bridge courier drops (kind 1401, tested)
-- [x] `src/core/payments/cashu.ts`: token parse/embed/redeem with offline DLEQ validation
-- [x] `src/core/payments/nutzap.ts`: NIP-61 online zaps
-- [x] `src/store/wallet-store.ts`: MMKV-backed local Cashu proof storage (balances, dedup)
 - [x] `src/core/router/message-router.ts`: Nostr added as priority-2 transport (BLE > Nostr > Courier)
 - [x] PTT voice: `src/core/mesh/voice-capture.ts` + `src/core/mesh/voice-player.ts`
 - [x] iOS: `AirhopTorManager.swift`: full Arti lifecycle management (FFI, bootstrap, SOCKS probe)
@@ -98,7 +95,7 @@
 - [x] `src/bridge/NativeAirhopTor.ts`: TurboModule spec (startTor, stopTor, getTorStatus, awaitTorReady)
 - [x] Android: `getTorProxyPort()`: probes localhost:9050 for Orbot SOCKS5 (in AirhopBLEModule.kt)
 
-**Milestone:** Cross-city DMs via Nostr. Live voice PTT over BLE. Cashu offline payment working. Tor routing available on iOS via Arti.
+**Milestone:** Cross-city DMs via Nostr. Live voice PTT over BLE. Tor routing available on iOS via Arti.
 
 ## v0.8.0: High Bandwidth + Double Ratchet ✅
 
@@ -128,17 +125,40 @@
 - [x] Onboarding flow: 3-screen sequence (welcome, animated identity generation with Ed25519/X25519 key gen, username reveal with deterministic peer ID username)
 - [x] Visual design: monochromatic dark theme (`#080808` base, single white accent), Feather icon system, design token system (`Colors`, `FontSize`, `FontWeight`, `Spacing`) in `src/ui/theme.ts`
 - [x] Animations: keyframe spin + opacity fade during identity generation, fade-up reveal on username screen
-- [x] Navigation shell: 4-tab state machine (Chats / Mesh / Wallet / Profile), sub-tab segment (Channels / Direct), Android BackHandler for in-thread back navigation
+- [x] Navigation shell: 5-tab state machine (Chats / AI / Mesh / Wallet / Profile), sub-tab segment (Channels / Direct), Android BackHandler for in-thread back navigation
 - [x] Safe area + status bar: `SafeAreaProvider` + `SafeAreaView` from `react-native-safe-area-context` v5, `StatusBar` from `expo-status-bar` (replaces deprecated `react-native` equivalents)
 - [x] Keyboard handling: `KeyboardAvoidingView` in message thread (iOS padding, Android default)
 - [x] Component library: `Avatar` (deterministic colour + initials from peer ID), `StatusDot` (online indicator); kebab-case naming, all imports updated
 - [x] Accessibility audit
 - [ ] App Store and Play Store submission
-- [ ] YouTube demo series: full offline mesh demo, voice PTT, Cashu payment, Nostr bridge, panic wipe
+- [ ] YouTube demo series: full offline mesh demo, voice PTT, Nostr bridge, panic wipe
 
 **Milestone:** UI complete and dev-ready. Submitted to app stores pending accessibility audit.
 
-## v1.1.0 to v1.2.0: Stabilization
+## v1.1.0: AI + Wallets
+
+### AI Assistant
+
+- [ ] Model picker and download flow: small offline-capable GGUF models (1–3B params, e.g. Gemma 2 2B), size/RAM shown before download
+- [ ] On-device inference engine (e.g. `llama.rn` / `llama.cpp` bindings), fully offline, no server, no telemetry
+- [ ] `src/core/ai/model-manager.ts`: download, checksum verify, store under app sandbox, delete/swap models
+- [ ] `src/core/ai/inference.ts`: prompt/response loop against the loaded model, streamed token output
+- [ ] Chat-style AI UI in `src/features/ai/ai-screen.tsx` (currently a placeholder): ask critical or general questions with zero network
+- [ ] Conversation history kept local-only (MMKV)
+- [ ] Low-end device fallback: block download if device lacks RAM/storage for the selected model
+
+### Cashu Wallet
+
+- [ ] `src/core/payments/cashu.ts`: token parse/embed/redeem with offline DLEQ validation
+- [ ] `src/core/payments/nutzap.ts`: NIP-61 online zaps
+- [ ] `src/store/wallet-store.ts`: MMKV-backed local Cashu proof storage (balances, dedup)
+- [ ] Wallet UI in `src/features/wallet/wallet-screen.tsx`: balance view, send/receive over BLE, QR-based token exchange
+- [ ] Nutzap send/receive when online, distinguished from the offline Cashu flow
+- [ ] Mint management: add/remove trusted mints, per-mint balance breakdown
+
+**Milestone:** A user with zero connectivity downloads a model once and asks it questions fully offline. A user sends and receives Cashu ecash entirely offline over BLE, and optionally sends a Nutzap when online.
+
+## v1.2.0: Stabilization
 
 No new features. Production bug fixes, race condition resolution in BLE and crypto layers, UI iteration from user feedback, and extended cross-device compatibility testing.
 

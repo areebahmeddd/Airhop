@@ -15,6 +15,16 @@
 </div>
 
 <p align="center">
+  <a href="https://airhop.1mindlabs.org">Website</a>
+  |
+  <a href="https://github.com/areebahmeddd/Airhop/releases/latest">Download</a>
+  |
+  <a href="https://docs.airhop.free">Docs</a>
+  |
+  <a href="https://razorpay.me/@1mindlabs">Donate</a>
+</p>
+
+<p align="center">
   <a href="https://github.com/areebahmeddd/Airhop/releases"><img src="https://img.shields.io/github/v/release/areebahmeddd/Airhop?style=flat-square" alt="release" /></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue?style=flat-square" alt="license" /></a>
   <a href="https://github.com/areebahmeddd/Airhop/actions/workflows/ci.yaml"><img src="https://img.shields.io/github/actions/workflow/status/areebahmeddd/Airhop/ci.yaml?style=flat-square&label=CI" alt="CI" /></a>
@@ -22,21 +32,11 @@
   <a href="https://securityscorecards.dev/viewer/?uri=github.com/areebahmeddd/Airhop"><img src="https://api.securityscorecards.dev/projects/github.com/areebahmeddd/Airhop/badge?style=flat-square" alt="OpenSSF Scorecard" /></a>
 </p>
 
-<p align="center">
-  <a href="https://apps.apple.com/app/airhop/id000000000">
-    <img src="https://developer.apple.com/assets/elements/badges/download-on-the-app-store.svg" alt="Download on the App Store" height="48" />
-  </a>
-  &nbsp;
-  <a href="https://play.google.com/store/apps/details?id=org.onemindlabs.airhop">
-    <img src="https://play.google.com/intl/en_us/badges/static/images/badges/en_badge_web_generic.png" alt="Get it on Google Play" height="48" />
-  </a>
-</p>
-
 <br />
 
 Airhop is an iOS + Android app (macOS and Windows coming soon) for private, offline-first peer-to-peer communication over [Bluetooth mesh](https://en.wikipedia.org/wiki/Mesh_networking) networks, with [Nostr](https://nostr.org) internet bridging and [Cashu](https://cashu.space) [ecash](https://en.wikipedia.org/wiki/Ecash) payments. **Our mission is to make censorship-resistant communication available to anyone: during natural disasters, internet blackouts, mass protests, or any situation where networks are unavailable, surveilled, or shut down.**
 
-Built on the foundation of [bitchat](https://bitchat.free), using the same [BLE wire protocol](docs/spec/PROTOCOLS.md), [service UUIDs](docs/spec/PROTOCOLS.md#1-ble-identifiers), and security model, meaning **Airhop-installed devices** can automatically discover and join the same mesh as nearby **Bitchat-installed devices**, relay messages, and exchange DMs with zero setup. Airhop also extends the protocol with [Double Ratchet](https://signal.org/docs/specifications/doubleratchet/) forward secrecy, [Tor](https://torproject.org) on both platforms, and offline Cashu payments (not present in bitchat _at the time of writing_).
+Built on the foundation of [bitchat](https://bitchat.free), using the same [BLE wire protocol](docs/spec/PROTOCOLS.md), [service UUIDs](docs/spec/PROTOCOLS.md#1-ble-identifiers), and security model, meaning **Airhop-installed devices** can automatically discover and join the same mesh as nearby **Bitchat-installed devices**, relay messages, and exchange DMs with zero setup. Airhop also extends the protocol with [Double Ratchet](https://signal.org/docs/specifications/doubleratchet/) forward secrecy, [Tor](https://torproject.org) on both platforms, offline Cashu payments, and offline AI (not present in bitchat _at the time of writing_).
 
 > [!NOTE]
 > Airhop is an independent side project built and maintained by [Areeb Ahmed](https://github.com/areebahmeddd) in his free time. It is not backed by any company or organization, not affiliated with or endorsed by permissionlesstech or the bitchat project, and not an impersonation of any existing app or service.
@@ -44,7 +44,7 @@ Built on the foundation of [bitchat](https://bitchat.free), using the same [BLE 
 > [!WARNING]
 > **WIP.** Not externally security-reviewed. All code is personally reviewed and run through the [security review agent](.github/agents/security-review.md) before shipping, but this is not a substitute for a formal audit. Do not rely on its security for sensitive use cases. External audit planned for [v1.9.0](docs/design/ROADMAP.md#v190-security-hardening).
 
-## Features
+## Built-in Features
 
 | Category          | Feature                   | Description                                                                             |
 | ----------------- | ------------------------- | --------------------------------------------------------------------------------------- |
@@ -54,8 +54,6 @@ Built on the foundation of [bitchat](https://bitchat.free), using the same [BLE 
 |                   | Video                     | 480p/15fps HEVC video over WiFi Aware or MultipeerConnectivity (only `.mp4`)            |
 |                   | File transfer             | Send **any** file format and size using chunked streaming (images, documents, archives) |
 |                   | Store-and-forward courier | Messages are delivered automatically when a route becomes available                     |
-| 💰 **Payments**   | Cashu ecash               | Send and receive offline ecash payments over BLE                                        |
-|                   | Nutzaps                   | NIP-61 Lightning payments when internet is available                                    |
 | 🔒 **Identity**   | No-account identity       | Identity is an Ed25519 key pair stored only on your device                              |
 |                   | Human-readable names      | Deterministic usernames derived from your public key                                    |
 |                   | QR & NFC contacts         | Add contacts by scanning a QR code or tapping phones together                           |
@@ -71,6 +69,18 @@ Built on the foundation of [bitchat](https://bitchat.free), using the same [BLE 
 |                   | Tor integration           | Route Nostr traffic through Tor (Arti on iOS, Orbot on Android)                         |
 
 **TL;DR: No internet required. No central servers. No accounts. No tracking.**
+
+## Optional Features
+
+| Category        | Feature         | Description                                                                                  |
+| --------------- | --------------- | -------------------------------------------------------------------------------------------- |
+| 💰 **Payments** | Cashu ecash     | Send and receive offline ecash payments over BLE                                             |
+|                 | Nutzaps         | NIP-61 Lightning payments when internet is available                                         |
+| 🤖 **AI**       | Local assistant | On-device inference answers questions with zero network calls, data never leaves your device |
+| 🔗 **Social**   | AT Protocol     | Opt-in bridge to Bluesky, using your Airhop identity                                         |
+|                 | ActivityPub     | Opt-in bridge to Mastodon, using your Airhop identity                                        |
+
+Not yet shipped. Tracked in detail in [ROADMAP.md](docs/design/ROADMAP.md#v110-ai--wallets).
 
 ## Stack
 
@@ -95,19 +105,43 @@ npm install
 npx expo prebuild
 ```
 
-**iOS**
+<details>
+<summary><strong>Xcode setup</strong></summary>
 
-```bash
-npx react-native run-ios
-```
+1. Install Xcode 16 or later from the Mac App Store, which also installs the iOS Simulator and base build tools
+2. Open Xcode at least once and let it install any additional required components when prompted
+3. Go to **Xcode** then **Settings** then **Locations**, and select the most recent version in the **Command Line Tools** dropdown
+4. Go to **Xcode** then **Settings** then **Platforms**, click the **+** icon, and add an **iOS** runtime if one is not already installed
+5. Install [CocoaPods](https://cocoapods.org) if not already installed, then run `npx pod-install` from the project root to install the iOS native dependencies (`npx expo prebuild` already does this once, so only re-run it after changing native dependencies)
+6. Pick a simulator from the device dropdown in Xcode, or just run `npm run ios` to launch the default simulator
 
-**Android**
+> The first `npm run ios` builds the native app from scratch and can take several minutes. Later runs are much faster.
 
-```bash
-npx react-native run-android
-```
+> A physical iPhone is required to test BLE mesh and NFC, since the iOS Simulator does not support Bluetooth.
 
-> Requires Xcode 16+ (iOS) and Android Studio with API 26+ SDK (Android)
+> Supports iOS 16+.
+
+</details>
+
+<details>
+<summary><strong>Android Studio setup</strong></summary>
+
+On a fresh Android Studio install, the SDK platforms this project targets are not installed by default.
+
+1. Click the gear icon and open **Settings**, then go to **Languages & Frameworks** then **Android SDK**
+2. On the **SDK Platforms** tab, tick **API 34**, **API 35**, and **API 36**, then click **Apply** to download them
+3. On the **SDK Tools** tab, confirm **Android SDK Build-Tools**, **Android SDK Platform-Tools**, and **Android Emulator** are installed
+4. Open the virtual device manager: **More Actions** then **Virtual Device Manager** from the Welcome screen, or **View** then **Tool Windows** then **Device Manager** if a project is already open
+5. Click **Create Device**, choose a **Pixel 9 Pro** profile, select one of the API levels just installed, then click **Finish**
+6. Launch the emulator from the device list, then run `npm run android`
+
+> The first `npm run android` builds the native app from scratch and can take several minutes. Later runs are much faster.
+
+> A physical Android device is required to test BLE mesh and NFC, since the Android Emulator does not support Bluetooth.
+
+> Supports Android 8.0+ (API 26+).
+
+</details>
 
 ## Documentation
 
