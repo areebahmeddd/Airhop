@@ -1,9 +1,17 @@
 import { ArrowLeft } from "lucide-react";
 import { Link } from "react-router-dom";
+import { useSEO } from "../hooks/useSEO";
 
 export default function PrivacyPage() {
+  useSEO({
+    title: "Privacy Policy - Airhop",
+    description:
+      "How Airhop handles data: no accounts, no servers, no tracking. Your identity and messages stay on your device.",
+    path: "/privacy-policy",
+  });
+
   return (
-    <main className="min-h-screen bg-white font-sans antialiased">
+    <main id="main-content" className="min-h-screen bg-white font-sans antialiased">
       <div className="mx-auto max-w-2xl px-6 py-16">
         <Link
           to="/"
@@ -18,7 +26,7 @@ export default function PrivacyPage() {
 
         <div className="mt-10">
           <h1 className="text-3xl font-semibold tracking-tight text-gray-900">Privacy Policy</h1>
-          <p className="mt-2 text-sm text-gray-500">Last updated: July 18, 2026</p>
+          <p className="mt-2 text-sm text-gray-500">Last updated: July 22, 2026</p>
         </div>
 
         <div className="mt-10 space-y-10 text-gray-700">
@@ -121,6 +129,20 @@ export default function PrivacyPage() {
               Private messages are encrypted end-to-end and readable only by the intended recipient.
               Public channel messages are visible to all participants in that channel.
             </p>
+            <p className="text-sm leading-relaxed">
+              Nearby mesh devices are not limited to Airhop.{" "}
+              <a
+                href="https://bitchat.free"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="underline underline-offset-2 transition-colors hover:text-gray-900"
+              >
+                bitchat
+              </a>{" "}
+              is a separate, compatible app that can join the same mesh and receive this same data.
+              bitchat is an independent project with its own codebase, not operated or audited by
+              us.
+            </p>
           </section>
 
           <section className="space-y-3">
@@ -164,9 +186,11 @@ export default function PrivacyPage() {
               >
                 @noble
               </a>{" "}
-              library suite, which has been independently audited by Cure53. No cryptographic
-              protection prevents a recipient from copying, screenshotting, or forwarding a message
-              after reading it.
+              library suite, which has been independently audited by Cure53.{" "}
+              <strong>
+                No cryptographic protection prevents a recipient from copying, screenshotting, or
+                forwarding a message after reading it.
+              </strong>
             </p>
           </section>
 

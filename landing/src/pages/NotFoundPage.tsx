@@ -1,8 +1,16 @@
 import { Link } from "react-router-dom";
+import { useSEO } from "../hooks/useSEO";
 
 export default function NotFoundPage() {
+  useSEO({
+    title: "Page Not Found - Airhop",
+    description: "The page you are looking for does not exist or has been moved.",
+    path: "/404",
+    noIndex: true,
+  });
+
   return (
-    <main className="mx-auto max-w-3xl space-y-6 px-6 py-32 text-center md:px-12">
+    <main id="main-content" className="mx-auto max-w-3xl space-y-6 px-6 py-32 text-center md:px-12">
       <div className="font-mono text-xs font-semibold tracking-[0.25em] text-gray-500 uppercase">
         404
       </div>

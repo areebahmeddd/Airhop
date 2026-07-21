@@ -1,9 +1,16 @@
 import { ArrowLeft } from "lucide-react";
 import { Link } from "react-router-dom";
+import { useSEO } from "../hooks/useSEO";
 
 export default function TermsPage() {
+  useSEO({
+    title: "Terms of Service - Airhop",
+    description: "Terms governing use of the Airhop app and website.",
+    path: "/terms-of-service",
+  });
+
   return (
-    <main className="min-h-screen bg-white font-sans antialiased">
+    <main id="main-content" className="min-h-screen bg-white font-sans antialiased">
       <div className="mx-auto max-w-2xl px-6 py-16">
         <Link
           to="/"
@@ -18,7 +25,7 @@ export default function TermsPage() {
 
         <div className="mt-10">
           <h1 className="text-3xl font-semibold tracking-tight text-gray-900">Terms of Service</h1>
-          <p className="mt-2 text-sm text-gray-500">Last updated: July 18, 2026</p>
+          <p className="mt-2 text-sm text-gray-500">Last updated: July 22, 2026</p>
         </div>
 
         <div className="mt-10 space-y-10 text-gray-700">
@@ -26,8 +33,17 @@ export default function TermsPage() {
             <h2 className="text-base font-semibold text-gray-900">About Airhop</h2>
             <p className="text-sm leading-relaxed">
               Airhop is a free, open-source mobile application for offline peer-to-peer
-              communication over Bluetooth mesh networks. It is an independent project, not backed
-              by any company. By using this website or the Airhop app, you agree to these terms.
+              communication over Bluetooth mesh networks, built on the foundation of{" "}
+              <a
+                href="https://bitchat.free"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="underline underline-offset-2 transition-colors hover:text-gray-900"
+              >
+                bitchat
+              </a>
+              . It is an independent project, not backed by any company. By using this website or
+              the Airhop app, you agree to these terms.
             </p>
           </section>
 

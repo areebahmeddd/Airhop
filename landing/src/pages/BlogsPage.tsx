@@ -1,6 +1,18 @@
+import { useSEO } from "../hooks/useSEO";
+
 export default function BlogsPage() {
+  useSEO({
+    title: "Blog - Airhop",
+    description: "Writing on mesh networking, privacy, and offline-first software. Coming soon.",
+    path: "/blogs",
+    noIndex: true,
+  });
+
   return (
-    <main className="flex min-h-[calc(100vh-72px)] flex-col items-center justify-center px-6 text-center">
+    <main
+      id="main-content"
+      className="flex min-h-[calc(100vh-64px)] flex-col items-center justify-center px-6 text-center"
+    >
       <div className="space-y-4">
         <div className="font-mono text-xs font-semibold tracking-[0.25em] text-gray-400 uppercase">
           BLOG
