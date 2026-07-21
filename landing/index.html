@@ -10,7 +10,9 @@
   <meta name="description"
     content="Private peer-to-peer messaging for iOS and Android. No internet, no servers, no accounts. Communicate over Bluetooth mesh anywhere." />
   <link rel="canonical" href="https://airhop.1mindlabs.org" />
-  <link rel="icon" type="image/x-icon" href="/favicon.ico" />
+  <link rel="icon" href="/favicon.ico" sizes="any" />
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
 
   <!-- Open Graph -->
   <meta property="og:type" content="website" />
@@ -33,34 +35,55 @@
 
   <!-- Structured data -->
   <script type="application/ld+json">
-    [
-      {
-        "@context": "https://schema.org",
-        "@type": "MobileApplication",
-        "name": "Airhop",
-        "url": "https://airhop.1mindlabs.org",
-        "description": "Private peer-to-peer messaging over Bluetooth mesh for iOS and Android. No internet, no servers, no accounts.",
-        "applicationCategory": "CommunicationApplication",
-        "operatingSystem": "iOS, Android",
-        "isAccessibleForFree": true,
-        "offers": {
-          "@type": "Offer",
-          "price": "0",
-          "priceCurrency": "USD"
+    {
+      "@context": "https://schema.org",
+      "@graph": [
+        {
+          "@type": "MobileApplication",
+          "@id": "https://airhop.1mindlabs.org/#app",
+          "name": "Airhop",
+          "url": "https://airhop.1mindlabs.org",
+          "description": "Private peer-to-peer messaging over Bluetooth mesh for iOS and Android. No internet, no servers, no accounts.",
+          "applicationCategory": "CommunicationApplication",
+          "operatingSystem": "iOS, Android",
+          "isAccessibleForFree": true,
+          "license": "https://opensource.org/licenses/MIT",
+          "sameAs": [
+            "https://github.com/areebahmeddd/Airhop"
+          ],
+          "downloadUrl": [
+            "https://apps.apple.com/app/airhop/id000000000",
+            "https://play.google.com/store/apps/details?id=org.onemindlabs.airhop"
+          ],
+          "offers": {
+            "@type": "Offer",
+            "price": "0",
+            "priceCurrency": "USD"
+          },
+          "author": {
+            "@id": "https://github.com/areebahmeddd#person"
+          }
         },
-        "author": {
+        {
+          "@type": "WebSite",
+          "@id": "https://airhop.1mindlabs.org/#website",
+          "name": "Airhop",
+          "url": "https://airhop.1mindlabs.org",
+          "about": {
+            "@id": "https://airhop.1mindlabs.org/#app"
+          },
+          "publisher": {
+            "@id": "https://github.com/areebahmeddd#person"
+          }
+        },
+        {
           "@type": "Person",
+          "@id": "https://github.com/areebahmeddd#person",
           "name": "Areeb Ahmed",
           "url": "https://github.com/areebahmeddd"
         }
-      },
-      {
-        "@context": "https://schema.org",
-        "@type": "WebSite",
-        "name": "Airhop",
-        "url": "https://airhop.1mindlabs.org"
-      }
-    ]
+      ]
+    }
   </script>
 </head>
 

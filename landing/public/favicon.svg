@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <!-- Bold, simplified version of the hero spider — legs collapsed to single
+       strokes and eyes dropped so the silhouette still reads at 16px. White
+       backdrop keeps it visible on both light and dark browser tab bars. -->
+  <circle cx="16" cy="16" r="16" fill="#fff" />
+  <g fill="none" stroke="#000" stroke-width="2.1" stroke-linecap="round">
+    <path d="M19,13 L29,7" />
+    <path d="M20,15.5 L30.5,13.5" />
+    <path d="M20,18.5 L30.5,20.5" />
+    <path d="M19,21 L27,27.5" />
+    <path d="M13,13 L3,7" />
+    <path d="M12,15.5 L1.5,13.5" />
+    <path d="M12,18.5 L1.5,20.5" />
+    <path d="M13,21 L5,27.5" />
+  </g>
+  <ellipse cx="16" cy="20" rx="6.5" ry="7.5" fill="#000" />
+  <circle cx="16" cy="11.5" r="4.5" fill="#000" />
+</svg>
