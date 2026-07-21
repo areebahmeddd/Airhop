@@ -34,31 +34,28 @@ export default function Footer() {
   return (
     <footer className="border-t border-gray-100 bg-white px-6 py-12 md:px-12 md:py-16">
       <div className="mx-auto max-w-7xl">
-        {/* Main grid: brand + nav columns */}
         <div className="grid grid-cols-2 gap-10 sm:grid-cols-2 md:grid-cols-4 md:gap-8">
-          {/* Brand */}
           <div className="col-span-2 space-y-3 sm:col-span-2 md:col-span-1">
             <Link
               to="/"
-              className="inline-block text-xl font-black tracking-tighter text-black select-none"
+              className="inline-block text-xl font-extrabold tracking-tighter text-black select-none"
               aria-label="Airhop home"
             >
               AIRHOP
             </Link>
-            <p className="font-mono text-xs leading-relaxed text-gray-400 select-none">
+            <p className="font-mono text-xs leading-relaxed text-gray-500 select-none">
               Offline peer-to-peer messaging
               <br />
               over Bluetooth mesh.
             </p>
-            <p className="font-mono text-[10px] text-gray-300 select-none">
+            <p className="font-mono text-[10px] text-gray-500 select-none">
               No internet. No servers. No accounts.
             </p>
           </div>
 
-          {/* Nav columns */}
           {NAV_COLUMNS.map((col) => (
             <div key={col.heading} className="space-y-3">
-              <p className="font-mono text-[10px] font-bold tracking-widest text-gray-400 uppercase">
+              <p className="font-mono text-[10px] font-bold tracking-widest text-gray-500 uppercase">
                 {col.heading}
               </p>
               <ul className="space-y-2.5">
@@ -88,10 +85,27 @@ export default function Footer() {
           ))}
         </div>
 
-        {/* Bottom bar */}
         <div className="mt-12 border-t border-gray-100 pt-6">
-          <p className="font-mono text-[10px] text-gray-400 select-none">
-            &copy; {currentYear} Areeb Ahmed. Released under MIT.
+          <p className="font-mono text-[10px] text-gray-500 select-none">
+            &copy; {currentYear}{" "}
+            <a
+              href="https://areeb.dev"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="no-underline hover:text-black"
+            >
+              Areeb Ahmed
+            </a>
+            . Released under{" "}
+            <a
+              href="https://github.com/areebahmeddd/Airhop/blob/main/LICENSE"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="no-underline hover:text-black"
+            >
+              MIT
+            </a>
+            .
           </p>
         </div>
       </div>

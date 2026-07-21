@@ -16,7 +16,7 @@ export default function Navbar() {
     <nav className="sticky top-0 z-50 flex items-center justify-between bg-white/95 px-6 py-4 backdrop-blur-sm md:px-12">
       <Link
         to="/"
-        className="text-2xl font-black tracking-tighter text-black select-none"
+        className="text-2xl font-extrabold tracking-tighter text-black select-none"
         onClick={() => setIsOpen(false)}
       >
         AIRHOP
@@ -41,7 +41,7 @@ export default function Navbar() {
       <div className="md:hidden">
         <button
           onClick={() => setIsOpen(!isOpen)}
-          className="rounded p-1 text-black transition-colors hover:bg-gray-100 focus:outline-none"
+          className="rounded p-1 text-black transition-colors hover:bg-gray-100"
           aria-label="Toggle menu"
         >
           {isOpen ? <X size={24} /> : <Menu size={24} />}

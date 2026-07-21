@@ -12,12 +12,12 @@ const sections = [
       },
       {
         title: "Android",
-        desc: "Requires Android 10 or later. Needs Bluetooth and nearby devices permissions.",
+        desc: "Requires Android 8.0 or later. Needs Bluetooth and nearby devices permissions.",
         href: "https://play.google.com/store/apps/details?id=org.onemindlabs.airhop",
       },
       {
         title: "Build from Source",
-        desc: "Clone the repo, run npm install, then npx expo run:ios or run:android.",
+        desc: "MIT licensed, no signing required for local builds. Setup takes a few minutes.",
         href: "https://github.com/areebahmeddd/Airhop#getting-started",
       },
     ],
@@ -43,7 +43,7 @@ const sections = [
     ],
   },
   {
-    category: "SOURCE & DOCS",
+    category: "SOURCE",
     items: [
       {
         title: "GitHub",
@@ -90,7 +90,7 @@ export default function Explore() {
               transition={{ duration: 0.5, delay: sectionIdx * 0.1 }}
               className="space-y-5"
             >
-              <div className="border-b border-gray-100 pb-3 font-mono text-[10px] font-bold tracking-widest text-gray-400 uppercase">
+              <div className="border-b border-gray-100 pb-3 font-mono text-[10px] font-bold tracking-widest text-gray-500 uppercase">
                 {section.category}
               </div>
               <div className="space-y-3">

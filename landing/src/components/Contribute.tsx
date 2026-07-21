@@ -27,7 +27,7 @@ export default function Contribute() {
           >
             <div className="absolute top-0 left-0 h-0.5 w-full origin-left scale-x-0 bg-black transition-transform duration-300 group-hover:scale-x-100" />
             <div className="space-y-4">
-              <div className="font-mono text-[10px] font-bold tracking-widest text-gray-400 uppercase">
+              <div className="font-mono text-[10px] font-bold tracking-widest text-gray-500 uppercase">
                 CONTRIBUTE
               </div>
               <h3 className="text-lg font-bold text-black">Star and contribute on GitHub</h3>
@@ -59,7 +59,7 @@ export default function Contribute() {
           >
             <div className="absolute top-0 left-0 h-0.5 w-full origin-left scale-x-0 bg-black transition-transform duration-300 group-hover:scale-x-100" />
             <div className="space-y-4">
-              <div className="font-mono text-[10px] font-bold tracking-widest text-gray-400 uppercase">
+              <div className="font-mono text-[10px] font-bold tracking-widest text-gray-500 uppercase">
                 SUPPORT
               </div>
               <h3 className="text-lg font-bold text-black">Keep the project going</h3>
