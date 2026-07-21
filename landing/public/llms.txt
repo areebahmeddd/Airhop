@@ -1,14 +1,15 @@
 # Airhop
 
-> Private, offline-first peer-to-peer messaging over Bluetooth mesh for iOS and Android.
+> Airhop is an open-source iOS and Android app for censorship-resistant communication. It works with zero internet connectivity using Bluetooth Low Energy mesh networking with multi-hop relay (up to 7 hops). When internet is available, Nostr relays serve as an internet bridge.
 
-Airhop is an open-source iOS and Android app for censorship-resistant communication. It works with zero internet connectivity using Bluetooth Low Energy mesh networking with multi-hop relay (up to 7 hops). When internet is available, Nostr relays serve as an internet bridge.
+Airhop is free, MIT-licensed, and has no accounts, no ads, no telemetry, and no company or investors behind it. It is an independent side project built by Areeb Ahmed, built on the foundation of bitchat and wire-compatible with it. It is not affiliated with or endorsed by permissionlesstech or the bitchat project.
 
 ## Key Features
 
 - Bluetooth mesh: communicate with no internet, messages relay up to 7 hops
 - End-to-end encryption: Noise XX handshake, Double Ratchet forward secrecy
 - Offline payments: ecash tokens sent directly over BLE
+- Offline AI: on-device assistant answers questions with zero network calls
 - No accounts: identity is an Ed25519 key pair stored in OS Keychain
 - Tor integration: iOS (Arti) and Android (Orbot)
 - bitchat compatible: Airhop and bitchat nodes interoperate on the same mesh
