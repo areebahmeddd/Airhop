@@ -1,5 +1,7 @@
 import { ArrowLeft } from "lucide-react";
+import { isValidElement } from "react";
 import { Link } from "react-router-dom";
+import { useSEO } from "../hooks/useSEO";
 
 const SECTIONS: {
   heading: string;
@@ -20,6 +22,10 @@ const SECTIONS: {
         q: "Who is it for?",
         a: "Anyone who needs to communicate when normal networks are unavailable or untrustworthy. Journalists, activists, people in disaster zones, protestors, hikers, and anyone who values communication that cannot be shut down by a third party.",
       },
+      {
+        q: "How is it different from bitchat and other players?",
+        a: "Airhop is built on top of bitchat, but extends it with things bitchat doesn't have at the time of writing, like Double Ratchet forward secrecy, Tor on both iOS and Android, offline Cashu payments, and an offline AI assistant. Beyond the protocol itself, a big part of the focus is the app people actually use day to day: a clean, simple interface that makes the whole thing easy to pick up, not just something that works well under the hood.",
+      },
     ],
   },
   {
@@ -27,7 +33,18 @@ const SECTIONS: {
     questions: [
       {
         q: "Does Airhop require internet?",
-        a: "Not for core messaging. BLE mesh chat, multi-hop relay, voice notes, images, file transfers, store-and-forward delivery, and gossip sync all work with zero internet. Location channels, direct messages to contacts currently outside Bluetooth range, and the Nostr internet bridge each require a connection.",
+        a: (
+          <>
+            Not for core offline messaging, since it relies on Bluetooth. Chatting, relaying across
+            the mesh, voice notes, images, file transfers, and store-and-forward delivery all work
+            with zero internet.
+            <br />
+            <br />
+            For communication beyond Bluetooth range, Airhop automatically uses the Nostr internet
+            bridge to reach a contact who is online but out of range. Location channels also require
+            a connection.
+          </>
+        ),
       },
       {
         q: "How does the mesh relay messages?",
@@ -39,7 +56,33 @@ const SECTIONS: {
       },
       {
         q: "What media can I send?",
-        a: "Over BLE: images up to 1 MB (JPEG, PNG, GIF, WebP), voice notes (AAC, .m4a), push-to-talk live voice, and any file format via chunked streaming. Video (480p/15fps HEVC, .mp4) is supported over WiFi Aware on Android and MultipeerConnectivity on iOS, not over the BLE mesh. Bluetooth bandwidth is roughly 15 KB/s, which makes video over BLE infeasible.",
+        a: (
+          <>
+            Over BLE: images up to 1 MB (JPEG, PNG, GIF, WebP), voice notes (AAC, .m4a),
+            push-to-talk live voice, and any file format via chunked streaming.
+            <br />
+            <br />
+            Not over BLE: video (480p/15fps HEVC, .mp4) requires{" "}
+            <a
+              href="https://wi-fi.org/discover-wi-fi/wi-fi-aware"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-gray-900 underline underline-offset-2 transition-colors hover:text-gray-600"
+            >
+              WiFi Aware
+            </a>{" "}
+            on Android or{" "}
+            <a
+              href="https://developer.apple.com/documentation/multipeerconnectivity"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-gray-900 underline underline-offset-2 transition-colors hover:text-gray-600"
+            >
+              MultipeerConnectivity
+            </a>{" "}
+            on iOS. Bluetooth bandwidth is roughly 15 KB/s, which makes video over BLE infeasible.
+          </>
+        ),
       },
       {
         q: "Is Airhop compatible with bitchat?",
@@ -48,10 +91,13 @@ const SECTIONS: {
             Yes. Wire compatibility means both apps agree on the exact binary format of every byte
             sent over the radio, so no translation layer is needed. Airhop and bitchat share the
             same BLE service identifiers, the same packet byte layout, the same peer identity
-            derivation, and the same Noise XX parameters. Place an Airhop device and a bitchat
-            device in the same room and they automatically join one mesh, relay each other's
-            messages, and exchange direct messages with no configuration and no awareness that
-            different software is running. The full wire format is documented in{" "}
+            derivation, and the same Noise XX parameters.
+            <br />
+            <br />
+            Place an Airhop device and a bitchat device in the same room and they automatically join
+            one mesh, relay each other's messages, and exchange direct messages with no
+            configuration and no awareness that different software is running. The full wire format
+            is documented in{" "}
             <a
               href="https://github.com/areebahmeddd/Airhop/blob/main/docs/spec/PROTOCOLS.md"
               target="_blank"
@@ -71,11 +117,59 @@ const SECTIONS: {
     questions: [
       {
         q: "Do I need an account?",
-        a: "No. Your identity is an Ed25519 key pair generated on-device and stored in iOS Keychain or Android Keystore. There is no sign-up, no email, no phone number, and nothing that registers with any server.",
+        a: (
+          <>
+            No. Your identity is an{" "}
+            <a
+              href="https://ed25519.cr.yp.to"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-gray-900 underline underline-offset-2 transition-colors hover:text-gray-600"
+            >
+              Ed25519
+            </a>{" "}
+            key pair generated on-device and stored in{" "}
+            <a
+              href="https://developer.apple.com/documentation/security/storing-keys-in-the-keychain"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-gray-900 underline underline-offset-2 transition-colors hover:text-gray-600"
+            >
+              iOS Keychain
+            </a>{" "}
+            or{" "}
+            <a
+              href="https://developer.android.com/privacy-and-security/keystore"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-gray-900 underline underline-offset-2 transition-colors hover:text-gray-600"
+            >
+              Android Keystore
+            </a>
+            .{" "}
+            <strong>
+              There is no sign-up, no email, no phone number, and nothing that registers with any
+              server.
+            </strong>
+          </>
+        ),
       },
       {
         q: "Can someone impersonate me?",
-        a: "No. Your identity is your private key, and every packet you send is Ed25519-signed. Nodes on the mesh verify signatures before relaying anything, so a forged packet claiming to be from you is dropped at every hop. Display names are derived deterministically from your public key and cannot be registered or squatted by anyone else. Noise XX mutual authentication prevents man-in-the-middle attacks on direct message sessions. For contacts you want to fully trust, QR code or NFC verification pins their key fingerprint to a human name, the same model Signal uses with safety numbers.",
+        a: (
+          <>
+            No. Your identity is your private key, and every packet you send is Ed25519-signed.
+            Nodes on the mesh verify signatures before relaying anything, so a forged packet
+            claiming to be from you is dropped at every hop. Display names are derived
+            deterministically from your public key and cannot be registered or squatted by anyone
+            else. Noise XX mutual authentication prevents man-in-the-middle attacks on direct
+            message sessions.
+            <br />
+            <br />
+            For contacts you want to fully trust, QR code or NFC verification pins their key
+            fingerprint to a human name, the same model Signal uses with safety numbers.
+          </>
+        ),
       },
       {
         q: "How is encryption handled?",
@@ -88,9 +182,12 @@ const SECTIONS: {
               rel="noopener noreferrer"
               className="text-gray-900 underline underline-offset-2 transition-colors hover:text-gray-600"
             >
-              Noise XX protocol
+              Noise XX
             </a>{" "}
-            for the handshake and key exchange. All stored messages use{" "}
+            protocol for a mutual handshake and key exchange.
+            <br />
+            <br />
+            All stored messages use{" "}
             <a
               href="https://signal.org/docs/specifications/doubleratchet/"
               target="_blank"
@@ -100,21 +197,30 @@ const SECTIONS: {
               Double Ratchet
             </a>{" "}
             forward secrecy, meaning past messages stay protected even if keys are later
-            compromised. No plaintext ever touches disk.
+            compromised. <strong>No plaintext ever touches disk.</strong>
           </>
         ),
       },
       {
         q: "What happens if I lose my phone or uninstall the app?",
-        a: "Your identity and message history are permanently gone. The key pair is stored only on your device and cannot be recovered from any server because no server has it. There is no account recovery and no backup mechanism. This is intentional: there is nothing for a third party to hand over, subpoena, or breach.",
+        a: (
+          <>
+            <strong>Your identity and message history are permanently gone.</strong> The key pair is
+            stored only on your device and cannot be recovered from any server because no server has
+            it. There is no account recovery and no backup mechanism. This is intentional: there is
+            nothing for a third party to hand over, subpoena, or breach.
+          </>
+        ),
       },
       {
         q: "What is panic wipe?",
-        a: "Triple-tapping the logo triggers an immediate wipe of all identity keys and message data in under one second. It is designed for high-stakes situations where you need to destroy the app contents instantly.",
-      },
-      {
-        q: "Does Airhop use Tor?",
-        a: "Tor is available as an optional transport on both platforms. iOS uses Arti, Android uses Orbot. When enabled, all Nostr relay traffic is routed over Tor.",
+        a: (
+          <>
+            Triple-tapping the logo triggers an immediate wipe of all identity keys and message data
+            in under one second, for high-stakes situations where you need to destroy the app's
+            contents right away. <strong>This cannot be undone.</strong>
+          </>
+        ),
       },
     ],
   },
@@ -123,11 +229,73 @@ const SECTIONS: {
     questions: [
       {
         q: "What is the Nostr bridge?",
-        a: "When you and a contact are out of Bluetooth range and internet is available, Airhop uses Nostr relays as an optional internet bridge to continue the conversation. Messages are sent as NIP-17 gift-wrapped direct messages, so relay operators cannot read them.",
+        a: (
+          <>
+            When you and a contact are out of Bluetooth range and internet is available, Airhop uses{" "}
+            <a
+              href="https://fiatjaf.com/nostr.html"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-gray-900 underline underline-offset-2 transition-colors hover:text-gray-600"
+            >
+              Nostr
+            </a>{" "}
+            relays as an optional internet bridge to continue the conversation. Messages are sent as{" "}
+            <a
+              href="https://github.com/nostr-protocol/nips/blob/master/17.md"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-gray-900 underline underline-offset-2 transition-colors hover:text-gray-600"
+            >
+              NIP-17
+            </a>{" "}
+            gift-wrapped direct messages, so relay operators cannot read them.
+          </>
+        ),
+      },
+      {
+        q: "Is Nostr centralized, web3, or decentralized?",
+        a: "Neither centralized nor web3. There is no blockchain, no token, and no company that owns it. Nostr relays are just servers run by independent operators on any hosting provider, not only a couple of big cloud platforms, so no single relay can lock you out or control the network. You are not tied to one relay either. If an operator disappears or blocks you, you move to another. That is what makes it decentralized: not a blockchain consensus mechanism, just nobody being able to own the whole network.",
       },
       {
         q: "Does the Nostr bridge compromise privacy?",
         a: "No. NIP-17 gift-wrapping encrypts the message content and hides the sender and recipient identities from relay operators. Metadata is minimal. You can also route Nostr traffic through Tor for additional network-level privacy.",
+      },
+      {
+        q: "Does Airhop use Tor?",
+        a: (
+          <>
+            <a
+              href="https://torproject.org"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-gray-900 underline underline-offset-2 transition-colors hover:text-gray-600"
+            >
+              Tor
+            </a>{" "}
+            is available as an optional transport on both platforms for the Nostr bridge
+            specifically. iOS uses{" "}
+            <a
+              href="https://arti.torproject.org"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-gray-900 underline underline-offset-2 transition-colors hover:text-gray-600"
+            >
+              Arti
+            </a>
+            , Android uses{" "}
+            <a
+              href="https://guardianproject.info/apps/org.torproject.android/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-gray-900 underline underline-offset-2 transition-colors hover:text-gray-600"
+            >
+              Orbot
+            </a>
+            . When enabled, all Nostr relay traffic is routed over Tor. It has no effect on the BLE
+            mesh itself, which never touches the internet either way.
+          </>
+        ),
       },
       {
         q: "Do I have to use Nostr?",
@@ -140,15 +308,43 @@ const SECTIONS: {
     questions: [
       {
         q: "Do I need Bitcoin or a Lightning wallet to use Airhop?",
-        a: "No. Payments are entirely optional and Airhop works fully without them. If you want to use payments, you need a Lightning wallet once to load Cashu tokens from a mint. After that, tokens live on your device and can be sent and received over the mesh with no ongoing Lightning connection required.",
+        a: "No. Payments are entirely optional, and Airhop works fully without them. A Lightning wallet is only needed once, to load Cashu tokens onto your device before going offline. See the next question for how that works.",
       },
       {
         q: "How do offline payments work?",
-        a: "Airhop uses Cashu ecash tokens as payment tokens. Before going offline, you load tokens from a Cashu mint by depositing via Lightning. The mint returns cryptographically signed token blobs worth the deposited amount, which live on your device like digital cash. To pay a contact offline, you select tokens and send them as a BLE mesh message. The recipient holds them and redeems with the mint later when back online. No internet is involved in the transfer itself.",
+        a: (
+          <>
+            Before going offline, you load tokens from a{" "}
+            <a
+              href="https://cashu.space"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-gray-900 underline underline-offset-2 transition-colors hover:text-gray-600"
+            >
+              Cashu
+            </a>{" "}
+            mint by depositing via Lightning. The mint returns cryptographically signed token blobs
+            worth the deposited amount, which live on your device like digital cash.
+            <br />
+            <br />
+            To pay a contact offline, you select tokens and send them as a BLE mesh message. The
+            recipient holds them and redeems with the mint later when back online. No internet is
+            involved in the transfer itself.
+          </>
+        ),
       },
       {
         q: "What stops someone from spending the same tokens twice?",
-        a: "The Cashu mint keeps a record of all redeemed token signatures. When a recipient redeems, the mint checks whether those exact signatures have been spent before. If they have, the redemption fails. The first person to redeem wins. This requires trusting the mint to maintain an honest ledger, similar to trusting a bank not to miscount withdrawals. Fedimint, a variant, distributes that trust across multiple operators so no single party controls the ledger.",
+        a: (
+          <>
+            The Cashu mint keeps a record of all redeemed token signatures. When a recipient
+            redeems, the mint checks whether those exact signatures have been spent before. If they
+            have, the redemption fails, and the first person to redeem wins.{" "}
+            <strong>This requires trusting the mint to maintain an honest ledger</strong>, similar
+            to trusting a bank not to miscount withdrawals. Fedimint, a variant, distributes that
+            trust across multiple operators so no single party controls the ledger.
+          </>
+        ),
       },
       {
         q: "Are there transaction fees?",
@@ -197,9 +393,49 @@ const SECTIONS: {
   },
 ];
 
+function toPlainText(node: React.ReactNode): string {
+  if (node == null || typeof node === "boolean") return "";
+  if (typeof node === "string" || typeof node === "number") return String(node);
+  if (Array.isArray(node)) return node.map(toPlainText).join(" ");
+  if (isValidElement(node)) {
+    return toPlainText((node.props as { children?: React.ReactNode }).children);
+  }
+  return "";
+}
+
+function faqAnswerText(node: React.ReactNode): string {
+  return toPlainText(node).replace(/\s+/g, " ").trim();
+}
+
+const FAQ_SCHEMA = {
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  mainEntity: SECTIONS.flatMap((section) =>
+    section.questions.map((item) => ({
+      "@type": "Question",
+      name: item.q,
+      acceptedAnswer: {
+        "@type": "Answer",
+        text: faqAnswerText(item.a),
+      },
+    })),
+  ),
+};
+
 export default function FAQPage() {
+  useSEO({
+    title: "Frequently Asked Questions - Airhop",
+    description:
+      "Answers about Airhop's Bluetooth mesh messaging, encryption, offline payments, the Nostr internet bridge, and bitchat compatibility.",
+    path: "/faq",
+  });
+
   return (
-    <main className="min-h-screen bg-white font-sans antialiased">
+    <main id="main-content" className="min-h-screen bg-white font-sans antialiased">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(FAQ_SCHEMA) }}
+      />
       <div className="mx-auto max-w-2xl px-6 py-16">
         <Link
           to="/"
