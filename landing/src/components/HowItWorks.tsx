@@ -1,7 +1,19 @@
-﻿import { motion } from "motion/react";
-import RelayMap from "./RelayMap";
+﻿import { motion, useReducedMotion } from "motion/react";
+import { lazy, Suspense } from "react";
+import { useInView } from "../hooks/useInView";
+
+const RelayMap = lazy(() => import("./RelayMap"));
+
+const relayMapFallback = (
+  <div className="border-t border-gray-200 px-6 pt-5 pb-3">
+    <div className="mb-2 h-[9px]" />
+    <div style={{ aspectRatio: "800 / 430" }} />
+  </div>
+);
 
 export default function HowItWorks() {
+  const reduceMotion = useReducedMotion();
+  const { ref: relayMapRef, inView: relayMapInView } = useInView<HTMLDivElement>();
   return (
     <section
       id="how-it-works"
@@ -18,6 +30,9 @@ export default function HowItWorks() {
           <div className="font-mono text-xs font-semibold tracking-[0.25em] text-gray-500 uppercase">
             HOW IT WORKS
           </div>
+          <h2 className="text-xl leading-tight font-extrabold text-black sm:text-2xl md:text-3xl">
+            The mesh forms itself. No infrastructure required.
+          </h2>
           <p className="font-mono text-sm leading-relaxed font-normal text-gray-700 sm:text-base">
             Airhop nodes discover each other automatically over Bluetooth Low Energy and form a
             self-healing mesh. A message sent from one device floods the network and relays across
@@ -33,14 +48,13 @@ export default function HowItWorks() {
           transition={{ duration: 0.7, ease: "easeOut" }}
           className="space-y-2 select-none"
         >
-          <p className="text-center font-mono text-[9px] font-semibold tracking-widest text-gray-400 uppercase lg:hidden">
+          <p className="text-center font-mono text-[9px] font-semibold tracking-widest text-gray-500 uppercase lg:hidden">
             &#8592; swipe to explore &#8594;
           </p>
 
           <div className="rounded-xl border border-gray-200 bg-gray-50/50">
-            {/* BLE mesh diagram label */}
             <div className="border-b border-gray-200 px-6 py-3 select-none">
-              <p className="font-mono text-[9px] font-bold tracking-widest text-gray-400 uppercase">
+              <p className="font-mono text-[9px] font-bold tracking-widest text-gray-500 uppercase">
                 &#9679; BLE mesh &mdash; local peer-to-peer network
               </p>
             </div>
@@ -54,39 +68,59 @@ export default function HowItWorks() {
                 aria-hidden="true"
               >
                 <style>{`
-                  @keyframes blePathFlow { to { stroke-dashoffset: -48; } }
-                  .ble-f { stroke-dasharray: 6 6; animation: blePathFlow 6s linear infinite; }
-                  .ble-r { stroke-dasharray: 6 6; animation: blePathFlow 8s linear infinite reverse; }
+                  @keyframes blePathFlow { to { stroke-dashoffset: -40; } }
+                  .ble-f { stroke-dasharray: 1 9; stroke-linecap: round; animation: blePathFlow 6s linear infinite; }
+                  .ble-r { stroke-dasharray: 1 9; stroke-linecap: round; animation: blePathFlow 8s linear infinite reverse; }
                 `}</style>
 
                 <path
                   d="M 185,187 Q 285,92 385,187"
                   fill="none"
                   stroke="#374151"
-                  strokeWidth="2"
+                  strokeWidth="2.5"
                   className="ble-f"
                 />
                 <path
                   d="M 185,193 Q 285,292 385,193"
                   fill="none"
                   stroke="#6b7280"
-                  strokeWidth="1.5"
+                  strokeWidth="2"
                   className="ble-r"
                 />
                 <path
                   d="M 465,187 Q 565,92 665,187"
                   fill="none"
                   stroke="#374151"
-                  strokeWidth="2"
+                  strokeWidth="2.5"
                   className="ble-f"
                 />
                 <path
                   d="M 465,193 Q 565,292 665,193"
                   fill="none"
                   stroke="#6b7280"
-                  strokeWidth="1.5"
+                  strokeWidth="2"
                   className="ble-r"
                 />
+
+                {!reduceMotion && (
+                  <>
+                    <circle r="3.5" fill="#111827">
+                      <animateMotion
+                        dur="1.8s"
+                        repeatCount="indefinite"
+                        path="M 185,187 Q 285,92 385,187"
+                      />
+                    </circle>
+                    <circle r="3.5" fill="#111827">
+                      <animateMotion
+                        dur="1.8s"
+                        repeatCount="indefinite"
+                        begin="0.9s"
+                        path="M 465,187 Q 565,92 665,187"
+                      />
+                    </circle>
+                  </>
+                )}
 
                 <line
                   x1="94"
@@ -111,9 +145,10 @@ export default function HowItWorks() {
                   y1="83"
                   x2="722"
                   y2="154"
-                  stroke="#d1d5db"
+                  stroke="#2563eb"
                   strokeWidth="1.5"
-                  strokeDasharray="3 5"
+                  strokeDasharray="2 4"
+                  opacity="0.7"
                 />
                 <line
                   x1="190"
@@ -155,27 +190,6 @@ export default function HowItWorks() {
                   &#9670; BLE RELAY (UP TO 7 HOPS)
                 </text>
 
-                <rect
-                  x="480"
-                  y="258"
-                  width="170"
-                  height="16"
-                  rx="2"
-                  fill="white"
-                  stroke="#e5e7eb"
-                  strokeWidth="1"
-                />
-                <text
-                  x="565"
-                  y="269"
-                  textAnchor="middle"
-                  fontSize="8"
-                  fontFamily="monospace"
-                  fill="#374151"
-                >
-                  &#9670; NOSTR BRIDGE (WHEN ONLINE)
-                </text>
-
                 <circle cx="85" cy="65" r="20" fill="white" stroke="#9ca3af" strokeWidth="1.5" />
                 <circle cx="85" cy="58" r="5" fill="none" stroke="#9ca3af" strokeWidth="1.5" />
                 <path
@@ -206,14 +220,33 @@ export default function HowItWorks() {
                   RELAY
                 </text>
 
-                <circle cx="765" cy="65" r="20" fill="white" stroke="#9ca3af" strokeWidth="1.5" />
-                <circle cx="765" cy="58" r="5" fill="none" stroke="#9ca3af" strokeWidth="1.5" />
+                <text
+                  x="765"
+                  y="28"
+                  textAnchor="middle"
+                  fontSize="8"
+                  fontFamily="monospace"
+                  fontWeight="bold"
+                  fill="#2563eb"
+                >
+                  NOSTR (ONLINE)
+                </text>
+                <circle cx="765" cy="65" r="20" fill="white" stroke="#2563eb" strokeWidth="1.5" />
+                <circle cx="765" cy="70" r="2" fill="#2563eb" />
                 <path
-                  d="M 758,68 Q 758,66 765,66 Q 772,66 772,68"
+                  d="M 758,64 A 10,10 0 0 1 772,64"
                   fill="none"
-                  stroke="#9ca3af"
+                  stroke="#2563eb"
                   strokeWidth="1.5"
                   strokeLinecap="round"
+                />
+                <path
+                  d="M 753,58 A 17,17 0 0 1 777,58"
+                  fill="none"
+                  stroke="#2563eb"
+                  strokeWidth="1.5"
+                  strokeLinecap="round"
+                  opacity="0.55"
                 />
 
                 <circle cx="198" cy="310" r="20" fill="white" stroke="#9ca3af" strokeWidth="1.5" />
@@ -291,8 +324,7 @@ export default function HowItWorks() {
               </svg>
             </div>
 
-            {/* Legend */}
-            <div className="grid grid-cols-3 divide-x divide-gray-200 border-t border-gray-200 select-none">
+            <div className="grid grid-cols-2 divide-x divide-y divide-gray-200 border-t border-gray-200 select-none sm:grid-cols-4 sm:divide-y-0">
               <div className="flex items-center justify-center gap-2.5 px-4 py-4 font-mono text-[11px] text-gray-500">
                 <span className="h-3 w-3 flex-shrink-0 rounded-full border-2 border-black bg-white" />
                 <span>BLE mesh node (offline)</span>
@@ -325,10 +357,32 @@ export default function HowItWorks() {
                 </svg>
                 <span>bitchat compatible on the same mesh</span>
               </div>
+              <div className="flex items-center justify-center gap-2.5 px-4 py-4 font-mono text-[11px] text-gray-500">
+                <svg width="32" height="8" className="flex-shrink-0" aria-hidden="true">
+                  <line
+                    x1="0"
+                    y1="4"
+                    x2="32"
+                    y2="4"
+                    stroke="#2563eb"
+                    strokeWidth="1.5"
+                    strokeDasharray="2 4"
+                    opacity="0.7"
+                  />
+                </svg>
+                <span>Nostr bridge (internet, when online)</span>
+              </div>
             </div>
 
-            {/* Nostr global reach, real relay map */}
-            <RelayMap />
+            <div ref={relayMapRef}>
+              {relayMapInView ? (
+                <Suspense fallback={relayMapFallback}>
+                  <RelayMap />
+                </Suspense>
+              ) : (
+                relayMapFallback
+              )}
+            </div>
           </div>
         </motion.div>
       </div>
