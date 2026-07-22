@@ -3,7 +3,8 @@
 // Spec: https://signal.org/docs/specifications/doubleratchet/
 //
 // Provides per-message forward secrecy and break-in recovery. Used for all
-// offline courier DMs. Initialized by X3DH key agreement (see x3dh.ts).
+// offline courier DMs. Initialized from a root key derived by static-static
+// ECDH over the two peers' Noise static keys (see mesh-service.ts).
 //
 // The ratchet has two interleaved components:
 //   Symmetric-key ratchet: derives sending/receiving message keys from chain keys
@@ -145,7 +146,7 @@ export interface RatchetState {
 // ---- Initialization ---------------------------------------------------------
 
 // Initialize the ratchet as the SENDER (Alice):
-//   - rk:   shared secret from X3DH (32 bytes)
+//   - rk:   shared secret from the static-static ECDH (32 bytes)
 //   - dhPub: recipient's signed prekey public (Bob's SPK_pub, 32 bytes)
 //
 // Alice performs the first DH ratchet step immediately so she can send.
@@ -167,7 +168,7 @@ export function initSender(rk: Uint8Array, dhPub: Uint8Array): RatchetState {
 }
 
 // Initialize the ratchet as the RECEIVER (Bob):
-//   - rk:       shared secret from X3DH (32 bytes)
+//   - rk:       shared secret from the static-static ECDH (32 bytes)
 //   - dhsPriv:  Bob's signed prekey private (SPK_priv, 32 bytes)
 //
 // Bob holds the key pair used by Alice to initialize; he waits for her first

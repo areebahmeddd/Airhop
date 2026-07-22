@@ -133,21 +133,10 @@ export function decodeQRContent(qr: string): ContactCard | null {
   }
 }
 
-// ---- NFC NDEF format --------------------------------------------------------
-
-// MIME type string for the NFC NDEF record. The native NFC module should
-// write an NDEF record of this type containing encodeContactCard() bytes.
-export const NFC_MIME_TYPE = "application/airhop-contact-v1";
-
-// The NFC payload IS the raw binary ContactCard (no extra envelope).
-// The NDEF type (NFC_MIME_TYPE) is the discriminator, not a header byte.
-export function encodeNFCPayload(card: ContactCard): Uint8Array {
-  return encodeContactCard(card);
-}
-
-export function decodeNFCPayload(payload: Uint8Array): ContactCard {
-  return decodeContactCard(payload);
-}
+// NFC NDEF helpers were removed along with the NFC contact path: iOS has no
+// host card emulation, so an iPhone cannot present a tag for another phone to
+// read, making phone-to-phone tap impossible. QR carries the same ContactCard
+// and works on every platform.
 
 // ---- Base64-URL helpers (RFC 4648 §5, no padding) ---------------------------
 
