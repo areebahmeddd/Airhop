@@ -13,7 +13,10 @@
 
 import { createMMKV } from "react-native-mmkv";
 import { panicWipe as clearKeys } from "../core/crypto/identity";
+import { useBlockedStore } from "../store/blocked-store";
 import { useChatStore } from "../store/chat-store";
+import { useContactsStore } from "../store/contacts-store";
+import { useOutboxStore } from "../store/outbox-store";
 import { usePeerStore } from "../store/peer-store";
 import { useWalletStore } from "../store/wallet-store";
 
@@ -21,8 +24,20 @@ import { useWalletStore } from "../store/wallet-store";
 // peer-store is intentionally absent: it uses in-memory Zustand with no MMKV
 // persistence, so it resets automatically when the process restarts.
 // wallet-store holds Cashu bearer tokens and MUST be cleared on panic wipe.
+// blocked-store records who this identity has blocked, which is tied to this
+// identity's relationships, same as chat data, so it goes too.
 // If a new persisted store is added, add its MMKV ID here.
-const MMKV_STORE_IDS = ["chat-store", "wallet-store"] as const;
+// outbox-store holds undelivered plaintext DMs awaiting a route, exactly the
+// kind of content a panic wipe exists to destroy, so it must be cleared too.
+// contacts-store holds who this identity knows, plus their public keys, the
+// social graph a panic wipe is meant to erase.
+export const MMKV_STORE_IDS = [
+  "chat-store",
+  "wallet-store",
+  "blocked-store",
+  "outbox-store",
+  "contacts-store",
+] as const;
 
 export async function panicWipe(): Promise<void> {
   // 1. Destroy all private keys from the OS secure enclave.
@@ -38,4 +53,7 @@ export async function panicWipe(): Promise<void> {
   useChatStore.getState().clearAll();
   useWalletStore.getState().clearAll();
   usePeerStore.getState().clearAll();
+  useOutboxStore.getState().clearAll();
+  useContactsStore.getState().clearAll();
+  useBlockedStore.setState({ blockedPeerIDs: [] });
 }
