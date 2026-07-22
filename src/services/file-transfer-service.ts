@@ -11,7 +11,11 @@
 
 import { bytesToHex, hexToBytes } from "@noble/hashes/utils.js";
 import * as FileSystem from "expo-file-system";
-import { encodeFileChunks, FileAssembler } from "../core/mesh/file-transfer";
+import {
+  CHUNK_SIZE,
+  encodeFileChunks,
+  FileAssembler,
+} from "../core/mesh/file-transfer";
 import { FRAGMENT_SIZE, fragmentPacket } from "../core/mesh/fragment-manager";
 import {
   BROADCAST_ID,
@@ -22,19 +26,36 @@ import {
   type Packet,
 } from "../core/mesh/packet-codec";
 import { useChatStore, type ChatAttachment } from "../store/chat-store";
+import { useTransferStore } from "../store/transfer-store";
 
 // ---- Types ------------------------------------------------------------------
 
-// Maximum file size accepted for mesh transfer. BLE throughput tops out at
-// ~2 Mbit/s in ideal conditions; a 25 MB file takes ~100 s. Larger payloads
-// should be split by the sender or delivered via Nostr/cloud link instead.
-const MAX_ATTACHMENT_BYTES = 25 * 1024 * 1024; // 25 MB
+// Maximum file size accepted for mesh transfer. Matches bitchat's 50 MB cap
+// (AppConstants.Media.MAX_FILE_SIZE_BYTES) so the two apps agree on what they
+// will accept from each other.
+//
+// This is an application policy limit, not a protocol or platform one. BLE has
+// no notion of file size, only a time cost. Over Bluetooth the paced fragment
+// rate below is ~22 KB/s, so 50 MB is roughly a 38-minute transfer, with no
+// resume if it is interrupted. Same-platform WiFi is far faster. The progress
+// UI makes the cost visible, but treat 50 MB as a hard ceiling, not a target.
+//
+// Attachments never travel over Nostr. Relays carry small signed JSON events,
+// not file bytes; "sending a file over Nostr" means uploading it to an HTTP
+// host and posting a link (NIP-94/96), which Airhop does not implement. The
+// only transports here are BLE and, when a link exists, same-platform WiFi.
+const MAX_ATTACHMENT_BYTES = 50 * 1024 * 1024; // 50 MB
 
 // Delay between consecutive outbound fragments. Matches bitchat's
 // FragmentingPacketSender.interFragmentDelayMs. This is a throughput ceiling
 // (~23 KB/s) rather than a tuning knob: without it the radio drops fragments
 // and the transfer never completes on the far side.
 const INTER_FRAGMENT_MS = 20;
+
+// Progress-store write throttle. Packets drain every 20 ms; the UI only needs
+// a few updates per second, so batching writes to this interval keeps the
+// progress card smooth without flooding React with re-renders.
+const PROGRESS_UPDATE_MS = 250;
 
 export interface AttachmentMeta {
   type: ChatAttachment["type"];
@@ -95,6 +116,20 @@ export function clearAttachmentCache(): number {
 export type BroadcastFn = (packet: Packet) => void;
 export type UnicastFn = (recipientPeerID: string, packet: Packet) => void;
 
+// Fallback display name when an attachment has none (e.g. a camera capture).
+function defaultAttachmentName(type: ChatAttachment["type"]): string {
+  switch (type) {
+    case "image":
+      return "Photo";
+    case "video":
+      return "Video";
+    case "voice":
+      return "Voice note";
+    default:
+      return "File";
+  }
+}
+
 interface ServiceIdentity {
   peerID: string;
   signingPrivKey: Uint8Array;
@@ -141,12 +176,34 @@ class TrackingAssembler {
   // streamID (u32) → senderPeerID (16 hex)
   private readonly senderMap = new Map<number, string>();
 
-  constructor(onComplete: (senderPeerID: string, data: Uint8Array) => void) {
-    this.inner = new FileAssembler((streamID, data) => {
-      const sender = this.senderMap.get(streamID) ?? "unknown";
-      this.senderMap.delete(streamID);
-      onComplete(sender, data);
-    });
+  constructor(
+    onComplete: (senderPeerID: string, data: Uint8Array) => void,
+    onProgress?: (
+      senderPeerID: string,
+      streamID: number,
+      chunksReceived: number,
+      totalChunks: number,
+    ) => void,
+  ) {
+    this.inner = new FileAssembler(
+      (streamID, data) => {
+        const sender = this.senderMap.get(streamID) ?? "unknown";
+        this.senderMap.delete(streamID);
+        onComplete(sender, data);
+      },
+      onProgress === undefined
+        ? undefined
+        : (streamID, chunksReceived, totalChunks) => {
+            const sender = this.senderMap.get(streamID) ?? "unknown";
+            onProgress(sender, streamID, chunksReceived, totalChunks);
+          },
+    );
+  }
+
+  // Discard a partial reassembly (user cancelled the incoming file).
+  dropStream(streamID: number): void {
+    this.inner.dropStream(streamID);
+    this.senderMap.delete(streamID);
   }
 
   // Feed a FILE_TRANSFER packet; extracts the stream ID to track the sender.
@@ -176,11 +233,29 @@ export class FileTransferService {
   // attributed to a raw hex fragment instead of the sender's name.
   private readonly resolveNickname?: (peerID: string) => string | undefined;
 
+  // Per-transfer accounting for the send-side progress bar. Keyed by the
+  // transfer id shown in the UI. `remaining` reaches 0 when the last of a
+  // file's packets leaves the queue. `lastPushMs` throttles store writes.
+  private readonly outbound = new Map<
+    string,
+    {
+      remaining: number;
+      totalBytes: number;
+      sentBytes: number;
+      lastPushMs: number;
+    }
+  >();
+
+  // Incoming stream IDs the user cancelled; later chunks for them are dropped.
+  private readonly cancelledRx = new Set<number>();
+
   // Paced outbound queue. See enqueue() for why this cannot be a tight loop.
   private readonly outQueue: {
     pkt: Packet;
     isDM: boolean;
     recipientPeerID: string;
+    transferId?: string;
+    weight?: number;
   }[] = [];
   private drainTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -195,16 +270,95 @@ export class FileTransferService {
     this.unicast = unicast;
     this.resolveNickname = resolveNickname;
 
-    this.assembler = new TrackingAssembler((senderPeerID, data) => {
-      void this.onFileComplete(senderPeerID, data);
-    });
+    this.assembler = new TrackingAssembler(
+      (senderPeerID, data) => {
+        void this.onFileComplete(senderPeerID, data);
+      },
+      (senderPeerID, streamID, chunksReceived, totalChunks) => {
+        this.onReceiveProgress(
+          senderPeerID,
+          streamID,
+          chunksReceived,
+          totalChunks,
+        );
+      },
+    );
+  }
+
+  // Surface incoming-file progress. The file's real name, type and channel are
+  // only known once its metadata prefix is decoded on completion, so until then
+  // this shows a generic "Incoming file" attributed to the sender. A DM
+  // attachment is best-guessed into that peer's thread; a channel broadcast has
+  // no channel until completion, so it shows against the sender's DM thread.
+  private onReceiveProgress(
+    senderPeerID: string,
+    streamID: number,
+    chunksReceived: number,
+    totalChunks: number,
+  ): void {
+    if (this.cancelledRx.has(streamID)) return;
+    const id = `rx-${String(streamID)}`;
+    const store = useTransferStore.getState();
+    // Chunk size is fixed except for the last chunk, so this is an estimate that
+    // is exact on completion.
+    const totalBytes = totalChunks * CHUNK_SIZE;
+    const transferredBytes = chunksReceived * CHUNK_SIZE;
+
+    if (store.transfers[id] === undefined) {
+      store.begin({
+        id,
+        direction: "receive",
+        channel: `dm:${senderPeerID}`,
+        peerLabel:
+          this.resolveNickname?.(senderPeerID) ?? senderPeerID.slice(0, 8),
+        type: "document",
+        name: "Incoming file",
+        totalBytes,
+        startedAtMs: Date.now(),
+      });
+    }
+    if (chunksReceived >= totalChunks) {
+      store.finish(id);
+    } else {
+      store.advance(id, transferredBytes);
+    }
   }
 
   // Receive a reassembled FILE_TRANSFER packet from the fragment layer.
   onFileTransfer(packet: Packet): void {
     // Drop our own echoes.
     if (bytesToHex(packet.senderID) === this.identity.peerID) return;
+    // Ignore packets for a stream the user cancelled, so late-arriving chunks
+    // don't silently restart a download that was stopped on purpose.
+    if (packet.payload.length >= 4) {
+      const streamID = new DataView(
+        packet.payload.buffer,
+        packet.payload.byteOffset,
+      ).getUint32(0, false);
+      if (this.cancelledRx.has(streamID)) return;
+    }
     this.assembler.receive(packet);
+  }
+
+  // Cancel an in-flight transfer by its UI id.
+  //   "tx-…" (outgoing): drop its accounting and purge its queued packets.
+  //   "rx-…" (incoming): drop the partial reassembly and ignore later chunks.
+  cancel(transferId: string): void {
+    if (transferId.startsWith("tx-")) {
+      this.outbound.delete(transferId);
+      for (let i = this.outQueue.length - 1; i >= 0; i--) {
+        if (this.outQueue[i].transferId === transferId) {
+          this.outQueue.splice(i, 1);
+        }
+      }
+    } else if (transferId.startsWith("rx-")) {
+      const streamID = Number(transferId.slice(3));
+      if (Number.isFinite(streamID)) {
+        this.cancelledRx.add(streamID);
+        this.assembler.dropStream(streamID);
+      }
+    }
+    useTransferStore.getState().cancel(transferId);
   }
 
   // Send file bytes with metadata over the mesh.
@@ -219,7 +373,7 @@ export class FileTransferService {
       // Caller (message-thread.tsx) already shows the local message.
       // Throw so the async wrapper can catch and alert the user.
       throw new Error(
-        `Attachment too large (${(fileBytes.length / 1024 / 1024).toFixed(1)} MB). Maximum is 25 MB.`,
+        `Attachment too large (${(fileBytes.length / 1024 / 1024).toFixed(1)} MB). Maximum is 50 MB.`,
       );
     }
 
@@ -236,6 +390,9 @@ export class FileTransferService {
     const fullBytes = prependMeta(fileBytes, envelope);
     const chunks = encodeFileChunks(fullBytes);
 
+    // Build the full packet list first, so the transfer's item count (and
+    // therefore its per-item progress weight) is known before anything queues.
+    const items: Packet[] = [];
     for (const chunk of chunks) {
       const pkt: Packet = {
         type: PacketType.FILE_TRANSFER,
@@ -252,15 +409,42 @@ export class FileTransferService {
       pkt.signature = signPacket(pkt, this.identity.signingPrivKey);
 
       // Fragment the chunk packet if it exceeds the BLE MTU limit.
-      const encoded = encodePacket(pkt);
-      if (encoded.length > FRAGMENT_SIZE) {
-        const frags = fragmentPacket(pkt, this.identity, signPacket);
-        for (const frag of frags) {
-          this.enqueue(frag, isDM, recipientPeerID);
+      if (encodePacket(pkt).length > FRAGMENT_SIZE) {
+        for (const frag of fragmentPacket(pkt, this.identity, signPacket)) {
+          items.push(frag);
         }
       } else {
-        this.enqueue(pkt, isDM, recipientPeerID);
+        items.push(pkt);
       }
+    }
+
+    // Register a progress transfer. Weight is spread evenly across the queued
+    // packets, so draining them maps linearly onto the file's byte count.
+    const transferId = `tx-${this.identity.peerID}-${String(Date.now())}`;
+    const totalItems = items.length || 1;
+    const perItemBytes = fileBytes.length / totalItems;
+    this.outbound.set(transferId, {
+      remaining: totalItems,
+      totalBytes: fileBytes.length,
+      sentBytes: 0,
+      lastPushMs: Date.now(),
+    });
+    useTransferStore.getState().begin({
+      id: transferId,
+      direction: "send",
+      channel,
+      peerLabel: isDM
+        ? (this.resolveNickname?.(recipientPeerID) ??
+          recipientPeerID.slice(0, 8))
+        : "",
+      type: meta.type,
+      name: meta.name || defaultAttachmentName(meta.type),
+      totalBytes: fileBytes.length,
+      startedAtMs: Date.now(),
+    });
+
+    for (const pkt of items) {
+      this.enqueue(pkt, isDM, recipientPeerID, transferId, perItemBytes);
     }
   }
 
@@ -275,8 +459,14 @@ export class FileTransferService {
   //
   // Pacing at one fragment per tick is the same approach bitchat uses
   // (FragmentingPacketSender.interFragmentDelayMs = 20).
-  private enqueue(pkt: Packet, isDM: boolean, recipientPeerID: string): void {
-    this.outQueue.push({ pkt, isDM, recipientPeerID });
+  private enqueue(
+    pkt: Packet,
+    isDM: boolean,
+    recipientPeerID: string,
+    transferId?: string,
+    weight?: number,
+  ): void {
+    this.outQueue.push({ pkt, isDM, recipientPeerID, transferId, weight });
     this.scheduleDrain();
   }
 
@@ -287,9 +477,36 @@ export class FileTransferService {
       const next = this.outQueue.shift();
       if (next !== undefined) {
         this.dispatchPacket(next.pkt, next.isDM, next.recipientPeerID);
+        if (next.transferId !== undefined) {
+          this.reportSendProgress(next.transferId, next.weight ?? 0);
+        }
       }
       if (this.outQueue.length > 0) this.scheduleDrain();
     }, INTER_FRAGMENT_MS);
+  }
+
+  // Advance the send-side progress bar as each packet leaves the queue, and
+  // mark the transfer done once its last packet has gone out.
+  //
+  // Packets drain every 20 ms, but the store is written at most every
+  // PROGRESS_UPDATE_MS so the card refreshes ~4x/sec (matching how real
+  // download indicators update) rather than triggering 50 re-renders a second.
+  private reportSendProgress(transferId: string, weight: number): void {
+    const tx = this.outbound.get(transferId);
+    if (tx === undefined) return;
+    tx.sentBytes += weight;
+    tx.remaining -= 1;
+    const store = useTransferStore.getState();
+    if (tx.remaining <= 0) {
+      this.outbound.delete(transferId);
+      store.finish(transferId);
+      return;
+    }
+    const now = Date.now();
+    if (now - tx.lastPushMs >= PROGRESS_UPDATE_MS) {
+      tx.lastPushMs = now;
+      store.advance(transferId, tx.sentBytes);
+    }
   }
 
   // Number of packets still waiting to go out, for tests and progress UI.
@@ -364,6 +581,7 @@ export class FileTransferService {
         name: meta.n || undefined,
         mimeType: meta.m || undefined,
         durationMs: meta.d || undefined,
+        sizeBytes: bytes.length,
       },
     });
   }

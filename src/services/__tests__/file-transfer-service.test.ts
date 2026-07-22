@@ -112,7 +112,8 @@ describe("outbound pacing", () => {
 
   it("rejects a file over the size cap before queueing anything", () => {
     const { service, broadcast } = makeService();
-    const tooBig = new Uint8Array(26 * 1024 * 1024);
+    // Just over the 50 MB cap.
+    const tooBig = new Uint8Array(51 * 1024 * 1024);
 
     expect(() => service.sendBytes(tooBig, META, "#test")).toThrow(
       /too large/i,
