@@ -17,7 +17,7 @@ import { finalizeEvent } from "nostr-tools";
 import type { EventHandler, NostrClient } from "./nostr-client";
 
 // Event kind constants per PROTOCOLS.md section 8.
-const KIND_PRESENCE = 20001;
+export const KIND_PRESENCE = 20001;
 const KIND_GEOHASH_CHANNEL = 20000;
 
 // Geohash precision per PROTOCOLS.md section 8 (~5 km × 5 km cell).
@@ -29,6 +29,18 @@ const ALLOWED_PRECISIONS: ReadonlySet<number> = new Set([2, 4, 5]);
 // Heartbeat interval range in milliseconds.
 const HEARTBEAT_MIN_MS = 40_000;
 const HEARTBEAT_MAX_MS = 80_000;
+
+// Opening a channel replays up to an hour of recent traffic, so the room isn't
+// empty on arrival. Capped so a busy cell can't flood the client on join.
+const CHANNEL_LOOKBACK_SECONDS = 3600;
+const CHANNEL_INITIAL_LIMIT = 200;
+
+// A pubkey counts as present if seen (via either kind) within this window.
+export const PARTICIPANT_ONLINE_MS = 5 * 60 * 1000;
+
+// Tag carrying the sender's cross-transport message ID, used to collapse the
+// BLE and Nostr copies of one message into a single bubble.
+export const TAG_MESSAGE_ID = "mid";
 
 // ---- Geohash encoding -------------------------------------------------------
 
@@ -185,23 +197,52 @@ export class GeohashPresence {
     return () => closer.close();
   }
 
-  // Subscribe to public channel messages on a geohash channel.
+  // Subscribe to a geohash channel: chat messages AND presence heartbeats.
+  //
+  // Both kinds share one subscription because both count as "this pubkey is
+  // here" for the participant list. The one-hour lookback lets someone opening
+  // a channel see recent conversation instead of an empty room, and the limit
+  // caps the initial replay burst.
   subscribeChannel(geohash: string, onEvent: EventHandler): () => void {
     const filter = {
-      kinds: [KIND_GEOHASH_CHANNEL],
+      kinds: [KIND_GEOHASH_CHANNEL, KIND_PRESENCE],
       "#g": [geohash],
+      since: Math.floor(Date.now() / 1000) - CHANNEL_LOOKBACK_SECONDS,
+      limit: CHANNEL_INITIAL_LIMIT,
     };
     const closer = this.client.subscribe([filter], onEvent);
     return () => closer.close();
   }
 
   // Publish a public message to a geohash channel (kind 20000).
-  async publishChannelMessage(geohash: string, content: string): Promise<void> {
+  //
+  // `nickname` rides along in an "n" tag: a Nostr event identifies its author
+  // only by pubkey, so without it every geohash message would render as a raw
+  // hex string with no way to tell participants apart. It is self-asserted and
+  // unverified, the same trust level as a nickname in any public chat room.
+  async publishChannelMessage(
+    geohash: string,
+    content: string,
+    nickname?: string,
+    msgId?: string,
+  ): Promise<void> {
+    const tags: string[][] = [["g", geohash]];
+    if (nickname !== undefined && nickname.length > 0) {
+      tags.push(["n", nickname.slice(0, 32)]);
+    }
+    // Sender-assigned ID shared with the BLE copy of this same message. A
+    // receiver on both transports would otherwise see it twice, and because
+    // the Nostr copy is signed with a per-geohash key, apparently from two
+    // different people. Unknown tags are ignored by other clients, so this is
+    // additive and safe.
+    if (msgId !== undefined && msgId.length > 0) {
+      tags.push([TAG_MESSAGE_ID, msgId.slice(0, 32)]);
+    }
     const event = finalizeEvent(
       {
         kind: KIND_GEOHASH_CHANNEL,
         created_at: Math.floor(Date.now() / 1000),
-        tags: [["g", geohash]],
+        tags,
         content,
       },
       this.privKey,
@@ -230,8 +271,12 @@ export class GeohashPresence {
       {
         kind: KIND_PRESENCE,
         created_at: Math.floor(Date.now() / 1000),
+        // Presence carries the geohash tag and NOTHING else: no nickname, and
+        // an empty body. A heartbeat says "someone is in this cell". Attaching
+        // a name would turn a presence beacon into a location disclosure tied
+        // to a person. Names travel only on chat events the user chose to send.
         tags: [["g", geohash]],
-        content: geohash,
+        content: "",
       },
       this.privKey,
     );
