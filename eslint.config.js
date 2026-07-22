@@ -38,6 +38,15 @@ module.exports = defineConfig([
     },
   },
   {
+    // Build scripts run in Node, so __dirname, require, and process are valid.
+    files: ["scripts/**/*.js"],
+    languageOptions: {
+      globals: {
+        ...globals.node,
+      },
+    },
+  },
+  {
     ignores: [
       "node_modules/",
       "bitchat/",

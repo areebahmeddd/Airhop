@@ -82,15 +82,21 @@ export class GeoRelayDirectory {
   // Load from CSV string (typically from require('../../../assets/data/relays.csv')
   // which Metro bundles as a static asset). Call once at startup.
   load(csv: string): void {
-    const parsed = parseRelaysCsv(csv);
-    // De-duplicate by URL
+    this.loadEntries(parseRelaysCsv(csv));
+  }
+
+  // Load from an already-parsed list. This is the path the app actually uses:
+  // the relay table ships as a generated TypeScript module (src/data/relays.ts)
+  // because Metro does not bundle .csv, so there is no CSV string to parse at
+  // runtime. The CSV path above remains for tests and for regeneration.
+  loadEntries(entries: readonly RelayEntry[]): void {
     const seen = new Set<string>();
     this.entries = [];
-    for (const e of parsed) {
-      if (!seen.has(e.url)) {
-        seen.add(e.url);
-        this.entries.push(e);
-      }
+    for (const e of entries) {
+      const url = normalizeRelayUrl(e.url);
+      if (url === null || seen.has(url)) continue;
+      seen.add(url);
+      this.entries.push({ url, lat: e.lat, lng: e.lng });
     }
   }
 
@@ -101,9 +107,30 @@ export class GeoRelayDirectory {
 
     const sorted = pool
       .map((e) => ({ url: e.url, km: haversineKm(lat, lng, e.lat, e.lng) }))
-      .sort((a, b) => a.km - b.km);
+      // Ties break on URL, not insertion order. This is load-bearing for
+      // interop, not cosmetic: publisher and subscriber must independently
+      // arrive at the SAME relay set, or messages get published to relays the
+      // other side never subscribed to and the channel silently drops traffic.
+      // Many relays in the directory share identical coordinates, so ties are
+      // common rather than exotic.
+      .sort((a, b) => (a.km !== b.km ? a.km - b.km : a.url < b.url ? -1 : 1));
 
     return sorted.slice(0, count).map((e) => e.url);
+  }
+
+  // Relays nearest the CENTRE of a geohash cell, not the user's own position.
+  //
+  // This distinction is essential: every participant in a cell must converge on
+  // the same relay set. Selecting by personal position would give two people in
+  // opposite corners of the same city cell different relays, and they would
+  // never see each other's messages despite being "in" the same channel.
+  closestRelaysToGeohash(
+    geohash: string,
+    decodeCenter: (hash: string) => { lat: number; lng: number },
+    count: number = 5,
+  ): string[] {
+    const center = decodeCenter(geohash);
+    return this.nearestRelays(center.lat, center.lng, count);
   }
 
   // Return the N nearest relays with their distance in kilometres.
