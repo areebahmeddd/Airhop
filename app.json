@@ -5,49 +5,11 @@
     "version": "1.0.0",
     "orientation": "portrait",
     "userInterfaceStyle": "automatic",
+    "icon": "./assets/images/icon.png",
     "splash": {
+      "image": "./assets/images/splash-icon.png",
       "resizeMode": "contain",
-      "backgroundColor": "#000000"
-    },
-    "ios": {
-      "supportsTablet": false,
-      "bundleIdentifier": "org.onemindlabs.airhop",
-      "infoPlist": {
-        "NSBluetoothAlwaysUsageDescription": "Airhop uses Bluetooth to communicate with nearby devices on the mesh.",
-        "NSBluetoothPeripheralUsageDescription": "Airhop uses Bluetooth to advertise your presence to nearby peers.",
-        "NSLocalNetworkUsageDescription": "Airhop uses the local network to connect directly to nearby devices for high-bandwidth transfers (video, large files).",
-        "NSCameraUsageDescription": "Airhop uses the camera to capture photos and videos to share with nearby peers.",
-        "NSMicrophoneUsageDescription": "Airhop uses the microphone to record voice notes for peer-to-peer messaging.",
-        "NSPhotoLibraryUsageDescription": "Airhop accesses your photo library to share images and videos over the mesh.",
-        "NFCReaderUsageDescription": "Airhop uses NFC to exchange contact Peer IDs by tapping phones together.",
-        "NSBonjourServices": ["_airhop-mesh._tcp"],
-        "UIBackgroundModes": ["bluetooth-central", "bluetooth-peripheral"]
-      },
-      "entitlements": {
-        "com.apple.developer.nfc.readersession.formats": ["NDEF"]
-      }
-    },
-    "android": {
-      "adaptiveIcon": {
-        "backgroundColor": "#000000"
-      },
-      "package": "org.onemindlabs.airhop",
-      "permissions": [
-        "BLUETOOTH",
-        "BLUETOOTH_ADMIN",
-        "BLUETOOTH_SCAN",
-        "BLUETOOTH_CONNECT",
-        "BLUETOOTH_ADVERTISE",
-        "ACCESS_FINE_LOCATION",
-        "ACCESS_WIFI_STATE",
-        "CHANGE_WIFI_STATE",
-        "ACCESS_NETWORK_STATE",
-        "CAMERA",
-        "RECORD_AUDIO",
-        "READ_MEDIA_IMAGES",
-        "READ_MEDIA_VIDEO",
-        "NFC"
-      ]
+      "backgroundColor": "#ffffff"
     },
     "plugins": [
       [
@@ -58,9 +20,22 @@
         }
       ],
       [
+        "expo-camera",
+        {
+          "cameraPermission": "Airhop uses the camera to scan a contact's QR code to add them."
+        }
+      ],
+      [
         "expo-audio",
         {
           "microphonePermission": "Airhop uses the microphone to record voice notes for peer-to-peer messaging."
+        }
+      ],
+      [
+        "expo-media-library",
+        {
+          "savePhotosPermission": "Airhop saves your QR code image to your photo library when you download it.",
+          "isAccessMediaLocationEnabled": false
         }
       ],
       [
@@ -75,6 +50,43 @@
         }
       ]
     ],
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "org.onemindlabs.airhop",
+      "infoPlist": {
+        "NSBluetoothAlwaysUsageDescription": "Airhop uses Bluetooth to communicate with nearby devices on the mesh.",
+        "NSBluetoothPeripheralUsageDescription": "Airhop uses Bluetooth to advertise your presence to nearby peers.",
+        "NSLocalNetworkUsageDescription": "Airhop uses the local network to connect directly to nearby devices for high-bandwidth transfers (video, large files).",
+        "NSCameraUsageDescription": "Airhop uses the camera to capture photos and videos to share with nearby peers.",
+        "NSMicrophoneUsageDescription": "Airhop uses the microphone to record voice notes for peer-to-peer messaging.",
+        "NSPhotoLibraryUsageDescription": "Airhop accesses your photo library to share images and videos over the mesh.",
+        "NSBonjourServices": ["_airhop-mesh._tcp"],
+        "UIBackgroundModes": ["bluetooth-central", "bluetooth-peripheral"]
+      }
+    },
+    "android": {
+      "package": "org.onemindlabs.airhop",
+      "allowBackup": false,
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/images/adaptive-icon.png",
+        "backgroundColor": "#ffffff"
+      },
+      "permissions": [
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_NETWORK_STATE",
+        "ACCESS_WIFI_STATE",
+        "BLUETOOTH",
+        "BLUETOOTH_ADMIN",
+        "BLUETOOTH_ADVERTISE",
+        "BLUETOOTH_CONNECT",
+        "BLUETOOTH_SCAN",
+        "CAMERA",
+        "CHANGE_WIFI_STATE",
+        "READ_MEDIA_IMAGES",
+        "READ_MEDIA_VIDEO",
+        "RECORD_AUDIO"
+      ]
+    },
     "experiments": {
       "typedRoutes": false
     }
