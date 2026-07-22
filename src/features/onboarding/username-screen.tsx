@@ -2,23 +2,17 @@
 // Shows the user their deterministic human-readable username derived from the
 // generated peer ID. Communicates that this is permanent and unique to them.
 
-import React, { useEffect, useState } from "react";
-import {
-  Animated,
-  Easing,
-  Pressable,
-  StyleSheet,
-  Text,
-  View,
-} from "react-native";
+import React, { useEffect, useMemo, useState } from "react";
+import { Animated, Easing, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import PrimaryButton from "../../ui/components/primary-button";
 import {
   avatarColor,
-  Colors,
   FontSize,
   FontWeight,
   Radius,
   Spacing,
+  useThemeColors,
 } from "../../ui/theme";
 import { peerIDToUsername } from "../../utils/username";
 
@@ -31,6 +25,8 @@ export default function UsernameScreen({
   peerID,
   onEnter,
 }: Props): React.JSX.Element {
+  const Colors = useThemeColors();
+  const styles = useMemo(() => createStyles(Colors), [Colors]);
   const username = peerIDToUsername(peerID);
   const accentColor = avatarColor(peerID);
   const [scaleAnim] = useState(() => new Animated.Value(0.88));
@@ -90,7 +86,9 @@ export default function UsernameScreen({
           {/* Peer ID */}
           <Text style={styles.peerIDLabel}>Peer ID</Text>
           <Text style={styles.peerID}>
-            {peerID.slice(0, 8)}\u2009\u00b7\u2009{peerID.slice(8)}
+            {peerID.slice(0, 8)}
+            {"\u2009\u00b7\u2009"}
+            {peerID.slice(8)}
           </Text>
 
           {/* Divider */}
@@ -123,14 +121,11 @@ export default function UsernameScreen({
 
       {/* Footer */}
       <View style={styles.footer}>
-        <Pressable
-          style={({ pressed }) => [styles.cta, pressed && styles.ctaPressed]}
+        <PrimaryButton
+          label="Enter Airhop"
           onPress={onEnter}
-          accessibilityRole="button"
           accessibilityLabel="Enter Airhop"
-        >
-          <Text style={styles.ctaText}>Enter Airhop</Text>
-        </Pressable>
+        />
       </View>
     </SafeAreaView>
   );
@@ -142,114 +137,102 @@ const PROPS = [
   { label: "Account required", value: "None", accent: true },
 ] as const;
 
-const styles = StyleSheet.create({
-  root: {
-    flex: 1,
-    backgroundColor: Colors.bg,
-  },
-  inner: {
-    flex: 1,
-    paddingHorizontal: Spacing["2xl"],
-    justifyContent: "center",
-    gap: Spacing.xl,
-  },
-  // Card
-  card: {
-    backgroundColor: Colors.surface,
-    borderRadius: Radius.xl,
-    borderWidth: 1,
-    padding: Spacing.xl,
-    alignItems: "center",
-    gap: Spacing.sm,
-  },
-  avatarCircle: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
-    borderWidth: 1.5,
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: Spacing.sm,
-  },
-  avatarInitials: {
-    fontSize: FontSize.xl,
-    fontWeight: FontWeight.bold,
-    letterSpacing: 1,
-  },
-  label: {
-    fontSize: FontSize.xs,
-    color: Colors.textMuted,
-    letterSpacing: 0.8,
-    textTransform: "uppercase",
-  },
-  username: {
-    fontSize: FontSize.lg,
-    fontWeight: FontWeight.bold,
-    letterSpacing: -0.3,
-    marginBottom: Spacing.xs,
-  },
-  peerIDLabel: {
-    fontSize: FontSize.xs,
-    color: Colors.textMuted,
-    letterSpacing: 0.8,
-    textTransform: "uppercase",
-    marginTop: Spacing.sm,
-  },
-  peerID: {
-    fontSize: FontSize.xs,
-    color: Colors.textSecondary,
-    fontFamily: "monospace",
-    letterSpacing: 1,
-  },
-  divider: {
-    alignSelf: "stretch",
-    height: 1,
-    backgroundColor: Colors.border,
-    marginVertical: Spacing.sm,
-  },
-  props: {
-    alignSelf: "stretch",
-    gap: Spacing.xs + 2,
-  },
-  propRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-  },
-  propLabel: {
-    fontSize: FontSize.sm,
-    color: Colors.textMuted,
-  },
-  propValue: {
-    fontSize: FontSize.sm,
-    color: Colors.textSecondary,
-    fontWeight: FontWeight.medium,
-  },
-  // Explanation
-  explanation: {
-    fontSize: FontSize.sm,
-    color: Colors.textMuted,
-    textAlign: "center",
-    lineHeight: FontSize.sm * 1.6,
-    paddingHorizontal: Spacing.md,
-  },
-  // Footer
-  footer: {
-    paddingHorizontal: Spacing["2xl"],
-    paddingBottom: Spacing["2xl"],
-  },
-  cta: {
-    backgroundColor: Colors.accent,
-    borderRadius: Radius.md,
-    paddingVertical: Spacing.base + 2,
-    alignItems: "center",
-  },
-  ctaPressed: {
-    opacity: 0.88,
-  },
-  ctaText: {
-    fontSize: FontSize.base,
-    fontWeight: FontWeight.semibold,
-    color: Colors.textInverse,
-    letterSpacing: 0.1,
-  },
-});
+function createStyles(Colors: ReturnType<typeof useThemeColors>) {
+  return StyleSheet.create({
+    root: {
+      flex: 1,
+      backgroundColor: Colors.bg,
+    },
+    inner: {
+      flex: 1,
+      paddingHorizontal: Spacing["2xl"],
+      justifyContent: "center",
+      gap: Spacing.xl,
+    },
+    // Card
+    card: {
+      backgroundColor: Colors.surface,
+      borderRadius: Radius.xl,
+      borderWidth: 1,
+      padding: Spacing.xl,
+      alignItems: "center",
+      gap: Spacing.sm,
+    },
+    avatarCircle: {
+      width: 72,
+      height: 72,
+      borderRadius: 36,
+      borderWidth: 1.5,
+      alignItems: "center",
+      justifyContent: "center",
+      marginBottom: Spacing.sm,
+    },
+    avatarInitials: {
+      fontSize: FontSize.xl,
+      fontWeight: FontWeight.bold,
+      letterSpacing: 1,
+    },
+    label: {
+      fontSize: FontSize.xs,
+      color: Colors.textMuted,
+      letterSpacing: 0.8,
+      textTransform: "uppercase",
+    },
+    username: {
+      fontSize: FontSize.lg,
+      fontWeight: FontWeight.bold,
+      letterSpacing: -0.3,
+      marginBottom: Spacing.xs,
+    },
+    peerIDLabel: {
+      fontSize: FontSize.xs,
+      color: Colors.textMuted,
+      letterSpacing: 0.8,
+      textTransform: "uppercase",
+      marginTop: Spacing.sm,
+    },
+    peerID: {
+      fontSize: FontSize.xs,
+      color: Colors.textSecondary,
+      fontFamily: "monospace",
+      letterSpacing: 1,
+    },
+    divider: {
+      alignSelf: "stretch",
+      height: 1,
+      backgroundColor: Colors.border,
+      marginVertical: Spacing.sm,
+    },
+    props: {
+      alignSelf: "stretch",
+      gap: Spacing.xs + 2,
+    },
+    propRow: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+    },
+    propLabel: {
+      fontSize: FontSize.sm,
+      color: Colors.textMuted,
+    },
+    propValue: {
+      fontSize: FontSize.sm,
+      color: Colors.textSecondary,
+      fontWeight: FontWeight.medium,
+    },
+    // Explanation
+    explanation: {
+      fontSize: FontSize.sm,
+      color: Colors.textMuted,
+      textAlign: "center",
+      lineHeight: FontSize.sm * 1.6,
+      paddingHorizontal: Spacing.md,
+    },
+    // Footer: same horizontal margin as the app's floating tab bar
+    // (Spacing.base) so the CTA width matches once onboarding hands off.
+    footer: {
+      paddingHorizontal: Spacing.base,
+      paddingBottom: Spacing.md,
+    },
+  });
+}
