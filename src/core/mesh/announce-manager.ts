@@ -23,7 +23,13 @@ import {
   type Packet,
 } from "./packet-codec";
 
-const ANNOUNCE_INTERVAL_MS = 30_000;
+// Announce cadence adapts to whether we can currently hear anyone, matching
+// bitchat: broadcast quickly while isolated so a lone pair of devices discovers
+// each other fast, then back off to a jittered 15-30s once connected to keep
+// steady-state traffic (and battery) low.
+const ANNOUNCE_ISOLATED_MS = 4_000;
+const ANNOUNCE_CONNECTED_MIN_MS = 15_000;
+const ANNOUNCE_CONNECTED_MAX_MS = 30_000;
 
 // TTL stamped on every outgoing ANNOUNCE. Receivers use this to tell a direct
 // announce from a relayed one: FloodRouter decrements TTL on each hop, so a
@@ -135,7 +141,7 @@ export function decodeAnnouncePayload(
 export type SendPacketFn = (packet: Packet) => void;
 
 export class AnnounceManager {
-  private timer: ReturnType<typeof setInterval> | null = null;
+  private timer: ReturnType<typeof setTimeout> | null = null;
 
   // Build and return a signed ANNOUNCE packet ready to send.
   // Pass neighborIDs (each 8 bytes) to include TLV 0x04 so topology gossip works.
@@ -169,8 +175,11 @@ export class AnnounceManager {
     return packet;
   }
 
-  // Start broadcasting ANNOUNCE packets every 30 seconds.
-  // Sends an initial packet immediately then repeats on the interval.
+  // Start broadcasting ANNOUNCE packets.
+  //
+  // The interval adapts to connectivity: ~4s while isolated (no peers), then a
+  // jittered 15-30s once at least one peer is connected. Pass getPeerCount so
+  // the manager can tell which state it is in on each tick.
   //
   // Pass getNeighborIDs to include TLV 0x04 in each ANNOUNCE. The callback is
   // called on every broadcast tick so the neighbor list stays current.
@@ -181,6 +190,7 @@ export class AnnounceManager {
     send: SendPacketFn,
     getNeighborIDs?: () => readonly Uint8Array[],
     nostrPubKey?: Uint8Array,
+    getPeerCount?: () => number,
   ): void {
     if (this.timer !== null) this.stop();
 
@@ -189,13 +199,29 @@ export class AnnounceManager {
       send(this.buildPacket(identity, nickname, neighbors, nostrPubKey));
     };
 
+    const nextDelay = (): number => {
+      const connected = (getPeerCount?.() ?? 0) > 0;
+      if (!connected) return ANNOUNCE_ISOLATED_MS;
+      return (
+        ANNOUNCE_CONNECTED_MIN_MS +
+        Math.random() * (ANNOUNCE_CONNECTED_MAX_MS - ANNOUNCE_CONNECTED_MIN_MS)
+      );
+    };
+
+    const scheduleNext = (): void => {
+      this.timer = setTimeout(() => {
+        broadcast();
+        scheduleNext();
+      }, nextDelay());
+    };
+
     broadcast(); // immediate first announce
-    this.timer = setInterval(broadcast, ANNOUNCE_INTERVAL_MS);
+    scheduleNext();
   }
 
   stop(): void {
     if (this.timer !== null) {
-      clearInterval(this.timer);
+      clearTimeout(this.timer);
       this.timer = null;
     }
   }

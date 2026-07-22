@@ -13,21 +13,41 @@
 import { Deduplicator } from "./deduplicator";
 import { computePacketId, type Packet } from "./packet-codec";
 
-const JITTER_MIN_MS = 10;
-const JITTER_MAX_MS = 220;
 const DEFAULT_TTL = 7;
 
-function jitterMs(): number {
-  return (
-    JITTER_MIN_MS +
-    Math.floor(Math.random() * (JITTER_MAX_MS - JITTER_MIN_MS + 1))
-  );
+// Relay delay scales with how many neighbours we can hear (our "degree"),
+// matching bitchat's RelayController. In a sparse mesh we relay almost
+// immediately so a packet is not cancelled before it propagates; in a dense
+// mesh we wait longer so someone else's relay usually wins first and duplicate
+// suppression does more of the work. The overall window is 10–220 ms.
+function jitterMs(degree: number): number {
+  let min: number;
+  let max: number;
+  if (degree <= 2) {
+    min = 10;
+    max = 40;
+  } else if (degree <= 5) {
+    min = 60;
+    max = 150;
+  } else if (degree <= 9) {
+    min = 80;
+    max = 180;
+  } else {
+    min = 100;
+    max = 220;
+  }
+  return min + Math.floor(Math.random() * (max - min + 1));
 }
 
 export type SendFn = (packet: Packet) => void;
 
 export class FloodRouter {
   private readonly dedup = new Deduplicator();
+
+  // Returns our current neighbour count so relay jitter can adapt to mesh
+  // density. Defaults to 0 (sparse) when the caller does not provide one, which
+  // keeps the router usable in tests without wiring up a live peer count.
+  constructor(private readonly getDegree: () => number = () => 0) {}
   // Scheduled relay timers, keyed by packet ID hex. Stored so callers can
   // flush on shutdown if needed.
   private readonly pending: Map<string, ReturnType<typeof setTimeout>> =
@@ -66,7 +86,7 @@ export class FloodRouter {
     const timer = setTimeout(() => {
       this.pending.delete(idKey);
       send(packet);
-    }, jitterMs());
+    }, jitterMs(this.getDegree()));
 
     this.pending.set(idKey, timer);
   }

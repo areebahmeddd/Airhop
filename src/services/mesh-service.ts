@@ -130,7 +130,10 @@ export class MeshService {
   // Maps a remote peer's Nostr pubkey hex to their peerID, populated as ANNOUNCEs arrive.
   private readonly nostrPubkeyToPeerID = new Map<string, string>();
 
-  private readonly floodRouter = new FloodRouter();
+  // Relay jitter adapts to how many peers we can hear (BLE + WiFi links).
+  private readonly floodRouter = new FloodRouter(
+    () => this.connectedLinks.size + this.wifiConnectedLinks.size,
+  );
   private readonly registry = new PeerRegistry();
   private readonly announceManager = new AnnounceManager();
   private readonly router: MessageRouter;
@@ -327,6 +330,7 @@ export class MeshService {
       sendFn,
       undefined,
       hexToBytes(this.nostrPubKeyHex),
+      () => this.connectedLinks.size + this.wifiConnectedLinks.size,
     );
 
     // Periodic gossip filter, so peers can tell us what they're missing.
@@ -1223,6 +1227,11 @@ export class MeshService {
   // and after the user joins a new location channel.
   refreshGeoChannels(): void {
     void this.geoChannels?.refresh();
+  }
+
+  // Cancel an in-flight attachment transfer (sending or receiving) by its id.
+  cancelTransfer(transferId: string): void {
+    this.fileXfer.cancel(transferId);
   }
 
   // Send a DM, queueing it for later delivery if no route exists right now.
