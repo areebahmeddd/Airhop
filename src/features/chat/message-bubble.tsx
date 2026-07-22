@@ -24,6 +24,12 @@ interface Props {
   renderAttachment: (attachment: ChatAttachment) => React.ReactNode;
   formatTime: (ms: number) => string;
   onLongPress: (item: ChatMessage) => void;
+  // Tapping the avatar or name opens a profile sheet for that sender — same
+  // "tap a peer to see who they are" affordance as the Mesh tab. Omitted in
+  // a DM thread (there's only one other participant, already reachable via
+  // the header) — only wired for channels, where a message can come from
+  // any of several people.
+  onPressSender?: (item: ChatMessage) => void;
   // Briefly true right after navigating here from a search result, so the
   // matched message is unmistakable among a screen of otherwise-identical
   // bubbles. A border ring (not a background wash) so it reads the same way
@@ -41,6 +47,7 @@ export default function MessageBubble({
   renderAttachment,
   formatTime,
   onLongPress,
+  onPressSender,
   highlighted,
 }: Props): React.JSX.Element {
   const Colors = useThemeColors();
@@ -60,11 +67,23 @@ export default function MessageBubble({
     >
       {showAvatar ? (
         isFirstFromSender ? (
-          <Avatar
-            username={item.senderNickname}
-            peerID={item.senderID}
-            size={32}
-          />
+          <Pressable
+            onPress={onPressSender ? () => onPressSender(item) : undefined}
+            disabled={!onPressSender}
+            hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
+            accessibilityRole={onPressSender ? "button" : undefined}
+            accessibilityLabel={
+              onPressSender
+                ? `View ${item.senderNickname}'s profile`
+                : undefined
+            }
+          >
+            <Avatar
+              username={item.senderNickname}
+              peerID={item.senderID}
+              size={32}
+            />
+          </Pressable>
         ) : (
           <View style={styles.avatarSpacer} />
         )
@@ -77,7 +96,19 @@ export default function MessageBubble({
         ]}
       >
         {showAvatar && isFirstFromSender && (
-          <Text style={styles.senderName}>{item.senderNickname}</Text>
+          <Pressable
+            onPress={onPressSender ? () => onPressSender(item) : undefined}
+            disabled={!onPressSender}
+            hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
+            accessibilityRole={onPressSender ? "button" : undefined}
+            accessibilityLabel={
+              onPressSender
+                ? `View ${item.senderNickname}'s profile`
+                : undefined
+            }
+          >
+            <Text style={styles.senderName}>{item.senderNickname}</Text>
+          </Pressable>
         )}
 
         <Pressable

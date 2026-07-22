@@ -777,7 +777,7 @@ export default function App(): React.JSX.Element {
                             ? messageTarget.trigger
                             : undefined
                         }
-                        onForwarded={openChannel}
+                        onNavigateToChannel={openChannel}
                       />
                     ) : tab === "chats" && chatView.kind === "search" ? (
                       <ChatSearchResults

@@ -32,6 +32,7 @@ import {
   Modal,
   Platform,
   Pressable,
+  ScrollView,
   Share,
   StyleSheet,
   Text,
@@ -113,7 +114,7 @@ const ATTACH_OPTIONS: {
     action: "ecash",
     icon: "zap",
     label: "Send ecash",
-    desc: "Send Cashu sats, built offline from your wallet",
+    desc: "Send Cashu sats from your wallet",
     dmOnly: true,
   },
 ];
@@ -130,10 +131,11 @@ interface Props {
   // re-scrolls (an id-only dependency wouldn't re-fire on an unchanged id).
   targetMessageId?: string;
   targetMessageTrigger?: number;
-  // Called right after a message is forwarded, so the parent can navigate
-  // into the chat it was forwarded to, since forwarding somewhere should land
-  // you there, not silently drop the message off-screen.
-  onForwarded: (channel: string) => void;
+  // Ask the parent to switch the active chat to this channel — used both
+  // right after forwarding a message (land where it went, not silently stay
+  // put) and when picking "Message" on a channel sender's profile sheet
+  // (jump straight into the DM with them).
+  onNavigateToChannel: (channel: string) => void;
 }
 
 // Broadcast wire format for a screenshot notice, matching bitchat's action
@@ -269,11 +271,12 @@ export default function MessageThread({
   onBack,
   targetMessageId,
   targetMessageTrigger,
-  onForwarded,
+  onNavigateToChannel,
 }: Props): React.JSX.Element {
   const Colors = useThemeColors();
   const styles = useMemo(() => createStyles(Colors), [Colors]);
-  const { messages, addMessage, toggleStar, removeChannel } = useChatStore();
+  const { messages, addMessage, addChannel, toggleStar, removeChannel } =
+    useChatStore();
   const blockPeer = useBlockedStore((s) => s.blockPeer);
   // Live peer count, real data from BLE discovery, not a stub.
   // Subscribe to the stable peer map and derive the reachable list locally.
@@ -310,6 +313,17 @@ export default function MessageThread({
   const [ecashMemo, setEcashMemo] = useState("");
   const [showChannelInfo, setShowChannelInfo] = useState(false);
   const [showDMInfo, setShowDMInfo] = useState(false);
+  // Channel-message sender profile sheet — tap a message's avatar/name to
+  // see who they are and message them, same as tapping a peer on the Mesh
+  // tab. Not used in a DM thread (only one other participant there,
+  // already reachable via the header).
+  const [senderInfoTarget, setSenderInfoTarget] = useState<{
+    peerID: string;
+    nickname: string;
+  } | null>(null);
+  // Channel members list — currently-reachable peers, tap one to open the
+  // same profile sheet as tapping their avatar on a message.
+  const [showMembersList, setShowMembersList] = useState(false);
   const [showScreenshotWarning, setShowScreenshotWarning] = useState(false);
   // Brief delivery status hint shown below the compose bar for DMs.
   // "queued" = no route available; cleared after 4 seconds.
@@ -666,6 +680,21 @@ export default function MessageThread({
     setActionSheet(item);
   }
 
+  function handlePressSender(item: ChatMessage): void {
+    setSenderInfoTarget({
+      peerID: item.senderID,
+      nickname: item.senderNickname,
+    });
+  }
+
+  function handleMessageSender(): void {
+    if (!senderInfoTarget) return;
+    const dmChannel = `dm:${senderInfoTarget.peerID}`;
+    addChannel(dmChannel);
+    setSenderInfoTarget(null);
+    onNavigateToChannel(dmChannel);
+  }
+
   async function handleCameraAttach(): Promise<void> {
     const { status } = await ImagePicker.requestCameraPermissionsAsync();
     if (status !== "granted") {
@@ -971,6 +1000,17 @@ export default function MessageThread({
     );
   }
 
+  // Absolute date for the DM info sheet's "Chatting since" line — unlike
+  // formatDateSeparator below, this always wants a real calendar date
+  // (including year), never "Today"/"Yesterday".
+  function formatChattingSince(ms: number): string {
+    return new Date(ms).toLocaleDateString([], {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    });
+  }
+
   function formatDateSeparator(ms: number): string {
     const d = new Date(ms);
     const now = new Date();
@@ -1099,18 +1139,30 @@ export default function MessageThread({
               size={28}
             />
           ) : (
-            <Pressable
-              onPress={handleInvite}
-              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-              accessibilityRole="button"
-              accessibilityLabel="Invite someone to this channel"
-            >
-              <Feather
-                name="user-plus"
-                size={18}
-                color={Colors.textSecondary}
-              />
-            </Pressable>
+            <>
+              <Pressable
+                style={styles.memberCountBtn}
+                onPress={() => setShowMembersList(true)}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                accessibilityRole="button"
+                accessibilityLabel={`${peerCount} member${peerCount !== 1 ? "s" : ""} nearby`}
+              >
+                <Feather name="users" size={14} color={Colors.textSecondary} />
+                <Text style={styles.memberCountText}>{peerCount}</Text>
+              </Pressable>
+              <Pressable
+                onPress={handleInvite}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                accessibilityRole="button"
+                accessibilityLabel="Invite someone to this channel"
+              >
+                <Feather
+                  name="user-plus"
+                  size={18}
+                  color={Colors.textSecondary}
+                />
+              </Pressable>
+            </>
           )}
         </View>
       </View>
@@ -1197,6 +1249,7 @@ export default function MessageThread({
                 }
                 formatTime={formatTime}
                 onLongPress={handleLongPressMessage}
+                onPressSender={isDM ? undefined : handlePressSender}
                 highlighted={item.id === highlightedMessageId}
               />
             </View>
@@ -1502,6 +1555,11 @@ export default function MessageThread({
                 />
                 <Text style={styles.dmInfoName}>{displayName}</Text>
                 <Text style={styles.dmInfoPeerID}>{channel.slice(3)}</Text>
+                {msgs.length > 0 && (
+                  <Text style={styles.dmInfoSince}>
+                    Chatting since {formatChattingSince(msgs[0].timestampMs)}
+                  </Text>
+                )}
                 {/* Peer online status, same 60s freshness window as the offline banner */}
                 {isDMPeerOnline && (
                   <View style={styles.dmInfoStatus}>
@@ -1538,6 +1596,135 @@ export default function MessageThread({
               </View>
             </View>
           </View>
+        </Modal>
+      )}
+
+      {/* Members list: currently-reachable peers, tap the header count. */}
+      {!isDM && (
+        <Modal
+          visible={showMembersList}
+          transparent
+          animationType="slide"
+          onRequestClose={() => setShowMembersList(false)}
+        >
+          <View style={styles.membersOverlay}>
+            <Pressable
+              style={StyleSheet.absoluteFill}
+              onPress={() => setShowMembersList(false)}
+            />
+            <View style={styles.membersSheet}>
+              <View style={styles.handle} />
+              <Text style={styles.membersTitle}>
+                {peerCount} member{peerCount !== 1 ? "s" : ""}
+              </Text>
+              {onlinePeers.length === 0 ? (
+                <Text style={styles.membersEmpty}>
+                  No one else is currently in range.
+                </Text>
+              ) : (
+                <ScrollView
+                  style={styles.membersList}
+                  showsVerticalScrollIndicator={false}
+                >
+                  {onlinePeers.map((peer) => (
+                    <Pressable
+                      key={peer.peerID}
+                      style={styles.memberRow}
+                      onPress={() => {
+                        setShowMembersList(false);
+                        setSenderInfoTarget({
+                          peerID: peer.peerID,
+                          nickname: peer.nickname,
+                        });
+                      }}
+                      accessibilityRole="button"
+                      accessibilityLabel={`View ${peerIDToUsername(peer.peerID)}'s profile`}
+                    >
+                      <Avatar
+                        username={peerIDToUsername(peer.peerID)}
+                        peerID={peer.peerID}
+                        size={40}
+                      />
+                      <View style={styles.memberRowInfo}>
+                        <Text style={styles.memberRowName} numberOfLines={1}>
+                          {peerIDToUsername(peer.peerID)}
+                        </Text>
+                        <View style={styles.memberRowStatus}>
+                          <View style={styles.memberRowDot} />
+                          <Text style={styles.memberRowStatusText}>
+                            In range
+                          </Text>
+                        </View>
+                      </View>
+                      <Feather
+                        name="message-circle"
+                        size={16}
+                        color={Colors.textMuted}
+                      />
+                    </Pressable>
+                  ))}
+                </ScrollView>
+              )}
+            </View>
+          </View>
+        </Modal>
+      )}
+
+      {/* Channel sender profile sheet: tap a message's avatar/name. */}
+      {!isDM && (
+        <Modal
+          visible={senderInfoTarget !== null}
+          transparent
+          animationType="slide"
+          onRequestClose={() => setSenderInfoTarget(null)}
+        >
+          {senderInfoTarget && (
+            <View style={styles.dmInfoOverlay}>
+              <Pressable
+                style={StyleSheet.absoluteFill}
+                onPress={() => setSenderInfoTarget(null)}
+              />
+              <View style={styles.dmInfoSheet}>
+                <View style={styles.handle} />
+                <View style={styles.dmInfoBody}>
+                  <Avatar
+                    username={peerIDToUsername(senderInfoTarget.peerID)}
+                    peerID={senderInfoTarget.peerID}
+                    size={64}
+                  />
+                  <Text style={styles.dmInfoName}>
+                    {peerIDToUsername(senderInfoTarget.peerID)}
+                  </Text>
+                  <Text style={styles.dmInfoPeerID}>
+                    {senderInfoTarget.peerID}
+                  </Text>
+                  {onlinePeers.some(
+                    (p) => p.peerID === senderInfoTarget.peerID,
+                  ) && (
+                    <View style={styles.dmInfoStatus}>
+                      <View style={styles.dmInfoDot} />
+                      <Text style={styles.dmInfoStatusText}>In BLE range</Text>
+                    </View>
+                  )}
+                </View>
+                <View style={styles.dmInfoActions}>
+                  <Pressable
+                    style={styles.senderInfoMessageBtn}
+                    onPress={handleMessageSender}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Message ${peerIDToUsername(senderInfoTarget.peerID)}`}
+                  >
+                    <Feather
+                      name="message-circle"
+                      size={16}
+                      color={Colors.textInverse}
+                    />
+                    <Text style={styles.senderInfoMessageText}>Message</Text>
+                  </Pressable>
+                </View>
+              </View>
+            </View>
+          )}
         </Modal>
       )}
 
@@ -1597,7 +1784,7 @@ export default function MessageThread({
         onForward={(target) => {
           if (forwardSource) {
             forwardMessage(forwardSource, target);
-            onForwarded(target);
+            onNavigateToChannel(target);
           }
         }}
       />
@@ -1657,8 +1844,24 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       letterSpacing: 0.5,
     },
     headerRight: {
+      flexDirection: "row",
       alignItems: "center",
       justifyContent: "flex-end",
+      gap: Spacing.md,
+    },
+    memberCountBtn: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 4,
+      paddingHorizontal: Spacing.sm,
+      paddingVertical: 4,
+      borderRadius: Radius.full,
+      backgroundColor: Colors.surfaceRaised,
+    },
+    memberCountText: {
+      fontSize: FontSize.xs,
+      fontWeight: FontWeight.semibold,
+      color: Colors.textSecondary,
     },
     // Messages
     list: {
@@ -2137,6 +2340,11 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       letterSpacing: 0.8,
       textAlign: "center",
     },
+    dmInfoSince: {
+      fontSize: FontSize.xs,
+      color: Colors.textMuted,
+      marginTop: 2,
+    },
     dmInfoStatus: {
       flexDirection: "row",
       alignItems: "center",
@@ -2208,6 +2416,85 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       fontSize: FontSize.base,
       fontWeight: FontWeight.semibold,
       color: Colors.danger,
+    },
+    // Channel sender profile sheet's single action — solid pill, same
+    // primary-button shape used everywhere else this session.
+    senderInfoMessageBtn: {
+      width: "100%",
+      minHeight: 50,
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: Spacing.sm,
+      borderRadius: Radius.full,
+      backgroundColor: Colors.accent,
+    },
+    senderInfoMessageText: {
+      fontSize: FontSize.base,
+      fontWeight: FontWeight.bold,
+      color: Colors.textInverse,
+    },
+    // Members list sheet
+    membersOverlay: {
+      flex: 1,
+      backgroundColor: Colors.overlay,
+      justifyContent: "flex-end",
+    },
+    membersSheet: {
+      width: "100%",
+      maxHeight: "70%",
+      backgroundColor: Colors.surface,
+      borderTopLeftRadius: Radius["2xl"],
+      borderTopRightRadius: Radius["2xl"],
+      padding: Spacing.xl,
+      gap: Spacing.md,
+    },
+    membersTitle: {
+      fontSize: FontSize.md,
+      fontWeight: FontWeight.bold,
+      color: Colors.textPrimary,
+    },
+    membersEmpty: {
+      fontSize: FontSize.sm,
+      color: Colors.textMuted,
+      paddingVertical: Spacing.lg,
+      textAlign: "center",
+    },
+    membersList: {
+      width: "100%",
+    },
+    memberRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: Spacing.md,
+      padding: Spacing.sm,
+      borderRadius: Radius.lg,
+      backgroundColor: Colors.surfaceRaised,
+      marginBottom: Spacing.xs,
+    },
+    memberRowInfo: {
+      flex: 1,
+      gap: 2,
+    },
+    memberRowName: {
+      fontSize: FontSize.base,
+      fontWeight: FontWeight.medium,
+      color: Colors.textPrimary,
+    },
+    memberRowStatus: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 4,
+    },
+    memberRowDot: {
+      width: 6,
+      height: 6,
+      borderRadius: 3,
+      backgroundColor: Colors.online,
+    },
+    memberRowStatusText: {
+      fontSize: FontSize.xs,
+      color: Colors.textMuted,
     },
     // Cashu payment cards rendered inside message bubbles.
     paymentCard: {
