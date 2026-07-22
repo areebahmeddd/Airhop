@@ -200,12 +200,12 @@ The existing `AI` tab (`src/features/ai/ai-screen.tsx`) is currently a placehold
 
 The existing `Wallet` tab (`src/features/wallet/wallet-screen.tsx`) gets the payment core it currently lacks. Cashu remains the primary rail because it is the only ecash system that settles fully offline over BLE; Nutzaps are a secondary online path for when internet is available.
 
-- [ ] `src/core/payments/cashu.ts`: token parse/embed/redeem with offline DLEQ validation
-- [ ] `src/core/payments/nutzap.ts`: NIP-61 online zaps (kind 9321/10019)
-- [ ] `src/store/wallet-store.ts`: MMKV-backed local proof storage, balance selectors, dedup
-- [ ] Wallet UI in `wallet-screen.tsx`: balance view, send/receive over BLE, QR-based token exchange for out-of-mesh transfers
-- [ ] Nutzap send/receive when online, clearly distinguished from the offline Cashu flow
-- [ ] Mint management: add/remove trusted mints, per-mint balance breakdown
+- [x] `src/core/payments/cashu.ts`: token parse/embed/redeem with offline DLEQ validation
+- [x] `src/core/payments/nutzap.ts`: NIP-61 online zaps (kind 9321/10019)
+- [x] `src/store/wallet-store.ts`: MMKV-backed local proof storage, balance selectors, dedup
+- [x] Wallet UI in `wallet-screen.tsx`: balance view, send/receive over BLE, QR-based token exchange for out-of-mesh transfers
+- [x] Nutzap send/receive when online, clearly distinguished from the offline Cashu flow
+- [x] Mint management: add/remove trusted mints, per-mint balance breakdown
 
 **Milestone:** A user sends and receives Cashu ecash entirely offline over BLE, and optionally sends a Nutzap when internet is available.
 

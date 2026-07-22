@@ -36,7 +36,7 @@
 
 Airhop is an iOS + Android app (macOS and Windows coming soon) for private, offline-first peer-to-peer communication over [Bluetooth mesh](https://en.wikipedia.org/wiki/Mesh_networking) networks, with [Nostr](https://nostr.org) internet bridging and [Cashu](https://cashu.space) [ecash](https://en.wikipedia.org/wiki/Ecash) payments. **Our mission is to make censorship-resistant communication available to anyone: during natural disasters, internet blackouts, mass protests, or any situation where networks are unavailable, surveilled, or shut down.**
 
-Built on the foundation of [bitchat](https://bitchat.free), using the same [BLE wire protocol](docs/spec/PROTOCOLS.md), [service UUIDs](docs/spec/PROTOCOLS.md#1-ble-identifiers), and security model, meaning **Airhop-installed devices** can automatically discover and join the same mesh as nearby **Bitchat-installed devices**, relay messages, and exchange DMs with zero setup. Airhop also extends the protocol with [Double Ratchet](https://signal.org/docs/specifications/doubleratchet/) forward secrecy, [Tor](https://torproject.org) on both platforms, offline Cashu payments, and offline AI (not present in bitchat _at the time of writing_).
+Built on the foundation of [bitchat](https://bitchat.free), using the same [BLE wire protocol](docs/spec/PROTOCOLS.md), [service UUIDs](docs/spec/PROTOCOLS.md#1-ble-identifiers), and security model, meaning **Airhop-installed devices** can automatically discover and join the same mesh as nearby **Bitchat-installed devices**, relay messages, and exchange DMs with zero setup. Airhop also extends the protocol with [Double Ratchet](https://signal.org/docs/specifications/doubleratchet) forward secrecy, [Tor](https://torproject.org) on both platforms, offline Cashu payments, and offline AI (not present in bitchat _at the time of writing_).
 
 > [!NOTE]
 > Airhop is an independent side project built and maintained by [Areeb Ahmed](https://github.com/areebahmeddd) in his free time. It is not backed by any company or organization, not affiliated with or endorsed by permissionlesstech or the bitchat project, and not an impersonation of any existing app or service.
@@ -46,27 +46,27 @@ Built on the foundation of [bitchat](https://bitchat.free), using the same [BLE 
 
 ## Built-in Features
 
-| Category          | Feature                   | Description                                                                             |
-| ----------------- | ------------------------- | --------------------------------------------------------------------------------------- |
-| 💬 **Messaging**  | Private DMs               | One-on-one end-to-end encrypted messaging                                               |
-|                   | Public channels           | IRC-style group chat rooms anyone nearby can join                                       |
-|                   | Voice notes               | Record and send voice messages over the local mesh (AAC, 16 kHz mono, only `.m4a`)      |
-|                   | Video sharing             | Record or pick a video and send it over the mesh; plays inline on any platform          |
-|                   | File transfer             | Send **any** file format and size using chunked streaming (images, documents, archives) |
-|                   | Store-and-forward courier | Messages are delivered automatically when a route becomes available                     |
-| 🔒 **Identity**   | No-account identity       | Identity is an Ed25519 key pair stored only on your device                              |
-|                   | Human-readable names      | Deterministic usernames derived from your public key                                    |
-|                   | QR contacts               | Add a contact by scanning their QR code; carries their public keys, not just an ID      |
-|                   | End-to-end encryption     | Secure sessions using the Noise XX protocol                                             |
-|                   | Forward secrecy           | Double Ratchet protects past messages even if keys are later compromised                |
-|                   | Panic wipe                | Triple-tap instantly erases keys and local messages (nuke your account)                 |
-| 🕸️ **Networking** | Bluetooth mesh            | Communicate with nearby devices without internet                                        |
-|                   | Multi-hop routing         | Messages automatically relay across nearby devices (up to 7 hops)                       |
-|                   | WiFi high-bandwidth mode  | Faster file transfers between two Android devices, or two iPhones. Not across platforms |
-|                   | bitchat compatibility     | Airhop nodes communicate directly with bitchat on iOS and Android                       |
-| 🌐 **Internet**   | Nostr bridge              | Continue conversations over Nostr relays when Bluetooth range ends                      |
-|                   | Geo-relay discovery       | Discover location-based channels across 350+ distributed Nostr relays                   |
-|                   | Tor integration           | Route Nostr traffic through Tor (Arti on iOS, Orbot on Android)                         |
+| Category          | Feature                   | Description                                                                                          |
+| ----------------- | ------------------------- | ---------------------------------------------------------------------------------------------------- |
+| 💬 **Messaging**  | Private DMs               | One-on-one end-to-end encrypted messaging                                                            |
+|                   | Public channels           | IRC-style group chat rooms anyone nearby can join                                                    |
+|                   | Voice notes               | Record and send voice messages over the local mesh (AAC, 16 kHz mono, only `.m4a`)                   |
+|                   | Video sharing             | Record or pick a video and send it over the mesh (H.264 or HEVC in `.mp4` / `.mov`)                  |
+|                   | File transfer             | Send **any** file format using chunked streaming (images, documents, archives), up to 50 MB per file |
+|                   | Store-and-forward courier | Messages are delivered automatically when a route becomes available                                  |
+| 🔒 **Identity**   | No-account identity       | Identity is an Ed25519 key pair stored only on your device                                           |
+|                   | Human-readable names      | Deterministic usernames derived from your public key                                                 |
+|                   | QR contacts               | Add a contact by scanning their QR code; carries their public keys, not just an ID                   |
+|                   | End-to-end encryption     | Secure sessions using the Noise XX protocol                                                          |
+|                   | Forward secrecy           | Double Ratchet protects past messages even if keys are later compromised                             |
+|                   | Panic wipe                | Triple-tap instantly erases keys and local messages (nuke your account)                              |
+| 🕸️ **Networking** | Bluetooth mesh            | Communicate with nearby devices without internet                                                     |
+|                   | Multi-hop routing         | Messages automatically relay across nearby devices (up to 7 hops)                                    |
+|                   | WiFi high-bandwidth mode  | Faster file transfers between two Android devices, or two iPhones. Not across platforms              |
+|                   | bitchat compatibility     | Airhop nodes communicate directly with bitchat on iOS and Android                                    |
+| 🌐 **Internet**   | Nostr bridge              | Continue conversations over Nostr relays when Bluetooth range ends                                   |
+|                   | Geo-relay discovery       | Discover location-based channels across 350+ distributed Nostr relays                                |
+|                   | Tor integration           | Route Nostr traffic through Tor (Arti on iOS, Orbot on Android)                                      |
 
 **TL;DR: No internet required. No central servers. No accounts. No tracking.**
 
@@ -86,13 +86,47 @@ Built on the foundation of [bitchat](https://bitchat.free), using the same [BLE 
 | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Application Framework   | [React Native](https://reactnative.dev) 0.86, [Expo](https://expo.dev) SDK 57 (bare workflow)                                                                                                                                                                                                                                                                                                     |
 | Network Transport       | [Bluetooth LE](https://en.wikipedia.org/wiki/Bluetooth_Low_Energy) mesh (all platforms), [Nostr](https://github.com/nostr-protocol/nostr) relay bridge, plus an optional same-platform fast path: [WiFi Aware](https://wi-fi.org/discover-wi-fi/wi-fi-aware) between Android devices and [MultipeerConnectivity](https://developer.apple.com/documentation/multipeerconnectivity) between iPhones |
-| Cryptographic Protocols | [Noise XX](https://noiseprotocol.org/noise.html) handshake, [Double Ratchet](https://signal.org/docs/specifications/doubleratchet/) algorithm                                                                                                                                                                                                                                                     |
+| Cryptographic Protocols | [Noise XX](https://noiseprotocol.org/noise.html) handshake, [Double Ratchet](https://signal.org/docs/specifications/doubleratchet) algorithm                                                                                                                                                                                                                                                      |
 | Cryptographic Library   | [`@noble/curves`](https://github.com/paulmillr/noble-curves), [`@noble/ciphers`](https://github.com/paulmillr/noble-ciphers), [`@noble/hashes`](https://github.com/paulmillr/noble-hashes) ([Cure53](https://cure53.de) audited)                                                                                                                                                                  |
-| Identity & Signatures   | [Ed25519](https://ed25519.cr.yp.to/) scheme                                                                                                                                                                                                                                                                                                                                                       |
-| Network Privacy         | [Arti](https://gitlab.torproject.org/tpo/core/arti) (iOS), [Orbot](https://guardianproject.info/apps/org.torproject.android/) (Android)                                                                                                                                                                                                                                                           |
+| Identity & Signatures   | [Ed25519](https://ed25519.cr.yp.to) scheme                                                                                                                                                                                                                                                                                                                                                        |
+| Network Privacy         | [Arti](https://gitlab.torproject.org/tpo/core/arti) (iOS), [Orbot](https://guardianproject.info/apps/org.torproject.android) (Android)                                                                                                                                                                                                                                                            |
 | Payment System          | [Cashu](https://cashu.space) [ecash](https://en.wikipedia.org/wiki/Ecash) (offline), [NIP-61](https://github.com/nostr-protocol/nips/blob/master/61.md) Nutzaps (online)                                                                                                                                                                                                                          |
 | State Management        | [Zustand](https://github.com/pmndrs/zustand) store, [MMKV](https://github.com/mrousavy/react-native-mmkv) storage                                                                                                                                                                                                                                                                                 |
 | Key Storage             | [iOS Keychain](https://developer.apple.com/documentation/security/storing-keys-in-the-keychain), [Android Keystore](https://developer.android.com/privacy-and-security/keystore)                                                                                                                                                                                                                  |
+
+## Transports
+
+Airhop chooses a transport per message. Bluetooth is the only one that needs no internet and the only one that works across iOS and Android. WiFi and Nostr are used when they are available.
+
+|                         | Bluetooth LE mesh                                                  | WiFi (same platform)                     | Nostr relays                     |
+| ----------------------- | ------------------------------------------------------------------ | ---------------------------------------- | -------------------------------- |
+| Carries                 | Channel messages, DMs, files, ecash                                | DMs and files, when a link exists        | DMs and geohash channel messages |
+| Needs internet          | No                                                                 | No                                       | Yes                              |
+| Works iPhone to Android | Yes                                                                | No                                       | Yes                              |
+| Range                   | ~10-30 m indoors, up to ~100 m line of sight, extended by relaying | ~30 m                                    | Global                           |
+| Max hops                | 7                                                                  | 1                                        | 1                                |
+| Speed                   | ~22 KB/s                                                           | ~22 KB/s (shared with Bluetooth for now) | Not used for files               |
+| Latency per hop         | 10-220 ms (randomised to avoid collisions)                         | n/a                                      | Relay round trip; more over Tor  |
+
+Notes on the numbers:
+
+- Text messages (channel and DM) are tiny and effectively instant on any transport. Throughput only matters for files.
+- The **~22 KB/s** figure is 456 bytes per fragment sent one every 20 ms. The delay is required: without it the radio drops fragments and the transfer never completes.
+- WiFi currently shares that same paced queue, so it runs at the same speed as Bluetooth for now. _Lifting the cap on the WiFi path is planned_.
+- A 25 MB file takes about 19 minutes over Bluetooth. Keep Bluetooth attachments small.
+- Android WiFi Aware and iOS MultipeerConnectivity are different protocols and cannot connect to each other, so the WiFi path only works Android to Android or iPhone to iPhone.
+- Nostr relays carry small signed events, not file bytes. Files can be shared over Nostr only by uploading them to a separate HTTP host and posting a link ([NIP-96](https://github.com/nostr-protocol/nips/blob/master/96.md)). Airhop does not do this: that host is a central server that can log, throttle, or take down your files, which is exactly what this app avoids. Attachments therefore travel only over Bluetooth or WiFi.
+
+Timing intervals:
+
+| Behaviour                  | Interval            | Why                                                                 |
+| -------------------------- | ------------------- | ------------------------------------------------------------------- |
+| Presence broadcast         | 30 s                | How peers discover each other and refresh reachability              |
+| Gossip sync                | 15 s                | Lets a peer returning from out of range catch up on missed messages |
+| Direct peer timeout        | 15 s                | A directly linked peer that goes quiet is demoted quickly           |
+| Mesh peer timeout          | 60 s                | Relayed peers get longer, since multi-hop packets arrive late       |
+| Geohash presence heartbeat | 40-80 s, randomised | Randomised so devices in one cell do not announce in lockstep       |
+| Geohash participant window | 5 min               | How long a pubkey stays listed as present after its last event      |
 
 ## Getting Started
 
@@ -106,12 +140,12 @@ npx expo prebuild
 <details>
 <summary><strong>Xcode setup</strong></summary>
 
-1. Install [Xcode](https://developer.apple.com/xcode/) from the Mac App Store, which also installs the iOS Simulator and base build tools
+1. Install [Xcode](https://developer.apple.com/xcode) from the Mac App Store, which also installs the iOS Simulator and base build tools
 2. Open Xcode at least once and let it install any additional required components when prompted
 3. Go to **Xcode** then **Settings** then **Locations**, and select the most recent version in the **Command Line Tools** dropdown
 4. Go to **Xcode** then **Settings** then **Platforms**, click the **+** icon, and add an **iOS** runtime if one is not already installed
 5. Install [CocoaPods](https://cocoapods.org) if it is not already present, then run `npx pod-install` from the project root to install the iOS native dependencies. `npx expo prebuild` already does this once, so only re-run it after changing native dependencies
-6. Launch a simulator from the device dropdown in Xcode, then run `npm run ios`
+6. Launch a simulator from the device dropdown, then run `npm run ios`
 
 > The first `npm run ios` builds the native app from scratch and can take several minutes. Later runs are much faster.
 

@@ -165,12 +165,12 @@ Voice notes and recorded-video sharing both work via `FILE_TRANSFER`.
 
 ### Cashu Wallet
 
-- [ ] `src/core/payments/cashu.ts`: token parse/embed/redeem with offline DLEQ validation
-- [ ] `src/core/payments/nutzap.ts`: NIP-61 online zaps
-- [ ] `src/store/wallet-store.ts`: MMKV-backed local Cashu proof storage (balances, dedup)
-- [ ] Wallet UI in `src/features/wallet/wallet-screen.tsx`: balance view, send/receive over BLE, QR-based token exchange
-- [ ] Nutzap send/receive when online, distinguished from the offline Cashu flow
-- [ ] Mint management: add/remove trusted mints, per-mint balance breakdown
+- [x] `src/core/payments/cashu.ts`: token parse/embed/redeem with offline DLEQ validation
+- [x] `src/core/payments/nutzap.ts`: NIP-61 online zaps
+- [x] `src/store/wallet-store.ts`: MMKV-backed local Cashu proof storage (balances, dedup)
+- [x] Wallet UI in `src/features/wallet/wallet-screen.tsx`: balance view, send/receive over BLE, QR-based token exchange
+- [x] Nutzap send/receive when online, distinguished from the offline Cashu flow
+- [x] Mint management: add/remove trusted mints, per-mint balance breakdown
 
 **Milestone:** A user with zero connectivity downloads a model once and asks it questions fully offline. A user sends and receives Cashu ecash entirely offline over BLE, and optionally sends a Nutzap when online.
 

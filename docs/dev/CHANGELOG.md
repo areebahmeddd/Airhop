@@ -2,6 +2,73 @@
 
 All notable changes are documented here.
 
+## Unreleased: pre-field-test hardening
+
+### Fixed (discovery was completely broken)
+
+- **BLE runtime permissions were never requested.** `BLUETOOTH_SCAN/ADVERTISE/CONNECT` are runtime permissions on Android 12+; they were declared in the manifest but never requested, so `startScanning`/`startAdvertising` threw `SecurityException` and it was swallowed. No device could ever discover another.
+- **No MTU negotiation.** Writes ran at the default 23-byte MTU while ANNOUNCE/handshake packets are 100+ bytes and fragments are 469, so everything silently truncated. Now requests MTU 517 and defers service discovery until it completes.
+- **Links announced before they could carry traffic.** Both platforms now wait for CCCD/notification confirmation.
+- **iOS: `CBPeripheral` not retained before `connect`.** CoreBluetooth abandons the attempt if it deallocates, so connections silently never completed.
+- **iOS: unicast DMs fanned out to every subscribed central** (`onSubscribedCentrals: nil`).
+- **Attachments were dead in both directions.** `expo-file-system@57` removed the legacy read/write API; the calls threw at runtime.
+- **Attachment fragments were sent in a tight loop**, overrunning both radios. Now paced at 20 ms like bitchat.
+- **Relayed ANNOUNCEs were recorded as direct links**, corrupting link→peer mapping and sending Noise handshakes into the void.
+- **Blocking was enforced in 1 of 6 inbound paths**; a blocked peer could still post in channels, DM, send files, and resurrect deleted threads.
+- Mock peers were seeding the Mesh tab, masking the fact that real discovery never worked.
+
+### Added
+
+- Store-and-forward **courier** (`COURIER_ENV 0x04`) and a persisted **outbox**, so "queued for delivery" is now true instead of a lie.
+- **Gossip sync** (`REQUEST_SYNC 0x21`) so a peer returning from out of range catches up.
+- **Nostr geohash channels**: `#block`/`#neighborhood`/`#city`/`#province`/`#region` now bridge over Nostr with per-geohash unlinkable identities, presence, and deterministic relay selection.
+- **Contacts store** + key-bearing QR; a scanned card's peer ID is verified against the fingerprint of its own Noise key.
+- BLE adapter-state detection, so "Bluetooth off" is distinguishable from "nobody nearby".
+- `LEAVE 0x03`, cross-transport message IDs, channel send-reach feedback.
+- **Attachment transfer progress.** Sending or receiving a file now shows a live card with percentage, speed and time remaining, in both channels and DMs. Files crawl at ~22 KB/s over Bluetooth, so this is the difference between a working transfer and an apparently frozen one.
+
+### Aligned with bitchat behaviour
+
+Not wire-format changes (those are still deferred), but local behaviour that makes Airhop a better co-citizen on a shared mesh and helps peer discovery.
+
+- **Relay jitter now adapts to mesh density** (10-40 ms when sparse, up to 100-220 ms when dense), matching bitchat's `RelayController` instead of a flat 10-220 ms.
+- **Announce cadence now adapts**: ~4 s while isolated so a lone pair of devices finds each other quickly, backing off to a jittered 15-30 s once connected. Previously a flat 30 s.
+- **File size cap raised to 50 MB** to match bitchat's `MAX_FILE_SIZE_BYTES`, so the two apps agree on what they accept from each other.
+
+### Removed (not viable, with reasons)
+
+- **Live video over WiFi.** Android WiFi Aware and iOS MultipeerConnectivity are different protocols that cannot interoperate; cross-OS streaming is impossible. Recorded-video _sharing_ works.
+- **Phone-to-phone NFC.** iOS has no host card emulation, so an iPhone cannot present a tag for another phone to read. QR covers this on both platforms.
+- **X3DH.** Redundant with the Noise static-static ECDH already seeding the Double Ratchet.
+- `VIDEO_FRAME 0x30`, `CASHU_TOKEN 0x40` (ecash rides DM text).
+- **`WiFiUnicastFn` from `MessageRouter`.** It duplicated a decision the injected `unicast` callback already makes: `MeshService`'s unicast prefers an active WiFi link before falling back to BLE. Because the parameter was never passed, it looked like an unfinished feature while the behaviour was already correct, and it misled two separate reviews. Transport selection now lives only in the callback that owns the link maps. No behaviour change.
+
+### Remaining
+
+Not implemented, or implemented but unproven on hardware. Nothing here is a regression; it is the honest state before the first field test.
+
+#### Not implemented
+
+- **Live push-to-talk voice** (`VOICE_FRAME 0x29` is reserved but never sent or handled). `AudioCaptureBackend.startCapture` needs real-time streaming microphone frames, and `expo-audio` only records to a file. This requires new native audio modules on both platforms (AVAudioEngine tap on iOS, AudioRecord on Android). Voice _notes_ work today over `FILE_TRANSFER`.
+- **Live video streaming.** Recorded video is shared as a file and plays inline; there is no real-time path, and there cannot be a cross-platform one while iOS uses MultipeerConnectivity.
+
+#### Implemented but never run on real hardware
+
+- **BLE discovery, MTU negotiation and connection lifecycle.** The native Kotlin and Swift modules have never been compiled by CI, and the mesh has never been exercised between two phones. Every radio-dependent claim is unproven.
+- **Android to Android WiFi Aware, and iPhone to iPhone MultipeerConnectivity.** Both are wired and preferred automatically for attachments, but neither has been observed working. They do not interoperate with each other by design, so there is no cross-platform WiFi path to test.
+- **Multi-peer relaying.** Flood routing, TTL and dedup are unit-tested, but a three-device topology where A and C only reach each other through B has never been run.
+- **Courier store-and-forward and gossip catch-up.** Both are wired and unit-tested; neither has delivered a message between real devices.
+- **Nostr geohash channels.** Require two devices in the same cell with internet. Relay selection determinism is unit-tested; live relay behaviour is not.
+
+#### Wallet, deferred by decision
+
+Two findings from the payments audit are still open. Both are money-critical and were deliberately left rather than fixed in a rush.
+
+- **Cashu proofs are stored unencrypted.** `wallet-store.ts` documents that MMKV must be opened with an `encryptionKey` held in the Keychain or Keystore, but `createMMKV({ id: "wallet-store" })` is called without one. Proofs are bearer instruments, so anyone who reads that file can spend the balance. Mitigated for now by setting `allowBackup="false"`, which closes the ADB-backup extraction path, but the file itself is still plaintext on disk. The fix needs an async key bootstrap before the store is created, which `zustand/persist` does not do out of the box.
+- **DLEQ validation is dead code.** `validateProofDleq` has zero call sites, and could not work if it were called: it returns `true` when no witness is present, `true` on any exception, and passes a hex string where `cashu-ts` expects a curve point. The module header claims verification runs on every received proof; it never runs. The receive path currently credits the balance from any well-formed token. Note that DLEQ proves the mint signed a proof and can never prove it has not been double-spent, so the fix is both to wire up real verification and to track offline-received proofs as unverified until redeemed.
+
+_Fixed in this release:_ offline send no longer silently overpays (it now selects exact denominations and requires explicit confirmation when it cannot), and `allowBackup` is off.
+
 ## What's Changed in v0.9.6
 
 - fix(crypto): patch double-ratchet and noise-xx session handling (by @areebahmeddd) [f1f6077]
@@ -49,10 +116,11 @@ All notable changes are documented here.
 - style(landing): improve text contrast and clean up focus/comments in nav, footer, explore, contribute (by @areebahmeddd) [17acd74]
 - feat(docs): update README and ROADMAP with new links and feature milestones (by @areebahmeddd) [1650379]
 
-**Full changelog:** [v0.9.5..v0.9.6](https://github.com/areebahmeddd/Airhop/compare/v0.9.5..v0.9.6)## What's Changed in v0.9.5
+**Full changelog:** [v0.9.5..v0.9.6](https://github.com/areebahmeddd/Airhop/compare/v0.9.5..v0.9.6)
+
+## What's Changed in v0.9.5
 
 - chore: update changelog format for better clarity (by @areebahmeddd) [ecb0a37]
-- Merge branch 'main' of <https://github.com/areebahmeddd/Airhop> (by @areebahmeddd) [4ff5709]
 - chore: revise CHANGELOG format (by @areebahmeddd) [bc3e71b]
 - feat(deps): install react-native-safe-area-context and expo-status-bar (by @areebahmeddd) [1a74e91]
 - chore(config): update ESLint config for v1.0 feature set (by @areebahmeddd) [1dbd51b]
@@ -71,79 +139,31 @@ All notable changes are documented here.
 - feat(landing): add Airhop landing page source (by @areebahmeddd) [d5c9f2b]
 - chore(ci): update Codecov action configuration for coverage reporting (by @areebahmeddd) [433e137]
 
-**Full changelog:** [v0.9.0..v0.9.5](https://github.com/areebahmeddd/Airhop/compare/v0.9.0..v0.9.5)## What's Changed in v0.9.0
+**Full changelog:** [v0.9.0..v0.9.5](https://github.com/areebahmeddd/Airhop/compare/v0.9.0..v0.9.5)
 
-- major bitchat compatibility fixes + tests
+## What's Changed in v0.9.0
 
-- Implemented `nearestRelaysWithDistance` method in `GeoRelayDirectory` to return the nearest N relays with their distances in kilometers.
-- Enhanced `PeerRegistry` to manage direct and indirect peer connections, including methods to mark peers as direct or indirect.
-- Updated `MessageRouter` to prioritize WiFi direct messaging over BLE, with fallback mechanisms for message delivery.
-- Added tests for new functionalities in `message-router.test.ts` to ensure proper behavior of direct messaging and fallback strategies.
-- Introduced battery optimization utilities in `battery-optimization.ts` to handle aggressive OEM settings on Android devices.
-- Created panic wipe functionality in `panic-wipe.ts` to clear user data securely.
-- Developed deterministic username generation from peer IDs in `username.ts`, ensuring unique and human-readable usernames.
-- Added comprehensive tests for new utility functions in `battery-optimization.test.ts`, `panic-wipe.test.ts`, and `username.test.ts`. (by @areebahmeddd) [3332b95]
-- refactor: naming conventions, known gap fixes, docs, and agent skills (v0.9)
-
-- Rename parse*/build* functions to encode*/decode* across mesh and nostr modules
-- Move wallet-store.ts to src/store/, rename client.ts to nostr-client.ts
-- Fix three known gaps: announce neighbor gossip, WiFi unicast tier, direct peer TTLs
-- Add src/README.md with module map and test coverage table (393 tests, 86%)
-- Sync folder trees across ARCHITECTURE.md, PROGRESS.md, ROADMAP.md, and agent docs
-- Add 5 skill files to .github/skills/ covering wire format, Noise, BLE boundary, mesh routing, and gift-wrap (by @areebahmeddd) [502be8a]
+- refactor: naming conventions, known gap fixes, docs, and agent skills (v0.9) (by @areebahmeddd) [502be8a]
 - chore: scaffold future platform directories (by @areebahmeddd) [1570204]
 - chore: add release automation, git-cliff changelog, and fix eslint config (by @areebahmeddd) [93c8134]
 
-**Full changelog:** [v0.8.0..v0.9.0](https://github.com/areebahmeddd/Airhop/compare/v0.8.0..v0.9.0)## What's Changed in v0.8.0
+**Full changelog:** [v0.8.0..v0.9.0](https://github.com/areebahmeddd/Airhop/compare/v0.8.0..v0.9.0)
+
+## What's Changed in v0.8.0
 
 - docs: some clarity for ai agents (by @areebahmeddd) [092d192]
-- feat(crypto): implement Signal Double Ratchet (double-ratchet.ts)
-
-Per-message forward secrecy and break-in recovery for offline courier DMs.
-Symmetric-key + DH ratchet, ChaCha20-Poly1305 AEAD, 1000-entry skipped-key
-map for out-of-order delivery. 12 passing unit tests. (by @areebahmeddd) [1211db0]
-
-- feat(crypto): implement X3DH prekey agreement (x3dh.ts)
-
-Allows initiating a Double Ratchet session to an offline peer via a prekey
-bundle published to Nostr. SPK is Ed25519-signed for authenticity. JSON
-serialization for Nostr kind-10002 events. 7 passing unit tests including
-full X3DH -> DR integration round-trip. (by @areebahmeddd) [c5d9164]
-
-- feat(android): add WiFi Aware high-bandwidth transport (AirhopWiFiModule)
-
-Implements NAN publish/subscribe, WifiAwareNetworkSpecifier socket channels,
-and length-prefixed frame I/O. Requires API 26+; gracefully absent on older
-devices. Registered in MainApplication.kt alongside AirhopBLEPackage. (by @areebahmeddd) [8c3bb3a]
-
-- feat(ios): add MultipeerConnectivity high-bandwidth transport (AirhopMCModule)
-
-MCNearbyServiceBrowser + MCNearbyServiceAdvertiser + MCSession with required
-encryption. Lexicographic invite-collision avoidance. Emits the same
-AirhopWiFi.* event names as the Android module for symmetric TypeScript handling. (by @areebahmeddd) [dd3c4f8]
-
-- feat(bridge): add NativeAirhopWiFi TurboModule spec
-
-Codegen input covering both AirhopWiFiModule (Android) and AirhopMCModule
-(iOS) with startWiFi, stopWiFi, writeToWiFiLink. Uses TurboModuleRegistry.get
-(nullable) since WiFi transport is optional on older devices. (by @areebahmeddd) [a84f801]
-
-- feat(mesh): add chunked streaming file transfer (file-transfer.ts)
-
-Splits files into 64 KiB FILE_TRANSFER chunks with stream_id, chunk_index,
-and total_chunks headers. FileAssembler handles out-of-order delivery,
-duplicates, and 60-second stale-session eviction. No hard size cap.
-13 passing unit tests including 3 MiB and out-of-order scenarios. (by @areebahmeddd) [cb4e064]
-
-- feat(mesh): add VIDEO_FRAME capture and jitter-buffer player (video-capture/player.ts)
-
-VideoCapture packages HEVC frames as 0x30 VIDEO_FRAME packets (TTL=1, WiFi
-Direct only). VideoPlayer maintains per-session 100ms jitter buffers with
-automatic cleanup on is_last or 10s timeout. 14 passing unit tests. (by @areebahmeddd) [569469c]
-
+- feat(crypto): implement Signal Double Ratchet (double-ratchet.ts) (by @areebahmeddd) [1211db0]
+- feat(crypto): implement X3DH prekey agreement (x3dh.ts) (by @areebahmeddd) [c5d9164]
+- feat(android): add WiFi Aware high-bandwidth transport (AirhopWiFiModule) (by @areebahmeddd) [8c3bb3a]
+- feat(ios): add MultipeerConnectivity high-bandwidth transport (AirhopMCModule) (by @areebahmeddd) [dd3c4f8]
+- feat(bridge): add NativeAirhopWiFi TurboModule spec (by @areebahmeddd) [a84f801]
+- feat(mesh): add chunked streaming file transfer (file-transfer.ts) (by @areebahmeddd) [cb4e064]
+- feat(mesh): add VIDEO_FRAME capture and jitter-buffer player (video-capture/player.ts) (by @areebahmeddd) [569469c]
 - docs: mark v0.8.0 complete (by @areebahmeddd) [a43c8fa]
 
-**Full changelog:** [v0.7.0..v0.8.0](https://github.com/areebahmeddd/Airhop/compare/v0.7.0..v0.8.0)## What's Changed in v0.7.0
+**Full changelog:** [v0.7.0..v0.8.0](https://github.com/areebahmeddd/Airhop/compare/v0.7.0..v0.8.0)
+
+## What's Changed in v0.7.0
 
 - docs: update links, version targets (by @areebahmeddd) [9be8399]
 - feat(nostr): add Nostr client with SimplePool, auto-reconnect, and Tor proxy config (by @areebahmeddd) [6d8f3bb]
@@ -160,7 +180,9 @@ automatic cleanup on is_last or 10s timeout. 14 passing unit tests. (by @areebah
 - feat(android): add Orbot SOCKS5 proxy detection via TCP probe (by @areebahmeddd) [ad770b9]
 - docs: mark v0.7.0 complete (by @areebahmeddd) [0e7fcb0]
 
-**Full changelog:** [v0.6.0..v0.7.0](https://github.com/areebahmeddd/Airhop/compare/v0.6.0..v0.7.0)## What's Changed in v0.6.0
+**Full changelog:** [v0.6.0..v0.7.0](https://github.com/areebahmeddd/Airhop/compare/v0.6.0..v0.7.0)
+
+## What's Changed in v0.6.0
 
 - docs: fix wording + star history graph (by @areebahmeddd) [f9f3c36]
 - feat(crypto): Noise XX handshake+transport and Noise X one-way sealing (by @areebahmeddd) [9d7d0cf]
@@ -173,17 +195,16 @@ automatic cleanup on is_last or 10s timeout. 14 passing unit tests. (by @areebah
 - feat(ui): channel list, message thread, and peer list screens (by @areebahmeddd) [0b30310]
 - docs: correct protocol constants (GCS, courier, packet types); mark v0.6.0 complete (by @areebahmeddd) [609b648]
 
-**Full changelog:** [v0.5.0..v0.6.0](https://github.com/areebahmeddd/Airhop/compare/v0.5.0..v0.6.0)## What's Changed in v0.5.0
+**Full changelog:** [v0.5.0..v0.6.0](https://github.com/areebahmeddd/Airhop/compare/v0.5.0..v0.6.0)
+
+## What's Changed in v0.5.0
 
 - Init project (Alpha stage) (by @areebahmeddd) [fbb0caf]
 - update docs with feature list + version targets + glossary (by @areebahmeddd) [dda2e0b]
 - update deps + add relays csv (by @areebahmeddd) [0e67041]
 - update docs (by @areebahmeddd) [2bd9c79]
 - run npm prebuild for android (by @areebahmeddd) [a9637bb]
-- run npm prebuild for ios
-
-Signed-off-by: Rishi Chirchi <rishiraj.chirchi@gmail.com> (by @Rishi Chirchi) [c33b4b1]
-
+- run npm prebuild for ios (by @rishichirchi) [c33b4b1]
 - docs: adjust roadmap, pretty readme (by @areebahmeddd) [5d73340]
 - docs: minor fixes (by @areebahmeddd) [fad3a49]
 - chore: configure Jest and TypeScript for @noble ESM modules (by @areebahmeddd) [c674718]

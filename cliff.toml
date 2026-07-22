@@ -3,21 +3,27 @@ header = """
 # Changelog
 
 All notable changes are documented here.
+
 """
 body = """
 ## What's Changed in {{ version }}
 
-{% for commit in commits %}{% if commit.author.name is not containing("[bot]") %}- {{ commit.message }} (by @{{ commit.author.name }}){% if commit.github.pr_number %} (#{{ commit.github.pr_number }}){% endif %} [{{ commit.id | truncate(length=7, end="") }}]
+{% for commit in commits %}{% if commit.author.name is not containing("[bot]") %}- {{ commit.message | split(pat="\n") | first | trim }} (by @{{ commit.author.name }}){% if commit.github.pr_number %} (#{{ commit.github.pr_number }}){% endif %} [{{ commit.id | truncate(length=7, end="") }}]
 {% endif %}{% endfor %}
-{% if previous.version %}**Full changelog:** [{{ previous.version }}..{{ version }}](https://github.com/areebahmeddd/Airhop/compare/{{ previous.version }}..{{ version }}){% endif %}
+{% if previous.version %}**Full changelog:** [{{ previous.version }}..{{ version }}](https://github.com/areebahmeddd/Airhop/compare/{{ previous.version }}..{{ version }})
+{% endif %}
 """
 footer = ""
-trim = true
+trim = false
 
 [git]
 conventional_commits = false
 filter_unconventional = false
-filter_commits = false
+filter_commits = true
+commit_parsers = [
+  { message = "^[a-z]+(\\(.+?\\))?!?:", skip = false },
+  { message = ".*", skip = true },
+]
 tag_pattern = "v[0-9].*"
 topo_order = false
 sort_commits = "oldest"
