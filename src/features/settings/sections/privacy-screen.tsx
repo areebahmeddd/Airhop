@@ -60,7 +60,13 @@ const SECTIONS: LegalSection[] = [
     heading: "Nostr internet bridge (optional)",
     paragraphs: [
       "When the Nostr bridge is enabled, Airhop connects to public or user-selected Nostr relays to extend conversations beyond Bluetooth range. This feature is optional and off by default.",
-      "Private fallback messages use NIP-17 gift wraps. Relay operators can observe event timestamps and network metadata but not message content. Public channel messages include a channel identifier, timestamp, and your public key. Nostr relays are operated by third parties whose retention and privacy practices are outside this project's control.",
+      {
+        bullets: [
+          "**Private messages.** Fallback messages use NIP-17 gift wraps. Relay operators can observe event timestamps and network metadata, but not message content.",
+          "**Public channel messages.** These include a channel identifier, timestamp, and your public key.",
+          "**Third-party relays.** Nostr relays are operated by third parties whose retention and privacy practices are outside this project's control.",
+        ],
+      },
     ],
   },
   {
@@ -72,7 +78,14 @@ const SECTIONS: LegalSection[] = [
   {
     heading: "Cryptography",
     paragraphs: [
-      "Private sessions use Noise XX with X25519 and ChaCha20-Poly1305. Forward secrecy is provided by Double Ratchet. All cryptographic operations use the @noble library suite, which has been independently audited by Cure53. **No cryptographic protection prevents a recipient from copying, screenshotting, or forwarding a message after reading it.**",
+      {
+        bullets: [
+          "**Private sessions.** Noise XX with X25519 and ChaCha20-Poly1305.",
+          "**Forward secrecy.** Provided by Double Ratchet.",
+          "**Implementation.** All cryptographic operations use the @noble library suite, which has been independently audited by Cure53.",
+        ],
+      },
+      "**No cryptographic protection prevents a recipient from copying, screenshotting, or forwarding a message after reading it.**",
     ],
   },
   {
@@ -102,7 +115,7 @@ const SECTIONS: LegalSection[] = [
   {
     heading: "Contact",
     paragraphs: [
-      "Questions or concerns can be sent to hi@areeb.dev, or raised by opening an issue on GitHub.",
+      "Questions or concerns can be sent to hi@areeb.dev or raised by opening an issue on GitHub.",
     ],
   },
 ];

@@ -24,7 +24,7 @@ const SECTIONS: LegalSection[] = [
   {
     heading: "No warranty",
     paragraphs: [
-      "Airhop is provided as is, without any warranty of any kind. We make no guarantees about reliability, availability, or fitness for a particular purpose.",
+      'Airhop is provided "as is" without any warranty of any kind. We make no guarantees about reliability, availability, or fitness for a particular purpose.',
       "The app has not been formally security-audited by an external firm. An audit is planned but has not been completed. **Do not rely on Airhop as your only means of communication in life-safety situations.**",
     ],
   },
@@ -55,7 +55,7 @@ const SECTIONS: LegalSection[] = [
   {
     heading: "Contact",
     paragraphs: [
-      "Questions about these terms can be sent to hi@areeb.dev, or raised by opening an issue on GitHub.",
+      "Questions about these terms can be sent to hi@areeb.dev or raised by opening an issue on GitHub.",
     ],
   },
 ];
