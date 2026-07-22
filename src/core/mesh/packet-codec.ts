@@ -46,10 +46,20 @@ export const enum PacketType {
   FRAGMENT = 0x20, // Single BLE fragment of a larger message
   REQUEST_SYNC = 0x21, // GCS filter gossip request (local-only, TTL=2)
   FILE_TRANSFER = 0x22, // Binary file / audio / image payload
-  VOICE_FRAME = 0x29, // PTT audio burst (Airhop extension)
-  VIDEO_FRAME = 0x30, // Video frame, WiFi only (Airhop extension)
-  CASHU_TOKEN = 0x40, // Cashu ecash token (Airhop extension)
+  VOICE_FRAME = 0x29, // PTT audio burst (matches bitchat-iOS voiceFrame)
 }
+
+// Removed types, recorded so they aren't reintroduced by accident:
+//
+//   0x30 VIDEO_FRAME: video was specified over "WiFi Aware or
+//     MultipeerConnectivity", but those are different protocols that cannot
+//     interoperate. iOS<->Android video is impossible on that path, so the
+//     type described a feature that could never work cross-platform.
+//
+//   0x40 CASHU_TOKEN: ecash travels as text inside an ordinary encrypted DM
+//     and is detected by findTokensInText(). That works today and needs no
+//     dedicated packet type; a second path would only be a second thing to
+//     keep in sync.
 
 // Flag bit values: must match bitchat BinaryProtocol.Flags exactly.
 export const Flags = {
