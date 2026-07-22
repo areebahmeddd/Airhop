@@ -443,10 +443,27 @@ export default function App(): React.JSX.Element {
                           <Pressable
                             style={[
                               styles.seg,
+                              styles.segIconText,
                               chatSubTab === "channels" && styles.segActive,
                             ]}
                             onPress={() => setChatSubTab("channels")}
+                            accessibilityRole="button"
+                            accessibilityLabel="Channels"
+                            accessibilityState={{
+                              selected: chatSubTab === "channels",
+                            }}
                           >
+                            {/* Same icon language as the channel rows below:
+                                hash for channels, message-circle for DMs. */}
+                            <Feather
+                              name="hash"
+                              size={14}
+                              color={
+                                chatSubTab === "channels"
+                                  ? Colors.textPrimary
+                                  : Colors.textMuted
+                              }
+                            />
                             <Text
                               style={[
                                 styles.segText,
@@ -467,10 +484,25 @@ export default function App(): React.JSX.Element {
                           <Pressable
                             style={[
                               styles.seg,
+                              styles.segIconText,
                               chatSubTab === "dms" && styles.segActive,
                             ]}
                             onPress={() => setChatSubTab("dms")}
+                            accessibilityRole="button"
+                            accessibilityLabel="Direct messages"
+                            accessibilityState={{
+                              selected: chatSubTab === "dms",
+                            }}
                           >
+                            <Feather
+                              name="message-circle"
+                              size={14}
+                              color={
+                                chatSubTab === "dms"
+                                  ? Colors.textPrimary
+                                  : Colors.textMuted
+                              }
+                            />
                             <Text
                               style={[
                                 styles.segText,
@@ -962,8 +994,9 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       paddingVertical: 7,
       borderRadius: 6,
     },
-    // Icon + label variant of `seg`, used where the segment needs an icon
-    // alongside its text (e.g. Mesh's Radar/List toggle) instead of text alone.
+    // Icon + label variant of `seg`, used wherever a segment carries an icon
+    // alongside its text (Chats' Channels/Direct, Mesh's Radar/List) so every
+    // segmented control in the header reads the same.
     segIconText: {
       flexDirection: "row",
       alignItems: "center",
