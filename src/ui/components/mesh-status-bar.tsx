@@ -1,11 +1,15 @@
 // MeshStatusBar component.
 // A slim contextual banner that surfaces the BLE mesh connectivity state.
-// Rendered below the header when BLE is off or scanning.
-// Hidden entirely when mesh is connected and healthy.
+// Rendered below the header only when something is actionable: the radio is
+// off, or traffic has fallen back to Nostr.
+//
+// "Connected" and "scanning" render nothing. The header peer count already
+// covers the first, and the radar view says "Scanning for nearby peers" in
+// its own empty state, so a banner repeating it on every tab was noise.
 
 import React from "react";
 import { StyleSheet, Text, View } from "react-native";
-import { Colors, FontSize, FontWeight, Spacing } from "../theme";
+import { FontSize, FontWeight, Spacing, useThemeColors } from "../theme";
 
 export type MeshState =
   | "connected" // at least one peer in range
@@ -15,50 +19,40 @@ export type MeshState =
 
 interface Props {
   state: MeshState;
-  peerCount?: number;
 }
 
-const CONFIG: Record<
-  MeshState,
-  { label: (n?: number) => string; bg: string; text: string }
-> = {
-  connected: {
-    label: (n) => `${n ?? 0} peer${n !== 1 ? "s" : ""} in range`,
-    bg: "rgba(34,197,94,0.10)",
-    text: Colors.online,
-  },
-  scanning: {
-    label: () => "Scanning for peers\u2026",
-    bg: "rgba(245,158,11,0.10)",
-    text: Colors.syncing,
-  },
-  offline: {
-    label: () => "Bluetooth off \u2014 mesh unavailable",
-    bg: Colors.dangerDim,
-    text: Colors.danger,
-  },
-  nostr: {
-    label: () => "No local peers \u2014 relaying via Nostr",
-    bg: Colors.accentGhost,
-    text: Colors.textSecondary,
-  },
-};
+// Only the states that actually render need an entry here.
+type BannerState = Exclude<MeshState, "connected" | "scanning">;
+
+function getConfig(
+  Colors: ReturnType<typeof useThemeColors>,
+): Record<BannerState, { label: string; bg: string; text: string }> {
+  return {
+    offline: {
+      label: "Bluetooth off, mesh unavailable",
+      bg: Colors.dangerDim,
+      text: Colors.danger,
+    },
+    nostr: {
+      label: "No local peers, relaying via Nostr",
+      bg: Colors.accentGhost,
+      text: Colors.textSecondary,
+    },
+  };
+}
 
 export default function MeshStatusBar({
   state,
-  peerCount,
 }: Props): React.JSX.Element | null {
-  // Don't render the bar when connected; the peer count in the header is enough.
-  if (state === "connected") return null;
+  const Colors = useThemeColors();
+  if (state === "connected" || state === "scanning") return null;
 
-  const cfg = CONFIG[state];
+  const cfg = getConfig(Colors)[state];
 
   return (
     <View style={[styles.bar, { backgroundColor: cfg.bg }]}>
       <View style={[styles.indicator, { backgroundColor: cfg.text }]} />
-      <Text style={[styles.label, { color: cfg.text }]}>
-        {cfg.label(peerCount)}
-      </Text>
+      <Text style={[styles.label, { color: cfg.text }]}>{cfg.label}</Text>
     </View>
   );
 }
