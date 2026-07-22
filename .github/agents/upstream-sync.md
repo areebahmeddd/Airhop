@@ -27,7 +27,7 @@ You are the Upstream Sync agent for the Airhop project. Your job is to monitor c
 - **Android:** `permissionlesstech/bitchat-android`
 - **Relay data:** `permissionlesstech/georelays`
 
-Airhop treats bitchat-iOS as the canonical spec (ChaCha20-Poly1305). Note the known divergence: bitchat-Android uses AES-256-GCM instead of ChaCha20-Poly1305 for the Noise cipher.
+Airhop treats bitchat-iOS as the canonical spec. Both bitchat platforms use `Noise_XX_25519_ChaChaPoly_SHA256`. there is NO cipher divergence.
 
 For georelays, watch for changes to `nostr_relays.csv`, `filter_bitchat_relays.sh`, and `relays_geo_lookup.py` - these feed directly into `assets/data/relays.csv` in Airhop.
 
@@ -129,5 +129,5 @@ Output the checklist in this format:
 
 - **Protocol changes are not automatically bad.** They may fix bitchat bugs. Assess each one.
 - **If a security patch fixes a vulnerability Airhop shares**, it must be applied. Check if the same code path exists in Airhop.
-- **bitchat-Android's AES-256-GCM vs ChaCha20-Poly1305 divergence** is known and tracked. Don't flag it as a new issue on every sync.
+- **There is no AES-GCM vs ChaChaPoly divergence.** Both bitchat platforms use ChaChaPoly. Do not re-raise this; it was a documentation error, now corrected.
 - If a change only affects UI (Views/, ViewModels/ in iOS, or Compose screens in Android), it is ⚪ MAINTENANCE for Airhop.
