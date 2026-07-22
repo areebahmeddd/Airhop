@@ -1,7 +1,7 @@
 // AirhopTorModule.swift
 //
 // React Native TurboModule exposing AirhopTorManager to JavaScript.
-// This is a separate native module from AirhopBLEModule — Tor and BLE
+// This is a separate native module from AirhopBLEModule. Tor and BLE
 // are independent concerns and should not share a module boundary.
 //
 // Bridge file: AirhopTorModule.mm
@@ -44,7 +44,7 @@ final class AirhopTorModule: RCTEventEmitter {
     // MARK: - JS-callable methods
 
     /// Enable and start Arti. Resolves when the start has been initiated
-    /// (not necessarily when bootstrap is complete — use awaitTorReady for that).
+    /// (not necessarily when bootstrap is complete; use awaitTorReady for that).
     @objc
     func startTor(_ resolve: @escaping RCTPromiseResolveBlock,
                   rejecter reject: @escaping RCTPromiseRejectBlock) {

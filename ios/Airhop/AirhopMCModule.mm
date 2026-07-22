@@ -1,5 +1,5 @@
 // Obj-C++ bridge: exposes AirhopMCModule (Swift) to the React Native bridge.
-// Counterpart to AirhopBLEModule.mm — same pattern, same method set.
+// Counterpart to AirhopBLEModule.mm. Same pattern, same method set.
 #import <React/RCTBridgeModule.h>
 #import <React/RCTEventEmitter.h>
 

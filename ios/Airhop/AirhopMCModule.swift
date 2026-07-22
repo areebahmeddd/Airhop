@@ -180,7 +180,7 @@ extension AirhopMCModule: MCSessionDelegate {
         ])
     }
 
-    // Stream and resource delegates — not used; raw Data frames cover all cases.
+    // Stream and resource delegates: not used; raw Data frames cover all cases.
     func session(_ session: MCSession, didReceive stream: InputStream,
                  withName streamName: String, fromPeer peer: MCPeerID) {}
     func session(_ session: MCSession,
