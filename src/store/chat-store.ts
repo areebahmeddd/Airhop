@@ -28,6 +28,14 @@ export interface ChatMessage {
   timestampMs: number;
   isMine: boolean;
   attachment?: ChatAttachment;
+  // Local-only notice rendered as centered muted text instead of a bubble
+  // (e.g. "you took a screenshot"). Never sent over the mesh.
+  isSystem?: boolean;
+  // Local-only, never sent over the mesh, mirroring how WhatsApp/Telegram
+  // already treat starring: private to you.
+  isStarred?: boolean;
+  // Set only on the sender's own outgoing copy of a forwarded message.
+  forwarded?: boolean;
 }
 
 interface ChatState {
@@ -42,25 +50,32 @@ interface ChatState {
   unreadCounts: Record<string, number>;
   // User-written descriptions for custom channels (persisted via MMKV).
   channelDescriptions: Record<string, string>;
-  // Transport preference for custom channels: "BLE" | "Nostr" | "BLE + Nostr".
-  channelTransports: Record<string, string>;
-  // Visibility preference for custom channels: "Public" | "Private".
-  channelVisibilities: Record<string, string>;
-  // Channels the user has archived (hidden but messages preserved).
-  archivedChannels: string[];
+  // NOTE: channelTransports / channelVisibilities were removed. They were
+  // written by the UI and read by nothing, so a channel marked "Private" was
+  // still plaintext-broadcast to everyone in range and a channel set to "Nostr"
+  // still went out over BLE. Keeping settings that silently do nothing, one of
+  // them implying encryption, is worse than not offering them. Channels are
+  // public by design; privacy lives in DMs (Noise + Double Ratchet).
+  // User-created channels pinned to the top of "Your Channels" (WhatsApp-style).
+  pinnedChannels: string[];
 
   addChannel: (channel: string) => void;
   removeChannel: (channel: string) => void;
-  renameChannel: (oldName: string, newName: string) => void;
-  archiveChannel: (channel: string) => void;
-  unarchiveChannel: (channel: string) => void;
+  // Returns false if the rename was rejected (name unchanged, or already taken)
+  // so callers don't apply follow-up edits to the wrong channel.
+  renameChannel: (oldName: string, newName: string) => boolean;
+  togglePinChannel: (channel: string) => void;
+  clearChannelMessages: (channel: string) => void;
+  // Fold one channel's messages into another and delete the source. Used when a
+  // Nostr-only correspondent is later identified over BLE, so the two threads
+  // for the same person become one.
+  mergeChannel: (from: string, to: string) => void;
   addMessage: (msg: ChatMessage) => void;
+  toggleStar: (channel: string, id: string) => void;
   setActiveChannel: (channel: string) => void;
   markChannelRead: (channel: string) => void;
   setLastThread: (channel: string) => void;
   setChannelDescription: (channel: string, description: string) => void;
-  setChannelTransport: (channel: string, transport: string) => void;
-  setChannelVisibility: (channel: string, visibility: string) => void;
   clearAll: () => void;
 }
 
@@ -90,7 +105,7 @@ const mmkvStorage = {
 
 export const useChatStore = create<ChatState>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       channels: DEFAULT_CHANNELS,
       messages: {},
       // Empty string: user at list, not inside any thread.
@@ -100,9 +115,7 @@ export const useChatStore = create<ChatState>()(
       lastThread: "",
       unreadCounts: {},
       channelDescriptions: {},
-      channelTransports: {},
-      channelVisibilities: {},
-      archivedChannels: [],
+      pinnedChannels: [],
 
       addChannel(channel: string) {
         set((state) => {
@@ -116,7 +129,26 @@ export const useChatStore = create<ChatState>()(
           const existing = state.messages[msg.channel] ?? [];
           // Deduplicate by id
           if (existing.some((m) => m.id === msg.id)) return state;
-          const next = [...existing, msg];
+          // Insert by timestamp instead of appending. Mesh messages can arrive
+          // out of order (a multi-hop relay is slower than a direct link but
+          // still carries the ORIGINAL sender timestamp), which otherwise
+          // renders bubbles out of sequence and makes the date-separator check
+          // (which only compares adjacent items) emit a stray "Yesterday" in
+          // the middle of today's conversation.
+          // Linear scan from the end: the common case is a genuinely newest
+          // message, which lands on the first comparison.
+          let insertAt = existing.length;
+          while (
+            insertAt > 0 &&
+            existing[insertAt - 1].timestampMs > msg.timestampMs
+          ) {
+            insertAt--;
+          }
+          const next = [
+            ...existing.slice(0, insertAt),
+            msg,
+            ...existing.slice(insertAt),
+          ];
           // Trim to cap and track how many unread messages were dropped.
           const overflow = next.length - MAX_PER_CHANNEL;
           const dropped = overflow > 0 ? next.slice(0, overflow) : [];
@@ -134,6 +166,20 @@ export const useChatStore = create<ChatState>()(
         });
       },
 
+      toggleStar(channel: string, id: string) {
+        set((state) => {
+          const existing = state.messages[channel] ?? [];
+          return {
+            messages: {
+              ...state.messages,
+              [channel]: existing.map((m) =>
+                m.id === id ? { ...m, isStarred: !m.isStarred } : m,
+              ),
+            },
+          };
+        });
+      },
+
       setActiveChannel(channel: string) {
         set({ activeChannel: channel });
       },
@@ -145,20 +191,40 @@ export const useChatStore = create<ChatState>()(
           delete messages[channel];
           const unreadCounts = { ...state.unreadCounts };
           delete unreadCounts[channel];
+          const channelDescriptions = { ...state.channelDescriptions };
+          delete channelDescriptions[channel];
+          const pinnedChannels = state.pinnedChannels.filter(
+            (c) => c !== channel,
+          );
+          // Clear activeChannel rather than reassigning it to some arbitrary
+          // surviving channel. The old behaviour picked the first non-DM
+          // channel (usually #bluetooth) while the user was sitting on the LIST
+          // view, and since addMessage suppresses the unread bump for the
+          // active channel, that channel then silently stopped showing unread
+          // badges until the user opened and closed some other thread.
           const activeChannel =
-            state.activeChannel === channel
-              ? (channels.find((c) => !c.startsWith("dm:")) ?? "")
-              : state.activeChannel;
-          return { channels, messages, unreadCounts, activeChannel };
+            state.activeChannel === channel ? "" : state.activeChannel;
+          return {
+            channels,
+            messages,
+            unreadCounts,
+            channelDescriptions,
+            pinnedChannels,
+            activeChannel,
+          };
         });
       },
 
       renameChannel(oldName: string, newName: string) {
         // Normalise: ensure exactly one leading #.
         const clean = "#" + newName.replace(/^#+/, "");
+        // Decide OUTSIDE set() so the result can be reported. Previously this
+        // silently no-opped on a collision while the caller carried on as if it
+        // had worked: renaming #foo onto an existing #bar left #foo untouched
+        // and overwrote #bar's description with #foo's drafts.
+        if (clean === oldName || get().channels.includes(clean)) return false;
+
         set((state) => {
-          // No-op if the name is unchanged or already taken.
-          if (clean === oldName || state.channels.includes(clean)) return state;
           const channels = state.channels.map((c) =>
             c === oldName ? clean : c,
           );
@@ -180,35 +246,95 @@ export const useChatStore = create<ChatState>()(
             channelDescriptions[clean] = channelDescriptions[oldName];
             delete channelDescriptions[oldName];
           }
-          const channelTransports = { ...state.channelTransports };
-          if (channelTransports[oldName] !== undefined) {
-            channelTransports[clean] = channelTransports[oldName];
-            delete channelTransports[oldName];
-          }
+          const pinnedChannels = state.pinnedChannels.includes(oldName)
+            ? state.pinnedChannels.map((c) => (c === oldName ? clean : c))
+            : state.pinnedChannels;
           const activeChannel =
             state.activeChannel === oldName ? clean : state.activeChannel;
+          // lastThread must follow the rename too, otherwise an app restart
+          // tries to reopen a channel key that no longer exists and lands the
+          // user on an empty thread.
+          const lastThread =
+            state.lastThread === oldName ? clean : state.lastThread;
           return {
             channels,
             messages,
             unreadCounts,
             channelDescriptions,
-            channelTransports,
+            pinnedChannels,
             activeChannel,
+            lastThread,
+          };
+        });
+        return true;
+      },
+
+      togglePinChannel(channel: string) {
+        set((state) => ({
+          pinnedChannels: state.pinnedChannels.includes(channel)
+            ? state.pinnedChannels.filter((c) => c !== channel)
+            : [...state.pinnedChannels, channel],
+        }));
+      },
+
+      // Wipes a channel's messages and unread count but keeps the channel
+      // itself (and its description/transport/visibility/pin state) intact,
+      // distinct from removeChannel, which deletes the channel entirely.
+      clearChannelMessages(channel: string) {
+        set((state) => {
+          const messages = { ...state.messages };
+          delete messages[channel];
+          return {
+            messages,
+            unreadCounts: { ...state.unreadCounts, [channel]: 0 },
           };
         });
       },
 
-      archiveChannel(channel: string) {
+      mergeChannel(from: string, to: string) {
+        if (from === to) return;
         set((state) => {
-          if (state.archivedChannels.includes(channel)) return state;
-          return { archivedChannels: [...state.archivedChannels, channel] };
-        });
-      },
+          const source = state.messages[from];
+          if (source === undefined || source.length === 0) {
+            // Nothing to move, but still drop the empty source channel.
+            if (!(from in state.messages) && !state.channels.includes(from)) {
+              return state;
+            }
+            const messages = { ...state.messages };
+            delete messages[from];
+            const unreadCounts = { ...state.unreadCounts };
+            delete unreadCounts[from];
+            return {
+              messages,
+              unreadCounts,
+              channels: state.channels.filter((c) => c !== from),
+            };
+          }
 
-      unarchiveChannel(channel: string) {
-        set((state) => ({
-          archivedChannels: state.archivedChannels.filter((c) => c !== channel),
-        }));
+          const target = state.messages[to] ?? [];
+          const seen = new Set(target.map((m) => m.id));
+          const merged = [
+            ...target,
+            ...source
+              .filter((m) => !seen.has(m.id))
+              .map((m) => ({ ...m, channel: to })),
+          ].sort((a, b) => a.timestampMs - b.timestampMs);
+
+          const messages = { ...state.messages, [to]: merged };
+          delete messages[from];
+
+          const unreadCounts = { ...state.unreadCounts };
+          unreadCounts[to] =
+            (unreadCounts[to] ?? 0) + (unreadCounts[from] ?? 0);
+          delete unreadCounts[from];
+
+          const channels = state.channels.filter((c) => c !== from);
+          return {
+            messages,
+            unreadCounts,
+            channels: channels.includes(to) ? channels : [...channels, to],
+          };
+        });
       },
 
       markChannelRead(channel: string) {
@@ -230,24 +356,6 @@ export const useChatStore = create<ChatState>()(
         }));
       },
 
-      setChannelTransport(channel: string, transport: string) {
-        set((state) => ({
-          channelTransports: {
-            ...state.channelTransports,
-            [channel]: transport,
-          },
-        }));
-      },
-
-      setChannelVisibility(channel: string, visibility: string) {
-        set((state) => ({
-          channelVisibilities: {
-            ...state.channelVisibilities,
-            [channel]: visibility,
-          },
-        }));
-      },
-
       clearAll() {
         set({
           channels: DEFAULT_CHANNELS,
@@ -256,9 +364,7 @@ export const useChatStore = create<ChatState>()(
           lastThread: "",
           unreadCounts: {},
           channelDescriptions: {},
-          channelTransports: {},
-          channelVisibilities: {},
-          archivedChannels: [],
+          pinnedChannels: [],
         });
       },
     }),

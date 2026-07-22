@@ -15,6 +15,9 @@ interface PeerState {
   peers: Map<string, NearbyPeer>;
 
   upsertPeer: (peer: NearbyPeer) => void;
+  // Record a fresh RSSI reading for an already-known peer. No-op for unknown
+  // peers: a signal reading alone doesn't tell us their identity.
+  updateRssi: (peerID: string, rssi: number) => void;
   removePeer: (peerID: string) => void;
   evictStale: (ttlMs?: number) => void;
   getPeer: (peerID: string) => NearbyPeer | undefined;
@@ -32,7 +35,25 @@ export const usePeerStore = create<PeerState>()((set, get) => ({
   upsertPeer(peer: NearbyPeer) {
     set((state) => {
       const next = new Map(state.peers);
-      next.set(peer.peerID, { ...peer, lastSeenMs: Date.now() });
+      const existing = state.peers.get(peer.peerID);
+      // Merge over the existing entry rather than replacing it. ANNOUNCE-derived
+      // updates carry no `rssi`, so a plain replace wiped the signal reading
+      // every 30s: it would flicker between a real value and undefined.
+      next.set(peer.peerID, { ...existing, ...peer, lastSeenMs: Date.now() });
+      return { peers: next };
+    });
+  },
+
+  updateRssi(peerID: string, rssi: number) {
+    set((state) => {
+      const existing = state.peers.get(peerID);
+      if (existing === undefined) return state;
+      const next = new Map(state.peers);
+      // Deliberately does NOT refresh lastSeenMs. RSSI is polled every 5s off
+      // the GATT link, so treating it as liveness would pin a peer as "just
+      // seen" forever even after their ANNOUNCE timer died, a ghost peer that
+      // evictStale could never remove. Reachability stays driven by ANNOUNCEs.
+      next.set(peerID, { ...existing, rssi });
       return { peers: next };
     });
   },
