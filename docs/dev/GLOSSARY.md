@@ -30,9 +30,9 @@
 
 **TTL (Time To Live)**: A counter embedded in each BLE packet. Every relay node decrements it by one before forwarding; the packet is dropped when TTL reaches zero. Default TTL is 7, bounding propagation to 7 hops.
 
-**[WiFi Aware](https://wi-fi.org/discover-wi-fi/wi-fi-aware)**: An Android API (API 26+) for direct device-to-device WiFi connections without a router or internet connection. Provides up to 250 Mbps at ~30 m range. Used in v0.8.0 for high-bandwidth transfers on Android.
+**[WiFi Aware](https://wi-fi.org/discover-wi-fi/wi-fi-aware)**: An Android API (API 26+) for direct device-to-device WiFi connections without a router or internet connection. Provides up to 250 Mbps at ~30 m range. Used for high-bandwidth transfers between two Android devices. It cannot interoperate with iOS MultipeerConnectivity, so it is never a cross-platform path.
 
-**[MultipeerConnectivity](https://developer.apple.com/documentation/multipeerconnectivity)**: Apple's framework for peer-to-peer networking between iOS and macOS devices over WiFi or Bluetooth without a router. Used in v0.8.0 for high-bandwidth transfers on iOS.
+**[MultipeerConnectivity](https://developer.apple.com/documentation/multipeerconnectivity)**: Apple's framework for peer-to-peer networking between iOS and macOS devices over WiFi or Bluetooth without a router. Used for high-bandwidth transfers between two Apple devices. It runs on Apple's proprietary AWDL and cannot interoperate with Android WiFi Aware, so it is never a cross-platform path.
 
 **GCS (Golomb-Coded Set)**: A probabilistic data structure, more compact than a Bloom filter, that encodes a set of hashes. Used in gossip sync to let two peers compare which messages each holds and exchange only what is missing. See [Golomb coding](https://en.wikipedia.org/wiki/Golomb_coding).
 
@@ -78,6 +78,6 @@
 
 **[Arti](https://gitlab.torproject.org/tpo/core/arti)**: The Tor Project's Rust implementation of the Tor client. Bundled as an xcframework in bitchat iOS; Airhop uses the same approach to route all Nostr traffic through Tor on iOS by default.
 
-**[Orbot](https://guardianproject.info/apps/org.torproject.android/)**: Guardian Project's Android app providing a Tor SOCKS5 proxy on `localhost:9050`. Airhop detects Orbot and routes all Nostr traffic through it when available (v0.7.0), with an embedded Tor binary as the long-term default.
+**[Orbot](https://guardianproject.info/apps/org.torproject.android/)**: Guardian Project's Android app providing a Tor SOCKS5 proxy on `localhost:9050`. Airhop detects Orbot and routes all Nostr traffic through it when available, with an embedded Tor binary as the long-term default.
 
 **[TurboModule](https://reactnative.dev/docs/the-new-architecture/what-are-turbo-native-modules)**: React Native's new architecture native module system. `src/bridge/NativeAirhopBLE.ts` is a TurboModule TypeScript spec (Codegen input) that provides a typed interface over the Swift and Kotlin BLE implementations.

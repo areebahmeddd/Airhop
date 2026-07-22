@@ -299,7 +299,7 @@ The iOS codebase contains `PrekeyBundleStore` and `LocalPrekeyStore`; one-time p
 
 Android uses:
 
-- **X25519 key exchange** + **AES-256-GCM** for private messages.
+- **X25519 key exchange** + **ChaCha20-Poly1305** for private messages.
 - The `EncryptionService.kt` provides identity fingerprint derivation and crypto operations.
 - Peer ID is the **first 16 hex characters** of the Noise identity fingerprint (same as iOS).
 
@@ -562,7 +562,7 @@ bitchat/android/app/src/main/java/com/bitchat/android/
 ├── MainActivity.kt
 ├── MainViewModel.kt
 ├── core/                     # Core utilities
-├── crypto/                   # EncryptionService.kt (X25519 + AES-256-GCM)
+├── crypto/                   # EncryptionService.kt (X25519 + ChaCha20-Poly1305)
 ├── favorites/                # Favorite peer management
 ├── features/
 │   ├── file/                 # FileUtils.kt

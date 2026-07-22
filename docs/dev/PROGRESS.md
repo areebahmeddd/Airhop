@@ -2,11 +2,27 @@
 
 > Updated when milestones complete, blockers are found, or decisions are made. It is the canonical answer to "where are we right now?"
 
-## Current Version: v1.0.0 (Ready)
+## Current Version: v1.0.0 (pre-field-test)
 
-**Status:** Production UI complete. Onboarding flow, dark theme, Feather icon system, 4-tab navigation shell, and core component library in place. ESLint and TypeScript clean.
-**Started:** July 18, 2026
-**Last Updated:** July 19, 2026
+**Status:** Feature work complete and green in CI (451 tests, 0 lint errors, TypeScript clean). **Not yet validated on physical hardware.**
+
+> [!IMPORTANT]
+> A checked box below means "implemented and unit-tested", NOT "verified on devices".
+> The BLE mesh has never been exercised on two real phones, and the native
+> Kotlin/Swift modules have not been compiled by CI. Treat every radio-dependent
+> claim as unproven until the first field test.
+
+**Verified by tests:** packet codec, fragment format, Noise XX, Double Ratchet,
+courier envelopes, gossip filters, outbox delivery, contact-card binding,
+geohash derivation + relay determinism, proof selection.
+
+**Cannot be verified without hardware:** discovery, MTU negotiation, cross-OS
+connection lifecycle, real attachment transfer over the radio.
+
+**Known not implemented:** live PTT voice (`VOICE_FRAME` reserved; needs a
+streaming-mic native module on both platforms) and live video (WiFi Aware and
+MultipeerConnectivity cannot interoperate, so cross-OS streaming is impossible).
+Voice notes and recorded-video sharing both work via `FILE_TRANSFER`.
 
 ## Documentation Status
 
@@ -129,11 +145,11 @@
 - [x] Safe area + status bar: `SafeAreaProvider` + `SafeAreaView` from `react-native-safe-area-context` v5, `StatusBar` from `expo-status-bar` (replaces deprecated `react-native` equivalents)
 - [x] Keyboard handling: `KeyboardAvoidingView` in message thread (iOS padding, Android default)
 - [x] Component library: `Avatar` (deterministic colour + initials from peer ID), `StatusDot` (online indicator); kebab-case naming, all imports updated
-- [x] Accessibility audit
+- [ ] Accessibility audit
 - [ ] App Store and Play Store submission
-- [ ] YouTube demo series: full offline mesh demo, voice PTT, Nostr bridge, panic wipe
+- [ ] YouTube demo series
 
-**Milestone:** UI complete and dev-ready. Submitted to app stores pending accessibility audit.
+**Milestone:** UI complete and dev-ready.
 
 ## v1.1.0: AI + Wallets
 
@@ -224,21 +240,9 @@ _No hard blockers._
 
 ## Known Gaps (pre-v1.0.0)
 
-| Gap                                                   | Detail                                                                                                                                                                                                                             | Impact                                                                        |
-| ----------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
-| Cross-language Noise XX test                          | JS ↔ bitchat-iOS interop test not yet run (requires a device test harness)                                                                                                                                                         | Deferred to v1.0.0 integration testing; MUST pass before App Store submission |
-| ~~`AnnounceManager.buildPacket()` sends no TLV 0x04~~ | **Fixed:** `buildPacket()` now accepts optional `neighborIDs` and calls `buildAnnouncePayloadWithNeighbors()`. `start()` accepts a `getNeighborIDs` callback for live topology gossip.                                             | Topology gossip re-enabled; TLV 0x04 wire-compatible with bitchat             |
-| ~~WiFi not in `MessageRouter` priority chain~~        | **Fixed:** `WiFiUnicastFn` added as tier-1 transport (tried before BLE when in range). Same Noise session is used for both transports. Falls back to BLE if WiFi returns false.                                                    | Full transport priority chain: WiFi → BLE → Nostr → Courier                   |
-| ~~`DeviceMonitoringManager` not in native BLE~~       | **Fixed:** `PeerRegistry` now tracks `isDirect` per-peer with a 15s TTL for directly connected peers (matching bitchat's `DIRECT_PEER_TTL_MS`) vs 60s for mesh peers. `markDirect()` / `markIndirect()` called on BLE link events. | Anti-spam defense in place; direct-peer slot exhaustion mitigated             |
-
-## Decision Log
-
-| Date       | Decision                                          | Rationale                                                                              | Alternatives Rejected                     |
-| ---------- | ------------------------------------------------- | -------------------------------------------------------------------------------------- | ----------------------------------------- |
-| 2026-07-12 | Build infra before UI                             | Non-negotiable; a reliable mesh node is the product                                    | UI-first (leads to empty shell)           |
-| 2026-07-12 | Single-app (not monorepo)                         | No benefit at this stage; extract packages later                                       | Monorepo adds tooling overhead now        |
-| 2026-07-12 | Expo bare workflow                                | BLE TurboModule needed from day 1; managed blocks it                                   | Managed workflow, plain RN CLI            |
-| 2026-07-12 | Nostr over Matrix/XMPP                            | Permissionless, no homeserver, 350+ relays, bitchat-validated                          | Matrix (requires homeserver), XMPP (same) |
-| 2026-07-12 | Follow bitchat-iOS Noise spec (ChaCha20-Poly1305) | bitchat-android diverged (AES-256-GCM); iOS is canonical                               | Match Android (inconsistent with iOS)     |
-| 2026-07-12 | `@noble/curves` + `@noble/ciphers` for all crypto | Audited (Cure53), zero deps, React Native compatible                                   | `node:crypto`, sodium-native              |
-| 2026-07-12 | Cashu for payments                                | Only offline-first ecash; bitchat already prototyping (`CashuTokenDecoderTests.swift`) | Lightning-only (requires internet)        |
+| Gap                                                   | Detail                                                                                                                                                                                                                                                                                                                                                                                                                             | Impact                                                                                             |
+| ----------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| Cross-language Noise XX test                          | JS ↔ bitchat-iOS interop test not yet run (requires a device test harness)                                                                                                                                                                                                                                                                                                                                                         | Deferred to v1.0.0 integration testing; MUST pass before App Store submission                      |
+| ~~`AnnounceManager.buildPacket()` sends no TLV 0x04~~ | **Fixed:** `buildPacket()` now accepts optional `neighborIDs` and calls `buildAnnouncePayloadWithNeighbors()`. `start()` accepts a `getNeighborIDs` callback for live topology gossip.                                                                                                                                                                                                                                             | Topology gossip re-enabled; TLV 0x04 wire-compatible with bitchat                                  |
+| ~~WiFi not in `MessageRouter` priority chain~~        | **Not a real gap; the "fix" was removed.** `MessageRouter` never needed a WiFi tier: the `unicast` callback it is given (from `MeshService`) already prefers an active WiFi link over BLE. The extra `WiFiUnicastFn` parameter duplicated that check, was never actually passed, and so read like an unfinished feature while the behaviour was already correct. Transport choice belongs in the callback that owns the link maps. | Unchanged behaviour: DMs use WiFi when a WiFi link exists, otherwise BLE, then Nostr, then courier |
+| ~~`DeviceMonitoringManager` not in native BLE~~       | **Fixed:** `PeerRegistry` now tracks `isDirect` per-peer with a 15s TTL for directly connected peers (matching bitchat's `DIRECT_PEER_TTL_MS`) vs 60s for mesh peers. `markDirect()` / `markIndirect()` called on BLE link events.                                                                                                                                                                                                 | Anti-spam defense in place; direct-peer slot exhaustion mitigated                                  |

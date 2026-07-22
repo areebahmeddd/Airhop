@@ -12,7 +12,7 @@ It is a **spiritual fork of bitchat** ([permissionlesstech/bitchat](https://gith
 - Live PTT voice from day 1 (designed but never shipped in bitchat _at the time of writing_)
 - Cashu ecash payments that work offline over BLE
 - Double Ratchet forward secrecy for all stored messages
-- WiFi Aware / Multipeer transport for high-bandwidth use cases (video, large files)
+- Same-platform WiFi transport for high-bandwidth use cases (large files). Android uses WiFi Aware, iOS uses MultipeerConnectivity. These are different protocols and do not interoperate, so this is a within-Android or within-iOS fast path only. Bluetooth remains the universal transport.
 - Tor on both iOS and Android (bitchat iOS only _at the time of writing_)
 - Human-readable identities and QR contact exchange
 
@@ -49,7 +49,7 @@ Do not open a PR for a UI component until the underlying `src/core/` service bac
 
 ## What We Are Not Building
 
-- **A video call app over BLE.** BLE bandwidth (~15 KB/s) cannot carry video. Video is WiFi Aware only, Phase 3, not core.
+- **A video call app.** BLE bandwidth (~15 KB/s) cannot carry live video, and the two platforms' direct-WiFi stacks do not interoperate, so cross-platform video calling is not achievable today. Videos are shared as files instead.
 - **A server.** We operate no relays, mints, or infrastructure. Ever.
 - **A centralized social network.** No profiles hosted on our servers. No search index we control.
 - **A KYC product.** No phone number. No email. No government ID.

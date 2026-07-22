@@ -67,7 +67,6 @@ airhop/
 │   │   │   ├── file-transfer.ts        # Chunked file streaming
 │   │   │   ├── voice-capture.ts        # PTT frame encoder (AAC/Opus bursts)
 │   │   │   ├── voice-player.ts         # 350ms jitter buffer, ordered delivery
-│   │   │   ├── video-capture.ts        # Video frame encoder (WiFi Aware)
 │   │   │   └── video-player.ts         # Video frame decoder
 │   │   ├── nostr/
 │   │   │   ├── nostr-client.ts         # SimplePool + auto-reconnect
@@ -114,23 +113,23 @@ airhop/
 
 ## 2. Core Feature Matrix
 
-| Feature                  | Offline (BLE)          | Online (Nostr)                  | Decentralized | Notes                                       |
-| ------------------------ | ---------------------- | ------------------------------- | ------------- | ------------------------------------------- |
-| **Public Discovery**     | ✅ Announce broadcasts | ✅ Kind 20001 presence          | ✅            | Peers appear on mesh and on geohash channel |
-| **Mesh Channels** (#tag) | ✅ TTL flood           | ✅ Kind 20000                   | ✅            | Same as bitchat IRC-style channels          |
-| **Private DMs**          | ✅ Noise XX + DR       | ✅ NIP-17 gift-wrap             | ✅            | Forward-secret, no metadata on relays       |
-| **Group Chats**          | ✅ Named channels      | ✅ NIP-29 relay groups          | ✅            | BLE group for offline; Nostr for global     |
-| **Voice Notes**          | ✅ AAC 16kHz encoded   | ✅ via courier relay            | ✅            | Finalized files, not live                   |
-| **Live PTT Voice**       | ✅ 210-byte bursts     | ❌ latency too high             | N/A           | BLE-only; WiFi Aware for better quality     |
-| **Image Transfer**       | ✅ Chunked (<1 MiB)    | ✅ relay or IPFS link           | ✅            | Larger sizes via chunked streaming          |
-| **Video Transfer**       | ⚠️ WiFi Aware only     | ✅ link in message              | ✅            | BLE too slow; video = WiFi Direct/Aware     |
-| **File Transfer**        | ✅ Chunked streaming   | ✅ link in message              | ✅            | No hard size cap in Airhop                  |
-| **Store-and-Forward**    | ✅ Courier envelopes   | ✅ Nostr relay buffer           | ✅            | Offline mail system                         |
-| **Payments (Cashu)**     | ✅ Token as message    | ✅ NIP-61 Nutzap                | ✅            | Transfer offline; redemption needs internet |
-| **Contact Verification** | ✅ QR / NFC exchange   | ✅ Nostr profile                | ✅            | Manual fingerprint or QR ceremony           |
-| **Panic Wipe**           | ✅ always              | ✅ always                       | N/A           | Triple-tap: destroys all keys + messages    |
-| **Tor Routing**          | N/A                    | ✅ iOS (Arti) + Android (Orbot) | ✅            | Nostr over Tor; BLE is local-only           |
-| **Relay Discovery**      | N/A                    | ✅ georelays CSV                | ✅            | Bundled + refreshed from georelays repo     |
+| Feature                  | Offline (BLE)          | Online (Nostr)                  | Decentralized | Notes                                                                                                                                         |
+| ------------------------ | ---------------------- | ------------------------------- | ------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Public Discovery**     | ✅ Announce broadcasts | ✅ Kind 20001 presence          | ✅            | Peers appear on mesh and on geohash channel                                                                                                   |
+| **Mesh Channels** (#tag) | ✅ TTL flood           | ✅ Kind 20000                   | ✅            | Same as bitchat IRC-style channels                                                                                                            |
+| **Private DMs**          | ✅ Noise XX + DR       | ✅ NIP-17 gift-wrap             | ✅            | Forward-secret, no metadata on relays                                                                                                         |
+| **Group Chats**          | ✅ Named channels      | ✅ NIP-29 relay groups          | ✅            | BLE group for offline; Nostr for global                                                                                                       |
+| **Voice Notes**          | ✅ AAC 16kHz encoded   | ✅ via courier relay            | ✅            | Finalized files, not live                                                                                                                     |
+| **Live PTT Voice**       | ❌ not implemented     | ❌ latency too high             | N/A           | Needs a streaming-mic native module; voice NOTES work over BLE today                                                                          |
+| **Image Transfer**       | ✅ Chunked (<1 MiB)    | ✅ relay or IPFS link           | ✅            | Larger sizes via chunked streaming                                                                                                            |
+| **Video Transfer**       | ✅ sent as a file      | ✅ link in message              | ✅            | Shared as a file over BLE and played inline. Live video streaming is not supported: the two platforms' direct-WiFi stacks do not interoperate |
+| **File Transfer**        | ✅ Chunked streaming   | ✅ link in message              | ✅            | No hard size cap in Airhop                                                                                                                    |
+| **Store-and-Forward**    | ✅ Courier envelopes   | ✅ Nostr relay buffer           | ✅            | Offline mail system                                                                                                                           |
+| **Payments (Cashu)**     | ✅ Token as message    | ✅ NIP-61 Nutzap                | ✅            | Transfer offline; redemption needs internet                                                                                                   |
+| **Contact Verification** | ✅ QR / NFC exchange   | ✅ Nostr profile                | ✅            | Manual fingerprint or QR ceremony                                                                                                             |
+| **Panic Wipe**           | ✅ always              | ✅ always                       | N/A           | Triple-tap: destroys all keys + messages                                                                                                      |
+| **Tor Routing**          | N/A                    | ✅ iOS (Arti) + Android (Orbot) | ✅            | Nostr over Tor; BLE is local-only                                                                                                             |
+| **Relay Discovery**      | N/A                    | ✅ georelays CSV                | ✅            | Bundled + refreshed from georelays repo                                                                                                       |
 
 ## 3. Identity: No Accounts, Ever
 
@@ -202,7 +201,14 @@ Identical to bitchat's proven design:
 - **Max concurrent assemblies**: 128
 - **Range per hop**: ~30–50m; 7 hops = ~350m max mesh range
 
-### WiFi Aware / Multipeer Transport (Phase 3)
+### Same-platform WiFi Transport (optional fast path)
+
+> [!IMPORTANT]
+> Android WiFi Aware and iOS MultipeerConnectivity are different protocols and
+> cannot talk to each other. This is an Android-to-Android or iPhone-to-iPhone
+> accelerator only. Anything cross-platform uses Bluetooth or Nostr.
+> (Apple shipped a standards-based Wi-Fi Aware framework in iOS 26 which could
+> close this gap in future, but it would make the feature iOS 26+ only.)
 
 - **Android**: [`WifiAwareManager`](https://developer.android.com/develop/connectivity/wifi/wifi-aware) API (API 26+): 250 Mbps, no internet, no router
 - **iOS**: [`MultipeerConnectivity`](https://developer.apple.com/documentation/multipeerconnectivity): 30–100 Mbps between nearby iOS devices
@@ -741,7 +747,6 @@ export const enum PacketType {
   COURIER_ENV = 0x06,
   GOSSIP_FILTER = 0x07,
   VOICE_FRAME = 0x29, // bitchat PTT spec
-  VIDEO_FRAME = 0x30, // Airhop extension (WiFi Aware only)
   CASHU_TOKEN = 0x40, // Airhop extension
 }
 

@@ -53,20 +53,18 @@ Variable sections (in this exact order after the header):
 
 All type values match bitchat `MessageType.swift` / `MessageType.kt` (public domain). Types `0x01–0x28` are bitchat-defined; `0x29+` are Airhop extensions. bitchat nodes silently drop unknown types.
 
-| Name              | Hex    | Direction         | Description                                                                                                                                                                                                     |
-| ----------------- | ------ | ----------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `ANNOUNCE`        | `0x01` | Broadcast         | Signed presence heartbeat. Payload is TLV-encoded (1-byte length): `0x01` nickname, `0x02` Noise pubkey (32B), `0x03` Ed25519 signing pubkey (32B), `0x04` direct neighbors (optional, up to 10 × 8B peer IDs). |
-| `CHANNEL_MSG`     | `0x02` | Broadcast         | Public channel message. Plaintext + signed. Channel name embedded in payload.                                                                                                                                   |
-| `LEAVE`           | `0x03` | Broadcast         | Peer departing notification.                                                                                                                                                                                    |
-| `COURIER_ENV`     | `0x04` | Broadcast         | Store-and-forward sealed envelope. Noise X encrypted. TLV format (see section 6).                                                                                                                               |
-| `NOISE_HANDSHAKE` | `0x10` | Unicast           | Noise XX handshake message (initiator msg1 / responder msg2 / initiator msg3). recipientID set.                                                                                                                 |
-| `NOISE_ENCRYPTED` | `0x11` | Unicast           | Post-handshake encrypted payload: DM text, receipts, metadata. recipientID set. HAS_RECIPIENT flag set.                                                                                                         |
-| `FRAGMENT`        | `0x20` | Broadcast/Unicast | BLE fragment of a larger message. Stream ID + index + total in payload header. See section 7.                                                                                                                   |
-| `REQUEST_SYNC`    | `0x21` | Broadcast         | GCS filter gossip request. TTL=2 (local-only). Payload TLV format (see section 5).                                                                                                                              |
-| `FILE_TRANSFER`   | `0x22` | Broadcast/Unicast | Binary file / audio / image payload.                                                                                                                                                                            |
-| `VOICE_FRAME`     | `0x29` | Broadcast         | PTT audio burst. Matches `VoiceBurstPacket.swift` wire format. (Airhop extension)                                                                                                                               |
-| `VIDEO_FRAME`     | `0x30` | Unicast           | Video frame (WiFi Aware only, Airhop extension). HEVC.                                                                                                                                                          |
-| `CASHU_TOKEN`     | `0x40` | Unicast           | Cashu ecash token transfer (Airhop extension).                                                                                                                                                                  |
+| Name              | Hex    | Direction         | Description                                                                                                                                                                                                              |
+| ----------------- | ------ | ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `ANNOUNCE`        | `0x01` | Broadcast         | Signed presence heartbeat. Payload is TLV-encoded (1-byte length): `0x01` nickname, `0x02` Noise pubkey (32B), `0x03` Ed25519 signing pubkey (32B), `0x04` direct neighbors (optional, up to 10 × 8B peer IDs).          |
+| `CHANNEL_MSG`     | `0x02` | Broadcast         | Public channel message. Plaintext + signed. Channel name embedded in payload.                                                                                                                                            |
+| `LEAVE`           | `0x03` | Broadcast         | Peer departing notification.                                                                                                                                                                                             |
+| `COURIER_ENV`     | `0x04` | Broadcast         | Store-and-forward sealed envelope. Noise X encrypted. TLV format (see section 6).                                                                                                                                        |
+| `NOISE_HANDSHAKE` | `0x10` | Unicast           | Noise XX handshake message (initiator msg1 / responder msg2 / initiator msg3). recipientID set.                                                                                                                          |
+| `NOISE_ENCRYPTED` | `0x11` | Unicast           | Post-handshake encrypted payload: DM text, receipts, metadata. recipientID set. HAS_RECIPIENT flag set.                                                                                                                  |
+| `FRAGMENT`        | `0x20` | Broadcast/Unicast | BLE fragment of a larger message. Stream ID + index + total in payload header. See section 7.                                                                                                                            |
+| `REQUEST_SYNC`    | `0x21` | Broadcast         | GCS filter gossip request. TTL=2 (local-only). Payload TLV format (see section 5).                                                                                                                                       |
+| `FILE_TRANSFER`   | `0x22` | Broadcast/Unicast | Binary file / audio / image payload.                                                                                                                                                                                     |
+| `VOICE_FRAME`     | `0x29` | Broadcast         | PTT audio burst. Matches `VoiceBurstPacket.swift`. **Reserved, not yet sent or handled.** live PTT needs a streaming-mic native module on both platforms. Voice _notes_ ride `FILE_TRANSFER` instead. (Airhop extension) |
 
 ## 4. Routing Constants
 
@@ -140,15 +138,15 @@ All type values match bitchat `MessageType.swift` / `MessageType.kt` (public dom
 
 ## 9. bitchat Wire Compatibility Table
 
-| Field                 | Airhop                    | bitchat iOS               | bitchat Android    | Must Match         |
-| --------------------- | ------------------------- | ------------------------- | ------------------ | ------------------ |
-| Service UUID          | `F47B5E2D...`             | `F47B5E2D...`             | `F47B5E2D...`      | ✅ Yes             |
-| Characteristic UUID   | `A1B2C3D4...`             | `A1B2C3D4...`             | `A1B2C3D4...`      | ✅ Yes             |
-| Packet version        | `2`                       | `2`                       | `2`                | ✅ Yes             |
-| TTL default           | `7`                       | `7`                       | `7`                | ✅ Yes             |
-| Fragment size         | `469` bytes               | `469` bytes               | `469` bytes        | ✅ Yes             |
-| Peer ID format        | SHA-256 slice 16          | SHA-256 slice 16          | SHA-256 slice 16   | ✅ Yes             |
-| Noise XX cipher suite | `25519_ChaChaPoly_SHA256` | `25519_ChaChaPoly_SHA256` | X25519+AES-256-GCM | ⚠️ Android differs |
-| Packet types `0x29+`  | Airhop extensions         | Unknown → dropped         | Unknown → dropped  | ✅ Safe            |
+| Field                 | Airhop                    | bitchat iOS               | bitchat Android           | Must Match   |
+| --------------------- | ------------------------- | ------------------------- | ------------------------- | ------------ |
+| Service UUID          | `F47B5E2D...`             | `F47B5E2D...`             | `F47B5E2D...`             | ✅ Yes       |
+| Characteristic UUID   | `A1B2C3D4...`             | `A1B2C3D4...`             | `A1B2C3D4...`             | ✅ Yes       |
+| Packet version        | `2`                       | `2`                       | `2`                       | ✅ Yes       |
+| TTL default           | `7`                       | `7`                       | `7`                       | ✅ Yes       |
+| Fragment size         | `469` bytes               | `469` bytes               | `469` bytes               | ✅ Yes       |
+| Peer ID format        | SHA-256 slice 16          | SHA-256 slice 16          | SHA-256 slice 16          | ✅ Yes       |
+| Noise XX cipher suite | `25519_ChaChaPoly_SHA256` | `25519_ChaChaPoly_SHA256` | `25519_ChaChaPoly_SHA256` | ✅ Identical |
+| Packet types `0x29+`  | Airhop extensions         | Unknown → dropped         | Unknown → dropped         | ✅ Safe      |
 
-> ⚠️ **Android crypto note:** bitchat-android uses X25519 + AES-256-GCM instead of ChaCha20-Poly1305. This is a known divergence between the two official clients. Airhop follows bitchat-**iOS** (ChaCha20-Poly1305) as the canonical spec.
+> ✅ **Crypto note (corrected):** all three clients use `Noise_XX_25519_ChaChaPoly_SHA256`. An earlier version of this doc claimed bitchat-Android had diverged to AES-256-GCM; that was incorrect. Its vendored noise-java library contains AES-GCM cipher classes, but the only protocol name ever instantiated is ChaChaPoly, so those classes are never selected. There is no divergence and no platform to choose between.
