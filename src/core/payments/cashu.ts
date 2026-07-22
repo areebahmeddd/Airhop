@@ -217,27 +217,64 @@ export function mayContainToken(text: string): boolean {
 
 // ---- Offline send helpers ---------------------------------------------------
 
-// Select the minimum set of proofs from `proofs` whose total covers
-// `targetAmount`. Uses a greedy-largest-first strategy. Returns null if
-// the available proofs are insufficient.
+// Select a set of proofs from `proofs` covering `targetAmount`, preferring an
+// EXACT match. Returns null if the available proofs are insufficient.
+//
+// Cashu denominations are powers of two, so an exact subset usually exists.
+// The previous implementation walked largest-first and pushed every proof until
+// the running sum crossed the target, which overshoots badly (asking to send
+// 10 from a single 64 proof spent all 64, with no change). Here we take a proof
+// only when it fits in the remaining need, which yields an exact match whenever
+// the denominations allow it.
+//
+// `exact` tells the caller whether the selection lands on the target. When it is
+// false the wallet cannot send this amount offline without overpaying, and the
+// caller MUST either swap at the mint for change or get explicit user consent
+// before spending `total`.
 export function selectProofsForAmount(
   proofs: StoredProof[],
   targetAmount: number,
-): { selected: StoredProof[]; total: number } | null {
+): { selected: StoredProof[]; total: number; exact: boolean } | null {
   if (targetAmount <= 0 || proofs.length === 0) return null;
   const totalAvailable = proofs.reduce((s, p) => s + p.amount, 0);
   if (totalAvailable < targetAmount) return null;
 
-  // Sort descending so we pick as few proofs as possible.
+  // Largest-first, skipping any proof that would overshoot the remainder.
   const sorted = [...proofs].sort((a, b) => b.amount - a.amount);
   const selected: StoredProof[] = [];
   let sum = 0;
   for (const p of sorted) {
-    if (sum >= targetAmount) break;
-    selected.push(p);
-    sum += p.amount;
+    if (sum === targetAmount) break;
+    if (sum + p.amount <= targetAmount) {
+      selected.push(p);
+      sum += p.amount;
+    }
   }
-  return { selected, total: sum };
+
+  if (sum === targetAmount) return { selected, total: sum, exact: true };
+
+  // No exact subset (odd denominations). Fall back to the smallest selection
+  // that still covers the target, and flag it so the caller can warn or swap
+  // rather than silently overpaying.
+  const ascending = [...proofs].sort((a, b) => a.amount - b.amount);
+  const covering: StoredProof[] = [];
+  let coverSum = 0;
+  for (const p of ascending) {
+    if (coverSum >= targetAmount) break;
+    covering.push(p);
+    coverSum += p.amount;
+  }
+  // Drop any now-redundant smallest proofs (the tail can make earlier ones
+  // unnecessary), keeping the overpayment as small as possible.
+  for (let i = 0; i < covering.length; i++) {
+    const without = coverSum - covering[i].amount;
+    if (without >= targetAmount) {
+      coverSum = without;
+      covering.splice(i, 1);
+      i--;
+    }
+  }
+  return { selected: covering, total: coverSum, exact: false };
 }
 
 // Build a cashuA token string from locally stored proofs without any network
