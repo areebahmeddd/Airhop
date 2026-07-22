@@ -1,31 +1,170 @@
 // Profile and settings screen.
-// Identity, security controls, network settings, and danger zone.
-// Triple-tap the logo triggers panic wipe per the spec.
+// Identity block + a WhatsApp-style nav list that drills into its own
+// sub-screens (src/features/settings/sections/*). Panic wipe stays here,
+// at the very bottom, outside every section.
 
 import Feather from "@expo/vector-icons/Feather";
-import * as Clipboard from "expo-clipboard";
-import React, { useEffect, useRef, useState } from "react";
+import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
+import * as FileSystem from "expo-file-system";
+import * as MediaLibrary from "expo-media-library";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
-  Alert,
-  Linking,
+  BackHandler,
   Modal,
-  NativeEventEmitter,
-  NativeModules,
-  Platform,
   Pressable,
   ScrollView,
   Share,
   StyleSheet,
-  Switch,
   Text,
   View,
 } from "react-native";
-import NfcManager, { Ndef, NfcTech } from "react-native-nfc-manager";
 import QRCode from "react-native-qrcode-svg";
-import NativeAirhopTor from "../../bridge/NativeAirhopTor";
+import { encodeQRContent } from "../../core/crypto/contact-exchange";
+import { getMeshService } from "../../services/mesh-service";
+import { showAlert } from "../../store/alert-store";
+import {
+  useSettingsStore,
+  type ThemePreference,
+} from "../../store/settings-store";
 import Avatar from "../../ui/components/avatar";
-import { Colors, FontSize, FontWeight, Radius, Spacing } from "../../ui/theme";
+import {
+  FontSize,
+  FontWeight,
+  Radius,
+  Spacing,
+  useThemeColors,
+} from "../../ui/theme";
 import { panicWipe } from "../../utils/panic-wipe";
+import AboutScreen from "./sections/about-screen";
+import DonateScreen from "./sections/donate-screen";
+import HelpScreen from "./sections/help-screen";
+import LicensesScreen from "./sections/licenses-screen";
+import NetworkScreen from "./sections/network-screen";
+import PrivacyScreen from "./sections/privacy-screen";
+import SecurityScreen from "./sections/security-screen";
+import StorageScreen from "./sections/storage-screen";
+import TermsScreen from "./sections/terms-screen";
+import {
+  GroupDivider,
+  SettingLinkRow,
+  SettingRow,
+  SettingSwitch,
+  useSharedStyles,
+} from "./shared";
+
+// Presence on the mesh. Online broadcasts + scans, Away stops the mesh
+// entirely, Invisible keeps scanning but stops advertising our presence.
+type Status = "online" | "away" | "invisible";
+
+// Colors passed in so the dot colors track light/dark instead of being
+// baked in once at module load.
+function getStatusMeta(Colors: ReturnType<typeof useThemeColors>): Record<
+  Status,
+  {
+    label: string;
+    description: string;
+    color: string;
+    icon: keyof typeof Feather.glyphMap;
+  }
+> {
+  return {
+    online: {
+      label: "Online",
+      description: "Discoverable, advertising and scanning",
+      color: Colors.online,
+      icon: "wifi",
+    },
+    away: {
+      label: "Away",
+      description: "Mesh paused, not scanning or advertising",
+      color: Colors.offline,
+      icon: "moon",
+    },
+    invisible: {
+      label: "Invisible",
+      description: "Scanning, but hidden from discovery",
+      color: Colors.danger,
+      icon: "eye-off",
+    },
+  };
+}
+
+const STATUS_ORDER: Status[] = ["online", "away", "invisible"];
+
+const THEME_META: Record<
+  ThemePreference,
+  { label: string; description: string; icon: keyof typeof Feather.glyphMap }
+> = {
+  light: {
+    label: "Light",
+    description: "Always use the light palette",
+    icon: "sun",
+  },
+  dark: {
+    label: "Dark",
+    description: "Always use the dark palette",
+    icon: "moon",
+  },
+  system: {
+    label: "System default",
+    description: "Match your device's appearance setting",
+    icon: "smartphone",
+  },
+};
+const THEME_ORDER: ThemePreference[] = ["light", "dark", "system"];
+
+// Payments has shipped, so it sits at the top of the features group with a
+// real switch instead of a "Coming soon" tag. The switch alone carries the
+// on/off state, since a status word beside it only restated what it shows.
+// The rest aren't built yet: each one expands in place to explain what it
+// will do, rather than linking out or staying silent about it.
+type FeatureKey = "ai" | "feeds";
+
+const FEATURES: {
+  key: FeatureKey;
+  label: string;
+  // Unused for "ai": that row renders a robot glyph from
+  // MaterialCommunityIcons instead, which Feather has no equivalent for.
+  icon: keyof typeof Feather.glyphMap;
+  description: string;
+}[] = [
+  {
+    key: "ai",
+    label: "AI",
+    icon: "cpu",
+    description:
+      "A local assistant that answers questions with on-device inference. There are no network calls, and your data never leaves this device.",
+  },
+  {
+    key: "feeds",
+    label: "Feeds",
+    icon: "rss",
+    description:
+      "Read your Bluesky and Mastodon feeds in a dedicated tab, and post to them using your Airhop identity.",
+  },
+];
+
+// Which sub-screen is currently pushed. "root" renders the hub itself.
+type SettingsView =
+  | "root"
+  | "security"
+  | "network"
+  | "storage"
+  | "help"
+  | "terms"
+  | "privacy"
+  | "donate"
+  | "about"
+  | "licenses";
+
+// Where hardware back should land for a sub-screen nested one level deeper
+// than its section (e.g. Terms/Privacy under Help, Licenses under About).
+// Any view not listed here falls back to "root".
+const SETTINGS_PARENT_VIEW: Partial<Record<SettingsView, SettingsView>> = {
+  licenses: "about",
+  terms: "help",
+  privacy: "help",
+};
 
 interface Props {
   peerID: string;
@@ -38,132 +177,119 @@ export default function ProfileScreen({
   username,
   onWipe,
 }: Props): React.JSX.Element {
-  const [torEnabled, setTorEnabled] = useState(false);
-  const [torStarting, setTorStarting] = useState(false);
-  const [torProgress, setTorProgress] = useState(0);
-  const [torSummary, setTorSummary] = useState("");
+  const Colors = useThemeColors();
+  const shared = useSharedStyles();
+  const styles = useMemo(() => createStyles(Colors), [Colors]);
+  const STATUS_META = useMemo(() => getStatusMeta(Colors), [Colors]);
+  const [view, setView] = useState<SettingsView>("root");
   const [showQRModal, setShowQRModal] = useState(false);
-  const [idCopied, setIdCopied] = useState(false);
-  const idCopiedTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const [nfcSupported, setNfcSupported] = useState(false);
-  const [isNfcWriting, setIsNfcWriting] = useState(false);
-  const logoTapCount = useRef(0);
-  const logoTapTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [status, setStatus] = useState<Status>("online");
+  const [showStatusModal, setShowStatusModal] = useState(false);
+  const [showWipeModal, setShowWipeModal] = useState(false);
+  const [showThemeModal, setShowThemeModal] = useState(false);
+  const [expandedFeatures, setExpandedFeatures] = useState<Set<FeatureKey>>(
+    () => new Set(),
+  );
+  const theme = useSettingsStore((s) => s.theme);
+  const setTheme = useSettingsStore((s) => s.setTheme);
+  const paymentsEnabled = useSettingsStore((s) => s.paymentsEnabled);
+  const setPaymentsEnabled = useSettingsStore((s) => s.setPaymentsEnabled);
 
-  // Subscribe to Tor bootstrap events (iOS only; NativeAirhopTor is null on Android).
+  // The QR encodes a full contact card (peer ID + Noise and Ed25519 public keys
+  // + nickname), not just the peer ID. A bare ID carries nothing a scanner can
+  // verify or encrypt to; the card lets the other device confirm the ID really
+  // is the fingerprint of these keys and open an encrypted session immediately.
+  // Falls back to the plain ID if the mesh service isn't up yet, which older
+  // builds' scanners also still accept.
+  const qrValue = useMemo(() => {
+    const card = getMeshService()?.getContactCard();
+    return card ? encodeQRContent(card) : peerID;
+  }, [peerID]);
+
+  function toggleFeature(key: FeatureKey): void {
+    setExpandedFeatures((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  }
+
+  // Android hardware/gesture back: leave a sub-screen instead of exiting.
   useEffect(() => {
-    if (!NativeAirhopTor || !NativeModules.AirhopTorModule) return;
-    const emitter = new NativeEventEmitter(NativeModules.AirhopTorModule);
-    const sub = emitter.addListener(
-      "TorStatusChanged",
-      (event: {
-        isReady: boolean;
-        isStarting: boolean;
-        progress: number;
-        bootstrapSummary: string;
-      }) => {
-        setTorProgress(event.progress);
-        setTorSummary(event.bootstrapSummary);
-        if (event.isReady) {
-          setTorEnabled(true);
-          setTorStarting(false);
-        }
-        if (!event.isStarting && !event.isReady) {
-          // Tor has stopped or failed outside of our control.
-          setTorEnabled(false);
-          setTorStarting(false);
-          setTorProgress(0);
-          setTorSummary("");
-        }
-      },
-    );
+    if (view === "root") return;
+    const sub = BackHandler.addEventListener("hardwareBackPress", () => {
+      setView(SETTINGS_PARENT_VIEW[view] ?? "root");
+      return true;
+    });
     return () => sub.remove();
-  }, []);
+  }, [view]);
 
-  // Triple-tap on the identity card triggers panic wipe.
-  function handleLogoTap(): void {
-    logoTapCount.current += 1;
+  async function handleConfirmWipe(): Promise<void> {
+    await panicWipe();
+    setShowWipeModal(false);
+    onWipe?.();
+  }
 
-    if (logoTapTimer.current) clearTimeout(logoTapTimer.current);
-    logoTapTimer.current = setTimeout(() => {
-      logoTapCount.current = 0;
-    }, 1200);
+  const shortPubKey = peerID.slice(0, 8) + " · " + peerID.slice(8);
 
-    if (logoTapCount.current >= 3) {
-      logoTapCount.current = 0;
-      if (logoTapTimer.current) clearTimeout(logoTapTimer.current);
-      confirmPanicWipe();
+  // Apply a presence change to the running mesh, then update the dot.
+  function applyStatus(next: Status): void {
+    const mesh = getMeshService();
+    if (next === "online") {
+      if (status === "away") mesh?.start(username);
+      else if (status === "invisible") mesh?.setDiscoverable(true);
+    } else if (next === "away") {
+      mesh?.stop();
+    } else if (next === "invisible") {
+      if (status === "away") mesh?.start(username);
+      mesh?.setDiscoverable(false);
     }
+    setStatus(next);
   }
 
-  function confirmPanicWipe(): void {
-    Alert.alert(
-      "Panic wipe",
-      "This will instantly destroy all your keys, messages, and wallet proofs. This cannot be undone.",
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Wipe now",
-          style: "destructive",
-          onPress: async () => {
-            await panicWipe();
-            Alert.alert(
-              "Wiped",
-              "All keys and data have been destroyed. Tap OK to set up a new identity.",
-              [{ text: "OK", onPress: () => onWipe?.() }],
-            );
-          },
-        },
-      ],
-    );
-  }
-
-  const shortPubKey =
-    peerID.slice(0, 8) + "\u2009\u00b7\u2009" + peerID.slice(8);
-
-  // Check NFC support each time the QR modal opens.
-  useEffect(() => {
-    if (!showQRModal) return;
-    NfcManager.isSupported()
-      .then(setNfcSupported)
-      .catch(() => {});
-  }, [showQRModal]);
-
-  async function handleCopyID(): Promise<void> {
-    await Clipboard.setStringAsync(peerID);
-    if (idCopiedTimer.current) clearTimeout(idCopiedTimer.current);
-    setIdCopied(true);
-    idCopiedTimer.current = setTimeout(() => setIdCopied(false), 2000);
+  function handleSelectStatus(next: Status): void {
+    applyStatus(next);
+    setShowStatusModal(false);
   }
 
   async function handleSharePeerID(): Promise<void> {
     await Share.share({ message: peerID });
   }
 
-  async function handleWriteNfc(): Promise<void> {
-    setIsNfcWriting(true);
-    try {
-      await NfcManager.start();
-      await NfcManager.requestTechnology(NfcTech.Ndef);
-      const bytes = Ndef.encodeMessage([
-        Ndef.uriRecord(`airhop://peer/${peerID}`),
-      ]);
-      if (bytes) {
-        await NfcManager.ndefHandler.writeNdefMessage(bytes);
-        Alert.alert(
-          "NFC tag written",
-          "Your Peer ID is now on the NFC tag. Anyone who scans it will be prompted to add you as a contact.",
+  // The QRCode component exposes an SVG ref whose toDataURL() returns the
+  // rendered code as base64 PNG data, no data URI prefix.
+  const qrRef = useRef<{
+    toDataURL: (callback: (data: string) => void) => void;
+  } | null>(null);
+
+  async function handleDownloadQR(): Promise<void> {
+    const { status } = await MediaLibrary.requestPermissionsAsync();
+    if (status !== "granted") {
+      showAlert(
+        "Permission needed",
+        "Grant photo library access in Settings to save the QR code.",
+      );
+      return;
+    }
+    qrRef.current?.toDataURL(async (base64) => {
+      try {
+        const file = new FileSystem.File(
+          FileSystem.Paths.cache,
+          `airhop-qr-${peerID.slice(0, 8)}.png`,
+        );
+        if (file.exists) file.delete();
+        file.create();
+        file.write(base64, { encoding: "base64" });
+        await MediaLibrary.saveToLibraryAsync(file.uri);
+        showAlert("Saved", "QR code saved to your photo library.");
+      } catch {
+        showAlert(
+          "Couldn't save",
+          "The QR code could not be saved. Try again.",
         );
       }
-    } catch {
-      Alert.alert(
-        "Write failed",
-        "Could not write to the NFC tag. Make sure it is writable and held close to your phone.",
-      );
-    } finally {
-      NfcManager.cancelTechnologyRequest().catch(() => {});
-      setIsNfcWriting(false);
-    }
+    });
   }
 
   async function handleShareQR(): Promise<void> {
@@ -174,70 +300,48 @@ export default function ProfileScreen({
     });
   }
 
-  // Wire the Tor toggle to the native AirhopTorModule.
-  // On Android NativeAirhopTor is null; Orbot detection is done natively.
-  async function handleTorToggle(value: boolean): Promise<void> {
-    if (!NativeAirhopTor) {
-      // Android: Tor routing goes through Orbot (SOCKS5 on port 9050).
-      // The app cannot start Orbot itself; the user must install and enable it.
-      if (value) {
-        Alert.alert(
-          "Tor on Android",
-          "Airhop routes Tor traffic through Orbot. Install and enable Orbot from the Play Store, then turn this on.",
-          [
-            {
-              text: "Get Orbot",
-              onPress: () =>
-                void Linking.openURL(
-                  "https://play.google.com/store/apps/details?id=org.torproject.android",
-                ),
-            },
-            { text: "Later", style: "cancel" },
-          ],
-        );
-        // Keep the switch off until the user comes back with Orbot running.
-        return;
-      }
-      setTorEnabled(false);
-      return;
-    }
-    try {
-      setTorStarting(true);
-      if (value) {
-        await NativeAirhopTor.startTor();
-        // Block until Tor has fully bootstrapped (SOCKS5 ready) or times out.
-        const ready = await NativeAirhopTor.awaitTorReady(60);
-        if (ready) {
-          setTorEnabled(true);
-          setTorProgress(100);
-        } else {
-          await NativeAirhopTor.stopTor().catch(() => {});
-          setTorEnabled(false);
-          setTorProgress(0);
-          setTorSummary("");
-          Alert.alert(
-            "Tor",
-            "Could not connect through Tor within 60 seconds. Check your network connection and try again.",
-          );
-        }
-      } else {
-        await NativeAirhopTor.stopTor();
-        setTorEnabled(false);
-        setTorProgress(0);
-        setTorSummary("");
-      }
-    } catch {
-      Alert.alert(
-        "Tor",
-        value
-          ? "Could not start Tor. Ensure the app has network access."
-          : "Could not stop Tor.",
-      );
-      setTorEnabled(false);
-    } finally {
-      setTorStarting(false);
-    }
+  // ---- Sub-screens --------------------------------------------------------
+
+  if (view === "security") {
+    return <SecurityScreen onBack={() => setView("root")} />;
   }
+  if (view === "network") {
+    return <NetworkScreen onBack={() => setView("root")} />;
+  }
+  if (view === "storage") {
+    return <StorageScreen onBack={() => setView("root")} />;
+  }
+  if (view === "help") {
+    return (
+      <HelpScreen
+        onBack={() => setView("root")}
+        onOpenTerms={() => setView("terms")}
+        onOpenPrivacy={() => setView("privacy")}
+      />
+    );
+  }
+  if (view === "terms") {
+    return <TermsScreen onBack={() => setView("help")} />;
+  }
+  if (view === "privacy") {
+    return <PrivacyScreen onBack={() => setView("help")} />;
+  }
+  if (view === "donate") {
+    return <DonateScreen onBack={() => setView("root")} />;
+  }
+  if (view === "about") {
+    return (
+      <AboutScreen
+        onBack={() => setView("root")}
+        onOpenLicenses={() => setView("licenses")}
+      />
+    );
+  }
+  if (view === "licenses") {
+    return <LicensesScreen onBack={() => setView("about")} />;
+  }
+
+  // ---- Root hub -------------------------------------------------------------
 
   return (
     <ScrollView
@@ -245,39 +349,39 @@ export default function ProfileScreen({
       contentContainerStyle={styles.content}
       showsVerticalScrollIndicator={false}
     >
-      {/* Identity card: triple-tap triggers panic wipe */}
-      <Pressable
-        style={styles.identityCard}
-        onPress={handleLogoTap}
-        accessibilityRole="button"
-        accessibilityLabel="Your identity card"
-        accessibilityHint="Triple-tap to trigger panic wipe"
-      >
-        <Avatar username={username} peerID={peerID} size={72} />
-        <View style={styles.identityInfo}>
-          <Text style={styles.username}>{username}</Text>
+      {/* Header: pencil edits presence status, top-right */}
+      <View style={styles.header}>
+        <Pressable
+          style={styles.headerEditBtn}
+          onPress={() => setShowStatusModal(true)}
+          accessibilityRole="button"
+          accessibilityLabel="Edit status"
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+        >
+          <Feather name="edit-2" size={15} color={Colors.textSecondary} />
+        </Pressable>
+      </View>
+
+      {/* Identity block: large centered avatar, name, peer ID, no card background */}
+      <View style={styles.identityBlock}>
+        <View style={styles.avatarWrap}>
+          <Avatar username={username} peerID={peerID} size={96} />
+          <View
+            style={[
+              styles.statusDot,
+              { backgroundColor: STATUS_META[status].color },
+            ]}
+          />
+        </View>
+        <Text style={styles.username}>{username}</Text>
+        <Text style={styles.statusLabel}>{STATUS_META[status].label}</Text>
+        <View style={styles.peerIDGroup}>
           <Text style={styles.peerIDLabel}>Peer ID</Text>
           <Text style={styles.peerID}>{shortPubKey}</Text>
         </View>
-        {/* Tap QR to open the full-screen QR modal */}
-        <Pressable
-          style={styles.qrContainer}
-          onPress={() => setShowQRModal(true)}
-          accessibilityRole="button"
-          accessibilityLabel="View full-size QR code"
-          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-        >
-          <QRCode
-            value={peerID}
-            size={48}
-            color={Colors.textPrimary}
-            backgroundColor={Colors.surfaceRaised}
-          />
-        </Pressable>
-      </Pressable>
-      <Text style={styles.tripleHint}>Triple-tap card for panic wipe</Text>
+      </View>
 
-      {/* Share action pills: side by side below the identity card */}
+      {/* Share actions: bordered pill buttons below the identity block */}
       <View style={styles.sharePills}>
         <Pressable
           style={styles.sharePill}
@@ -285,197 +389,163 @@ export default function ProfileScreen({
           accessibilityRole="button"
           accessibilityLabel="Share your Peer ID"
         >
-          <Feather name="share-2" size={13} color={Colors.textSecondary} />
-          <Text style={styles.sharePillText}>Share ID</Text>
+          <View style={styles.sharePillInner}>
+            <Feather name="share-2" size={13} color={Colors.textSecondary} />
+            <Text style={styles.sharePillText} numberOfLines={1}>
+              Share ID
+            </Text>
+          </View>
         </Pressable>
         <Pressable
           style={styles.sharePill}
           onPress={() => setShowQRModal(true)}
           accessibilityRole="button"
-          accessibilityLabel="Share QR code"
+          accessibilityLabel="Show QR code"
         >
-          <Feather name="share-2" size={13} color={Colors.textSecondary} />
-          <Text style={styles.sharePillText}>Share QR</Text>
+          <View style={styles.sharePillInner}>
+            <Feather name="eye" size={13} color={Colors.textSecondary} />
+            <Text style={styles.sharePillText} numberOfLines={1}>
+              Show QR
+            </Text>
+          </View>
         </Pressable>
       </View>
 
-      {/* Security */}
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Security</Text>
-        <View style={styles.settingsGroup}>
+      {/* Features. Payments is live, so it leads the group with a switch that
+          shows or hides the Wallet tab. The rest aren't built yet: each of
+          those rows expands in place to explain what it will do, instead of a
+          section title stating the obvious. */}
+      <View style={shared.section}>
+        <View style={shared.settingsGroup}>
           <SettingRow
-            label="Tor routing"
-            description={
-              Platform.OS === "android"
-                ? "Requires Orbot \u00b7 Install from the Play Store"
-                : torEnabled && !torStarting
-                  ? "Active \u00b7 Nostr traffic routed via Tor"
-                  : torStarting
-                    ? torProgress > 0
-                      ? `Connecting\u2026 ${torProgress}%${torSummary ? ` \u00b7 ${torSummary}` : ""}`
-                      : "Starting Tor\u2026"
-                    : "Route Nostr traffic through Tor for enhanced privacy"
-            }
+            icon="credit-card"
+            label="Payments"
+            description="Send Cashu ecash peer to peer over the mesh"
             control={
-              <Switch
-                value={torEnabled}
-                onValueChange={(v) => void handleTorToggle(v)}
-                disabled={torStarting}
-                trackColor={{
-                  false: Colors.surfaceRaised,
-                  true: Colors.online,
-                }}
-                thumbColor={Colors.surface}
+              <SettingSwitch
+                value={paymentsEnabled}
+                onValueChange={setPaymentsEnabled}
+                accessibilityLabel="Enable payments"
               />
             }
           />
-          <View style={styles.groupDivider} />
-          <SettingRow
-            label="Forward secrecy"
-            description="Double Ratchet is always on for DMs"
-            control={<Text style={styles.alwaysOn}>Always on</Text>}
-          />
-          <View style={styles.groupDivider} />
-          <SettingRow
-            label="Signed packets"
-            description="Every packet is Ed25519-signed"
-            control={<Text style={styles.alwaysOn}>Always on</Text>}
-          />
+          {FEATURES.map((feature) => {
+            const expanded = expandedFeatures.has(feature.key);
+            return (
+              <React.Fragment key={feature.key}>
+                <GroupDivider />
+                <Pressable
+                  style={shared.settingRow}
+                  onPress={() => toggleFeature(feature.key)}
+                  accessibilityRole="button"
+                  accessibilityLabel={`${feature.label}, coming soon`}
+                  accessibilityHint={
+                    expanded ? "Collapses details" : "Expands to show details"
+                  }
+                  accessibilityState={{ expanded }}
+                >
+                  <View style={shared.settingIcon}>
+                    {feature.key === "ai" ? (
+                      <MaterialCommunityIcons
+                        name="robot-outline"
+                        size={18}
+                        color={Colors.textSecondary}
+                      />
+                    ) : (
+                      <Feather
+                        name={feature.icon}
+                        size={18}
+                        color={Colors.textSecondary}
+                      />
+                    )}
+                  </View>
+                  <View style={shared.settingLabelGroup}>
+                    <Text style={shared.settingLabel}>{feature.label}</Text>
+                  </View>
+                  <Text style={shared.comingSoon}>Coming soon</Text>
+                  <Feather
+                    name={expanded ? "chevron-up" : "chevron-down"}
+                    size={16}
+                    color={Colors.textMuted}
+                    style={styles.featureChevron}
+                  />
+                </Pressable>
+                {expanded && (
+                  <View style={styles.featureDescription}>
+                    <Text style={shared.settingDescription}>
+                      {feature.description}
+                    </Text>
+                  </View>
+                )}
+              </React.Fragment>
+            );
+          })}
         </View>
       </View>
 
-      {/* Network */}
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Network</Text>
-        <View style={styles.settingsGroup}>
-          <SettingRow
-            label="Nostr bridge"
-            description="Fall back to Nostr relays when mesh peers are out of range"
-            control={<Text style={styles.alwaysOn}>Auto</Text>}
+      {/* Settings nav: each row drills into its own sub-screen */}
+      <View style={shared.section}>
+        <View style={shared.settingsGroup}>
+          <SettingLinkRow
+            icon="lock"
+            label="Privacy & Security"
+            description="Tor routing, forward secrecy, signed packets"
+            onPress={() => setView("security")}
           />
-          <View style={styles.groupDivider} />
-          <SettingRow
-            label="Geo-relay discovery"
-            description="350+ distributed relays, auto-selected by location"
-            control={<Text style={styles.alwaysOn}>Auto</Text>}
+          <GroupDivider />
+          <SettingLinkRow
+            icon="radio"
+            label="Network"
+            description="Mesh relays, Nostr fallback, bitchat compatibility"
+            onPress={() => setView("network")}
           />
-          <View style={styles.groupDivider} />
-          <SettingRow
-            label="bitchat compatibility"
-            description="BLE Service UUID F47B5E2D-... unchanged"
-            control={<Text style={styles.alwaysOn}>Always on</Text>}
+          <GroupDivider />
+          <SettingLinkRow
+            icon="hard-drive"
+            label="Storage & Data"
+            description="Usage, cache, and media quality on this device"
+            onPress={() => setView("storage")}
           />
-        </View>
-      </View>
-
-      {/* About */}
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>About</Text>
-        <View style={styles.settingsGroup}>
-          <View style={styles.settingRow}>
-            <Text style={styles.settingLabel}>Version</Text>
-            <Text style={styles.settingValue}>1.0.0</Text>
-          </View>
-          <View style={styles.groupDivider} />
-          <View style={styles.settingRow}>
-            <Text style={styles.settingLabel}>Protocol</Text>
-            <Text style={styles.settingValue}>bitchat v2</Text>
-          </View>
-          <View style={styles.groupDivider} />
-          <View style={styles.settingRow}>
-            <Text style={styles.settingLabel}>License</Text>
-            <Text style={styles.settingValue}>MIT</Text>
-          </View>
-        </View>
-      </View>
-
-      {/* Support */}
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Support</Text>
-        <View style={styles.settingsGroup}>
-          <Pressable
-            style={styles.settingRow}
-            onPress={() => void Linking.openURL("mailto:hi@areeb.dev")}
-            accessibilityRole="link"
-            accessibilityLabel="Email hi@areeb.dev"
-          >
-            <View style={styles.settingLabelGroup}>
-              <Text style={styles.settingLabel}>Get help</Text>
-              <Text style={styles.settingDescription}>hi@areeb.dev</Text>
-            </View>
-            <Feather name="mail" size={16} color={Colors.textMuted} />
-          </Pressable>
-          <View style={styles.groupDivider} />
-          <Pressable
-            style={styles.settingRow}
-            onPress={() => void Linking.openURL("https://airhop.1mindlabs.org")}
-            accessibilityRole="link"
-            accessibilityLabel="Open airhop.1mindlabs.org"
-          >
-            <View style={styles.settingLabelGroup}>
-              <Text style={styles.settingLabel}>Website</Text>
-              <Text style={styles.settingDescription}>
-                airhop.1mindlabs.org
-              </Text>
-            </View>
-            <Feather name="external-link" size={16} color={Colors.textMuted} />
-          </Pressable>
-        </View>
-      </View>
-
-      {/* Donate */}
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Donate</Text>
-        <View style={styles.settingsGroup}>
-          <View style={styles.settingRow}>
-            <View style={styles.settingLabelGroup}>
-              <Text style={styles.settingLabel}>Bitcoin</Text>
-              <Text style={styles.settingDescription}>Coming soon</Text>
-            </View>
-            <Feather name="dollar-sign" size={16} color={Colors.textMuted} />
-          </View>
-          <View style={styles.groupDivider} />
-          <View style={styles.settingRow}>
-            <View style={styles.settingLabelGroup}>
-              <Text style={styles.settingLabel}>Ecash</Text>
-              <Text style={styles.settingDescription}>Coming soon</Text>
-            </View>
-            <Feather name="zap" size={16} color={Colors.textMuted} />
-          </View>
-          <View style={styles.groupDivider} />
-          <Pressable
-            style={styles.settingRow}
-            onPress={() =>
-              void Linking.openURL(
-                "upi://pay?pa=areebahmed0709@okaxis&pn=Areeb",
-              )
-            }
-            accessibilityRole="link"
-            accessibilityLabel="Pay via UPI"
-          >
-            <View style={styles.settingLabelGroup}>
-              <Text style={styles.settingLabel}>UPI</Text>
-              <Text style={styles.settingDescription}>
-                areebahmed0709@okaxis
-              </Text>
-            </View>
-            <Feather name="credit-card" size={16} color={Colors.textMuted} />
-          </Pressable>
+          <GroupDivider />
+          <SettingLinkRow
+            icon="sliders"
+            label="Appearance"
+            description={THEME_META[theme].label}
+            onPress={() => setShowThemeModal(true)}
+          />
+          <GroupDivider />
+          <SettingLinkRow
+            icon="help-circle"
+            label="Help and feedback"
+            description="Contact us, report a bug, or read the FAQ"
+            onPress={() => setView("help")}
+          />
+          <GroupDivider />
+          <SettingLinkRow
+            icon="heart"
+            label="Donate"
+            description="Support development directly"
+            onPress={() => setView("donate")}
+          />
+          <GroupDivider />
+          <SettingLinkRow
+            icon="info"
+            label="About"
+            description="Version, changelog, and source"
+            onPress={() => setView("about")}
+          />
         </View>
       </View>
 
       {/* Danger zone, same settingsGroup box pattern as other sections */}
-      <View style={styles.section}>
-        <Text style={[styles.sectionTitle, { color: Colors.danger }]}>
+      <View style={shared.section}>
+        <Text style={[shared.sectionTitle, { color: Colors.danger }]}>
           Danger
         </Text>
-        <View style={[styles.settingsGroup, styles.dangerGroup]}>
+        <View style={[shared.settingsGroup, styles.dangerGroup]}>
           <Pressable
-            style={({ pressed }) => [
-              styles.dangerRow,
-              pressed && styles.dangerRowPressed,
-            ]}
-            onPress={confirmPanicWipe}
+            style={styles.dangerRow}
+            onPress={() => setShowWipeModal(true)}
             accessibilityRole="button"
             accessibilityLabel="Trigger panic wipe"
           >
@@ -485,7 +555,7 @@ export default function ProfileScreen({
               <View style={styles.dangerIconWrap}>
                 <Feather
                   name="alert-triangle"
-                  size={16}
+                  size={18}
                   color={Colors.danger}
                 />
               </View>
@@ -500,398 +570,464 @@ export default function ProfileScreen({
         </View>
       </View>
 
-      {/* QR code modal: bottom sheet with large QR, peerID, and share actions */}
+      {/* QR code modal: the QR, a Share button, and a Download button */}
       <Modal
         visible={showQRModal}
         transparent
         animationType="slide"
         onRequestClose={() => setShowQRModal(false)}
       >
-        <Pressable
-          style={styles.qrOverlay}
-          onPress={() => setShowQRModal(false)}
-        >
-          <View style={styles.qrSheet}>
-            <View style={styles.qrSheetHandle} />
-            <Text style={styles.qrSheetTitle}>Your QR Code</Text>
-            <Text style={styles.qrSheetSubtitle}>
-              Share this code to let anyone on Airhop or bitchat add you as a
-              contact.
-            </Text>
+        <View style={shared.sheetOverlay}>
+          <Pressable
+            style={StyleSheet.absoluteFill}
+            onPress={() => setShowQRModal(false)}
+          />
+          <View style={shared.sheet}>
+            <View style={shared.sheetHandle} />
+            <Text style={shared.sheetTitle}>Your QR Code</Text>
             <View style={styles.qrLarge}>
               <QRCode
-                value={peerID}
+                value={qrValue}
                 size={200}
                 color={Colors.textPrimary}
                 backgroundColor={Colors.surface}
+                getRef={(c) => {
+                  qrRef.current = c;
+                }}
               />
             </View>
             <Text style={styles.qrSheetPeerID}>{peerID}</Text>
-            <View style={styles.qrSheetActions}>
+            <View style={styles.qrActions}>
               <Pressable
-                style={({ pressed }) => [
-                  styles.qrSheetBtn,
-                  pressed && styles.qrSheetBtnPressed,
-                ]}
-                onPress={() => void handleCopyID()}
-                accessibilityRole="button"
-                accessibilityLabel="Copy Peer ID to clipboard"
-              >
-                <Feather
-                  name={idCopied ? "check" : "copy"}
-                  size={15}
-                  color={idCopied ? Colors.online : Colors.textPrimary}
-                />
-                <Text style={styles.qrSheetBtnText}>
-                  {idCopied ? "Copied!" : "Copy ID"}
-                </Text>
-              </Pressable>
-              <Pressable
-                style={({ pressed }) => [
-                  styles.qrSheetBtn,
-                  styles.qrSheetBtnPrimary,
-                  pressed && styles.qrSheetBtnPressed,
-                ]}
+                style={styles.qrShareBtn}
                 onPress={() => void handleShareQR()}
                 accessibilityRole="button"
                 accessibilityLabel="Share QR code"
               >
-                <Feather name="share-2" size={15} color={Colors.textInverse} />
-                <Text style={styles.qrSheetBtnTextPrimary}>Share QR</Text>
+                <Feather name="share-2" size={16} color={Colors.textInverse} />
+                <Text style={styles.qrShareText}>Share QR</Text>
+              </Pressable>
+              <Pressable
+                style={styles.qrDownloadBtn}
+                onPress={() => void handleDownloadQR()}
+                accessibilityRole="button"
+                accessibilityLabel="Download QR code"
+              >
+                <Feather name="download" size={16} color={Colors.textPrimary} />
+                <Text style={styles.qrDownloadText}>Download QR</Text>
               </Pressable>
             </View>
-            {/* NFC tag write: shown only on NFC-capable devices */}
-            {nfcSupported && (
-              <Pressable
-                style={({ pressed }) => [
-                  styles.qrSheetNfcBtn,
-                  (pressed || isNfcWriting) && { opacity: 0.7 },
-                ]}
-                onPress={() => void handleWriteNfc()}
-                disabled={isNfcWriting}
-                accessibilityRole="button"
-                accessibilityLabel="Write Peer ID to NFC tag"
-              >
-                <Feather name="wifi" size={15} color={Colors.textSecondary} />
-                <Text style={styles.qrSheetBtnText}>
-                  {isNfcWriting ? "Hold phone near tag…" : "Write NFC Tag"}
-                </Text>
-              </Pressable>
-            )}
           </View>
-        </Pressable>
+        </View>
+      </Modal>
+
+      {/* Status modal: bottom sheet, one selectable row per presence state */}
+      <Modal
+        visible={showStatusModal}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowStatusModal(false)}
+      >
+        <View style={shared.sheetOverlay}>
+          <Pressable
+            style={StyleSheet.absoluteFill}
+            onPress={() => setShowStatusModal(false)}
+          />
+          <View style={shared.sheet}>
+            <View style={shared.sheetHandle} />
+            <Text style={shared.sheetTitle}>Status</Text>
+            <Text style={shared.sheetSubtitle}>
+              Choose how visible you are on the mesh.
+            </Text>
+            <View style={shared.optionList}>
+              {STATUS_ORDER.map((key) => {
+                const meta = STATUS_META[key];
+                const selected = key === status;
+                return (
+                  <Pressable
+                    key={key}
+                    style={[
+                      shared.optionRow,
+                      selected && shared.optionRowSelected,
+                    ]}
+                    onPress={() => handleSelectStatus(key)}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Set status to ${meta.label}`}
+                  >
+                    <View style={shared.optionRowInner}>
+                      <View
+                        style={[
+                          shared.optionDot,
+                          { backgroundColor: meta.color },
+                        ]}
+                      >
+                        <Feather name={meta.icon} size={14} color="#FFFFFF" />
+                      </View>
+                      <View style={shared.optionText}>
+                        <Text style={shared.optionLabel}>{meta.label}</Text>
+                        <Text style={shared.optionDescription}>
+                          {meta.description}
+                        </Text>
+                      </View>
+                      {selected && (
+                        <Feather
+                          name="check"
+                          size={18}
+                          color={Colors.textPrimary}
+                        />
+                      )}
+                    </View>
+                  </Pressable>
+                );
+              })}
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Appearance modal: light / dark / system default */}
+      <Modal
+        visible={showThemeModal}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowThemeModal(false)}
+      >
+        <View style={shared.sheetOverlay}>
+          <Pressable
+            style={StyleSheet.absoluteFill}
+            onPress={() => setShowThemeModal(false)}
+          />
+          <View style={shared.sheet}>
+            <View style={shared.sheetHandle} />
+            <Text style={shared.sheetTitle}>Appearance</Text>
+            <View style={shared.optionList}>
+              {THEME_ORDER.map((key) => {
+                const meta = THEME_META[key];
+                const selected = key === theme;
+                return (
+                  <Pressable
+                    key={key}
+                    style={[
+                      shared.optionRow,
+                      selected && shared.optionRowSelected,
+                    ]}
+                    onPress={() => {
+                      setTheme(key);
+                      setShowThemeModal(false);
+                    }}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Set appearance to ${meta.label}`}
+                  >
+                    <View style={shared.optionRowInner}>
+                      <View
+                        style={[
+                          shared.optionDot,
+                          { backgroundColor: Colors.surface },
+                        ]}
+                      >
+                        <Feather
+                          name={meta.icon}
+                          size={14}
+                          color={Colors.textSecondary}
+                        />
+                      </View>
+                      <View style={shared.optionText}>
+                        <Text style={shared.optionLabel}>{meta.label}</Text>
+                        <Text style={shared.optionDescription}>
+                          {meta.description}
+                        </Text>
+                      </View>
+                      {selected && (
+                        <Feather
+                          name="check"
+                          size={18}
+                          color={Colors.textPrimary}
+                        />
+                      )}
+                    </View>
+                  </Pressable>
+                );
+              })}
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Panic wipe modal: confirm, then wipe and drop straight to onboarding
+          rather than making the user tap through a second "Wiped" screen. */}
+      <Modal
+        visible={showWipeModal}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowWipeModal(false)}
+      >
+        <View style={shared.sheetOverlay}>
+          <Pressable
+            style={StyleSheet.absoluteFill}
+            onPress={() => setShowWipeModal(false)}
+          />
+          <View style={shared.sheet}>
+            <View style={shared.sheetHandle} />
+            <Text style={shared.sheetTitle}>Panic wipe</Text>
+            <Text style={shared.sheetSubtitle}>
+              This will instantly destroy all your keys, messages, and wallet
+              proofs. This cannot be undone.
+            </Text>
+            <View style={styles.wipeActions}>
+              <Pressable
+                style={styles.wipeConfirmBtn}
+                onPress={() => void handleConfirmWipe()}
+                accessibilityRole="button"
+                accessibilityLabel="Wipe now"
+              >
+                <Text style={styles.wipeConfirmText}>Wipe now</Text>
+              </Pressable>
+              <Pressable
+                style={styles.wipeCancelBtn}
+                onPress={() => setShowWipeModal(false)}
+                accessibilityRole="button"
+                accessibilityLabel="Cancel"
+              >
+                <Text style={styles.wipeCancelText}>Cancel</Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
       </Modal>
     </ScrollView>
   );
 }
 
-// Reusable settings row
-interface SettingRowProps {
-  label: string;
-  description?: string;
-  control: React.ReactNode;
+function createStyles(Colors: ReturnType<typeof useThemeColors>) {
+  return StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: Colors.bg,
+    },
+    content: {
+      padding: Spacing.base,
+      gap: Spacing.md,
+      paddingBottom: Spacing["3xl"],
+    },
+    // Header row above the identity block: status edit pencil, top-right
+    header: {
+      flexDirection: "row",
+      justifyContent: "flex-end",
+    },
+    headerEditBtn: {
+      width: 32,
+      height: 32,
+      borderRadius: Radius.md,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    // Identity block: large centered avatar, name, peer ID, no card background
+    identityBlock: {
+      alignItems: "center",
+      paddingTop: Spacing.xs,
+    },
+    avatarWrap: {
+      position: "relative",
+    },
+    statusDot: {
+      position: "absolute",
+      right: 2,
+      bottom: 2,
+      width: 18,
+      height: 18,
+      borderRadius: 9,
+      borderWidth: 2,
+      borderColor: Colors.bg,
+    },
+    username: {
+      fontSize: FontSize.lg,
+      fontWeight: FontWeight.bold,
+      color: Colors.textPrimary,
+      marginTop: Spacing.md,
+      textAlign: "center",
+    },
+    statusLabel: {
+      fontSize: FontSize.sm,
+      color: Colors.textMuted,
+      marginTop: 2,
+    },
+    peerIDGroup: {
+      alignItems: "center",
+      gap: 3,
+      marginTop: Spacing.sm,
+    },
+    peerIDLabel: {
+      fontSize: FontSize.xs,
+      color: Colors.textMuted,
+      letterSpacing: 0.6,
+      textTransform: "uppercase",
+      marginTop: Spacing.xs,
+    },
+    peerID: {
+      fontSize: FontSize.xs,
+      color: Colors.textSecondary,
+      fontFamily: "monospace",
+      letterSpacing: 0.8,
+    },
+    // Share actions: bordered pill buttons below the identity block
+    sharePills: {
+      flexDirection: "row",
+      gap: Spacing.sm,
+    },
+    sharePill: {
+      flex: 1,
+      alignItems: "center",
+      justifyContent: "center",
+      paddingVertical: Spacing.sm + 2,
+      borderRadius: Radius.full,
+      backgroundColor: Colors.surface,
+      borderWidth: 1,
+      borderColor: Colors.border,
+    },
+    sharePillInner: {
+      flexDirection: "row",
+      alignItems: "center",
+    },
+    sharePillText: {
+      fontSize: FontSize.sm,
+      color: Colors.textSecondary,
+      fontWeight: FontWeight.medium,
+      marginLeft: Spacing.xs,
+    },
+    // Features: expandable rows explaining what's coming
+    featureChevron: {
+      marginLeft: Spacing.xs,
+    },
+    featureDescription: {
+      paddingHorizontal: Spacing.base,
+      paddingBottom: Spacing.md,
+      marginTop: -Spacing.xs,
+    },
+    // Danger zone, uses settingsGroup box for consistency with other sections
+    dangerGroup: {
+      borderColor: "rgba(220,38,38,0.2)",
+    },
+    // Pressable fills the cell; inner View owns the row direction.
+    dangerRow: {
+      overflow: "hidden",
+    },
+    dangerRowInner: {
+      flexDirection: "row",
+      alignItems: "center",
+      paddingHorizontal: Spacing.base,
+      paddingVertical: Spacing.md,
+      gap: Spacing.md,
+    },
+    dangerIconWrap: {
+      width: 22,
+      alignItems: "center",
+      justifyContent: "center",
+      flexShrink: 0,
+    },
+    dangerRowContent: {
+      flex: 1,
+      gap: 2,
+    },
+    dangerLabel: {
+      fontSize: FontSize.base,
+      fontWeight: FontWeight.semibold,
+      color: Colors.danger,
+    },
+    dangerDescription: {
+      fontSize: FontSize.xs,
+      color: Colors.danger,
+      opacity: 0.7,
+      lineHeight: FontSize.xs * 1.5,
+    },
+    qrLarge: {
+      padding: Spacing.xl,
+      backgroundColor: Colors.surface,
+      borderRadius: Radius.xl,
+      borderWidth: 1,
+      borderColor: Colors.border,
+    },
+    qrSheetPeerID: {
+      fontSize: FontSize.xs,
+      color: Colors.textMuted,
+      fontFamily: "monospace",
+      letterSpacing: 0.8,
+      textAlign: "center",
+    },
+    // Share / Download: stacked full-width buttons, same bounded-pill
+    // pattern as the panic-wipe actions. Share is the solid primary action;
+    // Download is a bordered secondary pill underneath it.
+    qrActions: {
+      width: "100%",
+      marginTop: Spacing.sm,
+    },
+    qrShareBtn: {
+      width: "100%",
+      minHeight: 50,
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: Spacing.xs,
+      borderRadius: Radius.full,
+      backgroundColor: Colors.accent,
+    },
+    qrShareText: {
+      fontSize: FontSize.base,
+      fontWeight: FontWeight.bold,
+      color: Colors.textInverse,
+    },
+    qrDownloadBtn: {
+      width: "100%",
+      minHeight: 50,
+      marginTop: Spacing.sm,
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: Spacing.xs,
+      borderRadius: Radius.full,
+      borderWidth: 1,
+      borderColor: Colors.borderStrong,
+      backgroundColor: Colors.surfaceRaised,
+    },
+    qrDownloadText: {
+      fontSize: FontSize.base,
+      fontWeight: FontWeight.semibold,
+      color: Colors.textPrimary,
+    },
+    // Wipe now / Cancel: stacked full-width buttons. Wipe now is a solid red
+    // pill (the one unmistakable destructive action on the whole screen);
+    // Cancel is a plain, clearly-tappable button underneath it.
+    wipeActions: {
+      width: "100%",
+      marginTop: Spacing.sm,
+    },
+    wipeConfirmBtn: {
+      width: "100%",
+      minHeight: 50,
+      paddingVertical: Spacing.md,
+      borderRadius: Radius.full,
+      backgroundColor: Colors.danger,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    wipeConfirmText: {
+      fontSize: FontSize.base,
+      fontWeight: FontWeight.bold,
+      color: "#FFFFFF",
+    },
+    wipeCancelBtn: {
+      width: "100%",
+      minHeight: 50,
+      paddingVertical: Spacing.md,
+      marginTop: Spacing.sm,
+      borderRadius: Radius.full,
+      backgroundColor: Colors.surfaceRaised,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    wipeCancelText: {
+      fontSize: FontSize.base,
+      fontWeight: FontWeight.semibold,
+      color: Colors.textPrimary,
+    },
+  });
 }
-
-function SettingRow({
-  label,
-  description,
-  control,
-}: SettingRowProps): React.JSX.Element {
-  return (
-    <View style={styles.settingRow}>
-      <View style={styles.settingLabelGroup}>
-        <Text style={styles.settingLabel}>{label}</Text>
-        {description ? (
-          <Text style={styles.settingDescription}>{description}</Text>
-        ) : null}
-      </View>
-      <View style={styles.settingControl}>{control}</View>
-    </View>
-  );
-}
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: Colors.bg,
-  },
-  content: {
-    padding: Spacing.base,
-    gap: Spacing.md,
-    paddingBottom: Spacing["3xl"],
-  },
-  // Identity card
-  identityCard: {
-    backgroundColor: Colors.surface,
-    borderRadius: Radius.xl,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    padding: Spacing.xl,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: Spacing.base,
-  },
-  identityInfo: {
-    flex: 1,
-    gap: 3,
-  },
-  username: {
-    fontSize: FontSize.lg,
-    fontWeight: FontWeight.bold,
-    color: Colors.textPrimary,
-  },
-  peerIDLabel: {
-    fontSize: FontSize.xs,
-    color: Colors.textMuted,
-    letterSpacing: 0.6,
-    textTransform: "uppercase",
-    marginTop: Spacing.xs,
-  },
-  peerID: {
-    fontSize: FontSize.xs,
-    color: Colors.textSecondary,
-    fontFamily: "monospace",
-    letterSpacing: 0.8,
-  },
-  qrContainer: {
-    width: 60,
-    height: 60,
-    borderRadius: Radius.sm,
-    backgroundColor: Colors.surfaceRaised,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    alignItems: "center",
-    justifyContent: "center",
-    flexShrink: 0,
-  },
-  tripleHint: {
-    fontSize: FontSize.xs,
-    color: Colors.textMuted,
-    textAlign: "center",
-    letterSpacing: 0.3,
-    marginTop: -Spacing.xs,
-  },
-  // Two pill buttons below the identity card
-  sharePills: {
-    flexDirection: "row",
-    gap: Spacing.sm,
-    marginTop: Spacing.xs,
-  },
-  sharePill: {
-    flex: 1,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: Spacing.xs,
-    paddingVertical: Spacing.sm + 2,
-    borderRadius: Radius.full,
-    backgroundColor: Colors.surface,
-    borderWidth: 1,
-    borderColor: Colors.border,
-  },
-  sharePillText: {
-    fontSize: FontSize.sm,
-    color: Colors.textSecondary,
-    fontWeight: FontWeight.medium,
-  },
-  // Sections
-  section: {
-    gap: Spacing.sm,
-    marginTop: Spacing.sm,
-  },
-  sectionTitle: {
-    fontSize: FontSize.xs,
-    color: Colors.textMuted,
-    letterSpacing: 0.8,
-    textTransform: "uppercase",
-    paddingHorizontal: Spacing.xs,
-  },
-  settingsGroup: {
-    backgroundColor: Colors.surface,
-    borderRadius: Radius.lg,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    overflow: "hidden",
-  },
-  groupDivider: {
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: Colors.border,
-    marginLeft: Spacing.base,
-  },
-  settingRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: Spacing.base,
-    paddingVertical: Spacing.md,
-    gap: Spacing.sm,
-  },
-  settingLabelGroup: {
-    flex: 1,
-    gap: 2,
-  },
-  settingLabel: {
-    fontSize: FontSize.base,
-    color: Colors.textPrimary,
-    fontWeight: FontWeight.medium,
-  },
-  settingDescription: {
-    fontSize: FontSize.xs,
-    color: Colors.textMuted,
-    lineHeight: FontSize.xs * 1.5,
-  },
-  settingValue: {
-    fontSize: FontSize.sm,
-    color: Colors.textMuted,
-    fontFamily: "monospace",
-  },
-  settingControl: {
-    flexShrink: 0,
-  },
-  alwaysOn: {
-    fontSize: FontSize.sm,
-    color: Colors.online,
-    fontWeight: FontWeight.medium,
-  },
-  // Danger zone, uses settingsGroup box for consistency with other sections
-  dangerGroup: {
-    borderColor: "rgba(220,38,38,0.2)",
-  },
-  // Pressable fills the cell; inner View owns the row direction.
-  dangerRow: {
-    overflow: "hidden",
-  },
-  dangerRowInner: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: Spacing.base,
-    paddingVertical: Spacing.md,
-    gap: Spacing.md,
-  },
-  dangerRowPressed: {
-    backgroundColor: Colors.dangerDim,
-  },
-  dangerIconWrap: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: Colors.dangerDim,
-    borderWidth: 1,
-    borderColor: "rgba(220,38,38,0.2)",
-    alignItems: "center",
-    justifyContent: "center",
-    flexShrink: 0,
-  },
-  dangerRowContent: {
-    flex: 1,
-    gap: 2,
-  },
-  dangerLabel: {
-    fontSize: FontSize.base,
-    fontWeight: FontWeight.semibold,
-    color: Colors.danger,
-  },
-  dangerDescription: {
-    fontSize: FontSize.xs,
-    color: Colors.danger,
-    opacity: 0.7,
-    lineHeight: FontSize.xs * 1.5,
-  },
-  // QR code modal
-  qrOverlay: {
-    flex: 1,
-    backgroundColor: Colors.overlay,
-    justifyContent: "flex-end",
-  },
-  qrSheet: {
-    width: "100%",
-    backgroundColor: Colors.surface,
-    borderTopLeftRadius: Radius["2xl"],
-    borderTopRightRadius: Radius["2xl"],
-    paddingHorizontal: Spacing.xl,
-    paddingTop: Spacing.base,
-    paddingBottom: Spacing["2xl"],
-    alignItems: "center",
-    gap: Spacing.md,
-  },
-  qrSheetHandle: {
-    width: 36,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: Colors.borderStrong,
-    alignSelf: "center",
-    marginBottom: Spacing.xs,
-  },
-  qrSheetTitle: {
-    fontSize: FontSize.md,
-    fontWeight: FontWeight.bold,
-    color: Colors.textPrimary,
-  },
-  qrSheetSubtitle: {
-    fontSize: FontSize.sm,
-    color: Colors.textMuted,
-    textAlign: "center",
-    lineHeight: FontSize.sm * 1.5,
-  },
-  qrLarge: {
-    padding: Spacing.xl,
-    backgroundColor: Colors.surface,
-    borderRadius: Radius.xl,
-    borderWidth: 1,
-    borderColor: Colors.border,
-  },
-  qrSheetPeerID: {
-    fontSize: FontSize.xs,
-    color: Colors.textMuted,
-    fontFamily: "monospace",
-    letterSpacing: 0.8,
-    textAlign: "center",
-  },
-  qrSheetActions: {
-    flexDirection: "row",
-    gap: Spacing.sm,
-    width: "100%",
-    marginTop: Spacing.xs,
-  },
-  qrSheetBtn: {
-    flex: 1,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: Spacing.xs,
-    paddingVertical: Spacing.md,
-    borderRadius: Radius.md,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    backgroundColor: Colors.surfaceRaised,
-  },
-  qrSheetBtnPrimary: {
-    backgroundColor: Colors.accent,
-    borderColor: "transparent",
-  },
-  qrSheetBtnPressed: {
-    opacity: 0.8,
-  },
-  qrSheetBtnText: {
-    fontSize: FontSize.sm,
-    fontWeight: FontWeight.medium,
-    color: Colors.textPrimary,
-  },
-  qrSheetBtnTextPrimary: {
-    fontSize: FontSize.sm,
-    fontWeight: FontWeight.medium,
-    color: Colors.textInverse,
-  },
-  qrSheetNfcBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: Spacing.xs,
-    paddingVertical: Spacing.md,
-    borderRadius: Radius.md,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    backgroundColor: Colors.surfaceRaised,
-    width: "100%",
-  },
-});
