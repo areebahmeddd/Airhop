@@ -25,6 +25,12 @@ import {
 
 const ANNOUNCE_INTERVAL_MS = 30_000;
 
+// TTL stamped on every outgoing ANNOUNCE. Receivers use this to tell a direct
+// announce from a relayed one: FloodRouter decrements TTL on each hop, so a
+// packet still carrying ANNOUNCE_TTL came straight from its originator.
+// Exported so mesh-service can't drift out of sync with the value used here.
+export const ANNOUNCE_TTL = 7;
+
 const TLV_NICKNAME = 0x01;
 const TLV_NOISE_PUB = 0x02;
 const TLV_SIGNING_PUB = 0x03;
@@ -150,7 +156,7 @@ export class AnnounceManager {
 
     const packet: Packet = {
       type: PacketType.ANNOUNCE,
-      ttl: 7,
+      ttl: ANNOUNCE_TTL,
       flags: Flags.SIGNED, // broadcast: no HAS_RECIPIENT, always signed
       senderID: senderIDBytes,
       recipientID: new Uint8Array(8), // all-zeros = broadcast
