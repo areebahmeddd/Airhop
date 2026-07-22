@@ -59,6 +59,11 @@ import {
   UPLOAD_QUALITY_VALUES,
   useSettingsStore,
 } from "../../store/settings-store";
+import {
+  transferEtaSec,
+  transferSpeedBps,
+  useTransferStore,
+} from "../../store/transfer-store";
 import { useWalletStore } from "../../store/wallet-store";
 import Avatar from "../../ui/components/avatar";
 import {
@@ -194,6 +199,241 @@ const videoAttachmentStyles = StyleSheet.create({
   },
 });
 
+// Progress cards for the attachments currently moving through this thread.
+// Files crawl over Bluetooth (~22 KB/s), so a large one can take many minutes;
+// showing live percent, speed and ETA is the difference between "working" and
+// "frozen" from the user's side.
+function TransferProgressList({
+  channel,
+}: {
+  channel: string;
+}): React.JSX.Element | null {
+  const Colors = useThemeColors();
+  const styles = useMemo(() => createTransferStyles(Colors), [Colors]);
+  // Subscribe to the whole map, then filter, so any advance() re-renders us.
+  const transfers = useTransferStore((s) => s.transfers);
+  const mine = Object.values(transfers)
+    .filter((t) => t.channel === channel)
+    .sort((a, b) => a.startedAtMs - b.startedAtMs);
+
+  if (mine.length === 0) return null;
+
+  return (
+    <View style={styles.wrap}>
+      {mine.map((t) => {
+        const pct =
+          t.totalBytes > 0
+            ? Math.min(
+                100,
+                Math.round((t.transferredBytes / t.totalBytes) * 100),
+              )
+            : 0;
+        const speed = transferSpeedBps(t);
+        const eta = transferEtaSec(t);
+
+        const verb =
+          t.status === "done"
+            ? t.direction === "send"
+              ? "Sent"
+              : "Received"
+            : t.status === "failed"
+              ? "Failed"
+              : t.status === "cancelled"
+                ? "Cancelled"
+                : t.status === "stalled"
+                  ? "Waiting"
+                  : t.direction === "send"
+                    ? "Sending"
+                    : "Receiving";
+
+        const detail =
+          t.status === "active"
+            ? [
+                formatBytes(t.transferredBytes) +
+                  " / " +
+                  formatBytes(t.totalBytes),
+                speed > 0 ? formatBytes(speed) + "/s" : null,
+                eta !== null && eta > 0 ? formatEta(eta) + " left" : null,
+              ]
+                .filter(Boolean)
+                .join(" · ")
+            : t.status === "stalled"
+              ? `Waiting for ${t.peerLabel || "peer"} to return · ${pct}%`
+              : formatBytes(t.totalBytes);
+
+        return (
+          <View key={t.id} style={styles.card}>
+            <Feather
+              name={
+                t.status === "failed"
+                  ? "alert-circle"
+                  : t.status === "done"
+                    ? "check-circle"
+                    : t.status === "stalled"
+                      ? "clock"
+                      : t.direction === "send"
+                        ? "arrow-up-circle"
+                        : "arrow-down-circle"
+              }
+              size={18}
+              color={
+                t.status === "failed"
+                  ? Colors.danger
+                  : t.status === "stalled"
+                    ? Colors.syncing
+                    : Colors.textSecondary
+              }
+            />
+            <View style={styles.body}>
+              <View style={styles.topRow}>
+                <Text style={styles.name} numberOfLines={1}>
+                  {verb} {t.name}
+                  {t.peerLabel ? ` · ${t.peerLabel}` : ""}
+                </Text>
+                {t.status === "active" || t.status === "stalled" ? (
+                  <View style={styles.transferRight}>
+                    <Text style={styles.pct}>{pct}%</Text>
+                    <Pressable
+                      onPress={() => getMeshService()?.cancelTransfer(t.id)}
+                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Cancel ${t.name}`}
+                    >
+                      <Feather name="x" size={16} color={Colors.textMuted} />
+                    </Pressable>
+                  </View>
+                ) : null}
+              </View>
+              <Text style={styles.detail} numberOfLines={1}>
+                {detail}
+              </Text>
+              <View style={styles.track}>
+                <View
+                  style={[
+                    styles.fill,
+                    {
+                      width: `${t.status === "active" || t.status === "stalled" ? pct : 100}%`,
+                      backgroundColor:
+                        t.status === "failed"
+                          ? Colors.danger
+                          : t.status === "stalled"
+                            ? Colors.syncing
+                            : Colors.accent,
+                    },
+                  ]}
+                />
+              </View>
+            </View>
+          </View>
+        );
+      })}
+    </View>
+  );
+}
+
+// Document subtitle in the WhatsApp style, e.g. "PDF · 2.3 MB". Returns null
+// when neither an extension nor a size is known.
+function docSubtitle(attachment: ChatAttachment): string | null {
+  const parts: string[] = [];
+  const ext = fileExtension(attachment.name, attachment.mimeType);
+  if (ext !== null) parts.push(ext);
+  if (attachment.sizeBytes !== undefined && attachment.sizeBytes > 0) {
+    parts.push(formatBytes(attachment.sizeBytes));
+  }
+  return parts.length > 0 ? parts.join(" · ") : null;
+}
+
+// Uppercase file-type tag from the filename extension, falling back to the MIME
+// subtype (e.g. "report.pdf" or "application/pdf" -> "PDF").
+function fileExtension(name?: string, mimeType?: string): string | null {
+  if (name !== undefined) {
+    const dot = name.lastIndexOf(".");
+    if (dot > 0 && dot < name.length - 1) {
+      return name
+        .slice(dot + 1)
+        .toUpperCase()
+        .slice(0, 5);
+    }
+  }
+  if (mimeType !== undefined) {
+    const sub = mimeType.split("/")[1];
+    if (sub) return sub.toUpperCase().slice(0, 5);
+  }
+  return null;
+}
+
+// Compact byte formatter: 512 B, 21 KB, 1.4 MB.
+function formatBytes(n: number): string {
+  if (n < 1024) return `${Math.round(n)} B`;
+  if (n < 1024 * 1024) return `${Math.round(n / 1024)} KB`;
+  return `${(n / 1024 / 1024).toFixed(1)} MB`;
+}
+
+// Rounded human ETA: 12s, 3m, 1h 4m.
+function formatEta(sec: number): string {
+  if (sec < 60) return `${Math.round(sec)}s`;
+  const m = Math.floor(sec / 60);
+  if (m < 60) return `${m}m`;
+  const h = Math.floor(m / 60);
+  return `${h}h ${m % 60}m`;
+}
+
+function createTransferStyles(Colors: ReturnType<typeof useThemeColors>) {
+  return StyleSheet.create({
+    wrap: {
+      paddingHorizontal: Spacing.base,
+      paddingBottom: Spacing.xs,
+      gap: Spacing.xs,
+    },
+    card: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: Spacing.sm,
+      backgroundColor: Colors.surfaceRaised,
+      borderRadius: Radius.lg,
+      paddingHorizontal: Spacing.md,
+      paddingVertical: Spacing.sm,
+    },
+    body: { flex: 1, gap: 3 },
+    topRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      gap: Spacing.sm,
+    },
+    name: {
+      flex: 1,
+      fontSize: FontSize.sm,
+      fontWeight: FontWeight.medium,
+      color: Colors.textPrimary,
+    },
+    transferRight: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: Spacing.sm,
+    },
+    pct: {
+      fontSize: FontSize.sm,
+      fontWeight: FontWeight.semibold,
+      color: Colors.textSecondary,
+      fontVariant: ["tabular-nums"],
+    },
+    detail: {
+      fontSize: FontSize.xs,
+      color: Colors.textMuted,
+      fontVariant: ["tabular-nums"],
+    },
+    track: {
+      height: 3,
+      borderRadius: 2,
+      backgroundColor: Colors.border,
+      overflow: "hidden",
+      marginTop: 2,
+    },
+    fill: { height: 3, borderRadius: 2 },
+  });
+}
+
 function VoiceNoteBubble({
   uri,
   durationMs,
@@ -306,6 +546,8 @@ export default function MessageThread({
   const [revealedAttachments, setRevealedAttachments] = useState<Set<string>>(
     new Set(),
   );
+  // URI of the photo currently shown in the full-screen viewer, or null.
+  const [fullscreenImage, setFullscreenImage] = useState<string | null>(null);
   const autoDownloadMedia = useSettingsStore((s) => s.autoDownloadMedia);
   const [showAttachMenu, setShowAttachMenu] = useState(false);
   const [showSendEcash, setShowSendEcash] = useState(false);
@@ -594,7 +836,11 @@ export default function MessageThread({
     name?: string,
     mimeType?: string,
     durationMs?: number,
-    options?: { targetChannel?: string; forwarded?: boolean },
+    options?: {
+      targetChannel?: string;
+      forwarded?: boolean;
+      sizeBytes?: number;
+    },
   ): void {
     const targetChannel = options?.targetChannel ?? channel;
     const msg: ChatMessage = {
@@ -607,7 +853,14 @@ export default function MessageThread({
       // eslint-disable-next-line react-hooks/purity
       timestampMs: Date.now(),
       isMine: true,
-      attachment: { type, uri, name, mimeType, durationMs },
+      attachment: {
+        type,
+        uri,
+        name,
+        mimeType,
+        durationMs,
+        sizeBytes: options?.sizeBytes,
+      },
       forwarded: options?.forwarded,
     };
     addMessage(msg);
@@ -751,7 +1004,14 @@ export default function MessageThread({
     });
     if (result.canceled || !result.assets?.[0]) return;
     const asset = result.assets[0];
-    sendAttachmentMessage("document", asset.uri, asset.name, asset.mimeType);
+    sendAttachmentMessage(
+      "document",
+      asset.uri,
+      asset.name,
+      asset.mimeType,
+      undefined,
+      { sizeBytes: asset.size ?? undefined },
+    );
   }
 
   async function startRecording(): Promise<void> {
@@ -865,13 +1125,20 @@ export default function MessageThread({
             </Pressable>
           );
         }
+        // Tap a loaded photo to view it full-screen, the standard gesture in
+        // WhatsApp / Signal / Telegram.
         return (
-          <Image
-            source={{ uri: attachment.uri }}
-            style={styles.attachImage}
-            resizeMode="cover"
-            accessibilityLabel="Attached image"
-          />
+          <Pressable
+            onPress={() => setFullscreenImage(attachment.uri)}
+            accessibilityRole="imagebutton"
+            accessibilityLabel="View photo full screen"
+          >
+            <Image
+              source={{ uri: attachment.uri }}
+              style={styles.attachImage}
+              resizeMode="cover"
+            />
+          </Pressable>
         );
       }
       case "voice": {
@@ -909,20 +1176,60 @@ export default function MessageThread({
                 color={Colors.textSecondary}
               />
             </View>
-            <Text
-              style={[
-                styles.attachDocName,
-                isMine ? styles.onMyBubble : styles.onTheirBubble,
-              ]}
-              numberOfLines={2}
-            >
-              {attachment.name ?? "Document"}
-            </Text>
+            <View style={styles.attachDocInfo}>
+              <Text
+                style={[
+                  styles.attachDocName,
+                  isMine ? styles.onMyBubble : styles.onTheirBubble,
+                ]}
+                numberOfLines={2}
+              >
+                {attachment.name ?? "Document"}
+              </Text>
+              {docSubtitle(attachment) !== null && (
+                <Text
+                  style={[
+                    styles.attachDocMeta,
+                    isMine ? styles.onMyBubble : styles.onTheirBubble,
+                  ]}
+                  numberOfLines={1}
+                >
+                  {docSubtitle(attachment)}
+                </Text>
+              )}
+            </View>
             <Feather name="external-link" size={14} color={Colors.textMuted} />
           </Pressable>
         );
-      case "video":
+      case "video": {
+        // Same reveal pattern as images: a received video shows a poster with a
+        // play badge and only mounts the (heavy) player once tapped. Own videos
+        // and auto-download show the player straight away. There is no thumbnail
+        // generation, so the poster is a neutral surface plus the universal play
+        // affordance rather than a frame grab.
+        const videoRevealed =
+          isMine || autoDownloadMedia || revealedAttachments.has(messageId);
+        if (!videoRevealed) {
+          return (
+            <Pressable
+              style={styles.attachVideoPoster}
+              onPress={() =>
+                setRevealedAttachments((prev) => new Set(prev).add(messageId))
+              }
+              accessibilityRole="button"
+              accessibilityLabel="Tap to load video"
+            >
+              <View style={styles.attachVideoPlayBadge}>
+                <Feather name="play" size={20} color={Colors.textPrimary} />
+              </View>
+              <Text style={styles.attachImagePlaceholderText}>
+                Tap to load video
+              </Text>
+            </Pressable>
+          );
+        }
         return <VideoAttachment uri={attachment.uri} />;
+      }
     }
   }
 
@@ -958,7 +1265,7 @@ export default function MessageThread({
     return (
       <View style={styles.paymentCard}>
         <View style={styles.paymentCardHeader}>
-          <Feather name="zap" size={14} color={Colors.accent} />
+          <Feather name="zap" size={17} color={Colors.accent} />
           <Text style={styles.paymentCardAmount}>
             {token.info.amount.toLocaleString()} {token.info.unit}
           </Text>
@@ -1314,6 +1621,41 @@ export default function MessageThread({
           </Text>
         </View>
       )}
+
+      {/* Full-screen photo viewer. Tap anywhere or the close button to dismiss. */}
+      <Modal
+        visible={fullscreenImage !== null}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setFullscreenImage(null)}
+      >
+        <Pressable
+          style={styles.fullscreenBackdrop}
+          onPress={() => setFullscreenImage(null)}
+        >
+          {fullscreenImage !== null && (
+            <Image
+              source={{ uri: fullscreenImage }}
+              style={styles.fullscreenImage}
+              resizeMode="contain"
+              accessibilityLabel="Photo"
+            />
+          )}
+          <Pressable
+            style={styles.fullscreenClose}
+            onPress={() => setFullscreenImage(null)}
+            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+            accessibilityRole="button"
+            accessibilityLabel="Close photo"
+          >
+            <Feather name="x" size={24} color="#FFFFFF" />
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      {/* Live attachment transfers for this thread: one card each, sending or
+          receiving, with percent, speed and time remaining. */}
+      <TransferProgressList channel={channel} />
 
       {/* Compose bar */}
       <View style={styles.composeBar}>
@@ -2236,6 +2578,48 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       gap: Spacing.xs,
       marginBottom: Spacing.xs,
     },
+    // Video poster shown before the player is mounted: a neutral surface with a
+    // centered play badge, matching the image "tap to load" gate.
+    attachVideoPoster: {
+      width: 200,
+      height: 120,
+      borderRadius: Radius.md,
+      backgroundColor: Colors.surfaceRaised,
+      alignItems: "center",
+      justifyContent: "center",
+      gap: Spacing.sm,
+      marginBottom: Spacing.xs,
+    },
+    attachVideoPlayBadge: {
+      width: 44,
+      height: 44,
+      borderRadius: 22,
+      backgroundColor: Colors.surface,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    // Full-screen photo viewer.
+    fullscreenBackdrop: {
+      flex: 1,
+      backgroundColor: "#000000",
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    fullscreenImage: {
+      width: "100%",
+      height: "100%",
+    },
+    fullscreenClose: {
+      position: "absolute",
+      top: 48,
+      right: 20,
+      width: 40,
+      height: 40,
+      borderRadius: 20,
+      backgroundColor: "rgba(0,0,0,0.5)",
+      alignItems: "center",
+      justifyContent: "center",
+    },
     attachVoice: {
       flexDirection: "row",
       alignItems: "center",
@@ -2289,11 +2673,18 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       justifyContent: "center",
       flexShrink: 0,
     },
-    attachDocName: {
+    attachDocInfo: {
       flexGrow: 1,
       flexShrink: 1,
+      gap: 1,
+    },
+    attachDocName: {
       fontSize: FontSize.sm,
       fontWeight: FontWeight.medium,
+    },
+    attachDocMeta: {
+      fontSize: FontSize.xs,
+      opacity: 0.7,
     },
     // Shared "text/fill on top of a message bubble" pair, the same tokens
     // messageTextMine/messageTextTheirs use, so anything sitting directly
@@ -2496,14 +2887,18 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       fontSize: FontSize.xs,
       color: Colors.textMuted,
     },
-    // Cashu payment cards rendered inside message bubbles.
+    // Cashu payment cards rendered inside message bubbles. Deliberately distinct
+    // from grey file attachments: an accent-tinted card with a hero amount, so
+    // money reads as money at a glance (the WhatsApp / GPay payment convention).
     paymentCard: {
       marginTop: Spacing.xs,
-      padding: Spacing.sm,
+      padding: Spacing.md,
       borderRadius: Radius.md,
-      backgroundColor: Colors.surfaceRaised,
-      gap: 3,
-      minWidth: 180,
+      backgroundColor: Colors.accentGhost,
+      borderWidth: 1,
+      borderColor: Colors.accent,
+      gap: 4,
+      minWidth: 190,
     },
     paymentCardHeader: {
       flexDirection: "row",
@@ -2511,9 +2906,10 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       gap: Spacing.xs,
     },
     paymentCardAmount: {
-      fontSize: FontSize.sm,
+      fontSize: FontSize.lg,
       fontWeight: FontWeight.bold,
       color: Colors.textPrimary,
+      letterSpacing: -0.3,
     },
     paymentCardMint: {
       fontSize: FontSize.xs,
