@@ -56,33 +56,7 @@ const SECTIONS: {
       },
       {
         q: "What media can I send?",
-        a: (
-          <>
-            Over BLE: images up to 1 MB (JPEG, PNG, GIF, WebP), voice notes (AAC, .m4a),
-            push-to-talk live voice, and any file format via chunked streaming.
-            <br />
-            <br />
-            Not over BLE: video (480p/15fps HEVC, .mp4) requires{" "}
-            <a
-              href="https://wi-fi.org/discover-wi-fi/wi-fi-aware"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-gray-900 underline underline-offset-2 transition-colors hover:text-gray-600"
-            >
-              WiFi Aware
-            </a>{" "}
-            on Android or{" "}
-            <a
-              href="https://developer.apple.com/documentation/multipeerconnectivity"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-gray-900 underline underline-offset-2 transition-colors hover:text-gray-600"
-            >
-              MultipeerConnectivity
-            </a>{" "}
-            on iOS. Bluetooth bandwidth is roughly 15 KB/s, which makes video over BLE infeasible.
-          </>
-        ),
+        a: "Images, voice notes, videos, and any other file format, all over Bluetooth using chunked streaming. Large files are split into fragments, paced so the radio is not overrun, and reassembled on the other side. Videos are sent as files and play inline; they are not live streams. Bluetooth bandwidth is roughly 15 KB/s, so a large attachment takes time, but it works with no internet at all. On Android to Android or iPhone to iPhone, a faster direct WiFi link is used automatically when both devices support it.",
       },
       {
         q: "Is Airhop compatible with bitchat?",
@@ -323,13 +297,24 @@ const SECTIONS: {
             >
               Cashu
             </a>{" "}
-            mint by depositing via Lightning. The mint returns cryptographically signed token blobs
-            worth the deposited amount, which live on your device like digital cash.
+            mint by depositing via{" "}
+            <a
+              href="https://en.wikipedia.org/wiki/Lightning_Network"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-gray-900 underline underline-offset-2 transition-colors hover:text-gray-600"
+            >
+              Lightning Network
+            </a>
+            . The mint returns cryptographically signed token blobs worth the deposited amount,
+            which live on your device like digital cash.
             <br />
             <br />
-            To pay a contact offline, you select tokens and send them as a BLE mesh message. The
-            recipient holds them and redeems with the mint later when back online. No internet is
-            involved in the transfer itself.
+            To pay a contact offline, you select tokens and send them as a BLE mesh message.{" "}
+            <strong>
+              The recipient holds them and redeems with the mint later when back online.
+            </strong>{" "}
+            No internet is involved in the transfer itself.
           </>
         ),
       },
@@ -368,7 +353,16 @@ const SECTIONS: {
             >
               GitHub
             </a>{" "}
-            under the MIT license. Protocol specifications are in the docs/ directory.
+            under the{" "}
+            <a
+              href="https://github.com/areebahmeddd/Airhop/blob/main/LICENSE"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-gray-900 underline underline-offset-2 transition-colors hover:text-gray-600"
+            >
+              MIT license
+            </a>
+            . Protocol specifications are in the docs/ directory.
           </>
         ),
       },

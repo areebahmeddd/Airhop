@@ -20,6 +20,13 @@ html {
     background-image: radial-gradient(#f0f0f0 1.5px, transparent 1.5px);
     background-size: 24px 24px;
   }
+
+  .heart-pixel {
+    fill: #000;
+    animation-duration: 7s;
+    animation-iteration-count: infinite;
+    animation-timing-function: linear;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

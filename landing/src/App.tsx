@@ -18,6 +18,10 @@ function ScrollToTop() {
 }
 
 export default function App() {
+  const { pathname } = useLocation();
+  const knownPaths = ["/", "/faq", "/blogs", "/privacy-policy", "/terms-of-service"];
+  const isNotFound = !knownPaths.includes(pathname);
+
   return (
     <div className="min-h-screen bg-white font-sans text-black selection:bg-gray-200 selection:text-black">
       <ScrollToTop />
@@ -36,7 +40,7 @@ export default function App() {
         <Route path="/terms-of-service" element={<TermsPage />} />
         <Route path="*" element={<NotFoundPage />} />
       </Routes>
-      <Footer />
+      {!isNotFound && <Footer />}
     </div>
   );
 }

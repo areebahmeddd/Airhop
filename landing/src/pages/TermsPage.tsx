@@ -25,7 +25,7 @@ export default function TermsPage() {
 
         <div className="mt-10">
           <h1 className="text-3xl font-semibold tracking-tight text-gray-900">Terms of Service</h1>
-          <p className="mt-2 text-sm text-gray-500">Last updated: July 22, 2026</p>
+          <p className="mt-2 text-sm text-gray-500">Last updated: September 01, 2026</p>
         </div>
 
         <div className="mt-10 space-y-10 text-gray-700">

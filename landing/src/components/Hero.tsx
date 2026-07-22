@@ -264,7 +264,7 @@ export default function Hero() {
 
           <div className="flex flex-col gap-3 pt-2 sm:flex-row">
             <DownloadDropdown
-              label="APP STORE"
+              label="APPLE"
               variant="primary"
               options={[
                 {
@@ -280,13 +280,18 @@ export default function Hero() {
               ]}
             />
             <DownloadDropdown
-              label="GOOGLE PLAY"
+              label="ANDROID"
               variant="secondary"
               options={[
                 {
                   label: "Google Play",
                   description: "Download from the Play Store",
                   href: "https://play.google.com/store/apps/details?id=org.onemindlabs.airhop",
+                },
+                {
+                  label: "F-Droid",
+                  description: "Install from the F-Droid catalog",
+                  href: "https://f-droid.org/en/packages/org.onemindlabs.airhop",
                 },
                 {
                   label: "APK",
@@ -299,10 +304,10 @@ export default function Hero() {
               href="https://github.com/areebahmeddd/Airhop"
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex items-center justify-center gap-2 border border-black/20 bg-white px-6 py-3.5 text-sm font-bold tracking-widest text-black transition-all select-none hover:border-black hover:bg-gray-50"
+              className="relative flex w-full items-center justify-center border border-black/20 bg-white px-6 py-3.5 text-sm font-bold tracking-widest text-black shadow-sm transition-all select-none hover:border-black hover:bg-gray-50 sm:w-auto sm:gap-2"
             >
               GITHUB
-              <span className="font-mono text-xs font-normal text-amber-700">
+              <span className="absolute right-6 font-mono text-xs font-normal text-amber-700 sm:static">
                 &#9733; {stars !== null ? stars.toLocaleString() : "—"}
               </span>
             </a>

@@ -26,46 +26,29 @@ export default function PrivacyPage() {
 
         <div className="mt-10">
           <h1 className="text-3xl font-semibold tracking-tight text-gray-900">Privacy Policy</h1>
-          <p className="mt-2 text-sm text-gray-500">Last updated: July 22, 2026</p>
+          <p className="mt-2 text-sm text-gray-500">Last updated: September 01, 2026</p>
         </div>
 
         <div className="mt-10 space-y-10 text-gray-700">
           <section className="space-y-3">
             <h2 className="text-base font-semibold text-gray-900">Summary</h2>
-            <ul className="space-y-1.5 text-sm leading-relaxed">
-              <li className="flex items-start gap-2">
-                <span className="mt-1.5 h-1 w-1 flex-shrink-0 rounded-full bg-gray-400" />
-                <span>No project-operated accounts or messaging servers.</span>
-              </li>
-              <li className="flex items-start gap-2">
-                <span className="mt-1.5 h-1 w-1 flex-shrink-0 rounded-full bg-gray-400" />
-                <span>No analytics, advertising, telemetry, or tracking of any kind.</span>
-              </li>
-              <li className="flex items-start gap-2">
-                <span className="mt-1.5 h-1 w-1 flex-shrink-0 rounded-full bg-gray-400" />
-                <span>No sale of user data.</span>
-              </li>
-              <li className="flex items-start gap-2">
-                <span className="mt-1.5 h-1 w-1 flex-shrink-0 rounded-full bg-gray-400" />
-                <span>
-                  Your identity is a cryptographic key pair that never leaves your device.
-                </span>
-              </li>
-              <li className="flex items-start gap-2">
-                <span className="mt-1.5 h-1 w-1 flex-shrink-0 rounded-full bg-gray-400" />
-                <span>
-                  All source code is{" "}
-                  <a
-                    href="https://github.com/areebahmeddd/Airhop"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="underline underline-offset-2 transition-colors hover:text-gray-900"
-                  >
-                    open source
-                  </a>
-                  . The storage, networking, and cryptography described here can be verified in the
-                  code.
-                </span>
+            <ul className="list-disc space-y-1.5 pl-5 text-sm leading-relaxed marker:text-gray-400">
+              <li>No project-operated accounts or messaging servers.</li>
+              <li>No analytics, advertising, telemetry, or tracking of any kind.</li>
+              <li>No sale of user data.</li>
+              <li>Your identity is a cryptographic key pair that never leaves your device.</li>
+              <li>
+                All source code is{" "}
+                <a
+                  href="https://github.com/areebahmeddd/Airhop"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="underline underline-offset-2 transition-colors hover:text-gray-900"
+                >
+                  open source
+                </a>
+                . The storage, networking, and cryptography described here can be verified in the
+                code.
               </li>
             </ul>
           </section>
@@ -77,7 +60,7 @@ export default function PrivacyPage() {
             <p className="text-sm leading-relaxed">
               Airhop stores data only on your device. None of it is transmitted to us.
             </p>
-            <ul className="space-y-2 text-sm leading-relaxed">
+            <ul className="list-disc space-y-2 pl-5 text-sm leading-relaxed marker:text-gray-400">
               <li>
                 <strong>Identity keys.</strong> An Ed25519 signing key and Noise static key are
                 generated locally on first launch. Both are stored in your device's secure storage
@@ -117,7 +100,7 @@ export default function PrivacyPage() {
             <p className="text-sm leading-relaxed">
               When the app is running, nearby mesh devices can receive:
             </p>
-            <ul className="space-y-1.5 text-sm leading-relaxed">
+            <ul className="list-disc space-y-1.5 pl-5 text-sm leading-relaxed marker:text-gray-400">
               <li>Your chosen nickname and public identity keys.</li>
               <li>Messages you send to public channels or directly to another peer.</li>
               <li>
@@ -154,13 +137,21 @@ export default function PrivacyPage() {
               relays to extend conversations beyond Bluetooth range. This feature is optional and
               off by default.
             </p>
-            <p className="text-sm leading-relaxed">
-              Private fallback messages use NIP-17 gift wraps. Relay operators can observe event
-              timestamps and network metadata but not message content. Public channel messages
-              include a channel identifier, timestamp, and your public key. Nostr relays are
-              operated by third parties whose retention and privacy practices are outside this
-              project's control.
-            </p>
+            <ul className="list-disc space-y-1.5 pl-5 text-sm leading-relaxed marker:text-gray-400">
+              <li>
+                <strong>Private messages.</strong> Fallback messages use NIP-17 gift wraps. Relay
+                operators can observe event timestamps and network metadata, but not message
+                content.
+              </li>
+              <li>
+                <strong>Public channel messages.</strong> These include a channel identifier,
+                timestamp, and your public key.
+              </li>
+              <li>
+                <strong>Third-party relays.</strong> Nostr relays are operated by third parties
+                whose retention and privacy practices are outside this project's control.
+              </li>
+            </ul>
           </section>
 
           <section className="space-y-3">
@@ -175,18 +166,27 @@ export default function PrivacyPage() {
 
           <section className="space-y-3">
             <h2 className="text-base font-semibold text-gray-900">Cryptography</h2>
+            <ul className="list-disc space-y-1.5 pl-5 text-sm leading-relaxed marker:text-gray-400">
+              <li>
+                <strong>Private sessions.</strong> Noise XX with X25519 and ChaCha20-Poly1305.
+              </li>
+              <li>
+                <strong>Forward secrecy.</strong> Provided by Double Ratchet.
+              </li>
+              <li>
+                <strong>Implementation.</strong> All cryptographic operations use the{" "}
+                <a
+                  href="https://github.com/paulmillr/noble-curves"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="underline underline-offset-2 transition-colors hover:text-gray-900"
+                >
+                  @noble
+                </a>{" "}
+                library suite, which has been independently audited by Cure53.
+              </li>
+            </ul>
             <p className="text-sm leading-relaxed">
-              Private sessions use Noise XX with X25519 and ChaCha20-Poly1305. Forward secrecy is
-              provided by Double Ratchet. All cryptographic operations use the{" "}
-              <a
-                href="https://github.com/paulmillr/noble-curves"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="underline underline-offset-2 transition-colors hover:text-gray-900"
-              >
-                @noble
-              </a>{" "}
-              library suite, which has been independently audited by Cure53.{" "}
               <strong>
                 No cryptographic protection prevents a recipient from copying, screenshotting, or
                 forwarding a message after reading it.
@@ -196,7 +196,7 @@ export default function PrivacyPage() {
 
           <section className="space-y-3">
             <h2 className="text-base font-semibold text-gray-900">Your controls</h2>
-            <ul className="space-y-1.5 text-sm leading-relaxed">
+            <ul className="list-disc space-y-1.5 pl-5 text-sm leading-relaxed marker:text-gray-400">
               <li>
                 <strong>Panic wipe.</strong> Triple-tap the logo to instantly erase all local keys,
                 messages, queued mail, and app data.
@@ -225,15 +225,23 @@ export default function PrivacyPage() {
                 Cloudflare Pages
               </a>
               . It has no user accounts, no cookies, and no analytics.{" "}
-              <strong>We have no interest in your personal data and collect none of it.</strong>
+              <strong>
+                We have no interest in your personal data and collect none of it (and never will!).
+              </strong>
             </p>
-            <p className="text-sm leading-relaxed">
-              Cloudflare's infrastructure may log standard request metadata (IP address, browser,
-              page path) for security and availability purposes. We do not access these logs for
-              analytics or share them with any third party. The site makes two browser-side requests
-              to the GitHub API: one for the latest release tag and one for the public star count.
-              No user data is included in either request.
-            </p>
+            <p className="text-sm leading-relaxed">Two things happen outside our control:</p>
+            <ul className="list-disc space-y-1.5 pl-5 text-sm leading-relaxed marker:text-gray-400">
+              <li>
+                <strong>Hosting logs.</strong> Cloudflare's infrastructure may log standard request
+                metadata (IP address, browser, page path) for security and availability purposes. We
+                do not access these logs for analytics or share them with any third party.
+              </li>
+              <li>
+                <strong>GitHub API.</strong> The site makes two browser-side requests to GitHub: one
+                for the latest release tag and one for the public star count. No user data is
+                included in either request.
+              </li>
+            </ul>
           </section>
 
           <section className="space-y-3">
