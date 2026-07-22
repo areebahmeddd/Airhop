@@ -5,9 +5,8 @@
 import { Mint, Wallet } from "@cashu/cashu-ts";
 import { Feather } from "@expo/vector-icons";
 import { nip19 } from "nostr-tools";
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
-  Alert,
   Modal,
   Pressable,
   ScrollView,
@@ -24,6 +23,7 @@ import {
 } from "../../core/payments/cashu";
 import { fetchWalletInfo, publishNutzap } from "../../core/payments/nutzap";
 import { getMeshService } from "../../services/mesh-service";
+import { showAlert } from "../../store/alert-store";
 import { useChatStore } from "../../store/chat-store";
 import { usePeerStore } from "../../store/peer-store";
 import {
@@ -32,10 +32,34 @@ import {
   type StoredProof,
 } from "../../store/wallet-store";
 import Avatar from "../../ui/components/avatar";
-import { Colors, FontSize, FontWeight, Radius, Spacing } from "../../ui/theme";
+import {
+  FontSize,
+  FontWeight,
+  Radius,
+  Spacing,
+  useThemeColors,
+} from "../../ui/theme";
 import { peerIDToUsername } from "../../utils/username";
 
-export default function WalletScreen(): React.JSX.Element {
+// The four quick actions, triggered from icon buttons in the App-level
+// header (styled to match the Mesh tab's "add contact" pill) rather than
+// from a row inside the balance card.
+export type WalletAction = "receive" | "send" | "zap" | "addMint";
+
+interface Props {
+  // Set together (action + an incrementing counter) when a header icon is
+  // tapped, so the right modal opens here, the same fire-once-per-increment
+  // pattern used for ChannelList's join modal / PeerList's scanner.
+  action?: WalletAction | null;
+  actionTrigger?: number;
+}
+
+export default function WalletScreen({
+  action,
+  actionTrigger,
+}: Props): React.JSX.Element {
+  const Colors = useThemeColors();
+  const styles = useMemo(() => createStyles(Colors), [Colors]);
   const { proofsByMint, unit, addMint, addProofs, removeProofs, clearMint } =
     useWalletStore();
   // Subscribe to the stable peer map and derive the reachable list locally.
@@ -72,6 +96,26 @@ export default function WalletScreen(): React.JSX.Element {
   // Zap status.
   const [isZapping, setIsZapping] = useState(false);
 
+  const prevActionTrigger = useRef(actionTrigger ?? 0);
+  useEffect(() => {
+    if (
+      actionTrigger === undefined ||
+      actionTrigger <= prevActionTrigger.current
+    ) {
+      return;
+    }
+    prevActionTrigger.current = actionTrigger;
+    // Opening a sheet in response to a one-shot command from the parent (a
+    // header button press arriving as an incrementing counter). The guard above
+    // makes this fire at most once per press, so it cannot cascade. This is an
+    // imperative event handoff, not derived state.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (action === "receive") setShowReceive(true);
+    else if (action === "send") setShowSend(true);
+    else if (action === "zap") setShowZap(true);
+    else if (action === "addMint") setShowAddMint(true);
+  }, [action, actionTrigger]);
+
   const mintBalances = useMemo<MintBalance[]>(() => {
     return Object.entries(proofsByMint).map(([mintUrl, proofs]) => ({
       mintUrl,
@@ -99,7 +143,7 @@ export default function WalletScreen(): React.JSX.Element {
     // Decode the token using the cashu core module (offline, no network call).
     const info = decodeToken(raw);
     if (!info) {
-      Alert.alert(
+      showAlert(
         "Invalid token",
         "Could not decode this token. Check that it starts with cashuA or cashuB.",
       );
@@ -122,7 +166,7 @@ export default function WalletScreen(): React.JSX.Element {
 
     setShowReceive(false);
     setTokenInput("");
-    Alert.alert(
+    showAlert(
       `+${info.amount.toLocaleString()} ${info.unit}`,
       `Proofs stored from ${info.mintUrl.replace(/https?:\/\//, "")}.` +
         (info.memo ? `\n\n"${info.memo}"` : "") +
@@ -135,7 +179,7 @@ export default function WalletScreen(): React.JSX.Element {
     if (!amount || amount <= 0) return;
 
     if (amount > totalSats) {
-      Alert.alert(
+      showAlert(
         "Insufficient balance",
         `You have ${totalSats.toLocaleString()} sats but tried to send ${amount.toLocaleString()} sats.`,
       );
@@ -152,7 +196,7 @@ export default function WalletScreen(): React.JSX.Element {
       .find((m) => m.balance >= amount);
 
     if (!mintEntry) {
-      Alert.alert(
+      showAlert(
         "Balance split across mints",
         "No single mint holds the full amount. Consolidate proofs at one mint first.",
       );
@@ -162,29 +206,52 @@ export default function WalletScreen(): React.JSX.Element {
     const selection = selectProofsForAmount(mintEntry.ps, amount);
     if (!selection) return;
 
-    // Build the token offline (pure serialization, no network call).
-    const tokenStr = buildOfflineToken(
-      mintEntry.url,
-      selection.selected,
-      unit,
-      sendMemo.trim() || undefined,
-    );
+    const finalize = (): void => {
+      // Build the token offline (pure serialization, no network call).
+      const tokenStr = buildOfflineToken(
+        mintEntry.url,
+        selection.selected,
+        unit,
+        sendMemo.trim() || undefined,
+      );
 
-    // Remove the spent proofs from local storage immediately.
-    removeProofs(
-      mintEntry.url,
-      selection.selected.map((p) => p.secret),
-    );
+      // Remove the spent proofs from local storage immediately.
+      removeProofs(
+        mintEntry.url,
+        selection.selected.map((p) => p.secret),
+      );
 
-    setShowSend(false);
-    setSendAmount("");
-    setSendMemo("");
-    setGeneratedToken({
-      token: tokenStr,
-      amount: selection.total,
-      mintUrl: mintEntry.url,
-    });
-    setShowGenerated(true);
+      setShowSend(false);
+      setSendAmount("");
+      setSendMemo("");
+      setGeneratedToken({
+        token: tokenStr,
+        amount: selection.total,
+        mintUrl: mintEntry.url,
+      });
+      setShowGenerated(true);
+    };
+
+    // No exact denomination match: the token would carry more than the user
+    // asked for, and offline there is no way to get change back. Never spend
+    // the difference silently, so make it an explicit decision.
+    if (!selection.exact) {
+      showAlert(
+        "Can't send that exact amount",
+        `Your proofs can't make exactly ${amount} ${unit} offline. The smallest token you can send is ${selection.total} ${unit}, and the extra ${selection.total - amount} ${unit} goes to the recipient and can't be recovered without swapping at the mint first.`,
+        [
+          { text: "Cancel", style: "cancel" },
+          {
+            text: `Send ${selection.total} ${unit}`,
+            style: "destructive",
+            onPress: finalize,
+          },
+        ],
+      );
+      return;
+    }
+
+    finalize();
   }
 
   async function handleZapConfirm(): Promise<void> {
@@ -193,7 +260,7 @@ export default function WalletScreen(): React.JSX.Element {
     if (!npubRaw || !amount || amount <= 0) return;
 
     if (amount > totalSats) {
-      Alert.alert(
+      showAlert(
         "Insufficient balance",
         `You have ${totalSats.toLocaleString()} sats but tried to zap ${amount.toLocaleString()} sats.`,
       );
@@ -211,7 +278,7 @@ export default function WalletScreen(): React.JSX.Element {
         recipientPubkey = npubRaw;
       }
     } catch {
-      Alert.alert(
+      showAlert(
         "Invalid pubkey",
         "Enter a valid npub1\u2026 or 64-char hex pubkey.",
       );
@@ -235,7 +302,7 @@ export default function WalletScreen(): React.JSX.Element {
 
     if (!mintEntry) {
       setIsZapping(false);
-      Alert.alert(
+      showAlert(
         "Balance split across mints",
         "No single mint holds the full amount.",
       );
@@ -315,7 +382,7 @@ export default function WalletScreen(): React.JSX.Element {
               setZapNpub("");
               setZapAmount("");
               setZapNote("");
-              Alert.alert(
+              showAlert(
                 "Nutzap sent",
                 `${amount.toLocaleString()} sats sent to ${npubRaw.slice(0, 20)}\u2026`,
               );
@@ -349,7 +416,7 @@ export default function WalletScreen(): React.JSX.Element {
         setZapNpub("");
         setZapAmount("");
         setZapNote("");
-        Alert.alert(
+        showAlert(
           "Token sent via Nostr",
           `${amount.toLocaleString()} sats sent to ${npubRaw.slice(0, 20)}\u2026 as an encrypted Cashu token.`,
         );
@@ -386,7 +453,7 @@ export default function WalletScreen(): React.JSX.Element {
   async function handleRedeem(mintUrl: string): Promise<void> {
     const mintProofs = proofsByMint[mintUrl];
     if (!mintProofs || mintProofs.length === 0) {
-      Alert.alert("Nothing to redeem", "This mint has no proofs stored.");
+      showAlert("Nothing to redeem", "This mint has no proofs stored.");
       return;
     }
 
@@ -413,12 +480,12 @@ export default function WalletScreen(): React.JSX.Element {
           C: p.C,
         })),
       );
-      Alert.alert(
+      showAlert(
         "Redeemed",
         `Proofs refreshed at ${mintUrl.replace(/https?:\/\//, "")}.`,
       );
     } catch (err) {
-      Alert.alert(
+      showAlert(
         "Redemption failed",
         `Could not reach the mint. Make sure you have internet access.\n\n${String(err)}`,
       );
@@ -435,7 +502,7 @@ export default function WalletScreen(): React.JSX.Element {
     try {
       const parsed = new URL(raw);
       if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
-        Alert.alert(
+        showAlert(
           "Invalid URL",
           "Mint URL must start with http:// or https://",
         );
@@ -445,7 +512,7 @@ export default function WalletScreen(): React.JSX.Element {
       parsed.pathname = parsed.pathname.replace(/\/+$/, "") || "/";
       url = parsed.toString().replace(/\/$/, "");
     } catch {
-      Alert.alert("Invalid URL", "Please enter a valid mint URL.");
+      showAlert("Invalid URL", "Please enter a valid mint URL.");
       return;
     }
 
@@ -458,7 +525,7 @@ export default function WalletScreen(): React.JSX.Element {
     if (!generatedToken) return;
     const service = getMeshService();
     if (!service) {
-      Alert.alert("Mesh offline", "Mesh service is not running.");
+      showAlert("Mesh offline", "Mesh service is not running.");
       return;
     }
     const localPeerID = service.getPeerID();
@@ -479,7 +546,7 @@ export default function WalletScreen(): React.JSX.Element {
     setShowPeerPicker(false);
     setShowGenerated(false);
     setGeneratedToken(null);
-    Alert.alert(
+    showAlert(
       "Token sent",
       `${generatedToken.amount} sats sent. Open the Chats tab to see the message.`,
     );
@@ -493,7 +560,6 @@ export default function WalletScreen(): React.JSX.Element {
     >
       {/* Balance section */}
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Balance</Text>
         <View style={styles.balanceCard}>
           <Text style={styles.balanceLabel}>Total balance</Text>
           <View style={styles.balanceRow}>
@@ -507,82 +573,11 @@ export default function WalletScreen(): React.JSX.Element {
             {"\u2009\u00b7\u2009"}
             {mintBalances.reduce((s, m) => s + m.proofCount, 0)} proofs
           </Text>
-
-          {/* Quick actions */}
-          <View style={styles.quickActions}>
-            <Pressable
-              style={({ pressed }) => [
-                styles.quickAction,
-                pressed && styles.actionButtonPressed,
-              ]}
-              accessibilityRole="button"
-              accessibilityLabel="Receive ecash token"
-              onPress={() => setShowReceive(true)}
-            >
-              <View
-                style={[styles.quickActionIcon, styles.quickActionIconPrimary]}
-              >
-                <Feather name="download" size={17} color={Colors.textInverse} />
-              </View>
-              <Text style={styles.quickActionLabel}>Receive</Text>
-            </Pressable>
-
-            <Pressable
-              style={({ pressed }) => [
-                styles.quickAction,
-                pressed && styles.actionButtonPressed,
-              ]}
-              accessibilityRole="button"
-              accessibilityLabel="Send ecash token"
-              onPress={() => setShowSend(true)}
-            >
-              <View style={styles.quickActionIcon}>
-                <Feather name="upload" size={17} color={Colors.textSecondary} />
-              </View>
-              <Text style={styles.quickActionLabel}>Send</Text>
-            </Pressable>
-
-            <Pressable
-              style={({ pressed }) => [
-                styles.quickAction,
-                pressed && styles.actionButtonPressed,
-              ]}
-              accessibilityRole="button"
-              accessibilityLabel="Zap a Nostr contact"
-              onPress={() => setShowZap(true)}
-            >
-              <View style={styles.quickActionIcon}>
-                <Feather name="zap" size={17} color={Colors.textSecondary} />
-              </View>
-              <Text style={styles.quickActionLabel}>Zap</Text>
-            </Pressable>
-
-            <Pressable
-              style={({ pressed }) => [
-                styles.quickAction,
-                pressed && styles.actionButtonPressed,
-              ]}
-              accessibilityRole="button"
-              accessibilityLabel="Add a Cashu mint"
-              onPress={() => setShowAddMint(true)}
-            >
-              <View style={styles.quickActionIcon}>
-                <Feather
-                  name="plus-circle"
-                  size={17}
-                  color={Colors.textSecondary}
-                />
-              </View>
-              <Text style={styles.quickActionLabel}>Add mint</Text>
-            </Pressable>
-          </View>
         </View>
       </View>
 
       {/* Mint balances */}
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Mints</Text>
-
         {mintBalances.length === 0 ? (
           <View style={styles.emptyMints}>
             <Text style={styles.emptyMintsText}>No mints added yet.</Text>
@@ -594,13 +589,10 @@ export default function WalletScreen(): React.JSX.Element {
           mintBalances.map((m) => (
             <Pressable
               key={m.mintUrl}
-              style={({ pressed }) => [
-                styles.mintRow,
-                pressed && { opacity: 0.85 },
-              ]}
+              style={styles.mintRow}
               onLongPress={() => {
                 const hasBalance = m.balance > 0;
-                Alert.alert(
+                showAlert(
                   hasBalance ? "Remove mint (has balance)" : "Remove mint",
                   hasBalance
                     ? `${shortenMintUrl(m.mintUrl)} has ${m.balance.toLocaleString()} sats in ${m.proofCount} proof${m.proofCount !== 1 ? "s" : ""}. Removing it deletes those proofs permanently. Transfer or redeem first.`
@@ -642,10 +634,7 @@ export default function WalletScreen(): React.JSX.Element {
                 <Text style={styles.mintUnit}>sats</Text>
                 {/* Refresh proofs at mint: confirms they are unspent. */}
                 <Pressable
-                  style={({ pressed }) => [
-                    styles.redeemBtn,
-                    pressed && { opacity: 0.7 },
-                  ]}
+                  style={styles.redeemBtn}
                   onPress={() => void handleRedeem(m.mintUrl)}
                   accessibilityRole="button"
                   accessibilityLabel={`Refresh proofs at ${shortenMintUrl(m.mintUrl)}`}
@@ -658,9 +647,10 @@ export default function WalletScreen(): React.JSX.Element {
         )}
       </View>
 
-      {/* About */}
+      {/* About: what ecash is, then one row per header action. The four icons
+          sit in the App-level header with no labels, so this is where they are
+          named and where each one states whether it needs internet. */}
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>About</Text>
         {/* Info panel */}
         <View style={styles.infoPanel}>
           <View style={styles.infoPanelRow}>
@@ -682,32 +672,65 @@ export default function WalletScreen(): React.JSX.Element {
           <View style={styles.infoPanelDivider} />
           <View style={styles.infoPanelRow}>
             <Feather
-              name="radio"
+              name="arrow-up"
               size={16}
               color={Colors.textMuted}
               style={styles.infoPanelIcon}
             />
             <View style={styles.infoPanelText}>
-              <Text style={styles.infoPanelTitle}>Works without internet</Text>
+              <Text style={styles.infoPanelTitle}>Send</Text>
               <Text style={styles.infoPanelBody}>
-                Transfer sats peer-to-peer over BLE mesh. No internet required.
-                Your peers are the network.
+                Turns an amount into a token and hands it to a nearby peer over
+                the mesh, or shares it as text. Works offline.
               </Text>
             </View>
           </View>
           <View style={styles.infoPanelDivider} />
           <View style={styles.infoPanelRow}>
             <Feather
-              name="globe"
+              name="arrow-down"
               size={16}
               color={Colors.textMuted}
               style={styles.infoPanelIcon}
             />
             <View style={styles.infoPanelText}>
-              <Text style={styles.infoPanelTitle}>Any mint works</Text>
+              <Text style={styles.infoPanelTitle}>Receive</Text>
               <Text style={styles.infoPanelBody}>
-                Any Cashu v1 mint is compatible. Redeem proofs at Minibits,
-                Nutshell, or run your own.
+                Paste a token to store its proofs on this device. Works offline.
+                Refresh at the mint once you are online to confirm they are
+                unspent.
+              </Text>
+            </View>
+          </View>
+          <View style={styles.infoPanelDivider} />
+          <View style={styles.infoPanelRow}>
+            <Feather
+              name="zap"
+              size={16}
+              color={Colors.textMuted}
+              style={styles.infoPanelIcon}
+            />
+            <View style={styles.infoPanelText}>
+              <Text style={styles.infoPanelTitle}>Zap</Text>
+              <Text style={styles.infoPanelBody}>
+                Sends sats to a Nostr contact by npub. Needs internet, since it
+                is delivered over relays.
+              </Text>
+            </View>
+          </View>
+          <View style={styles.infoPanelDivider} />
+          <View style={styles.infoPanelRow}>
+            <Feather
+              name="plus"
+              size={16}
+              color={Colors.textMuted}
+              style={styles.infoPanelIcon}
+            />
+            <View style={styles.infoPanelText}>
+              <Text style={styles.infoPanelTitle}>Add mint</Text>
+              <Text style={styles.infoPanelBody}>
+                Saves the mint that issues and redeems your tokens. Saving is
+                offline. Redeeming and Lightning cash-out need internet.
               </Text>
             </View>
           </View>
@@ -721,11 +744,12 @@ export default function WalletScreen(): React.JSX.Element {
         animationType="slide"
         onRequestClose={() => setShowReceive(false)}
       >
-        <Pressable
-          style={styles.modalOverlay}
-          onPress={() => setShowReceive(false)}
-        >
-          <Pressable style={styles.modalSheet} onPress={() => {}}>
+        <View style={styles.modalOverlay}>
+          <Pressable
+            style={StyleSheet.absoluteFill}
+            onPress={() => setShowReceive(false)}
+          />
+          <View style={styles.modalSheet}>
             <View style={styles.handle} />
             <Text style={styles.modalTitle}>Receive ecash</Text>
             <Text style={styles.modalSubtitle}>
@@ -745,12 +769,6 @@ export default function WalletScreen(): React.JSX.Element {
             />
             <View style={styles.modalActions}>
               <Pressable
-                style={styles.modalCancel}
-                onPress={() => setShowReceive(false)}
-              >
-                <Text style={styles.modalCancelText}>Cancel</Text>
-              </Pressable>
-              <Pressable
                 style={[
                   styles.modalConfirm,
                   !tokenInput.trim() && styles.modalConfirmDisabled,
@@ -760,9 +778,15 @@ export default function WalletScreen(): React.JSX.Element {
               >
                 <Text style={styles.modalConfirmText}>Receive</Text>
               </Pressable>
+              <Pressable
+                style={styles.modalCancel}
+                onPress={() => setShowReceive(false)}
+              >
+                <Text style={styles.modalCancelText}>Cancel</Text>
+              </Pressable>
             </View>
-          </Pressable>
-        </Pressable>
+          </View>
+        </View>
       </Modal>
       {/* Send modal */}
       <Modal
@@ -771,11 +795,12 @@ export default function WalletScreen(): React.JSX.Element {
         animationType="slide"
         onRequestClose={() => setShowSend(false)}
       >
-        <Pressable
-          style={styles.modalOverlay}
-          onPress={() => setShowSend(false)}
-        >
-          <Pressable style={styles.modalSheet} onPress={() => {}}>
+        <View style={styles.modalOverlay}>
+          <Pressable
+            style={StyleSheet.absoluteFill}
+            onPress={() => setShowSend(false)}
+          />
+          <View style={styles.modalSheet}>
             <View style={styles.handle} />
             <Text style={styles.modalTitle}>Send ecash</Text>
             <Text style={styles.modalSubtitle}>
@@ -803,16 +828,6 @@ export default function WalletScreen(): React.JSX.Element {
             />
             <View style={styles.modalActions}>
               <Pressable
-                style={styles.modalCancel}
-                onPress={() => {
-                  setShowSend(false);
-                  setSendAmount("");
-                  setSendMemo("");
-                }}
-              >
-                <Text style={styles.modalCancelText}>Cancel</Text>
-              </Pressable>
-              <Pressable
                 style={[
                   styles.modalConfirm,
                   !sendAmount.trim() && styles.modalConfirmDisabled,
@@ -822,9 +837,19 @@ export default function WalletScreen(): React.JSX.Element {
               >
                 <Text style={styles.modalConfirmText}>Generate token</Text>
               </Pressable>
+              <Pressable
+                style={styles.modalCancel}
+                onPress={() => {
+                  setShowSend(false);
+                  setSendAmount("");
+                  setSendMemo("");
+                }}
+              >
+                <Text style={styles.modalCancelText}>Cancel</Text>
+              </Pressable>
             </View>
-          </Pressable>
-        </Pressable>
+          </View>
+        </View>
       </Modal>
 
       {/* Zap modal */}
@@ -834,11 +859,12 @@ export default function WalletScreen(): React.JSX.Element {
         animationType="slide"
         onRequestClose={() => setShowZap(false)}
       >
-        <Pressable
-          style={styles.modalOverlay}
-          onPress={() => setShowZap(false)}
-        >
-          <Pressable style={styles.modalSheet} onPress={() => {}}>
+        <View style={styles.modalOverlay}>
+          <Pressable
+            style={StyleSheet.absoluteFill}
+            onPress={() => setShowZap(false)}
+          />
+          <View style={styles.modalSheet}>
             <View style={styles.handle} />
             <Text style={styles.modalTitle}>Nutzap</Text>
             <Text style={styles.modalSubtitle}>
@@ -876,17 +902,6 @@ export default function WalletScreen(): React.JSX.Element {
             />
             <View style={styles.modalActions}>
               <Pressable
-                style={styles.modalCancel}
-                onPress={() => {
-                  setShowZap(false);
-                  setZapNpub("");
-                  setZapAmount("");
-                  setZapNote("");
-                }}
-              >
-                <Text style={styles.modalCancelText}>Cancel</Text>
-              </Pressable>
-              <Pressable
                 style={[
                   styles.modalConfirm,
                   (!zapNpub.trim() || !zapAmount.trim() || isZapping) &&
@@ -899,9 +914,20 @@ export default function WalletScreen(): React.JSX.Element {
                   {isZapping ? "Sending…" : "Zap"}
                 </Text>
               </Pressable>
+              <Pressable
+                style={styles.modalCancel}
+                onPress={() => {
+                  setShowZap(false);
+                  setZapNpub("");
+                  setZapAmount("");
+                  setZapNote("");
+                }}
+              >
+                <Text style={styles.modalCancelText}>Cancel</Text>
+              </Pressable>
             </View>
-          </Pressable>
-        </Pressable>
+          </View>
+        </View>
       </Modal>
 
       {/* Add mint modal */}
@@ -911,11 +937,12 @@ export default function WalletScreen(): React.JSX.Element {
         animationType="slide"
         onRequestClose={() => setShowAddMint(false)}
       >
-        <Pressable
-          style={styles.modalOverlay}
-          onPress={() => setShowAddMint(false)}
-        >
-          <Pressable style={styles.modalSheet} onPress={() => {}}>
+        <View style={styles.modalOverlay}>
+          <Pressable
+            style={StyleSheet.absoluteFill}
+            onPress={() => setShowAddMint(false)}
+          />
+          <View style={styles.modalSheet}>
             <View style={styles.handle} />
             <Text style={styles.modalTitle}>Add mint</Text>
             <Text style={styles.modalSubtitle}>
@@ -936,15 +963,6 @@ export default function WalletScreen(): React.JSX.Element {
             />
             <View style={styles.modalActions}>
               <Pressable
-                style={styles.modalCancel}
-                onPress={() => {
-                  setShowAddMint(false);
-                  setMintUrlInput("");
-                }}
-              >
-                <Text style={styles.modalCancelText}>Cancel</Text>
-              </Pressable>
-              <Pressable
                 style={[
                   styles.modalConfirm,
                   !mintUrlInput.trim() && styles.modalConfirmDisabled,
@@ -954,9 +972,18 @@ export default function WalletScreen(): React.JSX.Element {
               >
                 <Text style={styles.modalConfirmText}>Add</Text>
               </Pressable>
+              <Pressable
+                style={styles.modalCancel}
+                onPress={() => {
+                  setShowAddMint(false);
+                  setMintUrlInput("");
+                }}
+              >
+                <Text style={styles.modalCancelText}>Cancel</Text>
+              </Pressable>
             </View>
-          </Pressable>
-        </Pressable>
+          </View>
+        </View>
       </Modal>
       {/* Generated token modal: shown after offline send completes. */}
       <Modal
@@ -965,11 +992,12 @@ export default function WalletScreen(): React.JSX.Element {
         animationType="slide"
         onRequestClose={() => setShowGenerated(false)}
       >
-        <Pressable
-          style={styles.modalOverlay}
-          onPress={() => setShowGenerated(false)}
-        >
-          <Pressable style={styles.modalSheet} onPress={() => {}}>
+        <View style={styles.modalOverlay}>
+          <Pressable
+            style={StyleSheet.absoluteFill}
+            onPress={() => setShowGenerated(false)}
+          />
+          <View style={styles.modalSheet}>
             <View style={styles.handle} />
             <View style={styles.generatedHeader}>
               <Feather name="check-circle" size={28} color={Colors.online} />
@@ -1028,8 +1056,8 @@ export default function WalletScreen(): React.JSX.Element {
             >
               <Text style={styles.modalCancelText}>Done</Text>
             </Pressable>
-          </Pressable>
-        </Pressable>
+          </View>
+        </View>
       </Modal>
 
       {/* Peer picker: send the generated token to a nearby mesh peer. */}
@@ -1039,11 +1067,12 @@ export default function WalletScreen(): React.JSX.Element {
         animationType="slide"
         onRequestClose={() => setShowPeerPicker(false)}
       >
-        <Pressable
-          style={styles.modalOverlay}
-          onPress={() => setShowPeerPicker(false)}
-        >
-          <Pressable style={styles.modalSheet} onPress={() => {}}>
+        <View style={styles.modalOverlay}>
+          <Pressable
+            style={StyleSheet.absoluteFill}
+            onPress={() => setShowPeerPicker(false)}
+          />
+          <View style={styles.modalSheet}>
             <View style={styles.handle} />
             <Text style={styles.modalTitle}>Send to peer</Text>
             <Text style={styles.modalSubtitle}>
@@ -1062,10 +1091,7 @@ export default function WalletScreen(): React.JSX.Element {
                 return (
                   <Pressable
                     key={peer.peerID}
-                    style={({ pressed }) => [
-                      styles.peerPickerRow,
-                      pressed && { opacity: 0.75 },
-                    ]}
+                    style={styles.peerPickerRow}
                     onPress={() => handleSendTokenToPeer(peer.peerID)}
                     accessibilityRole="button"
                     accessibilityLabel={`Send to ${username}`}
@@ -1087,428 +1113,368 @@ export default function WalletScreen(): React.JSX.Element {
               })
             )}
             <Pressable
-              style={[styles.modalCancel, { marginTop: Spacing.sm }]}
+              style={styles.modalCancel}
               onPress={() => setShowPeerPicker(false)}
             >
               <Text style={styles.modalCancelText}>Cancel</Text>
             </Pressable>
-          </Pressable>
-        </Pressable>
+          </View>
+        </View>
       </Modal>
     </ScrollView>
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: Colors.bg,
-  },
-  content: {
-    padding: Spacing.base,
-    gap: Spacing.base,
-    paddingBottom: Spacing["3xl"],
-  },
-  // Quick actions
-  quickActions: {
-    flexDirection: "row",
-    marginTop: Spacing.md,
-    paddingBottom: Spacing.xs,
-    gap: Spacing.xs,
-  },
-  quickAction: {
-    flex: 1,
-    alignItems: "center",
-    gap: 6,
-  },
-  quickActionIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: Radius.full,
-    backgroundColor: Colors.surfaceRaised,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  quickActionIconPrimary: {
-    backgroundColor: Colors.accent,
-    borderColor: "transparent",
-  },
-  quickActionLabel: {
-    fontSize: FontSize.xs,
-    color: Colors.textSecondary,
-    fontWeight: FontWeight.medium,
-    textAlign: "center",
-  },
-  // Balance card
-  balanceCard: {
-    backgroundColor: Colors.surface,
-    borderRadius: Radius.xl,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    padding: Spacing.xl,
-    gap: Spacing.sm,
-  },
-  balanceLabel: {
-    fontSize: FontSize.xs,
-    color: Colors.textMuted,
-    letterSpacing: 0.8,
-    textTransform: "uppercase",
-  },
-  balanceRow: {
-    flexDirection: "row",
-    alignItems: "flex-end",
-    gap: Spacing.sm,
-    marginVertical: Spacing.xs,
-  },
-  balanceAmount: {
-    fontSize: FontSize["3xl"],
-    fontWeight: FontWeight.bold,
-    color: Colors.textPrimary,
-    lineHeight: FontSize["3xl"] * 1.1,
-  },
-  balanceUnit: {
-    fontSize: FontSize.lg,
-    color: Colors.textMuted,
-    fontWeight: FontWeight.medium,
-    marginBottom: 4,
-  },
-  balanceSubtitle: {
-    fontSize: FontSize.sm,
-    color: Colors.textMuted,
-    marginBottom: Spacing.sm,
-  },
-  actionRow: {
-    flexDirection: "row",
-    gap: Spacing.sm,
-    marginTop: Spacing.sm,
-  },
-  actionButton: {
-    flex: 1,
-    borderRadius: Radius.md,
-    paddingVertical: Spacing.md,
-    alignItems: "center",
-  },
-  actionButtonPrimary: {
-    backgroundColor: Colors.accent,
-  },
-  actionButtonSecondary: {
-    backgroundColor: Colors.surfaceRaised,
-    borderWidth: 1,
-    borderColor: Colors.border,
-  },
-  actionButtonPressed: {
-    opacity: 0.82,
-  },
-  actionButtonTextPrimary: {
-    fontSize: FontSize.base,
-    fontWeight: FontWeight.semibold,
-    color: Colors.textInverse,
-  },
-  actionButtonTextSecondary: {
-    fontSize: FontSize.base,
-    fontWeight: FontWeight.medium,
-    color: Colors.textPrimary,
-  },
-  // Mints section
-  section: {
-    gap: Spacing.sm,
-  },
-  sectionTitle: {
-    fontSize: FontSize.xs,
-    color: Colors.textMuted,
-    letterSpacing: 0.8,
-    textTransform: "uppercase",
-    paddingHorizontal: Spacing.xs,
-  },
-  emptyMints: {
-    backgroundColor: Colors.surface,
-    borderRadius: Radius.lg,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    padding: Spacing.xl,
-    alignItems: "center",
-    gap: Spacing.sm,
-  },
-  emptyMintsText: {
-    fontSize: FontSize.base,
-    color: Colors.textSecondary,
-    fontWeight: FontWeight.medium,
-  },
-  emptyMintsSubtext: {
-    fontSize: FontSize.sm,
-    color: Colors.textMuted,
-    textAlign: "center",
-    lineHeight: FontSize.sm * 1.6,
-  },
-  mintRow: {
-    backgroundColor: Colors.surface,
-    borderRadius: Radius.lg,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    paddingHorizontal: Spacing.base,
-    paddingVertical: Spacing.md,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
-  mintLeft: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: Spacing.md,
-    flex: 1,
-  },
-  mintIconCircle: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: Colors.surfaceRaised,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    alignItems: "center",
-    justifyContent: "center",
-    flexShrink: 0,
-  },
-  mintInfo: {
-    flex: 1,
-    gap: 2,
-  },
-  mintName: {
-    fontSize: FontSize.base,
-    fontWeight: FontWeight.medium,
-    color: Colors.textPrimary,
-    fontFamily: "monospace",
-  },
-  mintProofs: {
-    fontSize: FontSize.xs,
-    color: Colors.textMuted,
-  },
-  mintRight: {
-    alignItems: "flex-end",
-    gap: 1,
-  },
-  mintBalance: {
-    fontSize: FontSize.md,
-    fontWeight: FontWeight.bold,
-    color: Colors.textPrimary,
-    fontFamily: "monospace",
-  },
-  mintUnit: {
-    fontSize: FontSize.xs,
-    color: Colors.textMuted,
-  },
-  // Info panel
-  infoPanel: {
-    backgroundColor: Colors.surface,
-    borderRadius: Radius.lg,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    padding: Spacing.base,
-    gap: Spacing.md,
-  },
-  infoPanelRow: {
-    flexDirection: "row",
-    gap: Spacing.md,
-    alignItems: "flex-start",
-  },
-  infoPanelIcon: {
-    marginTop: 2,
-    flexShrink: 0,
-  },
-  infoPanelText: {
-    flex: 1,
-    gap: 3,
-  },
-  infoPanelTitle: {
-    fontSize: FontSize.sm,
-    fontWeight: FontWeight.semibold,
-    color: Colors.textPrimary,
-  },
-  infoPanelBody: {
-    fontSize: FontSize.sm,
-    color: Colors.textMuted,
-    lineHeight: FontSize.sm * 1.5,
-  },
-  infoPanelDivider: {
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: Colors.border,
-  },
-  // Modal
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: Colors.overlay,
-    justifyContent: "flex-end",
-  },
-  modalSheet: {
-    backgroundColor: Colors.surface,
-    borderTopLeftRadius: Radius["2xl"],
-    borderTopRightRadius: Radius["2xl"],
-    padding: Spacing.xl,
-    gap: Spacing.base,
-  },
-  handle: {
-    width: 36,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: Colors.borderStrong,
-    alignSelf: "center",
-    marginBottom: Spacing.xs,
-  },
-  modalTitle: {
-    fontSize: FontSize.md,
-    fontWeight: FontWeight.semibold,
-    color: Colors.textPrimary,
-  },
-  modalSubtitle: {
-    fontSize: FontSize.sm,
-    color: Colors.textMuted,
-  },
-  tokenInput: {
-    backgroundColor: Colors.surfaceRaised,
-    borderRadius: Radius.md,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    paddingHorizontal: Spacing.base,
-    paddingVertical: Spacing.md,
-    color: Colors.textPrimary,
-    fontSize: FontSize.sm,
-    fontFamily: "monospace",
-    minHeight: 80,
-    textAlignVertical: "top",
-  },
-  tokenInputCompact: {
-    minHeight: 0,
-    fontFamily: undefined,
-    marginTop: Spacing.sm,
-  },
-  modalActions: {
-    flexDirection: "row",
-    gap: Spacing.sm,
-  },
-  modalCancel: {
-    flex: 1,
-    backgroundColor: Colors.surfaceRaised,
-    borderRadius: Radius.md,
-    paddingVertical: Spacing.md,
-    alignItems: "center",
-  },
-  modalCancelText: {
-    fontSize: FontSize.base,
-    color: Colors.textSecondary,
-    fontWeight: FontWeight.medium,
-  },
-  modalConfirm: {
-    flex: 1,
-    backgroundColor: Colors.accent,
-    borderRadius: Radius.md,
-    paddingVertical: Spacing.md,
-    alignItems: "center",
-  },
-  modalConfirmDisabled: {
-    opacity: 0.4,
-  },
-  modalConfirmText: {
-    fontSize: FontSize.base,
-    color: Colors.textInverse,
-    fontWeight: FontWeight.semibold,
-  },
-  tokenInputMono: {
-    fontFamily: "monospace",
-    fontSize: FontSize.xs,
-    letterSpacing: 0.3,
-  },
-  // Redeem button on mint rows.
-  redeemBtn: {
-    marginTop: 4,
-    paddingHorizontal: Spacing.sm,
-    paddingVertical: 3,
-    borderRadius: Radius.sm,
-    backgroundColor: Colors.surfaceRaised,
-    borderWidth: 1,
-    borderColor: Colors.border,
-  },
-  redeemBtnText: {
-    fontSize: FontSize.xs,
-    color: Colors.textSecondary,
-    fontWeight: FontWeight.medium,
-  },
-  // Generated token modal.
-  generatedHeader: {
-    alignItems: "center",
-    gap: Spacing.xs,
-    paddingBottom: Spacing.sm,
-  },
-  generatedAmountRow: {
-    flexDirection: "row",
-    alignItems: "flex-end",
-    gap: Spacing.sm,
-  },
-  generatedAmount: {
-    fontSize: FontSize["2xl"],
-    fontWeight: FontWeight.bold,
-    color: Colors.textPrimary,
-  },
-  generatedUnit: {
-    fontSize: FontSize.base,
-    color: Colors.textMuted,
-    fontWeight: FontWeight.medium,
-    marginBottom: 3,
-  },
-  generatedMint: {
-    fontSize: FontSize.sm,
-    color: Colors.textMuted,
-  },
-  generatedHint: {
-    fontSize: FontSize.xs,
-    color: Colors.textMuted,
-    textAlign: "center",
-    lineHeight: FontSize.xs * 1.6,
-    paddingHorizontal: Spacing.sm,
-  },
-  generatedActions: {
-    flexDirection: "row",
-    gap: Spacing.sm,
-    marginVertical: Spacing.sm,
-  },
-  generatedActionBtn: {
-    flex: 1,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: Spacing.xs,
-    borderRadius: Radius.md,
-    paddingVertical: Spacing.md,
-    backgroundColor: Colors.surfaceRaised,
-    borderWidth: 1,
-    borderColor: Colors.border,
-  },
-  generatedActionText: {
-    fontSize: FontSize.sm,
-    fontWeight: FontWeight.semibold,
-    color: Colors.accent,
-  },
-  // Peer picker modal.
-  peerPickerRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: Spacing.md,
-    paddingVertical: Spacing.md,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: Colors.border,
-  },
-  peerPickerInfo: {
-    flex: 1,
-    gap: 2,
-  },
-  peerPickerName: {
-    fontSize: FontSize.base,
-    fontWeight: FontWeight.semibold,
-    color: Colors.textPrimary,
-  },
-  peerPickerID: {
-    fontSize: FontSize.xs,
-    color: Colors.textMuted,
-    fontFamily: "monospace",
-  },
-});
+function createStyles(Colors: ReturnType<typeof useThemeColors>) {
+  return StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: Colors.bg,
+    },
+    content: {
+      padding: Spacing.base,
+      gap: Spacing.base,
+      paddingBottom: Spacing["3xl"],
+    },
+    // Quick actions: bordered pill buttons, matching the profile screen's
+    // Share ID / Share QR pills (icon + text side by side). Raised fill
+    // (not plain `surface`) so the pill reads against the white card
+    // instead of blending into it.
+    // Balance card
+    balanceCard: {
+      backgroundColor: Colors.surface,
+      borderRadius: Radius.xl,
+      borderWidth: 1,
+      borderColor: Colors.border,
+      padding: Spacing.lg,
+      gap: Spacing.md,
+    },
+    balanceLabel: {
+      fontSize: FontSize.xs,
+      color: Colors.textMuted,
+      letterSpacing: 0.8,
+      textTransform: "uppercase",
+    },
+    balanceRow: {
+      flexDirection: "row",
+      alignItems: "flex-end",
+      gap: Spacing.sm,
+    },
+    balanceAmount: {
+      fontSize: FontSize["3xl"],
+      fontWeight: FontWeight.bold,
+      color: Colors.textPrimary,
+      lineHeight: FontSize["3xl"] * 1.1,
+    },
+    balanceUnit: {
+      fontSize: FontSize.lg,
+      color: Colors.textMuted,
+      fontWeight: FontWeight.medium,
+      marginBottom: 4,
+    },
+    balanceSubtitle: {
+      fontSize: FontSize.sm,
+      color: Colors.textMuted,
+    },
+    // Mints section
+    section: {
+      gap: Spacing.sm,
+    },
+    emptyMints: {
+      backgroundColor: Colors.surface,
+      borderRadius: Radius.lg,
+      borderWidth: 1,
+      borderColor: Colors.border,
+      padding: Spacing.xl,
+      alignItems: "center",
+      gap: Spacing.sm,
+    },
+    emptyMintsText: {
+      fontSize: FontSize.base,
+      color: Colors.textSecondary,
+      fontWeight: FontWeight.medium,
+    },
+    emptyMintsSubtext: {
+      fontSize: FontSize.sm,
+      color: Colors.textMuted,
+      textAlign: "center",
+      lineHeight: FontSize.sm * 1.6,
+    },
+    mintRow: {
+      backgroundColor: Colors.surface,
+      borderRadius: Radius.lg,
+      borderWidth: 1,
+      borderColor: Colors.border,
+      paddingHorizontal: Spacing.base,
+      paddingVertical: Spacing.md,
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+    },
+    mintLeft: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: Spacing.md,
+      flex: 1,
+    },
+    mintIconCircle: {
+      width: 40,
+      height: 40,
+      borderRadius: 20,
+      backgroundColor: Colors.surfaceRaised,
+      borderWidth: 1,
+      borderColor: Colors.border,
+      alignItems: "center",
+      justifyContent: "center",
+      flexShrink: 0,
+    },
+    mintInfo: {
+      flex: 1,
+      gap: 2,
+    },
+    mintName: {
+      fontSize: FontSize.base,
+      fontWeight: FontWeight.medium,
+      color: Colors.textPrimary,
+      fontFamily: "monospace",
+    },
+    mintProofs: {
+      fontSize: FontSize.xs,
+      color: Colors.textMuted,
+    },
+    mintRight: {
+      alignItems: "flex-end",
+      gap: 1,
+    },
+    mintBalance: {
+      fontSize: FontSize.md,
+      fontWeight: FontWeight.bold,
+      color: Colors.textPrimary,
+      fontFamily: "monospace",
+    },
+    mintUnit: {
+      fontSize: FontSize.xs,
+      color: Colors.textMuted,
+    },
+    // Info panel
+    infoPanel: {
+      backgroundColor: Colors.surface,
+      borderRadius: Radius.lg,
+      borderWidth: 1,
+      borderColor: Colors.border,
+      padding: Spacing.base,
+      gap: Spacing.md,
+    },
+    infoPanelRow: {
+      flexDirection: "row",
+      gap: Spacing.md,
+      alignItems: "flex-start",
+    },
+    infoPanelIcon: {
+      marginTop: 2,
+      flexShrink: 0,
+    },
+    infoPanelText: {
+      flex: 1,
+      gap: 3,
+    },
+    infoPanelTitle: {
+      fontSize: FontSize.sm,
+      fontWeight: FontWeight.semibold,
+      color: Colors.textPrimary,
+    },
+    infoPanelBody: {
+      fontSize: FontSize.sm,
+      color: Colors.textMuted,
+      lineHeight: FontSize.sm * 1.5,
+    },
+    infoPanelDivider: {
+      height: StyleSheet.hairlineWidth,
+      backgroundColor: Colors.border,
+    },
+    // Modal
+    modalOverlay: {
+      flex: 1,
+      backgroundColor: Colors.overlay,
+      justifyContent: "flex-end",
+    },
+    modalSheet: {
+      backgroundColor: Colors.surface,
+      borderTopLeftRadius: Radius["2xl"],
+      borderTopRightRadius: Radius["2xl"],
+      padding: Spacing.xl,
+      gap: Spacing.base,
+    },
+    handle: {
+      width: 36,
+      height: 4,
+      borderRadius: 2,
+      backgroundColor: Colors.borderStrong,
+      alignSelf: "center",
+      marginBottom: Spacing.xs,
+    },
+    modalTitle: {
+      fontSize: FontSize.md,
+      fontWeight: FontWeight.semibold,
+      color: Colors.textPrimary,
+    },
+    modalSubtitle: {
+      fontSize: FontSize.sm,
+      color: Colors.textMuted,
+    },
+    tokenInput: {
+      backgroundColor: Colors.surfaceRaised,
+      borderRadius: Radius.md,
+      borderWidth: 1,
+      borderColor: Colors.border,
+      paddingHorizontal: Spacing.base,
+      paddingVertical: Spacing.md,
+      color: Colors.textPrimary,
+      fontSize: FontSize.sm,
+      fontFamily: "monospace",
+      minHeight: 80,
+      textAlignVertical: "top",
+    },
+    tokenInputCompact: {
+      minHeight: 0,
+      fontFamily: undefined,
+      marginTop: Spacing.sm,
+    },
+    // Stacked full-width pills, primary action on top, the same pattern as
+    // every other confirm sheet fixed this session (panic wipe, Tor, etc.).
+    modalActions: {
+      width: "100%",
+      marginTop: Spacing.xs,
+    },
+    modalCancel: {
+      width: "100%",
+      minHeight: 50,
+      marginTop: Spacing.sm,
+      backgroundColor: Colors.surfaceRaised,
+      borderWidth: 1,
+      borderColor: Colors.border,
+      borderRadius: Radius.full,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    modalCancelText: {
+      fontSize: FontSize.base,
+      color: Colors.textSecondary,
+      fontWeight: FontWeight.medium,
+    },
+    modalConfirm: {
+      width: "100%",
+      minHeight: 50,
+      backgroundColor: Colors.accent,
+      borderRadius: Radius.full,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    modalConfirmDisabled: {
+      opacity: 0.4,
+    },
+    modalConfirmText: {
+      fontSize: FontSize.base,
+      color: Colors.textInverse,
+      fontWeight: FontWeight.bold,
+    },
+    tokenInputMono: {
+      fontFamily: "monospace",
+      fontSize: FontSize.xs,
+      letterSpacing: 0.3,
+    },
+    // Redeem button on mint rows.
+    redeemBtn: {
+      marginTop: 4,
+      paddingHorizontal: Spacing.sm,
+      paddingVertical: 3,
+      borderRadius: Radius.sm,
+      backgroundColor: Colors.surfaceRaised,
+      borderWidth: 1,
+      borderColor: Colors.border,
+    },
+    redeemBtnText: {
+      fontSize: FontSize.xs,
+      color: Colors.textSecondary,
+      fontWeight: FontWeight.medium,
+    },
+    // Generated token modal.
+    generatedHeader: {
+      alignItems: "center",
+      gap: Spacing.xs,
+      paddingBottom: Spacing.sm,
+    },
+    generatedAmountRow: {
+      flexDirection: "row",
+      alignItems: "flex-end",
+      gap: Spacing.sm,
+    },
+    generatedAmount: {
+      fontSize: FontSize["2xl"],
+      fontWeight: FontWeight.bold,
+      color: Colors.textPrimary,
+    },
+    generatedUnit: {
+      fontSize: FontSize.base,
+      color: Colors.textMuted,
+      fontWeight: FontWeight.medium,
+      marginBottom: 3,
+    },
+    generatedMint: {
+      fontSize: FontSize.sm,
+      color: Colors.textMuted,
+    },
+    generatedHint: {
+      fontSize: FontSize.xs,
+      color: Colors.textMuted,
+      textAlign: "center",
+      lineHeight: FontSize.xs * 1.6,
+      paddingHorizontal: Spacing.sm,
+    },
+    generatedActions: {
+      width: "100%",
+      gap: Spacing.sm,
+      marginVertical: Spacing.sm,
+    },
+    generatedActionBtn: {
+      width: "100%",
+      minHeight: 50,
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: Spacing.xs,
+      borderRadius: Radius.full,
+      backgroundColor: Colors.surfaceRaised,
+      borderWidth: 1,
+      borderColor: Colors.border,
+    },
+    generatedActionText: {
+      fontSize: FontSize.sm,
+      fontWeight: FontWeight.semibold,
+      color: Colors.accent,
+    },
+    // Peer picker modal.
+    peerPickerRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: Spacing.md,
+      paddingVertical: Spacing.md,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: Colors.border,
+    },
+    peerPickerInfo: {
+      flex: 1,
+      gap: 2,
+    },
+    peerPickerName: {
+      fontSize: FontSize.base,
+      fontWeight: FontWeight.semibold,
+      color: Colors.textPrimary,
+    },
+    peerPickerID: {
+      fontSize: FontSize.xs,
+      color: Colors.textMuted,
+      fontFamily: "monospace",
+    },
+  });
+}

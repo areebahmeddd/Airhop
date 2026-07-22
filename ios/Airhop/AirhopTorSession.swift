@@ -35,7 +35,7 @@ public final class AirhopTorSession {
         rebuild()
     }
 
-    /// Recreate both sessions — call after Tor restarts so new connections use the fresh port.
+    /// Recreate both sessions. Call after Tor restarts so new connections use the fresh port.
     public func rebuild() {
         torSession = AirhopTorSession.makeTorSession()
         directSession = AirhopTorSession.makeDirectSession()

@@ -2,6 +2,7 @@
 // Uses only the pure parsing functions; no network calls or native deps.
 
 import type { Token } from "@cashu/cashu-ts";
+import type { StoredProof } from "../../../store/wallet-store";
 import type { TokenInfo } from "../cashu";
 import {
   decodeToken,
@@ -9,7 +10,18 @@ import {
   findTokensInText,
   formatTokenSummary,
   mayContainToken,
+  selectProofsForAmount,
 } from "../cashu";
+
+// Cashu denominations are powers of two; build a proof set from amounts.
+function proofSet(amounts: number[]): StoredProof[] {
+  return amounts.map((amount, i) => ({
+    id: "keyset1",
+    amount,
+    secret: `secret-${String(i)}`,
+    C: `C-${String(i)}`,
+  }));
+}
 
 // Helpers to build a minimal valid-looking Token object for encoding tests.
 function minimalToken(): Token {
@@ -119,6 +131,68 @@ describe("cashu", () => {
     it("includes memo when present", () => {
       const info = stubTokenInfo({ amount: 500, unit: "sat", memo: "coffee" });
       expect(formatTokenSummary(info)).toBe("500 sat - coffee");
+    });
+  });
+
+  // Proof selection spends real value, so exactness is a correctness property,
+  // not a nicety: any overshoot is money handed to the recipient with no
+  // offline way to get change back.
+  describe("selectProofsForAmount", () => {
+    it("returns null when the balance cannot cover the target", () => {
+      expect(selectProofsForAmount(proofSet([1, 2]), 10)).toBeNull();
+    });
+
+    it("returns null for a non-positive target", () => {
+      expect(selectProofsForAmount(proofSet([8]), 0)).toBeNull();
+    });
+
+    it("picks an exact single proof when one matches", () => {
+      const result = selectProofsForAmount(proofSet([1, 2, 8, 64]), 8);
+      expect(result).not.toBeNull();
+      expect(result?.exact).toBe(true);
+      expect(result?.total).toBe(8);
+      expect(result?.selected.map((p) => p.amount)).toEqual([8]);
+    });
+
+    it("combines denominations to hit the target exactly", () => {
+      const result = selectProofsForAmount(proofSet([1, 2, 4, 8, 16]), 13);
+      expect(result?.exact).toBe(true);
+      expect(result?.total).toBe(13);
+      expect(
+        result?.selected.map((p) => p.amount).sort((a, b) => a - b),
+      ).toEqual([1, 4, 8]);
+    });
+
+    it("does NOT spend a large proof to cover a small amount when exact change exists", () => {
+      // Regression: the old greedy took 64 first and overshot by 54.
+      const result = selectProofsForAmount(proofSet([64, 8, 2]), 10);
+      expect(result?.exact).toBe(true);
+      expect(result?.total).toBe(10);
+      expect(
+        result?.selected.map((p) => p.amount).sort((a, b) => a - b),
+      ).toEqual([2, 8]);
+    });
+
+    it("flags overpayment (never silently) when no exact subset exists", () => {
+      // Only a 64 available but 10 requested: must report exact=false so the
+      // caller can warn instead of quietly spending 64.
+      const result = selectProofsForAmount(proofSet([64]), 10);
+      expect(result).not.toBeNull();
+      expect(result?.exact).toBe(false);
+      expect(result?.total).toBe(64);
+    });
+
+    it("minimises the overshoot when overpaying is unavoidable", () => {
+      // 16 and 64 available, need 10 => should choose 16, not 64 or both.
+      const result = selectProofsForAmount(proofSet([64, 16]), 10);
+      expect(result?.exact).toBe(false);
+      expect(result?.total).toBe(16);
+      expect(result?.selected.map((p) => p.amount)).toEqual([16]);
+    });
+
+    it("never selects proofs totalling less than the target", () => {
+      const result = selectProofsForAmount(proofSet([1, 2, 4, 32]), 7);
+      expect(result?.total).toBeGreaterThanOrEqual(7);
     });
   });
 });

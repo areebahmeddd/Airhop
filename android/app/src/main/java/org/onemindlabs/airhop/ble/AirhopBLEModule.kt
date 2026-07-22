@@ -22,6 +22,7 @@ import android.bluetooth.BluetoothGattServerCallback
 import android.bluetooth.BluetoothGattService
 import android.bluetooth.BluetoothManager
 import android.bluetooth.BluetoothProfile
+import android.bluetooth.BluetoothStatusCodes
 import android.bluetooth.le.AdvertiseCallback
 import android.bluetooth.le.AdvertiseData
 import android.bluetooth.le.AdvertiseSettings
@@ -29,8 +30,13 @@ import android.bluetooth.le.ScanCallback
 import android.bluetooth.le.ScanFilter
 import android.bluetooth.le.ScanResult
 import android.bluetooth.le.ScanSettings
+import android.content.BroadcastReceiver
 import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
 import android.os.Build
+import android.os.Handler
+import android.os.Looper
 import android.os.ParcelUuid
 import android.util.Base64
 import android.util.Log
@@ -57,6 +63,10 @@ private const val EVT_PACKET_RECEIVED   = "AirhopBLE.packetReceived"
 private const val EVT_LINK_CONNECTED    = "AirhopBLE.linkConnected"
 private const val EVT_LINK_DISCONNECTED = "AirhopBLE.linkDisconnected"
 private const val EVT_RSSI_UPDATED      = "AirhopBLE.rssiUpdated"
+// Bluetooth radio turned on/off at the OS level. Without this the UI cannot
+// tell "Bluetooth is off" apart from "nobody is nearby". Both look like an
+// empty peer list, which is impossible for a user to diagnose.
+private const val EVT_ADAPTER_STATE     = "AirhopBLE.adapterStateChanged"
 
 // Orbot SOCKS5 proxy defaults (Tor via Orbot, per ARCHITECTURE.md section 9).
 // Phase 1: detect existing Orbot session. Phase 2: embedded tor binary.
@@ -83,13 +93,119 @@ class AirhopBLEModule(
     // Central-role links are GATT clients we connected to as central.
     private val centralLinks    = ConcurrentHashMap<String, BluetoothGatt>()
 
+    // Advertised peerIDs (hex) we already have (or are opening) a central link
+    // to, so a repeated scan callback, or the same peer under a rotated MAC,
+    // never opens a duplicate link. Mirrors bitchat's peerID-in-scan-response
+    // dedup (BluetoothGattClientManager.handleScanResult).
+    private val centralPeerIDs = ConcurrentHashMap.newKeySet<String>()
+    private val linkToAdvertisedPeerID = ConcurrentHashMap<String, String>()
+
+    // Our own peerID hex (16 chars), advertised as 8-byte scan-response service
+    // data so remote scanners can identify and de-dup us before connecting.
+    private var localPeerIDHex: String = ""
+
+    // Used to post the MTU request off the GATT callback thread after a short
+    // settle delay (a request issued synchronously inside onConnectionStateChange
+    // is unreliable on many controllers).
+    private val mainHandler = Handler(Looper.getMainLooper())
+
     private var listenerCount = 0
+
+    // Watches the OS Bluetooth toggle so the UI can report "Bluetooth off"
+    // instead of silently showing an empty mesh forever.
+    private val adapterStateReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            if (intent?.action != BluetoothAdapter.ACTION_STATE_CHANGED) return
+            val state = intent.getIntExtra(
+                BluetoothAdapter.EXTRA_STATE, BluetoothAdapter.ERROR,
+            )
+            // Only ON/OFF are reported; the TURNING_* transitions would make
+            // the banner flicker mid-toggle.
+            when (state) {
+                BluetoothAdapter.STATE_ON -> emitAdapterState(true)
+                BluetoothAdapter.STATE_OFF -> emitAdapterState(false)
+            }
+        }
+    }
+
+    init {
+        try {
+            reactContext.registerReceiver(
+                adapterStateReceiver,
+                IntentFilter(BluetoothAdapter.ACTION_STATE_CHANGED),
+            )
+        } catch (e: Exception) {
+            Log.e(TAG, "Could not register Bluetooth state receiver", e)
+        }
+    }
+
+    override fun invalidate() {
+        try {
+            reactContext.unregisterReceiver(adapterStateReceiver)
+        } catch (e: Exception) {
+            // Already unregistered, or context torn down first.
+        }
+        stopRssiPolling()
+        super.invalidate()
+    }
+
+    private fun emitAdapterState(enabled: Boolean) {
+        emitEvent(EVT_ADAPTER_STATE, WritableNativeMap().apply {
+            putBoolean("enabled", enabled)
+        })
+    }
+
+    // Report the current radio state on demand, so JS has a value before the
+    // first ACTION_STATE_CHANGED broadcast ever fires.
+    @ReactMethod
+    fun isAdapterEnabled(promise: Promise) {
+        try {
+            promise.resolve(adapter.isEnabled)
+        } catch (e: Exception) {
+            promise.resolve(false)
+        }
+    }
+
+    // Periodic RSSI polling. onReadRemoteRssi only fires in response to an
+    // explicit readRemoteRssi() call, so without this poller the rssiUpdated
+    // event could never be emitted and signal strength stayed unavailable to
+    // the UI. 5s cadence matches the iOS module.
+    private val rssiIntervalMs = 5_000L
+    private var rssiPollingActive = false
+    private val rssiPoller = object : Runnable {
+        override fun run() {
+            for (gatt in centralLinks.values) {
+                try {
+                    gatt.readRemoteRssi()
+                } catch (e: SecurityException) {
+                    Log.e(TAG, "BLUETOOTH_CONNECT permission missing", e)
+                }
+            }
+            if (rssiPollingActive) mainHandler.postDelayed(this, rssiIntervalMs)
+        }
+    }
+
+    private fun startRssiPolling() {
+        if (rssiPollingActive) return
+        rssiPollingActive = true
+        mainHandler.postDelayed(rssiPoller, rssiIntervalMs)
+    }
+
+    private fun stopRssiPolling() {
+        rssiPollingActive = false
+        mainHandler.removeCallbacks(rssiPoller)
+    }
 
     // MARK: - Advertising (Peripheral role)
 
+    // `localName` carries our 16-hex-char peerID (Airhop passes identity.peerID).
+    // We advertise its first 8 bytes as scan-response service data rather than
+    // mutating the global Bluetooth adapter name, which matches bitchat-android and
+    // lets scanners identify/de-dup us before connecting.
     @ReactMethod
     fun startAdvertising(serviceUUID: String, localName: String, promise: Promise) {
         try {
+            localPeerIDHex = localName
             setupGattServer()
 
             val settings = AdvertiseSettings.Builder()
@@ -100,21 +216,36 @@ class AirhopBLEModule(
                 .build()
 
             val data = AdvertiseData.Builder()
-                .setIncludeDeviceName(false) // name goes in scan response
+                .setIncludeDeviceName(false)
+                .setIncludeTxPowerLevel(false)
                 .addServiceUuid(ParcelUuid(SERVICE_UUID))
                 .build()
 
-            val scanResponse = AdvertiseData.Builder()
-                .setIncludeDeviceName(true)
-                .build()
+            val scanResponseBuilder = AdvertiseData.Builder()
+                .setIncludeDeviceName(false)
+                .setIncludeTxPowerLevel(false)
+            hexToPeerIDBytes(localName)?.let { peerIDBytes ->
+                scanResponseBuilder.addServiceData(ParcelUuid(SERVICE_UUID), peerIDBytes)
+            }
+            val scanResponse = scanResponseBuilder.build()
 
-            adapter.setName(localName)
             adapter.bluetoothLeAdvertiser?.startAdvertising(settings, data, scanResponse, advertiseCallback)
             promise.resolve(null)
         } catch (e: SecurityException) {
             promise.reject("PERMISSION_DENIED", "BLE advertising requires BLUETOOTH_ADVERTISE permission", e)
         } catch (e: Exception) {
             promise.reject("BLE_ERROR", "Failed to start advertising: ${e.message}", e)
+        }
+    }
+
+    // First 8 raw bytes of a 16-hex-char peerID, or null if malformed.
+    private fun hexToPeerIDBytes(hex: String): ByteArray? {
+        val clean = hex.trim()
+        if (clean.length < 16) return null
+        return try {
+            ByteArray(8) { i -> clean.substring(i * 2, i * 2 + 2).toInt(16).toByte() }
+        } catch (e: Exception) {
+            null
         }
     }
 
@@ -144,6 +275,7 @@ class AirhopBLEModule(
                 .build()
 
             adapter.bluetoothLeScanner?.startScan(listOf(filter), settings, scanCallback)
+            startRssiPolling()
             promise.resolve(null)
         } catch (e: SecurityException) {
             promise.reject("PERMISSION_DENIED", "BLE scanning requires BLUETOOTH_SCAN permission", e)
@@ -155,6 +287,7 @@ class AirhopBLEModule(
     @ReactMethod
     fun stopScanning(promise: Promise) {
         try {
+            stopRssiPolling()
             adapter.bluetoothLeScanner?.stopScan(scanCallback)
             promise.resolve(null)
         } catch (e: Exception) {
@@ -182,15 +315,26 @@ class AirhopBLEModule(
                 return
             }
             try {
+                // Surface a refused write instead of resolving regardless. The
+                // stack rejects writes once its internal queue is full, and
+                // silently resolving there meant whole fragments vanished
+                // mid-transfer with the sender believing they went out.
+                val accepted: Boolean
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                    gatt.writeCharacteristic(char, data, BluetoothGattCharacteristic.WRITE_TYPE_NO_RESPONSE)
+                    accepted = gatt.writeCharacteristic(
+                        char, data, BluetoothGattCharacteristic.WRITE_TYPE_NO_RESPONSE,
+                    ) == BluetoothStatusCodes.SUCCESS
                 } else {
                     @Suppress("DEPRECATION")
                     char.value = data
                     @Suppress("DEPRECATION")
-                    gatt.writeCharacteristic(char)
+                    accepted = gatt.writeCharacteristic(char)
                 }
-                promise.resolve(null)
+                if (accepted) {
+                    promise.resolve(null)
+                } else {
+                    promise.reject("WRITE_BUSY", "GATT write queue full for link $linkID")
+                }
             } catch (e: SecurityException) {
                 promise.reject("PERMISSION_DENIED", "BLUETOOTH_CONNECT required", e)
             }
@@ -312,8 +456,25 @@ class AirhopBLEModule(
             val linkID = "c:${device.address}"
             if (centralLinks.containsKey(linkID)) return
 
+            // Identify the remote by its advertised peerID (scan-response service
+            // data) and skip if we already have a link to that peer. This dedups
+            // MAC rotation and repeated scan callbacks for the same device.
+            val serviceData = result.scanRecord?.getServiceData(ParcelUuid(SERVICE_UUID))
+            val advertisedPeerID = if (serviceData != null && serviceData.size >= 8) {
+                serviceData.take(8).joinToString("") { "%02x".format(it) }
+            } else null
+            if (advertisedPeerID != null && centralPeerIDs.contains(advertisedPeerID)) return
+
             try {
-                val gatt = device.connectGatt(reactContext, false, gattClientCallback)
+                if (advertisedPeerID != null) {
+                    centralPeerIDs.add(advertisedPeerID)
+                    linkToAdvertisedPeerID[linkID] = advertisedPeerID
+                }
+                // TRANSPORT_LE forces a BLE (not BR/EDR) connection; omitting it
+                // is a common source of spurious GATT status 133 failures.
+                val gatt = device.connectGatt(
+                    reactContext, false, gattClientCallback, BluetoothDevice.TRANSPORT_LE,
+                )
                 centralLinks[linkID] = gatt
             } catch (e: SecurityException) {
                 Log.e(TAG, "BLUETOOTH_CONNECT permission missing", e)
@@ -329,12 +490,10 @@ class AirhopBLEModule(
         override fun onConnectionStateChange(device: BluetoothDevice, status: Int, newState: Int) {
             val linkID = "p:${device.address}"
             if (newState == BluetoothProfile.STATE_CONNECTED) {
+                // Track the device but DON'T announce the link yet: the central
+                // hasn't enabled notifications, so anything we notify now is lost.
+                // linkConnected fires from onDescriptorWriteRequest (CCCD enable).
                 peripheralLinks[linkID] = device
-                emitEvent(EVT_LINK_CONNECTED, WritableNativeMap().apply {
-                    putString("linkID", linkID)
-                    putString("role", "peripheral")
-                    putInt("rssi", -99)
-                })
             } else if (newState == BluetoothProfile.STATE_DISCONNECTED) {
                 peripheralLinks.remove(linkID)
                 emitEvent(EVT_LINK_DISCONNECTED, WritableNativeMap().apply {
@@ -372,6 +531,18 @@ class AirhopBLEModule(
             offset: Int,
             value: ByteArray,
         ) {
+            // A CCCD write whose first byte is 0x01 = ENABLE_NOTIFICATION_VALUE.
+            // Only now is it safe to notify this central, so surface the link.
+            if (descriptor.uuid == CCCD_UUID && value.isNotEmpty() && value[0].toInt() == 0x01) {
+                val linkID = "p:${device.address}"
+                if (peripheralLinks.containsKey(linkID)) {
+                    emitEvent(EVT_LINK_CONNECTED, WritableNativeMap().apply {
+                        putString("linkID", linkID)
+                        putString("role", "peripheral")
+                        putInt("rssi", -99)
+                    })
+                }
+            }
             if (responseNeeded) {
                 gattServer?.sendResponse(device, requestId, BluetoothGatt.GATT_SUCCESS, 0, null)
             }
@@ -382,16 +553,36 @@ class AirhopBLEModule(
         override fun onConnectionStateChange(gatt: BluetoothGatt, status: Int, newState: Int) {
             val linkID = "c:${gatt.device.address}"
             if (newState == BluetoothProfile.STATE_CONNECTED) {
-                try {
-                    gatt.discoverServices()
-                } catch (e: SecurityException) {
-                    Log.e(TAG, "BLUETOOTH_CONNECT permission missing", e)
-                }
+                // Negotiate a larger MTU BEFORE service discovery or any I/O.
+                // At the default 23-byte MTU, ANNOUNCE/handshake writes silently
+                // truncate and nothing works. Service discovery is deferred to
+                // onMtuChanged. The 200 ms settle matches bitchat and improves
+                // MTU-request reliability across controllers.
+                mainHandler.postDelayed({
+                    try {
+                        gatt.requestMtu(517)
+                    } catch (e: SecurityException) {
+                        Log.e(TAG, "BLUETOOTH_CONNECT permission missing", e)
+                    }
+                }, 200)
             } else if (newState == BluetoothProfile.STATE_DISCONNECTED) {
                 centralLinks.remove(linkID)
+                linkToAdvertisedPeerID.remove(linkID)?.let { centralPeerIDs.remove(it) }
+                try { gatt.close() } catch (e: Exception) { /* already closed */ }
                 emitEvent(EVT_LINK_DISCONNECTED, WritableNativeMap().apply {
                     putString("linkID", linkID)
                 })
+            }
+        }
+
+        override fun onMtuChanged(gatt: BluetoothGatt, mtu: Int, status: Int) {
+            // Proceed regardless of status: on a failed negotiation we keep the
+            // default MTU rather than stranding the peer (there is no reconnect
+            // state machine to fall back on).
+            try {
+                gatt.discoverServices()
+            } catch (e: SecurityException) {
+                Log.e(TAG, "BLUETOOTH_CONNECT permission missing", e)
             }
         }
 
@@ -399,10 +590,17 @@ class AirhopBLEModule(
             if (status != BluetoothGatt.GATT_SUCCESS) return
             val char = gatt.getService(SERVICE_UUID)?.getCharacteristic(CHARACTERISTIC_UUID) ?: return
 
-            // Enable notifications
+            // Subscribe to notifications. linkConnected is emitted only once the
+            // CCCD write confirms (onDescriptorWrite), so we never send on a link
+            // before the far side can actually receive.
             try {
                 gatt.setCharacteristicNotification(char, true)
                 val descriptor = char.getDescriptor(CCCD_UUID)
+                if (descriptor == null) {
+                    // No CCCD => can't receive notifications => unusable link.
+                    gatt.disconnect()
+                    return
+                }
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                     gatt.writeDescriptor(descriptor, BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE)
                 } else {
@@ -411,16 +609,24 @@ class AirhopBLEModule(
                     @Suppress("DEPRECATION")
                     gatt.writeDescriptor(descriptor)
                 }
-
-                val linkID = "c:${gatt.device.address}"
-                emitEvent(EVT_LINK_CONNECTED, WritableNativeMap().apply {
-                    putString("linkID", linkID)
-                    putString("role", "central")
-                    putInt("rssi", -99)
-                })
             } catch (e: SecurityException) {
                 Log.e(TAG, "BLUETOOTH_CONNECT permission missing", e)
             }
+        }
+
+        override fun onDescriptorWrite(
+            gatt: BluetoothGatt,
+            descriptor: BluetoothGattDescriptor,
+            status: Int,
+        ) {
+            if (descriptor.uuid != CCCD_UUID) return
+            // Notifications active: the central link is now fully usable.
+            val linkID = "c:${gatt.device.address}"
+            emitEvent(EVT_LINK_CONNECTED, WritableNativeMap().apply {
+                putString("linkID", linkID)
+                putString("role", "central")
+                putInt("rssi", -99)
+            })
         }
 
         override fun onCharacteristicChanged(

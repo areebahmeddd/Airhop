@@ -50,19 +50,19 @@ Built on the foundation of [bitchat](https://bitchat.free), using the same [BLE 
 | ----------------- | ------------------------- | --------------------------------------------------------------------------------------- |
 | 💬 **Messaging**  | Private DMs               | One-on-one end-to-end encrypted messaging                                               |
 |                   | Public channels           | IRC-style group chat rooms anyone nearby can join                                       |
-|                   | Push-to-talk voice        | Live voice and voice notes over the local mesh (AAC, 16 kHz mono, only `.m4a`)          |
-|                   | Video                     | 480p/15fps HEVC video over WiFi Aware or MultipeerConnectivity (only `.mp4`)            |
+|                   | Voice notes               | Record and send voice messages over the local mesh (AAC, 16 kHz mono, only `.m4a`)      |
+|                   | Video sharing             | Record or pick a video and send it over the mesh; plays inline on any platform          |
 |                   | File transfer             | Send **any** file format and size using chunked streaming (images, documents, archives) |
 |                   | Store-and-forward courier | Messages are delivered automatically when a route becomes available                     |
 | 🔒 **Identity**   | No-account identity       | Identity is an Ed25519 key pair stored only on your device                              |
 |                   | Human-readable names      | Deterministic usernames derived from your public key                                    |
-|                   | QR & NFC contacts         | Add contacts by scanning a QR code or tapping phones together                           |
+|                   | QR contacts               | Add a contact by scanning their QR code; carries their public keys, not just an ID      |
 |                   | End-to-end encryption     | Secure sessions using the Noise XX protocol                                             |
 |                   | Forward secrecy           | Double Ratchet protects past messages even if keys are later compromised                |
 |                   | Panic wipe                | Triple-tap instantly erases keys and local messages (nuke your account)                 |
 | 🕸️ **Networking** | Bluetooth mesh            | Communicate with nearby devices without internet                                        |
 |                   | Multi-hop routing         | Messages automatically relay across nearby devices (up to 7 hops)                       |
-|                   | WiFi high-bandwidth mode  | Android WiFi Aware and iOS MultipeerConnectivity for fast file and video transfers      |
+|                   | WiFi high-bandwidth mode  | Faster file transfers between two Android devices, or two iPhones. Not across platforms |
 |                   | bitchat compatibility     | Airhop nodes communicate directly with bitchat on iOS and Android                       |
 | 🌐 **Internet**   | Nostr bridge              | Continue conversations over Nostr relays when Bluetooth range ends                      |
 |                   | Geo-relay discovery       | Discover location-based channels across 350+ distributed Nostr relays                   |
@@ -80,21 +80,19 @@ Built on the foundation of [bitchat](https://bitchat.free), using the same [BLE 
 | 🔗 **Social**   | AT Protocol     | Opt-in bridge to Bluesky, using your Airhop identity                                         |
 |                 | ActivityPub     | Opt-in bridge to Mastodon, using your Airhop identity                                        |
 
-Not yet shipped. Tracked in detail in [ROADMAP.md](docs/design/ROADMAP.md#v110-ai--wallets).
-
 ## Stack
 
-| Layer                   | Technology                                                                                                                                                                                                                                                                                                   |
-| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Application Framework   | [React Native](https://reactnative.dev) 0.86, [Expo](https://expo.dev) SDK 57 (bare workflow)                                                                                                                                                                                                                |
-| Network Transport       | [Bluetooth LE](https://en.wikipedia.org/wiki/Bluetooth_Low_Energy) mesh, [WiFi Aware](https://wi-fi.org/discover-wi-fi/wi-fi-aware) (Android), [MultipeerConnectivity](https://developer.apple.com/documentation/multipeerconnectivity) (iOS), [Nostr](https://github.com/nostr-protocol/nostr) relay bridge |
-| Cryptographic Protocols | [Noise XX](https://noiseprotocol.org/noise.html) handshake, [Double Ratchet](https://signal.org/docs/specifications/doubleratchet/) algorithm                                                                                                                                                                |
-| Cryptographic Library   | [`@noble/curves`](https://github.com/paulmillr/noble-curves), [`@noble/ciphers`](https://github.com/paulmillr/noble-ciphers), [`@noble/hashes`](https://github.com/paulmillr/noble-hashes) ([Cure53](https://cure53.de) audited)                                                                             |
-| Identity & Signatures   | [Ed25519](https://ed25519.cr.yp.to/) scheme                                                                                                                                                                                                                                                                  |
-| Network Privacy         | [Arti](https://gitlab.torproject.org/tpo/core/arti) (iOS), [Orbot](https://guardianproject.info/apps/org.torproject.android/) (Android)                                                                                                                                                                      |
-| Payment System          | [Cashu](https://cashu.space) [ecash](https://en.wikipedia.org/wiki/Ecash) (offline), [NIP-61](https://github.com/nostr-protocol/nips/blob/master/61.md) Nutzaps (online)                                                                                                                                     |
-| State Management        | [Zustand](https://github.com/pmndrs/zustand) store, [MMKV](https://github.com/mrousavy/react-native-mmkv) storage                                                                                                                                                                                            |
-| Key Storage             | [iOS Keychain](https://developer.apple.com/documentation/security/storing-keys-in-the-keychain), [Android Keystore](https://developer.android.com/privacy-and-security/keystore)                                                                                                                             |
+| Layer                   | Technology                                                                                                                                                                                                                                                                                                                                                                                        |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Application Framework   | [React Native](https://reactnative.dev) 0.86, [Expo](https://expo.dev) SDK 57 (bare workflow)                                                                                                                                                                                                                                                                                                     |
+| Network Transport       | [Bluetooth LE](https://en.wikipedia.org/wiki/Bluetooth_Low_Energy) mesh (all platforms), [Nostr](https://github.com/nostr-protocol/nostr) relay bridge, plus an optional same-platform fast path: [WiFi Aware](https://wi-fi.org/discover-wi-fi/wi-fi-aware) between Android devices and [MultipeerConnectivity](https://developer.apple.com/documentation/multipeerconnectivity) between iPhones |
+| Cryptographic Protocols | [Noise XX](https://noiseprotocol.org/noise.html) handshake, [Double Ratchet](https://signal.org/docs/specifications/doubleratchet/) algorithm                                                                                                                                                                                                                                                     |
+| Cryptographic Library   | [`@noble/curves`](https://github.com/paulmillr/noble-curves), [`@noble/ciphers`](https://github.com/paulmillr/noble-ciphers), [`@noble/hashes`](https://github.com/paulmillr/noble-hashes) ([Cure53](https://cure53.de) audited)                                                                                                                                                                  |
+| Identity & Signatures   | [Ed25519](https://ed25519.cr.yp.to/) scheme                                                                                                                                                                                                                                                                                                                                                       |
+| Network Privacy         | [Arti](https://gitlab.torproject.org/tpo/core/arti) (iOS), [Orbot](https://guardianproject.info/apps/org.torproject.android/) (Android)                                                                                                                                                                                                                                                           |
+| Payment System          | [Cashu](https://cashu.space) [ecash](https://en.wikipedia.org/wiki/Ecash) (offline), [NIP-61](https://github.com/nostr-protocol/nips/blob/master/61.md) Nutzaps (online)                                                                                                                                                                                                                          |
+| State Management        | [Zustand](https://github.com/pmndrs/zustand) store, [MMKV](https://github.com/mrousavy/react-native-mmkv) storage                                                                                                                                                                                                                                                                                 |
+| Key Storage             | [iOS Keychain](https://developer.apple.com/documentation/security/storing-keys-in-the-keychain), [Android Keystore](https://developer.android.com/privacy-and-security/keystore)                                                                                                                                                                                                                  |
 
 ## Getting Started
 
@@ -108,38 +106,38 @@ npx expo prebuild
 <details>
 <summary><strong>Xcode setup</strong></summary>
 
-1. Install Xcode 16 or later from the Mac App Store, which also installs the iOS Simulator and base build tools
+1. Install [Xcode](https://developer.apple.com/xcode/) from the Mac App Store, which also installs the iOS Simulator and base build tools
 2. Open Xcode at least once and let it install any additional required components when prompted
 3. Go to **Xcode** then **Settings** then **Locations**, and select the most recent version in the **Command Line Tools** dropdown
 4. Go to **Xcode** then **Settings** then **Platforms**, click the **+** icon, and add an **iOS** runtime if one is not already installed
-5. Install [CocoaPods](https://cocoapods.org) if not already installed, then run `npx pod-install` from the project root to install the iOS native dependencies (`npx expo prebuild` already does this once, so only re-run it after changing native dependencies)
-6. Pick a simulator from the device dropdown in Xcode, or just run `npm run ios` to launch the default simulator
+5. Install [CocoaPods](https://cocoapods.org) if it is not already present, then run `npx pod-install` from the project root to install the iOS native dependencies. `npx expo prebuild` already does this once, so only re-run it after changing native dependencies
+6. Launch a simulator from the device dropdown in Xcode, then run `npm run ios`
 
 > The first `npm run ios` builds the native app from scratch and can take several minutes. Later runs are much faster.
 
-> A physical iPhone is required to test BLE mesh and NFC, since the iOS Simulator does not support Bluetooth.
+> A physical iPhone is required to test the BLE mesh, since the iOS Simulator does not support Bluetooth.
 
-> Supports iOS 16+.
+> Supports iOS 16 or later.
 
 </details>
 
 <details>
 <summary><strong>Android Studio setup</strong></summary>
 
-On a fresh Android Studio install, the SDK platforms this project targets are not installed by default.
-
-1. Click the gear icon and open **Settings**, then go to **Languages & Frameworks** then **Android SDK**
-2. On the **SDK Platforms** tab, tick **API 34**, **API 35**, and **API 36**, then click **Apply** to download them
-3. On the **SDK Tools** tab, confirm **Android SDK Build-Tools**, **Android SDK Platform-Tools**, and **Android Emulator** are installed
-4. Open the virtual device manager: **More Actions** then **Virtual Device Manager** from the Welcome screen, or **View** then **Tool Windows** then **Device Manager** if a project is already open
-5. Click **Create Device**, choose a **Pixel 9 Pro** profile, select one of the API levels just installed, then click **Finish**
-6. Launch the emulator from the device list, then run `npm run android`
+1. Install [Android Studio](https://developer.android.com/studio) from the official site, which also installs the Android SDK and base build tools
+2. Open Android Studio at least once and let the setup wizard install any additional required components when prompted
+3. Click the gear icon and open **Settings**, then go to **Languages & Frameworks** then **Android SDK**
+4. On the **SDK Platforms** tab, tick **API 34**, **API 35**, and **API 36**, then click **Apply** to download them, since a fresh install does not include them
+5. On the **SDK Tools** tab, confirm **Android SDK Build-Tools**, **Android SDK Platform-Tools**, and **Android Emulator** are installed
+6. Open the virtual device manager: **More Actions** then **Virtual Device Manager** from the Welcome screen, or **View** then **Tool Windows** then **Device Manager** if a project is already open
+7. Click **Create Device**, choose a **Pixel 9 Pro** profile, select one of the API levels just installed, then click **Finish**
+8. Launch the emulator from the device list, then run `npm run android`
 
 > The first `npm run android` builds the native app from scratch and can take several minutes. Later runs are much faster.
 
-> A physical Android device is required to test BLE mesh and NFC, since the Android Emulator does not support Bluetooth.
+> A physical Android device is required to test the BLE mesh, since the Android Emulator does not support Bluetooth.
 
-> Supports Android 8.0+ (API 26+).
+> Supports Android 8.0 (API 26) or later.
 
 </details>
 

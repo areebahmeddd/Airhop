@@ -2,12 +2,9 @@
  * @jest-environment node
  */
 import {
-  NFC_MIME_TYPE,
   decodeContactCard,
-  decodeNFCPayload,
   decodeQRContent,
   encodeContactCard,
-  encodeNFCPayload,
   encodeQRContent,
   type ContactCard,
 } from "../contact-exchange";
@@ -150,27 +147,6 @@ describe("QR content encode/decode", () => {
   });
 });
 
-describe("NFC payload encode/decode", () => {
-  test("NFC_MIME_TYPE is correctly defined", () => {
-    expect(NFC_MIME_TYPE).toBe("application/airhop-contact-v1");
-  });
-
-  test("NFC round-trip recovers all fields", () => {
-    const card = makeCard({ nickname: "node-prime" });
-    const payload = encodeNFCPayload(card);
-    const decoded = decodeNFCPayload(payload);
-
-    expect(decoded.peerID).toBe(card.peerID);
-    expect(decoded.nickname).toBe(card.nickname);
-    expect(Array.from(decoded.signingPubKey)).toEqual(
-      Array.from(card.signingPubKey),
-    );
-  });
-
-  test("NFC payload is the same as the raw ContactCard binary", () => {
-    const card = makeCard();
-    expect(Array.from(encodeNFCPayload(card))).toEqual(
-      Array.from(encodeContactCard(card)),
-    );
-  });
-});
+// The NFC payload tests were removed with the NFC contact path: iOS cannot
+// emulate an NDEF tag (no HCE), so phone-to-phone tap is impossible. QR carries
+// the identical ContactCard binary and is covered above.

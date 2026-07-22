@@ -30,6 +30,12 @@ import { useChatStore, type ChatAttachment } from "../store/chat-store";
 // should be split by the sender or delivered via Nostr/cloud link instead.
 const MAX_ATTACHMENT_BYTES = 25 * 1024 * 1024; // 25 MB
 
+// Delay between consecutive outbound fragments. Matches bitchat's
+// FragmentingPacketSender.interFragmentDelayMs. This is a throughput ceiling
+// (~23 KB/s) rather than a tuning knob: without it the radio drops fragments
+// and the transfer never completes on the far side.
+const INTER_FRAGMENT_MS = 20;
+
 export interface AttachmentMeta {
   type: ChatAttachment["type"];
   name: string;
@@ -43,6 +49,47 @@ interface MetaEnvelope {
   m: string; // MIME type
   d: number; // duration ms
   c: string; // channel ("dm:<peerID>" or "#bluetooth" etc.)
+}
+
+// Only the attachment cache files this service writes carry this prefix
+// (see onFileComplete below), so a directory sweep never touches anything
+// else the OS or other libraries may place in the shared cache dir.
+const CACHE_FILE_PREFIX = "airhop_";
+
+// Real, on-disk total for received attachments, used by the Storage & Data
+// screen's Cache row.
+export function getAttachmentCacheBytes(): number {
+  const dir = new FileSystem.Directory(FileSystem.Paths.cache);
+  if (!dir.exists) return 0;
+  return dir
+    .list()
+    .filter(
+      (entry): entry is FileSystem.File =>
+        entry instanceof FileSystem.File &&
+        entry.name.startsWith(CACHE_FILE_PREFIX),
+    )
+    .reduce((sum, file) => sum + file.size, 0);
+}
+
+// Deletes every cached attachment file and returns the bytes freed.
+export function clearAttachmentCache(): number {
+  const dir = new FileSystem.Directory(FileSystem.Paths.cache);
+  if (!dir.exists) return 0;
+  let freed = 0;
+  for (const entry of dir.list()) {
+    if (
+      entry instanceof FileSystem.File &&
+      entry.name.startsWith(CACHE_FILE_PREFIX)
+    ) {
+      freed += entry.size;
+      try {
+        entry.delete();
+      } catch {
+        // Best-effort: skip files that are mid-write or already gone.
+      }
+    }
+  }
+  return freed;
 }
 
 export type BroadcastFn = (packet: Packet) => void;
@@ -85,13 +132,6 @@ function stripMeta(
   }
 }
 
-// Encode a Uint8Array to base64 (uses the same atob/btoa available in Hermes).
-function bytesToBase64(bytes: Uint8Array): string {
-  let binary = "";
-  for (const b of bytes) binary += String.fromCharCode(b);
-  return btoa(binary);
-}
-
 // ---- FileTransferService ----------------------------------------------------
 
 // Tracks which peer originated each in-flight file stream so the completed
@@ -131,15 +171,29 @@ export class FileTransferService {
   private readonly identity: ServiceIdentity;
   private readonly broadcast: BroadcastFn;
   private readonly unicast: UnicastFn;
+  // Resolves a peerID to its announced nickname. Injected because the peer
+  // registry lives in MeshService; without it an incoming attachment is
+  // attributed to a raw hex fragment instead of the sender's name.
+  private readonly resolveNickname?: (peerID: string) => string | undefined;
+
+  // Paced outbound queue. See enqueue() for why this cannot be a tight loop.
+  private readonly outQueue: {
+    pkt: Packet;
+    isDM: boolean;
+    recipientPeerID: string;
+  }[] = [];
+  private drainTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor(
     identity: ServiceIdentity,
     broadcast: BroadcastFn,
     unicast: UnicastFn,
+    resolveNickname?: (peerID: string) => string | undefined,
   ) {
     this.identity = identity;
     this.broadcast = broadcast;
     this.unicast = unicast;
+    this.resolveNickname = resolveNickname;
 
     this.assembler = new TrackingAssembler((senderPeerID, data) => {
       void this.onFileComplete(senderPeerID, data);
@@ -202,12 +256,45 @@ export class FileTransferService {
       if (encoded.length > FRAGMENT_SIZE) {
         const frags = fragmentPacket(pkt, this.identity, signPacket);
         for (const frag of frags) {
-          this.dispatchPacket(frag, isDM, recipientPeerID);
+          this.enqueue(frag, isDM, recipientPeerID);
         }
       } else {
-        this.dispatchPacket(pkt, isDM, recipientPeerID);
+        this.enqueue(pkt, isDM, recipientPeerID);
       }
     }
+  }
+
+  // Queue a packet for paced transmission.
+  //
+  // Attachments MUST NOT be dispatched in a tight loop: a 1 MB file is ~2,200
+  // fragments, and neither transport can absorb that back-to-back. On Android
+  // gatt.writeCharacteristic starts refusing writes once its internal queue
+  // fills (and the native bridge resolves anyway, so they vanish silently); on
+  // iOS unacknowledged writes overrun the same way. The result is a transfer
+  // that reassembles forever and never completes.
+  //
+  // Pacing at one fragment per tick is the same approach bitchat uses
+  // (FragmentingPacketSender.interFragmentDelayMs = 20).
+  private enqueue(pkt: Packet, isDM: boolean, recipientPeerID: string): void {
+    this.outQueue.push({ pkt, isDM, recipientPeerID });
+    this.scheduleDrain();
+  }
+
+  private scheduleDrain(): void {
+    if (this.drainTimer !== null) return;
+    this.drainTimer = setTimeout(() => {
+      this.drainTimer = null;
+      const next = this.outQueue.shift();
+      if (next !== undefined) {
+        this.dispatchPacket(next.pkt, next.isDM, next.recipientPeerID);
+      }
+      if (this.outQueue.length > 0) this.scheduleDrain();
+    }, INTER_FRAGMENT_MS);
+  }
+
+  // Number of packets still waiting to go out, for tests and progress UI.
+  get pendingCount(): number {
+    return this.outQueue.length;
   }
 
   // Route a packet over BLE broadcast or unicast.
@@ -236,17 +323,23 @@ export class FileTransferService {
     const safeName = (meta.n || "file")
       .replace(/[^a-zA-Z0-9._-]/g, "_")
       .slice(0, 64);
-    const cacheDir = FileSystem.Paths.cache;
-    const cacheUri = `${cacheDir}airhop_${Date.now()}_${safeName}`;
+    // expo-file-system 57: writeAsStringAsync throws at runtime, and Paths.cache
+    // is a Directory object (string-interpolating it produced a path literally
+    // beginning "[object Object]"). The File API takes the directory plus a name
+    // and writes the raw bytes, so no base64 round-trip is needed either.
+    const file = new FileSystem.File(
+      FileSystem.Paths.cache,
+      `airhop_${String(Date.now())}_${safeName}`,
+    );
 
     try {
-      await FileSystem.writeAsStringAsync(cacheUri, bytesToBase64(bytes), {
-        encoding: FileSystem.EncodingType.Base64,
-      });
+      file.create({ overwrite: true, intermediates: true });
+      file.write(bytes);
     } catch {
       // Disk write failed: skip adding the message rather than crashing.
       return;
     }
+    const cacheUri = file.uri;
 
     const channel = meta.c || `dm:${senderPeerID}`;
     const type = (
@@ -260,7 +353,8 @@ export class FileTransferService {
       id: `ft-${senderPeerID}-${Date.now()}`,
       channel,
       senderID: senderPeerID,
-      senderNickname: senderPeerID.slice(0, 8),
+      senderNickname:
+        this.resolveNickname?.(senderPeerID) ?? senderPeerID.slice(0, 8),
       text: "",
       timestampMs: Date.now(),
       isMine: false,

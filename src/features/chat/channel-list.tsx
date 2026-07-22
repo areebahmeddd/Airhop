@@ -1,36 +1,52 @@
 // Channel list screen.
 // Two sections: Default Channels (bitchat-compatible, cannot be left) and
 // Your Channels (user-created, joinable / leaveable).
-// Tap a channel to open its message thread.
-// Tap the info icon (top-right of each row) to see channel details.
-// FAB at bottom-right to join or create a new channel.
+// Tap a channel to open its message thread. Swipe left on any row for More:
+// chat info, and for Your Channels also pin and delete. The header "+"
+// (App.tsx) opens the create/join modal below.
 
 import { Feather } from "@expo/vector-icons";
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   Modal,
   Pressable,
+  RefreshControl,
   SectionList,
   StyleSheet,
   Text,
   TextInput,
   View,
 } from "react-native";
+import { Swipeable } from "react-native-gesture-handler";
+import { getMeshService } from "../../services/mesh-service";
+import { showAlert } from "../../store/alert-store";
 import { useChatStore } from "../../store/chat-store";
 import { usePeerStore } from "../../store/peer-store";
-import { Colors, FontSize, FontWeight, Radius, Spacing } from "../../ui/theme";
+import {
+  FontSize,
+  FontWeight,
+  Radius,
+  Spacing,
+  useThemeColors,
+} from "../../ui/theme";
+import { messagePreviewText } from "../../utils/message-preview";
 import ChannelInfoSheet from "./channel-info-sheet";
 
-// Transport options for new channels.
-const TRANSPORT_OPTIONS = ["BLE", "Nostr", "BLE + Nostr"] as const;
-type TransportOption = (typeof TRANSPORT_OPTIONS)[number];
+// ---------------------------------------------------------------------------
+// Constants
+// ---------------------------------------------------------------------------
 
-// Visibility options for new channels.
-const VISIBILITY_OPTIONS = ["Public", "Private"] as const;
-type VisibilityOption = (typeof VISIBILITY_OPTIONS)[number];
+// How long the pull-to-refresh spinner stays up. The refresh itself (BLE
+// rescan kick) returns instantly, but a flash-then-gone spinner reads as
+// broken, so hold it briefly for legible feedback.
+const REFRESH_SPINNER_MS = 700;
 
-// The 6 bitchat-compatible default channels. These are always present and
-// cannot be removed; they are part of the mesh protocol.
+// Per-channel transport and visibility options used to live here. They were
+// removed because nothing in the send path ever read them. See the note in the
+// create-channel modal below.
+
+// The 6 bitchat-compatible default channels. Always present, cannot be
+// removed: they are part of the mesh protocol.
 const DEFAULT_CHANNEL_NAMES = new Set([
   "#bluetooth",
   "#block",
@@ -40,94 +56,113 @@ const DEFAULT_CHANNEL_NAMES = new Set([
   "#region",
 ]);
 
+// Default Channels is collapsed to this many rows until the user expands it.
+const DEFAULT_VISIBLE_COUNT = 3;
+
+// Single shared left/right inset used by BOTH the section headers and the
+// channel rows, so their leading text ("DEFAULT CHANNELS" / "#bluetooth")
+// starts at the same x position, one constant referenced twice rather than
+// two separate `Spacing.base` reads that could drift apart later.
+const ROW_INSET = Spacing.base;
+
 // Scope info for built-in bitchat-compatible channels.
-const CHANNEL_SCOPE: Record<
-  string,
-  { tag: string; description: string; transport: string }
-> = {
+const CHANNEL_SCOPE: Record<string, { tag: string; description: string }> = {
   "#bluetooth": {
     tag: "Local mesh · BLE only",
     description:
       "Reaches devices within BLE range (roughly 10 to 100 metres). No internet required. Ideal for local coordination.",
-    transport: "BLE only",
   },
   "#block": {
     tag: "City block · ~100m",
     description:
       "City-block level coverage. Messages are bridged over Nostr so peers outside BLE range but nearby can participate.",
-    transport: "BLE + Nostr",
   },
   "#neighborhood": {
     tag: "Neighborhood · ~1km",
     description:
       "Neighborhood coverage. Relay-assisted so peers across the area are reachable even without a direct BLE link.",
-    transport: "BLE + Nostr",
   },
   "#city": {
     tag: "City · ~10km",
     description:
       "City-wide channel. Uses geo-located Nostr relays to reach peers across the metro area.",
-    transport: "BLE + Nostr",
   },
   "#province": {
     tag: "Province or state · ~100km",
     description:
       "Provincial or state coverage. Bridged over Nostr for regional reach across hundreds of kilometres.",
-    transport: "BLE + Nostr",
   },
   "#region": {
     tag: "Country or region · ~1000km",
     description:
       "Country-wide coverage. Any Airhop or bitchat user in the region can join and read messages.",
-    transport: "BLE + Nostr",
   },
 };
+
+// ---------------------------------------------------------------------------
+// Types
+// ---------------------------------------------------------------------------
 
 interface ChannelSection {
   title: string;
   isDefault: boolean;
-  isArchived: boolean;
+  unread: number;
   data: string[];
 }
 
 interface Props {
   onSelectChannel: (channel: string) => void;
   // Increment this to programmatically open the join/create modal (e.g. from
-  // the App.tsx header + New button). Counter pattern avoids boolean edge cases.
+  // the App.tsx header + button). Counter pattern avoids boolean edge cases.
   newChannelTrigger?: number;
 }
+
+// ---------------------------------------------------------------------------
+// Component
+// ---------------------------------------------------------------------------
 
 export default function ChannelList({
   onSelectChannel,
   newChannelTrigger,
 }: Props): React.JSX.Element {
+  const Colors = useThemeColors();
+  const styles = useMemo(() => createStyles(Colors), [Colors]);
   const {
     channels,
     messages,
     addChannel,
     removeChannel,
     unreadCounts,
-    setChannelTransport,
-    setChannelVisibility,
-    archivedChannels,
+    pinnedChannels,
+    togglePinChannel,
+    clearChannelMessages,
   } = useChatStore();
   // Live peer count, real BLE data, not a stub.
   const peerCount = usePeerStore((s) => s.peers.size);
 
   const [showJoinModal, setShowJoinModal] = useState(false);
   const [newChannel, setNewChannel] = useState("");
-  const [newTransport, setNewTransport] =
-    useState<TransportOption>("BLE + Nostr");
-  const [newVisibility, setNewVisibility] =
-    useState<VisibilityOption>("Public");
   const [infoChannel, setInfoChannel] = useState<string | null>(null);
   const [collapsedSections, setCollapsedSections] = useState<Set<string>>(
     new Set(),
   );
+  const [showAllDefault, setShowAllDefault] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  // Which "Your Channels" row currently has its swipe-revealed More sheet open.
+  const [moreOptionsChannel, setMoreOptionsChannel] = useState<string | null>(
+    null,
+  );
+  // Open Swipeable rows, keyed by channel, so tapping an action can close its
+  // own row instead of leaving it hanging open.
+  const swipeableRefs = useRef(new Map<string, Swipeable>()).current;
 
-  // Watch the trigger counter from App.tsx header button.
-  // Initialise with the current counter value so a component remount (e.g.
-  // after navigating back from a thread) does not reopen the modal.
+  function closeSwipeable(channel: string): void {
+    swipeableRefs.get(channel)?.close();
+  }
+
+  // Watch the trigger counter from App.tsx header button. Initialise with the
+  // current counter value so a component remount (e.g. after navigating back
+  // from a thread) does not reopen the modal.
   const prevTrigger = useRef(newChannelTrigger ?? 0);
   useEffect(() => {
     if (
@@ -139,6 +174,63 @@ export default function ChannelList({
     }
   }, [newChannelTrigger]);
 
+  // ---- Derived channel lists ----------------------------------------------
+
+  // Public channels only (filter out dm: prefixed channels).
+  const publicChannels = channels.filter((c) => !c.startsWith("dm:"));
+  const defaultChannels = publicChannels.filter((c) =>
+    DEFAULT_CHANNEL_NAMES.has(c),
+  );
+  // Pinned channels float to the top, WhatsApp-style. `sort` is stable, so
+  // within each group (pinned / unpinned) the original relative order holds.
+  const ownChannels = publicChannels
+    .filter((c) => !DEFAULT_CHANNEL_NAMES.has(c))
+    .sort((a, b) => {
+      const aPinned = pinnedChannels.includes(a);
+      const bPinned = pinnedChannels.includes(b);
+      return aPinned === bPinned ? 0 : aPinned ? -1 : 1;
+    });
+
+  // Normalised input for duplicate detection (shown while typing).
+  const normalizedInput = newChannel.trim().replace(/^#*/, "#").toLowerCase();
+  const nameAlreadyExists =
+    normalizedInput.length > 1 &&
+    publicChannels.some((c) => c.toLowerCase() === normalizedInput);
+
+  // Section-level unread totals, computed from the FULL channel list (not the
+  // possibly-collapsed/sliced `data` below) so the badge stays accurate even
+  // while a section is collapsed or showing only its top rows.
+  function sumUnread(list: string[]): number {
+    return list.reduce((sum, c) => sum + (unreadCounts[c] ?? 0), 0);
+  }
+
+  const sections: ChannelSection[] = [
+    {
+      title: "Default Channels",
+      isDefault: true,
+      unread: sumUnread(defaultChannels),
+      data: collapsedSections.has("Default Channels")
+        ? []
+        : showAllDefault
+          ? defaultChannels
+          : defaultChannels.slice(0, DEFAULT_VISIBLE_COUNT),
+    },
+    {
+      title: "Your Channels",
+      isDefault: false,
+      unread: sumUnread(ownChannels),
+      data: collapsedSections.has("Your Channels") ? [] : ownChannels,
+    },
+  ];
+
+  // ---- Handlers ------------------------------------------------------------
+
+  function handleRefresh(): void {
+    setRefreshing(true);
+    getMeshService()?.refresh();
+    setTimeout(() => setRefreshing(false), REFRESH_SPINNER_MS);
+  }
+
   function toggleSection(title: string): void {
     setCollapsedSections((prev) => {
       const next = new Set(prev);
@@ -148,185 +240,164 @@ export default function ChannelList({
     });
   }
 
-  function handleAdd(): void {
-    const name = newChannel.trim().replace(/^#*/, "#");
-    if (name.length < 2) return;
-    // Duplicate guard: normalise for case-insensitive comparison.
-    if (publicChannels.some((c) => c.toLowerCase() === name.toLowerCase()))
-      return;
-    addChannel(name);
-    setChannelTransport(name, newTransport);
-    setChannelVisibility(name, newVisibility);
+  function resetJoinModal(): void {
     setNewChannel("");
-    setNewTransport("BLE + Nostr");
-    setNewVisibility("Public");
     setShowJoinModal(false);
   }
 
-  function handleLeave(channel: string): void {
-    removeChannel(channel);
-    setInfoChannel(null);
+  function handleAdd(): void {
+    const name = newChannel.trim().replace(/^#*/, "#");
+    if (name.length < 2 || nameAlreadyExists) return;
+    addChannel(name);
+    resetJoinModal();
   }
-  void handleLeave;
 
-  // Public channels only (filter out dm: prefixed channels).
-  const publicChannels = channels.filter((c) => !c.startsWith("dm:"));
-  const defaultChannels = publicChannels.filter((c) =>
-    DEFAULT_CHANNEL_NAMES.has(c),
-  );
-  const ownChannels = publicChannels.filter(
-    (c) => !DEFAULT_CHANNEL_NAMES.has(c) && !archivedChannels.includes(c),
-  );
-  const archivedList = publicChannels.filter(
-    (c) => !DEFAULT_CHANNEL_NAMES.has(c) && archivedChannels.includes(c),
-  );
+  // ---- Your Channels swipe / more-options actions --------------------------
 
-  // Normalised input for duplicate detection (shown while typing).
-  const normalizedInput = newChannel.trim().replace(/^#*/, "#").toLowerCase();
-  const nameAlreadyExists =
-    normalizedInput.length > 1 &&
-    publicChannels.some((c) => c.toLowerCase() === normalizedInput);
+  function handleSwipeMore(channel: string): void {
+    closeSwipeable(channel);
+    setMoreOptionsChannel(channel);
+  }
 
-  // Pass empty data array for collapsed sections.
-  const sections: ChannelSection[] = [
-    {
-      title: "Default Channels",
-      isDefault: true,
-      isArchived: false,
-      data: collapsedSections.has("Default Channels") ? [] : defaultChannels,
-    },
-    {
-      title: "Your Channels",
-      isDefault: false,
-      isArchived: false,
-      data: collapsedSections.has("Your Channels") ? [] : ownChannels,
-    },
-    ...(archivedList.length > 0
-      ? [
-          {
-            title: "Archived",
-            isDefault: false,
-            isArchived: true,
-            data: collapsedSections.has("Archived") ? [] : archivedList,
-          },
-        ]
-      : []),
-  ];
+  function handleClearChat(channel: string): void {
+    setMoreOptionsChannel(null);
+    showAlert(
+      "Clear chat",
+      `Delete all messages in ${channel}? This can't be undone.`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Clear",
+          style: "destructive",
+          onPress: () => clearChannelMessages(channel),
+        },
+      ],
+    );
+  }
 
-  const isDefaultChannel =
-    infoChannel !== null && DEFAULT_CHANNEL_NAMES.has(infoChannel);
-  void isDefaultChannel;
+  function handleDeleteChat(channel: string): void {
+    setMoreOptionsChannel(null);
+    showAlert(
+      "Delete chat",
+      `Delete ${channel}? This removes the channel and all its messages.`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: () => removeChannel(channel),
+        },
+      ],
+    );
+  }
+
+  // ---- Row rendering ---------------------------------------------------
 
   function renderChannelRow(
     item: string,
-    isArchived: boolean,
+    isYourChannel: boolean,
   ): React.JSX.Element {
     const msgs = messages[item] ?? [];
     const last = msgs[msgs.length - 1];
     const unread = unreadCounts[item] ?? 0;
     const scopeTag = CHANNEL_SCOPE[item]?.tag;
     const isDefault = DEFAULT_CHANNEL_NAMES.has(item);
+    const isPinned = isYourChannel && pinnedChannels.includes(item);
 
-    return (
+    const row = (
       <Pressable
-        style={({ pressed }) => [
-          styles.row,
-          isArchived && styles.rowArchived,
-          pressed && styles.rowPressed,
-        ]}
-        onPress={() => {
-          if (isArchived) {
-            setInfoChannel(item);
-          } else {
-            onSelectChannel(item);
-          }
-        }}
+        style={styles.channelRow}
+        onPress={() => onSelectChannel(item)}
         accessibilityRole="button"
-        accessibilityLabel={
-          isArchived ? `Archived channel ${item}` : `Open channel ${item}`
-        }
+        accessibilityLabel={`Open channel ${item}`}
       >
-        <View style={styles.rowContent}>
-          {/* Top row: channel name + timestamp + info icon */}
-          <View style={styles.rowTop}>
-            <View style={styles.rowNameWrap}>
-              {isArchived && (
-                <Feather
-                  name="archive"
-                  size={12}
-                  color={Colors.textMuted}
-                  style={styles.rowArchiveIcon}
-                />
-              )}
-              <Text
-                style={[
-                  styles.channelName,
-                  isArchived && styles.channelNameMuted,
-                ]}
-                numberOfLines={1}
-              >
+        <View style={styles.channelRowBody}>
+          {/* Head line: channel name + timestamp + pin indicator */}
+          <View style={styles.channelRowHead}>
+            <View style={styles.channelNameGroup}>
+              <Text style={styles.channelName} numberOfLines={1}>
                 <Text style={styles.channelHash}>#</Text>
                 {item.replace(/^#/, "")}
               </Text>
             </View>
-            <View style={styles.rowTopRight}>
-              {last && !isArchived ? (
-                <Text style={styles.timestamp}>
+            <View style={styles.channelRowMeta}>
+              {last && (
+                <Text style={styles.channelTimestamp}>
                   {formatTime(last.timestampMs)}
                 </Text>
-              ) : null}
-              {!isArchived && (
-                <Pressable
-                  style={styles.infoBtn}
-                  onPress={() => setInfoChannel(item)}
-                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                  accessibilityRole="button"
-                  accessibilityLabel={`Info for channel ${item}`}
-                >
-                  <Feather name="info" size={14} color={Colors.textMuted} />
-                </Pressable>
+              )}
+              {isPinned && (
+                <Feather name="map-pin" size={13} color={Colors.textMuted} />
               )}
             </View>
           </View>
 
           {/* Scope tag + live peer count for default channels */}
-          {scopeTag !== undefined ? (
+          {scopeTag !== undefined && (
             <Text style={styles.channelScope} numberOfLines={1}>
               {scopeTag}
-              {isDefault
-                ? peerCount > 0
-                  ? `  \u00b7  ${peerCount} nearby`
-                  : "  \u00b7  0 nearby"
-                : null}
+              {isDefault && `  ·  ${peerCount > 0 ? peerCount : 0} nearby`}
             </Text>
-          ) : null}
-
-          {/* Bottom row: preview + badge (hidden when archived) */}
-          {!isArchived && (
-            <View style={styles.rowBottom}>
-              {last ? (
-                <Text style={styles.preview} numberOfLines={1}>
-                  <Text style={styles.previewSender}>
-                    {last.isMine ? "You" : last.senderNickname}:{" "}
-                  </Text>
-                  {last.text}
-                </Text>
-              ) : (
-                <Text style={styles.previewEmpty}>No messages yet</Text>
-              )}
-              {unread > 0 && (
-                <View style={styles.badge}>
-                  <Text style={styles.badgeText}>
-                    {unread > 99 ? "99+" : unread}
-                  </Text>
-                </View>
-              )}
-            </View>
           )}
+
+          {/* Foot line: preview + unread badge */}
+          <View style={styles.channelRowFoot}>
+            {last ? (
+              <Text style={styles.channelPreview} numberOfLines={1}>
+                <Text style={styles.channelPreviewSender}>
+                  {last.isMine ? "You" : last.senderNickname}:{" "}
+                </Text>
+                {messagePreviewText(last)}
+              </Text>
+            ) : (
+              <Text style={styles.channelPreviewEmpty}>No messages yet</Text>
+            )}
+            {unread > 0 && (
+              <View style={styles.channelUnreadBadge}>
+                <Text style={styles.channelUnreadBadgeText}>
+                  {unread > 99 ? "99+" : unread}
+                </Text>
+              </View>
+            )}
+          </View>
         </View>
       </Pressable>
     );
+
+    // Every row (Your Channels and Default Channels alike) swipes left to
+    // reveal More, the single consistent way to reach chat info, so
+    // there's no separate inline info icon anywhere.
+    return (
+      <Swipeable
+        ref={(ref) => {
+          if (ref) swipeableRefs.set(item, ref);
+          else swipeableRefs.delete(item);
+        }}
+        overshootRight={false}
+        renderRightActions={() => (
+          <View style={styles.swipeActions}>
+            <Pressable
+              style={styles.swipeAction}
+              onPress={() => handleSwipeMore(item)}
+              accessibilityRole="button"
+              accessibilityLabel={`More options for ${item}`}
+            >
+              <Feather
+                name="more-horizontal"
+                size={18}
+                color={Colors.textSecondary}
+              />
+              <Text style={styles.swipeActionText}>More</Text>
+            </Pressable>
+          </View>
+        )}
+      >
+        {row}
+      </Swipeable>
+    );
   }
+
+  // ---- Render ---------------------------------------------------------
 
   return (
     <View style={styles.container}>
@@ -334,7 +405,7 @@ export default function ChannelList({
         sections={sections}
         keyExtractor={(item) => item}
         renderItem={({ item, section }) =>
-          renderChannelRow(item, section.isArchived)
+          renderChannelRow(item, !section.isDefault)
         }
         renderSectionHeader={({ section }) => {
           const isCollapsed = collapsedSections.has(section.title);
@@ -346,7 +417,15 @@ export default function ChannelList({
               accessibilityLabel={`${isCollapsed ? "Expand" : "Collapse"} ${section.title}`}
             >
               <Text style={styles.sectionTitle}>{section.title}</Text>
-              <View style={styles.sectionChevron}>
+              {section.unread > 0 && (
+                <View style={styles.sectionBadge}>
+                  <Text style={styles.sectionBadgeText}>
+                    {section.unread > 99 ? "99+" : section.unread}
+                  </Text>
+                </View>
+              )}
+              <View style={styles.sectionHeaderSpacer} />
+              <View style={styles.trailingIconBtn}>
                 <Feather
                   name={isCollapsed ? "chevron-right" : "chevron-down"}
                   size={14}
@@ -357,21 +436,59 @@ export default function ChannelList({
           );
         }}
         renderSectionFooter={({ section }) => {
-          if (section.isDefault || collapsedSections.has(section.title))
-            return null;
-          if (section.isArchived) return null;
+          if (collapsedSections.has(section.title)) return null;
+
+          if (section.isDefault) {
+            const hiddenCount = defaultChannels.length - DEFAULT_VISIBLE_COUNT;
+            if (hiddenCount <= 0) return null;
+            return (
+              <Pressable
+                style={styles.showMoreBtn}
+                onPress={() => setShowAllDefault((v) => !v)}
+                accessibilityRole="button"
+                accessibilityLabel={
+                  showAllDefault
+                    ? "Show fewer default channels"
+                    : `Show ${hiddenCount} more default channels`
+                }
+              >
+                <Text style={styles.showMoreText}>
+                  {showAllDefault ? "Show less" : `Show ${hiddenCount} more`}
+                </Text>
+                <Feather
+                  name={showAllDefault ? "chevron-up" : "chevron-down"}
+                  size={14}
+                  color={Colors.textMuted}
+                />
+              </Pressable>
+            );
+          }
+
           if (ownChannels.length > 0) return null;
           return (
             <View style={styles.ownEmpty}>
-              <Text style={styles.ownEmptyText}>
-                No custom channels yet. Tap{" "}
-                <Text style={styles.ownEmptyAccent}>New</Text> above to join or
-                create one.
+              <Feather
+                name="hash"
+                size={26}
+                color={Colors.textMuted}
+                style={styles.ownEmptyIcon}
+              />
+              <Text style={styles.ownEmptyText}>No channels yet</Text>
+              <Text style={styles.ownEmptyHint}>
+                Tap <Text style={styles.ownEmptyAccent}>+</Text> above to join
+                or create one
               </Text>
             </View>
           );
         }}
         ItemSeparatorComponent={() => <View style={styles.separator} />}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={handleRefresh}
+            tintColor={Colors.textMuted}
+          />
+        }
         stickySectionHeadersEnabled={false}
         contentContainerStyle={styles.list}
       />
@@ -381,18 +498,17 @@ export default function ChannelList({
         visible={showJoinModal}
         transparent
         animationType="slide"
-        onRequestClose={() => setShowJoinModal(false)}
+        onRequestClose={resetJoinModal}
       >
-        <Pressable
-          style={styles.modalOverlay}
-          onPress={() => setShowJoinModal(false)}
-        >
+        <Pressable style={styles.modalOverlay} onPress={resetJoinModal}>
           <Pressable style={styles.modalSheet} onPress={() => {}}>
             <View style={styles.handle} />
             <Text style={styles.modalTitle}>Create a channel</Text>
             <Text style={styles.modalHint}>
-              Choose a name, visibility, and transport for your channel. Anyone
-              with the same name can find and join it.
+              Channels are public: anyone nearby who joins the same name sees
+              every message, and messages are broadcast unencrypted over the
+              mesh. For private conversation, use a direct message. Those are
+              end-to-end encrypted.
             </Text>
             <View>
               <TextInput
@@ -417,82 +533,18 @@ export default function ChannelList({
               )}
             </View>
 
-            {/* Visibility */}
-            <View style={styles.optionGroup}>
-              <Text style={styles.optionLabel}>Visibility</Text>
-              <View style={styles.optionRow}>
-                {VISIBILITY_OPTIONS.map((opt) => (
-                  <Pressable
-                    key={opt}
-                    style={[
-                      styles.optionChip,
-                      newVisibility === opt && styles.optionChipActive,
-                    ]}
-                    onPress={() => setNewVisibility(opt)}
-                    accessibilityRole="radio"
-                    accessibilityState={{ checked: newVisibility === opt }}
-                  >
-                    <Feather
-                      name={opt === "Private" ? "lock" : "globe"}
-                      size={13}
-                      color={
-                        newVisibility === opt
-                          ? Colors.textPrimary
-                          : Colors.textMuted
-                      }
-                    />
-                    <Text
-                      style={
-                        newVisibility === opt
-                          ? styles.optionChipTextActive
-                          : styles.optionChipText
-                      }
-                    >
-                      {opt}
-                    </Text>
-                  </Pressable>
-                ))}
-              </View>
-            </View>
+            {/* Visibility and transport pickers were removed deliberately.
+                Both were written to the store and read by nothing: a channel
+                marked "Private" was still plaintext-broadcast to every device
+                in radio range, and picking "Nostr" still sent over BLE only.
+                A lock icon on an unencrypted broadcast is worse than no
+                control at all. Channels are public by design (bitchat's model);
+                privacy lives in DMs, which are Noise/Double-Ratchet encrypted.
+                If private groups are added later they need a real group-key
+                protocol, not a label. */}
 
-            {/* Transport */}
-            <View style={styles.optionGroup}>
-              <Text style={styles.optionLabel}>Transport</Text>
-              <View style={styles.optionRow}>
-                {TRANSPORT_OPTIONS.map((opt) => (
-                  <Pressable
-                    key={opt}
-                    style={[
-                      styles.optionChip,
-                      newTransport === opt && styles.optionChipActive,
-                    ]}
-                    onPress={() => setNewTransport(opt)}
-                    accessibilityRole="radio"
-                    accessibilityState={{ checked: newTransport === opt }}
-                  >
-                    <Text
-                      style={
-                        newTransport === opt
-                          ? styles.optionChipTextActive
-                          : styles.optionChipText
-                      }
-                    >
-                      {opt}
-                    </Text>
-                  </Pressable>
-                ))}
-              </View>
-            </View>
             <View style={styles.modalActions}>
-              <Pressable
-                style={styles.modalCancel}
-                onPress={() => {
-                  setNewChannel("");
-                  setNewTransport("BLE + Nostr");
-                  setNewVisibility("Public");
-                  setShowJoinModal(false);
-                }}
-              >
+              <Pressable style={styles.modalCancel} onPress={resetJoinModal}>
                 <Text style={styles.modalCancelText}>Cancel</Text>
               </Pressable>
               <Pressable
@@ -510,6 +562,98 @@ export default function ChannelList({
         </Pressable>
       </Modal>
 
+      {/* Your Channels: swipe "More" sheet with chat info, pin, clear, delete */}
+      <Modal
+        visible={moreOptionsChannel !== null}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setMoreOptionsChannel(null)}
+      >
+        <View style={styles.modalOverlay}>
+          <Pressable
+            style={StyleSheet.absoluteFill}
+            onPress={() => setMoreOptionsChannel(null)}
+          />
+          <View style={styles.modalSheet}>
+            <View style={styles.handle} />
+            {moreOptionsChannel && (
+              <>
+                <Text style={styles.modalTitle}>{moreOptionsChannel}</Text>
+
+                <View style={styles.moreRowsGroup}>
+                  <Pressable
+                    style={styles.moreRow}
+                    onPress={() => {
+                      setInfoChannel(moreOptionsChannel);
+                      setMoreOptionsChannel(null);
+                    }}
+                    accessibilityRole="button"
+                  >
+                    <Feather
+                      name="info"
+                      size={18}
+                      color={Colors.textSecondary}
+                    />
+                    <Text style={styles.moreRowText}>Chat info</Text>
+                  </Pressable>
+
+                  {!DEFAULT_CHANNEL_NAMES.has(moreOptionsChannel) && (
+                    <Pressable
+                      style={styles.moreRow}
+                      onPress={() => {
+                        togglePinChannel(moreOptionsChannel);
+                        setMoreOptionsChannel(null);
+                      }}
+                      accessibilityRole="button"
+                    >
+                      <Feather
+                        name="map-pin"
+                        size={18}
+                        color={Colors.textSecondary}
+                      />
+                      <Text style={styles.moreRowText}>
+                        {pinnedChannels.includes(moreOptionsChannel)
+                          ? "Unpin chat"
+                          : "Pin chat"}
+                      </Text>
+                    </Pressable>
+                  )}
+
+                  <Pressable
+                    style={styles.moreRow}
+                    onPress={() => handleClearChat(moreOptionsChannel)}
+                    accessibilityRole="button"
+                  >
+                    <Feather
+                      name="x-circle"
+                      size={18}
+                      color={Colors.textSecondary}
+                    />
+                    <Text style={styles.moreRowText}>Clear chat</Text>
+                  </Pressable>
+
+                  {/* Default channels are built-in and can't be left. */}
+                  {!DEFAULT_CHANNEL_NAMES.has(moreOptionsChannel) && (
+                    <Pressable
+                      style={styles.moreRowDanger}
+                      onPress={() => handleDeleteChat(moreOptionsChannel)}
+                      accessibilityRole="button"
+                    >
+                      <Feather name="trash-2" size={18} color={Colors.danger} />
+                      <Text
+                        style={[styles.moreRowText, styles.moreRowTextDanger]}
+                      >
+                        Delete chat
+                      </Text>
+                    </Pressable>
+                  )}
+                </View>
+              </>
+            )}
+          </View>
+        </View>
+      </Modal>
+
       {/* Channel info sheet (shared component) */}
       <ChannelInfoSheet
         channel={infoChannel}
@@ -523,293 +667,391 @@ export default function ChannelList({
 function formatTime(ms: number): string {
   const d = new Date(ms);
   const now = new Date();
-  if (
+  const isToday =
     d.getDate() === now.getDate() &&
     d.getMonth() === now.getMonth() &&
-    d.getFullYear() === now.getFullYear()
-  ) {
-    return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-  }
-  return d.toLocaleDateString([], { month: "short", day: "numeric" });
+    d.getFullYear() === now.getFullYear();
+  return isToday
+    ? d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+    : d.toLocaleDateString([], { month: "short", day: "numeric" });
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: Colors.bg,
-  },
-  list: {
-    flexGrow: 1,
-    paddingBottom: 88,
-  },
-  // ---- Section headers -------------------------------------------------------
-  sectionHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: Spacing.base,
-    paddingTop: Spacing.lg,
-    paddingBottom: Spacing.md,
-    backgroundColor: Colors.bg,
-  },
-  sectionTitle: {
-    fontSize: FontSize.xs,
-    fontWeight: FontWeight.semibold,
-    color: Colors.textMuted,
-    textTransform: "uppercase",
-    letterSpacing: 0.8,
-  },
-  sectionChevron: {
-    width: 20,
-    height: 20,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  // ---- Channel rows ----------------------------------------------------------
-  row: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: Spacing.base,
-    paddingVertical: Spacing.base,
-    gap: Spacing.md,
-    minHeight: 72,
-    backgroundColor: Colors.surface,
-  },
-  rowPressed: {
-    backgroundColor: Colors.surfacePressed,
-  },
-  rowContent: {
-    flex: 1,
-    gap: Spacing.xs,
-  },
-  rowTop: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
-  rowTopRight: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: Spacing.xs,
-    flexShrink: 0,
-  },
-  rowBottom: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
-  channelName: {
-    fontSize: FontSize.base,
-    fontWeight: FontWeight.semibold,
-    color: Colors.textPrimary,
-    flexShrink: 1,
-  },
-  channelHash: {
-    color: Colors.textMuted,
-    fontWeight: FontWeight.regular,
-  },
-  channelScope: {
-    fontSize: FontSize.xs,
-    color: Colors.textMuted,
-    letterSpacing: 0.1,
-  },
-  timestamp: {
-    fontSize: FontSize.xs,
-    color: Colors.textMuted,
-  },
-  infoBtn: {
-    width: 20,
-    height: 20,
-    alignItems: "center",
-    justifyContent: "center",
-    opacity: 0.7,
-  },
-  preview: {
-    fontSize: FontSize.sm,
-    color: Colors.textSecondary,
-    flex: 1,
-  },
-  previewSender: {
-    color: Colors.textMuted,
-  },
-  previewEmpty: {
-    fontSize: FontSize.sm,
-    color: Colors.textMuted,
-    fontStyle: "italic",
-  },
-  badge: {
-    backgroundColor: Colors.accent,
-    borderRadius: Radius.full,
-    minWidth: 18,
-    height: 18,
-    alignItems: "center",
-    justifyContent: "center",
-    paddingHorizontal: 5,
-  },
-  badgeText: {
-    fontSize: 10,
-    fontWeight: FontWeight.bold,
-    color: Colors.textInverse,
-  },
-  separator: {
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: Colors.border,
-    marginLeft: Spacing.base,
-  },
-  // ---- Option chips (create modal) ------------------------------------------
-  optionGroup: {
-    gap: Spacing.xs,
-  },
-  optionLabel: {
-    fontSize: FontSize.xs,
-    fontWeight: FontWeight.semibold,
-    color: Colors.textMuted,
-    textTransform: "uppercase",
-    letterSpacing: 0.8,
-  },
-  optionRow: {
-    flexDirection: "row",
-    gap: Spacing.sm,
-  },
-  optionChip: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 5,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: 7,
-    borderRadius: Radius.md,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    backgroundColor: Colors.bg,
-  },
-  optionChipActive: {
-    borderColor: Colors.accent,
-    backgroundColor: Colors.surface,
-  },
-  optionChipText: {
-    fontSize: FontSize.sm,
-    color: Colors.textMuted,
-    fontWeight: FontWeight.medium,
-  },
-  optionChipTextActive: {
-    fontSize: FontSize.sm,
-    color: Colors.textPrimary,
-    fontWeight: FontWeight.semibold,
-  },
-  // ---- Your Channels empty state ---------------------------------------------
-  ownEmpty: {
-    paddingHorizontal: Spacing.base,
-    paddingVertical: Spacing.md,
-    backgroundColor: Colors.surface,
-  },
-  ownEmptyText: {
-    fontSize: FontSize.sm,
-    color: Colors.textMuted,
-    fontStyle: "italic",
-    lineHeight: 18,
-  },
-  ownEmptyAccent: {
-    color: Colors.accent,
-    fontStyle: "normal",
-    fontWeight: FontWeight.semibold,
-  },
-  // ---- Modals ----------------------------------------------------------------
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: Colors.overlay,
-    justifyContent: "flex-end",
-  },
-  modalSheet: {
-    backgroundColor: Colors.surface,
-    borderTopLeftRadius: Radius["2xl"],
-    borderTopRightRadius: Radius["2xl"],
-    padding: Spacing.xl,
-    gap: Spacing.base,
-  },
-  handle: {
-    width: 36,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: Colors.borderStrong,
-    alignSelf: "center",
-    marginBottom: Spacing.xs,
-  },
-  modalTitle: {
-    fontSize: FontSize.md,
-    fontWeight: FontWeight.semibold,
-    color: Colors.textPrimary,
-  },
-  modalHint: {
-    fontSize: FontSize.sm,
-    color: Colors.textMuted,
-    lineHeight: 19,
-  },
-  modalInput: {
-    backgroundColor: Colors.surfaceRaised,
-    borderRadius: Radius.md,
-    paddingHorizontal: Spacing.base,
-    paddingVertical: Spacing.md,
-    color: Colors.textPrimary,
-    fontSize: FontSize.base,
-    borderWidth: 1,
-    borderColor: Colors.border,
-  },
-  modalInputError: {
-    borderColor: Colors.danger,
-  },
-  inputError: {
-    fontSize: FontSize.xs,
-    color: Colors.danger,
-    marginTop: 4,
-  },
-  modalActions: {
-    flexDirection: "row",
-    gap: Spacing.sm,
-    marginTop: Spacing.xs,
-  },
-  modalCancel: {
-    flex: 1,
-    backgroundColor: Colors.surfaceRaised,
-    borderRadius: Radius.md,
-    paddingVertical: Spacing.md,
-    alignItems: "center",
-  },
-  modalCancelText: {
-    fontSize: FontSize.base,
-    color: Colors.textSecondary,
-    fontWeight: FontWeight.medium,
-  },
-  modalConfirm: {
-    flex: 1,
-    backgroundColor: Colors.accent,
-    borderRadius: Radius.md,
-    paddingVertical: Spacing.md,
-    alignItems: "center",
-  },
-  modalConfirmDisabled: {
-    backgroundColor: Colors.border,
-  },
-  modalConfirmText: {
-    fontSize: FontSize.base,
-    color: Colors.textInverse,
-    fontWeight: FontWeight.semibold,
-  },
-  // ---- Archived channel rows -------------------------------------------------
-  rowArchived: {
-    opacity: 0.55,
-  },
-  rowNameWrap: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    flex: 1,
-    marginRight: Spacing.sm,
-    overflow: "hidden",
-  },
-  rowArchiveIcon: {
-    flexShrink: 0,
-  },
-  channelNameMuted: {
-    color: Colors.textMuted,
-  },
-});
+// ---------------------------------------------------------------------------
+// Styles
+// ---------------------------------------------------------------------------
+
+function createStyles(Colors: ReturnType<typeof useThemeColors>) {
+  return StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: Colors.bg,
+    },
+    list: {
+      flexGrow: 1,
+      paddingBottom: 88,
+    },
+
+    // ---- Section headers -------------------------------------------------
+
+    // No justifyContent: "space-between". With a variable number of children
+    // (title, optional badge, chevron) space-between would spread space across
+    // ALL of them instead of just pushing the chevron to the far edge.
+    // sectionHeaderSpacer (flex: 1) does that job instead, so the title always
+    // sits flush at the same left inset (ROW_INSET) as a channel row's "#".
+    sectionHeader: {
+      flexDirection: "row",
+      alignItems: "center",
+      paddingHorizontal: ROW_INSET,
+      paddingTop: Spacing.lg,
+      paddingBottom: Spacing.sm,
+      backgroundColor: Colors.bg,
+    },
+    sectionTitle: {
+      fontSize: FontSize.xs,
+      fontWeight: FontWeight.semibold,
+      color: Colors.textMuted,
+      textTransform: "uppercase",
+    },
+    sectionHeaderSpacer: {
+      flex: 1,
+    },
+    // Section-level unread aggregate, same visual language as the per-row badge.
+    sectionBadge: {
+      backgroundColor: Colors.accent,
+      borderRadius: Radius.full,
+      minWidth: 16,
+      height: 16,
+      alignItems: "center",
+      justifyContent: "center",
+      paddingHorizontal: 4,
+      marginLeft: Spacing.xs,
+    },
+    sectionBadgeText: {
+      fontSize: 10,
+      fontWeight: FontWeight.bold,
+      color: Colors.textInverse,
+    },
+    // Shared 20x20 trailing-icon slot for the section collapse chevron.
+    trailingIconBtn: {
+      width: 20,
+      height: 20,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+
+    // ---- Channel rows ------------------------------------------------------
+
+    // Same ROW_INSET as sectionHeader (above), applied directly on this
+    // full-bleed Pressable so its background spans edge to edge while its
+    // content still starts flush with the section title above it.
+    // No per-row background, just flat rows directly on the screen background,
+    // divided only by the hairline separator below. Matches the WhatsApp
+    // chat-list look rather than a "card per row" treatment.
+    channelRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      paddingHorizontal: ROW_INSET,
+      paddingVertical: Spacing.md + 2,
+      minHeight: 72,
+    },
+    // Single child of channelRow, so no `gap` here: it would be a no-op.
+    channelRowBody: {
+      flex: 1,
+      gap: Spacing.xs + 2,
+    },
+    channelRowHead: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+    },
+    channelNameGroup: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 4,
+      flex: 1,
+      marginRight: Spacing.sm,
+      overflow: "hidden",
+    },
+    channelRowMeta: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: Spacing.xs,
+      flexShrink: 0,
+    },
+    channelRowFoot: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+    },
+    channelName: {
+      fontSize: FontSize.base,
+      fontWeight: FontWeight.semibold,
+      color: Colors.textPrimary,
+      flexShrink: 1,
+    },
+    channelHash: {
+      color: Colors.textMuted,
+      fontWeight: FontWeight.regular,
+    },
+    channelScope: {
+      fontSize: FontSize.xs,
+      color: Colors.textMuted,
+      letterSpacing: 0.1,
+    },
+    channelTimestamp: {
+      fontSize: FontSize.xs,
+      color: Colors.textPrimary,
+    },
+    channelPreview: {
+      fontSize: FontSize.sm,
+      color: Colors.textSecondary,
+      flex: 1,
+    },
+    channelPreviewSender: {
+      color: Colors.textMuted,
+    },
+    channelPreviewEmpty: {
+      fontSize: FontSize.sm,
+      color: Colors.textMuted,
+      fontStyle: "italic",
+    },
+    channelUnreadBadge: {
+      backgroundColor: Colors.accent,
+      borderRadius: Radius.full,
+      minWidth: 18,
+      height: 18,
+      alignItems: "center",
+      justifyContent: "center",
+      paddingHorizontal: 5,
+    },
+    channelUnreadBadgeText: {
+      fontSize: 10,
+      fontWeight: FontWeight.bold,
+      color: Colors.textInverse,
+    },
+    separator: {
+      height: StyleSheet.hairlineWidth,
+      backgroundColor: Colors.border,
+    },
+
+    // ---- Your Channels: swipe actions ---------------------------------------
+
+    swipeActions: {
+      flexDirection: "row",
+      height: "100%",
+    },
+    swipeAction: {
+      width: 72,
+      alignItems: "center",
+      justifyContent: "center",
+      gap: 4,
+      backgroundColor: Colors.border,
+    },
+    swipeActionText: {
+      fontSize: FontSize.xs,
+      color: Colors.textSecondary,
+      fontWeight: FontWeight.medium,
+    },
+
+    // ---- Your Channels: "More" sheet -----------------------------------------
+
+    // Tight, boxed group, not spread out with the sheet's default gap,
+    // which reads as loose and disconnected for a same-purpose action list.
+    moreRowsGroup: {
+      gap: Spacing.xs,
+    },
+    moreRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: Spacing.md,
+      paddingVertical: Spacing.sm + 2,
+      paddingHorizontal: Spacing.sm,
+      borderRadius: Radius.md,
+      backgroundColor: Colors.surfaceRaised,
+    },
+    moreRowDanger: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: Spacing.md,
+      paddingVertical: Spacing.sm + 2,
+      paddingHorizontal: Spacing.sm,
+      borderRadius: Radius.md,
+      backgroundColor: Colors.dangerDim,
+    },
+    moreRowText: {
+      fontSize: FontSize.base,
+      color: Colors.textPrimary,
+      fontWeight: FontWeight.medium,
+    },
+    moreRowTextDanger: {
+      color: Colors.danger,
+    },
+
+    // ---- Default Channels show more/less -----------------------------------
+
+    showMoreBtn: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: Spacing.xs,
+      paddingVertical: Spacing.md,
+      backgroundColor: Colors.bg,
+    },
+    showMoreText: {
+      fontSize: FontSize.sm,
+      fontWeight: FontWeight.medium,
+      color: Colors.textMuted,
+    },
+
+    // ---- Your Channels empty state ------------------------------------------
+
+    ownEmpty: {
+      alignItems: "center",
+      justifyContent: "center",
+      paddingHorizontal: Spacing.xl,
+      paddingVertical: Spacing["2xl"],
+      gap: Spacing.xs,
+    },
+    ownEmptyIcon: {
+      marginBottom: Spacing.xs,
+      opacity: 0.6,
+    },
+    ownEmptyText: {
+      fontSize: FontSize.base,
+      fontWeight: FontWeight.semibold,
+      color: Colors.textSecondary,
+      textAlign: "center",
+    },
+    ownEmptyHint: {
+      fontSize: FontSize.sm,
+      color: Colors.textMuted,
+      textAlign: "center",
+    },
+    ownEmptyAccent: {
+      color: Colors.accent,
+      fontWeight: FontWeight.semibold,
+    },
+
+    // ---- Create/join modal ---------------------------------------------------
+
+    modalOverlay: {
+      flex: 1,
+      backgroundColor: Colors.overlay,
+      justifyContent: "flex-end",
+    },
+    modalSheet: {
+      backgroundColor: Colors.surface,
+      borderTopLeftRadius: Radius["2xl"],
+      borderTopRightRadius: Radius["2xl"],
+      padding: Spacing.xl,
+      gap: Spacing.base,
+    },
+    handle: {
+      width: 36,
+      height: 4,
+      borderRadius: 2,
+      backgroundColor: Colors.borderStrong,
+      alignSelf: "center",
+      marginBottom: Spacing.xs,
+    },
+    modalTitle: {
+      fontSize: FontSize.md,
+      fontWeight: FontWeight.semibold,
+      color: Colors.textPrimary,
+    },
+    modalHint: {
+      fontSize: FontSize.sm,
+      color: Colors.textMuted,
+      lineHeight: 19,
+    },
+    modalInput: {
+      backgroundColor: Colors.surfaceRaised,
+      borderRadius: Radius.md,
+      paddingHorizontal: Spacing.base,
+      paddingVertical: Spacing.md,
+      color: Colors.textPrimary,
+      fontSize: FontSize.base,
+      borderWidth: 1,
+      borderColor: Colors.border,
+    },
+    modalInputError: {
+      borderColor: Colors.danger,
+    },
+    inputError: {
+      fontSize: FontSize.xs,
+      color: Colors.danger,
+      marginTop: 4,
+    },
+    optionGroup: {
+      gap: Spacing.xs,
+    },
+    optionLabel: {
+      fontSize: FontSize.xs,
+      fontWeight: FontWeight.semibold,
+      color: Colors.textMuted,
+      textTransform: "uppercase",
+      letterSpacing: 0.8,
+    },
+    optionRow: {
+      flexDirection: "row",
+      gap: Spacing.sm,
+    },
+    optionChip: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 5,
+      paddingHorizontal: Spacing.md,
+      paddingVertical: 7,
+      borderRadius: Radius.md,
+      borderWidth: 1,
+      borderColor: Colors.border,
+      backgroundColor: Colors.bg,
+    },
+    optionChipActive: {
+      borderColor: Colors.accent,
+      backgroundColor: Colors.surface,
+    },
+    optionChipText: {
+      fontSize: FontSize.sm,
+      color: Colors.textMuted,
+      fontWeight: FontWeight.medium,
+    },
+    optionChipTextActive: {
+      fontSize: FontSize.sm,
+      color: Colors.textPrimary,
+      fontWeight: FontWeight.semibold,
+    },
+    modalActions: {
+      flexDirection: "row",
+      gap: Spacing.sm,
+      marginTop: Spacing.xs,
+    },
+    modalCancel: {
+      flex: 1,
+      backgroundColor: Colors.surfaceRaised,
+      borderRadius: Radius.md,
+      paddingVertical: Spacing.md,
+      alignItems: "center",
+    },
+    modalCancelText: {
+      fontSize: FontSize.base,
+      color: Colors.textSecondary,
+      fontWeight: FontWeight.medium,
+    },
+    modalConfirm: {
+      flex: 1,
+      backgroundColor: Colors.accent,
+      borderRadius: Radius.md,
+      paddingVertical: Spacing.md,
+      alignItems: "center",
+    },
+    modalConfirmDisabled: {
+      backgroundColor: Colors.border,
+    },
+    modalConfirmText: {
+      fontSize: FontSize.base,
+      color: Colors.textInverse,
+      fontWeight: FontWeight.semibold,
+    },
+  });
+}

@@ -5,20 +5,49 @@ on:
     tags:
       - "v*.*.*"
   workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing tag to publish, e.g. v1.0.0"
+        required: true
+        type: string
 
 permissions:
   contents: write
+
+concurrency:
+  group: release-${{ inputs.tag || github.ref_name }}
+  cancel-in-progress: false
 
 jobs:
   release:
     name: Create Release
     runs-on: ubuntu-24.04
+    outputs:
+      tag: ${{ steps.resolve.outputs.tag }}
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          ref: ${{ inputs.tag || github.ref }}
           fetch-depth: 0
+
+      - name: Resolve and validate tag
+        id: resolve
+        run: |
+          if [ -n "${{ inputs.tag }}" ]; then
+            TAG="${{ inputs.tag }}"
+          elif [ "${{ github.ref_type }}" = "tag" ]; then
+            TAG="${{ github.ref_name }}"
+          else
+            echo "::error::This workflow must run on a tag. For a manual run, supply the 'tag' input."
+            exit 1
+          fi
+          if ! git rev-parse -q --verify "refs/tags/${TAG}" >/dev/null; then
+            echo "::error::Tag '${TAG}' does not exist in this repository."
+            exit 1
+          fi
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
 
       - name: Generate changelog
         uses: orhun/git-cliff-action@f50e11560dce63f7c33227798f90b924471a88b5 # v4.8.0
@@ -36,16 +65,76 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Commit changelog
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add docs/dev/CHANGELOG.md
-          git diff --staged --quiet || git commit -m "chore(changelog): update for ${{ github.ref_name }}"
-          git push origin HEAD:main || true
-
       - name: Create GitHub release
         uses: softprops/action-gh-release@3d0d9888cb7fd7b750713d6e236d1fcb99157228 # v3.0.2
         with:
-          tag_name: ${{ github.ref_name }}
+          tag_name: ${{ steps.resolve.outputs.tag }}
           body_path: RELEASE_NOTES.md
+
+      - name: Commit changelog to main
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          cp docs/dev/CHANGELOG.md "${RUNNER_TEMP}/CHANGELOG.md"
+          git fetch origin main
+          git checkout -B main origin/main
+          cp "${RUNNER_TEMP}/CHANGELOG.md" docs/dev/CHANGELOG.md
+          git add docs/dev/CHANGELOG.md
+          if git diff --staged --quiet; then
+            echo "Changelog unchanged; nothing to commit."
+          else
+            git commit -m "chore(changelog): update for ${{ steps.resolve.outputs.tag }}"
+            git push origin main
+          fi
+
+  build-apk:
+    name: Build Android APK
+    runs-on: ubuntu-24.04
+    needs: release
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.release.outputs.tag }}
+
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "22"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Set up JDK
+        uses: actions/setup-java@03ad4de0992f5dab5e18fcb136590ce7c4a0ac95 # v5.6.0
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@3f131e8634966bd73d06cc69884922b02e6faf92 # v6.2.0
+
+      # Must match ndkVersion in android/build.gradle.
+      - name: Install pinned Android NDK
+        run: ${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager --install "ndk;27.1.12297006"
+
+      - name: Build release APK
+        working-directory: android
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleRelease --no-daemon
+
+      - name: Rename APK
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          mv android/app/build/outputs/apk/release/app-release.apk dist/airhop.apk
+
+      - name: Upload APK to release
+        uses: softprops/action-gh-release@3d0d9888cb7fd7b750713d6e236d1fcb99157228 # v3.0.2
+        with:
+          tag_name: ${{ needs.release.outputs.tag }}
+          files: dist/airhop.apk

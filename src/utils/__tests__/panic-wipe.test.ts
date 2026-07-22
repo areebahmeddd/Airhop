@@ -4,7 +4,7 @@
 
 // Imports come first in source; Babel hoists jest.mock() calls above them.
 import { panicWipe as identityPanicWipe } from "../../core/crypto/identity";
-import { panicWipe } from "../panic-wipe";
+import { MMKV_STORE_IDS, panicWipe } from "../panic-wipe";
 
 // identity.panicWipe wipes the Keychain/Keystore; mock it out in tests.
 jest.mock("../../core/crypto/identity", () => ({
@@ -62,8 +62,11 @@ describe("panicWipe", () => {
 
   test("clears all MMKV partitions", async () => {
     await panicWipe();
-    // One clearAll call per persisted store: chat-store + wallet-store.
-    expect(mockClearAll).toHaveBeenCalledTimes(2);
+    // One clearAll call per persisted store: chat-store + wallet-store + blocked-store.
+    // Derived from the constant, not hardcoded: adding a persisted store must
+    // extend the wipe, and this assertion should follow it automatically rather
+    // than failing and inviting someone to just bump the number.
+    expect(mockClearAll).toHaveBeenCalledTimes(MMKV_STORE_IDS.length);
   });
 
   test("clears keys before MMKV (order: secure first)", async () => {
@@ -79,7 +82,9 @@ describe("panicWipe", () => {
     await panicWipe();
 
     expect(callOrder[0]).toBe("keys");
-    expect(callOrder.filter((x) => x === "mmkv").length).toBe(2);
+    expect(callOrder.filter((x) => x === "mmkv").length).toBe(
+      MMKV_STORE_IDS.length,
+    );
   });
 
   test("resolves (does not throw) on success", async () => {

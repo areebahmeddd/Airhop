@@ -14,12 +14,12 @@ bitchat is an excellent foundation. Airhop fills the gaps it left open.
 ### Gap 2: Video Support
 
 **bitchat problem:** No video packet type, no mechanism, no MIME type for video.  
-**Airhop (v0.8.0):** `0x30: videoFrame` packet type over WiFi Aware. 480p/15fps is the BLE ceiling (~80 KB/s). Real video requires WiFi Direct or MultipeerConnectivity.
+**Airhop:** videos are shared as files over the mesh and play inline on any platform. Live video streaming was dropped: Android WiFi Aware and iOS MultipeerConnectivity are different protocols that cannot interoperate, so cross-platform video calling is not achievable with these stacks.
 
 ### Gap 3: Live PTT Voice (from day 1)
 
 **bitchat problem:** Fully designed (`PUSH-TO-TALK-DESIGN.md`) but never shipped.  
-**Airhop (v0.7.0):** `0x29: voiceFrame` broadcast type, AAC 16 kHz mono, 350ms jitter buffer, fallback to voice note.
+**Airhop:** `0x29: voiceFrame` broadcast type, AAC 16 kHz mono, 350ms jitter buffer, fallback to voice note.
 
 ### Gap 4: Larger File Transfers
 
@@ -29,17 +29,17 @@ bitchat is an excellent foundation. Airhop fills the gaps it left open.
 ### Gap 5: Tor on iOS and Android
 
 **bitchat problem:** Tor on iOS only (via Arti xcframework) at the time of writing. Android has no Tor integration.  
-**Airhop (v0.7.0):** iOS embeds `arti.xcframework` with a full `AirhopTorManager` (SOCKS5 on port 39050, bootstrap monitor, network path recovery). Android detects Orbot via a TCP probe on localhost:9050. Both platforms route Nostr traffic through the detected proxy.
+**Airhop:** iOS embeds `arti.xcframework` with a full `AirhopTorManager` (SOCKS5 on port 39050, bootstrap monitor, network path recovery). Android detects Orbot via a TCP probe on localhost:9050. Both platforms route Nostr traffic through the detected proxy.
 
 ### Gap 6: Double Ratchet for Offline Mail
 
 **bitchat problem:** Courier envelopes use Noise X (one-way). Compromise of recipient's static key exposes all undelivered mail.  
-**Airhop (v0.8.0):** Full Signal Double Ratchet (DR) + X3DH initialization. Prekey bundles on Nostr. Per-message forward secrecy everywhere.
+**Airhop:** Full Signal Double Ratchet (DR) + X3DH initialization. Prekey bundles on Nostr. Per-message forward secrecy everywhere.
 
 ### Gap 7: WiFi Direct / WiFi Aware Transport
 
 **bitchat problem:** BLE-only (~15 KB/s). Android WiFi Aware support exists but is experimental/unshipped.  
-**Airhop (v0.8.0):** Android WiFi Aware + iOS MultipeerConnectivity. Automatic transport selection: WiFi when available, BLE fallback. Enables video, large files, high-quality voice.
+**Airhop:** Android WiFi Aware and iOS MultipeerConnectivity, selected automatically when available with BLE as fallback. Important limitation: these two protocols cannot talk to each other, so this only accelerates Android-to-Android or iPhone-to-iPhone transfers. Every cross-platform path stays on Bluetooth or Nostr.
 
 ### Gap 8: Non-Technical UX
 

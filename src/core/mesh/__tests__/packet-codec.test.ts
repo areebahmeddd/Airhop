@@ -229,7 +229,8 @@ describe("packet-codec", () => {
     it("FRAGMENT = 0x20", () => expect(PacketType.FRAGMENT).toBe(0x20));
     it("REQUEST_SYNC = 0x21", () => expect(PacketType.REQUEST_SYNC).toBe(0x21));
     it("VOICE_FRAME = 0x29", () => expect(PacketType.VOICE_FRAME).toBe(0x29));
-    it("CASHU_TOKEN = 0x40", () => expect(PacketType.CASHU_TOKEN).toBe(0x40));
+    // 0x30 VIDEO_FRAME and 0x40 CASHU_TOKEN were removed. See the note in
+    // packet-codec.ts. Ecash rides ordinary encrypted DM text.
   });
 
   describe("computePacketId", () => {

@@ -7,7 +7,7 @@ Application source code, organized by architectural layer. See [docs/spec/ARCHIT
 | Folder           | Responsibility                                                          |
 | ---------------- | ----------------------------------------------------------------------- |
 | `bridge/`        | TurboModule TypeScript specs (Codegen input only, no business logic)    |
-| `core/crypto/`   | Identity, Noise XX/X, Double Ratchet, X3DH, contact exchange            |
+| `core/crypto/`   | Identity, Noise XX/X, Double Ratchet, contact exchange                  |
 | `core/mesh/`     | Packet codec, flood router, fragments, gossip, announce, courier, media |
 | `core/nostr/`    | Nostr client, NIP-59 gift-wrap, geo-relay discovery, presence           |
 | `core/payments/` | Cashu token parsing, Nutzap event handling                              |

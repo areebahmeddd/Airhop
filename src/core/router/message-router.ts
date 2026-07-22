@@ -157,40 +157,80 @@ export type NostrSendFn = (
   text: string,
 ) => Promise<void>;
 
-// Attempts to send an encrypted packet directly to a peer via the WiFi
-// transport (MultipeerConnectivity on iOS, WiFi Aware on Android).
-// Returns true if the peer was reachable via WiFi and the packet was dispatched;
-// returns false to fall through to the next transport tier.
-// Implemented by the feature layer when the WiFi native module is active.
-export type WiFiUnicastFn = (
-  recipientPeerID: string,
-  packet: Packet,
-) => boolean;
+// NOTE: a separate WiFiUnicastFn tier used to live here. It was removed because
+// it duplicated work the injected `unicast` callback already does: MeshService's
+// unicast checks for an active WiFi link and uses it before falling back to BLE.
+// Having a second WiFi check in the router meant the transport was consulted
+// twice, and because the parameter was never actually passed, it read like an
+// unfinished feature when the behaviour was in fact already correct.
+//
+// Transport selection belongs in the callback that owns the link maps, not here.
+// The router only decides WHICH tier to use (direct / Nostr / courier); how a
+// direct packet reaches the peer is the transport layer's business.
 
 // Encodes the CHANNEL_MSG payload:
-//   [channel_utf8_len (u8)][channel_utf8][text_utf8]
+//   [channel_utf8_len (u8)][channel_utf8][msg_id_len (u8)][msg_id][text_utf8]
+//
+// The message ID is a sender-generated identifier carried on EVERY transport
+// that message takes. It exists for two reasons:
+//
+//  1. Deduplication across transports. A location channel goes out over both
+//     BLE and Nostr, and the sender signs the Nostr copy with a per-geohash
+//     key, so to a receiver the two copies look like two different people
+//     saying the same thing. Correlating on a shared ID collapses them.
+//  2. Distinguishing genuine repeats. Packet-level dedup hashes the payload,
+//     so sending "ok" twice in one second used to be silently swallowed as a
+//     duplicate packet. A per-message ID makes the second one distinct.
+//
+// bitchat's message payload carries an `id` field for the same reason, so this
+// also moves the format toward wire compatibility rather than away from it.
 export function encodeChannelMsgPayload(
   channel: string,
   text: string,
+  msgId: string,
 ): Uint8Array {
   const chBytes = new TextEncoder().encode(channel.slice(0, 64));
+  const idBytes = new TextEncoder().encode(msgId.slice(0, 32));
   const textBytes = new TextEncoder().encode(text);
-  const buf = new Uint8Array(1 + chBytes.length + textBytes.length);
-  buf[0] = chBytes.length;
-  buf.set(chBytes, 1);
-  buf.set(textBytes, 1 + chBytes.length);
+  const buf = new Uint8Array(
+    1 + chBytes.length + 1 + idBytes.length + textBytes.length,
+  );
+  let off = 0;
+  buf[off++] = chBytes.length;
+  buf.set(chBytes, off);
+  off += chBytes.length;
+  buf[off++] = idBytes.length;
+  buf.set(idBytes, off);
+  off += idBytes.length;
+  buf.set(textBytes, off);
   return buf;
 }
 
 export function decodeChannelMsgPayload(
   payload: Uint8Array,
-): { channel: string; text: string } | null {
+): { channel: string; text: string; msgId: string } | null {
   if (payload.length < 1) return null;
   const chLen = payload[0];
-  if (1 + chLen > payload.length) return null;
+  if (1 + chLen + 1 > payload.length) return null;
   const channel = new TextDecoder().decode(payload.slice(1, 1 + chLen));
-  const text = new TextDecoder().decode(payload.slice(1 + chLen));
-  return { channel, text };
+
+  let off = 1 + chLen;
+  const idLen = payload[off++];
+  if (off + idLen > payload.length) return null;
+  const msgId = new TextDecoder().decode(payload.slice(off, off + idLen));
+  off += idLen;
+
+  const text = new TextDecoder().decode(payload.slice(off));
+  return { channel, text, msgId };
+}
+
+// 16 hex chars from 8 random bytes: short enough to stay cheap on the wire,
+// wide enough that collisions are irrelevant at mesh scale.
+export function newMessageId(): string {
+  const bytes = crypto.getRandomValues(new Uint8Array(8));
+  let hex = "";
+  for (const b of bytes) hex += b.toString(16).padStart(2, "0");
+  return hex;
 }
 
 // Encodes the DM payload for Noise-encrypted unicast:
@@ -209,18 +249,16 @@ export class MessageRouter {
     private readonly registry: PeerRegistry,
     private readonly broadcast: BroadcastFn,
     private readonly unicast: UnicastFn,
-    // Priority-3 transport: Nostr gift-wrap DM. Optional. When absent, DMs
-    // fall through to courier if both BLE and WiFi sessions are unavailable.
+    // Nostr gift-wrap DM. Optional. When absent, DMs fall through to courier
+    // if no direct session is available.
     private readonly nostrSend?: NostrSendFn,
-    // Priority-2 transport: WiFi direct (MC / WiFi Aware). Optional. When
-    // injected, tried before BLE for peers with an active WiFi link. Both tiers
-    // share the same Noise session (the session is transport-agnostic).
-    private readonly wifiUnicast?: WiFiUnicastFn,
   ) {}
 
   // Send a message to a public channel. Always broadcast over mesh.
-  sendChannelMessage(channel: string, text: string): void {
-    const payload = encodeChannelMsgPayload(channel, text);
+  // `msgId` is generated by the caller so the same identifier can be reused on
+  // every transport this message takes (BLE here, Nostr for geo channels).
+  sendChannelMessage(channel: string, text: string, msgId: string): void {
+    const payload = encodeChannelMsgPayload(channel, text, msgId);
     const senderIDBytes = hexToBytes(this.identity.peerID);
 
     const packet: Packet = {
@@ -240,16 +278,15 @@ export class MessageRouter {
   // Send a direct message.
   //
   // Transport selection:
-  //   1. WiFi direct: if a WiFiUnicastFn is injected and the peer is in WiFi
-  //      range, encrypt the packet with the active Noise session and send via
-  //      MultipeerConnectivity (iOS) or WiFi Aware (Android). Falls back to BLE
-  //      if WiFi is unavailable. Both tiers share the same Noise session.
-  //   2. BLE direct: if the recipient has an active Noise session, encrypt and
-  //      unicast over the mesh immediately.
-  //   3. Nostr: if a NostrSendFn was injected and the recipient's Nostr pubkey
+  //   1. Direct: if the recipient has an active Noise session, encrypt and
+  //      unicast it. The injected `unicast` callback picks the physical
+  //      transport, preferring a WiFi link (MultipeerConnectivity on iOS,
+  //      WiFi Aware on Android) over BLE when one exists. Both share the same
+  //      Noise session, which is transport-agnostic.
+  //   2. Nostr: if a NostrSendFn was injected and the recipient's Nostr pubkey
   //      is known, fire-and-forget a gift-wrap DM over the internet. Returns
   //      'sent-nostr' so the caller can show a pending indicator.
-  //   4. Courier: returns 'needs-courier' so the caller can seal the message
+  //   3. Courier: returns 'needs-courier' so the caller can seal the message
   //      and hand it to connected peers.
   sendDm(
     recipientPeerID: string,
@@ -257,8 +294,8 @@ export class MessageRouter {
   ): "sent" | "sent-nostr" | "needs-courier" {
     const peer = this.registry.get(recipientPeerID);
 
-    // Priority 1 + 2: Direct transport (WiFi or BLE). Both require an active
-    // Noise session so the payload can be encrypted end-to-end.
+    // Direct transport. Requires an active Noise session so the payload can be
+    // encrypted end-to-end; the callback below chooses WiFi or BLE.
     if (peer?.session !== undefined) {
       const payload = encodeDmPayload(text, peer.session);
       const senderIDBytes = hexToBytes(this.identity.peerID);
@@ -276,12 +313,7 @@ export class MessageRouter {
       };
       packet.signature = signPacket(packet, this.identity.signingPrivKey);
 
-      // WiFi direct: prefer when an MC/WiFi Aware link exists (higher throughput,
-      // device-to-device path). Falls back to BLE mesh when unavailable.
-      if (this.wifiUnicast?.(recipientPeerID, packet) === true) {
-        return "sent";
-      }
-      // BLE fallback.
+      // The transport layer owns the WiFi-vs-BLE decision.
       this.unicast(recipientPeerID, packet);
       return "sent";
     }

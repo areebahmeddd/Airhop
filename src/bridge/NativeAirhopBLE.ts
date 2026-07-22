@@ -16,6 +16,13 @@ export interface Spec extends TurboModule {
   // Write raw bytes to a connected peer (base64-encoded for bridge safety)
   writeToLink(linkID: string, dataBase64: string): Promise<void>;
 
+  // Current OS Bluetooth radio state. Needed at startup because the
+  // adapterStateChanged event only fires on a CHANGE. Without this the UI
+  // wouldn't know Bluetooth was already off when the app launched.
+  // Android only; on iOS CoreBluetooth reports state via adapterStateChanged
+  // as soon as the central manager initialises.
+  isAdapterEnabled(): Promise<boolean>;
+
   // Tor proxy: probe localhost for an active SOCKS5 proxy (Orbot on Android,
   // Orbot/Arti on iOS). Returns the port (9050) if reachable, or 0 if not.
   getTorProxyPort(): Promise<number>;
@@ -42,5 +49,9 @@ export interface Spec extends TurboModule {
 // 'AirhopBLE.rssiUpdated'
 //   { linkID: string, rssi: number }
 //   Periodic RSSI readings from connected peers.
+//
+// 'AirhopBLE.adapterStateChanged'
+//   { enabled: boolean }
+//   The OS Bluetooth radio was switched on or off.
 
 export default TurboModuleRegistry.getEnforcing<Spec>("AirhopBLE");

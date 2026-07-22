@@ -3,7 +3,7 @@
 
 import React from "react";
 import { StyleSheet, View } from "react-native";
-import { Colors } from "../theme";
+import { useThemeColors } from "../theme";
 
 type Status = "online" | "offline" | "syncing";
 
@@ -12,16 +12,16 @@ interface Props {
   size?: number;
 }
 
-const STATUS_COLORS: Record<Status, string> = {
-  online: Colors.online,
-  offline: Colors.offline,
-  syncing: Colors.syncing,
-};
-
 export default function StatusDot({
   status,
   size = 8,
 }: Props): React.JSX.Element {
+  const Colors = useThemeColors();
+  const STATUS_COLORS: Record<Status, string> = {
+    online: Colors.online,
+    offline: Colors.offline,
+    syncing: Colors.syncing,
+  };
   return (
     <View
       style={[

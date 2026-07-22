@@ -5,6 +5,9 @@
 //
 // Rule: if a color does not communicate information, it should not exist.
 
+import { useColorScheme, type ColorSchemeName } from "react-native";
+import { useSettingsStore } from "../store/settings-store";
+
 export const Colors = {
   // ---- Backgrounds ----------------------------------------------------------
   bg: "#F8F8F8", // off-white screen background
@@ -44,6 +47,41 @@ export const Colors = {
 
   // ---- Overlays -------------------------------------------------------------
   overlay: "rgba(0,0,0,0.45)",
+} as const;
+
+// Dark variant of the same tokens, same keys as Colors so any screen can
+// swap the whole palette by swapping which object it reads from. Currently
+// wired up via useThemeColors() below; most screens still import the static
+// `Colors` light palette directly and are unaffected by the theme setting.
+export const DarkColors = {
+  bg: "#0B0B0B",
+  surface: "#161616",
+  surfaceRaised: "#1F1F1F",
+  surfacePressed: "#2A2A2A",
+
+  border: "#2A2A2A",
+  borderStrong: "#3D3D3D",
+
+  textPrimary: "#F5F5F5",
+  textSecondary: "#A6A6A6",
+  textMuted: "#787878",
+  textInverse: "#111111",
+
+  accent: "#F5F5F5",
+  accentGhost: "rgba(245,245,245,0.08)",
+
+  myBubble: "#F5F5F5",
+  myBubbleText: "#111111",
+  theirBubble: "#232323",
+
+  online: "#22C55E",
+  offline: "#4B4B4B",
+  syncing: "#F59E0B",
+  danger: "#EF4444",
+  dangerDim: "rgba(239,68,68,0.15)",
+  success: "#22C55E",
+
+  overlay: "rgba(0,0,0,0.6)",
 } as const;
 
 // Legacy shims so existing component references compile without change.
@@ -121,4 +159,38 @@ export function avatarColor(seed: string): string {
     h = (h * 31 + seed.charCodeAt(i)) >>> 0;
   }
   return AVATAR_PALETTE[h % AVATAR_PALETTE.length];
+}
+
+// Resolves the Appearance preference ("light" | "dark" | "system") against
+// the OS color scheme. Shared by useThemeColors() and useResolvedTheme() so
+// both always agree on which mode is active.
+function resolveTheme(
+  preference: "light" | "dark" | "system",
+  systemScheme: ColorSchemeName,
+): "light" | "dark" {
+  return preference === "system"
+    ? systemScheme === "dark"
+      ? "dark"
+      : "light"
+    : preference;
+}
+
+// Resolves the Appearance preference ("light" | "dark" | "system") against
+// the OS color scheme and returns the matching palette. Re-renders whenever
+// either the preference or the OS scheme changes.
+export function useThemeColors(): Record<keyof typeof Colors, string> {
+  const preference = useSettingsStore((s) => s.theme);
+  const systemScheme = useColorScheme();
+  return resolveTheme(preference, systemScheme) === "dark"
+    ? DarkColors
+    : Colors;
+}
+
+// Same resolution as useThemeColors(), but returns just "light" | "dark",
+// for callers that need the mode itself (e.g. StatusBar's `style` prop)
+// rather than the palette.
+export function useResolvedTheme(): "light" | "dark" {
+  const preference = useSettingsStore((s) => s.theme);
+  const systemScheme = useColorScheme();
+  return resolveTheme(preference, systemScheme);
 }
