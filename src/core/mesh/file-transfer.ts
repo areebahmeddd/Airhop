@@ -203,6 +203,11 @@ export class FileAssembler {
     }
   }
 
+  // Drop a specific in-progress assembly (e.g. the user cancelled the download).
+  dropStream(streamID: number): void {
+    this.assemblies.delete(streamID);
+  }
+
   // Number of incomplete assemblies currently in memory.
   get pendingCount(): number {
     return this.assemblies.size;

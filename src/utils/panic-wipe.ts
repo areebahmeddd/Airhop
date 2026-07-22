@@ -18,6 +18,7 @@ import { useChatStore } from "../store/chat-store";
 import { useContactsStore } from "../store/contacts-store";
 import { useOutboxStore } from "../store/outbox-store";
 import { usePeerStore } from "../store/peer-store";
+import { useTransferStore } from "../store/transfer-store";
 import { useWalletStore } from "../store/wallet-store";
 
 // The IDs used by all MMKV storage instances in src/store/ and src/core/.
@@ -55,5 +56,6 @@ export async function panicWipe(): Promise<void> {
   usePeerStore.getState().clearAll();
   useOutboxStore.getState().clearAll();
   useContactsStore.getState().clearAll();
+  useTransferStore.getState().clearAll();
   useBlockedStore.setState({ blockedPeerIDs: [] });
 }

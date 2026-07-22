@@ -56,9 +56,11 @@ import { showAlert } from "./src/store/alert-store";
 import { useChatStore } from "./src/store/chat-store";
 import { useMeshState, useMeshStateStore } from "./src/store/mesh-state-store";
 import { useSettingsStore } from "./src/store/settings-store";
+import { useTransferStore } from "./src/store/transfer-store";
 import Avatar from "./src/ui/components/avatar";
 import CustomAlert from "./src/ui/components/custom-alert";
 import MeshStatusBar from "./src/ui/components/mesh-status-bar";
+import TransferBadge from "./src/ui/components/transfer-badge";
 import {
   FontSize,
   FontWeight,
@@ -240,6 +242,23 @@ export default function App(): React.JSX.Element {
     return () => sub.remove();
   }, [isInThread, isSearching]);
 
+  // Transfer watchdog: promote quiet transfers to "stalled", then "failed", on a
+  // wall clock. This is what turns a bar frozen mid-progress (peer out of range)
+  // into an honest "waiting for peer" and eventually a themed failure, rather
+  // than a silent lie. Only ticks while transfers exist, so it costs nothing at
+  // rest. See transfer-store reconcile().
+  const hasTransfers = useTransferStore(
+    (s) => Object.keys(s.transfers).length > 0,
+  );
+  useEffect(() => {
+    if (!hasTransfers) return;
+    const handle = setInterval(
+      () => useTransferStore.getState().reconcile(),
+      3000,
+    );
+    return () => clearInterval(handle);
+  }, [hasTransfers]);
+
   function triggerWalletAction(action: WalletAction): void {
     setWalletAction(action);
     setWalletActionTrigger((c) => c + 1);
@@ -317,6 +336,16 @@ export default function App(): React.JSX.Element {
     setLastThread(channel);
     markChannelRead(channel);
     setChatSubTab("dms");
+    navigateToTab("chats", false);
+    setChatView({ kind: "thread", channel });
+  }
+
+  // Jump to the conversation a transfer belongs to (from the global badge).
+  function openTransferChannel(channel: string): void {
+    setActiveChannel(channel);
+    setLastThread(channel);
+    markChannelRead(channel);
+    setChatSubTab(channel.startsWith("dm:") ? "dms" : "channels");
     navigateToTab("chats", false);
     setChatView({ kind: "thread", channel });
   }
@@ -820,6 +849,10 @@ export default function App(): React.JSX.Element {
                   </Animated.View>
                 </View>
               </GestureDetector>
+
+              {/* Ongoing attachment transfers, kept visible after you leave the
+                  thread. Sits just above the tab bar. */}
+              {!isInThread && <TransferBadge onOpen={openTransferChannel} />}
 
               {/* Tab bar */}
               {!isInThread && (
