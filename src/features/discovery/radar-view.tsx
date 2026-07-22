@@ -5,13 +5,19 @@
 // Compass N is decorative: BLE gives proximity only, not bearing.
 
 import { Feather } from "@expo/vector-icons";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { Animated, Pressable, StyleSheet, Text, View } from "react-native";
 import { type NearbyPeer } from "../../store/peer-store";
 import Avatar from "../../ui/components/avatar";
 import StatusDot from "../../ui/components/status-dot";
-import { Colors, FontSize, FontWeight, Radius, Spacing } from "../../ui/theme";
-import { peerIDToUsername } from "../../utils/username";
+import {
+  FontSize,
+  FontWeight,
+  Radius,
+  Spacing,
+  useThemeColors,
+} from "../../ui/theme";
+import { resolveDisplayName } from "../../utils/display-name";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -27,15 +33,23 @@ interface Props {
 // Constants
 // ---------------------------------------------------------------------------
 
-// Recency thresholds map to distance rings.
-// Inner ring = seen within last 15 s (strong / very close).
-// Middle ring = 15–45 s (present but less active).
-// Outer ring  = 45–60 s (edge of range or quieter device).
+// Ring assignment is signal-based when RSSI is known, and falls back to
+// recency when it isn't (a peer heard via a multi-hop relay has no RSSI of its
+// own, since we never had a direct radio link to measure).
+//
+// The rings are deliberately labelled by signal strength rather than distance.
+// RSSI is not a distance: it swings tens of dB with orientation, bodies, walls
+// and radio, so "~5m" was fiction. Presenting it as signal is both honest and
+// what the number actually is.
+const RSSI_STRONG = -60; // dBm, roughly same-room
+const RSSI_MEDIUM = -80; // dBm, beyond that it's the edge of usable range
+
+// Recency fallback thresholds, used only when RSSI is unavailable.
 const RING_THRESHOLDS: [number, number] = [15_000, 45_000]; // ms
 
 // Radii as fraction of half the canvas size (C).
 const RING_FR: [number, number, number] = [0.3, 0.54, 0.78];
-const RING_LABELS: [string, string, string] = ["~5m", "~15m", "~30m"];
+const RING_LABELS: [string, string, string] = ["Strong", "Medium", "Weak"];
 
 const AVATAR_SIZE = 34;
 const SELF_SIZE = 42;
@@ -49,6 +63,8 @@ export default function RadarView({
   now,
   onSelectPeer,
 }: Props): React.JSX.Element {
+  const Colors = useThemeColors();
+  const styles = useMemo(() => createStyles(Colors), [Colors]);
   const [canvasSize, setCanvasSize] = useState(0);
 
   const [ring1] = useState(() => new Animated.Value(0));
@@ -88,23 +104,42 @@ export default function RadarView({
     return () => anim.stop();
   }, [ring1, ring2, ring3]);
 
-  // Bucket peers by recency into the three rings.
+  // Bucket peers into rings by signal strength, falling back to recency.
   const byRing: [NearbyPeer[], NearbyPeer[], NearbyPeer[]] = [[], [], []];
   for (const peer of peers) {
-    const age = now - peer.lastSeenMs;
-    if (age < RING_THRESHOLDS[0]) byRing[0].push(peer);
-    else if (age < RING_THRESHOLDS[1]) byRing[1].push(peer);
-    else byRing[2].push(peer);
+    if (peer.rssi !== undefined) {
+      if (peer.rssi >= RSSI_STRONG) byRing[0].push(peer);
+      else if (peer.rssi >= RSSI_MEDIUM) byRing[1].push(peer);
+      else byRing[2].push(peer);
+    } else {
+      const age = now - peer.lastSeenMs;
+      if (age < RING_THRESHOLDS[0]) byRing[0].push(peer);
+      else if (age < RING_THRESHOLDS[1]) byRing[1].push(peer);
+      else byRing[2].push(peer);
+    }
+  }
+
+  // Stable angle derived from the peer ID.
+  //
+  // This was previously `indexInRing / countInRing`, which meant a peer's
+  // position was a function of how many OTHER peers happened to share its ring:
+  // anyone joining or leaving made every existing dot jump to a new angle, and
+  // the list re-sorts on every announce. Hashing the ID instead keeps each peer
+  // parked in one spot for as long as it's visible.
+  function peerAngle(peerID: string): number {
+    let hash = 0;
+    for (let i = 0; i < peerID.length; i++) {
+      hash = (hash * 31 + peerID.charCodeAt(i)) >>> 0;
+    }
+    return ((hash % 360) / 360) * 2 * Math.PI - Math.PI / 2;
   }
 
   function peerPos(
     ringIndex: 0 | 1 | 2,
-    indexInRing: number,
-    countInRing: number,
+    peerID: string,
   ): { top: number; left: number } {
     const r = C * RING_FR[ringIndex];
-    const angle =
-      (indexInRing / Math.max(countInRing, 1)) * 2 * Math.PI - Math.PI / 2;
+    const angle = peerAngle(peerID);
     return {
       top: C + Math.sin(angle) * r - AVATAR_SIZE / 2,
       left: C + Math.cos(angle) * r - AVATAR_SIZE / 2,
@@ -226,16 +261,17 @@ export default function RadarView({
               <Feather name="radio" size={14} color={Colors.textInverse} />
             </View>
 
-            {/* Peer nodes distributed across their distance ring */}
+            {/* Peer nodes placed on their signal-strength ring */}
             {(byRing as NearbyPeer[][]).map((group, ri) =>
-              group.map((peer, pi) => {
-                const pos = peerPos(ri as 0 | 1 | 2, pi, group.length);
+              group.map((peer) => {
+                const pos = peerPos(ri as 0 | 1 | 2, peer.peerID);
                 return (
                   <PeerNode
                     key={peer.peerID}
                     peer={peer}
                     top={pos.top}
                     left={pos.left}
+                    now={now}
                     onPress={() => onSelectPeer(peer)}
                   />
                 );
@@ -250,9 +286,12 @@ export default function RadarView({
               : `${peers.length} peer${peers.length !== 1 ? "s" : ""} in range`}
           </Text>
           <Text style={styles.hintText}>
+            {/* Signal strength, NOT distance. RSSI varies by tens of dB with
+                orientation, obstacles and radio, so any metre figure derived
+                from it would be invented. Ring = signal, and the label says so. */}
             {peers.length === 0
-              ? "Position ring shows estimated BLE distance"
-              : "Distance estimated from BLE signal strength"}
+              ? "Rings show BLE signal strength, not distance"
+              : "Ring position reflects signal strength, not distance"}
           </Text>
         </>
       )}
@@ -268,26 +307,35 @@ interface PeerNodeProps {
   peer: NearbyPeer;
   top: number;
   left: number;
+  now: number;
   onPress: () => void;
 }
+
+// Matches peer-list's threshold so the same peer can't read "online" here and
+// "offline" there. Previously this dot was hardcoded green for everyone.
+const ONLINE_WINDOW_MS = 30_000;
 
 function PeerNode({
   peer,
   top,
   left,
+  now,
   onPress,
 }: PeerNodeProps): React.JSX.Element {
-  const username = peerIDToUsername(peer.peerID);
+  const Colors = useThemeColors();
+  const styles = useMemo(() => createStyles(Colors), [Colors]);
+  const username = resolveDisplayName(peer.peerID);
+  const isOnline = now - peer.lastSeenMs < ONLINE_WINDOW_MS;
   return (
     <Pressable
       style={[styles.peerNode, { top, left }]}
       onPress={onPress}
       accessibilityRole="button"
-      accessibilityLabel={`View peer ${username}`}
+      accessibilityLabel={`View peer ${username}, ${isOnline ? "online" : "recently seen"}`}
     >
       <Avatar username={username} peerID={peer.peerID} size={AVATAR_SIZE} />
       <View style={styles.statusBadge}>
-        <StatusDot status="online" size={7} />
+        <StatusDot status={isOnline ? "online" : "offline"} size={7} />
       </View>
       <Text style={styles.peerLabel} numberOfLines={1}>
         {username.split("-")[0]}
@@ -300,86 +348,88 @@ function PeerNode({
 // Styles
 // ---------------------------------------------------------------------------
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: Colors.bg,
-    gap: Spacing.sm,
-    paddingBottom: Spacing.xl,
-  },
-  canvas: {
-    // width + height set dynamically
-  },
-  pulseRing: {
-    position: "absolute",
-    borderWidth: 1.5,
-    borderColor: Colors.accent,
-  },
-  guideRing: {
-    position: "absolute",
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.border,
-  },
-  ringLabel: {
-    position: "absolute",
-    fontSize: 10,
-    color: Colors.textMuted,
-    letterSpacing: 0.2,
-  },
-  compassDir: {
-    position: "absolute",
-    fontSize: 10,
-    fontWeight: FontWeight.semibold,
-    color: Colors.textMuted,
-    letterSpacing: 0.5,
-  },
-  selfDot: {
-    position: "absolute",
-    width: SELF_SIZE,
-    height: SELF_SIZE,
-    borderRadius: Radius.full,
-    backgroundColor: Colors.accent,
-    alignItems: "center",
-    justifyContent: "center",
-    elevation: 3,
-    shadowColor: Colors.accent,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 6,
-  },
-  peerNode: {
-    position: "absolute",
-    width: AVATAR_SIZE,
-    alignItems: "center",
-    gap: 2,
-  },
-  statusBadge: {
-    position: "absolute",
-    top: AVATAR_SIZE - 9,
-    left: AVATAR_SIZE - 9,
-    backgroundColor: Colors.bg,
-    borderRadius: Radius.full,
-    padding: 1,
-  },
-  peerLabel: {
-    fontSize: FontSize.xs - 1,
-    color: Colors.textMuted,
-    textAlign: "center",
-    width: AVATAR_SIZE + 16,
-    marginLeft: -8,
-  },
-  statusText: {
-    fontSize: FontSize.sm,
-    color: Colors.textSecondary,
-    textAlign: "center",
-    letterSpacing: 0.1,
-  },
-  hintText: {
-    fontSize: FontSize.xs,
-    color: Colors.textMuted,
-    textAlign: "center",
-    letterSpacing: 0.1,
-  },
-});
+function createStyles(Colors: ReturnType<typeof useThemeColors>) {
+  return StyleSheet.create({
+    container: {
+      flex: 1,
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: Colors.bg,
+      gap: Spacing.sm,
+      paddingBottom: Spacing.xl,
+    },
+    canvas: {
+      // width + height set dynamically
+    },
+    pulseRing: {
+      position: "absolute",
+      borderWidth: 1.5,
+      borderColor: Colors.accent,
+    },
+    guideRing: {
+      position: "absolute",
+      borderWidth: 1,
+      borderColor: Colors.borderStrong,
+    },
+    ringLabel: {
+      position: "absolute",
+      fontSize: 10,
+      color: Colors.textMuted,
+      letterSpacing: 0.2,
+    },
+    compassDir: {
+      position: "absolute",
+      fontSize: 10,
+      fontWeight: FontWeight.semibold,
+      color: Colors.textMuted,
+      letterSpacing: 0.5,
+    },
+    selfDot: {
+      position: "absolute",
+      width: SELF_SIZE,
+      height: SELF_SIZE,
+      borderRadius: Radius.full,
+      backgroundColor: Colors.accent,
+      alignItems: "center",
+      justifyContent: "center",
+      elevation: 3,
+      shadowColor: Colors.accent,
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.3,
+      shadowRadius: 6,
+    },
+    peerNode: {
+      position: "absolute",
+      width: AVATAR_SIZE,
+      alignItems: "center",
+      gap: 2,
+    },
+    statusBadge: {
+      position: "absolute",
+      top: AVATAR_SIZE - 9,
+      left: AVATAR_SIZE - 9,
+      backgroundColor: Colors.bg,
+      borderRadius: Radius.full,
+      padding: 1,
+    },
+    peerLabel: {
+      fontSize: FontSize.xs - 1,
+      color: Colors.textMuted,
+      textAlign: "center",
+      width: AVATAR_SIZE + 16,
+      marginLeft: -8,
+    },
+    statusText: {
+      fontSize: FontSize.sm,
+      color: Colors.textSecondary,
+      textAlign: "center",
+      letterSpacing: 0.1,
+    },
+    hintText: {
+      fontSize: FontSize.xs,
+      color: Colors.textMuted,
+      textAlign: "center",
+      letterSpacing: 0.1,
+    },
+  });
+}
