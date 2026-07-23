@@ -20,7 +20,7 @@ const SECTIONS: LegalSection[] = [
           "No analytics, advertising, telemetry, or tracking of any kind.",
           "No sale of user data.",
           "Your identity is a cryptographic key pair that never leaves your device.",
-          "All source code is open source. The storage, networking, and cryptography described here can be verified in the code.",
+          "All source code is [open source](https://github.com/areebahmeddd/Airhop). The storage, networking, and cryptography described here can be verified in the code.",
         ],
       },
     ],
@@ -53,13 +53,13 @@ const SECTIONS: LegalSection[] = [
         ],
       },
       "Private messages are encrypted end-to-end and readable only by the intended recipient. Public channel messages are visible to all participants in that channel.",
-      "Nearby mesh devices are not limited to Airhop. bitchat is a separate, compatible app that can join the same mesh and receive this same data. bitchat is an independent project with its own codebase, not operated or audited by us.",
+      "Nearby mesh devices are not limited to Airhop. [bitchat](https://bitchat.free) is a separate, compatible app that can join the same mesh and receive this same data. bitchat is an independent project with its own codebase, not operated or audited by us.",
     ],
   },
   {
     heading: "Nostr internet bridge (optional)",
     paragraphs: [
-      "When the Nostr bridge is enabled, Airhop connects to public or user-selected Nostr relays to extend conversations beyond Bluetooth range. This feature is optional and off by default.",
+      "When the Nostr bridge is enabled, Airhop connects to public or user-selected Nostr relays to extend conversations beyond Bluetooth range.",
       {
         bullets: [
           "**Private messages.** Fallback messages use NIP-17 gift wraps. Relay operators can observe event timestamps and network metadata, but not message content.",
@@ -82,7 +82,7 @@ const SECTIONS: LegalSection[] = [
         bullets: [
           "**Private sessions.** Noise XX with X25519 and ChaCha20-Poly1305.",
           "**Forward secrecy.** Provided by Double Ratchet.",
-          "**Implementation.** All cryptographic operations use the @noble library suite, which has been independently audited by Cure53.",
+          "**Implementation.** All cryptographic operations use the [@noble](https://github.com/paulmillr/noble-curves) library suite, which has been independently audited by Cure53.",
         ],
       },
       "**No cryptographic protection prevents a recipient from copying, screenshotting, or forwarding a message after reading it.**",
@@ -115,7 +115,7 @@ const SECTIONS: LegalSection[] = [
   {
     heading: "Contact",
     paragraphs: [
-      "Questions or concerns can be sent to hi@areeb.dev or raised by opening an issue on GitHub.",
+      "Questions or concerns can be sent to [hi@areeb.dev](mailto:hi@areeb.dev) or raised by opening an issue on [GitHub](https://github.com/areebahmeddd/Airhop/issues).",
     ],
   },
 ];

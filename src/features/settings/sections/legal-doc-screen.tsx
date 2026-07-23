@@ -6,12 +6,13 @@
 //
 // Mirrors the landing page's structure, not just its words: a section can
 // be a plain paragraph or a bulleted list, and either can contain inline
-// **bold** emphasis, the same shape as the <ul>/<strong> markup on
-// landing/src/pages/PrivacyPage.tsx and TermsPage.tsx, so the two stay
-// visually consistent, not just textually.
+// **bold** emphasis and [label](url) links, the same shape as the
+// <ul>/<strong>/<a> markup on landing/src/pages/PrivacyPage.tsx and
+// TermsPage.tsx, so the two stay visually consistent, not just textually.
+// Links (including mailto:) open externally, matching the anchors on the site.
 
 import React, { useMemo } from "react";
-import { ScrollView, StyleSheet, Text, View } from "react-native";
+import { Linking, ScrollView, StyleSheet, Text, View } from "react-native";
 import {
   FontSize,
   FontWeight,
@@ -21,7 +22,8 @@ import {
 import { SubHeader, useSharedStyles } from "../shared";
 
 // A block is either a paragraph string or a bulleted list of strings.
-// Any string (paragraph or bullet item) may contain **bold** spans.
+// Any string (paragraph or bullet item) may contain **bold** spans and
+// [label](url) links.
 export type LegalBlock = string | { bullets: string[] };
 
 export interface LegalSection {
@@ -63,6 +65,7 @@ export default function LegalDocScreen({
                   text={block}
                   style={styles.paragraph}
                   boldStyle={styles.bold}
+                  linkStyle={styles.link}
                 />
               ) : (
                 <View key={i} style={styles.list}>
@@ -73,6 +76,7 @@ export default function LegalDocScreen({
                         text={item}
                         style={styles.listText}
                         boldStyle={styles.bold}
+                        linkStyle={styles.link}
                       />
                     </View>
                   ))}
@@ -86,30 +90,52 @@ export default function LegalDocScreen({
   );
 }
 
-// Splits on **bold** markers and renders each span inline within one Text.
-// RN Text nests fine, and an unstyled nested Text inherits its parent's
-// color/fontSize, so bold spans only need to add fontWeight.
+// Splits on **bold** and [label](url) markers and renders each span inline
+// within one Text. RN Text nests fine, and an unstyled nested Text inherits
+// its parent's color/fontSize, so bold spans only need to add fontWeight and
+// links only need the underline color plus an onPress that opens the URL.
+const RICH_TOKEN = /(\*\*[^*]+\*\*|\[[^\]]+\]\([^)]+\))/g;
+const LINK_TOKEN = /^\[([^\]]+)\]\(([^)]+)\)$/;
+
 function RichText({
   text,
   style,
   boldStyle,
+  linkStyle,
 }: {
   text: string;
   style: object;
   boldStyle: object;
+  linkStyle: object;
 }): React.JSX.Element {
-  const parts = text.split(/(\*\*[^*]+\*\*)/g).filter(Boolean);
+  const parts = text.split(RICH_TOKEN).filter(Boolean);
   return (
     <Text style={style}>
-      {parts.map((part, i) =>
-        part.startsWith("**") && part.endsWith("**") ? (
-          <Text key={i} style={boldStyle}>
-            {part.slice(2, -2)}
-          </Text>
-        ) : (
-          <Text key={i}>{part}</Text>
-        ),
-      )}
+      {parts.map((part, i) => {
+        if (part.startsWith("**") && part.endsWith("**")) {
+          return (
+            <Text key={i} style={boldStyle}>
+              {part.slice(2, -2)}
+            </Text>
+          );
+        }
+        const link = LINK_TOKEN.exec(part);
+        if (link) {
+          const [, label, url] = link;
+          return (
+            <Text
+              key={i}
+              style={linkStyle}
+              onPress={() => void Linking.openURL(url)}
+              accessibilityRole="link"
+              suppressHighlighting
+            >
+              {label}
+            </Text>
+          );
+        }
+        return <Text key={i}>{part}</Text>;
+      })}
     </Text>
   );
 }
@@ -141,6 +167,10 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
     bold: {
       fontWeight: FontWeight.semibold,
       color: Colors.textPrimary,
+    },
+    link: {
+      color: Colors.textPrimary,
+      textDecorationLine: "underline",
     },
     list: {
       gap: Spacing.sm,
