@@ -288,19 +288,44 @@ if (_adjLen !== 128 || _nounLen !== 128) {
   );
 }
 
+// ---- Nostr identities -------------------------------------------------------
+
+// A peer reachable only over the Nostr internet bridge is keyed by its Nostr
+// public key, prefixed to distinguish it from a 16-hex mesh peer ID.
+export const NOSTR_ID_PREFIX = "nostr_";
+
+export function isNostrId(id: string): boolean {
+  return id.startsWith(NOSTR_ID_PREFIX);
+}
+
+// Short, honest label for a Nostr-only correspondent. They have no Noise-key
+// fingerprint to derive an adjective-noun name from, so we show the tail of
+// their public key, npub-style. The last 6 chars disambiguate plenty and this
+// is the single formatting used everywhere a Nostr peer is named.
+export function nostrShortLabel(id: string): string {
+  return `npub…${id.slice(-6)}`;
+}
+
 // ---- Public API -------------------------------------------------------------
 
 // Derive a human-readable username from a 16-hex-char peer ID.
 //
 // peerID is the first 16 hex chars of SHA-256(noiseStaticPubKey), as produced
-// by identity.ts. Passing any other string of length ≥ 4 also works but will
-// give a meaningless name.
+// by identity.ts. A Nostr id ("nostr_<pubkey>") has no such fingerprint, so it
+// returns its npub-style label instead of running the byte math (which would
+// otherwise index the word lists with NaN and yield "undefined-undefined-...").
 export function peerIDToUsername(peerID: string): string {
+  // Nostr-only peer: no mesh fingerprint to map. Name it by its key tail.
+  if (isNostrId(peerID)) return nostrShortLabel(peerID);
   if (peerID.length < 4) {
     throw new Error("username: peerID must be at least 4 hex characters");
   }
   const b0 = parseInt(peerID.slice(0, 2), 16);
   const b1 = parseInt(peerID.slice(2, 4), 16);
+  // Defensive: an id whose leading chars are not hex. Never emit "undefined".
+  if (Number.isNaN(b0) || Number.isNaN(b1)) {
+    return `peer-${peerID.slice(0, 6).toLowerCase()}`;
+  }
   const adj = ADJECTIVES[b0 % ADJECTIVES.length];
   const noun = NOUNS[b1 % NOUNS.length];
   const suffix = peerID.slice(0, 4).toLowerCase();

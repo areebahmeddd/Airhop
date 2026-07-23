@@ -17,9 +17,7 @@
 
 import { useContactsStore } from "../store/contacts-store";
 import { usePeerStore } from "../store/peer-store";
-import { peerIDToUsername } from "./username";
-
-const NOSTR_PREFIX = "nostr_";
+import { isNostrId, nostrShortLabel, peerIDToUsername } from "./username";
 
 // Name shown for a sender inside a PUBLIC channel.
 //
@@ -36,21 +34,27 @@ export function channelDisplayName(
   peerID: string,
   announcedNickname?: string,
 ): string {
-  const suffix = peerID.slice(-4);
   const contactName = useContactsStore.getState().nicknameFor(peerID);
-  const base =
-    contactName ??
-    (announcedNickname !== undefined && announcedNickname.length > 0
+  const announced =
+    announcedNickname !== undefined && announcedNickname.length > 0
       ? announcedNickname
-      : peerIDToUsername(peerID));
-  return `${base}#${suffix}`;
+      : undefined;
+  const nick = contactName ?? announced;
+
+  // A Nostr sender's public-key tail already identifies them uniquely, so no
+  // fingerprint suffix when we fall back to it. A trusted or announced name
+  // still wins, kept distinguishable with the same tail.
+  if (isNostrId(peerID)) {
+    return nick ? `${nick}#${peerID.slice(-4)}` : nostrShortLabel(peerID);
+  }
+
+  const base = nick ?? peerIDToUsername(peerID);
+  return `${base}#${peerID.slice(-4)}`;
 }
 
 // Resolve outside React (services, stores, event handlers).
 export function resolveDisplayName(peerID: string): string {
-  if (peerID.startsWith(NOSTR_PREFIX)) {
-    return `npub…${peerID.slice(-6)}`;
-  }
+  if (isNostrId(peerID)) return nostrShortLabel(peerID);
 
   const contactName = useContactsStore.getState().nicknameFor(peerID);
   if (contactName !== undefined) return contactName;
@@ -66,7 +70,7 @@ export function useDisplayName(peerID: string): string {
   const contactName = useContactsStore((s) => s.contacts[peerID]?.nickname);
   const announced = usePeerStore((s) => s.peers.get(peerID)?.nickname);
 
-  if (peerID.startsWith(NOSTR_PREFIX)) return `npub…${peerID.slice(-6)}`;
+  if (isNostrId(peerID)) return nostrShortLabel(peerID);
   if (contactName !== undefined && contactName.length > 0) return contactName;
   if (announced !== undefined && announced.length > 0) return announced;
   return peerIDToUsername(peerID);

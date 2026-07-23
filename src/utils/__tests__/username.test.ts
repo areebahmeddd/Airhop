@@ -1,7 +1,7 @@
 /**
  * @jest-environment node
  */
-import { peerIDToUsername } from "../username";
+import { isNostrId, nostrShortLabel, peerIDToUsername } from "../username";
 
 describe("peerIDToUsername", () => {
   test("produces adjective-noun-suffix format", () => {
@@ -67,5 +67,24 @@ describe("peerIDToUsername", () => {
     // If the length check in username.ts throws, the import above would have
     // already failed. Reaching this line confirms both lists are 128 entries.
     expect(true).toBe(true);
+  });
+
+  // Regression: a Nostr id fed into the byte math used to index the word lists
+  // with NaN and render "undefined-undefined-nost". It must instead resolve to
+  // the peer's npub-style label, consistently with resolveDisplayName.
+  test("Nostr id resolves to an npub-style label, never 'undefined'", () => {
+    const nostrID =
+      "nostr_53624313fcb11263cdb2562c440e0f5f0356a653ae9d449d09bc8c349c5ea763";
+    const name = peerIDToUsername(nostrID);
+    expect(name).toBe("npub…5ea763");
+    expect(name).not.toContain("undefined");
+    expect(isNostrId(nostrID)).toBe(true);
+    expect(nostrShortLabel(nostrID)).toBe("npub…5ea763");
+  });
+
+  test("non-hex id falls back to a stable label rather than 'undefined'", () => {
+    const name = peerIDToUsername("zzzzzz");
+    expect(name).not.toContain("undefined");
+    expect(name).toBe("peer-zzzzzz");
   });
 });
