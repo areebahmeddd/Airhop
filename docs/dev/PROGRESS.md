@@ -63,6 +63,8 @@ Voice notes and recorded-video sharing both work via `FILE_TRANSFER`.
 - [x] `android/app/src/main/java/tech/permissionless/airhop/service/AirhopForegroundService.kt`: background keepalive
 - [x] iOS: `UIBackgroundModes: [bluetooth-central, bluetooth-peripheral]` in `app.json`
 - [x] Android: foreground service permission in AndroidManifest
+- [x] Foreground service is started with the mesh (`AirhopBLEModule.startAdvertising`), so the process, BLE, and the Nostr socket survive backgrounding
+- [x] Local message notifications (`expo-notifications`, no push server): per-conversation heads-up with sender and channel, tap to open the thread, clears on read, app-icon badge synced to total unread; foreground haptic when a message lands on another chat while the app is open
 - [x] `src/bridge/NativeAirhopBLE.ts`: TurboModule TypeScript spec (Codegen input)
 
 ### Core mesh engine

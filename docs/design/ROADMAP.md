@@ -92,7 +92,7 @@ bitchat is an excellent foundation. Airhop fills the gaps it left open.
 - [x] Set up Expo bare workflow with TypeScript strict
 - [x] `AirhopBLEModule` iOS (Swift, ~400 lines): dual-role GATT server + client
 - [x] `AirhopBLEModule` Android (Kotlin, ~490 lines): dual-role GATT
-- [x] `AirhopForegroundService.kt`: background keepalive (foreground service, `connectedDevice` type)
+- [x] `AirhopForegroundService.kt`: background keepalive (foreground service, `connectedDevice` type), started with the mesh from `AirhopBLEModule` so the process, BLE, and Nostr socket survive backgrounding
 - [x] Wire TurboModule to `src/bridge/NativeAirhopBLE.ts`
 - [x] `src/core/mesh/packet-codec.ts`: binary encode/decode matching bitchat v2 (`PROTOCOLS.md`, section 2)
 - [x] `src/core/mesh/flood-router.ts`: TTL flood, jitter 10-220ms, dedup

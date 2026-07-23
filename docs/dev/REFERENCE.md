@@ -817,15 +817,15 @@ No forensic recovery is possible after panic wipe without the Keychain, which is
 
 ### Operational Gaps
 
-| Gap                              | Notes                                                                                                           |
-| -------------------------------- | --------------------------------------------------------------------------------------------------------------- |
-| **Sparse network problem**       | With few users, mesh range collapses; the network requires critical mass                                        |
-| **Discovery requires proximity** | You cannot find strangers unless they are physically nearby or mutual favorites                                 |
-| **Push notifications**           | Background delivery is limited by OS restrictions (especially iOS)                                              |
-| **Large file transfers**         | 1 MiB cap; no chunked streaming or resumable transfers                                                          |
-| **No read receipts on Nostr**    | Read receipts work on BLE but not reliably over Nostr                                                           |
-| **Relay quality variance**       | Not all 350+ relays reliably accept kind 20000; `filter_bitchat_relays.sh` filters but results change over time |
-| **Android battery optimization** | Many Android OEMs aggressively kill background apps, disrupting BLE mesh                                        |
+| Gap                              | Notes                                                                                                                                                                                                                                                                                      |
+| -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Sparse network problem**       | With few users, mesh range collapses; the network requires critical mass                                                                                                                                                                                                                   |
+| **Discovery requires proximity** | You cannot find strangers unless they are physically nearby or mutual favorites                                                                                                                                                                                                            |
+| **Push notifications**           | Local message notifications fire when the app process is alive (Android keeps it alive with the mesh foreground service; iOS whenever the OS has the app awake). Waking a fully killed app needs a push server Airhop does not run, so a force stopped iOS app stays silent until reopened |
+| **Large file transfers**         | 1 MiB cap; no chunked streaming or resumable transfers                                                                                                                                                                                                                                     |
+| **No read receipts on Nostr**    | Read receipts work on BLE but not reliably over Nostr                                                                                                                                                                                                                                      |
+| **Relay quality variance**       | Not all 350+ relays reliably accept kind 20000; `filter_bitchat_relays.sh` filters but results change over time                                                                                                                                                                            |
+| **Android battery optimization** | Many Android OEMs aggressively kill background apps, disrupting BLE mesh                                                                                                                                                                                                                   |
 
 ### Protocol Gaps
 
