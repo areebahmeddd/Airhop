@@ -1,4 +1,10 @@
-// About sub-screen: version, changelog, source, and third-party licenses.
+// About sub-screen: version, release notes, source, and third-party licenses.
+//
+// The version shown is this build's own version (from app.json, the single
+// source of truth), not a hand-edited constant. Tapping the row opens the
+// Version screen, where the running version can be checked against the latest
+// GitHub release. Release notes open GitHub's /releases/latest, which always
+// redirects to the newest published release, so no fetch happens here.
 //
 // No Build Number row: Expo doesn't expose a real build number outside an
 // EAS build, and this app isn't on EAS yet, so a fabricated number would
@@ -7,20 +13,26 @@
 import React from "react";
 import { Linking, ScrollView, Text, View } from "react-native";
 import {
+  APP_VERSION,
+  GITHUB_URL,
+  LATEST_RELEASE_PAGE,
+} from "../../../data/app-info";
+import {
   GroupDivider,
   SettingLinkRow,
-  SettingRow,
   SubHeader,
   useSharedStyles,
 } from "../shared";
 
 interface Props {
   onBack: () => void;
+  onOpenVersion: () => void;
   onOpenLicenses: () => void;
 }
 
 export default function AboutScreen({
   onBack,
+  onOpenVersion,
   onOpenLicenses,
 }: Props): React.JSX.Element {
   const styles = useSharedStyles();
@@ -33,40 +45,36 @@ export default function AboutScreen({
       >
         <View style={styles.section}>
           <View style={styles.settingsGroup}>
-            <SettingRow
+            <SettingLinkRow
               icon="tag"
               label="Version"
               description="Current release"
-              control={<Text style={styles.settingValue}>1.0.0</Text>}
+              control={<Text style={styles.settingValue}>{APP_VERSION}</Text>}
+              onPress={onOpenVersion}
+              accessibilityLabel="View version and check for updates"
             />
             <GroupDivider />
             <SettingLinkRow
               icon="clock"
-              label="Changelog"
-              description="What's changed, release by release"
-              onPress={() =>
-                void Linking.openURL(
-                  "https://github.com/areebahmeddd/airhop/blob/main/docs/dev/CHANGELOG.md",
-                )
-              }
-              accessibilityLabel="Open changelog on GitHub"
+              label="Release notes"
+              description="What's new in the latest release"
+              onPress={() => void Linking.openURL(LATEST_RELEASE_PAGE)}
+              accessibilityLabel="Open the latest release notes on GitHub"
               external
             />
             <GroupDivider />
             <SettingLinkRow
               icon="github"
-              label="GitHub"
-              description="areebahmeddd/airhop"
-              onPress={() =>
-                void Linking.openURL("https://github.com/areebahmeddd/airhop")
-              }
-              accessibilityLabel="Open GitHub repository"
+              label="Source Code"
+              description="areebahmeddd/Airhop"
+              onPress={() => void Linking.openURL(GITHUB_URL)}
+              accessibilityLabel="Open source code on GitHub"
               external
             />
             <GroupDivider />
             <SettingLinkRow
               icon="file-text"
-              label="Licenses"
+              label="Open source licenses"
               description="Third-party open source packages"
               onPress={onOpenLicenses}
               accessibilityLabel="View third-party licenses"

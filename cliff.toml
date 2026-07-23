@@ -6,7 +6,7 @@ All notable changes are documented here.
 
 """
 body = """
-## What's Changed in {{ version }}
+## What's Changed in {{ version }}{% if version and version is starting_with("v1.") %} · Albatross{% endif %}
 
 {% for commit in commits %}{% if commit.author.name is not containing("[bot]") %}- {{ commit.message | split(pat="\n") | first | trim }} (by @{{ commit.author.name }}){% if commit.github.pr_number %} (#{{ commit.github.pr_number }}){% endif %} [{{ commit.id | truncate(length=7, end="") }}]
 {% endif %}{% endfor %}

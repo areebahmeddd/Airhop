@@ -65,10 +65,22 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Compose release title
+        id: title
+        run: |
+          set -euo pipefail
+          # Use the git-cliff release heading if available; otherwise fall back to the tag.
+          NAME=$(grep -m1 "^## What's Changed in " RELEASE_NOTES.md | sed "s/^## What's Changed in //" || true)
+          if [ -z "${NAME:-}" ]; then
+            NAME="${{ steps.resolve.outputs.tag }}"
+          fi
+          echo "name=${NAME}" >> "$GITHUB_OUTPUT"
+
       - name: Create GitHub release
         uses: softprops/action-gh-release@3d0d9888cb7fd7b750713d6e236d1fcb99157228 # v3.0.2
         with:
           tag_name: ${{ steps.resolve.outputs.tag }}
+          name: ${{ steps.title.outputs.name }}
           body_path: RELEASE_NOTES.md
 
       - name: Commit changelog to main

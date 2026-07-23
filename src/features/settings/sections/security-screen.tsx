@@ -19,7 +19,7 @@ import NativeAirhopTor from "../../../bridge/NativeAirhopTor";
 import { showAlert } from "../../../store/alert-store";
 import { useBlockedStore } from "../../../store/blocked-store";
 import { useThemeColors } from "../../../ui/theme";
-import { peerIDToUsername } from "../../../utils/username";
+import { resolveDisplayName } from "../../../utils/display-name";
 import {
   GroupDivider,
   SettingRow,
@@ -47,7 +47,7 @@ export default function SecurityScreen({ onBack }: Props): React.JSX.Element {
   function confirmUnblock(peerID: string): void {
     showAlert(
       "Unblock this peer",
-      `${peerIDToUsername(peerID)} will be able to message you again and will reappear on the Mesh tab when nearby.`,
+      `${resolveDisplayName(peerID)} will be able to message you again and will reappear on the Mesh tab when nearby.`,
       [
         { text: "Cancel", style: "cancel" },
         {
@@ -202,7 +202,6 @@ export default function SecurityScreen({ onBack }: Props): React.JSX.Element {
             unblockPeer, so short of a full panic wipe a block could never be
             undone. */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Blocked</Text>
           <View style={styles.settingsGroup}>
             {blockedPeerIDs.length === 0 ? (
               <SettingRow
@@ -216,14 +215,14 @@ export default function SecurityScreen({ onBack }: Props): React.JSX.Element {
                   {index > 0 && <GroupDivider />}
                   <SettingRow
                     icon="slash"
-                    label={peerIDToUsername(peerID)}
+                    label={resolveDisplayName(peerID)}
                     description={peerID}
                     control={
                       <Pressable
                         onPress={() => confirmUnblock(peerID)}
                         hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                         accessibilityRole="button"
-                        accessibilityLabel={`Unblock ${peerIDToUsername(peerID)}`}
+                        accessibilityLabel={`Unblock ${resolveDisplayName(peerID)}`}
                       >
                         <Text
                           style={[
