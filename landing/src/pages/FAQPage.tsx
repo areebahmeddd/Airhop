@@ -140,7 +140,7 @@ const SECTIONS: {
             message sessions.
             <br />
             <br />
-            For contacts you want to fully trust, QR code or NFC verification pins their key
+            For contacts you want to fully trust, QR code verification pins their key
             fingerprint to a human name, the same model Signal uses with safety numbers.
           </>
         ),

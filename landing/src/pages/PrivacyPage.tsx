@@ -134,8 +134,7 @@ export default function PrivacyPage() {
             </h2>
             <p className="text-sm leading-relaxed">
               When the Nostr bridge is enabled, Airhop connects to public or user-selected Nostr
-              relays to extend conversations beyond Bluetooth range. This feature is optional and
-              off by default.
+              relays to extend conversations beyond Bluetooth range.
             </p>
             <ul className="list-disc space-y-1.5 pl-5 text-sm leading-relaxed marker:text-gray-400">
               <li>

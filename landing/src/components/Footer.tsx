@@ -85,8 +85,8 @@ const NAV_COLUMNS = [
   {
     heading: "Legal",
     links: [
-      { label: "Privacy Policy", href: "/privacy-policy", external: false },
       { label: "Terms of Service", href: "/terms-of-service", external: false },
+      { label: "Privacy Policy", href: "/privacy-policy", external: false },
       {
         label: "Project License",
         href: "https://github.com/areebahmeddd/Airhop/blob/main/LICENSE",

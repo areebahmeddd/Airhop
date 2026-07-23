@@ -165,7 +165,7 @@ export default function About() {
                 <ol className="mt-3 list-decimal space-y-2 pl-5">
                   <li>
                     <span className="font-semibold text-gray-900">Offline Payments:</span> Send and
-                    receive payments offline using the{" "}
+                    receive payments over the mesh using the {" "}
                     <a
                       href="https://cashu.space"
                       target="_blank"
@@ -186,8 +186,8 @@ export default function About() {
                   </li>
                   <li>
                     <span className="font-semibold text-gray-900">Offline AI:</span> A small
-                    on-device AI assistant that can answer important questions even when you're
-                    offline. All processing and data stay on your device.
+                    on-device AI assistant that can answer important questions. All processing and
+                    data stay on your device.
                   </li>
                 </ol>
               </div>
