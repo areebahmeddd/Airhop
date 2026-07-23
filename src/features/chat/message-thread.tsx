@@ -72,6 +72,7 @@ import {
   Spacing,
   useThemeColors,
 } from "../../ui/theme";
+import { resolveDisplayName } from "../../utils/display-name";
 import { peerIDToUsername } from "../../utils/username";
 import ChannelInfoSheet from "./channel-info-sheet";
 import ContactInfoSheet from "./contact-info-sheet";
@@ -560,6 +561,9 @@ export default function MessageThread({
   const [senderInfoTarget, setSenderInfoTarget] = useState<{
     peerID: string;
     nickname: string;
+    // True when opened from the members list, so the sheet shows a back arrow
+    // that returns to the list (still open behind it) instead of dismissing.
+    fromMembers?: boolean;
   } | null>(null);
   // Channel members list — currently-reachable peers, tap one to open the
   // same profile sheet as tapping their avatar on a message.
@@ -943,6 +947,8 @@ export default function MessageThread({
     const dmChannel = `dm:${senderInfoTarget.peerID}`;
     addChannel(dmChannel);
     setSenderInfoTarget(null);
+    // Also dismiss the members list, if it was left open behind this sheet.
+    setShowMembersList(false);
     onNavigateToChannel(dmChannel);
   }
 
@@ -1332,7 +1338,7 @@ export default function MessageThread({
   }
 
   const displayName = channel.startsWith("dm:")
-    ? peerIDToUsername(channel.slice(3))
+    ? resolveDisplayName(channel.slice(3))
     : channel;
 
   return (
@@ -1376,7 +1382,7 @@ export default function MessageThread({
         <View style={styles.headerRight}>
           {isDM ? (
             <Avatar
-              username={peerIDToUsername(channel.slice(3))}
+              username={resolveDisplayName(channel.slice(3))}
               peerID={channel.slice(3)}
               size={28}
             />
@@ -1852,10 +1858,12 @@ export default function MessageThread({
                       key={peer.peerID}
                       style={styles.memberRow}
                       onPress={() => {
-                        setShowMembersList(false);
+                        // Keep the members list open behind the profile sheet
+                        // so the sheet's back arrow returns straight to it.
                         setSenderInfoTarget({
                           peerID: peer.peerID,
                           nickname: peer.nickname,
+                          fromMembers: true,
                         });
                       }}
                       accessibilityRole="button"
@@ -1907,14 +1915,29 @@ export default function MessageThread({
               />
               <View style={styles.dmInfoSheet}>
                 <View style={styles.handle} />
+                {senderInfoTarget.fromMembers && (
+                  <Pressable
+                    style={styles.dmInfoBack}
+                    onPress={() => setSenderInfoTarget(null)}
+                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                    accessibilityRole="button"
+                    accessibilityLabel="Back to members"
+                  >
+                    <Feather
+                      name="chevron-left"
+                      size={24}
+                      color={Colors.textPrimary}
+                    />
+                  </Pressable>
+                )}
                 <View style={styles.dmInfoBody}>
                   <Avatar
-                    username={peerIDToUsername(senderInfoTarget.peerID)}
+                    username={resolveDisplayName(senderInfoTarget.peerID)}
                     peerID={senderInfoTarget.peerID}
                     size={64}
                   />
                   <Text style={styles.dmInfoName}>
-                    {peerIDToUsername(senderInfoTarget.peerID)}
+                    {resolveDisplayName(senderInfoTarget.peerID)}
                   </Text>
                   <Text style={styles.dmInfoPeerID}>
                     {senderInfoTarget.peerID}
@@ -1933,7 +1956,7 @@ export default function MessageThread({
                     style={styles.senderInfoMessageBtn}
                     onPress={handleMessageSender}
                     accessibilityRole="button"
-                    accessibilityLabel={`Message ${peerIDToUsername(senderInfoTarget.peerID)}`}
+                    accessibilityLabel={`Message ${resolveDisplayName(senderInfoTarget.peerID)}`}
                   >
                     <Feather
                       name="message-circle"
@@ -2291,10 +2314,12 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       marginLeft: 40 + Spacing.base + Spacing.sm,
     },
     attachCancel: {
+      minHeight: 50,
       backgroundColor: Colors.surfaceRaised,
-      borderRadius: Radius.md,
-      paddingVertical: Spacing.base,
+      borderRadius: Radius.full,
+      paddingVertical: Spacing.md,
       alignItems: "center",
+      justifyContent: "center",
       marginTop: Spacing.base,
       borderWidth: 1,
       borderColor: Colors.border,
@@ -2590,6 +2615,13 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       borderTopLeftRadius: Radius["2xl"],
       borderTopRightRadius: Radius["2xl"],
       paddingBottom: Spacing["2xl"],
+    },
+    dmInfoBack: {
+      position: "absolute",
+      top: Spacing.base,
+      left: Spacing.base,
+      zIndex: 1,
+      padding: Spacing.xs,
     },
     dmInfoBody: {
       alignItems: "center",

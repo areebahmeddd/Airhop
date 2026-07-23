@@ -4,7 +4,7 @@
 // Swipe left on a row for More (clear / delete), the same gesture as the
 // Channels list, so both chat surfaces manage conversations consistently.
 
-import { Feather } from "@expo/vector-icons";
+import { Feather, MaterialCommunityIcons } from "@expo/vector-icons";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   FlatList,
@@ -248,8 +248,8 @@ export default function DmList({ onSelectDM }: Props): React.JSX.Element {
                       />
                     )}
                     {isPinned && (
-                      <Feather
-                        name="map-pin"
+                      <MaterialCommunityIcons
+                        name="pin"
                         size={13}
                         color={Colors.textMuted}
                       />
@@ -360,11 +360,18 @@ export default function DmList({ onSelectDM }: Props): React.JSX.Element {
             <View style={styles.handle} />
             {moreOptionsDM && (
               <>
-                <Text style={styles.modalTitle}>
-                  {resolveDisplayName(moreOptionsDM.slice(3))}
-                </Text>
+                <View style={styles.modalTitleRow}>
+                  <Avatar
+                    username={resolveDisplayName(moreOptionsDM.slice(3))}
+                    peerID={moreOptionsDM.slice(3)}
+                    size={32}
+                  />
+                  <Text style={styles.modalTitle} numberOfLines={1}>
+                    {resolveDisplayName(moreOptionsDM.slice(3))}
+                  </Text>
+                </View>
 
-                {/* Everyday actions. */}
+                {/* Everyday actions, grouped in one box. */}
                 <View style={styles.moreRowsGroup}>
                   <Pressable
                     style={styles.moreRow}
@@ -379,13 +386,18 @@ export default function DmList({ onSelectDM }: Props): React.JSX.Element {
                     <Text style={styles.moreRowText}>Contact info</Text>
                   </Pressable>
 
+                  <View style={styles.moreDivider} />
                   <Pressable
                     style={styles.moreRow}
                     onPress={() => handlePinDM(moreOptionsDM)}
                     accessibilityRole="button"
                   >
-                    <Feather
-                      name="map-pin"
+                    <MaterialCommunityIcons
+                      name={
+                        pinnedChannels.includes(moreOptionsDM)
+                          ? "pin-off"
+                          : "pin"
+                      }
                       size={18}
                       color={Colors.textSecondary}
                     />
@@ -396,6 +408,7 @@ export default function DmList({ onSelectDM }: Props): React.JSX.Element {
                     </Text>
                   </Pressable>
 
+                  <View style={styles.moreDivider} />
                   <Pressable
                     style={styles.moreRow}
                     onPress={() => handleMuteDM(moreOptionsDM)}
@@ -412,11 +425,12 @@ export default function DmList({ onSelectDM }: Props): React.JSX.Element {
                     />
                     <Text style={styles.moreRowText}>
                       {mutedChannels.includes(moreOptionsDM)
-                        ? "Unmute"
-                        : "Mute"}
+                        ? "Unmute chat"
+                        : "Mute chat"}
                     </Text>
                   </Pressable>
 
+                  <View style={styles.moreDivider} />
                   <Pressable
                     style={styles.moreRow}
                     onPress={() => handleClearDM(moreOptionsDM)}
@@ -431,8 +445,8 @@ export default function DmList({ onSelectDM }: Props): React.JSX.Element {
                   </Pressable>
                 </View>
 
-                {/* Destructive actions, set apart in their own red group. */}
-                <View style={styles.moreRowsGroup}>
+                {/* Destructive actions in their own red box. */}
+                <View style={styles.moreRowsGroupDanger}>
                   <Pressable
                     style={styles.moreRowDanger}
                     onPress={() => handleRemoveContactDM(moreOptionsDM)}
@@ -446,6 +460,7 @@ export default function DmList({ onSelectDM }: Props): React.JSX.Element {
                     </Text>
                   </Pressable>
 
+                  <View style={styles.moreDividerDanger} />
                   <Pressable
                     style={styles.moreRowDanger}
                     onPress={() => handleBlockDM(moreOptionsDM)}
@@ -455,10 +470,11 @@ export default function DmList({ onSelectDM }: Props): React.JSX.Element {
                     <Text
                       style={[styles.moreRowText, styles.moreRowTextDanger]}
                     >
-                      Block
+                      Block contact
                     </Text>
                   </Pressable>
 
+                  <View style={styles.moreDividerDanger} />
                   <Pressable
                     style={styles.moreRowDanger}
                     onPress={() => handleDeleteDM(moreOptionsDM)}
@@ -672,31 +688,53 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       alignSelf: "center",
       marginBottom: Spacing.xs,
     },
+    modalTitleRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: Spacing.sm,
+    },
     modalTitle: {
+      flexShrink: 1,
       fontSize: FontSize.md,
       fontWeight: FontWeight.semibold,
       color: Colors.textPrimary,
     },
+    // Two grouped boxes: neutral actions in one card, destructive in a solid
+    // red card. Rows are transparent; the card owns the background and the
+    // rounded corners (overflow clips the rows to the radius).
     moreRowsGroup: {
-      gap: Spacing.xs,
+      backgroundColor: Colors.surfaceRaised,
+      borderRadius: Radius.lg,
+      overflow: "hidden",
+    },
+    moreRowsGroupDanger: {
+      backgroundColor: Colors.surfaceRaised,
+      borderRadius: Radius.lg,
+      overflow: "hidden",
     },
     moreRow: {
       flexDirection: "row",
       alignItems: "center",
       gap: Spacing.md,
-      paddingVertical: Spacing.sm + 2,
-      paddingHorizontal: Spacing.sm,
-      borderRadius: Radius.md,
-      backgroundColor: Colors.surfaceRaised,
+      paddingVertical: Spacing.md,
+      paddingHorizontal: Spacing.base,
     },
     moreRowDanger: {
       flexDirection: "row",
       alignItems: "center",
       gap: Spacing.md,
-      paddingVertical: Spacing.sm + 2,
-      paddingHorizontal: Spacing.sm,
-      borderRadius: Radius.md,
-      backgroundColor: Colors.dangerDim,
+      paddingVertical: Spacing.md,
+      paddingHorizontal: Spacing.base,
+    },
+    moreDivider: {
+      height: StyleSheet.hairlineWidth,
+      backgroundColor: Colors.border,
+      marginLeft: Spacing.base,
+    },
+    moreDividerDanger: {
+      height: StyleSheet.hairlineWidth,
+      backgroundColor: Colors.border,
+      marginLeft: Spacing.base,
     },
     moreRowText: {
       fontSize: FontSize.base,

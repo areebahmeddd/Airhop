@@ -5,7 +5,7 @@
 // chat info, and for Your Channels also pin and delete. The header "+"
 // (App.tsx) opens the create/join modal below.
 
-import { Feather } from "@expo/vector-icons";
+import { Feather, MaterialCommunityIcons } from "@expo/vector-icons";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   Modal,
@@ -276,7 +276,7 @@ export default function ChannelList({
   function handleClearChat(channel: string): void {
     setMoreOptionsChannel(null);
     showAlert(
-      "Clear chat",
+      "Clear channel",
       `Delete all messages in ${channel}? This can't be undone.`,
       [
         { text: "Cancel", style: "cancel" },
@@ -292,7 +292,7 @@ export default function ChannelList({
   function handleDeleteChat(channel: string): void {
     setMoreOptionsChannel(null);
     showAlert(
-      "Delete chat",
+      "Delete channel",
       `Delete ${channel}? This removes the channel and all its messages.`,
       [
         { text: "Cancel", style: "cancel" },
@@ -345,7 +345,11 @@ export default function ChannelList({
                 <Feather name="bell-off" size={13} color={Colors.textMuted} />
               )}
               {isPinned && (
-                <Feather name="map-pin" size={13} color={Colors.textMuted} />
+                <MaterialCommunityIcons
+                  name="pin"
+                  size={13}
+                  color={Colors.textMuted}
+                />
               )}
             </View>
           </View>
@@ -603,7 +607,7 @@ export default function ChannelList({
               <>
                 <Text style={styles.modalTitle}>{moreOptionsChannel}</Text>
 
-                {/* Everyday actions. */}
+                {/* Everyday actions, grouped in one box. */}
                 <View style={styles.moreRowsGroup}>
                   <Pressable
                     style={styles.moreRow}
@@ -618,31 +622,39 @@ export default function ChannelList({
                       size={18}
                       color={Colors.textSecondary}
                     />
-                    <Text style={styles.moreRowText}>Chat info</Text>
+                    <Text style={styles.moreRowText}>Channel info</Text>
                   </Pressable>
 
                   {!DEFAULT_CHANNEL_NAMES.has(moreOptionsChannel) && (
-                    <Pressable
-                      style={styles.moreRow}
-                      onPress={() => {
-                        togglePinChannel(moreOptionsChannel);
-                        setMoreOptionsChannel(null);
-                      }}
-                      accessibilityRole="button"
-                    >
-                      <Feather
-                        name="map-pin"
-                        size={18}
-                        color={Colors.textSecondary}
-                      />
-                      <Text style={styles.moreRowText}>
-                        {pinnedChannels.includes(moreOptionsChannel)
-                          ? "Unpin chat"
-                          : "Pin chat"}
-                      </Text>
-                    </Pressable>
+                    <>
+                      <View style={styles.moreDivider} />
+                      <Pressable
+                        style={styles.moreRow}
+                        onPress={() => {
+                          togglePinChannel(moreOptionsChannel);
+                          setMoreOptionsChannel(null);
+                        }}
+                        accessibilityRole="button"
+                      >
+                        <MaterialCommunityIcons
+                          name={
+                            pinnedChannels.includes(moreOptionsChannel)
+                              ? "pin-off"
+                              : "pin"
+                          }
+                          size={18}
+                          color={Colors.textSecondary}
+                        />
+                        <Text style={styles.moreRowText}>
+                          {pinnedChannels.includes(moreOptionsChannel)
+                            ? "Unpin channel"
+                            : "Pin channel"}
+                        </Text>
+                      </Pressable>
+                    </>
                   )}
 
+                  <View style={styles.moreDivider} />
                   <Pressable
                     style={styles.moreRow}
                     onPress={() => handleMuteChat(moreOptionsChannel)}
@@ -659,11 +671,12 @@ export default function ChannelList({
                     />
                     <Text style={styles.moreRowText}>
                       {mutedChannels.includes(moreOptionsChannel)
-                        ? "Unmute"
-                        : "Mute"}
+                        ? "Unmute channel"
+                        : "Mute channel"}
                     </Text>
                   </Pressable>
 
+                  <View style={styles.moreDivider} />
                   <Pressable
                     style={styles.moreRow}
                     onPress={() => handleClearChat(moreOptionsChannel)}
@@ -674,14 +687,14 @@ export default function ChannelList({
                       size={18}
                       color={Colors.textSecondary}
                     />
-                    <Text style={styles.moreRowText}>Clear chat</Text>
+                    <Text style={styles.moreRowText}>Clear channel</Text>
                   </Pressable>
                 </View>
 
-                {/* Destructive action. Default channels are built-in and can't
-                    be left, so they have no red group at all. */}
+                {/* Destructive action in its own red box. Default channels are
+                    built-in and can't be left, so they have no red group. */}
                 {!DEFAULT_CHANNEL_NAMES.has(moreOptionsChannel) && (
-                  <View style={styles.moreRowsGroup}>
+                  <View style={styles.moreRowsGroupDanger}>
                     <Pressable
                       style={styles.moreRowDanger}
                       onPress={() => handleDeleteChat(moreOptionsChannel)}
@@ -691,7 +704,7 @@ export default function ChannelList({
                       <Text
                         style={[styles.moreRowText, styles.moreRowTextDanger]}
                       >
-                        Delete chat
+                        Delete channel
                       </Text>
                     </Pressable>
                   </View>
@@ -905,26 +918,37 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
 
     // Tight, boxed group, not spread out with the sheet's default gap,
     // which reads as loose and disconnected for a same-purpose action list.
+    // Two grouped boxes: neutral actions in one card, destructive in a solid
+    // red card. Rows are transparent; the card owns the background and the
+    // rounded corners (overflow clips the rows to the radius).
     moreRowsGroup: {
-      gap: Spacing.xs,
+      backgroundColor: Colors.surfaceRaised,
+      borderRadius: Radius.lg,
+      overflow: "hidden",
+    },
+    moreRowsGroupDanger: {
+      backgroundColor: Colors.surfaceRaised,
+      borderRadius: Radius.lg,
+      overflow: "hidden",
     },
     moreRow: {
       flexDirection: "row",
       alignItems: "center",
       gap: Spacing.md,
-      paddingVertical: Spacing.sm + 2,
-      paddingHorizontal: Spacing.sm,
-      borderRadius: Radius.md,
-      backgroundColor: Colors.surfaceRaised,
+      paddingVertical: Spacing.md,
+      paddingHorizontal: Spacing.base,
     },
     moreRowDanger: {
       flexDirection: "row",
       alignItems: "center",
       gap: Spacing.md,
-      paddingVertical: Spacing.sm + 2,
-      paddingHorizontal: Spacing.sm,
-      borderRadius: Radius.md,
-      backgroundColor: Colors.dangerDim,
+      paddingVertical: Spacing.md,
+      paddingHorizontal: Spacing.base,
+    },
+    moreDivider: {
+      height: StyleSheet.hairlineWidth,
+      backgroundColor: Colors.border,
+      marginLeft: Spacing.base,
     },
     moreRowText: {
       fontSize: FontSize.base,
@@ -1076,10 +1100,12 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
     },
     modalCancel: {
       flex: 1,
+      minHeight: 50,
       backgroundColor: Colors.surfaceRaised,
-      borderRadius: Radius.md,
+      borderRadius: Radius.full,
       paddingVertical: Spacing.md,
       alignItems: "center",
+      justifyContent: "center",
     },
     modalCancelText: {
       fontSize: FontSize.base,
@@ -1088,13 +1114,15 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
     },
     modalConfirm: {
       flex: 1,
+      minHeight: 50,
       backgroundColor: Colors.accent,
-      borderRadius: Radius.md,
+      borderRadius: Radius.full,
       paddingVertical: Spacing.md,
       alignItems: "center",
+      justifyContent: "center",
     },
     modalConfirmDisabled: {
-      backgroundColor: Colors.border,
+      opacity: 0.4,
     },
     modalConfirmText: {
       fontSize: FontSize.base,

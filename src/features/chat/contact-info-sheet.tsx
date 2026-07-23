@@ -52,6 +52,7 @@ export default function ContactInfoSheet({
     peerID ? s.contacts[peerID] : undefined,
   );
   const removeContact = useContactsStore((s) => s.removeContact);
+  const addContact = useContactsStore((s) => s.addContact);
   const blockPeer = useBlockedStore((s) => s.blockPeer);
   const peer = usePeerStore((s) => (peerID ? s.peers.get(peerID) : undefined));
   // Snapshot on open, so the reachability line is honest without a live timer.
@@ -61,25 +62,38 @@ export default function ContactInfoSheet({
   const isOnline = peer !== undefined && nowMs - peer.lastSeenMs < 60_000;
   const firstMessage =
     messages && messages.length > 0 ? messages[0] : undefined;
-  const verification = contactVerification(contact?.source);
+  // Someone you started a DM with from a channel is not necessarily a saved
+  // contact. The primary action reflects that: add them if they are not saved,
+  // remove them if they are. Deleting the conversation itself lives in the
+  // chat's own Clear/Delete actions, not here.
+  const isContact = contact !== undefined;
 
-  function handleRemove(): void {
-    if (!peerID || !channel) return;
+  function handleAddContact(): void {
+    if (!peerID) return;
+    const nearby = usePeerStore.getState().getPeer(peerID);
+    addContact({
+      peerID,
+      // We keep whatever key we already have from their ANNOUNCE; a manually
+      // saved contact is unverified until a signed card confirms it.
+      noisePubKeyHex: nearby?.noisePubKeyHex ?? "",
+      signingPubKeyHex: "",
+      nickname: name,
+      addedAtMs: Date.now(),
+      source: "manual",
+    });
+  }
+
+  function handleRemoveContact(): void {
+    if (!peerID) return;
     showAlert(
       "Remove contact",
-      `Remove ${name}? This deletes the conversation and forgets the contact. They can still reach you if they message again.`,
+      `Remove ${name} from your contacts? Your conversation stays; they are just no longer saved.`,
       [
         { text: "Cancel", style: "cancel" },
         {
           text: "Remove",
           style: "destructive",
-          onPress: () => {
-            removeChannel(channel);
-            removeContact(peerID);
-            usePeerStore.getState().removePeer(peerID);
-            onClose();
-            onAfterRemove?.();
-          },
+          onPress: () => removeContact(peerID),
         },
       ],
     );
@@ -141,25 +155,6 @@ export default function ContactInfoSheet({
                   </View>
                 )}
 
-                <View style={styles.verification}>
-                  <Feather
-                    name={verification.icon}
-                    size={12}
-                    color={
-                      verification.verified ? Colors.online : Colors.textMuted
-                    }
-                  />
-                  <Text style={styles.verificationText}>
-                    {verification.detail}
-                  </Text>
-                </View>
-
-                {contact && (
-                  <Text style={styles.added}>
-                    Added {formatDate(contact.addedAtMs)}
-                  </Text>
-                )}
-
                 <View style={styles.encNote}>
                   <Feather name="lock" size={12} color={Colors.textMuted} />
                   <Text style={styles.encText}>
@@ -171,12 +166,20 @@ export default function ContactInfoSheet({
               <View style={styles.actions}>
                 <Pressable
                   style={styles.removeBtn}
-                  onPress={handleRemove}
+                  onPress={isContact ? handleRemoveContact : handleAddContact}
                   accessibilityRole="button"
-                  accessibilityLabel="Remove contact"
+                  accessibilityLabel={
+                    isContact ? "Remove contact" : "Add to contacts"
+                  }
                 >
-                  <Feather name="user-x" size={16} color={Colors.textPrimary} />
-                  <Text style={styles.removeText}>Remove contact</Text>
+                  <Feather
+                    name={isContact ? "user-x" : "user-plus"}
+                    size={16}
+                    color={Colors.textPrimary}
+                  />
+                  <Text style={styles.removeText}>
+                    {isContact ? "Remove contact" : "Add to contacts"}
+                  </Text>
                 </Pressable>
                 <Pressable
                   style={styles.blockBtn}
@@ -194,28 +197,6 @@ export default function ContactInfoSheet({
       </View>
     </Modal>
   );
-}
-
-function contactVerification(source: "qr" | "nfc" | "manual" | undefined): {
-  verified: boolean;
-  icon: keyof typeof Feather.glyphMap;
-  detail: string;
-} {
-  if (source === "qr" || source === "nfc") {
-    return {
-      verified: true,
-      icon: "shield",
-      detail: `Verified identity (${source.toUpperCase()})`,
-    };
-  }
-  if (source === "manual") {
-    return {
-      verified: false,
-      icon: "alert-triangle",
-      detail: "Unverified (added by ID)",
-    };
-  }
-  return { verified: false, icon: "user", detail: "Not in your contacts" };
 }
 
 function formatDate(ms: number): string {
@@ -285,20 +266,6 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       color: Colors.online,
       fontWeight: FontWeight.medium,
     },
-    verification: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 6,
-      marginTop: 2,
-    },
-    verificationText: {
-      fontSize: FontSize.sm,
-      color: Colors.textSecondary,
-    },
-    added: {
-      fontSize: FontSize.xs,
-      color: Colors.textMuted,
-    },
     encNote: {
       flexDirection: "row",
       alignItems: "center",
@@ -315,12 +282,13 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       gap: Spacing.sm,
     },
     removeBtn: {
+      minHeight: 50,
       flexDirection: "row",
       alignItems: "center",
       justifyContent: "center",
       gap: Spacing.sm,
       paddingVertical: Spacing.md,
-      borderRadius: Radius.md,
+      borderRadius: Radius.full,
       backgroundColor: Colors.surfaceRaised,
     },
     removeText: {
@@ -329,13 +297,14 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       color: Colors.textPrimary,
     },
     blockBtn: {
+      minHeight: 50,
       flexDirection: "row",
       alignItems: "center",
       justifyContent: "center",
       gap: Spacing.sm,
       paddingVertical: Spacing.md,
-      borderRadius: Radius.md,
-      backgroundColor: Colors.dangerDim,
+      borderRadius: Radius.full,
+      backgroundColor: Colors.surfaceRaised,
     },
     blockText: {
       fontSize: FontSize.base,
