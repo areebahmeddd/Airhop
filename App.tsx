@@ -150,6 +150,10 @@ export default function App(): React.JSX.Element {
   const [generatedPeerID, setGeneratedPeerID] =
     useState<string>(FALLBACK_PEER_ID);
   const [tab, setTab] = useState<MainTab>("mesh");
+  // Bumped whenever the Profile tab is tapped, so tapping "You" while inside a
+  // sub-screen (About, Version, ...) pops ProfileScreen back to its root, the
+  // same way tapping Chats returns to the conversation list.
+  const [profileResetSignal, setProfileResetSignal] = useState(0);
   // Which way the last tab change moved through TABS, so the content
   // transition slides the same direction the tab bar (or swipe) implied.
   const [tabDirection, setTabDirection] = useState<"forward" | "backward">(
@@ -301,10 +305,16 @@ export default function App(): React.JSX.Element {
   }, []);
 
   // One-time setup, deferred until past onboarding so the OS permission prompt
-  // lands in context rather than on the welcome screen. Wires the inbound
-  // observer (raise a notification) and the tap handler (open the conversation).
+  // lands on the mesh screen in context (alongside the Bluetooth/Location
+  // prompt) rather than on the welcome screen. Wires the inbound observer
+  // (raise a notification) and the tap handler (open the conversation).
+  //
+  // The appReady guard matters: onboardingStep starts as null (unknown) before
+  // loadIdentity resolves, so without it a brand-new install would run this
+  // during that initial window and fire the notification prompt at launch,
+  // before onboarding even appears.
   useEffect(() => {
-    if (onboardingStep !== null) return;
+    if (!appReady || onboardingStep !== null) return;
     setNotificationNavigator((channel) => openChannelRef.current(channel));
     const unsubscribe = subscribeInboundMessages((msg) => {
       const chat = useChatStore.getState();
@@ -334,7 +344,7 @@ export default function App(): React.JSX.Element {
     });
     void configureNotifications();
     return unsubscribe;
-  }, [onboardingStep]);
+  }, [appReady, onboardingStep]);
 
   // Tell the notifier which conversation is open, so it suppresses that chat's
   // banner and clears its delivered notification once the user reads it.
@@ -431,6 +441,10 @@ export default function App(): React.JSX.Element {
       if (nextTab === "chats" && resetChatView) {
         setChatView({ kind: "list" });
         setSearchQuery("");
+      }
+      // Tapping the Profile tab always returns to its root sub-screen.
+      if (nextTab === "profile") {
+        setProfileResetSignal((n) => n + 1);
       }
     },
     [tab, tabs],
@@ -973,6 +987,7 @@ export default function App(): React.JSX.Element {
                       />
                     ) : (
                       <ProfileScreen
+                        key={`profile-${profileResetSignal}`}
                         peerID={generatedPeerID}
                         username={username}
                         onWipe={() => {
