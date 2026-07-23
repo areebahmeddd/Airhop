@@ -18,6 +18,7 @@ import {
   View,
 } from "react-native";
 import { Swipeable } from "react-native-gesture-handler";
+import Animated, { FadeIn, LinearTransition } from "react-native-reanimated";
 import { getMeshService } from "../../services/mesh-service";
 import { showAlert } from "../../store/alert-store";
 import { useChatStore } from "../../store/chat-store";
@@ -29,6 +30,7 @@ import {
   Spacing,
   useThemeColors,
 } from "../../ui/theme";
+import { sortConversationsByActivity } from "../../utils/conversation-order";
 import { messagePreviewText } from "../../utils/message-preview";
 import ChannelInfoSheet from "./channel-info-sheet";
 
@@ -135,6 +137,8 @@ export default function ChannelList({
     unreadCounts,
     pinnedChannels,
     togglePinChannel,
+    mutedChannels,
+    toggleMuteChannel,
     clearChannelMessages,
   } = useChatStore();
   // Live peer count, real BLE data, not a stub.
@@ -181,15 +185,14 @@ export default function ChannelList({
   const defaultChannels = publicChannels.filter((c) =>
     DEFAULT_CHANNEL_NAMES.has(c),
   );
-  // Pinned channels float to the top, WhatsApp-style. `sort` is stable, so
-  // within each group (pinned / unpinned) the original relative order holds.
-  const ownChannels = publicChannels
-    .filter((c) => !DEFAULT_CHANNEL_NAMES.has(c))
-    .sort((a, b) => {
-      const aPinned = pinnedChannels.includes(a);
-      const bPinned = pinnedChannels.includes(b);
-      return aPinned === bPinned ? 0 : aPinned ? -1 : 1;
-    });
+  // Your Channels: pinned first, then most recent activity first, WhatsApp
+  // style. Default channels keep their curated protocol order (below) and are
+  // deliberately not reordered by activity.
+  const ownChannels = sortConversationsByActivity(
+    publicChannels.filter((c) => !DEFAULT_CHANNEL_NAMES.has(c)),
+    messages,
+    pinnedChannels,
+  );
 
   // Normalised input for duplicate detection (shown while typing).
   const normalizedInput = newChannel.trim().replace(/^#*/, "#").toLowerCase();
@@ -200,8 +203,14 @@ export default function ChannelList({
   // Section-level unread totals, computed from the FULL channel list (not the
   // possibly-collapsed/sliced `data` below) so the badge stays accurate even
   // while a section is collapsed or showing only its top rows.
+  // Section badge totals exclude muted channels, matching the app-level badges:
+  // a muted channel keeps its own per-row count but does not add to any header.
   function sumUnread(list: string[]): number {
-    return list.reduce((sum, c) => sum + (unreadCounts[c] ?? 0), 0);
+    return list.reduce(
+      (sum, c) =>
+        sum + (mutedChannels.includes(c) ? 0 : (unreadCounts[c] ?? 0)),
+      0,
+    );
   }
 
   const sections: ChannelSection[] = [
@@ -259,6 +268,11 @@ export default function ChannelList({
     setMoreOptionsChannel(channel);
   }
 
+  function handleMuteChat(channel: string): void {
+    setMoreOptionsChannel(null);
+    toggleMuteChannel(channel);
+  }
+
   function handleClearChat(channel: string): void {
     setMoreOptionsChannel(null);
     showAlert(
@@ -303,6 +317,7 @@ export default function ChannelList({
     const scopeTag = CHANNEL_SCOPE[item]?.tag;
     const isDefault = DEFAULT_CHANNEL_NAMES.has(item);
     const isPinned = isYourChannel && pinnedChannels.includes(item);
+    const isMuted = mutedChannels.includes(item);
 
     const row = (
       <Pressable
@@ -325,6 +340,9 @@ export default function ChannelList({
                 <Text style={styles.channelTimestamp}>
                   {formatTime(last.timestampMs)}
                 </Text>
+              )}
+              {isMuted && (
+                <Feather name="bell-off" size={13} color={Colors.textMuted} />
               )}
               {isPinned && (
                 <Feather name="map-pin" size={13} color={Colors.textMuted} />
@@ -368,32 +386,37 @@ export default function ChannelList({
     // reveal More, the single consistent way to reach chat info, so
     // there's no separate inline info icon anywhere.
     return (
-      <Swipeable
-        ref={(ref) => {
-          if (ref) swipeableRefs.set(item, ref);
-          else swipeableRefs.delete(item);
-        }}
-        overshootRight={false}
-        renderRightActions={() => (
-          <View style={styles.swipeActions}>
-            <Pressable
-              style={styles.swipeAction}
-              onPress={() => handleSwipeMore(item)}
-              accessibilityRole="button"
-              accessibilityLabel={`More options for ${item}`}
-            >
-              <Feather
-                name="more-horizontal"
-                size={18}
-                color={Colors.textSecondary}
-              />
-              <Text style={styles.swipeActionText}>More</Text>
-            </Pressable>
-          </View>
-        )}
+      <Animated.View
+        layout={LinearTransition.duration(220)}
+        entering={FadeIn.duration(180)}
       >
-        {row}
-      </Swipeable>
+        <Swipeable
+          ref={(ref) => {
+            if (ref) swipeableRefs.set(item, ref);
+            else swipeableRefs.delete(item);
+          }}
+          overshootRight={false}
+          renderRightActions={() => (
+            <View style={styles.swipeActions}>
+              <Pressable
+                style={styles.swipeAction}
+                onPress={() => handleSwipeMore(item)}
+                accessibilityRole="button"
+                accessibilityLabel={`More options for ${item}`}
+              >
+                <Feather
+                  name="more-horizontal"
+                  size={18}
+                  color={Colors.textSecondary}
+                />
+                <Text style={styles.swipeActionText}>More</Text>
+              </Pressable>
+            </View>
+          )}
+        >
+          {row}
+        </Swipeable>
+      </Animated.View>
     );
   }
 
@@ -580,6 +603,7 @@ export default function ChannelList({
               <>
                 <Text style={styles.modalTitle}>{moreOptionsChannel}</Text>
 
+                {/* Everyday actions. */}
                 <View style={styles.moreRowsGroup}>
                   <Pressable
                     style={styles.moreRow}
@@ -621,6 +645,27 @@ export default function ChannelList({
 
                   <Pressable
                     style={styles.moreRow}
+                    onPress={() => handleMuteChat(moreOptionsChannel)}
+                    accessibilityRole="button"
+                  >
+                    <Feather
+                      name={
+                        mutedChannels.includes(moreOptionsChannel)
+                          ? "bell"
+                          : "bell-off"
+                      }
+                      size={18}
+                      color={Colors.textSecondary}
+                    />
+                    <Text style={styles.moreRowText}>
+                      {mutedChannels.includes(moreOptionsChannel)
+                        ? "Unmute"
+                        : "Mute"}
+                    </Text>
+                  </Pressable>
+
+                  <Pressable
+                    style={styles.moreRow}
                     onPress={() => handleClearChat(moreOptionsChannel)}
                     accessibilityRole="button"
                   >
@@ -631,9 +676,12 @@ export default function ChannelList({
                     />
                     <Text style={styles.moreRowText}>Clear chat</Text>
                   </Pressable>
+                </View>
 
-                  {/* Default channels are built-in and can't be left. */}
-                  {!DEFAULT_CHANNEL_NAMES.has(moreOptionsChannel) && (
+                {/* Destructive action. Default channels are built-in and can't
+                    be left, so they have no red group at all. */}
+                {!DEFAULT_CHANNEL_NAMES.has(moreOptionsChannel) && (
+                  <View style={styles.moreRowsGroup}>
                     <Pressable
                       style={styles.moreRowDanger}
                       onPress={() => handleDeleteChat(moreOptionsChannel)}
@@ -646,8 +694,8 @@ export default function ChannelList({
                         Delete chat
                       </Text>
                     </Pressable>
-                  )}
-                </View>
+                  </View>
+                )}
               </>
             )}
           </View>

@@ -16,9 +16,12 @@ import {
   View,
 } from "react-native";
 import { Swipeable } from "react-native-gesture-handler";
+import Animated, { FadeIn, LinearTransition } from "react-native-reanimated";
 import { getMeshService } from "../../services/mesh-service";
 import { showAlert } from "../../store/alert-store";
+import { useBlockedStore } from "../../store/blocked-store";
 import { useChatStore } from "../../store/chat-store";
+import { useContactsStore } from "../../store/contacts-store";
 import { usePeerStore } from "../../store/peer-store";
 import Avatar from "../../ui/components/avatar";
 import {
@@ -28,8 +31,10 @@ import {
   Spacing,
   useThemeColors,
 } from "../../ui/theme";
+import { sortConversationsByActivity } from "../../utils/conversation-order";
 import { resolveDisplayName } from "../../utils/display-name";
 import { messagePreviewText } from "../../utils/message-preview";
+import ContactInfoSheet from "./contact-info-sheet";
 
 // How long the pull-to-refresh spinner stays up. The refresh itself
 // (BLE rescan kick) returns instantly, but a flash-then-gone spinner reads
@@ -49,7 +54,13 @@ export default function DmList({ onSelectDM }: Props): React.JSX.Element {
     unreadCounts,
     clearChannelMessages,
     removeChannel,
+    pinnedChannels,
+    togglePinChannel,
+    mutedChannels,
+    toggleMuteChannel,
   } = useChatStore();
+  const blockPeer = useBlockedStore((s) => s.blockPeer);
+  const removeContact = useContactsStore((s) => s.removeContact);
   // Subscribe to the peers Map so the list re-renders when any peer
   // comes online or goes offline (Map reference changes on every upsert).
   const peerMap = usePeerStore((s) => s.peers);
@@ -64,6 +75,8 @@ export default function DmList({ onSelectDM }: Props): React.JSX.Element {
   // Swipe left on a DM row for More (clear / delete), the same pattern as the
   // Channels list, so both chat surfaces manage conversations consistently.
   const [moreOptionsDM, setMoreOptionsDM] = useState<string | null>(null);
+  // Which DM's contact-info sheet is open (null when closed).
+  const [infoChannel, setInfoChannel] = useState<string | null>(null);
   const swipeableRefs = useRef(new Map<string, Swipeable>()).current;
 
   function handleRefresh(): void {
@@ -75,6 +88,16 @@ export default function DmList({ onSelectDM }: Props): React.JSX.Element {
   function handleSwipeMore(channel: string): void {
     swipeableRefs.get(channel)?.close();
     setMoreOptionsDM(channel);
+  }
+
+  function handleContactInfo(channel: string): void {
+    setMoreOptionsDM(null);
+    setInfoChannel(channel);
+  }
+
+  function handleMuteDM(channel: string): void {
+    setMoreOptionsDM(null);
+    toggleMuteChannel(channel);
   }
 
   function handleClearDM(channel: string): void {
@@ -93,26 +116,88 @@ export default function DmList({ onSelectDM }: Props): React.JSX.Element {
     );
   }
 
-  function handleDeleteDM(channel: string): void {
+  // Remove contact: forget the person (contact + ephemeral peer entry) and the
+  // conversation. Not a block: if they are still nearby they reappear on the
+  // Mesh tab and can be messaged again. Mirrors the in-thread Remove contact.
+  function handleRemoveContactDM(channel: string): void {
     setMoreOptionsDM(null);
-    showAlert("Delete chat", "Delete this conversation and all its messages?", [
-      { text: "Cancel", style: "cancel" },
-      {
-        text: "Delete",
-        style: "destructive",
-        onPress: () => {
-          removeChannel(channel);
-          // Same "forget this contact" outcome as Remove contact inside
-          // the thread itself, since deleting from the list shouldn't behave
-          // differently just because of which entry point was used.
-          usePeerStore.getState().removePeer(channel.slice(3));
+    const peerID = channel.slice(3);
+    showAlert(
+      "Remove contact",
+      `Remove ${resolveDisplayName(peerID)}? This deletes the conversation and forgets the contact. They can still reach you if they message again.`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Remove",
+          style: "destructive",
+          onPress: () => {
+            removeChannel(channel);
+            removeContact(peerID);
+            usePeerStore.getState().removePeer(peerID);
+          },
         },
-      },
-    ]);
+      ],
+    );
   }
 
-  // DM channels are prefixed "dm:<16-hex peerID>".
-  const dmChannels = channels.filter((c) => c.startsWith("dm:"));
+  // Block: forget them AND refuse to hear from them again. Enforced in
+  // mesh-service (announces and messages dropped before reaching any store),
+  // so a block survives them re-announcing.
+  function handleBlockDM(channel: string): void {
+    setMoreOptionsDM(null);
+    const peerID = channel.slice(3);
+    showAlert(
+      "Block this peer",
+      `Block ${resolveDisplayName(peerID)}? You won't see them on the Mesh tab or receive messages from them, even if they're nearby.`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Block",
+          style: "destructive",
+          onPress: () => {
+            blockPeer(peerID);
+            // Tear down the live crypto session and link maps too, not just the
+            // UI entry (forgetPeer also drops them from the peer store).
+            getMeshService()?.forgetPeer(peerID);
+            removeContact(peerID);
+            removeChannel(channel);
+          },
+        },
+      ],
+    );
+  }
+
+  function handleDeleteDM(channel: string): void {
+    setMoreOptionsDM(null);
+    showAlert(
+      "Delete chat",
+      "This removes the conversation from your list and deletes its messages. The contact is kept, and a new message from them starts a fresh chat.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          // Only the conversation view is removed. The peer stays in contacts
+          // (unlike Remove contact inside the thread), so this is a clean "hide
+          // this chat" rather than "forget this person".
+          onPress: () => removeChannel(channel),
+        },
+      ],
+    );
+  }
+
+  function handlePinDM(channel: string): void {
+    setMoreOptionsDM(null);
+    togglePinChannel(channel);
+  }
+
+  // DM channels are prefixed "dm:<16-hex peerID>", ordered pinned-first then by
+  // most recent activity, the same rule the channel list uses.
+  const dmChannels = sortConversationsByActivity(
+    channels.filter((c) => c.startsWith("dm:")),
+    messages,
+    pinnedChannels,
+  );
 
   return (
     <View style={styles.container}>
@@ -127,6 +212,8 @@ export default function DmList({ onSelectDM }: Props): React.JSX.Element {
           const peerEntry = peerMap.get(peerID);
           const isOnline =
             peerEntry !== undefined && nowMs - peerEntry.lastSeenMs < 60_000;
+          const isPinned = pinnedChannels.includes(item);
+          const isMuted = mutedChannels.includes(item);
 
           const row = (
             <Pressable
@@ -147,11 +234,27 @@ export default function DmList({ onSelectDM }: Props): React.JSX.Element {
                   <Text style={styles.username} numberOfLines={1}>
                     {username}
                   </Text>
-                  {last ? (
-                    <Text style={styles.timestamp}>
-                      {formatTime(last.timestampMs)}
-                    </Text>
-                  ) : null}
+                  <View style={styles.rowMeta}>
+                    {last ? (
+                      <Text style={styles.timestamp}>
+                        {formatTime(last.timestampMs)}
+                      </Text>
+                    ) : null}
+                    {isMuted && (
+                      <Feather
+                        name="bell-off"
+                        size={13}
+                        color={Colors.textMuted}
+                      />
+                    )}
+                    {isPinned && (
+                      <Feather
+                        name="map-pin"
+                        size={13}
+                        color={Colors.textMuted}
+                      />
+                    )}
+                  </View>
                 </View>
                 <View style={styles.rowBottom}>
                   {last ? (
@@ -178,35 +281,42 @@ export default function DmList({ onSelectDM }: Props): React.JSX.Element {
             </Pressable>
           );
 
-          // Swipe left for More (clear / delete), the same interaction as the
-          // Channels list, so both surfaces feel like one consistent app.
+          // Swipe left for More, the same interaction as the Channels list, so
+          // both surfaces feel like one consistent app. The wrapper animates the
+          // row settling into place when the list reorders (pin, new activity)
+          // and fading in/out on add/remove.
           return (
-            <Swipeable
-              ref={(ref) => {
-                if (ref) swipeableRefs.set(item, ref);
-                else swipeableRefs.delete(item);
-              }}
-              overshootRight={false}
-              renderRightActions={() => (
-                <View style={styles.swipeActions}>
-                  <Pressable
-                    style={styles.swipeAction}
-                    onPress={() => handleSwipeMore(item)}
-                    accessibilityRole="button"
-                    accessibilityLabel={`More options for ${username}`}
-                  >
-                    <Feather
-                      name="more-horizontal"
-                      size={18}
-                      color={Colors.textSecondary}
-                    />
-                    <Text style={styles.swipeActionText}>More</Text>
-                  </Pressable>
-                </View>
-              )}
+            <Animated.View
+              layout={LinearTransition.duration(220)}
+              entering={FadeIn.duration(180)}
             >
-              {row}
-            </Swipeable>
+              <Swipeable
+                ref={(ref) => {
+                  if (ref) swipeableRefs.set(item, ref);
+                  else swipeableRefs.delete(item);
+                }}
+                overshootRight={false}
+                renderRightActions={() => (
+                  <View style={styles.swipeActions}>
+                    <Pressable
+                      style={styles.swipeAction}
+                      onPress={() => handleSwipeMore(item)}
+                      accessibilityRole="button"
+                      accessibilityLabel={`More options for ${username}`}
+                    >
+                      <Feather
+                        name="more-horizontal"
+                        size={18}
+                        color={Colors.textSecondary}
+                      />
+                      <Text style={styles.swipeActionText}>More</Text>
+                    </Pressable>
+                  </View>
+                )}
+              >
+                {row}
+              </Swipeable>
+            </Animated.View>
           );
         }}
         ItemSeparatorComponent={() => <View style={styles.separator} />}
@@ -254,7 +364,59 @@ export default function DmList({ onSelectDM }: Props): React.JSX.Element {
                   {resolveDisplayName(moreOptionsDM.slice(3))}
                 </Text>
 
+                {/* Everyday actions. */}
                 <View style={styles.moreRowsGroup}>
+                  <Pressable
+                    style={styles.moreRow}
+                    onPress={() => handleContactInfo(moreOptionsDM)}
+                    accessibilityRole="button"
+                  >
+                    <Feather
+                      name="info"
+                      size={18}
+                      color={Colors.textSecondary}
+                    />
+                    <Text style={styles.moreRowText}>Contact info</Text>
+                  </Pressable>
+
+                  <Pressable
+                    style={styles.moreRow}
+                    onPress={() => handlePinDM(moreOptionsDM)}
+                    accessibilityRole="button"
+                  >
+                    <Feather
+                      name="map-pin"
+                      size={18}
+                      color={Colors.textSecondary}
+                    />
+                    <Text style={styles.moreRowText}>
+                      {pinnedChannels.includes(moreOptionsDM)
+                        ? "Unpin chat"
+                        : "Pin chat"}
+                    </Text>
+                  </Pressable>
+
+                  <Pressable
+                    style={styles.moreRow}
+                    onPress={() => handleMuteDM(moreOptionsDM)}
+                    accessibilityRole="button"
+                  >
+                    <Feather
+                      name={
+                        mutedChannels.includes(moreOptionsDM)
+                          ? "bell"
+                          : "bell-off"
+                      }
+                      size={18}
+                      color={Colors.textSecondary}
+                    />
+                    <Text style={styles.moreRowText}>
+                      {mutedChannels.includes(moreOptionsDM)
+                        ? "Unmute"
+                        : "Mute"}
+                    </Text>
+                  </Pressable>
+
                   <Pressable
                     style={styles.moreRow}
                     onPress={() => handleClearDM(moreOptionsDM)}
@@ -266,6 +428,35 @@ export default function DmList({ onSelectDM }: Props): React.JSX.Element {
                       color={Colors.textSecondary}
                     />
                     <Text style={styles.moreRowText}>Clear chat</Text>
+                  </Pressable>
+                </View>
+
+                {/* Destructive actions, set apart in their own red group. */}
+                <View style={styles.moreRowsGroup}>
+                  <Pressable
+                    style={styles.moreRowDanger}
+                    onPress={() => handleRemoveContactDM(moreOptionsDM)}
+                    accessibilityRole="button"
+                  >
+                    <Feather name="user-x" size={18} color={Colors.danger} />
+                    <Text
+                      style={[styles.moreRowText, styles.moreRowTextDanger]}
+                    >
+                      Remove contact
+                    </Text>
+                  </Pressable>
+
+                  <Pressable
+                    style={styles.moreRowDanger}
+                    onPress={() => handleBlockDM(moreOptionsDM)}
+                    accessibilityRole="button"
+                  >
+                    <Feather name="slash" size={18} color={Colors.danger} />
+                    <Text
+                      style={[styles.moreRowText, styles.moreRowTextDanger]}
+                    >
+                      Block
+                    </Text>
                   </Pressable>
 
                   <Pressable
@@ -286,6 +477,11 @@ export default function DmList({ onSelectDM }: Props): React.JSX.Element {
           </View>
         </View>
       </Modal>
+
+      <ContactInfoSheet
+        channel={infoChannel}
+        onClose={() => setInfoChannel(null)}
+      />
     </View>
   );
 }
@@ -342,6 +538,13 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       justifyContent: "space-between",
       alignItems: "center",
     },
+    rowMeta: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: Spacing.xs,
+      flexShrink: 0,
+      marginLeft: Spacing.sm,
+    },
     username: {
       fontSize: FontSize.base,
       fontWeight: FontWeight.semibold,
@@ -351,7 +554,6 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
     timestamp: {
       fontSize: FontSize.xs,
       color: Colors.textPrimary,
-      marginLeft: Spacing.sm,
     },
     preview: {
       fontSize: FontSize.sm,
