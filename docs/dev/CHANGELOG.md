@@ -2,119 +2,19 @@
 
 All notable changes are documented here.
 
-## Unreleased: pre-field-test hardening
 
-### Fixed (discovery was completely broken)
+## What's Changed in v0.9.9
 
-- **BLE runtime permissions were never requested.** `BLUETOOTH_SCAN/ADVERTISE/CONNECT` are runtime permissions on Android 12+; they were declared in the manifest but never requested, so `startScanning`/`startAdvertising` threw `SecurityException` and it was swallowed. No device could ever discover another.
-- **No MTU negotiation.** Writes ran at the default 23-byte MTU while ANNOUNCE/handshake packets are 100+ bytes and fragments are 469, so everything silently truncated. Now requests MTU 517 and defers service discovery until it completes.
-- **Links announced before they could carry traffic.** Both platforms now wait for CCCD/notification confirmation.
-- **iOS: `CBPeripheral` not retained before `connect`.** CoreBluetooth abandons the attempt if it deallocates, so connections silently never completed.
-- **iOS: unicast DMs fanned out to every subscribed central** (`onSubscribedCentrals: nil`).
-- **Attachments were dead in both directions.** `expo-file-system@57` removed the legacy read/write API; the calls threw at runtime.
-- **Attachment fragments were sent in a tight loop**, overrunning both radios. Now paced at 20 ms like bitchat.
-- **Relayed ANNOUNCEs were recorded as direct links**, corrupting link→peer mapping and sending Noise handshakes into the void.
-- **Blocking was enforced in 1 of 6 inbound paths**; a blocked peer could still post in channels, DM, send files, and resurrect deleted threads.
-- Mock peers were seeding the Mesh tab, masking the fact that real discovery never worked.
+- docs(landing): copy tweaks, footer order, sitemap refresh (by @areebahmeddd) [f989e94]
+- refactor(settings): tidy feature rows, network/storage/donate copy (by @areebahmeddd) [482dc8e]
+- feat(settings): tappable links in Terms and Privacy screens (by @areebahmeddd) [f45ac39]
+- style(chat): rounded-pill action buttons across sheets and modals (by @areebahmeddd) [b9e79ce]
+- feat(onboarding): require agreeing to terms before continuing (by @areebahmeddd) [4d186f7]
+- feat(settings): open-source licenses screen with repos and grouping (by @areebahmeddd) [cb92153]
+- fix(identity): label Nostr peers by npub tail, never "undefined" (by @areebahmeddd) [ce97219]
+- feat(settings): version screen with update check and release codenames (by @areebahmeddd) [8aa8c54]
 
-### Added
-
-- Store-and-forward **courier** (`COURIER_ENV 0x04`) and a persisted **outbox**, so "queued for delivery" is now true instead of a lie.
-- **Gossip sync** (`REQUEST_SYNC 0x21`) so a peer returning from out of range catches up.
-- **Nostr geohash channels**: `#block`/`#neighborhood`/`#city`/`#province`/`#region` now bridge over Nostr with per-geohash unlinkable identities, presence, and deterministic relay selection.
-- **Contacts store** + key-bearing QR; a scanned card's peer ID is verified against the fingerprint of its own Noise key.
-- BLE adapter-state detection, so "Bluetooth off" is distinguishable from "nobody nearby".
-- `LEAVE 0x03`, cross-transport message IDs, channel send-reach feedback.
-
-### Removed (not viable, with reasons)
-
-- **Live video over WiFi.** Android WiFi Aware and iOS MultipeerConnectivity are different protocols that cannot interoperate; cross-OS streaming is impossible. Recorded-video _sharing_ works.
-- **Phone-to-phone NFC.** iOS has no host card emulation, so an iPhone cannot present a tag for another phone to read. QR covers this on both platforms.
-- **X3DH.** Redundant with the Noise static-static ECDH already seeding the Double Ratchet.
-- `VIDEO_FRAME 0x30`, `CASHU_TOKEN 0x40` (ecash rides DM text).
-- **`WiFiUnicastFn` from `MessageRouter`.** It duplicated a decision the injected `unicast` callback already makes: `MeshService`'s unicast prefers an active WiFi link before falling back to BLE. Because the parameter was never passed, it looked like an unfinished feature while the behaviour was already correct, and it misled two separate reviews. Transport selection now lives only in the callback that owns the link maps. No behaviour change.
-
-### Remaining
-
-Not implemented, or implemented but unproven on hardware. Nothing here is a regression; it is the honest state before the first field test.
-
-#### Not implemented
-
-- **Live push-to-talk voice** (`VOICE_FRAME 0x29` is reserved but never sent or handled). `AudioCaptureBackend.startCapture` needs real-time streaming microphone frames, and `expo-audio` only records to a file. This requires new native audio modules on both platforms (AVAudioEngine tap on iOS, AudioRecord on Android). Voice _notes_ work today over `FILE_TRANSFER`.
-- **Live video streaming.** Recorded video is shared as a file and plays inline; there is no real-time path, and there cannot be a cross-platform one while iOS uses MultipeerConnectivity.
-
-#### Implemented but never run on real hardware
-
-- **BLE discovery, MTU negotiation and connection lifecycle.** The native Kotlin and Swift modules have never been compiled by CI, and the mesh has never been exercised between two phones. Every radio-dependent claim is unproven.
-- **Android to Android WiFi Aware, and iPhone to iPhone MultipeerConnectivity.** Both are wired and preferred automatically for attachments, but neither has been observed working. They do not interoperate with each other by design, so there is no cross-platform WiFi path to test.
-- **Multi-peer relaying.** Flood routing, TTL and dedup are unit-tested, but a three-device topology where A and C only reach each other through B has never been run.
-- **Courier store-and-forward and gossip catch-up.** Both are wired and unit-tested; neither has delivered a message between real devices.
-- **Nostr geohash channels.** Require two devices in the same cell with internet. Relay selection determinism is unit-tested; live relay behaviour is not.
-
-#### Wallet, deferred by decision
-
-Two findings from the payments audit are still open. Both are money-critical and were deliberately left rather than fixed in a rush.
-
-- **Cashu proofs are stored unencrypted.** `wallet-store.ts` documents that MMKV must be opened with an `encryptionKey` held in the Keychain or Keystore, but `createMMKV({ id: "wallet-store" })` is called without one. Proofs are bearer instruments, so anyone who reads that file can spend the balance. Mitigated for now by setting `allowBackup="false"`, which closes the ADB-backup extraction path, but the file itself is still plaintext on disk. The fix needs an async key bootstrap before the store is created, which `zustand/persist` does not do out of the box.
-- **DLEQ validation is dead code.** `validateProofDleq` has zero call sites, and could not work if it were called: it returns `true` when no witness is present, `true` on any exception, and passes a hex string where `cashu-ts` expects a curve point. The module header claims verification runs on every received proof; it never runs. The receive path currently credits the balance from any well-formed token. Note that DLEQ proves the mint signed a proof and can never prove it has not been double-spent, so the fix is both to wire up real verification and to track offline-received proofs as unverified until redeemed.
-
-_Fixed in this release:_ offline send no longer silently overpays (it now selects exact denominations and requires explicit confirmation when it cannot), and `allowBackup` is off.## Unreleased: pre-field-test hardening
-
-### Fixed (discovery was completely broken)
-
-- **BLE runtime permissions were never requested.** `BLUETOOTH_SCAN/ADVERTISE/CONNECT` are runtime permissions on Android 12+; they were declared in the manifest but never requested, so `startScanning`/`startAdvertising` threw `SecurityException` and it was swallowed. No device could ever discover another.
-- **No MTU negotiation.** Writes ran at the default 23-byte MTU while ANNOUNCE/handshake packets are 100+ bytes and fragments are 469, so everything silently truncated. Now requests MTU 517 and defers service discovery until it completes.
-- **Links announced before they could carry traffic.** Both platforms now wait for CCCD/notification confirmation.
-- **iOS: `CBPeripheral` not retained before `connect`.** CoreBluetooth abandons the attempt if it deallocates, so connections silently never completed.
-- **iOS: unicast DMs fanned out to every subscribed central** (`onSubscribedCentrals: nil`).
-- **Attachments were dead in both directions.** `expo-file-system@57` removed the legacy read/write API; the calls threw at runtime.
-- **Attachment fragments were sent in a tight loop**, overrunning both radios. Now paced at 20 ms like bitchat.
-- **Relayed ANNOUNCEs were recorded as direct links**, corrupting link→peer mapping and sending Noise handshakes into the void.
-- **Blocking was enforced in 1 of 6 inbound paths**; a blocked peer could still post in channels, DM, send files, and resurrect deleted threads.
-- Mock peers were seeding the Mesh tab, masking the fact that real discovery never worked.
-
-### Added
-
-- Store-and-forward **courier** (`COURIER_ENV 0x04`) and a persisted **outbox**, so "queued for delivery" is now true instead of a lie.
-- **Gossip sync** (`REQUEST_SYNC 0x21`) so a peer returning from out of range catches up.
-- **Nostr geohash channels**: `#block`/`#neighborhood`/`#city`/`#province`/`#region` now bridge over Nostr with per-geohash unlinkable identities, presence, and deterministic relay selection.
-- **Contacts store** + key-bearing QR; a scanned card's peer ID is verified against the fingerprint of its own Noise key.
-- BLE adapter-state detection, so "Bluetooth off" is distinguishable from "nobody nearby".
-- `LEAVE 0x03`, cross-transport message IDs, channel send-reach feedback.
-
-### Removed (not viable, with reasons)
-
-- **Live video over WiFi.** Android WiFi Aware and iOS MultipeerConnectivity are different protocols that cannot interoperate; cross-OS streaming is impossible. Recorded-video _sharing_ works.
-- **Phone-to-phone NFC.** iOS has no host card emulation, so an iPhone cannot present a tag for another phone to read. QR covers this on both platforms.
-- **X3DH.** Redundant with the Noise static-static ECDH already seeding the Double Ratchet.
-- `VIDEO_FRAME 0x30`, `CASHU_TOKEN 0x40` (ecash rides DM text).
-- **`WiFiUnicastFn` from `MessageRouter`.** It duplicated a decision the injected `unicast` callback already makes: `MeshService`'s unicast prefers an active WiFi link before falling back to BLE. Because the parameter was never passed, it looked like an unfinished feature while the behaviour was already correct, and it misled two separate reviews. Transport selection now lives only in the callback that owns the link maps. No behaviour change.
-
-### Remaining
-
-Not implemented, or implemented but unproven on hardware. Nothing here is a regression; it is the honest state before the first field test.
-
-#### Not implemented
-
-- **Live push-to-talk voice** (`VOICE_FRAME 0x29` is reserved but never sent or handled). `AudioCaptureBackend.startCapture` needs real-time streaming microphone frames, and `expo-audio` only records to a file. This requires new native audio modules on both platforms (AVAudioEngine tap on iOS, AudioRecord on Android). Voice _notes_ work today over `FILE_TRANSFER`.
-- **Live video streaming.** Recorded video is shared as a file and plays inline; there is no real-time path, and there cannot be a cross-platform one while iOS uses MultipeerConnectivity.
-
-#### Implemented but never run on real hardware
-
-- **BLE discovery, MTU negotiation and connection lifecycle.** The native Kotlin and Swift modules have never been compiled by CI, and the mesh has never been exercised between two phones. Every radio-dependent claim is unproven.
-- **Android to Android WiFi Aware, and iPhone to iPhone MultipeerConnectivity.** Both are wired and preferred automatically for attachments, but neither has been observed working. They do not interoperate with each other by design, so there is no cross-platform WiFi path to test.
-- **Multi-peer relaying.** Flood routing, TTL and dedup are unit-tested, but a three-device topology where A and C only reach each other through B has never been run.
-- **Courier store-and-forward and gossip catch-up.** Both are wired and unit-tested; neither has delivered a message between real devices.
-- **Nostr geohash channels.** Require two devices in the same cell with internet. Relay selection determinism is unit-tested; live relay behaviour is not.
-
-#### Wallet, deferred by decision
-
-Two findings from the payments audit are still open. Both are money-critical and were deliberately left rather than fixed in a rush.
-
-- **Cashu proofs are stored unencrypted.** `wallet-store.ts` documents that MMKV must be opened with an `encryptionKey` held in the Keychain or Keystore, but `createMMKV({ id: "wallet-store" })` is called without one. Proofs are bearer instruments, so anyone who reads that file can spend the balance. Mitigated for now by setting `allowBackup="false"`, which closes the ADB-backup extraction path, but the file itself is still plaintext on disk. The fix needs an async key bootstrap before the store is created, which `zustand/persist` does not do out of the box.
-- **DLEQ validation is dead code.** `validateProofDleq` has zero call sites, and could not work if it were called: it returns `true` when no witness is present, `true` on any exception, and passes a hex string where `cashu-ts` expects a curve point. The module header claims verification runs on every received proof; it never runs. The receive path currently credits the balance from any well-formed token. Note that DLEQ proves the mint signed a proof and can never prove it has not been double-spent, so the fix is both to wire up real verification and to track offline-received proofs as unverified until redeemed.
-
-_Fixed in this release:_ offline send no longer silently overpays (it now selects exact denominations and requires explicit confirmation when it cannot), and `allowBackup` is off.
+**Full changelog:** [v0.9.8..v0.9.9](https://github.com/areebahmeddd/Airhop/compare/v0.9.8..v0.9.9)
 
 ## What's Changed in v0.9.8
 
@@ -285,3 +185,6 @@ _Fixed in this release:_ offline send no longer silently overpays (it now select
 - feat(ios): AirhopBLEModule Swift dual-role GATT central+peripheral with RSSI polling (by @areebahmeddd) [27cda57]
 - feat(android): AirhopBLEModule Kotlin dual-role GATT, AirhopForegroundService, package registration (by @areebahmeddd) [65df2bf]
 - docs: mark v0.5.0 complete (by @areebahmeddd) [ef1c14f]
+
+
+
