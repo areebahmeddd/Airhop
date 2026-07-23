@@ -41,7 +41,7 @@ export default function NetworkScreen({ onBack }: Props): React.JSX.Element {
             <SettingRow
               icon="bluetooth"
               label="bitchat compatibility"
-              description="BLE Service UUID F47B5E2D-... unchanged"
+              description="Same BLE mesh as bitchat, fully interoperable"
               control={<Text style={styles.alwaysOn}>Always on</Text>}
             />
           </View>

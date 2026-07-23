@@ -108,23 +108,23 @@ export default function StorageScreen({ onBack }: Props): React.JSX.Element {
         <View style={styles.section}>
           <View style={styles.settingsGroup}>
             <SettingRow
-              icon="hard-drive"
-              label="Storage usage"
-              description="Messages, wallet proofs, and cached attachments on this device"
-              control={
-                <Text style={styles.settingValue}>
-                  {formatBytes(totalBytes)}
-                </Text>
-              }
-            />
-            <GroupDivider />
-            <SettingRow
               icon="activity"
               label="Network usage"
               description={`This session · ${formatBytes(stats.network.sent)} sent, ${formatBytes(stats.network.received)} received`}
               control={
                 <Text style={styles.settingValue}>
                   {formatBytes(stats.network.sent + stats.network.received)}
+                </Text>
+              }
+            />
+            <GroupDivider />
+            <SettingRow
+              icon="hard-drive"
+              label="Storage usage"
+              description="Messages, wallet proofs, and cached attachments"
+              control={
+                <Text style={styles.settingValue}>
+                  {formatBytes(totalBytes)}
                 </Text>
               }
             />

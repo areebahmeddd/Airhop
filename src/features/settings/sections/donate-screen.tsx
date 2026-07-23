@@ -4,7 +4,13 @@
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import React, { useMemo } from "react";
 import { Linking, ScrollView, StyleSheet, Text, View } from "react-native";
-import { FontSize, Spacing, useThemeColors } from "../../../ui/theme";
+import {
+  FontSize,
+  FontWeight,
+  Radius,
+  Spacing,
+  useThemeColors,
+} from "../../../ui/theme";
 import {
   GroupDivider,
   SettingLinkRow,
@@ -54,11 +60,13 @@ export default function DonateScreen({ onBack }: Props): React.JSX.Element {
             />
           </View>
         </View>
-        <Text style={localStyles.intro}>
-          I build Airhop in my free time. There are no investors and no ads. If
-          it is useful to you, a small donation goes a long way toward keeping
-          development active.
-        </Text>
+        <View style={localStyles.note}>
+          <Text style={localStyles.noteText}>
+            I build Airhop in my free time, with no investors and no ads. If it
+            is useful to you, a small donation helps keep it going.
+          </Text>
+          <Text style={localStyles.noteSignature}>Areeb</Text>
+        </View>
       </ScrollView>
     </View>
   );
@@ -66,12 +74,27 @@ export default function DonateScreen({ onBack }: Props): React.JSX.Element {
 
 function createLocalStyles(Colors: ReturnType<typeof useThemeColors>) {
   return StyleSheet.create({
-    intro: {
+    // A small personal note, set in its own soft card so it reads as a signed
+    // aside rather than a plea tacked under the payment rows.
+    note: {
+      marginTop: Spacing.xs,
+      backgroundColor: Colors.surface,
+      borderRadius: Radius.lg,
+      borderWidth: 1,
+      borderColor: Colors.border,
+      padding: Spacing.base,
+      gap: Spacing.sm,
+    },
+    noteText: {
       fontSize: FontSize.sm,
       color: Colors.textSecondary,
       lineHeight: FontSize.sm * 1.6,
-      paddingHorizontal: Spacing.xs,
-      marginTop: Spacing.sm,
+    },
+    noteSignature: {
+      alignSelf: "flex-end",
+      fontSize: FontSize.sm,
+      color: Colors.textMuted,
+      fontWeight: FontWeight.medium,
     },
   });
 }

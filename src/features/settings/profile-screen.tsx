@@ -44,6 +44,7 @@ import PrivacyScreen from "./sections/privacy-screen";
 import SecurityScreen from "./sections/security-screen";
 import StorageScreen from "./sections/storage-screen";
 import TermsScreen from "./sections/terms-screen";
+import VersionScreen from "./sections/version-screen";
 import {
   GroupDivider,
   SettingLinkRow,
@@ -132,15 +133,13 @@ const FEATURES: {
     key: "ai",
     label: "AI",
     icon: "cpu",
-    description:
-      "A local assistant that answers questions with on-device inference. There are no network calls, and your data never leaves this device.",
+    description: "Private on-device assistant, no network calls",
   },
   {
     key: "feeds",
     label: "Feeds",
     icon: "rss",
-    description:
-      "Read your Bluesky and Mastodon feeds in a dedicated tab, and post to them using your Airhop identity.",
+    description: "Read and post to Bluesky and Mastodon feeds",
   },
 ];
 
@@ -155,12 +154,14 @@ type SettingsView =
   | "privacy"
   | "donate"
   | "about"
+  | "version"
   | "licenses";
 
 // Where hardware back should land for a sub-screen nested one level deeper
 // than its section (e.g. Terms/Privacy under Help, Licenses under About).
 // Any view not listed here falls back to "root".
 const SETTINGS_PARENT_VIEW: Partial<Record<SettingsView, SettingsView>> = {
+  version: "about",
   licenses: "about",
   terms: "help",
   privacy: "help",
@@ -187,9 +188,6 @@ export default function ProfileScreen({
   const [showStatusModal, setShowStatusModal] = useState(false);
   const [showWipeModal, setShowWipeModal] = useState(false);
   const [showThemeModal, setShowThemeModal] = useState(false);
-  const [expandedFeatures, setExpandedFeatures] = useState<Set<FeatureKey>>(
-    () => new Set(),
-  );
   const theme = useSettingsStore((s) => s.theme);
   const setTheme = useSettingsStore((s) => s.setTheme);
   const paymentsEnabled = useSettingsStore((s) => s.paymentsEnabled);
@@ -205,15 +203,6 @@ export default function ProfileScreen({
     const card = getMeshService()?.getContactCard();
     return card ? encodeQRContent(card) : peerID;
   }, [peerID]);
-
-  function toggleFeature(key: FeatureKey): void {
-    setExpandedFeatures((prev) => {
-      const next = new Set(prev);
-      if (next.has(key)) next.delete(key);
-      else next.add(key);
-      return next;
-    });
-  }
 
   // Android hardware/gesture back: leave a sub-screen instead of exiting.
   useEffect(() => {
@@ -333,9 +322,13 @@ export default function ProfileScreen({
     return (
       <AboutScreen
         onBack={() => setView("root")}
+        onOpenVersion={() => setView("version")}
         onOpenLicenses={() => setView("licenses")}
       />
     );
+  }
+  if (view === "version") {
+    return <VersionScreen onBack={() => setView("about")} />;
   }
   if (view === "licenses") {
     return <LicensesScreen onBack={() => setView("about")} />;
@@ -412,9 +405,9 @@ export default function ProfileScreen({
       </View>
 
       {/* Features. Payments is live, so it leads the group with a switch that
-          shows or hides the Wallet tab. The rest aren't built yet: each of
-          those rows expands in place to explain what it will do, instead of a
-          section title stating the obvious. */}
+          shows or hides the Wallet tab. The rest aren't built yet: each row
+          states what it will do and carries a "Coming soon" tag, the same
+          shape as the live Payments row above it. */}
       <View style={shared.section}>
         <View style={shared.settingsGroup}>
           <SettingRow
@@ -429,57 +422,26 @@ export default function ProfileScreen({
               />
             }
           />
-          {FEATURES.map((feature) => {
-            const expanded = expandedFeatures.has(feature.key);
-            return (
-              <React.Fragment key={feature.key}>
-                <GroupDivider />
-                <Pressable
-                  style={shared.settingRow}
-                  onPress={() => toggleFeature(feature.key)}
-                  accessibilityRole="button"
-                  accessibilityLabel={`${feature.label}, coming soon`}
-                  accessibilityHint={
-                    expanded ? "Collapses details" : "Expands to show details"
-                  }
-                  accessibilityState={{ expanded }}
-                >
-                  <View style={shared.settingIcon}>
-                    {feature.key === "ai" ? (
-                      <MaterialCommunityIcons
-                        name="robot-outline"
-                        size={18}
-                        color={Colors.textSecondary}
-                      />
-                    ) : (
-                      <Feather
-                        name={feature.icon}
-                        size={18}
-                        color={Colors.textSecondary}
-                      />
-                    )}
-                  </View>
-                  <View style={shared.settingLabelGroup}>
-                    <Text style={shared.settingLabel}>{feature.label}</Text>
-                  </View>
-                  <Text style={shared.comingSoon}>Coming soon</Text>
-                  <Feather
-                    name={expanded ? "chevron-up" : "chevron-down"}
-                    size={16}
-                    color={Colors.textMuted}
-                    style={styles.featureChevron}
-                  />
-                </Pressable>
-                {expanded && (
-                  <View style={styles.featureDescription}>
-                    <Text style={shared.settingDescription}>
-                      {feature.description}
-                    </Text>
-                  </View>
-                )}
-              </React.Fragment>
-            );
-          })}
+          {FEATURES.map((feature) => (
+            <React.Fragment key={feature.key}>
+              <GroupDivider />
+              <SettingRow
+                icon={feature.key === "ai" ? undefined : feature.icon}
+                iconOverride={
+                  feature.key === "ai" ? (
+                    <MaterialCommunityIcons
+                      name="robot-outline"
+                      size={18}
+                      color={Colors.textSecondary}
+                    />
+                  ) : undefined
+                }
+                label={feature.label}
+                description={feature.description}
+                control={<Text style={shared.comingSoon}>Coming soon</Text>}
+              />
+            </React.Fragment>
+          ))}
         </View>
       </View>
 
@@ -539,9 +501,6 @@ export default function ProfileScreen({
 
       {/* Danger zone, same settingsGroup box pattern as other sections */}
       <View style={shared.section}>
-        <Text style={[shared.sectionTitle, { color: Colors.danger }]}>
-          Danger
-        </Text>
         <View style={[shared.settingsGroup, styles.dangerGroup]}>
           <Pressable
             style={styles.dangerRow}
@@ -894,15 +853,6 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       fontWeight: FontWeight.medium,
       marginLeft: Spacing.xs,
     },
-    // Features: expandable rows explaining what's coming
-    featureChevron: {
-      marginLeft: Spacing.xs,
-    },
-    featureDescription: {
-      paddingHorizontal: Spacing.base,
-      paddingBottom: Spacing.md,
-      marginTop: -Spacing.xs,
-    },
     // Danger zone, uses settingsGroup box for consistency with other sections
     dangerGroup: {
       borderColor: "rgba(220,38,38,0.2)",
@@ -1005,14 +955,14 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       minHeight: 50,
       paddingVertical: Spacing.md,
       borderRadius: Radius.full,
-      backgroundColor: Colors.danger,
+      backgroundColor: Colors.surfaceRaised,
       alignItems: "center",
       justifyContent: "center",
     },
     wipeConfirmText: {
       fontSize: FontSize.base,
-      fontWeight: FontWeight.bold,
-      color: "#FFFFFF",
+      fontWeight: FontWeight.semibold,
+      color: Colors.danger,
     },
     wipeCancelBtn: {
       width: "100%",
