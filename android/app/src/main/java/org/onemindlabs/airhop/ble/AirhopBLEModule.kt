@@ -47,6 +47,7 @@ import com.facebook.react.bridge.ReactMethod
 import com.facebook.react.bridge.ReadableArray
 import com.facebook.react.bridge.WritableNativeMap
 import com.facebook.react.modules.core.DeviceEventManagerModule
+import org.onemindlabs.airhop.service.AirhopForegroundService
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 
@@ -230,6 +231,18 @@ class AirhopBLEModule(
             val scanResponse = scanResponseBuilder.build()
 
             adapter.bluetoothLeAdvertiser?.startAdvertising(settings, data, scanResponse, advertiseCallback)
+            // Promote the process to a foreground service now that the mesh is
+            // up. Started while the app is in the foreground (mesh starts on
+            // launch), so it is allowed to run into the background, which is what
+            // keeps BLE scanning, the GATT server, and the Nostr socket alive
+            // and message notifications firing while the app is off screen.
+            // Guarded on its own: if the OS refuses the foreground start (e.g. a
+            // background-start restriction), advertising still succeeds.
+            try {
+                AirhopForegroundService.start(reactContext)
+            } catch (e: Exception) {
+                Log.w(TAG, "Foreground service start failed: ${e.message}")
+            }
             promise.resolve(null)
         } catch (e: SecurityException) {
             promise.reject("PERMISSION_DENIED", "BLE advertising requires BLUETOOTH_ADVERTISE permission", e)
@@ -255,6 +268,9 @@ class AirhopBLEModule(
             adapter.bluetoothLeAdvertiser?.stopAdvertising(advertiseCallback)
             gattServer?.close()
             gattServer = null
+            // Mesh is down: drop the foreground service so we stop holding the
+            // process (and its persistent notification) in the background.
+            AirhopForegroundService.stop(reactContext)
             promise.resolve(null)
         } catch (e: Exception) {
             promise.reject("BLE_ERROR", "Failed to stop advertising: ${e.message}", e)

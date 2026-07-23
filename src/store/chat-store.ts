@@ -58,6 +58,8 @@ interface ChatState {
   // public by design; privacy lives in DMs (Noise + Double Ratchet).
   // User-created channels pinned to the top of "Your Channels" (WhatsApp-style).
   pinnedChannels: string[];
+  // Conversations (channels or DMs) the user has muted.
+  mutedChannels: string[];
 
   addChannel: (channel: string) => void;
   removeChannel: (channel: string) => void;
@@ -65,6 +67,10 @@ interface ChatState {
   // so callers don't apply follow-up edits to the wrong channel.
   renameChannel: (oldName: string, newName: string) => boolean;
   togglePinChannel: (channel: string) => void;
+  // Muting a conversation stops it raising notifications and keeps its unread
+  // out of the aggregate badges (tab, segments, sections). The per-row unread
+  // count still shows, so a muted chat is quiet, not invisible.
+  toggleMuteChannel: (channel: string) => void;
   clearChannelMessages: (channel: string) => void;
   // Fold one channel's messages into another and delete the source. Used when a
   // Nostr-only correspondent is later identified over BLE, so the two threads
@@ -77,6 +83,21 @@ interface ChatState {
   setLastThread: (channel: string) => void;
   setChannelDescription: (channel: string, description: string) => void;
   clearAll: () => void;
+}
+
+// Inbound-message observers. A side channel so features like notifications can
+// react to a new message from someone else without the store importing them
+// (which would couple this pure state container to UI/native concerns). Fired
+// once per genuinely-new, not-mine message; suppression decisions belong to the
+// observer, not here.
+type InboundListener = (msg: ChatMessage) => void;
+const inboundListeners = new Set<InboundListener>();
+
+export function subscribeInboundMessages(fn: InboundListener): () => void {
+  inboundListeners.add(fn);
+  return () => {
+    inboundListeners.delete(fn);
+  };
 }
 
 // Max messages kept in memory per channel. Oldest are trimmed.
@@ -116,6 +137,7 @@ export const useChatStore = create<ChatState>()(
       unreadCounts: {},
       channelDescriptions: {},
       pinnedChannels: [],
+      mutedChannels: [],
 
       addChannel(channel: string) {
         set((state) => {
@@ -125,6 +147,12 @@ export const useChatStore = create<ChatState>()(
       },
 
       addMessage(msg: ChatMessage) {
+        // Decide this before the set() runs: was it already present? Observers
+        // must fire exactly once for a new message and never for a duplicate
+        // (mesh flooding delivers the same message by several paths).
+        const priorMessages = get().messages[msg.channel] ?? [];
+        const isDuplicate = priorMessages.some((m) => m.id === msg.id);
+
         set((state) => {
           const existing = state.messages[msg.channel] ?? [];
           // Deduplicate by id
@@ -164,6 +192,10 @@ export const useChatStore = create<ChatState>()(
             unreadCounts: { ...state.unreadCounts, [msg.channel]: newUnread },
           };
         });
+
+        if (!isDuplicate && !msg.isMine) {
+          for (const fn of inboundListeners) fn(msg);
+        }
       },
 
       toggleStar(channel: string, id: string) {
@@ -196,6 +228,9 @@ export const useChatStore = create<ChatState>()(
           const pinnedChannels = state.pinnedChannels.filter(
             (c) => c !== channel,
           );
+          const mutedChannels = state.mutedChannels.filter(
+            (c) => c !== channel,
+          );
           // Clear activeChannel rather than reassigning it to some arbitrary
           // surviving channel. The old behaviour picked the first non-DM
           // channel (usually #bluetooth) while the user was sitting on the LIST
@@ -210,6 +245,7 @@ export const useChatStore = create<ChatState>()(
             unreadCounts,
             channelDescriptions,
             pinnedChannels,
+            mutedChannels,
             activeChannel,
           };
         });
@@ -274,6 +310,14 @@ export const useChatStore = create<ChatState>()(
           pinnedChannels: state.pinnedChannels.includes(channel)
             ? state.pinnedChannels.filter((c) => c !== channel)
             : [...state.pinnedChannels, channel],
+        }));
+      },
+
+      toggleMuteChannel(channel: string) {
+        set((state) => ({
+          mutedChannels: state.mutedChannels.includes(channel)
+            ? state.mutedChannels.filter((c) => c !== channel)
+            : [...state.mutedChannels, channel],
         }));
       },
 
@@ -365,6 +409,7 @@ export const useChatStore = create<ChatState>()(
           unreadCounts: {},
           channelDescriptions: {},
           pinnedChannels: [],
+          mutedChannels: [],
         });
       },
     }),

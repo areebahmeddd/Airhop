@@ -4,7 +4,11 @@
 // Focused tests for the message-action primitives (star) added on top of the
 // existing chat store. Uses the in-memory MMKV mock: no native module required.
 
-import { useChatStore, type ChatMessage } from "../chat-store";
+import {
+  subscribeInboundMessages,
+  useChatStore,
+  type ChatMessage,
+} from "../chat-store";
 
 beforeEach(() => {
   useChatStore.getState().clearAll();
@@ -88,6 +92,66 @@ describe("addMessage ordering", () => {
     state().addMessage(at(T, "x"));
     state().addMessage(at(T, "y"));
     expect(state().messages["#test"].map((m) => m.id)).toEqual(["x", "y"]);
+  });
+});
+
+// The inbound observer is how notifications learn a message arrived without the
+// store depending on them. It must fire once per genuinely-new message from
+// someone else, and never for my own messages or mesh-flood duplicates.
+describe("subscribeInboundMessages", () => {
+  it("fires once for a new message from someone else", () => {
+    const seen: string[] = [];
+    const unsub = subscribeInboundMessages((m) => seen.push(m.id));
+    state().addMessage(makeMessage({ id: "in1", isMine: false }));
+    unsub();
+    expect(seen).toEqual(["in1"]);
+  });
+
+  it("does not fire for my own message", () => {
+    const seen: string[] = [];
+    const unsub = subscribeInboundMessages((m) => seen.push(m.id));
+    state().addMessage(makeMessage({ id: "mine", isMine: true }));
+    unsub();
+    expect(seen).toEqual([]);
+  });
+
+  it("does not fire again for a duplicate id", () => {
+    const seen: string[] = [];
+    const unsub = subscribeInboundMessages((m) => seen.push(m.id));
+    state().addMessage(makeMessage({ id: "dup", text: "first" }));
+    state().addMessage(makeMessage({ id: "dup", text: "flooded copy" }));
+    unsub();
+    expect(seen).toEqual(["dup"]);
+  });
+
+  it("stops firing after unsubscribe", () => {
+    const seen: string[] = [];
+    const unsub = subscribeInboundMessages((m) => seen.push(m.id));
+    unsub();
+    state().addMessage(makeMessage({ id: "after", isMine: false }));
+    expect(seen).toEqual([]);
+  });
+});
+
+describe("toggleMuteChannel", () => {
+  it("mutes and unmutes a conversation", () => {
+    state().toggleMuteChannel("dm:aaa");
+    expect(state().mutedChannels).toContain("dm:aaa");
+    state().toggleMuteChannel("dm:aaa");
+    expect(state().mutedChannels).not.toContain("dm:aaa");
+  });
+
+  it("drops the mute when the channel is removed", () => {
+    state().addChannel("#temp");
+    state().toggleMuteChannel("#temp");
+    state().removeChannel("#temp");
+    expect(state().mutedChannels).not.toContain("#temp");
+  });
+
+  it("clears all mutes on clearAll", () => {
+    state().toggleMuteChannel("#city");
+    state().clearAll();
+    expect(state().mutedChannels).toEqual([]);
   });
 });
 

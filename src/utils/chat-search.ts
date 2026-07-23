@@ -11,7 +11,7 @@ import {
   formatTokenSummary,
   mayContainToken,
 } from "../core/payments/cashu";
-import type { ChatMessage } from "../store/chat-store";
+import type { AttachmentType, ChatMessage } from "../store/chat-store";
 import { messagePreviewText } from "./message-preview";
 import { peerIDToUsername } from "./username";
 
@@ -48,8 +48,28 @@ function channelDisplayName(channel: string): string {
     : channel.replace(/^#/, "");
 }
 
-// Cashu-token messages embed an opaque encoded blob in `text`, so search and
-// snippet against the memo / amount summary instead, never the raw token.
+// Human word for an attachment kind, so "photo"/"video" match even when a media
+// message has no caption or filename.
+function attachmentKindWord(type: AttachmentType): string {
+  switch (type) {
+    case "image":
+      return "Photo";
+    case "video":
+      return "Video";
+    case "voice":
+      return "Voice note";
+    case "document":
+      return "Document";
+  }
+}
+
+// The text a message is matched (and snippeted) against. Beyond the caption,
+// this folds in the attachment's filename and kind, so searching an exact name
+// like "example.png" or "report.pdf" finds the message that carried it, in a
+// DM or a channel, even when the file was sent with a caption.
+//
+// Cashu-token messages embed an opaque encoded blob in `text`, so those match
+// the memo / amount summary instead, never the raw token.
 export function searchableMessageText(message: ChatMessage): string {
   if (message.text && mayContainToken(message.text)) {
     const tokens = findTokensInText(message.text);
@@ -57,7 +77,14 @@ export function searchableMessageText(message: ChatMessage): string {
       return tokens.map((t) => formatTokenSummary(t.info)).join(" ");
     }
   }
-  return messagePreviewText(message);
+
+  const parts: string[] = [];
+  if (message.text) parts.push(message.text);
+  if (message.attachment) {
+    if (message.attachment.name) parts.push(message.attachment.name);
+    parts.push(attachmentKindWord(message.attachment.type));
+  }
+  return parts.join(" ").trim() || messagePreviewText(message);
 }
 
 // matchIndex === 0: prefix match. Match starts right after whitespace: word

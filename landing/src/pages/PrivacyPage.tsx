@@ -198,8 +198,8 @@ export default function PrivacyPage() {
             <h2 className="text-base font-semibold text-gray-900">Your controls</h2>
             <ul className="list-disc space-y-1.5 pl-5 text-sm leading-relaxed marker:text-gray-400">
               <li>
-                <strong>Panic wipe.</strong> Triple-tap the logo to instantly erase all local keys,
-                messages, queued mail, and app data.
+                <strong>Panic wipe.</strong> Instantly erase all local keys, messages, queued mail,
+                and app data from the Profile screen.
               </li>
               <li>
                 <strong>Feature controls.</strong> The Nostr bridge, Tor routing, and internet

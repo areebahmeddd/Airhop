@@ -11,6 +11,7 @@ import React, {
   useState,
 } from "react";
 import {
+  AppState,
   BackHandler,
   Pressable,
   StyleSheet,
@@ -43,6 +44,7 @@ import ChannelList from "./src/features/chat/channel-list";
 import ChatSearchResults from "./src/features/chat/chat-search-results";
 import DmList from "./src/features/chat/dm-list";
 import MessageThread from "./src/features/chat/message-thread";
+import NotificationCenter from "./src/features/chat/notification-center";
 import PeerList from "./src/features/discovery/peer-list";
 import IdentityScreen from "./src/features/onboarding/identity-screen";
 import UsernameScreen from "./src/features/onboarding/username-screen";
@@ -52,8 +54,18 @@ import WalletScreen, {
   type WalletAction,
 } from "./src/features/wallet/wallet-screen";
 import { getMeshService, initMeshService } from "./src/services/mesh-service";
+import {
+  configureNotifications,
+  dismissNotificationsFor,
+  handleInboundMessage,
+  setAppBadgeCount,
+  setNotificationNavigator,
+  setNotificationsActiveChannel,
+  setNotificationsAppActive,
+} from "./src/services/notification-service";
+import { useActivityStore } from "./src/store/activity-store";
 import { showAlert } from "./src/store/alert-store";
-import { useChatStore } from "./src/store/chat-store";
+import { subscribeInboundMessages, useChatStore } from "./src/store/chat-store";
 import { useMeshState, useMeshStateStore } from "./src/store/mesh-state-store";
 import { useSettingsStore } from "./src/store/settings-store";
 import { useTransferStore } from "./src/store/transfer-store";
@@ -70,6 +82,8 @@ import {
   useThemeColors,
 } from "./src/ui/theme";
 import { ensureBlePermissions } from "./src/utils/ble-permissions";
+import { messagePreviewText } from "./src/utils/message-preview";
+import { sumUnread } from "./src/utils/unread";
 import { peerIDToUsername } from "./src/utils/username";
 
 // ---------------------------------------------------------------------------
@@ -158,8 +172,19 @@ export default function App(): React.JSX.Element {
   // to open the matching modal, same pattern as newChanCounter/meshAddCounter.
   const [walletAction, setWalletAction] = useState<WalletAction | null>(null);
   const [walletActionTrigger, setWalletActionTrigger] = useState(0);
-  const { setActiveChannel, unreadCounts, markChannelRead, setLastThread } =
-    useChatStore();
+  // Notification center (bell) visibility, and the count of unseen activity
+  // that badges the bell. Subscribing to entries keeps the badge live.
+  const [showActivity, setShowActivity] = useState(false);
+  const activityUnseen = useActivityStore((s) =>
+    s.entries.reduce((n, e) => (e.seen ? n : n + 1), 0),
+  );
+  const {
+    setActiveChannel,
+    unreadCounts,
+    mutedChannels,
+    markChannelRead,
+    setLastThread,
+  } = useChatStore();
   const { state: meshState } = useMeshState();
   // Payments is switchable from the profile screen, so the tab bar (and the
   // swipe order that follows it) is derived rather than fixed.
@@ -202,21 +227,18 @@ export default function App(): React.JSX.Element {
       });
   }, []);
 
-  // Total unread across all channels, shown as a badge on the Chats tab.
-  const chatsUnread = Object.values(unreadCounts).reduce(
-    (sum, n) => sum + n,
-    0,
+  // Aggregate unread for the badges, muted conversations excluded (their
+  // per-row count still shows; they just do not shout at the app level). Split
+  // by the "dm:" prefix (see chat-store) so the Channels/Direct segments show
+  // which side the activity is on, from one source of truth.
+  const chatsUnread = sumUnread(unreadCounts, mutedChannels);
+  const channelsUnread = sumUnread(
+    unreadCounts,
+    mutedChannels,
+    (channel) => !channel.startsWith("dm:"),
   );
-  // Split the same map by the "dm:" prefix convention (see chat-store) so the
-  // Channels/Direct segmented control can show which side the unread activity
-  // is actually in, without a second source of truth to drift out of sync.
-  const channelsUnread = Object.entries(unreadCounts).reduce(
-    (sum, [channel, n]) => (channel.startsWith("dm:") ? sum : sum + n),
-    0,
-  );
-  const dmsUnread = Object.entries(unreadCounts).reduce(
-    (sum, [channel, n]) => (channel.startsWith("dm:") ? sum + n : sum),
-    0,
+  const dmsUnread = sumUnread(unreadCounts, mutedChannels, (channel) =>
+    channel.startsWith("dm:"),
   );
 
   // Derived state computed before any early return so hook call order is stable.
@@ -259,6 +281,74 @@ export default function App(): React.JSX.Element {
     return () => clearInterval(handle);
   }, [hasTransfers]);
 
+  // Local message notifications. There is no push server: the running process
+  // raises these itself the instant a message lands over any transport (BLE,
+  // WiFi, courier, Nostr), so a backgrounded app still alerts. On Android the
+  // mesh foreground service keeps the process alive to make that possible; on
+  // iOS it fires whenever the OS has the app awake. See notification-service.
+  // The ref lets a notification tap open the right thread without re-registering
+  // the handler on every render.
+  const openChannelRef = useRef<(channel: string) => void>(() => undefined);
+
+  // Foreground/background tracking, so a banner is only raised when the user is
+  // not already looking at the app.
+  useEffect(() => {
+    setNotificationsAppActive(AppState.currentState === "active");
+    const sub = AppState.addEventListener("change", (next) => {
+      setNotificationsAppActive(next === "active");
+    });
+    return () => sub.remove();
+  }, []);
+
+  // One-time setup, deferred until past onboarding so the OS permission prompt
+  // lands in context rather than on the welcome screen. Wires the inbound
+  // observer (raise a notification) and the tap handler (open the conversation).
+  useEffect(() => {
+    if (onboardingStep !== null) return;
+    setNotificationNavigator((channel) => openChannelRef.current(channel));
+    const unsubscribe = subscribeInboundMessages((msg) => {
+      const chat = useChatStore.getState();
+      const isMuted = chat.mutedChannels.includes(msg.channel);
+      // A muted conversation stays silent: no system notification, no haptic,
+      // and no bell entry. Its unread still shows on its own row.
+      if (!isMuted) {
+        void handleInboundMessage(
+          msg,
+          sumUnread(chat.unreadCounts, chat.mutedChannels),
+        );
+        // Bell history logs real notifications only: skip the conversation you
+        // are actively reading (that is not a notification), same activeChannel
+        // rule the unread count uses.
+        if (!msg.isSystem && msg.channel !== chat.activeChannel) {
+          useActivityStore.getState().record({
+            id: msg.id,
+            channel: msg.channel,
+            isDM: msg.channel.startsWith("dm:"),
+            senderID: msg.senderID,
+            senderNickname: msg.senderNickname,
+            preview: messagePreviewText(msg),
+            timestampMs: msg.timestampMs,
+          });
+        }
+      }
+    });
+    void configureNotifications();
+    return unsubscribe;
+  }, [onboardingStep]);
+
+  // Tell the notifier which conversation is open, so it suppresses that chat's
+  // banner and clears its delivered notification once the user reads it.
+  useEffect(() => {
+    const channel = chatView.kind === "thread" ? chatView.channel : "";
+    setNotificationsActiveChannel(channel);
+    if (channel) void dismissNotificationsFor(channel);
+  }, [chatView]);
+
+  // Keep the app icon badge in step with total unread across channels and DMs.
+  useEffect(() => {
+    void setAppBadgeCount(chatsUnread);
+  }, [chatsUnread]);
+
   function triggerWalletAction(action: WalletAction): void {
     setWalletAction(action);
     setWalletActionTrigger((c) => c + 1);
@@ -273,6 +363,21 @@ export default function App(): React.JSX.Element {
     // both; a no-op when opened from the list itself (already the right tab).
     setChatSubTab(channel.startsWith("dm:") ? "dms" : "channels");
     setChatView({ kind: "thread", channel });
+  }
+  // Keep the notification tap handler pointed at the latest openChannel.
+  openChannelRef.current = openChannel;
+
+  // Open the bell screen and mark its backlog seen, so the badge clears the way
+  // it does when you open any notifications list.
+  function openActivityCenter(): void {
+    useActivityStore.getState().markAllSeen();
+    setShowActivity(true);
+  }
+
+  // Tapping a notification-center row: close the sheet and jump to that thread.
+  function openChannelFromActivity(channel: string): void {
+    setShowActivity(false);
+    openChannel(channel);
   }
 
   // Same as openChannel, but also tells the thread which message to scroll
@@ -405,6 +510,11 @@ export default function App(): React.JSX.Element {
       <SafeAreaProvider initialMetrics={initialWindowMetrics}>
         <StatusBar style={resolvedTheme === "dark" ? "light" : "dark"} />
         <CustomAlert />
+        <NotificationCenter
+          visible={showActivity}
+          onClose={() => setShowActivity(false)}
+          onOpenChannel={openChannelFromActivity}
+        />
 
         {/* Keyed by screen: welcome -> generating -> reveal -> main app each
             get their own mount, so this slide plays on every step of
@@ -549,6 +659,33 @@ export default function App(): React.JSX.Element {
                             )}
                           </Pressable>
                         </View>
+                        {/* Bell: notification history, shown on both the
+                            Channels and Direct sub-tabs, badged with unseen
+                            activity. Plain icon, no filled box (unlike the +),
+                            so the two read as different weights of action. */}
+                        <Pressable
+                          style={styles.headerIconBtn}
+                          onPress={openActivityCenter}
+                          accessibilityRole="button"
+                          accessibilityLabel={
+                            activityUnseen > 0
+                              ? `Notifications, ${String(activityUnseen)} new`
+                              : "Notifications"
+                          }
+                        >
+                          <Feather
+                            name="bell"
+                            size={18}
+                            color={Colors.textSecondary}
+                          />
+                          {activityUnseen > 0 && (
+                            <View style={styles.bellBadge}>
+                              <Text style={styles.bellBadgeText}>
+                                {activityUnseen > 99 ? "99+" : activityUnseen}
+                              </Text>
+                            </View>
+                          )}
+                        </Pressable>
                         {chatSubTab === "channels" && (
                           <Pressable
                             style={styles.newChannelPill}
@@ -1059,6 +1196,35 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       alignItems: "center",
       justifyContent: "center",
       backgroundColor: Colors.surfaceRaised,
+    },
+    // Same tap target as the + pill but with no filled background, so the bell
+    // sits as a lighter-weight action beside it.
+    headerIconBtn: {
+      width: 32,
+      height: 32,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    // Unseen-activity count over the bell, same visual language as the tab and
+    // segment badges.
+    bellBadge: {
+      position: "absolute",
+      top: -4,
+      right: -4,
+      backgroundColor: Colors.accent,
+      borderRadius: Radius.full,
+      minWidth: 16,
+      height: 16,
+      alignItems: "center",
+      justifyContent: "center",
+      paddingHorizontal: 4,
+      borderWidth: 1.5,
+      borderColor: Colors.bg,
+    },
+    bellBadgeText: {
+      fontSize: 9,
+      fontWeight: FontWeight.bold,
+      color: Colors.textInverse,
     },
     content: {
       flex: 1,

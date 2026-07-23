@@ -1,7 +1,7 @@
 // App preferences: theme, media auto-download, and upload quality.
-// MMKV-persisted so choices survive app restarts. Deliberately kept out of
-// panic-wipe's MMKV_STORE_IDS: these are device preferences, not identity
-// or message data, and should survive a wipe.
+// MMKV-persisted so choices survive app restarts. Reset to defaults by the
+// panic wipe (via reset()), so a wipe leaves a true first-run state with no
+// trace of the previous user's choices.
 
 import { createMMKV } from "react-native-mmkv";
 import { create } from "zustand";
@@ -29,7 +29,16 @@ interface SettingsState {
   setAutoDownloadMedia: (enabled: boolean) => void;
   setUploadQuality: (quality: UploadQuality) => void;
   setPaymentsEnabled: (enabled: boolean) => void;
+  // Restore first-run defaults. Used by the panic wipe.
+  reset: () => void;
 }
+
+const DEFAULTS = {
+  theme: "dark",
+  autoDownloadMedia: true,
+  uploadQuality: "high",
+  paymentsEnabled: true,
+} satisfies Partial<SettingsState>;
 
 const storage = createMMKV({ id: "settings-store" });
 
@@ -44,10 +53,7 @@ const mmkvStorage = {
 export const useSettingsStore = create<SettingsState>()(
   persist(
     (set) => ({
-      theme: "dark",
-      autoDownloadMedia: true,
-      uploadQuality: "high",
-      paymentsEnabled: true,
+      ...DEFAULTS,
 
       setTheme(theme) {
         set({ theme });
@@ -60,6 +66,9 @@ export const useSettingsStore = create<SettingsState>()(
       },
       setPaymentsEnabled(enabled) {
         set({ paymentsEnabled: enabled });
+      },
+      reset() {
+        set({ ...DEFAULTS });
       },
     }),
     {

@@ -48,7 +48,6 @@ import {
 } from "../../core/payments/cashu";
 import { getMeshService } from "../../services/mesh-service";
 import { showAlert } from "../../store/alert-store";
-import { useBlockedStore } from "../../store/blocked-store";
 import {
   useChatStore,
   type ChatAttachment,
@@ -75,6 +74,7 @@ import {
 } from "../../ui/theme";
 import { peerIDToUsername } from "../../utils/username";
 import ChannelInfoSheet from "./channel-info-sheet";
+import ContactInfoSheet from "./contact-info-sheet";
 import ForwardSheet from "./forward-sheet";
 import MessageActionSheet from "./message-action-sheet";
 import MessageBubble from "./message-bubble";
@@ -515,9 +515,7 @@ export default function MessageThread({
 }: Props): React.JSX.Element {
   const Colors = useThemeColors();
   const styles = useMemo(() => createStyles(Colors), [Colors]);
-  const { messages, addMessage, addChannel, toggleStar, removeChannel } =
-    useChatStore();
-  const blockPeer = useBlockedStore((s) => s.blockPeer);
+  const { messages, addMessage, addChannel, toggleStar } = useChatStore();
   // Live peer count, real data from BLE discovery, not a stub.
   // Subscribe to the stable peer map and derive the reachable list locally.
   const peers = usePeerStore((s) => s.peers);
@@ -1307,17 +1305,6 @@ export default function MessageThread({
     );
   }
 
-  // Absolute date for the DM info sheet's "Chatting since" line — unlike
-  // formatDateSeparator below, this always wants a real calendar date
-  // (including year), never "Today"/"Yesterday".
-  function formatChattingSince(ms: number): string {
-    return new Date(ms).toLocaleDateString([], {
-      month: "short",
-      day: "numeric",
-      year: "numeric",
-    });
-  }
-
   function formatDateSeparator(ms: number): string {
     const d = new Date(ms);
     const now = new Date();
@@ -1347,58 +1334,6 @@ export default function MessageThread({
   const displayName = channel.startsWith("dm:")
     ? peerIDToUsername(channel.slice(3))
     : channel;
-
-  // Remove contact: forget this conversation. The peer isn't blocked: if
-  // they're still nearby and broadcasting, they'll reappear on the Mesh
-  // tab and can be messaged again, same as any other discovered peer.
-  function handleRemoveContact(): void {
-    showAlert(
-      "Remove contact",
-      `Remove ${displayName}? This deletes the conversation. They'll still show up on the Mesh tab if they're nearby.`,
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Remove",
-          style: "destructive",
-          onPress: () => {
-            removeChannel(channel);
-            if (dmPeerID) usePeerStore.getState().removePeer(dmPeerID);
-            setShowDMInfo(false);
-            onBack();
-          },
-        },
-      ],
-    );
-  }
-
-  // Block: forget them AND refuse to hear from them again. Enforced in
-  // mesh-service (their announces/messages are dropped before reaching any
-  // store), not just hidden here: a block should survive them re-announcing.
-  function handleBlockPeer(): void {
-    showAlert(
-      "Block this peer",
-      `Block ${displayName}? You won't see them on the Mesh tab or receive messages from them, even if they're nearby.`,
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Block",
-          style: "destructive",
-          onPress: () => {
-            if (dmPeerID) {
-              blockPeer(dmPeerID);
-              // Tear down the live crypto session too, not just the UI entry:
-              // forgetPeer clears the Noise/Double Ratchet state and link maps
-              // (it also removes them from the peer store).
-              getMeshService()?.forgetPeer(dmPeerID);
-            }
-            removeChannel(channel);
-            setShowDMInfo(false);
-            onBack();
-          },
-        },
-      ],
-    );
-  }
 
   return (
     <KeyboardAvoidingView
@@ -1874,71 +1809,15 @@ export default function MessageThread({
         />
       )}
 
-      {/* DM peer info sheet: opens when user taps the DM header */}
+      {/* DM peer info: opens when the user taps the DM header. The same shared
+          sheet the DM list's "Contact info" action uses, so the two never
+          diverge. */}
       {isDM && (
-        <Modal
-          visible={showDMInfo}
-          transparent
-          animationType="slide"
-          onRequestClose={() => setShowDMInfo(false)}
-        >
-          <View style={styles.dmInfoOverlay}>
-            <Pressable
-              style={StyleSheet.absoluteFill}
-              onPress={() => setShowDMInfo(false)}
-            />
-            <View style={styles.dmInfoSheet}>
-              <View style={styles.handle} />
-              <View style={styles.dmInfoBody}>
-                <Avatar
-                  username={displayName}
-                  peerID={channel.slice(3)}
-                  size={64}
-                />
-                <Text style={styles.dmInfoName}>{displayName}</Text>
-                <Text style={styles.dmInfoPeerID}>{channel.slice(3)}</Text>
-                {msgs.length > 0 && (
-                  <Text style={styles.dmInfoSince}>
-                    Chatting since {formatChattingSince(msgs[0].timestampMs)}
-                  </Text>
-                )}
-                {/* Peer online status, same 60s freshness window as the offline banner */}
-                {isDMPeerOnline && (
-                  <View style={styles.dmInfoStatus}>
-                    <View style={styles.dmInfoDot} />
-                    <Text style={styles.dmInfoStatusText}>In BLE range</Text>
-                  </View>
-                )}
-                <View style={styles.dmInfoEncNote}>
-                  <Feather name="lock" size={12} color={Colors.textMuted} />
-                  <Text style={styles.dmInfoEncText}>
-                    End-to-end encrypted via Noise XX and Double Ratchet
-                  </Text>
-                </View>
-              </View>
-              <View style={styles.dmInfoActions}>
-                <Pressable
-                  style={styles.dmInfoRemoveBtn}
-                  onPress={handleRemoveContact}
-                  accessibilityRole="button"
-                  accessibilityLabel="Remove contact"
-                >
-                  <Feather name="user-x" size={16} color={Colors.textPrimary} />
-                  <Text style={styles.dmInfoRemoveText}>Remove contact</Text>
-                </Pressable>
-                <Pressable
-                  style={styles.dmInfoBlockBtn}
-                  onPress={handleBlockPeer}
-                  accessibilityRole="button"
-                  accessibilityLabel="Block this peer"
-                >
-                  <Feather name="slash" size={16} color={Colors.danger} />
-                  <Text style={styles.dmInfoBlockText}>Block contact</Text>
-                </Pressable>
-              </View>
-            </View>
-          </View>
-        </Modal>
+        <ContactInfoSheet
+          channel={showDMInfo ? channel : null}
+          onClose={() => setShowDMInfo(false)}
+          onAfterRemove={onBack}
+        />
       )}
 
       {/* Members list: currently-reachable peers, tap the header count. */}
@@ -2731,11 +2610,6 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       letterSpacing: 0.8,
       textAlign: "center",
     },
-    dmInfoSince: {
-      fontSize: FontSize.xs,
-      color: Colors.textMuted,
-      marginTop: 2,
-    },
     dmInfoStatus: {
       flexDirection: "row",
       alignItems: "center",
@@ -2753,19 +2627,6 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       color: Colors.online,
       fontWeight: FontWeight.medium,
     },
-    dmInfoEncNote: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: Spacing.xs,
-      marginTop: Spacing.md,
-      paddingHorizontal: Spacing.sm,
-    },
-    dmInfoEncText: {
-      fontSize: FontSize.xs,
-      color: Colors.textMuted,
-      textAlign: "center",
-      flex: 1,
-    },
     dmInfoActions: {
       width: "100%",
       gap: Spacing.sm,
@@ -2773,40 +2634,6 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       paddingTop: Spacing.md,
       borderTopWidth: StyleSheet.hairlineWidth,
       borderTopColor: Colors.border,
-    },
-    dmInfoRemoveBtn: {
-      width: "100%",
-      minHeight: 50,
-      flexDirection: "row",
-      alignItems: "center",
-      justifyContent: "center",
-      gap: Spacing.sm,
-      borderRadius: Radius.full,
-      backgroundColor: Colors.surfaceRaised,
-      borderWidth: 1,
-      borderColor: Colors.border,
-    },
-    dmInfoRemoveText: {
-      fontSize: FontSize.base,
-      fontWeight: FontWeight.semibold,
-      color: Colors.textPrimary,
-    },
-    dmInfoBlockBtn: {
-      width: "100%",
-      minHeight: 50,
-      flexDirection: "row",
-      alignItems: "center",
-      justifyContent: "center",
-      gap: Spacing.sm,
-      borderRadius: Radius.full,
-      backgroundColor: Colors.dangerDim,
-      borderWidth: 1,
-      borderColor: Colors.danger,
-    },
-    dmInfoBlockText: {
-      fontSize: FontSize.base,
-      fontWeight: FontWeight.semibold,
-      color: Colors.danger,
     },
     // Channel sender profile sheet's single action — solid pill, same
     // primary-button shape used everywhere else this session.

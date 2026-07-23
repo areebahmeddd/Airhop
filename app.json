@@ -82,6 +82,7 @@
         "BLUETOOTH_SCAN",
         "CAMERA",
         "CHANGE_WIFI_STATE",
+        "POST_NOTIFICATIONS",
         "READ_MEDIA_IMAGES",
         "READ_MEDIA_VIDEO",
         "RECORD_AUDIO"
