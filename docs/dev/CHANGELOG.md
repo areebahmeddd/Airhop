@@ -3,6 +3,14 @@
 All notable changes are documented here.
 
 
+## What's Changed in v0.9.8
+
+- docs: notifications + foreground-service lifecycle (by @areebahmeddd) [4ed7840]
+- refactor(chat): share pinned+recent conversation ordering, add DM pinning (by @areebahmeddd) [5112a93]
+- feat(chat): local message notifications with activity bell (by @areebahmeddd) [7105d0a]
+
+**Full changelog:** [v0.9.7..v0.9.8](https://github.com/areebahmeddd/Airhop/compare/v0.9.7..v0.9.8)
+
 ## What's Changed in v0.9.7
 
 - feat: update footer with new links and add PixelHeart animation (by @areebahmeddd) [6c79d4b]
