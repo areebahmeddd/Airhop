@@ -3,6 +3,16 @@
 All notable changes are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## What's Changed in v1.0.1 · Albatross
+
+- refactor: rename "Your Channels" to "Your Rooms" for clarity and consistency (by @areebahmeddd) [837173d]
+- feat(app/core): geohash support, ui fixes, docs update, updated tests and feature wiring (by @areebahmeddd) [f0dc507]
+- fix(core): Tor functionality, internet gateway, other minor ui bug fixes (by @areebahmeddd) [7322a68]
+- feat(chat): add unseen notices tracking and display in message thread (by @areebahmeddd) [16dfba6]
+- feat: add monospace font selection and update UI components (by @areebahmeddd) [fdb64f9]
+
+**Full changelog:** [v1.0.0..v1.0.1](https://github.com/areebahmeddd/Airhop/compare/v1.0.0..v1.0.1)
+
 ## What's Changed in v1.0.0 · Albatross
 
 - feat(project): run claude fable 5 to make it compatible with bitchat (potentially) (by @areebahmeddd) [2c4ae56]
