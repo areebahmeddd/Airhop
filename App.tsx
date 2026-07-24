@@ -93,6 +93,7 @@ import {
 } from "./src/ui/theme";
 import { ensureBlePermissions } from "./src/utils/ble-permissions";
 import { parseAirhopLink } from "./src/utils/deep-link";
+import { mentionsNickname } from "./src/utils/mentions";
 import { messagePreviewText } from "./src/utils/message-preview";
 import { sumUnread } from "./src/utils/unread";
 import { peerIDToUsername } from "./src/utils/username";
@@ -141,6 +142,9 @@ async function startMeshWithPermissions(
     );
   }
   initMeshService(identity, nickname);
+  // The mesh always starts Online (advertising + scanning), so keep the chosen
+  // presence in step, in case a prior session left it Away/Invisible.
+  useMeshStateStore.getState().setPresenceStatus("online");
 
   // Remaining permission prompts, sequenced one after another so the OS never
   // shows two at once (concurrent prompts raced on a fresh install: the
@@ -346,9 +350,13 @@ export default function App(): React.JSX.Element {
     const unsubscribe = subscribeInboundMessages((msg) => {
       const chat = useChatStore.getState();
       const isMuted = chat.mutedChannels.includes(msg.channel);
-      // A muted conversation stays silent: no system notification, no haptic,
-      // and no bell entry. Its unread still shows on its own row.
-      if (!isMuted) {
+      // Being @-mentioned overrides mute, the way every major chat app treats a
+      // mention: even a muted room pings and logs a bell entry when it is you
+      // being addressed by name.
+      const mentionsMe = !msg.isSystem && mentionsNickname(msg.text, username);
+      // A muted conversation otherwise stays silent: no system notification, no
+      // haptic, and no bell entry. Its unread still shows on its own row.
+      if (!isMuted || mentionsMe) {
         void handleInboundMessage(
           msg,
           sumUnread(chat.unreadCounts, chat.mutedChannels),
@@ -371,7 +379,7 @@ export default function App(): React.JSX.Element {
     });
     void configureNotifications();
     return unsubscribe;
-  }, [appReady, onboardingStep]);
+  }, [appReady, onboardingStep, username]);
 
   // Tell the notifier which conversation is open, so it suppresses that chat's
   // banner and clears its delivered notification once the user reads it.

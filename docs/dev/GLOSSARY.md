@@ -56,7 +56,7 @@
 
 **[NIP-61](https://github.com/nostr-protocol/nips/blob/master/61.md)**: The Nutzap standard. Defines how to send Cashu ecash tokens via Nostr events as a form of Lightning-backed payment.
 
-**[Geohash](https://en.wikipedia.org/wiki/Geohash)**: A geographic encoding that maps GPS coordinates to a short alphanumeric string, hierarchically scoping an area. Airhop uses 5-character geohashes (~5 km x 5 km cells) to scope location-based Nostr channels.
+**[Geohash](https://en.wikipedia.org/wiki/Geohash)**: A geographic encoding that maps GPS coordinates to a short alphanumeric string, hierarchically scoping an area. Airhop scopes location-based Nostr channels by geohash, from a 2-character region down to a 7-character city block (a city is 5 characters, ~5 km x 5 km). The named channels resolve their geohash from your location; you can also teleport to any cell by entering its geohash.
 
 **[Haversine formula](https://en.wikipedia.org/wiki/Haversine_formula)**: A formula for computing the great-circle distance between two GPS coordinates on a sphere. Used by `geo-relay.ts` to select the nearest Nostr relay from `assets/data/relays.csv`.
 

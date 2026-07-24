@@ -18,7 +18,13 @@ import { decodeGeohash, encodeGeohash } from "../../core/nostr/presence";
 import { GEO_RELAYS } from "../../data/relays";
 import {
   GEO_CHANNEL_PRECISION,
+  geohashChannel,
+  geohashLevelName,
   isGeoChannel,
+  isManualGeoChannel,
+  isValidGeohash,
+  manualGeohashOf,
+  normalizeGeohash,
 } from "../geohash-channel-service";
 
 jest.mock("expo-location", () => ({}));
@@ -49,6 +55,13 @@ describe("channel → precision mapping", () => {
     expect(isGeoChannel("dm:aabbccdd00112233")).toBe(false);
   });
 
+  it("treats a teleported cell as a geo channel", () => {
+    expect(isGeoChannel("geohash:tdr1k")).toBe(true);
+    expect(isManualGeoChannel("geohash:tdr1k")).toBe(true);
+    // A named location channel is not a manual/teleported one.
+    expect(isManualGeoChannel("#city")).toBe(false);
+  });
+
   it("produces coarser cells as the scope widens", () => {
     const lengths = [
       "#block",
@@ -62,6 +75,54 @@ describe("channel → precision mapping", () => {
     );
     // Strictly decreasing precision from block out to region.
     expect(lengths).toEqual([...lengths].sort((a, b) => b - a));
+  });
+});
+
+describe("teleport: manual geohash channels", () => {
+  it("round-trips a geohash through the channel key", () => {
+    const channel = geohashChannel("tdr1k");
+    expect(channel).toBe("geohash:tdr1k");
+    expect(manualGeohashOf(channel)).toBe("tdr1k");
+  });
+
+  it("returns null geohash for a non-manual channel", () => {
+    expect(manualGeohashOf("#city")).toBeNull();
+    expect(manualGeohashOf("group:abcd")).toBeNull();
+  });
+
+  it("normalises user input the way bitchat does", () => {
+    // Lowercase, drop a leading #, discard out-of-alphabet chars, cap at 12.
+    expect(normalizeGeohash("#TDR1K")).toBe("tdr1k");
+    expect(normalizeGeohash("  u4pruy  ")).toBe("u4pruy");
+    // a, i, l, o are not in the geohash alphabet and are stripped.
+    expect(normalizeGeohash("taile")).toBe("te");
+    expect(normalizeGeohash("bcdefghjkmnpqrstuvwxyz")).toHaveLength(12);
+  });
+
+  it("accepts geohashes of 2 to 12 valid chars", () => {
+    expect(isValidGeohash("td")).toBe(true);
+    expect(isValidGeohash("tdr1k")).toBe(true);
+    expect(isValidGeohash("u4pruydqqvj8")).toBe(true); // 12
+  });
+
+  it("rejects too short, too long, or out-of-alphabet geohashes", () => {
+    expect(isValidGeohash("t")).toBe(false); // 1 char
+    expect(isValidGeohash("u4pruydqqvj8x")).toBe(false); // 13 chars
+    expect(isValidGeohash("tail")).toBe(false); // a, i, l not allowed
+    expect(isValidGeohash("")).toBe(false);
+  });
+
+  it("maps geohash length to the same coverage level as bitchat", () => {
+    // bitchat GeohashChannelLevel.level(forLength:): 0-2 region, 3-4 province,
+    // 5 city, 6 neighborhood, 7 block, 8+ building.
+    expect(geohashLevelName("t")).toBe("Region");
+    expect(geohashLevelName("td")).toBe("Region");
+    expect(geohashLevelName("tdr")).toBe("Province");
+    expect(geohashLevelName("tdr1")).toBe("Province");
+    expect(geohashLevelName("tdr1k")).toBe("City");
+    expect(geohashLevelName("tdr1ke")).toBe("Neighborhood");
+    expect(geohashLevelName("tdr1ke7")).toBe("Block");
+    expect(geohashLevelName("tdr1ke7x")).toBe("Building");
   });
 });
 

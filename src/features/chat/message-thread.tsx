@@ -54,6 +54,8 @@ import {
 } from "../../core/payments/cashu";
 import {
   isGeoChannel,
+  isManualGeoChannel,
+  manualGeohashOf,
   type GeoParticipant,
 } from "../../services/geohash-channel-service";
 import { hasLocationPermission } from "../../services/location-service";
@@ -67,6 +69,7 @@ import {
 import { useContactsStore } from "../../store/contacts-store";
 import { useGroupStore } from "../../store/group-store";
 import { usePeerStore } from "../../store/peer-store";
+import { usePlaceNamesStore } from "../../store/place-names-store";
 import {
   UPLOAD_QUALITY_VALUES,
   useSettingsStore,
@@ -87,6 +90,7 @@ import {
 } from "../../ui/theme";
 import { channelInviteLink } from "../../utils/deep-link";
 import { resolveDisplayName } from "../../utils/display-name";
+import { activeMentionQuery, applyMention } from "../../utils/mentions";
 import { peerIDToUsername } from "../../utils/username";
 import ChannelInfoSheet from "./channel-info-sheet";
 import ContactInfoSheet from "./contact-info-sheet";
@@ -640,6 +644,10 @@ export default function MessageThread({
   // permissions); here we just re-resolve the cell when the channel opens, in
   // case the user has moved. No-op without permission.
   const isGeo = isGeoChannel(channel);
+  // Teleported cells are keyed `geohash:<gh>`; the header shows them as `#<gh>`,
+  // matching bitchat's location-channel badge, not the raw internal key.
+  const isManualGeo = isManualGeoChannel(channel);
+  const channelLabel = isManualGeo ? `#${manualGeohashOf(channel)}` : channel;
   // Private group channels (`group:<id>`): messages are ChaCha20-Poly1305
   // sealed under the group's epoch key and broadcast as 0x25, not plaintext.
   const isGroup = channel.startsWith("group:");
@@ -689,6 +697,37 @@ export default function MessageThread({
       ? geoMembers.length
       : peerCount;
 
+  // Reverse-geocoded name for a location channel's cell, shown in the header
+  // subtitle as "~Kumaraswamy Layout". Present once the cell has a geohash
+  // (teleported always; named only with location on) and geocoding succeeds.
+  const channelGeohash = isGeo
+    ? (manualGeohashOf(channel) ??
+      getMeshService()?.getChannelGeohash(channel) ??
+      null)
+    : null;
+  const geoPlaceName = usePlaceNamesStore((s) =>
+    channelGeohash !== null ? s.names[channelGeohash] : undefined,
+  );
+  useEffect(() => {
+    if (channelGeohash !== null) {
+      usePlaceNamesStore.getState().resolve(channelGeohash);
+    }
+  }, [channelGeohash]);
+
+  // Header subtitle for a channel (not a group/DM): place name and/or live
+  // count, falling back to a plain label.
+  const channelSubtitleParts: string[] = [];
+  if (isGeo && geoPlaceName !== undefined) {
+    channelSubtitleParts.push(`~${geoPlaceName}`);
+  }
+  if (memberCount > 0) {
+    channelSubtitleParts.push(`${memberCount} ${isGeo ? "active" : "nearby"}`);
+  }
+  const channelSubtitle =
+    channelSubtitleParts.length > 0
+      ? channelSubtitleParts.join("  ·  ")
+      : "Public channel";
+
   const audioRecorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
   const recorderState = useAudioRecorderState(audioRecorder);
   const dmPeerID = channel.startsWith("dm:") ? channel.slice(3) : null;
@@ -707,6 +746,47 @@ export default function MessageThread({
     (dmPeerID.startsWith("nostr_") ||
       (dmContactNostr !== undefined && dmContactNostr.length > 0));
   const [draft, setDraft] = useState("");
+
+  // @-mention suggestions. Who can be tagged depends on the thread: a group's
+  // roster, a location cell's active participants, or a channel's nearby peers.
+  // A DM has only one other person, so mentions there add nothing.
+  const mentionCandidates = useMemo<{ id: string; nickname: string }[]>(() => {
+    if (channel.startsWith("dm:")) return [];
+    if (channel.startsWith("group:")) {
+      const members =
+        useGroupStore.getState().get(channel.slice("group:".length))?.members ??
+        [];
+      return members.map((m) => ({ id: m.fingerprint, nickname: m.nickname }));
+    }
+    if (isGeo) {
+      return geoMembers.map((m) => ({ id: m.pubkey, nickname: m.nickname }));
+    }
+    return [...peers.values()].map((p) => ({
+      id: p.peerID,
+      nickname: p.nickname || peerIDToUsername(p.peerID),
+    }));
+  }, [isGeo, channel, geoMembers, peers]);
+
+  // The candidates matching what the user is typing after "@", minus yourself.
+  const mentionQuery = activeMentionQuery(draft);
+  const mentionMatches = useMemo(() => {
+    if (mentionQuery === null) return [];
+    const q = mentionQuery.toLowerCase();
+    const seen = new Set<string>();
+    const out: { id: string; nickname: string }[] = [];
+    for (const c of mentionCandidates) {
+      const nick = c.nickname.trim();
+      if (nick.length === 0 || nick === localNickname) continue;
+      if (!nick.toLowerCase().includes(q)) continue;
+      const key = nick.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push({ id: c.id, nickname: nick });
+      if (out.length >= 6) break;
+    }
+    return out;
+  }, [mentionQuery, mentionCandidates, localNickname]);
+
   const [isPTTActive, setIsPTTActive] = useState(false);
   const isRecording = recorderState.isRecording;
   // Voice recording
@@ -979,6 +1059,15 @@ export default function MessageThread({
     pendingSendRef.current = null;
     setHeldMessage(null);
     transmit(pending.msg);
+  }
+
+  // Resend a failed message: flip it back to sending and run the same transmit
+  // path, which resets the status to sent/carried/failed on the outcome.
+  // Reached by tapping the red failed mark on the bubble.
+  function handleRetryMessage(item: ChatMessage): void {
+    if (item.status !== "failed") return;
+    useChatStore.getState().setMessageStatus(item.channel, item.id, "sending");
+    transmit(item);
   }
 
   function handleSend(): void {
@@ -1701,14 +1790,12 @@ export default function MessageThread({
           ) : (
             <>
               <Text style={styles.channelTitle} numberOfLines={1}>
-                {isGroup ? displayName : channel}
+                {isGroup ? displayName : channelLabel}
               </Text>
               <Text style={styles.headerSubtitle} numberOfLines={1}>
                 {isGroup
                   ? `${memberCount} member${memberCount !== 1 ? "s" : ""}`
-                  : memberCount > 0
-                    ? `${memberCount} ${isGeo ? "active" : "nearby"}`
-                    : "Public channel"}
+                  : channelSubtitle}
               </Text>
             </>
           )}
@@ -1867,6 +1954,7 @@ export default function MessageThread({
                 }
                 formatTime={formatTime}
                 onLongPress={handleLongPressMessage}
+                onRetry={handleRetryMessage}
                 onPressSender={isDM ? undefined : handlePressSender}
                 highlighted={item.id === highlightedMessageId}
               />
@@ -1972,6 +2060,32 @@ export default function MessageThread({
 
       {/* Undo Send window for the message currently being held. */}
       {heldMessage && <UndoSendPill onUndo={undoSend} Colors={Colors} />}
+
+      {/* @-mention picker: appears while typing "@", tap to insert. */}
+      {mentionMatches.length > 0 && (
+        <View style={styles.mentionBar}>
+          <ScrollView
+            style={styles.mentionList}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+          >
+            {mentionMatches.map((c) => (
+              <Pressable
+                key={c.id}
+                style={styles.mentionRow}
+                onPress={() => setDraft(applyMention(draft, c.nickname))}
+                accessibilityRole="button"
+                accessibilityLabel={`Mention ${c.nickname}`}
+              >
+                <Avatar username={c.nickname} peerID={c.id} size={28} />
+                <Text style={styles.mentionName} numberOfLines={1}>
+                  {c.nickname}
+                </Text>
+              </Pressable>
+            ))}
+          </ScrollView>
+        </View>
+      )}
 
       {/* Compose bar */}
       <View style={styles.composeBar}>
@@ -2235,19 +2349,36 @@ export default function MessageThread({
               <Text style={styles.membersTitle}>
                 {memberCount} member{memberCount !== 1 ? "s" : ""}
               </Text>
-              {isGeo ? (
-                // Geohash channel: participants are Nostr pseudonyms scoped to
-                // this cell, not BLE peers, so they carry no openable profile.
-                geoMembers.length === 0 ? (
-                  <Text style={styles.membersEmpty}>
-                    No one is active over the internet right now.
-                  </Text>
-                ) : (
-                  <ScrollView
-                    style={styles.membersList}
-                    showsVerticalScrollIndicator={false}
-                  >
-                    {geoMembers.map((m) => (
+              <ScrollView
+                style={styles.membersList}
+                showsVerticalScrollIndicator={false}
+              >
+                {/* You: your own entry, always first. No action, since you can't
+                    message or open a profile for yourself; the right side reads
+                    "You" instead of the message icon every other row shows. */}
+                <View style={styles.memberRow}>
+                  <Avatar
+                    username={localNickname}
+                    peerID={localPeerID}
+                    size={40}
+                  />
+                  <View style={styles.memberRowInfo}>
+                    <Text style={styles.memberRowName} numberOfLines={1}>
+                      {localNickname}
+                    </Text>
+                  </View>
+                  <Text style={styles.memberRowYou}>You</Text>
+                </View>
+
+                {isGeo ? (
+                  // Geohash channel: participants are Nostr pseudonyms scoped to
+                  // this cell, not BLE peers, so they carry no openable profile.
+                  geoMembers.length === 0 ? (
+                    <Text style={styles.membersEmpty}>
+                      No one else is active in this cell right now.
+                    </Text>
+                  ) : (
+                    geoMembers.map((m) => (
                       <Pressable
                         key={m.pubkey}
                         style={styles.memberRow}
@@ -2271,9 +2402,14 @@ export default function MessageThread({
                             {m.nickname}
                           </Text>
                           <View style={styles.memberRowStatus}>
-                            <View style={styles.memberRowDot} />
+                            <View
+                              style={[
+                                styles.memberRowDot,
+                                m.teleported && styles.memberRowDotTeleported,
+                              ]}
+                            />
                             <Text style={styles.memberRowStatusText}>
-                              Active
+                              {m.teleported ? "Teleported" : "Active"}
                             </Text>
                           </View>
                         </View>
@@ -2285,19 +2421,14 @@ export default function MessageThread({
                           />
                         </View>
                       </Pressable>
-                    ))}
-                  </ScrollView>
-                )
-              ) : onlinePeers.length === 0 ? (
-                <Text style={styles.membersEmpty}>
-                  No one else is currently in range.
-                </Text>
-              ) : (
-                <ScrollView
-                  style={styles.membersList}
-                  showsVerticalScrollIndicator={false}
-                >
-                  {onlinePeers.map((peer) => (
+                    ))
+                  )
+                ) : onlinePeers.length === 0 ? (
+                  <Text style={styles.membersEmpty}>
+                    No one else is currently in range.
+                  </Text>
+                ) : (
+                  onlinePeers.map((peer) => (
                     <Pressable
                       key={peer.peerID}
                       style={styles.memberRow}
@@ -2337,9 +2468,9 @@ export default function MessageThread({
                         />
                       </View>
                     </Pressable>
-                  ))}
-                </ScrollView>
-              )}
+                  ))
+                )}
+              </ScrollView>
             </View>
           </View>
         </Modal>
@@ -2747,6 +2878,28 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
     dmStatusText: {
       fontSize: FontSize.xs,
       color: Colors.textMuted,
+    },
+    // ---- @-mention picker (above the compose bar) ------------------------------
+    mentionBar: {
+      borderTopWidth: StyleSheet.hairlineWidth,
+      borderTopColor: Colors.border,
+      backgroundColor: Colors.bg,
+    },
+    mentionList: {
+      maxHeight: 176,
+    },
+    mentionRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: Spacing.md,
+      paddingHorizontal: Spacing.base,
+      paddingVertical: Spacing.sm,
+    },
+    mentionName: {
+      flex: 1,
+      fontSize: FontSize.base,
+      fontWeight: FontWeight.medium,
+      color: Colors.textPrimary,
     },
     composeBar: {
       flexDirection: "row",
@@ -3313,6 +3466,11 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       borderRadius: 3,
       backgroundColor: Colors.online,
     },
+    // Teleported participants are not physically present, so a muted dot rather
+    // than the live-presence green.
+    memberRowDotTeleported: {
+      backgroundColor: Colors.textMuted,
+    },
     memberRowStatusText: {
       fontSize: FontSize.xs,
       color: Colors.textMuted,
@@ -3327,6 +3485,13 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       backgroundColor: Colors.surfaceRaised,
       alignItems: "center",
       justifyContent: "center",
+    },
+    // "You" label on your own member row, where every other row shows the
+    // message icon.
+    memberRowYou: {
+      fontSize: FontSize.sm,
+      fontWeight: FontWeight.medium,
+      color: Colors.textMuted,
     },
     // Cashu payment cards rendered inside message bubbles. Deliberately distinct
     // from grey file attachments: an accent-tinted card with a hero amount, so

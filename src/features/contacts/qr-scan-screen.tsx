@@ -404,45 +404,41 @@ export default function QrScanScreen({
               <View style={styles.dividerLine} />
             </View>
 
-            <Pressable
-              style={styles.optionRow}
-              onPress={handleScanWithCamera}
-              accessibilityRole="button"
-              accessibilityLabel="Scan QR code with camera"
-            >
-              <View style={styles.optionIcon}>
-                <Feather name="camera" size={20} color={Colors.textPrimary} />
-              </View>
-              <View style={styles.optionText}>
-                <Text style={styles.optionTitle}>Scan QR code</Text>
-                <Text style={styles.optionSub}>Use your camera</Text>
-              </View>
-              <Feather
-                name="chevron-right"
-                size={20}
-                color={Colors.textMuted}
-              />
-            </Pressable>
+            {/* One grouped card with a hairline divider, matching the
+                "Start something new" chooser so the two sheets read alike. */}
+            <View style={styles.optionGroup}>
+              <Pressable
+                style={styles.optionRow}
+                onPress={handleScanWithCamera}
+                accessibilityRole="button"
+                accessibilityLabel="Scan QR code with camera"
+              >
+                <View style={styles.optionIcon}>
+                  <Feather name="camera" size={18} color={Colors.textPrimary} />
+                </View>
+                <View style={styles.optionText}>
+                  <Text style={styles.optionTitle}>Scan QR code</Text>
+                  <Text style={styles.optionSub}>Use your camera</Text>
+                </View>
+              </Pressable>
 
-            <Pressable
-              style={styles.optionRow}
-              onPress={handlePickFromGallery}
-              accessibilityRole="button"
-              accessibilityLabel="Upload QR image from gallery"
-            >
-              <View style={styles.optionIcon}>
-                <Feather name="image" size={20} color={Colors.textPrimary} />
-              </View>
-              <View style={styles.optionText}>
-                <Text style={styles.optionTitle}>Upload from gallery</Text>
-                <Text style={styles.optionSub}>Pick a saved QR image</Text>
-              </View>
-              <Feather
-                name="chevron-right"
-                size={20}
-                color={Colors.textMuted}
-              />
-            </Pressable>
+              <View style={styles.optionDivider} />
+
+              <Pressable
+                style={styles.optionRow}
+                onPress={handlePickFromGallery}
+                accessibilityRole="button"
+                accessibilityLabel="Upload QR image from gallery"
+              >
+                <View style={styles.optionIcon}>
+                  <Feather name="image" size={18} color={Colors.textPrimary} />
+                </View>
+                <View style={styles.optionText}>
+                  <Text style={styles.optionTitle}>Upload from gallery</Text>
+                  <Text style={styles.optionSub}>Pick a saved QR image</Text>
+                </View>
+              </Pressable>
+            </View>
 
             <View style={styles.noteRow}>
               <Feather name="shield" size={14} color={Colors.textMuted} />
@@ -591,8 +587,8 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       gap: Spacing.xs,
     },
     sheetTitle: {
-      fontSize: FontSize.lg,
-      fontWeight: FontWeight.bold,
+      fontSize: FontSize.md,
+      fontWeight: FontWeight.semibold,
       color: Colors.textPrimary,
     },
     sheetSubtitle: {
@@ -644,22 +640,28 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       fontSize: FontSize.xs,
       color: Colors.textMuted,
     },
+    optionGroup: {
+      backgroundColor: Colors.surfaceRaised,
+      borderRadius: Radius.lg,
+      overflow: "hidden",
+    },
+    optionDivider: {
+      height: StyleSheet.hairlineWidth,
+      backgroundColor: Colors.border,
+      marginLeft: Spacing.base,
+    },
     optionRow: {
       flexDirection: "row",
       alignItems: "center",
-      gap: Spacing.base,
-      backgroundColor: Colors.surface,
-      borderRadius: Radius.md,
-      borderWidth: 1,
-      borderColor: Colors.border,
+      gap: Spacing.md,
       paddingHorizontal: Spacing.base,
-      paddingVertical: Spacing.md,
+      paddingVertical: Spacing.base,
     },
     optionIcon: {
-      width: 40,
-      height: 40,
+      width: 38,
+      height: 38,
       borderRadius: Radius.full,
-      backgroundColor: Colors.surfaceRaised,
+      backgroundColor: Colors.surface,
       alignItems: "center",
       justifyContent: "center",
     },
@@ -673,8 +675,9 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       color: Colors.textPrimary,
     },
     optionSub: {
-      fontSize: FontSize.xs,
-      color: Colors.textMuted,
+      fontSize: FontSize.sm,
+      color: Colors.textSecondary,
+      lineHeight: 18,
     },
     noteRow: {
       flexDirection: "row",

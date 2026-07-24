@@ -21,10 +21,12 @@ import { useBlockedStore } from "../store/blocked-store";
 import { useBoardStore } from "../store/board-store";
 import { useChatStore } from "../store/chat-store";
 import { useContactsStore } from "../store/contacts-store";
+import { useGeohashBookmarksStore } from "../store/geohash-bookmarks-store";
 import { useGroupStore } from "../store/group-store";
 import { useNoticesStore } from "../store/notices-store";
 import { useOutboxStore } from "../store/outbox-store";
 import { usePeerStore } from "../store/peer-store";
+import { usePlaceNamesStore } from "../store/place-names-store";
 import { useSettingsStore } from "../store/settings-store";
 import { useTransferStore } from "../store/transfer-store";
 import { useWalletStore } from "../store/wallet-store";
@@ -66,6 +68,12 @@ export const MMKV_STORE_IDS = [
   // group-store holds private-group epoch keys, which decrypt every group
   // message; destroy them on panic like any other conversation key material.
   "group-store",
+  // geohash-bookmarks-store holds cells the user saved; a bookmark reveals a
+  // place they care about, so it is erased with the rest of their data.
+  "geohash-bookmarks-store",
+  // place-names-store caches geocoded names for cells the user has opened, which
+  // trace the places they have been active in; cleared on panic.
+  "place-names-store",
 ] as const;
 
 export async function panicWipe(): Promise<void> {
@@ -89,6 +97,8 @@ export async function panicWipe(): Promise<void> {
   useBoardStore.getState().clearAll();
   useGroupStore.getState().clearAll();
   useNoticesStore.getState().clearAll();
+  useGeohashBookmarksStore.getState().clearAll();
+  usePlaceNamesStore.getState().clearAll();
   useSettingsStore.getState().reset();
   useBlockedStore.setState({ blockedPeerIDs: [] });
 

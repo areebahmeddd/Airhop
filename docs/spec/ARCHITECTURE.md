@@ -303,6 +303,11 @@ A public location channel exists on both at once:
 Reconnecting after time offline reconciles the gap through GCS gossip sync, the
 same mechanism bitchat uses.
 
+A teleported cell is the exception: when the user opens a location channel by
+its geohash rather than by being there, nobody in Bluetooth range is in it, so
+it runs over Nostr only. Its messages carry a `t=teleport` tag, so bitchat lists
+the sender as teleported rather than nearby.
+
 ## 8. Payments: Offline-First Ecash
 
 > bitchat already includes `CashuTokenDecoderTests.swift`; this validates Cashu as the right choice. We are not inventing; we are completing what bitchat started.

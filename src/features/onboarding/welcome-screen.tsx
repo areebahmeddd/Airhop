@@ -79,7 +79,7 @@ export default function WelcomeScreen({
               ) : null}
             </View>
             <Text style={styles.agreementText}>
-              By tapping Get Started, you agree to our{" "}
+              By tapping Get started, you agree to our{" "}
               <Text
                 style={styles.link}
                 onPress={() => void Linking.openURL(TERMS_URL)}

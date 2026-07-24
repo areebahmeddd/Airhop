@@ -17,6 +17,12 @@ export type MeshState =
   | "offline" // Bluetooth off, or permission denied
   | "nostr"; // no BLE, but the internet bridge is live
 
+// Presence the user chose in Profile. Online advertises + scans, Away stops the
+// mesh entirely, Invisible scans but stops advertising. Lives here, not in the
+// Profile screen's local state, so it survives that screen unmounting on a tab
+// switch: otherwise the label reset to "Online" while the mesh stayed stopped.
+export type PresenceStatus = "online" | "away" | "invisible";
+
 interface MeshStateStore {
   // OS Bluetooth toggle. Starts true so the banner doesn't flash "off" during
   // the first render, before native has reported.
@@ -25,16 +31,21 @@ interface MeshStateStore {
   permissionGranted: boolean;
   // Whether the Nostr relay pool has at least one live connection.
   nostrConnected: boolean;
+  // Chosen presence. Session-level: the mesh starts Online on every launch, so
+  // this resets to match rather than being restored from disk.
+  presenceStatus: PresenceStatus;
 
   setAdapterEnabled: (enabled: boolean) => void;
   setPermissionGranted: (granted: boolean) => void;
   setNostrConnected: (connected: boolean) => void;
+  setPresenceStatus: (status: PresenceStatus) => void;
 }
 
 export const useMeshStateStore = create<MeshStateStore>()((set) => ({
   adapterEnabled: true,
   permissionGranted: true,
   nostrConnected: false,
+  presenceStatus: "online",
 
   setAdapterEnabled(enabled) {
     set({ adapterEnabled: enabled });
@@ -44,6 +55,9 @@ export const useMeshStateStore = create<MeshStateStore>()((set) => ({
   },
   setNostrConnected(connected) {
     set({ nostrConnected: connected });
+  },
+  setPresenceStatus(status) {
+    set({ presenceStatus: status });
   },
 }));
 

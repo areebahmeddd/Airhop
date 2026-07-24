@@ -16,6 +16,10 @@ import {
   Text,
   View,
 } from "react-native";
+import {
+  isManualGeoChannel,
+  manualGeohashOf,
+} from "../../services/geohash-channel-service";
 import { useChatStore } from "../../store/chat-store";
 import Avatar from "../../ui/components/avatar";
 import {
@@ -67,9 +71,10 @@ interface ResultSection {
 }
 
 function channelDisplayName(channel: string): string {
-  return channel.startsWith("dm:")
-    ? peerIDToUsername(channel.slice(3))
-    : channel.replace(/^#/, "");
+  if (channel.startsWith("dm:")) return peerIDToUsername(channel.slice(3));
+  // A teleported cell is keyed geohash:<gh>; show it as its geohash.
+  if (isManualGeoChannel(channel)) return manualGeohashOf(channel) ?? channel;
+  return channel.replace(/^#/, "");
 }
 
 function formatTime(ms: number): string {

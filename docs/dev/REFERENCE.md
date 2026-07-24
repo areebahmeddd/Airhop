@@ -248,6 +248,8 @@ Location channels are Nostr channels scoped by [geohash](https://en.wikipedia.or
 
 Each geohash level gets its own Nostr identity (derived from the base identity + geohash string), and messages are published to the closest geographic relay(s) for that precision level.
 
+Beyond these location-derived levels, a user can teleport to any cell by entering its geohash directly (2 to 12 characters). A teleported cell uses the same per-geohash identity and relay selection but runs over Nostr only, since nobody in Bluetooth range is in it, and its messages carry a `t=teleport` tag so other clients list the sender as teleported rather than nearby.
+
 Presence heartbeats (kind 20001) are broadcast only to **region, province, and city** precision levels; the app explicitly refuses to broadcast presence at neighborhood/block level for privacy reasons.
 
 ## 5. Identity & Cryptography

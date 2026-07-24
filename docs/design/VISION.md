@@ -42,6 +42,7 @@ What each feature is for, and when someone would actually reach for it.
 
 - Private DMs. One to one, encrypted end to end, with delivery and read receipts. You message a friend across a festival ground with no signal and it hops through other people's phones to reach them.
 - Public channels. Open rooms anyone nearby can join. `#bluetooth` stays inside Bluetooth range. `#block` through `#region` widen to a geographic cell and also travel over the internet, so `#city` still works when you are the only person on your street with the app.
+- Jump to a place. Open the location channel for anywhere by its geohash, even a city you are not in. You show as teleported rather than nearby, and it reaches over the internet only. Scout a spot before you arrive, or follow an area from afar.
 - Private channels. An invite-only room where the key rides inside the invite link, so anyone you send the link to can read. No member cap. Put a QR on a flyer for a march and a few hundred people join through the day.
 - Private groups. A fixed list of people the creator signs, up to 16. There is no link to forward, so nobody joins by accident. Your four friends at that same march, rather than the whole crowd.
 - Bulletin board. Signed notices that outlive a conversation, pinned to your mesh or your area for one to seven days, with an urgent flag. "Water station at the south entrance," left for whoever walks past an hour later.

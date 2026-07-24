@@ -230,6 +230,7 @@ export class GeohashPresence {
     nickname?: string,
     msgId?: string,
     relays?: string[],
+    teleported = false,
   ): Promise<void> {
     const tags: string[][] = [["g", geohash]];
     if (nickname !== undefined && nickname.length > 0) {
@@ -243,6 +244,10 @@ export class GeohashPresence {
     if (msgId !== undefined && msgId.length > 0) {
       tags.push([TAG_MESSAGE_ID, msgId.slice(0, 32)]);
     }
+    // Teleport marker: this sender is posting into a cell they are not
+    // physically in. bitchat tags the same way (["t","teleport"]) so its
+    // participant list shows them as teleported rather than nearby.
+    if (teleported) tags.push(["t", "teleport"]);
     const event = finalizeEvent(
       {
         kind: KIND_GEOHASH_CHANNEL,

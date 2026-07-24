@@ -150,8 +150,10 @@ import {
   type AttachmentMeta,
 } from "./file-transfer-service";
 import {
+  geohashChannel,
   GeohashChannelService,
   isGeoChannel,
+  isManualGeoChannel,
   type GeoParticipant,
 } from "./geohash-channel-service";
 import { PrivateChannelService } from "./private-channel-service";
@@ -535,6 +537,10 @@ export class MeshService {
         state.channelReach !== prev.channelReach
       ) {
         this.privateChannels?.refresh();
+        // Same trigger keeps geohash subscriptions in step: teleporting into a
+        // cell subscribes it, and leaving one drops its subscription instead of
+        // quietly receiving a cell the user left.
+        void this.geoChannels?.refresh();
       }
     });
 
@@ -1738,14 +1744,39 @@ export class MeshService {
 
     // Public channel: plaintext CHANNEL_MSG over BLE, and its geohash cell over
     // Nostr for the built-in location channels.
-    this.router.sendChannelMessage(channel, text, msgId);
+    //
+    // A teleported cell (geohash:<gh>) is a REMOTE place: nobody in Bluetooth
+    // range is in it, so a BLE broadcast would only leak the cell to neighbours
+    // for no reach. It goes over Nostr only, matching bitchat's Nostr-only
+    // location channels.
+    const teleported = isManualGeoChannel(channel);
+    if (!teleported) this.router.sendChannelMessage(channel, text, msgId);
     const viaGeo =
       this.geoChannels !== null &&
       isGeoChannel(channel) &&
       this.geoChannels.geohashFor(channel) !== null;
     if (viaGeo) void this.geoChannels?.publish(channel, text, msgId);
 
-    return { msgId, bleLinks, nostr: viaGeo };
+    return { msgId, bleLinks: teleported ? 0 : bleLinks, nostr: viaGeo };
+  }
+
+  // Teleport into a geohash cell the user chose, wherever they physically are.
+  // Adds it as a joined channel (persisted, and it shows under Your Rooms), then
+  // refreshes so its Nostr subscription comes up immediately. Returns the
+  // channel key so the caller can open the thread. The geohash is assumed
+  // already validated/normalised by the caller.
+  joinGeohash(geohash: string): string {
+    const channel = geohashChannel(geohash);
+    useChatStore.getState().addChannel(channel);
+    void this.geoChannels?.refresh();
+    return channel;
+  }
+
+  // If `geohash` is the cell one of the user's own location channels currently
+  // resolves to, return that named channel (#city etc.). The teleport flow uses
+  // this to open the existing room instead of duplicating it. Null otherwise.
+  localGeoChannelFor(geohash: string): string | null {
+    return this.geoChannels?.namedChannelForGeohash(geohash) ?? null;
   }
 
   // Nearby geohash channel participants, for the channel info sheet.

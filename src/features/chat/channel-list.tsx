@@ -24,12 +24,18 @@ import {
 import { Swipeable } from "react-native-gesture-handler";
 import Animated, { FadeIn, LinearTransition } from "react-native-reanimated";
 import { generateChannelKey } from "../../core/mesh/channel-crypto";
-import { isGeoChannel } from "../../services/geohash-channel-service";
+import {
+  geohashLevelName,
+  isGeoChannel,
+  isManualGeoChannel,
+  manualGeohashOf,
+} from "../../services/geohash-channel-service";
 import { getMeshService } from "../../services/mesh-service";
 import { showAlert } from "../../store/alert-store";
 import { useChatStore } from "../../store/chat-store";
 import { useGroupStore } from "../../store/group-store";
 import { usePeerStore } from "../../store/peer-store";
+import { usePlaceNamesStore } from "../../store/place-names-store";
 import {
   FontSize,
   FontWeight,
@@ -40,6 +46,7 @@ import {
 import { sortConversationsByActivity } from "../../utils/conversation-order";
 import { messagePreviewText } from "../../utils/message-preview";
 import ChannelInfoSheet from "./channel-info-sheet";
+import { GeohashJumpSheet } from "./geohash-jump-sheet";
 import { NewGroupSheet } from "./new-group-sheet";
 
 // ---------------------------------------------------------------------------
@@ -132,6 +139,18 @@ interface Props {
   newChannelTrigger?: number;
 }
 
+// Human-readable label for a channel key, for dialogs and sheet headers that
+// would otherwise print the raw store key. Named channels (#city) already read
+// fine; groups and teleported cells are keyed group:<id> / geohash:<gh>, so
+// show the group's name or #<geohash> instead.
+function channelLabel(channel: string): string {
+  if (isManualGeoChannel(channel)) return `#${manualGeohashOf(channel)}`;
+  if (channel.startsWith("group:")) {
+    return useGroupStore.getState().nameForChannel(channel) ?? "Group";
+  }
+  return channel;
+}
+
 // ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
@@ -163,13 +182,26 @@ export default function ChannelList({
   // and uses peerCount instead. Empty until location resolves and relays answer,
   // in which case a geo channel is genuinely running BLE-only and shows 0.
   const [geoCounts, setGeoCounts] = useState<Record<string, number>>({});
+  // Channel -> the geohash it currently resolves to, so a row can look up the
+  // cell's place name. A named channel's cell depends on location (null when
+  // off); a teleported cell is fixed.
+  const [geoHashes, setGeoHashes] = useState<Record<string, string>>({});
+  const placeNames = usePlaceNamesStore((s) => s.names);
   useEffect(() => {
     function sample(): void {
       const service = getMeshService();
       if (!service) return;
       const next: Record<string, number> = {};
+      const hashes: Record<string, string> = {};
       for (const ch of channels) {
-        if (isGeoChannel(ch)) next[ch] = service.getGeoParticipants(ch).length;
+        if (!isGeoChannel(ch)) continue;
+        next[ch] = service.getGeoParticipants(ch).length;
+        const gh = manualGeohashOf(ch) ?? service.getChannelGeohash(ch);
+        if (gh !== null) {
+          hashes[ch] = gh;
+          // Best-effort, cached and de-duped inside the store.
+          usePlaceNamesStore.getState().resolve(gh);
+        }
       }
       setGeoCounts((prev) => {
         const keys = Object.keys(next);
@@ -177,6 +209,13 @@ export default function ChannelList({
           keys.length === Object.keys(prev).length &&
           keys.every((k) => prev[k] === next[k]);
         return same ? prev : next;
+      });
+      setGeoHashes((prev) => {
+        const keys = Object.keys(hashes);
+        const same =
+          keys.length === Object.keys(prev).length &&
+          keys.every((k) => prev[k] === hashes[k]);
+        return same ? prev : hashes;
       });
     }
     sample();
@@ -189,6 +228,7 @@ export default function ChannelList({
   const [showChooser, setShowChooser] = useState(false);
   const [showJoinModal, setShowJoinModal] = useState(false);
   const [showNewGroup, setShowNewGroup] = useState(false);
+  const [showGeohash, setShowGeohash] = useState(false);
   const [newChannel, setNewChannel] = useState("");
   // Reach for a new channel. Defaults to Bluetooth-only, the most private
   // option; the user opts into internet reach.
@@ -340,8 +380,8 @@ export default function ChannelList({
   function handleClearChat(channel: string): void {
     setMoreOptionsChannel(null);
     showAlert(
-      "Clear channel",
-      `Delete all messages in ${channel}? This can't be undone.`,
+      "Clear messages",
+      `Delete all messages in ${channelLabel(channel)}? This can't be undone.`,
       [
         { text: "Cancel", style: "cancel" },
         {
@@ -356,8 +396,8 @@ export default function ChannelList({
   function handleLeaveChannel(channel: string): void {
     setMoreOptionsChannel(null);
     showAlert(
-      "Leave channel",
-      `Leave ${channel}? You will stop receiving its messages, and its history is removed from this device.`,
+      "Leave room",
+      `Leave ${channelLabel(channel)}? You will stop receiving its messages, and its history is removed from this device.`,
       [
         { text: "Cancel", style: "cancel" },
         {
@@ -378,7 +418,20 @@ export default function ChannelList({
     const msgs = messages[item] ?? [];
     const last = msgs[msgs.length - 1];
     const unread = unreadCounts[item] ?? 0;
-    const scopeTag = CHANNEL_SCOPE[item]?.tag;
+    // A teleported cell (geohash:<gh>) is a location channel keyed by a fixed
+    // geohash. It has no CHANNEL_SCOPE entry, so its scope line is derived from
+    // the geohash length (its coverage level) and marked teleported.
+    const isManualGeo = isManualGeoChannel(item);
+    const manualGh = isManualGeo ? (manualGeohashOf(item) ?? "") : "";
+    const scopeTag = isManualGeo
+      ? `${geohashLevelName(manualGh)}  ·  teleported`
+      : CHANNEL_SCOPE[item]?.tag;
+    // Reverse-geocoded place name for this cell, e.g. "~Kumaraswamy Layout",
+    // shown between the coverage tag and the active count. Only present once the
+    // cell has a geohash (teleported always; named only with location on).
+    const rowGeohash = isManualGeo ? manualGh : geoHashes[item];
+    const placeName =
+      rowGeohash !== undefined ? placeNames[rowGeohash] : undefined;
     const isDefault = DEFAULT_CHANNEL_NAMES.has(item);
     const isPinned = isYourChannel && pinnedChannels.includes(item);
     const isMuted = mutedChannels.includes(item);
@@ -409,6 +462,9 @@ export default function ChannelList({
               {isGroup && (
                 <Feather name="users" size={13} color={Colors.textMuted} />
               )}
+              {isManualGeo && (
+                <Feather name="map-pin" size={13} color={Colors.textMuted} />
+              )}
               {isGroup ? (
                 <Text style={styles.channelName} numberOfLines={1}>
                   {groupName ?? "Group"}
@@ -416,7 +472,7 @@ export default function ChannelList({
               ) : (
                 <Text style={styles.channelName} numberOfLines={1}>
                   <Text style={styles.channelHash}>#</Text>
-                  {item.replace(/^#/, "")}
+                  {isManualGeo ? manualGh : item.replace(/^#/, "")}
                 </Text>
               )}
             </View>
@@ -439,11 +495,13 @@ export default function ChannelList({
             </View>
           </View>
 
-          {/* Scope tag + live peer count for default channels */}
+          {/* Scope tag + place name + live count for location channels */}
           {scopeTag !== undefined && (
             <Text style={styles.channelScope} numberOfLines={1}>
               {scopeTag}
-              {isDefault && `  ·  ${presenceCount} ${presenceLabel}`}
+              {placeName !== undefined && `  ·  ~${placeName}`}
+              {(isDefault || isManualGeo) &&
+                `  ·  ${presenceCount} ${presenceLabel}`}
             </Text>
           )}
 
@@ -819,6 +877,32 @@ export default function ChannelList({
                   </Text>
                 </View>
               </Pressable>
+
+              <View style={styles.moreDivider} />
+
+              <Pressable
+                style={styles.chooserRow}
+                onPress={() => {
+                  setShowChooser(false);
+                  setShowGeohash(true);
+                }}
+                accessibilityRole="button"
+                accessibilityLabel="Go to a place by geohash"
+              >
+                <View style={styles.chooserIcon}>
+                  <Feather
+                    name="map-pin"
+                    size={18}
+                    color={Colors.textPrimary}
+                  />
+                </View>
+                <View style={styles.chooserText}>
+                  <Text style={styles.chooserTitle}>Go to a place</Text>
+                  <Text style={styles.chooserDesc}>
+                    Open a location channel anywhere by its geohash.
+                  </Text>
+                </View>
+              </Pressable>
             </View>
 
             <Pressable
@@ -844,6 +928,19 @@ export default function ChannelList({
         }}
       />
 
+      <GeohashJumpSheet
+        visible={showGeohash}
+        onClose={() => setShowGeohash(false)}
+        onBack={() => {
+          setShowGeohash(false);
+          setShowChooser(true);
+        }}
+        onJoined={(channel) => {
+          setShowGeohash(false);
+          onSelectChannel(channel);
+        }}
+      />
+
       {/* Your Rooms: swipe "More" sheet with chat info, pin, clear, delete */}
       <Modal
         visible={moreOptionsChannel !== null}
@@ -860,7 +957,9 @@ export default function ChannelList({
             <View style={styles.handle} />
             {moreOptionsChannel && (
               <>
-                <Text style={styles.modalTitle}>{moreOptionsChannel}</Text>
+                <Text style={styles.modalTitle}>
+                  {channelLabel(moreOptionsChannel)}
+                </Text>
 
                 {/* Everyday actions, grouped in one box. */}
                 <View style={styles.moreRowsGroup}>
@@ -877,7 +976,7 @@ export default function ChannelList({
                       size={18}
                       color={Colors.textSecondary}
                     />
-                    <Text style={styles.moreRowText}>Channel info</Text>
+                    <Text style={styles.moreRowText}>Room info</Text>
                   </Pressable>
 
                   {!DEFAULT_CHANNEL_NAMES.has(moreOptionsChannel) && (
@@ -902,8 +1001,8 @@ export default function ChannelList({
                         />
                         <Text style={styles.moreRowText}>
                           {pinnedChannels.includes(moreOptionsChannel)
-                            ? "Unpin channel"
-                            : "Pin channel"}
+                            ? "Unpin room"
+                            : "Pin room"}
                         </Text>
                       </Pressable>
                     </>
@@ -926,8 +1025,8 @@ export default function ChannelList({
                     />
                     <Text style={styles.moreRowText}>
                       {mutedChannels.includes(moreOptionsChannel)
-                        ? "Unmute channel"
-                        : "Mute channel"}
+                        ? "Unmute room"
+                        : "Mute room"}
                     </Text>
                   </Pressable>
 
@@ -942,7 +1041,7 @@ export default function ChannelList({
                       size={18}
                       color={Colors.textSecondary}
                     />
-                    <Text style={styles.moreRowText}>Clear channel</Text>
+                    <Text style={styles.moreRowText}>Clear messages</Text>
                   </Pressable>
                 </View>
 
@@ -959,7 +1058,7 @@ export default function ChannelList({
                       <Text
                         style={[styles.moreRowText, styles.moreRowTextDanger]}
                       >
-                        Leave channel
+                        Leave room
                       </Text>
                     </Pressable>
                   </View>
@@ -974,7 +1073,6 @@ export default function ChannelList({
       <ChannelInfoSheet
         channel={infoChannel}
         onClose={() => setInfoChannel(null)}
-        onRename={(newName) => setInfoChannel(newName)}
       />
     </View>
   );

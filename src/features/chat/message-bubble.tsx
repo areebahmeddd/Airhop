@@ -28,6 +28,9 @@ interface Props {
   renderAttachment: (attachment: ChatAttachment) => React.ReactNode;
   formatTime: (ms: number) => string;
   onLongPress: (item: ChatMessage) => void;
+  // Tapping the failed indicator on one of your own messages resends it. Only
+  // wired for text messages, the only kind this bubble owns the send path for.
+  onRetry?: (item: ChatMessage) => void;
   // Tapping the avatar or name opens a profile sheet for that sender, same
   // "tap a peer to see who they are" affordance as the Mesh tab. Omitted in
   // a DM thread (there's only one other participant, already reachable via
@@ -51,6 +54,7 @@ export default function MessageBubble({
   renderAttachment,
   formatTime,
   onLongPress,
+  onRetry,
   onPressSender,
   highlighted,
 }: Props): React.JSX.Element {
@@ -183,10 +187,23 @@ export default function MessageBubble({
                 {formatTime(item.timestampMs)}
               </Text>
               {/* Delivery ticks, own outgoing messages only (never on system
-                  notices or received messages). */}
-              {item.isMine && !item.isSystem && item.status !== undefined && (
-                <StatusTick status={item.status} Colors={Colors} />
-              )}
+                  notices or received messages). A failed message's mark is
+                  tappable to resend. */}
+              {item.isMine &&
+                !item.isSystem &&
+                item.status !== undefined &&
+                (item.status === "failed" && onRetry ? (
+                  <Pressable
+                    onPress={() => onRetry(item)}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                    accessibilityRole="button"
+                    accessibilityLabel="Failed to send. Tap to retry."
+                  >
+                    <StatusTick status={item.status} Colors={Colors} />
+                  </Pressable>
+                ) : (
+                  <StatusTick status={item.status} Colors={Colors} />
+                ))}
             </View>
           </View>
         </Pressable>

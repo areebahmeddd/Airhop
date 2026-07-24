@@ -23,6 +23,10 @@ import { encodeQRContent } from "../../core/crypto/contact-exchange";
 import { getMeshService } from "../../services/mesh-service";
 import { showAlert } from "../../store/alert-store";
 import {
+  useMeshStateStore,
+  type PresenceStatus,
+} from "../../store/mesh-state-store";
+import {
   useSettingsStore,
   type ThemePreference,
 } from "../../store/settings-store";
@@ -56,7 +60,7 @@ import {
 
 // Presence on the mesh. Online broadcasts + scans, Away stops the mesh
 // entirely, Invisible keeps scanning but stops advertising our presence.
-type Status = "online" | "away" | "invisible";
+type Status = PresenceStatus;
 
 // Colors passed in so the dot colors track light/dark instead of being
 // baked in once at module load.
@@ -185,7 +189,10 @@ export default function ProfileScreen({
   const STATUS_META = useMemo(() => getStatusMeta(Colors), [Colors]);
   const [view, setView] = useState<SettingsView>("root");
   const [showQRModal, setShowQRModal] = useState(false);
-  const [status, setStatus] = useState<Status>("online");
+  // Presence lives in the app-level mesh-state store, not local state, so it
+  // survives this screen unmounting on a tab switch and never drifts out of sync
+  // with the actual mesh (which stays stopped/hidden until changed again).
+  const status = useMeshStateStore((s) => s.presenceStatus);
   const [showStatusModal, setShowStatusModal] = useState(false);
   const [showWipeModal, setShowWipeModal] = useState(false);
   const [showThemeModal, setShowThemeModal] = useState(false);
@@ -235,7 +242,7 @@ export default function ProfileScreen({
       if (status === "away") mesh?.start(username);
       mesh?.setDiscoverable(false);
     }
-    setStatus(next);
+    useMeshStateStore.getState().setPresenceStatus(next);
   }
 
   function handleSelectStatus(next: Status): void {

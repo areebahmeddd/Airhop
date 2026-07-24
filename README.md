@@ -15,7 +15,7 @@
 </div>
 
 <p align="center">
-  <a href="https://airhop.1mindlabs.org">Website</a>
+  <a href="https://airhop.free">Website</a>
   |
   <a href="https://github.com/areebahmeddd/Airhop/releases/latest">Download</a>
   |
@@ -50,12 +50,13 @@ Built on the foundation of [bitchat](https://bitchat.free), using the same [BLE 
 | ----------------- | ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 💬 **Messaging**  | Private DMs               | One-on-one end-to-end encrypted messaging                                                                                                             |
 |                   | Public channels           | IRC-style group chat rooms anyone nearby can join                                                                                                     |
+|                   | Location channels         | Public rooms scoped to a geohash cell, from a block to a region, bridged over the internet. Jump to any cell to read a place you are not in           |
 |                   | Private channels          | Invite-only encrypted rooms. A shared key travels in the invite link, so anyone with the link joins and reads; there is no member cap                 |
 |                   | Private groups            | Fixed-roster encrypted group chats. The creator signs the member list (up to 16) and shares the key over Noise; only listed members can read          |
 |                   | Bulletin board            | Signed notices that outlive chat: pin a post to your mesh or location for 1 to 7 days, with urgent flags. Late arrivals catch up automatically        |
 |                   | Voice notes               | Record and send voice messages over the local mesh (AAC, 16 kHz mono, only `.m4a`)                                                                    |
 |                   | Video sharing             | Record or pick a video and send it over the mesh (H.264 or HEVC in `.mp4` / `.mov`)                                                                   |
-|                   | File transfer             | Send **any** file format using chunked streaming (images, documents, archives), up to 50 MB per file                                                  |
+|                   | File transfer             | Send **any** file format using chunked streaming (images, documents, archives), up to 1 MB per file                                                   |
 |                   | Store-and-forward courier | Messages are delivered automatically when a route becomes available, sealed to a one-time prekey for forward secrecy                                  |
 | 🔒 **Identity**   | No-account identity       | Identity is an Ed25519 key pair stored only on your device                                                                                            |
 |                   | Human-readable names      | Deterministic usernames derived from your public key                                                                                                  |
@@ -204,18 +205,18 @@ npx expo prebuild
 
 ## Documentation
 
-| Document                                     | Description                                                                 |
-| -------------------------------------------- | --------------------------------------------------------------------------- |
-| [VISION.md](docs/design/VISION.md)           | Why Airhop exists and what it will never compromise on                      |
-| [ROADMAP.md](docs/design/ROADMAP.md)         | Version targets (v0.5.0 to v2.0.0), gap analysis, and competitive landscape |
-| [ARCHITECTURE.md](docs/spec/ARCHITECTURE.md) | System architecture, design decisions, and stack rationale                  |
-| [PROTOCOLS.md](docs/spec/PROTOCOLS.md)       | Wire format, BLE UUIDs, and protocol specifications                         |
-| [REFERENCE.md](docs/dev/REFERENCE.md)        | Bitchat codebase deep dive and implementation reference                     |
-| [PROGRESS.md](docs/dev/PROGRESS.md)          | Current build state and development milestones                              |
-| [GLOSSARY.md](docs/dev/GLOSSARY.md)          | Definitions of technical terms used throughout the documentation            |
-| [CONTRIBUTING.md](CONTRIBUTING.md)           | Development workflow, coding standards, and pull request guidelines         |
-| [SECURITY.md](SECURITY.md)                   | Security policy and vulnerability reporting                                 |
-| [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md)     | Community standards and expectations                                        |
+| Document                                     | Description                                                         |
+| -------------------------------------------- | ------------------------------------------------------------------- |
+| [VISION.md](docs/design/VISION.md)           | Why Airhop exists and what it will never compromise on              |
+| [ROADMAP.md](docs/design/ROADMAP.md)         | Version targets (v0.5.0 to v2.0.0), and gap analysis                |
+| [ARCHITECTURE.md](docs/spec/ARCHITECTURE.md) | System architecture, design decisions, and stack rationale          |
+| [PROTOCOLS.md](docs/spec/PROTOCOLS.md)       | Wire format, BLE UUIDs, and protocol specifications                 |
+| [REFERENCE.md](docs/dev/REFERENCE.md)        | Bitchat codebase deep dive and implementation reference             |
+| [PROGRESS.md](docs/dev/PROGRESS.md)          | Current build, development milestones, and known issues             |
+| [GLOSSARY.md](docs/dev/GLOSSARY.md)          | Definitions of technical terms used throughout the documentation    |
+| [CONTRIBUTING.md](CONTRIBUTING.md)           | Development workflow, coding standards, and pull request guidelines |
+| [SECURITY.md](SECURITY.md)                   | Security policy and vulnerability reporting                         |
+| [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md)     | Community standards and expectations                                |
 
 ## Acknowledgements
 

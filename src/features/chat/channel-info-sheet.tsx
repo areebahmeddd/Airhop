@@ -1,24 +1,33 @@
 // Shared channel detail bottom sheet.
 // Used by both channel-list (info icon tap) and message-thread (header tap).
-// Shows About, Visibility, Transport, and Members sections.
-// Own channels have an edit mode for the name and About text.
-// Default channels are read-only with a protocol lock notice.
+// Shows About, an at-a-glance facts card (privacy, reach, geohash), and Members.
+// Read-only: it describes what a room is and who is in it. Default channels add
+// a protocol lock notice; a location channel adds a bookmark toggle.
 
-import { Feather } from "@expo/vector-icons";
-import React, { useMemo, useState } from "react";
+import { Feather, MaterialCommunityIcons } from "@expo/vector-icons";
+import * as Clipboard from "expo-clipboard";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   Modal,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   View,
 } from "react-native";
-import { isGeoChannel } from "../../services/geohash-channel-service";
+import {
+  type GeoParticipant,
+  geohashLevelName,
+  isGeoChannel,
+  isManualGeoChannel,
+  manualGeohashOf,
+} from "../../services/geohash-channel-service";
 import { getMeshService } from "../../services/mesh-service";
 import { useChatStore } from "../../store/chat-store";
+import { useGeohashBookmarksStore } from "../../store/geohash-bookmarks-store";
+import { useGroupStore } from "../../store/group-store";
 import { usePeerStore } from "../../store/peer-store";
+import { usePlaceNamesStore } from "../../store/place-names-store";
 import Avatar from "../../ui/components/avatar";
 import StatusDot from "../../ui/components/status-dot";
 import {
@@ -91,33 +100,69 @@ interface Props {
   onClose: () => void;
   // Called after leaving so the parent can navigate away if needed.
   onLeave?: () => void;
-  // Called after a rename so the parent can track the new channel name.
-  onRename?: (newName: string) => void;
 }
 
 export default function ChannelInfoSheet({
   channel,
   onClose,
   onLeave,
-  onRename,
 }: Props): React.JSX.Element | null {
   const Colors = useThemeColors();
   const styles = useMemo(() => createStyles(Colors), [Colors]);
-  const {
-    removeChannel,
-    renameChannel,
-    channelDescriptions,
-    setChannelDescription,
-    channelKeys,
-    channelReach,
-  } = useChatStore();
+  const { removeChannel, channelKeys, channelReach } = useChatStore();
   const { peers, removePeer } = usePeerStore();
   const peerList = [...peers.values()];
 
-  const [isEditing, setIsEditing] = useState(false);
-  const [draftName, setDraftName] = useState("");
-  const [draftDescription, setDraftDescription] = useState("");
-  const [nameError, setNameError] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+
+  // Private group (`group:<id>`): its name and roster come from group-store, not
+  // the chat-store fields a public/custom channel uses.
+  const isGroup = (channel ?? "").startsWith("group:");
+  const groupName = useGroupStore((s) =>
+    channel !== null ? s.nameForChannel(channel) : undefined,
+  );
+
+  // Bookmark state and place name for a location channel. The channel's geohash
+  // is resolved below (null when a named channel has no location fix), and both
+  // key off it: you can only bookmark or name a cell you actually have.
+  const channelGeohash = isGeoChannel(channel ?? "")
+    ? (manualGeohashOf(channel ?? "") ??
+      getMeshService()?.getChannelGeohash(channel ?? "") ??
+      null)
+    : null;
+  const bookmarked = useGeohashBookmarksStore((s) =>
+    channelGeohash !== null ? s.bookmarks.includes(channelGeohash) : false,
+  );
+  const placeName = usePlaceNamesStore((s) =>
+    channelGeohash !== null ? s.names[channelGeohash] : undefined,
+  );
+  useEffect(() => {
+    if (channelGeohash !== null) {
+      usePlaceNamesStore.getState().resolve(channelGeohash);
+    }
+  }, [channelGeohash]);
+
+  // For a location channel, "members" are the people active in its cell over
+  // the internet, not the nearby BLE peers. Polled off a Nostr subscription,
+  // matching the thread header and the channel row. Non-geo channels keep the
+  // live BLE peer list below.
+  const [geoParticipants, setGeoParticipants] = useState<GeoParticipant[]>([]);
+  useEffect(() => {
+    if (channel === null || !isGeoChannel(channel)) return;
+    const ch = channel;
+    function sample(): void {
+      const list = getMeshService()?.getGeoParticipants(ch) ?? [];
+      setGeoParticipants((prev) =>
+        prev.length === list.length &&
+        prev.every((p, i) => p.pubkey === list[i]?.pubkey)
+          ? prev
+          : list,
+      );
+    }
+    sample();
+    const timer = setInterval(sample, 5000);
+    return () => clearInterval(timer);
+  }, [channel]);
 
   if (channel === null) return null;
 
@@ -127,55 +172,87 @@ export default function ChannelInfoSheet({
   // the built-in location channels have none and are public plaintext.
   const isPrivate = channelKeys[channel] !== undefined;
   const overNostr = channelReach[channel] === "ble+nostr";
+  // A private group is also end-to-end encrypted (a signed roster + epoch key),
+  // just via group-store rather than a chat-store channel key.
+  const encrypted = isPrivate || isGroup;
+  // Group roster, read once: it only changes on an epoch update, which replaces
+  // the whole sheet's channel anyway.
+  const groupMembers = isGroup
+    ? (useGroupStore.getState().get(channel.slice("group:".length))?.members ??
+      [])
+    : [];
 
-  // Location-channel state, read live from the mesh service.
+  // Location-channel state. The geohash was resolved above (channelGeohash),
+  // preferring the fixed key of a teleported cell over the service's live map.
   const isGeo = isGeoChannel(channel);
-  const geohash = isGeo
-    ? (getMeshService()?.getChannelGeohash(channel) ?? null)
-    : null;
-  // Resolved description: user-saved > protocol default > custom fallback.
+  const geohash = channelGeohash;
+  // A teleported cell (geohash:<gh>): a location channel keyed by a fixed
+  // geohash the user jumped to, rather than a named or custom channel. It has
+  // no CHANNEL_SCOPE entry, so its label and description are derived here.
+  const isManualGeo = isManualGeoChannel(channel);
+  const manualGh = isManualGeo ? (manualGeohashOf(channel) ?? "") : "";
+  // Description: protocol default for a named channel, else a per-type line.
   const resolvedDescription =
-    channelDescriptions[channel] ??
     scopeData?.description ??
-    "A custom channel. Anyone who knows the name can join from any Airhop or bitchat device.";
+    (isGroup
+      ? "A private group. Only the members the creator added can read it, and it stays on Bluetooth."
+      : isManualGeo
+        ? "A public location channel for this geohash cell. Anyone in the cell, on Airhop or bitchat, shares it over the internet. You are teleported, not physically here."
+        : "A custom channel. Anyone who knows the name can join from any Airhop or bitchat device.");
 
-  function startEdit(): void {
-    setDraftName(channel!.replace(/^#/, ""));
-    setDraftDescription(channelDescriptions[channel!] ?? "");
-    setNameError(null);
-    setIsEditing(true);
+  // The three at-a-glance facts, computed once so the card below stays declarative:
+  // privacy (is it encrypted), reach (which transports carry it), and location
+  // (the geohash, for geo channels). The old sheet spread these across two
+  // paragraph-heavy sections that restated the same thing.
+  type IconName = React.ComponentProps<typeof Feather>["name"];
+  // "unlock" for public (unencrypted), distinct from the reach row's "globe".
+  const privacyIcon: IconName = encrypted ? "lock" : "unlock";
+  const privacyColor = encrypted ? Colors.online : Colors.textSecondary;
+  const privacyLabel = encrypted
+    ? "Private · end-to-end encrypted"
+    : "Public · unencrypted";
+
+  let reachIcon: IconName = "bluetooth";
+  let reachLabel = "Bluetooth only";
+  if (isGroup) {
+    reachIcon = "bluetooth";
+    reachLabel = "Bluetooth only";
+  } else if (isManualGeo) {
+    reachIcon = "globe";
+    reachLabel = "Internet only";
+  } else if (isPrivate) {
+    reachIcon = overNostr ? "globe" : "bluetooth";
+    reachLabel = overNostr ? "Bluetooth + Internet" : "Bluetooth only";
+  } else if (isGeo && geohash !== null) {
+    reachIcon = "globe";
+    reachLabel = "Bluetooth + Internet";
   }
 
-  function saveEdit(): void {
-    const cleanName = "#" + draftName.trim().replace(/^#+/, "");
-    const wantsRename = cleanName !== channel && cleanName.length > 1;
+  // One adaptive caveat under the card: whichever nuance actually matters for
+  // this channel, rather than three stacked explanations.
+  const detailHint = isGroup
+    ? "Only the members shown below can read this group. Messages stay on Bluetooth, so members out of range receive them once they are back."
+    : isManualGeo
+      ? "A place you teleported to. It reaches everyone in this cell over the internet, and nobody in Bluetooth range."
+      : isGeo && geohash === null
+        ? "Location is off, so this channel reaches nearby devices over Bluetooth only. Turn on location to reach its area cell over the internet."
+        : isPrivate
+          ? "Only people you invite via the link can read it. It stays hidden from everyone else, even peers nearby."
+          : "Anyone who joins can read every message. Use a direct message for private conversation; DMs are end-to-end encrypted.";
 
-    // renameChannel reports whether it actually happened. Trusting a rename
-    // that silently no-opped (name already taken) meant the follow-up edits
-    // below were applied to the OTHER channel, overwriting its description.
-    const renamed = wantsRename ? renameChannel(channel!, cleanName) : false;
-    if (wantsRename && !renamed) {
-      setNameError("A channel with that name already exists.");
-      return;
-    }
-
-    const targetChannel = renamed ? cleanName : channel!;
-    setChannelDescription(targetChannel, draftDescription.trim());
-    setIsEditing(false);
-    if (renamed) {
-      if (onRename) {
-        onRename(cleanName);
-      } else {
-        onClose();
-      }
-    }
-  }
-
-  function cancelEdit(): void {
-    setIsEditing(false);
+  function handleCopyGeohash(): void {
+    if (geohash === null) return;
+    void Clipboard.setStringAsync(geohash).catch(() => {});
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
   }
 
   function handleLeave(): void {
+    // Leaving a group also drops its epoch key from group-store, not just the
+    // chat-store channel row, so no group key material lingers after leaving.
+    if (isGroup) {
+      useGroupStore.getState().remove(channel!.slice("group:".length));
+    }
     removeChannel(channel!);
     onClose();
     onLeave?.();
@@ -189,73 +266,55 @@ export default function ChannelInfoSheet({
           {/* Drag handle */}
           <View style={styles.handle} />
 
-          {/* Centered header: icon + name + scope tag. Pencil sits in the bottom-right corner. */}
+          {/* Centered header: icon + name + scope tag, with an optional corner
+              action (bookmark, for location channels). */}
           <View style={styles.headerCenter}>
             <View style={styles.iconWrap}>
-              <Feather name="hash" size={22} color={Colors.textPrimary} />
+              <Feather
+                name={isGroup ? "users" : isManualGeo ? "map-pin" : "hash"}
+                size={22}
+                color={Colors.textPrimary}
+              />
             </View>
 
-            <View style={styles.nameRow}>
-              {isEditing ? (
-                <TextInput
-                  style={styles.nameInput}
-                  value={draftName}
-                  onChangeText={(text) => {
-                    setDraftName(text);
-                    // Clear the collision warning as soon as they edit.
-                    if (nameError !== null) setNameError(null);
-                  }}
-                  placeholder="channel-name"
-                  placeholderTextColor={Colors.textMuted}
-                  autoCapitalize="none"
-                  selectionColor={Colors.accent}
-                  textAlign="center"
-                />
-              ) : (
-                <Text style={styles.channelName}>
-                  {channel.replace(/^#/, "")}
-                </Text>
-              )}
-              {isEditing && (
-                <View style={styles.editControls}>
-                  <Pressable
-                    onPress={cancelEdit}
-                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                    accessibilityRole="button"
-                    accessibilityLabel="Cancel"
-                  >
-                    <Feather name="x" size={15} color={Colors.textMuted} />
-                  </Pressable>
-                  <Pressable
-                    onPress={saveEdit}
-                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                    accessibilityRole="button"
-                    accessibilityLabel="Save"
-                  >
-                    <Feather name="check" size={15} color={Colors.accent} />
-                  </Pressable>
-                </View>
-              )}
-            </View>
-
-            {nameError !== null && (
-              <Text style={styles.nameError}>{nameError}</Text>
-            )}
-
-            <Text style={styles.scopeTag}>
-              {scopeData?.tag ?? "Custom channel"}
+            <Text style={styles.channelName} numberOfLines={1}>
+              {isGroup
+                ? (groupName ?? "Group")
+                : isManualGeo
+                  ? manualGh
+                  : channel.replace(/^#/, "")}
             </Text>
 
-            {/* Edit pencil: bottom-right of the header section */}
-            {!isDefault && !isEditing && (
+            <Text style={styles.scopeTag}>
+              {isGroup
+                ? `Private group  ·  ${groupMembers.length} member${groupMembers.length !== 1 ? "s" : ""}`
+                : (scopeData?.tag ??
+                  (isManualGeo
+                    ? `${geohashLevelName(manualGh)}  ·  teleported`
+                    : "Custom channel"))}
+              {placeName !== undefined && `  ·  ~${placeName}`}
+            </Text>
+
+            {/* Bottom-right corner action: a location channel with a resolved
+                cell gets a bookmark toggle, so a saved cell reopens later from
+                the "Go to a place" sheet. */}
+            {isGeo && geohash !== null && (
               <Pressable
-                style={styles.pencilCorner}
-                onPress={startEdit}
+                style={styles.cornerBtn}
+                onPress={() =>
+                  useGeohashBookmarksStore.getState().toggle(geohash)
+                }
                 hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                 accessibilityRole="button"
-                accessibilityLabel="Edit channel"
+                accessibilityLabel={
+                  bookmarked ? "Remove bookmark" : "Bookmark this place"
+                }
               >
-                <Feather name="edit-2" size={14} color={Colors.textMuted} />
+                <MaterialCommunityIcons
+                  name={bookmarked ? "bookmark" : "bookmark-outline"}
+                  size={19}
+                  color={bookmarked ? Colors.accent : Colors.textMuted}
+                />
               </Pressable>
             )}
           </View>
@@ -269,174 +328,161 @@ export default function ChannelInfoSheet({
             {/* About */}
             <View style={styles.section}>
               <Text style={styles.sectionLabel}>About</Text>
-              {isEditing ? (
-                <TextInput
-                  style={styles.descriptionInput}
-                  value={draftDescription}
-                  onChangeText={setDraftDescription}
-                  placeholder="Describe this channel…"
-                  placeholderTextColor={Colors.textMuted}
-                  multiline
-                  selectionColor={Colors.accent}
-                  autoFocus
-                />
-              ) : (
-                <Text style={styles.description}>{resolvedDescription}</Text>
-              )}
+              <Text style={styles.description}>{resolvedDescription}</Text>
             </View>
 
-            {/* Privacy: states what actually happens on the wire. The old
-                Visibility / Transport rows showed stored values that no send
-                path ever consulted, so a channel could read "Private" while being
-                broadcast in the clear. */}
-            <View style={styles.section}>
-              <Text style={styles.sectionLabel}>Privacy</Text>
-              {isPrivate ? (
-                <>
-                  <View style={styles.infoRow}>
-                    <Feather name="lock" size={14} color={Colors.online} />
-                    <Text style={styles.infoValue}>
-                      Private · end-to-end encrypted
-                    </Text>
-                  </View>
-                  <Text style={styles.infoHint}>
-                    Sealed with a channel key that only people you invited via
-                    the link hold. Messages are unreadable to anyone else, even
-                    peers nearby, and it never appears in their app.
-                  </Text>
-                </>
-              ) : (
-                <>
-                  <View style={styles.infoRow}>
-                    <Feather
-                      name="globe"
-                      size={14}
-                      color={Colors.textSecondary}
-                    />
-                    <Text style={styles.infoValue}>
-                      Public · unencrypted broadcast
-                    </Text>
-                  </View>
-                  <Text style={styles.infoHint}>
-                    Everyone in range who joins this channel can read every
-                    message. Use a direct message for private conversation. DMs
-                    are end-to-end encrypted.
-                  </Text>
-                </>
-              )}
-            </View>
-
-            {/* Reach: how far this channel actually travels right now.
-                A location channel spans BLE *and* its Nostr geohash cell, but
-                only once a position has been resolved. With location denied it
-                is BLE-only, and saying so beats silently behaving differently
-                from the description above. */}
-            {isGeo && (
-              <View style={styles.section}>
-                <Text style={styles.sectionLabel}>Reach</Text>
-                {geohash !== null ? (
+            {/* At a glance: privacy, reach, and (for a location channel) the
+                geohash, as one compact card. This states what actually happens
+                on the wire; the caveat that matters sits just below it. */}
+            <View style={styles.factsWrap}>
+              <View style={styles.factsCard}>
+                <View style={styles.factRow}>
+                  <Feather name={privacyIcon} size={16} color={privacyColor} />
+                  <Text style={styles.factValue}>{privacyLabel}</Text>
+                </View>
+                <View style={styles.factDivider} />
+                <View style={styles.factRow}>
+                  <Feather
+                    name={reachIcon}
+                    size={16}
+                    color={Colors.textSecondary}
+                  />
+                  <Text style={styles.factValue}>{reachLabel}</Text>
+                </View>
+                {isGeo && geohash !== null && (
                   <>
-                    <View style={styles.infoRow}>
+                    <View style={styles.factDivider} />
+                    <View style={styles.factRow}>
                       <Feather
                         name="map-pin"
-                        size={14}
+                        size={16}
                         color={Colors.textSecondary}
                       />
-                      <Text style={styles.infoValue}>
-                        Bluetooth + Internet · {geohash}
+                      <Text style={styles.factValue} numberOfLines={1}>
+                        <Text style={styles.factGeohashLabel}>Geohash </Text>
+                        <Text style={styles.factGeohash}>{geohash}</Text>
                       </Text>
+                      <Pressable
+                        style={styles.copyBtn}
+                        onPress={handleCopyGeohash}
+                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                        accessibilityRole="button"
+                        accessibilityLabel="Copy geohash"
+                      >
+                        <Feather
+                          name={copied ? "check" : "copy"}
+                          size={15}
+                          color={copied ? Colors.online : Colors.textMuted}
+                        />
+                      </Pressable>
                     </View>
-                    <Text style={styles.infoHint}>
-                      Anyone in this area cell can take part, even out of
-                      Bluetooth range.
-                    </Text>
-                  </>
-                ) : (
-                  <>
-                    <View style={styles.infoRow}>
-                      <Feather
-                        name="bluetooth"
-                        size={14}
-                        color={Colors.textSecondary}
-                      />
-                      <Text style={styles.infoValue}>Bluetooth only</Text>
-                    </View>
-                    <Text style={styles.infoHint}>
-                      Location is unavailable, so this channel can&apos;t reach
-                      its area cell over the internet. It still works normally
-                      with nearby devices over Bluetooth.
-                    </Text>
                   </>
                 )}
               </View>
-            )}
+              <Text style={styles.factHint}>{detailHint}</Text>
+            </View>
 
-            {/* Reach for a private channel: the encrypted send path either stays
-                on the local mesh or is also bridged over Nostr. */}
-            {isPrivate && (
+            {/* Members. A group lists its signed roster; a location channel
+                lists who is active in its cell over the internet (no remove for
+                either: they are not local peers). Every other channel lists the
+                nearby BLE peers. */}
+            {isGroup ? (
               <View style={styles.section}>
-                <Text style={styles.sectionLabel}>Reach</Text>
-                <View style={styles.infoRow}>
-                  <Feather
-                    name={overNostr ? "globe" : "bluetooth"}
-                    size={14}
-                    color={Colors.textSecondary}
-                  />
-                  <Text style={styles.infoValue}>
-                    {overNostr ? "Bluetooth + Internet" : "Bluetooth only"}
-                  </Text>
-                </View>
-                <Text style={styles.infoHint}>
-                  {overNostr
-                    ? "Sealed messages are also published over the internet, so members out of Bluetooth range still receive them. Relays see the channel is active, never its content or members."
-                    : "Stays on the local mesh. Nothing leaves Bluetooth range, so there is no relay metadata at all."}
+                <Text style={styles.sectionLabel}>
+                  {`Members · ${groupMembers.length}`}
                 </Text>
-              </View>
-            )}
-
-            {/* Members: live BLE peer data */}
-            <View style={styles.section}>
-              <Text style={styles.sectionLabel}>
-                {`Members · ${peerList.length}`}
-              </Text>
-              {peerList.length > 0 ? (
                 <View style={styles.memberList}>
-                  {peerList.map((peer) => {
-                    const name = peer.nickname || peerIDToUsername(peer.peerID);
-                    return (
-                      <View key={peer.peerID} style={styles.memberRow}>
+                  {groupMembers.map((m) => (
+                    <View key={m.fingerprint} style={styles.memberRow}>
+                      <Avatar
+                        username={m.nickname}
+                        peerID={m.fingerprint}
+                        size={30}
+                      />
+                      <Text style={styles.memberName} numberOfLines={1}>
+                        {m.nickname}
+                      </Text>
+                    </View>
+                  ))}
+                </View>
+              </View>
+            ) : isGeo ? (
+              <View style={styles.section}>
+                <Text style={styles.sectionLabel}>
+                  {`Active · ${geoParticipants.length}`}
+                </Text>
+                {geoParticipants.length > 0 ? (
+                  <View style={styles.memberList}>
+                    {geoParticipants.map((p) => (
+                      <View key={p.pubkey} style={styles.memberRow}>
                         <Avatar
-                          username={name}
-                          peerID={peer.peerID}
+                          username={p.nickname}
+                          peerID={p.pubkey}
                           size={30}
                         />
                         <Text style={styles.memberName} numberOfLines={1}>
-                          {name}
+                          {p.nickname}
                         </Text>
-                        <StatusDot status="online" size={8} />
-                        <Pressable
-                          style={styles.removeBtn}
-                          onPress={() => removePeer(peer.peerID)}
-                          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                          accessibilityRole="button"
-                          accessibilityLabel={`Remove ${name} from local view`}
-                        >
-                          <Feather
-                            name="x"
-                            size={14}
-                            color={Colors.textMuted}
-                          />
-                        </Pressable>
+                        {p.teleported ? (
+                          <Text style={styles.memberTag}>teleported</Text>
+                        ) : (
+                          <StatusDot status="online" size={8} />
+                        )}
                       </View>
-                    );
-                  })}
-                </View>
-              ) : (
-                <Text style={styles.noMembers}>
-                  No peers detected via BLE yet.
+                    ))}
+                  </View>
+                ) : (
+                  <Text style={styles.noMembers}>No one here yet.</Text>
+                )}
+              </View>
+            ) : (
+              <View style={styles.section}>
+                <Text style={styles.sectionLabel}>
+                  {`Members · ${peerList.length}`}
                 </Text>
-              )}
-            </View>
+                {peerList.length > 0 ? (
+                  <View style={styles.memberList}>
+                    {peerList.map((peer) => {
+                      const name =
+                        peer.nickname || peerIDToUsername(peer.peerID);
+                      return (
+                        <View key={peer.peerID} style={styles.memberRow}>
+                          <Avatar
+                            username={name}
+                            peerID={peer.peerID}
+                            size={30}
+                          />
+                          <Text style={styles.memberName} numberOfLines={1}>
+                            {name}
+                          </Text>
+                          <StatusDot status="online" size={8} />
+                          <Pressable
+                            style={styles.removeBtn}
+                            onPress={() => removePeer(peer.peerID)}
+                            hitSlop={{
+                              top: 8,
+                              bottom: 8,
+                              left: 8,
+                              right: 8,
+                            }}
+                            accessibilityRole="button"
+                            accessibilityLabel={`Remove ${name} from local view`}
+                          >
+                            <Feather
+                              name="x"
+                              size={14}
+                              color={Colors.textMuted}
+                            />
+                          </Pressable>
+                        </View>
+                      );
+                    })}
+                  </View>
+                ) : (
+                  <Text style={styles.noMembers}>No one here yet.</Text>
+                )}
+              </View>
+            )}
 
             {/* Share */}
             {/* (removed: channel name visible in every screen header) */}
@@ -500,7 +546,7 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       paddingBottom: Spacing.lg,
       gap: Spacing.sm,
     },
-    pencilCorner: {
+    cornerBtn: {
       position: "absolute",
       right: Spacing.sm,
       bottom: Spacing.sm,
@@ -515,15 +561,9 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       alignItems: "center",
       justifyContent: "center",
     },
-    nameRow: {
-      flexDirection: "row",
-      alignItems: "center",
+    channelName: {
       alignSelf: "stretch",
       paddingHorizontal: Spacing.xl,
-      gap: Spacing.xs,
-    },
-    channelName: {
-      flex: 1,
       fontSize: FontSize.xl,
       fontWeight: FontWeight.bold,
       color: Colors.textPrimary,
@@ -534,30 +574,11 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       color: Colors.textMuted,
       textAlign: "center",
     },
-    editControls: {
-      flexDirection: "row",
-      gap: Spacing.sm,
-      marginLeft: Spacing.xs,
-    },
     divider: {
       height: StyleSheet.hairlineWidth,
       backgroundColor: Colors.border,
       marginHorizontal: Spacing.xl,
       marginBottom: Spacing.xs,
-    },
-    // ---- Header name input (edit mode) ----------------------------------------
-    nameInput: {
-      flex: 1,
-      fontSize: FontSize.xl,
-      fontWeight: FontWeight.bold,
-      color: Colors.textPrimary,
-      backgroundColor: Colors.surfaceRaised,
-      borderRadius: Radius.sm,
-      borderWidth: 1,
-      borderColor: Colors.border,
-      paddingHorizontal: Spacing.sm,
-      paddingVertical: 4,
-      textAlign: "center",
     },
     // ---- Body ------------------------------------------------------------------
     body: {
@@ -581,72 +602,56 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       color: Colors.textSecondary,
       lineHeight: 22,
     },
-    descriptionInput: {
-      fontSize: FontSize.base,
-      color: Colors.textPrimary,
-      lineHeight: 22,
+    // ---- At-a-glance facts card ------------------------------------------------
+    factsWrap: {
+      gap: Spacing.sm,
+    },
+    factsCard: {
       backgroundColor: Colors.surfaceRaised,
       borderRadius: Radius.md,
-      borderWidth: 1,
-      borderColor: Colors.border,
-      paddingHorizontal: Spacing.md,
-      paddingVertical: Spacing.sm,
-      minHeight: 72,
-      textAlignVertical: "top",
+      paddingHorizontal: Spacing.base,
     },
-    infoRow: {
+    factRow: {
       flexDirection: "row",
       alignItems: "center",
-      gap: Spacing.sm,
+      gap: Spacing.md,
+      paddingVertical: Spacing.md,
     },
-    infoValue: {
+    factDivider: {
+      height: StyleSheet.hairlineWidth,
+      backgroundColor: Colors.border,
+    },
+    factValue: {
+      flex: 1,
       fontSize: FontSize.base,
       fontWeight: FontWeight.medium,
       color: Colors.textPrimary,
     },
-    // Explanatory line under a value, e.g. what "Public" actually means.
-    infoHint: {
-      fontSize: FontSize.sm,
-      color: Colors.textMuted,
-      marginTop: Spacing.xs,
-      lineHeight: 18,
-    },
-    nameError: {
-      fontSize: FontSize.sm,
-      color: Colors.danger,
-      textAlign: "center",
-      marginTop: Spacing.xs,
-    },
-    // Visibility / Transport pickers in edit mode, the same chip pattern as
-    // the create-channel modal (channel-list.tsx).
-    chipRow: {
-      flexDirection: "row",
-      gap: Spacing.sm,
-    },
-    chip: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 5,
-      paddingHorizontal: Spacing.md,
-      paddingVertical: 7,
-      borderRadius: Radius.md,
-      borderWidth: 1,
-      borderColor: Colors.border,
-      backgroundColor: Colors.bg,
-    },
-    chipActive: {
-      borderColor: Colors.accent,
-      backgroundColor: Colors.surface,
-    },
-    chipText: {
-      fontSize: FontSize.sm,
-      color: Colors.textMuted,
+    factGeohashLabel: {
+      fontSize: FontSize.base,
       fontWeight: FontWeight.medium,
+      color: Colors.textMuted,
     },
-    chipTextActive: {
-      fontSize: FontSize.sm,
+    factGeohash: {
+      fontSize: FontSize.base,
+      fontWeight: FontWeight.medium,
       color: Colors.textPrimary,
-      fontWeight: FontWeight.semibold,
+      fontFamily: "monospace",
+      letterSpacing: 1,
+    },
+    copyBtn: {
+      width: 30,
+      height: 30,
+      borderRadius: Radius.full,
+      backgroundColor: Colors.surface,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    // Single adaptive caveat under the facts card.
+    factHint: {
+      fontSize: FontSize.sm,
+      color: Colors.textMuted,
+      lineHeight: 18,
     },
     // ---- Members ---------------------------------------------------------------
     memberList: {
@@ -663,6 +668,10 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       fontSize: FontSize.sm,
       fontWeight: FontWeight.medium,
       color: Colors.textPrimary,
+    },
+    memberTag: {
+      fontSize: FontSize.xs,
+      color: Colors.textMuted,
     },
     removeBtn: {
       width: 28,

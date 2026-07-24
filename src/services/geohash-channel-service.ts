@@ -19,9 +19,10 @@
 // is published, and the finest cell we ever publish is ~150 m across. Presence
 // heartbeats are additionally restricted to coarse precisions by presence.ts.
 //
-// Degradation: with location denied, every geohash resolves to null and the
-// service is inert and the channels keep working over BLE exactly as before.
-// Location is an enhancement, never a requirement.
+// Degradation: with location denied, the NAMED channels resolve to no cell and
+// keep working over BLE exactly as before. Location is an enhancement, never a
+// requirement. Teleported channels (geohash:<gh>) carry a fixed geohash, so
+// they stay live over the internet even with no location fix.
 
 import { finalizeEvent, type Event as NostrEvent } from "nostr-tools";
 import { NoisePayloadType } from "../core/mesh/noise-payload";
@@ -74,8 +75,68 @@ export const GEO_CHANNEL_PRECISION: Readonly<Record<string, number>> = {
   "#region": 2,
 };
 
+// A teleported cell is keyed `geohash:<gh>`, mirroring the app's `group:` and
+// `dm:` channel-key idiom. The named channels above resolve their geohash from
+// the device's own location; a teleported one carries a FIXED geohash the user
+// jumped to, so it works with no location permission and never moves. The `gh`
+// after the prefix is the bare lowercased geohash that rides the Nostr `g` tag,
+// so it interoperates with bitchat's location channels for the same cell.
+export const MANUAL_GEO_PREFIX = "geohash:";
+
+// The standard geohash base32 alphabet (no a/i/l/o), same as bitchat.
+const GEOHASH_ALPHABET = "0123456789bcdefghjkmnpqrstuvwxyz";
+
+export function isManualGeoChannel(channel: string): boolean {
+  return channel.startsWith(MANUAL_GEO_PREFIX);
+}
+
 export function isGeoChannel(channel: string): boolean {
-  return channel in GEO_CHANNEL_PRECISION;
+  return channel in GEO_CHANNEL_PRECISION || isManualGeoChannel(channel);
+}
+
+// Build the channel key for a teleported geohash cell.
+export function geohashChannel(geohash: string): string {
+  return `${MANUAL_GEO_PREFIX}${geohash}`;
+}
+
+// The bare geohash a teleported channel points at, or null for a named/other
+// channel (whose geohash is location-derived, not fixed in the key).
+export function manualGeohashOf(channel: string): string | null {
+  return isManualGeoChannel(channel)
+    ? channel.slice(MANUAL_GEO_PREFIX.length)
+    : null;
+}
+
+// Canonicalise raw user input into a geohash: lowercase, drop a leading #,
+// discard anything outside the alphabet, cap at 12 chars. Mirrors bitchat's
+// LocationStateManager.normalizeGeohash so both accept the same strings.
+export function normalizeGeohash(raw: string): string {
+  return [...raw.trim().toLowerCase().replace(/#/g, "")]
+    .filter((c) => GEOHASH_ALPHABET.includes(c))
+    .join("")
+    .slice(0, 12);
+}
+
+// A geohash the user may teleport to: 2 to 12 alphabet chars. Matches bitchat's
+// open-channel gate (2...12); 1-char cells are half the globe and pointless.
+export function isValidGeohash(gh: string): boolean {
+  return (
+    gh.length >= 2 &&
+    gh.length <= 12 &&
+    [...gh].every((c) => GEOHASH_ALPHABET.includes(c))
+  );
+}
+
+// The coverage level a geohash length maps to, matching bitchat's
+// GeohashChannelLevel.level(forLength:). Used only for display labels.
+export function geohashLevelName(gh: string): string {
+  const n = gh.length;
+  if (n <= 2) return "Region";
+  if (n <= 4) return "Province";
+  if (n === 5) return "City";
+  if (n === 6) return "Neighborhood";
+  if (n === 7) return "Block";
+  return "Building";
 }
 
 // Relays to publish/subscribe per geohash cell. Matches bitchat's
@@ -110,6 +171,10 @@ export interface GeoParticipant {
   pubkey: string;
   nickname: string;
   lastSeenMs: number;
+  // True when this participant posted with a teleport marker, i.e. they are not
+  // physically in the cell. bitchat sets the same flag from the ["t","teleport"]
+  // tag, so the two apps show the same "here vs teleported" state.
+  teleported: boolean;
 }
 
 export class GeohashChannelService {
@@ -193,14 +258,11 @@ export class GeohashChannelService {
   // Safe to call repeatedly; re-resolves location and re-subscribes only where
   // the geohash actually changed.
   async refresh(): Promise<void> {
+    // Location may be null (denied or off). That only affects the named
+    // channels, whose cell is derived from where the user is. Teleported
+    // channels carry a fixed geohash and stay live regardless, so we no longer
+    // tear everything down when there is no fix.
     const coords = await getCoarseLocation();
-    if (coords === null) {
-      // No location: tear down any existing subscriptions so we don't keep
-      // serving a stale cell after permission is revoked.
-      this.teardownAll();
-      this.coords = null;
-      return;
-    }
     this.coords = coords;
 
     const joined = useChatStore.getState().channels.filter(isGeoChannel);
@@ -211,15 +273,36 @@ export class GeohashChannelService {
     }
 
     for (const channel of joined) {
-      const precision = GEO_CHANNEL_PRECISION[channel];
-      const geohash = encodeGeohash(coords.lat, coords.lng, precision);
+      const geohash = this.resolveGeohash(channel, coords);
+      if (geohash === null) {
+        // A named channel with no location fix: it runs BLE-only, so make sure
+        // it isn't left subscribed to a stale cell from before permission went.
+        if (this.channelGeohash.has(channel)) this.unsubscribeChannel(channel);
+        continue;
+      }
       if (this.channelGeohash.get(channel) === geohash) continue; // unchanged
 
-      // Moved into a new cell: the old cell's traffic is no longer ours.
+      // New cell (moved, or first resolve): the old cell's traffic is no
+      // longer ours.
       this.unsubscribeChannel(channel);
       this.channelGeohash.set(channel, geohash);
       this.subscribeChannel(channel, geohash);
     }
+  }
+
+  // The geohash a joined channel should subscribe to right now. Teleported
+  // channels use their fixed key geohash; named channels derive it from the
+  // current position, or null when there is no fix (BLE-only).
+  private resolveGeohash(
+    channel: string,
+    coords: Coords | null,
+  ): string | null {
+    const manual = manualGeohashOf(channel);
+    if (manual !== null) return isValidGeohash(manual) ? manual : null;
+    if (coords === null) return null;
+    const precision = GEO_CHANNEL_PRECISION[channel];
+    if (precision === undefined) return null;
+    return encodeGeohash(coords.lat, coords.lng, precision);
   }
 
   // The relays carrying a given geohash cell, chosen from the cell's CENTRE so
@@ -253,6 +336,19 @@ export class GeohashChannelService {
     return this.channelGeohash.get(channel) ?? null;
   }
 
+  // The named location channel (#city etc.) whose current cell equals `geohash`,
+  // or null. Lets the teleport flow redirect to a channel the user is already
+  // standing in rather than opening a duplicate teleported room for the same
+  // cell. Mirrors bitchat, which clears teleport when the target matches one of
+  // the device's own computed channels. Returns null with no location fix, since
+  // then no named channel has a resolved cell to compare against.
+  namedChannelForGeohash(geohash: string): string | null {
+    for (const channel of Object.keys(GEO_CHANNEL_PRECISION)) {
+      if (this.channelGeohash.get(channel) === geohash) return channel;
+    }
+    return null;
+  }
+
   // Whether a position has been resolved. The UI uses this to explain that a
   // location channel is running BLE-only rather than leaving it silently local.
   get hasLocation(): boolean {
@@ -276,6 +372,9 @@ export class GeohashChannelService {
         this.nickname,
         msgId,
         this.relaysForGeohash(geohash),
+        // A teleported cell is one we are not standing in, so mark our posts
+        // teleported for bitchat's participant list, matching its own clients.
+        isManualGeoChannel(channel),
       );
       return true;
     } catch {
@@ -297,7 +396,12 @@ export class GeohashChannelService {
     const cutoff = Date.now() - PARTICIPANT_TTL_MS;
     return [...map.values()]
       .filter((p) => p.lastSeenMs >= cutoff)
-      .sort((a, b) => b.lastSeenMs - a.lastSeenMs);
+      .sort((a, b) => {
+        // People physically here first, teleported below them, matching
+        // bitchat's list ordering; within each group, most recent first.
+        if (a.teleported !== b.teleported) return a.teleported ? 1 : -1;
+        return b.lastSeenMs - a.lastSeenMs;
+      });
   }
 
   stop(): void {
@@ -394,7 +498,12 @@ export class GeohashChannelService {
 
     const rawNick = event.tags.find(([t]) => t === TAG_NICKNAME)?.[1];
     const nickname = geohashDisplayName(event.pubkey, rawNick);
-    this.trackParticipant(channel, event.pubkey, nickname);
+    this.trackParticipant(
+      channel,
+      event.pubkey,
+      nickname,
+      this.isTeleportEvent(event),
+    );
     const sharedId = event.tags.find(([t]) => t === TAG_MESSAGE_ID)?.[1];
     useChatStore.getState().addMessage({
       id:
@@ -554,7 +663,13 @@ export class GeohashChannelService {
         const nickname = geohashDisplayName(event.pubkey, rawNick);
 
         // Both chat (20000) and presence (20001) prove someone is in the cell.
-        this.trackParticipant(channel, event.pubkey, nickname);
+        // Only a chat event can carry the teleport marker; presence never does.
+        this.trackParticipant(
+          channel,
+          event.pubkey,
+          nickname,
+          this.isTeleportEvent(event),
+        );
 
         // Presence heartbeats carry no content: they update the participant
         // list only and must never render as an empty chat bubble.
@@ -682,13 +797,20 @@ export class GeohashChannelService {
     channel: string,
     pubkey: string,
     nickname: string,
+    teleported = false,
   ): void {
     let map = this.participants.get(channel);
     if (map === undefined) {
       map = new Map();
       this.participants.set(channel, map);
     }
-    map.set(pubkey, { pubkey, nickname, lastSeenMs: Date.now() });
+    map.set(pubkey, { pubkey, nickname, lastSeenMs: Date.now(), teleported });
+  }
+
+  // Whether an event was published with a teleport marker (["t","teleport"]).
+  // Only meaningful on chat events; presence heartbeats never carry it.
+  private isTeleportEvent(event: NostrEvent): boolean {
+    return event.tags.some(([t, v]) => t === "t" && v === "teleport");
   }
 
   // Exposed for the publish path so outgoing events carry our display name.
