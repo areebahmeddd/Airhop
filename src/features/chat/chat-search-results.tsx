@@ -6,7 +6,16 @@
 
 import { Feather } from "@expo/vector-icons";
 import React, { useEffect, useMemo, useState } from "react";
-import { Pressable, SectionList, StyleSheet, Text, View } from "react-native";
+import {
+  FlatList,
+  Image,
+  Pressable,
+  ScrollView,
+  SectionList,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
 import { useChatStore } from "../../store/chat-store";
 import Avatar from "../../ui/components/avatar";
 import {
@@ -17,12 +26,28 @@ import {
   useThemeColors,
 } from "../../ui/theme";
 import {
+  filterMessages,
   searchChats,
   searchMessages,
   type ChatHit,
+  type MediaFilter,
   type MessageHit,
 } from "../../utils/chat-search";
 import { peerIDToUsername } from "../../utils/username";
+
+// The filter chips shown above search, one per content kind Airhop supports.
+const MEDIA_FILTERS: {
+  key: MediaFilter;
+  label: string;
+  icon: React.ComponentProps<typeof Feather>["name"];
+}[] = [
+  { key: "photos", label: "Photos", icon: "image" },
+  { key: "videos", label: "Videos", icon: "video" },
+  { key: "audio", label: "Audio", icon: "mic" },
+  { key: "documents", label: "Documents", icon: "file-text" },
+  { key: "links", label: "Links", icon: "link" },
+  { key: "ecash", label: "Ecash", icon: "dollar-sign" },
+];
 
 // Debounce so fast typing doesn't recompute the scan on every keystroke.
 const DEBOUNCE_MS = 150;
@@ -85,6 +110,13 @@ export default function ChatSearchResults({
     [debouncedQuery, messages],
   );
 
+  // Active media filter (Photos / Links / ...), or null for plain text search.
+  const [filter, setFilter] = useState<MediaFilter | null>(null);
+  const mediaHits = useMemo(
+    () => (filter ? filterMessages(filter, debouncedQuery, messages) : []),
+    [filter, debouncedQuery, messages],
+  );
+
   const sections: ResultSection[] = [
     ...(chatHits.length > 0
       ? [
@@ -108,52 +140,125 @@ export default function ChatSearchResults({
   ];
 
   const trimmed = debouncedQuery.trim();
-  if (trimmed.length === 0) return <View style={styles.container} />;
-
-  if (sections.length === 0) {
-    return (
-      <View style={styles.emptyState}>
-        <Feather name="search" size={26} color={Colors.textMuted} />
-        <Text style={styles.emptyText}>
-          No results for &ldquo;{trimmed}&rdquo;
-        </Text>
-      </View>
-    );
-  }
+  const activeFilter = filter
+    ? MEDIA_FILTERS.find((f) => f.key === filter)
+    : undefined;
 
   return (
     <View style={styles.container}>
-      <SectionList<ResultRow, ResultSection>
-        sections={sections}
-        keyExtractor={(row, index) =>
-          row.kind === "chat"
-            ? `chat-${row.hit.channel}`
-            : `msg-${row.hit.messageId}-${index}`
-        }
-        renderSectionHeader={({ section }) => (
-          <Text style={styles.sectionTitle}>{section.title}</Text>
-        )}
-        renderItem={({ item }) =>
-          item.kind === "chat" ? (
-            <ChatResultRow
-              hit={item.hit}
-              styles={styles}
-              colors={Colors}
-              onPress={onSelectChat}
-            />
-          ) : (
-            <MessageResultRow
-              hit={item.hit}
-              styles={styles}
-              colors={Colors}
-              onPress={onSelectMessage}
-            />
-          )
-        }
-        stickySectionHeadersEnabled={false}
+      {/* Filter chips, always available so you can browse by kind without
+          typing anything, WhatsApp-style. Tapping the active one clears it. */}
+      <ScrollView
+        horizontal
+        style={styles.chipScroll}
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.chipRow}
         keyboardShouldPersistTaps="handled"
-        contentContainerStyle={styles.list}
-      />
+      >
+        {MEDIA_FILTERS.map((f) => {
+          const selected = filter === f.key;
+          return (
+            <Pressable
+              key={f.key}
+              style={[styles.chip, selected && styles.chipSelected]}
+              onPress={() => setFilter(selected ? null : f.key)}
+              accessibilityRole="button"
+              accessibilityState={{ selected }}
+              accessibilityLabel={`Filter by ${f.label}`}
+            >
+              <Feather
+                name={f.icon}
+                size={13}
+                color={selected ? Colors.textInverse : Colors.textSecondary}
+              />
+              <Text
+                style={[styles.chipText, selected && styles.chipTextSelected]}
+              >
+                {f.label}
+              </Text>
+            </Pressable>
+          );
+        })}
+      </ScrollView>
+
+      {activeFilter ? (
+        // Media-filtered view: messages of the selected kind, narrowed by the
+        // query if one is typed.
+        mediaHits.length === 0 ? (
+          <View style={styles.emptyState}>
+            <Feather
+              name={activeFilter.icon}
+              size={26}
+              color={Colors.textMuted}
+            />
+            <Text style={styles.emptyText}>
+              {trimmed.length > 0
+                ? `No ${activeFilter.label.toLowerCase()} matching “${trimmed}”`
+                : `No ${activeFilter.label.toLowerCase()} yet`}
+            </Text>
+          </View>
+        ) : (
+          <FlatList
+            data={mediaHits}
+            keyExtractor={(hit, index) => `media-${hit.messageId}-${index}`}
+            renderItem={({ item }) => (
+              <MediaResultRow
+                hit={item}
+                filter={activeFilter}
+                styles={styles}
+                colors={Colors}
+                onPress={onSelectMessage}
+              />
+            )}
+            keyboardShouldPersistTaps="handled"
+            contentContainerStyle={styles.list}
+          />
+        )
+      ) : trimmed.length === 0 ? (
+        // No query, no filter: leave the chips as the only affordance.
+        <View style={styles.hintState}>
+          <Text style={styles.emptyText}>
+            Search messages and chats, or pick a filter above.
+          </Text>
+        </View>
+      ) : sections.length === 0 ? (
+        <View style={styles.emptyState}>
+          <Feather name="search" size={26} color={Colors.textMuted} />
+          <Text style={styles.emptyText}>No results for “{trimmed}”</Text>
+        </View>
+      ) : (
+        <SectionList<ResultRow, ResultSection>
+          sections={sections}
+          keyExtractor={(row, index) =>
+            row.kind === "chat"
+              ? `chat-${row.hit.channel}`
+              : `msg-${row.hit.messageId}-${index}`
+          }
+          renderSectionHeader={({ section }) => (
+            <Text style={styles.sectionTitle}>{section.title}</Text>
+          )}
+          renderItem={({ item }) =>
+            item.kind === "chat" ? (
+              <ChatResultRow
+                hit={item.hit}
+                styles={styles}
+                colors={Colors}
+                onPress={onSelectChat}
+              />
+            ) : (
+              <MessageResultRow
+                hit={item.hit}
+                styles={styles}
+                colors={Colors}
+                onPress={onSelectMessage}
+              />
+            )
+          }
+          stickySectionHeadersEnabled={false}
+          keyboardShouldPersistTaps="handled"
+          contentContainerStyle={styles.list}
+        />
+      )}
     </View>
   );
 }
@@ -245,6 +350,63 @@ function MessageResultRow({
   );
 }
 
+// A media-filter result: a thumbnail for photos/videos (icon otherwise),
+// then the chat, time, and a snippet. Same tap-to-jump as a message result.
+function MediaResultRow({
+  hit,
+  filter,
+  styles,
+  colors,
+  onPress,
+}: {
+  hit: MessageHit;
+  filter: (typeof MEDIA_FILTERS)[number];
+  styles: ReturnType<typeof createStyles>;
+  colors: ReturnType<typeof useThemeColors>;
+  onPress: (channel: string, messageId: string) => void;
+}): React.JSX.Element {
+  const before = hit.snippet.slice(0, hit.matchStart);
+  const match = hit.snippet.slice(hit.matchStart, hit.matchEnd);
+  const after = hit.snippet.slice(hit.matchEnd);
+  return (
+    <Pressable
+      style={styles.row}
+      onPress={() => onPress(hit.channel, hit.messageId)}
+      accessibilityRole="button"
+      accessibilityLabel={`${channelDisplayName(hit.channel)}, ${filter.label} from ${
+        hit.isMine ? "you" : hit.senderNickname
+      }`}
+    >
+      <View style={styles.mediaThumb}>
+        <Feather name={filter.icon} size={16} color={colors.textSecondary} />
+        {hit.thumbnailUri ? (
+          <Image
+            source={{ uri: hit.thumbnailUri }}
+            style={StyleSheet.absoluteFill}
+            resizeMode="cover"
+          />
+        ) : null}
+      </View>
+      <View style={styles.messageBody}>
+        <View style={styles.messageHead}>
+          <Text style={styles.messageChannel} numberOfLines={1}>
+            {channelDisplayName(hit.channel)}
+          </Text>
+          <Text style={styles.messageTime}>{formatTime(hit.timestampMs)}</Text>
+        </View>
+        <Text style={styles.messageSnippet} numberOfLines={2}>
+          <Text style={styles.messageSender}>
+            {hit.isMine ? "You" : hit.senderNickname}:{" "}
+          </Text>
+          {before}
+          <Text style={styles.messageMatch}>{match}</Text>
+          {after}
+        </Text>
+      </View>
+    </Pressable>
+  );
+}
+
 function createStyles(Colors: ReturnType<typeof useThemeColors>) {
   return StyleSheet.create({
     container: {
@@ -254,6 +416,60 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
     list: {
       paddingHorizontal: Spacing.base,
       paddingBottom: Spacing["3xl"],
+    },
+    // flexGrow 0 stops the horizontal ScrollView from claiming the column's
+    // spare vertical space, so it stays as tall as one chip row.
+    chipScroll: {
+      flexGrow: 0,
+    },
+    // Horizontal filter chips. alignItems keeps each chip at its natural
+    // height; without it a horizontal ScrollView stretches children to fill
+    // the whole column, which Radius.full then rounds into tall pills.
+    chipRow: {
+      alignItems: "center",
+      paddingHorizontal: Spacing.base,
+      paddingVertical: Spacing.sm,
+      gap: Spacing.sm,
+    },
+    chip: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 6,
+      paddingHorizontal: Spacing.md,
+      paddingVertical: Spacing.sm,
+      borderRadius: Radius.full,
+      backgroundColor: Colors.surfaceRaised,
+      borderWidth: 1,
+      borderColor: Colors.border,
+    },
+    chipSelected: {
+      backgroundColor: Colors.accent,
+      borderColor: Colors.accent,
+    },
+    chipText: {
+      fontSize: FontSize.sm,
+      fontWeight: FontWeight.medium,
+      color: Colors.textSecondary,
+    },
+    chipTextSelected: {
+      color: Colors.textInverse,
+    },
+    // Photo/video thumbnail box (icon shows through when no image).
+    mediaThumb: {
+      width: 40,
+      height: 40,
+      borderRadius: Radius.md,
+      overflow: "hidden",
+      backgroundColor: Colors.surface,
+      borderWidth: 1,
+      borderColor: Colors.border,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    hintState: {
+      alignItems: "center",
+      paddingHorizontal: Spacing.xl,
+      paddingTop: Spacing["2xl"],
     },
     sectionTitle: {
       fontSize: FontSize.xs,

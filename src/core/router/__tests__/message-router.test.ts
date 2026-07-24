@@ -3,13 +3,19 @@
  */
 import { ed25519 } from "@noble/curves/ed25519.js";
 import { NoiseHandshake } from "../../crypto/noise-xx";
+import {
+  decodeNoisePayload,
+  decodePrivateMessagePacket,
+  encodeNoisePrivateMessage,
+  NoisePayloadType,
+} from "../../mesh/noise-payload";
 import { Flags, PacketType, type Packet } from "../../mesh/packet-codec";
 import {
-  MessageRouter,
-  PeerRegistry,
   decodeChannelMsgPayload,
   encodeChannelMsgPayload,
+  MessageRouter,
   newMessageId,
+  PeerRegistry,
   type RouterIdentity,
 } from "../message-router";
 
@@ -199,7 +205,9 @@ describe("MessageRouter", () => {
       () => {},
       () => {},
     );
-    expect(router.sendDm("aabbccdd00112233", "hello")).toBe("needs-courier");
+    expect(router.sendDm("aabbccdd00112233", "hello", "m0")).toBe(
+      "needs-courier",
+    );
   });
 
   test("sendDm sends unicast DM when session is established", () => {
@@ -224,18 +232,22 @@ describe("MessageRouter", () => {
       (pid, p) => unicasts.push({ peerID: pid, packet: p }),
     );
 
-    const result = router.sendDm(recipientPeerID, "secret");
+    const result = router.sendDm(recipientPeerID, "secret", "msg1");
     expect(result).toBe("sent");
     expect(unicasts.length).toBe(1);
     expect(unicasts[0].peerID).toBe(recipientPeerID);
     expect(unicasts[0].packet.type).toBe(PacketType.NOISE_ENCRYPTED);
 
-    // The recipient can decrypt with their session
+    // The recipient decrypts to a bitchat NoisePayload private message.
     const decrypted = sessionR.decrypt(unicasts[0].packet.payload);
-    expect(new TextDecoder().decode(decrypted)).toBe("secret");
+    const np = decodeNoisePayload(decrypted)!;
+    expect(np.type).toBe(NoisePayloadType.PRIVATE_MESSAGE);
+    const pm = decodePrivateMessagePacket(np.body)!;
+    expect(pm.messageID).toBe("msg1");
+    expect(pm.content).toBe("secret");
   });
 
-  test("decryptDm recovers plaintext for known peer with session", () => {
+  test("decryptDm recovers the typed NoisePayload for a known peer", () => {
     const identity = makeIdentity();
     const registry = new PeerRegistry();
     const senderPeerID = "0011223344556677";
@@ -251,8 +263,9 @@ describe("MessageRouter", () => {
     // Sender uses sessionI to encrypt, receiver uses sessionR to decrypt
     registry.setSession(senderPeerID, sessionR);
 
-    const plaintext = new TextEncoder().encode("private message");
-    const ciphertext = sessionI.encrypt(plaintext);
+    const ciphertext = sessionI.encrypt(
+      encodeNoisePrivateMessage("id7", "private message")!,
+    );
 
     const incomingPacket: Packet = {
       type: PacketType.NOISE_ENCRYPTED,
@@ -271,8 +284,11 @@ describe("MessageRouter", () => {
       () => {},
       () => {},
     );
-    const result = router.decryptDm(incomingPacket, senderPeerID);
-    expect(result).toBe("private message");
+    const np = router.decryptDm(incomingPacket, senderPeerID)!;
+    expect(np.type).toBe(NoisePayloadType.PRIVATE_MESSAGE);
+    expect(decodePrivateMessagePacket(np.body)!.content).toBe(
+      "private message",
+    );
   });
 
   test("decryptDm returns null for unknown sender", () => {
@@ -324,7 +340,7 @@ describe("MessageRouter", () => {
       },
     );
 
-    const result = router.sendDm(recipientPeerID, "via nostr");
+    const result = router.sendDm(recipientPeerID, "via nostr", "m0");
     expect(result).toBe("sent-nostr");
   });
 
@@ -347,7 +363,9 @@ describe("MessageRouter", () => {
       () => {},
     );
 
-    expect(router.sendDm(recipientPeerID, "offline")).toBe("needs-courier");
+    expect(router.sendDm(recipientPeerID, "offline", "m0")).toBe(
+      "needs-courier",
+    );
   });
 
   test("sendDm prefers BLE over Nostr even when both are available", () => {
@@ -377,7 +395,7 @@ describe("MessageRouter", () => {
       },
     );
 
-    const result = router.sendDm(recipientPeerID, "prefer ble");
+    const result = router.sendDm(recipientPeerID, "prefer ble", "m0");
     expect(result).toBe("sent");
     expect(unicasts).toHaveLength(1);
     expect(nostrSent).toHaveLength(0);
@@ -452,7 +470,7 @@ describe("MessageRouter", () => {
       (peerID, p) => unicasts.push({ peerID, packet: p }),
     );
 
-    expect(router.sendDm(recipientPeerID, "hello")).toBe("sent");
+    expect(router.sendDm(recipientPeerID, "hello", "m0")).toBe("sent");
     expect(unicasts).toHaveLength(1);
     expect(unicasts[0].peerID).toBe(recipientPeerID);
     expect(unicasts[0].packet.type).toBe(PacketType.NOISE_ENCRYPTED);
@@ -486,7 +504,7 @@ describe("MessageRouter", () => {
       },
     );
 
-    const result = router.sendDm(recipientPeerID, "no session");
+    const result = router.sendDm(recipientPeerID, "no session", "m0");
     expect(result).toBe("sent-nostr");
     expect(unicasts).toHaveLength(0);
     expect(nostrSent).toHaveLength(1);

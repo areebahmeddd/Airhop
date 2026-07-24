@@ -28,6 +28,7 @@
 			<key>CFBundleURLSchemes</key>
 			<array>
 				<string>org.onemindlabs.airhop</string>
+				<string>airhop</string>
 			</array>
 		</dict>
 	</array>
@@ -48,6 +49,11 @@
 	<string>Airhop uses Bluetooth to communicate with nearby devices on the mesh.</string>
 	<key>NSBluetoothPeripheralUsageDescription</key>
 	<string>Airhop uses Bluetooth to advertise your presence to nearby peers.</string>
+	<!-- Coarse location resolves which geohash cell the location channels
+	     (#block, #city, #region, etc.) belong to. Raw coordinates never leave
+	     the device; only the truncated geohash is published. -->
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Airhop uses your approximate location to place you in nearby area channels (block, city, region). Your exact position never leaves your device.</string>
 	<!-- Required for MultipeerConnectivity on iOS 14+. Without this the system
 	     cannot show the local network access prompt and MC discovery will fail. -->
 	<key>NSLocalNetworkUsageDescription</key>

@@ -12,16 +12,17 @@ Implementation: `src/core/nostr/gift-wrap.ts` and `courier-relay.ts`.
 
 ## Key Distinction: Nostr Keys vs BLE Keys
 
-Airhop identity uses two separate key systems:
+Airhop identity uses three key systems, all rooted in one stored key pair:
 
-| Key          | Curve   | Used for                                    |
-| ------------ | ------- | ------------------------------------------- |
-| Noise static | X25519  | BLE session encryption (Noise XX)           |
-| Signing key  | Ed25519 | Packet signing, also used as Nostr identity |
+| Key          | Curve     | Used for                                       |
+| ------------ | --------- | ---------------------------------------------- |
+| Noise static | X25519    | BLE session encryption (Noise XX)              |
+| Signing key  | Ed25519   | Packet, board, prekey, and group-state signing |
+| Nostr key    | secp256k1 | Nostr events, derived from the signing key     |
 
-The Ed25519 signing key doubles as the Nostr key (`npub`). It is not the same as the X25519 Noise key.
+The Ed25519 signing key is **not** the Nostr key. Nostr uses secp256k1 (Schnorr), so the `npub` cannot be the Ed25519 public key. Use `deriveNostrPrivKey(ed25519PrivKey)` to derive a deterministic secp256k1 key from the Ed25519 identity key via HKDF-SHA256. Only the Ed25519 and X25519 keys are stored; the Nostr key is re-derived, so there is no third key pair to manage.
 
-Nostr tools (`nostr-tools`) require secp256k1 keys. Use `deriveNostrPrivKey(ed25519PrivKey)` to derive a deterministic secp256k1 key from the Ed25519 identity key via HKDF-SHA256. This avoids managing a third key pair.
+Location channels derive a further per-geohash secp256k1 identity from the same signing key, so presence in one cell cannot be linked to another.
 
 ```typescript
 // src/core/nostr/gift-wrap.ts

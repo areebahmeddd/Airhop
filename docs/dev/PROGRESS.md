@@ -4,7 +4,7 @@
 
 ## Current Version: v1.0.0 (pre-field-test)
 
-**Status:** Feature work complete and green in CI (451 tests, 0 lint errors, TypeScript clean). **Not yet validated on physical hardware.**
+**Status:** Feature work complete and green in CI (663 tests, 0 lint errors, TypeScript clean). **Not yet validated on physical hardware.**
 
 > [!IMPORTANT]
 > A checked box below means "implemented and unit-tested", NOT "verified on devices".
@@ -12,9 +12,13 @@
 > Kotlin/Swift modules have not been compiled by CI. Treat every radio-dependent
 > claim as unproven until the first field test.
 
-**Verified by tests:** packet codec, fragment format, Noise XX, Double Ratchet,
-courier envelopes, gossip filters, outbox delivery, contact-card binding,
-geohash derivation + relay determinism, proof selection.
+**Verified by tests:** packet codec (v1 and v2 headers, padding, compression),
+fragment format and reassembly progress, Noise XX, Double Ratchet, courier
+envelopes (static and prekey-sealed), one-time prekey bundles, gossip filters
+(including type-aware board rounds), bulletin-board wire and store quotas,
+private-group wire and epoch keys, gateway carrier codec, mesh ping/pong,
+outbox delivery, contact-card binding, geohash derivation + relay determinism,
+geohash DM round trip, Nostr gift-wrap and the bitchat envelope, proof selection.
 
 **Cannot be verified without hardware:** discovery, MTU negotiation, cross-OS
 connection lifecycle, real attachment transfer over the radio.
@@ -128,7 +132,7 @@ Voice notes and recorded-video sharing both work via `FILE_TRANSFER`.
 
 ## v0.9.0: Production Hardening ✅
 
-- [x] NFC contact exchange (`src/core/crypto/contact-exchange.ts`: ContactCard binary format, NDEF + QR URI scheme)
+- [x] QR contact exchange (`src/core/crypto/contact-exchange.ts`: ContactCard binary format, QR URI scheme)
 - [x] QR code scanner for peer verification (encodeQRContent/decodeQRContent in contact-exchange.ts)
 - [x] Human-readable usernames (`src/utils/username.ts`: deterministic adjective-noun-suffix from peer ID, 128-entry word lists)
 - [x] Panic wipe (`src/utils/panic-wipe.ts`: clears EncryptedStorage keys + all MMKV partitions in one call)
@@ -165,7 +169,7 @@ Voice notes and recorded-video sharing both work via `FILE_TRANSFER`.
 - [ ] Conversation history kept local-only (MMKV)
 - [ ] Low-end device fallback: block download if device lacks RAM/storage for the selected model
 
-### Cashu Wallet
+### Cashu Wallet (Shipped in v1.0.0)
 
 - [x] `src/core/payments/cashu.ts`: token parse/embed/redeem with offline DLEQ validation
 - [x] `src/core/payments/nutzap.ts`: NIP-61 online zaps

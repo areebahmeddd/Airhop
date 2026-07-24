@@ -15,6 +15,7 @@ function makeCard(overrides: Partial<ContactCard> = {}): ContactCard {
     noisePubKey: new Uint8Array(32).fill(0xaa),
     signingPubKey: new Uint8Array(32).fill(0xbb),
     nickname: "swift",
+    nostrPubKey: new Uint8Array(32).fill(0xcc),
     ...overrides,
   };
 }
@@ -33,6 +34,9 @@ describe("ContactCard binary encode/decode", () => {
       Array.from(card.signingPubKey),
     );
     expect(decoded.nickname).toBe(card.nickname);
+    expect(Array.from(decoded.nostrPubKey)).toEqual(
+      Array.from(card.nostrPubKey),
+    );
   });
 
   test("empty nickname encodes and decodes correctly", () => {
@@ -101,6 +105,44 @@ describe("ContactCard binary encode/decode", () => {
   });
 });
 
+describe("ContactCard Nostr pubkey", () => {
+  const npub = new Uint8Array(32).fill(0xdd);
+
+  test("round-trips the Nostr key", () => {
+    const decoded = decodeContactCard(
+      encodeContactCard(makeCard({ nostrPubKey: npub })),
+    );
+    expect(Array.from(decoded.nostrPubKey)).toEqual(Array.from(npub));
+  });
+
+  test("the npub survives even with a max-length nickname (variable offset)", () => {
+    const card = makeCard({ nickname: "a".repeat(32), nostrPubKey: npub });
+    const decoded = decodeContactCard(encodeContactCard(card));
+    expect(decoded.nickname).toBe("a".repeat(32));
+    expect(Array.from(decoded.nostrPubKey)).toEqual(Array.from(npub));
+  });
+
+  test("throws on a card truncated in the npub field", () => {
+    const buf = encodeContactCard(makeCard({ nostrPubKey: npub }));
+    expect(() => decodeContactCard(buf.slice(0, buf.length - 4))).toThrow(
+      "truncated",
+    );
+  });
+
+  test("rejects an npub that is not 32 bytes", () => {
+    expect(() =>
+      encodeContactCard(makeCard({ nostrPubKey: new Uint8Array(16) })),
+    ).toThrow("32 bytes");
+  });
+
+  test("QR round-trip carries the npub", () => {
+    const card = makeCard({ nostrPubKey: npub });
+    const decoded = decodeQRContent(encodeQRContent(card));
+    expect(decoded).not.toBeNull();
+    expect(Array.from(decoded!.nostrPubKey)).toEqual(Array.from(npub));
+  });
+});
+
 describe("QR content encode/decode", () => {
   test("QR content starts with airhop:v1/ scheme", () => {
     const qr = encodeQRContent(makeCard());
@@ -146,7 +188,3 @@ describe("QR content encode/decode", () => {
     }
   });
 });
-
-// The NFC payload tests were removed with the NFC contact path: iOS cannot
-// emulate an NDEF tag (no HCE), so phone-to-phone tap is impossible. QR carries
-// the identical ContactCard binary and is covered above.

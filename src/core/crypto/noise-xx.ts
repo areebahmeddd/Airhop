@@ -226,10 +226,21 @@ export class NoiseHandshake {
     this.localStaticPriv = localStaticPriv.slice();
     this.localStaticPub = x25519.getPublicKey(localStaticPriv);
 
-    // Initialize symmetric state: h = ck = protocol_name padded to 32 bytes
+    // Initialize symmetric state: h = ck = protocol_name (exactly 32 bytes, so
+    // it is used directly, not hashed).
     this.h = new Uint8Array(32);
     this.h.set(PROTOCOL_NAME_BYTES);
     this.ck = this.h.slice();
+
+    // MixHash(prologue). Standard Noise ALWAYS runs this after InitializeSymmetric
+    // even when the prologue is empty, and bitchat does too, so h becomes
+    // SHA-256(protocol_name). Skipping it left our handshake hash one hash behind
+    // bitchat's, which is used as the AEAD associated data when the static key is
+    // sealed in message 2: same key, different AAD, so the tag mismatches and no
+    // bitchat<->Airhop handshake could ever complete. The prologue is empty on
+    // both sides (see NoiseSession call sites), so no data is carried, only the
+    // hash step.
+    this.mixHash(new Uint8Array(0));
   }
 
   static createInitiator(localStaticPrivKey: Uint8Array): NoiseHandshake {

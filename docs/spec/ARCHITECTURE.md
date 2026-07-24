@@ -55,7 +55,7 @@ airhop/
 │   │   │   ├── noise-x.ts              # Noise X one-way (courier sealing)
 │   │   │   ├── double-ratchet.ts       # Signal DR (per-message forward secrecy)
 │   │   │   ├── x3dh.ts                 # Extended Triple DH (DR initialization)
-│   │   │   └── contact-exchange.ts     # QR/NFC contact card encode/decode
+│   │   │   └── contact-exchange.ts     # QR contact card encode/decode
 │   │   ├── mesh/
 │   │   │   ├── packet-codec.ts         # Binary encode/decode - bitchat v2 wire format
 │   │   │   ├── flood-router.ts         # TTL flood, jitter, deterministic fanout
@@ -81,7 +81,7 @@ airhop/
 │   ├── features/                       # Product features: UI + screen-level logic
 │   │   ├── discovery/                  # Nearby peers, public channel browser
 │   │   ├── chat/                       # Channel threads, DMs, group chats
-│   │   ├── contacts/                   # Add contact, QR scanner, NFC, key verify
+│   │   ├── contacts/                   # Add contact, QR scanner, key verify
 │   │   ├── wallet/                     # Send/receive Cashu, balance, history
 │   │   └── settings/                   # Privacy, Tor config, panic wipe
 │   │
@@ -126,7 +126,7 @@ airhop/
 | **File Transfer**        | ✅ Chunked streaming   | ✅ link in message              | ✅            | No hard size cap in Airhop                                                                                                                    |
 | **Store-and-Forward**    | ✅ Courier envelopes   | ✅ Nostr relay buffer           | ✅            | Offline mail system                                                                                                                           |
 | **Payments (Cashu)**     | ✅ Token as message    | ✅ NIP-61 Nutzap                | ✅            | Transfer offline; redemption needs internet                                                                                                   |
-| **Contact Verification** | ✅ QR / NFC exchange   | ✅ Nostr profile                | ✅            | Manual fingerprint or QR ceremony                                                                                                             |
+| **Contact Verification** | ✅ QR exchange         | ✅ Nostr profile                | ✅            | Manual fingerprint or QR ceremony                                                                                                             |
 | **Panic Wipe**           | ✅ always              | ✅ always                       | N/A           | Triple-tap: destroys all keys + messages                                                                                                      |
 | **Tor Routing**          | N/A                    | ✅ iOS (Arti) + Android (Orbot) | ✅            | Nostr over Tor; BLE is local-only                                                                                                             |
 | **Relay Discovery**      | N/A                    | ✅ georelays CSV                | ✅            | Bundled + refreshed from georelays repo                                                                                                       |
@@ -139,12 +139,19 @@ Airhop identity is a **cryptographic key pair generated locally, stored in OS Ke
 
 ```
 Identity
-├── Noise Static Key   (X25519)   - for session encryption (Noise XX handshake)
-├── Signing Key        (Ed25519)  - for packet authentication, also used as Nostr identity
-└── Peer ID            (string)   - SHA-256(noiseStaticPub).slice(0, 8 bytes) → 16 hex chars
+├── Noise Static Key   (X25519)     - for session encryption (Noise XX handshake)
+├── Signing Key        (Ed25519)    - for packet + board/prekey/group authentication
+├── Nostr Key          (secp256k1)  - derived from the signing key; the Nostr identity
+└── Peer ID            (string)     - SHA-256(noiseStaticPub).slice(0, 8 bytes) → 16 hex chars
 ```
 
-The Ed25519 `signingPubKey` in hex is the **Nostr public key** (`npub`). One key pair = one identity across BLE mesh + Nostr + payments. No linking to phone numbers, emails, or real-world identifiers.
+The **Nostr key is a separate secp256k1 (Schnorr) keypair deterministically derived
+from the Ed25519 signing key** (HKDF, see `deriveNostrPrivKey`). Nostr uses secp256k1,
+so the Ed25519 signing key is not itself the `npub`. Deriving it means one root identity
+still yields a single stable Nostr identity across BLE mesh + Nostr + payments, with no
+linking to phone numbers, emails, or real-world identifiers. Location channels use a
+further per-geohash secp256k1 identity (also derived from the signing key) so presence in
+one cell cannot be linked to another.
 
 ### Human-readable names
 
@@ -1003,7 +1010,6 @@ export class NostrDMTransport {
 | `react-native-reanimated`  | `^4.x`           | Hardware-accelerated animations | MIT     |
 | `nativewind`               | `^4.x`           | Tailwind CSS for React Native   | MIT     |
 | `react-native-camera`      | via VisionCamera | QR code scanning                | MIT     |
-| `react-native-nfc-manager` | `^3.x`           | NFC contact exchange (Phase 4)  | MIT     |
 
 ### Build toolchain
 

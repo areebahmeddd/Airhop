@@ -4,8 +4,8 @@
 // Contact-card identity binding.
 //
 // A peer ID is only meaningful because it is the fingerprint of the peer's
-// Noise static public key. Anything that accepts a contact out-of-band (QR,
-// NFC) MUST re-derive and compare, or a forged card can claim someone else's
+// Noise static public key. Anything that accepts a contact out-of-band (a QR
+// scan) MUST re-derive and compare, or a forged card can claim someone else's
 // peer ID while supplying attacker-controlled keys, and every DM the user
 // then believes they are sending to that contact would be encrypted to the
 // forger instead. bitchat-iOS enforces the same rule on inbound announces
@@ -37,6 +37,7 @@ function makeCard(seed: number, nickname = "swift-otter-42"): ContactCard {
     noisePubKey,
     signingPubKey,
     nickname,
+    nostrPubKey: new Uint8Array(32).fill(seed + 50),
   };
 }
 

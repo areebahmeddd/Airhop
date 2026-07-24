@@ -14,6 +14,11 @@ interface Props {
   // and ringed with the accent color like an active one, instead of always
   // showing its full peer color.
   active?: boolean;
+  // Presence dot overlaid at the bottom-right: green when reachable, grey when
+  // not. Omit for no dot. `ringColor` should match the background the avatar
+  // sits on so the dot reads as a badge; defaults to the base background.
+  presence?: "online" | "offline";
+  ringColor?: string;
 }
 
 export default function Avatar({
@@ -21,6 +26,8 @@ export default function Avatar({
   peerID,
   size = 40,
   active,
+  presence,
+  ringColor,
 }: Props): React.JSX.Element {
   const Colors = useThemeColors();
   const styles = useMemo(() => createStyles(Colors), [Colors]);
@@ -33,6 +40,13 @@ export default function Avatar({
       : active
         ? Colors.accent
         : Colors.border;
+
+  // Presence dot, matching the profile screen's status dot proportions:
+  // ~0.1875 of the avatar, a ~2% border in the background colour, inset ~2%.
+  const dotSize = Math.max(8, Math.round(size * 0.1875));
+  const dotBorder = Math.max(1.5, Math.round(size * 0.02));
+  const dotInset = Math.max(1, Math.round(size * 0.02));
+  const presenceColor = presence === "online" ? Colors.online : Colors.offline;
 
   return (
     <View
@@ -50,6 +64,21 @@ export default function Avatar({
       ]}
     >
       <Text style={[styles.initials, { fontSize, color: bg }]}>{initials}</Text>
+      {presence !== undefined && (
+        <View
+          style={{
+            position: "absolute",
+            right: dotInset,
+            bottom: dotInset,
+            width: dotSize,
+            height: dotSize,
+            borderRadius: dotSize / 2,
+            borderWidth: dotBorder,
+            borderColor: ringColor ?? Colors.bg,
+            backgroundColor: presenceColor,
+          }}
+        />
+      )}
     </View>
   );
 }

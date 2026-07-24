@@ -18,8 +18,11 @@ import { panicWipe as clearKeys } from "../core/crypto/identity";
 import { clearAttachmentCache } from "../services/file-transfer-service";
 import { useActivityStore } from "../store/activity-store";
 import { useBlockedStore } from "../store/blocked-store";
+import { useBoardStore } from "../store/board-store";
 import { useChatStore } from "../store/chat-store";
 import { useContactsStore } from "../store/contacts-store";
+import { useGroupStore } from "../store/group-store";
+import { useNoticesStore } from "../store/notices-store";
 import { useOutboxStore } from "../store/outbox-store";
 import { usePeerStore } from "../store/peer-store";
 import { useSettingsStore } from "../store/settings-store";
@@ -49,6 +52,15 @@ export const MMKV_STORE_IDS = [
   "contacts-store",
   "activity-store",
   "settings-store",
+  // board-store holds signed public bulletin-board posts tied to this identity's
+  // signing key; a wipe erases them along with the rest of this identity's data.
+  "board-store",
+  // prekey-store holds our one-time prekey private keys and peers' bundles;
+  // both are identity-linked key material and must be destroyed on panic.
+  "prekey-store",
+  // group-store holds private-group epoch keys, which decrypt every group
+  // message; destroy them on panic like any other conversation key material.
+  "group-store",
 ] as const;
 
 export async function panicWipe(): Promise<void> {
@@ -69,6 +81,9 @@ export async function panicWipe(): Promise<void> {
   useContactsStore.getState().clearAll();
   useTransferStore.getState().clearAll();
   useActivityStore.getState().clearAll();
+  useBoardStore.getState().clearAll();
+  useGroupStore.getState().clearAll();
+  useNoticesStore.getState().clearAll();
   useSettingsStore.getState().reset();
   useBlockedStore.setState({ blockedPeerIDs: [] });
 

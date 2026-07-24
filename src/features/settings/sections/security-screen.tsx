@@ -18,6 +18,7 @@ import {
 import NativeAirhopTor from "../../../bridge/NativeAirhopTor";
 import { showAlert } from "../../../store/alert-store";
 import { useBlockedStore } from "../../../store/blocked-store";
+import { useSettingsStore } from "../../../store/settings-store";
 import { useThemeColors } from "../../../ui/theme";
 import { resolveDisplayName } from "../../../utils/display-name";
 import {
@@ -36,6 +37,8 @@ export default function SecurityScreen({ onBack }: Props): React.JSX.Element {
   const Colors = useThemeColors();
   const styles = useSharedStyles();
   const [torEnabled, setTorEnabled] = useState(false);
+  const gatewayEnabled = useSettingsStore((s) => s.gatewayEnabled);
+  const setGatewayEnabled = useSettingsStore((s) => s.setGatewayEnabled);
   const [torStarting, setTorStarting] = useState(false);
   const [torProgress, setTorProgress] = useState(0);
   const [torSummary, setTorSummary] = useState("");
@@ -177,6 +180,22 @@ export default function SecurityScreen({ onBack }: Props): React.JSX.Element {
                   value={torEnabled}
                   onValueChange={(v) => void handleTorToggle(v)}
                   disabled={torStarting}
+                />
+              }
+            />
+            <GroupDivider />
+            <SettingRow
+              icon="radio"
+              label="Internet gateway"
+              description={
+                gatewayEnabled
+                  ? "On · Relaying nearby offline peers' location messages to the internet"
+                  : "Relay nearby offline peers' location messages to the internet. Uses your data and battery."
+              }
+              control={
+                <SettingSwitch
+                  value={gatewayEnabled}
+                  onValueChange={setGatewayEnabled}
                 />
               }
             />

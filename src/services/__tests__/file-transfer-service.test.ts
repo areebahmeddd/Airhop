@@ -10,6 +10,7 @@
 // never reassembles. The assertions below are therefore about WHEN packets are
 // handed to the transport, not just that they are.
 
+import { decodeFilePacket } from "../../core/mesh/bitchat-file-packet";
 import { PacketType, type Packet } from "../../core/mesh/packet-codec";
 import { FileTransferService } from "../file-transfer-service";
 
@@ -49,8 +50,14 @@ afterEach(() => {
 });
 
 describe("outbound pacing", () => {
-  // Big enough to exceed one 469-byte fragment several times over.
-  const FILE = new Uint8Array(4000).fill(9);
+  // Big enough to exceed one 469-byte fragment several times over. High-entropy
+  // fill so the codec's raw-DEFLATE compression can't shrink it into one frame
+  // (an all-one-byte file would compress away and never fragment).
+  const FILE = (() => {
+    const f = new Uint8Array(4000);
+    for (let i = 0; i < f.length; i++) f[i] = (i * 167 + 13) & 0xff;
+    return f;
+  })();
 
   it("does not dispatch the whole file synchronously", () => {
     const { service, broadcast } = makeService();
@@ -110,15 +117,51 @@ describe("outbound pacing", () => {
     expect(indices).toEqual([...indices].sort((a, b) => a - b));
   });
 
-  it("rejects a file over the size cap before queueing anything", () => {
+  it("rejects a file over the 1 MiB cap before queueing anything", () => {
     const { service, broadcast } = makeService();
-    // Just over the 50 MB cap.
-    const tooBig = new Uint8Array(51 * 1024 * 1024);
+    const tooBig = new Uint8Array(1 * 1024 * 1024 + 1);
 
     expect(() => service.sendBytes(tooBig, META, "#test")).toThrow(
       /too large/i,
     );
     expect(service.pendingCount).toBe(0);
     expect(broadcast).not.toHaveBeenCalled();
+  });
+});
+
+describe("wire format (BitchatFilePacket)", () => {
+  const PNG = new Uint8Array([
+    0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1, 2, 3, 4, 5,
+  ]);
+  const IMG_META = {
+    type: "image" as const,
+    name: "pic.png",
+    mimeType: "image/png",
+    durationMs: 0,
+  };
+
+  it("sends a small DM file as one FILE_TRANSFER packet decoding to the file", () => {
+    const { service, unicast } = makeService();
+    service.sendBytes(PNG, IMG_META, "dm:1122334455667788");
+    jest.advanceTimersByTime(40);
+
+    expect(unicast).toHaveBeenCalledTimes(1);
+    const pkt = unicast.mock.calls[0][1] as Packet;
+    expect(pkt.type).toBe(PacketType.FILE_TRANSFER);
+    const fp = decodeFilePacket(pkt.payload)!;
+    expect(fp.fileName).toBe("pic.png");
+    expect(fp.mimeType).toBe("image/png");
+    expect(Array.from(fp.content)).toEqual(Array.from(PNG));
+    // A DM carries no channel tag; it is routed by the recipient ID.
+    expect(fp.channel).toBeUndefined();
+  });
+
+  it("tags a channel attachment with its channel for routing", () => {
+    const { service, broadcast } = makeService();
+    service.sendBytes(PNG, IMG_META, "#region");
+    jest.advanceTimersByTime(40);
+
+    const pkt = broadcast.mock.calls[0][0] as Packet;
+    expect(decodeFilePacket(pkt.payload)!.channel).toBe("#region");
   });
 });

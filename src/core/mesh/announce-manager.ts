@@ -37,11 +37,17 @@ const ANNOUNCE_CONNECTED_MAX_MS = 30_000;
 // Exported so mesh-service can't drift out of sync with the value used here.
 export const ANNOUNCE_TTL = 7;
 
+// ANNOUNCE TLV types. 0x01–0x06 are bitchat's (Packets.swift TLVType); we must
+// not reuse them. bitchat's 0x05 is a capabilities bitfield and 0x06 is a bridge
+// geohash. Reading either as our Nostr key (or vice versa) would corrupt both
+// sides, so our Nostr pubkey lives at 0x07, which bitchat skips as unknown.
 const TLV_NICKNAME = 0x01;
 const TLV_NOISE_PUB = 0x02;
 const TLV_SIGNING_PUB = 0x03;
 const TLV_NEIGHBORS = 0x04;
-const TLV_NOSTR_PUB = 0x05;
+const TLV_CAPABILITIES = 0x05; // bitchat capabilities bitfield (decoded, ignored)
+const TLV_BRIDGE_GEOHASH = 0x06; // bitchat bridge cell (decoded, ignored)
+const TLV_NOSTR_PUB = 0x07; // Airhop extension: secp256k1 X-only Nostr pubkey
 
 export interface AnnounceInfo {
   senderID: Uint8Array; // 8 bytes
@@ -120,6 +126,11 @@ export function decodeAnnouncePayload(
           neighborIDs.push(value.slice(i, i + 8));
         }
         break;
+      case TLV_CAPABILITIES:
+      case TLV_BRIDGE_GEOHASH:
+        // bitchat fields we accept but do not yet act on. Explicit cases so
+        // they are never mistaken for another field.
+        break;
       case TLV_NOSTR_PUB:
         if (value.length === 32) nostrPubKey = value;
         break;
@@ -145,7 +156,7 @@ export class AnnounceManager {
 
   // Build and return a signed ANNOUNCE packet ready to send.
   // Pass neighborIDs (each 8 bytes) to include TLV 0x04 so topology gossip works.
-  // Pass nostrPubKey (32 bytes secp256k1 X-only) to include TLV 0x05 for Nostr DMs.
+  // Pass nostrPubKey (32 bytes secp256k1 X-only) to include TLV 0x07 for Nostr DMs.
   buildPacket(
     identity: Identity,
     nickname: string,
@@ -166,7 +177,7 @@ export class AnnounceManager {
       flags: Flags.SIGNED, // broadcast: no HAS_RECIPIENT, always signed
       senderID: senderIDBytes,
       recipientID: new Uint8Array(8), // all-zeros = broadcast
-      timestamp: Math.floor(Date.now() / 1000),
+      timestamp: Date.now(),
       signature: new Uint8Array(64),
       payload,
     };

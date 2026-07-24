@@ -1,6 +1,9 @@
 /**
  * @jest-environment node
  */
+// Wire-format tests for the bitchat-compatible binary codec. These lock in
+// byte-level behavior that must match bitchat iOS/Android: v1 + v2 headers,
+// PKCS#7 padding, raw-DEFLATE compression, and signing over the padded encoding.
 import { ed25519 } from "@noble/curves/ed25519.js";
 import {
   BROADCAST_ID,
@@ -20,10 +23,10 @@ function makePacket(overrides: Partial<Packet> = {}): Packet {
   return {
     type: PacketType.ANNOUNCE,
     ttl: 7,
-    flags: Flags.SIGNED, // signed broadcast
+    flags: Flags.SIGNED,
     senderID: new Uint8Array([0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88]),
     recipientID: new Uint8Array(8),
-    timestamp: 1700000000,
+    timestamp: 1_700_000_000_000, // milliseconds, per bitchat
     signature: new Uint8Array(64),
     payload: new TextEncoder().encode("hello"),
     ...overrides,
@@ -32,227 +35,230 @@ function makePacket(overrides: Partial<Packet> = {}): Packet {
 
 describe("packet-codec", () => {
   describe("encode/decode round-trip", () => {
-    it("round-trips a broadcast packet with correct byte offsets", () => {
+    it("round-trips a broadcast packet, preserving every field", () => {
       const p = makePacket();
-      const encoded = encodePacket(p);
-      const decoded = decodePacket(encoded);
-
+      const decoded = decodePacket(encodePacket(p));
       expect(decoded).not.toBeNull();
       expect(decoded!.type).toBe(PacketType.ANNOUNCE);
       expect(decoded!.ttl).toBe(7);
-      expect(decoded!.flags).toBe(Flags.SIGNED);
       expect(Array.from(decoded!.senderID)).toEqual(Array.from(p.senderID));
       expect(Array.from(decoded!.recipientID)).toEqual(
         Array.from(BROADCAST_ID),
       );
-      expect(decoded!.timestamp).toBe(1700000000);
-      expect(Array.from(decoded!.payload)).toEqual(
-        Array.from(new TextEncoder().encode("hello")),
-      );
+      expect(decoded!.timestamp).toBe(1_700_000_000_000);
+      expect(new TextDecoder().decode(decoded!.payload)).toBe("hello");
     });
 
-    it("preserves combined flags through encode/decode", () => {
-      // Simulates a unicast compressed+signed packet from a bitchat peer
-      const combinedFlags =
-        Flags.HAS_RECIPIENT | Flags.COMPRESSED | Flags.SIGNED;
+    it("round-trips a unicast packet with a recipient", () => {
       const p = makePacket({
-        flags: combinedFlags,
-        // recipientID must be non-zero for HAS_RECIPIENT to be preserved on wire
+        flags: Flags.SIGNED | Flags.HAS_RECIPIENT,
         recipientID: new Uint8Array([1, 2, 3, 4, 5, 6, 7, 8]),
       });
-      const encoded = encodePacket(p);
-      // Flags live at byte [11] in v2 format
-      expect(encoded[11]).toBe(combinedFlags);
-      const decoded = decodePacket(encoded);
-      expect(decoded!.flags).toBe(combinedFlags);
+      const decoded = decodePacket(encodePacket(p));
+      expect(Array.from(decoded!.recipientID)).toEqual([
+        1, 2, 3, 4, 5, 6, 7, 8,
+      ]);
+      expect(isBroadcast(decoded!)).toBe(false);
     });
 
-    it("sets version byte to 2 at offset 0", () => {
+    it("emits v2 by default and reads the version back", () => {
       const encoded = encodePacket(makePacket());
       expect(encoded[0]).toBe(2);
+      expect(decodePacket(encoded)!.version).toBe(2);
     });
 
-    it("sets type at offset 1", () => {
+    it("round-trips a v1 packet (bitchat's broadcast header)", () => {
+      const p = makePacket({ version: 1 });
+      const encoded = encodePacket(p);
+      expect(encoded[0]).toBe(1);
+      const decoded = decodePacket(encoded);
+      expect(decoded!.version).toBe(1);
+      expect(new TextDecoder().decode(decoded!.payload)).toBe("hello");
+    });
+
+    it("type at [1], ttl at [2], flags at [11]", () => {
       const encoded = encodePacket(
-        makePacket({ type: PacketType.CHANNEL_MSG }),
+        makePacket({ type: PacketType.CHANNEL_MSG, ttl: 5, flags: 0 }),
       );
       expect(encoded[1]).toBe(PacketType.CHANNEL_MSG);
-    });
-
-    it("sets TTL at offset 2", () => {
-      const encoded = encodePacket(makePacket({ ttl: 5 }));
       expect(encoded[2]).toBe(5);
+      // Broadcast, unsigned, uncompressed -> flags byte is 0.
+      expect(encoded[11]).toBe(0);
     });
 
-    it("encodes timestamp as u64 BE at bytes [3–10]", () => {
-      const ts = 0x12345678;
-      const encoded = encodePacket(makePacket({ timestamp: ts }));
-      const view = new DataView(encoded.buffer);
-      // High 32 bits at [3], low 32 bits at [7]
-      const hi = view.getUint32(3, false);
-      const lo = view.getUint32(7, false);
-      const decoded = hi * 0x100000000 + lo;
-      expect(decoded).toBe(ts);
+    it("pads the frame to a PKCS#7 block size", () => {
+      // A tiny broadcast (16+8+4 = 28 bytes) pads up to the 256 block.
+      const encoded = encodePacket(
+        makePacket({
+          payload: new Uint8Array([0xde, 0xad, 0xbe, 0xef]),
+          flags: 0,
+        }),
+      );
+      expect(encoded.length).toBe(256);
+      // Payload still sits right after header(16) + senderID(8).
+      expect(Array.from(encoded.slice(24, 28))).toEqual([
+        0xde, 0xad, 0xbe, 0xef,
+      ]);
+      expect(new TextDecoder().decode(decodePacket(encoded)!.payload)).toBe(
+        new TextDecoder().decode(new Uint8Array([0xde, 0xad, 0xbe, 0xef])),
+      );
     });
 
-    it("timestamp > u32 max survives round-trip", () => {
-      // Year 2100 timestamp (> 2^32)
-      const ts = 4_102_444_800;
-      const encoded = encodePacket(makePacket({ timestamp: ts }));
-      const decoded = decodePacket(encoded);
-      expect(decoded!.timestamp).toBe(ts);
+    it("a large u64 (ms) timestamp survives the round-trip", () => {
+      const ts = 4_102_444_800_000; // year 2100 in ms, > 2^32
+      expect(
+        decodePacket(encodePacket(makePacket({ timestamp: ts })))!.timestamp,
+      ).toBe(ts);
     });
 
-    it("broadcast payload starts at offset 24 (header + senderID)", () => {
-      // 16 header + 8 senderID = 24; no recipientID for broadcast
-      const payload = new Uint8Array([0xde, 0xad, 0xbe, 0xef]);
-      const p = makePacket({ payload, flags: 0x00 }); // no SIGNED, no HAS_RECIPIENT
-      const encoded = encodePacket(p);
-      // 16 + 8 + 4 = 28 total (no signature)
-      expect(encoded.length).toBe(28);
-      expect(Array.from(encoded.slice(24))).toEqual([0xde, 0xad, 0xbe, 0xef]);
-    });
-
-    it("returns null for packets shorter than minimum (16-byte header)", () => {
+    it("returns null for a too-short buffer", () => {
       expect(decodePacket(new Uint8Array(15))).toBeNull();
     });
 
-    it("returns null for version != 2", () => {
+    it("returns null for an unsupported version", () => {
       const buf = new Uint8Array(96);
-      buf[0] = 1; // v1
+      buf[0] = 3;
       expect(decodePacket(buf)).toBeNull();
     });
   });
 
+  describe("compression (raw DEFLATE, bitchat-compatible)", () => {
+    it("compresses a large low-entropy payload and restores it exactly", () => {
+      // 500 bytes of repetitive text: >100 threshold, low unique-byte ratio.
+      const original = new TextEncoder().encode("ab".repeat(250));
+      const p = makePacket({ payload: original, flags: Flags.SIGNED });
+      const encoded = encodePacket(p);
+      // COMPRESSED flag is derived by the encoder and set on the wire.
+      expect((encoded[11] & Flags.COMPRESSED) !== 0).toBe(true);
+      const decoded = decodePacket(encoded);
+      expect(Array.from(decoded!.payload)).toEqual(Array.from(original));
+    });
+
+    it("does NOT compress a small payload", () => {
+      const encoded = encodePacket(
+        makePacket({ payload: new Uint8Array([1, 2, 3]), flags: 0 }),
+      );
+      expect((encoded[11] & Flags.COMPRESSED) !== 0).toBe(false);
+    });
+
+    it("does NOT compress high-entropy data", () => {
+      // Coprime step covers all 256 byte values -> unique ratio ~1.0.
+      const big = new Uint8Array(300);
+      for (let i = 0; i < big.length; i++) big[i] = (i * 167 + 13) & 0xff;
+      const encoded = encodePacket(makePacket({ payload: big, flags: 0 }));
+      expect((encoded[11] & Flags.COMPRESSED) !== 0).toBe(false);
+    });
+  });
+
   describe("signing and verification", () => {
-    it("sign + verify round-trip succeeds", () => {
-      const privKey = ed25519.utils.randomSecretKey();
-      const pubKey = ed25519.getPublicKey(privKey);
+    it("sign + verify round-trip succeeds (uncompressed)", () => {
+      const priv = ed25519.utils.randomSecretKey();
+      const pub = ed25519.getPublicKey(priv);
       const p = makePacket();
-      p.signature = signPacket(p, privKey);
-      expect(verifyPacket(p, pubKey)).toBe(true);
+      p.signature = signPacket(p, priv);
+      expect(verifyPacket(p, pub)).toBe(true);
     });
 
-    it("signature verification fails after modifying payload", () => {
-      const privKey = ed25519.utils.randomSecretKey();
-      const pubKey = ed25519.getPublicKey(privKey);
-      const p = makePacket();
-      p.signature = signPacket(p, privKey);
-      // Flip a byte in payload
-      const tamperedPayload = new Uint8Array(p.payload);
-      tamperedPayload[0] ^= 0xff;
-      const tampered = { ...p, payload: tamperedPayload };
-      expect(verifyPacket(tampered, pubKey)).toBe(false);
+    it("sign + verify round-trip succeeds through a compressed payload", () => {
+      const priv = ed25519.utils.randomSecretKey();
+      const pub = ed25519.getPublicKey(priv);
+      const p = makePacket({
+        payload: new TextEncoder().encode("xy".repeat(200)),
+      });
+      p.signature = signPacket(p, priv);
+      // Re-decode the wire packet and verify, mirroring the receive path.
+      const decoded = decodePacket(encodePacket(p))!;
+      decoded.signature = p.signature;
+      expect(verifyPacket(decoded, pub)).toBe(true);
     });
 
-    it("signature is valid even after TTL decrement (relay-safe)", () => {
-      const privKey = ed25519.utils.randomSecretKey();
-      const pubKey = ed25519.getPublicKey(privKey);
+    it("fails after modifying the payload", () => {
+      const priv = ed25519.utils.randomSecretKey();
+      const pub = ed25519.getPublicKey(priv);
+      const p = makePacket();
+      p.signature = signPacket(p, priv);
+      const tampered = { ...p, payload: new TextEncoder().encode("hellp") };
+      expect(verifyPacket(tampered, pub)).toBe(false);
+    });
+
+    it("stays valid after a TTL decrement (relay-safe)", () => {
+      const priv = ed25519.utils.randomSecretKey();
+      const pub = ed25519.getPublicKey(priv);
       const p = makePacket({ ttl: 7 });
-      p.signature = signPacket(p, privKey);
-      // Simulate relay decrementing TTL
-      const relayed = { ...p, ttl: 6 };
-      expect(verifyPacket(relayed, pubKey)).toBe(true);
+      p.signature = signPacket(p, priv);
+      expect(verifyPacket({ ...p, ttl: 6 }, pub)).toBe(true);
     });
 
-    it("verifyPacket returns false for wrong public key", () => {
-      const privKey = ed25519.utils.randomSecretKey();
-      const wrongPubKey = ed25519.getPublicKey(ed25519.utils.randomSecretKey());
+    it("stays valid after being tagged as a solicited sync response (isRSR)", () => {
+      const priv = ed25519.utils.randomSecretKey();
+      const pub = ed25519.getPublicKey(priv);
       const p = makePacket();
-      p.signature = signPacket(p, privKey);
-      expect(verifyPacket(p, wrongPubKey)).toBe(false);
+      p.signature = signPacket(p, priv);
+      expect(verifyPacket({ ...p, isRSR: true }, pub)).toBe(true);
     });
 
-    it("verifyPacket returns false when FLAG_SIGNED is not set", () => {
-      const privKey = ed25519.utils.randomSecretKey();
-      const pubKey = ed25519.getPublicKey(privKey);
-      const p = makePacket({ flags: 0x00 }); // no SIGNED bit
-      p.signature = signPacket(p, privKey);
-      expect(verifyPacket(p, pubKey)).toBe(false);
+    it("fails for the wrong public key", () => {
+      const priv = ed25519.utils.randomSecretKey();
+      const wrong = ed25519.getPublicKey(ed25519.utils.randomSecretKey());
+      const p = makePacket();
+      p.signature = signPacket(p, priv);
+      expect(verifyPacket(p, wrong)).toBe(false);
     });
 
-    it("flags are included in the signing message", () => {
-      const privKey = ed25519.utils.randomSecretKey();
-      const pubKey = ed25519.getPublicKey(privKey);
-      const p = makePacket({ flags: Flags.SIGNED | Flags.COMPRESSED });
-      p.signature = signPacket(p, privKey);
-      // Verify succeeds with original flags
-      expect(verifyPacket(p, pubKey)).toBe(true);
-      // Tamper with flags - verification must fail
-      expect(verifyPacket({ ...p, flags: Flags.SIGNED }, pubKey)).toBe(false);
+    it("fails when the SIGNED flag is not set", () => {
+      const priv = ed25519.utils.randomSecretKey();
+      const pub = ed25519.getPublicKey(priv);
+      const p = makePacket({ flags: 0 });
+      p.signature = signPacket(p, priv);
+      expect(verifyPacket(p, pub)).toBe(false);
     });
   });
 
   describe("broadcast and unicast helpers", () => {
-    it("isBroadcast returns true for all-zero recipientID", () => {
+    it("isBroadcast is true for an all-zero recipient", () => {
       expect(isBroadcast(makePacket())).toBe(true);
     });
 
-    it("isBroadcast returns false for non-zero recipientID with HAS_RECIPIENT set", () => {
-      // HAS_RECIPIENT flag must be set for the packet to be treated as unicast
-      const p = makePacket({
-        flags: Flags.SIGNED | Flags.HAS_RECIPIENT,
-        recipientID: new Uint8Array([1, 0, 0, 0, 0, 0, 0, 0]),
-      });
-      expect(isBroadcast(p)).toBe(false);
-    });
-
-    it("isForMe returns true when recipientID matches", () => {
+    it("isForMe matches a recipient id", () => {
       const myID = new Uint8Array([
         0xde, 0xad, 0xbe, 0xef, 0xca, 0xfe, 0xba, 0xbe,
       ]);
-      const p = makePacket({ recipientID: myID });
-      expect(isForMe(p, myID)).toBe(true);
-    });
-
-    it("isForMe returns false for a different ID", () => {
-      const myID = new Uint8Array([
-        0xde, 0xad, 0xbe, 0xef, 0xca, 0xfe, 0xba, 0xbe,
-      ]);
-      const othersID = new Uint8Array([
-        0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08,
-      ]);
-      const p = makePacket({ recipientID: othersID });
-      expect(isForMe(p, myID)).toBe(false);
+      expect(isForMe(makePacket({ recipientID: myID }), myID)).toBe(true);
+      expect(
+        isForMe(makePacket({ recipientID: new Uint8Array(8).fill(1) }), myID),
+      ).toBe(false);
     });
   });
 
-  describe("packet type constants", () => {
-    it("ANNOUNCE = 0x01", () => expect(PacketType.ANNOUNCE).toBe(0x01));
-    it("CHANNEL_MSG = 0x02", () => expect(PacketType.CHANNEL_MSG).toBe(0x02));
-    it("LEAVE = 0x03", () => expect(PacketType.LEAVE).toBe(0x03));
-    it("COURIER_ENV = 0x04", () => expect(PacketType.COURIER_ENV).toBe(0x04));
-    it("NOISE_HANDSHAKE = 0x10", () =>
-      expect(PacketType.NOISE_HANDSHAKE).toBe(0x10));
-    it("NOISE_ENCRYPTED = 0x11", () =>
-      expect(PacketType.NOISE_ENCRYPTED).toBe(0x11));
-    it("FRAGMENT = 0x20", () => expect(PacketType.FRAGMENT).toBe(0x20));
-    it("REQUEST_SYNC = 0x21", () => expect(PacketType.REQUEST_SYNC).toBe(0x21));
-    it("VOICE_FRAME = 0x29", () => expect(PacketType.VOICE_FRAME).toBe(0x29));
-    // 0x30 VIDEO_FRAME and 0x40 CASHU_TOKEN were removed. See the note in
-    // packet-codec.ts. Ecash rides ordinary encrypted DM text.
+  describe("packet type constants (match bitchat MessageType)", () => {
+    it("core types", () => {
+      expect(PacketType.ANNOUNCE).toBe(0x01);
+      expect(PacketType.CHANNEL_MSG).toBe(0x02);
+      expect(PacketType.LEAVE).toBe(0x03);
+      expect(PacketType.NOISE_HANDSHAKE).toBe(0x10);
+      expect(PacketType.NOISE_ENCRYPTED).toBe(0x11);
+      expect(PacketType.FRAGMENT).toBe(0x20);
+      expect(PacketType.FILE_TRANSFER).toBe(0x22);
+    });
   });
 
   describe("computePacketId", () => {
-    it("produces 16 bytes", () => {
-      expect(computePacketId(makePacket())).toHaveLength(16);
-    });
-
-    it("is deterministic", () => {
+    it("is 16 bytes and deterministic", () => {
       const p = makePacket({ payload: new Uint8Array([1, 2, 3]) });
+      expect(computePacketId(p)).toHaveLength(16);
       expect(computePacketId(p)).toEqual(computePacketId(p));
     });
 
-    it("differs for packets with different type or payload", () => {
-      const p1 = makePacket({
+    it("differs across type or payload", () => {
+      const a = makePacket({
         type: PacketType.ANNOUNCE,
         payload: new Uint8Array([1]),
       });
-      const p2 = makePacket({
+      const b = makePacket({
         type: PacketType.CHANNEL_MSG,
         payload: new Uint8Array([1]),
       });
-      expect(computePacketId(p1)).not.toEqual(computePacketId(p2));
+      expect(computePacketId(a)).not.toEqual(computePacketId(b));
     });
   });
 });

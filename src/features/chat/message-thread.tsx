@@ -1,7 +1,7 @@
 // Message thread screen for a single channel.
 // Shows messages with sender and timestamp. Text input to compose and PTT button.
 
-import { Feather } from "@expo/vector-icons";
+import { Feather, MaterialCommunityIcons } from "@expo/vector-icons";
 import {
   AudioModule,
   RecordingPresets,
@@ -39,6 +39,12 @@ import {
   TextInput,
   View,
 } from "react-native";
+import Animated, {
+  Easing,
+  useAnimatedStyle,
+  useSharedValue,
+  withTiming,
+} from "react-native-reanimated";
 import {
   buildOfflineToken,
   findTokensInText,
@@ -46,6 +52,11 @@ import {
   selectProofsForAmount,
   type EmbeddedToken,
 } from "../../core/payments/cashu";
+import {
+  isGeoChannel,
+  type GeoParticipant,
+} from "../../services/geohash-channel-service";
+import { hasLocationPermission } from "../../services/location-service";
 import { getMeshService } from "../../services/mesh-service";
 import { showAlert } from "../../store/alert-store";
 import {
@@ -53,6 +64,8 @@ import {
   type ChatAttachment,
   type ChatMessage,
 } from "../../store/chat-store";
+import { useContactsStore } from "../../store/contacts-store";
+import { useGroupStore } from "../../store/group-store";
 import { usePeerStore } from "../../store/peer-store";
 import {
   UPLOAD_QUALITY_VALUES,
@@ -72,6 +85,7 @@ import {
   Spacing,
   useThemeColors,
 } from "../../ui/theme";
+import { channelInviteLink } from "../../utils/deep-link";
 import { resolveDisplayName } from "../../utils/display-name";
 import { peerIDToUsername } from "../../utils/username";
 import ChannelInfoSheet from "./channel-info-sheet";
@@ -79,6 +93,8 @@ import ContactInfoSheet from "./contact-info-sheet";
 import ForwardSheet from "./forward-sheet";
 import MessageActionSheet from "./message-action-sheet";
 import MessageBubble from "./message-bubble";
+import MessageInfoSheet from "./message-info-sheet";
+import { NoticesSheet } from "./notices-sheet";
 
 type AttachAction = "camera" | "library" | "document" | "voice" | "ecash";
 
@@ -137,7 +153,7 @@ interface Props {
   // re-scrolls (an id-only dependency wouldn't re-fire on an unchanged id).
   targetMessageId?: string;
   targetMessageTrigger?: number;
-  // Ask the parent to switch the active chat to this channel — used both
+  // Ask the parent to switch the active chat to this channel, used both
   // right after forwarding a message (land where it went, not silently stay
   // put) and when picking "Message" on a channel sender's profile sheet
   // (jump straight into the DM with them).
@@ -147,6 +163,10 @@ interface Props {
 // Broadcast wire format for a screenshot notice, matching bitchat's action
 // message convention so both platforms recognize it and render it inline
 // instead of as a regular chat bubble.
+// How long a just-sent message is held before it actually transmits, giving a
+// window to Undo. Short enough not to read as lag, long enough to react.
+const UNDO_WINDOW_MS = 5000;
+
 function screenshotNoticeText(nickname: string): string {
   return `* ${nickname} took a screenshot *`;
 }
@@ -199,6 +219,89 @@ const videoAttachmentStyles = StyleSheet.create({
     backgroundColor: "#000",
   },
 });
+
+// Undo Send pill: shown just above the compose bar while a message is held in
+// its brief send window. A thin line drains left-to-right over the window as a
+// countdown; tapping Undo pulls the message back into the input.
+function UndoSendPill({
+  onUndo,
+  Colors,
+}: {
+  onUndo: () => void;
+  Colors: ReturnType<typeof useThemeColors>;
+}): React.JSX.Element {
+  const styles = useMemo(() => createUndoStyles(Colors), [Colors]);
+  const progress = useSharedValue(1);
+  useEffect(() => {
+    progress.value = 1;
+    progress.value = withTiming(0, {
+      duration: UNDO_WINDOW_MS,
+      easing: Easing.linear,
+    });
+  }, [progress]);
+  const fillStyle = useAnimatedStyle(() => ({
+    width: `${progress.value * 100}%`,
+  }));
+
+  return (
+    <View style={styles.pill}>
+      <Feather name="clock" size={14} color={Colors.textSecondary} />
+      <Text style={styles.label}>Sending…</Text>
+      <Pressable
+        onPress={onUndo}
+        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+        accessibilityRole="button"
+        accessibilityLabel="Undo send"
+      >
+        <Text style={styles.undo}>Undo</Text>
+      </Pressable>
+      <View style={styles.track}>
+        <Animated.View style={[styles.fill, fillStyle]} />
+      </View>
+    </View>
+  );
+}
+
+function createUndoStyles(Colors: ReturnType<typeof useThemeColors>) {
+  return StyleSheet.create({
+    pill: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: Spacing.sm,
+      marginHorizontal: Spacing.base,
+      marginBottom: Spacing.sm,
+      paddingHorizontal: Spacing.md,
+      paddingVertical: Spacing.sm,
+      borderRadius: Radius.full,
+      backgroundColor: Colors.surface,
+      overflow: "hidden",
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: Colors.border,
+    },
+    label: {
+      flex: 1,
+      fontSize: FontSize.sm,
+      color: Colors.textSecondary,
+    },
+    undo: {
+      fontSize: FontSize.sm,
+      fontWeight: FontWeight.semibold,
+      color: Colors.accent,
+    },
+    // Countdown line pinned to the bottom edge, draining as the window elapses.
+    track: {
+      position: "absolute",
+      left: 0,
+      right: 0,
+      bottom: 0,
+      height: 2,
+    },
+    fill: {
+      height: 2,
+      backgroundColor: Colors.accent,
+    },
+  });
+}
 
 // Progress cards for the attachments currently moving through this thread.
 // Files crawl over Bluetooth (~22 KB/s), so a large one can take many minutes;
@@ -516,7 +619,8 @@ export default function MessageThread({
 }: Props): React.JSX.Element {
   const Colors = useThemeColors();
   const styles = useMemo(() => createStyles(Colors), [Colors]);
-  const { messages, addMessage, addChannel, toggleStar } = useChatStore();
+  const { messages, addMessage, addChannel, toggleStar, togglePinMessage } =
+    useChatStore();
   // Live peer count, real data from BLE discovery, not a stub.
   // Subscribe to the stable peer map and derive the reachable list locally.
   const peers = usePeerStore((s) => s.peers);
@@ -530,11 +634,78 @@ export default function MessageThread({
     return [...peers.values()].filter((peer) => peer.lastSeenMs >= cutoff);
   }, [peerClock, peers]);
   const peerCount = onlinePeers.length;
+
+  // Geohash channels live over Nostr, keyed by the user's location cell. The
+  // location prompt itself happens once at mesh startup (alongside the Bluetooth
+  // permissions); here we just re-resolve the cell when the channel opens, in
+  // case the user has moved. No-op without permission.
+  const isGeo = isGeoChannel(channel);
+  // Private group channels (`group:<id>`): messages are ChaCha20-Poly1305
+  // sealed under the group's epoch key and broadcast as 0x25, not plaintext.
+  const isGroup = channel.startsWith("group:");
+  const groupName = useGroupStore((s) => s.nameForChannel(channel));
+  useEffect(() => {
+    if (!isGeo) return;
+    let cancelled = false;
+    void (async () => {
+      if (!cancelled && (await hasLocationPermission())) {
+        getMeshService()?.refreshGeoChannels();
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [isGeo, channel]);
+
+  // Live participant list for a geohash channel, from Nostr presence + recent
+  // posts in the cell. Polled since it updates off a network subscription, not a
+  // store. Drives the member pill and members sheet; #bluetooth and private
+  // channels have no such roster and fall back to nearby BLE peers.
+  const [geoMembers, setGeoMembers] = useState<GeoParticipant[]>([]);
+  useEffect(() => {
+    // Only polled for geo channels; geoMembers is never read otherwise, so a
+    // stale value on a non-geo channel is harmless and needs no reset.
+    if (!isGeo) return;
+    function sample(): void {
+      const list = getMeshService()?.getGeoParticipants(channel) ?? [];
+      setGeoMembers((prev) =>
+        prev.length === list.length &&
+        prev.every((p, i) => p.pubkey === list[i]?.pubkey)
+          ? prev
+          : list,
+      );
+    }
+    sample();
+    const timer = setInterval(sample, 5000);
+    return () => clearInterval(timer);
+  }, [isGeo, channel]);
+
+  // Member count and roster resolve by transport: a geohash channel counts
+  // people active in its cell over the internet; every other channel counts
+  // nearby BLE peers.
+  const memberCount = isGroup
+    ? (getMeshService()?.groupMemberCount(channel.slice("group:".length)) ?? 0)
+    : isGeo
+      ? geoMembers.length
+      : peerCount;
+
   const audioRecorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
   const recorderState = useAudioRecorderState(audioRecorder);
   const dmPeerID = channel.startsWith("dm:") ? channel.slice(3) : null;
   const isDMPeerOnline =
     dmPeerID !== null && onlinePeers.some((p) => p.peerID === dmPeerID);
+  // Whether this DM can still be delivered when the peer is out of Bluetooth
+  // range: either they are a Nostr-only correspondent, or we hold their durable
+  // Nostr pubkey (from a v2 QR card or a past ANNOUNCE). Drives honest banner
+  // copy: an offline peer we can still reach over the internet must not be shown
+  // the same "we'll deliver when they're nearby" line as an unreachable one.
+  const dmContactNostr = useContactsStore((s) =>
+    dmPeerID !== null ? s.contacts[dmPeerID]?.nostrPubkeyHex : undefined,
+  );
+  const dmInternetReachable =
+    dmPeerID !== null &&
+    (dmPeerID.startsWith("nostr_") ||
+      (dmContactNostr !== undefined && dmContactNostr.length > 0));
   const [draft, setDraft] = useState("");
   const [isPTTActive, setIsPTTActive] = useState(false);
   const isRecording = recorderState.isRecording;
@@ -554,7 +725,7 @@ export default function MessageThread({
   const [ecashMemo, setEcashMemo] = useState("");
   const [showChannelInfo, setShowChannelInfo] = useState(false);
   const [showDMInfo, setShowDMInfo] = useState(false);
-  // Channel-message sender profile sheet — tap a message's avatar/name to
+  // Channel-message sender profile sheet: tap a message's avatar/name to
   // see who they are and message them, same as tapping a peer on the Mesh
   // tab. Not used in a DM thread (only one other participant there,
   // already reachable via the header).
@@ -565,9 +736,11 @@ export default function MessageThread({
     // that returns to the list (still open behind it) instead of dismissing.
     fromMembers?: boolean;
   } | null>(null);
-  // Channel members list — currently-reachable peers, tap one to open the
+  // Channel members list: currently-reachable peers, tap one to open the
   // same profile sheet as tapping their avatar on a message.
   const [showMembersList, setShowMembersList] = useState(false);
+  // Notices (bulletin board) sheet for this channel.
+  const [showNotices, setShowNotices] = useState(false);
   const [showScreenshotWarning, setShowScreenshotWarning] = useState(false);
   // Brief delivery status hint shown below the compose bar for DMs.
   // "queued" = no route available; cleared after 4 seconds.
@@ -576,7 +749,20 @@ export default function MessageThread({
   const listRef = useRef<FlatList<ChatMessage>>(null);
   // Long-press action sheet target.
   const [actionSheet, setActionSheet] = useState<ChatMessage | null>(null);
+  // Id of the message whose delivery-info sheet is open (null when closed).
+  // Kept as an id, not a snapshot, so the sheet updates live as delivered/read
+  // receipts arrive while it is on screen.
+  const [infoMessageId, setInfoMessageId] = useState<string | null>(null);
+  // Undo Send: a just-sent message is held briefly before it actually
+  // transmits, so it can be recalled. The ref holds the live pending record
+  // (and its timer) for commit/flush; the state drives the Undo pill.
+  const pendingSendRef = useRef<{
+    msg: ChatMessage;
+    timer: ReturnType<typeof setTimeout>;
+  } | null>(null);
+  const [heldMessage, setHeldMessage] = useState<ChatMessage | null>(null);
   const [forwardSource, setForwardSource] = useState<ChatMessage | null>(null);
+  const [showPinned, setShowPinned] = useState(false);
   // Set right after scrolling to a search result, cleared after a brief
   // flash. Not persisted (unlike isStarred), purely a transient UI cue.
   const [highlightedMessageId, setHighlightedMessageId] = useState<
@@ -594,13 +780,46 @@ export default function MessageThread({
     };
   }, [audioRecorder]);
 
-  const msgs = messages[channel] ?? [];
+  const msgs = useMemo(() => messages[channel] ?? [], [messages, channel]);
+  // Newest pinned first, so the pinned sheet reads like a recent-first list.
+  const pinnedMessages = useMemo(
+    () => msgs.filter((m) => m.isPinned).reverse(),
+    [msgs],
+  );
   const isDM = channel.startsWith("dm:");
 
-  // Scroll to and flash a message opened from a search result. Guarded by
-  // the same fire-once-per-increment counter pattern used elsewhere in this
-  // app (e.g. ChannelList's join-modal trigger) so remounts/re-renders
-  // don't re-fire it, but re-tapping the same search result does.
+  // Send read receipts for this DM whenever it is open and its messages change:
+  // covers both opening the thread and a new message arriving while it is on
+  // screen. Best-effort and no-op for channels (no per-recipient receipts).
+  useEffect(() => {
+    if (isDM) getMeshService()?.sendReadReceipts(channel.slice(3));
+  }, [isDM, channel, msgs]);
+
+  // Scroll to a message and briefly flash it. Shared by search-result jumps
+  // and the pinned-messages sheet so both behave identically.
+  const scrollToMessage = useCallback(
+    (id: string) => {
+      const index = msgs.findIndex((m) => m.id === id);
+      if (index === -1) return;
+      listRef.current?.scrollToIndex({
+        index,
+        animated: true,
+        viewPosition: 0.3,
+      });
+      setHighlightedMessageId(id);
+      if (highlightTimerRef.current) clearTimeout(highlightTimerRef.current);
+      highlightTimerRef.current = setTimeout(
+        () => setHighlightedMessageId(null),
+        1500,
+      );
+    },
+    [msgs],
+  );
+
+  // Scroll to a message opened from a search result. Guarded by the same
+  // fire-once-per-increment counter pattern used elsewhere in this app (e.g.
+  // ChannelList's join-modal trigger) so remounts/re-renders don't re-fire it,
+  // but re-tapping the same search result does.
   useEffect(() => {
     if (
       targetMessageTrigger === undefined ||
@@ -610,26 +829,8 @@ export default function MessageThread({
       return;
     }
     prevScrollTrigger.current = targetMessageTrigger;
-
-    const index = msgs.findIndex((m) => m.id === targetMessageId);
-    if (index === -1) return;
-
-    listRef.current?.scrollToIndex({
-      index,
-      animated: true,
-      viewPosition: 0.3,
-    });
-    // Flash the message a search result pointed at. Driven by an incrementing
-    // trigger prop, so this runs once per result tap, an imperative scroll-and-
-    // highlight command from the parent, not state derived from props.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setHighlightedMessageId(targetMessageId);
-    if (highlightTimerRef.current) clearTimeout(highlightTimerRef.current);
-    highlightTimerRef.current = setTimeout(
-      () => setHighlightedMessageId(null),
-      1500,
-    );
-  }, [targetMessageTrigger, targetMessageId, msgs]);
+    scrollToMessage(targetMessageId);
+  }, [targetMessageTrigger, targetMessageId, scrollToMessage]);
 
   useEffect(() => {
     return () => {
@@ -684,6 +885,14 @@ export default function MessageThread({
       if (service) {
         if (isDM) {
           service.sendDm(channel.slice(3), text);
+        } else if (isGroup) {
+          // Seal the notice under the group key rather than leaking it as a
+          // plaintext channel broadcast to everyone in range.
+          service.sendGroupMessage(
+            channel.slice("group:".length),
+            text,
+            `${localPeerID}-${Date.now()}`,
+          );
         } else {
           service.sendChannelMessage(channel, text);
         }
@@ -701,11 +910,82 @@ export default function MessageThread({
       setShowScreenshotWarning(true);
     });
     return () => subscription.remove();
-  }, [channel, isDM, localNickname, localPeerID, addMessage]);
+  }, [channel, isDM, isGroup, localNickname, localPeerID, addMessage]);
 
-  const handleSend = useCallback(() => {
+  // The real transmission, run when the hold window elapses or is committed.
+  // Reads everything from the message and from live getters, so it is safe to
+  // call from a stale closure (a fired timer, or the unmount flush).
+  function transmit(msg: ChatMessage): void {
+    const setStatus = useChatStore.getState().setMessageStatus;
+    const msgChannel = msg.channel;
+    const service = getMeshService();
+    if (!service) {
+      setStatus(msgChannel, msg.id, "failed");
+      return;
+    }
+    if (msgChannel.startsWith("dm:")) {
+      const dmPeerID = msgChannel.slice(3);
+      // Sending to someone saves them as a contact too, so replying to a DM
+      // that started inbound keeps them, not just DMs you initiated.
+      useContactsStore
+        .getState()
+        .saveIfAbsent(
+          dmPeerID,
+          usePeerStore.getState().getPeer(dmPeerID)?.nickname ??
+            resolveDisplayName(dmPeerID),
+          usePeerStore.getState().getPeer(dmPeerID)?.noisePubKeyHex ?? "",
+        );
+      const result = service.sendDm(dmPeerID, msg.text, msg.id);
+      // "sent" upgrades to delivered/read via receipts; "needs-courier" is
+      // handed to a courier, hence "carried".
+      setStatus(
+        msgChannel,
+        msg.id,
+        result === "needs-courier" ? "carried" : "sent",
+      );
+      if (result === "needs-courier") showQueuedStatus();
+    } else if (msgChannel.startsWith("group:")) {
+      // Private group: seal under the epoch key and broadcast (0x25).
+      const ok = service.sendGroupMessage(
+        msgChannel.slice("group:".length),
+        msg.text,
+        msg.id,
+      );
+      setStatus(msgChannel, msg.id, ok ? "sent" : "failed");
+      if (!ok) showNoReachStatus();
+    } else {
+      // A channel broadcast that reaches no link and no Nostr cell reaches no
+      // one; say so rather than rendering a confident sent bubble.
+      const sent = service.sendChannelMessage(msgChannel, msg.text);
+      const reached = sent.bleLinks > 0 || sent.nostr;
+      setStatus(msgChannel, msg.id, reached ? "sent" : "failed");
+      if (!reached) showNoReachStatus();
+    }
+  }
+
+  // Latest transmit, so the unmount flush uses current closures without
+  // re-running its effect on every render.
+  const transmitRef = useRef(transmit);
+  useEffect(() => {
+    transmitRef.current = transmit;
+  });
+
+  // Commit the held message now: its timer elapsed, a new send started, or the
+  // thread is closing.
+  function commitHeld(): void {
+    const pending = pendingSendRef.current;
+    if (!pending) return;
+    clearTimeout(pending.timer);
+    pendingSendRef.current = null;
+    setHeldMessage(null);
+    transmit(pending.msg);
+  }
+
+  function handleSend(): void {
     const text = draft.trim();
     if (!text) return;
+    // At most one message is ever held: commit the previous one first.
+    commitHeld();
 
     const msg: ChatMessage = {
       id: `${localPeerID}-${Date.now()}-${Math.random().toString(36).slice(2)}`,
@@ -715,28 +995,46 @@ export default function MessageThread({
       text,
       timestampMs: Date.now(),
       isMine: true,
+      status: "sending",
     };
+    // Sending is what creates the conversation. Inbound messages already call
+    // addChannel before addMessage; without the same call here, a thread you
+    // started yourself (tapping a member in a channel, say) held its messages
+    // but never appeared in the DM list, which renders from `channels`.
+    // Idempotent, so re-sending in an existing thread is a no-op.
+    useChatStore.getState().addChannel(channel);
     addMessage(msg);
     setDraft("");
 
-    // Broadcast over BLE mesh (channel) or route as DM.
-    const service = getMeshService();
-    if (service) {
-      if (isDM) {
-        // Pass the message id so a message that can't go out now is queued
-        // against this exact bubble and retried when the peer is reachable.
-        const result = service.sendDm(channel.slice(3), text, msg.id);
-        if (result === "needs-courier") showQueuedStatus();
-      } else {
-        // A channel broadcast with nobody connected and no Nostr cell reaches
-        // no one, it used to render as a normal sent bubble regardless. Say so
-        // instead, since the user can act on it (move closer, enable location).
-        const sent = service.sendChannelMessage(channel, text);
-        if (sent.bleLinks === 0 && !sent.nostr) showNoReachStatus();
+    const timer = setTimeout(commitHeld, UNDO_WINDOW_MS);
+    pendingSendRef.current = { msg, timer };
+    setHeldMessage(msg);
+  }
+
+  // Pull the held message back before it transmits, returning its text to the
+  // input so it can be edited or discarded.
+  function undoSend(): void {
+    const pending = pendingSendRef.current;
+    if (!pending) return;
+    clearTimeout(pending.timer);
+    pendingSendRef.current = null;
+    setHeldMessage(null);
+    useChatStore.getState().removeMessage(pending.msg.channel, pending.msg.id);
+    setDraft(pending.msg.text);
+  }
+
+  // Flush a held message when the thread unmounts, so leaving a chat still sends
+  // what you typed and never leaves an orphaned timer.
+  useEffect(() => {
+    return () => {
+      const pending = pendingSendRef.current;
+      if (pending) {
+        clearTimeout(pending.timer);
+        pendingSendRef.current = null;
+        transmitRef.current(pending.msg);
       }
-    }
-    // showQueuedStatus is defined in the same scope and is stable across renders.
-  }, [draft, channel, localPeerID, localNickname, addMessage, isDM]);
+    };
+  }, []);
 
   function handleAttach(): void {
     setShowAttachMenu(true);
@@ -944,7 +1242,17 @@ export default function MessageThread({
 
   function handleMessageSender(): void {
     if (!senderInfoTarget) return;
-    const dmChannel = `dm:${senderInfoTarget.peerID}`;
+    const { peerID, nickname } = senderInfoTarget;
+    // Messaging someone from a channel saves them as a contact, the same as
+    // messaging a peer from the Mesh tab. Unverified until a QR card confirms.
+    useContactsStore
+      .getState()
+      .saveIfAbsent(
+        peerID,
+        nickname,
+        usePeerStore.getState().getPeer(peerID)?.noisePubKeyHex ?? "",
+      );
+    const dmChannel = `dm:${peerID}`;
     addChannel(dmChannel);
     setSenderInfoTarget(null);
     // Also dismiss the members list, if it was left open behind this sheet.
@@ -1081,8 +1389,14 @@ export default function MessageThread({
   }
 
   function handleInvite(): void {
+    // A tappable deep link that opens Airhop and joins this exact channel. For a
+    // private channel the link carries its encryption key, so the invitee can
+    // both join and read; a public channel's link has no key.
+    const chat = useChatStore.getState();
+    const key = chat.channelKeys[channel];
+    const overNostr = chat.channelReach[channel] === "ble+nostr";
     void Share.share({
-      message: `Join me in ${channel} on Airhop - offline-first, private mesh messaging.`,
+      message: `Join me in ${channel} on Airhop - offline-first, private mesh messaging.\n\n${channelInviteLink(channel, key, overNostr)}`,
     });
   }
 
@@ -1339,7 +1653,9 @@ export default function MessageThread({
 
   const displayName = channel.startsWith("dm:")
     ? resolveDisplayName(channel.slice(3))
-    : channel;
+    : isGroup
+      ? (groupName ?? "Group")
+      : channel;
 
   return (
     <KeyboardAvoidingView
@@ -1369,34 +1685,47 @@ export default function MessageThread({
             isDM ? `View info for ${displayName}` : `View info for ${channel}`
           }
         >
-          <Text style={styles.channelTitle} numberOfLines={1}>
-            {isDM ? displayName : channel}
-          </Text>
-          {!isDM && (
-            <Text style={styles.headerSubtitle} numberOfLines={1}>
-              {peerCount > 0 ? `${peerCount} nearby` : "Public channel"}
-            </Text>
+          {isDM ? (
+            // DM: avatar + name, left-aligned right after the back arrow.
+            <View style={styles.headerDmId}>
+              <Avatar
+                username={resolveDisplayName(channel.slice(3))}
+                peerID={channel.slice(3)}
+                size={28}
+                presence={isDMPeerOnline ? "online" : "offline"}
+              />
+              <Text style={styles.channelTitle} numberOfLines={1}>
+                {displayName}
+              </Text>
+            </View>
+          ) : (
+            <>
+              <Text style={styles.channelTitle} numberOfLines={1}>
+                {isGroup ? displayName : channel}
+              </Text>
+              <Text style={styles.headerSubtitle} numberOfLines={1}>
+                {isGroup
+                  ? `${memberCount} member${memberCount !== 1 ? "s" : ""}`
+                  : memberCount > 0
+                    ? `${memberCount} ${isGeo ? "active" : "nearby"}`
+                    : "Public channel"}
+              </Text>
+            </>
           )}
         </Pressable>
 
         <View style={styles.headerRight}>
-          {isDM ? (
-            <Avatar
-              username={resolveDisplayName(channel.slice(3))}
-              peerID={channel.slice(3)}
-              size={28}
-            />
-          ) : (
+          {!isDM && !isGroup && (
             <>
               <Pressable
                 style={styles.memberCountBtn}
                 onPress={() => setShowMembersList(true)}
                 hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                 accessibilityRole="button"
-                accessibilityLabel={`${peerCount} member${peerCount !== 1 ? "s" : ""} nearby`}
+                accessibilityLabel={`${memberCount} member${memberCount !== 1 ? "s" : ""} ${isGeo ? "active" : "nearby"}`}
               >
                 <Feather name="users" size={14} color={Colors.textSecondary} />
-                <Text style={styles.memberCountText}>{peerCount}</Text>
+                <Text style={styles.memberCountText}>{memberCount}</Text>
               </Pressable>
               <Pressable
                 onPress={handleInvite}
@@ -1410,17 +1739,58 @@ export default function MessageThread({
                   color={Colors.textSecondary}
                 />
               </Pressable>
+              <Pressable
+                onPress={() => setShowNotices(true)}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                accessibilityRole="button"
+                accessibilityLabel="Notices for this channel"
+              >
+                <MaterialCommunityIcons
+                  name="bulletin-board"
+                  size={18}
+                  color={Colors.textSecondary}
+                />
+              </Pressable>
             </>
           )}
+          <Pressable
+            onPress={() => setShowPinned(true)}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            accessibilityRole="button"
+            accessibilityLabel={
+              pinnedMessages.length > 0
+                ? `${pinnedMessages.length} pinned message${pinnedMessages.length !== 1 ? "s" : ""}`
+                : "Pinned messages"
+            }
+          >
+            <MaterialCommunityIcons
+              name="pin"
+              size={18}
+              color={
+                pinnedMessages.length > 0
+                  ? Colors.textPrimary
+                  : Colors.textSecondary
+              }
+            />
+          </Pressable>
         </View>
       </View>
 
-      {/* Peer offline notice: shown in DM threads when the peer has not been seen recently. */}
+      {/* Peer offline notice: shown in DM threads when the peer is not in
+          Bluetooth range. The copy is transport-honest: if we can still reach
+          them over the internet, say so, rather than implying delivery waits on
+          them coming back into range. */}
       {isDM && !isDMPeerOnline && (
         <View style={styles.peerOfflineBanner}>
-          <Feather name="wifi-off" size={12} color={Colors.textMuted} />
+          <Feather
+            name={dmInternetReachable ? "globe" : "wifi-off"}
+            size={12}
+            color={Colors.textMuted}
+          />
           <Text style={styles.peerOfflineBannerText}>
-            Peer not in range · messages will be delivered when nearby
+            {dmInternetReachable
+              ? "Not in Bluetooth range. Delivering over the internet."
+              : "Not nearby. We'll deliver when they're back in range or online."}
           </Text>
         </View>
       )}
@@ -1550,7 +1920,9 @@ export default function MessageThread({
         <View style={styles.dmStatusBar}>
           <Feather name="clock" size={12} color={Colors.textMuted} />
           <Text style={styles.dmStatusText}>
-            Peer not reachable - message queued for delivery
+            {
+              "Can't reach them right now. Message will send when a route is available."
+            }
           </Text>
         </View>
       )}
@@ -1597,6 +1969,9 @@ export default function MessageThread({
       {/* Live attachment transfers for this thread: one card each, sending or
           receiving, with percent, speed and time remaining. */}
       <TransferProgressList channel={channel} />
+
+      {/* Undo Send window for the message currently being held. */}
+      {heldMessage && <UndoSendPill onUndo={undoSend} Colors={Colors} />}
 
       {/* Compose bar */}
       <View style={styles.composeBar}>
@@ -1728,6 +2103,13 @@ export default function MessageThread({
                 </React.Fragment>
               ),
             )}
+            <View style={styles.attachNote}>
+              <Feather name="bluetooth" size={12} color={Colors.textMuted} />
+              <Text style={styles.attachNoteText}>
+                Files send over Bluetooth range only. Text and payments reach
+                internet contacts; attachments do not.
+              </Text>
+            </View>
             <Pressable
               style={styles.attachCancel}
               onPress={() => setShowAttachMenu(false)}
@@ -1826,6 +2208,15 @@ export default function MessageThread({
         />
       )}
 
+      {/* Notices: the channel's signed bulletin board (mesh + this cell). */}
+      {!isDM && (
+        <NoticesSheet
+          visible={showNotices}
+          onClose={() => setShowNotices(false)}
+          channel={channel}
+        />
+      )}
+
       {/* Members list: currently-reachable peers, tap the header count. */}
       {!isDM && (
         <Modal
@@ -1842,9 +2233,62 @@ export default function MessageThread({
             <View style={styles.membersSheet}>
               <View style={styles.handle} />
               <Text style={styles.membersTitle}>
-                {peerCount} member{peerCount !== 1 ? "s" : ""}
+                {memberCount} member{memberCount !== 1 ? "s" : ""}
               </Text>
-              {onlinePeers.length === 0 ? (
+              {isGeo ? (
+                // Geohash channel: participants are Nostr pseudonyms scoped to
+                // this cell, not BLE peers, so they carry no openable profile.
+                geoMembers.length === 0 ? (
+                  <Text style={styles.membersEmpty}>
+                    No one is active over the internet right now.
+                  </Text>
+                ) : (
+                  <ScrollView
+                    style={styles.membersList}
+                    showsVerticalScrollIndicator={false}
+                  >
+                    {geoMembers.map((m) => (
+                      <Pressable
+                        key={m.pubkey}
+                        style={styles.memberRow}
+                        onPress={() => {
+                          // Open an end-to-end encrypted DM with this cell
+                          // participant, from our per-cell identity.
+                          getMeshService()?.openGeoDm(channel, m.pubkey);
+                          setShowMembersList(false);
+                          onNavigateToChannel(`dm:nostr_${m.pubkey}`);
+                        }}
+                        accessibilityRole="button"
+                        accessibilityLabel={`Message ${m.nickname}`}
+                      >
+                        <Avatar
+                          username={m.nickname}
+                          peerID={m.pubkey}
+                          size={40}
+                        />
+                        <View style={styles.memberRowInfo}>
+                          <Text style={styles.memberRowName} numberOfLines={1}>
+                            {m.nickname}
+                          </Text>
+                          <View style={styles.memberRowStatus}>
+                            <View style={styles.memberRowDot} />
+                            <Text style={styles.memberRowStatusText}>
+                              Active
+                            </Text>
+                          </View>
+                        </View>
+                        <View style={styles.memberRowAction}>
+                          <Feather
+                            name="message-circle"
+                            size={17}
+                            color={Colors.textSecondary}
+                          />
+                        </View>
+                      </Pressable>
+                    ))}
+                  </ScrollView>
+                )
+              ) : onlinePeers.length === 0 ? (
                 <Text style={styles.membersEmpty}>
                   No one else is currently in range.
                 </Text>
@@ -1885,11 +2329,13 @@ export default function MessageThread({
                           </Text>
                         </View>
                       </View>
-                      <Feather
-                        name="message-circle"
-                        size={16}
-                        color={Colors.textMuted}
-                      />
+                      <View style={styles.memberRowAction}>
+                        <Feather
+                          name="message-circle"
+                          size={17}
+                          color={Colors.textSecondary}
+                        />
+                      </View>
                     </Pressable>
                   ))}
                 </ScrollView>
@@ -2015,9 +2461,23 @@ export default function MessageThread({
           actionSheet &&
           void Clipboard.setStringAsync(actionSheet.text).catch(() => {})
         }
+        onTogglePin={() =>
+          actionSheet && togglePinMessage(actionSheet.channel, actionSheet.id)
+        }
         onToggleStar={() =>
           actionSheet && toggleStar(actionSheet.channel, actionSheet.id)
         }
+        onInfo={() => {
+          // Same close-then-open handoff as Forward, so the two sheets don't
+          // fight for the screen.
+          const target = actionSheet;
+          if (target) setTimeout(() => setInfoMessageId(target.id), 250);
+        }}
+      />
+
+      <MessageInfoSheet
+        message={msgs.find((m) => m.id === infoMessageId) ?? null}
+        onClose={() => setInfoMessageId(null)}
       />
 
       {/* Forward target picker */}
@@ -2032,8 +2492,75 @@ export default function MessageThread({
           }
         }}
       />
+
+      {/* Pinned messages: tap one to jump to it in the thread. */}
+      <Modal
+        visible={showPinned}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowPinned(false)}
+      >
+        <View style={styles.membersOverlay}>
+          <Pressable
+            style={StyleSheet.absoluteFill}
+            onPress={() => setShowPinned(false)}
+          />
+          <View style={styles.membersSheet}>
+            <View style={styles.handle} />
+            <Text style={styles.membersTitle}>Pinned messages</Text>
+            {pinnedMessages.length === 0 ? (
+              <Text style={styles.membersEmpty}>
+                No pinned messages. Long-press a message and choose Pin.
+              </Text>
+            ) : (
+              <ScrollView
+                style={styles.membersList}
+                showsVerticalScrollIndicator={false}
+              >
+                {pinnedMessages.map((m) => (
+                  <Pressable
+                    key={m.id}
+                    style={styles.pinnedRow}
+                    onPress={() => {
+                      setShowPinned(false);
+                      scrollToMessage(m.id);
+                    }}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Go to pinned message from ${m.isMine ? "you" : m.senderNickname}`}
+                  >
+                    <MaterialCommunityIcons
+                      name="pin"
+                      size={16}
+                      color={Colors.textMuted}
+                    />
+                    <View style={styles.pinnedBody}>
+                      <Text style={styles.pinnedMeta} numberOfLines={1}>
+                        {m.isMine ? "You" : m.senderNickname} ·{" "}
+                        {formatPinnedTime(m.timestampMs)}
+                      </Text>
+                      <Text style={styles.pinnedText} numberOfLines={2}>
+                        {m.text.trim().length > 0 ? m.text : "Attachment"}
+                      </Text>
+                    </View>
+                  </Pressable>
+                ))}
+              </ScrollView>
+            )}
+          </View>
+        </View>
+      </Modal>
     </KeyboardAvoidingView>
   );
+}
+
+// Compact "Jul 23, 2:48 PM" stamp for the pinned-messages list.
+function formatPinnedTime(ms: number): string {
+  return new Date(ms).toLocaleString([], {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
 }
 
 function createStyles(Colors: ReturnType<typeof useThemeColors>) {
@@ -2106,6 +2633,37 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       fontSize: FontSize.xs,
       fontWeight: FontWeight.semibold,
       color: Colors.textSecondary,
+    },
+    // DM header: avatar + name row, left-aligned after the back arrow.
+    headerDmId: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: Spacing.sm,
+    },
+    // Pinned-messages sheet rows.
+    pinnedRow: {
+      flexDirection: "row",
+      alignItems: "flex-start",
+      gap: Spacing.md,
+      paddingVertical: Spacing.md,
+      paddingHorizontal: Spacing.sm,
+      borderRadius: Radius.md,
+      backgroundColor: Colors.surfaceRaised,
+      marginBottom: Spacing.xs,
+    },
+    pinnedBody: {
+      flex: 1,
+      gap: 2,
+    },
+    pinnedMeta: {
+      fontSize: FontSize.xs,
+      fontWeight: FontWeight.semibold,
+      color: Colors.textSecondary,
+    },
+    pinnedText: {
+      fontSize: FontSize.sm,
+      color: Colors.textPrimary,
+      lineHeight: FontSize.sm * 1.4,
     },
     // Messages
     list: {
@@ -2312,6 +2870,19 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       height: StyleSheet.hairlineWidth,
       backgroundColor: Colors.border,
       marginLeft: 40 + Spacing.base + Spacing.sm,
+    },
+    attachNote: {
+      flexDirection: "row",
+      alignItems: "flex-start",
+      gap: Spacing.xs,
+      paddingHorizontal: Spacing.xs,
+      paddingTop: Spacing.md,
+    },
+    attachNoteText: {
+      flex: 1,
+      fontSize: FontSize.xs,
+      lineHeight: 16,
+      color: Colors.textMuted,
     },
     attachCancel: {
       minHeight: 50,
@@ -2667,7 +3238,7 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       borderTopWidth: StyleSheet.hairlineWidth,
       borderTopColor: Colors.border,
     },
-    // Channel sender profile sheet's single action — solid pill, same
+    // Channel sender profile sheet's single action: solid pill, same
     // primary-button shape used everywhere else this session.
     senderInfoMessageBtn: {
       width: "100%",
@@ -2745,6 +3316,17 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
     memberRowStatusText: {
       fontSize: FontSize.xs,
       color: Colors.textMuted,
+    },
+    // Trailing "message this person" affordance on a member row. A bare glyph
+    // read as decoration at 16px; the tinted circle makes it a target and
+    // matches the rounded surfaces used elsewhere in the sheets.
+    memberRowAction: {
+      width: 34,
+      height: 34,
+      borderRadius: Radius.full,
+      backgroundColor: Colors.surfaceRaised,
+      alignItems: "center",
+      justifyContent: "center",
     },
     // Cashu payment cards rendered inside message bubbles. Deliberately distinct
     // from grey file attachments: an accent-tinted card with a hero amount, so

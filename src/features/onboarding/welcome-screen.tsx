@@ -4,7 +4,14 @@
 
 import Feather from "@expo/vector-icons/Feather";
 import React, { useMemo, useState } from "react";
-import { Linking, Pressable, StyleSheet, Text, View } from "react-native";
+import {
+  Linking,
+  Pressable,
+  StyleSheet,
+  Text,
+  useWindowDimensions,
+  View,
+} from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import PrimaryButton from "../../ui/components/primary-button";
 import {
@@ -27,9 +34,24 @@ export default function WelcomeScreen({
 }: Props): React.JSX.Element {
   const Colors = useThemeColors();
   const styles = useMemo(() => createStyles(Colors), [Colors]);
+  const { width } = useWindowDimensions();
   const [agreed, setAgreed] = useState(false);
+  // Size the bird to about half the screen width, capped, so it reads big on
+  // phones without overflowing tablets. Cell rounded to a whole pixel keeps
+  // the pixel edges crisp.
+  const birdCell = Math.max(
+    2,
+    Math.round(Math.min(width * 0.5, 240) / BIRD_PIXELS[0].length),
+  );
   return (
     <SafeAreaView style={styles.root}>
+      {/* Centered brand mark filling the space above the footer. Uses the
+          primary text color, so it is a black bird on a light background and a
+          white bird in dark mode. */}
+      <View style={styles.hero}>
+        <PixelBird color={Colors.textPrimary} cell={birdCell} />
+      </View>
+
       {/* Bottom: wordmark + tagline, left-aligned, then CTA */}
       <View style={styles.footer}>
         <View style={styles.textBlock}>
@@ -82,12 +104,58 @@ export default function WelcomeScreen({
   );
 }
 
+// The Airhop brand mark: a monochrome pixel bird, the same soaring-seabird
+// glide frame that crowns the Version screen and every app icon (a nod to the
+// release codenames, birds, alphabetical; 1.x is Albatross). Drawn as a grid
+// of square cells so it stays crisp at any size; filled cells take the passed
+// color, so it reads in both light and dark themes.
+const BIRD_PIXELS = [
+  [1, 1, 0, 0, 0, 0, 0, 0, 0, 1, 1],
+  [0, 1, 1, 0, 0, 0, 0, 0, 1, 1, 0],
+  [0, 0, 1, 1, 0, 1, 0, 1, 1, 0, 0],
+  [0, 0, 0, 1, 1, 1, 1, 1, 0, 0, 0],
+  [0, 0, 0, 0, 1, 1, 1, 0, 0, 0, 0],
+  [0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0],
+];
+
+function PixelBird({
+  color,
+  cell,
+}: {
+  color: string;
+  cell: number;
+}): React.JSX.Element {
+  return (
+    <View style={{ width: BIRD_PIXELS[0].length * cell }}>
+      {BIRD_PIXELS.map((row, y) => (
+        <View key={y} style={{ flexDirection: "row" }}>
+          {row.map((filled, x) => (
+            <View
+              key={x}
+              style={{
+                width: cell,
+                height: cell,
+                backgroundColor: filled ? color : "transparent",
+              }}
+            />
+          ))}
+        </View>
+      ))}
+    </View>
+  );
+}
+
 function createStyles(Colors: ReturnType<typeof useThemeColors>) {
   return StyleSheet.create({
     root: {
       flex: 1,
       backgroundColor: Colors.bg,
-      justifyContent: "flex-end",
+    },
+    // Fills the space above the footer and centers the brand mark in it.
+    hero: {
+      flex: 1,
+      alignItems: "center",
+      justifyContent: "center",
     },
     footer: {
       paddingHorizontal: Spacing.base,

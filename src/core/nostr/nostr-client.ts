@@ -86,33 +86,57 @@ export class NostrClient {
     return this.proxyPort;
   }
 
-  // Subscribe to events matching the given filter across all relays.
+  // Resolve an optional per-call relay override to a concrete relay list.
+  // Bare hostnames (as stored in the geo-relay directory) are normalized to
+  // wss:// URLs. An empty or all-invalid override falls back to the default
+  // pool so a caller can never accidentally publish to nothing.
+  private resolveRelays(relays?: string[]): string[] {
+    if (relays === undefined || relays.length === 0) return this.relays;
+    const normalized = relays
+      .map(normalizeRelayUrl)
+      .filter(Boolean) as string[];
+    return normalized.length > 0
+      ? [...new Set(normalized)].slice(0, MAX_RELAY_COUNT)
+      : this.relays;
+  }
+
+  // Subscribe to events matching the given filter.
+  //
+  // `relays` targets a specific relay set (e.g. the geohash-closest relays for a
+  // location channel) instead of the default DM pool. This is what makes public
+  // geohash channels interoperate with bitchat: both clients converge on the
+  // same geographically-selected relays for a cell. Omit it for DM / gift-wrap
+  // traffic, which uses the default pool.
   // Returns a closer function; call it to cancel the subscription.
   subscribe(
     filters: Filter[],
     onEvent: EventHandler,
     onEose?: EoseHandler,
+    relays?: string[],
   ): SubCloser {
+    const targets = this.resolveRelays(relays);
     // SimplePool.subscribeMany takes a single merged filter. Merge all filters
     // into one using OR semantics via the ids/kinds/authors fields approach:
     // for multiple filters we subscribe each separately and merge the closers.
     if (filters.length === 1) {
-      return this.pool.subscribeMany(this.relays, filters[0], {
+      return this.pool.subscribeMany(targets, filters[0], {
         onevent: onEvent,
         oneose: onEose,
       });
     }
     const closers = filters.map((f) =>
-      this.pool.subscribeMany(this.relays, f, { onevent: onEvent }),
+      this.pool.subscribeMany(targets, f, { onevent: onEvent }),
     );
     return {
       close: (reason?: string) => closers.forEach((c) => c.close(reason)),
     };
   }
 
-  // Publish an event to all relays. Resolves when at least one relay ACKs OK,
-  // or rejects after PUBLISH_TIMEOUT_MS with no ACK.
-  async publish(event: Event): Promise<PublishResult> {
+  // Publish an event. Resolves when at least one relay ACKs OK, or rejects after
+  // PUBLISH_TIMEOUT_MS with no ACK. `relays` targets a specific relay set (see
+  // subscribe); omit it for DM / gift-wrap traffic on the default pool.
+  async publish(event: Event, relays?: string[]): Promise<PublishResult> {
+    const targets = this.resolveRelays(relays);
     return new Promise<PublishResult>((resolve, reject) => {
       let resolved = false;
       const results: PublishResult[] = [];
@@ -129,8 +153,8 @@ export class NostrClient {
         }
       }, PUBLISH_TIMEOUT_MS);
 
-      const promises = this.pool.publish(this.relays, event);
-      this.relays.forEach((relay, i) => {
+      const promises = this.pool.publish(targets, event);
+      targets.forEach((relay, i) => {
         promises[i]
           ?.then(() => {
             results.push({ relay, ok: true });

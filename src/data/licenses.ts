@@ -200,7 +200,7 @@ const CATALOG: {
   {
     category: "Cryptography & protocol",
     description:
-      "The building blocks for encryption and messaging: key exchange, ciphers, hashing, ecash tokens, and Nostr support.",
+      "The building blocks for encryption and messaging: key exchange, ciphers, hashing, wire compression, ecash tokens, and Nostr support.",
     packages: [
       {
         name: "@cashu/cashu-ts",
@@ -226,6 +226,11 @@ const CATALOG: {
         name: "nostr-tools",
         license: "Unlicense",
         repo: "https://github.com/nbd-wtf/nostr-tools",
+      },
+      {
+        name: "pako",
+        license: "MIT AND Zlib",
+        repo: "https://github.com/nodeca/pako",
       },
     ],
   },

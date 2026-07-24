@@ -2,6 +2,7 @@
 import "react-native-get-random-values";
 
 import { Feather, MaterialCommunityIcons } from "@expo/vector-icons";
+import { bytesToHex } from "@noble/hashes/utils.js";
 import { StatusBar } from "expo-status-bar";
 import React, {
   useCallback,
@@ -13,6 +14,7 @@ import React, {
 import {
   AppState,
   BackHandler,
+  Linking,
   Pressable,
   StyleSheet,
   Text,
@@ -37,8 +39,10 @@ import {
   SafeAreaProvider,
   SafeAreaView,
 } from "react-native-safe-area-context";
+import { decodeQRContent } from "./src/core/crypto/contact-exchange";
 import type { Identity } from "./src/core/crypto/identity";
 import { loadIdentity } from "./src/core/crypto/identity";
+import { isValidChannelKey } from "./src/core/mesh/channel-crypto";
 import AiScreen from "./src/features/ai/ai-screen";
 import ChannelList from "./src/features/chat/channel-list";
 import ChatSearchResults from "./src/features/chat/chat-search-results";
@@ -53,11 +57,16 @@ import ProfileScreen from "./src/features/settings/profile-screen";
 import WalletScreen, {
   type WalletAction,
 } from "./src/features/wallet/wallet-screen";
+import {
+  hasLocationPermission,
+  requestLocationPermission,
+} from "./src/services/location-service";
 import { getMeshService, initMeshService } from "./src/services/mesh-service";
 import {
   configureNotifications,
   dismissNotificationsFor,
   handleInboundMessage,
+  requestNotificationPermission,
   setAppBadgeCount,
   setNotificationNavigator,
   setNotificationsActiveChannel,
@@ -66,6 +75,7 @@ import {
 import { useActivityStore } from "./src/store/activity-store";
 import { showAlert } from "./src/store/alert-store";
 import { subscribeInboundMessages, useChatStore } from "./src/store/chat-store";
+import { useContactsStore } from "./src/store/contacts-store";
 import { useMeshState, useMeshStateStore } from "./src/store/mesh-state-store";
 import { useSettingsStore } from "./src/store/settings-store";
 import { useTransferStore } from "./src/store/transfer-store";
@@ -82,6 +92,7 @@ import {
   useThemeColors,
 } from "./src/ui/theme";
 import { ensureBlePermissions } from "./src/utils/ble-permissions";
+import { parseAirhopLink } from "./src/utils/deep-link";
 import { messagePreviewText } from "./src/utils/message-preview";
 import { sumUnread } from "./src/utils/unread";
 import { peerIDToUsername } from "./src/utils/username";
@@ -130,6 +141,22 @@ async function startMeshWithPermissions(
     );
   }
   initMeshService(identity, nickname);
+
+  // Remaining permission prompts, sequenced one after another so the OS never
+  // shows two at once (concurrent prompts raced on a fresh install: the
+  // notification prompt got swallowed and sometimes crashed). Runs after the
+  // mesh has started so BLE is never held up waiting on any of them.
+  //   1. Location powers the geohash public channels (#block…#region): without a
+  //      position the app cannot resolve its cell, so they stay BLE-only and
+  //      never show internet participants or bitchat traffic. On Android the BLE
+  //      grant above already covers it; on iOS this is the only place it is asked.
+  //   2. Notifications, last, so it lands cleanly after the others.
+  void (async () => {
+    const granted =
+      (await hasLocationPermission()) || (await requestLocationPermission());
+    if (granted) getMeshService()?.refreshGeoChannels();
+    await requestNotificationPermission();
+  })();
 }
 
 // ---------------------------------------------------------------------------
@@ -358,6 +385,60 @@ export default function App(): React.JSX.Element {
   useEffect(() => {
     void setAppBadgeCount(chatsUnread);
   }, [chatsUnread]);
+
+  // Airhop deep links: airhop://channel/<name> and airhop://peer/<id>. Tapping a
+  // shared invite opens the app here. Joining is user-initiated (you tapped the
+  // link), so adding the channel / opening the DM is legitimate consent, not the
+  // stranger-injection the mesh guards against. Deferred until past onboarding,
+  // so a cold-start link waits for the identity to load.
+  useEffect(() => {
+    if (!appReady || onboardingStep !== null) return;
+    const handle = (url: string | null): void => {
+      if (url === null) return;
+      const link = parseAirhopLink(url);
+      if (link === null) return;
+      if (link.kind === "channel") {
+        // A private channel invite carries its E2E key; a public one does not.
+        if (link.key !== undefined && isValidChannelKey(link.key)) {
+          useChatStore
+            .getState()
+            .joinPrivateChannel(link.channel, link.key, link.overNostr);
+        } else {
+          useChatStore.getState().addChannel(link.channel);
+        }
+        openChannelRef.current(link.channel);
+      } else if (link.kind === "peer") {
+        const channel = `dm:${link.peerID}`;
+        useChatStore.getState().addChannel(channel);
+        openChannelRef.current(channel);
+      } else {
+        // A scanned contact card: verify + import the keys, then open the DM.
+        const card = decodeQRContent(link.card);
+        if (card === null) return;
+        // Reject a card whose peer ID isn't the fingerprint of its Noise key;
+        // accepting it would encrypt every DM to whoever forged the QR. Seeds
+        // the routing registry and inbound Nostr map as a side effect.
+        const accepted = getMeshService()?.addVerifiedContact(card) ?? false;
+        if (!accepted) return;
+        useContactsStore.getState().addContact({
+          peerID: card.peerID,
+          noisePubKeyHex: bytesToHex(card.noisePubKey),
+          signingPubKeyHex: bytesToHex(card.signingPubKey),
+          nickname: card.nickname,
+          addedAtMs: Date.now(),
+          source: "qr",
+          // The card carries the peer's Nostr pubkey (internet reachability).
+          nostrPubkeyHex: bytesToHex(card.nostrPubKey),
+        });
+        const channel = `dm:${card.peerID}`;
+        useChatStore.getState().addChannel(channel);
+        openChannelRef.current(channel);
+      }
+    };
+    void Linking.getInitialURL().then(handle);
+    const sub = Linking.addEventListener("url", ({ url }) => handle(url));
+    return () => sub.remove();
+  }, [appReady, onboardingStep]);
 
   function triggerWalletAction(action: WalletAction): void {
     setWalletAction(action);
@@ -994,6 +1075,12 @@ export default function App(): React.JSX.Element {
                           // Stop BLE mesh immediately so old keys are flushed from memory.
                           getMeshService()?.stop();
                           setGeneratedPeerID(FALLBACK_PEER_ID);
+                          // Reset navigation to the fresh-start landing tab.
+                          // Panic wipe is triggered from Profile, so without this
+                          // the re-onboarded app reopens on the Profile screen
+                          // instead of Mesh.
+                          setTab("mesh");
+                          setChatView({ kind: "list" });
                           setOnboardingStep("welcome");
                         }}
                       />

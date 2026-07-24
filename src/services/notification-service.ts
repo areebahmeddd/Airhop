@@ -56,9 +56,26 @@ export function setNotificationNavigator(fn: (channel: string) => void): void {
   navigate = fn;
 }
 
-// One-time setup: notification handler, Android channel, permission request, and
-// tap routing (both while running and from a cold start via a tapped
-// notification). Safe to call more than once.
+// Ask for notification permission. Kept separate from configureNotifications so
+// the prompt can be sequenced with the Bluetooth and location prompts in one
+// place (App.startMeshWithPermissions) rather than racing them, which on a fresh
+// install swallowed this prompt and could crash. Denial degrades gracefully: no
+// system notifications, but in-app badges and the foreground haptic still work.
+// Never throws: a permission-layer failure must not take down mesh startup.
+export async function requestNotificationPermission(): Promise<void> {
+  try {
+    const current = await Notifications.getPermissionsAsync();
+    if (!current.granted && current.canAskAgain) {
+      await Notifications.requestPermissionsAsync();
+    }
+  } catch {
+    // Notifications simply stay off; the app is fully usable without them.
+  }
+}
+
+// One-time setup: notification handler, Android channel, and tap routing (both
+// while running and from a cold start via a tapped notification). Does NOT ask
+// for permission, see requestNotificationPermission. Safe to call more than once.
 export async function configureNotifications(): Promise<void> {
   if (configured) return;
   configured = true;
@@ -83,13 +100,6 @@ export async function configureNotifications(): Promise<void> {
       vibrationPattern: [0, 200],
       lockscreenVisibility: Notifications.AndroidNotificationVisibility.PRIVATE,
     });
-  }
-
-  // Ask once. Denial degrades gracefully: no system notifications, but the
-  // in-app badges and foreground haptic still work.
-  const current = await Notifications.getPermissionsAsync();
-  if (!current.granted && current.canAskAgain) {
-    await Notifications.requestPermissionsAsync();
   }
 
   responseSub?.remove();

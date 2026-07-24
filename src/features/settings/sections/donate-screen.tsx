@@ -4,13 +4,7 @@
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import React, { useMemo } from "react";
 import { Linking, ScrollView, StyleSheet, Text, View } from "react-native";
-import {
-  FontSize,
-  FontWeight,
-  Radius,
-  Spacing,
-  useThemeColors,
-} from "../../../ui/theme";
+import { FontSize, Radius, Spacing, useThemeColors } from "../../../ui/theme";
 import {
   GroupDivider,
   SettingLinkRow,
@@ -65,7 +59,6 @@ export default function DonateScreen({ onBack }: Props): React.JSX.Element {
             I build Airhop in my free time, with no investors and no ads. If it
             is useful to you, a small donation helps keep it going.
           </Text>
-          <Text style={localStyles.noteSignature}>Areeb</Text>
         </View>
       </ScrollView>
     </View>
@@ -74,8 +67,8 @@ export default function DonateScreen({ onBack }: Props): React.JSX.Element {
 
 function createLocalStyles(Colors: ReturnType<typeof useThemeColors>) {
   return StyleSheet.create({
-    // A small personal note, set in its own soft card so it reads as a signed
-    // aside rather than a plea tacked under the payment rows.
+    // A small personal note, set in its own soft card so it reads as an aside
+    // rather than a plea tacked under the payment rows.
     note: {
       marginTop: Spacing.xs,
       backgroundColor: Colors.surface,
@@ -83,18 +76,11 @@ function createLocalStyles(Colors: ReturnType<typeof useThemeColors>) {
       borderWidth: 1,
       borderColor: Colors.border,
       padding: Spacing.base,
-      gap: Spacing.sm,
     },
     noteText: {
       fontSize: FontSize.sm,
       color: Colors.textSecondary,
       lineHeight: FontSize.sm * 1.6,
-    },
-    noteSignature: {
-      alignSelf: "flex-end",
-      fontSize: FontSize.sm,
-      color: Colors.textMuted,
-      fontWeight: FontWeight.medium,
     },
   });
 }

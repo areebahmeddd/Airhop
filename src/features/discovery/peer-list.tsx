@@ -24,6 +24,7 @@ import { getMeshService } from "../../services/mesh-service";
 import { showAlert } from "../../store/alert-store";
 import { useBlockedStore } from "../../store/blocked-store";
 import { useChatStore } from "../../store/chat-store";
+import { useContactsStore } from "../../store/contacts-store";
 import { usePeerStore, type NearbyPeer } from "../../store/peer-store";
 import { useWalletStore } from "../../store/wallet-store";
 import Avatar from "../../ui/components/avatar";
@@ -109,6 +110,12 @@ export default function PeerList({
 
   function handleSendDM(peer: NearbyPeer): void {
     const channel = `dm:${peer.peerID}`;
+    // Messaging someone saves them as a contact (Signal-style: people you talk
+    // to are kept), so the thread and their identity survive them going out of
+    // range. Unverified until a QR card confirms the keys.
+    useContactsStore
+      .getState()
+      .saveIfAbsent(peer.peerID, peer.nickname, peer.noisePubKeyHex);
     addChannel(channel);
     closeSheet();
     onOpenDM?.(channel);

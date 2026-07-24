@@ -34,15 +34,20 @@ import {
   type Event,
   type UnsignedEvent,
 } from "nostr-tools";
-import * as nip44 from "nostr-tools/nip44";
+import {
+  bitchatNip44Decrypt,
+  bitchatNip44Encrypt,
+} from "./bitchat-nostr-crypto";
 
 // Event kinds per PROTOCOLS.md section 8.
 const KIND_DM_RUMOR = 14;
 const KIND_SEAL = 13;
 const KIND_GIFT_WRAP = 1059;
 
-// NIP-59: randomize the gift-wrap timestamp ±2 days to prevent timing analysis.
-const TIMESTAMP_JITTER_SECONDS = 2 * 24 * 60 * 60;
+// bitchat randomizes seal + gift-wrap timestamps by ±15 minutes (NostrProtocol
+// randomizedTimestamp). Matching this keeps our events indistinguishable from
+// theirs to a relay.
+const TIMESTAMP_JITTER_SECONDS = 15 * 60;
 
 // ---- Types ------------------------------------------------------------------
 
@@ -69,59 +74,60 @@ export function wrapDm(
   recipientPubkeyHex: string,
 ): GiftWrapResult {
   const senderPubkey = getPublicKey(senderPrivKey);
+  const recipientXOnly = hexToBytes(recipientPubkeyHex);
 
-  // Step 1: Rumor (kind 14, unsigned - per NIP-17 a rumor is never signed)
+  // Step 1: Rumor (kind 14, unsigned - per NIP-17 a rumor is never signed).
+  // Empty tags, matching bitchat (the recipient is targeted by the gift wrap's
+  // `p` tag, not the rumor).
   const rumor: UnsignedEvent = {
     kind: KIND_DM_RUMOR,
     pubkey: senderPubkey,
     created_at: Math.floor(Date.now() / 1000),
-    tags: [["p", recipientPubkeyHex]],
+    tags: [],
     content,
   };
   const rumorJson = JSON.stringify(rumor);
 
-  // Step 2: Seal (kind 13) - encrypt rumor to recipient, sign with sender key
-  const senderConvKey = nip44.getConversationKey(
-    senderPrivKey,
-    recipientPubkeyHex,
-  );
-  const sealContent = nip44.encrypt(rumorJson, senderConvKey);
-
+  // Step 2: Seal (kind 13) - encrypt the rumor to the recipient with bitchat's
+  // nip44-v2 flavor, sign with the sender's real key so the recipient can
+  // authenticate who sent it.
   const sealEvent = finalizeEvent(
     {
       kind: KIND_SEAL,
-      created_at: Math.floor(Date.now() / 1000),
+      created_at: randomizedTimestamp(),
       tags: [],
-      content: sealContent,
+      content: bitchatNip44Encrypt(rumorJson, recipientXOnly, senderPrivKey),
     },
     senderPrivKey,
   );
 
-  // Step 3: Gift wrap (kind 1059) - encrypt seal with throwaway ephemeral key
+  // Step 3: Gift wrap (kind 1059) - encrypt the seal with a throwaway ephemeral
+  // key so relays cannot see the sender.
   const ephemeralPrivKey = generateSecretKey();
   const ephemeralPubkey = getPublicKey(ephemeralPrivKey);
-
-  const wrapConvKey = nip44.getConversationKey(
-    ephemeralPrivKey,
-    recipientPubkeyHex,
-  );
-  const wrapContent = nip44.encrypt(JSON.stringify(sealEvent), wrapConvKey);
-
-  // Randomize gift-wrap timestamp per NIP-59 to obscure when messages are sent.
-  const jitter = Math.floor((Math.random() * 2 - 1) * TIMESTAMP_JITTER_SECONDS);
-  const wrapTimestamp = Math.floor(Date.now() / 1000) + jitter;
 
   const giftWrap = finalizeEvent(
     {
       kind: KIND_GIFT_WRAP,
-      created_at: wrapTimestamp,
+      created_at: randomizedTimestamp(),
       tags: [["p", recipientPubkeyHex]],
-      content: wrapContent,
+      content: bitchatNip44Encrypt(
+        JSON.stringify(sealEvent),
+        recipientXOnly,
+        ephemeralPrivKey,
+      ),
     },
     ephemeralPrivKey,
   );
 
   return { event: giftWrap, wrapperPubkey: ephemeralPubkey };
+}
+
+// bitchat randomizes the seal and gift-wrap timestamps by ±15 minutes to blur
+// send timing without moving them so far that relays reject them.
+function randomizedTimestamp(): number {
+  const jitter = Math.floor((Math.random() * 2 - 1) * TIMESTAMP_JITTER_SECONDS);
+  return Math.floor(Date.now() / 1000) + jitter;
 }
 
 // ---- Receive ----------------------------------------------------------------
@@ -137,18 +143,20 @@ export function unwrapDm(
     throw new Error("Not a gift wrap event");
   }
 
-  // Step 1: Unwrap the gift wrap using the recipient key and the ephemeral
-  // sender pubkey embedded in the gift wrap's `pubkey` field.
-  const wrapConvKey = nip44.getConversationKey(
+  // Step 1: Unwrap the gift wrap with the recipient key and the ephemeral sender
+  // pubkey embedded in the gift wrap's `pubkey` field (bitchat nip44-v2).
+  const sealJson = bitchatNip44Decrypt(
+    giftWrap.content,
+    hexToBytes(giftWrap.pubkey),
     recipientPrivKey,
-    giftWrap.pubkey,
   );
-  const sealJson = nip44.decrypt(giftWrap.content, wrapConvKey);
+  if (sealJson === null) throw new Error("Gift wrap decrypt failed");
   const seal: Event = JSON.parse(sealJson) as Event;
 
   // Step 2: Verify the seal's signature. Per NIP-17 the seal is signed by the
   // real sender key; without this check DMs are forgeable by anyone who knows
-  // the recipient's pubkey.
+  // the recipient's pubkey. bitchat's seal is BIP-340 Schnorr, which nostr-tools
+  // verifyEvent checks.
   if (!verifyEvent(seal)) {
     throw new Error("Seal signature invalid");
   }
@@ -157,20 +165,17 @@ export function unwrapDm(
   }
 
   // Step 3: Decrypt the seal to reveal the rumor.
-  const recipientPubkey = getPublicKey(recipientPrivKey);
-  const sealConvKey = nip44.getConversationKey(recipientPrivKey, seal.pubkey);
-  const rumorJson = nip44.decrypt(seal.content, sealConvKey);
+  const rumorJson = bitchatNip44Decrypt(
+    seal.content,
+    hexToBytes(seal.pubkey),
+    recipientPrivKey,
+  );
+  if (rumorJson === null) throw new Error("Seal decrypt failed");
   const rumor = JSON.parse(rumorJson) as UnsignedEvent;
 
   // Step 4: Ensure the seal's signer is who the rumor claims to be.
   if (seal.pubkey !== rumor.pubkey) {
     throw new Error("Rumor pubkey does not match seal signer");
-  }
-
-  // Verify the recipient tag matches us (reject misdirected wraps).
-  const recipientTag = rumor.tags.find(([t]) => t === "p");
-  if (recipientTag && recipientTag[1] !== recipientPubkey) {
-    throw new Error("Gift wrap not addressed to us");
   }
 
   return {

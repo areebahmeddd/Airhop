@@ -12,6 +12,14 @@
 
 import { type NoiseSession } from "../crypto/noise-xx";
 import {
+  decodeNoisePayload,
+  encodeNoisePayload,
+  encodeNoisePrivateMessage,
+  encodeNoiseReceipt,
+  NoisePayloadType,
+  type NoisePayload,
+} from "../mesh/noise-payload";
+import {
   Flags,
   PacketType,
   signPacket,
@@ -233,14 +241,18 @@ export function newMessageId(): string {
   return hex;
 }
 
-// Encodes the DM payload for Noise-encrypted unicast:
-//   [noise_ciphertext: session.encrypt(text_utf8)]
+// Encodes the DM payload for Noise-encrypted unicast, byte-compatible with
+// bitchat: the plaintext is a NoisePayload ([0x01] + PrivateMessagePacket TLV),
+// then Noise-encrypted. Returns null when the content is longer than one
+// PrivateMessagePacket can carry (255 bytes), matching bitchat's cap.
 export function encodeDmPayload(
+  messageID: string,
   text: string,
   session: NoiseSession,
-): Uint8Array {
-  const plaintext = new TextEncoder().encode(text);
-  return session.encrypt(plaintext);
+): Uint8Array | null {
+  const inner = encodeNoisePrivateMessage(messageID, text);
+  if (inner === null) return null;
+  return session.encrypt(inner);
 }
 
 export class MessageRouter {
@@ -267,9 +279,27 @@ export class MessageRouter {
       flags: Flags.SIGNED,
       senderID: senderIDBytes,
       recipientID: new Uint8Array(8), // broadcast
-      timestamp: Math.floor(Date.now() / 1000),
+      timestamp: Date.now(),
       signature: new Uint8Array(64),
       payload,
+    };
+    packet.signature = signPacket(packet, this.identity.signingPrivKey);
+    this.broadcast(packet);
+  }
+
+  // Broadcast an already-sealed private-channel message (XChaCha20-Poly1305).
+  // The payload is opaque here; only key-holders can open it. Signed at the
+  // packet layer so the sender stays attributable.
+  sendChannelEnc(sealedPayload: Uint8Array): void {
+    const packet: Packet = {
+      type: PacketType.CHANNEL_ENC,
+      ttl: 7,
+      flags: Flags.SIGNED,
+      senderID: hexToBytes(this.identity.peerID),
+      recipientID: new Uint8Array(8), // broadcast
+      timestamp: Date.now(),
+      signature: new Uint8Array(64),
+      payload: sealedPayload,
     };
     packet.signature = signPacket(packet, this.identity.signingPrivKey);
     this.broadcast(packet);
@@ -291,31 +321,24 @@ export class MessageRouter {
   sendDm(
     recipientPeerID: string,
     text: string,
+    messageID: string,
   ): "sent" | "sent-nostr" | "needs-courier" {
     const peer = this.registry.get(recipientPeerID);
 
     // Direct transport. Requires an active Noise session so the payload can be
-    // encrypted end-to-end; the callback below chooses WiFi or BLE.
+    // encrypted end-to-end; the callback below chooses WiFi or BLE. This is the
+    // path a bitchat peer's DM travels: NOISE_ENCRYPTED carrying a bitchat
+    // NoisePayload private message.
     if (peer?.session !== undefined) {
-      const payload = encodeDmPayload(text, peer.session);
-      const senderIDBytes = hexToBytes(this.identity.peerID);
-      const recipientIDBytes = hexToBytes(recipientPeerID);
-
-      const packet: Packet = {
-        type: PacketType.NOISE_ENCRYPTED,
-        ttl: 7,
-        flags: Flags.HAS_RECIPIENT | Flags.SIGNED,
-        senderID: senderIDBytes,
-        recipientID: recipientIDBytes,
-        timestamp: Math.floor(Date.now() / 1000),
-        signature: new Uint8Array(64),
-        payload,
-      };
-      packet.signature = signPacket(packet, this.identity.signingPrivKey);
-
-      // The transport layer owns the WiFi-vs-BLE decision.
-      this.unicast(recipientPeerID, packet);
-      return "sent";
+      const payload = encodeDmPayload(messageID, text, peer.session);
+      // Content longer than one PrivateMessagePacket (255 bytes): fall through
+      // to courier rather than send something bitchat can't parse.
+      if (payload !== null) {
+        const packet = this.makeNoisePacket(recipientPeerID, payload);
+        // The transport layer owns the WiFi-vs-BLE decision.
+        this.unicast(recipientPeerID, packet);
+        return "sent";
+      }
     }
 
     // Priority 3: Nostr gift-wrap DM when recipient pubkey is known.
@@ -331,13 +354,71 @@ export class MessageRouter {
     return "needs-courier";
   }
 
-  // Decrypt an incoming DM payload.
-  decryptDm(packet: Packet, senderPeerID: string): string | null {
+  // Send a delivery/read receipt over the Noise session, in bitchat's format
+  // ([type] + utf8(messageID)). Used for peers reachable only over plain Noise
+  // (bitchat, or an Airhop peer without a Double Ratchet). Returns false when no
+  // session exists, so the caller knows the receipt did not go out.
+  sendNoiseReceipt(
+    recipientPeerID: string,
+    type:
+      typeof NoisePayloadType.DELIVERED | typeof NoisePayloadType.READ_RECEIPT,
+    messageID: string,
+  ): boolean {
+    const peer = this.registry.get(recipientPeerID);
+    if (peer?.session === undefined) return false;
+    const payload = peer.session.encrypt(encodeNoiseReceipt(type, messageID));
+    this.unicast(
+      recipientPeerID,
+      this.makeNoisePacket(recipientPeerID, payload),
+    );
+    return true;
+  }
+
+  // Send an arbitrary NoisePayload (type + body) over the Noise session, e.g. a
+  // creator-signed group invite. Returns false when no session exists yet, so
+  // the caller can retry once the handshake completes.
+  sendNoisePayload(
+    recipientPeerID: string,
+    type: number,
+    body: Uint8Array,
+  ): boolean {
+    const peer = this.registry.get(recipientPeerID);
+    if (peer?.session === undefined) return false;
+    const payload = peer.session.encrypt(encodeNoisePayload(type, body));
+    this.unicast(
+      recipientPeerID,
+      this.makeNoisePacket(recipientPeerID, payload),
+    );
+    return true;
+  }
+
+  // Build and sign a NOISE_ENCRYPTED unicast packet around an already-encrypted
+  // payload.
+  private makeNoisePacket(
+    recipientPeerID: string,
+    encryptedPayload: Uint8Array,
+  ): Packet {
+    const packet: Packet = {
+      type: PacketType.NOISE_ENCRYPTED,
+      ttl: 7,
+      flags: Flags.HAS_RECIPIENT | Flags.SIGNED,
+      senderID: hexToBytes(this.identity.peerID),
+      recipientID: hexToBytes(recipientPeerID),
+      timestamp: Date.now(),
+      signature: new Uint8Array(64),
+      payload: encryptedPayload,
+    };
+    packet.signature = signPacket(packet, this.identity.signingPrivKey);
+    return packet;
+  }
+
+  // Decrypt an incoming NOISE_ENCRYPTED payload into its typed NoisePayload
+  // (private message, delivery, or read receipt). Null on any failure.
+  decryptDm(packet: Packet, senderPeerID: string): NoisePayload | null {
     const peer = this.registry.get(senderPeerID);
     if (peer?.session === undefined) return null;
     try {
-      const plaintext = peer.session.decrypt(packet.payload);
-      return new TextDecoder().decode(plaintext);
+      return decodeNoisePayload(peer.session.decrypt(packet.payload));
     } catch {
       return null;
     }

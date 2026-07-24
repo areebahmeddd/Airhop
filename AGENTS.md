@@ -84,13 +84,15 @@ Invoke these when needed (via VS Code Copilot chat):
 
 Skills are reference files in `.github/skills/`. Read the relevant one before working on a subsystem. They contain dense, accurate reference material cross-checked against the source code and the bitchat implementations.
 
-| Skill                                                                     | Read before working on                                                        |
-| ------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
-| [`bitchat-wire-format.md`](.github/skills/bitchat-wire-format.md)         | `packet-codec.ts`, BLE native modules, any packet encoding or decoding        |
-| [`noise-session-lifecycle.md`](.github/skills/noise-session-lifecycle.md) | `noise-xx.ts`, `noise-x.ts`, handshake logic, transport encryption            |
-| [`ble-native-boundary.md`](.github/skills/ble-native-boundary.md)         | `android/`, `ios/`, `src/bridge/`, TurboModule specs                          |
-| [`mesh-routing.md`](.github/skills/mesh-routing.md)                       | `flood-router.ts`, `deduplicator.ts`, `fragment-manager.ts`, `gossip-sync.ts` |
-| [`nostr-gift-wrap.md`](.github/skills/nostr-gift-wrap.md)                 | `gift-wrap.ts`, `courier-relay.ts`, any Nostr DM or event handling            |
+| Skill                                                                     | Read before working on                                                         |
+| ------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
+| [`bitchat-wire-format.md`](.github/skills/bitchat-wire-format.md)         | `packet-codec.ts`, BLE native modules, any packet encoding or decoding         |
+| [`noise-session-lifecycle.md`](.github/skills/noise-session-lifecycle.md) | `noise-xx.ts`, `noise-x.ts`, handshake logic, transport encryption             |
+| [`ble-native-boundary.md`](.github/skills/ble-native-boundary.md)         | `android/`, `ios/`, `src/bridge/`, TurboModule specs                           |
+| [`mesh-routing.md`](.github/skills/mesh-routing.md)                       | `flood-router.ts`, `deduplicator.ts`, `fragment-manager.ts`, `gossip-sync.ts`  |
+| [`nostr-gift-wrap.md`](.github/skills/nostr-gift-wrap.md)                 | `gift-wrap.ts`, `courier-relay.ts`, any Nostr DM or event handling             |
+| [`prekeys-and-courier.md`](.github/skills/prekeys-and-courier.md)         | `prekey-bundle.ts`, `prekey-store.ts`, `courier-store.ts`, offline mail        |
+| [`private-groups.md`](.github/skills/private-groups.md)                   | `group-protocol.ts`, `group-store.ts`, anything touching `0x25` or group state |
 
 ## TypeScript Conventions
 
@@ -98,7 +100,8 @@ Skills are reference files in `.github/skills/`. Read the relevant one before wo
 - No `any` in `src/core/` or `src/bridge/`
 - Named exports only in `src/core/` and `src/bridge/`
 - File naming: `kebab-case.ts`
-- Max 400 lines per file. Split by responsibility if longer.
+- Keep `src/core/` modules under ~400 lines: one protocol concern per file, each independently testable. This holds today and must keep holding.
+- `src/services/mesh-service.ts` and several `src/features/` screens are far past that (mesh-service is ~2,700 lines, `message-thread.tsx` ~3,400). They are known refactor targets, **not** precedent. Add a new packet type's logic as a focused module in `src/core/mesh/` and keep the mesh-service side to wiring.
 
 ## Common Mistakes to Avoid
 

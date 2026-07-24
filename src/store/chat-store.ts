@@ -7,6 +7,24 @@ import { createJSONStorage, persist } from "zustand/middleware";
 
 export type AttachmentType = "image" | "voice" | "document" | "video";
 
+// Delivery lifecycle of an outgoing message, WhatsApp-style. Only meaningful on
+// your own messages (isMine). "carried" means handed to a store-and-forward
+// courier (best-effort physical delivery); "sent" means it left the device;
+// "delivered"/"read" are confirmed by the recipient over the mesh.
+export type MessageStatus =
+  "sending" | "sent" | "carried" | "delivered" | "read" | "failed";
+
+// Progression rank, so a status only ever moves forward (a late "delivered"
+// never downgrades a message that is already "read").
+const STATUS_RANK: Record<MessageStatus, number> = {
+  sending: 0,
+  failed: 1,
+  sent: 2,
+  carried: 2,
+  delivered: 3,
+  read: 4,
+};
+
 // Metadata for a file attached to a chat message.
 // The `uri` field holds a local file URI on the sender's device.
 // When received over the mesh the uri is populated from the decoded bytes.
@@ -34,8 +52,18 @@ export interface ChatMessage {
   // Local-only, never sent over the mesh, mirroring how WhatsApp/Telegram
   // already treat starring: private to you.
   isStarred?: boolean;
+  // Local-only pin: surfaces the message in this conversation's pinned list.
+  // Not shared with other members (a serverless mesh has no channel roster to
+  // sync a shared pin to), so each person pins their own view.
+  isPinned?: boolean;
   // Set only on the sender's own outgoing copy of a forwarded message.
   forwarded?: boolean;
+  // Delivery status (own outgoing messages only). Undefined on received
+  // messages and legacy rows. See MessageStatus.
+  status?: MessageStatus;
+  // When the recipient confirmed delivery / read, for the Message info sheet.
+  deliveredAtMs?: number;
+  readAtMs?: number;
 }
 
 interface ChatState {
@@ -60,8 +88,24 @@ interface ChatState {
   pinnedChannels: string[];
   // Conversations (channels or DMs) the user has muted.
   mutedChannels: string[];
+  // Per-channel end-to-end encryption keys (base64url), one per private
+  // (custom) channel. A channel with a key here is private and encrypted; a
+  // channel without one (the built-in location channels) is public plaintext.
+  channelKeys: Record<string, string>;
+  // Reach of each private channel: "ble" (local mesh only, most private) or
+  // "ble+nostr" (also bridged over Nostr for internet reach, at the cost of a
+  // stable channel tag visible to relays). Chosen at creation, carried in the
+  // invite so every member subscribes the same way.
+  channelReach: Record<string, "ble" | "ble+nostr">;
 
   addChannel: (channel: string) => void;
+  // Join (or create) a private channel with its E2E key and reach. Used both
+  // when you create a channel and when you tap someone's invite link.
+  joinPrivateChannel: (
+    channel: string,
+    keyBase64: string,
+    overNostr: boolean,
+  ) => void;
   removeChannel: (channel: string) => void;
   // Returns false if the rename was rejected (name unchanged, or already taken)
   // so callers don't apply follow-up edits to the wrong channel.
@@ -77,7 +121,19 @@ interface ChatState {
   // for the same person become one.
   mergeChannel: (from: string, to: string) => void;
   addMessage: (msg: ChatMessage) => void;
+  // Advance an outgoing message's delivery status (never downgrades). `atMs`
+  // stamps the delivered/read time for the Message info sheet.
+  setMessageStatus: (
+    channel: string,
+    id: string,
+    status: MessageStatus,
+    atMs?: number,
+  ) => void;
+  // Remove a single message. Used by Undo Send to pull an outgoing message back
+  // during its brief hold window, before it is ever transmitted.
+  removeMessage: (channel: string, id: string) => void;
   toggleStar: (channel: string, id: string) => void;
+  togglePinMessage: (channel: string, id: string) => void;
   setActiveChannel: (channel: string) => void;
   markChannelRead: (channel: string) => void;
   setLastThread: (channel: string) => void;
@@ -138,12 +194,31 @@ export const useChatStore = create<ChatState>()(
       channelDescriptions: {},
       pinnedChannels: [],
       mutedChannels: [],
+      channelKeys: {},
+      channelReach: {},
 
       addChannel(channel: string) {
         set((state) => {
           if (state.channels.includes(channel)) return state;
           return { channels: [...state.channels, channel] };
         });
+      },
+
+      joinPrivateChannel(
+        channel: string,
+        keyBase64: string,
+        overNostr: boolean,
+      ) {
+        set((state) => ({
+          channels: state.channels.includes(channel)
+            ? state.channels
+            : [...state.channels, channel],
+          channelKeys: { ...state.channelKeys, [channel]: keyBase64 },
+          channelReach: {
+            ...state.channelReach,
+            [channel]: overNostr ? "ble+nostr" : "ble",
+          },
+        }));
       },
 
       addMessage(msg: ChatMessage) {
@@ -198,6 +273,47 @@ export const useChatStore = create<ChatState>()(
         }
       },
 
+      setMessageStatus(channel, id, status, atMs) {
+        set((state) => {
+          const existing = state.messages[channel];
+          if (existing === undefined) return state;
+          let changed = false;
+          const next = existing.map((m) => {
+            if (m.id !== id) return m;
+            // Never move backwards: a stray "delivered" after "read" is ignored.
+            if (
+              m.status !== undefined &&
+              STATUS_RANK[status] < STATUS_RANK[m.status]
+            ) {
+              return m;
+            }
+            changed = true;
+            return {
+              ...m,
+              status,
+              ...(status === "delivered" && atMs !== undefined
+                ? { deliveredAtMs: atMs }
+                : {}),
+              ...(status === "read" && atMs !== undefined
+                ? { readAtMs: atMs }
+                : {}),
+            };
+          });
+          if (!changed) return state;
+          return { messages: { ...state.messages, [channel]: next } };
+        });
+      },
+
+      removeMessage(channel, id) {
+        set((state) => {
+          const existing = state.messages[channel];
+          if (existing === undefined) return state;
+          const next = existing.filter((m) => m.id !== id);
+          if (next.length === existing.length) return state;
+          return { messages: { ...state.messages, [channel]: next } };
+        });
+      },
+
       toggleStar(channel: string, id: string) {
         set((state) => {
           const existing = state.messages[channel] ?? [];
@@ -206,6 +322,20 @@ export const useChatStore = create<ChatState>()(
               ...state.messages,
               [channel]: existing.map((m) =>
                 m.id === id ? { ...m, isStarred: !m.isStarred } : m,
+              ),
+            },
+          };
+        });
+      },
+
+      togglePinMessage(channel: string, id: string) {
+        set((state) => {
+          const existing = state.messages[channel] ?? [];
+          return {
+            messages: {
+              ...state.messages,
+              [channel]: existing.map((m) =>
+                m.id === id ? { ...m, isPinned: !m.isPinned } : m,
               ),
             },
           };
@@ -231,6 +361,10 @@ export const useChatStore = create<ChatState>()(
           const mutedChannels = state.mutedChannels.filter(
             (c) => c !== channel,
           );
+          const channelKeys = { ...state.channelKeys };
+          delete channelKeys[channel];
+          const channelReach = { ...state.channelReach };
+          delete channelReach[channel];
           // Clear activeChannel rather than reassigning it to some arbitrary
           // surviving channel. The old behaviour picked the first non-DM
           // channel (usually #bluetooth) while the user was sitting on the LIST
@@ -246,6 +380,8 @@ export const useChatStore = create<ChatState>()(
             channelDescriptions,
             pinnedChannels,
             mutedChannels,
+            channelKeys,
+            channelReach,
             activeChannel,
           };
         });
@@ -285,6 +421,23 @@ export const useChatStore = create<ChatState>()(
           const pinnedChannels = state.pinnedChannels.includes(oldName)
             ? state.pinnedChannels.map((c) => (c === oldName ? clean : c))
             : state.pinnedChannels;
+          const mutedChannels = state.mutedChannels.includes(oldName)
+            ? state.mutedChannels.map((c) => (c === oldName ? clean : c))
+            : state.mutedChannels;
+          // The encryption key and reach MUST follow the rename: the name is a
+          // local label, the key is the channel's real identity. Dropping it
+          // would silently turn a private channel keyless (unable to decrypt its
+          // own traffic) and lose its Bluetooth+Internet reach.
+          const channelKeys = { ...state.channelKeys };
+          if (channelKeys[oldName] !== undefined) {
+            channelKeys[clean] = channelKeys[oldName];
+            delete channelKeys[oldName];
+          }
+          const channelReach = { ...state.channelReach };
+          if (channelReach[oldName] !== undefined) {
+            channelReach[clean] = channelReach[oldName];
+            delete channelReach[oldName];
+          }
           const activeChannel =
             state.activeChannel === oldName ? clean : state.activeChannel;
           // lastThread must follow the rename too, otherwise an app restart
@@ -298,6 +451,9 @@ export const useChatStore = create<ChatState>()(
             unreadCounts,
             channelDescriptions,
             pinnedChannels,
+            mutedChannels,
+            channelKeys,
+            channelReach,
             activeChannel,
             lastThread,
           };
@@ -410,6 +566,8 @@ export const useChatStore = create<ChatState>()(
           channelDescriptions: {},
           pinnedChannels: [],
           mutedChannels: [],
+          channelKeys: {},
+          channelReach: {},
         });
       },
     }),

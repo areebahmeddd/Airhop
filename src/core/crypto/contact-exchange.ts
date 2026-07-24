@@ -1,23 +1,23 @@
-// Contact card: compact binary encoding for NFC tap and QR code peer exchange.
+// Contact card: compact binary encoding for QR code peer exchange.
 //
-// When two users meet in person they can exchange contact info by:
-//   a) NFC tap:  phone A writes an NDEF record; phone B reads and imports it.
-//   b) QR code:  phone A displays a QR; phone B scans it with the camera.
+// When two users meet in person, phone A displays a QR and phone B scans it
+// with the camera. The QR carries a ContactCard binary blob, encoded in a URI
+// scheme so scanners open Airhop directly: "airhop:v1/<base64url>".
 //
-// Both transports carry the same ContactCard binary blob. The QR content
-// uses a URI scheme so scanners open Airhop directly: "airhop:v1/<base64url>".
-// The NFC NDEF type is "application/airhop-contact-v1" (a MIME media type).
+// ContactCard binary layout (fixed header, variable nickname, trailing npub):
 //
-// ContactCard binary layout (fixed header, variable nickname):
+//   [0]        u8     version (1)
+//   [1–8]      bytes  peerID (8 bytes, first half of SHA-256(noisePub))
+//   [9–40]     bytes  Noise static public key (32 bytes, X25519)
+//   [41–72]    bytes  Ed25519 signing public key (32 bytes)
+//   [73]       u8     nickname length (0–32)
+//   [74–M]     utf8   nickname (0–32 bytes)
+//   [M+1–M+32] bytes  Nostr public key (32 bytes, secp256k1)
 //
-//   [0]       u8     version = 1
-//   [1–8]     bytes  peerID (8 bytes, first half of SHA-256(noisePub))
-//   [9–40]    bytes  Noise static public key (32 bytes, X25519)
-//   [41–72]   bytes  Ed25519 signing public key (32 bytes)
-//   [73]      u8     nickname length (0–32)
-//   [74–N]    utf8   nickname (0–32 bytes)
-//
-// Total: 74 + nicknameLen bytes (74–106 bytes).
+// Total: 106 + nicknameLen bytes. Every card carries all three keys: the Noise
+// and signing keys for BLE, and the Nostr key so a contact met only by QR (never
+// over Bluetooth) is still reachable over the internet. Airhop is pre-1.0 with no
+// install base, so there is exactly one card format rather than a versioned pair.
 
 import { bytesToHex, hexToBytes } from "@noble/hashes/utils.js";
 
@@ -28,12 +28,14 @@ export interface ContactCard {
   noisePubKey: Uint8Array; // 32-byte X25519
   signingPubKey: Uint8Array; // 32-byte Ed25519
   nickname: string; // 0–32 UTF-8 characters
+  nostrPubKey: Uint8Array; // 32-byte secp256k1 (Nostr identity)
 }
 
 // ---- Binary encode/decode ---------------------------------------------------
 
 const CARD_VERSION = 1;
 const FIXED_HEADER_SIZE = 74; // version(1) + peerID(8) + noisePub(32) + signingPub(32) + nickLen(1)
+const NOSTR_PUBKEY_SIZE = 32;
 const MAX_NICKNAME_BYTES = 32;
 
 export function encodeContactCard(card: ContactCard): Uint8Array {
@@ -46,6 +48,9 @@ export function encodeContactCard(card: ContactCard): Uint8Array {
   if (card.signingPubKey.length !== 32) {
     throw new Error("contact-exchange: signingPubKey must be 32 bytes");
   }
+  if (card.nostrPubKey.length !== 32) {
+    throw new Error("contact-exchange: nostrPubKey must be 32 bytes");
+  }
 
   // Encode, then byte-truncate to MAX_NICKNAME_BYTES. This matches the
   // behavior in announce-manager.ts (silent truncation). Callers should
@@ -57,13 +62,16 @@ export function encodeContactCard(card: ContactCard): Uint8Array {
 
   const peerIDBytes = hexToBytes(card.peerID);
 
-  const buf = new Uint8Array(FIXED_HEADER_SIZE + nicknameBytes.length);
+  const buf = new Uint8Array(
+    FIXED_HEADER_SIZE + nicknameBytes.length + NOSTR_PUBKEY_SIZE,
+  );
   buf[0] = CARD_VERSION;
   buf.set(peerIDBytes, 1);
   buf.set(card.noisePubKey, 9);
   buf.set(card.signingPubKey, 41);
   buf[73] = nicknameBytes.length;
   buf.set(nicknameBytes, FIXED_HEADER_SIZE);
+  buf.set(card.nostrPubKey, FIXED_HEADER_SIZE + nicknameBytes.length);
   return buf;
 }
 
@@ -89,12 +97,13 @@ export function decodeContactCard(buf: Uint8Array): ContactCard {
       `contact-exchange: nickname length ${nickLen} exceeds maximum ${MAX_NICKNAME_BYTES}`,
     );
   }
-  if (buf.length < FIXED_HEADER_SIZE + nickLen) {
-    throw new Error("contact-exchange: buffer truncated in nickname field");
+  const npubStart = FIXED_HEADER_SIZE + nickLen;
+  if (buf.length < npubStart + NOSTR_PUBKEY_SIZE) {
+    throw new Error("contact-exchange: buffer truncated");
   }
 
   const nickname = new TextDecoder().decode(
-    buf.slice(FIXED_HEADER_SIZE, FIXED_HEADER_SIZE + nickLen),
+    buf.slice(FIXED_HEADER_SIZE, npubStart),
   );
 
   return {
@@ -102,6 +111,7 @@ export function decodeContactCard(buf: Uint8Array): ContactCard {
     noisePubKey,
     signingPubKey,
     nickname,
+    nostrPubKey: buf.slice(npubStart, npubStart + NOSTR_PUBKEY_SIZE),
   };
 }
 
@@ -132,11 +142,6 @@ export function decodeQRContent(qr: string): ContactCard | null {
     return null;
   }
 }
-
-// NFC NDEF helpers were removed along with the NFC contact path: iOS has no
-// host card emulation, so an iPhone cannot present a tag for another phone to
-// read, making phone-to-phone tap impossible. QR carries the same ContactCard
-// and works on every platform.
 
 // ---- Base64-URL helpers (RFC 4648 §5, no padding) ---------------------------
 

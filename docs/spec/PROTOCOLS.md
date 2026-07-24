@@ -24,11 +24,11 @@ Offset  Size  Type     Field
 [0]        1   u8       version = 2
 [1]        1   u8       type (see section 3 for packet types)
 [2]        1   u8       ttl (default 7, decremented each hop; set to 0 for signing)
-[3 to 10]  8   u64-BE   timestamp (Unix seconds)
+[3 to 10]  8   u64-BE   timestamp (Unix MILLISECONDS, not seconds)
 [11]       1   u8       flags
                           bit 0 (0x01): hasRecipient: recipientID field present
                           bit 1 (0x02): hasSignature: 64-byte Ed25519 signature appended
-                          bit 2 (0x04): isCompressed: zlib payload (reserved, not used)
+                          bit 2 (0x04): isCompressed: raw-DEFLATE payload, preceded by originalSize
                           bit 3 (0x08): hasRoute: source-route hop list present
                           bit 4 (0x10): isRSR: solicited sync response
 [12 to 15] 4   u32-BE   payloadLength
@@ -60,11 +60,19 @@ All type values match bitchat `MessageType.swift` / `MessageType.kt` (public dom
 | `LEAVE`           | `0x03` | Broadcast         | Peer departing notification.                                                                                                                                                                                             |
 | `COURIER_ENV`     | `0x04` | Broadcast         | Store-and-forward sealed envelope. Noise X encrypted. TLV format (see section 6).                                                                                                                                        |
 | `NOISE_HANDSHAKE` | `0x10` | Unicast           | Noise XX handshake message (initiator msg1 / responder msg2 / initiator msg3). recipientID set.                                                                                                                          |
-| `NOISE_ENCRYPTED` | `0x11` | Unicast           | Post-handshake encrypted payload: DM text, receipts, metadata. recipientID set. HAS_RECIPIENT flag set.                                                                                                                  |
+| `NOISE_ENCRYPTED` | `0x11` | Unicast           | Post-handshake encrypted payload: DM text, receipts, group invites (`0x06`/`0x07`), metadata. recipientID set. HAS_RECIPIENT flag set.                                                                                   |
+| `DR_ENCRYPTED`    | `0x12` | Unicast           | Double Ratchet encrypted DM (per-message forward secrecy beyond Noise transport). Airhop-to-Airhop only; bitchat drops as unknown. (Airhop extension)                                                                    |
 | `FRAGMENT`        | `0x20` | Broadcast/Unicast | BLE fragment of a larger message. Stream ID + index + total in payload header. See section 7.                                                                                                                            |
-| `REQUEST_SYNC`    | `0x21` | Broadcast         | GCS filter gossip request. TTL=2 (local-only). Payload TLV format (see section 5).                                                                                                                                       |
-| `FILE_TRANSFER`   | `0x22` | Broadcast/Unicast | Binary file / audio / image payload.                                                                                                                                                                                     |
+| `REQUEST_SYNC`    | `0x21` | Broadcast         | GCS filter gossip request. TTL=2 (local-only). Type-aware (SyncTypeFlags bit 8 = board posts). Payload TLV format (see section 5).                                                                                       |
+| `FILE_TRANSFER`   | `0x22` | Broadcast/Unicast | Binary file / audio / image payload. Single `BitchatFilePacket` TLV, 1 MiB cap, MIME allow-list + magic-byte validation.                                                                                                 |
+| `BOARD_POST`      | `0x23` | Broadcast         | Signed bulletin-board post or tombstone (TLV). Ed25519-signed by the author; persists until its author-chosen expiry (max 7 days) and gossip-syncs.                                                                      |
+| `PREKEY_BUNDLE`   | `0x24` | Broadcast         | Signed batch of one-time Curve25519 prekeys (TLV). Gossiped; a sender seals a courier envelope to a prekey for forward-secret async first contact.                                                                       |
+| `GROUP_MESSAGE`   | `0x25` | Broadcast         | Private-group message: cleartext groupID + epoch framing a ChaCha20-Poly1305 body with an Ed25519-signed inner payload. Roster/key travel over Noise (`0x06`/`0x07`).                                                    |
+| `PING`            | `0x26` | Unicast           | Directed mesh echo request: 8-byte nonce + origin TTL. Unsigned; the reply's echoed nonce binds it to the probe.                                                                                                         |
+| `PONG`            | `0x27` | Unicast           | Directed mesh echo reply: echoed nonce + origin TTL. Hops = originTTL − receivedTTL + 1.                                                                                                                                 |
+| `NOSTR_CARRIER`   | `0x28` | Broadcast/Unicast | Gateway-ferried signed Nostr event (direction byte + geohash + event JSON). Verified against its own Schnorr signature before use.                                                                                       |
 | `VOICE_FRAME`     | `0x29` | Broadcast         | PTT audio burst. Matches `VoiceBurstPacket.swift`. **Reserved, not yet sent or handled.** live PTT needs a streaming-mic native module on both platforms. Voice _notes_ ride `FILE_TRANSFER` instead. (Airhop extension) |
+| `CHANNEL_ENC`     | `0x2a` | Broadcast         | Airhop private channel: XChaCha20-Poly1305 sealed message. bitchat drops as unknown. (Airhop extension)                                                                                                                  |
 
 ## 4. Routing Constants
 

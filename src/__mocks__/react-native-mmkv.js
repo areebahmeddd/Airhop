@@ -16,6 +16,16 @@ class MMKVInstance {
     return typeof v === "string" ? v : undefined;
   }
 
+  getNumber(key) {
+    const v = this._store.get(key);
+    return typeof v === "number" ? v : undefined;
+  }
+
+  getBoolean(key) {
+    const v = this._store.get(key);
+    return typeof v === "boolean" ? v : undefined;
+  }
+
   set(key, value) {
     this._store.set(key, value);
   }

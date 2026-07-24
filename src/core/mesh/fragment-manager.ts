@@ -13,6 +13,7 @@
 // encoding of the original packet (as returned by encodePacket).
 
 import { hexToBytes } from "@noble/hashes/utils.js";
+import { MAX_FRAMED_FILE_BYTES } from "./bitchat-file-packet";
 import {
   Flags,
   PacketType,
@@ -36,13 +37,26 @@ const MAX_CONCURRENT = 128;
 // Reassembly timeout (30 seconds). After this, partial assemblies are dropped.
 const TIMEOUT_MS = 30_000;
 
-// Hard cap on total reassembled size (1 MiB). Guards against memory exhaustion.
-const MAX_REASSEMBLED_BYTES = 1 * 1024 * 1024;
+// Hard cap on total reassembled size. Guards against memory exhaustion while
+// admitting the largest file a bitchat peer can send (1 MiB content + TLV +
+// packet envelope), matching bitchat's FileTransferLimits.maxFramedFileBytes.
+const MAX_REASSEMBLED_BYTES = MAX_FRAMED_FILE_BYTES;
 
 // The outer fragment packet type per PROTOCOLS.md.
 const OUTER_TYPE = PacketType.FRAGMENT; // 0x20
 
 export type FragmentCallback = (packet: Packet) => void;
+
+// Reports reassembly progress as fragments of a stream arrive, so the UI can
+// show an incoming-file card before the whole file is here.
+export interface FragmentProgress {
+  key: string; // assembly key (senderHex_streamHex), stable per stream
+  originalType: PacketType; // type of the packet being reassembled
+  received: number; // fragments received so far
+  total: number; // fragments expected
+  receivedBytes: number; // data bytes received so far
+}
+export type FragmentProgressCallback = (info: FragmentProgress) => void;
 
 // ---- Fragmentation -----------------------------------------------------------
 
@@ -87,7 +101,7 @@ export function fragmentPacket(
       flags: Flags.SIGNED,
       senderID: senderIDBytes,
       recipientID: new Uint8Array(8), // broadcast
-      timestamp: Math.floor(Date.now() / 1000),
+      timestamp: Date.now(),
       signature: new Uint8Array(64),
       payload,
     };
@@ -174,6 +188,7 @@ export class FragmentManager {
     fromSenderID: Uint8Array,
     payload: Uint8Array,
     onComplete: FragmentCallback,
+    onProgress?: FragmentProgressCallback,
   ): void {
     const header = decodeFragmentPayload(payload);
     if (header === null) return;
@@ -206,6 +221,14 @@ export class FragmentManager {
 
     asm.fragments.set(header.index, header.data);
     asm.byteCount += header.data.length;
+
+    onProgress?.({
+      key,
+      originalType: header.originalType,
+      received: asm.fragments.size,
+      total: asm.total,
+      receivedBytes: asm.byteCount,
+    });
 
     if (asm.fragments.size === asm.total) {
       this.assemblies.delete(key);

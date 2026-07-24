@@ -40,6 +40,92 @@ export interface MessageHit {
   matchStart: number;
   matchEnd: number;
   score: number;
+  // Local file URI of an image/video attachment, so the media filter can show
+  // a thumbnail instead of a generic icon. Undefined for other kinds.
+  thumbnailUri?: string;
+}
+
+// The media/content filters offered above search, matching the attachment
+// kinds Airhop supports plus links and ecash tokens carried inside text.
+export type MediaFilter =
+  "photos" | "videos" | "audio" | "documents" | "links" | "ecash";
+
+const URL_RE = /https?:\/\/[^\s]+/i;
+
+export function messageMatchesFilter(
+  message: ChatMessage,
+  filter: MediaFilter,
+): boolean {
+  switch (filter) {
+    case "photos":
+      return message.attachment?.type === "image";
+    case "videos":
+      return message.attachment?.type === "video";
+    case "audio":
+      return message.attachment?.type === "voice";
+    case "documents":
+      return message.attachment?.type === "document";
+    case "links":
+      return URL_RE.test(message.text);
+    case "ecash":
+      return message.text.length > 0 && mayContainToken(message.text);
+  }
+}
+
+// Messages matching a media filter, optionally narrowed by a text query.
+// Filter-only results are newest first; when a query is present they rank by
+// match quality then recency, the same as the plain message search.
+export function filterMessages(
+  filter: MediaFilter,
+  query: string,
+  messages: Record<string, ChatMessage[]>,
+): MessageHit[] {
+  const q = query.trim().toLowerCase();
+  const hits: MessageHit[] = [];
+  for (const [channel, list] of Object.entries(messages)) {
+    for (const message of list) {
+      if (message.isSystem) continue;
+      if (!messageMatchesFilter(message, filter)) continue;
+
+      const searchable = searchableMessageText(message);
+      let snippet = searchable;
+      let matchStart = 0;
+      let matchEnd = 0;
+      let score = 0;
+
+      if (q) {
+        const index = searchable.toLowerCase().indexOf(q);
+        if (index === -1) continue; // must also match the typed text
+        const built = buildSnippet(searchable, index, q.length);
+        snippet = built.snippet;
+        matchStart = built.matchStart;
+        matchEnd = built.matchEnd;
+        score = scoreMatch(searchable, index);
+      }
+
+      hits.push({
+        channel,
+        messageId: message.id,
+        senderNickname: message.senderNickname,
+        isMine: message.isMine,
+        timestampMs: message.timestampMs,
+        snippet,
+        matchStart,
+        matchEnd,
+        score,
+        thumbnailUri:
+          filter === "photos" || filter === "videos"
+            ? message.attachment?.uri
+            : undefined,
+      });
+    }
+  }
+  hits.sort((a, b) =>
+    q
+      ? b.score - a.score || b.timestampMs - a.timestampMs
+      : b.timestampMs - a.timestampMs,
+  );
+  return hits.slice(0, MAX_MESSAGE_RESULTS);
 }
 
 function channelDisplayName(channel: string): string {

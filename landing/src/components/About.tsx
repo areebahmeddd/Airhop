@@ -165,7 +165,7 @@ export default function About() {
                 <ol className="mt-3 list-decimal space-y-2 pl-5">
                   <li>
                     <span className="font-semibold text-gray-900">Offline Payments:</span> Send and
-                    receive payments over the mesh using the {" "}
+                    receive payments over the mesh using the{" "}
                     <a
                       href="https://cashu.space"
                       target="_blank"

@@ -22,16 +22,24 @@ const SECTIONS: LegalSection[] = [
     ],
   },
   {
-    heading: "No warranty",
+    heading: "Content you post",
     paragraphs: [
-      'Airhop is provided "as is" without any warranty of any kind. We make no guarantees about reliability, availability, or fitness for a particular purpose.',
-      "The app has not been formally security-audited by an external firm. An audit is planned but has not been completed. **Do not rely on Airhop as your only means of communication in life-safety situations.**",
+      "Public channels, location channels, and bulletin-board notices are visible to anyone in range or in the same area, including people using other compatible apps. Treat anything posted there as public. You are responsible for what you post.",
+      "**There is no central server, so we cannot moderate, edit, or delete what you or anyone else sends.** Deleting your own notice broadcasts a signed retraction that other devices honour, and notices expire on their own, but a copy that has already reached another device may remain there.",
+      "If you turn on the internet gateway, your device relays other people's public location-channel messages. You do not author that content and cannot control it.",
     ],
   },
   {
     heading: "Offline payments",
     paragraphs: [
       "Airhop supports transferring Cashu ecash tokens directly between devices over the mesh. **We do not operate any payment infrastructure. We are not a financial institution, payment processor, or money services business.** Token transfers occur between devices without any involvement from this project. We have no ability to reverse, recover, or mediate any transaction.",
+    ],
+  },
+  {
+    heading: "No warranty",
+    paragraphs: [
+      'Airhop is provided "as is" without any warranty of any kind. We make no guarantees about reliability, availability, or fitness for a particular purpose.',
+      "The app has not been formally security-audited by an external firm. An audit is planned but has not been completed. **Do not rely on Airhop as your only means of communication in life-safety situations.**",
     ],
   },
   {

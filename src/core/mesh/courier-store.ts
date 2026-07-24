@@ -70,6 +70,10 @@ const ENV_TLV_TAG = 0x01;
 const ENV_TLV_EXPIRY = 0x02;
 const ENV_TLV_CIPHERTEXT = 0x03;
 const ENV_TLV_COPIES = 0x04;
+// v2 (forward-secret) envelopes: the ciphertext is Noise X to the recipient's
+// one-time prekey with this ID rather than their static key. Omitted for v1 so
+// v1 decoders skip it as unknown and still carry v2 envelopes opaquely.
+const ENV_TLV_PREKEY_ID = 0x05;
 const TAG_LENGTH = 16;
 
 function appendTlv(type: number, value: Uint8Array, into: number[]): void {
@@ -84,6 +88,9 @@ export interface SealedEnvelope {
   expiryMs: number; // Unix ms
   copies: number; // spray budget
   ciphertext: Uint8Array; // Noise X output
+  // Present on v2 envelopes: the recipient prekey id the ciphertext was sealed
+  // to. Absent means v1 (sealed to the recipient's static key).
+  prekeyID?: number;
 }
 
 export function encodeEnvelopePayload(env: SealedEnvelope): Uint8Array {
@@ -102,6 +109,14 @@ export function encodeEnvelopePayload(env: SealedEnvelope): Uint8Array {
     appendTlv(ENV_TLV_COPIES, new Uint8Array([env.copies & 0xff]), bytes);
   }
 
+  // Omitted for v1 static-sealed envelopes so they stay byte-identical to the
+  // pre-prekey wire format.
+  if (env.prekeyID !== undefined) {
+    const idBuf = new Uint8Array(4);
+    new DataView(idBuf.buffer).setUint32(0, env.prekeyID >>> 0, false);
+    appendTlv(ENV_TLV_PREKEY_ID, idBuf, bytes);
+  }
+
   return new Uint8Array(bytes);
 }
 
@@ -113,6 +128,7 @@ export function decodeEnvelopePayload(
   let expiryMs: number | undefined;
   let ciphertext: Uint8Array | undefined;
   let copies = 1;
+  let prekeyID: number | undefined;
 
   while (off + 3 <= payload.length) {
     const type = payload[off];
@@ -142,13 +158,20 @@ export function decodeEnvelopePayload(
       case ENV_TLV_COPIES:
         if (len === 1) copies = value[0];
         break;
+      case ENV_TLV_PREKEY_ID:
+        if (len === 4)
+          prekeyID = new DataView(value.buffer, value.byteOffset).getUint32(
+            0,
+            false,
+          );
+        break;
       // Unknown TLVs: skip for forward compatibility
     }
   }
 
   if (tag === undefined || expiryMs === undefined || ciphertext === undefined)
     return null;
-  return { recipientTag: tag, expiryMs, copies, ciphertext };
+  return { recipientTag: tag, expiryMs, copies, ciphertext, prekeyID };
 }
 
 // ---- Trust tiers ------------------------------------------------------------
@@ -163,6 +186,7 @@ interface StoredEnvelope {
   storedAt: number;
   tier: CourierTier;
   copies: number;
+  prekeyID?: number;
 }
 
 // ---- CourierStore -----------------------------------------------------------
@@ -208,6 +232,7 @@ export class CourierStore {
       storedAt: Date.now(),
       tier,
       copies: env.copies,
+      prekeyID: env.prekeyID,
     });
     return true;
   }
@@ -224,6 +249,7 @@ export class CourierStore {
           expiryMs: e.expiryMs,
           copies: e.copies,
           ciphertext: e.ciphertext,
+          prekeyID: e.prekeyID,
         });
         this.envelopes.splice(i, 1);
       }
@@ -245,24 +271,29 @@ export class CourierStore {
         expiryMs: e.expiryMs,
         copies: half,
         ciphertext: e.ciphertext,
+        prekeyID: e.prekeyID,
       });
     }
     return toSpray;
   }
 
   // Seal a plaintext message into a courier envelope packet.
+  //
+  // Pass `prekey` to seal a forward-secret v2 envelope: the ciphertext targets
+  // the recipient's one-time prekey (Noise X) instead of their static key, and
+  // the envelope records the prekey id so the recipient opens it with the
+  // matching private prekey. The routing tag still derives from the recipient's
+  // STATIC key so delivery matching is unchanged.
   static seal(
     plaintext: Uint8Array,
     senderStaticPrivKey: Uint8Array,
     recipientNoisePubKey: Uint8Array,
     senderPeerID: string,
     signingPrivKey: Uint8Array,
+    prekey?: { id: number; publicKey: Uint8Array },
   ): Packet {
-    const ciphertext = noiseXSeal(
-      senderStaticPrivKey,
-      recipientNoisePubKey,
-      plaintext,
-    );
+    const sealTo = prekey?.publicKey ?? recipientNoisePubKey;
+    const ciphertext = noiseXSeal(senderStaticPrivKey, sealTo, plaintext);
     const tag = computeRecipientTag(recipientNoisePubKey);
     const expiryMs = Date.now() + ENVELOPE_TTL_MS;
 
@@ -271,6 +302,7 @@ export class CourierStore {
       expiryMs,
       copies: INITIAL_COPIES,
       ciphertext,
+      prekeyID: prekey?.id,
     };
 
     const senderIDBytes = new Uint8Array(8);
@@ -284,7 +316,7 @@ export class CourierStore {
       flags: Flags.SIGNED,
       senderID: senderIDBytes,
       recipientID: new Uint8Array(8), // broadcast
-      timestamp: Math.floor(Date.now() / 1000),
+      timestamp: Date.now(),
       signature: new Uint8Array(64),
       payload: encodeEnvelopePayload(env),
     };

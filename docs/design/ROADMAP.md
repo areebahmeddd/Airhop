@@ -19,12 +19,12 @@ bitchat is an excellent foundation. Airhop fills the gaps it left open.
 ### Gap 3: Live PTT Voice (from day 1)
 
 **bitchat problem:** Fully designed (`PUSH-TO-TALK-DESIGN.md`) but never shipped.  
-**Airhop:** `0x29: voiceFrame` broadcast type, AAC 16 kHz mono, 350ms jitter buffer, fallback to voice note.
+**Airhop:** `0x29: voiceFrame` is reserved in the packet registry, but live PTT is **not shipped yet** either: it needs a streaming-mic native module on both platforms. Voice _notes_ work today and ride `FILE_TRANSFER`.
 
-### Gap 4: Larger File Transfers
+### Gap 4: File Transfers
 
-**bitchat problem:** Hard 1 MiB cap in `FileTransferLimits`.  
-**Airhop:** Chunked streaming transfer. 64 KB chunks, sequence tracking, partial delivery. No hard protocol cap.
+**bitchat position:** Hard 1 MiB cap in `FileTransferLimits`, enforced at the binary-protocol decode layer.  
+**Airhop:** Matches it. An earlier plan for 64 KB chunked streaming with no protocol cap was dropped: the cap is enforced when bitchat _decodes_ a packet, so anything larger is rejected outright and would have broken interop in both directions. Airhop sends one `BitchatFilePacket` per file (1 MiB cap, MIME allow-list, magic-byte validation) and lets the fragment layer split it for the radio. A larger Airhop-only path remains possible later, but it cannot be the default without losing bitchat compatibility.
 
 ### Gap 5: Tor on iOS and Android
 
@@ -34,7 +34,7 @@ bitchat is an excellent foundation. Airhop fills the gaps it left open.
 ### Gap 6: Double Ratchet for Offline Mail
 
 **bitchat problem:** Courier envelopes use Noise X (one-way). Compromise of recipient's static key exposes all undelivered mail.  
-**Airhop:** Full Signal Double Ratchet (DR) + X3DH initialization. Prekey bundles on Nostr. Per-message forward secrecy everywhere.
+**Airhop:** Full Signal Double Ratchet (DR) for Airhop-to-Airhop DMs, plus bitchat-compatible one-time prekeys for offline mail. Prekey bundles are signed and gossiped over the mesh as `0x24` (not published to Nostr), and a courier envelope seals to a one-time prekey rather than the recipient's static key, so undelivered mail stays protected if that static key is later compromised.
 
 ### Gap 7: WiFi Direct / WiFi Aware Transport
 
@@ -44,7 +44,7 @@ bitchat is an excellent foundation. Airhop fills the gaps it left open.
 ### Gap 8: Non-Technical UX
 
 **bitchat problem:** No onboarding. Users see raw hex peer IDs. Contact verification is manual fingerprint comparison.  
-**Airhop:** Human-readable usernames (Adjective + Noun + 4-digit suffix, deterministic from pubkey). QR bootstrap. NFC tap-to-connect.
+**Airhop:** Human-readable usernames (Adjective + Noun + 4-digit suffix, deterministic from pubkey). QR bootstrap.
 
 ## 2. System Architecture
 
@@ -54,7 +54,7 @@ bitchat is an excellent foundation. Airhop fills the gaps it left open.
 │                                                                             │
 │  ┌─────────────┐  ┌──────────────┐  ┌──────────────┐  ┌─────────────────┐   │
 │  │ Mesh Chat   │  │ Direct Msgs  │  │ Location Chs │  │ Contacts & Keys │   │
-│  │ (public)    │  │ (Noise/DR)   │  │ (geo Nostr)  │  │ (QR/NFC/manual) │   │
+│  │ (public)    │  │ (Noise/DR)   │  │ (geo Nostr)  │  │ (QR/manual)     │   │
 │  └─────────────┘  └──────────────┘  └──────────────┘  └─────────────────┘   │
 │                                                                             │
 │  ┌─────────────────────────────────────────────────────────────────────┐    │
@@ -151,7 +151,7 @@ bitchat is an excellent foundation. Airhop fills the gaps it left open.
 
 **Goal:** All features complete, hardened, and cross-platform verified.
 
-- [x] NFC contact exchange (`src/core/crypto/contact-exchange.ts`: binary ContactCard, NDEF + QR URI scheme `airhop:v1/<base64url>`)
+- [x] QR contact exchange (`src/core/crypto/contact-exchange.ts`: binary ContactCard, QR URI scheme `airhop:v1/<base64url>`)
 - [x] QR code scanner for peer verification (encodeQRContent/decodeQRContent, deep-link format)
 - [x] Human-readable usernames (`src/utils/username.ts`: deterministic `adjective-noun-XXXX` from peer ID)
 - [x] Panic wipe (`src/utils/panic-wipe.ts`: clears EncryptedStorage keys + all MMKV partitions; < 1s)
@@ -196,7 +196,7 @@ The existing `AI` tab (`src/features/ai/ai-screen.tsx`) is currently a placehold
 
 **Milestone:** A user with zero connectivity downloads a model once, then asks it questions and gets answered fully offline, with no server round-trip of any kind.
 
-#### Cashu Wallet
+#### Cashu Wallet (Shipped in v1.0.0)
 
 The existing `Wallet` tab (`src/features/wallet/wallet-screen.tsx`) gets the payment core it currently lacks. Cashu remains the primary rail because it is the only ecash system that settles fully offline over BLE; Nutzaps are a secondary online path for when internet is available.
 
@@ -307,7 +307,6 @@ Built in SwiftUI using WatchConnectivity to communicate with the iOS Airhop app.
 - [ ] Incoming message notifications with sender name and channel
 - [ ] Quick reply from a set of short pre-defined responses
 - [ ] Panic wipe trigger: a specific gesture or button sequence on the watch sends an immediate wipe command to the paired iPhone, destroying all keys and message content in under one second
-- [ ] Contact tap via NFC on supported Watch models (Series 7+)
 - [ ] App Clip / glanceable recent messages complication
 
 **Wear OS (Android)**
@@ -509,16 +508,3 @@ Everything under the Unlicense. Copy verbatim, no attribution required.
 | **Total**                    |                                                                | ~3,050 TS + ~900 native |
 
 Everything else is a TypeScript port of existing bitchat code or an existing npm package.
-
-## 7. Competitive Landscape
-
-| Project                              | Transport                | Crypto        | Offline | Platform                    |
-| ------------------------------------ | ------------------------ | ------------- | ------- | --------------------------- |
-| [Session](https://getsession.org)    | Onion routing            | Signal        | Partial | iOS + Android               |
-| [Bridgefy](https://bridgefy.me)      | BLE + WiFi               | Proprietary   | Yes     | iOS + Android               |
-| [Briar](https://briarproject.org)    | BLE + WiFi + Tor         | Signal        | Yes     | Android                     |
-| [Meshtastic](https://meshtastic.org) | LoRa                     | AES-256       | Yes     | Requires hardware           |
-| [Berty](https://berty.tech)          | BLE + mDNS + Tor         | Noise XX      | Yes     | iOS + Android (open source) |
-| [GoTenna](https://gotennamesh.com)   | Proprietary radio        | Proprietary   | Yes     | Requires hardware           |
-| [bitchat](https://bitchat.free)      | BLE + Nostr              | Noise XX      | Yes     | Native iOS + Android        |
-| [Airhop](https://airhop.free)        | BLE + WiFi Aware + Nostr | Noise XX + DR | Yes     | iOS + Android + Desktop     |

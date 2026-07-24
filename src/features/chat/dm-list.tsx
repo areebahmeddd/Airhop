@@ -104,7 +104,7 @@ export default function DmList({ onSelectDM }: Props): React.JSX.Element {
     setMoreOptionsDM(null);
     showAlert(
       "Clear chat",
-      "Delete all messages in this conversation? This can't be undone.",
+      `Delete all messages with ${resolveDisplayName(channel.slice(3))}? This can't be undone.`,
       [
         { text: "Cancel", style: "cancel" },
         {
@@ -222,11 +222,13 @@ export default function DmList({ onSelectDM }: Props): React.JSX.Element {
               accessibilityRole="button"
               accessibilityLabel={`Open DM with ${username}${isOnline ? ", online" : ""}`}
             >
-              {/* Avatar with optional online indicator */}
-              <View style={styles.avatarWrapper}>
-                <Avatar username={username} peerID={peerID} size={46} />
-                {isOnline && <View style={styles.onlineDot} />}
-              </View>
+              {/* Avatar with presence dot (green in range, grey otherwise) */}
+              <Avatar
+                username={username}
+                peerID={peerID}
+                size={46}
+                presence={isOnline ? "online" : "offline"}
+              />
 
               {/* Content */}
               <View style={styles.rowContent}>
@@ -535,10 +537,6 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       gap: Spacing.md,
       minHeight: 72,
     },
-    // Avatar
-    avatarWrapper: {
-      flexShrink: 0,
-    },
     // Row content
     rowContent: {
       flex: 1,
@@ -638,17 +636,6 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       fontSize: 10,
       fontWeight: FontWeight.bold,
       color: Colors.textInverse,
-    },
-    onlineDot: {
-      position: "absolute",
-      bottom: 1,
-      right: 1,
-      width: 11,
-      height: 11,
-      borderRadius: 6,
-      backgroundColor: Colors.online,
-      borderWidth: 2,
-      borderColor: Colors.bg,
     },
     // Swipe-to-more (matches channel-list.tsx's swipe action styling)
     swipeActions: {

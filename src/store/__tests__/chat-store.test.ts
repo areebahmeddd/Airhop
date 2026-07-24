@@ -133,6 +133,98 @@ describe("subscribeInboundMessages", () => {
   });
 });
 
+describe("setMessageStatus", () => {
+  it("advances the delivery lifecycle and stamps times", () => {
+    state().addMessage(makeMessage({ id: "m1", isMine: true, status: "sent" }));
+    state().setMessageStatus("#test", "m1", "delivered", 1000);
+    state().setMessageStatus("#test", "m1", "read", 2000);
+    const m = state().messages["#test"][0];
+    expect(m.status).toBe("read");
+    expect(m.deliveredAtMs).toBe(1000);
+    expect(m.readAtMs).toBe(2000);
+  });
+
+  it("never downgrades (a late delivered cannot undo read)", () => {
+    state().addMessage(makeMessage({ id: "m1", isMine: true, status: "read" }));
+    state().setMessageStatus("#test", "m1", "delivered", 9999);
+    expect(state().messages["#test"][0].status).toBe("read");
+  });
+
+  it("is a no-op for an unknown message", () => {
+    state().addMessage(makeMessage({ id: "m1", status: "sent" }));
+    state().setMessageStatus("#test", "does-not-exist", "read");
+    expect(state().messages["#test"][0].status).toBe("sent");
+  });
+});
+
+describe("joinPrivateChannel", () => {
+  it("adds the channel and stores its key and reach", () => {
+    state().joinPrivateChannel("#secret", "key-abc", false);
+    expect(state().channels).toContain("#secret");
+    expect(state().channelKeys["#secret"]).toBe("key-abc");
+    expect(state().channelReach["#secret"]).toBe("ble");
+  });
+
+  it("records ble+nostr reach when opted in", () => {
+    state().joinPrivateChannel("#secret", "k", true);
+    expect(state().channelReach["#secret"]).toBe("ble+nostr");
+  });
+
+  it("does not duplicate the channel when joined twice", () => {
+    state().joinPrivateChannel("#secret", "k1", false);
+    state().joinPrivateChannel("#secret", "k2", false);
+    expect(state().channels.filter((c) => c === "#secret")).toHaveLength(1);
+    expect(state().channelKeys["#secret"]).toBe("k2");
+  });
+
+  it("drops the key and reach when the channel is removed", () => {
+    state().joinPrivateChannel("#secret", "k", true);
+    state().removeChannel("#secret");
+    expect(state().channelKeys["#secret"]).toBeUndefined();
+    expect(state().channelReach["#secret"]).toBeUndefined();
+  });
+
+  it("clears all keys and reach on clearAll", () => {
+    state().joinPrivateChannel("#secret", "k", true);
+    state().clearAll();
+    expect(state().channelKeys).toEqual({});
+    expect(state().channelReach).toEqual({});
+  });
+
+  it("keeps the key when clearing messages (still a member)", () => {
+    state().joinPrivateChannel("#secret", "k", true);
+    state().addMessage(makeMessage({ id: "m", channel: "#secret" }));
+    state().clearChannelMessages("#secret");
+    expect(state().channelKeys["#secret"]).toBe("k");
+    expect(state().messages["#secret"] ?? []).toHaveLength(0);
+  });
+
+  it("migrates the key and reach when the channel is renamed", () => {
+    state().joinPrivateChannel("#old", "k", true);
+    expect(state().renameChannel("#old", "new")).toBe(true);
+    expect(state().channelKeys["#new"]).toBe("k");
+    expect(state().channelReach["#new"]).toBe("ble+nostr");
+    expect(state().channelKeys["#old"]).toBeUndefined();
+    expect(state().channelReach["#old"]).toBeUndefined();
+  });
+});
+
+describe("removeMessage", () => {
+  it("removes a single message (Undo Send)", () => {
+    state().addMessage(makeMessage({ id: "a", timestampMs: 1000 }));
+    state().addMessage(makeMessage({ id: "b", timestampMs: 2000 }));
+    state().removeMessage("#test", "a");
+    expect(state().messages["#test"].map((m) => m.id)).toEqual(["b"]);
+  });
+
+  it("is a no-op for an unknown id or channel", () => {
+    state().addMessage(makeMessage({ id: "a" }));
+    state().removeMessage("#test", "nope");
+    state().removeMessage("#missing", "a");
+    expect(state().messages["#test"]).toHaveLength(1);
+  });
+});
+
 describe("toggleMuteChannel", () => {
   it("mutes and unmutes a conversation", () => {
     state().toggleMuteChannel("dm:aaa");

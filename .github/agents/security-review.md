@@ -94,8 +94,16 @@ Check for:
 
 - Ratchet key reuse (each ratchet step must derive a fresh chain key): **FAIL**
 - Missing out-of-order message key caching: **WARN**
-- Prekey bundle not signed by identity key: **FAIL**
-- Prekey bundle published to Nostr without NIP-44 encryption: **FAIL** (bundles contain one-time prekeys, must be sealed)
+
+### 6b. One-time Prekeys (`0x24`)
+
+Prekey bundles carry only **public** prekeys and are broadcast in the clear, signed, exactly as bitchat does. Do not flag an unencrypted bundle: publishing the public halves is the design. Check instead for:
+
+- Bundle not Ed25519-signed by the owner's identity key: **FAIL**
+- Bundle accepted without verifying that signature against the owner's announce-bound signing key: **FAIL**
+- A **private** prekey leaving the device in any form: **FAIL**
+- A consumed one-time prekey being reused to open a second envelope: **FAIL** (defeats the forward secrecy the prekey exists for)
+- Consumed private prekeys retained beyond the grace window without being dropped: **WARN**
 
 ### 7. Cashu / Payments
 

@@ -37,9 +37,45 @@ const SEEN_CAPACITY = 1000;
 const GCS_MAX_BYTES = 400;
 const GCS_TARGET_FPR = 0.01; // 1%
 
-// SyncTypeFlags bits that we handle for ANNOUNCE and public messages.
+// SyncTypeFlags bit indices (bit -> message type), matching bitchat's
+// SyncTypeFlags.swift so a board sync round is mutually intelligible.
 const TYPE_BIT_ANNOUNCE = 0; // bit 0
 const TYPE_BIT_MESSAGE = 1; // bit 1
+const TYPE_BIT_BOARD = 8; // bit 8 (board posts persist and sync until expiry)
+
+// Map a packet type to its SyncTypeFlags bit, or null when it is not gossiped.
+function syncBitForType(type: PacketType): number | null {
+  switch (type) {
+    case PacketType.ANNOUNCE:
+      return TYPE_BIT_ANNOUNCE;
+    case PacketType.CHANNEL_MSG:
+      return TYPE_BIT_MESSAGE;
+    case PacketType.BOARD_POST:
+      return TYPE_BIT_BOARD;
+    default:
+      return null;
+  }
+}
+
+// The bitfield is a little-endian integer, 1-8 bytes with trailing zero bytes
+// trimmed (bit 8 widens it from 1 to 2 bytes). Unknown high bits are ignored by
+// the decoder, so old clients simply never match the newer bits.
+function encodeTypeFlags(types: number): Uint8Array {
+  const bytes: number[] = [];
+  let v = types;
+  while (v > 0 && bytes.length < 8) {
+    bytes.push(v & 0xff);
+    v = Math.floor(v / 256);
+  }
+  if (bytes.length === 0) bytes.push(0);
+  return new Uint8Array(bytes);
+}
+
+function decodeTypeFlags(bytes: Uint8Array): number {
+  let v = 0;
+  for (let i = 0; i < bytes.length && i < 8; i++) v += bytes[i] * 256 ** i;
+  return v;
+}
 
 // ---- GCS h64 derivation -----------------------------------------------------
 
@@ -245,8 +281,8 @@ export function encodeGossipFilterPayload(
     ),
     encodeTlv(0x03, params.data),
   ];
-  if (params.types !== undefined) {
-    parts.push(encodeTlv(0x04, new Uint8Array([params.types & 0xff])));
+  if (params.types !== undefined && params.types !== 0) {
+    parts.push(encodeTlv(0x04, encodeTypeFlags(params.types)));
   }
   return concatBytes(...parts);
 }
@@ -284,7 +320,8 @@ export function decodeGossipFilterPayload(
         if (value.length <= GCS_MAX_BYTES + 16) data = value;
         break;
       case 0x04:
-        if (value.length >= 1) types = value[0];
+        if (value.length >= 1 && value.length <= 8)
+          types = decodeTypeFlags(value);
         break;
     }
   }
@@ -349,7 +386,12 @@ export class GossipSync {
     const h64s = ids.map(packetIdToH64);
     const { p, m, data } = buildGcsFilter(h64s, GCS_MAX_BYTES, GCS_TARGET_FPR);
 
-    const typeFlags = (1 << TYPE_BIT_ANNOUNCE) | (1 << TYPE_BIT_MESSAGE);
+    // Advertise every type we track so a peer answers with any it holds and we
+    // lack: announces, public messages, and signed board posts.
+    const typeFlags =
+      (1 << TYPE_BIT_ANNOUNCE) |
+      (1 << TYPE_BIT_MESSAGE) |
+      (1 << TYPE_BIT_BOARD);
 
     const payload = encodeGossipFilterPayload({ p, m, data, types: typeFlags });
     const senderIDBytes = hexToBytes(identity.peerID);
@@ -360,7 +402,7 @@ export class GossipSync {
       flags: Flags.SIGNED,
       senderID: senderIDBytes,
       recipientID: new Uint8Array(8),
-      timestamp: Math.floor(Date.now() / 1000),
+      timestamp: Date.now(),
       signature: new Uint8Array(64),
       payload,
     };
@@ -378,7 +420,17 @@ export class GossipSync {
     const decodedFilter = decodeGcsFilter(params.p, params.m, params.data);
     const missing: Packet[] = [];
 
+    // A request without a types field is a pre-type-aware peer: answer with the
+    // original announce+message set only.
+    const requestedTypes =
+      params.types ?? (1 << TYPE_BIT_ANNOUNCE) | (1 << TYPE_BIT_MESSAGE);
+
     for (const packet of this.seen.values()) {
+      // Only offer a packet whose type the requester actually asked for, so a
+      // board round never draws announces and vice versa.
+      const bit = syncBitForType(packet.type);
+      if (bit === null || (requestedTypes & (1 << bit)) === 0) continue;
+
       const id = computePacketId(packet);
       const h64 = packetIdToH64(id);
       const inPeerFilter = filterContains(
@@ -405,7 +457,7 @@ export class GossipSync {
 // ---- Helpers -----------------------------------------------------------------
 
 function isGossipType(type: PacketType): boolean {
-  return type === PacketType.ANNOUNCE || type === PacketType.CHANNEL_MSG;
+  return syncBitForType(type) !== null;
 }
 
 function hexToBytes(hex: string): Uint8Array {

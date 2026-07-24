@@ -183,7 +183,7 @@ export class VoiceCaptureSession {
       flags: Flags.SIGNED,
       senderID: this.senderIDBytes,
       recipientID: new Uint8Array(8), // broadcast
-      timestamp: Math.floor(Date.now() / 1000),
+      timestamp: Date.now(),
       signature: new Uint8Array(64),
       payload: burstPayload,
     };

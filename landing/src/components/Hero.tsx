@@ -8,6 +8,29 @@ interface DownloadOption {
   href: string;
 }
 
+const RELEASE_BIRDS: Record<string, string> = {
+  "1": "Albatross",
+};
+
+function formatRelease(tag: string, publishedAt: string | null): string {
+  const version = tag.replace(/^v/, "");
+  const parts = [`v${version}`];
+
+  const bird = RELEASE_BIRDS[version.split(".")[0]];
+  if (bird) parts.push(bird);
+
+  if (publishedAt) {
+    const date = new Date(publishedAt);
+    if (!Number.isNaN(date.getTime())) {
+      parts.push(
+        date.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }),
+      );
+    }
+  }
+
+  return parts.join(" · ");
+}
+
 function DownloadDropdown({
   label,
   variant,
@@ -90,124 +113,32 @@ function DownloadDropdown({
   );
 }
 
-function SpiderIllustration() {
+const BIRD_PIXELS = [
+  [1, 1, 0, 0, 0, 0, 0, 0, 0, 1, 1],
+  [0, 1, 1, 0, 0, 0, 0, 0, 1, 1, 0],
+  [0, 0, 1, 1, 0, 1, 0, 1, 1, 0, 0],
+  [0, 0, 0, 1, 1, 1, 1, 1, 0, 0, 0],
+  [0, 0, 0, 0, 1, 1, 1, 0, 0, 0, 0],
+  [0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0],
+];
+
+function PixelBird() {
+  const cols = BIRD_PIXELS[0].length;
+  const rows = BIRD_PIXELS.length;
   return (
     <svg
-      viewBox="0 0 480 460"
-      className="h-auto w-full max-w-[400px] select-none"
+      viewBox={`0 0 ${cols} ${rows}`}
+      className="h-auto w-full max-w-[360px] select-none"
       aria-hidden="true"
+      shapeRendering="crispEdges"
     >
-      <path
-        d="M 274,162 L 330,115 L 398,122"
-        stroke="black"
-        strokeWidth="4.5"
-        fill="none"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-      <path
-        d="M 280,175 L 352,152 L 428,160"
-        stroke="black"
-        strokeWidth="4"
-        fill="none"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-      <path
-        d="M 278,190 L 355,210 L 428,225"
-        stroke="black"
-        strokeWidth="4"
-        fill="none"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-      <path
-        d="M 265,200 L 325,250 L 365,308"
-        stroke="black"
-        strokeWidth="4.5"
-        fill="none"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-
-      <path
-        d="M 206,162 L 150,115 L 82,122"
-        stroke="black"
-        strokeWidth="4.5"
-        fill="none"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-      <path
-        d="M 200,175 L 128,152 L 52,160"
-        stroke="black"
-        strokeWidth="4"
-        fill="none"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-      <path
-        d="M 202,190 L 125,210 L 52,225"
-        stroke="black"
-        strokeWidth="4"
-        fill="none"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-      <path
-        d="M 215,200 L 155,250 L 115,308"
-        stroke="black"
-        strokeWidth="4.5"
-        fill="none"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-
-      <path
-        d="M 232,147 L 227,132 L 220,123"
-        stroke="black"
-        strokeWidth="3"
-        fill="none"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-      <path
-        d="M 248,147 L 253,132 L 260,123"
-        stroke="black"
-        strokeWidth="3"
-        fill="none"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-
-      <path
-        d="M 213,168 L 200,150 L 193,141"
-        stroke="black"
-        strokeWidth="2.5"
-        fill="none"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-      <path
-        d="M 267,168 L 280,150 L 287,141"
-        stroke="black"
-        strokeWidth="2.5"
-        fill="none"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-
-      <ellipse cx="240" cy="272" rx="56" ry="62" fill="black" />
-
-      <ellipse cx="240" cy="207" rx="9" ry="7" fill="black" />
-
-      <ellipse cx="240" cy="179" rx="42" ry="35" fill="black" />
-
-      <circle cx="231" cy="165" r="5.5" fill="white" />
-      <circle cx="249" cy="165" r="5.5" fill="white" />
-
-      <circle cx="221" cy="175" r="3.5" fill="white" opacity="0.55" />
-      <circle cx="259" cy="175" r="3.5" fill="white" opacity="0.55" />
+      {BIRD_PIXELS.flatMap((row, y) =>
+        row.map((cell, x) =>
+          cell ? (
+            <rect key={`${x}-${y}`} x={x} y={y} width={1.02} height={1.02} fill="black" />
+          ) : null,
+        ),
+      )}
     </svg>
   );
 }
@@ -229,8 +160,11 @@ export default function Hero() {
     fetch("https://api.github.com/repos/areebahmeddd/Airhop/releases/latest")
       .then((res) => res.json())
       .then((data) => {
-        if (typeof data.tag_name === "string") {
-          setLatestRelease(data.tag_name);
+        const tag = data.tag_name || data.name;
+        if (typeof tag === "string" && tag) {
+          setLatestRelease(
+            formatRelease(tag, typeof data.published_at === "string" ? data.published_at : null),
+          );
         }
       })
       .catch(() => {});
@@ -258,7 +192,7 @@ export default function Hero() {
           <div className="inline-flex w-fit items-center space-x-2 border border-gray-200 bg-gray-100 px-3 py-1">
             <span className="h-2 w-2 animate-pulse rounded-full bg-green-500" />
             <span className="font-mono text-xs font-semibold tracking-widest text-gray-600 uppercase">
-              {latestRelease ? `${latestRelease} released` : "v1.0.0 released"}
+              {latestRelease ?? "v1.0.0 · Albatross"}
             </span>
           </div>
 
@@ -320,7 +254,7 @@ export default function Hero() {
           transition={{ duration: 1.2, delay: 0.3, ease: "easeOut" }}
           className="flex items-center justify-center py-4 lg:py-0"
         >
-          <SpiderIllustration />
+          <PixelBird />
         </motion.div>
       </div>
     </section>

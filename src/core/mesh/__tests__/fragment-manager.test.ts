@@ -38,7 +38,14 @@ function makeLargePacket(
     recipientID: new Uint8Array(8),
     timestamp: 1000,
     signature: new Uint8Array(64),
-    payload: new Uint8Array(payloadSize).fill(0xab),
+    // High-entropy fill so the codec's raw-DEFLATE compression leaves it large:
+    // an all-one-byte payload would compress below a single BLE frame and there
+    // would be nothing to fragment.
+    payload: (() => {
+      const p = new Uint8Array(payloadSize);
+      for (let i = 0; i < payloadSize; i++) p[i] = (i * 167 + 13) & 0xff;
+      return p;
+    })(),
   };
   packet.signature = signPacket(packet, identity.signingPrivKey);
   return packet;
@@ -206,5 +213,45 @@ describe("FragmentManager", () => {
     expect(manager.size).toBe(1);
     manager.reset();
     expect(manager.size).toBe(0);
+  });
+
+  test("reports incremental progress as fragments arrive", () => {
+    const identity2 = makeIdentity();
+    // A FILE_TRANSFER packet large enough to span several fragments.
+    const base = makeLargePacket(FRAG_DATA_SIZE * 4, identity2);
+    const packet: Packet = { ...base, type: PacketType.FILE_TRANSFER };
+    packet.signature = signPacket(packet, identity2.signingPrivKey);
+    const frags = fragmentPacket(packet, identity2, signPacket);
+    expect(frags.length).toBeGreaterThan(1);
+
+    const manager = new FragmentManager();
+    const progress: {
+      received: number;
+      total: number;
+      receivedBytes: number;
+      originalType: number;
+    }[] = [];
+    for (const f of frags) {
+      manager.receive(
+        f.senderID,
+        f.payload,
+        () => {},
+        (p) => progress.push(p),
+      );
+    }
+
+    // One progress event per fragment, counts climbing to the full total.
+    expect(progress).toHaveLength(frags.length);
+    expect(progress[0].received).toBe(1);
+    expect(progress[0].originalType).toBe(PacketType.FILE_TRANSFER);
+    const last = progress[progress.length - 1];
+    expect(last.received).toBe(last.total);
+    expect(last.total).toBe(frags.length);
+    // Bytes received only ever increase.
+    for (let i = 1; i < progress.length; i++) {
+      expect(progress[i].receivedBytes).toBeGreaterThan(
+        progress[i - 1].receivedBytes,
+      );
+    }
   });
 });

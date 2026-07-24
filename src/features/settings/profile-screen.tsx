@@ -34,6 +34,7 @@ import {
   Spacing,
   useThemeColors,
 } from "../../ui/theme";
+import { peerInviteLink } from "../../utils/deep-link";
 import { panicWipe } from "../../utils/panic-wipe";
 import AboutScreen from "./sections/about-screen";
 import DonateScreen from "./sections/donate-screen";
@@ -282,10 +283,10 @@ export default function ProfileScreen({
   }
 
   async function handleShareQR(): Promise<void> {
-    // Share a deep-link URL that any Airhop / bitchat-compatible app can open.
+    // A tappable deep link that opens Airhop straight into a chat with me.
     await Share.share({
-      message: `airhop://peer/${peerID}`,
-      title: "Scan to add me on Airhop",
+      message: `Add me on Airhop - offline-first, private mesh messaging.\n\n${peerInviteLink(peerID)}`,
+      title: "Add me on Airhop",
     });
   }
 
@@ -412,7 +413,7 @@ export default function ProfileScreen({
         <View style={shared.settingsGroup}>
           <SettingRow
             icon="credit-card"
-            label="Payments"
+            label="Wallet"
             description="Send Cashu ecash peer to peer over the mesh"
             control={
               <SettingSwitch
@@ -451,7 +452,7 @@ export default function ProfileScreen({
           <SettingLinkRow
             icon="lock"
             label="Privacy & Security"
-            description="Tor routing, forward secrecy, signed packets"
+            description="Tor routing, Internet gateway, protocols"
             onPress={() => setView("security")}
           />
           <GroupDivider />

@@ -136,11 +136,13 @@ describe("Packet header byte layout (v2)", () => {
     expect(Array.from(buf.slice(32, 35))).toEqual(Array.from(PAYLOAD)));
   test("bytes[35–98] are signature (64 bytes)", () =>
     expect(buf.slice(35, 99).every((b) => b === 0x5a)).toBe(true));
-  // Total: 16 header + 8 senderID + 8 recipientID + 3 payload + 64 signature = 99
-  test("total length is 16 + 8 + 8 + payload + 64", () =>
-    expect(buf.length).toBe(16 + 8 + 8 + PAYLOAD.length + 64));
+  // Core is 16 header + 8 senderID + 8 recipientID + 3 payload + 64 sig = 99,
+  // then PKCS#7-padded up to the 256 block (bitchat MessagePadding).
+  test("frame is PKCS#7-padded to a block size", () =>
+    expect(buf.length).toBe(256));
 
-  // Broadcast: no recipientID field (smaller buffer)
+  // Broadcast: no recipientID field on the wire, so payload sits right after the
+  // senderID at offset 24 (16 header + 8 senderID).
   test("broadcast omits recipientID field from wire", () => {
     const bcast: Packet = {
       ...packet,
@@ -148,8 +150,10 @@ describe("Packet header byte layout (v2)", () => {
       recipientID: BROADCAST_ID,
     };
     const bcastBuf = encodePacket(bcast);
-    // 16 + 8 senderID + 3 payload + 64 signature (no recipientID)
-    expect(bcastBuf.length).toBe(16 + 8 + PAYLOAD.length + 64);
+    expect(Array.from(bcastBuf.slice(24, 24 + PAYLOAD.length))).toEqual(
+      Array.from(PAYLOAD),
+    );
+    expect(isBroadcast(decodePacket(bcastBuf)!)).toBe(true);
   });
 });
 
@@ -228,10 +232,27 @@ describe("Packet encode/decode round-trip", () => {
     expect(decoded!.isRSR).toBe(true);
   });
 
-  test("decodePacket returns null for version != 2", () => {
-    const buf = new Uint8Array(100);
-    buf[0] = 1;
-    expect(decodePacket(buf)).toBeNull();
+  test("decodePacket accepts v1 and v2, rejects unknown versions", () => {
+    const sample: Packet = {
+      type: PacketType.ANNOUNCE,
+      ttl: 7,
+      flags: Flags.SIGNED,
+      senderID: new Uint8Array(8).fill(0x11),
+      recipientID: BROADCAST_ID,
+      timestamp: 1_700_000_000_000,
+      signature: new Uint8Array(64),
+      payload: new TextEncoder().encode("hi"),
+    };
+    // v1 and v2 are both valid bitchat wire versions.
+    expect(
+      decodePacket(encodePacket({ ...sample, version: 1 })),
+    ).not.toBeNull();
+    expect(
+      decodePacket(encodePacket({ ...sample, version: 2 })),
+    ).not.toBeNull();
+    const bad = new Uint8Array(100);
+    bad[0] = 3;
+    expect(decodePacket(bad)).toBeNull();
   });
 
   test("decodePacket returns null for truncated buffer", () => {

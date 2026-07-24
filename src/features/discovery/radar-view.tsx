@@ -5,8 +5,15 @@
 // Compass N is decorative: BLE gives proximity only, not bearing.
 
 import { Feather } from "@expo/vector-icons";
-import React, { useEffect, useMemo, useState } from "react";
-import { Animated, Pressable, StyleSheet, Text, View } from "react-native";
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import {
+  Animated,
+  Easing,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
 import { type NearbyPeer } from "../../store/peer-store";
 import Avatar from "../../ui/components/avatar";
 import StatusDot from "../../ui/components/status-dot";
@@ -54,6 +61,10 @@ const RING_LABELS: [string, string, string] = ["Strong", "Medium", "Weak"];
 const AVATAR_SIZE = 34;
 const SELF_SIZE = 42;
 
+// Consecutive taps within this window count toward the easter egg.
+const TAP_WINDOW_MS = 2500;
+const EGG_TAPS = 5;
+
 // ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
@@ -70,15 +81,78 @@ export default function RadarView({
   const [ring1] = useState(() => new Animated.Value(0));
   const [ring2] = useState(() => new Animated.Value(0));
   const [ring3] = useState(() => new Animated.Value(0));
+  // A one-shot wave fired when the user taps the center to rescan.
+  const [manualWave] = useState(() => new Animated.Value(0));
+  // Center dot press feedback: a small dip, no overshoot.
+  const [selfScale] = useState(() => new Animated.Value(1));
+  // Bumped by the easter egg to restart the ambient sonar loop from scratch.
+  const [waveEpoch, setWaveEpoch] = useState(0);
+
+  // Consecutive rapid center taps, for the easter egg. Reset after a pause.
+  const tapCountRef = useRef(0);
+  const tapResetRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Handles for the tap animations, so a fast second tap cancels the first
+  // rather than leaving two timings fighting over the same Animated.Value.
+  const waveAnimRef = useRef<Animated.CompositeAnimation | null>(null);
+  const dotAnimRef = useRef<Animated.CompositeAnimation | null>(null);
 
   const C = canvasSize / 2;
 
+  // Tap the center device for a single sonar wave. Deliberately cosmetic: BLE
+  // scanning runs continuously once started and peers arrive on announce
+  // events, so a manual rescan would find nothing a moment's wait would not.
+  // Five taps in quick succession regenerate the ambient waves.
+  function handleCenterPress(): void {
+    waveAnimRef.current?.stop();
+    manualWave.setValue(0);
+    waveAnimRef.current = Animated.timing(manualWave, {
+      toValue: 1,
+      duration: 1100,
+      easing: Easing.out(Easing.quad),
+      useNativeDriver: true,
+    });
+    waveAnimRef.current.start();
+
+    dotAnimRef.current?.stop();
+    dotAnimRef.current = Animated.sequence([
+      Animated.timing(selfScale, {
+        toValue: 0.92,
+        duration: 110,
+        easing: Easing.out(Easing.quad),
+        useNativeDriver: true,
+      }),
+      Animated.timing(selfScale, {
+        toValue: 1,
+        duration: 220,
+        easing: Easing.out(Easing.quad),
+        useNativeDriver: true,
+      }),
+    ]);
+    dotAnimRef.current.start();
+
+    tapCountRef.current += 1;
+    if (tapResetRef.current !== null) clearTimeout(tapResetRef.current);
+    tapResetRef.current = setTimeout(() => {
+      tapCountRef.current = 0;
+    }, TAP_WINDOW_MS);
+    if (tapCountRef.current >= EGG_TAPS) {
+      tapCountRef.current = 0;
+      // Easter egg: no pop, no flurry. The three ambient waves simply start
+      // over from the center, so the radar quietly re-blooms. Restarting the
+      // loop by epoch keeps a single owner of the ring values, which is what
+      // stops a second egg mid-flight from running two loops at once.
+      setWaveEpoch((n) => n + 1);
+    }
+  }
+
   // Staggered sonar pulse: three expanding rings at the outer boundary.
+  // Re-runs when waveEpoch changes, tearing the old loop down first.
   useEffect(() => {
     function pulse(
       val: Animated.Value,
       delay: number,
     ): Animated.CompositeAnimation {
+      val.setValue(0);
       return Animated.loop(
         Animated.sequence([
           Animated.delay(delay),
@@ -102,7 +176,18 @@ export default function RadarView({
     ]);
     anim.start();
     return () => anim.stop();
-  }, [ring1, ring2, ring3]);
+  }, [ring1, ring2, ring3, waveEpoch]);
+
+  // Unmounting mid-tap must not leave a timer or an animation callback holding
+  // a handle to this component.
+  useEffect(() => {
+    return () => {
+      if (tapResetRef.current !== null) clearTimeout(tapResetRef.current);
+      tapResetRef.current = null;
+      waveAnimRef.current?.stop();
+      dotAnimRef.current?.stop();
+    };
+  }, []);
 
   // Bucket peers into rings by signal strength, falling back to recency.
   const byRing: [NearbyPeer[], NearbyPeer[], NearbyPeer[]] = [[], [], []];
@@ -199,6 +284,33 @@ export default function RadarView({
               );
             })}
 
+            {/* Manual sonar wave: one calm ring on center tap, no overshoot. */}
+            <Animated.View
+              pointerEvents="none"
+              style={[
+                styles.manualWave,
+                {
+                  width: outerR * 2,
+                  height: outerR * 2,
+                  borderRadius: outerR,
+                  top: C - outerR,
+                  left: C - outerR,
+                  opacity: manualWave.interpolate({
+                    inputRange: [0, 0.15, 1],
+                    outputRange: [0, 0.34, 0],
+                  }),
+                  transform: [
+                    {
+                      scale: manualWave.interpolate({
+                        inputRange: [0, 1],
+                        outputRange: [0.06, 1],
+                      }),
+                    },
+                  ],
+                },
+              ]}
+            />
+
             {/* Static distance guide rings with labels */}
             {RING_FR.map((fr, i) => {
               const r = C * fr;
@@ -251,15 +363,23 @@ export default function RadarView({
               E
             </Text>
 
-            {/* Center dot: local device */}
-            <View
+            {/* Center dot: local device. Tap to rescan (with a sonar burst). */}
+            <Pressable
               style={[
-                styles.selfDot,
+                styles.selfButton,
                 { top: C - SELF_SIZE / 2, left: C - SELF_SIZE / 2 },
               ]}
+              onPress={handleCenterPress}
+              accessibilityRole="button"
+              accessibilityLabel="Rescan for nearby peers"
+              hitSlop={10}
             >
-              <Feather name="radio" size={14} color={Colors.textInverse} />
-            </View>
+              <Animated.View
+                style={[styles.selfDot, { transform: [{ scale: selfScale }] }]}
+              >
+                <Feather name="radio" size={14} color={Colors.textInverse} />
+              </Animated.View>
+            </Pressable>
 
             {/* Peer nodes placed on their signal-strength ring */}
             {(byRing as NearbyPeer[][]).map((group, ri) =>
@@ -366,6 +486,11 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       borderWidth: 1.5,
       borderColor: Colors.accent,
     },
+    manualWave: {
+      position: "absolute",
+      borderWidth: 1.5,
+      borderColor: Colors.accent,
+    },
     guideRing: {
       position: "absolute",
       borderWidth: 1,
@@ -384,8 +509,12 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       color: Colors.textMuted,
       letterSpacing: 0.5,
     },
-    selfDot: {
+    selfButton: {
       position: "absolute",
+      width: SELF_SIZE,
+      height: SELF_SIZE,
+    },
+    selfDot: {
       width: SELF_SIZE,
       height: SELF_SIZE,
       borderRadius: Radius.full,

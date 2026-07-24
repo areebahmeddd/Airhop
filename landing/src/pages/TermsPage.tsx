@@ -62,17 +62,24 @@ export default function TermsPage() {
           </section>
 
           <section className="space-y-3">
-            <h2 className="text-base font-semibold text-gray-900">No warranty</h2>
+            <h2 className="text-base font-semibold text-gray-900">Content you post</h2>
             <p className="text-sm leading-relaxed">
-              Airhop is provided &quot;as is&quot; without any warranty of any kind. We make no
-              guarantees about reliability, availability, or fitness for a particular purpose.
+              Public channels, location channels, and bulletin-board notices are visible to anyone
+              in range or in the same area, including people using other compatible apps. Treat
+              anything posted there as public. You are responsible for what you post.
             </p>
             <p className="text-sm leading-relaxed">
-              The app has not been formally security-audited by an external firm. An audit is
-              planned but has not been completed.{" "}
               <strong>
-                Do not rely on Airhop as your only means of communication in life-safety situations.
-              </strong>
+                There is no central server, so we cannot moderate, edit, or delete what you or
+                anyone else sends.
+              </strong>{" "}
+              Deleting your own notice broadcasts a signed retraction that other devices honour, and
+              notices expire on their own, but a copy that has already reached another device may
+              remain there.
+            </p>
+            <p className="text-sm leading-relaxed">
+              If you turn on the internet gateway, your device relays other people&apos;s public
+              location-channel messages. You do not author that content and cannot control it.
             </p>
           </section>
 
@@ -87,6 +94,21 @@ export default function TermsPage() {
               </strong>{" "}
               Token transfers occur between devices without any involvement from this project. We
               have no ability to reverse, recover, or mediate any transaction.
+            </p>
+          </section>
+
+          <section className="space-y-3">
+            <h2 className="text-base font-semibold text-gray-900">No warranty</h2>
+            <p className="text-sm leading-relaxed">
+              Airhop is provided &quot;as is&quot; without any warranty of any kind. We make no
+              guarantees about reliability, availability, or fitness for a particular purpose.
+            </p>
+            <p className="text-sm leading-relaxed">
+              The app has not been formally security-audited by an external firm. An audit is
+              planned but has not been completed.{" "}
+              <strong>
+                Do not rely on Airhop as your only means of communication in life-safety situations.
+              </strong>
             </p>
           </section>
 

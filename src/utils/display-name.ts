@@ -8,7 +8,7 @@
 // nickname, so the SAME peer appeared under two different names on two screens.
 //
 // Precedence, most trusted first:
-//   1. Contact nickname: the user added them deliberately (QR/NFC card).
+//   1. Contact nickname: the user added them deliberately (QR card).
 //   2. Announced nickname: what the peer calls themselves over the mesh.
 //   3. Generated username: deterministic from the peer ID; always available.
 //

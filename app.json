@@ -2,6 +2,7 @@
   "expo": {
     "name": "Airhop",
     "slug": "airhop",
+    "scheme": "airhop",
     "version": "1.0.0",
     "orientation": "portrait",
     "userInterfaceStyle": "automatic",

@@ -49,6 +49,13 @@
         <action android:name="android.intent.action.MAIN"/>
         <category android:name="android.intent.category.LAUNCHER"/>
       </intent-filter>
+      <!-- Airhop deep links: airhop://channel/<name>, airhop://peer/<id> -->
+      <intent-filter>
+        <action android:name="android.intent.action.VIEW"/>
+        <category android:name="android.intent.category.DEFAULT"/>
+        <category android:name="android.intent.category.BROWSABLE"/>
+        <data android:scheme="airhop"/>
+      </intent-filter>
     </activity>
     <!-- Foreground service that keeps BLE scanning/advertising alive in the background -->
     <service

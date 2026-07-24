@@ -203,14 +203,18 @@ export class GeohashPresence {
   // here" for the participant list. The one-hour lookback lets someone opening
   // a channel see recent conversation instead of an empty room, and the limit
   // caps the initial replay burst.
-  subscribeChannel(geohash: string, onEvent: EventHandler): () => void {
+  subscribeChannel(
+    geohash: string,
+    onEvent: EventHandler,
+    relays?: string[],
+  ): () => void {
     const filter = {
       kinds: [KIND_GEOHASH_CHANNEL, KIND_PRESENCE],
       "#g": [geohash],
       since: Math.floor(Date.now() / 1000) - CHANNEL_LOOKBACK_SECONDS,
       limit: CHANNEL_INITIAL_LIMIT,
     };
-    const closer = this.client.subscribe([filter], onEvent);
+    const closer = this.client.subscribe([filter], onEvent, undefined, relays);
     return () => closer.close();
   }
 
@@ -225,6 +229,7 @@ export class GeohashPresence {
     content: string,
     nickname?: string,
     msgId?: string,
+    relays?: string[],
   ): Promise<void> {
     const tags: string[][] = [["g", geohash]];
     if (nickname !== undefined && nickname.length > 0) {
@@ -247,7 +252,7 @@ export class GeohashPresence {
       },
       this.privKey,
     );
-    await this.client.publish(event);
+    await this.client.publish(event, relays);
   }
 
   // ---- Private ---------------------------------------------------------------

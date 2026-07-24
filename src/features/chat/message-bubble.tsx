@@ -5,12 +5,16 @@
 // depend on per-thread interactive state: playingUri, revealedAttachments,
 // claimToken) and are handed down as render props.
 
-import { Feather } from "@expo/vector-icons";
+import { Feather, MaterialCommunityIcons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import React, { useMemo } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import type { EmbeddedToken } from "../../core/payments/cashu";
-import type { ChatAttachment, ChatMessage } from "../../store/chat-store";
+import type {
+  ChatAttachment,
+  ChatMessage,
+  MessageStatus,
+} from "../../store/chat-store";
 import Avatar from "../../ui/components/avatar";
 import { FontSize, Radius, Spacing, useThemeColors } from "../../ui/theme";
 
@@ -24,10 +28,10 @@ interface Props {
   renderAttachment: (attachment: ChatAttachment) => React.ReactNode;
   formatTime: (ms: number) => string;
   onLongPress: (item: ChatMessage) => void;
-  // Tapping the avatar or name opens a profile sheet for that sender — same
+  // Tapping the avatar or name opens a profile sheet for that sender, same
   // "tap a peer to see who they are" affordance as the Mesh tab. Omitted in
   // a DM thread (there's only one other participant, already reachable via
-  // the header) — only wired for channels, where a message can come from
+  // the header). Only wired for channels, where a message can come from
   // any of several people.
   onPressSender?: (item: ChatMessage) => void;
   // Briefly true right after navigating here from a search result, so the
@@ -178,6 +182,11 @@ export default function MessageBubble({
               >
                 {formatTime(item.timestampMs)}
               </Text>
+              {/* Delivery ticks, own outgoing messages only (never on system
+                  notices or received messages). */}
+              {item.isMine && !item.isSystem && item.status !== undefined && (
+                <StatusTick status={item.status} Colors={Colors} />
+              )}
             </View>
           </View>
         </Pressable>
@@ -197,6 +206,76 @@ export default function MessageBubble({
       </View>
     </View>
   );
+}
+
+// WhatsApp-style delivery ticks, kept monochrome to match the app: a single
+// check for sent, a double check for delivered, the same double check at full
+// brightness for read (the app has no second accent colour to spend, so read
+// reads as "brighter", not "blue"). Rendered on the near-black "mine" bubble,
+// hence textInverse.
+function StatusTick({
+  status,
+  Colors,
+}: {
+  status: MessageStatus;
+  Colors: ReturnType<typeof useThemeColors>;
+}): React.JSX.Element {
+  const SIZE = 13;
+  const dim = { opacity: 0.55 };
+  switch (status) {
+    case "sending":
+      return (
+        <MaterialCommunityIcons
+          name="clock-outline"
+          size={SIZE}
+          color={Colors.textInverse}
+          style={dim}
+        />
+      );
+    case "sent":
+      return (
+        <MaterialCommunityIcons
+          name="check"
+          size={SIZE}
+          color={Colors.textInverse}
+          style={dim}
+        />
+      );
+    case "carried":
+      return (
+        <MaterialCommunityIcons
+          name="account-arrow-right"
+          size={SIZE}
+          color={Colors.textInverse}
+          style={dim}
+        />
+      );
+    case "delivered":
+      return (
+        <MaterialCommunityIcons
+          name="check-all"
+          size={SIZE}
+          color={Colors.textInverse}
+          style={dim}
+        />
+      );
+    case "read":
+      return (
+        <MaterialCommunityIcons
+          name="check-all"
+          size={SIZE}
+          color={Colors.textInverse}
+        />
+      );
+    case "failed":
+      return (
+        <MaterialCommunityIcons
+          name="alert-circle-outline"
+          size={SIZE}
+          color={Colors.danger}
+        />
+      );
+  }
 }
 
 function createStyles(Colors: ReturnType<typeof useThemeColors>) {

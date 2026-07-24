@@ -1,36 +1,39 @@
-// Binary encode/decode for the bitchat v2 wire format.
+// Binary encode/decode for the bitchat wire format.
 //
-// Matches bitchat BinaryProtocol.swift / BinaryProtocol.kt exactly so
-// Airhop packets are decodable by bitchat iOS and Android nodes.
+// Byte-identical to bitchat BinaryProtocol.swift / BinaryProtocol.kt so an
+// Airhop packet is decodable and signature-verifiable by bitchat iOS and Android
+// nodes, and vice versa. Two header versions coexist:
 //
-// Fixed header (v2, 16 bytes):
-//   [0]      u8      version = 2
-//   [1]      u8      type
-//   [2]      u8      ttl (default 7; normalized to 0 for signing)
-//   [3–10]   u64-BE  timestamp (Unix seconds)
-//   [11]     u8      flags
-//                      bit 0 (0x01): hasRecipient – recipientID field present
-//                      bit 1 (0x02): hasSignature – 64-byte Ed25519 sig appended
-//                      bit 2 (0x04): isCompressed – zlib payload (reserved)
-//                      bit 3 (0x08): hasRoute     – source-route hop list present
-//                      bit 4 (0x10): isRSR        – solicited sync response
-//   [12–15]  u32-BE  payloadLength
+//   v1 header (14 bytes):  version type ttl timestamp(8) flags payloadLen(u16)
+//   v2 header (16 bytes):  version type ttl timestamp(8) flags payloadLen(u32)
+//
+// bitchat emits its core broadcasts (ANNOUNCE, message, leave) as v1 and uses v2
+// for file transfer and source-routed packets; both sides decode either. We
+// decode both and emit v2 (bitchat decodes v2 for every type).
 //
 // Variable sections (in order after the fixed header):
-//   senderID    (8 bytes, always present)
-//   recipientID (8 bytes, only when hasRecipient = 1)
-//   route       (when hasRoute = 1: [count: u8][hop1: 8 bytes]...[hopN: 8 bytes])
-//   payload     (payloadLength bytes)
-//   signature   (64 bytes, only when hasSignature = 1)
+//   senderID     (8 bytes, always present)
+//   recipientID  (8 bytes, only when hasRecipient = 1; omitted for broadcast)
+//   route        (v2 only, hasRoute = 1: [count u8][hop×8]...), NOT counted in payloadLength
+//   originalSize (lengthField bytes, only when isCompressed = 1)
+//   payload      (compressed bytes when isCompressed, else raw)
+//   signature    (64 bytes, only when hasSignature = 1)
+// The whole frame is then PKCS#7-padded to a fixed block size (MessagePadding).
 //
-// Signing (matches bitchat toBinaryDataForSigning()):
-//   Encode the packet with ttl=0, isRSR cleared, hasSignature cleared (no sig),
-//   then Ed25519-sign the resulting bytes. Receivers re-encode with the same
-//   parameters to verify. Clearing TTL lets relays decrement it without
-//   invalidating the signature.
+//   timestamp is MILLISECONDS since the Unix epoch (bitchat unit).
+//   payloadLength = payload bytes + (isCompressed ? originalSize field : 0);
+//                   it does NOT include the route block.
+//
+// Signing (matches bitchat toBinaryDataForSigning()): encode the packet with
+// ttl=0, isRSR cleared, and no signature, PADDED, then Ed25519-sign. Receivers
+// re-encode identically to verify. Clearing TTL lets relays decrement it, and
+// clearing isRSR lets a packet be re-tagged as a solicited sync response,
+// without invalidating the signature.
 import { ed25519 } from "@noble/curves/ed25519.js";
 import { sha256 } from "@noble/hashes/sha2.js";
 import { concatBytes } from "@noble/hashes/utils.js";
+import { optimalBlockSize, pad, unpad } from "./message-padding";
+import { compress, decompress, shouldCompress } from "./packet-compression";
 
 // Packet type registry per PROTOCOLS.md section 3.
 // All values match bitchat MessageType.swift / MessageType.kt (public domain).
@@ -46,7 +49,14 @@ export const enum PacketType {
   FRAGMENT = 0x20, // Single BLE fragment of a larger message
   REQUEST_SYNC = 0x21, // GCS filter gossip request (local-only, TTL=2)
   FILE_TRANSFER = 0x22, // Binary file / audio / image payload
+  BOARD_POST = 0x23, // Signed geohash/mesh bulletin-board post or tombstone
+  PREKEY_BUNDLE = 0x24, // Signed batch of one-time prekeys (gossiped)
+  GROUP_MESSAGE = 0x25, // Group-encrypted broadcast (cleartext group ID + AEAD)
+  PING = 0x26, // Directed mesh echo request (nonce + origin TTL)
+  PONG = 0x27, // Directed mesh echo reply (echoed nonce + origin TTL)
+  NOSTR_CARRIER = 0x28, // Gateway-ferried signed Nostr event
   VOICE_FRAME = 0x29, // PTT audio burst (matches bitchat-iOS voiceFrame)
+  CHANNEL_ENC = 0x2a, // Airhop private channel: XChaCha20-Poly1305 sealed msg
 }
 
 // Removed types, recorded so they aren't reintroduced by accident:
@@ -65,7 +75,7 @@ export const enum PacketType {
 export const Flags = {
   HAS_RECIPIENT: 0x01, // bit 0: recipientID field is present (unicast)
   SIGNED: 0x02, // bit 1: 64-byte Ed25519 signature is appended
-  COMPRESSED: 0x04, // bit 2: payload is zlib-compressed (reserved)
+  COMPRESSED: 0x04, // bit 2: raw-DEFLATE payload, preceded by originalSize
   HAS_ROUTE: 0x08, // bit 3: source-route hop list is present
   IS_RSR: 0x10, // bit 4: packet is a solicited sync response
 } as const;
@@ -76,33 +86,33 @@ export const Flags = {
 // HAS_RECIPIENT is not set, preserving the isBroadcast() helper contract.
 export const BROADCAST_ID = new Uint8Array(8);
 
-// Fixed header size for v2 packets.
-export const V2_HEADER_SIZE = 16;
+// Fixed header sizes.
+export const V1_HEADER_SIZE = 14; // 2-byte payload length
+export const V2_HEADER_SIZE = 16; // 4-byte payload length (+ optional route)
 const SENDER_ID_SIZE = 8;
 const RECIPIENT_ID_SIZE = 8;
 const SIGNATURE_SIZE = 64;
-const MIN_DECODE_SIZE = V2_HEADER_SIZE + SENDER_ID_SIZE; // 24 bytes
+// Shortest decodable frame: the smaller (v1) header plus a senderID.
+const MIN_DECODE_SIZE = V1_HEADER_SIZE + SENDER_ID_SIZE; // 22 bytes
 
-// Fixed-header field positions.
-const VERSION_OFFSET = 0; // u8
-const TYPE_OFFSET = 1; // u8
+// Fixed-header field positions (identical up to flags for v1 and v2).
 const TTL_OFFSET = 2; // u8
-const TIMESTAMP_OFFSET = 3; // u64 BE (8 bytes)
 const FLAGS_OFFSET = 11; // u8
-const PAYLOAD_LEN_OFFSET = 12; // u32 BE (4 bytes)
 
 export interface Packet {
   type: PacketType;
   ttl: number;
-  // Flags byte. Use Flags.* constants. HAS_RECIPIENT is derived automatically
-  // from recipientID during encoding. SIGNED must be set before calling
-  // signPacket. IS_RSR and HAS_ROUTE are derived from isRSR / route fields.
+  // Flags byte. Use Flags.* constants. HAS_RECIPIENT / HAS_ROUTE / IS_RSR /
+  // COMPRESSED are all derived by the encoder from the struct fields; only
+  // SIGNED is honoured as an input (set it before signPacket).
   flags: number;
   senderID: Uint8Array; // 8 bytes
   recipientID: Uint8Array; // 8 bytes (all-zeros = broadcast)
-  timestamp: number; // Unix seconds (u64 on wire; JS number is safe up to 2^53)
+  timestamp: number; // MILLISECONDS since epoch (u64 on wire; safe up to 2^53)
   signature: Uint8Array; // 64 bytes (zeros when unsigned)
-  payload: Uint8Array;
+  payload: Uint8Array; // decoded (decompressed) payload
+  // Wire header version. Decoder reports what it read; encoder defaults to 2.
+  version?: number;
   // Optional fields: encoder derives HAS_ROUTE and IS_RSR flags from these.
   isRSR?: boolean;
   route?: readonly Uint8Array[]; // intermediate hop peerIDs, each 8 bytes
@@ -125,16 +135,48 @@ function readU64BE(view: DataView, offset: number): number {
   return hi * 0x100000000 + lo;
 }
 
-export function encodePacket(p: Packet): Uint8Array {
+// Maximum decodable payload length, matching bitchat's FileTransferLimits guard
+// against absurd length fields (defends the decompressor and allocator).
+const MAX_PAYLOAD_BYTES = 20 * 1024 * 1024;
+
+function headerSizeFor(version: number): number | null {
+  if (version === 1) return V1_HEADER_SIZE;
+  if (version === 2) return V2_HEADER_SIZE;
+  return null;
+}
+
+// Encode a packet to bitchat's binary wire format. `padding` defaults to true
+// (the on-wire form and the signing preimage are both padded).
+export function encodePacket(p: Packet, padding = true): Uint8Array {
+  const version = p.version ?? 2;
+  const lengthFieldBytes = version === 2 ? 4 : 2;
+  const headerSize = version === 2 ? V2_HEADER_SIZE : V1_HEADER_SIZE;
+
+  // Compress the payload when bitchat would, keeping the original size so the
+  // receiver can restore it. Route bytes are never compressed.
+  let payload = p.payload;
+  let isCompressed = false;
+  let originalSize = 0;
+  if (shouldCompress(payload)) {
+    const maxRepresentable = version === 2 ? 0xffffffff : 0xffff;
+    if (payload.length <= maxRepresentable) {
+      const c = compress(payload);
+      if (c !== null) {
+        originalSize = payload.length;
+        payload = c;
+        isCompressed = true;
+      }
+    }
+  }
+
   const isBcast = p.recipientID.every((b) => b === 0);
   const hasRecipient = !isBcast;
   const isSigned = (p.flags & Flags.SIGNED) !== 0;
-  const isCompressed = (p.flags & Flags.COMPRESSED) !== 0;
-  const route = p.route ?? [];
+  // Route is v2-only.
+  const route = version >= 2 ? (p.route ?? []) : [];
   const hasRoute = route.length > 0;
   const isRSR = p.isRSR === true;
 
-  // Derive the wire flags byte: always computed from struct fields.
   let wireFlags = 0;
   if (hasRecipient) wireFlags |= Flags.HAS_RECIPIENT;
   if (isSigned) wireFlags |= Flags.SIGNED;
@@ -143,26 +185,33 @@ export function encodePacket(p: Packet): Uint8Array {
   if (isRSR) wireFlags |= Flags.IS_RSR;
 
   const routeBytes = hasRoute ? 1 + route.length * SENDER_ID_SIZE : 0;
-  const payloadLen = p.payload.length;
+  const originalSizeFieldBytes = isCompressed ? lengthFieldBytes : 0;
+  // payloadLength counts the payload and the compression preamble, NOT the route.
+  const payloadDataSize = payload.length + originalSizeFieldBytes;
 
-  let size = V2_HEADER_SIZE + SENDER_ID_SIZE;
+  let size = headerSize + SENDER_ID_SIZE;
   if (hasRecipient) size += RECIPIENT_ID_SIZE;
   size += routeBytes;
-  size += payloadLen;
+  size += payloadDataSize;
   if (isSigned) size += SIGNATURE_SIZE;
 
   const buf = new Uint8Array(size);
   const view = new DataView(buf.buffer);
   let off = 0;
 
-  buf[off++] = 2; // version
+  buf[off++] = version;
   buf[off++] = p.type;
   buf[off++] = p.ttl;
   writeU64BE(view, off, p.timestamp);
   off += 8;
   buf[off++] = wireFlags;
-  view.setUint32(off, payloadLen, false);
-  off += 4;
+  if (version === 2) {
+    view.setUint32(off, payloadDataSize, false);
+    off += 4;
+  } else {
+    view.setUint16(off, payloadDataSize, false);
+    off += 2;
+  }
 
   buf.set(p.senderID.slice(0, 8), off);
   off += 8;
@@ -177,33 +226,62 @@ export function encodePacket(p: Packet): Uint8Array {
       off += 8;
     }
   }
-  buf.set(p.payload, off);
-  off += payloadLen;
+  if (isCompressed) {
+    if (version === 2) {
+      view.setUint32(off, originalSize, false);
+      off += 4;
+    } else {
+      view.setUint16(off, originalSize, false);
+      off += 2;
+    }
+  }
+  buf.set(payload, off);
+  off += payload.length;
   if (isSigned) {
     buf.set(p.signature.slice(0, 64), off);
   }
 
+  if (padding) {
+    return pad(buf, optimalBlockSize(buf.length));
+  }
   return buf;
 }
 
 export function decodePacket(raw: Uint8Array): Packet | null {
+  // Decode as-is first (robust when padding was not applied), then retry after
+  // stripping PKCS#7 padding, exactly bitchat's BinaryProtocol.decode.
+  const direct = decodeCore(raw);
+  if (direct !== null) return direct;
+  const unpadded = unpad(raw);
+  if (unpadded.length === raw.length) return null;
+  return decodeCore(unpadded);
+}
+
+function decodeCore(raw: Uint8Array): Packet | null {
   if (raw.length < MIN_DECODE_SIZE) return null;
   const view = new DataView(raw.buffer, raw.byteOffset, raw.byteLength);
 
-  if (raw[VERSION_OFFSET] !== 2) return null; // only v2
+  const version = raw[0];
+  const headerSize = headerSizeFor(version);
+  if (headerSize === null) return null;
+  const lengthFieldBytes = version === 2 ? 4 : 2;
+  if (raw.length < headerSize + SENDER_ID_SIZE) return null;
 
-  const type = raw[TYPE_OFFSET] as PacketType;
+  const type = raw[1] as PacketType;
   const ttl = raw[TTL_OFFSET];
-  const timestamp = readU64BE(view, TIMESTAMP_OFFSET);
+  const timestamp = readU64BE(view, 3);
   const flags = raw[FLAGS_OFFSET];
-  const payloadLen = view.getUint32(PAYLOAD_LEN_OFFSET, false);
+  const payloadLen =
+    version === 2 ? view.getUint32(12, false) : view.getUint16(12, false);
+  if (payloadLen > MAX_PAYLOAD_BYTES) return null;
 
   const hasRecipient = (flags & Flags.HAS_RECIPIENT) !== 0;
   const hasSig = (flags & Flags.SIGNED) !== 0;
-  const hasRoute = (flags & Flags.HAS_ROUTE) !== 0;
+  const isCompressed = (flags & Flags.COMPRESSED) !== 0;
+  const hasRoute = version >= 2 && (flags & Flags.HAS_ROUTE) !== 0;
   const isRSR = (flags & Flags.IS_RSR) !== 0;
 
-  let off = V2_HEADER_SIZE;
+  let off = headerSize;
 
   if (off + SENDER_ID_SIZE > raw.length) return null;
   const senderID = raw.slice(off, off + SENDER_ID_SIZE);
@@ -227,9 +305,26 @@ export function decodePacket(raw: Uint8Array): Packet | null {
     }
   }
 
-  if (off + payloadLen > raw.length) return null;
-  const payload = raw.slice(off, off + payloadLen);
-  off += payloadLen;
+  // Payload: payloadLen covers the payload plus the compression preamble.
+  let payload: Uint8Array;
+  if (isCompressed) {
+    if (payloadLen < lengthFieldBytes) return null;
+    const origSize =
+      version === 2 ? view.getUint32(off, false) : view.getUint16(off, false);
+    off += lengthFieldBytes;
+    if (origSize > MAX_PAYLOAD_BYTES) return null;
+    const compressedSize = payloadLen - lengthFieldBytes;
+    if (compressedSize <= 0 || off + compressedSize > raw.length) return null;
+    const compressed = raw.slice(off, off + compressedSize);
+    off += compressedSize;
+    const decompressed = decompress(compressed, origSize);
+    if (decompressed === null) return null;
+    payload = decompressed;
+  } else {
+    if (off + payloadLen > raw.length) return null;
+    payload = raw.slice(off, off + payloadLen);
+    off += payloadLen;
+  }
 
   let signature = new Uint8Array(SIGNATURE_SIZE);
   if (hasSig) {
@@ -246,6 +341,7 @@ export function decodePacket(raw: Uint8Array): Packet | null {
     timestamp,
     signature,
     payload,
+    version,
     isRSR: isRSR || undefined,
     route: route.length > 0 ? route : undefined,
   };

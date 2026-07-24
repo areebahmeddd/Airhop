@@ -46,40 +46,40 @@ const CHANNEL_SCOPE: Record<
   { tag: string; description: string; transport: string }
 > = {
   "#bluetooth": {
-    tag: "Local mesh · BLE only",
+    tag: "Local mesh · Bluetooth only",
     description:
-      "Reaches devices within BLE range (roughly 10 to 100 metres). No internet required. Ideal for local coordination.",
-    transport: "BLE only",
+      "Reaches devices within Bluetooth range (roughly 10 to 100 metres). No internet required. Ideal for local coordination.",
+    transport: "Bluetooth only",
   },
   "#block": {
     tag: "City block · ~100m",
     description:
-      "City-block level coverage. Messages are bridged over Nostr so peers outside BLE range but nearby can participate.",
-    transport: "BLE + Nostr",
+      "City-block level coverage. Messages are bridged over the internet so peers outside Bluetooth range but nearby can participate.",
+    transport: "Bluetooth + Internet",
   },
   "#neighborhood": {
     tag: "Neighborhood · ~1km",
     description:
-      "Neighborhood coverage. Relay-assisted so peers across the area are reachable even without a direct BLE link.",
-    transport: "BLE + Nostr",
+      "Neighborhood coverage. Relay-assisted so peers across the area are reachable even without a direct Bluetooth link.",
+    transport: "Bluetooth + Internet",
   },
   "#city": {
     tag: "City · ~10km",
     description:
-      "City-wide channel. Uses geo-located Nostr relays to reach peers across the metro area.",
-    transport: "BLE + Nostr",
+      "City-wide channel. Uses geo-located internet relays to reach peers across the metro area.",
+    transport: "Bluetooth + Internet",
   },
   "#province": {
     tag: "Province or state · ~100km",
     description:
-      "Provincial or state coverage. Bridged over Nostr for regional reach across hundreds of kilometres.",
-    transport: "BLE + Nostr",
+      "Provincial or state coverage. Bridged over the internet for regional reach across hundreds of kilometres.",
+    transport: "Bluetooth + Internet",
   },
   "#region": {
     tag: "Country or region · ~1000km",
     description:
       "Country-wide coverage. Any Airhop or bitchat user in the region can join and read messages.",
-    transport: "BLE + Nostr",
+    transport: "Bluetooth + Internet",
   },
 };
 
@@ -108,6 +108,8 @@ export default function ChannelInfoSheet({
     renameChannel,
     channelDescriptions,
     setChannelDescription,
+    channelKeys,
+    channelReach,
   } = useChatStore();
   const { peers, removePeer } = usePeerStore();
   const peerList = [...peers.values()];
@@ -121,16 +123,16 @@ export default function ChannelInfoSheet({
 
   const isDefault = DEFAULT_CHANNEL_NAMES.has(channel);
   const scopeData = CHANNEL_SCOPE[channel];
+  // A channel with a key is private and end-to-end encrypted (custom channels);
+  // the built-in location channels have none and are public plaintext.
+  const isPrivate = channelKeys[channel] !== undefined;
+  const overNostr = channelReach[channel] === "ble+nostr";
 
   // Location-channel state, read live from the mesh service.
   const isGeo = isGeoChannel(channel);
   const geohash = isGeo
     ? (getMeshService()?.getChannelGeohash(channel) ?? null)
     : null;
-  const geoParticipants = isGeo
-    ? (getMeshService()?.getGeoParticipants(channel) ?? [])
-    : [];
-
   // Resolved description: user-saved > protocol default > custom fallback.
   const resolvedDescription =
     channelDescriptions[channel] ??
@@ -289,17 +291,39 @@ export default function ChannelInfoSheet({
                 broadcast in the clear. */}
             <View style={styles.section}>
               <Text style={styles.sectionLabel}>Privacy</Text>
-              <View style={styles.infoRow}>
-                <Feather name="globe" size={14} color={Colors.textSecondary} />
-                <Text style={styles.infoValue}>
-                  Public · unencrypted broadcast
-                </Text>
-              </View>
-              <Text style={styles.infoHint}>
-                Everyone in range who joins this channel can read every message.
-                Use a direct message for private conversation. DMs are
-                end-to-end encrypted.
-              </Text>
+              {isPrivate ? (
+                <>
+                  <View style={styles.infoRow}>
+                    <Feather name="lock" size={14} color={Colors.online} />
+                    <Text style={styles.infoValue}>
+                      Private · end-to-end encrypted
+                    </Text>
+                  </View>
+                  <Text style={styles.infoHint}>
+                    Sealed with a channel key that only people you invited via
+                    the link hold. Messages are unreadable to anyone else, even
+                    peers nearby, and it never appears in their app.
+                  </Text>
+                </>
+              ) : (
+                <>
+                  <View style={styles.infoRow}>
+                    <Feather
+                      name="globe"
+                      size={14}
+                      color={Colors.textSecondary}
+                    />
+                    <Text style={styles.infoValue}>
+                      Public · unencrypted broadcast
+                    </Text>
+                  </View>
+                  <Text style={styles.infoHint}>
+                    Everyone in range who joins this channel can read every
+                    message. Use a direct message for private conversation. DMs
+                    are end-to-end encrypted.
+                  </Text>
+                </>
+              )}
             </View>
 
             {/* Reach: how far this channel actually travels right now.
@@ -319,15 +343,12 @@ export default function ChannelInfoSheet({
                         color={Colors.textSecondary}
                       />
                       <Text style={styles.infoValue}>
-                        Bluetooth + Nostr · {geohash}
+                        Bluetooth + Internet · {geohash}
                       </Text>
                     </View>
                     <Text style={styles.infoHint}>
-                      {`Anyone in this area cell can take part, even out of Bluetooth range. ${
-                        geoParticipants.length > 0
-                          ? `${String(geoParticipants.length)} active over the internet in the last few minutes.`
-                          : "Nobody active over the internet right now."
-                      }`}
+                      Anyone in this area cell can take part, even out of
+                      Bluetooth range.
                     </Text>
                   </>
                 ) : (
@@ -347,6 +368,29 @@ export default function ChannelInfoSheet({
                     </Text>
                   </>
                 )}
+              </View>
+            )}
+
+            {/* Reach for a private channel: the encrypted send path either stays
+                on the local mesh or is also bridged over Nostr. */}
+            {isPrivate && (
+              <View style={styles.section}>
+                <Text style={styles.sectionLabel}>Reach</Text>
+                <View style={styles.infoRow}>
+                  <Feather
+                    name={overNostr ? "globe" : "bluetooth"}
+                    size={14}
+                    color={Colors.textSecondary}
+                  />
+                  <Text style={styles.infoValue}>
+                    {overNostr ? "Bluetooth + Internet" : "Bluetooth only"}
+                  </Text>
+                </View>
+                <Text style={styles.infoHint}>
+                  {overNostr
+                    ? "Sealed messages are also published over the internet, so members out of Bluetooth range still receive them. Relays see the channel is active, never its content or members."
+                    : "Stays on the local mesh. Nothing leaves Bluetooth range, so there is no relay metadata at all."}
+                </Text>
               </View>
             )}
 

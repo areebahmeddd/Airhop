@@ -25,19 +25,28 @@ interface SettingsState {
   // from the tab bar; it does not touch the wallet's stored proofs, so
   // turning it back on restores the balance untouched.
   paymentsEnabled: boolean;
+  // Whether this device acts as an internet gateway: relaying mesh-only peers'
+  // geohash events to Nostr (toGateway carriers) and, in future, rebroadcasting
+  // relay traffic to the mesh. Off by default, matching bitchat; enabling it
+  // spends this device's battery and data on behalf of nearby offline peers.
+  gatewayEnabled: boolean;
   setTheme: (theme: ThemePreference) => void;
   setAutoDownloadMedia: (enabled: boolean) => void;
   setUploadQuality: (quality: UploadQuality) => void;
   setPaymentsEnabled: (enabled: boolean) => void;
+  setGatewayEnabled: (enabled: boolean) => void;
   // Restore first-run defaults. Used by the panic wipe.
   reset: () => void;
 }
 
 const DEFAULTS = {
-  theme: "dark",
+  // Follow the OS appearance by default so a new user gets whichever of light or
+  // dark their phone is already set to, rather than being forced into dark.
+  theme: "system",
   autoDownloadMedia: true,
   uploadQuality: "high",
   paymentsEnabled: true,
+  gatewayEnabled: false,
 } satisfies Partial<SettingsState>;
 
 const storage = createMMKV({ id: "settings-store" });
@@ -66,6 +75,9 @@ export const useSettingsStore = create<SettingsState>()(
       },
       setPaymentsEnabled(enabled) {
         set({ paymentsEnabled: enabled });
+      },
+      setGatewayEnabled(enabled) {
+        set({ gatewayEnabled: enabled });
       },
       reset() {
         set({ ...DEFAULTS });

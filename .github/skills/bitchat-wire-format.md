@@ -10,16 +10,18 @@ description: >
 
 Source of truth: `bitchat/ios/localPackages/BitFoundation/Sources/BitFoundation/BinaryProtocol.swift` and the Android equivalent `BinaryProtocol.kt`. The Airhop implementation is in `src/core/mesh/packet-codec.ts`.
 
-## Fixed Header (16 bytes)
+## Fixed Header (v2, 16 bytes)
 
 Every packet starts with this exact layout. Field order is non-negotiable.
 
+Two header versions exist and both must be **decoded**: v1 is 14 bytes with a `u16` payload length and no route section; v2 is 16 bytes with a `u32` length. Airhop **emits v2 for everything** (bitchat decodes v2 for every type), but bitchat still emits v1 for its small broadcasts such as announce and leave, so a v1 decoder path is required. Read the version byte, never assume.
+
 | Offset | Size | Type   | Field         | Notes                                       |
 | ------ | ---- | ------ | ------------- | ------------------------------------------- |
-| 0      | 1    | u8     | version       | Always `2`                                  |
+| 0      | 1    | u8     | version       | `2` on send; accept `1` and `2` on receive  |
 | 1      | 1    | u8     | type          | See packet type table below                 |
 | 2      | 1    | u8     | ttl           | Default `7`; must be set to `0` for signing |
-| 3-10   | 8    | u64-BE | timestamp     | Unix seconds, big-endian                    |
+| 3-10   | 8    | u64-BE | timestamp     | Unix **milliseconds**, big-endian           |
 | 11     | 1    | u8     | flags         | See flag bits below                         |
 | 12-15  | 4    | u32-BE | payloadLength | Length of the payload section only          |
 
@@ -37,13 +39,13 @@ Broadcast packets omit the `recipientID` field entirely. `HAS_RECIPIENT` is clea
 
 ## Flag Bits
 
-| Bit | Hex    | Name          | Meaning                                         |
-| --- | ------ | ------------- | ----------------------------------------------- |
-| 0   | `0x01` | HAS_RECIPIENT | `recipientID` field is present (unicast)        |
-| 1   | `0x02` | HAS_SIGNATURE | 64-byte Ed25519 signature is appended           |
-| 2   | `0x04` | COMPRESSED    | Payload is zlib-compressed (reserved, not used) |
-| 3   | `0x08` | HAS_ROUTE     | Source-route hop list is present                |
-| 4   | `0x10` | IS_RSR        | This is a solicited sync response               |
+| Bit | Hex    | Name          | Meaning                                       |
+| --- | ------ | ------------- | --------------------------------------------- |
+| 0   | `0x01` | HAS_RECIPIENT | `recipientID` field is present (unicast)      |
+| 1   | `0x02` | HAS_SIGNATURE | 64-byte Ed25519 signature is appended         |
+| 2   | `0x04` | COMPRESSED    | Raw-DEFLATE payload, preceded by originalSize |
+| 3   | `0x08` | HAS_ROUTE     | Source-route hop list is present              |
+| 4   | `0x10` | IS_RSR        | This is a solicited sync response             |
 
 ## Signing Rule
 
@@ -66,20 +68,31 @@ There is no nonce field. Deduplication is content-addressed. See `computePacketI
 
 Types `0x01-0x28` are bitchat-defined. Types `0x29+` are Airhop extensions. bitchat nodes silently drop unknown types, so extensions are safe to add.
 
-| Name              | Hex    | Direction         | Description                                     |
-| ----------------- | ------ | ----------------- | ----------------------------------------------- |
-| `ANNOUNCE`        | `0x01` | Broadcast         | Signed presence heartbeat; TLV payload          |
-| `CHANNEL_MSG`     | `0x02` | Broadcast         | Public channel message                          |
-| `LEAVE`           | `0x03` | Broadcast         | Peer departing                                  |
-| `COURIER_ENV`     | `0x04` | Broadcast         | Store-and-forward sealed envelope               |
-| `NOISE_HANDSHAKE` | `0x10` | Unicast           | Noise XX handshake message                      |
-| `NOISE_ENCRYPTED` | `0x11` | Unicast           | Post-handshake encrypted payload (DM, receipts) |
-| `FRAGMENT`        | `0x20` | Broadcast/Unicast | BLE fragment of a larger message                |
-| `REQUEST_SYNC`    | `0x21` | Broadcast         | GCS gossip request; TTL=2 (local mesh only)     |
-| `FILE_TRANSFER`   | `0x22` | Broadcast/Unicast | Binary file, audio, or image payload            |
-| `VOICE_FRAME`     | `0x29` | Broadcast         | PTT audio burst (Airhop extension)              |
-| `VIDEO_FRAME`     | `0x30` | Unicast           | Video frame, WiFi Aware only (Airhop extension) |
-| `CASHU_TOKEN`     | `0x40` | Unicast           | Cashu ecash token transfer (Airhop extension)   |
+| Name              | Hex    | Direction         | Description                                            |
+| ----------------- | ------ | ----------------- | ------------------------------------------------------ |
+| `ANNOUNCE`        | `0x01` | Broadcast         | Signed presence heartbeat; TLV payload                 |
+| `CHANNEL_MSG`     | `0x02` | Broadcast         | Public channel message                                 |
+| `LEAVE`           | `0x03` | Broadcast         | Peer departing                                         |
+| `COURIER_ENV`     | `0x04` | Broadcast         | Store-and-forward sealed envelope                      |
+| `NOISE_HANDSHAKE` | `0x10` | Unicast           | Noise XX handshake message                             |
+| `NOISE_ENCRYPTED` | `0x11` | Unicast           | Post-handshake payload (DM, receipts, group state)     |
+| `DR_ENCRYPTED`    | `0x12` | Unicast           | Double Ratchet DM (Airhop extension)                   |
+| `FRAGMENT`        | `0x20` | Broadcast/Unicast | BLE fragment of a larger message                       |
+| `REQUEST_SYNC`    | `0x21` | Broadcast         | GCS gossip request; TTL=2 (local mesh only)            |
+| `FILE_TRANSFER`   | `0x22` | Broadcast/Unicast | Binary file, audio, or image payload; 1 MiB cap        |
+| `BOARD_POST`      | `0x23` | Broadcast         | Signed bulletin-board post or tombstone                |
+| `PREKEY_BUNDLE`   | `0x24` | Broadcast         | Signed batch of one-time public prekeys                |
+| `GROUP_MESSAGE`   | `0x25` | Broadcast         | Group-encrypted message (groupID + epoch, ChaChaPoly)  |
+| `PING`            | `0x26` | Unicast           | Directed echo request (nonce + origin TTL)             |
+| `PONG`            | `0x27` | Unicast           | Directed echo reply (echoed nonce)                     |
+| `NOSTR_CARRIER`   | `0x28` | Broadcast/Unicast | Gateway-ferried signed Nostr event                     |
+| `VOICE_FRAME`     | `0x29` | Broadcast         | PTT audio burst; reserved, not yet sent (Airhop ext.)  |
+| `CHANNEL_ENC`     | `0x2a` | Broadcast         | Private channel, XChaCha20-Poly1305 (Airhop extension) |
+
+Two types were specified and then deliberately removed. Do not reintroduce them:
+
+- `0x30 VIDEO_FRAME`: was specified over WiFi Aware / MultipeerConnectivity, which are different protocols that cannot interoperate, so iOS-to-Android video was never achievable. Video ships as a file over `FILE_TRANSFER` instead.
+- `0x40 CASHU_TOKEN`: ecash travels as text inside an ordinary encrypted DM and is detected by `findTokensInText()`. A dedicated type would be a second path to keep in sync for no gain.
 
 ## ANNOUNCE TLV Payload
 

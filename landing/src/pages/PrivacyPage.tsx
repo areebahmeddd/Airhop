@@ -62,19 +62,39 @@ export default function PrivacyPage() {
             </p>
             <ul className="list-disc space-y-2 pl-5 text-sm leading-relaxed marker:text-gray-400">
               <li>
-                <strong>Identity keys.</strong> An Ed25519 signing key and Noise static key are
-                generated locally on first launch. Both are stored in your device's secure storage
-                (iOS Keychain or Android Keystore). Your public key is shared with peers you
-                communicate with. <strong>Private keys never leave your device.</strong>
+                <strong>Identity keys.</strong> An Ed25519 signing key and a Noise static key are
+                generated locally on first launch and stored in your device's secure storage (iOS
+                Keychain or Android Keystore). A Nostr key, a separate identity for each location
+                cell you use, and one-time prekeys are all derived from that signing key rather than
+                stored separately. Your public keys are shared with peers you communicate with.{" "}
+                <strong>Private keys never leave your device.</strong>
               </li>
               <li>
                 <strong>Nickname and preferences.</strong> Your chosen display name and app settings
                 are stored locally.
               </li>
               <li>
-                <strong>Message history.</strong> Conversation content is stored encrypted on your
-                device using ChaCha20-Poly1305. You can delete it at any time, or wipe everything
-                instantly with panic wipe.
+                <strong>Message history.</strong> Conversations are stored locally on your device
+                and are never sent to us. They are protected by the operating system's app sandbox
+                and whole-device encryption, not by a separate app-level cipher, so a person with
+                access to an unlocked device can read them. Delete a conversation at any time, or
+                wipe everything instantly with panic wipe.
+              </li>
+              <li>
+                <strong>Private group state.</strong> Group names, member lists, and the current
+                group key are stored locally so you can keep reading the group. They are removed by
+                panic wipe or by removing the app.
+              </li>
+              <li>
+                <strong>Bulletin board notices.</strong> Signed public notices, and the deletion
+                markers that retract them, persist until the author's chosen expiry, at most seven
+                days. These are public to the mesh or area they were posted to, not private
+                messages.
+              </li>
+              <li>
+                <strong>Media attachments.</strong> Photos, videos, and voice notes you send or
+                receive are written to the app's cache so they stay viewable. They are deleted by
+                panic wipe, by clearing the cache in settings, or by removing the app.
               </li>
               <li>
                 <strong>Queued outgoing messages.</strong> A private message that has not yet been
@@ -104,13 +124,34 @@ export default function PrivacyPage() {
               <li>Your chosen nickname and public identity keys.</li>
               <li>Messages you send to public channels or directly to another peer.</li>
               <li>
+                Public notices you post to the bulletin board, which stay readable until they
+                expire.
+              </li>
+              <li>
+                A batch of single-use public keys, so someone can leave you a protected message
+                while you are offline. These contain no private information.
+              </li>
+              <li>
+                Encrypted group traffic, which nearby devices relay but cannot read unless they are
+                members of that group.
+              </li>
+              <li>
                 Approximate Bluetooth signal strength (radio metadata visible to any nearby
                 receiver).
               </li>
             </ul>
             <p className="text-sm leading-relaxed">
-              Private messages are encrypted end-to-end and readable only by the intended recipient.
-              Public channel messages are visible to all participants in that channel.
+              Private text messages are encrypted end-to-end and readable only by the intended
+              recipient. Public channel messages are visible to all participants in that channel.
+            </p>
+            <p className="text-sm leading-relaxed">
+              <strong>
+                Attachments are an exception: photos, videos, voice notes, and files are signed but
+                not encrypted.
+              </strong>{" "}
+              This is the format bitchat uses, and matching it is what lets the two apps exchange
+              media at all. Because attachments relay hop by hop, any device carrying one can read
+              it. Treat an attachment as visible to the mesh, not private.
             </p>
             <p className="text-sm leading-relaxed">
               Nearby mesh devices are not limited to Airhop.{" "}
@@ -154,6 +195,44 @@ export default function PrivacyPage() {
           </section>
 
           <section className="space-y-3">
+            <h2 className="text-base font-semibold text-gray-900">Location channels (optional)</h2>
+            <p className="text-sm leading-relaxed">
+              Location channels let you talk to people in the same area. Location permission is
+              optional and only requested when you use them.
+            </p>
+            <ul className="list-disc space-y-1.5 pl-5 text-sm leading-relaxed marker:text-gray-400">
+              <li>
+                <strong>Exact coordinates never leave your device</strong> and are never stored.
+                Your position is truncated to a grid cell, and the smallest cell we ever publish is
+                roughly 150 metres across.
+              </li>
+              <li>
+                A cell still reveals an approximate area to peers and relays. A finer cell reveals a
+                smaller area.
+              </li>
+              <li>
+                Each cell uses a separate identity derived on your device, so your activity in one
+                area cannot be linked to another, or to your main identity.
+              </li>
+              <li>
+                Revoking location permission stops the app resolving your cell. Location channels
+                then fall back to Bluetooth range only.
+              </li>
+            </ul>
+          </section>
+
+          <section className="space-y-3">
+            <h2 className="text-base font-semibold text-gray-900">Internet gateway (optional)</h2>
+            <p className="text-sm leading-relaxed">
+              A device with the gateway setting enabled relays location-channel messages on behalf
+              of nearby devices that have no internet connection. The relayed messages are already
+              public to that channel and are signed by their original author, so a gateway cannot
+              read private content or alter what it carries. Enabling it uses your own data
+              connection and battery. Internet gateway is off by default.
+            </p>
+          </section>
+
+          <section className="space-y-3">
             <h2 className="text-base font-semibold text-gray-900">Tor routing (optional)</h2>
             <p className="text-sm leading-relaxed">
               Airhop supports routing Nostr traffic through Tor using Arti on iOS or Orbot on
@@ -170,7 +249,21 @@ export default function PrivacyPage() {
                 <strong>Private sessions.</strong> Noise XX with X25519 and ChaCha20-Poly1305.
               </li>
               <li>
-                <strong>Forward secrecy.</strong> Provided by Double Ratchet.
+                <strong>Forward secrecy.</strong> Provided by Double Ratchet for live conversations,
+                and by single-use prekeys for messages left for someone who is offline, so an
+                undelivered message stays protected even if a long-term key is compromised later.
+              </li>
+              <li>
+                <strong>Private groups.</strong> Group messages use ChaCha20-Poly1305 under a shared
+                group key. The member list is signed by the group's creator with Ed25519.
+              </li>
+              <li>
+                <strong>Public notices.</strong> Bulletin-board posts are Ed25519-signed so their
+                author cannot be forged. They are deliberately public, not confidential.
+              </li>
+              <li>
+                <strong>Nostr events.</strong> secp256k1 Schnorr signatures, with private messages
+                sealed using key agreement, HKDF-SHA256, and XChaCha20-Poly1305.
               </li>
               <li>
                 <strong>Implementation.</strong> All cryptographic operations use the{" "}
@@ -194,6 +287,32 @@ export default function PrivacyPage() {
           </section>
 
           <section className="space-y-3">
+            <h2 className="text-base font-semibold text-gray-900">How long data is kept</h2>
+            <ul className="list-disc space-y-1.5 pl-5 text-sm leading-relaxed marker:text-gray-400">
+              <li>
+                <strong>Undelivered private messages:</strong> until acknowledged, or 24 hours,
+                whichever comes first.
+              </li>
+              <li>
+                <strong>Courier envelopes carried for others:</strong> until handed over, or 24
+                hours.
+              </li>
+              <li>
+                <strong>Public bulletin-board notices:</strong> until the author's chosen expiry, at
+                most seven days.
+              </li>
+              <li>
+                <strong>Conversations, groups, contacts, keys, and media:</strong> until you delete
+                them, run a panic wipe, or remove the app.
+              </li>
+              <li>
+                <strong>Anything sent to a Nostr relay:</strong> according to that relay operator's
+                own policy, which is outside our control.
+              </li>
+            </ul>
+          </section>
+
+          <section className="space-y-3">
             <h2 className="text-base font-semibold text-gray-900">Your controls</h2>
             <ul className="list-disc space-y-1.5 pl-5 text-sm leading-relaxed marker:text-gray-400">
               <li>
@@ -201,12 +320,14 @@ export default function PrivacyPage() {
                 and app data from the Profile screen.
               </li>
               <li>
-                <strong>Feature controls.</strong> The Nostr bridge, Tor routing, and internet
-                features can be disabled in settings.
+                <strong>Feature controls.</strong> The Nostr bridge, Tor routing, location channels,
+                and the internet gateway can each be disabled in settings. Anything already
+                published to a relay cannot be recalled.
               </li>
               <li>
-                <strong>System permissions.</strong> Bluetooth and microphone access can be revoked
-                in your device settings at any time.
+                <strong>System permissions.</strong> Bluetooth, location, microphone, camera, photo
+                library, and notification access can each be revoked in your device settings at any
+                time. Camera access is used only to scan a contact's QR code.
               </li>
             </ul>
           </section>
@@ -247,8 +368,9 @@ export default function PrivacyPage() {
             <h2 className="text-base font-semibold text-gray-900">Children's privacy</h2>
             <p className="text-sm leading-relaxed">
               Airhop has no account registration or age-verification system. The project does not
-              knowingly collect personal data from children. Public channel messages and mesh
-              traffic are visible to other nearby participants.
+              knowingly collect personal data from children. Public channel messages, location
+              channels, bulletin-board notices, and mesh traffic are visible to other participants
+              and may be relayed onward by their devices.
             </p>
           </section>
 

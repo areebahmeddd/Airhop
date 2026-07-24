@@ -19,9 +19,12 @@ import {
 } from "react-native";
 import { Swipeable } from "react-native-gesture-handler";
 import Animated, { FadeIn, LinearTransition } from "react-native-reanimated";
+import { generateChannelKey } from "../../core/mesh/channel-crypto";
+import { isGeoChannel } from "../../services/geohash-channel-service";
 import { getMeshService } from "../../services/mesh-service";
 import { showAlert } from "../../store/alert-store";
 import { useChatStore } from "../../store/chat-store";
+import { useGroupStore } from "../../store/group-store";
 import { usePeerStore } from "../../store/peer-store";
 import {
   FontSize,
@@ -33,6 +36,7 @@ import {
 import { sortConversationsByActivity } from "../../utils/conversation-order";
 import { messagePreviewText } from "../../utils/message-preview";
 import ChannelInfoSheet from "./channel-info-sheet";
+import { NewGroupSheet } from "./new-group-sheet";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -42,6 +46,11 @@ import ChannelInfoSheet from "./channel-info-sheet";
 // rescan kick) returns instantly, but a flash-then-gone spinner reads as
 // broken, so hold it briefly for legible feedback.
 const REFRESH_SPINNER_MS = 700;
+
+// How often to re-read geohash channel participant counts. They change off a
+// Nostr subscription, so a slow poll keeps the list live without a per-event
+// re-render of the whole screen.
+const GEO_COUNT_POLL_MS = 5000;
 
 // Per-channel transport and visibility options used to live here. They were
 // removed because nothing in the send path ever read them. See the note in the
@@ -70,29 +79,29 @@ const ROW_INSET = Spacing.base;
 // Scope info for built-in bitchat-compatible channels.
 const CHANNEL_SCOPE: Record<string, { tag: string; description: string }> = {
   "#bluetooth": {
-    tag: "Local mesh · BLE only",
+    tag: "Local mesh · Bluetooth only",
     description:
-      "Reaches devices within BLE range (roughly 10 to 100 metres). No internet required. Ideal for local coordination.",
+      "Reaches devices within Bluetooth range (roughly 10 to 100 metres). No internet required. Ideal for local coordination.",
   },
   "#block": {
     tag: "City block · ~100m",
     description:
-      "City-block level coverage. Messages are bridged over Nostr so peers outside BLE range but nearby can participate.",
+      "City-block level coverage. Messages are bridged over the internet so peers outside Bluetooth range but nearby can participate.",
   },
   "#neighborhood": {
     tag: "Neighborhood · ~1km",
     description:
-      "Neighborhood coverage. Relay-assisted so peers across the area are reachable even without a direct BLE link.",
+      "Neighborhood coverage. Relay-assisted so peers across the area are reachable even without a direct Bluetooth link.",
   },
   "#city": {
     tag: "City · ~10km",
     description:
-      "City-wide channel. Uses geo-located Nostr relays to reach peers across the metro area.",
+      "City-wide channel. Uses geo-located internet relays to reach peers across the metro area.",
   },
   "#province": {
     tag: "Province or state · ~100km",
     description:
-      "Provincial or state coverage. Bridged over Nostr for regional reach across hundreds of kilometres.",
+      "Provincial or state coverage. Bridged over the internet for regional reach across hundreds of kilometres.",
   },
   "#region": {
     tag: "Country or region · ~1000km",
@@ -132,7 +141,6 @@ export default function ChannelList({
   const {
     channels,
     messages,
-    addChannel,
     removeChannel,
     unreadCounts,
     pinnedChannels,
@@ -140,12 +148,44 @@ export default function ChannelList({
     mutedChannels,
     toggleMuteChannel,
     clearChannelMessages,
+    joinPrivateChannel,
   } = useChatStore();
-  // Live peer count, real BLE data, not a stub.
+  // Live BLE peer count. This is the right number ONLY for #bluetooth, the
+  // local-mesh channel; the geohash channels are populated over Nostr, not BLE.
   const peerCount = usePeerStore((s) => s.peers.size);
+  // Live participant count per geohash channel, from Nostr presence + recent
+  // posts in the cell (kind 20000/20001), polled since it updates off a network
+  // subscription rather than a store. #bluetooth is absent here: it is BLE-only
+  // and uses peerCount instead. Empty until location resolves and relays answer,
+  // in which case a geo channel is genuinely running BLE-only and shows 0.
+  const [geoCounts, setGeoCounts] = useState<Record<string, number>>({});
+  useEffect(() => {
+    function sample(): void {
+      const service = getMeshService();
+      if (!service) return;
+      const next: Record<string, number> = {};
+      for (const ch of channels) {
+        if (isGeoChannel(ch)) next[ch] = service.getGeoParticipants(ch).length;
+      }
+      setGeoCounts((prev) => {
+        const keys = Object.keys(next);
+        const same =
+          keys.length === Object.keys(prev).length &&
+          keys.every((k) => prev[k] === next[k]);
+        return same ? prev : next;
+      });
+    }
+    sample();
+    const timer = setInterval(sample, GEO_COUNT_POLL_MS);
+    return () => clearInterval(timer);
+  }, [channels]);
 
   const [showJoinModal, setShowJoinModal] = useState(false);
+  const [showNewGroup, setShowNewGroup] = useState(false);
   const [newChannel, setNewChannel] = useState("");
+  // Reach for a new channel. Defaults to Bluetooth-only, the most private
+  // option; the user opts into internet reach.
+  const [newChannelOverNostr, setNewChannelOverNostr] = useState(false);
   const [infoChannel, setInfoChannel] = useState<string | null>(null);
   const [collapsedSections, setCollapsedSections] = useState<Set<string>>(
     new Set(),
@@ -180,16 +220,23 @@ export default function ChannelList({
 
   // ---- Derived channel lists ----------------------------------------------
 
-  // Public channels only (filter out dm: prefixed channels).
-  const publicChannels = channels.filter((c) => !c.startsWith("dm:"));
+  // Public channels only (exclude dm: and group: prefixed channels).
+  const publicChannels = channels.filter(
+    (c) => !c.startsWith("dm:") && !c.startsWith("group:"),
+  );
+  // Private groups the user belongs to, keyed as group:<id>.
+  const groupChannels = channels.filter((c) => c.startsWith("group:"));
   const defaultChannels = publicChannels.filter((c) =>
     DEFAULT_CHANNEL_NAMES.has(c),
   );
-  // Your Channels: pinned first, then most recent activity first, WhatsApp
-  // style. Default channels keep their curated protocol order (below) and are
-  // deliberately not reordered by activity.
+  // Your Channels: user-created public channels and private groups, pinned
+  // first, then most recent activity first. Default channels keep their curated
+  // protocol order (below) and are deliberately not reordered by activity.
   const ownChannels = sortConversationsByActivity(
-    publicChannels.filter((c) => !DEFAULT_CHANNEL_NAMES.has(c)),
+    [
+      ...publicChannels.filter((c) => !DEFAULT_CHANNEL_NAMES.has(c)),
+      ...groupChannels,
+    ],
     messages,
     pinnedChannels,
   );
@@ -251,13 +298,17 @@ export default function ChannelList({
 
   function resetJoinModal(): void {
     setNewChannel("");
+    setNewChannelOverNostr(false);
     setShowJoinModal(false);
   }
 
   function handleAdd(): void {
     const name = newChannel.trim().replace(/^#*/, "#");
     if (name.length < 2 || nameAlreadyExists) return;
-    addChannel(name);
+    // Every custom channel is private and end-to-end encrypted: it gets a fresh
+    // key here, shared only with people you send the invite link to. Reach is
+    // the creator's choice: local mesh only, or also bridged over Nostr.
+    joinPrivateChannel(name, generateChannelKey(), newChannelOverNostr);
     resetJoinModal();
   }
 
@@ -289,15 +340,15 @@ export default function ChannelList({
     );
   }
 
-  function handleDeleteChat(channel: string): void {
+  function handleLeaveChannel(channel: string): void {
     setMoreOptionsChannel(null);
     showAlert(
-      "Delete channel",
-      `Delete ${channel}? This removes the channel and all its messages.`,
+      "Leave channel",
+      `Leave ${channel}? You will stop receiving its messages, and its history is removed from this device.`,
       [
         { text: "Cancel", style: "cancel" },
         {
-          text: "Delete",
+          text: "Leave",
           style: "destructive",
           onPress: () => removeChannel(channel),
         },
@@ -318,22 +369,43 @@ export default function ChannelList({
     const isDefault = DEFAULT_CHANNEL_NAMES.has(item);
     const isPinned = isYourChannel && pinnedChannels.includes(item);
     const isMuted = mutedChannels.includes(item);
+    // Presence count and its label depend on the channel's transport:
+    // #bluetooth counts BLE peers in range; a geohash channel counts people
+    // active in its cell over Nostr. Showing the BLE count on a geo channel is
+    // what made #region read "0 nearby" while a city's worth of people were on
+    // it over the internet.
+    const isGeo = isGeoChannel(item);
+    const isGroup = item.startsWith("group:");
+    const groupName = isGroup
+      ? useGroupStore.getState().nameForChannel(item)
+      : undefined;
+    const presenceCount = isGeo ? (geoCounts[item] ?? 0) : peerCount;
+    const presenceLabel = isGeo ? "active" : "nearby";
 
     const row = (
       <Pressable
         style={styles.channelRow}
         onPress={() => onSelectChannel(item)}
         accessibilityRole="button"
-        accessibilityLabel={`Open channel ${item}`}
+        accessibilityLabel={`Open ${isGroup ? "group" : "channel"} ${groupName ?? item}`}
       >
         <View style={styles.channelRowBody}>
           {/* Head line: channel name + timestamp + pin indicator */}
           <View style={styles.channelRowHead}>
             <View style={styles.channelNameGroup}>
-              <Text style={styles.channelName} numberOfLines={1}>
-                <Text style={styles.channelHash}>#</Text>
-                {item.replace(/^#/, "")}
-              </Text>
+              {isGroup && (
+                <Feather name="users" size={13} color={Colors.textMuted} />
+              )}
+              {isGroup ? (
+                <Text style={styles.channelName} numberOfLines={1}>
+                  {groupName ?? "Group"}
+                </Text>
+              ) : (
+                <Text style={styles.channelName} numberOfLines={1}>
+                  <Text style={styles.channelHash}>#</Text>
+                  {item.replace(/^#/, "")}
+                </Text>
+              )}
             </View>
             <View style={styles.channelRowMeta}>
               {last && (
@@ -358,7 +430,7 @@ export default function ChannelList({
           {scopeTag !== undefined && (
             <Text style={styles.channelScope} numberOfLines={1}>
               {scopeTag}
-              {isDefault && `  ·  ${peerCount > 0 ? peerCount : 0} nearby`}
+              {isDefault && `  ·  ${presenceCount} ${presenceLabel}`}
             </Text>
           )}
 
@@ -531,12 +603,33 @@ export default function ChannelList({
           <Pressable style={styles.modalSheet} onPress={() => {}}>
             <View style={styles.handle} />
             <Text style={styles.modalTitle}>Create a channel</Text>
-            <Text style={styles.modalHint}>
-              Channels are public: anyone nearby who joins the same name sees
-              every message, and messages are broadcast unencrypted over the
-              mesh. For private conversation, use a direct message. Those are
-              end-to-end encrypted.
-            </Text>
+            <View style={styles.privacyNote}>
+              <View style={styles.privacyNoteRow}>
+                <Feather name="lock" size={14} color={Colors.online} />
+                <Text style={styles.privacyNoteText}>
+                  End-to-end encrypted. Only members can read the messages.
+                </Text>
+              </View>
+              <View style={styles.privacyNoteRow}>
+                <Feather name="link" size={14} color={Colors.textMuted} />
+                <Text style={styles.privacyNoteText}>
+                  Invite only. Anyone you share the link with can join. It stays
+                  hidden from everyone else, even peers nearby.
+                </Text>
+              </View>
+              <View style={styles.privacyNoteRow}>
+                <Feather
+                  name={newChannelOverNostr ? "globe" : "bluetooth"}
+                  size={14}
+                  color={Colors.textMuted}
+                />
+                <Text style={styles.privacyNoteText}>
+                  {newChannelOverNostr
+                    ? "Reaches members over Bluetooth and the internet."
+                    : "Works over Bluetooth range, not the internet."}
+                </Text>
+              </View>
+            </View>
             <View>
               <TextInput
                 style={[
@@ -560,15 +653,76 @@ export default function ChannelList({
               )}
             </View>
 
-            {/* Visibility and transport pickers were removed deliberately.
-                Both were written to the store and read by nothing: a channel
-                marked "Private" was still plaintext-broadcast to every device
-                in radio range, and picking "Nostr" still sent over BLE only.
-                A lock icon on an unencrypted broadcast is worse than no
-                control at all. Channels are public by design (bitchat's model);
-                privacy lives in DMs, which are Noise/Double-Ratchet encrypted.
-                If private groups are added later they need a real group-key
-                protocol, not a label. */}
+            {/* Reach. Encryption is always on (the removed "Private"/"Nostr"
+                pickers only set unread labels); this choice actually changes the
+                send path: local mesh only, or also sealed and published over
+                Nostr for out-of-range members. */}
+            <View style={styles.optionGroup}>
+              <Text style={styles.optionLabel}>Reach</Text>
+              <View style={styles.optionRow}>
+                <Pressable
+                  style={[
+                    styles.optionChip,
+                    !newChannelOverNostr && styles.optionChipActive,
+                  ]}
+                  onPress={() => setNewChannelOverNostr(false)}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: !newChannelOverNostr }}
+                >
+                  <Feather
+                    name="bluetooth"
+                    size={13}
+                    color={
+                      newChannelOverNostr
+                        ? Colors.textMuted
+                        : Colors.textPrimary
+                    }
+                  />
+                  <Text
+                    style={
+                      newChannelOverNostr
+                        ? styles.optionChipText
+                        : styles.optionChipTextActive
+                    }
+                  >
+                    Bluetooth only
+                  </Text>
+                </Pressable>
+                <Pressable
+                  style={[
+                    styles.optionChip,
+                    newChannelOverNostr && styles.optionChipActive,
+                  ]}
+                  onPress={() => setNewChannelOverNostr(true)}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: newChannelOverNostr }}
+                >
+                  <Feather
+                    name="globe"
+                    size={13}
+                    color={
+                      newChannelOverNostr
+                        ? Colors.textPrimary
+                        : Colors.textMuted
+                    }
+                  />
+                  <Text
+                    style={
+                      newChannelOverNostr
+                        ? styles.optionChipTextActive
+                        : styles.optionChipText
+                    }
+                  >
+                    Bluetooth + Internet
+                  </Text>
+                </Pressable>
+              </View>
+              <Text style={styles.reachHint}>
+                {newChannelOverNostr
+                  ? "Reaches members over the internet too. Relays can see the channel is active, never its messages or who is in it."
+                  : "Stays on the local mesh. Most private, nothing leaves Bluetooth range."}
+              </Text>
+            </View>
 
             <View style={styles.modalActions}>
               <Pressable style={styles.modalCancel} onPress={resetJoinModal}>
@@ -585,9 +739,34 @@ export default function ChannelList({
                 <Text style={styles.modalConfirmText}>Create</Text>
               </Pressable>
             </View>
+
+            {/* Private groups are a distinct thing from public channels: a
+                fixed, creator-signed roster rather than an open invite link. */}
+            <Pressable
+              style={styles.groupLink}
+              onPress={() => {
+                setShowJoinModal(false);
+                setShowNewGroup(true);
+              }}
+              accessibilityRole="button"
+            >
+              <Feather name="users" size={15} color={Colors.textSecondary} />
+              <Text style={styles.groupLinkText}>
+                Create a private group instead
+              </Text>
+            </Pressable>
           </Pressable>
         </Pressable>
       </Modal>
+
+      <NewGroupSheet
+        visible={showNewGroup}
+        onClose={() => setShowNewGroup(false)}
+        onCreated={(channel) => {
+          setShowNewGroup(false);
+          onSelectChannel(channel);
+        }}
+      />
 
       {/* Your Channels: swipe "More" sheet with chat info, pin, clear, delete */}
       <Modal
@@ -697,14 +876,14 @@ export default function ChannelList({
                   <View style={styles.moreRowsGroupDanger}>
                     <Pressable
                       style={styles.moreRowDanger}
-                      onPress={() => handleDeleteChat(moreOptionsChannel)}
+                      onPress={() => handleLeaveChannel(moreOptionsChannel)}
                       accessibilityRole="button"
                     >
-                      <Feather name="trash-2" size={18} color={Colors.danger} />
+                      <Feather name="log-out" size={18} color={Colors.danger} />
                       <Text
                         style={[styles.moreRowText, styles.moreRowTextDanger]}
                       >
-                        Delete channel
+                        Leave channel
                       </Text>
                     </Pressable>
                   </View>
@@ -1031,9 +1210,24 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       fontWeight: FontWeight.semibold,
       color: Colors.textPrimary,
     },
-    modalHint: {
+    // Privacy note in the create sheet: a short, scannable list of what a
+    // channel actually is (encrypted, invite-only, Bluetooth range) rather than
+    // one dense paragraph.
+    privacyNote: {
+      gap: Spacing.sm,
+      backgroundColor: Colors.surfaceRaised,
+      borderRadius: Radius.md,
+      padding: Spacing.md,
+    },
+    privacyNoteRow: {
+      flexDirection: "row",
+      alignItems: "flex-start",
+      gap: Spacing.sm,
+    },
+    privacyNoteText: {
+      flex: 1,
       fontSize: FontSize.sm,
-      color: Colors.textMuted,
+      color: Colors.textSecondary,
       lineHeight: 19,
     },
     modalInput: {
@@ -1093,6 +1287,11 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       color: Colors.textPrimary,
       fontWeight: FontWeight.semibold,
     },
+    reachHint: {
+      fontSize: FontSize.xs,
+      color: Colors.textMuted,
+      lineHeight: 17,
+    },
     modalActions: {
       flexDirection: "row",
       gap: Spacing.sm,
@@ -1128,6 +1327,18 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       fontSize: FontSize.base,
       color: Colors.textInverse,
       fontWeight: FontWeight.semibold,
+    },
+    groupLink: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: Spacing.sm,
+      paddingVertical: Spacing.sm,
+    },
+    groupLinkText: {
+      fontSize: FontSize.sm,
+      color: Colors.textSecondary,
+      fontWeight: FontWeight.medium,
     },
   });
 }
