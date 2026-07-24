@@ -1,9 +1,13 @@
 // Channel list screen.
 // Two sections: Default Channels (bitchat-compatible, cannot be left) and
-// Your Channels (user-created, joinable / leaveable).
+// Your Rooms (user-created channels and private groups, joinable / leaveable).
 // Tap a channel to open its message thread. Swipe left on any row for More:
-// chat info, and for Your Channels also pin and delete. The header "+"
-// (App.tsx) opens the create/join modal below.
+// chat info, and for Your Rooms also pin and delete.
+//
+// The header "+" (App.tsx) opens a chooser: channel or group. Both are private
+// and both are encrypted, so the difference (a shareable link and no member cap
+// versus a fixed signed roster that stays on Bluetooth) has to be stated where
+// the choice is made. Picking one closes the chooser and opens that form.
 
 import { Feather, MaterialCommunityIcons } from "@expo/vector-icons";
 import React, { useEffect, useMemo, useRef, useState } from "react";
@@ -180,6 +184,9 @@ export default function ChannelList({
     return () => clearInterval(timer);
   }, [channels]);
 
+  // The "+" opens a chooser first, so a channel and a group are seen side by
+  // side at the moment of deciding. Picking one closes it and opens that form.
+  const [showChooser, setShowChooser] = useState(false);
   const [showJoinModal, setShowJoinModal] = useState(false);
   const [showNewGroup, setShowNewGroup] = useState(false);
   const [newChannel, setNewChannel] = useState("");
@@ -192,7 +199,7 @@ export default function ChannelList({
   );
   const [showAllDefault, setShowAllDefault] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
-  // Which "Your Channels" row currently has its swipe-revealed More sheet open.
+  // Which "Your Rooms" row currently has its swipe-revealed More sheet open.
   const [moreOptionsChannel, setMoreOptionsChannel] = useState<string | null>(
     null,
   );
@@ -214,7 +221,7 @@ export default function ChannelList({
       newChannelTrigger > prevTrigger.current
     ) {
       prevTrigger.current = newChannelTrigger;
-      setShowJoinModal(true);
+      setShowChooser(true);
     }
   }, [newChannelTrigger]);
 
@@ -229,7 +236,7 @@ export default function ChannelList({
   const defaultChannels = publicChannels.filter((c) =>
     DEFAULT_CHANNEL_NAMES.has(c),
   );
-  // Your Channels: user-created public channels and private groups, pinned
+  // Your Rooms: user-created channels and private groups, pinned
   // first, then most recent activity first. Default channels keep their curated
   // protocol order (below) and are deliberately not reordered by activity.
   const ownChannels = sortConversationsByActivity(
@@ -272,10 +279,10 @@ export default function ChannelList({
           : defaultChannels.slice(0, DEFAULT_VISIBLE_COUNT),
     },
     {
-      title: "Your Channels",
+      title: "Your Rooms",
       isDefault: false,
       unread: sumUnread(ownChannels),
-      data: collapsedSections.has("Your Channels") ? [] : ownChannels,
+      data: collapsedSections.has("Your Rooms") ? [] : ownChannels,
     },
   ];
 
@@ -296,10 +303,15 @@ export default function ChannelList({
     });
   }
 
-  function resetJoinModal(): void {
+  // Close the channel form and clear its inputs. `backToChooser` reopens the
+  // step before it, so Cancel reads as "go back" rather than "lose my place":
+  // the user came here from a choice and may have picked the wrong one.
+  // Dismissing by backdrop or system back leaves entirely, as usual.
+  function resetJoinModal(backToChooser = false): void {
     setNewChannel("");
     setNewChannelOverNostr(false);
     setShowJoinModal(false);
+    if (backToChooser) setShowChooser(true);
   }
 
   function handleAdd(): void {
@@ -309,10 +321,11 @@ export default function ChannelList({
     // key here, shared only with people you send the invite link to. Reach is
     // the creator's choice: local mesh only, or also bridged over Nostr.
     joinPrivateChannel(name, generateChannelKey(), newChannelOverNostr);
+    // Created, so there is nothing to go back to.
     resetJoinModal();
   }
 
-  // ---- Your Channels swipe / more-options actions --------------------------
+  // ---- Your Rooms swipe / more-options actions -----------------------------
 
   function handleSwipeMore(channel: string): void {
     closeSwipeable(channel);
@@ -458,7 +471,7 @@ export default function ChannelList({
       </Pressable>
     );
 
-    // Every row (Your Channels and Default Channels alike) swipes left to
+    // Every row (Your Rooms and Default Channels alike) swipes left to
     // reveal More, the single consistent way to reach chat info, so
     // there's no separate inline info icon anywhere.
     return (
@@ -572,7 +585,7 @@ export default function ChannelList({
                 color={Colors.textMuted}
                 style={styles.ownEmptyIcon}
               />
-              <Text style={styles.ownEmptyText}>No channels yet</Text>
+              <Text style={styles.ownEmptyText}>No rooms yet</Text>
               <Text style={styles.ownEmptyHint}>
                 Tap <Text style={styles.ownEmptyAccent}>+</Text> above to join
                 or create one
@@ -597,9 +610,9 @@ export default function ChannelList({
         visible={showJoinModal}
         transparent
         animationType="slide"
-        onRequestClose={resetJoinModal}
+        onRequestClose={() => resetJoinModal()}
       >
-        <Pressable style={styles.modalOverlay} onPress={resetJoinModal}>
+        <Pressable style={styles.modalOverlay} onPress={() => resetJoinModal()}>
           <Pressable style={styles.modalSheet} onPress={() => {}}>
             <View style={styles.handle} />
             <Text style={styles.modalTitle}>Create a channel</Text>
@@ -725,8 +738,11 @@ export default function ChannelList({
             </View>
 
             <View style={styles.modalActions}>
-              <Pressable style={styles.modalCancel} onPress={resetJoinModal}>
-                <Text style={styles.modalCancelText}>Cancel</Text>
+              <Pressable
+                style={styles.modalCancel}
+                onPress={() => resetJoinModal(true)}
+              >
+                <Text style={styles.modalCancelText}>Back</Text>
               </Pressable>
               <Pressable
                 style={[
@@ -739,36 +755,96 @@ export default function ChannelList({
                 <Text style={styles.modalConfirmText}>Create</Text>
               </Pressable>
             </View>
-
-            {/* Private groups are a distinct thing from public channels: a
-                fixed, creator-signed roster rather than an open invite link. */}
-            <Pressable
-              style={styles.groupLink}
-              onPress={() => {
-                setShowJoinModal(false);
-                setShowNewGroup(true);
-              }}
-              accessibilityRole="button"
-            >
-              <Feather name="users" size={15} color={Colors.textSecondary} />
-              <Text style={styles.groupLinkText}>
-                Create a private group instead
-              </Text>
-            </Pressable>
           </Pressable>
         </Pressable>
+      </Modal>
+
+      {/* Pick the concept before the details. A channel and a group are both
+          private and both encrypted, so the only way to choose sensibly is to
+          see how they differ, side by side, at the moment of deciding. */}
+      <Modal
+        visible={showChooser}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowChooser(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <Pressable
+            style={StyleSheet.absoluteFill}
+            onPress={() => setShowChooser(false)}
+          />
+          <View style={styles.modalSheet}>
+            <View style={styles.handle} />
+            <Text style={styles.modalTitle}>Start something new</Text>
+
+            <View style={styles.moreRowsGroup}>
+              <Pressable
+                style={styles.chooserRow}
+                onPress={() => {
+                  setShowChooser(false);
+                  setShowJoinModal(true);
+                }}
+                accessibilityRole="button"
+                accessibilityLabel="Create a channel"
+              >
+                <View style={styles.chooserIcon}>
+                  <Feather name="hash" size={18} color={Colors.textPrimary} />
+                </View>
+                <View style={styles.chooserText}>
+                  <Text style={styles.chooserTitle}>Channel</Text>
+                  <Text style={styles.chooserDesc}>
+                    A room anyone with the link can join.
+                  </Text>
+                </View>
+              </Pressable>
+
+              <View style={styles.moreDivider} />
+
+              <Pressable
+                style={styles.chooserRow}
+                onPress={() => {
+                  setShowChooser(false);
+                  setShowNewGroup(true);
+                }}
+                accessibilityRole="button"
+                accessibilityLabel="Create a private group"
+              >
+                <View style={styles.chooserIcon}>
+                  <Feather name="users" size={18} color={Colors.textPrimary} />
+                </View>
+                <View style={styles.chooserText}>
+                  <Text style={styles.chooserTitle}>Group</Text>
+                  <Text style={styles.chooserDesc}>
+                    Pick specific people. Up to 16. Stays on Bluetooth.
+                  </Text>
+                </View>
+              </Pressable>
+            </View>
+
+            <Pressable
+              style={styles.modalCancel}
+              onPress={() => setShowChooser(false)}
+            >
+              <Text style={styles.modalCancelText}>Cancel</Text>
+            </Pressable>
+          </View>
+        </View>
       </Modal>
 
       <NewGroupSheet
         visible={showNewGroup}
         onClose={() => setShowNewGroup(false)}
+        onBack={() => {
+          setShowNewGroup(false);
+          setShowChooser(true);
+        }}
         onCreated={(channel) => {
           setShowNewGroup(false);
           onSelectChannel(channel);
         }}
       />
 
-      {/* Your Channels: swipe "More" sheet with chat info, pin, clear, delete */}
+      {/* Your Rooms: swipe "More" sheet with chat info, pin, clear, delete */}
       <Modal
         visible={moreOptionsChannel !== null}
         transparent
@@ -1074,7 +1150,7 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       backgroundColor: Colors.border,
     },
 
-    // ---- Your Channels: swipe actions ---------------------------------------
+    // ---- Your Rooms: swipe actions ------------------------------------------
 
     swipeActions: {
       flexDirection: "row",
@@ -1093,7 +1169,7 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       fontWeight: FontWeight.medium,
     },
 
-    // ---- Your Channels: "More" sheet -----------------------------------------
+    // ---- Your Rooms: "More" sheet --------------------------------------------
 
     // Tight, boxed group, not spread out with the sheet's default gap,
     // which reads as loose and disconnected for a same-purpose action list.
@@ -1154,7 +1230,7 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       color: Colors.textMuted,
     },
 
-    // ---- Your Channels empty state ------------------------------------------
+    // ---- Your Rooms empty state ---------------------------------------------
 
     ownEmpty: {
       alignItems: "center",
@@ -1328,17 +1404,36 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       color: Colors.textInverse,
       fontWeight: FontWeight.semibold,
     },
-    groupLink: {
+    // Chooser rows: icon, then a title over a one-line explanation of what
+    // makes this option different from the other one.
+    chooserRow: {
       flexDirection: "row",
       alignItems: "center",
-      justifyContent: "center",
-      gap: Spacing.sm,
-      paddingVertical: Spacing.sm,
+      gap: Spacing.md,
+      paddingVertical: Spacing.base,
+      paddingHorizontal: Spacing.base,
     },
-    groupLinkText: {
+    chooserIcon: {
+      width: 38,
+      height: 38,
+      borderRadius: Radius.full,
+      backgroundColor: Colors.surface,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    chooserText: {
+      flex: 1,
+      gap: 2,
+    },
+    chooserTitle: {
+      fontSize: FontSize.base,
+      fontWeight: FontWeight.semibold,
+      color: Colors.textPrimary,
+    },
+    chooserDesc: {
       fontSize: FontSize.sm,
       color: Colors.textSecondary,
-      fontWeight: FontWeight.medium,
+      lineHeight: 18,
     },
   });
 }

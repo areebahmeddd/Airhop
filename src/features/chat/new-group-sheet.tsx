@@ -31,11 +31,14 @@ import {
 
 interface Props {
   visible: boolean;
+  /** Dismiss entirely: backdrop tap or system back. */
   onClose: () => void;
+  /** Step back to whatever opened this sheet, for the Back button. */
+  onBack: () => void;
   onCreated: (channel: string) => void;
 }
 
-export function NewGroupSheet({ visible, onClose, onCreated }: Props) {
+export function NewGroupSheet({ visible, onClose, onBack, onCreated }: Props) {
   const Colors = useThemeColors();
   const styles = useMemo(() => createStyles(Colors), [Colors]);
 
@@ -81,6 +84,11 @@ export function NewGroupSheet({ visible, onClose, onCreated }: Props) {
     onClose();
   }
 
+  function handleBack() {
+    reset();
+    onBack();
+  }
+
   const canCreate = name.trim().length > 0 && selected.size > 0;
 
   return (
@@ -95,9 +103,31 @@ export function NewGroupSheet({ visible, onClose, onCreated }: Props) {
         <View style={styles.sheet}>
           <View style={styles.handle} />
           <Text style={styles.title}>New group</Text>
-          <Text style={styles.subtitle}>
-            End-to-end encrypted. Only members can read the messages.
-          </Text>
+          {/* Same scannable card as the create-channel sheet, so the two sides
+              of the chooser stay comparable: what it protects, who can get in,
+              how far it reaches. */}
+          <View style={styles.privacyNote}>
+            <View style={styles.privacyNoteRow}>
+              <Feather name="lock" size={14} color={Colors.online} />
+              <Text style={styles.privacyNoteText}>
+                End-to-end encrypted. Only members can read the messages.
+              </Text>
+            </View>
+            <View style={styles.privacyNoteRow}>
+              <Feather name="users" size={14} color={Colors.textMuted} />
+              <Text style={styles.privacyNoteText}>
+                Up to 16 people, chosen by you. There is no invite link, so
+                nobody joins by being forwarded one.
+              </Text>
+            </View>
+            <View style={styles.privacyNoteRow}>
+              <Feather name="bluetooth" size={14} color={Colors.textMuted} />
+              <Text style={styles.privacyNoteText}>
+                Bluetooth only. Members out of range receive messages once they
+                are back.
+              </Text>
+            </View>
+          </View>
 
           <TextInput
             style={styles.input}
@@ -109,58 +139,62 @@ export function NewGroupSheet({ visible, onClose, onCreated }: Props) {
             maxLength={64}
           />
 
-          <Text style={styles.sectionLabel}>
-            MEMBERS{selected.size > 0 ? ` · ${selected.size}` : ""}
-          </Text>
-
-          {reachable.length === 0 ? (
-            <Text style={styles.empty}>
-              No one is in range. Group members must be nearby when you create
-              the group.
+          {/* Label and list are one block: the sheet's own gap would otherwise
+              push the heading away from the thing it labels. */}
+          <View style={styles.section}>
+            <Text style={styles.sectionLabel}>
+              MEMBERS{selected.size > 0 ? ` · ${selected.size}` : ""}
             </Text>
-          ) : (
-            <ScrollView
-              style={styles.list}
-              showsVerticalScrollIndicator={false}
-            >
-              {reachable.map((peer) => {
-                const isSel = selected.has(peer.peerID);
-                return (
-                  <Pressable
-                    key={peer.peerID}
-                    style={styles.row}
-                    onPress={() => toggle(peer.peerID)}
-                    accessibilityRole="checkbox"
-                    accessibilityState={{ checked: isSel }}
-                  >
-                    <Avatar
-                      username={peer.nickname}
-                      peerID={peer.peerID}
-                      size={36}
-                    />
-                    <Text style={styles.rowName} numberOfLines={1}>
-                      {peer.nickname}
-                    </Text>
-                    <View style={[styles.check, isSel && styles.checkOn]}>
-                      {isSel && (
-                        <Feather
-                          name="check"
-                          size={14}
-                          color={Colors.textInverse}
-                        />
-                      )}
-                    </View>
-                  </Pressable>
-                );
-              })}
-            </ScrollView>
-          )}
+
+            {reachable.length === 0 ? (
+              <Text style={styles.empty}>
+                No one is in range. Members must be nearby when you create the
+                group.
+              </Text>
+            ) : (
+              <ScrollView
+                style={styles.list}
+                showsVerticalScrollIndicator={false}
+              >
+                {reachable.map((peer) => {
+                  const isSel = selected.has(peer.peerID);
+                  return (
+                    <Pressable
+                      key={peer.peerID}
+                      style={styles.row}
+                      onPress={() => toggle(peer.peerID)}
+                      accessibilityRole="checkbox"
+                      accessibilityState={{ checked: isSel }}
+                    >
+                      <Avatar
+                        username={peer.nickname}
+                        peerID={peer.peerID}
+                        size={36}
+                      />
+                      <Text style={styles.rowName} numberOfLines={1}>
+                        {peer.nickname}
+                      </Text>
+                      <View style={[styles.check, isSel && styles.checkOn]}>
+                        {isSel && (
+                          <Feather
+                            name="check"
+                            size={14}
+                            color={Colors.textInverse}
+                          />
+                        )}
+                      </View>
+                    </Pressable>
+                  );
+                })}
+              </ScrollView>
+            )}
+          </View>
 
           {error !== null && <Text style={styles.error}>{error}</Text>}
 
           <View style={styles.actions}>
-            <Pressable style={styles.cancel} onPress={handleClose}>
-              <Text style={styles.cancelText}>Cancel</Text>
+            <Pressable style={styles.cancel} onPress={handleBack}>
+              <Text style={styles.cancelText}>Back</Text>
             </Pressable>
             <Pressable
               style={[styles.confirm, !canCreate && styles.confirmDisabled]}
@@ -204,9 +238,22 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       fontWeight: FontWeight.semibold,
       color: Colors.textPrimary,
     },
-    subtitle: {
+    privacyNote: {
+      gap: Spacing.sm,
+      backgroundColor: Colors.surfaceRaised,
+      borderRadius: Radius.md,
+      padding: Spacing.md,
+    },
+    privacyNoteRow: {
+      flexDirection: "row",
+      alignItems: "flex-start",
+      gap: Spacing.sm,
+    },
+    privacyNoteText: {
+      flex: 1,
       fontSize: FontSize.sm,
       color: Colors.textSecondary,
+      lineHeight: 19,
     },
     input: {
       backgroundColor: Colors.surfaceRaised,
@@ -218,6 +265,7 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       borderWidth: 1,
       borderColor: Colors.border,
     },
+    section: { gap: Spacing.sm },
     sectionLabel: {
       fontSize: FontSize.xs,
       fontWeight: FontWeight.semibold,
@@ -227,7 +275,7 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
     empty: {
       fontSize: FontSize.sm,
       color: Colors.textMuted,
-      paddingVertical: Spacing.lg,
+      lineHeight: 19,
     },
     list: { flexGrow: 0 },
     row: {

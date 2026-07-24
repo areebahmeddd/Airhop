@@ -84,7 +84,7 @@ interface ChatState {
   // still went out over BLE. Keeping settings that silently do nothing, one of
   // them implying encryption, is worse than not offering them. Channels are
   // public by design; privacy lives in DMs (Noise + Double Ratchet).
-  // User-created channels pinned to the top of "Your Channels" (WhatsApp-style).
+  // User-created channels pinned to the top of "Your Rooms" (WhatsApp-style).
   pinnedChannels: string[];
   // Conversations (channels or DMs) the user has muted.
   mutedChannels: string[];

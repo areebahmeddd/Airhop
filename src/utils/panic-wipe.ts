@@ -58,6 +58,11 @@ export const MMKV_STORE_IDS = [
   // prekey-store holds our one-time prekey private keys and peers' bundles;
   // both are identity-linked key material and must be destroyed on panic.
   "prekey-store",
+  // geo-relays-cache holds a public relay list, identical for every user, so it
+  // leaks nothing about this device. It is cleared anyway for the timestamp it
+  // keeps alongside it, which would otherwise show roughly when the app last
+  // ran. The list re-downloads, and the bundled snapshot covers the gap.
+  "geo-relays-cache",
   // group-store holds private-group epoch keys, which decrypt every group
   // message; destroy them on panic like any other conversation key material.
   "group-store",

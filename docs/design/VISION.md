@@ -34,6 +34,53 @@ These do not change under schedule pressure or feature requests.
 
 7. **Protocol compliance over clever shortcuts.** When in doubt, do what bitchat does. The bitchat team are smart engineers who made deliberate choices.
 
+## Features in Practice
+
+What each feature is for, and when someone would actually reach for it.
+
+### Messaging
+
+- Private DMs. One to one, encrypted end to end, with delivery and read receipts. You message a friend across a festival ground with no signal and it hops through other people's phones to reach them.
+- Public channels. Open rooms anyone nearby can join. `#bluetooth` stays inside Bluetooth range. `#block` through `#region` widen to a geographic cell and also travel over the internet, so `#city` still works when you are the only person on your street with the app.
+- Private channels. An invite-only room where the key rides inside the invite link, so anyone you send the link to can read. No member cap. Put a QR on a flyer for a march and a few hundred people join through the day.
+- Private groups. A fixed list of people the creator signs, up to 16. There is no link to forward, so nobody joins by accident. Your four friends at that same march, rather than the whole crowd.
+- Bulletin board. Signed notices that outlive a conversation, pinned to your mesh or your area for one to seven days, with an urgent flag. "Water station at the south entrance," left for whoever walks past an hour later.
+- Voice notes. Recorded audio sent as a file, faster than typing directions.
+- Video sharing. Recorded clips that play inline. There is no live video, because the two platforms' direct-WiFi stacks cannot talk to each other.
+- File transfer. Any format, up to 1 MB, which is bitchat's limit and takes about 45 seconds over Bluetooth. A photo of a road closure.
+- Store-and-forward courier. When nothing can reach the recipient now, a nearby phone carries the sealed message and hands it over when they eventually meet. The carrier cannot read it.
+
+### Identity
+
+- No account. Your identity is a key pair made on the phone. Nothing registers anywhere, so there is nothing to seize or subpoena.
+- Human-readable names. Derived from your public key rather than chosen, so nobody can take someone else's name.
+- QR contacts. Scanning a card carries public keys, not just a name, and the peer ID is verified against them before anything is trusted.
+- End-to-end encryption. Live sessions use Noise XX. Nobody in the middle, including relaying phones, can read a private message.
+- Forward secrecy. Double Ratchet for live chats, and single-use prekeys for messages left for someone offline, so an old message stays protected even if a key leaks later.
+- Panic wipe. Triple-tap the logo and every key, message, group, notice and prekey is gone in under a second.
+
+### Networking
+
+- Bluetooth mesh. The part that works when nothing else does. No towers, no router, no bill.
+- Multi-hop routing. Messages relay through up to seven phones, so two people who cannot see each other still connect through the strangers between them.
+- WiFi fast path. Two Androids, or two iPhones, move large files faster. It never crosses platforms, so Bluetooth stays the universal path.
+- bitchat compatibility. An Airhop phone and a bitchat phone join the same mesh and talk with no setup. Airhop's own additions are ignored by bitchat rather than breaking it.
+
+### Internet
+
+- Nostr bridge. Picks up where Bluetooth range ends, without a server we own.
+- Geo-relay discovery. Location channels pick relays near that place, so people in one city converge on the same ones.
+- Internet gateway. Off by default. Turn it on and your phone carries public location traffic for nearby people who have no connection of their own.
+- Tor. Routes Nostr traffic so relay operators never see your IP.
+
+### Optional
+
+- Cashu ecash. Send value device to device with no internet and no payment company. Settle a shared bill in a dead zone; the recipient redeems whenever they are back online.
+- Nutzaps. Lightning payments over Nostr when you do have a connection.
+- Local assistant. On-device inference. Questions answered with nothing leaving the phone.
+- AT Protocol. Opt-in bridge to Bluesky using the same Airhop identity.
+- ActivityPub. Opt-in bridge to Mastodon, same identity.
+
 ## Build Order Philosophy
 
 ```
