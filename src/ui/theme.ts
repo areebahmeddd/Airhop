@@ -5,8 +5,10 @@
 //
 // Rule: if a color does not communicate information, it should not exist.
 
+import { useMemo } from "react";
 import { useColorScheme, type ColorSchemeName } from "react-native";
 import { useSettingsStore } from "../store/settings-store";
+import { MONO_FONTS } from "./fonts";
 
 export const Colors = {
   // ---- Backgrounds ----------------------------------------------------------
@@ -41,9 +43,19 @@ export const Colors = {
   online: "#16A34A", // peer is reachable
   offline: "#CCCCCC", // peer timed out
   syncing: "#D97706", // BLE scanning / Nostr reconnecting
+  syncingDim: "rgba(217,119,6,0.10)", // caution banner bg (location off)
   danger: "#DC2626", // destructive actions, panic wipe
   dangerDim: "rgba(220,38,38,0.08)",
   success: "#16A34A",
+
+  // Mesh-status banner accents: each hue names a distinct network state so the
+  // Mesh tab reads at a glance (per-tone bg is the same hue at low alpha).
+  relay: "#2563EB", // traffic carried over the internet (Nostr relay)
+  relayDim: "rgba(37,99,235,0.09)",
+  tor: "#7C3AED", // onion-routed internet traffic (Tor)
+  torDim: "rgba(124,58,237,0.09)",
+  gateway: "#0D9488", // this device relaying for offline peers (gateway)
+  gatewayDim: "rgba(13,148,136,0.09)",
 
   // ---- Overlays -------------------------------------------------------------
   overlay: "rgba(0,0,0,0.45)",
@@ -77,9 +89,19 @@ export const DarkColors = {
   online: "#22C55E",
   offline: "#4B4B4B",
   syncing: "#F59E0B",
+  syncingDim: "rgba(245,158,11,0.16)",
   danger: "#EF4444",
   dangerDim: "rgba(239,68,68,0.15)",
   success: "#22C55E",
+
+  // Brighter hues for the dark canvas; dim backgrounds carry more alpha to stay
+  // visible on near-black.
+  relay: "#3B82F6",
+  relayDim: "rgba(59,130,246,0.16)",
+  tor: "#8B5CF6",
+  torDim: "rgba(139,92,246,0.16)",
+  gateway: "#14B8A6",
+  gatewayDim: "rgba(20,184,166,0.16)",
 
   overlay: "rgba(0,0,0,0.6)",
 } as const;
@@ -131,6 +153,18 @@ export const FontWeight = {
   bold: "700" as const,
 };
 
+// Monospace family for keys, geohashes, IDs, and wallet amounts. Points at the
+// bundled JetBrains Mono (loaded in App.tsx); if the font ever fails to load,
+// the platform substitutes its own monospace, so text never disappears.
+export const FontFamily = {
+  // Resolved live from the user's Appearance choice via the single MONO_FONTS
+  // table (one source of truth, so adding a font can't mismap here). Read at
+  // style-build time; useThemeColors below recomputes styles when it changes.
+  get mono(): string {
+    return MONO_FONTS[useSettingsStore.getState().monoFont].family;
+  },
+};
+
 export const Radius = {
   sm: 6,
   md: 10,
@@ -180,10 +214,21 @@ function resolveTheme(
 // either the preference or the OS scheme changes.
 export function useThemeColors(): Record<keyof typeof Colors, string> {
   const preference = useSettingsStore((s) => s.theme);
+  // Subscribe to the mono-font choice too. Component styles are memoized on the
+  // object this hook returns, so returning a fresh identity when the font
+  // changes makes every screen recompute its styles and pick up FontFamily.mono
+  // live, exactly the way a theme switch already works. No app restart needed.
+  const monoFont = useSettingsStore((s) => s.monoFont);
   const systemScheme = useColorScheme();
-  return resolveTheme(preference, systemScheme) === "dark"
-    ? DarkColors
-    : Colors;
+  const base =
+    resolveTheme(preference, systemScheme) === "dark" ? DarkColors : Colors;
+  return useMemo(() => {
+    // monoFont is part of the identity on purpose: it doesn't change the
+    // palette, but a fresh object forces every memoized style to recompute and
+    // re-read FontFamily.mono when the font choice changes.
+    void monoFont;
+    return { ...base };
+  }, [base, monoFont]);
 }
 
 // Same resolution as useThemeColors(), but returns just "light" | "dark",

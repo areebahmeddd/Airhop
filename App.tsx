@@ -1,6 +1,11 @@
 ﻿// Polyfill must be the first import. Required before any @noble/* usage.
 import "react-native-get-random-values";
 
+import { FiraCode_400Regular } from "@expo-google-fonts/fira-code";
+import {
+  JetBrainsMono_400Regular,
+  useFonts,
+} from "@expo-google-fonts/jetbrains-mono";
 import { Feather, MaterialCommunityIcons } from "@expo/vector-icons";
 import { bytesToHex } from "@noble/hashes/utils.js";
 import { StatusBar } from "expo-status-bar";
@@ -186,6 +191,12 @@ export default function App(): React.JSX.Element {
   // appReady guards against a flash of the welcome screen on every launch.
   // The identity check is async, so we render nothing until it resolves.
   const [appReady, setAppReady] = useState(false);
+  // Load JetBrains Mono in the background so it is ready the instant a user
+  // picks it under Appearance. Startup is NOT gated on it: the app defaults to
+  // the system monospace, so there is nothing to wait for and a missing/unlinked
+  // font can never delay or hang launch. The mono bits switch over live once it
+  // is loaded (see useThemeColors).
+  useFonts({ JetBrainsMono_400Regular, FiraCode_400Regular });
   const [onboardingStep, setOnboardingStep] = useState<OnboardingStep | null>(
     null,
   );
@@ -618,8 +629,9 @@ export default function App(): React.JSX.Element {
 
   // ---- Render ------------------------------------------------------------
 
-  // Render nothing until the identity check resolves. This prevents a flash
-  // of the welcome screen for returning users on every app launch.
+  // Render nothing until the identity check resolves (and the bundled font is
+  // ready). This prevents a flash of the welcome screen for returning users on
+  // every app launch, and of system-font mono text before JetBrains Mono loads.
   if (!appReady) {
     return (
       <GestureHandlerRootView style={{ flex: 1 }}>

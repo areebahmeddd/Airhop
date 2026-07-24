@@ -30,6 +30,7 @@ import {
 import { birdForVersion } from "../../../data/releases";
 import PrimaryButton from "../../../ui/components/primary-button";
 import {
+  FontFamily,
   FontSize,
   FontWeight,
   Spacing,
@@ -413,7 +414,7 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
     version: {
       fontSize: FontSize.sm,
       color: Colors.textMuted,
-      fontFamily: "monospace",
+      fontFamily: FontFamily.mono,
     },
     // The release codename as a labeled value: a small uppercase "Codename"
     // tag beside the name, the same label idiom as the settings section

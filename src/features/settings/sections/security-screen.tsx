@@ -2,12 +2,10 @@
 // on Android), and the always-on Double Ratchet / packet-signing guarantees.
 
 import Feather from "@expo/vector-icons/Feather";
-import React, { useEffect, useState } from "react";
+import React, { useState } from "react";
 import {
   Linking,
   Modal,
-  NativeEventEmitter,
-  NativeModules,
   Platform,
   Pressable,
   ScrollView,
@@ -15,7 +13,6 @@ import {
   Text,
   View,
 } from "react-native";
-import NativeAirhopTor from "../../../bridge/NativeAirhopTor";
 import { setTorRouting } from "../../../core/nostr/tor-routing";
 import { showAlert } from "../../../store/alert-store";
 import { useBlockedStore } from "../../../store/blocked-store";
@@ -38,13 +35,12 @@ export default function SecurityScreen({ onBack }: Props): React.JSX.Element {
   const Colors = useThemeColors();
   const styles = useSharedStyles();
   // The switch reflects the persisted preference (user intent), which
-  // setTorRouting owns. Local state below is only transient bootstrap UI.
+  // setTorRouting owns. torStarting only disables the switch while a toggle is
+  // in flight, so it can't be double-tapped mid-operation.
   const torEnabled = useSettingsStore((s) => s.torEnabled);
   const gatewayEnabled = useSettingsStore((s) => s.gatewayEnabled);
   const setGatewayEnabled = useSettingsStore((s) => s.setGatewayEnabled);
   const [torStarting, setTorStarting] = useState(false);
-  const [torProgress, setTorProgress] = useState(0);
-  const [torSummary, setTorSummary] = useState("");
   const [showOrbotModal, setShowOrbotModal] = useState(false);
   // Subscribe to the array itself (not the isBlocked function, whose identity
   // never changes) so the list re-renders when a block is added or removed.
@@ -66,34 +62,6 @@ export default function SecurityScreen({ onBack }: Props): React.JSX.Element {
     );
   }
 
-  // Subscribe to Tor bootstrap events (iOS only; NativeAirhopTor is null on Android).
-  useEffect(() => {
-    if (!NativeAirhopTor || !NativeModules.AirhopTorModule) return;
-    const emitter = new NativeEventEmitter(NativeModules.AirhopTorModule);
-    const sub = emitter.addListener(
-      "TorStatusChanged",
-      (event: {
-        isReady: boolean;
-        isStarting: boolean;
-        progress: number;
-        bootstrapSummary: string;
-      }) => {
-        setTorProgress(event.progress);
-        setTorSummary(event.bootstrapSummary);
-        if (event.isReady) {
-          setTorStarting(false);
-        }
-        if (!event.isStarting && !event.isReady) {
-          // Tor has stopped or failed outside of our control.
-          setTorStarting(false);
-          setTorProgress(0);
-          setTorSummary("");
-        }
-      },
-    );
-    return () => sub.remove();
-  }, []);
-
   function handleGetOrbot(): void {
     setShowOrbotModal(false);
     void Linking.openURL(
@@ -107,31 +75,30 @@ export default function SecurityScreen({ onBack }: Props): React.JSX.Element {
   // switch itself is driven by the persisted preference, so it always reflects
   // the real routing state rather than a copy that can drift.
   async function handleTorToggle(value: boolean): Promise<void> {
-    // Android routes through Orbot's VPN, which the app cannot start. Show the
-    // install guide on enable, then let setTorRouting record the intent (the VPN
-    // itself does the transparent routing).
-    if (Platform.OS === "android" && value) {
-      setShowOrbotModal(true);
-    }
+    // Android routes through Orbot's VPN, which the app cannot start. setTorRouting
+    // verifies Orbot is installed and a VPN is up before enabling; if it isn't, we
+    // surface the install guide (orbot-missing) or a "start Orbot" hint
+    // (orbot-inactive) from the result below rather than assuming it worked.
     try {
       setTorStarting(true);
       const result = await setTorRouting(value);
       if (value && !result.ok) {
-        setTorProgress(0);
-        setTorSummary("");
-        showAlert(
-          "Tor",
-          result.reason === "unavailable"
-            ? "Tor routing is not available in this build."
-            : result.reason === "timeout"
-              ? "Could not connect through Tor within 60 seconds. Check your network connection and try again."
-              : "Could not start Tor. Ensure the app has network access.",
-        );
-      } else if (value) {
-        setTorProgress(100);
-      } else {
-        setTorProgress(0);
-        setTorSummary("");
+        if (result.reason === "orbot-missing") {
+          // Orbot isn't installed, so nothing can route. Re-open the install
+          // guide rather than a dead-end alert.
+          setShowOrbotModal(true);
+        } else {
+          showAlert(
+            "Tor",
+            result.reason === "orbot-inactive"
+              ? "Orbot is installed but not connected. Open Orbot, start its VPN, then turn this on."
+              : result.reason === "unavailable"
+                ? "Tor routing is not available in this build."
+                : result.reason === "timeout"
+                  ? "Could not connect through Tor within 60 seconds. Check your network connection and try again."
+                  : "Could not start Tor. Ensure the app has network access.",
+          );
+        }
       }
     } finally {
       setTorStarting(false);
@@ -150,16 +117,12 @@ export default function SecurityScreen({ onBack }: Props): React.JSX.Element {
             <SettingRow
               icon="globe"
               label="Tor routing"
+              // Standard description regardless of on/off; the switch and the Mesh
+              // banner communicate state.
               description={
                 Platform.OS === "android"
                   ? "Requires Orbot · Install from the Play Store"
-                  : torEnabled && !torStarting
-                    ? "Active · Nostr traffic routed via Tor"
-                    : torStarting
-                      ? torProgress > 0
-                        ? `Connecting… ${torProgress}%${torSummary ? ` · ${torSummary}` : ""}`
-                        : "Starting Tor…"
-                      : "Route Nostr traffic through Tor for enhanced privacy"
+                  : "Route Nostr traffic through Tor for enhanced privacy"
               }
               control={
                 <SettingSwitch
@@ -173,11 +136,8 @@ export default function SecurityScreen({ onBack }: Props): React.JSX.Element {
             <SettingRow
               icon="radio"
               label="Internet gateway"
-              description={
-                gatewayEnabled
-                  ? "On · Relaying nearby offline peers' location messages to the internet"
-                  : "Relay nearby offline peers' location messages to the internet. Uses your data and battery."
-              }
+              // Standard description regardless of on/off; the switch shows state.
+              description="Relay nearby offline peers' location messages to the internet. Uses your data and battery."
               control={
                 <SettingSwitch
                   value={gatewayEnabled}

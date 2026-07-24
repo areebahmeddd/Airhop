@@ -50,6 +50,9 @@ export interface AttachmentMeta {
   name: string;
   mimeType: string;
   durationMs: number;
+  // Optional WhatsApp-style caption. Rides the file packet as an Airhop TLV that
+  // bitchat skips, so the media and its caption travel as one message.
+  caption?: string;
 }
 
 // Only the attachment cache files this service writes carry this prefix, so a
@@ -196,6 +199,8 @@ export class FileTransferService {
       // omit the channel tag; a channel attachment carries it for Airhop routing.
       channel: isDM ? undefined : channel,
       durationMs: meta.durationMs > 0 ? meta.durationMs : undefined,
+      caption:
+        meta.caption && meta.caption.length > 0 ? meta.caption : undefined,
     });
     if (tlv === null) return;
 
@@ -331,7 +336,9 @@ export class FileTransferService {
       senderID: senderPeerID,
       senderNickname:
         this.resolveNickname?.(senderPeerID) ?? senderPeerID.slice(0, 8),
-      text: "",
+      // The caption rides with the file, so the received bubble shows the media
+      // and its caption together, exactly as the sender composed it.
+      text: fp.caption ?? "",
       timestampMs: Date.now(),
       isMine: false,
       attachment: {

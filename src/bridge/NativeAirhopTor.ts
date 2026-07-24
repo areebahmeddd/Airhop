@@ -4,9 +4,10 @@
 // Source: ios/Airhop/AirhopTorModule.swift + AirhopTorModule.mm
 // Binary: ios/Frameworks/arti.xcframework (bundled)
 //
-// On Android, Tor traffic is routed via Orbot (system-level SOCKS5 proxy on
-// port 9050) rather than an embedded Arti instance. Orbot detection is handled
-// by AirhopBLEModule.getTorProxyPort() on Android. This module is iOS-only.
+// On Android, Tor traffic is routed via Orbot's system-level VPN rather than an
+// embedded Arti instance. Whether Tor can actually route is detected by
+// AirhopBLEModule.getTorAvailability() (Orbot installed + a VPN transport up).
+// This module is iOS-only.
 
 import type { TurboModule } from "react-native";
 import { TurboModuleRegistry } from "react-native";
@@ -61,6 +62,6 @@ export type TorStatusChangedEvent = TorStatus;
 
 // ---- Registry ---------------------------------------------------------------
 
-// Returns null on Android (Arti is iOS-only; use NativeAirhopBLE.getTorProxyPort()
-// to detect Orbot on Android instead).
+// Returns null on Android (Arti is iOS-only; use
+// NativeAirhopBLE.getTorAvailability() to detect Orbot on Android instead).
 export default TurboModuleRegistry.get<Spec>("AirhopTorModule");

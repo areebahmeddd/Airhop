@@ -27,6 +27,15 @@ export interface Spec extends TurboModule {
   // Orbot/Arti on iOS). Returns the port (9050) if reachable, or 0 if not.
   getTorProxyPort(): Promise<number>;
 
+  // Whether Tor routing can actually work right now. Android checks the Orbot
+  // package is installed and a VPN transport is up; the Tor toggle requires both
+  // before turning on, so it never reports "on" while nothing is routing. iOS
+  // uses in-app Arti and resolves both false (it never consults this).
+  getTorAvailability(): Promise<{
+    orbotInstalled: boolean;
+    vpnActive: boolean;
+  }>;
+
   // Required by React Native NativeEventEmitter contract
   addListener(eventName: string): void;
   removeListeners(count: number): void;

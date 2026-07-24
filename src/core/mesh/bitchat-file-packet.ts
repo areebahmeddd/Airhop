@@ -174,6 +174,11 @@ const TLV_MIMETYPE = 0x03;
 const TLV_CONTENT = 0x04;
 const TLV_CHANNEL = 0x05; // Airhop extension (bitchat skips it)
 const TLV_DURATION = 0x06; // Airhop extension: voice-note duration ms
+const TLV_CAPTION = 0x07; // Airhop extension: attachment caption text (bitchat skips it)
+
+// A caption is chat text, not a document: keep it short so a huge string can't
+// bloat the file frame. 512 bytes matches the board-post content cap.
+const MAX_CAPTION_BYTES = 512;
 
 export interface FilePacket {
   fileName?: string;
@@ -181,6 +186,7 @@ export interface FilePacket {
   content: Uint8Array;
   channel?: string; // Airhop routing (bitchat ignores)
   durationMs?: number; // Airhop voice duration (bitchat ignores)
+  caption?: string; // Airhop attachment caption (bitchat ignores)
 }
 
 function u16(n: number): [number, number] {
@@ -223,6 +229,12 @@ export function encodeFilePacket(p: FilePacket): Uint8Array | null {
   if (p.durationMs !== undefined && p.durationMs > 0) {
     out.push(TLV_DURATION, ...u16(4), ...u32(p.durationMs));
   }
+  if (p.caption !== undefined && p.caption.length > 0) {
+    const b = enc.encode(p.caption);
+    if (b.length > 0 && b.length <= MAX_CAPTION_BYTES) {
+      out.push(TLV_CAPTION, ...u16(b.length), ...b);
+    }
+  }
   // content: u32 length (bitchat canonical), then bytes.
   out.push(TLV_CONTENT, ...u32(p.content.length), ...p.content);
   return new Uint8Array(out);
@@ -236,6 +248,7 @@ export function decodeFilePacket(data: Uint8Array): FilePacket | null {
   let mimeType: string | undefined;
   let channel: string | undefined;
   let durationMs: number | undefined;
+  let caption: string | undefined;
   const contentParts: Uint8Array[] = [];
   let contentLen = 0;
   const dec = new TextDecoder();
@@ -286,6 +299,9 @@ export function decodeFilePacket(data: Uint8Array): FilePacket | null {
             (value[0] << 24) | (value[1] << 16) | (value[2] << 8) | value[3];
         }
         break;
+      case TLV_CAPTION:
+        if (len <= MAX_CAPTION_BYTES) caption = dec.decode(value);
+        break;
       case TLV_CONTENT:
         contentLen += value.length;
         if (contentLen > MAX_FILE_BYTES) return null;
@@ -303,5 +319,5 @@ export function decodeFilePacket(data: Uint8Array): FilePacket | null {
     content.set(part, o);
     o += part.length;
   }
-  return { fileName, mimeType, content, channel, durationMs };
+  return { fileName, mimeType, content, channel, durationMs, caption };
 }

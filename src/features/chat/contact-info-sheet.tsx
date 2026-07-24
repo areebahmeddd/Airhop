@@ -24,6 +24,7 @@ import { useContactsStore } from "../../store/contacts-store";
 import { usePeerStore } from "../../store/peer-store";
 import Avatar from "../../ui/components/avatar";
 import {
+  FontFamily,
   FontSize,
   FontWeight,
   Radius,
@@ -431,7 +432,7 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
     },
     peerID: {
       fontSize: FontSize.xs,
-      fontFamily: "monospace",
+      fontFamily: FontFamily.mono,
       color: Colors.textMuted,
       letterSpacing: 0.3,
     },

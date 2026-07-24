@@ -45,6 +45,33 @@ describe("bitchat-file-packet", () => {
       expect(dec.mimeType).toBe("audio/m4a");
     });
 
+    it("round-trips an attachment caption (Airhop extension)", () => {
+      const content = new Uint8Array(64).fill(9);
+      const dec = decodeFilePacket(
+        encodeFilePacket({
+          fileName: "photo.jpg",
+          mimeType: "image/jpeg",
+          content,
+          caption: "sunset at the pier 🌅",
+        })!,
+      )!;
+      expect(dec.caption).toBe("sunset at the pier 🌅");
+      // The file itself still decodes correctly alongside the caption.
+      expect(dec.fileName).toBe("photo.jpg");
+      expect(dec.content).toEqual(content);
+    });
+
+    it("omits the caption tag when there is no caption (bitchat parity)", () => {
+      const enc = encodeFilePacket({
+        mimeType: "image/jpeg",
+        content: new Uint8Array(16).fill(1),
+      })!;
+      // 0x07 is the caption tag; it must not appear when unused, so a plain
+      // bitchat file frame stays byte-for-byte what bitchat would produce.
+      expect([...enc]).not.toContain(0x07);
+      expect(decodeFilePacket(enc)!.caption).toBeUndefined();
+    });
+
     it("uses canonical tags: 0x01 name, 0x02 size(u32), 0x03 mime, 0x04 content(u32)", () => {
       const enc = encodeFilePacket({
         fileName: "a",

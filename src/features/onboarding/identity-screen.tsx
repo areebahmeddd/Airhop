@@ -7,7 +7,13 @@ import React, { useEffect, useMemo, useState } from "react";
 import { Animated, Easing, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { generateIdentity, saveIdentity } from "../../core/crypto/identity";
-import { FontSize, FontWeight, Spacing, useThemeColors } from "../../ui/theme";
+import {
+  FontFamily,
+  FontSize,
+  FontWeight,
+  Spacing,
+  useThemeColors,
+} from "../../ui/theme";
 
 interface Props {
   onComplete: (peerID: string) => void;
@@ -197,7 +203,7 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
     stepText: {
       fontSize: FontSize.xs,
       color: Colors.textMuted,
-      fontFamily: "monospace",
+      fontFamily: FontFamily.mono,
     },
   });
 }

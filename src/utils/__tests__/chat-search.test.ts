@@ -5,7 +5,12 @@
 // make it findable by its exact name in a DM or a channel.
 
 import type { ChatMessage } from "../../store/chat-store";
-import { searchableMessageText, searchMessages } from "../chat-search";
+import {
+  searchableMessageText,
+  searchMessages,
+  searchNotices,
+  type SearchableNotice,
+} from "../chat-search";
 
 function msg(overrides: Partial<ChatMessage>): ChatMessage {
   return {
@@ -84,5 +89,43 @@ describe("searchMessages finds attachments by name", () => {
 
   it("does not match an unrelated query", () => {
     expect(searchMessages("nonsense.zip", messages)).toHaveLength(0);
+  });
+});
+
+describe("searchNotices", () => {
+  const notices: SearchableNotice[] = [
+    {
+      id: "n1",
+      channel: "#bluetooth",
+      content: "Lost dog near the park, please help",
+      author: "sam",
+      timestampMs: 2000,
+      isUrgent: true,
+    },
+    {
+      id: "n2",
+      channel: "geohash:9q8yy",
+      content: "Farmers market this Saturday",
+      author: "dana",
+      timestampMs: 1000,
+      isUrgent: false,
+    },
+  ];
+
+  it("matches notice content and points at its room", () => {
+    const hits = searchNotices("dog", notices);
+    expect(hits).toHaveLength(1);
+    expect(hits[0].id).toBe("n1");
+    expect(hits[0].channel).toBe("#bluetooth");
+    expect(hits[0].isUrgent).toBe(true);
+  });
+
+  it("falls back to matching the author's name", () => {
+    const hits = searchNotices("dana", notices);
+    expect(hits.map((h) => h.id)).toEqual(["n2"]);
+  });
+
+  it("returns nothing for an unrelated query", () => {
+    expect(searchNotices("spaceship", notices)).toHaveLength(0);
   });
 });

@@ -34,6 +34,9 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.content.pm.PackageManager
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
@@ -416,6 +419,44 @@ class AirhopBLEModule(
                 promise.resolve(0)
             }
         }.start()
+    }
+
+    // Report whether Tor routing can actually work on this device, so the UI
+    // never flips the Tor toggle "on" when nothing is routing traffic. We cannot
+    // start Orbot ourselves, so we surface the two things we *can* observe:
+    //   - orbotInstalled: the Orbot package is present (PackageManager query;
+    //     needs the <package> entry in AndroidManifest's <queries> on API 30+).
+    //   - vpnActive: a VPN transport is currently up. Orbot's VPN mode captures
+    //     app traffic transparently, so an active VPN is our best signal that
+    //     traffic is being routed. It cannot prove the VPN is *Orbot* (only that
+    //     one exists), which is why we report it alongside orbotInstalled and let
+    //     the caller require both.
+    @ReactMethod
+    fun getTorAvailability(promise: Promise) {
+        val result = WritableNativeMap()
+
+        val orbotInstalled = try {
+            reactContext.packageManager.getPackageInfo("org.torproject.android", 0)
+            true
+        } catch (_: PackageManager.NameNotFoundException) {
+            false
+        } catch (_: Exception) {
+            false
+        }
+
+        val vpnActive = try {
+            val cm = reactContext.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
+            cm?.allNetworks?.any { network ->
+                cm.getNetworkCapabilities(network)
+                    ?.hasTransport(NetworkCapabilities.TRANSPORT_VPN) == true
+            } ?: false
+        } catch (_: Exception) {
+            false
+        }
+
+        result.putBoolean("orbotInstalled", orbotInstalled)
+        result.putBoolean("vpnActive", vpnActive)
+        promise.resolve(result)
     }
 
     // MARK: - GATT server setup

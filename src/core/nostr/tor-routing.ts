@@ -18,6 +18,7 @@
 
 import { useWebSocketImplementation } from "nostr-tools/pool";
 import { Platform } from "react-native";
+import NativeAirhopBLE from "../../bridge/NativeAirhopBLE";
 import NativeAirhopTor from "../../bridge/NativeAirhopTor";
 import { isTorSocketNativeAvailable } from "../../bridge/NativeAirhopTorSocket";
 import { getMeshService } from "../../services/mesh-service";
@@ -36,9 +37,14 @@ let torActive = false;
 
 export interface TorRoutingResult {
   ok: boolean;
-  // Why enabling failed, for the UI to explain: the native module is missing,
-  // or Arti did not bootstrap in time.
-  reason?: "unavailable" | "timeout" | "error";
+  // Why enabling failed, for the UI to explain:
+  //   unavailable    the native module is missing (iOS build without Arti)
+  //   timeout        Arti did not bootstrap in time (iOS)
+  //   error          Arti failed to start (iOS)
+  //   orbot-missing  Orbot is not installed (Android)
+  //   orbot-inactive Orbot is installed but no VPN is up, so nothing is routing (Android)
+  reason?:
+    "unavailable" | "timeout" | "error" | "orbot-missing" | "orbot-inactive";
 }
 
 // Whether Nostr WebSockets are currently routed through the in-app Tor proxy.
@@ -86,10 +92,22 @@ export async function setTorRouting(
 }
 
 async function enableTorRouting(): Promise<TorRoutingResult> {
-  // Android: cannot start Orbot ourselves; assume the user has its VPN running.
-  // Traffic is routed transparently, so there is no socket to swap. Persist the
-  // intent and rebuild so connections re-open (helps if Orbot just came up).
+  // Android: we cannot start Orbot ourselves, but we must not flip the toggle
+  // "on" while nothing is actually routing. Orbot's VPN mode captures app traffic
+  // transparently, so require both that Orbot is installed and that a VPN is up
+  // before we persist the intent. If either is missing, report why and leave the
+  // toggle off. (getTorAvailability resolves both false on iOS, but this branch
+  // is Android-only.)
   if (Platform.OS === "android") {
+    const availability = await NativeAirhopBLE.getTorAvailability().catch(
+      () => ({ orbotInstalled: false, vpnActive: false }),
+    );
+    if (!availability.orbotInstalled) {
+      return { ok: false, reason: "orbot-missing" };
+    }
+    if (!availability.vpnActive) {
+      return { ok: false, reason: "orbot-inactive" };
+    }
     setTorActive(true);
     useSettingsStore.getState().setTorEnabled(true);
     getMeshService()?.restartNostr();
@@ -140,9 +158,21 @@ export function primeTorRoutingOnStartup(): void {
   if (!useSettingsStore.getState().torEnabled) return;
 
   if (Platform.OS === "android") {
-    // Orbot VPN routes transparently; nothing to install. Record intent so the
-    // UI reflects it and a later toggle behaves consistently.
-    setTorActive(true);
+    // The preference is on, but Orbot may have been uninstalled or its VPN
+    // stopped since. Re-verify before claiming Tor is active, so the toggle does
+    // not show green when nothing is routing. Done async (the mesh has not
+    // started yet); the settings switch is driven by the persisted preference,
+    // which we clear if Tor is no longer actually available.
+    void NativeAirhopBLE.getTorAvailability()
+      .then((availability) => {
+        if (availability.orbotInstalled && availability.vpnActive) {
+          setTorActive(true);
+        } else {
+          setTorActive(false);
+          useSettingsStore.getState().setTorEnabled(false);
+        }
+      })
+      .catch(() => {});
     return;
   }
 

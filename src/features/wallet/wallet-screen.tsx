@@ -33,6 +33,7 @@ import {
 } from "../../store/wallet-store";
 import Avatar from "../../ui/components/avatar";
 import {
+  FontFamily,
   FontSize,
   FontWeight,
   Radius,
@@ -1236,7 +1237,7 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       fontSize: FontSize.base,
       fontWeight: FontWeight.medium,
       color: Colors.textPrimary,
-      fontFamily: "monospace",
+      fontFamily: FontFamily.mono,
     },
     mintProofs: {
       fontSize: FontSize.xs,
@@ -1250,7 +1251,7 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       fontSize: FontSize.md,
       fontWeight: FontWeight.bold,
       color: Colors.textPrimary,
-      fontFamily: "monospace",
+      fontFamily: FontFamily.mono,
     },
     mintUnit: {
       fontSize: FontSize.xs,
@@ -1331,7 +1332,7 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       paddingVertical: Spacing.md,
       color: Colors.textPrimary,
       fontSize: FontSize.sm,
-      fontFamily: "monospace",
+      fontFamily: FontFamily.mono,
       minHeight: 80,
       textAlignVertical: "top",
     },
@@ -1379,7 +1380,7 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       fontWeight: FontWeight.bold,
     },
     tokenInputMono: {
-      fontFamily: "monospace",
+      fontFamily: FontFamily.mono,
       fontSize: FontSize.xs,
       letterSpacing: 0.3,
     },
@@ -1474,7 +1475,7 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
     peerPickerID: {
       fontSize: FontSize.xs,
       color: Colors.textMuted,
-      fontFamily: "monospace",
+      fontFamily: FontFamily.mono,
     },
   });
 }

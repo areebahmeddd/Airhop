@@ -83,6 +83,7 @@ import {
 import { useWalletStore } from "../../store/wallet-store";
 import Avatar from "../../ui/components/avatar";
 import {
+  FontFamily,
   FontSize,
   FontWeight,
   Radius,
@@ -103,6 +104,15 @@ import MessageInfoSheet from "./message-info-sheet";
 import { NoticesSheet } from "./notices-sheet";
 
 type AttachAction = "camera" | "library" | "document" | "voice" | "ecash";
+
+// A picked attachment staged for the caption composer before it is sent.
+interface PendingAttachment {
+  type: ChatAttachment["type"];
+  uri: string;
+  name?: string;
+  mimeType?: string;
+  sizeBytes?: number;
+}
 
 const ATTACH_OPTIONS: {
   action: AttachAction;
@@ -848,6 +858,11 @@ export default function MessageThread({
   const [showMembersList, setShowMembersList] = useState(false);
   // Notices (bulletin board) sheet for this channel.
   const [showNotices, setShowNotices] = useState(false);
+  // A picked attachment held for review before sending, so the user can add a
+  // caption (WhatsApp-style) instead of it firing off the instant it is chosen.
+  const [pendingAttachment, setPendingAttachment] =
+    useState<PendingAttachment | null>(null);
+  const [captionDraft, setCaptionDraft] = useState("");
   const [showScreenshotWarning, setShowScreenshotWarning] = useState(false);
   // Brief delivery status hint shown below the compose bar for DMs.
   // "queued" = no route available; cleared after 4 seconds.
@@ -1169,7 +1184,9 @@ export default function MessageThread({
     pendingSendRef.current = null;
     setHeldMessage(null);
     useChatStore.getState().removeMessage(pending.msg.channel, pending.msg.id);
-    setDraft(pending.msg.text);
+    // Only pull the recalled text back into the input when it is empty, so an
+    // undo never clobbers a new message the user has started typing since.
+    if (draft.trim().length === 0) setDraft(pending.msg.text);
   }
 
   // Flush a held message when the thread unmounts, so leaving a chat still sends
@@ -1289,17 +1306,19 @@ export default function MessageThread({
       targetChannel?: string;
       forwarded?: boolean;
       sizeBytes?: number;
+      caption?: string;
     },
   ): void {
     const targetChannel = options?.targetChannel ?? channel;
+    const caption = options?.caption?.trim() ?? "";
     const msg: ChatMessage = {
-      // eslint-disable-next-line react-hooks/purity
       id: `${localPeerID}-${Date.now()}-${Math.random().toString(36).slice(2)}`,
       channel: targetChannel,
       senderID: localPeerID,
       senderNickname: localNickname,
-      text: "",
-      // eslint-disable-next-line react-hooks/purity
+      // The caption is the message text, so the bubble shows media + caption
+      // together and search indexes it, exactly as a received one does.
+      text: caption,
       timestampMs: Date.now(),
       isMine: true,
       attachment: {
@@ -1330,6 +1349,7 @@ export default function MessageThread({
           name: name ?? "",
           mimeType: mimeType ?? "",
           durationMs: durationMs ?? 0,
+          caption: caption || undefined,
         });
         // No route right now: mark it failed so the bubble shows the same red,
         // tap-to-retry mark a text message would, rather than a confident card.
@@ -1360,18 +1380,18 @@ export default function MessageThread({
         source.attachment.name,
         source.attachment.mimeType,
         source.attachment.durationMs,
-        { targetChannel, forwarded: true },
+        // Carry the caption (it lives on the message text) so a forwarded photo
+        // keeps its caption, the way it arrived.
+        { targetChannel, forwarded: true, caption: source.text || undefined },
       );
       return;
     }
     const msg: ChatMessage = {
-      // eslint-disable-next-line react-hooks/purity
       id: `${localPeerID}-${Date.now()}-${Math.random().toString(36).slice(2)}`,
       channel: targetChannel,
       senderID: localPeerID,
       senderNickname: localNickname,
       text: source.text,
-      // eslint-disable-next-line react-hooks/purity
       timestampMs: Date.now(),
       isMine: true,
       forwarded: true,
@@ -1435,12 +1455,13 @@ export default function MessageThread({
     const asset = result.assets[0];
     const type: ChatAttachment["type"] =
       asset.type === "video" ? "video" : "image";
-    sendAttachmentMessage(
+    setCaptionDraft("");
+    setPendingAttachment({
       type,
-      asset.uri,
-      asset.fileName ?? (type === "video" ? "video.mp4" : "photo.jpg"),
-      asset.mimeType,
-    );
+      uri: asset.uri,
+      name: asset.fileName ?? (type === "video" ? "video.mp4" : "photo.jpg"),
+      mimeType: asset.mimeType,
+    });
   }
 
   async function handleLibraryAttach(): Promise<void> {
@@ -1458,12 +1479,13 @@ export default function MessageThread({
     const asset = result.assets[0];
     const type: ChatAttachment["type"] =
       asset.type === "video" ? "video" : "image";
-    sendAttachmentMessage(
+    setCaptionDraft("");
+    setPendingAttachment({
       type,
-      asset.uri,
-      asset.fileName ?? (type === "video" ? "video.mp4" : "photo.jpg"),
-      asset.mimeType,
-    );
+      uri: asset.uri,
+      name: asset.fileName ?? (type === "video" ? "video.mp4" : "photo.jpg"),
+      mimeType: asset.mimeType,
+    });
   }
 
   async function handleDocumentAttach(): Promise<void> {
@@ -1473,14 +1495,33 @@ export default function MessageThread({
     });
     if (result.canceled || !result.assets?.[0]) return;
     const asset = result.assets[0];
-    sendAttachmentMessage(
-      "document",
-      asset.uri,
-      asset.name,
-      asset.mimeType,
-      undefined,
-      { sizeBytes: asset.size ?? undefined },
-    );
+    setCaptionDraft("");
+    setPendingAttachment({
+      type: "document",
+      uri: asset.uri,
+      name: asset.name,
+      mimeType: asset.mimeType,
+      sizeBytes: asset.size ?? undefined,
+    });
+  }
+
+  // Send the staged attachment with its (optional) caption, then clear the
+  // composer. The caption rides the file packet, so media + caption arrive as
+  // one message.
+  function confirmPendingAttachment(): void {
+    const p = pendingAttachment;
+    if (p === null) return;
+    sendAttachmentMessage(p.type, p.uri, p.name, p.mimeType, undefined, {
+      sizeBytes: p.sizeBytes,
+      caption: captionDraft,
+    });
+    setPendingAttachment(null);
+    setCaptionDraft("");
+  }
+
+  function cancelPendingAttachment(): void {
+    setPendingAttachment(null);
+    setCaptionDraft("");
   }
 
   async function startRecording(): Promise<void> {
@@ -1960,6 +2001,13 @@ export default function MessageThread({
         ref={listRef}
         data={msgs}
         keyExtractor={(item) => item.id}
+        // Keep a long thread cheap to update: render fewer rows per batch and
+        // keep a smaller window mounted, so a keyboard toggle or a new message
+        // doesn't churn the whole list. The bubble itself is memoized.
+        initialNumToRender={20}
+        maxToRenderPerBatch={12}
+        windowSize={11}
+        updateCellsBatchingPeriod={50}
         renderItem={({ item, index }) => {
           const showAvatar = !item.isMine;
           const isFirstFromSender =
@@ -2131,8 +2179,13 @@ export default function MessageThread({
           receiving, with percent, speed and time remaining. */}
       <TransferProgressList channel={channel} />
 
-      {/* Undo Send window for the message currently being held. */}
-      {heldMessage && <UndoSendPill onUndo={undoSend} Colors={Colors} />}
+      {/* Undo Send window for the message currently being held. Keyed by message
+          id so a rapid second send remounts the pill and its countdown restarts
+          fresh, in sync with the new hold window, instead of continuing the
+          previous (already-drained) animation. */}
+      {heldMessage && (
+        <UndoSendPill key={heldMessage.id} onUndo={undoSend} Colors={Colors} />
+      )}
 
       {/* @-mention picker: appears while typing "@", tap to insert. */}
       {mentionMatches.length > 0 && (
@@ -2409,6 +2462,67 @@ export default function MessageThread({
           channel={channel}
         />
       )}
+
+      {/* Attachment composer: review the picked media and add a caption before
+          sending, the way WhatsApp/Signal do. The caption rides the file packet
+          so media + caption land as one message. */}
+      <Modal
+        visible={pendingAttachment !== null}
+        transparent
+        animationType="slide"
+        onRequestClose={cancelPendingAttachment}
+      >
+        <View style={styles.composerOverlay}>
+          <Pressable
+            style={StyleSheet.absoluteFill}
+            onPress={cancelPendingAttachment}
+            accessibilityRole="button"
+            accessibilityLabel="Cancel attachment"
+          />
+          <View style={styles.composerSheet}>
+            {pendingAttachment?.type === "image" ? (
+              <Image
+                source={{ uri: pendingAttachment.uri }}
+                style={styles.composerPreview}
+                resizeMode="contain"
+              />
+            ) : (
+              <View style={styles.composerFilePreview}>
+                <Feather
+                  name={pendingAttachment?.type === "video" ? "film" : "file"}
+                  size={40}
+                  color={Colors.textSecondary}
+                />
+                <Text style={styles.composerFileName} numberOfLines={1}>
+                  {pendingAttachment?.name ??
+                    (pendingAttachment?.type === "video"
+                      ? "Video"
+                      : "Document")}
+                </Text>
+              </View>
+            )}
+            <View style={styles.composerInputRow}>
+              <TextInput
+                style={styles.composerInput}
+                placeholder="Add a caption…"
+                placeholderTextColor={Colors.textMuted}
+                value={captionDraft}
+                onChangeText={setCaptionDraft}
+                multiline
+                maxLength={512}
+              />
+              <Pressable
+                style={styles.composerSend}
+                onPress={confirmPendingAttachment}
+                accessibilityRole="button"
+                accessibilityLabel="Send attachment"
+              >
+                <Feather name="send" size={18} color={Colors.textInverse} />
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
 
       {/* Members list: currently-reachable peers, tap the header count. */}
       {!isDM && (
@@ -3441,7 +3555,7 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
     dmInfoPeerID: {
       fontSize: FontSize.xs,
       color: Colors.textMuted,
-      fontFamily: "monospace",
+      fontFamily: FontFamily.mono,
       letterSpacing: 0.8,
       textAlign: "center",
     },
@@ -3468,6 +3582,66 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       backgroundColor: Colors.accent,
       borderWidth: 1,
       borderColor: Colors.bg,
+    },
+    // Attachment composer (caption before send).
+    composerOverlay: {
+      flex: 1,
+      justifyContent: "flex-end",
+      backgroundColor: "rgba(0,0,0,0.85)",
+    },
+    composerSheet: {
+      backgroundColor: Colors.bg,
+      borderTopLeftRadius: Radius.lg,
+      borderTopRightRadius: Radius.lg,
+      paddingHorizontal: Spacing.base,
+      paddingTop: Spacing.base,
+      paddingBottom: Spacing.xl,
+      gap: Spacing.md,
+    },
+    composerPreview: {
+      width: "100%",
+      height: 320,
+      borderRadius: Radius.md,
+      backgroundColor: Colors.surface,
+    },
+    composerFilePreview: {
+      width: "100%",
+      height: 140,
+      borderRadius: Radius.md,
+      backgroundColor: Colors.surface,
+      alignItems: "center",
+      justifyContent: "center",
+      gap: Spacing.sm,
+    },
+    composerFileName: {
+      fontSize: FontSize.sm,
+      color: Colors.textSecondary,
+      maxWidth: "80%",
+    },
+    composerInputRow: {
+      flexDirection: "row",
+      alignItems: "flex-end",
+      gap: Spacing.sm,
+    },
+    composerInput: {
+      flex: 1,
+      maxHeight: 120,
+      minHeight: 44,
+      paddingHorizontal: Spacing.md,
+      paddingTop: Spacing.sm,
+      paddingBottom: Spacing.sm,
+      borderRadius: Radius.lg,
+      backgroundColor: Colors.surface,
+      color: Colors.textPrimary,
+      fontSize: FontSize.base,
+    },
+    composerSend: {
+      width: 44,
+      height: 44,
+      borderRadius: 22,
+      backgroundColor: Colors.accent,
+      alignItems: "center",
+      justifyContent: "center",
     },
     dmInfoStatusText: {
       fontSize: FontSize.sm,

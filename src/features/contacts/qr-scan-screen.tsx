@@ -42,6 +42,7 @@ import { getMeshService } from "../../services/mesh-service";
 import { useContactsStore } from "../../store/contacts-store";
 import Avatar from "../../ui/components/avatar";
 import {
+  FontFamily,
   FontSize,
   FontWeight,
   Radius,
@@ -612,7 +613,7 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       paddingVertical: Spacing.md,
       color: Colors.textPrimary,
       fontSize: FontSize.sm,
-      fontFamily: "monospace",
+      fontFamily: FontFamily.mono,
     },
     fieldHint: {
       fontSize: FontSize.xs,
@@ -723,7 +724,7 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
     confirmPeerID: {
       fontSize: FontSize.xs,
       color: Colors.textMuted,
-      fontFamily: "monospace",
+      fontFamily: FontFamily.mono,
       letterSpacing: 0.8,
     },
     verifyPill: {

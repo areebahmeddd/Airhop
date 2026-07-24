@@ -30,6 +30,7 @@ import { useWalletStore } from "../../store/wallet-store";
 import Avatar from "../../ui/components/avatar";
 import StatusDot from "../../ui/components/status-dot";
 import {
+  FontFamily,
   FontSize,
   FontWeight,
   Radius,
@@ -460,7 +461,7 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
     rowPeerID: {
       fontSize: FontSize.xs,
       color: Colors.textMuted,
-      fontFamily: "monospace",
+      fontFamily: FontFamily.mono,
       letterSpacing: 0.8,
     },
     rowLastSeen: {
@@ -523,7 +524,7 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
     sheetPeerID: {
       fontSize: FontSize.xs,
       color: Colors.textMuted,
-      fontFamily: "monospace",
+      fontFamily: FontFamily.mono,
       letterSpacing: 0.8,
     },
     sheetStatusRow: {

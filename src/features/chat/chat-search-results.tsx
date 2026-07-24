@@ -5,6 +5,7 @@
 // chat, not scoped to whichever sub-tab happens to be selected.
 
 import { Feather } from "@expo/vector-icons";
+import { bytesToHex } from "@noble/hashes/utils.js";
 import React, { useEffect, useMemo, useState } from "react";
 import {
   FlatList,
@@ -16,7 +17,12 @@ import {
   Text,
   View,
 } from "react-native";
+import { isUrgent } from "../../core/mesh/board-packet";
+import { geohashChannel } from "../../services/geohash-channel-service";
+import { getMeshService } from "../../services/mesh-service";
+import { useBoardStore } from "../../store/board-store";
 import { useChatStore } from "../../store/chat-store";
+import { useNoticesStore } from "../../store/notices-store";
 import Avatar from "../../ui/components/avatar";
 import {
   FontSize,
@@ -30,9 +36,12 @@ import {
   filterMessages,
   searchChats,
   searchMessages,
+  searchNotices,
   type ChatHit,
   type MediaFilter,
   type MessageHit,
+  type NoticeHit,
+  type SearchableNotice,
 } from "../../utils/chat-search";
 
 // The filter chips shown above search, one per content kind Airhop supports.
@@ -59,7 +68,9 @@ interface Props {
 }
 
 type ResultRow =
-  { kind: "chat"; hit: ChatHit } | { kind: "message"; hit: MessageHit };
+  | { kind: "chat"; hit: ChatHit }
+  | { kind: "message"; hit: MessageHit }
+  | { kind: "notice"; hit: NoticeHit };
 
 interface ResultSection {
   title: string;
@@ -88,6 +99,8 @@ export default function ChatSearchResults({
   const styles = useMemo(() => createStyles(Colors), [Colors]);
   const channels = useChatStore((s) => s.channels);
   const messages = useChatStore((s) => s.messages);
+  const boardPosts = useBoardStore((s) => s.posts);
+  const notesByGeohash = useNoticesStore((s) => s.notesByGeohash);
 
   const [debouncedQuery, setDebouncedQuery] = useState(query);
   useEffect(() => {
@@ -102,6 +115,50 @@ export default function ChatSearchResults({
   const messageHits = useMemo(
     () => searchMessages(debouncedQuery, messages),
     [debouncedQuery, messages],
+  );
+
+  // Board notices + Nostr location notes, normalized with their room resolved so
+  // a tapped result opens the right board. The mesh board ("") lives on
+  // #bluetooth; a cell resolves to its named channel, else the teleport key. A
+  // note that is the bridged copy of a board post is dropped (the post wins).
+  const searchableNotices = useMemo<SearchableNotice[]>(() => {
+    const mesh = getMeshService();
+    const roomFor = (gh: string): string =>
+      gh === ""
+        ? "#bluetooth"
+        : (mesh?.localGeoChannelFor(gh) ?? geohashChannel(gh));
+    const seen = new Set<string>();
+    const out: SearchableNotice[] = [];
+    for (const p of boardPosts) {
+      seen.add(`${p.geohash}|${p.content}`);
+      out.push({
+        id: bytesToHex(p.postID),
+        channel: roomFor(p.geohash),
+        content: p.content,
+        author: p.authorNickname || "anon",
+        timestampMs: p.createdAt,
+        isUrgent: isUrgent(p),
+      });
+    }
+    for (const [gh, notes] of Object.entries(notesByGeohash)) {
+      for (const n of notes) {
+        if (seen.has(`${n.geohash}|${n.content}`)) continue;
+        out.push({
+          id: n.id,
+          channel: roomFor(gh),
+          content: n.content,
+          author: n.nickname || "anon",
+          timestampMs: n.createdAtMs,
+          isUrgent: n.isUrgent,
+        });
+      }
+    }
+    return out;
+  }, [boardPosts, notesByGeohash]);
+
+  const noticeHits = useMemo(
+    () => searchNotices(debouncedQuery, searchableNotices),
+    [debouncedQuery, searchableNotices],
   );
 
   // Active media filter (Photos / Links / ...), or null for plain text search.
@@ -126,6 +183,17 @@ export default function ChatSearchResults({
             title: "Messages",
             data: messageHits.map((hit): ResultRow => ({
               kind: "message",
+              hit,
+            })),
+          },
+        ]
+      : []),
+    ...(noticeHits.length > 0
+      ? [
+          {
+            title: "Notices",
+            data: noticeHits.map((hit): ResultRow => ({
+              kind: "notice",
               hit,
             })),
           },
@@ -226,7 +294,9 @@ export default function ChatSearchResults({
           keyExtractor={(row, index) =>
             row.kind === "chat"
               ? `chat-${row.hit.channel}`
-              : `msg-${row.hit.messageId}-${index}`
+              : row.kind === "notice"
+                ? `notice-${row.hit.id}-${index}`
+                : `msg-${row.hit.messageId}-${index}`
           }
           renderSectionHeader={({ section }) => (
             <Text style={styles.sectionTitle}>{section.title}</Text>
@@ -234,6 +304,13 @@ export default function ChatSearchResults({
           renderItem={({ item }) =>
             item.kind === "chat" ? (
               <ChatResultRow
+                hit={item.hit}
+                styles={styles}
+                colors={Colors}
+                onPress={onSelectChat}
+              />
+            ) : item.kind === "notice" ? (
+              <NoticeResultRow
                 hit={item.hit}
                 styles={styles}
                 colors={Colors}
@@ -334,6 +411,57 @@ function MessageResultRow({
         <Text style={styles.messageSnippet} numberOfLines={2}>
           <Text style={styles.messageSender}>
             {hit.isMine ? "You" : hit.senderNickname}:{" "}
+          </Text>
+          {before}
+          <Text style={styles.messageMatch}>{match}</Text>
+          {after}
+        </Text>
+      </View>
+    </Pressable>
+  );
+}
+
+// A board-notice result: a bell icon (red when urgent), the room and time, and
+// the author + matched content snippet. Tap opens the notice's room.
+function NoticeResultRow({
+  hit,
+  styles,
+  colors,
+  onPress,
+}: {
+  hit: NoticeHit;
+  styles: ReturnType<typeof createStyles>;
+  colors: ReturnType<typeof useThemeColors>;
+  onPress: (channel: string) => void;
+}): React.JSX.Element {
+  const before = hit.snippet.slice(0, hit.matchStart);
+  const match = hit.snippet.slice(hit.matchStart, hit.matchEnd);
+  const after = hit.snippet.slice(hit.matchEnd);
+  return (
+    <Pressable
+      style={styles.row}
+      onPress={() => onPress(hit.channel)}
+      accessibilityRole="button"
+      accessibilityLabel={`Notice in ${chatDisplayName(hit.channel)} from ${hit.author}: ${hit.snippet}`}
+    >
+      <View style={styles.channelIcon}>
+        <Feather
+          name="bell"
+          size={16}
+          color={hit.isUrgent ? colors.danger : colors.textSecondary}
+        />
+      </View>
+      <View style={styles.messageBody}>
+        <View style={styles.messageHead}>
+          <Text style={styles.messageChannel} numberOfLines={1}>
+            {chatDisplayName(hit.channel)}
+          </Text>
+          <Text style={styles.messageTime}>{formatTime(hit.timestampMs)}</Text>
+        </View>
+        <Text style={styles.messageSnippet} numberOfLines={2}>
+          <Text style={styles.messageSender}>
+            {hit.isUrgent ? "Urgent · " : ""}
+            {hit.author}:{" "}
           </Text>
           {before}
           <Text style={styles.messageMatch}>{match}</Text>

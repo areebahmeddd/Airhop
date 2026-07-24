@@ -31,6 +31,15 @@ import {
   useThemeColors,
 } from "../../ui/theme";
 
+// Memoized (see the export) so a thread of hundreds of messages doesn't
+// re-render every bubble on each keyboard/scroll/state tick, which is what
+// triggered React Native's "VirtualizedList slow to update" warning. A message
+// object is replaced whenever it changes (immutable store updates), so a
+// reference check on `item` is enough; `tokens` is skipped because it derives
+// from `item.text`, and the callbacks are behaviorally stable (they act on the
+// item passed to them). The bubble still re-renders on theme/font changes via
+// its own useThemeColors subscription, and an in-progress attachment card keeps
+// updating through its own store subscription.
 interface Props {
   item: ChatMessage;
   showAvatar: boolean;
@@ -57,7 +66,7 @@ interface Props {
   highlighted?: boolean;
 }
 
-export default function MessageBubble({
+function MessageBubble({
   item,
   showAvatar,
   isFirstFromSender,
@@ -455,3 +464,13 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
     },
   });
 }
+
+export default React.memo(
+  MessageBubble,
+  (prev, next) =>
+    prev.item === next.item &&
+    prev.showAvatar === next.showAvatar &&
+    prev.isFirstFromSender === next.isFirstFromSender &&
+    prev.isPureToken === next.isPureToken &&
+    prev.highlighted === next.highlighted,
+);

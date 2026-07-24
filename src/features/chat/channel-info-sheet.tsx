@@ -31,6 +31,7 @@ import { usePlaceNamesStore } from "../../store/place-names-store";
 import Avatar from "../../ui/components/avatar";
 import StatusDot from "../../ui/components/status-dot";
 import {
+  FontFamily,
   FontSize,
   FontWeight,
   Radius,
@@ -636,7 +637,7 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       fontSize: FontSize.base,
       fontWeight: FontWeight.medium,
       color: Colors.textPrimary,
-      fontFamily: "monospace",
+      fontFamily: FontFamily.mono,
       letterSpacing: 1,
     },
     copyBtn: {

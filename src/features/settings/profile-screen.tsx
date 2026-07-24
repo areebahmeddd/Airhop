@@ -31,7 +31,9 @@ import {
   type ThemePreference,
 } from "../../store/settings-store";
 import Avatar from "../../ui/components/avatar";
+import { MONO_FONT_ORDER, MONO_FONTS } from "../../ui/fonts";
 import {
+  FontFamily,
   FontSize,
   FontWeight,
   Radius,
@@ -198,6 +200,8 @@ export default function ProfileScreen({
   const [showThemeModal, setShowThemeModal] = useState(false);
   const theme = useSettingsStore((s) => s.theme);
   const setTheme = useSettingsStore((s) => s.setTheme);
+  const monoFont = useSettingsStore((s) => s.monoFont);
+  const setMonoFont = useSettingsStore((s) => s.setMonoFont);
   const paymentsEnabled = useSettingsStore((s) => s.paymentsEnabled);
   const setPaymentsEnabled = useSettingsStore((s) => s.setPaymentsEnabled);
 
@@ -238,6 +242,12 @@ export default function ProfileScreen({
       else if (status === "invisible") mesh?.setDiscoverable(true);
     } else if (next === "away") {
       mesh?.stop();
+      // Away stops the whole mesh, so the internet gateway can no longer relay
+      // for anyone. Turn it off outright rather than leaving a green toggle that
+      // does nothing; the user re-enables it when they come back. (Tor stays as
+      // set: it is a privacy preference, and silently disabling it would risk
+      // clear-net traffic on return.)
+      useSettingsStore.getState().setGatewayEnabled(false);
     } else if (next === "invisible") {
       if (status === "away") mesh?.start(username);
       mesh?.setDiscoverable(false);
@@ -480,7 +490,7 @@ export default function ProfileScreen({
           <SettingLinkRow
             icon="sliders"
             label="Appearance"
-            description={THEME_META[theme].label}
+            description="Theme and font"
             onPress={() => setShowThemeModal(true)}
           />
           <GroupDivider />
@@ -606,22 +616,22 @@ export default function ProfileScreen({
             <Text style={shared.sheetSubtitle}>
               Choose how visible you are on the mesh.
             </Text>
-            <View style={shared.optionList}>
-              {STATUS_ORDER.map((key) => {
+            <View style={[shared.settingsGroup, styles.appearanceGroup]}>
+              {STATUS_ORDER.map((key, i) => {
                 const meta = STATUS_META[key];
                 const selected = key === status;
                 return (
-                  <Pressable
-                    key={key}
-                    style={[
-                      shared.optionRow,
-                      selected && shared.optionRowSelected,
-                    ]}
-                    onPress={() => handleSelectStatus(key)}
-                    accessibilityRole="button"
-                    accessibilityLabel={`Set status to ${meta.label}`}
-                  >
-                    <View style={shared.optionRowInner}>
+                  <React.Fragment key={key}>
+                    {i > 0 && <View style={shared.groupDivider} />}
+                    <Pressable
+                      style={[
+                        styles.optionRowGrouped,
+                        selected && styles.optionRowGroupedSelected,
+                      ]}
+                      onPress={() => handleSelectStatus(key)}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Set status to ${meta.label}`}
+                    >
                       <View
                         style={[
                           shared.optionDot,
@@ -643,8 +653,8 @@ export default function ProfileScreen({
                           color={Colors.textPrimary}
                         />
                       )}
-                    </View>
-                  </Pressable>
+                    </Pressable>
+                  </React.Fragment>
                 );
               })}
             </View>
@@ -667,34 +677,31 @@ export default function ProfileScreen({
           <View style={shared.sheet}>
             <View style={shared.sheetHandle} />
             <Text style={shared.sheetTitle}>Appearance</Text>
-            <View style={shared.optionList}>
-              {THEME_ORDER.map((key) => {
+
+            <Text style={styles.appearanceGroupLabel}>THEME</Text>
+            <View style={[shared.settingsGroup, styles.appearanceGroup]}>
+              {THEME_ORDER.map((key, i) => {
                 const meta = THEME_META[key];
                 const selected = key === theme;
                 return (
-                  <Pressable
-                    key={key}
-                    style={[
-                      shared.optionRow,
-                      selected && shared.optionRowSelected,
-                    ]}
-                    onPress={() => {
-                      setTheme(key);
-                      setShowThemeModal(false);
-                    }}
-                    accessibilityRole="button"
-                    accessibilityLabel={`Set appearance to ${meta.label}`}
-                  >
-                    <View style={shared.optionRowInner}>
-                      <View
-                        style={[
-                          shared.optionDot,
-                          { backgroundColor: Colors.surface },
-                        ]}
-                      >
+                  <React.Fragment key={key}>
+                    {i > 0 && <View style={shared.groupDivider} />}
+                    <Pressable
+                      style={[
+                        styles.optionRowGrouped,
+                        selected && styles.optionRowGroupedSelected,
+                      ]}
+                      onPress={() => {
+                        setTheme(key);
+                        setShowThemeModal(false);
+                      }}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Set appearance to ${meta.label}`}
+                    >
+                      <View style={styles.optionIconGrouped}>
                         <Feather
                           name={meta.icon}
-                          size={14}
+                          size={18}
                           color={Colors.textSecondary}
                         />
                       </View>
@@ -711,8 +718,60 @@ export default function ProfileScreen({
                           color={Colors.textPrimary}
                         />
                       )}
-                    </View>
-                  </Pressable>
+                    </Pressable>
+                  </React.Fragment>
+                );
+              })}
+            </View>
+
+            {/* Font: keep the sheet open on select so the change is visible live
+                (the mono bits behind it update instantly) and easy to compare. */}
+            <Text style={styles.appearanceGroupLabel}>FONT</Text>
+            <View style={[shared.settingsGroup, styles.appearanceGroup]}>
+              {MONO_FONT_ORDER.map((key, i) => {
+                const meta = MONO_FONTS[key];
+                const selected = key === monoFont;
+                return (
+                  <React.Fragment key={key}>
+                    {i > 0 && <View style={shared.groupDivider} />}
+                    <Pressable
+                      style={[
+                        styles.optionRowGrouped,
+                        selected && styles.optionRowGroupedSelected,
+                      ]}
+                      onPress={() => setMonoFont(key)}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Set monospace font to ${meta.label}`}
+                    >
+                      <View style={styles.optionIconGrouped}>
+                        <Feather
+                          name={meta.icon}
+                          size={18}
+                          color={Colors.textSecondary}
+                        />
+                      </View>
+                      <View style={shared.optionText}>
+                        <Text
+                          style={[
+                            shared.optionLabel,
+                            { fontFamily: meta.family },
+                          ]}
+                        >
+                          {meta.label}
+                        </Text>
+                        <Text style={shared.optionDescription}>
+                          {meta.description}
+                        </Text>
+                      </View>
+                      {selected && (
+                        <Feather
+                          name="check"
+                          size={18}
+                          color={Colors.textPrimary}
+                        />
+                      )}
+                    </Pressable>
+                  </React.Fragment>
                 );
               })}
             </View>
@@ -818,6 +877,41 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       color: Colors.textMuted,
       marginTop: 2,
     },
+    // The sheet centers its children, so both the box and its header need to be
+    // stretched to full width or they collapse to their content and the rows
+    // wrap and overlap.
+    appearanceGroup: {
+      width: "100%",
+    },
+    // Small group header inside the Appearance sheet ("THEME" / "FONT").
+    appearanceGroupLabel: {
+      alignSelf: "stretch",
+      fontSize: FontSize.xs,
+      fontWeight: FontWeight.semibold,
+      color: Colors.textMuted,
+      letterSpacing: 0.8,
+      marginTop: Spacing.md,
+      marginBottom: Spacing.xs,
+      marginLeft: Spacing.xs,
+    },
+    // One row inside the Appearance box (no per-row border; the box + dividers
+    // group them, matching the settings and room-actions sheets).
+    optionRowGrouped: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: Spacing.md,
+      paddingHorizontal: Spacing.base,
+      paddingVertical: Spacing.md,
+      minHeight: 60,
+    },
+    optionRowGroupedSelected: {
+      backgroundColor: Colors.surfaceRaised,
+    },
+    optionIconGrouped: {
+      width: 24,
+      alignItems: "center",
+      flexShrink: 0,
+    },
     peerIDGroup: {
       alignItems: "center",
       gap: 3,
@@ -833,7 +927,7 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
     peerID: {
       fontSize: FontSize.xs,
       color: Colors.textSecondary,
-      fontFamily: "monospace",
+      fontFamily: FontFamily.mono,
       letterSpacing: 0.8,
     },
     // Share actions: bordered pill buttons below the identity block
@@ -907,7 +1001,7 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
     qrSheetPeerID: {
       fontSize: FontSize.xs,
       color: Colors.textMuted,
-      fontFamily: "monospace",
+      fontFamily: FontFamily.mono,
       letterSpacing: 0.8,
       textAlign: "center",
     },

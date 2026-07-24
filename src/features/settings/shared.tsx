@@ -8,6 +8,7 @@ import React, { useMemo } from "react";
 import { Pressable, StyleSheet, Switch, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
+  FontFamily,
   FontSize,
   FontWeight,
   Radius,
@@ -288,7 +289,7 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
     settingValue: {
       fontSize: FontSize.sm,
       color: Colors.textMuted,
-      fontFamily: "monospace",
+      fontFamily: FontFamily.mono,
     },
     settingControl: {
       flexShrink: 0,

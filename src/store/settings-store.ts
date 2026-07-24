@@ -9,6 +9,9 @@ import { createJSONStorage, persist } from "zustand/middleware";
 
 export type ThemePreference = "light" | "dark" | "system";
 export type UploadQuality = "low" | "medium" | "high";
+// The typeface for the app's monospace text (keys, IDs, geohashes, amounts):
+// the device's built-in monospace, or a bundled coding font.
+export type MonoFont = "system" | "firacode" | "jetbrains";
 
 // expo-image-picker's `quality` option (0-1 JPEG compression factor).
 export const UPLOAD_QUALITY_VALUES: Record<UploadQuality, number> = {
@@ -35,12 +38,16 @@ interface SettingsState {
   // Persisted so the choice is applied before the first relay connects at
   // startup (see tor-routing.ts), never leaking the clear net for a Tor user.
   torEnabled: boolean;
+  // Monospace typeface for keys/IDs/geohashes/amounts. Live: changing it
+  // recomputes styles immediately via useThemeColors (see ui/theme.ts).
+  monoFont: MonoFont;
   setTheme: (theme: ThemePreference) => void;
   setAutoDownloadMedia: (enabled: boolean) => void;
   setUploadQuality: (quality: UploadQuality) => void;
   setPaymentsEnabled: (enabled: boolean) => void;
   setGatewayEnabled: (enabled: boolean) => void;
   setTorEnabled: (enabled: boolean) => void;
+  setMonoFont: (font: MonoFont) => void;
   // Restore first-run defaults. Used by the panic wipe.
   reset: () => void;
 }
@@ -51,9 +58,14 @@ const DEFAULTS = {
   theme: "system",
   autoDownloadMedia: true,
   uploadQuality: "high",
-  paymentsEnabled: true,
+  // Opt-in, like the gateway and Tor: a new install starts with the wallet off
+  // so payments never appear until the user deliberately enables them.
+  paymentsEnabled: false,
   gatewayEnabled: false,
   torEnabled: false,
+  // The device's own monospace by default, so a new install looks native and
+  // familiar. JetBrains Mono is offered as an opt-in choice under Appearance.
+  monoFont: "system",
 } satisfies Partial<SettingsState>;
 
 const storage = createMMKV({ id: "settings-store" });
@@ -88,6 +100,9 @@ export const useSettingsStore = create<SettingsState>()(
       },
       setTorEnabled(enabled) {
         set({ torEnabled: enabled });
+      },
+      setMonoFont(font) {
+        set({ monoFont: font });
       },
       reset() {
         set({ ...DEFAULTS });

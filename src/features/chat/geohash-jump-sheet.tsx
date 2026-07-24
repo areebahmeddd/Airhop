@@ -25,6 +25,7 @@ import { getMeshService } from "../../services/mesh-service";
 import { useGeohashBookmarksStore } from "../../store/geohash-bookmarks-store";
 import { usePlaceNamesStore } from "../../store/place-names-store";
 import {
+  FontFamily,
   FontSize,
   FontWeight,
   Radius,
@@ -304,7 +305,7 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
     inputPrefix: {
       fontSize: FontSize.base,
       color: Colors.textMuted,
-      fontFamily: "monospace",
+      fontFamily: FontFamily.mono,
       marginRight: Spacing.xs,
     },
     input: {
@@ -312,7 +313,7 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       paddingVertical: Spacing.md,
       color: Colors.textPrimary,
       fontSize: FontSize.base,
-      fontFamily: "monospace",
+      fontFamily: FontFamily.mono,
       letterSpacing: 1,
     },
     hint: {
@@ -351,7 +352,7 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       fontSize: FontSize.base,
       fontWeight: FontWeight.medium,
       color: Colors.textPrimary,
-      fontFamily: "monospace",
+      fontFamily: FontFamily.mono,
     },
     savedSub: {
       fontSize: FontSize.xs,

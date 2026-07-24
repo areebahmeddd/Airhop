@@ -15,6 +15,7 @@
 
 import { create } from "zustand";
 import { usePeerStore } from "./peer-store";
+import { useSettingsStore } from "./settings-store";
 
 // Presence the user chose in Profile. Online advertises + scans, Away stops the
 // mesh entirely, Invisible scans but stops advertising. Lives here, not in the
@@ -22,9 +23,17 @@ import { usePeerStore } from "./peer-store";
 // switch: otherwise the label reset to "Online" while the mesh stayed stopped.
 export type PresenceStatus = "online" | "away" | "invisible";
 
-// A banner's visual weight. "danger" = a hard blocker the user should fix now;
-// "info" = a calm, informational note (relaying, Tor on, paused).
-export type BannerTone = "danger" | "info";
+// A banner's semantic tone, which the status bar maps to a hue. Each names a
+// distinct network state rather than a generic weight, so the Mesh tab reads at
+// a glance:
+//   danger   a hard blocker to fix now (red)          — Bluetooth off, permission
+//   caution  a feature is unavailable (amber)         — location off
+//   relay    traffic carried over the internet (blue) — Nostr relay
+//   tor      internet traffic onion-routed (purple)   — Tor on
+//   gateway  this device relaying for others (teal)   — internet gateway
+//   neutral  a calm, intentional pause (muted)        — Away
+export type BannerTone =
+  "danger" | "caution" | "relay" | "tor" | "gateway" | "neutral";
 
 export interface MeshBanner {
   // Stable identity for React keys and de-duplication.
@@ -96,6 +105,7 @@ export interface MeshBannerInputs {
   locationGranted: boolean;
   nostrConnected: boolean;
   torActive: boolean;
+  gatewayEnabled: boolean;
   peerCount: number;
 }
 
@@ -110,7 +120,7 @@ export interface MeshBannerInputs {
 export function computeMeshBanners(inputs: MeshBannerInputs): MeshBanner[] {
   if (inputs.presenceStatus === "away") {
     return [
-      { key: "paused", label: "Mesh paused · You're away", tone: "info" },
+      { key: "paused", label: "Mesh paused · You're away", tone: "neutral" },
     ];
   }
 
@@ -137,7 +147,7 @@ export function computeMeshBanners(inputs: MeshBannerInputs): MeshBanner[] {
     banners.push({
       key: "location",
       label: "Location off · location channels unavailable",
-      tone: "info",
+      tone: "caution",
     });
   }
 
@@ -146,7 +156,7 @@ export function computeMeshBanners(inputs: MeshBannerInputs): MeshBanner[] {
     banners.push({
       key: "nostr",
       label: "No local peers · relaying via Nostr",
-      tone: "info",
+      tone: "relay",
     });
   }
 
@@ -156,7 +166,17 @@ export function computeMeshBanners(inputs: MeshBannerInputs): MeshBanner[] {
     banners.push({
       key: "tor",
       label: "Tor on · internet traffic routed",
-      tone: "info",
+      tone: "tor",
+    });
+  }
+
+  // Gateway indicator: this device is spending its data/battery relaying nearby
+  // offline peers' location messages to the internet, so make that visible.
+  if (inputs.gatewayEnabled) {
+    banners.push({
+      key: "gateway",
+      label: "Internet gateway on · relaying nearby peers",
+      tone: "gateway",
     });
   }
 
@@ -172,6 +192,7 @@ export function useMeshBanners(): MeshBanner[] {
   const locationGranted = useMeshStateStore((s) => s.locationGranted);
   const nostrConnected = useMeshStateStore((s) => s.nostrConnected);
   const torActive = useMeshStateStore((s) => s.torActive);
+  const gatewayEnabled = useSettingsStore((s) => s.gatewayEnabled);
   const peerCount = usePeerStore((s) => s.peers.size);
   return computeMeshBanners({
     presenceStatus,
@@ -180,6 +201,7 @@ export function useMeshBanners(): MeshBanner[] {
     locationGranted,
     nostrConnected,
     torActive,
+    gatewayEnabled,
     peerCount,
   });
 }

@@ -8,6 +8,7 @@ const HEALTHY: MeshBannerInputs = {
   locationGranted: true,
   nostrConnected: false,
   torActive: false,
+  gatewayEnabled: false,
   peerCount: 3,
 };
 
@@ -26,7 +27,7 @@ describe("computeMeshBanners", () => {
       peerCount: 0,
     });
     expect(banners).toEqual([
-      { key: "paused", label: "Mesh paused · you're Away", tone: "info" },
+      { key: "paused", label: "Mesh paused · You're away", tone: "neutral" },
     ]);
   });
 
@@ -47,7 +48,7 @@ describe("computeMeshBanners", () => {
     });
     expect(banners.map((b) => b.key)).toEqual(["bluetooth", "location"]);
     expect(banners[0].tone).toBe("danger");
-    expect(banners[1].tone).toBe("info");
+    expect(banners[1].tone).toBe("caution");
   });
 
   it("distinguishes adapter-off from permission-denied", () => {
@@ -80,6 +81,11 @@ describe("computeMeshBanners", () => {
   it("shows the Tor note whenever Tor is active", () => {
     const banners = computeMeshBanners({ ...HEALTHY, torActive: true });
     expect(banners.map((b) => b.key)).toEqual(["tor"]);
+  });
+
+  it("shows the gateway note whenever the gateway is enabled", () => {
+    const banners = computeMeshBanners({ ...HEALTHY, gatewayEnabled: true });
+    expect(banners.map((b) => b.key)).toEqual(["gateway"]);
   });
 
   it("stacks location, Nostr and Tor together when all apply", () => {

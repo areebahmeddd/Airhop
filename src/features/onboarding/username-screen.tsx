@@ -8,6 +8,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import PrimaryButton from "../../ui/components/primary-button";
 import {
   avatarColor,
+  FontFamily,
   FontSize,
   FontWeight,
   Radius,
@@ -194,7 +195,7 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
     peerID: {
       fontSize: FontSize.xs,
       color: Colors.textSecondary,
-      fontFamily: "monospace",
+      fontFamily: FontFamily.mono,
       letterSpacing: 1,
     },
     divider: {

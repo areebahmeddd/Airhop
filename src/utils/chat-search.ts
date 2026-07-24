@@ -45,6 +45,29 @@ export interface MessageHit {
   thumbnailUri?: string;
 }
 
+// A board notice, normalized for search. The caller (which has store access)
+// resolves each notice's room `channel` up front so this module stays pure.
+export interface SearchableNotice {
+  id: string;
+  channel: string;
+  content: string;
+  author: string;
+  timestampMs: number;
+  isUrgent: boolean;
+}
+
+export interface NoticeHit {
+  id: string;
+  channel: string;
+  author: string;
+  timestampMs: number;
+  isUrgent: boolean;
+  snippet: string;
+  matchStart: number;
+  matchEnd: number;
+  score: number;
+}
+
 // The media/content filters offered above search, matching the attachment
 // kinds Airhop supports plus links and ecash tokens carried inside text.
 export type MediaFilter =
@@ -203,6 +226,60 @@ export function searchChats(query: string, channels: string[]): ChatHit[] {
   return hits.sort(
     (a, b) => b.score - a.score || a.displayName.localeCompare(b.displayName),
   );
+}
+
+// Search board notices by content, falling back to the author's name (so
+// "sam" finds notices Sam posted). The room `channel` is already resolved on
+// each notice, so a tapped result opens the right board.
+export function searchNotices(
+  query: string,
+  notices: SearchableNotice[],
+): NoticeHit[] {
+  const q = query.trim().toLowerCase();
+  if (!q) return [];
+  const hits: NoticeHit[] = [];
+  for (const n of notices) {
+    const contentIndex = n.content.toLowerCase().indexOf(q);
+    if (contentIndex !== -1) {
+      const { snippet, matchStart, matchEnd } = buildSnippet(
+        n.content,
+        contentIndex,
+        q.length,
+      );
+      hits.push({
+        id: n.id,
+        channel: n.channel,
+        author: n.author,
+        timestampMs: n.timestampMs,
+        isUrgent: n.isUrgent,
+        snippet,
+        matchStart,
+        matchEnd,
+        score: scoreMatch(n.content, contentIndex),
+      });
+      continue;
+    }
+    // Author-name match: show the content as context, no in-content highlight.
+    const authorIndex = n.author.toLowerCase().indexOf(q);
+    if (authorIndex === -1) continue;
+    const snippet =
+      n.content.length > SNIPPET_RADIUS * 2
+        ? `${n.content.slice(0, SNIPPET_RADIUS * 2)}…`
+        : n.content;
+    hits.push({
+      id: n.id,
+      channel: n.channel,
+      author: n.author,
+      timestampMs: n.timestampMs,
+      isUrgent: n.isUrgent,
+      snippet,
+      matchStart: 0,
+      matchEnd: 0,
+      score: scoreMatch(n.author, authorIndex),
+    });
+  }
+  hits.sort((a, b) => b.score - a.score || b.timestampMs - a.timestampMs);
+  return hits.slice(0, MAX_MESSAGE_RESULTS);
 }
 
 export function searchMessages(

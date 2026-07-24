@@ -245,6 +245,16 @@ final class AirhopBLEModule: RCTEventEmitter {
         }
     }
 
+    // Android-only in practice: on Android the Tor toggle checks whether Orbot is
+    // installed and a VPN transport is up before turning on. iOS routes Nostr
+    // through in-app Arti (AirhopTorModule) and never consults this, so we resolve
+    // both false to keep the cross-platform bridge contract mirrored.
+    @objc
+    func getTorAvailability(_ resolve: @escaping RCTPromiseResolveBlock,
+                            rejecter reject: @escaping RCTPromiseRejectBlock) {
+        resolve(["orbotInstalled": false, "vpnActive": false])
+    }
+
     // Helper: find the cached characteristic for a connected peripheral
     private func discoverCharacteristic(on peripheral: CBPeripheral) -> CBCharacteristic? {
         return peripheral.services?
