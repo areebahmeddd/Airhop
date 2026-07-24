@@ -1,7 +1,13 @@
 # Changelog
 
-All notable changes are documented here.
+All notable changes are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+
+## What's Changed in v1.0.0 · Albatross
+
+- feat(project): run claude fable 5 to make it compatible with bitchat (potentially) (by @areebahmeddd) [2c4ae56]
+
+**Full changelog:** [v0.9.9..v1.0.0](https://github.com/areebahmeddd/Airhop/compare/v0.9.9..v1.0.0)
 
 ## What's Changed in v0.9.9
 
