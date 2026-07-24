@@ -16,6 +16,7 @@ import {
   View,
 } from "react-native";
 import NativeAirhopTor from "../../../bridge/NativeAirhopTor";
+import { setTorRouting } from "../../../core/nostr/tor-routing";
 import { showAlert } from "../../../store/alert-store";
 import { useBlockedStore } from "../../../store/blocked-store";
 import { useSettingsStore } from "../../../store/settings-store";
@@ -36,7 +37,9 @@ interface Props {
 export default function SecurityScreen({ onBack }: Props): React.JSX.Element {
   const Colors = useThemeColors();
   const styles = useSharedStyles();
-  const [torEnabled, setTorEnabled] = useState(false);
+  // The switch reflects the persisted preference (user intent), which
+  // setTorRouting owns. Local state below is only transient bootstrap UI.
+  const torEnabled = useSettingsStore((s) => s.torEnabled);
   const gatewayEnabled = useSettingsStore((s) => s.gatewayEnabled);
   const setGatewayEnabled = useSettingsStore((s) => s.setGatewayEnabled);
   const [torStarting, setTorStarting] = useState(false);
@@ -78,12 +81,10 @@ export default function SecurityScreen({ onBack }: Props): React.JSX.Element {
         setTorProgress(event.progress);
         setTorSummary(event.bootstrapSummary);
         if (event.isReady) {
-          setTorEnabled(true);
           setTorStarting(false);
         }
         if (!event.isStarting && !event.isReady) {
           // Tor has stopped or failed outside of our control.
-          setTorEnabled(false);
           setTorStarting(false);
           setTorProgress(0);
           setTorSummary("");
@@ -100,53 +101,38 @@ export default function SecurityScreen({ onBack }: Props): React.JSX.Element {
     );
   }
 
-  // Wire the Tor toggle to the native AirhopTorModule.
-  // On Android NativeAirhopTor is null; Orbot detection is done natively.
+  // Route the Tor toggle through tor-routing.setTorRouting, the single place
+  // that starts/stops Arti (iOS), swaps nostr-tools' WebSocket for the Tor
+  // socket, persists the preference, and rebuilds the Nostr transport. The
+  // switch itself is driven by the persisted preference, so it always reflects
+  // the real routing state rather than a copy that can drift.
   async function handleTorToggle(value: boolean): Promise<void> {
-    if (!NativeAirhopTor) {
-      // Android: Tor routing goes through Orbot (SOCKS5 on port 9050).
-      // The app cannot start Orbot itself; the user must install and enable it.
-      if (value) {
-        setShowOrbotModal(true);
-        // Keep the switch off until the user comes back with Orbot running.
-        return;
-      }
-      setTorEnabled(false);
-      return;
+    // Android routes through Orbot's VPN, which the app cannot start. Show the
+    // install guide on enable, then let setTorRouting record the intent (the VPN
+    // itself does the transparent routing).
+    if (Platform.OS === "android" && value) {
+      setShowOrbotModal(true);
     }
     try {
       setTorStarting(true);
-      if (value) {
-        await NativeAirhopTor.startTor();
-        // Block until Tor has fully bootstrapped (SOCKS5 ready) or times out.
-        const ready = await NativeAirhopTor.awaitTorReady(60);
-        if (ready) {
-          setTorEnabled(true);
-          setTorProgress(100);
-        } else {
-          await NativeAirhopTor.stopTor().catch(() => {});
-          setTorEnabled(false);
-          setTorProgress(0);
-          setTorSummary("");
-          showAlert(
-            "Tor",
-            "Could not connect through Tor within 60 seconds. Check your network connection and try again.",
-          );
-        }
+      const result = await setTorRouting(value);
+      if (value && !result.ok) {
+        setTorProgress(0);
+        setTorSummary("");
+        showAlert(
+          "Tor",
+          result.reason === "unavailable"
+            ? "Tor routing is not available in this build."
+            : result.reason === "timeout"
+              ? "Could not connect through Tor within 60 seconds. Check your network connection and try again."
+              : "Could not start Tor. Ensure the app has network access.",
+        );
+      } else if (value) {
+        setTorProgress(100);
       } else {
-        await NativeAirhopTor.stopTor();
-        setTorEnabled(false);
         setTorProgress(0);
         setTorSummary("");
       }
-    } catch {
-      showAlert(
-        "Tor",
-        value
-          ? "Could not start Tor. Ensure the app has network access."
-          : "Could not stop Tor.",
-      );
-      setTorEnabled(false);
     } finally {
       setTorStarting(false);
     }

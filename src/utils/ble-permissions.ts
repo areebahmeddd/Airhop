@@ -57,7 +57,19 @@ export async function ensureBlePermissions(): Promise<BlePermissionResult> {
     );
   }
 
-  // Fast path: skip the prompt if everything is already granted.
+  // Optional: NEARBY_WIFI_DEVICES (API 33+) unlocks the same-platform WiFi Aware
+  // fast path. Requested alongside BLE so the user sees one batch, but kept OUT
+  // of `required`: WiFi is a bonus transport and the BLE mesh must work whether
+  // or not it is granted, so a denial here never fails the gate. On API <=32
+  // FINE_LOCATION already covers WiFi Aware, so nothing extra is needed there.
+  const optional: Permission[] = [];
+  if (apiLevel >= 33) {
+    optional.push("android.permission.NEARBY_WIFI_DEVICES" as Permission);
+  }
+
+  // Fast path: skip the prompt if every REQUIRED permission is already granted.
+  // (Optional WiFi is not checked here, so a prior WiFi denial never re-prompts
+  // once BLE is settled.)
   const alreadyGranted = await Promise.all(
     required.map((p) => PermissionsAndroid.check(p)),
   );
@@ -65,7 +77,10 @@ export async function ensureBlePermissions(): Promise<BlePermissionResult> {
     return { granted: true, denied: [], blockedForever: false };
   }
 
-  const result = await PermissionsAndroid.requestMultiple(required);
+  const result = await PermissionsAndroid.requestMultiple([
+    ...required,
+    ...optional,
+  ]);
 
   const denied: string[] = [];
   let blockedForever = false;

@@ -30,11 +30,17 @@ interface SettingsState {
   // relay traffic to the mesh. Off by default, matching bitchat; enabling it
   // spends this device's battery and data on behalf of nearby offline peers.
   gatewayEnabled: boolean;
+  // Whether Nostr traffic is routed through Tor. On iOS this drives the in-app
+  // Arti SOCKS proxy; on Android it records that the user relies on Orbot's VPN.
+  // Persisted so the choice is applied before the first relay connects at
+  // startup (see tor-routing.ts), never leaking the clear net for a Tor user.
+  torEnabled: boolean;
   setTheme: (theme: ThemePreference) => void;
   setAutoDownloadMedia: (enabled: boolean) => void;
   setUploadQuality: (quality: UploadQuality) => void;
   setPaymentsEnabled: (enabled: boolean) => void;
   setGatewayEnabled: (enabled: boolean) => void;
+  setTorEnabled: (enabled: boolean) => void;
   // Restore first-run defaults. Used by the panic wipe.
   reset: () => void;
 }
@@ -47,6 +53,7 @@ const DEFAULTS = {
   uploadQuality: "high",
   paymentsEnabled: true,
   gatewayEnabled: false,
+  torEnabled: false,
 } satisfies Partial<SettingsState>;
 
 const storage = createMMKV({ id: "settings-store" });
@@ -78,6 +85,9 @@ export const useSettingsStore = create<SettingsState>()(
       },
       setGatewayEnabled(enabled) {
         set({ gatewayEnabled: enabled });
+      },
+      setTorEnabled(enabled) {
+        set({ torEnabled: enabled });
       },
       reset() {
         set({ ...DEFAULTS });

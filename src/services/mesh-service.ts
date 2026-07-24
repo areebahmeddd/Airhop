@@ -417,11 +417,29 @@ export class MeshService {
         );
         return;
       }
-      // Fall back to BLE.
+      // Fall back to a direct BLE link.
       const linkID = this.peerToLink.get(recipientPeerID);
-      if (!linkID) return;
-      this.floodRouter.originate(packet);
-      this.sendBle(linkID, bytesToBase64(encodePacket(packet))).catch(() => {});
+      if (linkID) {
+        this.floodRouter.originate(packet);
+        this.sendBle(linkID, bytesToBase64(encodePacket(packet))).catch(
+          () => {},
+        );
+        return;
+      }
+      // No direct link: flood the recipient-addressed, TTL-bounded packet over
+      // the mesh so an intermediate node relays it to the recipient. This is
+      // bitchat's multi-hop delivery for directed packets: the recipientID and
+      // TTL are already on the packet, every node relays it (handleRaw), and
+      // only the addressee's handler claims it. File transfers are excluded:
+      // they are far too large to flood and stay a direct-link feature. No-op
+      // when we have no neighbour to relay through.
+      if (
+        this.connectedLinks.size > 0 &&
+        packet.type !== PacketType.FILE_TRANSFER &&
+        packet.type !== PacketType.FRAGMENT
+      ) {
+        broadcastFn(packet);
+      }
     };
 
     // Store the unicast closure so sendDRMessage can use it without
@@ -506,31 +524,8 @@ export class MeshService {
       sendFn,
     );
 
-    // Connect to Nostr relays for internet-bridged DMs.
-    this.nostrClient = new NostrClient({ relays: [] });
-
-    // Location-scoped channels. Constructed unconditionally: it resolves its
-    // own position and stays inert if permission was never granted, so the
-    // location prompt is never forced on someone who only wants BLE.
-    // Signed with per-geohash derived keys, NOT our main Nostr identity. See
-    // geohash-identity.ts. Passing the Ed25519 signing key lets the service
-    // derive its own seed without a second stored secret.
-    this.geoChannels = new GeohashChannelService(
-      this.nostrClient,
-      this.identity.signingPrivKey,
-      nickname,
-      this.identity.peerID,
-    );
-    void this.geoChannels.refresh();
-
-    // Private channels bridged over Nostr (the "Bluetooth + Internet" reach).
-    // Subscribes to every joined ble+nostr private channel and re-syncs whenever
-    // the channel set changes (a create, join, leave, or reach change).
-    this.privateChannels = new PrivateChannelService(
-      this.nostrClient,
-      this.identity.peerID,
-    );
-    this.privateChannels.refresh();
+    // Connect to Nostr relays and stand up the channel services that ride them.
+    this.buildNostrTransport();
     this.chatUnsub = useChatStore.subscribe((state, prev) => {
       if (
         state.channels !== prev.channels ||
@@ -575,84 +570,7 @@ export class MeshService {
     }, OUTBOX_SWEEP_INTERVAL_MS);
 
     // Subscribe to gift-wrap events addressed to our Nostr pubkey.
-    this.nostrClient.subscribe(
-      [{ kinds: [1059], "#p": [this.nostrPubKeyHex] }],
-      (event) => {
-        try {
-          const dm = unwrapDm(event, this.nostrPrivKey);
-          // Map sender Nostr pubkey back to their peerID if we know them.
-          const peerID = this.nostrPubkeyToPeerID.get(dm.senderPubkey);
-          // Blocking has to be honoured on the internet path too, otherwise a
-          // blocked peer simply switches to Nostr and keeps reaching you (and
-          // re-creates the conversation you deleted).
-          if (
-            peerID !== undefined &&
-            useBlockedStore.getState().isBlocked(peerID)
-          ) {
-            return;
-          }
-          // When we don't know this sender's peerID yet, key the thread by
-          // their FULL Nostr pubkey rather than a 16-char slice of it. The old
-          // slice looked like a peerID but wasn't one: replying fed it to
-          // sendDm, which could never resolve a route, so the conversation was
-          // un-repliable. `nostr_` keeps it unambiguous and routable, and
-          // onAnnounce merges the thread once their real peerID shows up.
-          const senderKey = peerID ?? `nostr_${dm.senderPubkey}`;
-          const channel = `dm:${senderKey}`;
-
-          // The rumor content is a bitchat `bitchat1:` envelope: a private
-          // message or a delivery/read receipt. Decode and dispatch.
-          const env = decodeBitchatEnvelope(dm.content);
-          if (env === null) return;
-
-          if (env.type === NoisePayloadType.DELIVERED) {
-            useChatStore
-              .getState()
-              .setMessageStatus(
-                channel,
-                env.messageID,
-                "delivered",
-                Date.now(),
-              );
-            return;
-          }
-          if (env.type === NoisePayloadType.READ_RECEIPT) {
-            useChatStore
-              .getState()
-              .setMessageStatus(channel, env.messageID, "read", Date.now());
-            return;
-          }
-          if (env.type !== NoisePayloadType.PRIVATE_MESSAGE) return;
-
-          const peer = peerID ? this.registry.get(peerID) : undefined;
-          useChatStore.getState().addChannel(channel);
-          useChatStore.getState().addMessage({
-            id: env.messageID,
-            channel,
-            senderID: senderKey,
-            senderNickname:
-              peer?.nickname ?? `npub…${dm.senderPubkey.slice(-6)}`,
-            text: env.content,
-            timestampMs: dm.timestamp * 1000,
-            isMine: false,
-          });
-
-          // Acknowledge delivery over Nostr, and remember to send a read receipt
-          // when the user opens this conversation.
-          this.publishNostrAck(
-            dm.senderPubkey,
-            NoisePayloadType.DELIVERED,
-            env.messageID,
-          );
-          const pending =
-            this.pendingNostrReadAcks.get(dm.senderPubkey) ?? new Set<string>();
-          pending.add(env.messageID);
-          this.pendingNostrReadAcks.set(dm.senderPubkey, pending);
-        } catch {
-          // Invalid or misdirected gift wrap: drop silently.
-        }
-      },
-    );
+    this.subscribeNostrInbox();
 
     // BLE event listeners.
     this.subs = [
@@ -2310,7 +2228,7 @@ export class MeshService {
     recipientPeerID: string,
     text: string,
     messageID?: string,
-  ): "sent" | "sent-nostr" | "needs-courier" {
+  ): "sent" | "sent-nostr" | "needs-courier" | "queued" {
     // A stable id for this message, reused across the mesh envelope, the outbox,
     // and any retry, so a delivery receipt can always be matched to it.
     const msgID = messageID ?? newMessageId();
@@ -2325,12 +2243,14 @@ export class MeshService {
       const sent =
         geohash !== undefined
           ? (this.geoChannels?.sendGeoDm(geohash, pubkey, msgID, text) ?? false)
-          : this.publishNostrDm(pubkey, msgID, text);
+          : this.publishNostrDm(pubkey, msgID, text, recipientPeerID);
       if (sent) {
         return "sent-nostr";
       }
       // Offline: queue it, keyed by the same identifier so a later flush
-      // resolves to this branch again once relays are reachable.
+      // resolves to this branch again once relays are reachable. A Nostr-only
+      // peer has no mesh key, so nothing can courier it: it is queued, not
+      // carried.
       useOutboxStore.getState().enqueue({
         id: msgID,
         recipientPeerID,
@@ -2338,7 +2258,7 @@ export class MeshService {
         text,
         createdAtMs: Date.now(),
       });
-      return "needs-courier";
+      return "queued";
     }
 
     const result = this.trySendDm(recipientPeerID, text, msgID);
@@ -2347,7 +2267,7 @@ export class MeshService {
       // the recipient can deliver it, AND keep our own copy queued in case they
       // simply walk back to us. The two paths are complementary, and the
       // recipient dedupes by message id if both arrive.
-      this.sendViaCourier(recipientPeerID, text);
+      const carried = this.sendViaCourier(recipientPeerID, text);
       // Genuinely queue it. This used to be dropped while the UI said
       // "queued for delivery" while the message was gone for good, even if the
       // peer reappeared moments later.
@@ -2358,6 +2278,9 @@ export class MeshService {
         text,
         createdAtMs: Date.now(),
       });
+      // "carried" only when a courier actually took a sealed copy (we hold the
+      // recipient's Noise key); otherwise it is merely queued locally.
+      return carried ? "needs-courier" : "queued";
     }
     return result;
   }
@@ -2377,7 +2300,12 @@ export class MeshService {
     const hasDirectLink =
       this.peerToLink.has(recipientPeerID) ||
       this.wifiPeerToLink.has(recipientPeerID);
-    if (drState !== undefined && hasDirectLink) {
+    // A directed encrypted packet reaches the peer over the mesh either by a
+    // direct link (unicast) or, lacking one, by flooding through a neighbour who
+    // relays it on (multi-hop, bitchat-style). With no direct link AND no
+    // neighbour to relay through, the mesh cannot help, so we fall to Nostr.
+    const canReachMesh = hasDirectLink || this.connectedLinks.size > 0;
+    if (drState !== undefined && canReachMesh) {
       this.sendDRMessage(
         recipientPeerID,
         encodeDmMessage(msgID, text),
@@ -2413,13 +2341,18 @@ export class MeshService {
       return "sent";
     }
 
-    // Priority 3: an established Noise session over the mesh (BLE or WiFi,
-    // including a multi-hop route). This is the bitchat-compatible path, and it
-    // comes BEFORE the internet on purpose: when a radio already reaches this
-    // peer, using a relay instead would spend data and hand a third party the
-    // metadata for a hop we can make ourselves. The messageID rides inside the
-    // bitchat PrivateMessagePacket so receipts resolve to the right bubble.
-    if (peer?.session !== undefined) {
+    // Priority 3: an established Noise session over the mesh. Comes BEFORE the
+    // internet on purpose: when a radio already reaches this peer (directly, or
+    // multi-hop through a neighbour), using a relay instead would spend data and
+    // hand a third party the metadata for a hop we can make ourselves. The
+    // messageID rides inside the bitchat PrivateMessagePacket so receipts resolve
+    // to the right bubble.
+    //
+    // Gated on `canReachMesh` like Priority 1: the packet is recipient-addressed
+    // and TTL-bounded, so with no direct link the unicast floods it for a relay
+    // to carry (multi-hop). With no direct link AND no neighbour, the mesh can't
+    // help, so this is skipped and Nostr takes over.
+    if (peer?.session !== undefined && canReachMesh) {
       // Only "sent" means it actually went out. A payload too long for one
       // PrivateMessagePacket falls through to the options below.
       if (this.router.sendDm(recipientPeerID, text, msgID) === "sent") {
@@ -2442,7 +2375,7 @@ export class MeshService {
     if (
       nostrPubkey !== undefined &&
       nostrPubkey.length > 0 &&
-      this.publishNostrDm(nostrPubkey, msgID, text)
+      this.publishNostrDm(nostrPubkey, msgID, text, recipientPeerID)
     ) {
       return "sent-nostr";
     }
@@ -2461,6 +2394,7 @@ export class MeshService {
     recipientPubkeyHex: string,
     messageID: string,
     text: string,
+    outboxPeerID?: string,
   ): boolean {
     if (this.nostrClient === null) return false;
     // No embedded recipient peer ID: we only know the Nostr pubkey, not the
@@ -2474,8 +2408,20 @@ export class MeshService {
     if (envelope === null) return false;
     const { event } = wrapDm(envelope, this.nostrPrivKey, recipientPubkeyHex);
     void this.nostrClient.publish(event).catch(() => {
-      // Relay failure surfaces via client events; the gift wrap is still parked
-      // on any relay that accepted it, and the sweep retries the rest.
+      // No relay accepted it (all rejected, or timed out with no ACK). We
+      // already returned an optimistic "sent-nostr", so park it in the outbox
+      // for the internet-retry sweep instead of losing it. On success this
+      // never runs, so a delivered message is not re-queued; the receiver
+      // dedupes by message id if a later resend does land twice.
+      if (outboxPeerID !== undefined) {
+        useOutboxStore.getState().enqueue({
+          id: messageID,
+          recipientPeerID: outboxPeerID,
+          channel: `dm:${outboxPeerID}`,
+          text,
+          createdAtMs: Date.now(),
+        });
+      }
     });
     return true;
   }
@@ -2523,12 +2469,26 @@ export class MeshService {
   // Send a file attachment over the mesh. Chunks the bytes into 64 KB FILE_TRANSFER
   // packets, fragments each to 469 bytes, and routes via unicast (DM) or broadcast
   // (channel). The receiver reconstructs, saves to cache, and adds a ChatMessage.
+  //
+  // Media rides BLE only (never Nostr), so returns whether a route exists right
+  // now: for a DM, a direct link to that peer; for a channel, any live link.
+  // The reach is checked BEFORE starting the transfer, so an unreachable send
+  // never spins up a progress card that would falsely reach 100%. False means it
+  // went nowhere, so the caller surfaces that instead of a confident "sent"
+  // (the text path reports reach the same way); the user can retry when a link
+  // returns.
   sendAttachment(
     channel: string,
     bytes: Uint8Array,
     meta: AttachmentMeta,
-  ): void {
+  ): boolean {
+    const reached = channel.startsWith("dm:")
+      ? this.peerToLink.has(channel.slice(3)) ||
+        this.wifiPeerToLink.has(channel.slice(3))
+      : this.connectedLinks.size + this.wifiConnectedLinks.size > 0;
+    if (!reached) return false;
     this.fileXfer.sendBytes(bytes, meta, channel);
+    return true;
   }
 
   // ---- Payment helpers (used by wallet feature layer) ----------------------
@@ -2731,6 +2691,150 @@ export class MeshService {
     void this.geoChannels?.refresh();
   }
 
+  // Build (or rebuild) the Nostr transport: the relay pool plus the geohash and
+  // private-channel services that ride it. Extracted so the Tor toggle can tear
+  // the pool down and stand it back up on the newly selected WebSocket transport
+  // (Tor or direct) without disturbing BLE or the durable store subscriptions.
+  private buildNostrTransport(): void {
+    this.nostrClient = new NostrClient({
+      relays: [],
+      // Reflect real relay connectivity in the mesh banner: with no BLE peers
+      // but a live relay, the Mesh tab can say it is relaying over the internet
+      // instead of implying nothing is reachable.
+      onConnectionChange: (connected) =>
+        useMeshStateStore.getState().setNostrConnected(connected),
+    });
+
+    // Location-scoped channels. Constructed unconditionally: it resolves its
+    // own position and stays inert if permission was never granted, so the
+    // location prompt is never forced on someone who only wants BLE.
+    // Signed with per-geohash derived keys, NOT our main Nostr identity. See
+    // geohash-identity.ts. Passing the Ed25519 signing key lets the service
+    // derive its own seed without a second stored secret.
+    this.geoChannels = new GeohashChannelService(
+      this.nostrClient,
+      this.identity.signingPrivKey,
+      this.nickname,
+      this.identity.peerID,
+    );
+    void this.geoChannels.refresh();
+
+    // Private channels bridged over Nostr (the "Bluetooth + Internet" reach).
+    // Subscribes to every joined ble+nostr private channel and re-syncs whenever
+    // the channel set changes (a create, join, leave, or reach change).
+    this.privateChannels = new PrivateChannelService(
+      this.nostrClient,
+      this.identity.peerID,
+    );
+    this.privateChannels.refresh();
+  }
+
+  // Subscribe to gift-wrap DMs (kind 1059) addressed to our Nostr pubkey. Split
+  // out so it can be re-run after the pool is rebuilt for a Tor toggle: the old
+  // subscription dies with the old pool, so a fresh one must be opened.
+  private subscribeNostrInbox(): void {
+    if (this.nostrClient === null) return;
+    this.nostrClient.subscribe(
+      [{ kinds: [1059], "#p": [this.nostrPubKeyHex] }],
+      (event) => {
+        try {
+          const dm = unwrapDm(event, this.nostrPrivKey);
+          // Map sender Nostr pubkey back to their peerID if we know them.
+          const peerID = this.nostrPubkeyToPeerID.get(dm.senderPubkey);
+          // Blocking has to be honoured on the internet path too, otherwise a
+          // blocked peer simply switches to Nostr and keeps reaching you (and
+          // re-creates the conversation you deleted).
+          if (
+            peerID !== undefined &&
+            useBlockedStore.getState().isBlocked(peerID)
+          ) {
+            return;
+          }
+          // When we don't know this sender's peerID yet, key the thread by
+          // their FULL Nostr pubkey rather than a 16-char slice of it. The old
+          // slice looked like a peerID but wasn't one: replying fed it to
+          // sendDm, which could never resolve a route, so the conversation was
+          // un-repliable. `nostr_` keeps it unambiguous and routable, and
+          // onAnnounce merges the thread once their real peerID shows up.
+          const senderKey = peerID ?? `nostr_${dm.senderPubkey}`;
+          const channel = `dm:${senderKey}`;
+
+          // The rumor content is a bitchat `bitchat1:` envelope: a private
+          // message or a delivery/read receipt. Decode and dispatch.
+          const env = decodeBitchatEnvelope(dm.content);
+          if (env === null) return;
+
+          if (env.type === NoisePayloadType.DELIVERED) {
+            useChatStore
+              .getState()
+              .setMessageStatus(
+                channel,
+                env.messageID,
+                "delivered",
+                Date.now(),
+              );
+            return;
+          }
+          if (env.type === NoisePayloadType.READ_RECEIPT) {
+            useChatStore
+              .getState()
+              .setMessageStatus(channel, env.messageID, "read", Date.now());
+            return;
+          }
+          if (env.type !== NoisePayloadType.PRIVATE_MESSAGE) return;
+
+          const peer = peerID ? this.registry.get(peerID) : undefined;
+          useChatStore.getState().addChannel(channel);
+          useChatStore.getState().addMessage({
+            id: env.messageID,
+            channel,
+            senderID: senderKey,
+            senderNickname:
+              peer?.nickname ?? `npub…${dm.senderPubkey.slice(-6)}`,
+            text: env.content,
+            timestampMs: dm.timestamp * 1000,
+            isMine: false,
+          });
+
+          // Acknowledge delivery over Nostr, and remember to send a read receipt
+          // when the user opens this conversation.
+          this.publishNostrAck(
+            dm.senderPubkey,
+            NoisePayloadType.DELIVERED,
+            env.messageID,
+          );
+          const pending =
+            this.pendingNostrReadAcks.get(dm.senderPubkey) ?? new Set<string>();
+          pending.add(env.messageID);
+          this.pendingNostrReadAcks.set(dm.senderPubkey, pending);
+        } catch {
+          // Invalid or misdirected gift wrap: drop silently.
+        }
+      },
+    );
+  }
+
+  // Rebuild the Nostr transport on whatever WebSocket implementation nostr-tools
+  // currently has installed. Called when Tor routing is toggled at runtime: the
+  // old relay pool is closed and a fresh one opened, so every relay connection
+  // re-establishes over the selected path (Tor or direct). BLE links and the
+  // durable store subscriptions are deliberately left untouched, because Tor is
+  // an internet-only concern and must not disturb nearby Bluetooth chat.
+  restartNostr(): void {
+    // Nothing to rebuild before the first start(): the persisted Tor preference
+    // is applied by priming the socket factory ahead of buildNostrTransport().
+    if (this.nostrClient === null) return;
+    this.geoChannels?.stop();
+    this.privateChannels?.stop();
+    this.nostrClient.close();
+    useMeshStateStore.getState().setNostrConnected(false);
+    // Fresh pool + channel services on the current socket factory, then re-open
+    // the DM inbox. The chat/contacts store subscriptions and the outbox sweep
+    // keep working: they reach the new instances through `this.` fields.
+    this.buildNostrTransport();
+    this.subscribeNostrInbox();
+  }
+
   stop(): void {
     // Say goodbye while the links are still up, before tearing anything down.
     try {
@@ -2762,9 +2866,16 @@ export class MeshService {
     }
     this.nostrClient?.close();
     this.nostrClient = null;
+    // The relay pool is gone, so the internet bridge is down. Reset explicitly
+    // rather than relying on close() to fire per-relay failure callbacks.
+    useMeshStateStore.getState().setNostrConnected(false);
     AirhopBLE.stopScanning().catch(() => {});
     AirhopBLE.stopAdvertising().catch(() => {});
     NativeAirhopWiFi?.stopWiFi().catch(() => {});
+    // The radios are down, so anyone in the peer list is now stale. Clear it so
+    // a stopped mesh (Away, or a wipe) shows an empty radar instead of lingering
+    // peers that imply a live mesh. Peers repopulate from ANNOUNCE on restart.
+    usePeerStore.getState().clearAll();
   }
 }
 

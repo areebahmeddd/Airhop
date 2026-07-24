@@ -12,7 +12,13 @@ export type AttachmentType = "image" | "voice" | "document" | "video";
 // courier (best-effort physical delivery); "sent" means it left the device;
 // "delivered"/"read" are confirmed by the recipient over the mesh.
 export type MessageStatus =
-  "sending" | "sent" | "carried" | "delivered" | "read" | "failed";
+  | "sending"
+  | "sent"
+  | "carried" // handed to a store-and-forward courier (a device will ferry it)
+  | "queued" // held locally, retried over the mesh/internet when a route returns
+  | "delivered"
+  | "read"
+  | "failed";
 
 // Progression rank, so a status only ever moves forward (a late "delivered"
 // never downgrades a message that is already "read").
@@ -21,6 +27,7 @@ const STATUS_RANK: Record<MessageStatus, number> = {
   failed: 1,
   sent: 2,
   carried: 2,
+  queued: 2,
   delivered: 3,
   read: 4,
 };

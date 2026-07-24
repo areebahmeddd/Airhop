@@ -8,7 +8,14 @@
 import { Feather, MaterialCommunityIcons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import React, { useMemo } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import {
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+  type StyleProp,
+  type TextStyle,
+} from "react-native";
 import type { EmbeddedToken } from "../../core/payments/cashu";
 import type {
   ChatAttachment,
@@ -16,7 +23,13 @@ import type {
   MessageStatus,
 } from "../../store/chat-store";
 import Avatar from "../../ui/components/avatar";
-import { FontSize, Radius, Spacing, useThemeColors } from "../../ui/theme";
+import {
+  FontSize,
+  FontWeight,
+  Radius,
+  Spacing,
+  useThemeColors,
+} from "../../ui/theme";
 
 interface Props {
   item: ChatMessage;
@@ -170,7 +183,12 @@ export default function MessageBubble({
                     : styles.messageTextTheirs,
                 ]}
               >
-                {item.text}
+                {renderMessageText(
+                  item.text,
+                  item.isMine
+                    ? styles.messageMentionMine
+                    : styles.messageMentionTheirs,
+                )}
               </Text>
             )}
 
@@ -225,6 +243,36 @@ export default function MessageBubble({
   );
 }
 
+// Render message text with @mentions emphasised, the way every chat app does.
+// A mention is an "@" at a word start followed by nickname characters; anything
+// else (an email's "@", a lone "@") is left plain. Highlighting is syntactic,
+// so it does not need the roster.
+function renderMessageText(
+  text: string,
+  mentionStyle: StyleProp<TextStyle>,
+): React.ReactNode {
+  const re = /(^|\s)(@[A-Za-z0-9_-]+)/g;
+  const out: React.ReactNode[] = [];
+  let last = 0;
+  let key = 0;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(text)) !== null) {
+    const lead = m[1];
+    const mention = m[2];
+    // Plain run up to and including the leading whitespace.
+    out.push(text.slice(last, m.index + lead.length));
+    out.push(
+      <Text key={key++} style={mentionStyle}>
+        {mention}
+      </Text>,
+    );
+    last = m.index + m[0].length;
+  }
+  if (last === 0) return text; // no mentions: return the raw string, no spans
+  out.push(text.slice(last));
+  return out;
+}
+
 // WhatsApp-style delivery ticks, kept monochrome to match the app: a single
 // check for sent, a double check for delivered, the same double check at full
 // brightness for read (the app has no second accent colour to spend, so read
@@ -262,6 +310,17 @@ function StatusTick({
       return (
         <MaterialCommunityIcons
           name="account-arrow-right"
+          size={SIZE}
+          color={Colors.textInverse}
+          style={dim}
+        />
+      );
+    case "queued":
+      // Held locally, not handed to anyone: an hourglass, distinct from the
+      // courier hand-off ("carried") and the transient "sending" clock.
+      return (
+        <MaterialCommunityIcons
+          name="timer-sand"
           size={SIZE}
           color={Colors.textInverse}
           style={dim}
@@ -334,6 +393,17 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
     },
     messageTextMine: { color: Colors.textInverse },
     messageTextTheirs: { color: Colors.textPrimary },
+    // @mentions: bold everywhere for emphasis, plus the accent colour on the
+    // light "theirs" bubble. On the near-black "mine" bubble the accent has too
+    // little contrast, so bold alone carries it (same reasoning as the ticks).
+    messageMentionMine: {
+      color: Colors.textInverse,
+      fontWeight: FontWeight.bold,
+    },
+    messageMentionTheirs: {
+      color: Colors.accent,
+      fontWeight: FontWeight.bold,
+    },
     metaRow: {
       flexDirection: "row",
       alignItems: "center",

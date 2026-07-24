@@ -12,8 +12,8 @@ import {
   mayContainToken,
 } from "../core/payments/cashu";
 import type { AttachmentType, ChatMessage } from "../store/chat-store";
+import { chatDisplayName } from "./chat-display-name";
 import { messagePreviewText } from "./message-preview";
-import { peerIDToUsername } from "./username";
 
 // Message results are capped so the results view never renders an unbounded
 // list. The underlying scan is cheap (messages are capped per-channel at
@@ -128,12 +128,6 @@ export function filterMessages(
   return hits.slice(0, MAX_MESSAGE_RESULTS);
 }
 
-function channelDisplayName(channel: string): string {
-  return channel.startsWith("dm:")
-    ? peerIDToUsername(channel.slice(3))
-    : channel.replace(/^#/, "");
-}
-
 // Human word for an attachment kind, so "photo"/"video" match even when a media
 // message has no caption or filename.
 function attachmentKindWord(type: AttachmentType): string {
@@ -201,7 +195,7 @@ export function searchChats(query: string, channels: string[]): ChatHit[] {
   if (!q) return [];
   const hits: ChatHit[] = [];
   for (const channel of channels) {
-    const name = channelDisplayName(channel);
+    const name = chatDisplayName(channel);
     const index = name.toLowerCase().indexOf(q);
     if (index === -1) continue;
     hits.push({ channel, displayName: name, score: scoreMatch(name, index) });

@@ -43,6 +43,7 @@ import { decodeQRContent } from "./src/core/crypto/contact-exchange";
 import type { Identity } from "./src/core/crypto/identity";
 import { loadIdentity } from "./src/core/crypto/identity";
 import { isValidChannelKey } from "./src/core/mesh/channel-crypto";
+import { primeTorRoutingOnStartup } from "./src/core/nostr/tor-routing";
 import AiScreen from "./src/features/ai/ai-screen";
 import ChannelList from "./src/features/chat/channel-list";
 import ChatSearchResults from "./src/features/chat/chat-search-results";
@@ -76,7 +77,10 @@ import { useActivityStore } from "./src/store/activity-store";
 import { showAlert } from "./src/store/alert-store";
 import { subscribeInboundMessages, useChatStore } from "./src/store/chat-store";
 import { useContactsStore } from "./src/store/contacts-store";
-import { useMeshState, useMeshStateStore } from "./src/store/mesh-state-store";
+import {
+  useMeshBanners,
+  useMeshStateStore,
+} from "./src/store/mesh-state-store";
 import { useSettingsStore } from "./src/store/settings-store";
 import { useTransferStore } from "./src/store/transfer-store";
 import Avatar from "./src/ui/components/avatar";
@@ -141,6 +145,10 @@ async function startMeshWithPermissions(
         : "Airhop needs Bluetooth and Location permission to discover nearby devices over the mesh. Without it, only internet (Nostr) messaging will work.",
     );
   }
+  // Apply the persisted Tor preference BEFORE the mesh starts, so the very first
+  // relay pool is built on the Tor socket (never leaking the clear net for a Tor
+  // user). No-op when Tor is off or unavailable.
+  primeTorRoutingOnStartup();
   initMeshService(identity, nickname);
   // The mesh always starts Online (advertising + scanning), so keep the chosen
   // presence in step, in case a prior session left it Away/Invisible.
@@ -158,6 +166,9 @@ async function startMeshWithPermissions(
   void (async () => {
     const granted =
       (await hasLocationPermission()) || (await requestLocationPermission());
+    // Reflect the grant on the Mesh banner: without it the location channels
+    // are unavailable, and saying so beats a silently empty channel list.
+    useMeshStateStore.getState().setLocationGranted(granted);
     if (granted) getMeshService()?.refreshGeoChannels();
     await requestNotificationPermission();
   })();
@@ -220,7 +231,7 @@ export default function App(): React.JSX.Element {
     markChannelRead,
     setLastThread,
   } = useChatStore();
-  const { state: meshState } = useMeshState();
+  const meshBanners = useMeshBanners();
   // Payments is switchable from the profile screen, so the tab bar (and the
   // swipe order that follows it) is derived rather than fixed.
   const paymentsEnabled = useSettingsStore((s) => s.paymentsEnabled);
@@ -329,8 +340,19 @@ export default function App(): React.JSX.Element {
   // not already looking at the app.
   useEffect(() => {
     setNotificationsAppActive(AppState.currentState === "active");
+    // Re-read location permission whenever we come to the foreground: the user
+    // may have toggled it in system Settings while we were backgrounded, and the
+    // Mesh banner must reflect that. Bluetooth adapter changes already arrive as
+    // native events, so they need no polling here.
+    const syncLocation = (): void => {
+      void hasLocationPermission().then((granted) =>
+        useMeshStateStore.getState().setLocationGranted(granted),
+      );
+    };
+    syncLocation();
     const sub = AppState.addEventListener("change", (next) => {
       setNotificationsAppActive(next === "active");
+      if (next === "active") syncLocation();
     });
     return () => sub.remove();
   }, []);
@@ -1008,8 +1030,8 @@ export default function App(): React.JSX.Element {
               {/* Transport banner. Shown on Mesh and Chats, the two places an
                   empty screen would otherwise be unexplainable. Renders nothing
                   while peers are connected or a scan is in progress. */}
-              {!isInThread && (tab === "mesh" || tab === "chats") && (
-                <MeshStatusBar state={meshState} />
+              {!isInThread && tab === "mesh" && (
+                <MeshStatusBar banners={meshBanners} />
               )}
 
               {/* Content: swipe left/right to step through TABS, matching the

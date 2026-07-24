@@ -14,6 +14,7 @@ import {
   Text,
   View,
 } from "react-native";
+import { useMeshStateStore } from "../../store/mesh-state-store";
 import { type NearbyPeer } from "../../store/peer-store";
 import Avatar from "../../ui/components/avatar";
 import StatusDot from "../../ui/components/status-dot";
@@ -77,6 +78,9 @@ export default function RadarView({
   const Colors = useThemeColors();
   const styles = useMemo(() => createStyles(Colors), [Colors]);
   const [canvasSize, setCanvasSize] = useState(0);
+  // "Away" stops the radios, so an empty radar then means paused, not scanning.
+  // "Invisible" still scans (it only stops advertising), so it reads as normal.
+  const away = useMeshStateStore((s) => s.presenceStatus === "away");
 
   const [ring1] = useState(() => new Animated.Value(0));
   const [ring2] = useState(() => new Animated.Value(0));
@@ -148,6 +152,16 @@ export default function RadarView({
   // Staggered sonar pulse: three expanding rings at the outer boundary.
   // Re-runs when waveEpoch changes, tearing the old loop down first.
   useEffect(() => {
+    // Away pauses the radios, so freeze the ambient sonar too: a radar still
+    // pulsing while nothing scans would be a lie. The rings collapse to nothing
+    // rather than freezing mid-bloom. The center tap keeps its own one-shot
+    // wave, so the radar is quiet but still playful.
+    if (away) {
+      ring1.setValue(0);
+      ring2.setValue(0);
+      ring3.setValue(0);
+      return;
+    }
     function pulse(
       val: Animated.Value,
       delay: number,
@@ -176,7 +190,7 @@ export default function RadarView({
     ]);
     anim.start();
     return () => anim.stop();
-  }, [ring1, ring2, ring3, waveEpoch]);
+  }, [ring1, ring2, ring3, waveEpoch, away]);
 
   // Unmounting mid-tap must not leave a timer or an animation callback holding
   // a handle to this component.
@@ -401,17 +415,21 @@ export default function RadarView({
 
           {/* ---- Status -------------------------------------------------- */}
           <Text style={styles.statusText}>
-            {peers.length === 0
-              ? "Scanning for nearby peers\u2026"
-              : `${peers.length} peer${peers.length !== 1 ? "s" : ""} in range`}
+            {peers.length > 0
+              ? `${peers.length} peer${peers.length !== 1 ? "s" : ""} in range`
+              : away
+                ? "Mesh paused \u00b7 you're Away"
+                : "Scanning for nearby peers\u2026"}
           </Text>
           <Text style={styles.hintText}>
             {/* Signal strength, NOT distance. RSSI varies by tens of dB with
                 orientation, obstacles and radio, so any metre figure derived
                 from it would be invented. Ring = signal, and the label says so. */}
-            {peers.length === 0
-              ? "Rings show BLE signal strength, not distance"
-              : "Ring position reflects signal strength, not distance"}
+            {peers.length > 0
+              ? "Ring position reflects signal strength, not distance"
+              : away
+                ? "Set your status to Online in Profile to discover peers"
+                : "Rings show BLE signal strength, not distance"}
           </Text>
         </>
       )}

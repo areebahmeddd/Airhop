@@ -182,7 +182,16 @@ export function NoticesSheet({ visible, onClose, channel }: Props) {
 
   function handlePost() {
     if (!canPost) return;
-    const ok = mesh?.createBoardPost(draft, scopeGeohash, urgent, expiryDays);
+    // Urgency is a mesh-board concept in bitchat: a location cell can be huge, so
+    // an "urgent" geohash notice would let anyone shout across a whole city. Only
+    // the local mesh board can carry urgency, so we drop the flag off-mesh even
+    // if it was toggled before the user switched scope.
+    const ok = mesh?.createBoardPost(
+      draft,
+      scopeGeohash,
+      scope === "mesh" && urgent,
+      expiryDays,
+    );
     if (ok === true) {
       setDraft("");
       setUrgent(false);
@@ -278,23 +287,27 @@ export function NoticesSheet({ visible, onClose, channel }: Props) {
               maxLength={CONTENT_MAX * 2}
             />
             <View style={styles.composerControls}>
-              <Pressable
-                style={[styles.urgentToggle, urgent && styles.urgentToggleOn]}
-                onPress={() => setUrgent((u) => !u)}
-                accessibilityRole="button"
-                accessibilityLabel="Mark urgent"
-              >
-                <Feather
-                  name="alert-triangle"
-                  size={13}
-                  color={urgent ? Colors.textInverse : Colors.textSecondary}
-                />
-                <Text
-                  style={[styles.urgentText, urgent && styles.urgentTextOn]}
+              {/* Urgent is mesh-only, matching bitchat: the toggle simply is not
+                  offered in a location cell. */}
+              {scope === "mesh" && (
+                <Pressable
+                  style={[styles.urgentToggle, urgent && styles.urgentToggleOn]}
+                  onPress={() => setUrgent((u) => !u)}
+                  accessibilityRole="button"
+                  accessibilityLabel="Mark urgent"
                 >
-                  Urgent
-                </Text>
-              </Pressable>
+                  <Feather
+                    name="alert-triangle"
+                    size={13}
+                    color={urgent ? Colors.textInverse : Colors.textSecondary}
+                  />
+                  <Text
+                    style={[styles.urgentText, urgent && styles.urgentTextOn]}
+                  >
+                    Urgent
+                  </Text>
+                </Pressable>
+              )}
 
               <View style={styles.expiryChips}>
                 {EXPIRY_OPTIONS.map((opt) => (

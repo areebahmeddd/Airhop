@@ -7,11 +7,14 @@
 // the closest relays. A fixed set of default gift-wrap relays is always
 // included for DM delivery.
 //
-// Tor proxy: if a proxyPort is provided the client signals intent, but note
-// that React Native's built-in WebSocket does not support SOCKS5 natively.
-// Full tunnelling requires platform-level proxy configuration (iOS system
-// proxy or Android VpnService through Orbot). The proxyPort is stored here
-// so higher-level code can request proxy setup before connecting.
+// Tor proxy: this client never touches the socket directly. Routing Nostr
+// through Tor is done one level up, by swapping nostr-tools' WebSocket
+// implementation (see tor-routing.ts): on iOS for TorWebSocket, which tunnels
+// over Arti's SOCKS5 proxy, and on Android by Orbot's transparent VPN. The pool
+// is created with auto-reconnect so that when the transport is swapped (or a
+// relay drops) connections re-open on their own, and so a pool primed for Tor
+// before Arti has finished bootstrapping simply retries until the circuit is up
+// rather than ever falling back to the clear net.
 
 import type { Event } from "nostr-tools";
 import type { Filter } from "nostr-tools/filter";
@@ -39,9 +42,9 @@ const PUBLISH_TIMEOUT_MS = 8_000;
 export interface NostrClientConfig {
   // Relay URLs to connect to (merged with default DM relays).
   relays?: string[];
-  // If > 0, native networking should route Nostr connections through
-  // SOCKS5 proxy at localhost:proxyPort (Orbot or Arti).
-  proxyPort?: number;
+  // Called whenever the set of live relay connections crosses the has-any /
+  // has-none boundary, so the UI can reflect whether the internet bridge is up.
+  onConnectionChange?: (connected: boolean) => void;
 }
 
 export interface PublishResult {
@@ -58,11 +61,22 @@ export type EoseHandler = () => void;
 export class NostrClient {
   private readonly pool: SimplePool;
   private readonly relays: string[];
-  private readonly proxyPort: number;
+  private readonly onConnectionChange?: (connected: boolean) => void;
+  // Last reported connectivity, so we only notify on an actual transition.
+  private connected = false;
 
   constructor(config: NostrClientConfig = {}) {
-    this.pool = new SimplePool();
-    this.proxyPort = config.proxyPort ?? 0;
+    this.onConnectionChange = config.onConnectionChange;
+    // enableReconnect: relays that drop (or whose first connect fails, e.g. when
+    // the pool is primed for Tor before Arti is ready) retry with backoff and
+    // re-open their subscriptions, so the transport self-heals without a manual
+    // resubscribe. See tor-routing.ts, which rebuilds this pool on a Tor toggle.
+    this.pool = new SimplePool({ enableReconnect: true });
+    // The pool tells us as relays connect and drop (set as properties: the
+    // SimplePool constructor doesn't accept these in its options). We translate
+    // that into a single "any live relay" boolean for the caller.
+    this.pool.onRelayConnectionSuccess = () => this.reconcileConnected();
+    this.pool.onRelayConnectionFailure = () => this.reconcileConnected();
 
     // Merge caller-provided relays with the default DM relay set, deduplicated
     // and capped at MAX_RELAY_COUNT.
@@ -81,9 +95,14 @@ export class NostrClient {
     return [...this.relays];
   }
 
-  // Whether a Tor proxy port has been configured.
-  get torProxyPort(): number {
-    return this.proxyPort;
+  // Recompute "any relay live" and notify only on a has-any / has-none flip, so
+  // the UI's internet-bridge indicator tracks real connectivity without churn.
+  private reconcileConnected(): void {
+    const any = [...this.pool.listConnectionStatus().values()].some(Boolean);
+    if (any !== this.connected) {
+      this.connected = any;
+      this.onConnectionChange?.(any);
+    }
   }
 
   // Resolve an optional per-call relay override to a concrete relay list.

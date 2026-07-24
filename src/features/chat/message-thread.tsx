@@ -90,6 +90,7 @@ import {
 } from "../../ui/theme";
 import { channelInviteLink } from "../../utils/deep-link";
 import { resolveDisplayName } from "../../utils/display-name";
+import { canSendMedia } from "../../utils/media-policy";
 import { activeMentionQuery, applyMention } from "../../utils/mentions";
 import { peerIDToUsername } from "../../utils/username";
 import ChannelInfoSheet from "./channel-info-sheet";
@@ -644,6 +645,11 @@ export default function MessageThread({
   // permissions); here we just re-resolve the cell when the channel opens, in
   // case the user has moved. No-op without permission.
   const isGeo = isGeoChannel(channel);
+  // Media (photos, files, voice) rides BLE only, so it is offered only where it
+  // can actually deliver: the Bluetooth mesh channel and direct mesh DMs. Off in
+  // location/teleported cells (Nostr-scoped) and private channels/groups
+  // (encrypted text; media would broadcast in the clear). Matches bitchat.
+  const mediaAllowed = canSendMedia(channel);
   // Teleported cells are keyed `geohash:<gh>`; the header shows them as `#<gh>`,
   // matching bitchat's location-channel badge, not the raw internal key.
   const isManualGeo = isManualGeoChannel(channel);
@@ -1016,14 +1022,21 @@ export default function MessageThread({
           usePeerStore.getState().getPeer(dmPeerID)?.noisePubKeyHex ?? "",
         );
       const result = service.sendDm(dmPeerID, msg.text, msg.id);
-      // "sent" upgrades to delivered/read via receipts; "needs-courier" is
-      // handed to a courier, hence "carried".
+      // "sent"/"sent-nostr" upgrade to delivered/read via receipts. When no
+      // route exists now it is either "carried" (a courier took a sealed copy)
+      // or "queued" (held locally for retry); both surface the queued notice.
       setStatus(
         msgChannel,
         msg.id,
-        result === "needs-courier" ? "carried" : "sent",
+        result === "needs-courier"
+          ? "carried"
+          : result === "queued"
+            ? "queued"
+            : "sent",
       );
-      if (result === "needs-courier") showQueuedStatus();
+      if (result === "needs-courier" || result === "queued") {
+        showQueuedStatus();
+      }
     } else if (msgChannel.startsWith("group:")) {
       // Private group: seal under the epoch key and broadcast (0x25).
       const ok = service.sendGroupMessage(
@@ -1061,12 +1074,38 @@ export default function MessageThread({
     transmit(pending.msg);
   }
 
-  // Resend a failed message: flip it back to sending and run the same transmit
-  // path, which resets the status to sent/carried/failed on the outcome.
-  // Reached by tapping the red failed mark on the bubble.
+  // Resend a failed message: flip it back to sending and run the send path,
+  // which resets the status on the outcome. Reached by tapping the red failed
+  // mark on the bubble. An attachment re-reads its file and re-sends the bytes;
+  // a text message runs the same transmit path.
   function handleRetryMessage(item: ChatMessage): void {
     if (item.status !== "failed") return;
-    useChatStore.getState().setMessageStatus(item.channel, item.id, "sending");
+    const setStatus = useChatStore.getState().setMessageStatus;
+    setStatus(item.channel, item.id, "sending");
+    if (item.attachment) {
+      const service = getMeshService();
+      const att = item.attachment;
+      if (!service) {
+        setStatus(item.channel, item.id, "failed");
+        return;
+      }
+      void (async () => {
+        try {
+          const bytes = await new FileSystem.File(att.uri).bytes();
+          const reached = service.sendAttachment(item.channel, bytes, {
+            type: att.type,
+            name: att.name ?? "",
+            mimeType: att.mimeType ?? "",
+            durationMs: att.durationMs ?? 0,
+          });
+          setStatus(item.channel, item.id, reached ? "sent" : "failed");
+          if (!reached) showNoReachStatus();
+        } catch {
+          setStatus(item.channel, item.id, "failed");
+        }
+      })();
+      return;
+    }
     transmit(item);
   }
 
@@ -1265,12 +1304,20 @@ export default function MessageThread({
         // drops the base64 -> binary-string -> Uint8Array round-trip this used
         // to do, and that was ~2.4x peak memory for every attachment.
         const bytes = await new FileSystem.File(uri).bytes();
-        service.sendAttachment(targetChannel, bytes, {
+        const reached = service.sendAttachment(targetChannel, bytes, {
           type,
           name: name ?? "",
           mimeType: mimeType ?? "",
           durationMs: durationMs ?? 0,
         });
+        // No route right now: mark it failed so the bubble shows the same red,
+        // tap-to-retry mark a text message would, rather than a confident card.
+        if (!reached) {
+          useChatStore
+            .getState()
+            .setMessageStatus(targetChannel, msg.id, "failed");
+          showNoReachStatus();
+        }
       } catch (err) {
         // File too large or URI unreadable. Alert the sender with a reason
         // so they know the attachment did not reach the other device.
@@ -2089,14 +2136,17 @@ export default function MessageThread({
 
       {/* Compose bar */}
       <View style={styles.composeBar}>
-        <Pressable
-          style={styles.attachButton}
-          onPress={handleAttach}
-          accessibilityRole="button"
-          accessibilityLabel="Attach a file"
-        >
-          <Feather name="plus" size={20} color={Colors.textMuted} />
-        </Pressable>
+        {/* Attach: only where media can actually be delivered (see mediaAllowed). */}
+        {mediaAllowed && (
+          <Pressable
+            style={styles.attachButton}
+            onPress={handleAttach}
+            accessibilityRole="button"
+            accessibilityLabel="Attach a file"
+          >
+            <Feather name="plus" size={20} color={Colors.textMuted} />
+          </Pressable>
+        )}
         <TextInput
           style={styles.input}
           value={draft}
@@ -2122,26 +2172,29 @@ export default function MessageThread({
             <Feather name="arrow-up" size={18} color={Colors.textInverse} />
           </Pressable>
         ) : (
-          // PTT button: hold to talk. onPressIn starts recording; onPressOut stops and sends.
-          <Pressable
-            style={[styles.pttButton, isPTTActive && styles.pttButtonActive]}
-            onPressIn={() => {
-              setIsPTTActive(true);
-              void startRecording();
-            }}
-            onPressOut={() => {
-              setIsPTTActive(false);
-              void stopRecording();
-            }}
-            accessibilityRole="button"
-            accessibilityLabel="Hold to talk"
-          >
-            <Feather
-              name="mic"
-              size={16}
-              color={isPTTActive ? Colors.danger : Colors.textMuted}
-            />
-          </Pressable>
+          // PTT button: hold to talk. Voice is media, so it appears only where
+          // media is allowed; otherwise the bar is just text + send.
+          mediaAllowed && (
+            <Pressable
+              style={[styles.pttButton, isPTTActive && styles.pttButtonActive]}
+              onPressIn={() => {
+                setIsPTTActive(true);
+                void startRecording();
+              }}
+              onPressOut={() => {
+                setIsPTTActive(false);
+                void stopRecording();
+              }}
+              accessibilityRole="button"
+              accessibilityLabel="Hold to talk"
+            >
+              <Feather
+                name="mic"
+                size={16}
+                color={isPTTActive ? Colors.danger : Colors.textMuted}
+              />
+            </Pressable>
+          )
         )}
       </View>
 

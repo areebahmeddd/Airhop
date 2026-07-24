@@ -1,58 +1,40 @@
 // MeshStatusBar component.
-// A slim contextual banner that surfaces the BLE mesh connectivity state.
-// Rendered below the header only when something is actionable: the radio is
-// off, or traffic has fallen back to Nostr.
+// A stack of slim contextual banners surfacing Mesh-tab state: a deliberate
+// pause (Away), hard blockers (Bluetooth off, permission), and calm notes
+// (location off, relaying via Nostr, Tor on). Shown only on the Mesh tab.
 //
-// "Connected" and "scanning" render nothing. The header peer count already
-// covers the first, and the radar view says "Scanning for nearby peers" in
-// its own empty state, so a banner repeating it on every tab was noise.
+// Several can be active at once (e.g. Bluetooth AND location off), so they
+// render one below the other, severity-first. Renders nothing when the list is
+// empty, so a healthy mesh with peers shows no chrome at all.
 
 import React from "react";
 import { StyleSheet, Text, View } from "react-native";
+import type { MeshBanner } from "../../store/mesh-state-store";
 import { FontSize, FontWeight, Spacing, useThemeColors } from "../theme";
 
-export type MeshState =
-  | "connected" // at least one peer in range
-  | "scanning" // active scan, no peers yet
-  | "offline" // BLE disabled or permission denied
-  | "nostr"; // internet fallback via Nostr (no BLE peers)
-
 interface Props {
-  state: MeshState;
-}
-
-// Only the states that actually render need an entry here.
-type BannerState = Exclude<MeshState, "connected" | "scanning">;
-
-function getConfig(
-  Colors: ReturnType<typeof useThemeColors>,
-): Record<BannerState, { label: string; bg: string; text: string }> {
-  return {
-    offline: {
-      label: "Bluetooth off, mesh unavailable",
-      bg: Colors.dangerDim,
-      text: Colors.danger,
-    },
-    nostr: {
-      label: "No local peers, relaying via Nostr",
-      bg: Colors.accentGhost,
-      text: Colors.textSecondary,
-    },
-  };
+  banners: MeshBanner[];
 }
 
 export default function MeshStatusBar({
-  state,
+  banners,
 }: Props): React.JSX.Element | null {
   const Colors = useThemeColors();
-  if (state === "connected" || state === "scanning") return null;
-
-  const cfg = getConfig(Colors)[state];
+  if (banners.length === 0) return null;
 
   return (
-    <View style={[styles.bar, { backgroundColor: cfg.bg }]}>
-      <View style={[styles.indicator, { backgroundColor: cfg.text }]} />
-      <Text style={[styles.label, { color: cfg.text }]}>{cfg.label}</Text>
+    <View>
+      {banners.map((banner) => {
+        const danger = banner.tone === "danger";
+        const bg = danger ? Colors.dangerDim : Colors.accentGhost;
+        const fg = danger ? Colors.danger : Colors.textSecondary;
+        return (
+          <View key={banner.key} style={[styles.bar, { backgroundColor: bg }]}>
+            <View style={[styles.indicator, { backgroundColor: fg }]} />
+            <Text style={[styles.label, { color: fg }]}>{banner.label}</Text>
+          </View>
+        );
+      })}
     </View>
   );
 }

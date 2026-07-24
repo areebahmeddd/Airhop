@@ -16,10 +16,6 @@ import {
   Text,
   View,
 } from "react-native";
-import {
-  isManualGeoChannel,
-  manualGeohashOf,
-} from "../../services/geohash-channel-service";
 import { useChatStore } from "../../store/chat-store";
 import Avatar from "../../ui/components/avatar";
 import {
@@ -29,6 +25,7 @@ import {
   Spacing,
   useThemeColors,
 } from "../../ui/theme";
+import { chatDisplayName } from "../../utils/chat-display-name";
 import {
   filterMessages,
   searchChats,
@@ -37,7 +34,6 @@ import {
   type MediaFilter,
   type MessageHit,
 } from "../../utils/chat-search";
-import { peerIDToUsername } from "../../utils/username";
 
 // The filter chips shown above search, one per content kind Airhop supports.
 const MEDIA_FILTERS: {
@@ -68,13 +64,6 @@ type ResultRow =
 interface ResultSection {
   title: string;
   data: ResultRow[];
-}
-
-function channelDisplayName(channel: string): string {
-  if (channel.startsWith("dm:")) return peerIDToUsername(channel.slice(3));
-  // A teleported cell is keyed geohash:<gh>; show it as its geohash.
-  if (isManualGeoChannel(channel)) return manualGeohashOf(channel) ?? channel;
-  return channel.replace(/^#/, "");
 }
 
 function formatTime(ms: number): string {
@@ -324,7 +313,7 @@ function MessageResultRow({
       style={styles.row}
       onPress={() => onPress(hit.channel, hit.messageId)}
       accessibilityRole="button"
-      accessibilityLabel={`${channelDisplayName(hit.channel)}, message from ${
+      accessibilityLabel={`${chatDisplayName(hit.channel)}, message from ${
         hit.isMine ? "you" : hit.senderNickname
       }: ${hit.snippet}`}
     >
@@ -338,7 +327,7 @@ function MessageResultRow({
       <View style={styles.messageBody}>
         <View style={styles.messageHead}>
           <Text style={styles.messageChannel} numberOfLines={1}>
-            {channelDisplayName(hit.channel)}
+            {chatDisplayName(hit.channel)}
           </Text>
           <Text style={styles.messageTime}>{formatTime(hit.timestampMs)}</Text>
         </View>
@@ -378,7 +367,7 @@ function MediaResultRow({
       style={styles.row}
       onPress={() => onPress(hit.channel, hit.messageId)}
       accessibilityRole="button"
-      accessibilityLabel={`${channelDisplayName(hit.channel)}, ${filter.label} from ${
+      accessibilityLabel={`${chatDisplayName(hit.channel)}, ${filter.label} from ${
         hit.isMine ? "you" : hit.senderNickname
       }`}
     >
@@ -395,7 +384,7 @@ function MediaResultRow({
       <View style={styles.messageBody}>
         <View style={styles.messageHead}>
           <Text style={styles.messageChannel} numberOfLines={1}>
-            {channelDisplayName(hit.channel)}
+            {chatDisplayName(hit.channel)}
           </Text>
           <Text style={styles.messageTime}>{formatTime(hit.timestampMs)}</Text>
         </View>
