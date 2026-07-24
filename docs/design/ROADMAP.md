@@ -215,7 +215,13 @@ The existing `Wallet` tab (`src/features/wallet/wallet-screen.tsx`) gets the pay
 
 No new features ship in this range. The focus is production bugs found after launch, race conditions in the BLE and crypto state machines, UI iteration from real user feedback, and extended cross-device battery and compatibility testing. The mesh backend gets battle-tested across as many device and OS combinations as possible before the codebase expands to new targets.
 
-**Milestone:** Zero open P0/P1 bugs. BLE state machine stable across Pixel, Samsung, and Xiaomi device classes. Ready to expand to new platforms.
+Alongside stabilization, v1.2.0 ships Airhop's **own embedded Tor binary for Android**, mirroring what `arti.xcframework` already gives iOS. Today Android Tor routing depends on the user installing Orbot (a third-party app) and running it in VPN mode; bundling an Arti-based Android library removes that external dependency so Android gets the same one-toggle, no-install Tor experience as iOS, with no reliance on any third-party app.
+
+- [ ] Bundle an Arti-based Android Tor library (JNI over the Rust `arti` core), exposing the same SOCKS5 endpoint contract as iOS
+- [ ] Route the Android Tor WebSocket through the embedded proxy (the JS Tor routing layer already exists and is platform-agnostic; only the native provider changes)
+- [ ] Keep Orbot detection as a fallback for users who prefer their own Tor, but no longer require it
+
+**Milestone:** Zero open P0/P1 bugs. BLE state machine stable across Pixel, Samsung, and Xiaomi device classes. Embedded Tor on both iOS and Android, no third-party app required. Ready to expand to new platforms.
 
 ### v1.3.0: Plugin Integrations
 

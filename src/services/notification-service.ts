@@ -16,6 +16,7 @@ import * as Haptics from "expo-haptics";
 import * as Notifications from "expo-notifications";
 import { Platform } from "react-native";
 import type { ChatMessage } from "../store/chat-store";
+import { channelLabel } from "../utils/chat-display-name";
 import {
   notificationContentFor,
   shouldHapticPing,
@@ -154,7 +155,10 @@ export async function handleInboundMessage(
     return;
   }
 
-  const { title, body } = notificationContentFor(msg);
+  const { title, body } = notificationContentFor(
+    msg,
+    channelLabel(msg.channel),
+  );
   try {
     await Notifications.scheduleNotificationAsync({
       identifier: channelToId(msg.channel),

@@ -51,6 +51,7 @@ import {
   KIND_PRESENCE,
   TAG_MESSAGE_ID,
 } from "../core/nostr/presence";
+import { useActivityStore } from "../store/activity-store";
 import { useChatStore } from "../store/chat-store";
 import { useNoticesStore } from "../store/notices-store";
 import { getCoarseLocation, type Coords } from "./location-service";
@@ -151,6 +152,11 @@ const GEO_DM_LOOKBACK_SECONDS = 24 * 60 * 60;
 // Matches bitchat's GeohashParticipantTracker activity cutoff (5 minutes) so
 // both apps show the same "who is here now" count.
 const PARTICIPANT_TTL_MS = 5 * 60 * 1000;
+
+// A bridged note only counts as "new" for the notification bell if it arrived
+// within this window, so a subscription's history replay does not flood it.
+// Mirrors NOTICE_BELL_WINDOW_MS in mesh-service (the BLE board path).
+const NOTICE_BELL_WINDOW_MS = 5 * 60 * 1000;
 
 // Nostr tag carrying the sender's chosen display name. Nostr events identify
 // the author only by pubkey, so without this every geohash message would show
@@ -420,15 +426,20 @@ export class GeohashChannelService {
     geohash: string,
     content: string,
     nickname: string,
-    expiresAtMs: number,
+    // A number bridges a mesh board post (NIP-40 expiry, fades with the post).
+    // `null` is a permanent, standalone note: no expiry tag, no mesh copy.
+    expiresAtMs: number | null,
     urgent: boolean,
   ): Promise<string | null> {
     const relays = this.relaysForGeohash(geohash);
     if (relays.length === 0) return null;
     const tags: string[][] = [[TAG_GEOHASH, geohash]];
     if (nickname.length > 0) tags.push([TAG_NICKNAME, nickname]);
-    // NIP-40: the note fades in step with the board post's expiry.
-    tags.push([TAG_EXPIRATION, String(Math.floor(expiresAtMs / 1000))]);
+    // NIP-40: a bridged note fades in step with the board post's expiry. A
+    // permanent note carries no expiration tag.
+    if (expiresAtMs !== null) {
+      tags.push([TAG_EXPIRATION, String(Math.floor(expiresAtMs / 1000))]);
+    }
     if (urgent) tags.push([TAG_TOPIC, "urgent"]);
     try {
       const event = finalizeEvent(
@@ -441,6 +452,21 @@ export class GeohashChannelService {
         this.identityFor(geohash).privKey,
       );
       await this.client.publish(event, relays);
+      // A permanent note has no mesh board post to render it locally, and our
+      // own bridged copy is filtered out on receive, so add it optimistically:
+      // the author sees their own note the moment it goes out.
+      if (expiresAtMs === null) {
+        useNoticesStore.getState().addNote({
+          id: event.id,
+          pubkey: event.pubkey,
+          content,
+          createdAtMs: Date.now(),
+          nickname: nickname.length > 0 ? nickname : undefined,
+          geohash,
+          expiresAtMs: undefined,
+          isUrgent: urgent,
+        });
+      }
       return event.id;
     } catch {
       return null;
@@ -751,13 +777,14 @@ export class GeohashChannelService {
     const isUrgent = event.tags.some(
       ([t, v]) => t === TAG_TOPIC && v === "urgent",
     );
+    // Clamp to now: a relay event may carry a future-dated created_at.
+    const createdAtMs =
+      Math.min(event.created_at, Math.floor(Date.now() / 1000)) * 1000;
     useNoticesStore.getState().addNote({
       id: event.id,
       pubkey: event.pubkey,
       content: event.content,
-      // Clamp to now: a relay event may carry a future-dated created_at.
-      createdAtMs:
-        Math.min(event.created_at, Math.floor(Date.now() / 1000)) * 1000,
+      createdAtMs,
       nickname,
       geohash,
       expiresAtMs:
@@ -766,6 +793,23 @@ export class GeohashChannelService {
           : undefined,
       isUrgent,
     });
+    // Log a live note on the bell + the room's board badge. Own notes are
+    // already filtered above; the recency gate skips replayed history.
+    if (Date.now() - createdAtMs <= NOTICE_BELL_WINDOW_MS) {
+      useActivityStore.getState().record({
+        id: event.id,
+        channel:
+          this.namedChannelForGeohash(geohash) ?? geohashChannel(geohash),
+        isDM: false,
+        senderID: event.pubkey,
+        senderNickname:
+          nickname !== undefined && nickname.length > 0 ? nickname : "Someone",
+        preview: `${isUrgent ? "Urgent notice · " : "Notice · "}${event.content}`,
+        timestampMs: createdAtMs,
+        kind: "notice",
+        geohash,
+      });
+    }
   }
 
   private unsubscribeChannel(channel: string): void {

@@ -110,7 +110,7 @@ export interface MeshBannerInputs {
 export function computeMeshBanners(inputs: MeshBannerInputs): MeshBanner[] {
   if (inputs.presenceStatus === "away") {
     return [
-      { key: "paused", label: "Mesh paused · you're Away", tone: "info" },
+      { key: "paused", label: "Mesh paused · You're away", tone: "info" },
     ];
   }
 

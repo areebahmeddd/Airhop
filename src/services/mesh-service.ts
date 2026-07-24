@@ -44,6 +44,7 @@ import {
 import {
   decodeBoardWire,
   encodeBoardWire,
+  isUrgent,
   newPostID,
   signBoardPost,
   signBoardTombstone,
@@ -134,6 +135,7 @@ import {
   type NostrSendFn,
   type RouterIdentity,
 } from "../core/router/message-router";
+import { useActivityStore } from "../store/activity-store";
 import { useBlockedStore } from "../store/blocked-store";
 import { useBoardStore } from "../store/board-store";
 import { useChatStore } from "../store/chat-store";
@@ -171,6 +173,12 @@ const DR_SEED_INFO = new TextEncoder().encode("airhop-dr-seed-v1");
 // Slow on purpose: it is a safety net behind the event-driven flush, not the
 // primary delivery path, so it stays cheap and never spams relays.
 const OUTBOX_SWEEP_INTERVAL_MS = 45_000;
+
+// A board notice only counts as "new" for the notification bell if it was
+// created within this window. It keeps a channel's history replay on subscribe,
+// and a gossip backfill of old-but-unexpired posts, from flooding the bell with
+// notices the user has effectively already had the chance to see.
+const NOTICE_BELL_WINDOW_MS = 5 * 60 * 1000;
 
 // Where a channel message actually went. `bleLinks === 0 && !nostr` means it
 // reached nobody. The UI must say so rather than render a normal sent bubble.
@@ -1731,7 +1739,75 @@ export class MeshService {
   private onBoardPost(packet: Packet): void {
     const wire = decodeBoardWire(packet.payload);
     if (wire === null || !verifyBoardWire(wire)) return;
-    useBoardStore.getState().ingest(wire);
+    const result = useBoardStore.getState().ingest(wire);
+    // Surface a genuinely new post from someone else on the notification bell
+    // (and, via the bell, the room's board-icon badge). "accepted" means it was
+    // not a duplicate or a rejected/expired post, so this fires once per notice.
+    if (wire.kind === "post" && result === "accepted") {
+      this.recordNoticeActivity(wire.post);
+    }
+  }
+
+  // The channel a notice belongs to, for a tap on its bell row. The mesh board
+  // (empty geohash) lives on #bluetooth; a cell maps to its named channel if the
+  // user has one, else the teleport channel form.
+  private channelForNoticeGeohash(geohash: string): string {
+    if (geohash.length === 0) return "#bluetooth";
+    return (
+      this.geoChannels?.namedChannelForGeohash(geohash) ??
+      geohashChannel(geohash)
+    );
+  }
+
+  // Log a board notice on the activity feed (the bell), unless it is our own or
+  // stale. The recency window keeps a fresh subscription's history replay (or a
+  // gossip backfill of old posts) from flooding the bell: only notices created
+  // in the last few minutes count as "new", matching how the mesh delivers a
+  // live post the instant it is broadcast.
+  private recordNoticeActivity(post: BoardPost): void {
+    if (
+      bytesToHex(post.authorSigningKey) ===
+      bytesToHex(this.identity.signingPubKey)
+    ) {
+      return;
+    }
+    if (Date.now() - post.createdAt > NOTICE_BELL_WINDOW_MS) return;
+    const nickname =
+      post.authorNickname.length > 0 ? post.authorNickname : "Someone";
+    useActivityStore.getState().record({
+      id: bytesToHex(post.postID),
+      channel: this.channelForNoticeGeohash(post.geohash),
+      isDM: false,
+      senderID: bytesToHex(post.authorSigningKey),
+      senderNickname: nickname,
+      preview: `${isUrgent(post) ? "Urgent notice · " : "Notice · "}${post.content}`,
+      timestampMs: post.createdAt,
+      kind: "notice",
+      geohash: post.geohash,
+    });
+  }
+
+  // Post a permanent, standalone Nostr note (bitchat's geo "∞" option): a
+  // location note with NO NIP-40 expiry and NO mesh board copy. It reaches
+  // online readers of the cell only (there is no mesh board post to flood), and
+  // is added optimistically to the local notices so the author sees it. Returns
+  // false when the content is empty/oversized or no relay carried it.
+  async createPermanentNote(
+    content: string,
+    geohash: string,
+  ): Promise<boolean> {
+    const trimmed = content.trim();
+    if (trimmed.length === 0 || geohash.length === 0) return false;
+    if (new TextEncoder().encode(trimmed).length > 512) return false;
+    if (this.geoChannels === null) return false;
+    const id = await this.geoChannels.publishBoardNote(
+      geohash,
+      trimmed,
+      clampNickname(this.nickname),
+      null,
+      false,
+    );
+    return id !== null;
   }
 
   // Create, sign, and broadcast a board post. Returns false when the content is

@@ -36,9 +36,15 @@ export function messagePreview(msg: ChatMessage): string {
 }
 
 // Title/body for a message notification. DMs read as "<sender>: <preview>";
-// channels lead with the channel name and name the sender inside the body, so a
-// busy channel is still attributable at a glance.
-export function notificationContentFor(msg: ChatMessage): {
+// channels lead with the room name and name the sender inside the body, so a
+// busy channel is still attributable at a glance. `channelLabel` is the resolved
+// display name for the channel (group name, "#<geohash>", "#city"); the caller
+// passes it because resolving it needs store access, and this file stays pure.
+// It falls back to the raw channel key so the title is never blank.
+export function notificationContentFor(
+  msg: ChatMessage,
+  channelLabel?: string,
+): {
   title: string;
   body: string;
 } {
@@ -46,7 +52,10 @@ export function notificationContentFor(msg: ChatMessage): {
   if (isDirectMessage(msg.channel)) {
     return { title: msg.senderNickname, body: preview };
   }
-  return { title: msg.channel, body: `${msg.senderNickname}: ${preview}` };
+  return {
+    title: channelLabel ?? msg.channel,
+    body: `${msg.senderNickname}: ${preview}`,
+  };
 }
 
 // A system-tray notification is raised only for an inbound message that arrives

@@ -38,10 +38,13 @@ import {
 } from "../../ui/theme";
 
 const CONTENT_MAX = 512;
+// days: 0 is the permanent (∞) option, offered only in a location cell (it is a
+// standalone Nostr note with no expiry; the mesh board always expires <= 7 days).
 const EXPIRY_OPTIONS = [
   { label: "1 day", days: 1 },
   { label: "3 days", days: 3 },
   { label: "7 days", days: 7 },
+  { label: "∞", days: 0 },
 ] as const;
 
 // A board post's Nostr bridge arrives as a same-content note signed by an
@@ -156,6 +159,12 @@ export function NoticesSheet({ visible, onClose, channel }: Props) {
   const [urgent, setUrgent] = useState(false);
   const [expiryDays, setExpiryDays] = useState(1);
 
+  // The permanent (∞ = 0) option only exists in a location cell. If it is picked
+  // and the user then switches to the mesh board, treat it as 1 day so the chips
+  // never show an impossible selection and the mesh post gets a valid expiry.
+  const effectiveExpiryDays =
+    scope !== "here" && expiryDays === 0 ? 1 : expiryDays;
+
   // Re-render on a slow tick so relative times and fade labels stay fresh.
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
@@ -182,6 +191,19 @@ export function NoticesSheet({ visible, onClose, channel }: Props) {
 
   function handlePost() {
     if (!canPost) return;
+    // Permanent (∞) is a location-only, Nostr-only note: no mesh board post and
+    // no NIP-40 expiry, matching bitchat's geo "∞" option. It needs a relay, so
+    // it resolves async and only clears the draft once it is actually published.
+    if (
+      scope === "here" &&
+      effectiveExpiryDays === 0 &&
+      scopeGeohash.length > 0
+    ) {
+      void mesh?.createPermanentNote(draft, scopeGeohash).then((ok) => {
+        if (ok) setDraft("");
+      });
+      return;
+    }
     // Urgency is a mesh-board concept in bitchat: a location cell can be huge, so
     // an "urgent" geohash notice would let anyone shout across a whole city. Only
     // the local mesh board can carry urgency, so we drop the flag off-mesh even
@@ -190,7 +212,7 @@ export function NoticesSheet({ visible, onClose, channel }: Props) {
       draft,
       scopeGeohash,
       scope === "mesh" && urgent,
-      expiryDays,
+      effectiveExpiryDays,
     );
     if (ok === true) {
       setDraft("");
@@ -310,12 +332,14 @@ export function NoticesSheet({ visible, onClose, channel }: Props) {
               )}
 
               <View style={styles.expiryChips}>
-                {EXPIRY_OPTIONS.map((opt) => (
+                {EXPIRY_OPTIONS.filter(
+                  (opt) => opt.days !== 0 || scope === "here",
+                ).map((opt) => (
                   <Pressable
                     key={opt.days}
                     style={[
                       styles.chip,
-                      expiryDays === opt.days && styles.chipActive,
+                      effectiveExpiryDays === opt.days && styles.chipActive,
                     ]}
                     onPress={() => setExpiryDays(opt.days)}
                     accessibilityRole="button"
@@ -323,7 +347,8 @@ export function NoticesSheet({ visible, onClose, channel }: Props) {
                     <Text
                       style={[
                         styles.chipText,
-                        expiryDays === opt.days && styles.chipTextActive,
+                        effectiveExpiryDays === opt.days &&
+                          styles.chipTextActive,
                       ]}
                     >
                       {opt.label}

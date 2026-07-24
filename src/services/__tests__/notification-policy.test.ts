@@ -96,6 +96,22 @@ describe("notificationContentFor", () => {
     ).toEqual({ title: "#city", body: "alice: hi all" });
   });
 
+  it("uses the resolved channel label for the title when provided", () => {
+    expect(
+      notificationContentFor(
+        msg({ channel: "group:abc123", text: "meet up" }),
+        "Weekend Crew",
+      ),
+    ).toEqual({ title: "Weekend Crew", body: "alice: meet up" });
+  });
+
+  it("falls back to the raw channel key when no label is given", () => {
+    expect(
+      notificationContentFor(msg({ channel: "group:abc123", text: "hi" }))
+        .title,
+    ).toBe("group:abc123");
+  });
+
   it("summarises an attachment when there is no text", () => {
     const content = notificationContentFor(
       msg({ text: "", attachment: { type: "image", uri: "x" } }),

@@ -1,10 +1,10 @@
 // Notification center: the history behind the bell icon.
 //
-// A single running list of inbound activity across DMs and channels, the way
-// Instagram's activity tab or a chat app's notification history reads: avatar,
-// who it was from, a one-line preview, and when. Tap a row to jump to that
-// conversation. The data comes from activity-store, which logs one entry per
-// inbound message.
+// A single running list of inbound activity across DMs, channels and board
+// notices, the way Instagram's activity tab or a chat app's notification history
+// reads: avatar, who it was from, which room, a one-line preview, and when. Tap
+// a row to jump straight to that conversation or channel. The data comes from
+// activity-store, which logs one entry per inbound message or notice.
 
 import { Feather } from "@expo/vector-icons";
 import React, { useMemo } from "react";
@@ -24,6 +24,7 @@ import {
 } from "../../store/activity-store";
 import Avatar from "../../ui/components/avatar";
 import { FontSize, FontWeight, Spacing, useThemeColors } from "../../ui/theme";
+import { channelLabel } from "../../utils/chat-display-name";
 import { resolveDisplayName } from "../../utils/display-name";
 
 interface Props {
@@ -98,8 +99,8 @@ export default function NotificationCenter({
               />
               <Text style={styles.emptyTitle}>No notifications yet</Text>
               <Text style={styles.emptySubtitle}>
-                Messages from your channels and{"\n"}direct chats will show up
-                here.
+                Messages, mentions, and notices from{"\n"}your channels and
+                chats show up here.
               </Text>
             </View>
           }
@@ -118,11 +119,17 @@ function Row({
   styles: ReturnType<typeof createStyles>;
   onPress: () => void;
 }): React.JSX.Element {
-  // DMs read best under the peer's resolved contact name; a channel message
-  // keeps the sender's nickname and tags which channel it came from.
+  // DMs read best under the peer's resolved contact name; a channel message or
+  // notice keeps the sender's nickname and tags which room it came from.
   const name = entry.isDM
     ? resolveDisplayName(entry.senderID)
     : entry.senderNickname;
+  const room = entry.isDM ? "" : channelLabel(entry.channel);
+  const a11y = entry.isDM
+    ? `Open conversation with ${name}`
+    : entry.kind === "notice"
+      ? `Open notices in ${room}`
+      : `Open ${room}`;
 
   return (
     <Animated.View
@@ -133,16 +140,14 @@ function Row({
         style={[styles.row, !entry.seen && styles.rowUnseen]}
         onPress={onPress}
         accessibilityRole="button"
-        accessibilityLabel={`Open conversation with ${name}`}
+        accessibilityLabel={a11y}
       >
         <Avatar username={name} peerID={entry.senderID} size={44} />
         <View style={styles.rowContent}>
           <View style={styles.rowTop}>
             <Text style={styles.name} numberOfLines={1}>
               {name}
-              {!entry.isDM && (
-                <Text style={styles.channelTag}> in {entry.channel}</Text>
-              )}
+              {!entry.isDM && <Text style={styles.channelTag}> in {room}</Text>}
             </Text>
             <Text style={styles.time}>{formatTime(entry.timestampMs)}</Text>
           </View>

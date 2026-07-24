@@ -418,7 +418,7 @@ export default function RadarView({
             {peers.length > 0
               ? `${peers.length} peer${peers.length !== 1 ? "s" : ""} in range`
               : away
-                ? "Mesh paused \u00b7 you're Away"
+                ? "Mesh paused \u00b7 You're away"
                 : "Scanning for nearby peers\u2026"}
           </Text>
           <Text style={styles.hintText}>

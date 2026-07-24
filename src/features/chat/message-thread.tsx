@@ -60,6 +60,7 @@ import {
 } from "../../services/geohash-channel-service";
 import { hasLocationPermission } from "../../services/location-service";
 import { getMeshService } from "../../services/mesh-service";
+import { useActivityStore } from "../../store/activity-store";
 import { showAlert } from "../../store/alert-store";
 import {
   useChatStore,
@@ -714,6 +715,26 @@ export default function MessageThread({
   const geoPlaceName = usePlaceNamesStore((s) =>
     channelGeohash !== null ? s.names[channelGeohash] : undefined,
   );
+
+  // Unseen board notices for this room, driving a dot on the header's notices
+  // icon. A non-geo public channel (#bluetooth) uses the mesh board (""); a geo
+  // channel uses its own cell. Opening the sheet clears both, since it shows the
+  // "Here" and "Mesh" tabs together.
+  const noticeGeohash = channelGeohash ?? "";
+  const unseenNotices = useActivityStore((s) =>
+    s.entries.reduce(
+      (n, e) =>
+        e.kind === "notice" && (e.geohash ?? "") === noticeGeohash && !e.seen
+          ? n + 1
+          : n,
+      0,
+    ),
+  );
+  function openNotices(): void {
+    setShowNotices(true);
+    useActivityStore.getState().markNoticesSeen(noticeGeohash);
+    if (noticeGeohash !== "") useActivityStore.getState().markNoticesSeen("");
+  }
   useEffect(() => {
     if (channelGeohash !== null) {
       usePlaceNamesStore.getState().resolve(channelGeohash);
@@ -1874,16 +1895,21 @@ export default function MessageThread({
                 />
               </Pressable>
               <Pressable
-                onPress={() => setShowNotices(true)}
+                onPress={openNotices}
                 hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                 accessibilityRole="button"
-                accessibilityLabel="Notices for this channel"
+                accessibilityLabel={
+                  unseenNotices > 0
+                    ? `Notices for this channel, ${String(unseenNotices)} new`
+                    : "Notices for this channel"
+                }
               >
                 <MaterialCommunityIcons
                   name="bulletin-board"
                   size={18}
                   color={Colors.textSecondary}
                 />
+                {unseenNotices > 0 && <View style={styles.noticeDot} />}
               </Pressable>
             </>
           )}
@@ -3430,6 +3456,18 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       height: 8,
       borderRadius: 4,
       backgroundColor: Colors.online,
+    },
+    // Unseen-notices dot on the header's board icon.
+    noticeDot: {
+      position: "absolute",
+      top: -2,
+      right: -2,
+      width: 8,
+      height: 8,
+      borderRadius: 4,
+      backgroundColor: Colors.accent,
+      borderWidth: 1,
+      borderColor: Colors.bg,
     },
     dmInfoStatusText: {
       fontSize: FontSize.sm,

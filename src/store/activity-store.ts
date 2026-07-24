@@ -26,6 +26,12 @@ export interface ActivityEntry {
   timestampMs: number;
   // False until the user has opened the bell screen and seen it.
   seen: boolean;
+  // "message" (default) or "notice" (a board/bulletin post). Lets the bell and
+  // the per-room board-icon badge tell the two apart.
+  kind?: "message" | "notice";
+  // For notices only: the board's geohash ("" = the mesh-local board). Used to
+  // badge the right room's board icon and to mark a room's notices seen.
+  geohash?: string;
 }
 
 // Newest entries kept; older ones fall off. Enough to scroll a meaningful
@@ -37,7 +43,12 @@ interface ActivityState {
   entries: ActivityEntry[];
   record: (entry: Omit<ActivityEntry, "seen">) => void;
   markAllSeen: () => void;
+  // Mark every notice for one board (geohash, "" = mesh) as seen. Called when
+  // the user opens that room's notices sheet, so its board-icon badge clears.
+  markNoticesSeen: (geohash: string) => void;
   unseenCount: () => number;
+  // Count of unseen notices for one board, for the per-room board-icon badge.
+  unseenNoticesFor: (geohash: string) => number;
   clearAll: () => void;
 }
 
@@ -73,8 +84,36 @@ export const useActivityStore = create<ActivityState>()(
         });
       },
 
+      markNoticesSeen(geohash) {
+        set((state) => {
+          let changed = false;
+          const entries = state.entries.map((e) => {
+            if (
+              e.kind === "notice" &&
+              (e.geohash ?? "") === geohash &&
+              !e.seen
+            ) {
+              changed = true;
+              return { ...e, seen: true };
+            }
+            return e;
+          });
+          return changed ? { entries } : state;
+        });
+      },
+
       unseenCount() {
         return get().entries.reduce((n, e) => (e.seen ? n : n + 1), 0);
+      },
+
+      unseenNoticesFor(geohash) {
+        return get().entries.reduce(
+          (n, e) =>
+            e.kind === "notice" && (e.geohash ?? "") === geohash && !e.seen
+              ? n + 1
+              : n,
+          0,
+        );
       },
 
       clearAll() {
