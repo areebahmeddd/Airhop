@@ -62,9 +62,25 @@ function createMMKV({ id = "default" } = {}) {
   return instanceCache.get(id);
 }
 
+// Mirrors the real module's instance deletion (used by the panic wipe for the
+// encrypted wallet store, which cannot be reopened without its key).
+function deleteMMKV(id) {
+  return instanceCache.delete(id);
+}
+
+function existsMMKV(id) {
+  return instanceCache.has(id);
+}
+
 // Allow tests to reset all instance state between runs.
 function __resetAll() {
   instanceCache.clear();
 }
 
-module.exports = { createMMKV, __resetAll, __mockClearAll: clearAllSpy };
+module.exports = {
+  createMMKV,
+  deleteMMKV,
+  existsMMKV,
+  __resetAll,
+  __mockClearAll: clearAllSpy,
+};

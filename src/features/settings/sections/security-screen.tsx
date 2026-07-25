@@ -5,11 +5,9 @@ import Feather from "@expo/vector-icons/Feather";
 import React, { useState } from "react";
 import {
   Linking,
-  Modal,
   Platform,
   Pressable,
   ScrollView,
-  StyleSheet,
   Text,
   View,
 } from "react-native";
@@ -17,6 +15,7 @@ import { setTorRouting } from "../../../core/nostr/tor-routing";
 import { showAlert } from "../../../store/alert-store";
 import { useBlockedStore } from "../../../store/blocked-store";
 import { useSettingsStore } from "../../../store/settings-store";
+import BottomSheet from "../../../ui/components/bottom-sheet";
 import { useThemeColors } from "../../../ui/theme";
 import { resolveDisplayName } from "../../../utils/display-name";
 import {
@@ -40,6 +39,12 @@ export default function SecurityScreen({ onBack }: Props): React.JSX.Element {
   const torEnabled = useSettingsStore((s) => s.torEnabled);
   const gatewayEnabled = useSettingsStore((s) => s.gatewayEnabled);
   const setGatewayEnabled = useSettingsStore((s) => s.setGatewayEnabled);
+  const allowMintOverClearnet = useSettingsStore(
+    (s) => s.allowMintOverClearnet,
+  );
+  const setAllowMintOverClearnet = useSettingsStore(
+    (s) => s.setAllowMintOverClearnet,
+  );
   const [torStarting, setTorStarting] = useState(false);
   const [showOrbotModal, setShowOrbotModal] = useState(false);
   // Subscribe to the array itself (not the isBlocked function, whose identity
@@ -132,6 +137,29 @@ export default function SecurityScreen({ onBack }: Props): React.JSX.Element {
                 />
               }
             />
+            {/* Only meaningful on iOS. Arti is a per-socket SOCKS shim that we
+                wire into the Nostr WebSocket, so a Cashu mint request (plain
+                fetch) would bypass Tor entirely and hand the mint this device's
+                IP alongside the proofs being swapped. Rather than leak
+                silently, mint calls are refused while Tor is on unless the user
+                opts in here. Android needs no such switch: Orbot's VPN captures
+                every socket, so mint traffic is already covered. */}
+            {Platform.OS === "ios" && torEnabled && (
+              <>
+                <GroupDivider />
+                <SettingRow
+                  icon="alert-triangle"
+                  label="Allow mint traffic over clear net"
+                  description="Tor on iOS only covers Nostr. Leave off to block mint requests; ecash over the mesh keeps working either way."
+                  control={
+                    <SettingSwitch
+                      value={allowMintOverClearnet}
+                      onValueChange={setAllowMintOverClearnet}
+                    />
+                  }
+                />
+              </>
+            )}
             <GroupDivider />
             <SettingRow
               icon="radio"
@@ -208,48 +236,38 @@ export default function SecurityScreen({ onBack }: Props): React.JSX.Element {
       </ScrollView>
 
       {/* Orbot modal: bottom sheet shown when enabling Tor on Android */}
-      <Modal
+      <BottomSheet
         visible={showOrbotModal}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setShowOrbotModal(false)}
+        onClose={() => setShowOrbotModal(false)}
+        sheetStyle={styles.sheet}
       >
-        <View style={styles.sheetOverlay}>
-          <Pressable
-            style={StyleSheet.absoluteFill}
-            onPress={() => setShowOrbotModal(false)}
-          />
-          <View style={styles.sheet}>
-            <View style={styles.sheetHandle} />
-            <View style={styles.sheetIconWrap}>
-              <Feather name="globe" size={22} color={Colors.textSecondary} />
-            </View>
-            <Text style={styles.sheetTitle}>Tor on Android</Text>
-            <Text style={styles.sheetSubtitle}>
-              Airhop routes Tor traffic through Orbot. Install and enable Orbot
-              from the Play Store, then turn this on.
-            </Text>
-            <View style={styles.sheetActions}>
-              <Pressable
-                style={styles.sheetBtnPrimary}
-                onPress={handleGetOrbot}
-                accessibilityRole="button"
-                accessibilityLabel="Get Orbot"
-              >
-                <Text style={styles.sheetBtnTextPrimary}>Get Orbot</Text>
-              </Pressable>
-              <Pressable
-                style={styles.sheetBtn}
-                onPress={() => setShowOrbotModal(false)}
-                accessibilityRole="button"
-                accessibilityLabel="Later"
-              >
-                <Text style={styles.sheetBtnText}>Later</Text>
-              </Pressable>
-            </View>
-          </View>
+        <View style={styles.sheetIconWrap}>
+          <Feather name="globe" size={22} color={Colors.textSecondary} />
         </View>
-      </Modal>
+        <Text style={styles.sheetTitle}>Tor on Android</Text>
+        <Text style={styles.sheetSubtitle}>
+          Airhop routes Tor traffic through Orbot. Install and enable Orbot from
+          the Play Store, then turn this on.
+        </Text>
+        <View style={styles.sheetActions}>
+          <Pressable
+            style={styles.sheetBtnPrimary}
+            onPress={handleGetOrbot}
+            accessibilityRole="button"
+            accessibilityLabel="Get Orbot"
+          >
+            <Text style={styles.sheetBtnTextPrimary}>Get Orbot</Text>
+          </Pressable>
+          <Pressable
+            style={styles.sheetBtn}
+            onPress={() => setShowOrbotModal(false)}
+            accessibilityRole="button"
+            accessibilityLabel="Later"
+          >
+            <Text style={styles.sheetBtnText}>Later</Text>
+          </Pressable>
+        </View>
+      </BottomSheet>
     </View>
   );
 }

@@ -5,6 +5,10 @@
 // Imports come first in source; Babel hoists jest.mock() calls above them.
 import { panicWipe as identityPanicWipe } from "../../core/crypto/identity";
 import { clearAttachmentCache } from "../../services/file-transfer-service";
+import {
+  LEGACY_WALLET_STORAGE_ID,
+  WALLET_STORAGE_ID,
+} from "../../store/wallet-store";
 import { MMKV_STORE_IDS, panicWipe } from "../panic-wipe";
 
 // identity.panicWipe wipes the Keychain/Keystore; mock it out in tests.
@@ -47,18 +51,25 @@ jest.mock("react-native-mmkv", () => {
       if (!instances.has(id)) instances.set(id, new MockMMKV());
       return instances.get(id)!;
     },
+    // The encrypted wallet store is removed with deleteMMKV, not clearAll, so
+    // the mock has to expose it for the wipe to be assertable.
+    deleteMMKV: jest.fn(() => true),
     __mockClearAll: clearAll,
   };
 });
 
 const mockClearKeys = identityPanicWipe as jest.Mock;
-const mockClearAll = (
-  jest.requireMock("react-native-mmkv") as { __mockClearAll: jest.Mock }
-).__mockClearAll;
+const mmkvMock = jest.requireMock("react-native-mmkv") as {
+  __mockClearAll: jest.Mock;
+  deleteMMKV: jest.Mock;
+};
+const mockClearAll = mmkvMock.__mockClearAll;
+const deleteMMKV = mmkvMock.deleteMMKV;
 
 beforeEach(() => {
   mockClearKeys.mockClear();
   mockClearAll.mockClear();
+  deleteMMKV.mockClear();
   (clearAttachmentCache as jest.Mock).mockClear();
 });
 
@@ -106,10 +117,9 @@ describe("panicWipe", () => {
 
   test("wipes every sensitive persisted store, including the activity feed", () => {
     // Message previews and sender names live in the activity feed, so it must
-    // be part of the wipe alongside chats, wallet, contacts, blocks and outbox.
+    // be part of the wipe alongside chats, contacts, blocks and outbox.
     for (const id of [
       "chat-store",
-      "wallet-store",
       "blocked-store",
       "outbox-store",
       "contacts-store",
@@ -118,5 +128,19 @@ describe("panicWipe", () => {
     ]) {
       expect(MMKV_STORE_IDS).toContain(id);
     }
+  });
+
+  test("deletes the encrypted wallet store rather than clearing it", async () => {
+    // The wallet file is AES-256 encrypted, so reopening it without the key to
+    // call clearAll() is unreliable. It is removed with deleteMMKV instead, and
+    // both the current id and the pre-encryption one are covered so an old
+    // install's plaintext proofs go too.
+    await panicWipe();
+    expect(deleteMMKV).toHaveBeenCalledWith(WALLET_STORAGE_ID);
+    expect(deleteMMKV).toHaveBeenCalledWith(LEGACY_WALLET_STORAGE_ID);
+    // It must never appear in the plain clearAll list, or the wipe would depend
+    // on being able to decrypt what it is trying to destroy.
+    expect(MMKV_STORE_IDS).not.toContain(WALLET_STORAGE_ID);
+    expect(MMKV_STORE_IDS).not.toContain(LEGACY_WALLET_STORAGE_ID);
   });
 });

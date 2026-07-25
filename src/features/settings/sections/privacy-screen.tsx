@@ -32,14 +32,14 @@ const SECTIONS: LegalSection[] = [
       {
         bullets: [
           "**Identity keys.** An Ed25519 signing key and a Noise static key are generated locally on first launch and stored in your device's secure storage (iOS Keychain or Android Keystore). A Nostr key, a separate identity for each location cell you use, and one-time prekeys are all derived from that signing key rather than stored separately. Your public keys are shared with peers you communicate with. **Private keys never leave your device.**",
-          "**Nickname and preferences.** Your chosen display name and app settings are stored locally.",
+          "**Display name and preferences.** Your generated display name and app settings are stored locally.",
           "**Message history.** Conversations are stored locally on your device and are never sent to us. They are protected by the operating system's app sandbox and whole-device encryption, not by a separate app-level cipher, so a person with access to an unlocked device can read them. Delete a conversation at any time, or wipe everything instantly with panic wipe.",
           "**Private group state.** Group names, member lists, and the current group key are stored locally so you can keep reading the group. They are removed by panic wipe or by removing the app.",
           "**Bulletin board notices.** Signed public notices, and the deletion markers that retract them, persist until the author's chosen expiry, at most seven days. These are public to the mesh or area they were posted to, not private messages.",
           "**Media attachments.** Photos, videos, and voice notes you send or receive are written to the app's cache so they stay viewable. They are deleted by panic wipe, by clearing the cache in settings, or by removing the app.",
           "**Queued outgoing messages.** A private message that has not yet been delivered may remain in an encrypted local queue. It is **dropped after 24 hours** if unacknowledged.",
           "**Courier envelopes.** If your device acts as a mesh courier for another user, it may hold an opaque end-to-end encrypted envelope for up to 24 hours. **The courier cannot read the contents.**",
-          "**Cashu tokens.** Ecash tokens are stored locally and transferred directly between devices. No payment backend is involved.",
+          "**Ecash wallet.** Cashu tokens are bearer instruments, so they are kept in a separate file encrypted with AES-256 under a key held in your device's secure storage. The same file holds the mints you added, their public keys, and your transaction history (amounts, timestamps, and the mint involved). If a recovery phrase is set up, the twelve words live in secure storage alongside your identity keys, never in the wallet file. **No payment backend is involved and none of this is transmitted to us.**",
         ],
       },
     ],
@@ -50,7 +50,7 @@ const SECTIONS: LegalSection[] = [
       "When the app is running, nearby mesh devices can receive:",
       {
         bullets: [
-          "Your chosen nickname and public identity keys.",
+          "Your display name, which the app generates from your public key, and your public identity keys.",
           "Messages you send to public channels or directly to another peer.",
           "Public notices you post to the bulletin board, which stay readable until they expire.",
           "A batch of single-use public keys, so someone can leave you a protected message while you are offline. These contain no private information.",
@@ -91,6 +91,22 @@ const SECTIONS: LegalSection[] = [
     ],
   },
   {
+    heading: "Ecash payments (optional)",
+    paragraphs: [
+      "Payments are off until you add a mint. Sending and receiving ecash over Bluetooth involves no server, no relay, and no mint: the two devices do it themselves, and nothing about the payment leaves them.",
+      "Talking to a mint is different, and only happens when you deposit, withdraw, refresh, or claim a token while online.",
+      {
+        bullets: [
+          "**What a mint can see.** Your IP address, the amounts you deposit and withdraw, and when. Mints are third parties whose retention and privacy practices are outside this project's control.",
+          "**What a mint cannot see.** Who you are, who you paid, or which coins you deposited became which coins you spent. Cashu signs tokens blindly, so that link is severed by the maths rather than by policy.",
+          "**Tor.** On Android, Orbot covers mint traffic along with everything else. On iOS, Tor only wraps Nostr connections, so **mint requests are blocked while Tor is on** unless you opt in under Privacy & Security. Mesh payments are unaffected either way.",
+          "**Nutzaps are public.** A NIP-61 nutzap is an unencrypted Nostr event. The ecash is locked to the recipient so nobody else can spend it, but relays and observers can see that one public key paid another, and the amount. The encrypted-message fallback does not have this property.",
+          "**Recovery phrase.** Optional and off by default. It is stored only in your device's secure storage, is never transmitted, and is never shown to a mint. Anyone who obtains it can spend your balance.",
+        ],
+      },
+    ],
+  },
+  {
     heading: "Internet gateway (optional)",
     paragraphs: [
       "A device with the gateway setting enabled relays location-channel messages on behalf of nearby devices that have no internet connection. The relayed messages are already public to that channel and are signed by their original author, so a gateway cannot read private content or alter what it carries. Enabling it uses your own data connection and battery. Internet gateway is off by default.",
@@ -112,6 +128,7 @@ const SECTIONS: LegalSection[] = [
           "**Private groups.** Group messages use ChaCha20-Poly1305 under a shared group key. The member list is signed by the group's creator with Ed25519.",
           "**Public notices.** Bulletin-board posts are Ed25519-signed so their author cannot be forged. They are deliberately public, not confidential.",
           "**Nostr events.** secp256k1 Schnorr signatures, with private messages sealed using key agreement, HKDF-SHA256, and XChaCha20-Poly1305.",
+          "**Ecash.** Cashu blind signatures, which stop a mint linking issuance to redemption, plus DLEQ proofs that let your device verify a token was genuinely signed by its mint with no network connection.",
           "**Implementation.** All cryptographic operations use the [@noble](https://github.com/paulmillr/noble-curves) library suite, which has been independently audited by Cure53.",
         ],
       },
@@ -127,6 +144,7 @@ const SECTIONS: LegalSection[] = [
           "**Courier envelopes carried for others:** until handed over, or 24 hours.",
           "**Public bulletin-board notices:** until the author's chosen expiry, at most seven days.",
           "**Conversations, groups, contacts, keys, and media:** until you delete them, run a panic wipe, or remove the app.",
+          "**Wallet transaction history:** the most recent 500 entries, until you run a panic wipe or remove the app.",
           "**Anything sent to a Nostr relay:** according to that relay operator's own policy, which is outside our control.",
         ],
       },
@@ -139,6 +157,7 @@ const SECTIONS: LegalSection[] = [
         bullets: [
           "**Panic wipe.** Instantly erase all local keys, messages, queued mail, and app data from the Profile screen.",
           "**Feature controls.** The Nostr bridge, Tor routing, location channels, and the internet gateway can each be disabled in settings. Anything already published to a relay cannot be recalled.",
+          "**Wallet.** Remove a mint at any time from the Wallet tab. Removing one deletes the coins held there from this device, so withdraw or send them first. A panic wipe destroys the wallet file and its encryption key together.",
           "**System permissions.** Bluetooth, location, microphone, camera, photo library, and notification access can each be revoked in your device settings at any time. Camera access is used only to scan a contact's QR code.",
         ],
       },
@@ -168,7 +187,7 @@ export default function PrivacyScreen({ onBack }: Props): React.JSX.Element {
   return (
     <LegalDocScreen
       title="Privacy Policy"
-      lastUpdated="September 01, 2026"
+      lastUpdated="August 01, 2026"
       sections={SECTIONS}
       onBack={onBack}
     />

@@ -1,23 +1,38 @@
-// Cashu ecash: token detection, embedding, and offline proof validation.
+// Cashu ecash: token detection, decoding, offline verification, and selection.
 //
 // Cashu tokens are bearer instruments: whoever holds the string owns the value.
-// Airhop embeds tokens in message text and detects them on receive. No network
-// call is needed to transfer value. Redemption requires internet access to the
-// mint (not handled here; that is the user's wallet responsibility).
+// Airhop embeds tokens in message text and detects them on receive, so no
+// network call is needed to transfer value. Everything in this module is pure
+// and offline; anything that talks to a mint lives in
+// `src/services/wallet-service.ts`.
 //
-// Supported token formats (per NUT-00):
-//   cashuA<base64url>  - V3 token (JSON, human-readable)
-//   cashuB<base64url>  - V4 token (CBOR, compact)
-//   cashu:<token>      - URI form
-//   cashu://<token>    - URI form (alternative)
+// Supported token formats (NUT-00):
+//   cashuA<base64url>  V3 token (JSON, legacy)
+//   cashuB<base64url>  V4 token (CBOR, compact) - what we emit
+//   cashu:<token>      URI form
+//   cashu://<token>    URI form (alternative)
 //
-// DLEQ proof verification (hasValidDleq) runs offline and is performed on every
-// received proof to catch malformed/forged tokens before displaying them.
+// Detection is deliberately identical to bitchat's
+// `MessageFormattingEngine.Patterns.cashu`, down to the character class and the
+// 40-character minimum body. Both apps read the same messages off the same
+// mesh, so a string that renders as a payment chip on one must render as a
+// payment chip on the other; being more permissive here would show a card where
+// bitchat shows raw text.
+//
+// What "verification" means offline
+// ---------------------------------
+// `verifyTokenOffline` runs NUT-12 DLEQ checks against the mint's cached public
+// keys. A passing DLEQ proves the mint really signed this proof, so it catches
+// forged and tampered tokens. It cannot prove the proof is *unspent* - only the
+// mint knows that, and only over the network. Offline-received proofs are
+// therefore stored as unverified and redeemed at the first opportunity.
 
 import {
   getDecodedToken,
   getEncodedToken,
-  getTokenMetadata,
+  KeyChain,
+  verifyDleqIfPresent,
+  type KeyChainCache,
   type Proof,
   type ProofLike,
   type Token,
@@ -26,282 +41,503 @@ import type { StoredProof } from "../../store/wallet-store";
 
 // ---- Constants --------------------------------------------------------------
 
-// Maximum token string length before we stop processing (abuse prevention).
+// Upper bound on an accepted token string. Real tokens are a few KB.
 const MAX_TOKEN_LENGTH = 60_000;
 
-// Minimum token prefix we check for.
-const TOKEN_PREFIXES = ["cashuA", "cashuB", "cashu://", "cashu:"];
+// Stop scanning message text beyond this. Guards CPU on hostile input.
+const MAX_SCAN_LENGTH = MAX_TOKEN_LENGTH * 2;
+
+// Most chips we will render for one message, matching bitchat's cap.
+const MAX_TOKENS_PER_MESSAGE = 3;
+
+// Sanity cap on any single amount or token total: more sats than will ever
+// exist. Anything above this is a malformed or hostile token.
+const MAX_AMOUNT = 2_100_000_000_000_000;
+
+// Cheap pre-check before running the scanner.
+const TOKEN_HINTS = ["cashuA", "cashuB", "cashu:"];
+
+// Bare-token pattern, byte-for-byte the same as bitchat's. The `cashu:` and
+// `cashu://` URI forms are handled implicitly: the match starts at the embedded
+// `cashuA`/`cashuB`, which is exactly the bearer string we want.
+const TOKEN_PATTERN = /\bcashu[AB][A-Za-z0-9._-]{40,}\b/g;
 
 // ---- Types ------------------------------------------------------------------
 
 export interface TokenInfo {
-  version: "A" | "B" | "unknown";
-  amount: number; // total proof amounts in the token's declared unit
-  unit: string; // "sat" if not declared
-  mintUrl: string; // mint host (first mint)
+  version: "A" | "B";
+  // Total of the proof amounts, in `unit`.
+  amount: number;
+  // "sat" when the token does not declare one (NUT-00 default).
+  unit: string;
+  // Full mint URL as declared by the token.
+  mintUrl: string;
+  // Mint hostname only, for compact display.
+  mintHost: string;
   memo?: string;
-  // Raw decoded token (to pass to Wallet for redemption)
+  proofCount: number;
+  // Whether every proof carries a NUT-12 DLEQ witness. Without one there is
+  // nothing to verify offline, so the token can only be trusted after a swap.
+  hasDleq: boolean;
+  // Decoded token, to hand to a Wallet for redemption.
   token: Token;
 }
 
 export interface EmbeddedToken {
   info: TokenInfo;
-  // The raw token string as it appeared in the message body.
+  // The bare `cashuA…`/`cashuB…` string as it appeared in the message body.
   raw: string;
-  // Byte offset in the message text where the token starts.
+  // Character offset in the message text where the token starts.
   offset: number;
 }
 
+export type DleqResult =
+  // Every proof carried a DLEQ witness and every one verified against the
+  // mint's keys. The mint definitely signed this. Still says nothing about
+  // whether it has already been spent.
+  | { status: "valid"; checked: number }
+  // At least one witness failed to verify. The token is forged or corrupted;
+  // refuse it.
+  | { status: "invalid"; reason: string }
+  // No witnesses present, or we hold no keys for this mint's keyset, so there
+  // was nothing to check. Not a failure, just no offline assurance.
+  | { status: "unchecked"; reason: string };
+
 // ---- Detection --------------------------------------------------------------
 
-// Find all Cashu tokens embedded in message text. Returns one entry per token.
-// Safe to call on attacker-controlled content; all paths are bounded.
+// Whether a string could contain a Cashu token. Cheap enough to call per
+// message render before the full scan.
+export function mayContainToken(text: string): boolean {
+  return TOKEN_HINTS.some((hint) => text.includes(hint));
+}
+
+// Find Cashu tokens embedded in message text, at most MAX_TOKENS_PER_MESSAGE.
+// Safe on attacker-controlled content: bounded scan window, bounded matches,
+// and every decode failure drops the candidate rather than throwing.
+//
+// Tokens are deduplicated by their bare string, so `cashu:cashuA…` and the same
+// `cashuA…` written twice in one message yield exactly one card. The previous
+// implementation scanned once per URI prefix and deduplicated on the raw slice
+// including the prefix, which rendered the same bearer token as two cards.
 export function findTokensInText(text: string): EmbeddedToken[] {
-  if (text.length > MAX_TOKEN_LENGTH * 2) {
-    // Truncate before scanning to prevent ReDoS-style CPU abuse.
-    text = text.slice(0, MAX_TOKEN_LENGTH * 2);
-  }
+  if (!mayContainToken(text)) return [];
+  const scanned =
+    text.length > MAX_SCAN_LENGTH ? text.slice(0, MAX_SCAN_LENGTH) : text;
 
   const results: EmbeddedToken[] = [];
-  // Find each prefix occurrence and try to extract a token from that position.
-  for (const prefix of TOKEN_PREFIXES) {
-    let searchStart = 0;
-    while (searchStart < text.length) {
-      const idx = text.indexOf(prefix, searchStart);
-      if (idx < 0) break;
-      searchStart = idx + 1;
+  const seen = new Set<string>();
 
-      const candidate = extractTokenCandidate(text, idx);
-      if (!candidate) continue;
+  // `lastIndex` is mutated by exec on a /g regex, so use a fresh instance
+  // rather than the shared literal (which is not re-entrant).
+  const pattern = new RegExp(TOKEN_PATTERN.source, "g");
+  let match: RegExpExecArray | null;
+  while ((match = pattern.exec(scanned)) !== null) {
+    const raw = match[0];
+    if (raw.length > MAX_TOKEN_LENGTH) continue;
+    if (seen.has(raw)) continue;
+    seen.add(raw);
 
-      const info = decodeToken(candidate);
-      if (!info) continue;
+    const info = decodeToken(raw);
+    if (!info) continue;
 
-      results.push({ info, raw: candidate, offset: idx });
+    results.push({ info, raw, offset: match.index });
+    if (results.length >= MAX_TOKENS_PER_MESSAGE) break;
+  }
+
+  return results;
+}
+
+// Strip a `cashu:` / `cashu://` URI wrapper and percent-encoding to get the
+// bare bearer string. Returns null when the input is not token-shaped.
+export function bareToken(raw: string): string | null {
+  let token = raw.trim();
+  const lower = token.toLowerCase();
+  if (lower.startsWith("cashu://")) token = token.slice(8);
+  else if (lower.startsWith("cashu:")) token = token.slice(6);
+
+  if (token.includes("%")) {
+    try {
+      token = decodeURIComponent(token);
+    } catch {
+      // Malformed percent-encoding: keep the original and let the shape check
+      // below reject it.
     }
   }
 
-  // De-duplicate (same raw token found via multiple prefixes).
-  const seen = new Set<string>();
-  return results.filter((r) => {
-    if (seen.has(r.raw)) return false;
-    seen.add(r.raw);
-    return true;
-  });
-}
-
-// Extract a token-shaped string starting at `offset` within `text`.
-// Returns null if the candidate is too short, too long, or has illegal chars.
-function extractTokenCandidate(text: string, offset: number): string | null {
-  // Token body ends at the first whitespace or end of string.
-  const rest = text.slice(offset);
-  const endIdx = rest.search(/\s|$/);
-  const candidate = endIdx >= 0 ? rest.slice(0, endIdx) : rest;
-
-  if (candidate.length < 12 || candidate.length > MAX_TOKEN_LENGTH) return null;
-
-  // Strip URI prefix for the charset check.
-  let payload = candidate;
-  const lower = payload.toLowerCase();
-  if (lower.startsWith("cashu://")) payload = payload.slice(8);
-  else if (lower.startsWith("cashu:")) payload = payload.slice(6);
-
-  if (!payload.startsWith("cashuA") && !payload.startsWith("cashuB"))
-    return null;
-
-  // Base64url charset plus '.' for legacy multi-part tokens.
-  if (!/^[a-zA-Z0-9\-_+/=.]+$/.test(payload.slice(6))) return null;
-
-  return candidate;
+  if (token.length < 12 || token.length > MAX_TOKEN_LENGTH) return null;
+  if (!token.startsWith("cashuA") && !token.startsWith("cashuB")) return null;
+  // Same charset as the detection pattern, plus the base64 (non-url) characters
+  // that older wallets emit, since a directly pasted token is not constrained by
+  // what survives a message body.
+  if (!/^[A-Za-z0-9._\-+/=]+$/.test(token.slice(6))) return null;
+  return token;
 }
 
 // ---- Decode -----------------------------------------------------------------
 
-// Decode a raw token string into a TokenInfo. Returns null on parse error.
-// All failure modes silently return null (never throws to caller).
+// Decode a token string into a display/redemption summary, or null if it does
+// not cleanly parse into a known version carrying a positive amount.
+//
+// There is no permissive mode: unlike bitchat, which renders a generic chip for
+// a V4 payload its minimal CBOR reader cannot walk, we use a full CBOR decoder,
+// so failure to decode here means the token really is malformed. Showing a card
+// for something we cannot price would be worse than showing the raw string.
 export function decodeToken(raw: string): TokenInfo | null {
+  const tokenStr = bareToken(raw);
+  if (!tokenStr) return null;
+
   try {
-    let tokenStr = raw.trim();
-    const lower = tokenStr.toLowerCase();
-    if (lower.startsWith("cashu://")) tokenStr = tokenStr.slice(8);
-    else if (lower.startsWith("cashu:")) tokenStr = tokenStr.slice(6);
-
-    if (tokenStr.length > MAX_TOKEN_LENGTH) return null;
-
+    // The keyset-id list only matters for rehydrating the short ids that V4
+    // tokens use for keysets we already know about. An empty list keeps the
+    // short id, which is still a valid lookup key everywhere we use it.
     const token = getDecodedToken(tokenStr, []);
-    // getTokenMetadata takes the raw token string, not the decoded Token.
-    const meta = getTokenMetadata(tokenStr);
+    if (!Array.isArray(token.proofs) || token.proofs.length === 0) return null;
 
-    const version = tokenStr.startsWith("cashuA")
-      ? "A"
-      : tokenStr.startsWith("cashuB")
-        ? "B"
-        : "unknown";
+    let amount = 0;
+    for (const proof of token.proofs) {
+      const value = proof.amount.toNumber();
+      if (!Number.isFinite(value) || value <= 0 || value > MAX_AMOUNT)
+        return null;
+      amount += value;
+      if (amount > MAX_AMOUNT) return null;
+    }
+    if (amount <= 0) return null;
 
-    // Sum proof amounts. Proof.amount is an Amount value object; use toNumber().
-    const amount = token.proofs.reduce(
-      (sum: number, p: Proof) => sum + p.amount.toNumber(),
-      0,
-    );
-    const unit = token.unit ?? meta?.unit ?? "sat";
-    const mintUrl = token.mint ?? meta?.mint ?? "";
+    const mintUrl = typeof token.mint === "string" ? token.mint : "";
+    if (mintUrl.length === 0 || mintUrl.length > 512) return null;
 
-    return { version, amount, unit, mintUrl, memo: token.memo, token };
+    return {
+      version: tokenStr.startsWith("cashuA") ? "A" : "B",
+      amount,
+      unit: sanitizeUnit(token.unit),
+      mintUrl,
+      mintHost: mintHostOf(mintUrl),
+      memo: sanitizeMemo(token.memo),
+      proofCount: token.proofs.length,
+      hasDleq: token.proofs.every((p) => p.dleq !== undefined),
+      token,
+    };
   } catch {
     return null;
   }
 }
 
+// Mint hostname for display. Attacker-controlled, so it is length-capped and
+// lowercased; falls back to a truncated raw string for non-URL mints.
+function mintHostOf(mintUrl: string): string {
+  try {
+    return new URL(mintUrl).hostname.toLowerCase().slice(0, 48);
+  } catch {
+    return mintUrl.slice(0, 48);
+  }
+}
+
+// Units are alphanumeric currency codes ("sat", "usd", "eur"). Reject anything
+// else rather than rendering attacker-chosen text next to an amount.
+function sanitizeUnit(unit: string | undefined): string {
+  if (typeof unit !== "string") return "sat";
+  if (unit.length === 0 || unit.length > 12) return "sat";
+  if (!/^[a-zA-Z0-9]+$/.test(unit)) return "sat";
+  return unit.toLowerCase();
+}
+
+// Memos are shown verbatim in the payment card, so strip control characters and
+// newlines (which would let a sender fake extra UI lines) and cap the length.
+function sanitizeMemo(memo: string | undefined): string | undefined {
+  if (typeof memo !== "string" || memo.length > 512) return undefined;
+  const cleaned = memo.replace(/[ -]/g, " ").trim();
+  return cleaned.length > 0 ? cleaned.slice(0, 80) : undefined;
+}
+
+// ---- Offline DLEQ verification ----------------------------------------------
+
+// Verify every proof in a token against the mint's cached public keys (NUT-12).
+//
+// `keysetCache` is the `keyChain.cache` blob persisted per mint by the wallet
+// service. It contains public keys only, so it is safe to keep unencrypted and
+// safe to use offline. Without it there is nothing to check against, which is
+// reported as "unchecked", not as a pass: the old implementation returned true
+// both when a witness was missing and when the check threw, which meant it
+// could only ever say yes.
+export function verifyTokenOffline(
+  token: Token,
+  keysetCache: KeyChainCache | undefined,
+  unit: string,
+): DleqResult {
+  const withDleq = token.proofs.filter((p) => p.dleq !== undefined);
+  if (withDleq.length === 0) {
+    return { status: "unchecked", reason: "token carries no DLEQ witness" };
+  }
+  if (!keysetCache) {
+    return {
+      status: "unchecked",
+      reason: "mint keys not cached on this device",
+    };
+  }
+
+  let keyChain: KeyChain;
+  try {
+    keyChain = KeyChain.fromCache(token.mint, unit, keysetCache);
+  } catch {
+    return { status: "unchecked", reason: "cached mint keys are unreadable" };
+  }
+
+  let checked = 0;
+  for (const proof of token.proofs) {
+    let keyset;
+    try {
+      keyset = keyChain.getKeyset(proof.id);
+    } catch {
+      // We know this mint but not this keyset (it rotated, or the token uses a
+      // short id we cannot resolve). Nothing to check for this proof.
+      continue;
+    }
+    try {
+      // `verifyDleqIfPresent` returns true for a proof with no witness, which is
+      // the NUT-12 "MUST verify if present" rule. We only reach it for proofs
+      // that do carry one, or for ones where skipping is correct.
+      if (!verifyDleqIfPresent(proof, keyset)) {
+        return {
+          status: "invalid",
+          reason: `proof ${proof.secret.slice(0, 8)}… failed DLEQ verification`,
+        };
+      }
+      if (proof.dleq !== undefined) checked += 1;
+    } catch (err) {
+      // A throw here means the proof's amount matches no key in the keyset,
+      // i.e. it claims a denomination the mint does not issue. That is a
+      // forgery, not an inconclusive check.
+      return {
+        status: "invalid",
+        reason: `proof ${proof.secret.slice(0, 8)}… has no matching mint key (${String(err)})`,
+      };
+    }
+  }
+
+  if (checked === 0) {
+    return {
+      status: "unchecked",
+      reason: "no keys cached for this token's keyset",
+    };
+  }
+  if (checked < withDleq.length) {
+    return {
+      status: "unchecked",
+      reason: `verified ${String(checked)} of ${String(withDleq.length)} witnesses`,
+    };
+  }
+  return { status: "valid", checked };
+}
+
+// ---- Proof conversion -------------------------------------------------------
+
+// cashu-ts `Proof` -> persisted `StoredProof`. The `Amount` value object does
+// not survive JSON, so it is flattened to a number here and rebuilt on the way
+// out. `verified` is set by the caller: only the mint can grant it.
+export function toStoredProof(
+  proof: Proof,
+  opts?: { verified?: boolean; derived?: boolean; receivedAtMs?: number },
+): StoredProof {
+  return {
+    id: proof.id,
+    amount: proof.amount.toNumber(),
+    secret: proof.secret,
+    C: proof.C,
+    ...(proof.dleq
+      ? { dleq: proof.dleq as unknown as StoredProof["dleq"] }
+      : {}),
+    ...(proof.witness !== undefined
+      ? {
+          witness:
+            typeof proof.witness === "string"
+              ? proof.witness
+              : JSON.stringify(proof.witness),
+        }
+      : {}),
+    verified: opts?.verified ?? false,
+    derived: opts?.derived ?? false,
+    receivedAtMs: opts?.receivedAtMs ?? Date.now(),
+  };
+}
+
+// Persisted proof -> the `ProofLike` shape cashu-ts accepts everywhere (it
+// normalises the numeric amount internally via `Amount.from`).
+export function toProofLike(proof: StoredProof): ProofLike {
+  return {
+    id: proof.id,
+    amount: proof.amount,
+    secret: proof.secret,
+    C: proof.C,
+    ...(proof.dleq ? { dleq: proof.dleq as Proof["dleq"] } : {}),
+    ...(proof.witness !== undefined
+      ? { witness: proof.witness as Proof["witness"] }
+      : {}),
+  } as ProofLike;
+}
+
 // ---- Encode -----------------------------------------------------------------
 
-// Encode a Token object back to a cashuA/B string.
-export function encodeToken(token: Token): string {
-  return getEncodedToken(token);
-}
-
-// Create a token-bearing message body by appending the token string.
-// Example output: "here's 500 sats for coffee\ncashuA..."
-export function embedTokenInMessage(text: string, token: Token): string {
-  const tokenStr = encodeToken(token);
-  return text ? `${text}\n${tokenStr}` : tokenStr;
-}
-
-// ---- Offline proof validation -----------------------------------------------
-
-// Validate that a proof carries a valid DLEQ witness for the given mint key.
-// This runs offline and does not contact the mint. Returns false for any proof
-// that fails validation (reject before displaying as payment).
+// Serialise stored proofs into a `cashuB` token string. Pure serialisation: no
+// mint contact, no state change. The caller MUST reserve or remove the selected
+// proofs from the store before handing the string out, or the same value can be
+// spent twice from this device.
 //
-// Note: DLEQ verification requires the mint's keyset key for that amount
-// denomination. If the keyset is not cached locally, skip and redeem directly.
-export function validateProofDleq(
-  proof: Proof,
-  mintPubkeyHex: string,
-): boolean {
-  // Import inline to avoid issues in test environments that mock cashu.
-  try {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { hasValidDleq } = require("@cashu/cashu-ts") as {
-      hasValidDleq: (proof: Proof, A: unknown) => boolean;
-    };
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { hashToCurve } = require("@cashu/cashu-ts") as {
-      hashToCurve: (secret: Uint8Array) => unknown;
-    };
-    void hashToCurve; // used internally by hasValidDleq
-    // The mint key for this proof's amount denomination (provided by caller).
-    // If no DLEQ witness is present, the proof may still be valid at the mint.
-    if (!proof.dleq) return true; // no witness to check
-    // Convert hex mint key to the point representation cashu-ts expects.
-    // This is a best-effort check; if conversion fails, we return true (skip).
-    return hasValidDleq(proof, mintPubkeyHex as unknown);
-  } catch {
-    return true; // DLEQ check unavailable; defer to mint
-  }
-}
-
-// ---- Helpers ----------------------------------------------------------------
-
-// Summarize a TokenInfo for display in the chat UI.
-export function formatTokenSummary(info: TokenInfo): string {
-  const amount = `${info.amount} ${info.unit}`;
-  if (info.memo) return `${amount} - ${info.memo}`;
-  return amount;
-}
-
-// Check whether a string looks like it might contain a Cashu token
-// (lightweight pre-check before running the full scanner).
-export function mayContainToken(text: string): boolean {
-  return TOKEN_PREFIXES.some((p) => text.includes(p));
-}
-
-// ---- Offline send helpers ---------------------------------------------------
-
-// Select a set of proofs from `proofs` covering `targetAmount`, preferring an
-// EXACT match. Returns null if the available proofs are insufficient.
-//
-// Cashu denominations are powers of two, so an exact subset usually exists.
-// The previous implementation walked largest-first and pushed every proof until
-// the running sum crossed the target, which overshoots badly (asking to send
-// 10 from a single 64 proof spent all 64, with no change). Here we take a proof
-// only when it fits in the remaining need, which yields an exact match whenever
-// the denominations allow it.
-//
-// `exact` tells the caller whether the selection lands on the target. When it is
-// false the wallet cannot send this amount offline without overpaying, and the
-// caller MUST either swap at the mint for change or get explicit user consent
-// before spending `total`.
-export function selectProofsForAmount(
-  proofs: StoredProof[],
-  targetAmount: number,
-): { selected: StoredProof[]; total: number; exact: boolean } | null {
-  if (targetAmount <= 0 || proofs.length === 0) return null;
-  const totalAvailable = proofs.reduce((s, p) => s + p.amount, 0);
-  if (totalAvailable < targetAmount) return null;
-
-  // Largest-first, skipping any proof that would overshoot the remainder.
-  const sorted = [...proofs].sort((a, b) => b.amount - a.amount);
-  const selected: StoredProof[] = [];
-  let sum = 0;
-  for (const p of sorted) {
-    if (sum === targetAmount) break;
-    if (sum + p.amount <= targetAmount) {
-      selected.push(p);
-      sum += p.amount;
-    }
-  }
-
-  if (sum === targetAmount) return { selected, total: sum, exact: true };
-
-  // No exact subset (odd denominations). Fall back to the smallest selection
-  // that still covers the target, and flag it so the caller can warn or swap
-  // rather than silently overpaying.
-  const ascending = [...proofs].sort((a, b) => a.amount - b.amount);
-  const covering: StoredProof[] = [];
-  let coverSum = 0;
-  for (const p of ascending) {
-    if (coverSum >= targetAmount) break;
-    covering.push(p);
-    coverSum += p.amount;
-  }
-  // Drop any now-redundant smallest proofs (the tail can make earlier ones
-  // unnecessary), keeping the overpayment as small as possible.
-  for (let i = 0; i < covering.length; i++) {
-    const without = coverSum - covering[i].amount;
-    if (without >= targetAmount) {
-      coverSum = without;
-      covering.splice(i, 1);
-      i--;
-    }
-  }
-  return { selected: covering, total: coverSum, exact: false };
-}
-
-// Build a cashuA token string from locally stored proofs without any network
-// call. This is pure serialization: pick proofs, encode them, hand off the
-// string. The caller must remove the selected proofs from the wallet store to
-// prevent double-spending from the same device.
-export function buildOfflineToken(
+// DLEQ witnesses are carried through when present, so the recipient can verify
+// the mint's signature offline. That is the whole point of sending them.
+export function buildToken(
   mintUrl: string,
   proofs: StoredProof[],
-  unit: string = "sat",
+  unit = "sat",
   memo?: string,
 ): string {
-  // ProofLike accepts AmountLike (number), so our StoredProof.amount (number)
-  // maps directly. getEncodedToken internally normalises via Amount.from().
-  const cashuProofs = proofs.map((p): ProofLike => ({
-    id: p.id,
-    amount: p.amount,
-    secret: p.secret,
-    C: p.C,
-    ...(p.dleq ? { dleq: p.dleq as Proof["dleq"] } : {}),
-  }));
-
   const token = {
     mint: mintUrl,
-    proofs: cashuProofs,
+    proofs: proofs.map(toProofLike),
     unit,
     ...(memo ? { memo } : {}),
   };
   return getEncodedToken(token as unknown as Token);
+}
+
+// ---- Fees -------------------------------------------------------------------
+
+// NUT-02 input fee for spending `inputCount` proofs of a keyset charging
+// `feePpk` parts-per-thousand. The mint rounds up, so the wallet must too or
+// swaps get rejected for underpaying by one sat.
+export function inputFeeFor(inputCount: number, feePpk: number): number {
+  if (feePpk <= 0 || inputCount <= 0) return 0;
+  return Math.ceil((inputCount * feePpk) / 1000);
+}
+
+// Fee the recipient will pay to swap `proofs` at the mint. Used to show "they
+// receive N" honestly, and to decide how much to over-send when the sender
+// chooses to cover it.
+export function feeForProofs(
+  proofs: StoredProof[],
+  feePpkByKeysetId: Record<string, number> | undefined,
+): number {
+  if (!feePpkByKeysetId) return 0;
+  const ppk = proofs.reduce(
+    (total, p) => total + (feePpkByKeysetId[p.id] ?? 0),
+    0,
+  );
+  return ppk > 0 ? Math.ceil(ppk / 1000) : 0;
+}
+
+// ---- Offline proof selection ------------------------------------------------
+
+export interface ProofSelection {
+  selected: StoredProof[];
+  // Face value of `selected`.
+  total: number;
+  // What the recipient can actually claim after paying the mint's input fee.
+  receivable: number;
+  // Fee the recipient will pay to swap this selection.
+  fee: number;
+  // True when `receivable` lands exactly on the requested amount.
+  exact: boolean;
+}
+
+// Choose proofs covering `targetAmount` from `proofs`, preferring an exact
+// match on what the *recipient receives* rather than on face value.
+//
+// This is the offline fallback used when the mint's keysets have never been
+// cached on this device. When they have been, the wallet service defers to
+// cashu-ts `Wallet.sendOffline`, which runs the same job with the library's
+// RGLI selector and the mint's real fee schedule.
+//
+// Cashu denominations are powers of two, so an exact subset usually exists. We
+// take a proof only when it fits inside the remaining need, which finds that
+// subset whenever the denominations allow it; walking largest-first and pushing
+// until the sum crosses the target overshoots badly (sending 10 from a single
+// 64 spends all 64, with no change).
+//
+// `exact: false` means the wallet cannot make this amount offline without
+// overpaying. The caller MUST get explicit consent before spending `total`,
+// because offline there is no change: the difference goes to the recipient.
+export function selectProofsForAmount(
+  proofs: StoredProof[],
+  targetAmount: number,
+  feePpkByKeysetId?: Record<string, number>,
+): ProofSelection | null {
+  if (targetAmount <= 0 || proofs.length === 0) return null;
+
+  const describe = (selected: StoredProof[]): ProofSelection => {
+    const total = selected.reduce((s, p) => s + p.amount, 0);
+    const fee = feeForProofs(selected, feePpkByKeysetId);
+    const receivable = total - fee;
+    return {
+      selected,
+      total,
+      receivable,
+      fee,
+      exact: receivable === targetAmount,
+    };
+  };
+
+  // Prefer spending the proofs the mint has not confirmed for us: they are the
+  // ones most at risk of turning out to be already spent, and passing them on
+  // immediately is both safer for us and no worse for the recipient, who will
+  // swap right away. Within each group, largest first.
+  const ranked = [...proofs].sort(
+    (a, b) =>
+      Number(a.verified === true) - Number(b.verified === true) ||
+      b.amount - a.amount,
+  );
+
+  // Fees depend on how many proofs we pick, so the target moves as we select.
+  // Walk greedily against a target that includes the fee accrued so far.
+  const selected: StoredProof[] = [];
+  let sum = 0;
+  for (const proof of ranked) {
+    const feeIfTaken = feeForProofs([...selected, proof], feePpkByKeysetId);
+    const need = targetAmount + feeIfTaken;
+    if (sum >= need) break;
+    if (sum + proof.amount <= need) {
+      selected.push(proof);
+      sum += proof.amount;
+    }
+  }
+
+  const exactAttempt = describe(selected);
+  if (exactAttempt.exact) return exactAttempt;
+
+  // No exact subset. Fall back to the smallest selection that still covers the
+  // target plus its own fee, so the recipient is never short-changed, and flag
+  // it so the caller can warn instead of silently overpaying.
+  const ascending = [...proofs].sort((a, b) => a.amount - b.amount);
+  const covering: StoredProof[] = [];
+  let coverSum = 0;
+  for (const proof of ascending) {
+    if (coverSum >= targetAmount + feeForProofs(covering, feePpkByKeysetId))
+      break;
+    covering.push(proof);
+    coverSum += proof.amount;
+  }
+  if (coverSum - feeForProofs(covering, feePpkByKeysetId) < targetAmount) {
+    // Even everything we hold cannot cover the amount plus its fee.
+    return null;
+  }
+
+  // Drop now-redundant proofs: a later, larger pick can make an earlier small
+  // one unnecessary. Keeps the overpayment as small as the denominations allow.
+  for (let i = 0; i < covering.length; i++) {
+    const trial = covering.filter((_, idx) => idx !== i);
+    const trialSum = trial.reduce((s, p) => s + p.amount, 0);
+    if (trialSum - feeForProofs(trial, feePpkByKeysetId) >= targetAmount) {
+      covering.splice(i, 1);
+      i--;
+    }
+  }
+
+  return describe(covering);
+}
+
+// ---- Display ----------------------------------------------------------------
+
+// "500 sat" / "500 sat - coffee money", for chat search previews and
+// accessibility labels.
+export function formatTokenSummary(info: TokenInfo): string {
+  const amount = `${info.amount.toLocaleString()} ${info.unit}`;
+  return info.memo ? `${amount} - ${info.memo}` : amount;
 }
