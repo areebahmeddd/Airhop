@@ -7,7 +7,7 @@ const RelayMap = lazy(() => import("./RelayMap"));
 const relayMapFallback = (
   <div className="border-t border-gray-200 px-6 pt-5 pb-3">
     <div className="mb-2 h-[9px]" />
-    <div style={{ aspectRatio: "800 / 430" }} />
+    <div style={{ aspectRatio: "800 / 356" }} />
   </div>
 );
 
@@ -34,10 +34,10 @@ export default function HowItWorks() {
             The mesh forms itself. No infrastructure required.
           </h2>
           <p className="font-mono text-sm leading-relaxed font-normal text-gray-700 sm:text-base">
-            Airhop nodes discover each other automatically over Bluetooth Low Energy and form a
-            self-healing mesh. A message sent from one device floods the network and relays across
-            nearby nodes up to 7 hops. When internet is available, Nostr relays extend the mesh
-            globally without requiring any infrastructure we control.
+            Airhop nodes discover each other automatically over Bluetooth and form a self-healing
+            mesh. A message sent from one device floods the network and relays across nearby nodes
+            up to 7 hops. When internet is available, Nostr relays extend the mesh globally without
+            requiring any infrastructure we control.
           </p>
         </motion.div>
 

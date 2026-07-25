@@ -7,18 +7,12 @@
 // Groups, Location (geohash) cells, and Direct messages.
 
 import { Feather } from "@expo/vector-icons";
-import React, { useMemo, useState } from "react";
-import {
-  Modal,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
-} from "react-native";
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { isManualGeoChannel } from "../../services/geohash-channel-service";
 import { useChatStore } from "../../store/chat-store";
 import Avatar from "../../ui/components/avatar";
+import BottomSheet from "../../ui/components/bottom-sheet";
 import {
   FontSize,
   FontWeight,
@@ -82,120 +76,111 @@ export default function ForwardSheet({
     })).filter((s) => s.data.length > 0);
   }, [channels, excludeChannel]);
 
+  // The half-second before the sheet closes is there to let the checkmark
+  // register as confirmation. It has to be cancellable: the sheet is draggable,
+  // so the user can dismiss it inside that window, and a timer that outlived it
+  // would fire onClose() at whatever is on screen half a second later.
+  const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(
+    () => () => {
+      if (closeTimer.current) clearTimeout(closeTimer.current);
+    },
+    [],
+  );
+
   function handlePick(channel: string): void {
+    if (closeTimer.current) return; // Already confirming; ignore a double tap.
     onForward(channel);
     setSentTo(channel);
-    setTimeout(() => {
+    closeTimer.current = setTimeout(() => {
+      closeTimer.current = null;
       setSentTo(null);
       onClose();
     }, 500);
   }
 
   return (
-    <Modal
+    <BottomSheet
       visible={visible}
-      transparent
-      animationType="slide"
-      onRequestClose={onClose}
+      onClose={onClose}
+      sheetStyle={styles.sheet}
+      scrollable
     >
-      <View style={styles.overlay}>
-        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
-        <View style={styles.sheet}>
-          <View style={styles.handle} />
-          <Text style={styles.title}>Forward to…</Text>
-          <ScrollView
-            style={styles.list}
-            contentContainerStyle={styles.listContent}
-            keyboardShouldPersistTaps="handled"
-            showsVerticalScrollIndicator={false}
-          >
-            {sections.length === 0 ? (
-              <Text style={styles.empty}>No other chats yet.</Text>
-            ) : (
-              sections.map((section) => (
-                <View key={section.title} style={styles.section}>
-                  <Text style={styles.sectionHeader}>{section.title}</Text>
-                  <View style={styles.group}>
-                    {section.data.map((item, i) => {
-                      const kind = kindOf(item);
-                      const label =
-                        kind === "dm"
-                          ? resolveDisplayName(item.slice(3))
-                          : channelLabel(item);
-                      const justSent = sentTo === item;
-                      return (
-                        <React.Fragment key={item}>
-                          {i > 0 && <View style={styles.divider} />}
-                          <Pressable
-                            style={styles.row}
-                            onPress={() => handlePick(item)}
-                            disabled={sentTo !== null}
-                            accessibilityRole="button"
-                            accessibilityLabel={`Forward to ${label}`}
-                          >
-                            {kind === "dm" ? (
-                              <Avatar
-                                username={label}
-                                peerID={item.slice(3)}
-                                size={36}
-                              />
-                            ) : (
-                              <View style={styles.channelIcon}>
-                                <Feather
-                                  name={ICON_FOR[kind]}
-                                  size={16}
-                                  color={Colors.textSecondary}
-                                />
-                              </View>
-                            )}
-                            <Text style={styles.rowLabel} numberOfLines={1}>
-                              {label}
-                            </Text>
-                            {justSent && (
-                              <Feather
-                                name="check-circle"
-                                size={18}
-                                color={Colors.success}
-                              />
-                            )}
-                          </Pressable>
-                        </React.Fragment>
-                      );
-                    })}
-                  </View>
-                </View>
-              ))
-            )}
-          </ScrollView>
-        </View>
-      </View>
-    </Modal>
+      <Text style={styles.title}>Forward to…</Text>
+      <ScrollView
+        style={styles.list}
+        contentContainerStyle={styles.listContent}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+      >
+        {sections.length === 0 ? (
+          <Text style={styles.empty}>No other chats yet.</Text>
+        ) : (
+          sections.map((section) => (
+            <View key={section.title} style={styles.section}>
+              <Text style={styles.sectionHeader}>{section.title}</Text>
+              <View style={styles.group}>
+                {section.data.map((item, i) => {
+                  const kind = kindOf(item);
+                  const label =
+                    kind === "dm"
+                      ? resolveDisplayName(item.slice(3))
+                      : channelLabel(item);
+                  const justSent = sentTo === item;
+                  return (
+                    <React.Fragment key={item}>
+                      {i > 0 && <View style={styles.divider} />}
+                      <Pressable
+                        style={styles.row}
+                        onPress={() => handlePick(item)}
+                        disabled={sentTo !== null}
+                        accessibilityRole="button"
+                        accessibilityLabel={`Forward to ${label}`}
+                      >
+                        {kind === "dm" ? (
+                          <Avatar
+                            username={label}
+                            peerID={item.slice(3)}
+                            size={36}
+                          />
+                        ) : (
+                          <View style={styles.channelIcon}>
+                            <Feather
+                              name={ICON_FOR[kind]}
+                              size={16}
+                              color={Colors.textSecondary}
+                            />
+                          </View>
+                        )}
+                        <Text style={styles.rowLabel} numberOfLines={1}>
+                          {label}
+                        </Text>
+                        {justSent && (
+                          <Feather
+                            name="check-circle"
+                            size={18}
+                            color={Colors.success}
+                          />
+                        )}
+                      </Pressable>
+                    </React.Fragment>
+                  );
+                })}
+              </View>
+            </View>
+          ))
+        )}
+      </ScrollView>
+    </BottomSheet>
   );
 }
 
 function createStyles(Colors: ReturnType<typeof useThemeColors>) {
   return StyleSheet.create({
-    overlay: {
-      flex: 1,
-      backgroundColor: Colors.overlay,
-      justifyContent: "flex-end",
-    },
     sheet: {
       width: "100%",
       maxHeight: "70%",
-      backgroundColor: Colors.surface,
-      borderTopLeftRadius: Radius["2xl"],
-      borderTopRightRadius: Radius["2xl"],
-      paddingTop: Spacing.base,
       paddingBottom: Spacing.xl,
-    },
-    handle: {
-      width: 36,
-      height: 4,
-      borderRadius: 2,
-      backgroundColor: Colors.borderStrong,
-      alignSelf: "center",
-      marginBottom: Spacing.base,
     },
     title: {
       fontSize: FontSize.md,

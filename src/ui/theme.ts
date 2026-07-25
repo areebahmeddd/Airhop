@@ -66,9 +66,6 @@ export const Colors = {
 
   // ---- Overlays -------------------------------------------------------------
   overlay: "rgba(0,0,0,0.45)",
-  // Translucent fill laid over the tab bar's blur so the frosted glass keeps
-  // enough contrast for icons/labels while still letting content ghost through.
-  tabBarGlass: "rgba(255,255,255,0.55)",
 } as const;
 
 // Dark variant of the same tokens, same keys as Colors so any screen can
@@ -118,8 +115,6 @@ export const DarkColors = {
   gatewayDim: "rgba(20,184,166,0.16)",
 
   overlay: "rgba(0,0,0,0.6)",
-  // See light palette: a dark translucent fill over the tab bar's blur.
-  tabBarGlass: "rgba(20,20,22,0.55)",
 } as const;
 
 // Legacy shims so existing component references compile without change.
@@ -152,9 +147,9 @@ export const Spacing = {
 } as const;
 
 // Bottom clearance a scrollable tab screen must leave so its last rows clear the
-// floating (absolutely positioned) tab bar instead of hiding behind the frosted
-// glass. Sized to the pill's height + its bottom margin + a little breathing
-// room. Screens apply it as contentContainer paddingBottom.
+// floating (absolutely positioned) tab bar instead of scrolling under it. Sized
+// to the pill's height + its bottom margin + a little breathing room. Screens
+// apply it as contentContainer paddingBottom.
 export const TAB_BAR_CLEARANCE = 96;
 
 export const FontSize = {

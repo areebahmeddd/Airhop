@@ -180,7 +180,7 @@ export default function Hero() {
           className="z-10 flex flex-col space-y-6"
         >
           <h1 className="text-4xl leading-tight font-extrabold tracking-tight text-black select-none sm:text-5xl lg:text-6xl">
-            Offline<span className="text-gray-300">.</span> Private
+            Private<span className="text-gray-300">.</span> Offline
             <span className="text-gray-300">.</span> Free<span className="text-gray-300">.</span>
           </h1>
 

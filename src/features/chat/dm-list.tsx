@@ -8,7 +8,6 @@ import { Feather, MaterialCommunityIcons } from "@expo/vector-icons";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   FlatList,
-  Modal,
   Pressable,
   RefreshControl,
   StyleSheet,
@@ -24,6 +23,7 @@ import { useChatStore } from "../../store/chat-store";
 import { useContactsStore } from "../../store/contacts-store";
 import { usePeerStore } from "../../store/peer-store";
 import Avatar from "../../ui/components/avatar";
+import BottomSheet from "../../ui/components/bottom-sheet";
 import {
   FontSize,
   FontWeight,
@@ -348,154 +348,130 @@ export default function DmList({ onSelectDM }: Props): React.JSX.Element {
       />
 
       {/* Swipe "More" sheet: clear or delete a conversation */}
-      <Modal
+      <BottomSheet
         visible={moreOptionsDM !== null}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setMoreOptionsDM(null)}
+        onClose={() => setMoreOptionsDM(null)}
+        sheetStyle={styles.modalSheet}
       >
-        <View style={styles.modalOverlay}>
-          <Pressable
-            style={StyleSheet.absoluteFill}
-            onPress={() => setMoreOptionsDM(null)}
-          />
-          <View style={styles.modalSheet}>
-            <View style={styles.handle} />
-            {moreOptionsDM && (
-              <>
-                <View style={styles.modalTitleRow}>
-                  <Avatar
-                    username={resolveDisplayName(moreOptionsDM.slice(3))}
-                    peerID={moreOptionsDM.slice(3)}
-                    size={32}
-                  />
-                  <Text style={styles.modalTitle} numberOfLines={1}>
-                    {resolveDisplayName(moreOptionsDM.slice(3))}
-                  </Text>
-                </View>
+        {moreOptionsDM && (
+          <>
+            <View style={styles.modalTitleRow}>
+              <Avatar
+                username={resolveDisplayName(moreOptionsDM.slice(3))}
+                peerID={moreOptionsDM.slice(3)}
+                size={32}
+              />
+              <Text style={styles.modalTitle} numberOfLines={1}>
+                {resolveDisplayName(moreOptionsDM.slice(3))}
+              </Text>
+            </View>
 
-                {/* Everyday actions, grouped in one box. */}
-                <View style={styles.moreRowsGroup}>
-                  <Pressable
-                    style={styles.moreRow}
-                    onPress={() => handleContactInfo(moreOptionsDM)}
-                    accessibilityRole="button"
-                  >
-                    <Feather
-                      name="info"
-                      size={18}
-                      color={Colors.textSecondary}
-                    />
-                    <Text style={styles.moreRowText}>Contact info</Text>
-                  </Pressable>
+            {/* Everyday actions, grouped in one box. */}
+            <View style={styles.moreRowsGroup}>
+              <Pressable
+                style={styles.moreRow}
+                onPress={() => handleContactInfo(moreOptionsDM)}
+                accessibilityRole="button"
+              >
+                <Feather name="info" size={18} color={Colors.textSecondary} />
+                <Text style={styles.moreRowText}>Contact info</Text>
+              </Pressable>
 
-                  <View style={styles.moreDivider} />
-                  <Pressable
-                    style={styles.moreRow}
-                    onPress={() => handlePinDM(moreOptionsDM)}
-                    accessibilityRole="button"
-                  >
-                    <MaterialCommunityIcons
-                      name={
-                        pinnedChannels.includes(moreOptionsDM)
-                          ? "pin-off"
-                          : "pin"
-                      }
-                      size={18}
-                      color={Colors.textSecondary}
-                    />
-                    <Text style={styles.moreRowText}>
-                      {pinnedChannels.includes(moreOptionsDM)
-                        ? "Unpin chat"
-                        : "Pin chat"}
-                    </Text>
-                  </Pressable>
+              <View style={styles.moreDivider} />
+              <Pressable
+                style={styles.moreRow}
+                onPress={() => handlePinDM(moreOptionsDM)}
+                accessibilityRole="button"
+              >
+                <MaterialCommunityIcons
+                  name={
+                    pinnedChannels.includes(moreOptionsDM) ? "pin-off" : "pin"
+                  }
+                  size={18}
+                  color={Colors.textSecondary}
+                />
+                <Text style={styles.moreRowText}>
+                  {pinnedChannels.includes(moreOptionsDM)
+                    ? "Unpin chat"
+                    : "Pin chat"}
+                </Text>
+              </Pressable>
 
-                  <View style={styles.moreDivider} />
-                  <Pressable
-                    style={styles.moreRow}
-                    onPress={() => handleMuteDM(moreOptionsDM)}
-                    accessibilityRole="button"
-                  >
-                    <Feather
-                      name={
-                        mutedChannels.includes(moreOptionsDM)
-                          ? "bell"
-                          : "bell-off"
-                      }
-                      size={18}
-                      color={Colors.textSecondary}
-                    />
-                    <Text style={styles.moreRowText}>
-                      {mutedChannels.includes(moreOptionsDM)
-                        ? "Unmute chat"
-                        : "Mute chat"}
-                    </Text>
-                  </Pressable>
+              <View style={styles.moreDivider} />
+              <Pressable
+                style={styles.moreRow}
+                onPress={() => handleMuteDM(moreOptionsDM)}
+                accessibilityRole="button"
+              >
+                <Feather
+                  name={
+                    mutedChannels.includes(moreOptionsDM) ? "bell" : "bell-off"
+                  }
+                  size={18}
+                  color={Colors.textSecondary}
+                />
+                <Text style={styles.moreRowText}>
+                  {mutedChannels.includes(moreOptionsDM)
+                    ? "Unmute chat"
+                    : "Mute chat"}
+                </Text>
+              </Pressable>
 
-                  <View style={styles.moreDivider} />
-                  <Pressable
-                    style={styles.moreRow}
-                    onPress={() => handleClearDM(moreOptionsDM)}
-                    accessibilityRole="button"
-                  >
-                    <Feather
-                      name="x-circle"
-                      size={18}
-                      color={Colors.textSecondary}
-                    />
-                    <Text style={styles.moreRowText}>Clear chat</Text>
-                  </Pressable>
-                </View>
+              <View style={styles.moreDivider} />
+              <Pressable
+                style={styles.moreRow}
+                onPress={() => handleClearDM(moreOptionsDM)}
+                accessibilityRole="button"
+              >
+                <Feather
+                  name="x-circle"
+                  size={18}
+                  color={Colors.textSecondary}
+                />
+                <Text style={styles.moreRowText}>Clear chat</Text>
+              </Pressable>
+            </View>
 
-                {/* Destructive actions in their own red box. */}
-                <View style={styles.moreRowsGroupDanger}>
-                  <Pressable
-                    style={styles.moreRowDanger}
-                    onPress={() => handleRemoveContactDM(moreOptionsDM)}
-                    accessibilityRole="button"
-                  >
-                    <Feather name="user-x" size={18} color={Colors.danger} />
-                    <Text
-                      style={[styles.moreRowText, styles.moreRowTextDanger]}
-                    >
-                      Remove contact
-                    </Text>
-                  </Pressable>
+            {/* Destructive actions in their own red box. */}
+            <View style={styles.moreRowsGroupDanger}>
+              <Pressable
+                style={styles.moreRowDanger}
+                onPress={() => handleRemoveContactDM(moreOptionsDM)}
+                accessibilityRole="button"
+              >
+                <Feather name="user-x" size={18} color={Colors.danger} />
+                <Text style={[styles.moreRowText, styles.moreRowTextDanger]}>
+                  Remove contact
+                </Text>
+              </Pressable>
 
-                  <View style={styles.moreDividerDanger} />
-                  <Pressable
-                    style={styles.moreRowDanger}
-                    onPress={() => handleBlockDM(moreOptionsDM)}
-                    accessibilityRole="button"
-                  >
-                    <Feather name="slash" size={18} color={Colors.danger} />
-                    <Text
-                      style={[styles.moreRowText, styles.moreRowTextDanger]}
-                    >
-                      Block contact
-                    </Text>
-                  </Pressable>
+              <View style={styles.moreDividerDanger} />
+              <Pressable
+                style={styles.moreRowDanger}
+                onPress={() => handleBlockDM(moreOptionsDM)}
+                accessibilityRole="button"
+              >
+                <Feather name="slash" size={18} color={Colors.danger} />
+                <Text style={[styles.moreRowText, styles.moreRowTextDanger]}>
+                  Block contact
+                </Text>
+              </Pressable>
 
-                  <View style={styles.moreDividerDanger} />
-                  <Pressable
-                    style={styles.moreRowDanger}
-                    onPress={() => handleDeleteDM(moreOptionsDM)}
-                    accessibilityRole="button"
-                  >
-                    <Feather name="trash-2" size={18} color={Colors.danger} />
-                    <Text
-                      style={[styles.moreRowText, styles.moreRowTextDanger]}
-                    >
-                      Delete chat
-                    </Text>
-                  </Pressable>
-                </View>
-              </>
-            )}
-          </View>
-        </View>
-      </Modal>
+              <View style={styles.moreDividerDanger} />
+              <Pressable
+                style={styles.moreRowDanger}
+                onPress={() => handleDeleteDM(moreOptionsDM)}
+                accessibilityRole="button"
+              >
+                <Feather name="trash-2" size={18} color={Colors.danger} />
+                <Text style={[styles.moreRowText, styles.moreRowTextDanger]}>
+                  Delete chat
+                </Text>
+              </Pressable>
+            </View>
+          </>
+        )}
+      </BottomSheet>
 
       <ContactInfoSheet
         channel={infoChannel}
@@ -658,25 +634,10 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       fontWeight: FontWeight.medium,
     },
     // More sheet
-    modalOverlay: {
-      flex: 1,
-      backgroundColor: Colors.overlay,
-      justifyContent: "flex-end",
-    },
     modalSheet: {
-      backgroundColor: Colors.surface,
-      borderTopLeftRadius: Radius["2xl"],
-      borderTopRightRadius: Radius["2xl"],
-      padding: Spacing.xl,
+      paddingHorizontal: Spacing.xl,
+      paddingBottom: Spacing.xl,
       gap: Spacing.base,
-    },
-    handle: {
-      width: 36,
-      height: 4,
-      borderRadius: 2,
-      backgroundColor: Colors.borderStrong,
-      alignSelf: "center",
-      marginBottom: Spacing.xs,
     },
     modalTitleRow: {
       flexDirection: "row",

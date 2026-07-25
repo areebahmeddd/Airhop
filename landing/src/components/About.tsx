@@ -49,11 +49,20 @@ export default function About() {
                   rel="noopener noreferrer"
                   className="text-gray-900 underline underline-offset-2 transition-colors hover:text-gray-600"
                 >
-                  BLE wire protocol
+                  wire protocol
                 </a>{" "}
-                and security model, then extending it with Tor, offline payments, and offline AI. It
-                works with zero internet connectivity, and messages relay automatically across
-                nearby devices (roughly 30 to 50 meters per hop), up to 7 hops.
+                and security model, then extending it with Tor, offline{" "}
+                <a
+                  href="https://en.wikipedia.org/wiki/Ecash"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-gray-900 underline underline-offset-2 transition-colors hover:text-gray-600"
+                >
+                  ecash
+                </a>{" "}
+                payments, and offline AI. It works with zero internet connectivity, and messages
+                relay automatically across nearby devices (roughly 30 to 50 meters per hop), up to 7
+                hops.
               </p>
               <p>
                 Your identity is an{" "}
@@ -83,7 +92,9 @@ export default function About() {
                 >
                   Android Keystore
                 </a>
-                . There are no accounts, no registrations, and nothing that touches any server.
+                . There are no accounts, no registrations, and nothing that touches any server, i.e.
+                it can be used as a burner app that leaves nothing linking back to your activity
+                once deleted.
               </p>
               <p>
                 Every session uses the{" "}
@@ -129,7 +140,8 @@ export default function About() {
                 >
                   NIP-17
                 </a>{" "}
-                gift-wrapped direct messages.{" "}
+                gift-wrapped direct messages, so the mesh extends globally whenever both of you are
+                online.{" "}
                 <a
                   href="https://torproject.org"
                   target="_blank"
@@ -173,14 +185,6 @@ export default function About() {
                       className="text-gray-900 underline underline-offset-2 transition-colors hover:text-gray-600"
                     >
                       Cashu
-                    </a>{" "}
-                    <a
-                      href="https://en.wikipedia.org/wiki/Ecash"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-gray-900 underline underline-offset-2 transition-colors hover:text-gray-600"
-                    >
-                      ecash
                     </a>{" "}
                     protocol (Bitcoin only).
                   </li>

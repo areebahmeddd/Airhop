@@ -23,9 +23,21 @@ import {
   type Packet,
 } from "../mesh/packet-codec";
 
-// Constants per PROTOCOLS.md section 6.
+// Constants per PROTOCOLS.md section 6. Every value here matches bitchat's
+// CourierStore.Limits and CourierEnvelope, because a carrier applies its own
+// limits to envelopes it did not write: anything we exceed is simply dropped by
+// the other side, and anything we fail to enforce is a slot someone else can
+// take from us.
 const POOL_SIZE = 40;
-const ENVELOPE_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
+// Verified-tier mail can never crowd out favourites' share of the pool.
+const VERIFIED_POOL_SIZE = 20;
+// How long an envelope is worth carrying, matching CourierEnvelope
+// .maxLifetimeSeconds. Exported because mesh-service stamps the envelopes it
+// originates and the two must not drift.
+export const ENVELOPE_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
+// Tolerance on a depositor's expiry, matching Limits.maxExpirySlack. Absorbs
+// clock skew between two phones without letting anyone park mail indefinitely.
+const EXPIRY_SLACK_MS = 60 * 60 * 1000; // 1 hour
 const MAX_ENVELOPE_BYTES = 16 * 1024; // 16 KiB plaintext cap
 const FAVORITE_QUOTA = 5;
 const VERIFIED_QUOTA = 2;
@@ -202,7 +214,13 @@ export class CourierStore {
   ): boolean {
     const env = decodeEnvelopePayload(payload);
     if (env === null) return false;
-    if (env.expiryMs < Date.now()) return false; // already expired
+    const now = Date.now();
+    if (env.expiryMs < now) return false; // already expired
+    // Reject an expiry past the policy lifetime. Without this a depositor sets
+    // its own retention: one envelope stamped years out would hold a pool slot
+    // for as long as the app is installed. The slack absorbs clock skew between
+    // two phones, nothing more.
+    if (env.expiryMs > now + ENVELOPE_TTL_MS + EXPIRY_SLACK_MS) return false;
     if (env.ciphertext.length > MAX_ENVELOPE_BYTES) return false;
 
     this.evictExpired();
@@ -215,6 +233,17 @@ export class CourierStore {
         e.tier === tier,
     ).length;
     if (depositorCount >= quota) return false;
+
+    // Verified-tier sub-cap. The per-depositor quota alone does not stop enough
+    // distinct verified strangers filling the pool between them and leaving no
+    // room for the people this device actually knows.
+    if (
+      tier === "verified" &&
+      this.envelopes.filter((e) => e.tier === "verified").length >=
+        VERIFIED_POOL_SIZE
+    ) {
+      return false;
+    }
 
     // Check total pool cap.
     if (this.envelopes.length >= POOL_SIZE) {

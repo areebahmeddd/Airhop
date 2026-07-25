@@ -6,9 +6,8 @@
 
 import { Feather, MaterialCommunityIcons } from "@expo/vector-icons";
 import * as Clipboard from "expo-clipboard";
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
-  Modal,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -32,6 +31,7 @@ import { useGroupStore } from "../../store/group-store";
 import { usePeerStore } from "../../store/peer-store";
 import { usePlaceNamesStore } from "../../store/place-names-store";
 import Avatar from "../../ui/components/avatar";
+import BottomSheet from "../../ui/components/bottom-sheet";
 import {
   FontFamily,
   FontSize,
@@ -132,6 +132,22 @@ export default function ChannelInfoSheet({
   // Creator-only "add members" picker.
   const [showAddMembers, setShowAddMembers] = useState(false);
   const [addSelected, setAddSelected] = useState<Set<string>>(new Set());
+
+  // Members is the last section in this sheet, so its search field sits near the
+  // bottom of a long scroll. Opening it raises the keyboard, which shortens the
+  // sheet from below - and the field the user just asked for can end up under
+  // the fold. Riding to the end of the scroll puts the field and the list it
+  // filters back in view, which is where someone who just tapped Search is
+  // looking. Deferred a frame so the layout has already shrunk.
+  const bodyRef = useRef<ScrollView>(null);
+  useEffect(() => {
+    if (!searching) return;
+    const id = setTimeout(
+      () => bodyRef.current?.scrollToEnd({ animated: true }),
+      120,
+    );
+    return () => clearTimeout(id);
+  }, [searching]);
 
   // Private group (`group:<id>`): its name and roster come from group-store, not
   // the chat-store fields a public/custom channel uses.
@@ -393,394 +409,352 @@ export default function ChannelInfoSheet({
     : [];
 
   return (
-    <Modal visible transparent animationType="slide" onRequestClose={onClose}>
-      <View style={styles.overlay}>
-        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
-        <View style={styles.sheet}>
-          {/* Drag handle */}
-          <View style={styles.handle} />
-
-          {/* Top-right corner action, mirroring the pencil on the contact sheet:
+    <BottomSheet visible onClose={onClose} sheetStyle={styles.sheet} scrollable>
+      {/* Top-right corner action, mirroring the pencil on the contact sheet:
               a location channel with a resolved cell gets a bookmark toggle. */}
-          {isGeo && geohash !== null && (
-            <Pressable
-              style={styles.cornerBtn}
-              onPress={() =>
-                useGeohashBookmarksStore.getState().toggle(geohash)
-              }
-              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-              accessibilityRole="button"
-              accessibilityLabel={
-                bookmarked ? "Remove bookmark" : "Bookmark this place"
-              }
-            >
-              <MaterialCommunityIcons
-                name={bookmarked ? "bookmark" : "bookmark-outline"}
-                size={20}
-                color={bookmarked ? Colors.accent : Colors.textMuted}
-              />
-            </Pressable>
-          )}
+      {isGeo && geohash !== null && (
+        <Pressable
+          style={styles.cornerBtn}
+          onPress={() => useGeohashBookmarksStore.getState().toggle(geohash)}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          accessibilityRole="button"
+          accessibilityLabel={
+            bookmarked ? "Remove bookmark" : "Bookmark this place"
+          }
+        >
+          <MaterialCommunityIcons
+            name={bookmarked ? "bookmark" : "bookmark-outline"}
+            size={20}
+            color={bookmarked ? Colors.accent : Colors.textMuted}
+          />
+        </Pressable>
+      )}
 
-          {/* Centered header: icon + name + scope tag, with an optional corner
+      {/* Centered header: icon + name + scope tag, with an optional corner
               action (bookmark, for location channels). */}
-          <View style={styles.headerCenter}>
-            <View style={styles.iconWrap}>
-              <Feather
-                name={isGroup ? "users" : isManualGeo ? "map-pin" : "hash"}
-                size={22}
-                color={Colors.textPrimary}
-              />
-            </View>
+      <View style={styles.headerCenter}>
+        <View style={styles.iconWrap}>
+          <Feather
+            name={isGroup ? "users" : isManualGeo ? "map-pin" : "hash"}
+            size={22}
+            color={Colors.textPrimary}
+          />
+        </View>
 
-            <Text style={styles.channelName} numberOfLines={1}>
-              {isGroup
-                ? (groupName ?? "Group")
-                : isManualGeo
-                  ? manualGh
-                  : channel.replace(/^#/, "")}
-            </Text>
+        <Text style={styles.channelName} numberOfLines={1}>
+          {isGroup
+            ? (groupName ?? "Group")
+            : isManualGeo
+              ? manualGh
+              : channel.replace(/^#/, "")}
+        </Text>
 
-            <Text style={styles.scopeTag}>
-              {isGroup
-                ? `Private group  ·  ${groupMembers.length} member${groupMembers.length !== 1 ? "s" : ""}`
-                : (scopeData?.tag ??
-                  (isManualGeo
-                    ? `${geohashLevelName(manualGh)}  ·  teleported`
-                    : "Custom channel"))}
-              {placeName !== undefined && `  ·  ~${placeName}`}
-            </Text>
-          </View>
+        <Text style={styles.scopeTag}>
+          {isGroup
+            ? `Private group  ·  ${groupMembers.length} member${groupMembers.length !== 1 ? "s" : ""}`
+            : (scopeData?.tag ??
+              (isManualGeo
+                ? `${geohashLevelName(manualGh)}  ·  teleported`
+                : "Custom channel"))}
+          {placeName !== undefined && `  ·  ~${placeName}`}
+        </Text>
+      </View>
 
-          <View style={styles.divider} />
+      <View style={styles.divider} />
 
-          <ScrollView
-            showsVerticalScrollIndicator={false}
-            contentContainerStyle={styles.body}
-          >
-            {/* About */}
-            <View style={styles.section}>
-              <Text style={styles.sectionLabel}>About</Text>
-              <Text style={styles.description}>{resolvedDescription}</Text>
-            </View>
+      <ScrollView
+        ref={bodyRef}
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.body}
+        // So tapping a member row registers on the first tap while the member
+        // search has focus, instead of being eaten dismissing the keyboard.
+        keyboardShouldPersistTaps="handled"
+      >
+        {/* About */}
+        <View style={styles.section}>
+          <Text style={styles.sectionLabel}>About</Text>
+          <Text style={styles.description}>{resolvedDescription}</Text>
+        </View>
 
-            {/* At a glance: privacy, reach, and (for a location channel) the
+        {/* At a glance: privacy, reach, and (for a location channel) the
                 geohash, as one compact card. This states what actually happens
                 on the wire; the caveat that matters sits just below it. */}
-            <View style={styles.factsWrap}>
-              <View style={styles.factsCard}>
-                <View style={styles.factRow}>
-                  <Feather name={privacyIcon} size={16} color={privacyColor} />
-                  <Text style={styles.factValue}>{privacyLabel}</Text>
-                </View>
+        <View style={styles.factsWrap}>
+          <View style={styles.factsCard}>
+            <View style={styles.factRow}>
+              <Feather name={privacyIcon} size={16} color={privacyColor} />
+              <Text style={styles.factValue}>{privacyLabel}</Text>
+            </View>
+            <View style={styles.factDivider} />
+            <View style={styles.factRow}>
+              <Feather
+                name={reachIcon}
+                size={16}
+                color={Colors.textSecondary}
+              />
+              <Text style={styles.factValue}>{reachLabel}</Text>
+            </View>
+            {isGeo && geohash !== null && (
+              <>
                 <View style={styles.factDivider} />
                 <View style={styles.factRow}>
                   <Feather
-                    name={reachIcon}
+                    name="map-pin"
                     size={16}
                     color={Colors.textSecondary}
                   />
-                  <Text style={styles.factValue}>{reachLabel}</Text>
+                  <Text style={styles.factValue} numberOfLines={1}>
+                    <Text style={styles.factGeohashLabel}>Geohash </Text>
+                    <Text style={styles.factGeohash}>{geohash}</Text>
+                  </Text>
+                  <Pressable
+                    style={styles.copyBtn}
+                    onPress={handleCopyGeohash}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                    accessibilityRole="button"
+                    accessibilityLabel="Copy geohash"
+                  >
+                    <Feather
+                      name={copied ? "check" : "copy"}
+                      size={15}
+                      color={copied ? Colors.online : Colors.textMuted}
+                    />
+                  </Pressable>
                 </View>
-                {isGeo && geohash !== null && (
-                  <>
-                    <View style={styles.factDivider} />
-                    <View style={styles.factRow}>
-                      <Feather
-                        name="map-pin"
-                        size={16}
-                        color={Colors.textSecondary}
-                      />
-                      <Text style={styles.factValue} numberOfLines={1}>
-                        <Text style={styles.factGeohashLabel}>Geohash </Text>
-                        <Text style={styles.factGeohash}>{geohash}</Text>
-                      </Text>
-                      <Pressable
-                        style={styles.copyBtn}
-                        onPress={handleCopyGeohash}
-                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                        accessibilityRole="button"
-                        accessibilityLabel="Copy geohash"
-                      >
-                        <Feather
-                          name={copied ? "check" : "copy"}
-                          size={15}
-                          color={copied ? Colors.online : Colors.textMuted}
-                        />
-                      </Pressable>
-                    </View>
-                  </>
-                )}
-              </View>
-              <Text style={styles.factHint}>{detailHint}</Text>
-            </View>
+              </>
+            )}
+          </View>
+          <Text style={styles.factHint}>{detailHint}</Text>
+        </View>
 
-            {/* Members: a group's signed roster, a geo cell's active
+        {/* Members: a group's signed roster, a geo cell's active
                 participants, or the nearby BLE peers — one layout for all three,
                 with a "You" row, a search toggle, and a chat action per member. */}
-            <View style={styles.section}>
-              <View style={styles.memberHeaderRow}>
-                <Text style={styles.sectionLabel}>
-                  {`${memberSectionTitle} · ${memberTotal}`}
-                </Text>
-                <Pressable
-                  onPress={() => {
-                    setSearching((s) => !s);
-                    setMemberSearch("");
-                  }}
-                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                  accessibilityRole="button"
-                  accessibilityLabel="Search members"
-                >
-                  <Feather
-                    name="search"
-                    size={15}
-                    color={searching ? Colors.textPrimary : Colors.textMuted}
-                  />
-                </Pressable>
-              </View>
+        <View style={styles.section}>
+          <View style={styles.memberHeaderRow}>
+            <Text style={styles.sectionLabel}>
+              {`${memberSectionTitle} · ${memberTotal}`}
+            </Text>
+            <Pressable
+              onPress={() => {
+                setSearching((s) => !s);
+                setMemberSearch("");
+              }}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              accessibilityRole="button"
+              accessibilityLabel="Search members"
+            >
+              <Feather
+                name="search"
+                size={15}
+                color={searching ? Colors.textPrimary : Colors.textMuted}
+              />
+            </Pressable>
+          </View>
 
-              {searching && (
-                <TextInput
-                  style={styles.memberSearchInput}
-                  value={memberSearch}
-                  onChangeText={setMemberSearch}
-                  placeholder="Search members..."
-                  placeholderTextColor={Colors.textMuted}
-                  autoFocus
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  selectionColor={Colors.accent}
-                />
-              )}
+          {searching && (
+            <TextInput
+              style={styles.memberSearchInput}
+              value={memberSearch}
+              onChangeText={setMemberSearch}
+              placeholder="Search members..."
+              placeholderTextColor={Colors.textMuted}
+              autoFocus
+              autoCapitalize="none"
+              autoCorrect={false}
+              selectionColor={Colors.accent}
+            />
+          )}
 
-              <View style={styles.memberList}>
-                {/* You: your own row, no chat action (you can't DM yourself);
+          <View style={styles.memberList}>
+            {/* You: your own row, no chat action (you can't DM yourself);
                     the right side reads "You". */}
-                {showYouRow && youMatches && (
-                  <View style={styles.memberRow}>
-                    <Avatar
-                      username={localNickname}
-                      peerID={localPeerID}
-                      size={30}
-                    />
-                    <Text style={styles.memberName} numberOfLines={1}>
-                      {localNickname}
-                    </Text>
-                    {selfTeleported && (
-                      <Text style={styles.memberTag}>Teleported</Text>
-                    )}
-                    <Text style={styles.memberYou}>You</Text>
-                  </View>
-                )}
-
-                {filteredMembers.map((m) => (
-                  <View key={m.id} style={styles.memberRow}>
-                    <Avatar username={m.name} peerID={m.id} size={30} />
-                    <Text style={styles.memberName} numberOfLines={1}>
-                      {m.name}
-                    </Text>
-                    {isGroup && m.id === groupCreatorFp && (
-                      <Text style={styles.memberTag}>Creator</Text>
-                    )}
-                    {m.teleported && (
-                      <Text style={styles.memberTag}>Teleported</Text>
-                    )}
-                    {m.onChat && (
-                      <Pressable
-                        onPress={m.onChat}
-                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                        accessibilityRole="button"
-                        accessibilityLabel={`Message ${m.name}`}
-                      >
-                        <Feather
-                          name="message-circle"
-                          size={18}
-                          color={Colors.textSecondary}
-                        />
-                      </Pressable>
-                    )}
-                    {m.onRemove && (
-                      <Pressable
-                        onPress={m.onRemove}
-                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                        accessibilityRole="button"
-                        accessibilityLabel={`Remove ${m.name}`}
-                      >
-                        <Feather
-                          name="user-x"
-                          size={17}
-                          color={Colors.danger}
-                        />
-                      </Pressable>
-                    )}
-                  </View>
-                ))}
-
-                {visibleCount === 0 && (
-                  <Text style={styles.noMembers}>
-                    {query.length > 0 ? "No matches." : "No one here yet."}
-                  </Text>
-                )}
-              </View>
-
-              {isGroupCreator && groupMembers.length < GROUP_MAX_MEMBERS && (
-                <Pressable
-                  style={styles.addMembersBtn}
-                  onPress={() => {
-                    setAddSelected(new Set());
-                    setShowAddMembers(true);
-                  }}
-                  accessibilityRole="button"
-                  accessibilityLabel="Add members"
-                >
-                  <Feather
-                    name="user-plus"
-                    size={16}
-                    color={Colors.textSecondary}
-                  />
-                  <Text style={styles.addMembersText}>Add members</Text>
-                </Pressable>
-              )}
-            </View>
-
-            {/* Creator-only add-members picker. */}
-            {showAddMembers && (
-              <Modal
-                transparent
-                animationType="slide"
-                onRequestClose={() => setShowAddMembers(false)}
-              >
-                <View style={styles.overlay}>
-                  <Pressable
-                    style={StyleSheet.absoluteFill}
-                    onPress={() => setShowAddMembers(false)}
-                  />
-                  <View style={styles.sheet}>
-                    <View style={styles.handle} />
-                    <Text style={styles.addTitle}>Add members</Text>
-                    {addablePeers.length === 0 ? (
-                      <Text style={styles.noMembers}>
-                        No reachable peers to add. Members must be nearby.
-                      </Text>
-                    ) : (
-                      <ScrollView
-                        style={styles.addList}
-                        showsVerticalScrollIndicator={false}
-                      >
-                        {addablePeers.map((peer) => {
-                          const sel = addSelected.has(peer.peerID);
-                          return (
-                            <Pressable
-                              key={peer.peerID}
-                              style={styles.memberRow}
-                              onPress={() => toggleAddMember(peer.peerID)}
-                              accessibilityRole="checkbox"
-                              accessibilityState={{ checked: sel }}
-                            >
-                              <Avatar
-                                username={peer.nickname}
-                                peerID={peer.peerID}
-                                size={30}
-                              />
-                              <Text style={styles.memberName} numberOfLines={1}>
-                                {peer.nickname}
-                              </Text>
-                              <View
-                                style={[
-                                  styles.addCheck,
-                                  sel && styles.addCheckOn,
-                                ]}
-                              >
-                                {sel && (
-                                  <Feather
-                                    name="check"
-                                    size={14}
-                                    color={Colors.textInverse}
-                                  />
-                                )}
-                              </View>
-                            </Pressable>
-                          );
-                        })}
-                      </ScrollView>
-                    )}
-                    <Pressable
-                      style={[
-                        styles.addConfirm,
-                        addSelected.size === 0 && styles.addConfirmDisabled,
-                      ]}
-                      onPress={handleAddMembers}
-                      disabled={addSelected.size === 0}
-                      accessibilityRole="button"
-                      accessibilityLabel="Add selected members"
-                    >
-                      <Text style={styles.addConfirmText}>
-                        {addSelected.size > 0
-                          ? `Add ${addSelected.size}`
-                          : "Add"}
-                      </Text>
-                    </Pressable>
-                  </View>
-                </View>
-              </Modal>
-            )}
-
-            {/* Share */}
-            {/* (removed: channel name visible in every screen header) */}
-
-            {/* Actions: leave */}
-            {!isDefault ? (
-              <View style={styles.actions}>
-                <Pressable
-                  style={styles.leaveBtn}
-                  onPress={handleLeave}
-                  accessibilityRole="button"
-                  accessibilityLabel={isGroup ? "Leave group" : "Leave channel"}
-                >
-                  <Feather name="log-out" size={15} color={Colors.danger} />
-                  <Text style={styles.leaveBtnText}>
-                    {isGroup ? "Leave group" : "Leave"}
-                  </Text>
-                </Pressable>
-              </View>
-            ) : (
-              <View style={styles.defaultNotice}>
-                <Feather name="lock" size={13} color={Colors.textMuted} />
-                <Text style={styles.defaultNoticeText}>
-                  Default rooms cannot be left. They are part of the Airhop mesh
-                  protocol.
+            {showYouRow && youMatches && (
+              <View style={styles.memberRow}>
+                <Avatar
+                  username={localNickname}
+                  peerID={localPeerID}
+                  size={30}
+                />
+                <Text style={styles.memberName} numberOfLines={1}>
+                  {localNickname}
                 </Text>
+                {selfTeleported && (
+                  <Text style={styles.memberTag}>Teleported</Text>
+                )}
+                <Text style={styles.memberYou}>You</Text>
               </View>
             )}
-          </ScrollView>
+
+            {filteredMembers.map((m) => (
+              <View key={m.id} style={styles.memberRow}>
+                <Avatar username={m.name} peerID={m.id} size={30} />
+                <Text style={styles.memberName} numberOfLines={1}>
+                  {m.name}
+                </Text>
+                {isGroup && m.id === groupCreatorFp && (
+                  <Text style={styles.memberTag}>Creator</Text>
+                )}
+                {m.teleported && (
+                  <Text style={styles.memberTag}>Teleported</Text>
+                )}
+                {m.onChat && (
+                  <Pressable
+                    onPress={m.onChat}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Message ${m.name}`}
+                  >
+                    <Feather
+                      name="message-circle"
+                      size={18}
+                      color={Colors.textSecondary}
+                    />
+                  </Pressable>
+                )}
+                {m.onRemove && (
+                  <Pressable
+                    onPress={m.onRemove}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Remove ${m.name}`}
+                  >
+                    <Feather name="user-x" size={17} color={Colors.danger} />
+                  </Pressable>
+                )}
+              </View>
+            ))}
+
+            {visibleCount === 0 && (
+              <Text style={styles.noMembers}>
+                {query.length > 0 ? "No matches." : "No one here yet."}
+              </Text>
+            )}
+          </View>
+
+          {isGroupCreator && groupMembers.length < GROUP_MAX_MEMBERS && (
+            <Pressable
+              style={styles.addMembersBtn}
+              onPress={() => {
+                setAddSelected(new Set());
+                setShowAddMembers(true);
+              }}
+              accessibilityRole="button"
+              accessibilityLabel="Add members"
+            >
+              <Feather
+                name="user-plus"
+                size={16}
+                color={Colors.textSecondary}
+              />
+              <Text style={styles.addMembersText}>Add members</Text>
+            </Pressable>
+          )}
         </View>
-      </View>
-    </Modal>
+
+        {/* Creator-only add-members picker. */}
+        {showAddMembers && (
+          <BottomSheet
+            visible
+            onClose={() => setShowAddMembers(false)}
+            sheetStyle={styles.sheet}
+            scrollable
+          >
+            <Text style={styles.addTitle}>Add members</Text>
+            {addablePeers.length === 0 ? (
+              <Text style={styles.noMembers}>
+                No reachable peers to add. Members must be nearby.
+              </Text>
+            ) : (
+              <ScrollView
+                style={styles.addList}
+                showsVerticalScrollIndicator={false}
+              >
+                {addablePeers.map((peer) => {
+                  const sel = addSelected.has(peer.peerID);
+                  return (
+                    <Pressable
+                      key={peer.peerID}
+                      style={styles.memberRow}
+                      onPress={() => toggleAddMember(peer.peerID)}
+                      accessibilityRole="checkbox"
+                      accessibilityState={{ checked: sel }}
+                    >
+                      <Avatar
+                        username={peer.nickname}
+                        peerID={peer.peerID}
+                        size={30}
+                      />
+                      <Text style={styles.memberName} numberOfLines={1}>
+                        {peer.nickname}
+                      </Text>
+                      <View style={[styles.addCheck, sel && styles.addCheckOn]}>
+                        {sel && (
+                          <Feather
+                            name="check"
+                            size={14}
+                            color={Colors.textInverse}
+                          />
+                        )}
+                      </View>
+                    </Pressable>
+                  );
+                })}
+              </ScrollView>
+            )}
+            <Pressable
+              style={[
+                styles.addConfirm,
+                addSelected.size === 0 && styles.addConfirmDisabled,
+              ]}
+              onPress={handleAddMembers}
+              disabled={addSelected.size === 0}
+              accessibilityRole="button"
+              accessibilityLabel="Add selected members"
+            >
+              <Text style={styles.addConfirmText}>
+                {addSelected.size > 0 ? `Add ${addSelected.size}` : "Add"}
+              </Text>
+            </Pressable>
+          </BottomSheet>
+        )}
+
+        {/* Share */}
+        {/* (removed: channel name visible in every screen header) */}
+
+        {/* Actions: leave */}
+        {!isDefault ? (
+          <View style={styles.actions}>
+            <Pressable
+              style={styles.leaveBtn}
+              onPress={handleLeave}
+              accessibilityRole="button"
+              accessibilityLabel={isGroup ? "Leave group" : "Leave channel"}
+            >
+              <Feather name="log-out" size={15} color={Colors.danger} />
+              <Text style={styles.leaveBtnText}>
+                {isGroup ? "Leave group" : "Leave"}
+              </Text>
+            </Pressable>
+          </View>
+        ) : (
+          <View style={styles.defaultNotice}>
+            <Feather name="lock" size={13} color={Colors.textMuted} />
+            <Text style={styles.defaultNoticeText}>
+              Default rooms cannot be left. They are part of the Airhop mesh
+              protocol.
+            </Text>
+          </View>
+        )}
+      </ScrollView>
+    </BottomSheet>
   );
 }
 
 function createStyles(Colors: ReturnType<typeof useThemeColors>) {
   return StyleSheet.create({
-    overlay: {
-      flex: 1,
-      backgroundColor: Colors.overlay,
-      justifyContent: "flex-end",
-    },
     sheet: {
-      backgroundColor: Colors.surface,
-      borderTopLeftRadius: Radius["2xl"],
-      borderTopRightRadius: Radius["2xl"],
       maxHeight: "85%",
-    },
-    handle: {
-      width: 36,
-      height: 4,
-      borderRadius: 2,
-      backgroundColor: Colors.borderStrong,
-      alignSelf: "center",
-      marginTop: Spacing.md,
-      marginBottom: Spacing.sm,
     },
     // ---- Header (centered) ----------------------------------------------------
     headerCenter: {

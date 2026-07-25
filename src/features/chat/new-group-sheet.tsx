@@ -9,7 +9,6 @@
 import { Feather } from "@expo/vector-icons";
 import { useMemo, useState } from "react";
 import {
-  Modal,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -21,6 +20,7 @@ import { getMeshService } from "../../services/mesh-service";
 import { groupChannel } from "../../store/group-store";
 import { usePeerStore } from "../../store/peer-store";
 import Avatar from "../../ui/components/avatar";
+import BottomSheet from "../../ui/components/bottom-sheet";
 import {
   FontSize,
   FontWeight,
@@ -98,161 +98,137 @@ export function NewGroupSheet({ visible, onClose, onBack, onCreated }: Props) {
   const canCreate = name.trim().length > 0 && selected.size > 0;
 
   return (
-    <Modal
+    <BottomSheet
       visible={visible}
-      transparent
-      animationType="slide"
-      onRequestClose={handleClose}
+      onClose={handleClose}
+      sheetStyle={styles.sheet}
+      scrollable
     >
-      <View style={styles.overlay}>
-        <Pressable style={StyleSheet.absoluteFill} onPress={handleClose} />
-        <View style={styles.sheet}>
-          <View style={styles.handle} />
-          <Text style={styles.title}>Create a group</Text>
-          {/* Same scannable card as the create-channel sheet, so the two sides
+      <Text style={styles.title}>Create a group</Text>
+      {/* Same scannable card as the create-channel sheet, so the two sides
               of the chooser stay comparable: what it protects, who can get in,
               how far it reaches. */}
-          <View style={styles.privacyNote}>
-            <View style={styles.privacyNoteRow}>
-              <Feather
-                name="lock"
-                size={14}
-                color={Colors.e2ee}
-                style={styles.noteIcon}
-              />
-              <Text style={styles.privacyNoteText}>
-                End-to-end encrypted. Only members can read the messages.
-              </Text>
-            </View>
-            <View style={styles.privacyNoteRow}>
-              <Feather
-                name="users"
-                size={14}
-                color={Colors.textMuted}
-                style={styles.noteIcon}
-              />
-              <Text style={styles.privacyNoteText}>
-                Up to 16 people, chosen by you. There is no invite link, so
-                nobody joins by being forwarded one.
-              </Text>
-            </View>
-            <View style={styles.privacyNoteRow}>
-              <Feather
-                name="bluetooth"
-                size={14}
-                color={Colors.textMuted}
-                style={styles.noteIcon}
-              />
-              <Text style={styles.privacyNoteText}>
-                Bluetooth only. Members out of range receive messages once they
-                are back.
-              </Text>
-            </View>
-          </View>
-
-          <TextInput
-            style={styles.input}
-            value={name}
-            onChangeText={setName}
-            placeholder="Group name"
-            placeholderTextColor={Colors.textMuted}
-            selectionColor={Colors.accent}
-            maxLength={40}
+      <View style={styles.privacyNote}>
+        <View style={styles.privacyNoteRow}>
+          <Feather
+            name="lock"
+            size={14}
+            color={Colors.e2ee}
+            style={styles.noteIcon}
           />
-
-          {/* Label and list are one block: the sheet's own gap would otherwise
-              push the heading away from the thing it labels. */}
-          <View style={styles.section}>
-            <Text style={styles.sectionLabel}>
-              MEMBERS{selected.size > 0 ? ` · ${selected.size}` : ""}
-            </Text>
-
-            {reachable.length === 0 ? (
-              <Text style={styles.empty}>
-                No one is in range. Members must be nearby when you create the
-                group.
-              </Text>
-            ) : (
-              <ScrollView
-                style={styles.list}
-                showsVerticalScrollIndicator={false}
-              >
-                {reachable.map((peer) => {
-                  const isSel = selected.has(peer.peerID);
-                  return (
-                    <Pressable
-                      key={peer.peerID}
-                      style={styles.row}
-                      onPress={() => toggle(peer.peerID)}
-                      accessibilityRole="checkbox"
-                      accessibilityState={{ checked: isSel }}
-                    >
-                      <Avatar
-                        username={peer.nickname}
-                        peerID={peer.peerID}
-                        size={36}
-                      />
-                      <Text style={styles.rowName} numberOfLines={1}>
-                        {peer.nickname}
-                      </Text>
-                      <View style={[styles.check, isSel && styles.checkOn]}>
-                        {isSel && (
-                          <Feather
-                            name="check"
-                            size={14}
-                            color={Colors.textInverse}
-                          />
-                        )}
-                      </View>
-                    </Pressable>
-                  );
-                })}
-              </ScrollView>
-            )}
-          </View>
-
-          {error !== null && <Text style={styles.error}>{error}</Text>}
-
-          <View style={styles.actions}>
-            <Pressable style={styles.cancel} onPress={handleBack}>
-              <Text style={styles.cancelText}>Back</Text>
-            </Pressable>
-            <Pressable
-              style={[styles.confirm, !canCreate && styles.confirmDisabled]}
-              onPress={handleCreate}
-              disabled={!canCreate}
-            >
-              <Text style={styles.confirmText}>Create</Text>
-            </Pressable>
-          </View>
+          <Text style={styles.privacyNoteText}>
+            End-to-end encrypted. Only members can read the messages.
+          </Text>
+        </View>
+        <View style={styles.privacyNoteRow}>
+          <Feather
+            name="users"
+            size={14}
+            color={Colors.textMuted}
+            style={styles.noteIcon}
+          />
+          <Text style={styles.privacyNoteText}>
+            Up to 16 people, chosen by you. There is no invite link, so nobody
+            joins by being forwarded one.
+          </Text>
+        </View>
+        <View style={styles.privacyNoteRow}>
+          <Feather
+            name="bluetooth"
+            size={14}
+            color={Colors.textMuted}
+            style={styles.noteIcon}
+          />
+          <Text style={styles.privacyNoteText}>
+            Bluetooth only. Members out of range receive messages once they are
+            back.
+          </Text>
         </View>
       </View>
-    </Modal>
+
+      <TextInput
+        style={styles.input}
+        value={name}
+        onChangeText={setName}
+        placeholder="Group name"
+        placeholderTextColor={Colors.textMuted}
+        selectionColor={Colors.accent}
+        maxLength={40}
+      />
+
+      {/* Label and list are one block: the sheet's own gap would otherwise
+              push the heading away from the thing it labels. */}
+      <View style={styles.section}>
+        <Text style={styles.sectionLabel}>
+          MEMBERS{selected.size > 0 ? ` · ${selected.size}` : ""}
+        </Text>
+
+        {reachable.length === 0 ? (
+          <Text style={styles.empty}>
+            No one is in range. Members must be nearby when you create the
+            group.
+          </Text>
+        ) : (
+          <ScrollView style={styles.list} showsVerticalScrollIndicator={false}>
+            {reachable.map((peer) => {
+              const isSel = selected.has(peer.peerID);
+              return (
+                <Pressable
+                  key={peer.peerID}
+                  style={styles.row}
+                  onPress={() => toggle(peer.peerID)}
+                  accessibilityRole="checkbox"
+                  accessibilityState={{ checked: isSel }}
+                >
+                  <Avatar
+                    username={peer.nickname}
+                    peerID={peer.peerID}
+                    size={36}
+                  />
+                  <Text style={styles.rowName} numberOfLines={1}>
+                    {peer.nickname}
+                  </Text>
+                  <View style={[styles.check, isSel && styles.checkOn]}>
+                    {isSel && (
+                      <Feather
+                        name="check"
+                        size={14}
+                        color={Colors.textInverse}
+                      />
+                    )}
+                  </View>
+                </Pressable>
+              );
+            })}
+          </ScrollView>
+        )}
+      </View>
+
+      {error !== null && <Text style={styles.error}>{error}</Text>}
+
+      <View style={styles.actions}>
+        <Pressable style={styles.cancel} onPress={handleBack}>
+          <Text style={styles.cancelText}>Back</Text>
+        </Pressable>
+        <Pressable
+          style={[styles.confirm, !canCreate && styles.confirmDisabled]}
+          onPress={handleCreate}
+          disabled={!canCreate}
+        >
+          <Text style={styles.confirmText}>Create</Text>
+        </Pressable>
+      </View>
+    </BottomSheet>
   );
 }
 
 function createStyles(Colors: ReturnType<typeof useThemeColors>) {
   return StyleSheet.create({
-    overlay: {
-      flex: 1,
-      backgroundColor: Colors.overlay,
-      justifyContent: "flex-end",
-    },
     sheet: {
-      backgroundColor: Colors.surface,
-      borderTopLeftRadius: Radius["2xl"],
-      borderTopRightRadius: Radius["2xl"],
-      padding: Spacing.xl,
+      paddingHorizontal: Spacing.xl,
+      paddingBottom: Spacing.xl,
       gap: Spacing.md,
       maxHeight: "85%",
-    },
-    handle: {
-      width: 36,
-      height: 4,
-      borderRadius: 2,
-      backgroundColor: Colors.borderStrong,
-      alignSelf: "center",
-      marginBottom: Spacing.xs,
     },
     title: {
       fontSize: FontSize.md,
@@ -291,7 +267,12 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       borderWidth: 1,
       borderColor: Colors.border,
     },
-    section: { gap: Spacing.sm },
+    // flexShrink so the member list gives up height when the sheet is squeezed
+    // (keyboard up on a short screen) instead of pushing the Back/Create row off
+    // the bottom of a maxHeight-clipped sheet. RN defaults flexShrink to 0, so
+    // without this the list keeps its full height and the actions - the only way
+    // to finish or leave - are what gets cut.
+    section: { gap: Spacing.sm, flexShrink: 1 },
     sectionLabel: {
       fontSize: FontSize.xs,
       fontWeight: FontWeight.semibold,
@@ -303,7 +284,7 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       color: Colors.textMuted,
       lineHeight: 19,
     },
-    list: { flexGrow: 0 },
+    list: { flexGrow: 0, flexShrink: 1 },
     row: {
       flexDirection: "row",
       alignItems: "center",

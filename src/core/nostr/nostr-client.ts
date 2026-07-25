@@ -37,6 +37,15 @@ const MAX_RELAY_COUNT = 5;
 // How long to wait for a publish ACK from at least one relay.
 const PUBLISH_TIMEOUT_MS = 8_000;
 
+// Ceiling on a one-shot read (querySync / get). Without it these resolve only
+// once every relay has sent EOSE, which never happens on a connection that went
+// away without closing - the case where you walk out of Wi-Fi range mid-request.
+// The promise would then never settle, and any UI awaiting it stays in its
+// loading state for the rest of the session with no way back. Returning
+// whatever arrived inside the window is both bounded and honest: these reads
+// are best-effort lookups across a relay set that is never guaranteed complete.
+const QUERY_MAX_WAIT_MS = 6_000;
+
 // ---- Types ------------------------------------------------------------------
 
 export interface NostrClientConfig {
@@ -193,12 +202,18 @@ export class NostrClient {
 
   // Fetch a single event by its ID (queries all relays, returns first found).
   async fetchEvent(id: string): Promise<Event | null> {
-    return this.pool.get(this.relays, { ids: [id] });
+    return this.pool.get(
+      this.relays,
+      { ids: [id] },
+      { maxWait: QUERY_MAX_WAIT_MS },
+    );
   }
 
   // Query relays and collect all matching events up to eose.
   async queryEvents(filter: Filter): Promise<Event[]> {
-    return this.pool.querySync(this.relays, filter);
+    return this.pool.querySync(this.relays, filter, {
+      maxWait: QUERY_MAX_WAIT_MS,
+    });
   }
 
   // Close all relay connections.

@@ -77,7 +77,7 @@ What each feature is for, and when someone would actually reach for it.
 ### Optional
 
 - Cashu ecash. Send value device to device with no internet and no payment company. Settle a shared bill in a dead zone; the recipient redeems whenever they are back online.
-- Nutzaps. Lightning payments over Nostr when you do have a connection.
+- Nutzaps. Pay a Nostr identity in ecash when you do have a connection, locked to their key so only they can spend it.
 - Local assistant. On-device inference. Questions answered with nothing leaving the phone.
 - AT Protocol. Opt-in bridge to Bluesky using the same Airhop identity.
 - ActivityPub. Opt-in bridge to Mastodon, same identity.

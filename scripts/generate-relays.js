@@ -1,5 +1,6 @@
 #!/usr/bin/env node
-// Regenerates src/data/relays.ts from assets/data/relays.csv.
+// Regenerates src/data/relays.ts and landing/src/data/relays.ts from
+// assets/data/relays.csv.
 //
 // The relay directory ships as a TypeScript module rather than being parsed
 // from the CSV at runtime: Metro does not bundle .csv as an asset, so the file
@@ -22,6 +23,14 @@ const path = require("path");
 
 const CSV = path.join(__dirname, "..", "assets", "data", "relays.csv");
 const OUT = path.join(__dirname, "..", "src", "data", "relays.ts");
+const LANDING_OUT = path.join(
+  __dirname,
+  "..",
+  "landing",
+  "src",
+  "data",
+  "relays.ts",
+);
 
 const lines = fs
   .readFileSync(CSV, "utf8")
@@ -74,3 +83,44 @@ ${body}
 );
 
 console.log(`Wrote ${relays.length} relays to src/data/relays.ts`);
+
+// The landing page plots the same directory on a world map. It only needs one
+// entry per physical location, so relays sharing a site are collapsed into a
+// single point carrying its relay count. Generating it here keeps the map in
+// step with the weekly sync and means the site never calls GitHub at runtime.
+const sites = new Map();
+for (const r of relays) {
+  const lat = Math.round(r.lat * 1000) / 1000;
+  const lng = Math.round(r.lng * 1000) / 1000;
+  const key = `${lat},${lng}`;
+  const site = sites.get(key);
+  if (site) site.relays += 1;
+  else sites.set(key, { lat, lng, relays: 1 });
+}
+
+// Stable order so the generated file only changes when the data does.
+const siteList = [...sites.values()].sort(
+  (a, b) => a.lat - b.lat || a.lng - b.lng,
+);
+const siteBody = siteList
+  .map((s) => `  { lat: ${s.lat}, lng: ${s.lng}, relays: ${s.relays} },`)
+  .join("\n");
+
+fs.mkdirSync(path.dirname(LANDING_OUT), { recursive: true });
+fs.writeFileSync(
+  LANDING_OUT,
+  `export interface RelaySite {
+  lat: number;
+  lng: number;
+  relays: number;
+}
+
+export const RELAY_COUNT = ${relays.length};
+
+export const RELAY_SITES: readonly RelaySite[] = [
+${siteBody}
+];
+`,
+);
+
+console.log(`Wrote ${siteList.length} sites to landing/src/data/relays.ts`);

@@ -910,6 +910,21 @@ From the whitepaper's "Future Work" section and observed codebase state:
 
 ## Appendix: Key Constants Reference
 
+These are bitchat's constants, not Airhop's. Airhop matches every value a
+carrier or peer can observe, because anything on the wire is judged by the
+other device's limits, not ours. The code is the authority for the rest.
+
+Deliberate differences, all of them local-only:
+
+| Constant   | bitchat      | Airhop    | Where                       |
+| ---------- | ------------ | --------- | --------------------------- |
+| Outbox TTL | 24 h         | 7 days    | `src/store/outbox-store.ts` |
+| Outbox cap | 100 per peer | 500 total | `src/store/outbox-store.ts` |
+
+The outbox is our own queue of undelivered messages. Nothing about it goes on
+the wire, so holding longer only means retrying longer for a peer who has been
+out of range for days, which suits a mesh where that is normal.
+
 | Constant                      | Value                          | Meaning                                               |
 | ----------------------------- | ------------------------------ | ----------------------------------------------------- |
 | TTL default                   | 7                              | Max hops for a packet                                 |
@@ -942,4 +957,6 @@ From the whitepaper's "Future Work" section and observed codebase state:
 | PTT max burst duration        | 120 s                          |                                                       |
 | PTT jitter buffer             | 350 ms                         | Before starting live playback                         |
 
-_This document reflects the codebase as of July 2026. The bitchat protocol is public domain (Unlicense). Airhop is MIT licensed._
+_This document reflects the bitchat codebase as of July 2026. For how Airhop
+behaves, read `src/` and [ARCHITECTURE.md](../spec/ARCHITECTURE.md). The bitchat
+protocol is public domain (Unlicense). Airhop is MIT licensed._

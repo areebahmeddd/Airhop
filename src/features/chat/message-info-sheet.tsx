@@ -6,8 +6,9 @@
 
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import React, { useMemo } from "react";
-import { Modal, Pressable, StyleSheet, Text, View } from "react-native";
+import { StyleSheet, Text, View } from "react-native";
 import type { ChatMessage } from "../../store/chat-store";
+import BottomSheet from "../../ui/components/bottom-sheet";
 import {
   FontSize,
   FontWeight,
@@ -37,110 +38,103 @@ export default function MessageInfoSheet({
     message && isDM ? resolveDisplayName(message.channel.slice(3)) : "";
 
   return (
-    <Modal
+    <BottomSheet
       visible={message !== null}
-      transparent
-      animationType="slide"
-      onRequestClose={onClose}
+      onClose={onClose}
+      sheetStyle={styles.sheet}
     >
-      <View style={styles.overlay}>
-        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
-        <View style={styles.sheet}>
-          <View style={styles.handle} />
-          <Text style={styles.title}>Message info</Text>
+      <Text style={styles.title}>Message info</Text>
 
-          {message && (
-            <>
-              <View style={styles.preview}>
-                <Text style={styles.previewText} numberOfLines={3}>
-                  {messagePreviewText(message)}
-                </Text>
-              </View>
+      {message && (
+        <>
+          <View style={styles.preview}>
+            <Text style={styles.previewText} numberOfLines={3}>
+              {messagePreviewText(message)}
+            </Text>
+          </View>
 
-              <View style={styles.rows}>
-                {status === "sending" && (
+          <View style={styles.rows}>
+            {status === "sending" && (
+              <InfoLine
+                styles={styles}
+                icon="clock-outline"
+                color={Colors.textMuted}
+                label="Sending…"
+              />
+            )}
+            {status === "failed" && (
+              <InfoLine
+                styles={styles}
+                icon="alert-circle-outline"
+                color={Colors.danger}
+                label="Failed to send"
+              />
+            )}
+            {status === "carried" && (
+              <InfoLine
+                styles={styles}
+                icon="account-arrow-right"
+                color={Colors.textSecondary}
+                label="Carried by a friend"
+                time={formatDateTime(message.timestampMs)}
+                sub="Handed to the mesh for best-effort delivery"
+              />
+            )}
+
+            {status !== undefined &&
+              status !== "sending" &&
+              status !== "failed" &&
+              status !== "carried" && (
+                <>
                   <InfoLine
                     styles={styles}
-                    icon="clock-outline"
-                    color={Colors.textMuted}
-                    label="Sending…"
-                  />
-                )}
-                {status === "failed" && (
-                  <InfoLine
-                    styles={styles}
-                    icon="alert-circle-outline"
-                    color={Colors.danger}
-                    label="Failed to send"
-                  />
-                )}
-                {status === "carried" && (
-                  <InfoLine
-                    styles={styles}
-                    icon="account-arrow-right"
+                    icon="check"
                     color={Colors.textSecondary}
-                    label="Carried by a friend"
+                    label="Sent"
                     time={formatDateTime(message.timestampMs)}
-                    sub="Handed to the mesh for best-effort delivery"
                   />
-                )}
-
-                {status !== undefined &&
-                  status !== "sending" &&
-                  status !== "failed" &&
-                  status !== "carried" && (
+                  {isDM && (
                     <>
                       <InfoLine
                         styles={styles}
-                        icon="check"
-                        color={Colors.textSecondary}
-                        label="Sent"
-                        time={formatDateTime(message.timestampMs)}
+                        icon="check-all"
+                        color={
+                          message.deliveredAtMs !== undefined
+                            ? Colors.textSecondary
+                            : Colors.textMuted
+                        }
+                        label={`Delivered to ${peerName}`}
+                        time={
+                          message.deliveredAtMs !== undefined
+                            ? formatDateTime(message.deliveredAtMs)
+                            : undefined
+                        }
+                        pending={message.deliveredAtMs === undefined}
                       />
-                      {isDM && (
-                        <>
-                          <InfoLine
-                            styles={styles}
-                            icon="check-all"
-                            color={
-                              message.deliveredAtMs !== undefined
-                                ? Colors.textSecondary
-                                : Colors.textMuted
-                            }
-                            label={`Delivered to ${peerName}`}
-                            time={
-                              message.deliveredAtMs !== undefined
-                                ? formatDateTime(message.deliveredAtMs)
-                                : undefined
-                            }
-                            pending={message.deliveredAtMs === undefined}
-                          />
-                          <InfoLine
-                            styles={styles}
-                            icon="check-all"
-                            color={
-                              message.readAtMs !== undefined
-                                ? Colors.accent
-                                : Colors.textMuted
-                            }
-                            label={`Read by ${peerName}`}
-                            time={
-                              message.readAtMs !== undefined
-                                ? formatDateTime(message.readAtMs)
-                                : undefined
-                            }
-                            pending={message.readAtMs === undefined}
-                          />
-                        </>
-                      )}
+                      <InfoLine
+                        styles={styles}
+                        icon="check-all"
+                        color={
+                          message.readAtMs !== undefined
+                            ? Colors.accent
+                            : Colors.textMuted
+                        }
+                        label={`Read by ${peerName}`}
+                        time={
+                          message.readAtMs !== undefined
+                            ? formatDateTime(message.readAtMs)
+                            : undefined
+                        }
+                        pending={message.readAtMs === undefined}
+                      />
                     </>
                   )}
-              </View>
-            </>
-          )}
-        </View>
-      </View>
-    </Modal>
+                </>
+              )}
+          </View>
+        </>
+      )}
+    </BottomSheet>
   );
 }
 
@@ -187,24 +181,10 @@ function formatDateTime(ms: number): string {
 
 function createStyles(Colors: ReturnType<typeof useThemeColors>) {
   return StyleSheet.create({
-    overlay: {
-      flex: 1,
-      backgroundColor: Colors.overlay,
-      justifyContent: "flex-end",
-    },
     sheet: {
-      backgroundColor: Colors.surface,
-      borderTopLeftRadius: Radius["2xl"],
-      borderTopRightRadius: Radius["2xl"],
-      padding: Spacing.xl,
+      paddingHorizontal: Spacing.xl,
+      paddingBottom: Spacing.xl,
       gap: Spacing.base,
-    },
-    handle: {
-      width: 36,
-      height: 4,
-      borderRadius: 2,
-      backgroundColor: Colors.borderStrong,
-      alignSelf: "center",
     },
     title: {
       fontSize: FontSize.md,

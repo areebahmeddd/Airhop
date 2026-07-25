@@ -35,12 +35,12 @@ jobs:
 
       - name: Commit and push
         run: |
-          if git diff --quiet -- assets/data/relays.csv src/data/relays.ts; then
+          if git diff --quiet -- assets/data/relays.csv src/data/relays.ts landing/src/data/relays.ts; then
             echo "Relay directory already up to date"
             exit 0
           fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add assets/data/relays.csv src/data/relays.ts
+          git add assets/data/relays.csv src/data/relays.ts landing/src/data/relays.ts
           git commit -m "chore(relays): sync relay directory from upstream"
           git push

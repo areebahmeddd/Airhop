@@ -17,7 +17,6 @@ import { Feather, MaterialCommunityIcons } from "@expo/vector-icons";
 import { bytesToHex } from "@noble/hashes/utils.js";
 import { useEffect, useMemo, useState } from "react";
 import {
-  Modal,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -29,6 +28,7 @@ import { isUrgent, type BoardPost } from "../../core/mesh/board-packet";
 import { getMeshService } from "../../services/mesh-service";
 import { useBoardStore } from "../../store/board-store";
 import { useNoticesStore, type LocationNote } from "../../store/notices-store";
+import BottomSheet from "../../ui/components/bottom-sheet";
 import {
   FontSize,
   FontWeight,
@@ -229,235 +229,193 @@ export function NoticesSheet({ visible, onClose, channel }: Props) {
   }
 
   return (
-    <Modal
+    <BottomSheet
       visible={visible}
-      transparent
-      animationType="slide"
-      onRequestClose={onClose}
+      onClose={onClose}
+      sheetStyle={styles.sheet}
+      scrollable
     >
-      <View style={styles.overlay}>
-        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
-        <View style={styles.sheet}>
-          <View style={styles.handle} />
-
-          <View style={styles.titleRow}>
-            <MaterialCommunityIcons
-              name="bulletin-board"
-              size={18}
-              color={Colors.textPrimary}
-            />
-            <Text style={styles.title}>Notices</Text>
-          </View>
-
-          {/* Scope tabs: only offer "Here" when a location cell is resolved. */}
-          {geohash !== null && (
-            <View style={styles.tabs}>
-              <Pressable
-                style={[styles.tab, scope === "here" && styles.tabActive]}
-                onPress={() => setScopeOverride("here")}
-                accessibilityRole="button"
-              >
-                <Feather
-                  name="map-pin"
-                  size={13}
-                  color={
-                    scope === "here" ? Colors.textPrimary : Colors.textSecondary
-                  }
-                />
-                <Text
-                  style={[
-                    styles.tabText,
-                    scope === "here" && styles.tabTextActive,
-                  ]}
-                >
-                  Geo
-                </Text>
-              </Pressable>
-              <Pressable
-                style={[styles.tab, scope === "mesh" && styles.tabActive]}
-                onPress={() => setScopeOverride("mesh")}
-                accessibilityRole="button"
-              >
-                <Feather
-                  name="bluetooth"
-                  size={13}
-                  color={
-                    scope === "mesh" ? Colors.textPrimary : Colors.textSecondary
-                  }
-                />
-                <Text
-                  style={[
-                    styles.tabText,
-                    scope === "mesh" && styles.tabTextActive,
-                  ]}
-                >
-                  Mesh
-                </Text>
-              </Pressable>
-            </View>
-          )}
-
-          {/* Compose */}
-          <View style={styles.composer}>
-            <TextInput
-              style={styles.input}
-              value={draft}
-              onChangeText={setDraft}
-              placeholder={
-                scope === "here"
-                  ? "Post a notice to this area"
-                  : "Post a notice to the mesh"
-              }
-              placeholderTextColor={Colors.textMuted}
-              multiline
-              maxLength={CONTENT_MAX * 2}
-            />
-            <View style={styles.composerControls}>
-              {/* Urgent is mesh-only, matching bitchat: not offered in a cell. */}
-              {scope === "mesh" && (
-                <Pressable
-                  style={[styles.urgentToggle, urgent && styles.urgentToggleOn]}
-                  onPress={() => setUrgent((u) => !u)}
-                  accessibilityRole="button"
-                  accessibilityLabel="Mark urgent"
-                >
-                  <Text
-                    style={[styles.urgentText, urgent && styles.urgentTextOn]}
-                  >
-                    Urgent
-                  </Text>
-                </Pressable>
-              )}
-
-              {/* Expiry: a connected segmented track with an accent thumb. */}
-              <View style={styles.expiryChips}>
-                {expiryOptions.map((opt) => (
-                  <Pressable
-                    key={opt.days}
-                    style={[
-                      styles.chip,
-                      effectiveExpiryDays === opt.days && styles.chipActive,
-                    ]}
-                    onPress={() => setExpiryDays(opt.days)}
-                    accessibilityRole="button"
-                  >
-                    <Text
-                      style={[
-                        styles.chipText,
-                        effectiveExpiryDays === opt.days &&
-                          styles.chipTextActive,
-                      ]}
-                    >
-                      {opt.label}
-                    </Text>
-                  </Pressable>
-                ))}
-              </View>
-            </View>
-            <Pressable
-              style={[styles.postBtn, !canPost && styles.postBtnDisabled]}
-              onPress={handlePost}
-              disabled={!canPost}
-              accessibilityRole="button"
-              accessibilityLabel="Post notice"
-            >
-              <Text style={styles.postBtnText}>Post</Text>
-            </Pressable>
-          </View>
-
-          {/* List */}
-          {rows.length === 0 ? (
-            <Text style={styles.empty}>
-              No notices yet. Post one so it stays here for others.
-            </Text>
-          ) : (
-            <ScrollView
-              style={styles.list}
-              showsVerticalScrollIndicator={false}
-            >
-              {rows.map((row) => {
-                const mine =
-                  row.post !== undefined &&
-                  myKey.length > 0 &&
-                  bytesToHex(row.post.authorSigningKey) === bytesToHex(myKey);
-                const fade = fadeLabel(row.expiresAtMs, now);
-                return (
-                  <View key={row.id} style={styles.row}>
-                    <View style={styles.rowHead}>
-                      {row.urgent && (
-                        <View style={styles.urgentBadge}>
-                          <Feather
-                            name="alert-triangle"
-                            size={10}
-                            color={Colors.textInverse}
-                          />
-                          <Text style={styles.urgentBadgeText}>URGENT</Text>
-                        </View>
-                      )}
-                      <Text style={styles.rowAuthor} numberOfLines={1}>
-                        {row.author}
-                      </Text>
-                      {!row.isBoard && (
-                        <Feather
-                          name="globe"
-                          size={11}
-                          color={Colors.textMuted}
-                        />
-                      )}
-                      <Text style={styles.rowTime}>
-                        {ageLabel(row.createdAtMs, now)}
-                      </Text>
-                    </View>
-                    <Text style={styles.rowContent}>{row.content}</Text>
-                    <View style={styles.rowFoot}>
-                      {fade !== null && (
-                        <Text style={styles.rowFade}>{fade}</Text>
-                      )}
-                      {mine && row.post !== undefined && (
-                        <Pressable
-                          onPress={() => handleDelete(row.post as BoardPost)}
-                          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                          accessibilityRole="button"
-                          accessibilityLabel="Delete notice"
-                        >
-                          <Text style={styles.rowDelete}>Delete</Text>
-                        </Pressable>
-                      )}
-                    </View>
-                  </View>
-                );
-              })}
-            </ScrollView>
-          )}
-        </View>
+      <View style={styles.titleRow}>
+        <MaterialCommunityIcons
+          name="bulletin-board"
+          size={18}
+          color={Colors.textPrimary}
+        />
+        <Text style={styles.title}>Notices</Text>
       </View>
-    </Modal>
+
+      {/* Scope tabs: only offer "Here" when a location cell is resolved. */}
+      {geohash !== null && (
+        <View style={styles.tabs}>
+          <Pressable
+            style={[styles.tab, scope === "here" && styles.tabActive]}
+            onPress={() => setScopeOverride("here")}
+            accessibilityRole="button"
+          >
+            <Feather
+              name="map-pin"
+              size={13}
+              color={
+                scope === "here" ? Colors.textPrimary : Colors.textSecondary
+              }
+            />
+            <Text
+              style={[styles.tabText, scope === "here" && styles.tabTextActive]}
+            >
+              Geo
+            </Text>
+          </Pressable>
+          <Pressable
+            style={[styles.tab, scope === "mesh" && styles.tabActive]}
+            onPress={() => setScopeOverride("mesh")}
+            accessibilityRole="button"
+          >
+            <Feather
+              name="bluetooth"
+              size={13}
+              color={
+                scope === "mesh" ? Colors.textPrimary : Colors.textSecondary
+              }
+            />
+            <Text
+              style={[styles.tabText, scope === "mesh" && styles.tabTextActive]}
+            >
+              Mesh
+            </Text>
+          </Pressable>
+        </View>
+      )}
+
+      {/* Compose */}
+      <View style={styles.composer}>
+        <TextInput
+          style={styles.input}
+          value={draft}
+          onChangeText={setDraft}
+          placeholder={
+            scope === "here"
+              ? "Post a notice to this area"
+              : "Post a notice to the mesh"
+          }
+          placeholderTextColor={Colors.textMuted}
+          multiline
+          maxLength={CONTENT_MAX * 2}
+        />
+        <View style={styles.composerControls}>
+          {/* Urgent is mesh-only, matching bitchat: not offered in a cell. */}
+          {scope === "mesh" && (
+            <Pressable
+              style={[styles.urgentToggle, urgent && styles.urgentToggleOn]}
+              onPress={() => setUrgent((u) => !u)}
+              accessibilityRole="button"
+              accessibilityLabel="Mark urgent"
+            >
+              <Text style={[styles.urgentText, urgent && styles.urgentTextOn]}>
+                Urgent
+              </Text>
+            </Pressable>
+          )}
+
+          {/* Expiry: a connected segmented track with an accent thumb. */}
+          <View style={styles.expiryChips}>
+            {expiryOptions.map((opt) => (
+              <Pressable
+                key={opt.days}
+                style={[
+                  styles.chip,
+                  effectiveExpiryDays === opt.days && styles.chipActive,
+                ]}
+                onPress={() => setExpiryDays(opt.days)}
+                accessibilityRole="button"
+              >
+                <Text
+                  style={[
+                    styles.chipText,
+                    effectiveExpiryDays === opt.days && styles.chipTextActive,
+                  ]}
+                >
+                  {opt.label}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+        </View>
+        <Pressable
+          style={[styles.postBtn, !canPost && styles.postBtnDisabled]}
+          onPress={handlePost}
+          disabled={!canPost}
+          accessibilityRole="button"
+          accessibilityLabel="Post notice"
+        >
+          <Text style={styles.postBtnText}>Post</Text>
+        </Pressable>
+      </View>
+
+      {/* List */}
+      {rows.length === 0 ? (
+        <Text style={styles.empty}>
+          No notices yet. Post one so it stays here for others.
+        </Text>
+      ) : (
+        <ScrollView style={styles.list} showsVerticalScrollIndicator={false}>
+          {rows.map((row) => {
+            const mine =
+              row.post !== undefined &&
+              myKey.length > 0 &&
+              bytesToHex(row.post.authorSigningKey) === bytesToHex(myKey);
+            const fade = fadeLabel(row.expiresAtMs, now);
+            return (
+              <View key={row.id} style={styles.row}>
+                <View style={styles.rowHead}>
+                  {row.urgent && (
+                    <View style={styles.urgentBadge}>
+                      <Feather
+                        name="alert-triangle"
+                        size={10}
+                        color={Colors.textInverse}
+                      />
+                      <Text style={styles.urgentBadgeText}>URGENT</Text>
+                    </View>
+                  )}
+                  <Text style={styles.rowAuthor} numberOfLines={1}>
+                    {row.author}
+                  </Text>
+                  {!row.isBoard && (
+                    <Feather name="globe" size={11} color={Colors.textMuted} />
+                  )}
+                  <Text style={styles.rowTime}>
+                    {ageLabel(row.createdAtMs, now)}
+                  </Text>
+                </View>
+                <Text style={styles.rowContent}>{row.content}</Text>
+                <View style={styles.rowFoot}>
+                  {fade !== null && <Text style={styles.rowFade}>{fade}</Text>}
+                  {mine && row.post !== undefined && (
+                    <Pressable
+                      onPress={() => handleDelete(row.post as BoardPost)}
+                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                      accessibilityRole="button"
+                      accessibilityLabel="Delete notice"
+                    >
+                      <Text style={styles.rowDelete}>Delete</Text>
+                    </Pressable>
+                  )}
+                </View>
+              </View>
+            );
+          })}
+        </ScrollView>
+      )}
+    </BottomSheet>
   );
 }
 
 function createStyles(Colors: ReturnType<typeof useThemeColors>) {
   return StyleSheet.create({
-    overlay: {
-      flex: 1,
-      backgroundColor: Colors.overlay,
-      justifyContent: "flex-end",
-    },
     sheet: {
-      backgroundColor: Colors.surface,
-      borderTopLeftRadius: Radius["2xl"],
-      borderTopRightRadius: Radius["2xl"],
       paddingHorizontal: Spacing.lg,
       paddingBottom: Spacing["2xl"],
       maxHeight: "88%",
-    },
-    handle: {
-      alignSelf: "center",
-      width: 36,
-      height: 4,
-      borderRadius: Radius.full,
-      backgroundColor: Colors.borderStrong,
-      marginTop: Spacing.md,
-      marginBottom: Spacing.base,
     },
     titleRow: {
       flexDirection: "row",
@@ -571,7 +529,7 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       textAlign: "center",
       paddingVertical: Spacing["2xl"],
     },
-    list: { flexGrow: 0 },
+    list: { flexGrow: 0, flexShrink: 1 },
     row: {
       paddingVertical: Spacing.md,
       borderBottomWidth: StyleSheet.hairlineWidth,

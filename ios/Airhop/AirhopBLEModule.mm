@@ -5,7 +5,13 @@
 #import <React/RCTBridgeModule.h>
 #import <React/RCTEventEmitter.h>
 
-RCT_EXTERN_MODULE(AirhopBLEModule, RCTEventEmitter)
+// REMAP, not RCT_EXTERN_MODULE. The plain macro passes an empty JS name, so RN
+// falls back to the Objective-C class name and registers this as
+// "AirhopBLEModule" - it only strips an "RCT"/"RK" prefix, never a "Module"
+// suffix. The spec (src/bridge/NativeAirhopBLE.ts) and the Android module both
+// use "AirhopBLE", so the two platforms were registering the same module under
+// different names. Remapping pins the JS name to the one both sides agree on.
+@interface RCT_EXTERN_REMAP_MODULE(AirhopBLE, AirhopBLEModule, RCTEventEmitter)
 
 RCT_EXTERN_METHOD(startAdvertising:(NSString *)serviceUUID
                   localName:(NSString *)localName
@@ -22,6 +28,9 @@ RCT_EXTERN_METHOD(startScanning:(NSArray<NSString *> *)serviceUUIDs
 RCT_EXTERN_METHOD(stopScanning:(RCTPromiseResolveBlock)resolve
                   rejecter:(RCTPromiseRejectBlock)reject)
 
+RCT_EXTERN_METHOD(isAdapterEnabled:(RCTPromiseResolveBlock)resolve
+                  rejecter:(RCTPromiseRejectBlock)reject)
+
 RCT_EXTERN_METHOD(writeToLink:(NSString *)linkID
                   dataBase64:(NSString *)dataBase64
                   resolver:(RCTPromiseResolveBlock)resolve
@@ -32,3 +41,5 @@ RCT_EXTERN_METHOD(getTorProxyPort:(RCTPromiseResolveBlock)resolve
 
 RCT_EXTERN_METHOD(getTorAvailability:(RCTPromiseResolveBlock)resolve
                   rejecter:(RCTPromiseRejectBlock)reject)
+
+@end

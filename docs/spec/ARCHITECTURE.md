@@ -58,33 +58,33 @@ handshakes and the routing while the radios stay unproven until a field test.
 
 ## 2. Core Feature Matrix
 
-| Feature                   | Offline (BLE)            | Online (Nostr)      | Notes                                                                          |
-| ------------------------- | ------------------------ | ------------------- | ------------------------------------------------------------------------------ |
-| Peer discovery            | Yes, announce broadcasts | Yes, kind 20001     | Peers show on the mesh radar and in the location cell                          |
-| Public channels           | Yes, TTL flood           | Yes, kind 20000     | `#bluetooth` stays local; `#block` to `#region` also bridge                    |
-| Private channels          | Yes, sealed `0x2a`       | Optional, same blob | Airhop only. Key rides an invite link, no member cap                           |
-| Private groups            | Yes, sealed `0x25`       | No                  | bitchat compatible. Creator-signed roster, max 16, Bluetooth only              |
-| Private DMs               | Yes, Noise XX (+DR)      | Yes, NIP-17 wrap    | Receipts on every path. DR only between Airhop peers                           |
-| Bulletin board            | Yes, signed `0x23`       | Yes, kind 1 mirror  | Public and signed, 1 to 7 day expiry, gossip catch-up                          |
-| Voice notes               | Yes, as a file           | No                  | Recorded AAC, not live                                                         |
-| Video sharing             | Yes, as a file           | No                  | Recorded and played inline. Live streaming is not possible across platforms    |
-| File transfer             | Yes, 1 MiB cap           | No                  | Cap is enforced by bitchat's decoder, so it is not ours to raise               |
-| Store-and-forward courier | Yes, sealed envelope     | Yes, parked drop    | 24 hour life. Sealed to a one-time prekey for forward secrecy                  |
-| Live push-to-talk         | No                       | No                  | `0x29` reserved, never sent. Needs a streaming-mic native module               |
-| Payments (Cashu)          | Yes, token in a message  | Yes, NIP-61 Nutzap  | Transfer works offline, redemption needs internet                              |
-| Contact verification      | Yes, QR exchange         | n/a                 | The card carries public keys, and the peer ID is checked against its noise key |
-| Panic wipe                | Yes                      | Yes                 | Triple-tap. Destroys keys, messages, groups, board, prekeys                    |
-| Internet gateway          | Relays for others        | Yes                 | Off by default. Carries public location traffic for offline peers              |
-| Tor routing               | n/a                      | Yes                 | Arti on iOS, Orbot on Android. BLE is local, so nothing to route               |
-| Relay discovery           | n/a                      | Yes                 | Bundled CSV, refreshed from the georelays repo                                 |
-| bitchat compatibility     | Yes                      | Yes                 | Same wire format both directions. Airhop-only types are simply ignored         |
+| Feature                   | Offline (BLE)            | Online (Nostr)      | Notes                                                                                      |
+| ------------------------- | ------------------------ | ------------------- | ------------------------------------------------------------------------------------------ |
+| Peer discovery            | Yes, announce broadcasts | Yes, kind 20001     | Peers show on the mesh radar and in the location cell                                      |
+| Public channels           | Yes, TTL flood           | Yes, kind 20000     | `#bluetooth` stays local; `#block` to `#region` also bridge                                |
+| Private channels          | Yes, sealed `0x2a`       | Optional, same blob | Airhop only. Key rides an invite link, no member cap                                       |
+| Private groups            | Yes, sealed `0x25`       | No                  | bitchat compatible. Creator-signed roster, max 16, Bluetooth only                          |
+| Private DMs               | Yes, Noise XX (+DR)      | Yes, NIP-17 wrap    | Receipts on every path. DR only between Airhop peers                                       |
+| Bulletin board            | Yes, signed `0x23`       | Yes, kind 1 mirror  | Public and signed, 1 to 7 day expiry, gossip catch-up                                      |
+| Voice notes               | Yes, as a file           | No                  | Recorded AAC, not live                                                                     |
+| Video sharing             | Yes, as a file           | No                  | Recorded and played inline. Live streaming is not possible across platforms                |
+| File transfer             | Yes, 1 MiB cap           | No                  | Cap is enforced by bitchat's decoder, so it is not ours to raise                           |
+| Store-and-forward courier | Yes, sealed envelope     | Yes, parked drop    | 24 hour life, as bitchat carriers enforce. Sealed to a one-time prekey for forward secrecy |
+| Live push-to-talk         | No                       | No                  | `0x29` reserved, never sent. Needs a streaming-mic native module                           |
+| Payments (Cashu)          | Yes, token in a message  | Yes, NIP-61 Nutzap  | Transfer works offline, redemption needs internet                                          |
+| Contact verification      | Yes, QR exchange         | n/a                 | The card carries public keys, and the peer ID is checked against its noise key             |
+| Panic wipe                | Yes                      | Yes                 | Triple-tap. Destroys keys, messages, groups, board, prekeys                                |
+| Internet gateway          | Relays for others        | Yes                 | Off by default. Carries public location traffic for offline peers                          |
+| Tor routing               | n/a                      | Yes                 | Arti on iOS, Orbot on Android. BLE is local, so nothing to route                           |
+| Relay discovery           | n/a                      | Yes                 | Bundled CSV, refreshed from the georelays repo                                             |
+| bitchat compatibility     | Yes                      | Yes                 | Same wire format both directions. Airhop-only types are simply ignored                     |
 
 Optional, shipped but switchable:
 
 | Feature         | Needs internet | Notes                                               |
 | --------------- | -------------- | --------------------------------------------------- |
 | Cashu ecash     | Only to redeem | Tokens move device to device over the mesh          |
-| Nutzaps         | Yes            | NIP-61 lightning payments                           |
+| Nutzaps         | Yes            | NIP-61 ecash locked to the recipient key            |
 | Local assistant | No             | On-device inference, nothing leaves the phone       |
 | AT Protocol     | Yes            | Opt-in bridge to Bluesky using the Airhop identity  |
 | ActivityPub     | Yes            | Opt-in bridge to Mastodon using the Airhop identity |
@@ -135,9 +135,25 @@ This prevents impersonation and username squatting. Users verify real identity v
 | -------------------- | -------------------------------- | --------------------------------- |
 | `noiseStaticPrivKey` | `react-native-encrypted-storage` | iOS Keychain / Android Keystore   |
 | `signingPrivKey`     | `react-native-encrypted-storage` | iOS Keychain / Android Keystore   |
-| `cashuWalletPrivKey` | `react-native-encrypted-storage` | iOS Keychain / Android Keystore   |
+| Wallet AES-256 key   | `react-native-encrypted-storage` | iOS Keychain / Android Keystore   |
+| Nutzap P2PK privkey  | `react-native-encrypted-storage` | iOS Keychain / Android Keystore   |
+| Recovery phrase      | `react-native-encrypted-storage` | iOS Keychain / Android Keystore   |
+| Cashu proofs         | `react-native-mmkv` (AES-256)    | File encrypted with the key above |
 | Active sessions      | `react-native-mmkv` (encrypted)  | RAM-backed, not persisted         |
 | Message history      | `react-native-mmkv`              | Encrypted at rest, panic-wipeable |
+
+Cashu proofs are bearer instruments, so `wallet-store` is the one MMKV partition
+opened with an explicit `encryptionKey`. The key is 24 random bytes, base64 (32
+ASCII characters, the AES-256 maximum), generated on first run and held in the
+Keychain/Keystore. Because the key is fetched asynchronously, the store cannot
+exist at module scope: `bootstrapWalletStorage()` opens it and every
+`zustand/persist` read and write awaits that promise. If the Keychain refuses,
+the store is **not** opened unencrypted; the wallet reports itself locked and no
+proof is ever written to plaintext disk.
+
+The panic wipe deletes this partition with `deleteMMKV` rather than `clearAll`,
+since the file cannot be reliably reopened without its key, and the key itself
+is destroyed by the same wipe that clears the Keychain.
 
 ## 4. Adaptive Transport Stack
 
@@ -347,26 +363,86 @@ When internet is available, users can send **Nutzaps** (NIP-61):
 
 ### Payment security model
 
-| Attack             | Mitigation                                                                                                                |
-| ------------------ | ------------------------------------------------------------------------------------------------------------------------- |
-| Double-spend       | Receiver redeems with mint ASAP; mint tracks spent proofs                                                                 |
-| Mint failure       | User controls which mints to trust; can use multiple mints                                                                |
-| Token interception | DM channel encrypts the token; plain channel tokens are bearer; anyone who decodes the message can claim them (warn user) |
-| Fake token         | DLEQ proofs allow offline verification that token is valid blind signature                                                |
-| Inflated amount    | Token self-describes amount; client validates against proofs                                                              |
+| Attack              | Mitigation                                                                                                                                                                                                                                                                   |
+| ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Double-spend        | The mint is the only authority. A proof received offline is stored as **unverified** and is not claimed to be confirmed; `refreshAccount` runs a NUT-07 state check and swaps, and anything the mint reports as spent is removed from the balance rather than shown as money |
+| Fake token          | NUT-12 DLEQ verification against the mint's cached public keys, on every received token. A failing witness is rejected outright and never reaches the store. Missing keys report "unchecked", never "valid"                                                                  |
+| Inflated amount     | Amounts come from the decoded proofs, not from a self-declared field, and every proof is bounded before being summed                                                                                                                                                         |
+| Token interception  | DMs encrypt the token in transit; a token posted to a public channel is a bearer instrument anyone reading can redeem, which the UI states plainly                                                                                                                           |
+| Interrupted send    | Proofs are moved to a reserved bucket, never deleted, and the serialised token is kept on the transaction. An abandoned sheet, a crash, or a DM that never routes leaves the value reclaimable                                                                               |
+| Mint failure        | The user chooses which mints to trust; balances are per (mint, unit) and never pooled across mints, so one mint failing cannot take the rest                                                                                                                                 |
+| Proofs at rest      | The MMKV partition is AES-256 encrypted with a Keychain/Keystore-held key. If that key is unavailable the wallet locks rather than falling back to plaintext                                                                                                                 |
+| IP linkage over Tor | On iOS, Arti wraps only Nostr WebSockets, so mint HTTP would bypass it. Mint calls are refused while Tor is on unless the user explicitly opts in. Android is covered by Orbot's VPN                                                                                         |
+
+### Recovery
+
+Off by default. Turning it on generates a 12-word BIP-39 phrase, stored in the
+Keychain/Keystore next to the identity keys, and switches proof creation from
+random secrets to NUT-13 deterministic derivation. Recovery (NUT-09) re-derives
+those secrets on any device and asks each mint which of them it signed, so the
+balance is rebuilt from the mint's own records rather than from any backup file.
+
+|                    |                                                                                                                                                                                                        |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Covers             | Ecash derived from the phrase, at mints the user re-adds                                                                                                                                               |
+| Does **not** cover | The Airhop identity, chats, contacts, or the mint list                                                                                                                                                 |
+| Does **not** cover | Coins received and never swapped: those carry the sender's secrets, so no seed of ours can reproduce them. They come under the phrase the moment they are swapped, which is what `refreshAccount` does |
+
+Three properties keep this honest rather than decorative:
+
+- **The keychain is the source of truth.** If the flag says backup is on but the
+  phrase is gone, startup turns the flag off rather than claiming coverage the
+  user does not have.
+- **Coverage is reported, not assumed.** `StoredProof.derived` tracks which
+  proofs the phrase can actually rebuild, and the UI shows the uncovered
+  remainder rather than folding it into a green tick.
+- **It is one-way.** There is no "turn backup off", because deleting a phrase
+  that coins were derived from is indistinguishable from deleting the coins.
+  Only the panic wipe removes it, and it is destroying everything anyway.
+
+Counters are the one place this can go wrong: re-deriving a counter recreates a
+secret the mint has already signed and the swap is rejected. The cursor is
+persisted per keyset, only ever moves forward, and restore pushes it past
+everything the mint has on record. A rejected swap leaves the input proofs
+untouched, so the failure mode is a retry, never a loss.
+
+### Moving between mints
+
+A token names exactly one mint, so ecash from two mints can never be combined
+into a single token. That is Cashu's design and is not worked around. What
+`consolidateMints` does instead is move the value: the destination mint issues a
+Lightning invoice and the source mint pays it, so the balance ends up at one
+mint and can then pay any amount it covers. One routing fee, no external wallet.
+
+Two limits are worth stating explicitly, because wallets often blur them:
+
+- **DLEQ proves origin, not freshness.** A valid witness proves the mint signed
+  that proof. It can never prove the sender did not already spend it. Only the
+  mint knows that, and only over the network.
+- **Reclaiming an undelivered send is not free.** The proofs are still valid at
+  the mint, so a reclaim works, but if the recipient also holds the token string
+  then whoever reaches the mint first keeps the value. The UI says so before
+  reclaiming.
 
 ### Wallet UX
 
-- **Balance**: sum of all unspent Cashu proofs in local MMKV store
-- **Receive**: display QR of Lightning invoice (via mint) or accept raw Cashu token
-- **Send offline**: paste Cashu token into DM / channel
-- **Send online**: NIP-61 nutzap to any Nostr pubkey
-- **Redeem**: when internet available, swap held tokens at mint to refresh to non-double-spent state
-- **No custodian**: mint is a minimal trust party; user's proofs are local
+- **Balance**: spendable proofs per (mint, unit), with unverified and reserved amounts broken out rather than folded into the headline number
+- **Deposit**: bolt11 invoice from the mint (NUT-04); polled while the sheet is open and reconciled on next launch if the app is closed
+- **Withdraw**: pay any bolt11 invoice from ecash (NUT-05), quoted with the routing reserve first, unused reserve returned as change
+- **Send offline**: build a token from held proofs; hand it to a mesh peer, share it, or copy it. Fee-aware, so "send 100" means the recipient can claim 100
+- **Receive**: paste or claim from a message. Swapped at the mint when online, stored unverified when not
+- **Send online**: NIP-61 nutzap locked to the recipient's P2PK key, falling back to an encrypted DM and then to a manual token, telling the user which happened
+- **Refresh**: NUT-07 state check, a swap of everything unverified, and a swap of anything the recovery phrase does not yet cover
+- **Backup**: opt-in 12-word recovery phrase (NUT-13 / NUT-09), with the uncovered remainder shown rather than hidden
+- **Consolidate**: move a split balance onto one mint over Lightning, since a token can only name one mint
+- **History**: every send, receive, deposit, withdrawal, nutzap and swap, with status
+- **No custodian**: the mint is a minimal trust party; proofs live only on the device
 
 ### Library
 
-`@cashu/cashu-ts` v5 (MIT, 105 stars, actively maintained, TypeScript-first, ESM)
+`@cashu/cashu-ts` v4.7 (MIT, actively maintained, TypeScript-first, ESM). The
+library owns proof selection (RGLI), fee arithmetic, blinding, and the mint HTTP
+surface; `src/services/wallet-service.ts` owns everything above it.
 
 ## 9. Privacy & Tor Integration
 
@@ -463,13 +539,21 @@ native side, which is the one thing this design exists to prevent.
 
 ### Background execution
 
-| Platform       | Mechanism                                           | Result                               |
-| -------------- | --------------------------------------------------- | ------------------------------------ |
-| iOS Central    | `UIBackgroundModes: bluetooth-central`              | Receives BLE data in background      |
-| iOS Peripheral | `UIBackgroundModes: bluetooth-peripheral`           | Continues advertising in background  |
-| iOS Suspended  | `CBCentralManagerOptionRestoreIdentifierKey`        | iOS restarts app on BLE event        |
-| Android        | `AirhopForegroundService` (persistent notification) | Survives Doze + battery optimization |
-| Android        | `FOREGROUND_SERVICE_CONNECTED_DEVICE` permission    | Required Android 14+                 |
+| Platform       | Mechanism                                           | Result                                      |
+| -------------- | --------------------------------------------------- | ------------------------------------------- |
+| iOS Central    | `UIBackgroundModes: bluetooth-central`              | Receives BLE data in background             |
+| iOS Peripheral | `UIBackgroundModes: bluetooth-peripheral`           | Keeps advertising, but see the caveat below |
+| iOS Suspended  | `CBCentralManagerOptionRestoreIdentifierKey`        | iOS restarts app on BLE event               |
+| Android        | `AirhopForegroundService` (persistent notification) | Survives Doze + battery optimization        |
+| Android        | `FOREGROUND_SERVICE_CONNECTED_DEVICE` permission    | Required Android 14+                        |
+
+**A backgrounded iPhone is not discoverable from Android.** Once the app leaves
+the foreground, CoreBluetooth moves the service UUID into the advertisement's
+overflow area and drops the local name. Only another iOS device scanning for
+that exact UUID can see it there, so iPhone-to-iPhone still works but
+iPhone-to-Android discovery stops until the app is reopened. An already
+connected link keeps carrying traffic. Android has no equivalent restriction:
+the foreground service keeps it advertising normally.
 
 ## 12. Protocol Decision Log
 
@@ -539,9 +623,10 @@ Each decision records what was considered, what was chosen, and why.
 
 ### Payments (Phase 2)
 
-| Package           | Version | Purpose                       | License |
-| ----------------- | ------- | ----------------------------- | ------- |
-| `@cashu/cashu-ts` | `^4.7`  | Cashu ecash wallet operations | MIT     |
+| Package           | Version | Purpose                              | License |
+| ----------------- | ------- | ------------------------------------ | ------- |
+| `@cashu/cashu-ts` | `^4.7`  | Cashu ecash wallet operations        | MIT     |
+| `@scure/bip39`    | `^2.0`  | BIP-39 recovery phrase (NUT-13 seed) | MIT     |
 
 ### UX / Polish (Phase 1+)
 

@@ -4,8 +4,9 @@
 
 import { Feather } from "@expo/vector-icons";
 import React, { useMemo } from "react";
-import { Modal, Pressable, StyleSheet, Text, View } from "react-native";
+import { Pressable, StyleSheet, Text, View } from "react-native";
 import type { ChatMessage } from "../../store/chat-store";
+import BottomSheet from "../../ui/components/bottom-sheet";
 import {
   FontSize,
   FontWeight,
@@ -44,46 +45,39 @@ export default function MessageActionSheet({
     message.isMine && !message.isSystem && message.status !== undefined;
 
   return (
-    <Modal visible transparent animationType="fade" onRequestClose={onClose}>
-      <View style={styles.overlay}>
-        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
-        <View style={styles.sheet}>
-          <View style={styles.handle} />
-
-          {/* Everyday actions, grouped in one box so it matches the channel
-              "more" sheet: transparent rows on a single raised card, hairline
-              dividers between them, corners clipped by the card. */}
-          <View style={styles.actionGroup}>
-            {canShowInfo && (
-              <ActionRow
-                icon="info"
-                label="Message info"
-                onPress={() => act(onInfo)}
-                color={Colors.textPrimary}
-              />
-            )}
-            {canShowInfo && <View style={styles.divider} />}
+    <BottomSheet visible onClose={onClose} sheetStyle={styles.sheet}>
+      {/* Everyday actions, grouped in one box so it matches the channel
+          "more" sheet: transparent rows on a single raised card, hairline
+          dividers between them, corners clipped by the card. */}
+      <View style={styles.actionGroup}>
+        {canShowInfo && (
+          <ActionRow
+            icon="info"
+            label="Message info"
+            onPress={() => act(onInfo)}
+            color={Colors.textPrimary}
+          />
+        )}
+        {canShowInfo && <View style={styles.divider} />}
+        <ActionRow
+          icon="corner-up-right"
+          label="Forward"
+          onPress={() => act(onForward)}
+          color={Colors.textPrimary}
+        />
+        {message.text.length > 0 && (
+          <>
+            <View style={styles.divider} />
             <ActionRow
-              icon="corner-up-right"
-              label="Forward"
-              onPress={() => act(onForward)}
+              icon="copy"
+              label="Copy"
+              onPress={() => act(onCopy)}
               color={Colors.textPrimary}
             />
-            {message.text.length > 0 && (
-              <>
-                <View style={styles.divider} />
-                <ActionRow
-                  icon="copy"
-                  label="Copy"
-                  onPress={() => act(onCopy)}
-                  color={Colors.textPrimary}
-                />
-              </>
-            )}
-          </View>
-        </View>
+          </>
+        )}
       </View>
-    </Modal>
+    </BottomSheet>
   );
 }
 
@@ -117,26 +111,9 @@ function ActionRow({
 
 function createStyles(Colors: ReturnType<typeof useThemeColors>) {
   return StyleSheet.create({
-    overlay: {
-      flex: 1,
-      backgroundColor: Colors.overlay,
-      justifyContent: "flex-end",
-    },
     sheet: {
-      backgroundColor: Colors.surface,
-      borderTopLeftRadius: Radius["2xl"],
-      borderTopRightRadius: Radius["2xl"],
       paddingHorizontal: Spacing.base,
-      paddingTop: Spacing.base,
       paddingBottom: Spacing["2xl"],
-    },
-    handle: {
-      width: 36,
-      height: 4,
-      borderRadius: 2,
-      backgroundColor: Colors.borderStrong,
-      alignSelf: "center",
-      marginBottom: Spacing.base,
     },
     // One raised card owns the background and rounded corners; the rows sit
     // transparent inside it, clipped to the radius by overflow.

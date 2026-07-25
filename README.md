@@ -15,11 +15,15 @@
 </div>
 
 <p align="center">
-  <a href="https://airhop.free">Website</a>
+  <a href="https://airhop.1mindlabs.org">Website</a>
   |
-  <a href="https://github.com/areebahmeddd/Airhop/releases/latest">Download</a>
+  <a href="https://github.com/areebahmeddd/Airhop/tree/main/docs">Docs</a>
   |
-  <a href="https://docs.airhop.free">Docs</a>
+  <a href="https://airhop.1mindlabs.org/faq">FAQ</a>
+  |
+  <a href="https://airhop.1mindlabs.org/terms-of-service">Terms of Service</a>
+  |
+  <a href="https://airhop.1mindlabs.org/privacy-policy">Privacy Policy</a>
   |
   <a href="https://razorpay.me/@1mindlabs">Donate</a>
 </p>
@@ -77,27 +81,29 @@ Built on the foundation of [bitchat](https://bitchat.free), using the same [BLE 
 
 ## Optional Features
 
-| Category        | Feature         | Description                                                                                  |
-| --------------- | --------------- | -------------------------------------------------------------------------------------------- |
-| 💰 **Payments** | Cashu ecash     | Send and receive offline ecash payments over BLE                                             |
-|                 | Nutzaps         | NIP-61 Lightning payments when internet is available                                         |
-| 🤖 **AI**       | Local assistant | On-device inference answers questions with zero network calls, data never leaves your device |
-| 🔗 **Social**   | AT Protocol     | Opt-in bridge to Bluesky, using your Airhop identity                                         |
-|                 | ActivityPub     | Opt-in bridge to Mastodon, using your Airhop identity                                        |
+| Category        | Feature         | Description                                                                                                                                                                                      |
+| --------------- | --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 💰 **Payments** | Cashu ecash     | Send and receive ecash over BLE with no internet. Proofs are stored AES-256 encrypted, verified against the mint's signature (NUT-12 DLEQ) on arrival, and an undelivered send stays reclaimable |
+|                 | Lightning       | Deposit sats into ecash and cash out to any bolt11 invoice through your mint (NUT-04 / NUT-05)                                                                                                   |
+|                 | Nutzaps         | NIP-61 payments locked to a Nostr identity's key, falling back to an encrypted DM when they publish no nutzap info                                                                               |
+|                 | Wallet recovery | Opt-in 12-word phrase (NUT-13 / NUT-09). Coins are derived from it rather than random, so a new device rebuilds the balance by asking your mints which coins they signed. Off by default         |
+| 🤖 **AI**       | Local assistant | On-device inference answers questions with zero network calls, data never leaves your device                                                                                                     |
+| 🔗 **Social**   | AT Protocol     | Opt-in bridge to Bluesky, using your Airhop identity                                                                                                                                             |
+|                 | ActivityPub     | Opt-in bridge to Mastodon, using your Airhop identity                                                                                                                                            |
 
 ## Stack
 
-| Layer                   | Technology                                                                                                                                                                                                                                                                                                                                                                                        |
-| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Application Framework   | [React Native](https://reactnative.dev) 0.86, [Expo](https://expo.dev) SDK 57 (bare workflow)                                                                                                                                                                                                                                                                                                     |
-| Network Transport       | [Bluetooth LE](https://en.wikipedia.org/wiki/Bluetooth_Low_Energy) mesh (all platforms), [Nostr](https://github.com/nostr-protocol/nostr) relay bridge, plus an optional same-platform fast path: [WiFi Aware](https://wi-fi.org/discover-wi-fi/wi-fi-aware) between Android devices and [MultipeerConnectivity](https://developer.apple.com/documentation/multipeerconnectivity) between iPhones |
-| Cryptographic Protocols | [Noise XX](https://noiseprotocol.org/noise.html) handshake, [Double Ratchet](https://signal.org/docs/specifications/doubleratchet) algorithm                                                                                                                                                                                                                                                      |
-| Cryptographic Library   | [`@noble/curves`](https://github.com/paulmillr/noble-curves), [`@noble/ciphers`](https://github.com/paulmillr/noble-ciphers), [`@noble/hashes`](https://github.com/paulmillr/noble-hashes) ([Cure53](https://cure53.de) audited)                                                                                                                                                                  |
-| Identity & Signatures   | [Ed25519](https://ed25519.cr.yp.to) scheme                                                                                                                                                                                                                                                                                                                                                        |
-| Network Privacy         | [Arti](https://gitlab.torproject.org/tpo/core/arti) (iOS), [Orbot](https://guardianproject.info/apps/org.torproject.android) (Android)                                                                                                                                                                                                                                                            |
-| Payment System          | [Cashu](https://cashu.space) [ecash](https://en.wikipedia.org/wiki/Ecash) (offline), [NIP-61](https://github.com/nostr-protocol/nips/blob/master/61.md) Nutzaps (online)                                                                                                                                                                                                                          |
-| State Management        | [Zustand](https://github.com/pmndrs/zustand) store, [MMKV](https://github.com/mrousavy/react-native-mmkv) storage                                                                                                                                                                                                                                                                                 |
-| Key Storage             | [iOS Keychain](https://developer.apple.com/documentation/security/storing-keys-in-the-keychain), [Android Keystore](https://developer.android.com/privacy-and-security/keystore)                                                                                                                                                                                                                  |
+| Layer                   | Technology                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Application Framework   | [React Native](https://reactnative.dev) 0.86, [Expo](https://expo.dev) SDK 57 (bare workflow)                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| Network Transport       | [Bluetooth LE](https://en.wikipedia.org/wiki/Bluetooth_Low_Energy) mesh (all platforms), [Nostr](https://github.com/nostr-protocol/nostr) relay bridge, plus an optional same-platform fast path: [WiFi Aware](https://wi-fi.org/discover-wi-fi/wi-fi-aware) between Android devices and [MultipeerConnectivity](https://developer.apple.com/documentation/multipeerconnectivity) between iPhones                                                                                                                                         |
+| Cryptographic Protocols | [Noise XX](https://noiseprotocol.org/noise.html) handshake, [Double Ratchet](https://signal.org/docs/specifications/doubleratchet) algorithm                                                                                                                                                                                                                                                                                                                                                                                              |
+| Cryptographic Library   | [`@noble/curves`](https://github.com/paulmillr/noble-curves), [`@noble/ciphers`](https://github.com/paulmillr/noble-ciphers), [`@noble/hashes`](https://github.com/paulmillr/noble-hashes) ([Cure53](https://cure53.de) audited)                                                                                                                                                                                                                                                                                                          |
+| Identity & Signatures   | [Ed25519](https://ed25519.cr.yp.to) scheme                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| Network Privacy         | [Arti](https://gitlab.torproject.org/tpo/core/arti) (iOS), [Orbot](https://guardianproject.info/apps/org.torproject.android) (Android)                                                                                                                                                                                                                                                                                                                                                                                                    |
+| Payment System          | [Cashu](https://cashu.space) [ecash](https://en.wikipedia.org/wiki/Ecash) via [`@cashu/cashu-ts`](https://github.com/cashubtc/cashu-ts): offline transfer, [NUT-12](https://github.com/cashubtc/nuts/blob/main/12.md) DLEQ verification, [NUT-13](https://github.com/cashubtc/nuts/blob/main/13.md) recovery phrase, [NUT-04](https://github.com/cashubtc/nuts/blob/main/04.md) and [NUT-05](https://github.com/cashubtc/nuts/blob/main/05.md) Lightning, plus [NIP-61](https://github.com/nostr-protocol/nips/blob/master/61.md) Nutzaps |
+| State Management        | [Zustand](https://github.com/pmndrs/zustand) store, [MMKV](https://github.com/mrousavy/react-native-mmkv) storage                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| Key Storage             | [iOS Keychain](https://developer.apple.com/documentation/security/storing-keys-in-the-keychain), [Android Keystore](https://developer.android.com/privacy-and-security/keystore)                                                                                                                                                                                                                                                                                                                                                          |
 
 ## Transports
 
@@ -126,7 +132,7 @@ Timing intervals:
 
 | Behaviour                  | Interval            | Why                                                                 |
 | -------------------------- | ------------------- | ------------------------------------------------------------------- |
-| Presence broadcast         | 30 s                | How peers discover each other and refresh reachability              |
+| Presence broadcast         | 4 s alone, 15-30 s  | Fast while alone so devices meet quickly, then backs off            |
 | Gossip sync                | 15 s                | Lets a peer returning from out of range catch up on missed messages |
 | Direct peer timeout        | 15 s                | A directly linked peer that goes quiet is demoted quickly           |
 | Mesh peer timeout          | 60 s                | Relayed peers get longer, since multi-hop packets arrive late       |
@@ -178,7 +184,7 @@ npx expo prebuild
 
 > A physical iPhone is required to test the BLE mesh, since the iOS Simulator does not support Bluetooth.
 
-> Supports iOS 16 or later.
+> Supports iOS 16.0 or later.
 
 </details>
 

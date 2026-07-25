@@ -12,7 +12,6 @@
 import { Feather, MaterialCommunityIcons } from "@expo/vector-icons";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
-  Modal,
   Pressable,
   RefreshControl,
   SectionList,
@@ -36,6 +35,7 @@ import { useChatStore } from "../../store/chat-store";
 import { useGroupStore } from "../../store/group-store";
 import { usePeerStore } from "../../store/peer-store";
 import { usePlaceNamesStore } from "../../store/place-names-store";
+import BottomSheet from "../../ui/components/bottom-sheet";
 import {
   FontSize,
   FontWeight,
@@ -690,256 +690,232 @@ export default function ChannelList({
       />
 
       {/* Join or create channel modal */}
-      <Modal
+      <BottomSheet
         visible={showJoinModal}
-        transparent
-        animationType="slide"
-        onRequestClose={() => resetJoinModal()}
+        onClose={() => resetJoinModal()}
+        sheetStyle={styles.modalSheet}
       >
-        <Pressable style={styles.modalOverlay} onPress={() => resetJoinModal()}>
-          <Pressable style={styles.modalSheet} onPress={() => {}}>
-            <View style={styles.handle} />
-            <Text style={styles.modalTitle}>Create a channel</Text>
-            <View style={styles.privacyNote}>
-              <View style={styles.privacyNoteRow}>
-                <Feather name="lock" size={14} color={Colors.e2ee} />
-                <Text style={styles.privacyNoteText}>
-                  End-to-end encrypted. Only members can read the messages.
-                </Text>
-              </View>
-              <View style={styles.privacyNoteRow}>
-                <Feather name="link" size={14} color={Colors.textMuted} />
-                <Text style={styles.privacyNoteText}>
-                  Invite only. Anyone you share the link with can join. It stays
-                  hidden from everyone else, even peers nearby.
-                </Text>
-              </View>
-              <View style={styles.privacyNoteRow}>
-                <Feather
-                  name={newChannelOverNostr ? "globe" : "bluetooth"}
-                  size={14}
-                  color={Colors.textMuted}
-                />
-                <Text style={styles.privacyNoteText}>
-                  {newChannelOverNostr
-                    ? "Reaches members over Bluetooth and the internet."
-                    : "Works over Bluetooth range, not the internet."}
-                </Text>
-              </View>
-            </View>
-            <View>
-              <TextInput
-                style={[
-                  styles.modalInput,
-                  nameAlreadyExists && styles.modalInputError,
-                ]}
-                value={newChannel}
-                onChangeText={setNewChannel}
-                placeholder="#channel-name"
-                placeholderTextColor={Colors.textMuted}
-                autoCapitalize="none"
-                autoFocus
-                onSubmitEditing={handleAdd}
-                returnKeyType="done"
-                selectionColor={Colors.accent}
-              />
-              {nameAlreadyExists && (
-                <Text style={styles.inputError}>
-                  A channel with this name already exists.
-                </Text>
-              )}
-            </View>
+        <Text style={styles.modalTitle}>Create a channel</Text>
+        <View style={styles.privacyNote}>
+          <View style={styles.privacyNoteRow}>
+            <Feather name="lock" size={14} color={Colors.e2ee} />
+            <Text style={styles.privacyNoteText}>
+              End-to-end encrypted. Only members can read the messages.
+            </Text>
+          </View>
+          <View style={styles.privacyNoteRow}>
+            <Feather name="link" size={14} color={Colors.textMuted} />
+            <Text style={styles.privacyNoteText}>
+              Invite only. Anyone you share the link with can join. It stays
+              hidden from everyone else, even peers nearby.
+            </Text>
+          </View>
+          <View style={styles.privacyNoteRow}>
+            <Feather
+              name={newChannelOverNostr ? "globe" : "bluetooth"}
+              size={14}
+              color={Colors.textMuted}
+            />
+            <Text style={styles.privacyNoteText}>
+              {newChannelOverNostr
+                ? "Reaches members over Bluetooth and the internet."
+                : "Works over Bluetooth range, not the internet."}
+            </Text>
+          </View>
+        </View>
+        <View>
+          <TextInput
+            style={[
+              styles.modalInput,
+              nameAlreadyExists && styles.modalInputError,
+            ]}
+            value={newChannel}
+            onChangeText={setNewChannel}
+            placeholder="#channel-name"
+            placeholderTextColor={Colors.textMuted}
+            autoCapitalize="none"
+            autoFocus
+            onSubmitEditing={handleAdd}
+            returnKeyType="done"
+            selectionColor={Colors.accent}
+          />
+          {nameAlreadyExists && (
+            <Text style={styles.inputError}>
+              A channel with this name already exists.
+            </Text>
+          )}
+        </View>
 
-            {/* Reach. Encryption is always on (the removed "Private"/"Nostr"
+        {/* Reach. Encryption is always on (the removed "Private"/"Nostr"
                 pickers only set unread labels); this choice actually changes the
                 send path: local mesh only, or also sealed and published over
                 Nostr for out-of-range members. */}
-            <View style={styles.optionGroup}>
-              <Text style={styles.optionLabel}>Reach</Text>
-              <View style={styles.optionRow}>
-                <Pressable
-                  style={[
-                    styles.optionChip,
-                    !newChannelOverNostr && styles.optionChipActive,
-                  ]}
-                  onPress={() => setNewChannelOverNostr(false)}
-                  accessibilityRole="button"
-                  accessibilityState={{ selected: !newChannelOverNostr }}
-                >
-                  <Feather
-                    name="bluetooth"
-                    size={13}
-                    color={
-                      newChannelOverNostr
-                        ? Colors.textMuted
-                        : Colors.textPrimary
-                    }
-                  />
-                  <Text
-                    style={
-                      newChannelOverNostr
-                        ? styles.optionChipText
-                        : styles.optionChipTextActive
-                    }
-                  >
-                    Bluetooth only
-                  </Text>
-                </Pressable>
-                <Pressable
-                  style={[
-                    styles.optionChip,
-                    newChannelOverNostr && styles.optionChipActive,
-                  ]}
-                  onPress={() => setNewChannelOverNostr(true)}
-                  accessibilityRole="button"
-                  accessibilityState={{ selected: newChannelOverNostr }}
-                >
-                  <Feather
-                    name="globe"
-                    size={13}
-                    color={
-                      newChannelOverNostr
-                        ? Colors.textPrimary
-                        : Colors.textMuted
-                    }
-                  />
-                  <Text
-                    style={
-                      newChannelOverNostr
-                        ? styles.optionChipTextActive
-                        : styles.optionChipText
-                    }
-                  >
-                    Bluetooth + Internet
-                  </Text>
-                </Pressable>
-              </View>
-              <Text style={styles.reachHint}>
-                {newChannelOverNostr
-                  ? "Reaches members over the internet too. Relays can see the channel is active, never its messages or who is in it."
-                  : "Stays on the local mesh. Most private, nothing leaves Bluetooth range."}
+        <View style={styles.optionGroup}>
+          <Text style={styles.optionLabel}>Reach</Text>
+          <View style={styles.optionRow}>
+            <Pressable
+              style={[
+                styles.optionChip,
+                !newChannelOverNostr && styles.optionChipActive,
+              ]}
+              onPress={() => setNewChannelOverNostr(false)}
+              accessibilityRole="button"
+              accessibilityState={{ selected: !newChannelOverNostr }}
+            >
+              <Feather
+                name="bluetooth"
+                size={13}
+                color={
+                  newChannelOverNostr ? Colors.textMuted : Colors.textPrimary
+                }
+              />
+              <Text
+                style={
+                  newChannelOverNostr
+                    ? styles.optionChipText
+                    : styles.optionChipTextActive
+                }
+              >
+                Bluetooth only
               </Text>
-            </View>
+            </Pressable>
+            <Pressable
+              style={[
+                styles.optionChip,
+                newChannelOverNostr && styles.optionChipActive,
+              ]}
+              onPress={() => setNewChannelOverNostr(true)}
+              accessibilityRole="button"
+              accessibilityState={{ selected: newChannelOverNostr }}
+            >
+              <Feather
+                name="globe"
+                size={13}
+                color={
+                  newChannelOverNostr ? Colors.textPrimary : Colors.textMuted
+                }
+              />
+              <Text
+                style={
+                  newChannelOverNostr
+                    ? styles.optionChipTextActive
+                    : styles.optionChipText
+                }
+              >
+                Bluetooth + Internet
+              </Text>
+            </Pressable>
+          </View>
+          <Text style={styles.reachHint}>
+            {newChannelOverNostr
+              ? "Reaches members over the internet too. Relays can see the channel is active, never its messages or who is in it."
+              : "Stays on the local mesh. Most private, nothing leaves Bluetooth range."}
+          </Text>
+        </View>
 
-            <View style={styles.modalActions}>
-              <Pressable
-                style={styles.modalCancel}
-                onPress={() => resetJoinModal(true)}
-              >
-                <Text style={styles.modalCancelText}>Back</Text>
-              </Pressable>
-              <Pressable
-                style={[
-                  styles.modalConfirm,
-                  nameAlreadyExists && styles.modalConfirmDisabled,
-                ]}
-                onPress={handleAdd}
-                disabled={nameAlreadyExists}
-              >
-                <Text style={styles.modalConfirmText}>Create</Text>
-              </Pressable>
-            </View>
+        <View style={styles.modalActions}>
+          <Pressable
+            style={styles.modalCancel}
+            onPress={() => resetJoinModal(true)}
+          >
+            <Text style={styles.modalCancelText}>Back</Text>
           </Pressable>
-        </Pressable>
-      </Modal>
+          <Pressable
+            style={[
+              styles.modalConfirm,
+              nameAlreadyExists && styles.modalConfirmDisabled,
+            ]}
+            onPress={handleAdd}
+            disabled={nameAlreadyExists}
+          >
+            <Text style={styles.modalConfirmText}>Create</Text>
+          </Pressable>
+        </View>
+      </BottomSheet>
 
       {/* Pick the concept before the details. A channel and a group are both
           private and both encrypted, so the only way to choose sensibly is to
           see how they differ, side by side, at the moment of deciding. */}
-      <Modal
+      <BottomSheet
         visible={showChooser}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setShowChooser(false)}
+        onClose={() => setShowChooser(false)}
+        sheetStyle={styles.modalSheet}
       >
-        <View style={styles.modalOverlay}>
+        <Text style={styles.modalTitle}>Start something new</Text>
+
+        <View style={styles.moreRowsGroup}>
           <Pressable
-            style={StyleSheet.absoluteFill}
-            onPress={() => setShowChooser(false)}
-          />
-          <View style={styles.modalSheet}>
-            <View style={styles.handle} />
-            <Text style={styles.modalTitle}>Start something new</Text>
-
-            <View style={styles.moreRowsGroup}>
-              <Pressable
-                style={styles.chooserRow}
-                onPress={() => {
-                  setShowChooser(false);
-                  setShowJoinModal(true);
-                }}
-                accessibilityRole="button"
-                accessibilityLabel="Create a channel"
-              >
-                <View style={styles.chooserIcon}>
-                  <Feather name="hash" size={18} color={Colors.textPrimary} />
-                </View>
-                <View style={styles.chooserText}>
-                  <Text style={styles.chooserTitle}>Channel</Text>
-                  <Text style={styles.chooserDesc}>
-                    A room anyone with the link can join.
-                  </Text>
-                </View>
-              </Pressable>
-
-              <View style={styles.moreDivider} />
-
-              <Pressable
-                style={styles.chooserRow}
-                onPress={() => {
-                  setShowChooser(false);
-                  setShowNewGroup(true);
-                }}
-                accessibilityRole="button"
-                accessibilityLabel="Create a private group"
-              >
-                <View style={styles.chooserIcon}>
-                  <Feather name="users" size={18} color={Colors.textPrimary} />
-                </View>
-                <View style={styles.chooserText}>
-                  <Text style={styles.chooserTitle}>Group</Text>
-                  <Text style={styles.chooserDesc}>
-                    Pick specific people. Up to 16. Stays on Bluetooth.
-                  </Text>
-                </View>
-              </Pressable>
-
-              <View style={styles.moreDivider} />
-
-              <Pressable
-                style={styles.chooserRow}
-                onPress={() => {
-                  setShowChooser(false);
-                  setShowGeohash(true);
-                }}
-                accessibilityRole="button"
-                accessibilityLabel="Go to a place by geohash"
-              >
-                <View style={styles.chooserIcon}>
-                  <Feather
-                    name="map-pin"
-                    size={18}
-                    color={Colors.textPrimary}
-                  />
-                </View>
-                <View style={styles.chooserText}>
-                  <Text style={styles.chooserTitle}>Go to a place</Text>
-                  <Text style={styles.chooserDesc}>
-                    Open a location channel anywhere by its geohash.
-                  </Text>
-                </View>
-              </Pressable>
+            style={styles.chooserRow}
+            onPress={() => {
+              setShowChooser(false);
+              setShowJoinModal(true);
+            }}
+            accessibilityRole="button"
+            accessibilityLabel="Create a channel"
+          >
+            <View style={styles.chooserIcon}>
+              <Feather name="hash" size={18} color={Colors.textPrimary} />
             </View>
+            <View style={styles.chooserText}>
+              <Text style={styles.chooserTitle}>Channel</Text>
+              <Text style={styles.chooserDesc}>
+                A room anyone with the link can join.
+              </Text>
+            </View>
+          </Pressable>
 
-            <Pressable
-              style={styles.modalCancel}
-              onPress={() => setShowChooser(false)}
-            >
-              <Text style={styles.modalCancelText}>Cancel</Text>
-            </Pressable>
-          </View>
+          <View style={styles.moreDivider} />
+
+          <Pressable
+            style={styles.chooserRow}
+            onPress={() => {
+              setShowChooser(false);
+              setShowNewGroup(true);
+            }}
+            accessibilityRole="button"
+            accessibilityLabel="Create a private group"
+          >
+            <View style={styles.chooserIcon}>
+              <Feather name="users" size={18} color={Colors.textPrimary} />
+            </View>
+            <View style={styles.chooserText}>
+              <Text style={styles.chooserTitle}>Group</Text>
+              <Text style={styles.chooserDesc}>
+                Pick specific people. Up to 16. Stays on Bluetooth.
+              </Text>
+            </View>
+          </Pressable>
+
+          <View style={styles.moreDivider} />
+
+          <Pressable
+            style={styles.chooserRow}
+            onPress={() => {
+              setShowChooser(false);
+              setShowGeohash(true);
+            }}
+            accessibilityRole="button"
+            accessibilityLabel="Go to a place by geohash"
+          >
+            <View style={styles.chooserIcon}>
+              <Feather name="map-pin" size={18} color={Colors.textPrimary} />
+            </View>
+            <View style={styles.chooserText}>
+              <Text style={styles.chooserTitle}>Go to a place</Text>
+              <Text style={styles.chooserDesc}>
+                Open a location channel anywhere by its geohash.
+              </Text>
+            </View>
+          </Pressable>
         </View>
-      </Modal>
+
+        <Pressable
+          style={styles.modalCancel}
+          onPress={() => setShowChooser(false)}
+        >
+          <Text style={styles.modalCancelText}>Cancel</Text>
+        </Pressable>
+      </BottomSheet>
 
       <NewGroupSheet
         visible={showNewGroup}
@@ -968,132 +944,116 @@ export default function ChannelList({
       />
 
       {/* Your Rooms: swipe "More" sheet with chat info, pin, clear, delete */}
-      <Modal
+      <BottomSheet
         visible={moreOptionsChannel !== null}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setMoreOptionsChannel(null)}
+        onClose={() => setMoreOptionsChannel(null)}
+        sheetStyle={styles.modalSheet}
       >
-        <View style={styles.modalOverlay}>
-          <Pressable
-            style={StyleSheet.absoluteFill}
-            onPress={() => setMoreOptionsChannel(null)}
-          />
-          <View style={styles.modalSheet}>
-            <View style={styles.handle} />
-            {moreOptionsChannel && (
-              <>
-                <Text style={styles.modalTitle}>
-                  {channelLabel(moreOptionsChannel)}
-                </Text>
+        {moreOptionsChannel && (
+          <>
+            <Text style={styles.modalTitle}>
+              {channelLabel(moreOptionsChannel)}
+            </Text>
 
-                {/* Everyday actions, grouped in one box. */}
-                <View style={styles.moreRowsGroup}>
+            {/* Everyday actions, grouped in one box. */}
+            <View style={styles.moreRowsGroup}>
+              <Pressable
+                style={styles.moreRow}
+                onPress={() => {
+                  setInfoChannel(moreOptionsChannel);
+                  setMoreOptionsChannel(null);
+                }}
+                accessibilityRole="button"
+              >
+                <Feather name="info" size={18} color={Colors.textSecondary} />
+                <Text style={styles.moreRowText}>Room info</Text>
+              </Pressable>
+
+              {!DEFAULT_CHANNEL_NAMES.has(moreOptionsChannel) && (
+                <>
+                  <View style={styles.moreDivider} />
                   <Pressable
                     style={styles.moreRow}
                     onPress={() => {
-                      setInfoChannel(moreOptionsChannel);
+                      togglePinChannel(moreOptionsChannel);
                       setMoreOptionsChannel(null);
                     }}
                     accessibilityRole="button"
                   >
-                    <Feather
-                      name="info"
-                      size={18}
-                      color={Colors.textSecondary}
-                    />
-                    <Text style={styles.moreRowText}>Room info</Text>
-                  </Pressable>
-
-                  {!DEFAULT_CHANNEL_NAMES.has(moreOptionsChannel) && (
-                    <>
-                      <View style={styles.moreDivider} />
-                      <Pressable
-                        style={styles.moreRow}
-                        onPress={() => {
-                          togglePinChannel(moreOptionsChannel);
-                          setMoreOptionsChannel(null);
-                        }}
-                        accessibilityRole="button"
-                      >
-                        <MaterialCommunityIcons
-                          name={
-                            pinnedChannels.includes(moreOptionsChannel)
-                              ? "pin-off"
-                              : "pin"
-                          }
-                          size={18}
-                          color={Colors.textSecondary}
-                        />
-                        <Text style={styles.moreRowText}>
-                          {pinnedChannels.includes(moreOptionsChannel)
-                            ? "Unpin room"
-                            : "Pin room"}
-                        </Text>
-                      </Pressable>
-                    </>
-                  )}
-
-                  <View style={styles.moreDivider} />
-                  <Pressable
-                    style={styles.moreRow}
-                    onPress={() => handleMuteChat(moreOptionsChannel)}
-                    accessibilityRole="button"
-                  >
-                    <Feather
+                    <MaterialCommunityIcons
                       name={
-                        mutedChannels.includes(moreOptionsChannel)
-                          ? "bell"
-                          : "bell-off"
+                        pinnedChannels.includes(moreOptionsChannel)
+                          ? "pin-off"
+                          : "pin"
                       }
                       size={18}
                       color={Colors.textSecondary}
                     />
                     <Text style={styles.moreRowText}>
-                      {mutedChannels.includes(moreOptionsChannel)
-                        ? "Unmute room"
-                        : "Mute room"}
+                      {pinnedChannels.includes(moreOptionsChannel)
+                        ? "Unpin room"
+                        : "Pin room"}
                     </Text>
                   </Pressable>
+                </>
+              )}
 
-                  <View style={styles.moreDivider} />
-                  <Pressable
-                    style={styles.moreRow}
-                    onPress={() => handleClearChat(moreOptionsChannel)}
-                    accessibilityRole="button"
-                  >
-                    <Feather
-                      name="x-circle"
-                      size={18}
-                      color={Colors.textSecondary}
-                    />
-                    <Text style={styles.moreRowText}>Clear messages</Text>
-                  </Pressable>
-                </View>
+              <View style={styles.moreDivider} />
+              <Pressable
+                style={styles.moreRow}
+                onPress={() => handleMuteChat(moreOptionsChannel)}
+                accessibilityRole="button"
+              >
+                <Feather
+                  name={
+                    mutedChannels.includes(moreOptionsChannel)
+                      ? "bell"
+                      : "bell-off"
+                  }
+                  size={18}
+                  color={Colors.textSecondary}
+                />
+                <Text style={styles.moreRowText}>
+                  {mutedChannels.includes(moreOptionsChannel)
+                    ? "Unmute room"
+                    : "Mute room"}
+                </Text>
+              </Pressable>
 
-                {/* Destructive action in its own red box. Default channels are
+              <View style={styles.moreDivider} />
+              <Pressable
+                style={styles.moreRow}
+                onPress={() => handleClearChat(moreOptionsChannel)}
+                accessibilityRole="button"
+              >
+                <Feather
+                  name="x-circle"
+                  size={18}
+                  color={Colors.textSecondary}
+                />
+                <Text style={styles.moreRowText}>Clear messages</Text>
+              </Pressable>
+            </View>
+
+            {/* Destructive action in its own red box. Default channels are
                     built-in and can't be left, so they have no red group. */}
-                {!DEFAULT_CHANNEL_NAMES.has(moreOptionsChannel) && (
-                  <View style={styles.moreRowsGroupDanger}>
-                    <Pressable
-                      style={styles.moreRowDanger}
-                      onPress={() => handleLeaveChannel(moreOptionsChannel)}
-                      accessibilityRole="button"
-                    >
-                      <Feather name="log-out" size={18} color={Colors.danger} />
-                      <Text
-                        style={[styles.moreRowText, styles.moreRowTextDanger]}
-                      >
-                        Leave room
-                      </Text>
-                    </Pressable>
-                  </View>
-                )}
-              </>
+            {!DEFAULT_CHANNEL_NAMES.has(moreOptionsChannel) && (
+              <View style={styles.moreRowsGroupDanger}>
+                <Pressable
+                  style={styles.moreRowDanger}
+                  onPress={() => handleLeaveChannel(moreOptionsChannel)}
+                  accessibilityRole="button"
+                >
+                  <Feather name="log-out" size={18} color={Colors.danger} />
+                  <Text style={[styles.moreRowText, styles.moreRowTextDanger]}>
+                    Leave room
+                  </Text>
+                </Pressable>
+              </View>
             )}
-          </View>
-        </View>
-      </Modal>
+          </>
+        )}
+      </BottomSheet>
 
       {/* Channel info sheet (shared component) */}
       <ChannelInfoSheet
@@ -1385,25 +1345,10 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
 
     // ---- Create/join modal ---------------------------------------------------
 
-    modalOverlay: {
-      flex: 1,
-      backgroundColor: Colors.overlay,
-      justifyContent: "flex-end",
-    },
     modalSheet: {
-      backgroundColor: Colors.surface,
-      borderTopLeftRadius: Radius["2xl"],
-      borderTopRightRadius: Radius["2xl"],
-      padding: Spacing.xl,
+      paddingHorizontal: Spacing.xl,
+      paddingBottom: Spacing.xl,
       gap: Spacing.base,
-    },
-    handle: {
-      width: 36,
-      height: 4,
-      borderRadius: 2,
-      backgroundColor: Colors.borderStrong,
-      alignSelf: "center",
-      marginBottom: Spacing.xs,
     },
     modalTitle: {
       fontSize: FontSize.md,

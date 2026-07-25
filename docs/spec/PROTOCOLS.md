@@ -6,12 +6,26 @@
 
 ## 1. BLE Identifiers
 
-| Identifier              | Value                                  | Notes                                   |
-| ----------------------- | -------------------------------------- | --------------------------------------- |
-| **Service UUID**        | `F47B5E2D-4A9E-4C5A-9B3F-8E1D2C3A4B5C` | Same as bitchat mainnet. Do not change. |
-| **Characteristic UUID** | `A1B2C3D4-E5F6-4A5B-8C9D-0E1F2A3B4C5D` | Read/Write/Notify                       |
-| **Local Name prefix**   | `bitchat-`                             | Advertised in scan response             |
-| **Protocol version**    | `2`                                    | `u8` at byte `[0]` of every packet      |
+| Identifier                | Value                                  | Notes                                       |
+| ------------------------- | -------------------------------------- | ------------------------------------------- |
+| **Service UUID**          | `F47B5E2D-4A9E-4C5A-9B3F-8E1D2C3A4B5C` | Same as bitchat mainnet. Do not change.     |
+| **Characteristic UUID**   | `A1B2C3D4-E5F6-4A5B-8C9D-0E1F2A3B4C5D` | Read/Write/Notify                           |
+| **Peer ID in the advert** | iOS local name, Android service data   | Carried differently per platform, see below |
+| **Protocol version**      | `2`                                    | `u8` at byte `[0]` of every packet          |
+
+A scanner reads the peer ID out of the advertisement so it can identify and
+de-duplicate a device before opening a link. The two platforms cannot carry it
+the same way:
+
+- **Android** puts the first 8 bytes of the peer ID in scan-response service data
+  under the service UUID, and advertises no local name.
+- **iOS** advertises the full 16-character peer ID as the local name.
+  CoreBluetooth has no API for service data, so the Android layout is not
+  available to it.
+
+Neither platform advertises a `bitchat-` name prefix. A scanner that finds no
+peer ID in the advertisement still connects and learns the peer from its first
+`ANNOUNCE`, which is what happens on every iOS-to-Android link.
 
 ## 2. Packet Frame Layout
 
@@ -104,14 +118,20 @@ All type values match bitchat `MessageType.swift` / `MessageType.kt` (public dom
 
 ## 6. Store-and-Forward (Courier) Constants
 
-| Constant                          | Value                                                                                   | Notes                                     |
-| --------------------------------- | --------------------------------------------------------------------------------------- | ----------------------------------------- |
-| Courier pool size                 | `40 envelopes`                                                                          | Max carried per device                    |
-| Envelope TTL                      | `24 hours`                                                                              | Dropped after expiry                      |
-| Per-envelope size cap             | `16 KiB`                                                                                | Text only; media not couriered            |
-| Per-peer deposit quota (favorite) | `5 envelopes`                                                                           | Trust tier: favorite                      |
-| Per-peer deposit quota (verified) | `2 envelopes`                                                                           | Trust tier: verified/known                |
-| Recipient tag derivation          | HMAC-SHA256(key=noiseStaticKey, msg=`"bitchat-courier-tag-v1"` \|\| epochDay_BE4)[0:16] | epochDay = floor(unixSec/86400) as u32 BE |
+| Constant                          | Value          | Notes                                     |
+| --------------------------------- | -------------- | ----------------------------------------- |
+| Courier pool size                 | `40 envelopes` | Max carried per device                    |
+| Verified-tier sub-cap             | `20 envelopes` | Verified mail cannot crowd out favorites  |
+| Envelope TTL                      | `24 hours`     | Stamped by the sender, dropped after      |
+| Expiry slack accepted             | `1 hour`       | Clock skew only; longer expiries rejected |
+| Per-envelope size cap             | `16 KiB`       | Text only; media not couriered            |
+| Per-peer deposit quota (favorite) | `5 envelopes`  | Trust tier: favorite                      |
+| Per-peer deposit quota (verified) | `2 envelopes`  | Trust tier: verified/known                |
+
+A carrier judges an envelope by its own limits, not the sender's. An expiry
+beyond `TTL + slack` is refused outright rather than clamped, so a sender that
+stamps longer does not get longer carriage, it gets no carriage at all.
+| Recipient tag derivation | HMAC-SHA256(key=noiseStaticKey, msg=`"bitchat-courier-tag-v1"` \|\| epochDay_BE4)[0:16] | epochDay = floor(unixSec/86400) as u32 BE |
 
 ## 7. Cryptographic Constants
 
@@ -138,10 +158,10 @@ All type values match bitchat `MessageType.swift` / `MessageType.kt` (public dom
 | Nostr seal kind      | `13` (NIP-17 seal, signed by real sender, encrypts rumor to recipient)                                  |
 | Nostr gift wrap kind | `1059` (NIP-17 outer envelope, signed by ephemeral key)                                                 |
 | Nostr courier drop   | `1401` (Nostr store-and-forward envelope; `#x` tag = recipient tag hex; NIP-40 expiry)                  |
-| Nutzap event kind    | `9321` (NIP-61)                                                                                         |
-| Wallet info kind     | `10019` (NIP-61 receiver info)                                                                          |
-| Cashu wallet kind    | `17375` (NIP-60)                                                                                        |
-| Token event kind     | `7375` (NIP-60)                                                                                         |
+| Nutzap event kind    | `9321` (NIP-61; `proof` tag per proof, `u` = mint)                                                      |
+| Wallet info kind     | `10019` (NIP-61; `mint`, `relay`, 33-byte `pubkey`)                                                     |
+| Cashu wallet kind    | `17375` (NIP-60, not published by Airhop yet)                                                           |
+| Token event kind     | `7375` (NIP-60, not published by Airhop yet)                                                            |
 | Geohash precision    | 5 characters (~5 km × 5 km cell)                                                                        |
 
 ## 9. bitchat Wire Compatibility Table

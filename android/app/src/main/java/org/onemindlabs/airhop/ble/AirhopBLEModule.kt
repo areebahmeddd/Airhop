@@ -43,6 +43,7 @@ import android.os.Looper
 import android.os.ParcelUuid
 import android.util.Base64
 import android.util.Log
+import androidx.core.content.ContextCompat
 import com.facebook.react.bridge.Promise
 import com.facebook.react.bridge.ReactApplicationContext
 import com.facebook.react.bridge.ReactContextBaseJavaModule
@@ -71,6 +72,9 @@ private const val EVT_RSSI_UPDATED      = "AirhopBLE.rssiUpdated"
 // tell "Bluetooth is off" apart from "nobody is nearby". Both look like an
 // empty peer list, which is impossible for a user to diagnose.
 private const val EVT_ADAPTER_STATE     = "AirhopBLE.adapterStateChanged"
+// The user tapped "Stop mesh" on the background notification. Handled in JS so
+// the shutdown is the same one the Status picker performs.
+private const val EVT_MESH_STOP_REQUESTED = "AirhopBLE.meshStopRequested"
 
 // Orbot SOCKS5 proxy defaults (Tor via Orbot, per ARCHITECTURE.md section 9).
 // Phase 1: detect existing Orbot session. Phase 2: embedded tor binary.
@@ -127,22 +131,38 @@ class AirhopBLEModule(
             // the banner flicker mid-toggle.
             when (state) {
                 BluetoothAdapter.STATE_ON -> emitAdapterState(true)
-                BluetoothAdapter.STATE_OFF -> emitAdapterState(false)
+                BluetoothAdapter.STATE_OFF -> {
+                    releaseRadioState()
+                    emitAdapterState(false)
+                }
             }
         }
     }
 
     init {
         try {
-            reactContext.registerReceiver(
+            // NOT_EXPORTED: this only ever listens to a protected system
+            // broadcast, so nothing outside the app has any business reaching
+            // it. Required to be explicit from API 34 on, and ContextCompat
+            // makes it a no-op below that.
+            ContextCompat.registerReceiver(
+                reactContext,
                 adapterStateReceiver,
                 IntentFilter(BluetoothAdapter.ACTION_STATE_CHANGED),
+                ContextCompat.RECEIVER_NOT_EXPORTED,
             )
         } catch (e: Exception) {
             Log.e(TAG, "Could not register Bluetooth state receiver", e)
         }
+        live = this
     }
 
+    // The JS runtime backing this module is going away (the app is being torn
+    // down, or Metro is reloading). Everything below is driven from TypeScript,
+    // so without JS the radios have nobody to hand packets to and the "mesh
+    // active" notification is claiming something that is no longer true. Leaving
+    // them up burns battery and, worse, makes the app look wedged on reopen -
+    // an ongoing notification over a mesh that can't answer.
     override fun invalidate() {
         try {
             reactContext.unregisterReceiver(adapterStateReceiver)
@@ -150,7 +170,57 @@ class AirhopBLEModule(
             // Already unregistered, or context torn down first.
         }
         stopRssiPolling()
+        try {
+            adapter.bluetoothLeScanner?.stopScan(scanCallback)
+            adapter.bluetoothLeAdvertiser?.stopAdvertising(advertiseCallback)
+            gattServer?.close()
+            gattServer = null
+            AirhopForegroundService.stop(reactContext)
+        } catch (e: Exception) {
+            Log.w(TAG, "BLE teardown on invalidate failed: ${e.message}")
+        }
+        if (live === this) live = null
         super.invalidate()
+    }
+
+    // Drop everything the OS has already invalidated when Bluetooth is switched
+    // off, so a re-enable starts from a clean slate.
+    //
+    // Android tears the GATT server and every connection down with the adapter,
+    // but our handles stay non-null and look alive. Without this, `startAdvertising`
+    // on the way back would hit `setupGattServer`'s `gattServer != null` guard,
+    // return early, and advertise against a server that no longer exists: peers
+    // discover us and every write then fails. That is the "Bluetooth came back
+    // but nothing works until I restart the app" case.
+    //
+    // Links are announced as disconnected before the maps are cleared, so JS
+    // stops addressing them immediately rather than discovering they are gone
+    // one failed write at a time.
+    private fun releaseRadioState() {
+        for (linkID in peripheralLinks.keys + centralLinks.keys) {
+            emitEvent(EVT_LINK_DISCONNECTED, WritableNativeMap().apply {
+                putString("linkID", linkID)
+            })
+        }
+        stopRssiPolling()
+        for (gatt in centralLinks.values) {
+            try {
+                gatt.close()
+            } catch (e: Exception) {
+                Log.w(TAG, "GATT close during adapter-off failed: ${e.message}")
+            }
+        }
+        centralLinks.clear()
+        peripheralLinks.clear()
+        centralPeerIDs.clear()
+        linkToAdvertisedPeerID.clear()
+        try {
+            gattServer?.close()
+        } catch (e: Exception) {
+            Log.w(TAG, "GATT server close during adapter-off failed: ${e.message}")
+        }
+        gattServer = null
+        characteristic = null
     }
 
     private fun emitAdapterState(enabled: Boolean) {
@@ -384,6 +454,32 @@ class AirhopBLEModule(
         }
 
         promise.reject("UNKNOWN_LINK", "No active link with ID $linkID")
+    }
+
+    // MARK: - Background notification hand-off
+
+    companion object {
+        // The module instance backing the live JS runtime, or null if there
+        // isn't one. The background notification's "Stop mesh" action is
+        // handled by a Service, which has no bridge of its own; this is how it
+        // reaches JS so the teardown runs through the one code path that knows
+        // how to shut a mesh down (see services/presence.ts).
+        @Volatile
+        private var live: AirhopBLEModule? = null
+
+        // Ask JS to stop the mesh. Returns false when there is no JS to ask -
+        // the process outlived its React context - and the caller then has to
+        // clean up on its own rather than waiting for a reply that can't come.
+        fun requestMeshStop(): Boolean {
+            val module = live ?: return false
+            return try {
+                module.emitEvent(EVT_MESH_STOP_REQUESTED, WritableNativeMap())
+                true
+            } catch (e: Exception) {
+                Log.w(TAG, "Could not reach JS to stop the mesh: ${e.message}")
+                false
+            }
+        }
     }
 
     // MARK: - NativeEventEmitter contract

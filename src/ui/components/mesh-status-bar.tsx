@@ -15,12 +15,23 @@
 // empty, so a healthy mesh with peers shows no chrome at all.
 
 import React from "react";
-import { StyleSheet, Text, View } from "react-native";
+import { Pressable, StyleSheet, Text, View } from "react-native";
 import type { BannerTone, MeshBanner } from "../../store/mesh-state-store";
-import { FontSize, FontWeight, Spacing, useThemeColors } from "../theme";
+import {
+  FontSize,
+  FontWeight,
+  Radius,
+  Spacing,
+  useThemeColors,
+} from "../theme";
 
 interface Props {
   banners: MeshBanner[];
+  // Turn the mesh back on. Shown only on the paused banner, because Away is the
+  // one state reachable from outside the app (the background notification's
+  // "Stop mesh"), and someone who arrives in it that way has no reason to know
+  // the way out lives under Profile → Status.
+  onResume?: () => void;
 }
 
 // The dot color for each tone. This is the only place a banner shows its hue;
@@ -47,6 +58,7 @@ function dotColor(
 
 export default function MeshStatusBar({
   banners,
+  onResume,
 }: Props): React.JSX.Element | null {
   const Colors = useThemeColors();
   if (banners.length === 0) return null;
@@ -67,6 +79,19 @@ export default function MeshStatusBar({
           <Text style={[styles.label, { color: Colors.textSecondary }]}>
             {banner.label}
           </Text>
+          {banner.key === "paused" && onResume && (
+            <Pressable
+              style={[styles.action, { borderColor: Colors.border }]}
+              onPress={onResume}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              accessibilityRole="button"
+              accessibilityLabel="Resume the mesh"
+            >
+              <Text style={[styles.actionText, { color: Colors.textPrimary }]}>
+                Resume
+              </Text>
+            </Pressable>
+          )}
         </View>
       ))}
     </View>
@@ -87,8 +112,19 @@ const styles = StyleSheet.create({
     borderRadius: 3,
   },
   label: {
+    flex: 1,
     fontSize: FontSize.xs,
     fontWeight: FontWeight.medium,
     letterSpacing: 0.2,
+  },
+  action: {
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: Radius.full,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: 3,
+  },
+  actionText: {
+    fontSize: FontSize.xs,
+    fontWeight: FontWeight.semibold,
   },
 });

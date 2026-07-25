@@ -8,11 +8,12 @@
 
 import { Feather } from "@expo/vector-icons";
 import React, { useMemo, useState } from "react";
-import { Modal, Pressable, StyleSheet, Text, View } from "react-native";
+import { Pressable, StyleSheet, Text, View } from "react-native";
 import { useChatStore } from "../../store/chat-store";
 import { useContactsStore } from "../../store/contacts-store";
 import { usePeerStore } from "../../store/peer-store";
 import Avatar from "../../ui/components/avatar";
+import BottomSheet from "../../ui/components/bottom-sheet";
 import {
   FontFamily,
   FontSize,
@@ -67,15 +68,24 @@ export default function ContactInfoSheet({
   // lasting identity to verify, so the sheet says "Anonymous" rather than the
   // "Not verified · scan their QR" line that a mesh peer gets.
   const isAnonymous = peerID !== null && isNostrId(peerID);
-  // The info card's rows, top to bottom. Verification leads (the trust signal),
-  // then relationship, reachability, and the always-on encryption guarantee.
+  // The info card's rows, top to bottom. Relationship leads, then verification
+  // (the trust signal), then the always-on encryption guarantee.
   const infoRows: {
     key: string;
     icon: React.ComponentProps<typeof Feather>["name"];
     iconColor: string;
     label: string;
     sub?: string;
-  }[] = [
+  }[] = [];
+  if (firstMessage) {
+    infoRows.push({
+      key: "since",
+      icon: "clock",
+      iconColor: Colors.textSecondary,
+      label: `Chatting since ${formatDate(firstMessage.timestampMs)}`,
+    });
+  }
+  infoRows.push(
     isAnonymous
       ? {
           key: "verify",
@@ -101,15 +111,7 @@ export default function ContactInfoSheet({
             label: "Not verified",
             sub: "Scan their QR code to confirm this is really them.",
           },
-  ];
-  if (firstMessage) {
-    infoRows.push({
-      key: "since",
-      icon: "clock",
-      iconColor: Colors.textSecondary,
-      label: `Chatting since ${formatDate(firstMessage.timestampMs)}`,
-    });
-  }
+  );
   infoRows.push({
     key: "enc",
     icon: "lock",
@@ -120,87 +122,72 @@ export default function ContactInfoSheet({
 
   return (
     <>
-      <Modal
+      <BottomSheet
         visible={channel !== null}
-        transparent
-        animationType="slide"
-        onRequestClose={onClose}
+        onClose={onClose}
+        sheetStyle={styles.sheet}
       >
-        <View style={styles.overlay}>
-          <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
-          <View style={styles.sheet}>
-            <View style={styles.handle} />
-            {peerID && (
-              <>
-                <View style={styles.body}>
-                  <Avatar
-                    username={name}
-                    peerID={peerID}
-                    size={64}
-                    presence={isOnline ? "online" : "offline"}
-                    ringColor={Colors.surface}
-                  />
-                  <Text style={styles.name}>{name}</Text>
-                  {/* A Nostr peer has no short mesh ID — its identifier IS a
+        {peerID && (
+          <>
+            <View style={styles.body}>
+              <Avatar
+                username={name}
+                peerID={peerID}
+                size={64}
+                presence={isOnline ? "online" : "offline"}
+                ringColor={Colors.surface}
+              />
+              <Text style={styles.name}>{name}</Text>
+              {/* A Nostr peer has no short mesh ID — its identifier IS a
                       64-hex public key. Box and label it so it reads as a
                       deliberate credential, not a stray string. */}
-                  {isNostrId(peerID) ? (
-                    <View style={styles.keyBox}>
-                      <Text style={styles.keyBoxLabel}>Nostr public key</Text>
-                      <Text style={styles.keyBoxValue} selectable>
-                        {peerID.slice(NOSTR_ID_PREFIX.length)}
-                      </Text>
-                    </View>
-                  ) : (
-                    <Text style={styles.peerID}>{peerID}</Text>
-                  )}
-
-                  <View style={styles.infoCard}>
-                    {infoRows.map((r, i) => (
-                      <React.Fragment key={r.key}>
-                        {i > 0 && <View style={styles.infoDivider} />}
-                        <View style={styles.infoRow}>
-                          <View style={styles.infoIcon}>
-                            <Feather
-                              name={r.icon}
-                              size={16}
-                              color={r.iconColor}
-                            />
-                          </View>
-                          <View style={styles.infoText}>
-                            <Text style={styles.infoLabel}>{r.label}</Text>
-                            {r.sub ? (
-                              <Text style={styles.infoSub}>{r.sub}</Text>
-                            ) : null}
-                          </View>
-                        </View>
-                      </React.Fragment>
-                    ))}
-                  </View>
+              {isNostrId(peerID) ? (
+                <View style={styles.keyBox}>
+                  <Text style={styles.keyBoxLabel}>Nostr public key</Text>
+                  <Text style={styles.keyBoxValue} selectable>
+                    {peerID.slice(NOSTR_ID_PREFIX.length)}
+                  </Text>
                 </View>
+              ) : (
+                <Text style={styles.peerID}>{peerID}</Text>
+              )}
 
-                {canVerify && (
-                  <View style={styles.actions}>
-                    <Pressable
-                      style={styles.verifyBtn}
-                      onPress={() => setVerifying(true)}
-                      accessibilityRole="button"
-                      accessibilityLabel="Verify contact"
-                    >
-                      <Feather
-                        name="shield"
-                        size={16}
-                        color={Colors.textInverse}
-                      />
-                      <Text style={styles.verifyText}>Verify contact</Text>
-                    </Pressable>
-                  </View>
-                )}
-              </>
+              <View style={styles.infoCard}>
+                {infoRows.map((r, i) => (
+                  <React.Fragment key={r.key}>
+                    {i > 0 && <View style={styles.infoDivider} />}
+                    <View style={styles.infoRow}>
+                      <View style={styles.infoIcon}>
+                        <Feather name={r.icon} size={16} color={r.iconColor} />
+                      </View>
+                      <View style={styles.infoText}>
+                        <Text style={styles.infoLabel}>{r.label}</Text>
+                        {r.sub ? (
+                          <Text style={styles.infoSub}>{r.sub}</Text>
+                        ) : null}
+                      </View>
+                    </View>
+                  </React.Fragment>
+                ))}
+              </View>
+            </View>
+
+            {canVerify && (
+              <View style={styles.actions}>
+                <Pressable
+                  style={styles.verifyBtn}
+                  onPress={() => setVerifying(true)}
+                  accessibilityRole="button"
+                  accessibilityLabel="Verify contact"
+                >
+                  <Feather name="shield" size={16} color={Colors.textInverse} />
+                  <Text style={styles.verifyText}>Verify contact</Text>
+                </Pressable>
+              </View>
             )}
-          </View>
-        </View>
-      </Modal>
+          </>
+        )}
+      </BottomSheet>
       {peerID && (
         <VerifyContactScanner
           visible={verifying}
@@ -223,24 +210,10 @@ function formatDate(ms: number): string {
 
 function createStyles(Colors: ReturnType<typeof useThemeColors>) {
   return StyleSheet.create({
-    overlay: {
-      flex: 1,
-      backgroundColor: Colors.overlay,
-      justifyContent: "flex-end",
-    },
     sheet: {
-      backgroundColor: Colors.surface,
-      borderTopLeftRadius: Radius["2xl"],
-      borderTopRightRadius: Radius["2xl"],
-      padding: Spacing.xl,
+      paddingHorizontal: Spacing.xl,
+      paddingBottom: Spacing.xl,
       gap: Spacing.lg,
-    },
-    handle: {
-      width: 36,
-      height: 4,
-      borderRadius: 2,
-      backgroundColor: Colors.borderStrong,
-      alignSelf: "center",
     },
     body: {
       alignItems: "center",

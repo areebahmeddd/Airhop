@@ -10,7 +10,6 @@ import * as MediaLibrary from "expo-media-library";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   BackHandler,
-  Modal,
   Pressable,
   ScrollView,
   Share,
@@ -20,7 +19,11 @@ import {
 } from "react-native";
 import QRCode from "react-native-qrcode-svg";
 import { encodeQRContent } from "../../core/crypto/contact-exchange";
-import { getMeshService } from "../../services/mesh-service";
+import {
+  destroyMeshService,
+  getMeshService,
+} from "../../services/mesh-service";
+import { applyPresence } from "../../services/presence";
 import { showAlert } from "../../store/alert-store";
 import {
   useMeshStateStore,
@@ -31,6 +34,7 @@ import {
   type ThemePreference,
 } from "../../store/settings-store";
 import Avatar from "../../ui/components/avatar";
+import BottomSheet from "../../ui/components/bottom-sheet";
 import { MONO_FONT_ORDER, MONO_FONTS } from "../../ui/fonts";
 import {
   FontFamily,
@@ -43,6 +47,7 @@ import {
 } from "../../ui/theme";
 import { peerInviteLink } from "../../utils/deep-link";
 import { panicWipe } from "../../utils/panic-wipe";
+import { ensurePermission } from "../../utils/permissions";
 import AboutScreen from "./sections/about-screen";
 import DonateScreen from "./sections/donate-screen";
 import HelpScreen from "./sections/help-screen";
@@ -123,10 +128,9 @@ const THEME_META: Record<
 const THEME_ORDER: ThemePreference[] = ["light", "dark", "system"];
 
 // Payments has shipped, so it sits at the top of the features group with a
-// real switch instead of a "Coming soon" tag. The switch alone carries the
-// on/off state, since a status word beside it only restated what it shows.
-// The rest aren't built yet: each one expands in place to explain what it
-// will do, rather than linking out or staying silent about it.
+// switch locked on rather than a "Coming soon" tag. The rest aren't built
+// yet: each one expands in place to explain what it will do, rather than
+// linking out or staying silent about it.
 type FeatureKey = "ai" | "feeds";
 
 const FEATURES: {
@@ -203,8 +207,6 @@ export default function ProfileScreen({
   const setTheme = useSettingsStore((s) => s.setTheme);
   const monoFont = useSettingsStore((s) => s.monoFont);
   const setMonoFont = useSettingsStore((s) => s.setMonoFont);
-  const paymentsEnabled = useSettingsStore((s) => s.paymentsEnabled);
-  const setPaymentsEnabled = useSettingsStore((s) => s.setPaymentsEnabled);
 
   // The QR encodes a full contact card (peer ID + Noise and Ed25519 public keys
   // + nickname), not just the peer ID. A bare ID carries nothing a scanner can
@@ -228,6 +230,13 @@ export default function ProfileScreen({
   }, [view]);
 
   async function handleConfirmWipe(): Promise<void> {
+    // Order matters. The mesh comes down FIRST: it is a live process with radios
+    // open and relay subscriptions running, and anything that lands while the
+    // wipe is in flight would be written straight back into the stores the wipe
+    // just cleared. Stopping first also lets the goodbye packet go out under the
+    // identity that is about to cease existing, which is the last honest moment
+    // to send it. Destroying rather than stopping releases the key material too.
+    destroyMeshService();
     await panicWipe();
     setShowWipeModal(false);
     onWipe?.();
@@ -253,29 +262,10 @@ export default function ProfileScreen({
 
   const shortPubKey = peerID.slice(0, 8) + " · " + peerID.slice(8);
 
-  // Apply a presence change to the running mesh, then update the dot.
-  function applyStatus(next: Status): void {
-    const mesh = getMeshService();
-    if (next === "online") {
-      if (status === "away") mesh?.start(username);
-      else if (status === "invisible") mesh?.setDiscoverable(true);
-    } else if (next === "away") {
-      mesh?.stop();
-      // Away stops the whole mesh, so the internet gateway can no longer relay
-      // for anyone. Turn it off outright rather than leaving a green toggle that
-      // does nothing; the user re-enables it when they come back. (Tor stays as
-      // set: it is a privacy preference, and silently disabling it would risk
-      // clear-net traffic on return.)
-      useSettingsStore.getState().setGatewayEnabled(false);
-    } else if (next === "invisible") {
-      if (status === "away") mesh?.start(username);
-      mesh?.setDiscoverable(false);
-    }
-    useMeshStateStore.getState().setPresenceStatus(next);
-  }
-
   function handleSelectStatus(next: Status): void {
-    applyStatus(next);
+    // Shared with the background notification's "Stop mesh" action, so both
+    // routes into Away do exactly the same thing. See services/presence.
+    applyPresence(next, username);
     setShowStatusModal(false);
   }
 
@@ -290,14 +280,15 @@ export default function ProfileScreen({
   } | null>(null);
 
   async function handleDownloadQR(): Promise<void> {
-    const { status } = await MediaLibrary.requestPermissionsAsync();
-    if (status !== "granted") {
-      showAlert(
-        "Permission needed",
-        "Grant photo library access in Settings to save the QR code.",
-      );
-      return;
-    }
+    // writeOnly: saving one image needs permission to add to the library, not
+    // to read everything already in it. Asking for less is both faster to grant
+    // and the honest ask.
+    const granted = await ensurePermission(
+      () => MediaLibrary.getPermissionsAsync(true),
+      () => MediaLibrary.requestPermissionsAsync(true),
+      { label: "Photo access", purpose: "save your QR code" },
+    );
+    if (!granted) return;
     qrRef.current?.toDataURL(async (base64) => {
       try {
         const file = new FileSystem.File(
@@ -441,10 +432,11 @@ export default function ProfileScreen({
         </Pressable>
       </View>
 
-      {/* Features. Payments is live, so it leads the group with a switch that
-          shows or hides the Wallet tab. The rest aren't built yet: each row
-          states what it will do and carries a "Coming soon" tag, the same
-          shape as the live Payments row above it. */}
+      {/* Features. Payments is live, so it leads the group. Its switch is
+          locked on: the Wallet tab is part of what Airhop is, not something to
+          switch off. The rest aren't built yet: each row states what it will
+          do and carries a "Coming soon" tag, the same shape as the Payments
+          row above it. */}
       <View style={shared.section}>
         <View style={shared.settingsGroup}>
           <SettingRow
@@ -453,9 +445,9 @@ export default function ProfileScreen({
             description="Send Cashu ecash peer to peer over the mesh"
             control={
               <SettingSwitch
-                value={paymentsEnabled}
-                onValueChange={setPaymentsEnabled}
-                accessibilityLabel="Enable payments"
+                value
+                disabled
+                accessibilityLabel="Payments (always on)"
               />
             }
           />
@@ -568,278 +560,232 @@ export default function ProfileScreen({
       </View>
 
       {/* QR code modal: the QR, a Share button, and a Download button */}
-      <Modal
+      <BottomSheet
         visible={showQRModal}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setShowQRModal(false)}
+        onClose={() => setShowQRModal(false)}
+        sheetStyle={shared.sheet}
       >
-        <View style={shared.sheetOverlay}>
-          <Pressable
-            style={StyleSheet.absoluteFill}
-            onPress={() => setShowQRModal(false)}
+        <Text style={shared.sheetTitle}>Your QR Code</Text>
+        <View style={styles.qrLarge}>
+          <QRCode
+            value={qrValue}
+            size={200}
+            color={Colors.textPrimary}
+            backgroundColor={Colors.surface}
+            getRef={(c) => {
+              qrRef.current = c;
+            }}
           />
-          <View style={shared.sheet}>
-            <View style={shared.sheetHandle} />
-            <Text style={shared.sheetTitle}>Your QR Code</Text>
-            <View style={styles.qrLarge}>
-              <QRCode
-                value={qrValue}
-                size={200}
-                color={Colors.textPrimary}
-                backgroundColor={Colors.surface}
-                getRef={(c) => {
-                  qrRef.current = c;
-                }}
-              />
-            </View>
-            <Text style={styles.qrSheetPeerID}>{peerID}</Text>
-            <View style={styles.qrActions}>
-              <Pressable
-                style={styles.qrShareBtn}
-                onPress={() => void handleShareQR()}
-                accessibilityRole="button"
-                accessibilityLabel="Share QR code"
-              >
-                <Feather name="share-2" size={16} color={Colors.textInverse} />
-                <Text style={styles.qrShareText}>Share QR</Text>
-              </Pressable>
-              <Pressable
-                style={styles.qrDownloadBtn}
-                onPress={() => void handleDownloadQR()}
-                accessibilityRole="button"
-                accessibilityLabel="Download QR code"
-              >
-                <Feather name="download" size={16} color={Colors.textPrimary} />
-                <Text style={styles.qrDownloadText}>Download QR</Text>
-              </Pressable>
-            </View>
-          </View>
         </View>
-      </Modal>
+        <Text style={styles.qrSheetPeerID}>{peerID}</Text>
+        <View style={styles.qrActions}>
+          <Pressable
+            style={styles.qrShareBtn}
+            onPress={() => void handleShareQR()}
+            accessibilityRole="button"
+            accessibilityLabel="Share QR code"
+          >
+            <Feather name="share-2" size={16} color={Colors.textInverse} />
+            <Text style={styles.qrShareText}>Share QR</Text>
+          </Pressable>
+          <Pressable
+            style={styles.qrDownloadBtn}
+            onPress={() => void handleDownloadQR()}
+            accessibilityRole="button"
+            accessibilityLabel="Download QR code"
+          >
+            <Feather name="download" size={16} color={Colors.textPrimary} />
+            <Text style={styles.qrDownloadText}>Download QR</Text>
+          </Pressable>
+        </View>
+      </BottomSheet>
 
       {/* Status modal: bottom sheet, one selectable row per presence state */}
-      <Modal
+      <BottomSheet
         visible={showStatusModal}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setShowStatusModal(false)}
+        onClose={() => setShowStatusModal(false)}
+        sheetStyle={shared.sheet}
       >
-        <View style={shared.sheetOverlay}>
-          <Pressable
-            style={StyleSheet.absoluteFill}
-            onPress={() => setShowStatusModal(false)}
-          />
-          <View style={shared.sheet}>
-            <View style={shared.sheetHandle} />
-            <Text style={shared.sheetTitle}>Status</Text>
-            <Text style={shared.sheetSubtitle}>
-              Choose how visible you are on the mesh.
-            </Text>
-            <View style={[shared.settingsGroup, styles.appearanceGroup]}>
-              {STATUS_ORDER.map((key, i) => {
-                const meta = STATUS_META[key];
-                const selected = key === status;
-                return (
-                  <React.Fragment key={key}>
-                    {i > 0 && <View style={shared.groupDivider} />}
-                    <Pressable
-                      style={[
-                        styles.optionRowGrouped,
-                        selected && styles.optionRowGroupedSelected,
-                      ]}
-                      onPress={() => handleSelectStatus(key)}
-                      accessibilityRole="button"
-                      accessibilityLabel={`Set status to ${meta.label}`}
-                    >
-                      <View
-                        style={[
-                          shared.optionDot,
-                          { backgroundColor: meta.color },
-                        ]}
-                      >
-                        <Feather name={meta.icon} size={14} color="#FFFFFF" />
-                      </View>
-                      <View style={shared.optionText}>
-                        <Text style={shared.optionLabel}>{meta.label}</Text>
-                        <Text style={shared.optionDescription}>
-                          {meta.description}
-                        </Text>
-                      </View>
-                      {selected && (
-                        <Feather
-                          name="check"
-                          size={18}
-                          color={Colors.textPrimary}
-                        />
-                      )}
-                    </Pressable>
-                  </React.Fragment>
-                );
-              })}
-            </View>
-          </View>
+        <Text style={shared.sheetTitle}>Status</Text>
+        <Text style={shared.sheetSubtitle}>
+          Choose how visible you are on the mesh.
+        </Text>
+        <View style={[shared.settingsGroup, styles.appearanceGroup]}>
+          {STATUS_ORDER.map((key, i) => {
+            const meta = STATUS_META[key];
+            const selected = key === status;
+            return (
+              <React.Fragment key={key}>
+                {i > 0 && <View style={shared.groupDivider} />}
+                <Pressable
+                  style={[
+                    styles.optionRowGrouped,
+                    selected && styles.optionRowGroupedSelected,
+                  ]}
+                  onPress={() => handleSelectStatus(key)}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Set status to ${meta.label}`}
+                >
+                  <View
+                    style={[shared.optionDot, { backgroundColor: meta.color }]}
+                  >
+                    <Feather name={meta.icon} size={14} color="#FFFFFF" />
+                  </View>
+                  <View style={shared.optionText}>
+                    <Text style={shared.optionLabel}>{meta.label}</Text>
+                    <Text style={shared.optionDescription}>
+                      {meta.description}
+                    </Text>
+                  </View>
+                  {selected && (
+                    <Feather
+                      name="check"
+                      size={18}
+                      color={Colors.textPrimary}
+                    />
+                  )}
+                </Pressable>
+              </React.Fragment>
+            );
+          })}
         </View>
-      </Modal>
+      </BottomSheet>
 
       {/* Appearance modal: light / dark / system default */}
-      <Modal
+      <BottomSheet
         visible={showThemeModal}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setShowThemeModal(false)}
+        onClose={() => setShowThemeModal(false)}
+        sheetStyle={shared.sheet}
       >
-        <View style={shared.sheetOverlay}>
-          <Pressable
-            style={StyleSheet.absoluteFill}
-            onPress={() => setShowThemeModal(false)}
-          />
-          <View style={shared.sheet}>
-            <View style={shared.sheetHandle} />
-            <Text style={shared.sheetTitle}>Appearance</Text>
+        <Text style={shared.sheetTitle}>Appearance</Text>
 
-            <Text style={styles.appearanceGroupLabel}>THEME</Text>
-            <View style={[shared.settingsGroup, styles.appearanceGroup]}>
-              {THEME_ORDER.map((key, i) => {
-                const meta = THEME_META[key];
-                const selected = key === theme;
-                return (
-                  <React.Fragment key={key}>
-                    {i > 0 && <View style={shared.groupDivider} />}
-                    <Pressable
-                      style={[
-                        styles.optionRowGrouped,
-                        selected && styles.optionRowGroupedSelected,
-                      ]}
-                      onPress={() => {
-                        setTheme(key);
-                        setShowThemeModal(false);
-                      }}
-                      accessibilityRole="button"
-                      accessibilityLabel={`Set appearance to ${meta.label}`}
-                    >
-                      <View style={styles.optionIconGrouped}>
-                        <Feather
-                          name={meta.icon}
-                          size={18}
-                          color={Colors.textSecondary}
-                        />
-                      </View>
-                      <View style={shared.optionText}>
-                        <Text style={shared.optionLabel}>{meta.label}</Text>
-                        <Text style={shared.optionDescription}>
-                          {meta.description}
-                        </Text>
-                      </View>
-                      {selected && (
-                        <Feather
-                          name="check"
-                          size={18}
-                          color={Colors.textPrimary}
-                        />
-                      )}
-                    </Pressable>
-                  </React.Fragment>
-                );
-              })}
-            </View>
-
-            {/* Font: keep the sheet open on select so the change is visible live
-                (the mono bits behind it update instantly) and easy to compare. */}
-            <Text style={styles.appearanceGroupLabel}>FONT</Text>
-            <View style={[shared.settingsGroup, styles.appearanceGroup]}>
-              {MONO_FONT_ORDER.map((key, i) => {
-                const meta = MONO_FONTS[key];
-                const selected = key === monoFont;
-                return (
-                  <React.Fragment key={key}>
-                    {i > 0 && <View style={shared.groupDivider} />}
-                    <Pressable
-                      style={[
-                        styles.optionRowGrouped,
-                        selected && styles.optionRowGroupedSelected,
-                      ]}
-                      onPress={() => setMonoFont(key)}
-                      accessibilityRole="button"
-                      accessibilityLabel={`Set monospace font to ${meta.label}`}
-                    >
-                      <View style={styles.optionIconGrouped}>
-                        <Feather
-                          name={meta.icon}
-                          size={18}
-                          color={Colors.textSecondary}
-                        />
-                      </View>
-                      <View style={shared.optionText}>
-                        <Text
-                          style={[
-                            shared.optionLabel,
-                            { fontFamily: meta.family },
-                          ]}
-                        >
-                          {meta.label}
-                        </Text>
-                        <Text style={shared.optionDescription}>
-                          {meta.description}
-                        </Text>
-                      </View>
-                      {selected && (
-                        <Feather
-                          name="check"
-                          size={18}
-                          color={Colors.textPrimary}
-                        />
-                      )}
-                    </Pressable>
-                  </React.Fragment>
-                );
-              })}
-            </View>
-          </View>
+        <Text style={styles.appearanceGroupLabel}>THEME</Text>
+        <View style={[shared.settingsGroup, styles.appearanceGroup]}>
+          {THEME_ORDER.map((key, i) => {
+            const meta = THEME_META[key];
+            const selected = key === theme;
+            return (
+              <React.Fragment key={key}>
+                {i > 0 && <View style={shared.groupDivider} />}
+                <Pressable
+                  style={[
+                    styles.optionRowGrouped,
+                    selected && styles.optionRowGroupedSelected,
+                  ]}
+                  onPress={() => {
+                    setTheme(key);
+                    setShowThemeModal(false);
+                  }}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Set appearance to ${meta.label}`}
+                >
+                  <View style={styles.optionIconGrouped}>
+                    <Feather
+                      name={meta.icon}
+                      size={18}
+                      color={Colors.textSecondary}
+                    />
+                  </View>
+                  <View style={shared.optionText}>
+                    <Text style={shared.optionLabel}>{meta.label}</Text>
+                    <Text style={shared.optionDescription}>
+                      {meta.description}
+                    </Text>
+                  </View>
+                  {selected && (
+                    <Feather
+                      name="check"
+                      size={18}
+                      color={Colors.textPrimary}
+                    />
+                  )}
+                </Pressable>
+              </React.Fragment>
+            );
+          })}
         </View>
-      </Modal>
+
+        {/* Font: keep the sheet open on select so the change is visible live
+                (the mono bits behind it update instantly) and easy to compare. */}
+        <Text style={styles.appearanceGroupLabel}>FONT</Text>
+        <View style={[shared.settingsGroup, styles.appearanceGroup]}>
+          {MONO_FONT_ORDER.map((key, i) => {
+            const meta = MONO_FONTS[key];
+            const selected = key === monoFont;
+            return (
+              <React.Fragment key={key}>
+                {i > 0 && <View style={shared.groupDivider} />}
+                <Pressable
+                  style={[
+                    styles.optionRowGrouped,
+                    selected && styles.optionRowGroupedSelected,
+                  ]}
+                  onPress={() => setMonoFont(key)}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Set monospace font to ${meta.label}`}
+                >
+                  <View style={styles.optionIconGrouped}>
+                    <Feather
+                      name={meta.icon}
+                      size={18}
+                      color={Colors.textSecondary}
+                    />
+                  </View>
+                  <View style={shared.optionText}>
+                    <Text
+                      style={[shared.optionLabel, { fontFamily: meta.family }]}
+                    >
+                      {meta.label}
+                    </Text>
+                    <Text style={shared.optionDescription}>
+                      {meta.description}
+                    </Text>
+                  </View>
+                  {selected && (
+                    <Feather
+                      name="check"
+                      size={18}
+                      color={Colors.textPrimary}
+                    />
+                  )}
+                </Pressable>
+              </React.Fragment>
+            );
+          })}
+        </View>
+      </BottomSheet>
 
       {/* Panic wipe modal: confirm, then wipe and drop straight to onboarding
           rather than making the user tap through a second "Wiped" screen. */}
-      <Modal
+      <BottomSheet
         visible={showWipeModal}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setShowWipeModal(false)}
+        onClose={() => setShowWipeModal(false)}
+        sheetStyle={shared.sheet}
       >
-        <View style={shared.sheetOverlay}>
+        <Text style={shared.sheetTitle}>Panic wipe</Text>
+        <Text style={shared.sheetSubtitle}>
+          This will instantly destroy all your keys, messages, and wallet
+          proofs. This cannot be undone.
+        </Text>
+        <View style={styles.wipeActions}>
           <Pressable
-            style={StyleSheet.absoluteFill}
+            style={styles.wipeConfirmBtn}
+            onPress={() => void handleConfirmWipe()}
+            accessibilityRole="button"
+            accessibilityLabel="Wipe now"
+          >
+            <Text style={styles.wipeConfirmText}>Wipe now</Text>
+          </Pressable>
+          <Pressable
+            style={styles.wipeCancelBtn}
             onPress={() => setShowWipeModal(false)}
-          />
-          <View style={shared.sheet}>
-            <View style={shared.sheetHandle} />
-            <Text style={shared.sheetTitle}>Panic wipe</Text>
-            <Text style={shared.sheetSubtitle}>
-              This will instantly destroy all your keys, messages, and wallet
-              proofs. This cannot be undone.
-            </Text>
-            <View style={styles.wipeActions}>
-              <Pressable
-                style={styles.wipeConfirmBtn}
-                onPress={() => void handleConfirmWipe()}
-                accessibilityRole="button"
-                accessibilityLabel="Wipe now"
-              >
-                <Text style={styles.wipeConfirmText}>Wipe now</Text>
-              </Pressable>
-              <Pressable
-                style={styles.wipeCancelBtn}
-                onPress={() => setShowWipeModal(false)}
-                accessibilityRole="button"
-                accessibilityLabel="Cancel"
-              >
-                <Text style={styles.wipeCancelText}>Cancel</Text>
-              </Pressable>
-            </View>
-          </View>
+            accessibilityRole="button"
+            accessibilityLabel="Cancel"
+          >
+            <Text style={styles.wipeCancelText}>Cancel</Text>
+          </Pressable>
         </View>
-      </Modal>
+      </BottomSheet>
     </ScrollView>
   );
 }

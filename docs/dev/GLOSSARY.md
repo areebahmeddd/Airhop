@@ -62,11 +62,17 @@
 
 ## Payments
 
-**[Cashu](https://cashu.space)**: A Chaumian ecash protocol backed by Bitcoin and Lightning. Tokens are cryptographically signed bearer instruments that transfer with no internet connection. Airhop uses Cashu for offline BLE payments; internet is only required when redeeming tokens back to Lightning.
+**[Cashu](https://cashu.space)**: A Chaumian ecash protocol backed by Bitcoin and Lightning. Tokens are cryptographically signed bearer instruments that transfer with no internet connection. Airhop uses Cashu for offline BLE payments; internet is only needed to move value in or out over Lightning, and to confirm a received token is unspent.
 
-**[DLEQ (Discrete Log Equivalence Proof)](https://en.wikipedia.org/wiki/Proof_of_knowledge#Sigma_protocols)**: A zero-knowledge proof that lets a Cashu mint prove a token was correctly blind-signed without revealing its private key. Enables a recipient to verify a token's authenticity offline before redeeming.
+**Mint**: The server that issues and redeems ecash and holds the bitcoin backing it. The only trusted party in the payment system. Airhop ships with no default mint: the user chooses one, or runs their own.
 
-**Nutzap**: A Cashu-based payment sent via Nostr ([NIP-61](https://github.com/nostr-protocol/nips/blob/master/61.md)). Functions like a Lightning zap but settles as ecash rather than requiring a live Lightning payment channel.
+**Proof**: One ecash coin. An amount, a random secret only its owner knows, and the mint's blind signature over that secret. A **token** is one or more proofs packed into a single `cashuB…` string, which is what actually moves between devices.
+
+**[DLEQ (Discrete Log Equivalence Proof)](https://en.wikipedia.org/wiki/Proof_of_knowledge#Sigma_protocols)**: A zero-knowledge proof that lets a Cashu mint prove a token was correctly blind-signed without revealing its private key. Lets a recipient verify a token is genuine with no network. It cannot prove the token is _unspent_: only the mint knows that.
+
+**[NUT](https://github.com/cashubtc/nuts)**: A numbered Cashu specification ("Notation, Usage, and Terminology"), the Cashu equivalent of a NIP. Airhop implements NUT-04/05 (Lightning in and out), NUT-07 (proof state), NUT-11 (P2PK locking), NUT-12 (DLEQ), and NUT-13 (deterministic secrets for the recovery phrase).
+
+**Nutzap**: A Cashu payment sent via Nostr ([NIP-61](https://github.com/nostr-protocol/nips/blob/master/61.md)). The ecash is locked to the recipient's public key, so the event can be public while only they can spend it.
 
 ## Tools and Libraries
 

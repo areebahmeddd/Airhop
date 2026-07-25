@@ -198,16 +198,22 @@ The existing `AI` tab (`src/features/ai/ai-screen.tsx`) is currently a placehold
 
 #### Cashu Wallet (Shipped in v1.0.0)
 
-The existing `Wallet` tab (`src/features/wallet/wallet-screen.tsx`) gets the payment core it currently lacks. Cashu remains the primary rail because it is the only ecash system that settles fully offline over BLE; Nutzaps are a secondary online path for when internet is available.
+The `Wallet` tab is a real wallet, not a token viewer. Cashu is the primary rail because it is the only ecash system that settles fully offline over BLE; Lightning moves value in and out, and Nutzaps are a secondary online path.
 
-- [x] `src/core/payments/cashu.ts`: token parse/embed/redeem with offline DLEQ validation
-- [x] `src/core/payments/nutzap.ts`: NIP-61 online zaps (kind 9321/10019)
-- [x] `src/store/wallet-store.ts`: MMKV-backed local proof storage, balance selectors, dedup
-- [x] Wallet UI in `wallet-screen.tsx`: balance view, send/receive over BLE, QR-based token exchange for out-of-mesh transfers
-- [x] Nutzap send/receive when online, clearly distinguished from the offline Cashu flow
-- [x] Mint management: add/remove trusted mints, per-mint balance breakdown
+- [x] `src/core/payments/cashu.ts`: detection (bitchat-identical), decoding, NUT-12 DLEQ verification against cached keysets, fee-aware proof selection
+- [x] `src/core/payments/nutzap.ts`: NIP-61 kind 9321 / 10019 construction and parsing
+- [x] `src/core/payments/wallet-seed.ts`: BIP-39 recovery phrase, kept in the keychain
+- [x] `src/store/wallet-store.ts`: AES-256 encrypted proof storage, per (mint, unit) accounts, reserved bucket, transaction history, NUT-13 counters
+- [x] `src/services/wallet-service.ts`: the only module that talks to a mint. Reservations, Tor guard, Lightning, restore, consolidate
+- [x] `src/services/ecash-transfer.ts`: one send-to-peer flow shared by the Wallet, Mesh and Chat entry points
+- [x] Send that reserves rather than deletes, so an undelivered token is always reclaimable
+- [x] Lightning deposit and withdrawal (NUT-04 / NUT-05) with quoted routing reserve
+- [x] Opt-in recovery phrase (NUT-13 / NUT-09), off by default, with uncovered balance shown rather than hidden
+- [x] Mint management: validated add, per-mint balances, consolidate a split balance over Lightning
+- [x] Nutzap send and receive, with honest fallback to an encrypted DM when the recipient publishes no NIP-61 info
+- [ ] QR display and scan for tokens, for hand-off without a mesh link
 
-**Milestone:** A user sends and receives Cashu ecash entirely offline over BLE, and optionally sends a Nutzap when internet is available.
+**Milestone:** A user sends and receives Cashu ecash entirely offline over BLE, tops up and cashes out over Lightning, and can rebuild the balance on a new device from twelve words.
 
 ### v1.2.0: Stabilization
 

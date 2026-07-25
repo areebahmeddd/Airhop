@@ -30,6 +30,39 @@ export interface BlePermissionResult {
   blockedForever: boolean;
 }
 
+// The permissions the BLE mesh cannot run without, for this API level.
+function requiredBlePermissions(): Permission[] {
+  const required: Permission[] = [
+    // Coupled to BLE scanning because neverForLocation is not declared.
+    PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
+  ];
+  // Platform.Version is the API level (number) on Android.
+  const apiLevel =
+    typeof Platform.Version === "number"
+      ? Platform.Version
+      : parseInt(String(Platform.Version), 10);
+  if (apiLevel >= 31) {
+    required.push(
+      PermissionsAndroid.PERMISSIONS.BLUETOOTH_SCAN,
+      PermissionsAndroid.PERMISSIONS.BLUETOOTH_ADVERTISE,
+      PermissionsAndroid.PERMISSIONS.BLUETOOTH_CONNECT,
+    );
+  }
+  return required;
+}
+
+// Read the current grant WITHOUT prompting. Used on app resume, where the user
+// may have just granted the permission in system Settings: re-requesting there
+// would either be a no-op or throw a prompt at someone who is not asking for
+// one, and both leave the mesh dead until a full restart.
+export async function hasBlePermissions(): Promise<boolean> {
+  if (Platform.OS !== "android") return true;
+  const checks = await Promise.all(
+    requiredBlePermissions().map((p) => PermissionsAndroid.check(p)),
+  );
+  return checks.every(Boolean);
+}
+
 // Request every BLE permission required for the current Android API level.
 // Resolves { granted: true } on iOS (handled by CoreBluetooth) and on Android
 // once all required permissions are granted.
@@ -38,24 +71,13 @@ export async function ensureBlePermissions(): Promise<BlePermissionResult> {
     return { granted: true, denied: [], blockedForever: false };
   }
 
-  const required: Permission[] = [
-    // Coupled to BLE scanning because neverForLocation is not declared.
-    PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
-  ];
+  const required = requiredBlePermissions();
 
   // Platform.Version is the API level (number) on Android.
   const apiLevel =
     typeof Platform.Version === "number"
       ? Platform.Version
       : parseInt(String(Platform.Version), 10);
-
-  if (apiLevel >= 31) {
-    required.push(
-      PermissionsAndroid.PERMISSIONS.BLUETOOTH_SCAN,
-      PermissionsAndroid.PERMISSIONS.BLUETOOTH_ADVERTISE,
-      PermissionsAndroid.PERMISSIONS.BLUETOOTH_CONNECT,
-    );
-  }
 
   // Optional: NEARBY_WIFI_DEVICES (API 33+) unlocks the same-platform WiFi Aware
   // fast path. Requested alongside BLE so the user sees one batch, but kept OUT

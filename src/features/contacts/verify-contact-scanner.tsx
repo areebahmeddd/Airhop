@@ -10,8 +10,15 @@
 import { Feather } from "@expo/vector-icons";
 import { bytesToHex } from "@noble/hashes/utils.js";
 import { CameraView, useCameraPermissions } from "expo-camera";
-import React, { useEffect, useMemo, useRef, useState } from "react";
-import { Modal, Pressable, StyleSheet, Text, View } from "react-native";
+import React, { useMemo, useRef, useState } from "react";
+import {
+  Linking,
+  Modal,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { decodeQRContent } from "../../core/crypto/contact-exchange";
 import { getMeshService } from "../../services/mesh-service";
@@ -51,15 +58,18 @@ export default function VerifyContactScanner({
   // can't fire the handler repeatedly.
   const scannedRef = useRef(false);
 
-  useEffect(() => {
-    if (visible && !permission?.granted) requestPermission();
-  }, [visible, permission, requestPermission]);
-
-  // Fresh session each time the scanner is shown. Done on the Modal's onShow
-  // event rather than an effect, so it never triggers a cascading render.
+  // Fresh session each time the scanner is shown, and the permission ask lives
+  // here too. Doing it on the Modal's onShow event rather than in an effect
+  // keeps it off the render path, and awaiting the answer before `permission`
+  // flips to granted is what stops CameraView mounting against a camera it
+  // isn't allowed to open (which expo-camera never retries, leaving a black
+  // preview behind an already-granted permission).
   function handleShow(): void {
     scannedRef.current = false;
     setOutcome(null);
+    if (!permission?.granted && permission?.canAskAgain !== false) {
+      void requestPermission();
+    }
   }
 
   function handleScanned(data: string): void {
@@ -105,7 +115,12 @@ export default function VerifyContactScanner({
     setOutcome(null);
   }
 
+  // Three states, not two. `permission == null` (never asked) and a denial both
+  // have to keep CameraView unmounted; only an outright grant may mount it.
+  // Treating "not yet answered" as permitted is exactly the black-preview bug.
+  const granted = permission?.granted === true;
   const denied = permission != null && !permission.granted;
+  const awaitingAnswer = !granted && !denied;
 
   return (
     <Modal
@@ -117,7 +132,7 @@ export default function VerifyContactScanner({
     >
       <View style={styles.root}>
         {/* Live camera, only while we're still waiting for a scan. */}
-        {outcome === null && !denied && (
+        {outcome === null && granted && (
           <CameraView
             style={StyleSheet.absoluteFill}
             facing="back"
@@ -142,7 +157,7 @@ export default function VerifyContactScanner({
           </View>
 
           {/* Scanning */}
-          {outcome === null && !denied && (
+          {outcome === null && granted && (
             <>
               <View style={styles.frameWrap} pointerEvents="none">
                 <View style={styles.frame} />
@@ -154,8 +169,16 @@ export default function VerifyContactScanner({
             </>
           )}
 
+          {/* The OS prompt is up, or its answer hasn't landed yet. A word beats
+              a blank screen for the second it takes. */}
+          {outcome === null && awaitingAnswer && (
+            <View style={styles.resultCard}>
+              <Text style={styles.resultBody}>Waiting for camera access…</Text>
+            </View>
+          )}
+
           {/* Camera unavailable */}
-          {denied && (
+          {outcome === null && denied && (
             <View style={styles.resultCard}>
               <View style={[styles.resultIcon, styles.iconNeutral]}>
                 <Feather name="camera-off" size={26} color="#FFFFFF" />
@@ -164,8 +187,16 @@ export default function VerifyContactScanner({
               <Text style={styles.resultBody}>
                 Turn on camera access in Settings to verify by QR.
               </Text>
-              <Pressable style={styles.primaryBtn} onPress={onClose}>
-                <Text style={styles.primaryBtnText}>Close</Text>
+              <Pressable
+                style={styles.primaryBtn}
+                onPress={() => void Linking.openSettings()}
+                accessibilityRole="button"
+                accessibilityLabel="Open Settings"
+              >
+                <Text style={styles.primaryBtnText}>Open Settings</Text>
+              </Pressable>
+              <Pressable onPress={onClose}>
+                <Text style={styles.secondaryText}>Close</Text>
               </Pressable>
             </View>
           )}

@@ -114,6 +114,10 @@ const SECTIONS: {
         a: "Yes. Airhop is completely free, open-source under MIT, and has no ads, no subscriptions, and no paywall of any kind.",
       },
       {
+        q: "Which phones does it work on?",
+        a: "Android 8.0 or later, and iPhones on iOS 16.0 or later. A handful of older Android models ship Bluetooth chips that can receive but never advertise; those phones can still join a mesh and read everything, they just will not show up in anyone else's peer list. Everything else works the same on both platforms, because the protocol itself is shared code.",
+      },
+      {
         q: "Who is it for?",
         a: "Anyone who needs to communicate when normal networks are unavailable or untrustworthy. Journalists, activists, people in disaster zones, protestors, hikers, and anyone who values communication that cannot be shut down by a third party.",
       },
@@ -151,7 +155,7 @@ const SECTIONS: {
       },
       {
         q: "What media can I send?",
-        a: "Images, voice notes, videos, and any other file format, all over Bluetooth using chunked streaming. Large files are split into fragments, paced so the radio is not overrun, and reassembled on the other side. Videos are sent as files and play inline; they are not live streams. Bluetooth bandwidth is roughly 15 KB/s, so a large attachment takes time, but it works with no internet at all. On Android to Android or iPhone to iPhone, a faster direct WiFi link is used automatically when both devices support it.",
+        a: "Images, voice notes, videos, and any other file format, all over Bluetooth using chunked streaming. Large files are split into fragments, paced so the radio is not overrun, and reassembled on the other side. Videos are sent as files and play inline; they are not live streams. Bluetooth carries roughly 22 KB/s, so a file near the 1 MB limit takes about 45 seconds, but it works with no internet at all. On Android to Android or iPhone to iPhone, a faster direct WiFi link is used automatically when both devices support it.",
       },
       {
         q: "Is Airhop compatible with bitchat?",
@@ -178,6 +182,56 @@ const SECTIONS: {
             .
           </>
         ),
+      },
+      {
+        q: "What is the difference between Classic Bluetooth and Bluetooth Low Energy?",
+        a: (
+          <>
+            They are two modes of the same Bluetooth chip in your phone. Classic Bluetooth is the
+            one you already use every day. It pairs two devices and holds the connection open, which
+            is what wireless headphones, car audio, and file transfers rely on. It moves data
+            quickly, but it drains the battery and only talks to what you have paired. Bluetooth Low
+            Energy is the lighter mode. Devices announce themselves and listen in short bursts
+            instead of pairing, so one phone can see many nearby devices at once and the radio
+            sleeps between packets.
+            <br />
+            <br />
+            Airhop uses Low Energy. Pairing does not work for a mesh where you have never met the
+            people around you, and an always-open Classic connection would flatten your battery long
+            before the network was useful. Low Energy lets Airhop find peers with no setup and keep
+            relaying quietly in the background. The trade is speed, so messages and voice notes
+            arrive immediately while a large file takes its time.
+          </>
+        ),
+      },
+    ],
+  },
+  {
+    heading: "Everyday use",
+    questions: [
+      {
+        q: "Will it drain my battery?",
+        a: "It uses more than an app sitting idle and far less than maps or video. Airhop stays on Bluetooth Low Energy, which listens and announces in short bursts and lets the radio sleep in between, and it slows its own announcements down once it can hear other devices. Relaying for other people costs a little more. If you want it to stop entirely, set your status to Away in Profile: that stops scanning and announcing, and nothing runs until you set it back.",
+      },
+      {
+        q: "Why does a messenger ask for my location?",
+        a: "Android ties Bluetooth scanning to the location permission at the system level, so any app that looks for nearby devices has to ask for it, whether or not it cares where you are. Airhop does not read your position for the mesh. The one place it genuinely uses location is the optional location channels, which need a rough area to work out which cell you are in, and you can decline that and still use everything else. Nothing about your position is ever sent to us, because there is no server to send it to.",
+      },
+      {
+        q: "What else does it ask permission for?",
+        a: "Bluetooth and nearby devices, to find and talk to peers, which is the one it cannot work without. Notifications, so a message can reach you when the app is closed. Camera, only to scan a contact's QR code. Photos, only when you attach or save one. Microphone, only when you record a voice note. Every one of them can be refused or revoked later in your device settings, and the app keeps working with whatever is left.",
+      },
+      {
+        q: "Does it work in airplane mode?",
+        a: "Yes, as long as you switch Bluetooth back on, which both iOS and Android let you do without leaving airplane mode. The mesh then works in full: discovery, channels, direct messages, files, and ecash transfers, none of which touch the internet. The internet features stop, so messages to people who are not nearby queue up and send themselves when a route appears, and cashing ecash out to Lightning has to wait until you are back online.",
+      },
+      {
+        q: "What is the notification that will not swipe away?",
+        a: "On Android, that notification is what keeps the mesh alive after you leave the app. Without it the system would suspend Airhop within minutes and you would stop receiving anything. It has a Stop mesh button that shuts the radios down cleanly and takes the notification with it; reopening the app then shows the mesh paused, with a Resume button. iPhones have no equivalent notification, because iOS keeps Bluetooth apps alive differently.",
+      },
+      {
+        q: "Can people tell when I have read their message?",
+        a: "In a direct message, yes, the same way most messengers work. The receipt is only sent when the app is actually open in front of you, so a message that arrives while Airhop is in your pocket stays unread until you look at it. Public and location channels have no receipts at all.",
       },
     ],
   },
@@ -219,7 +273,10 @@ const SECTIONS: {
             <strong>
               There is no sign-up, no email, no phone number, and nothing that registers with any
               server.
-            </strong>
+            </strong>{" "}
+            This means Airhop can be used as a burner app. Your identity lives only on your device,
+            so deleting the app erases it, and the next identity you generate has no link to the old
+            one.
           </>
         ),
       },
@@ -276,8 +333,14 @@ const SECTIONS: {
           <>
             <strong>Your identity and message history are permanently gone.</strong> The key pair is
             stored only on your device and cannot be recovered from any server because no server has
-            it. There is no account recovery and no backup mechanism. This is intentional: there is
+            it. There is no account recovery for your identity. This is intentional: there is
             nothing for a third party to hand over, subpoena, or breach.
+            <br />
+            <br />
+            <strong>Your ecash balance is the one exception, and only if you opt in.</strong> The
+            wallet has a recovery phrase you can turn on, which lets a new device rebuild the
+            balance from your mints. It is off by default and covers money only, not your identity,
+            chats, or contacts.
           </>
         ),
       },
@@ -288,6 +351,25 @@ const SECTIONS: {
             Triple-tapping the logo triggers an immediate wipe of all identity keys and message data
             in under one second, for high-stakes situations where you need to destroy the app's
             contents right away. <strong>This cannot be undone.</strong>
+          </>
+        ),
+      },
+      {
+        q: "Does my phone hold other people's messages?",
+        a: (
+          <>
+            Sometimes, and only ever as sealed ciphertext. This is how a message reaches someone who
+            was not around when it was sent: your phone carries it until it meets them, then hands
+            it over. <strong>You cannot read anything you carry</strong>, and neither can anyone
+            else who touches it, because it is encrypted to the recipient's key before it leaves the
+            sender.
+            <br />
+            <br />
+            The limits are deliberately small. At most 40 envelopes at a time, none larger than 16
+            KB, and every one is discarded after 24 hours whether or not it was ever delivered. How
+            many any single person can leave with you depends on whether you have verified them. It
+            costs you a little storage, and it is the reason the network keeps working when people
+            are not in the same place at the same time.
           </>
         ),
       },
@@ -373,7 +455,7 @@ const SECTIONS: {
     ],
   },
   {
-    heading: "Offline payments",
+    heading: "Payments & wallet",
     questions: [
       {
         q: "What is ecash?",
@@ -405,49 +487,277 @@ const SECTIONS: {
       },
       {
         q: "Do I need Bitcoin or a Lightning wallet to use Airhop?",
-        a: "No. Payments are entirely optional, and Airhop works fully without them. A Lightning wallet is only needed once, to load ecash tokens onto your device before going offline. See the next question for how that works.",
+        a: "No. Payments are entirely optional and every other feature works without them. A Lightning wallet is only needed to move sats in or out. Once you have a balance, paying someone next to you needs nothing but Bluetooth.",
       },
       {
-        q: "How do offline payments work?",
+        q: "What is a mint, and why do I have to add one?",
         a: (
           <>
-            Before going offline, you load ecash tokens from a Cashu mint by depositing via{" "}
+            A mint is the server that issues and redeems your ecash. Think of it as a casino
+            cashier's desk: you hand over Lightning sats and get chips, the chips move around the
+            floor with nobody watching, and anyone can bring them back to the desk for cash.
+            <br />
+            <br />
+            <strong>Airhop is a wallet, not a bank.</strong> It holds your coins; it does not issue
+            them. Somebody has to be holding the actual bitcoin, and that is the mint. This is the
+            one trust assumption in the whole system, so Airhop ships with no default mint and never
+            picks one for you.
+            <br />
+            <br />
+            What you get in exchange is payments that work with no internet, no account, no ID
+            check, and no way for the mint to see who you paid.
+          </>
+        ),
+      },
+      {
+        q: "Which mint should I use?",
+        a: (
+          <>
+            Any Cashu-compatible mint. Airhop checks the URL is a real mint before saving it.
+            <br />
+            <ul className="my-2 list-disc space-y-1 pl-5">
+              <li>
+                <strong>To try it out:</strong> the community test mints issue free play-money sats,
+                so you can walk through every flow with nothing at risk.
+              </li>
+              <li>
+                <strong>For real sats:</strong> pick a publicly run mint with a track record.{" "}
+                <a
+                  href="https://bitcoinmints.com"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-gray-900 underline underline-offset-2 transition-colors hover:text-gray-600"
+                >
+                  bitcoinmints.com
+                </a>{" "}
+                tracks who is running what.
+              </li>
+              <li>
+                <strong>To trust nobody:</strong> run your own with Nutshell. A Raspberry Pi is
+                enough.
+              </li>
+            </ul>
+            Treat the balance like cash in a jacket pocket, not a savings account. Keep small
+            amounts, and spread them across mints if you hold more.
+          </>
+        ),
+      },
+      {
+        q: "How do I get sats in and out?",
+        a: (
+          <>
+            <strong>In:</strong> tap Deposit, enter an amount, and the mint gives you a{" "}
             <a
               href="https://en.wikipedia.org/wiki/Lightning_Network"
               target="_blank"
               rel="noopener noreferrer"
               className="text-gray-900 underline underline-offset-2 transition-colors hover:text-gray-600"
             >
-              Lightning Network
-            </a>
-            . The mint returns cryptographically signed token blobs worth the deposited amount,
-            which live on your device like digital cash.
+              Lightning
+            </a>{" "}
+            invoice. Pay it from any Lightning wallet and the sats arrive as ecash. If you close the
+            app mid-payment, Airhop picks the deposit back up next time it opens.
             <br />
             <br />
-            To pay a contact offline, you select tokens and send them as a BLE mesh message.{" "}
-            <strong>
-              The recipient holds them and redeems with the mint later when back online.
-            </strong>{" "}
-            No internet is involved in the transfer itself.
+            <strong>Out:</strong> paste any Lightning invoice into Withdraw. You are quoted the
+            amount plus a routing reserve before anything is spent, and whatever routing does not
+            use comes back to your balance.
+            <br />
+            <br />
+            These two are the only parts that need the internet, and the only parts that involve
+            another app, because Airhop is not a Lightning node.
           </>
         ),
       },
       {
-        q: "What stops someone from spending the same tokens twice?",
+        q: "How do I pay someone with no internet?",
         a: (
           <>
-            The Cashu mint keeps a record of all redeemed token signatures. When a recipient
-            redeems, the mint checks whether those exact signatures have been spent before. If they
-            have, the redemption fails, and the first person to redeem wins.{" "}
-            <strong>This requires trusting the mint to maintain an honest ledger</strong>, similar
-            to trusting a bank not to miscount withdrawals. Fedimint, a variant, distributes that
-            trust across multiple operators so no single party controls the ledger.
+            Send from the Wallet tab, from a chat, or by tapping a peer on the Mesh tab. Airhop
+            turns the amount into a token and hands it over as an encrypted Bluetooth message.{" "}
+            <strong>
+              No server, no relay, no mint. The two phones do the whole thing themselves.
+            </strong>
+            <br />
+            <br />
+            The recipient sees a payment card with the amount and a Claim button, not a wall of
+            characters.
           </>
         ),
       },
       {
-        q: "Are there transaction fees?",
-        a: "There are no fees at the point of transfer over the mesh. Normal Cashu mint fees may apply when a recipient redeems tokens online.",
+        q: "What happens if I receive a payment while offline?",
+        a: (
+          <>
+            The money is really yours, but Airhop cannot yet confirm nobody spent it first, so it
+            shows up as <strong>unconfirmed</strong> on a separate line rather than being folded
+            silently into your balance.
+            <br />
+            <br />
+            Offline, Airhop still checks the mint's signature on every token it receives (a{" "}
+            <a
+              href="https://github.com/cashubtc/nuts/blob/main/12.md"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-gray-900 underline underline-offset-2 transition-colors hover:text-gray-600"
+            >
+              DLEQ proof
+            </a>
+            ), so a forged token is rejected outright. That proves the mint issued it. It can never
+            prove it is unspent, because only the mint knows that. Tap Refresh once you are online
+            and the unconfirmed line clears.
+          </>
+        ),
+      },
+      {
+        q: "What stops someone spending the same token twice?",
+        a: (
+          <>
+            The mint keeps a list of spent tokens, and <strong>whoever redeems first wins.</strong>{" "}
+            When you claim a token online, Airhop immediately swaps it for fresh coins only you know
+            the secrets to, which kills the sender's copy.
+            <br />
+            <br />
+            Offline there is no way to check, which is inherent to bearer money: a genuine banknote
+            can also have been promised to somebody else. In practice, redeem before handing over
+            goods to a stranger. With a friend it does not matter.
+            <br />
+            <br />
+            This does mean trusting the mint to keep an honest list, in the same way you trust a
+            bank not to miscount withdrawals.
+          </>
+        ),
+      },
+      {
+        q: "What if I send a payment and it never arrives?",
+        a: (
+          <>
+            Nothing is lost. Building a token does not delete your coins, it{" "}
+            <strong>reserves</strong> them: they leave your spendable balance so you cannot spend
+            them twice, and sit under Pending until you confirm delivery or reclaim them. Closing
+            the app, a crash, or a Bluetooth message that never routes all leave the money
+            recoverable.
+            <br />
+            <br />
+            One caveat the app also states before you tap: if the recipient already has the token
+            string, reclaiming is a race, and whoever reaches the mint first keeps the money.
+          </>
+        ),
+      },
+      {
+        q: "Are there fees?",
+        a: (
+          <>
+            Nothing is charged for the transfer itself, and nothing goes to this project.
+            <br />
+            <ul className="my-2 list-disc space-y-1 pl-5">
+              <li>
+                Mints usually charge a small fee when coins are swapped. Airhop covers it on your
+                behalf when you send, so{" "}
+                <strong>&ldquo;send 100&rdquo; means they can claim 100</strong>, not 97.
+              </li>
+              <li>
+                Lightning deposits and withdrawals pay normal Lightning routing fees. You see the
+                estimate before confirming, and any unused reserve is returned.
+              </li>
+            </ul>
+          </>
+        ),
+      },
+      {
+        q: "What happens to my ecash if I lose my phone?",
+        a: (
+          <>
+            By default it is gone. Coins are secrets stored only on that device, so the bitcoin
+            stays at the mint and nobody can ever claim it again.
+            <br />
+            <br />
+            <strong>Turn on the recovery phrase to change that.</strong> Airhop generates twelve
+            words and derives your coins from them instead of from random numbers, so a new phone
+            can rebuild the balance by asking your mints which coins they signed. Write the words on
+            paper, keep your mint list beside them, and never store them on the phone they protect.
+            <br />
+            <br />
+            Two things it does not cover: your identity, chats and contacts, which have no backup at
+            all; and coins somebody gave you that you never refreshed, since those carry the
+            sender's secrets until they are swapped. The wallet shows exactly how much falls into
+            that second category.
+          </>
+        ),
+      },
+      {
+        q: "Why does Airhop say my balance is split across mints?",
+        a: (
+          <>
+            A token names exactly one mint, so ecash from two different mints can never be combined
+            into a single payment. With 60 sats at one and 60 at another you cannot send 100, even
+            though the total says 120. That is how Cashu works, not something an app can code
+            around.
+            <br />
+            <br />
+            You can send two separate payments, or use <strong>Move to one mint</strong>, which has
+            one mint pay a Lightning invoice issued by the other so the balance ends up in one
+            place. It costs a small routing fee and needs internet.
+          </>
+        ),
+      },
+      {
+        q: "What is a nutzap?",
+        a: (
+          <>
+            Paying someone by their Nostr identity over the internet, using{" "}
+            <a
+              href="https://github.com/nostr-protocol/nips/blob/master/61.md"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-gray-900 underline underline-offset-2 transition-colors hover:text-gray-600"
+            >
+              NIP-61
+            </a>
+            . The ecash is locked to their public key, so only they can spend it even though the
+            event is public.
+            <br />
+            <br />
+            Worth knowing: <strong>a nutzap is a public event.</strong> The money is safe, but
+            relays and anyone watching can see that one identity paid another, and how much. If they
+            have not published nutzap details, Airhop falls back to an encrypted Nostr message
+            instead and tells you which of the two happened.
+          </>
+        ),
+      },
+      {
+        q: "Does Tor cover payments?",
+        a: (
+          <>
+            On Android, yes. Orbot runs as a VPN and covers every connection, mint traffic included.
+            <br />
+            <br />
+            On iPhone, not yet. Tor there only wraps the Nostr connection, so a mint request would
+            reveal your IP address alongside your coins. Rather than leak that quietly,{" "}
+            <strong>Airhop blocks mint requests while Tor is on</strong> and explains why, with an
+            opt-in switch under Settings if you decide you do not mind.
+            <br />
+            <br />
+            Sending and receiving over Bluetooth never touches a mint, so that keeps working with
+            Tor on either way.
+          </>
+        ),
+      },
+      {
+        q: "What happens if the mint disappears or steals the money?",
+        a: (
+          <>
+            You lose whatever was at that mint. A mint is a custodian, and this is the honest
+            trade-off for offline, account-free, private payments.
+            <br />
+            <br />
+            It is a limited custodian, though. It cannot see who you are, who you pay, or link the
+            coins you deposited to the ones you spend, so it cannot single you out or freeze one
+            person's funds. And balances in Airhop are kept per mint and never pooled, so one mint
+            failing cannot take the rest. Keep small amounts, and run your own mint if the trade is
+            not acceptable to you.
+          </>
+        ),
       },
     ],
   },

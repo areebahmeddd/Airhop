@@ -26,7 +26,7 @@ export default function PrivacyPage() {
 
         <div className="mt-10">
           <h1 className="text-3xl font-semibold tracking-tight text-gray-900">Privacy Policy</h1>
-          <p className="mt-2 text-sm text-gray-500">Last updated: September 01, 2026</p>
+          <p className="mt-2 text-sm text-gray-500">Last updated: August 01, 2026</p>
         </div>
 
         <div className="mt-10 space-y-10 text-gray-700">
@@ -70,8 +70,8 @@ export default function PrivacyPage() {
                 <strong>Private keys never leave your device.</strong>
               </li>
               <li>
-                <strong>Nickname and preferences.</strong> Your chosen display name and app settings
-                are stored locally.
+                <strong>Display name and preferences.</strong> Your generated display name and app
+                settings are stored locally.
               </li>
               <li>
                 <strong>Message history.</strong> Conversations are stored locally on your device
@@ -107,8 +107,15 @@ export default function PrivacyPage() {
                 hours. <strong>The courier cannot read the contents.</strong>
               </li>
               <li>
-                <strong>Cashu tokens.</strong> Ecash tokens are stored locally and transferred
-                directly between devices. No payment backend is involved.
+                <strong>Ecash wallet.</strong> Cashu tokens are bearer instruments, so they are kept
+                in a separate file encrypted with AES-256 under a key held in your device's secure
+                storage. The same file holds the mints you added, their public keys, and your
+                transaction history (amounts, timestamps, and the mint involved). If a recovery
+                phrase is set up, the twelve words live in secure storage alongside your identity
+                keys, never in the wallet file.{" "}
+                <strong>
+                  No payment backend is involved and none of this is transmitted to us.
+                </strong>
               </li>
             </ul>
           </section>
@@ -121,7 +128,10 @@ export default function PrivacyPage() {
               When the app is running, nearby mesh devices can receive:
             </p>
             <ul className="list-disc space-y-1.5 pl-5 text-sm leading-relaxed marker:text-gray-400">
-              <li>Your chosen nickname and public identity keys.</li>
+              <li>
+                Your display name, which the app generates from your public key, and your public
+                identity keys.
+              </li>
               <li>Messages you send to public channels or directly to another peer.</li>
               <li>
                 Public notices you post to the bulletin board, which stay readable until they
@@ -222,6 +232,48 @@ export default function PrivacyPage() {
           </section>
 
           <section className="space-y-3">
+            <h2 className="text-base font-semibold text-gray-900">Ecash payments (optional)</h2>
+            <p className="text-sm leading-relaxed">
+              Payments are off until you add a mint. Sending and receiving ecash over Bluetooth
+              involves no server, no relay, and no mint: the two devices do it themselves, and
+              nothing about the payment leaves them.
+            </p>
+            <p className="text-sm leading-relaxed">
+              Talking to a mint is different, and only happens when you deposit, withdraw, refresh,
+              or claim a token while online.
+            </p>
+            <ul className="list-disc space-y-1.5 pl-5 text-sm leading-relaxed marker:text-gray-400">
+              <li>
+                <strong>What a mint can see.</strong> Your IP address, the amounts you deposit and
+                withdraw, and when. Mints are third parties whose retention and privacy practices
+                are outside this project's control.
+              </li>
+              <li>
+                <strong>What a mint cannot see.</strong> Who you are, who you paid, or which coins
+                you deposited became which coins you spent. Cashu signs tokens blindly, so that link
+                is severed by the maths rather than by policy.
+              </li>
+              <li>
+                <strong>Tor.</strong> On Android, Orbot covers mint traffic along with everything
+                else. On iOS, Tor only wraps Nostr connections, so{" "}
+                <strong>mint requests are blocked while Tor is on</strong> unless you opt in under
+                Privacy &amp; Security. Mesh payments are unaffected either way.
+              </li>
+              <li>
+                <strong>Nutzaps are public.</strong> A NIP-61 nutzap is an unencrypted Nostr event.
+                The ecash is locked to the recipient so nobody else can spend it, but relays and
+                observers can see that one public key paid another, and the amount. The
+                encrypted-message fallback does not have this property.
+              </li>
+              <li>
+                <strong>Recovery phrase.</strong> Optional and off by default. It is stored only in
+                your device's secure storage, is never transmitted, and is never shown to a mint.
+                Anyone who obtains it can spend your balance.
+              </li>
+            </ul>
+          </section>
+
+          <section className="space-y-3">
             <h2 className="text-base font-semibold text-gray-900">Internet gateway (optional)</h2>
             <p className="text-sm leading-relaxed">
               A device with the gateway setting enabled relays location-channel messages on behalf
@@ -277,6 +329,11 @@ export default function PrivacyPage() {
                 </a>{" "}
                 library suite, which has been independently audited by Cure53.
               </li>
+              <li>
+                <strong>Ecash.</strong> Cashu blind signatures, which stop a mint linking issuance
+                to redemption, plus DLEQ proofs that let your device verify a token was genuinely
+                signed by its mint with no network connection.
+              </li>
             </ul>
             <p className="text-sm leading-relaxed">
               <strong>
@@ -306,6 +363,10 @@ export default function PrivacyPage() {
                 them, run a panic wipe, or remove the app.
               </li>
               <li>
+                <strong>Wallet transaction history:</strong> the most recent 500 entries, until you
+                run a panic wipe or remove the app.
+              </li>
+              <li>
                 <strong>Anything sent to a Nostr relay:</strong> according to that relay operator's
                 own policy, which is outside our control.
               </li>
@@ -323,6 +384,11 @@ export default function PrivacyPage() {
                 <strong>Feature controls.</strong> The Nostr bridge, Tor routing, location channels,
                 and the internet gateway can each be disabled in settings. Anything already
                 published to a relay cannot be recalled.
+              </li>
+              <li>
+                <strong>Wallet.</strong> Remove a mint at any time from the Wallet tab. Removing one
+                deletes the coins held there from this device, so withdraw or send them first. A
+                panic wipe destroys the wallet file and its encryption key together.
               </li>
               <li>
                 <strong>System permissions.</strong> Bluetooth, location, microphone, camera, photo
@@ -348,6 +414,10 @@ export default function PrivacyPage() {
               <strong>
                 We have no interest in your personal data and collect none of it (and never will!).
               </strong>
+            </p>
+            <p className="text-sm leading-relaxed">
+              The relay map is drawn from data bundled into the site at build time. Viewing it
+              contacts no one.
             </p>
             <p className="text-sm leading-relaxed">Two things happen outside our control:</p>
             <ul className="list-disc space-y-1.5 pl-5 text-sm leading-relaxed marker:text-gray-400">

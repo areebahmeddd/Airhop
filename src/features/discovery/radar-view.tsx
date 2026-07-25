@@ -81,6 +81,12 @@ export default function RadarView({
   // "Away" stops the radios, so an empty radar then means paused, not scanning.
   // "Invisible" still scans (it only stops advertising), so it reads as normal.
   const away = useMeshStateStore((s) => s.presenceStatus === "away");
+  const adapterEnabled = useMeshStateStore((s) => s.adapterEnabled);
+  const permissionGranted = useMeshStateStore((s) => s.permissionGranted);
+  // The sonar means "a scan is running". It sweeps when one is, and stops when
+  // one is not, whichever of the three reasons applies. Anything else is the
+  // screen claiming to look for peers while the radio sits idle.
+  const scanning = !away && adapterEnabled && permissionGranted;
 
   const [ring1] = useState(() => new Animated.Value(0));
   const [ring2] = useState(() => new Animated.Value(0));
@@ -151,12 +157,13 @@ export default function RadarView({
 
   // Staggered sonar pulse: three expanding rings at the outer boundary.
   // Re-runs when waveEpoch changes, tearing the old loop down first.
+  // Nothing is scanning, so nothing sweeps. The rings are collapsed to zero
+  // rather than left frozen mid-bloom: a stalled half-drawn ring reads as the
+  // app having hung, an empty dial reads as switched off, which is the truth.
+  // The line under the radar says which of the three reasons it is, and the
+  // centre tap keeps its own one-shot wave so the screen still answers a touch.
   useEffect(() => {
-    // Away pauses the radios, so freeze the ambient sonar too: a radar still
-    // pulsing while nothing scans would be a lie. The rings collapse to nothing
-    // rather than freezing mid-bloom. The center tap keeps its own one-shot
-    // wave, so the radar is quiet but still playful.
-    if (away) {
+    if (!scanning) {
       ring1.setValue(0);
       ring2.setValue(0);
       ring3.setValue(0);
@@ -190,7 +197,7 @@ export default function RadarView({
     ]);
     anim.start();
     return () => anim.stop();
-  }, [ring1, ring2, ring3, waveEpoch, away]);
+  }, [ring1, ring2, ring3, waveEpoch, scanning]);
 
   // Unmounting mid-tap must not leave a timer or an animation callback holding
   // a handle to this component.
@@ -419,7 +426,11 @@ export default function RadarView({
               ? `${peers.length} peer${peers.length !== 1 ? "s" : ""} in range`
               : away
                 ? "Mesh paused \u00b7 You're away"
-                : "Scanning for nearby peers\u2026"}
+                : !adapterEnabled
+                  ? "Bluetooth off \u00b7 not scanning"
+                  : !permissionGranted
+                    ? "Bluetooth permission needed"
+                    : "Scanning for nearby peers\u2026"}
           </Text>
           <Text style={styles.hintText}>
             {/* Signal strength, NOT distance. RSSI varies by tens of dB with
@@ -429,7 +440,11 @@ export default function RadarView({
               ? "Ring position reflects signal strength, not distance"
               : away
                 ? "Set your status to Online in Profile to discover peers"
-                : "Rings show BLE signal strength, not distance"}
+                : !adapterEnabled
+                  ? "Turn Bluetooth on to discover peers"
+                  : !permissionGranted
+                    ? "Allow Bluetooth in Settings to discover peers"
+                    : "Rings show BLE signal strength, not distance"}
           </Text>
         </>
       )}

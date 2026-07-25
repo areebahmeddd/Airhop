@@ -119,6 +119,67 @@ describe("CourierStore deposit", () => {
     expect(store.deposit(expired, depositor.pub, "verified")).toBe(false);
   });
 
+  test("rejects an expiry past the policy lifetime", () => {
+    const store = new CourierStore();
+    // A depositor that sets its own retention would hold a pool slot for as
+    // long as it liked. bitchat rejects the same envelope, so accepting it
+    // would also mean carrying mail no other client would.
+    const tooLong = encodeEnvelopePayload({
+      recipientTag: tag,
+      expiryMs: Date.now() + 8 * 24 * 60 * 60 * 1000,
+      copies: 4,
+      ciphertext: new Uint8Array(48),
+    });
+    expect(store.deposit(tooLong, depositor.pub, "verified")).toBe(false);
+  });
+
+  test("allows an expiry inside the slack window", () => {
+    const store = new CourierStore();
+    // 24h plus a few minutes: a depositor whose clock runs fast, not an abuse.
+    const skewed = encodeEnvelopePayload({
+      recipientTag: tag,
+      expiryMs: Date.now() + 24 * 60 * 60 * 1000 + 5 * 60 * 1000,
+      copies: 4,
+      ciphertext: new Uint8Array(48),
+    });
+    expect(store.deposit(skewed, depositor.pub, "verified")).toBe(true);
+  });
+
+  test("caps verified-tier mail at 20 so favorites keep room", () => {
+    const store = new CourierStore();
+    // Two per depositor, so ten distinct strangers reach the sub-cap.
+    for (let d = 0; d < 10; d++) {
+      const stranger = makeNoiseKeypair();
+      for (let i = 0; i < 2; i++) {
+        const accepted = store.deposit(
+          makeEnvelopePayload(new Uint8Array(16).fill(d * 2 + i)),
+          stranger.pub,
+          "verified",
+        );
+        expect(accepted).toBe(true);
+      }
+    }
+    expect(store.size).toBe(20);
+    // An eleventh stranger is refused even though the pool holds 40.
+    const extra = makeNoiseKeypair();
+    expect(
+      store.deposit(
+        makeEnvelopePayload(new Uint8Array(16).fill(99)),
+        extra.pub,
+        "verified",
+      ),
+    ).toBe(false);
+    // Favorites still get in: the remaining 20 slots were never theirs to take.
+    const friend = makeNoiseKeypair();
+    expect(
+      store.deposit(
+        makeEnvelopePayload(new Uint8Array(16).fill(100)),
+        friend.pub,
+        "favorite",
+      ),
+    ).toBe(true);
+  });
+
   test("rejects oversized ciphertext", () => {
     const store = new CourierStore();
     const big = encodeEnvelopePayload({

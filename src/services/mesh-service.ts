@@ -62,6 +62,7 @@ import {
   CourierStore,
   decodeEnvelopePayload,
   encodeEnvelopePayload,
+  ENVELOPE_TTL_MS,
 } from "../core/mesh/courier-store";
 import {
   decodeDmPayload,
@@ -201,6 +202,12 @@ export interface MeshPingResult {
 const MESH_PING_TTL = 7;
 // How long to wait for a pong before resolving the probe as unreachable.
 const MESH_PING_TIMEOUT_MS = 10_000;
+
+// How long to let the Bluetooth switch settle before restarting the radios.
+// Long enough for the Android stack to finish coming up after it broadcasts
+// STATE_ON, and to swallow a burst of flips, short enough that a deliberate
+// toggle feels immediate. See scheduleRadioRestart.
+const ADAPTER_SETTLE_MS = 700;
 // Minimum spacing between pong replies on one ingress link (anti-amplification).
 const MESH_PONG_MIN_INTERVAL_MS = 100;
 
@@ -367,6 +374,13 @@ export class MeshService {
 
   private subs: EmitterSubscription[] = [];
   private nickname = "";
+  // Whether start() has run without a matching stop(). Guards the recovery
+  // paths (see retryRadios) so a late event - a permission granted in Settings,
+  // Bluetooth switched back on - can never bring the radios up behind a user
+  // who deliberately went Away.
+  private running = false;
+  // Pending debounced radio restart, see scheduleRadioRestart.
+  private radioRestartTimer: ReturnType<typeof setTimeout> | null = null;
 
   // Cumulative bytes moved over BLE/WiFi this session, for the Storage &
   // Data screen's Network Usage row. Resets when the app restarts.
@@ -483,18 +497,27 @@ export class MeshService {
     );
   }
 
+  // The identity this instance was built for. Lets a caller tell "the mesh
+  // this app already has" from "a wipe re-onboarded as someone else".
+  get peerID(): string {
+    return this.identity.peerID;
+  }
+
   // Start BLE advertising, scanning, and the periodic ANNOUNCE timer.
   start(nickname: string): void {
     this.nickname = nickname;
+    this.running = true;
 
     // Seed the radio state before any change event fires. Otherwise launching
     // with Bluetooth already off would look like "scanning, no peers yet".
+    // Implemented on both platforms; adapterStateChanged then keeps it current.
     AirhopBLE.isAdapterEnabled()
       .then((enabled) => {
         useMeshStateStore.getState().setAdapterEnabled(enabled);
       })
       .catch(() => {
-        // iOS has no such method; CoreBluetooth reports via adapterStateChanged.
+        // Radio unreadable at this instant. The banner's optimistic default
+        // stands and the next adapterStateChanged settles it either way.
       });
 
     // Central: discover other Airhop / bitchat devices.
@@ -630,16 +653,10 @@ export class MeshService {
       DeviceEventEmitter.addListener(
         "AirhopBLE.adapterStateChanged",
         ({ enabled }: { enabled: boolean }) => {
+          // The banner tracks the switch with no delay: that is a statement
+          // about the radio, and it is true the moment the event lands.
           useMeshStateStore.getState().setAdapterEnabled(enabled);
-          // Radio came back: restart scan/advertise, which the OS dropped when
-          // it was switched off.
-          if (enabled) {
-            AirhopBLE.startScanning([BLE_SERVICE_UUID]).catch(() => {});
-            AirhopBLE.startAdvertising(
-              BLE_SERVICE_UUID,
-              this.identity.peerID,
-            ).catch(() => {});
-          }
+          this.scheduleRadioRestart(enabled);
         },
       ),
 
@@ -1346,9 +1363,6 @@ export class MeshService {
   // Courier: store-and-forward for peers we can't reach directly
   // ---------------------------------------------------------------------------
 
-  // How long a sealed envelope stays worth carrying. Matches the outbox TTL so
-  // the two delivery mechanisms give up at the same time.
-  private static readonly COURIER_TTL_MS = 7 * 24 * 60 * 60 * 1000;
   // Initial spray budget: how many peers may carry a copy.
   private static readonly COURIER_COPIES = 4;
 
@@ -1377,7 +1391,12 @@ export class MeshService {
         // carriers can match deliveries without learning who it is for (v1 and
         // v2 share the same routing tag).
         recipientTag: computeRecipientTag(noisePub),
-        expiryMs: Date.now() + MeshService.COURIER_TTL_MS,
+        // The envelope's expiry is on the wire, and every carrier applies its
+        // own policy to it. bitchat rejects anything past 24h + 1h slack, so a
+        // longer stamp is not a longer life, it is an envelope no bitchat device
+        // will carry at all. The outbox keeps retrying for 7 days regardless;
+        // this only bounds how long a third party holds a copy for us.
+        expiryMs: Date.now() + ENVELOPE_TTL_MS,
         copies: MeshService.COURIER_COPIES,
         ciphertext,
         prekeyID: prekey?.id,
@@ -2938,6 +2957,52 @@ export class MeshService {
     }
   }
 
+  // Bring the radios back after the Bluetooth switch settles.
+  //
+  // Two reasons this waits instead of acting on the event. Android broadcasts
+  // STATE_ON as the adapter comes up, not once it is usable, and a scan or
+  // advertise issued in that window is quietly dropped by the stack, leaving the
+  // app idle with Bluetooth apparently on. And someone flipping the switch back
+  // and forth generates a burst of events, each of which would otherwise kick
+  // off a full scan + advertise + GATT server + foreground service cycle.
+  //
+  // One pending restart at a time, re-armed on every event, so a burst collapses
+  // into a single restart driven by wherever the switch ended up. Turning it off
+  // just cancels the pending work; there is nothing to start.
+  private scheduleRadioRestart(enabled: boolean): void {
+    if (this.radioRestartTimer !== null) {
+      clearTimeout(this.radioRestartTimer);
+      this.radioRestartTimer = null;
+    }
+    if (!enabled) return;
+    this.radioRestartTimer = setTimeout(() => {
+      this.radioRestartTimer = null;
+      // Re-read rather than trusting the event that armed this: the switch may
+      // have gone off again while we waited.
+      if (!useMeshStateStore.getState().adapterEnabled) return;
+      this.retryRadios();
+    }, ADAPTER_SETTLE_MS);
+  }
+
+  // Re-issue the BLE calls that a missing permission (or a radio that was off)
+  // silently swallowed. Both native calls are idempotent, so calling this when
+  // the radios are already up costs nothing - which is what makes it safe to
+  // fire from a resume handler that cannot know whether it is needed.
+  //
+  // Not the same as refresh(): that assumes a working mesh and re-scans for
+  // peers. This is the recovery path for a mesh that never got off the ground.
+  retryRadios(): void {
+    if (!this.running) return;
+    AirhopBLE.startScanning([BLE_SERVICE_UUID]).catch(() => {});
+    // Invisible is a deliberate choice to not advertise, so honour it: coming
+    // back with a fresh permission must not quietly make someone discoverable.
+    if (useMeshStateStore.getState().presenceStatus !== "invisible") {
+      AirhopBLE.startAdvertising(BLE_SERVICE_UUID, this.identity.peerID).catch(
+        () => {},
+      );
+    }
+  }
+
   // Pull-to-refresh hook: kick the BLE scan again, drop stale peers, and
   // re-resolve the geohash channels (picks up a moved location cell and
   // re-subscribes). Safe to call repeatedly: startScanning is idempotent on the
@@ -3094,6 +3159,13 @@ export class MeshService {
   }
 
   stop(): void {
+    this.running = false;
+    // Drop any pending radio restart: a Bluetooth flip a moment before Away (or
+    // a panic wipe) must not bring the radios back up after the mesh is down.
+    if (this.radioRestartTimer !== null) {
+      clearTimeout(this.radioRestartTimer);
+      this.radioRestartTimer = null;
+    }
     // Say goodbye while the links are still up, before tearing anything down.
     try {
       this.sendLeave();
@@ -3156,4 +3228,16 @@ export function initMeshService(
   _instance = new MeshService(identity);
   _instance.start(nickname);
   return _instance;
+}
+
+// Stop the mesh and drop the singleton. For the panic wipe: stop() alone takes
+// the radios down but leaves this module holding a MeshService that still has
+// the wiped identity's private keys on its `identity` field, which would keep
+// them reachable in memory for the rest of the process. JS gives no way to zero
+// the bytes, so releasing the last reference to them is the strongest thing
+// available - and it also guarantees the next launch builds a mesh from the new
+// identity rather than finding a stale one.
+export function destroyMeshService(): void {
+  _instance?.stop();
+  _instance = null;
 }

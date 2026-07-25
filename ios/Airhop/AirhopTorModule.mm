@@ -7,7 +7,7 @@
 #import <React/RCTBridgeModule.h>
 #import <React/RCTEventEmitter.h>
 
-RCT_EXTERN_MODULE(AirhopTorModule, RCTEventEmitter)
+@interface RCT_EXTERN_MODULE(AirhopTorModule, RCTEventEmitter)
 
 RCT_EXTERN_METHOD(startTor:(RCTPromiseResolveBlock)resolve
                   rejecter:(RCTPromiseRejectBlock)reject)
@@ -21,3 +21,5 @@ RCT_EXTERN_METHOD(getTorStatus:(RCTPromiseResolveBlock)resolve
 RCT_EXTERN_METHOD(awaitTorReady:(double)timeoutSeconds
                   resolver:(RCTPromiseResolveBlock)resolve
                   rejecter:(RCTPromiseRejectBlock)reject)
+
+@end

@@ -10,12 +10,17 @@ Application source code, organized by architectural layer. See [docs/spec/ARCHIT
 | `core/crypto/`   | Identity, Noise XX/X, Double Ratchet, contact exchange                  |
 | `core/mesh/`     | Packet codec, flood router, fragments, gossip, announce, courier, media |
 | `core/nostr/`    | Nostr client, NIP-59 gift-wrap, geo-relay discovery, presence           |
-| `core/payments/` | Cashu token parsing, Nutzap event handling                              |
+| `core/payments/` | Cashu tokens, DLEQ, proof selection, NIP-61 events, BIP-39 seed         |
 | `core/router/`   | Transport selection: `PeerRegistry` and `MessageRouter`                 |
+| `services/`      | Long-lived runtime wiring: mesh service, wallet service, transfers      |
 | `features/`      | Screen-level logic, wires core services to the UI                       |
 | `store/`         | Zustand state slices with MMKV persistence                              |
 | `ui/`            | Shared UI components                                                    |
 | `utils/`         | Stateless helpers: username, panic-wipe, battery optimization           |
+
+`core/` is pure and has no native or network dependencies, which is why the
+whole protocol is testable in CI. Anything that opens a socket or talks to a
+mint lives in `services/`.
 
 ## Tests
 
@@ -31,19 +36,26 @@ Tests are co-located with their module in a `__tests__/` directory. All `src/cor
 
 ### Unit Test Coverage
 
-| Layer            | Suites | Tests   | Lines   | Excluded                             |
-| ---------------- | ------ | ------- | ------- | ------------------------------------ |
-| `core/crypto/`   | 5      | 50      | 95%     | -                                    |
-| `core/mesh/`     | 11     | 207     | 85%     | Live BLE I/O (native boundary)       |
-| `core/nostr/`    | 4      | 47      | 74%     | Network calls (`NostrClient` mocked) |
-| `core/payments/` | 1      | 17      | 65%     | Mint connectivity (network)          |
-| `core/router/`   | 1      | 25      | 93%     | BLE and WiFi transports (native)     |
-| `store/`         | 1      | 14      | 94%     | MMKV persistence (mocked)            |
-| `utils/`         | 3      | 33      | 82%     | -                                    |
-| **Total**        | **26** | **393** | **86%** |                                      |
+| Layer            | Suites | Tests   | Statements | Excluded                             |
+| ---------------- | ------ | ------- | ---------- | ------------------------------------ |
+| `core/crypto/`   | 5      | 53      | 93%        | -                                    |
+| `core/mesh/`     | 22     | 275     | 84%        | Live BLE I/O (native boundary)       |
+| `core/nostr/`    | 9      | 77      | 75%        | Network calls (`NostrClient` mocked) |
+| `core/payments/` | 3      | 70      | 74%        | Mint connectivity (network)          |
+| `core/router/`   | 1      | 30      | 80%        | BLE and WiFi transports (native)     |
+| `services/`      | 4      | 46      | 14%        | Mesh and mint I/O (native + network) |
+| `store/`         | 11     | 141     | 73%        | MMKV persistence (mocked)            |
+| `utils/`         | 9      | 85      | 67%        | -                                    |
+| **Total**        | **64** | **777** | **68%**    |                                      |
+
+`services/` is the outlier because it is the layer that owns sockets and HTTP:
+`mesh-service` needs a radio and `wallet-service` needs a live mint, so most of
+it is only reachable from a device. The rules those services enforce are tested
+where they live, in `core/` and `store/`.
 
 ### Integration Test Coverage
 
-Not yet added. The UI layer is not built. Once feature screens exist, [Maestro](https://maestro.mobile.dev) is the planned tool for UI flow smoke tests.
+Not yet added. [Maestro](https://maestro.mobile.dev) is the planned tool for UI
+flow smoke tests.
 
 BLE mesh behavior cannot be emulated. Testing actual peer discovery, multi-hop routing, and Noise handshakes over a live connection requires two physical devices. This is covered by manual two-device testing before any release.

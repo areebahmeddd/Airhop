@@ -22,11 +22,9 @@ import {
   useCameraPermissions,
 } from "expo-camera";
 import * as ImagePicker from "expo-image-picker";
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useMemo, useRef, useState } from "react";
 import {
-  KeyboardAvoidingView,
   Modal,
-  Platform,
   Pressable,
   StyleSheet,
   Text,
@@ -41,6 +39,7 @@ import {
 import { getMeshService } from "../../services/mesh-service";
 import { useContactsStore } from "../../store/contacts-store";
 import Avatar from "../../ui/components/avatar";
+import BottomSheet from "../../ui/components/bottom-sheet";
 import {
   FontFamily,
   FontSize,
@@ -49,6 +48,7 @@ import {
   Spacing,
   useThemeColors,
 } from "../../ui/theme";
+import { ensurePermission } from "../../utils/permissions";
 import { peerIDToUsername } from "../../utils/username";
 
 // ---------------------------------------------------------------------------
@@ -110,24 +110,11 @@ export default function QrScanScreen({
   const [foundCard, setFoundCard] = useState<ContactCard | null>(null);
   const [input, setInput] = useState("");
   const [error, setError] = useState<string | null>(null);
-  const [cameraPermission, requestCameraPermission] = useCameraPermissions();
+  const [, requestCameraPermission, getCameraPermission] =
+    useCameraPermissions();
   // Guards against onBarcodeScanned firing repeatedly while a code stays
   // in frame: only the first read in a scan session is used.
   const hasScannedRef = useRef(false);
-
-  // Request camera access when the scanner opens. If it's denied, fall back to
-  // the entry hub with a note rather than showing a dead camera view.
-  useEffect(() => {
-    if (!visible || stage !== "camera" || cameraPermission?.granted) return;
-    requestCameraPermission().then((result) => {
-      if (!result.granted) {
-        setError(
-          "Camera access is off. Turn it on in Settings, or add by peer ID.",
-        );
-        setStage("entry");
-      }
-    });
-  }, [visible, stage, cameraPermission, requestCameraPermission]);
 
   function resetAll(): void {
     setStage("entry");
@@ -168,20 +155,54 @@ export default function QrScanScreen({
     setStage("confirm");
   }
 
-  // Open the live camera scanner. Permission is requested by the effect above.
-  function handleScanWithCamera(): void {
+  // Open the live camera scanner.
+  //
+  // Permission is settled BEFORE the camera stage is entered, not alongside it.
+  // Mounting CameraView while the OS prompt is still up hands it a denied
+  // camera; expo-camera doesn't re-acquire the device when the answer arrives,
+  // so granting access left the user staring at a permanently black preview.
+  // Asking first means the camera view only ever mounts with a camera it can
+  // actually open.
+  async function handleScanWithCamera(): Promise<void> {
     setError(null);
+    const granted = await ensurePermission(
+      getCameraPermission,
+      requestCameraPermission,
+      { label: "Camera access", purpose: "scan a contact's QR code" },
+    );
+    if (!granted) {
+      // A plain "not now" needs no dialog on top of the one just dismissed:
+      // the hub already offers two other ways to add someone.
+      setError(
+        "Camera access is needed to scan. You can still add by peer ID.",
+      );
+      return;
+    }
     hasScannedRef.current = false;
     setStage("camera");
+  }
+
+  // The camera opened but the device wouldn't start (already in use by another
+  // app, or unavailable on this hardware). Say so instead of leaving the black
+  // preview to speak for itself.
+  function handleCameraMountError(): void {
+    setError(
+      "Couldn't start the camera. Close other camera apps and try again.",
+    );
+    setStage("entry");
   }
 
   // Decode a QR from an image the user already has saved, no camera needed.
   async function handlePickFromGallery(): Promise<void> {
     setError(null);
-    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (perm.status !== "granted") {
+    const granted = await ensurePermission(
+      () => ImagePicker.getMediaLibraryPermissionsAsync(),
+      () => ImagePicker.requestMediaLibraryPermissionsAsync(),
+      { label: "Photo access", purpose: "scan a QR code you've saved" },
+    );
+    if (!granted) {
       setError(
-        "Grant photo access to scan a saved QR image, or add by peer ID.",
+        "Photo access is needed to pick an image. You can still add by peer ID.",
       );
       return;
     }
@@ -295,22 +316,31 @@ export default function QrScanScreen({
       : "Not verified yet";
   const confirmPrimaryLabel = alreadyContact ? "Message" : "Add Contact";
 
-  // The camera is a full-bleed surface; the entry and confirm steps ride in a
-  // bottom sheet, matching the app's other sheets (contact info, channel info).
-  if (stage === "camera") {
-    return (
+  // The entry and confirm steps ride in a bottom sheet, matching the app's other
+  // sheets (contact info, channel info). The camera is a full-bleed surface
+  // stacked OVER that sheet rather than replacing it: dismissing one modal in
+  // the same frame as another is presented is how you end up with neither, and
+  // keeping the sheet mounted underneath means backing out of the camera lands
+  // exactly where it left off.
+  return (
+    <>
       <Modal
-        visible={visible}
+        visible={visible && stage === "camera"}
         animationType="slide"
         presentationStyle="fullScreen"
-        onRequestClose={handleClose}
+        // System back does what the on-screen back arrow does: step out of the
+        // camera to the hub, not out of adding a contact altogether.
+        onRequestClose={() => setStage("entry")}
       >
         <View style={styles.root}>
+          {/* Mounted only once permission is granted (see handleScanWithCamera),
+              so this is never the black rectangle of a denied camera. */}
           <CameraView
             style={StyleSheet.absoluteFill}
             facing="back"
             barcodeScannerSettings={{ barcodeTypes: ["qr"] }}
             onBarcodeScanned={(result) => handleBarcodeScanned(result.data)}
+            onMountError={handleCameraMountError}
           />
           <SafeAreaView style={styles.scanChrome}>
             <View style={styles.scanTopBar}>
@@ -338,26 +368,14 @@ export default function QrScanScreen({
           </SafeAreaView>
         </View>
       </Modal>
-    );
-  }
 
-  return (
-    <Modal
-      visible={visible}
-      transparent
-      animationType="slide"
-      onRequestClose={handleClose}
-    >
-      <KeyboardAvoidingView
-        style={styles.overlay}
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
+      <BottomSheet
+        visible={visible}
+        onClose={handleClose}
+        sheetStyle={styles.sheet}
       >
-        <Pressable style={StyleSheet.absoluteFill} onPress={handleClose} />
-
-        {stage === "entry" && (
-          <View style={styles.sheet}>
-            <View style={styles.handle} />
-
+        {stage !== "confirm" && (
+          <>
             <View style={styles.sheetHead}>
               <Text style={styles.sheetTitle}>Add Contact</Text>
               <Text style={styles.sheetSubtitle}>
@@ -448,13 +466,11 @@ export default function QrScanScreen({
                 unverified until you meet on the mesh.
               </Text>
             </View>
-          </View>
+          </>
         )}
 
         {stage === "confirm" && foundPeerID && (
-          <View style={styles.sheet}>
-            <View style={styles.handle} />
-
+          <>
             <View style={styles.confirmBody}>
               <Avatar username={confirmName} peerID={foundPeerID} size={72} />
               <Text style={styles.confirmUsername}>{confirmName}</Text>
@@ -494,10 +510,10 @@ export default function QrScanScreen({
                 <Text style={styles.rescanText}>Back</Text>
               </Pressable>
             </View>
-          </View>
+          </>
         )}
-      </KeyboardAvoidingView>
-    </Modal>
+      </BottomSheet>
+    </>
   );
 }
 
@@ -561,27 +577,12 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       paddingBottom: Spacing.xl,
       gap: Spacing.sm,
     },
-    // ---- Bottom sheet shared chrome (entry + confirm) ----
-    overlay: {
-      flex: 1,
-      backgroundColor: Colors.overlay,
-      justifyContent: "flex-end",
-    },
+    // ---- Bottom sheet body (entry + confirm). Scrim, handle and drag come
+    // from BottomSheet; this is only what's inside it. ----
     sheet: {
-      backgroundColor: Colors.surface,
-      borderTopLeftRadius: Radius["2xl"],
-      borderTopRightRadius: Radius["2xl"],
-      padding: Spacing.xl,
+      paddingHorizontal: Spacing.xl,
       paddingBottom: Spacing["2xl"],
       gap: Spacing.base,
-    },
-    handle: {
-      width: 36,
-      height: 4,
-      borderRadius: 2,
-      backgroundColor: Colors.borderStrong,
-      alignSelf: "center",
-      marginBottom: Spacing.xs,
     },
     // ---- Entry hub (paste peer ID, or choose a scan source) ----
     sheetHead: {

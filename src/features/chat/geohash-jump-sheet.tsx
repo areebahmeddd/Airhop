@@ -8,7 +8,6 @@
 import { Feather } from "@expo/vector-icons";
 import { useEffect, useMemo, useState } from "react";
 import {
-  Modal,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -24,6 +23,7 @@ import {
 import { getMeshService } from "../../services/mesh-service";
 import { useGeohashBookmarksStore } from "../../store/geohash-bookmarks-store";
 import { usePlaceNamesStore } from "../../store/place-names-store";
+import BottomSheet from "../../ui/components/bottom-sheet";
 import {
   FontFamily,
   FontSize,
@@ -116,175 +116,149 @@ export function GeohashJumpSheet({
   }
 
   return (
-    <Modal
+    <BottomSheet
       visible={visible}
-      transparent
-      animationType="slide"
-      onRequestClose={handleClose}
+      onClose={handleClose}
+      sheetStyle={styles.sheet}
+      scrollable
     >
-      <View style={styles.overlay}>
-        <Pressable style={StyleSheet.absoluteFill} onPress={handleClose} />
-        <View style={styles.sheet}>
-          <View style={styles.handle} />
-          <Text style={styles.title}>Go to a place</Text>
-          {/* Same scannable card as the other create sheets, so all three
+      <Text style={styles.title}>Go to a place</Text>
+      {/* Same scannable card as the other create sheets, so all three
               chooser destinations read alike. */}
-          <View style={styles.privacyNote}>
-            <View style={styles.privacyNoteRow}>
-              <Feather
-                name="map-pin"
-                size={14}
-                color={Colors.textMuted}
-                style={styles.noteIcon}
-              />
-              <Text style={styles.privacyNoteText}>
-                Open a public location channel anywhere, even a place you are
-                not.
-              </Text>
-            </View>
-            <View style={styles.privacyNoteRow}>
-              <Feather
-                name="hash"
-                size={14}
-                color={Colors.textMuted}
-                style={styles.noteIcon}
-              />
-              <Text style={styles.privacyNoteText}>
-                Enter its geohash. Everyone whose location falls in that cell
-                shares the channel.
-              </Text>
-            </View>
-            <View style={styles.privacyNoteRow}>
-              <Feather
-                name="globe"
-                size={14}
-                color={Colors.textMuted}
-                style={styles.noteIcon}
-              />
-              <Text style={styles.privacyNoteText}>
-                You show as teleported, not nearby. It reaches over the internet
-                only.
-              </Text>
-            </View>
-          </View>
-
-          <View style={styles.inputRow}>
-            <Text style={styles.inputPrefix}>#</Text>
-            <TextInput
-              style={styles.input}
-              value={input}
-              onChangeText={(v) => {
-                setInput(normalizeGeohash(v));
-                setError(null);
-              }}
-              placeholder="geohash"
-              placeholderTextColor={Colors.textMuted}
-              autoCapitalize="none"
-              autoCorrect={false}
-              returnKeyType="go"
-              onSubmitEditing={handleGo}
-              selectionColor={Colors.accent}
-            />
-          </View>
-          <Text style={styles.hint}>
-            {localChannel !== null
-              ? `You are already here. Go opens your ${localChannel} channel.`
-              : level !== null
-                ? `${level} cell`
-                : "2 to 12 letters and digits"}
+      <View style={styles.privacyNote}>
+        <View style={styles.privacyNoteRow}>
+          <Feather
+            name="map-pin"
+            size={14}
+            color={Colors.textMuted}
+            style={styles.noteIcon}
+          />
+          <Text style={styles.privacyNoteText}>
+            Open a public location channel anywhere, even a place you are not.
           </Text>
-          {error !== null && <Text style={styles.error}>{error}</Text>}
-
-          {bookmarks.length > 0 && (
-            <View style={styles.saved}>
-              <Text style={styles.savedLabel}>SAVED PLACES</Text>
-              <ScrollView
-                style={styles.savedList}
-                showsVerticalScrollIndicator={false}
-                keyboardShouldPersistTaps="handled"
-              >
-                {bookmarks.map((gh) => {
-                  const name = placeNames[gh];
-                  return (
-                    <Pressable
-                      key={gh}
-                      style={styles.savedRow}
-                      onPress={() => openGeohash(gh)}
-                      accessibilityRole="button"
-                      accessibilityLabel={`Open ${name ?? gh}`}
-                    >
-                      <Feather
-                        name="map-pin"
-                        size={15}
-                        color={Colors.textMuted}
-                      />
-                      <View style={styles.savedText}>
-                        <Text style={styles.savedGeohash} numberOfLines={1}>
-                          #{gh}
-                        </Text>
-                        <Text style={styles.savedSub} numberOfLines={1}>
-                          {name !== undefined
-                            ? `~${name}  ·  ${geohashLevelName(gh)}`
-                            : geohashLevelName(gh)}
-                        </Text>
-                      </View>
-                      <Pressable
-                        onPress={() =>
-                          useGeohashBookmarksStore.getState().remove(gh)
-                        }
-                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                        accessibilityRole="button"
-                        accessibilityLabel={`Remove ${name ?? gh} from saved places`}
-                      >
-                        <Feather name="x" size={15} color={Colors.textMuted} />
-                      </Pressable>
-                    </Pressable>
-                  );
-                })}
-              </ScrollView>
-            </View>
-          )}
-
-          <View style={styles.actions}>
-            <Pressable style={styles.cancel} onPress={handleBack}>
-              <Text style={styles.cancelText}>Back</Text>
-            </Pressable>
-            <Pressable
-              style={[styles.confirm, !valid && styles.confirmDisabled]}
-              onPress={handleGo}
-              disabled={!valid}
-            >
-              <Text style={styles.confirmText}>Go</Text>
-            </Pressable>
-          </View>
+        </View>
+        <View style={styles.privacyNoteRow}>
+          <Feather
+            name="hash"
+            size={14}
+            color={Colors.textMuted}
+            style={styles.noteIcon}
+          />
+          <Text style={styles.privacyNoteText}>
+            Enter its geohash. Everyone whose location falls in that cell shares
+            the channel.
+          </Text>
+        </View>
+        <View style={styles.privacyNoteRow}>
+          <Feather
+            name="globe"
+            size={14}
+            color={Colors.textMuted}
+            style={styles.noteIcon}
+          />
+          <Text style={styles.privacyNoteText}>
+            You show as teleported, not nearby. It reaches over the internet
+            only.
+          </Text>
         </View>
       </View>
-    </Modal>
+
+      <View style={styles.inputRow}>
+        <Text style={styles.inputPrefix}>#</Text>
+        <TextInput
+          style={styles.input}
+          value={input}
+          onChangeText={(v) => {
+            setInput(normalizeGeohash(v));
+            setError(null);
+          }}
+          placeholder="geohash"
+          placeholderTextColor={Colors.textMuted}
+          autoCapitalize="none"
+          autoCorrect={false}
+          returnKeyType="go"
+          onSubmitEditing={handleGo}
+          selectionColor={Colors.accent}
+        />
+      </View>
+      <Text style={styles.hint}>
+        {localChannel !== null
+          ? `You are already here. Go opens your ${localChannel} channel.`
+          : level !== null
+            ? `${level} cell`
+            : "2 to 12 letters and digits"}
+      </Text>
+      {error !== null && <Text style={styles.error}>{error}</Text>}
+
+      {bookmarks.length > 0 && (
+        <View style={styles.saved}>
+          <Text style={styles.savedLabel}>SAVED PLACES</Text>
+          <ScrollView
+            style={styles.savedList}
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+          >
+            {bookmarks.map((gh) => {
+              const name = placeNames[gh];
+              return (
+                <Pressable
+                  key={gh}
+                  style={styles.savedRow}
+                  onPress={() => openGeohash(gh)}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Open ${name ?? gh}`}
+                >
+                  <Feather name="map-pin" size={15} color={Colors.textMuted} />
+                  <View style={styles.savedText}>
+                    <Text style={styles.savedGeohash} numberOfLines={1}>
+                      #{gh}
+                    </Text>
+                    <Text style={styles.savedSub} numberOfLines={1}>
+                      {name !== undefined
+                        ? `~${name}  ·  ${geohashLevelName(gh)}`
+                        : geohashLevelName(gh)}
+                    </Text>
+                  </View>
+                  <Pressable
+                    onPress={() =>
+                      useGeohashBookmarksStore.getState().remove(gh)
+                    }
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Remove ${name ?? gh} from saved places`}
+                  >
+                    <Feather name="x" size={15} color={Colors.textMuted} />
+                  </Pressable>
+                </Pressable>
+              );
+            })}
+          </ScrollView>
+        </View>
+      )}
+
+      <View style={styles.actions}>
+        <Pressable style={styles.cancel} onPress={handleBack}>
+          <Text style={styles.cancelText}>Back</Text>
+        </Pressable>
+        <Pressable
+          style={[styles.confirm, !valid && styles.confirmDisabled]}
+          onPress={handleGo}
+          disabled={!valid}
+        >
+          <Text style={styles.confirmText}>Go</Text>
+        </Pressable>
+      </View>
+    </BottomSheet>
   );
 }
 
 function createStyles(Colors: ReturnType<typeof useThemeColors>) {
   return StyleSheet.create({
-    overlay: {
-      flex: 1,
-      backgroundColor: Colors.overlay,
-      justifyContent: "flex-end",
-    },
     sheet: {
-      backgroundColor: Colors.surface,
-      borderTopLeftRadius: Radius["2xl"],
-      borderTopRightRadius: Radius["2xl"],
-      padding: Spacing.xl,
+      paddingHorizontal: Spacing.xl,
+      paddingBottom: Spacing.xl,
       gap: Spacing.md,
       maxHeight: "88%",
-    },
-    handle: {
-      width: 36,
-      height: 4,
-      borderRadius: 2,
-      backgroundColor: Colors.borderStrong,
-      alignSelf: "center",
-      marginBottom: Spacing.xs,
     },
     title: {
       fontSize: FontSize.md,
@@ -345,8 +319,12 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       color: Colors.danger,
     },
     // ---- Saved places (bookmarks) ----------------------------------------------
+    // flexShrink so the saved-places list yields height when the sheet is
+    // squeezed (keyboard up on a short screen) rather than pushing the Back/Go
+    // row past the sheet's maxHeight, where it would be clipped and unreachable.
     saved: {
       gap: Spacing.sm,
+      flexShrink: 1,
     },
     savedLabel: {
       fontSize: FontSize.xs,
@@ -356,6 +334,7 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
     },
     savedList: {
       maxHeight: 168,
+      flexShrink: 1,
     },
     savedRow: {
       flexDirection: "row",

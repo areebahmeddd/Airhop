@@ -146,15 +146,20 @@ export function SettingLinkRow({
 // dark it was reading as a hole punched in the green track, and against the
 // off-track it all but vanished. The off-track uses borderStrong so the
 // control still has a visible outline sitting on a surface-colored row.
-export function SettingSwitch(
-  props: React.ComponentProps<typeof Switch>,
-): React.JSX.Element {
+// A disabled switch is dimmed rather than recolored: it still reads as on or
+// off at a glance, just plainly not yours to change. RN greys the control
+// inconsistently across platforms, so the opacity is set here.
+export function SettingSwitch({
+  style,
+  ...props
+}: React.ComponentProps<typeof Switch>): React.JSX.Element {
   const Colors = useThemeColors();
   return (
     <Switch
       trackColor={{ false: Colors.borderStrong, true: Colors.online }}
       thumbColor="#FFFFFF"
       ios_backgroundColor={Colors.borderStrong}
+      style={[props.disabled === true && { opacity: 0.45 }, style]}
       {...props}
     />
   );
@@ -304,30 +309,14 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       color: Colors.textMuted,
       fontWeight: FontWeight.medium,
     },
-    // Bottom-sheet modal (QR / Status / Wipe / Orbot / Appearance / etc.)
-    sheetOverlay: {
-      flex: 1,
-      backgroundColor: Colors.overlay,
-      justifyContent: "flex-end",
-    },
+    // Body of a settings bottom sheet (QR / Status / Wipe / Orbot / Appearance
+    // / etc.). Scrim, grab handle and drag live in BottomSheet.
     sheet: {
       width: "100%",
-      backgroundColor: Colors.surface,
-      borderTopLeftRadius: Radius["2xl"],
-      borderTopRightRadius: Radius["2xl"],
       paddingHorizontal: Spacing.xl,
-      paddingTop: Spacing.base,
       paddingBottom: Spacing["2xl"],
       alignItems: "center",
       gap: Spacing.md,
-    },
-    sheetHandle: {
-      width: 36,
-      height: 4,
-      borderRadius: 2,
-      backgroundColor: Colors.borderStrong,
-      alignSelf: "center",
-      marginBottom: Spacing.xs,
     },
     sheetIconWrap: {
       width: 48,

@@ -147,6 +147,24 @@ final class AirhopBLEModule: RCTEventEmitter {
         }
     }
 
+    // Current radio state, matching the Android module method by method.
+    //
+    // The TurboModule spec declares this for both platforms, and until now only
+    // Android implemented it: on iOS the call landed on a missing selector and
+    // the mesh service leaned on the rejection as if it were an answer. Relying
+    // on a thrown method to mean "not supported here" is not a contract, it is a
+    // coincidence - and it left an unexplained rejected promise on every iOS
+    // launch. Answering honestly costs one line.
+    //
+    // A nil manager means CoreBluetooth has not initialised yet, which is not
+    // the same as the radio being off; false is the safe reading, and
+    // centralManagerDidUpdateState corrects it the moment the real state lands.
+    @objc
+    func isAdapterEnabled(_ resolve: @escaping RCTPromiseResolveBlock,
+                          rejecter reject: @escaping RCTPromiseRejectBlock) {
+        resolve(centralManager?.state == .poweredOn)
+    }
+
     // MARK: I/O
 
     @objc

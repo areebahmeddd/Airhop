@@ -25,7 +25,7 @@ export default function TermsPage() {
 
         <div className="mt-10">
           <h1 className="text-3xl font-semibold tracking-tight text-gray-900">Terms of Service</h1>
-          <p className="mt-2 text-sm text-gray-500">Last updated: September 01, 2026</p>
+          <p className="mt-2 text-sm text-gray-500">Last updated: August 01, 2026</p>
         </div>
 
         <div className="mt-10 space-y-10 text-gray-700">
@@ -84,16 +84,43 @@ export default function TermsPage() {
           </section>
 
           <section className="space-y-3">
-            <h2 className="text-base font-semibold text-gray-900">Offline payments</h2>
+            <h2 className="text-base font-semibold text-gray-900">Payments</h2>
             <p className="text-sm leading-relaxed">
-              Airhop supports transferring Cashu ecash tokens directly between devices over the
-              mesh.{" "}
+              Airhop includes an optional Cashu ecash wallet.{" "}
               <strong>
                 We do not operate any payment infrastructure. We are not a financial institution,
-                payment processor, or money services business.
+                payment processor, money services business, or custodian of your funds.
               </strong>{" "}
-              Token transfers occur between devices without any involvement from this project. We
-              have no ability to reverse, recover, or mediate any transaction.
+              We have no ability to reverse, recover, freeze, or mediate any transaction.
+            </p>
+            <p className="text-sm leading-relaxed">
+              <strong>Mints are third parties you choose.</strong> A mint is an independent server
+              that issues and redeems ecash and holds the bitcoin backing it. Airhop ships with no
+              default mint and does not endorse, vet, or monitor any of them. Adding a mint means
+              trusting that operator with whatever balance you keep there. A mint may go offline,
+              refuse service, change its fees, or fail to honour its tokens, and any loss that
+              follows is between you and that operator.
+            </p>
+            <p className="text-sm leading-relaxed">
+              <strong>Ecash is a bearer instrument.</strong> Whoever holds a token can spend it. A
+              token sent to the wrong person, posted to a public channel, or read by someone over
+              your shoulder is gone. Transfers over the mesh are final and cannot be reversed by
+              anyone.
+            </p>
+            <p className="text-sm leading-relaxed">
+              <strong>Recovery is your responsibility.</strong> The optional recovery phrase is the
+              only way to rebuild a balance on another device. It is stored on your device and
+              nowhere else. We cannot recover it, reset it, or help you if it is lost, and anyone
+              who obtains it can spend your balance.
+            </p>
+            <p className="text-sm leading-relaxed">
+              <strong>Lightning deposits and withdrawals</strong> are performed by your chosen mint
+              and the wider Lightning Network, not by us. Routing fees, failed payments, and
+              settlement delays are outside our control.
+            </p>
+            <p className="text-sm leading-relaxed">
+              You are responsible for complying with any tax, reporting, or financial regulations
+              that apply to you.
             </p>
           </section>
 

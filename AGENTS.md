@@ -61,7 +61,8 @@ Never suggest UI code for a feature whose `src/core/` service isn't tested.
 | Crypto (Noise XX, identity, DR)                               | `src/core/crypto/`       |
 | BLE mesh (routing, codec, fragments, gossip, courier)         | `src/core/mesh/`         |
 | Nostr (client, gift-wrap, geo-relay, presence, courier-relay) | `src/core/nostr/`        |
-| Payments (Cashu, Nutzap)                                      | `src/core/payments/`     |
+| Payments: tokens, DLEQ, NIP-61, seed (pure)                   | `src/core/payments/`     |
+| Payments: anything touching a mint                            | `src/services/`          |
 | Screen logic                                                  | `src/features/`          |
 | UI components                                                 | `src/ui/`                |
 | State management                                              | `src/store/`             |
