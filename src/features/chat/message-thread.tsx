@@ -26,11 +26,10 @@ import React, {
   useState,
 } from "react";
 import {
+  AppState,
   FlatList,
   Image,
-  KeyboardAvoidingView,
   Modal,
-  Platform,
   Pressable,
   ScrollView,
   Share,
@@ -38,6 +37,8 @@ import {
   Text,
   TextInput,
   View,
+  type NativeScrollEvent,
+  type NativeSyntheticEvent,
 } from "react-native";
 import Animated, {
   Easing,
@@ -46,12 +47,15 @@ import Animated, {
   withTiming,
 } from "react-native-reanimated";
 import {
-  buildOfflineToken,
   findTokensInText,
   mayContainToken,
-  selectProofsForAmount,
   type EmbeddedToken,
 } from "../../core/payments/cashu";
+import {
+  describeRoute,
+  reportWalletError,
+  sendEcashToPeer,
+} from "../../services/ecash-transfer";
 import {
   isGeoChannel,
   isManualGeoChannel,
@@ -60,6 +64,7 @@ import {
 } from "../../services/geohash-channel-service";
 import { hasLocationPermission } from "../../services/location-service";
 import { getMeshService } from "../../services/mesh-service";
+import { hostOf, receiveToken } from "../../services/wallet-service";
 import { useActivityStore } from "../../store/activity-store";
 import { showAlert } from "../../store/alert-store";
 import {
@@ -82,6 +87,7 @@ import {
 } from "../../store/transfer-store";
 import { useWalletStore } from "../../store/wallet-store";
 import Avatar from "../../ui/components/avatar";
+import BottomSheet from "../../ui/components/bottom-sheet";
 import {
   FontFamily,
   FontSize,
@@ -90,10 +96,12 @@ import {
   Spacing,
   useThemeColors,
 } from "../../ui/theme";
+import { useKeyboardInset } from "../../ui/use-keyboard";
 import { channelInviteLink } from "../../utils/deep-link";
 import { resolveDisplayName } from "../../utils/display-name";
 import { canSendMedia } from "../../utils/media-policy";
 import { activeMentionQuery, applyMention } from "../../utils/mentions";
+import { ensurePermission } from "../../utils/permissions";
 import {
   isNostrId,
   NOSTR_ID_PREFIX,
@@ -187,8 +195,34 @@ interface Props {
 // window to Undo. Short enough not to read as lag, long enough to react.
 const UNDO_WINDOW_MS = 3000;
 
+// How close to the end of the thread still counts as "at the bottom", in points.
+// Roughly one bubble: near enough that following a new message reads as the list
+// staying put, far enough that a deliberate scroll up is never mistaken for it.
+const AT_BOTTOM_TOLERANCE = 80;
+
+// Long enough for a bottom sheet to finish sliding out before the next one
+// slides in. Matches BottomSheet's own close duration with a little slack.
+const SHEET_HANDOFF_MS = 250;
+
+// The attachment-review sheet darkens the screen further than the standard
+// scrim: the point of that sheet is to look at one photo, and the thread behind
+// it competing for attention defeats that.
+const COMPOSER_SCRIM = "rgba(0,0,0,0.85)";
+
 function screenshotNoticeText(nickname: string): string {
   return `* ${nickname} took a screenshot *`;
+}
+
+// Whole calendar days between two instants, in local time.
+//
+// Counting elapsed milliseconds would be wrong here: a message sent at 23:50 and
+// read at 00:10 is twenty minutes old but belongs to yesterday, which is the
+// only thing a date separator cares about. Both sides are flattened to local
+// midnight first, so the result is a day count and never a fraction.
+function daysBetween(from: Date, to: Date): number {
+  const a = new Date(from.getFullYear(), from.getMonth(), from.getDate());
+  const b = new Date(to.getFullYear(), to.getMonth(), to.getDate());
+  return Math.round((b.getTime() - a.getTime()) / 86_400_000);
 }
 
 // Slash commands offered by the "/" quick-picker. Only the ones handleSend
@@ -656,6 +690,8 @@ export default function MessageThread({
 }: Props): React.JSX.Element {
   const Colors = useThemeColors();
   const styles = useMemo(() => createStyles(Colors), [Colors]);
+  // How far the compose bar has to lift to clear the on-screen keyboard.
+  const keyboardInset = useKeyboardInset();
   const { messages, addMessage, addChannel } = useChatStore();
   // Live peer count, real data from BLE discovery, not a stub.
   // Subscribe to the stable peer map and derive the reachable list locally.
@@ -873,6 +909,12 @@ export default function MessageThread({
   const autoDownloadMedia = useSettingsStore((s) => s.autoDownloadMedia);
   const [showAttachMenu, setShowAttachMenu] = useState(false);
   const [showSendEcash, setShowSendEcash] = useState(false);
+  const [sendingEcash, setSendingEcash] = useState(false);
+  // Raw string of the token currently being claimed, so its button can show
+  // progress and a double tap cannot start two swaps for the same proofs.
+  const [claimingToken, setClaimingToken] = useState<string | null>(null);
+  // Tokens already taken into the wallet, so their cards read "Claimed".
+  const claimedTokens = useWalletStore((s) => s.claimedTokens);
   const [ecashAmount, setEcashAmount] = useState("");
   const [ecashMemo, setEcashMemo] = useState("");
   const [showChannelInfo, setShowChannelInfo] = useState(false);
@@ -938,12 +980,97 @@ export default function MessageThread({
   const msgs = useMemo(() => messages[channel] ?? [], [messages, channel]);
   const isDM = channel.startsWith("dm:");
 
-  // Send read receipts for this DM whenever it is open and its messages change:
-  // covers both opening the thread and a new message arriving while it is on
-  // screen. Best-effort and no-op for channels (no per-recipient receipts).
+  // Read receipts for this DM. Best-effort, and a no-op for channels (there is
+  // no per-recipient receipt for a broadcast).
+  //
+  // Gated on the app actually being in the foreground. The thread stays mounted
+  // when you switch away, so without this a message arriving while the app is in
+  // your pocket would be reported back as "read" - telling the other person you
+  // saw something you have not seen. A read receipt is a claim about a human,
+  // not about a process, and it is the one piece of presence people notice being
+  // wrong. Re-runs when we come back, so opening the app does send the receipts
+  // that were correctly withheld.
+  const [appActive, setAppActive] = useState(
+    () => AppState.currentState === "active",
+  );
   useEffect(() => {
-    if (isDM) getMeshService()?.sendReadReceipts(channel.slice(3));
-  }, [isDM, channel, msgs]);
+    const sub = AppState.addEventListener("change", (next) =>
+      setAppActive(next === "active"),
+    );
+    return () => sub.remove();
+  }, []);
+  useEffect(() => {
+    if (isDM && appActive) getMeshService()?.sendReadReceipts(channel.slice(3));
+  }, [isDM, channel, msgs, appActive]);
+
+  // Where the reader is in the thread, and whether they have been placed at the
+  // newest message yet. Refs, not state: these are read inside scroll handlers
+  // on every frame and must never themselves cause a render.
+  const atBottomRef = useRef(true);
+  const hasLandedRef = useRef(false);
+  // The one piece of it the UI needs, so the jump-to-latest pill can appear.
+  const [showJumpToLatest, setShowJumpToLatest] = useState(false);
+
+  function handleListScroll(e: NativeSyntheticEvent<NativeScrollEvent>): void {
+    const { contentOffset, contentSize, layoutMeasurement } = e.nativeEvent;
+    const distanceFromBottom =
+      contentSize.height - (contentOffset.y + layoutMeasurement.height);
+    // A tolerance rather than an exact match: momentum, a keyboard resize or a
+    // half-pixel layout rounding all leave you a few points short of the true
+    // end, and none of them mean the reader has scrolled away.
+    const atBottom = distanceFromBottom <= AT_BOTTOM_TOLERANCE;
+    atBottomRef.current = atBottom;
+    setShowJumpToLatest((shown) => (shown === !atBottom ? shown : !atBottom));
+  }
+
+  function jumpToLatest(): void {
+    atBottomRef.current = true;
+    setShowJumpToLatest(false);
+    listRef.current?.scrollToEnd({ animated: true });
+  }
+
+  // Open a second bottom sheet once the first has finished sliding out. One
+  // pending handoff at a time, and cancelled when the thread goes away: two of
+  // these racing would open the wrong sheet, or open one over a thread the user
+  // has already left. The action sheet's own close is what this is waiting on,
+  // so the delay tracks that animation.
+  const handoffTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(
+    () => () => {
+      if (handoffTimer.current) clearTimeout(handoffTimer.current);
+    },
+    [],
+  );
+  function scheduleSheetHandoff(open: () => void): void {
+    if (handoffTimer.current) clearTimeout(handoffTimer.current);
+    handoffTimer.current = setTimeout(() => {
+      handoffTimer.current = null;
+      open();
+    }, SHEET_HANDOFF_MS);
+  }
+
+  // Opening the keyboard shortens the list without changing its content, so no
+  // content-size event fires and the newest messages end up hidden behind the
+  // compose bar. Follow the keyboard down to the latest message: you almost
+  // always start typing in reply to what you were just reading.
+  //
+  // Keyed on the keyboard alone. Adding the message count would re-run this for
+  // every message that arrives while the keyboard is open, racing the animated
+  // scroll against the instant one onContentSizeChange already does for new
+  // content - two scrollers fighting over the same list reads as a stutter.
+  //
+  // Only for a reader already at the bottom, which is the case this exists for:
+  // the list got shorter under them and took the newest messages with it. Someone
+  // reading further up tapped the composer on purpose and expects to keep looking
+  // at what they were looking at.
+  useEffect(() => {
+    if (keyboardInset <= 0 || !atBottomRef.current) return;
+    const id = setTimeout(
+      () => listRef.current?.scrollToEnd({ animated: true }),
+      50,
+    );
+    return () => clearTimeout(id);
+  }, [keyboardInset]);
 
   // Scroll to a message and briefly flash it. Shared by search-result jumps
   // and the pinned-messages sheet so both behave identically.
@@ -989,21 +1116,39 @@ export default function MessageThread({
   }, []);
 
   // Claim an ecash token found inside a received message.
-  // Proofs are stored offline without a mint call; user can redeem later.
-  function claimToken(embedded: EmbeddedToken): void {
-    const { addMint, addProofs } = useWalletStore.getState();
-    const stored = embedded.info.token.proofs.map((p) => ({
-      id: p.id,
-      amount: p.amount.toNumber(),
-      secret: p.secret,
-      C: p.C,
-    }));
-    addMint(embedded.info.mintUrl);
-    addProofs(embedded.info.mintUrl, stored);
-    showAlert(
-      `+${embedded.info.amount.toLocaleString()} ${embedded.info.unit}`,
-      `Token added to your wallet from ${embedded.info.mintUrl.replace(/https?:\/\//, "")}.`,
-    );
+  //
+  // This goes through the wallet service rather than writing proofs straight
+  // into the store, which is the difference between "the card said 500 sats so
+  // we added 500 sats" and actually checking. The service verifies the mint's
+  // DLEQ signature offline and refuses a forgery outright, swaps at the mint
+  // when there is internet (the only thing that proves the token has not
+  // already been spent elsewhere), and otherwise stores it as unconfirmed so
+  // the balance stays honest about what it does and does not know.
+  async function claimToken(embedded: EmbeddedToken): Promise<void> {
+    if (claimingToken !== null) return;
+    setClaimingToken(embedded.raw);
+    try {
+      const result = await receiveToken(embedded.raw, {
+        counterparty: dmPeerID ?? channel,
+      });
+      if (result.outcome === "duplicate") {
+        showAlert(
+          "Already claimed",
+          "Every proof in this token is already in your wallet, so nothing was added.",
+        );
+        return;
+      }
+      showAlert(
+        `+${result.amount.toLocaleString()} ${result.unit}`,
+        result.outcome === "swapped"
+          ? `Redeemed at ${hostOf(result.mintUrl)}. It is provably yours now: the sender's copy of this token no longer works.`
+          : `Stored from ${hostOf(result.mintUrl)}, but the mint has not confirmed it is unspent yet${result.dleq === "valid" ? " (its signature does check out, so the token is genuine)" : ""}. Refresh from the Wallet tab once you are online.`,
+      );
+    } catch (err) {
+      reportWalletError(err);
+    } finally {
+      setClaimingToken(null);
+    }
   }
 
   // Show a brief status hint, then auto-clear after 4 seconds.
@@ -1270,70 +1415,43 @@ export default function MessageThread({
     }
   }
 
-  // Send a Cashu token to this DM peer, the same offline build-and-deduct flow
-  // as the Wallet tab's Send, just with the recipient already fixed to
-  // whoever this thread is with.
-  function handleSendEcash(): void {
+  // Send a Cashu token to this DM peer. Identical to the Wallet tab's send and
+  // the Mesh tab's peer sheet, because all three call the same transfer
+  // service: proof selection, mint fees, and the reservation that makes an
+  // undelivered token reclaimable all live there rather than being re-derived
+  // per screen.
+  async function handleSendEcash(): Promise<void> {
     const amount = parseInt(ecashAmount, 10);
-    if (!amount || amount <= 0 || !dmPeerID) return;
+    if (!amount || amount <= 0 || !dmPeerID || sendingEcash) return;
 
-    const { proofsByMint, unit, removeProofs } = useWalletStore.getState();
-    const totalBalance = Object.values(proofsByMint).reduce(
-      (sum, ps) => sum + ps.reduce((s, p) => s + p.amount, 0),
-      0,
-    );
-    if (amount > totalBalance) {
-      showAlert(
-        "Insufficient balance",
-        `You have ${totalBalance.toLocaleString()} sats but tried to send ${amount.toLocaleString()} sats.`,
-      );
-      return;
+    // Quoting awaits the mint, so a double tap would otherwise start two sends.
+    setSendingEcash(true);
+    let result;
+    try {
+      result = await sendEcashToPeer({
+        peerID: dmPeerID,
+        amount,
+        memo: ecashMemo.trim() || undefined,
+        senderNickname: localNickname,
+      });
+    } finally {
+      setSendingEcash(false);
     }
-
-    const mintEntry = Object.entries(proofsByMint)
-      .map(([url, ps]) => ({
-        url,
-        ps,
-        balance: ps.reduce((s, p) => s + p.amount, 0),
-      }))
-      .find((m) => m.balance >= amount);
-    if (!mintEntry) {
-      showAlert(
-        "Balance split across mints",
-        "No single mint holds the full amount. Use the Wallet tab to consolidate.",
-      );
-      return;
-    }
-
-    const selection = selectProofsForAmount(mintEntry.ps, amount);
-    if (!selection) return;
-
-    const tokenStr = buildOfflineToken(
-      mintEntry.url,
-      selection.selected,
-      unit,
-      ecashMemo.trim() || undefined,
-    );
-    removeProofs(
-      mintEntry.url,
-      selection.selected.map((p) => p.secret),
-    );
-
-    addMessage({
-      id: `${localPeerID}-${Date.now()}-ecash`,
-      channel,
-      senderID: localPeerID,
-      senderNickname: localNickname,
-      text: tokenStr,
-
-      timestampMs: Date.now(),
-      isMine: true,
-    });
-    getMeshService()?.sendDm(dmPeerID, tokenStr);
+    if (!result) return;
 
     setShowSendEcash(false);
     setEcashAmount("");
     setEcashMemo("");
+    // The bubble and its delivery status are already on screen, so the happy
+    // path needs no modal. Only the routes that are not immediate delivery are
+    // worth interrupting for, because "queued" looks identical to "sent" in the
+    // thread and means something quite different.
+    if (result.route !== "sent") {
+      showAlert(
+        `${result.prepared.amount.toLocaleString()} ${result.prepared.unit} on its way`,
+        `${describeRoute(result.route)} It stays reclaimable from the Wallet tab until you confirm it arrived.`,
+      );
+    }
   }
 
   // Build a local attachment message immediately (instant feedback), then read
@@ -1479,14 +1597,12 @@ export default function MessageThread({
   }
 
   async function handleCameraAttach(): Promise<void> {
-    const { status } = await ImagePicker.requestCameraPermissionsAsync();
-    if (status !== "granted") {
-      showAlert(
-        "Permission needed",
-        "Grant camera access in Settings to take photos.",
-      );
-      return;
-    }
+    const granted = await ensurePermission(
+      () => ImagePicker.getCameraPermissionsAsync(),
+      () => ImagePicker.requestCameraPermissionsAsync(),
+      { label: "Camera access", purpose: "take a photo to send" },
+    );
+    if (!granted) return;
     const result = await ImagePicker.launchCameraAsync({
       mediaTypes: ["images", "videos"],
       quality: UPLOAD_QUALITY_VALUES[useSettingsStore.getState().uploadQuality],
@@ -1506,11 +1622,12 @@ export default function MessageThread({
   }
 
   async function handleLibraryAttach(): Promise<void> {
-    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (status !== "granted") {
-      showAlert("Permission needed", "Grant photo library access in Settings.");
-      return;
-    }
+    const granted = await ensurePermission(
+      () => ImagePicker.getMediaLibraryPermissionsAsync(),
+      () => ImagePicker.requestMediaLibraryPermissionsAsync(),
+      { label: "Photo access", purpose: "pick a photo or video to send" },
+    );
+    if (!granted) return;
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ["images", "videos"],
       quality: UPLOAD_QUALITY_VALUES[useSettingsStore.getState().uploadQuality],
@@ -1566,14 +1683,12 @@ export default function MessageThread({
   }
 
   async function startRecording(): Promise<void> {
-    const { granted } = await AudioModule.requestRecordingPermissionsAsync();
-    if (!granted) {
-      showAlert(
-        "Permission needed",
-        "Grant microphone access in Settings to record voice notes.",
-      );
-      return;
-    }
+    const granted = await ensurePermission(
+      () => AudioModule.getRecordingPermissionsAsync(),
+      () => AudioModule.requestRecordingPermissionsAsync(),
+      { label: "Microphone access", purpose: "record a voice note" },
+    );
+    if (!granted) return;
     await setAudioModeAsync({
       allowsRecording: true,
       playsInSilentMode: true,
@@ -1833,18 +1948,41 @@ export default function MessageThread({
         {token.info.memo ? (
           <Text style={styles.paymentCardMemo}>{token.info.memo}</Text>
         ) : null}
-        {!isMine && (
-          <Pressable
-            style={styles.paymentCardClaim}
-            onPress={() => claimToken(token)}
-            accessibilityRole="button"
-            accessibilityLabel={`Claim ${token.info.amount.toLocaleString()} ${token.info.unit}`}
-          >
-            <Text style={styles.paymentCardClaimText}>Claim</Text>
-          </Pressable>
-        )}
+        {/* Nothing to claim on a token you sent: your copy of those proofs is
+            already reserved against the pending send. */}
+        {!isMine &&
+          (isTokenClaimed(token) ? (
+            <View style={styles.paymentCardClaimed}>
+              <Feather name="check" size={13} color={Colors.online} />
+              <Text style={styles.paymentCardClaimedText}>Claimed</Text>
+            </View>
+          ) : (
+            <Pressable
+              style={[
+                styles.paymentCardClaim,
+                claimingToken !== null && styles.paymentCardClaimBusy,
+              ]}
+              disabled={claimingToken !== null}
+              onPress={() => void claimToken(token)}
+              accessibilityRole="button"
+              accessibilityLabel={`Claim ${token.info.amount.toLocaleString()} ${token.info.unit}`}
+            >
+              <Text style={styles.paymentCardClaimText}>
+                {claimingToken === token.raw ? "Claiming…" : "Claim"}
+              </Text>
+            </Pressable>
+          ))}
       </View>
     );
+  }
+
+  // A token is "claimed" once its proofs have been taken into the wallet.
+  // Matched on the first proof's secret, which the store records on claim,
+  // because after an online swap the proofs themselves are replaced and can no
+  // longer be found in the balance.
+  function isTokenClaimed(token: EmbeddedToken): boolean {
+    const first = token.info.token.proofs[0]?.secret;
+    return first !== undefined && claimedTokens.includes(first);
   }
 
   function formatTime(ms: number): string {
@@ -1864,29 +2002,26 @@ export default function MessageThread({
     );
   }
 
+  // Date separator label, following what every messenger settles on: the two
+  // days people think of by name, then the weekday while "last Tuesday" is
+  // still a useful handle, then a plain date.
+  //
+  // The date always carries the year. Without it a thread from last July and one
+  // from this July render identically, which is the one case a separator exists
+  // to prevent.
   function formatDateSeparator(ms: number): string {
     const d = new Date(ms);
     const now = new Date();
-    if (
-      d.getDate() === now.getDate() &&
-      d.getMonth() === now.getMonth() &&
-      d.getFullYear() === now.getFullYear()
-    ) {
-      return "Today";
-    }
-    const yesterday = new Date(now);
-    yesterday.setDate(now.getDate() - 1);
-    if (
-      d.getDate() === yesterday.getDate() &&
-      d.getMonth() === yesterday.getMonth() &&
-      d.getFullYear() === yesterday.getFullYear()
-    ) {
-      return "Yesterday";
-    }
+    const days = daysBetween(d, now);
+    if (days === 0) return "Today";
+    if (days === 1) return "Yesterday";
+    // Inside the last week a weekday name still locates the message. Past that
+    // it stops meaning anything, since "Monday" could be any Monday.
+    if (days < 7) return d.toLocaleDateString([], { weekday: "long" });
     return d.toLocaleDateString([], {
-      weekday: "long",
-      month: "long",
-      day: "numeric",
+      month: "short",
+      day: "2-digit",
+      year: "numeric",
     });
   }
 
@@ -1897,10 +2032,13 @@ export default function MessageThread({
       : channel;
 
   return (
-    <KeyboardAvoidingView
-      style={styles.container}
-      behavior={Platform.OS === "ios" ? "padding" : undefined}
-    >
+    // Padding, not KeyboardAvoidingView: Android is edge-to-edge, so the window
+    // never shrinks for the IME and KAV's Android path (which waits for that
+    // resize) left the compose bar buried under the keyboard. Measuring the IME
+    // and padding by it works identically on both platforms. The inset is the
+    // keyboard height minus the bottom safe-area, because the thread already
+    // sits above the nav bar inside the app's root SafeAreaView.
+    <View style={[styles.container, { paddingBottom: keyboardInset }]}>
       {/* Header */}
       <View style={styles.header}>
         <Pressable
@@ -2007,158 +2145,200 @@ export default function MessageThread({
         </View>
       )}
 
-      {/* Messages */}
-      <FlatList
-        ref={listRef}
-        data={msgs}
-        keyExtractor={(item) => item.id}
-        // Keep a long thread cheap to update: render fewer rows per batch and
-        // keep a smaller window mounted, so a keyboard toggle or a new message
-        // doesn't churn the whole list. The bubble itself is memoized.
-        initialNumToRender={20}
-        maxToRenderPerBatch={12}
-        windowSize={11}
-        updateCellsBatchingPeriod={50}
-        renderItem={({ item, index }) => {
-          const showAvatar = !item.isMine;
-          const isFirstFromSender =
-            index === 0 || (msgs[index - 1]?.senderID ?? "") !== item.senderID;
-          // Only LOCALLY generated notices render as a system row.
-          //
-          // This used to also sniff the text for "took a screenshot", which
-          // meant any peer could forge a system row just by typing that phrase
-          // and worse, the branch below substitutes a canned string for
-          // non-mine messages, so an ordinary sentence like "I took a
-          // screenshot of the map" had its real content silently replaced.
-          // A peer's screenshot notice now renders as the normal message it
-          // actually is; a trustworthy version needs a protocol signal, not a
-          // substring match on user text.
-          const isSystemRow = item.isSystem === true;
+      {/* Messages. Wrapped so the jump-to-latest pill can float over the end of
+          the list rather than taking a row in the column and shoving the
+          compose bar around as it comes and goes. */}
+      <View style={styles.listWrap}>
+        <FlatList
+          ref={listRef}
+          data={msgs}
+          keyExtractor={(item) => item.id}
+          // Keep a long thread cheap to update: render fewer rows per batch and
+          // keep a smaller window mounted, so a keyboard toggle or a new message
+          // doesn't churn the whole list. The bubble itself is memoized.
+          initialNumToRender={20}
+          maxToRenderPerBatch={12}
+          windowSize={11}
+          updateCellsBatchingPeriod={50}
+          renderItem={({ item, index }) => {
+            const showAvatar = !item.isMine;
+            const isFirstFromSender =
+              index === 0 ||
+              (msgs[index - 1]?.senderID ?? "") !== item.senderID;
+            // Only LOCALLY generated notices render as a system row.
+            //
+            // This used to also sniff the text for "took a screenshot", which
+            // meant any peer could forge a system row just by typing that phrase
+            // and worse, the branch below substitutes a canned string for
+            // non-mine messages, so an ordinary sentence like "I took a
+            // screenshot of the map" had its real content silently replaced.
+            // A peer's screenshot notice now renders as the normal message it
+            // actually is; a trustworthy version needs a protocol signal, not a
+            // substring match on user text.
+            const isSystemRow = item.isSystem === true;
 
-          if (isSystemRow) {
-            return (
-              <View>
-                {needsDateSeparator(index) && (
-                  <View style={styles.dateSeparator}>
-                    <View style={styles.dateLine} />
-                    <Text style={styles.dateLabel}>
-                      {formatDateSeparator(item.timestampMs)}
-                    </Text>
-                    <View style={styles.dateLine} />
+            if (isSystemRow) {
+              return (
+                <View>
+                  {needsDateSeparator(index) && (
+                    <View style={styles.dateSeparator}>
+                      <View style={styles.dateLine} />
+                      <Text style={styles.dateLabel}>
+                        {formatDateSeparator(item.timestampMs)}
+                      </Text>
+                      <View style={styles.dateLine} />
+                    </View>
+                  )}
+                  <View style={styles.systemRow}>
+                    <Feather name="camera" size={12} color={Colors.textMuted} />
+                    <Text style={styles.systemRowText}>{item.text}</Text>
                   </View>
-                )}
-                <View style={styles.systemRow}>
-                  <Feather name="camera" size={12} color={Colors.textMuted} />
-                  <Text style={styles.systemRowText}>{item.text}</Text>
                 </View>
-              </View>
-            );
-          }
-
-          // IRC-style emote (/hug, /slap): a real message wrapped in "* … *",
-          // rendered centered and italic like an action rather than a bubble.
-          const isEmoteRow =
-            item.isSystem !== true &&
-            item.attachment === undefined &&
-            /^\* .+ \*$/.test(item.text);
-          if (isEmoteRow) {
-            return (
-              <View>
-                {needsDateSeparator(index) && (
-                  <View style={styles.dateSeparator}>
-                    <View style={styles.dateLine} />
-                    <Text style={styles.dateLabel}>
-                      {formatDateSeparator(item.timestampMs)}
-                    </Text>
-                    <View style={styles.dateLine} />
-                  </View>
-                )}
-                <View style={styles.systemRow}>
-                  <Text style={styles.emoteText}>
-                    {item.text.replace(/^\* /, "").replace(/ \*$/, "")}
-                  </Text>
-                </View>
-              </View>
-            );
-          }
-
-          // Compute the token list once and suppress raw text when the
-          // entire message is a Cashu token (no extra prose).
-          const tokens = mayContainToken(item.text)
-            ? findTokensInText(item.text)
-            : [];
-          const isPureToken =
-            tokens.length > 0 && tokens[0]!.raw.trim() === item.text.trim();
-
-          return (
-            <View>
-              {needsDateSeparator(index) && (
-                <View style={styles.dateSeparator}>
-                  <View style={styles.dateLine} />
-                  <Text style={styles.dateLabel}>
-                    {formatDateSeparator(item.timestampMs)}
-                  </Text>
-                  <View style={styles.dateLine} />
-                </View>
-              )}
-              <MessageBubble
-                item={item}
-                showAvatar={showAvatar}
-                isFirstFromSender={isFirstFromSender}
-                tokens={tokens}
-                isPureToken={isPureToken}
-                renderToken={(token) => renderTokenCard(token, item.isMine)}
-                renderAttachment={(attachment) =>
-                  renderAttachmentBubble(attachment, item.id, item.isMine)
-                }
-                formatTime={formatTime}
-                onLongPress={handleLongPressMessage}
-                onRetry={handleRetryMessage}
-                onPressSender={isDM ? undefined : handlePressSender}
-                highlighted={item.id === highlightedMessageId}
-              />
-            </View>
-          );
-        }}
-        onContentSizeChange={() => {
-          // Suppressed while a search-result message is flashed: a stray
-          // content-size event (e.g. an image finishing layout) would
-          // otherwise yank the view back to the bottom mid-flash.
-          if (highlightedMessageId) return;
-          if (msgs.length > 0)
-            listRef.current?.scrollToEnd({ animated: false });
-        }}
-        onScrollToIndexFailed={(info) => {
-          // Bubble heights vary (attachments/tokens/multi-line text), so
-          // scrollToIndex can fail before layout has measured that far.
-          // Jump to the estimated offset, then retry once layout catches up.
-          listRef.current?.scrollToOffset({
-            offset: info.averageItemLength * info.index,
-            animated: false,
-          });
-          setTimeout(() => {
-            const index = msgs.findIndex((m) => m.id === targetMessageId);
-            if (index !== -1) {
-              listRef.current?.scrollToIndex({
-                index,
-                animated: true,
-                viewPosition: 0.3,
-              });
+              );
             }
-          }, 100);
-        }}
-        ListEmptyComponent={
-          <View style={styles.emptyState}>
-            <Text style={styles.emptyTitle}>No messages yet</Text>
-            <Text style={styles.emptySubtitle}>
-              {isDM
-                ? "Start an encrypted conversation."
-                : `Say something in ${channel}.`}
-            </Text>
-          </View>
-        }
-        contentContainerStyle={styles.list}
-      />
+
+            // IRC-style emote (/hug, /slap): a real message wrapped in "* … *",
+            // rendered centered and italic like an action rather than a bubble.
+            const isEmoteRow =
+              item.isSystem !== true &&
+              item.attachment === undefined &&
+              /^\* .+ \*$/.test(item.text);
+            if (isEmoteRow) {
+              return (
+                <View>
+                  {needsDateSeparator(index) && (
+                    <View style={styles.dateSeparator}>
+                      <View style={styles.dateLine} />
+                      <Text style={styles.dateLabel}>
+                        {formatDateSeparator(item.timestampMs)}
+                      </Text>
+                      <View style={styles.dateLine} />
+                    </View>
+                  )}
+                  <View style={styles.systemRow}>
+                    <Text style={styles.emoteText}>
+                      {item.text.replace(/^\* /, "").replace(/ \*$/, "")}
+                    </Text>
+                  </View>
+                </View>
+              );
+            }
+
+            // Compute the token list once and suppress raw text when the
+            // entire message is a Cashu token (no extra prose).
+            const tokens = mayContainToken(item.text)
+              ? findTokensInText(item.text)
+              : [];
+            const isPureToken =
+              tokens.length > 0 && tokens[0]!.raw.trim() === item.text.trim();
+
+            return (
+              <View>
+                {needsDateSeparator(index) && (
+                  <View style={styles.dateSeparator}>
+                    <View style={styles.dateLine} />
+                    <Text style={styles.dateLabel}>
+                      {formatDateSeparator(item.timestampMs)}
+                    </Text>
+                    <View style={styles.dateLine} />
+                  </View>
+                )}
+                <MessageBubble
+                  item={item}
+                  showAvatar={showAvatar}
+                  isFirstFromSender={isFirstFromSender}
+                  tokens={tokens}
+                  isPureToken={isPureToken}
+                  renderToken={(token) => renderTokenCard(token, item.isMine)}
+                  renderAttachment={(attachment) =>
+                    renderAttachmentBubble(attachment, item.id, item.isMine)
+                  }
+                  formatTime={formatTime}
+                  onLongPress={handleLongPressMessage}
+                  onRetry={handleRetryMessage}
+                  onPressSender={isDM ? undefined : handlePressSender}
+                  highlighted={item.id === highlightedMessageId}
+                />
+              </View>
+            );
+          }}
+          onScroll={handleListScroll}
+          // 16ms would fire this every frame; 100 is plenty to know which end of
+          // the thread someone is reading, and costs a fraction as much.
+          scrollEventThrottle={100}
+          onContentSizeChange={() => {
+            // Suppressed while a search-result message is flashed: a stray
+            // content-size event (e.g. an image finishing layout) would
+            // otherwise yank the view back to the bottom mid-flash.
+            if (highlightedMessageId || msgs.length === 0) return;
+
+            // Opening a thread lands at the newest message, instantly - every
+            // messenger does this, and animating it would just show the user a
+            // scroll they didn't ask for.
+            if (!hasLandedRef.current) {
+              hasLandedRef.current = true;
+              listRef.current?.scrollToEnd({ animated: false });
+              return;
+            }
+
+            // After that, only follow the thread if the reader is already at the
+            // bottom. Scrolling up is a deliberate act - reading back, quoting
+            // something, looking at an old photo - and yanking them to the newest
+            // message because someone typed, or because an image two screens up
+            // finished loading, is the single most disruptive thing a chat list
+            // can do. When they aren't at the bottom the jump-to-latest pill
+            // appears instead, and the choice stays theirs.
+            if (atBottomRef.current) {
+              listRef.current?.scrollToEnd({ animated: true });
+            }
+          }}
+          onScrollToIndexFailed={(info) => {
+            // Bubble heights vary (attachments/tokens/multi-line text), so
+            // scrollToIndex can fail before layout has measured that far.
+            // Jump to the estimated offset, then retry once layout catches up.
+            listRef.current?.scrollToOffset({
+              offset: info.averageItemLength * info.index,
+              animated: false,
+            });
+            setTimeout(() => {
+              const index = msgs.findIndex((m) => m.id === targetMessageId);
+              if (index !== -1) {
+                listRef.current?.scrollToIndex({
+                  index,
+                  animated: true,
+                  viewPosition: 0.3,
+                });
+              }
+            }, 100);
+          }}
+          ListEmptyComponent={
+            <View style={styles.emptyState}>
+              <Text style={styles.emptyTitle}>No messages yet</Text>
+              <Text style={styles.emptySubtitle}>
+                {isDM
+                  ? "Start an encrypted conversation."
+                  : `Say something in ${channel}.`}
+              </Text>
+            </View>
+          }
+          contentContainerStyle={styles.list}
+        />
+
+        {/* Jump to latest: only while the reader is away from the end, so it is
+            an offer rather than permanent chrome. This is the other half of not
+            auto-scrolling - without a way back, "we left you where you were"
+            turns into "we stranded you". */}
+        {showJumpToLatest && msgs.length > 0 && (
+          <Pressable
+            style={styles.jumpToLatest}
+            onPress={jumpToLatest}
+            accessibilityRole="button"
+            accessibilityLabel="Jump to latest message"
+          >
+            <Feather name="chevron-down" size={20} color={Colors.textPrimary} />
+          </Pressable>
+        )}
+      </View>
 
       {/* Delivery hints. "queued" means a DM is held for later retry; "no-reach"
           means a channel broadcast found no peers and no internet cell, so it
@@ -2376,129 +2556,104 @@ export default function MessageThread({
       )}
 
       {/* Attachment picker */}
-      <Modal
+      <BottomSheet
         visible={showAttachMenu}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setShowAttachMenu(false)}
+        onClose={() => setShowAttachMenu(false)}
+        sheetStyle={styles.attachSheet}
       >
-        <View style={styles.attachOverlay}>
-          <Pressable
-            style={StyleSheet.absoluteFill}
-            onPress={() => setShowAttachMenu(false)}
-            accessible={false}
-          />
-          <View style={styles.attachSheet}>
-            <View style={styles.handle} />
-            <Text style={styles.attachSheetTitle}>Attach</Text>
-            {ATTACH_OPTIONS.filter((o) => !o.dmOnly || isDM).map(
-              ({ action, icon, label, desc }, i) => (
-                <React.Fragment key={action}>
-                  {i > 0 && <View style={styles.attachSeparator} />}
-                  <Pressable
-                    style={styles.attachOption}
-                    onPress={() => handleAttachAction(action)}
-                    accessibilityRole="button"
-                    accessibilityLabel={label}
-                  >
-                    <View style={styles.attachOptionIcon}>
-                      <Feather
-                        name={icon}
-                        size={20}
-                        color={Colors.textSecondary}
-                      />
-                    </View>
-                    <View style={styles.attachOptionBody}>
-                      <Text style={styles.attachOptionLabel}>{label}</Text>
-                      <Text style={styles.attachOptionDesc}>{desc}</Text>
-                    </View>
-                  </Pressable>
-                </React.Fragment>
-              ),
-            )}
-            <View style={styles.attachNote}>
-              <Feather name="bluetooth" size={12} color={Colors.textMuted} />
-              <Text style={styles.attachNoteText}>
-                Files send over Bluetooth range only. Text and payments reach
-                internet contacts; attachments do not.
-              </Text>
-            </View>
-            <Pressable
-              style={styles.attachCancel}
-              onPress={() => setShowAttachMenu(false)}
-              accessibilityRole="button"
-            >
-              <Text style={styles.attachCancelText}>Cancel</Text>
-            </Pressable>
-          </View>
+        <Text style={styles.attachSheetTitle}>Attach</Text>
+        {ATTACH_OPTIONS.filter((o) => !o.dmOnly || isDM).map(
+          ({ action, icon, label, desc }, i) => (
+            <React.Fragment key={action}>
+              {i > 0 && <View style={styles.attachSeparator} />}
+              <Pressable
+                style={styles.attachOption}
+                onPress={() => handleAttachAction(action)}
+                accessibilityRole="button"
+                accessibilityLabel={label}
+              >
+                <View style={styles.attachOptionIcon}>
+                  <Feather name={icon} size={20} color={Colors.textSecondary} />
+                </View>
+                <View style={styles.attachOptionBody}>
+                  <Text style={styles.attachOptionLabel}>{label}</Text>
+                  <Text style={styles.attachOptionDesc}>{desc}</Text>
+                </View>
+              </Pressable>
+            </React.Fragment>
+          ),
+        )}
+        <View style={styles.attachNote}>
+          <Feather name="bluetooth" size={12} color={Colors.textMuted} />
+          <Text style={styles.attachNoteText}>
+            Files send over Bluetooth range only. Text and payments reach
+            internet contacts; attachments do not.
+          </Text>
         </View>
-      </Modal>
+        <Pressable
+          style={styles.attachCancel}
+          onPress={() => setShowAttachMenu(false)}
+          accessibilityRole="button"
+        >
+          <Text style={styles.attachCancelText}>Cancel</Text>
+        </Pressable>
+      </BottomSheet>
 
       {/* Send ecash: DM-only attach option, builds an offline Cashu token
           from the wallet and sends it straight to this peer. */}
       {isDM && (
-        <Modal
+        <BottomSheet
           visible={showSendEcash}
-          transparent
-          animationType="slide"
-          onRequestClose={() => setShowSendEcash(false)}
+          onClose={() => setShowSendEcash(false)}
+          sheetStyle={styles.ecashSheet}
         >
-          <View style={styles.ecashOverlay}>
+          <Text style={styles.ecashTitle}>Send ecash</Text>
+          <Text style={styles.ecashSubtitle}>
+            Built offline from your wallet and sent as a token to {displayName}.
+          </Text>
+          <TextInput
+            style={styles.ecashInput}
+            value={ecashAmount}
+            onChangeText={setEcashAmount}
+            placeholder="Amount in sats"
+            placeholderTextColor={Colors.textMuted}
+            keyboardType="number-pad"
+            returnKeyType="next"
+            selectionColor={Colors.accent}
+          />
+          <TextInput
+            style={[styles.ecashInput, styles.ecashInputCompact]}
+            value={ecashMemo}
+            onChangeText={setEcashMemo}
+            placeholder="Memo (optional)"
+            placeholderTextColor={Colors.textMuted}
+            autoCapitalize="sentences"
+            selectionColor={Colors.accent}
+          />
+          <View style={styles.ecashActions}>
             <Pressable
-              style={StyleSheet.absoluteFill}
-              onPress={() => setShowSendEcash(false)}
-            />
-            <View style={styles.ecashSheet}>
-              <View style={styles.handle} />
-              <Text style={styles.ecashTitle}>Send ecash</Text>
-              <Text style={styles.ecashSubtitle}>
-                Built offline from your wallet and sent as a token to{" "}
-                {displayName}.
-              </Text>
-              <TextInput
-                style={styles.ecashInput}
-                value={ecashAmount}
-                onChangeText={setEcashAmount}
-                placeholder="Amount in sats"
-                placeholderTextColor={Colors.textMuted}
-                keyboardType="number-pad"
-                returnKeyType="next"
-                selectionColor={Colors.accent}
-              />
-              <TextInput
-                style={[styles.ecashInput, styles.ecashInputCompact]}
-                value={ecashMemo}
-                onChangeText={setEcashMemo}
-                placeholder="Memo (optional)"
-                placeholderTextColor={Colors.textMuted}
-                autoCapitalize="sentences"
-                selectionColor={Colors.accent}
-              />
-              <View style={styles.ecashActions}>
-                <Pressable
-                  style={[
-                    styles.ecashConfirm,
-                    !ecashAmount.trim() && styles.ecashConfirmDisabled,
-                  ]}
-                  onPress={handleSendEcash}
-                  disabled={!ecashAmount.trim()}
-                >
-                  <Text style={styles.ecashConfirmText}>Send</Text>
-                </Pressable>
-                <Pressable
-                  style={styles.ecashCancel}
-                  onPress={() => {
-                    setShowSendEcash(false);
-                    setEcashAmount("");
-                    setEcashMemo("");
-                  }}
-                >
-                  <Text style={styles.ecashCancelText}>Cancel</Text>
-                </Pressable>
-              </View>
-            </View>
+              style={[
+                styles.ecashConfirm,
+                (!ecashAmount.trim() || sendingEcash) &&
+                  styles.ecashConfirmDisabled,
+              ]}
+              onPress={() => void handleSendEcash()}
+              disabled={!ecashAmount.trim() || sendingEcash}
+            >
+              <Text style={styles.ecashConfirmText}>Send</Text>
+            </Pressable>
+            <Pressable
+              style={styles.ecashCancel}
+              onPress={() => {
+                setShowSendEcash(false);
+                setEcashAmount("");
+                setEcashMemo("");
+              }}
+            >
+              <Text style={styles.ecashCancelText}>Cancel</Text>
+            </Pressable>
           </View>
-        </Modal>
+        </BottomSheet>
       )}
 
       {/* Channel info sheet: opens when user taps the header center */}
@@ -2536,144 +2691,124 @@ export default function MessageThread({
       {/* Attachment composer: review the picked media and add a caption before
           sending, the way WhatsApp/Signal do. The caption rides the file packet
           so media + caption land as one message. */}
-      <Modal
+      <BottomSheet
         visible={pendingAttachment !== null}
-        transparent
-        animationType="slide"
-        onRequestClose={cancelPendingAttachment}
+        onClose={cancelPendingAttachment}
+        sheetStyle={styles.composerSheet}
+        scrimColor={COMPOSER_SCRIM}
       >
-        <View style={styles.composerOverlay}>
-          <Pressable
-            style={StyleSheet.absoluteFill}
-            onPress={cancelPendingAttachment}
-            accessibilityRole="button"
-            accessibilityLabel="Cancel attachment"
+        {pendingAttachment?.type === "image" ? (
+          <Image
+            source={{ uri: pendingAttachment.uri }}
+            style={styles.composerPreview}
+            resizeMode="contain"
           />
-          <View style={styles.composerSheet}>
-            {pendingAttachment?.type === "image" ? (
-              <Image
-                source={{ uri: pendingAttachment.uri }}
-                style={styles.composerPreview}
-                resizeMode="contain"
-              />
-            ) : (
-              <View style={styles.composerFilePreview}>
-                <Feather
-                  name={pendingAttachment?.type === "video" ? "film" : "file"}
-                  size={40}
-                  color={Colors.textSecondary}
-                />
-                <Text style={styles.composerFileName} numberOfLines={1}>
-                  {pendingAttachment?.name ??
-                    (pendingAttachment?.type === "video"
-                      ? "Video"
-                      : "Document")}
-                </Text>
-              </View>
-            )}
-            <View style={styles.composerInputRow}>
-              <TextInput
-                style={styles.composerInput}
-                placeholder="Add a caption…"
-                placeholderTextColor={Colors.textMuted}
-                value={captionDraft}
-                onChangeText={setCaptionDraft}
-                multiline
-                maxLength={512}
-              />
-              <Pressable
-                style={styles.composerSend}
-                onPress={confirmPendingAttachment}
-                accessibilityRole="button"
-                accessibilityLabel="Send attachment"
-              >
-                <Feather name="send" size={18} color={Colors.textInverse} />
-              </Pressable>
-            </View>
+        ) : (
+          <View style={styles.composerFilePreview}>
+            <Feather
+              name={pendingAttachment?.type === "video" ? "film" : "file"}
+              size={40}
+              color={Colors.textSecondary}
+            />
+            <Text style={styles.composerFileName} numberOfLines={1}>
+              {pendingAttachment?.name ??
+                (pendingAttachment?.type === "video" ? "Video" : "Document")}
+            </Text>
           </View>
+        )}
+        <View style={styles.composerInputRow}>
+          <TextInput
+            style={styles.composerInput}
+            placeholder="Add a caption…"
+            placeholderTextColor={Colors.textMuted}
+            value={captionDraft}
+            onChangeText={setCaptionDraft}
+            multiline
+            maxLength={512}
+          />
+          <Pressable
+            style={styles.composerSend}
+            onPress={confirmPendingAttachment}
+            accessibilityRole="button"
+            accessibilityLabel="Send attachment"
+          >
+            <Feather name="send" size={18} color={Colors.textInverse} />
+          </Pressable>
         </View>
-      </Modal>
+      </BottomSheet>
 
       {/* Channel sender profile sheet: tap a message's avatar/name. */}
       {!isDM && (
-        <Modal
+        <BottomSheet
           visible={senderInfoTarget !== null}
-          transparent
-          animationType="slide"
-          onRequestClose={() => setSenderInfoTarget(null)}
+          onClose={() => setSenderInfoTarget(null)}
+          sheetStyle={styles.dmInfoSheet}
         >
           {senderInfoTarget && (
-            <View style={styles.dmInfoOverlay}>
-              <Pressable
-                style={StyleSheet.absoluteFill}
-                onPress={() => setSenderInfoTarget(null)}
-              />
-              <View style={styles.dmInfoSheet}>
-                <View style={styles.handle} />
-                {senderInfoTarget.fromMembers && (
-                  <Pressable
-                    style={styles.dmInfoBack}
-                    onPress={() => setSenderInfoTarget(null)}
-                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                    accessibilityRole="button"
-                    accessibilityLabel="Back to members"
-                  >
-                    <Feather
-                      name="chevron-left"
-                      size={24}
-                      color={Colors.textPrimary}
-                    />
-                  </Pressable>
-                )}
-                <View style={styles.dmInfoBody}>
-                  <Avatar
-                    username={resolveDisplayName(senderInfoTarget.peerID)}
-                    peerID={senderInfoTarget.peerID}
-                    size={64}
+            <>
+              {senderInfoTarget.fromMembers && (
+                <Pressable
+                  style={styles.dmInfoBack}
+                  onPress={() => setSenderInfoTarget(null)}
+                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                  accessibilityRole="button"
+                  accessibilityLabel="Back to members"
+                >
+                  <Feather
+                    name="chevron-left"
+                    size={24}
+                    color={Colors.textPrimary}
                   />
-                  <Text style={styles.dmInfoName}>
-                    {resolveDisplayName(senderInfoTarget.peerID)}
-                  </Text>
-                  {isNostrId(senderInfoTarget.peerID) ? (
-                    <View style={styles.keyBox}>
-                      <Text style={styles.keyBoxLabel}>Nostr public key</Text>
-                      <Text style={styles.keyBoxValue} selectable>
-                        {senderInfoTarget.peerID.slice(NOSTR_ID_PREFIX.length)}
-                      </Text>
-                    </View>
-                  ) : (
-                    <Text style={styles.dmInfoPeerID}>
-                      {senderInfoTarget.peerID}
+                </Pressable>
+              )}
+              <View style={styles.dmInfoBody}>
+                <Avatar
+                  username={resolveDisplayName(senderInfoTarget.peerID)}
+                  peerID={senderInfoTarget.peerID}
+                  size={64}
+                />
+                <Text style={styles.dmInfoName}>
+                  {resolveDisplayName(senderInfoTarget.peerID)}
+                </Text>
+                {isNostrId(senderInfoTarget.peerID) ? (
+                  <View style={styles.keyBox}>
+                    <Text style={styles.keyBoxLabel}>Nostr public key</Text>
+                    <Text style={styles.keyBoxValue} selectable>
+                      {senderInfoTarget.peerID.slice(NOSTR_ID_PREFIX.length)}
                     </Text>
-                  )}
-                  {onlinePeers.some(
-                    (p) => p.peerID === senderInfoTarget.peerID,
-                  ) && (
-                    <View style={styles.dmInfoStatus}>
-                      <View style={styles.dmInfoDot} />
-                      <Text style={styles.dmInfoStatusText}>In BLE range</Text>
-                    </View>
-                  )}
-                </View>
-                <View style={styles.dmInfoActions}>
-                  <Pressable
-                    style={styles.senderInfoMessageBtn}
-                    onPress={handleMessageSender}
-                    accessibilityRole="button"
-                    accessibilityLabel={`Message ${resolveDisplayName(senderInfoTarget.peerID)}`}
-                  >
-                    <Feather
-                      name="message-circle"
-                      size={16}
-                      color={Colors.textInverse}
-                    />
-                    <Text style={styles.senderInfoMessageText}>Message</Text>
-                  </Pressable>
-                </View>
+                  </View>
+                ) : (
+                  <Text style={styles.dmInfoPeerID}>
+                    {senderInfoTarget.peerID}
+                  </Text>
+                )}
+                {onlinePeers.some(
+                  (p) => p.peerID === senderInfoTarget.peerID,
+                ) && (
+                  <View style={styles.dmInfoStatus}>
+                    <View style={styles.dmInfoDot} />
+                    <Text style={styles.dmInfoStatusText}>In BLE range</Text>
+                  </View>
+                )}
               </View>
-            </View>
+              <View style={styles.dmInfoActions}>
+                <Pressable
+                  style={styles.senderInfoMessageBtn}
+                  onPress={handleMessageSender}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Message ${resolveDisplayName(senderInfoTarget.peerID)}`}
+                >
+                  <Feather
+                    name="message-circle"
+                    size={16}
+                    color={Colors.textInverse}
+                  />
+                  <Text style={styles.senderInfoMessageText}>Message</Text>
+                </Pressable>
+              </View>
+            </>
           )}
-        </Modal>
+        </BottomSheet>
       )}
 
       {/* Screenshot privacy notice: shown right after a screenshot is taken,
@@ -2713,7 +2848,7 @@ export default function MessageThread({
           // forward sheet slides up: opening both at once reads as a glitch
           // rather than a handoff between two bottom sheets.
           const target = actionSheet;
-          if (target) setTimeout(() => setForwardSource(target), 250);
+          if (target) scheduleSheetHandoff(() => setForwardSource(target));
         }}
         onCopy={() =>
           actionSheet &&
@@ -2723,7 +2858,7 @@ export default function MessageThread({
           // Same close-then-open handoff as Forward, so the two sheets don't
           // fight for the screen.
           const target = actionSheet;
-          if (target) setTimeout(() => setInfoMessageId(target.id), 250);
+          if (target) scheduleSheetHandoff(() => setInfoMessageId(target.id));
         }}
       />
 
@@ -2744,7 +2879,7 @@ export default function MessageThread({
           }
         }}
       />
-    </KeyboardAvoidingView>
+    </View>
   );
 }
 
@@ -2812,11 +2947,33 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       gap: Spacing.sm,
     },
     // Messages
+    listWrap: {
+      flex: 1,
+    },
     list: {
       flexGrow: 1,
       paddingHorizontal: Spacing.base,
       paddingTop: Spacing.base,
       paddingBottom: Spacing.sm,
+    },
+    // Floats at the end of the list, clear of the compose bar below it.
+    jumpToLatest: {
+      position: "absolute",
+      right: Spacing.base,
+      bottom: Spacing.md,
+      width: 36,
+      height: 36,
+      borderRadius: Radius.full,
+      backgroundColor: Colors.surface,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: Colors.border,
+      alignItems: "center",
+      justifyContent: "center",
+      shadowColor: "#000",
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.12,
+      shadowRadius: 6,
+      elevation: 4,
     },
     dateSeparator: {
       flexDirection: "row",
@@ -2833,6 +2990,7 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       fontSize: FontSize.xs,
       color: Colors.textMuted,
       letterSpacing: 0.4,
+      textTransform: "uppercase",
     },
     // System row (e.g. screenshot notices): centered, muted, no bubble.
     systemRow: {
@@ -3008,27 +3166,10 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       borderColor: Colors.danger,
     },
     // Attachment picker sheet
-    attachOverlay: {
-      flex: 1,
-      backgroundColor: Colors.overlay,
-      justifyContent: "flex-end",
-    },
     attachSheet: {
       width: "100%",
-      backgroundColor: Colors.surface,
-      borderTopLeftRadius: Radius["2xl"],
-      borderTopRightRadius: Radius["2xl"],
       paddingHorizontal: Spacing.base,
-      paddingTop: Spacing.base,
       paddingBottom: Spacing["2xl"],
-    },
-    handle: {
-      width: 36,
-      height: 4,
-      borderRadius: 2,
-      backgroundColor: Colors.borderStrong,
-      alignSelf: "center",
-      marginBottom: Spacing.md,
     },
     attachSheetTitle: {
       fontSize: FontSize.md,
@@ -3104,16 +3245,9 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       fontWeight: FontWeight.medium,
     },
     // Send ecash modal (DM-only attach option)
-    ecashOverlay: {
-      flex: 1,
-      backgroundColor: Colors.overlay,
-      justifyContent: "flex-end",
-    },
     ecashSheet: {
-      backgroundColor: Colors.surface,
-      borderTopLeftRadius: Radius["2xl"],
-      borderTopRightRadius: Radius["2xl"],
-      padding: Spacing.xl,
+      paddingHorizontal: Spacing.xl,
+      paddingBottom: Spacing.xl,
       gap: Spacing.base,
     },
     ecashTitle: {
@@ -3378,16 +3512,8 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       backgroundColor: Colors.textPrimary,
     },
     // DM peer info sheet
-    dmInfoOverlay: {
-      flex: 1,
-      backgroundColor: Colors.overlay,
-      justifyContent: "flex-end",
-    },
     dmInfoSheet: {
       width: "100%",
-      backgroundColor: Colors.surface,
-      borderTopLeftRadius: Radius["2xl"],
-      borderTopRightRadius: Radius["2xl"],
       paddingBottom: Spacing["2xl"],
     },
     dmInfoBack: {
@@ -3467,17 +3593,9 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       borderColor: Colors.bg,
     },
     // Attachment composer (caption before send).
-    composerOverlay: {
-      flex: 1,
-      justifyContent: "flex-end",
-      backgroundColor: "rgba(0,0,0,0.85)",
-    },
     composerSheet: {
       backgroundColor: Colors.bg,
-      borderTopLeftRadius: Radius["2xl"],
-      borderTopRightRadius: Radius["2xl"],
       paddingHorizontal: Spacing.base,
-      paddingTop: Spacing.base,
       paddingBottom: Spacing.xl,
       gap: Spacing.md,
     },
@@ -3596,6 +3714,21 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       paddingHorizontal: Spacing.sm,
       paddingVertical: Spacing.xs,
       alignSelf: "flex-start",
+    },
+    paymentCardClaimBusy: {
+      opacity: 0.5,
+    },
+    paymentCardClaimed: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: Spacing.xs,
+      alignSelf: "flex-start",
+      marginTop: Spacing.xs,
+    },
+    paymentCardClaimedText: {
+      fontSize: FontSize.xs,
+      color: Colors.online,
+      fontWeight: FontWeight.semibold,
     },
     paymentCardClaimText: {
       fontSize: FontSize.xs,

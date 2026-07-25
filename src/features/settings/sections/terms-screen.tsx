@@ -30,9 +30,14 @@ const SECTIONS: LegalSection[] = [
     ],
   },
   {
-    heading: "Offline payments",
+    heading: "Payments",
     paragraphs: [
-      "Airhop supports transferring Cashu ecash tokens directly between devices over the mesh. **We do not operate any payment infrastructure. We are not a financial institution, payment processor, or money services business.** Token transfers occur between devices without any involvement from this project. We have no ability to reverse, recover, or mediate any transaction.",
+      "Airhop includes an optional Cashu ecash wallet. **We do not operate any payment infrastructure. We are not a financial institution, payment processor, money services business, or custodian of your funds.** We have no ability to reverse, recover, freeze, or mediate any transaction.",
+      "**Mints are third parties you choose.** A mint is an independent server that issues and redeems ecash and holds the bitcoin backing it. Airhop ships with no default mint and does not endorse, vet, or monitor any of them. Adding a mint means trusting that operator with whatever balance you keep there. A mint may go offline, refuse service, change its fees, or fail to honour its tokens, and any loss that follows is between you and that operator.",
+      "**Ecash is a bearer instrument.** Whoever holds a token can spend it. A token sent to the wrong person, posted to a public channel, or read by someone over your shoulder is gone. Transfers over the mesh are final and cannot be reversed by anyone.",
+      "**Recovery is your responsibility.** The optional recovery phrase is the only way to rebuild a balance on another device. It is stored on your device and nowhere else. We cannot recover it, reset it, or help you if it is lost, and anyone who obtains it can spend your balance.",
+      "**Lightning deposits and withdrawals** are performed by your chosen mint and the wider Lightning Network, not by us. Routing fees, failed payments, and settlement delays are outside our control.",
+      "You are responsible for complying with any tax, reporting, or financial regulations that apply to you.",
     ],
   },
   {
@@ -72,7 +77,7 @@ export default function TermsScreen({ onBack }: Props): React.JSX.Element {
   return (
     <LegalDocScreen
       title="Terms of Service"
-      lastUpdated="September 01, 2026"
+      lastUpdated="August 01, 2026"
       sections={SECTIONS}
       onBack={onBack}
     />

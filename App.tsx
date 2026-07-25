@@ -8,7 +8,6 @@ import {
 } from "@expo-google-fonts/jetbrains-mono";
 import { Feather } from "@expo/vector-icons";
 import { bytesToHex } from "@noble/hashes/utils.js";
-import { BlurTargetView, BlurView } from "expo-blur";
 import { StatusBar } from "expo-status-bar";
 import React, {
   useCallback,
@@ -20,6 +19,7 @@ import React, {
 import {
   AppState,
   BackHandler,
+  DeviceEventEmitter,
   Linking,
   Pressable,
   StyleSheet,
@@ -78,6 +78,13 @@ import {
   setNotificationsActiveChannel,
   setNotificationsAppActive,
 } from "./src/services/notification-service";
+import { applyPresence } from "./src/services/presence";
+import {
+  initWalletService,
+  publishOwnNutzapInfo,
+  reconcile,
+  startNutzapWatcher,
+} from "./src/services/wallet-service";
 import { useActivityStore } from "./src/store/activity-store";
 import { showAlert } from "./src/store/alert-store";
 import { subscribeInboundMessages, useChatStore } from "./src/store/chat-store";
@@ -86,8 +93,8 @@ import {
   useMeshBanners,
   useMeshStateStore,
 } from "./src/store/mesh-state-store";
-import { useSettingsStore } from "./src/store/settings-store";
 import { useTransferStore } from "./src/store/transfer-store";
+import { useWalletStore } from "./src/store/wallet-store";
 import Avatar from "./src/ui/components/avatar";
 import CustomAlert from "./src/ui/components/custom-alert";
 import MeshStatusBar from "./src/ui/components/mesh-status-bar";
@@ -100,10 +107,14 @@ import {
   useResolvedTheme,
   useThemeColors,
 } from "./src/ui/theme";
-import { ensureBlePermissions } from "./src/utils/ble-permissions";
+import {
+  ensureBlePermissions,
+  hasBlePermissions,
+} from "./src/utils/ble-permissions";
 import { parseAirhopLink } from "./src/utils/deep-link";
 import { mentionsNickname } from "./src/utils/mentions";
 import { messagePreviewText } from "./src/utils/message-preview";
+import { showBlockedAlert } from "./src/utils/permissions";
 import { sumUnread } from "./src/utils/unread";
 import { peerIDToUsername } from "./src/utils/username";
 
@@ -129,6 +140,11 @@ interface MessageTarget {
 // Placeholder peer ID shown before identity is loaded from secure storage.
 const FALLBACK_PEER_ID = "0000000000000000";
 
+// Live NIP-61 subscription, kept at module scope so a re-onboard (panic wipe
+// then fresh identity) replaces it instead of leaving the old identity's
+// subscription running against the new wallet.
+let stopNutzapWatcher: (() => void) | null = null;
+
 // Request the BLE runtime permissions the OS requires, THEN start the mesh.
 // Without the grant, native startScanning/startAdvertising throw and are
 // swallowed: a silent, total discovery failure. On denial we surface a
@@ -143,18 +159,71 @@ async function startMeshWithPermissions(
   // than spinning "Scanning…" forever with no route to a fix.
   useMeshStateStore.getState().setPermissionGranted(perm.granted);
   if (!perm.granted) {
-    showAlert(
-      "Bluetooth permission needed",
-      perm.blockedForever
-        ? "Airhop can't find nearby devices without Bluetooth (and Nearby devices/Location) permission. Enable it in Settings → Apps → Airhop → Permissions."
-        : "Airhop needs Bluetooth and Location permission to discover nearby devices over the mesh. Without it, only internet (Nostr) messaging will work.",
-    );
+    if (perm.blockedForever) {
+      // The OS will not prompt again, so the only way out is Settings. Same
+      // deep-linked dialog the camera and photo flows use, rather than a
+      // dead-end box reciting a path to tap through.
+      showBlockedAlert({
+        label: "Bluetooth access",
+        purpose: "discover nearby devices over the mesh",
+      });
+    } else {
+      showAlert(
+        "Bluetooth permission needed",
+        "Airhop needs Bluetooth and Location permission to discover nearby devices over the mesh. Without it, only internet (Nostr) messaging will work.",
+      );
+    }
   }
   // Apply the persisted Tor preference BEFORE the mesh starts, so the very first
   // relay pool is built on the Tor socket (never leaking the clear net for a Tor
   // user). No-op when Tor is off or unavailable.
   primeTorRoutingOnStartup();
   initMeshService(identity, nickname);
+
+  // Open the encrypted ecash store and settle anything left in flight. Proofs
+  // live in an AES-256 MMKV file whose key is in the Keychain/Keystore, so this
+  // is async and must happen before the Wallet tab can spend. Failure leaves
+  // the wallet locked rather than silently falling back to plaintext storage.
+  //
+  // `reconcile` then finishes the work a previous session could not: Lightning
+  // deposits whose invoice was paid after the app was closed, and reserved
+  // sends whose recipient has since redeemed them.
+  void (async () => {
+    const unlocked = await initWalletService();
+    if (!unlocked) return;
+
+    // Settling leftovers is a background chore, not a prerequisite. It walks
+    // every pending deposit and reserved send, one mint round trip at a time,
+    // so on a bad network it can take minutes. Awaiting it here would hold the
+    // nutzap watcher behind it and quietly drop incoming payments for that
+    // whole window. Nothing below depends on its result.
+    void reconcile().catch(() => {
+      // Offline, or the mint is down. Retried on the next launch.
+    });
+
+    const client = getMeshService()?.getNostrClient();
+    const privKey = getMeshService()?.getNostrPrivKey();
+    const pubKey = getMeshService()?.getNostrPubKeyHex();
+    if (!client || !privKey || !pubKey) return;
+    // Tell the network how to pay us (NIP-61 kind 10019), then watch for
+    // incoming nutzaps. Both are no-ops without a mint configured.
+    await publishOwnNutzapInfo({
+      client,
+      privKey,
+      relays: client.activeRelays,
+    });
+    stopNutzapWatcher?.();
+    stopNutzapWatcher = startNutzapWatcher({
+      myPubkey: pubKey,
+      client,
+      onRedeemed: (amount, unit, from) => {
+        showAlert(
+          `+${amount.toLocaleString()} ${unit}`,
+          `Nutzap received from ${from.slice(0, 12)}… and redeemed into your wallet.`,
+        );
+      },
+    });
+  })();
   // The mesh always starts Online (advertising + scanning), so keep the chosen
   // presence in step, in case a prior session left it Away/Invisible.
   useMeshStateStore.getState().setPresenceStatus("online");
@@ -207,7 +276,7 @@ export default function App(): React.JSX.Element {
   // sub-screen (About, Version, ...) pops ProfileScreen back to its root, the
   // same way tapping Chats returns to the conversation list.
   const [profileResetSignal, setProfileResetSignal] = useState(0);
-  // Which way the last tab change moved through TABS, so the content
+  // Which way the last tab change moved through the tabs, so the content
   // transition slides the same direction the tab bar (or swipe) implied.
   const [tabDirection, setTabDirection] = useState<"forward" | "backward">(
     "forward",
@@ -216,10 +285,6 @@ export default function App(): React.JSX.Element {
   const [chatView, setChatView] = useState<ChatView>({ kind: "list" });
   const [searchQuery, setSearchQuery] = useState("");
   const searchInputRef = useRef<TextInput>(null);
-  // The content region behind the tab bar. On Android the frosted glass blurs a
-  // snapshot of this target (the new expo-blur API); on iOS it is a plain View
-  // and the native backdrop blur ignores it.
-  const blurTargetRef = useRef<View | null>(null);
   // Which message a search result should scroll a thread to on open.
   const [messageTarget, setMessageTarget] = useState<MessageTarget | null>(
     null,
@@ -232,6 +297,11 @@ export default function App(): React.JSX.Element {
   // Counter-based trigger: incrementing (with an action) tells WalletScreen
   // to open the matching modal, same pattern as newChanCounter/meshAddCounter.
   const [walletAction, setWalletAction] = useState<WalletAction | null>(null);
+  // Whether there is any ecash at all to spend. Selected as a boolean so the
+  // header only re-renders when the answer flips, not on every proof change.
+  const hasSpendableEcash = useWalletStore((s) =>
+    Object.values(s.proofs).some((list) => list.length > 0),
+  );
   const [walletActionTrigger, setWalletActionTrigger] = useState(0);
   // Notification center (bell) visibility, and the count of unseen activity
   // that badges the bell. Subscribing to entries keeps the badge live.
@@ -247,13 +317,6 @@ export default function App(): React.JSX.Element {
     setLastThread,
   } = useChatStore();
   const meshBanners = useMeshBanners();
-  // Payments is switchable from the profile screen, so the tab bar (and the
-  // swipe order that follows it) is derived rather than fixed.
-  const paymentsEnabled = useSettingsStore((s) => s.paymentsEnabled);
-  const tabs = useMemo(
-    () => ALL_TABS.filter((t) => t.id !== "wallet" || paymentsEnabled),
-    [paymentsEnabled],
-  );
 
   // On mount: check for an existing persisted identity. If found, skip
   // onboarding and start the BLE mesh service immediately.
@@ -263,10 +326,26 @@ export default function App(): React.JSX.Element {
         if (existing) {
           setGeneratedPeerID(existing.peerID);
           setOnboardingStep(null);
-          void startMeshWithPermissions(
-            existing,
-            peerIDToUsername(existing.peerID),
-          );
+          // Android can destroy the Activity while the foreground service keeps
+          // the process (and the JS runtime, and the mesh) alive. Reopening then
+          // remounts this component with everything already set up, and tearing
+          // that down just to rebuild it is what made a reopen feel like a hang:
+          // a full stop() says goodbye to every peer, drops the relay pool, and
+          // bounces the foreground service, all to arrive back where we started.
+          //
+          // So a cold start is exactly: no mesh at all, or one belonging to a
+          // different identity (a wipe re-onboarded as someone else). An
+          // existing mesh is left alone whatever state it is in - including
+          // stopped, because the only things that stop it are the user choosing
+          // Away and the notification's "Stop mesh". Restarting it here would
+          // undo a decision they just made, from an event they didn't trigger.
+          const existingMesh = getMeshService();
+          if (existingMesh?.peerID !== existing.peerID) {
+            void startMeshWithPermissions(
+              existing,
+              peerIDToUsername(existing.peerID),
+            );
+          }
           // Restore the last open thread after an OS-kill-and-reopen. The
           // channel name is persisted by setLastThread and cleared by closeThread.
           const { lastThread } = useChatStore.getState();
@@ -355,22 +434,49 @@ export default function App(): React.JSX.Element {
   // not already looking at the app.
   useEffect(() => {
     setNotificationsAppActive(AppState.currentState === "active");
-    // Re-read location permission whenever we come to the foreground: the user
-    // may have toggled it in system Settings while we were backgrounded, and the
-    // Mesh banner must reflect that. Bluetooth adapter changes already arrive as
-    // native events, so they need no polling here.
-    const syncLocation = (): void => {
+    // Re-read the permissions whenever we come to the foreground: the user may
+    // have changed either in system Settings while we were backgrounded, and
+    // coming back is the only signal we get. Bluetooth adapter changes already
+    // arrive as native events, so they need no polling here.
+    //
+    // Both are checks, never requests: prompting someone who just walked back
+    // into the app would be ambushing them.
+    const syncPermissions = (): void => {
       void hasLocationPermission().then((granted) =>
         useMeshStateStore.getState().setLocationGranted(granted),
       );
+      void hasBlePermissions().then((granted) => {
+        const state = useMeshStateStore.getState();
+        if (granted === state.permissionGranted) return;
+        state.setPermissionGranted(granted);
+        // Granted while we were away: the radios never started (or were denied
+        // mid-session), so the mesh is sitting there doing nothing behind a
+        // banner the user has already acted on. Bring it up now instead of
+        // making them restart the app to be believed.
+        if (granted) getMeshService()?.retryRadios();
+      });
     };
-    syncLocation();
+    syncPermissions();
     const sub = AppState.addEventListener("change", (next) => {
       setNotificationsAppActive(next === "active");
-      if (next === "active") syncLocation();
+      if (next === "active") syncPermissions();
     });
     return () => sub.remove();
   }, []);
+
+  // "Stop mesh" on the Android background notification. The native service
+  // hands it here rather than tearing things down itself, so stopping from the
+  // notification and stopping from the Status picker are the same action: the
+  // radios come down, the gateway switches off, and presence lands on Away - so
+  // reopening the app shows "Mesh paused · You're away" with a way back, not a
+  // dead mesh wearing a green dot.
+  useEffect(() => {
+    const sub = DeviceEventEmitter.addListener(
+      "AirhopBLE.meshStopRequested",
+      () => applyPresence("away", username),
+    );
+    return () => sub.remove();
+  }, [username]);
 
   // One-time setup, deferred until past onboarding so the OS permission prompt
   // lands on the mesh screen in context (alongside the Bluetooth/Location
@@ -560,8 +666,8 @@ export default function App(): React.JSX.Element {
   // direction always matches TABS order instead of only working for taps.
   const navigateToTab = useCallback(
     (nextTab: MainTab, resetChatView = true): void => {
-      const nextIndex = tabs.findIndex((t) => t.id === nextTab);
-      const currentIndex = tabs.findIndex((t) => t.id === tab);
+      const nextIndex = TABS.findIndex((t) => t.id === nextTab);
+      const currentIndex = TABS.findIndex((t) => t.id === tab);
       setTabDirection(nextIndex >= currentIndex ? "forward" : "backward");
       setTab(nextTab);
       if (nextTab === "chats" && resetChatView) {
@@ -573,7 +679,7 @@ export default function App(): React.JSX.Element {
         setProfileResetSignal((n) => n + 1);
       }
     },
-    [tab, tabs],
+    [tab],
   );
 
   function openDMFromMesh(channel: string): void {
@@ -612,14 +718,14 @@ export default function App(): React.JSX.Element {
             Math.abs(event.translationX) > 60 ||
             Math.abs(event.velocityX) > 600;
           if (!passedThreshold) return;
-          const currentIndex = tabs.findIndex((t) => t.id === tab);
+          const currentIndex = TABS.findIndex((t) => t.id === tab);
           const target =
             event.translationX < 0
-              ? tabs[currentIndex + 1]
-              : tabs[currentIndex - 1];
+              ? TABS[currentIndex + 1]
+              : TABS[currentIndex - 1];
           if (target) runOnJS(navigateToTab)(target.id, true);
         }),
-    [tab, tabs, isInThread, navigateToTab],
+    [tab, isInThread, navigateToTab],
   );
 
   const tabEntering =
@@ -935,10 +1041,20 @@ export default function App(): React.JSX.Element {
                     <>
                       <Text style={styles.headerTitle}>Wallet</Text>
                       <View style={styles.headerControls}>
+                        {/* Send and Zap both spend, so they are dimmed with
+                            nothing to spend. Letting them open a sheet that can
+                            only end in "not enough balance" is the classic way
+                            to waste somebody's time. Receive and Add mint stay
+                            live, since those are how a new wallet gets started. */}
                         <Pressable
-                          style={styles.newChannelPill}
+                          style={[
+                            styles.newChannelPill,
+                            !hasSpendableEcash && styles.headerPillDisabled,
+                          ]}
+                          disabled={!hasSpendableEcash}
                           onPress={() => triggerWalletAction("send")}
                           accessibilityRole="button"
+                          accessibilityState={{ disabled: !hasSpendableEcash }}
                           accessibilityLabel="Send ecash token"
                         >
                           <Feather
@@ -960,9 +1076,14 @@ export default function App(): React.JSX.Element {
                           />
                         </Pressable>
                         <Pressable
-                          style={styles.newChannelPill}
+                          style={[
+                            styles.newChannelPill,
+                            !hasSpendableEcash && styles.headerPillDisabled,
+                          ]}
+                          disabled={!hasSpendableEcash}
                           onPress={() => triggerWalletAction("zap")}
                           accessibilityRole="button"
+                          accessibilityState={{ disabled: !hasSpendableEcash }}
                           accessibilityLabel="Zap a Nostr contact"
                         >
                           <Feather
@@ -1047,15 +1168,18 @@ export default function App(): React.JSX.Element {
                   empty screen would otherwise be unexplainable. Renders nothing
                   while peers are connected or a scan is in progress. */}
               {!isInThread && tab === "mesh" && (
-                <MeshStatusBar banners={meshBanners} />
+                <MeshStatusBar
+                  banners={meshBanners}
+                  onResume={() => applyPresence("online", username)}
+                />
               )}
 
-              {/* Content: swipe left/right to step through TABS, matching the
+              {/* Content: swipe left/right to step through tabs, matching the
                 tab bar's order. The inner Animated.View is keyed by tab so
                 only a genuine tab change slides. Switching Channels/Direct
                 or opening a thread within the same tab does not. */}
               <GestureDetector gesture={swipeGesture}>
-                <BlurTargetView ref={blurTargetRef} style={styles.content}>
+                <View style={styles.content}>
                   <Animated.View
                     key={tab}
                     style={styles.flexFill}
@@ -1116,8 +1240,10 @@ export default function App(): React.JSX.Element {
                         peerID={generatedPeerID}
                         username={username}
                         onWipe={() => {
-                          // Stop BLE mesh immediately so old keys are flushed from memory.
-                          getMeshService()?.stop();
+                          // The mesh is already down and its keys released: the
+                          // wipe does that first, before it clears anything.
+                          // All that is left here is putting the shell back to
+                          // a first-run state.
                           setGeneratedPeerID(FALLBACK_PEER_ID);
                           // Reset navigation to the fresh-start landing tab.
                           // Panic wipe is triggered from Profile, so without this
@@ -1130,35 +1256,22 @@ export default function App(): React.JSX.Element {
                       />
                     )}
                   </Animated.View>
-                </BlurTargetView>
+                </View>
               </GestureDetector>
 
-              {/* Floating bottom stack: the ongoing-transfer pill and the
-                  frosted-glass tab bar, both hovering over the content that
-                  scrolls beneath. box-none so taps land on content in the gaps
-                  around the pills, not on the transparent container. */}
+              {/* Floating bottom stack: the ongoing-transfer pill and the tab
+                  bar, both hovering over the content that scrolls beneath.
+                  box-none so taps land on content in the gaps around the pills,
+                  not on the transparent container. */}
               {!isInThread && (
                 <View style={styles.floatingBottom} pointerEvents="box-none">
                   <TransferBadge onOpen={openTransferChannel} />
-                  {/* Outer wrap carries the shadow + rounding; the BlurView must
-                      clip to the pill (overflow hidden), and a clipped view
-                      can't cast the shadow itself. */}
+                  {/* Outer wrap carries the shadow + rounding; the bar itself
+                      clips its children to the pill (overflow hidden), and a
+                      clipped view can't cast the shadow itself. */}
                   <View style={styles.tabBarWrap}>
-                    <BlurView
-                      intensity={48}
-                      tint={resolvedTheme === "dark" ? "dark" : "light"}
-                      // Android has no native backdrop blur; blurMethod opts into
-                      // the Dimezis implementation and blurTarget tells it which
-                      // view to sample (the content region). Both are no-ops on
-                      // iOS, which blurs the real backdrop natively.
-                      blurMethod="dimezisBlurView"
-                      blurTarget={blurTargetRef}
-                      style={[
-                        styles.tabBar,
-                        { backgroundColor: Colors.tabBarGlass },
-                      ]}
-                    >
-                      {tabs.map(({ id, label, icon }) => {
+                    <View style={styles.tabBar}>
+                      {TABS.map(({ id, label, icon }) => {
                         const active = tab === id;
                         return (
                           <Pressable
@@ -1217,7 +1330,7 @@ export default function App(): React.JSX.Element {
                           </Pressable>
                         );
                       })}
-                    </BlurView>
+                    </View>
                   </View>
                 </View>
               )}
@@ -1240,7 +1353,7 @@ const HEADER_TITLES: Record<MainTab, string> = {
   profile: "You",
 };
 
-const ALL_TABS: { id: MainTab; label: string; icon: string }[] = [
+const TABS: { id: MainTab; label: string; icon: string }[] = [
   { id: "chats", label: "Chats", icon: "message-square" },
   { id: "mesh", label: "Mesh", icon: "radio" },
   { id: "wallet", label: "Wallet", icon: "credit-card" },
@@ -1354,6 +1467,9 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       justifyContent: "center",
       backgroundColor: Colors.surfaceRaised,
     },
+    headerPillDisabled: {
+      opacity: 0.35,
+    },
     // Same tap target as the + pill but with no filled background, so the bell
     // sits as a lighter-weight action beside it.
     headerIconBtn: {
@@ -1393,9 +1509,9 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       right: 0,
       bottom: 0,
     },
-    // Outer wrap: carries the shadow + rounding + margins. Kept separate from the
-    // BlurView because the blur must clip to the pill (overflow hidden), and a
-    // clipped view cannot also cast a shadow.
+    // Outer wrap: carries the shadow + rounding + margins. Kept separate from
+    // the bar itself because the bar clips its children to the pill (overflow
+    // hidden), and a clipped view cannot also cast a shadow.
     tabBarWrap: {
       marginHorizontal: Spacing.base,
       marginBottom: Spacing.md,
@@ -1406,10 +1522,10 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       shadowRadius: 16,
       elevation: 10,
     },
-    // The frosted-glass pill itself: the BlurView. A hairline glass-edge border
-    // and a translucent fill (set inline from the theme) sit over the blur.
+    // The pill itself: a solid surface with a hairline edge.
     tabBar: {
       flexDirection: "row",
+      backgroundColor: Colors.surface,
       borderRadius: Radius.full,
       overflow: "hidden",
       paddingTop: Spacing.xs,

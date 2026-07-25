@@ -14,14 +14,7 @@
 
 import Feather from "@expo/vector-icons/Feather";
 import React, { useCallback, useMemo, useState } from "react";
-import {
-  Modal,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
-} from "react-native";
+import { Pressable, ScrollView, Text, View } from "react-native";
 import { createMMKV } from "react-native-mmkv";
 import {
   clearAttachmentCache,
@@ -32,6 +25,8 @@ import {
   useSettingsStore,
   type UploadQuality,
 } from "../../../store/settings-store";
+import { WALLET_STORAGE_ID } from "../../../store/wallet-store";
+import BottomSheet from "../../../ui/components/bottom-sheet";
 import { useThemeColors } from "../../../ui/theme";
 import { MMKV_STORE_IDS } from "../../../utils/panic-wipe";
 import {
@@ -64,7 +59,11 @@ const QUALITY_META: Record<
 const QUALITY_ORDER: UploadQuality[] = ["low", "medium", "high"];
 
 function readStorageStats() {
-  const messagesBytes = MMKV_STORE_IDS.reduce(
+  // The wallet store is not in MMKV_STORE_IDS (the panic wipe deletes its file
+  // rather than clearing it, since it is encrypted), so it is measured
+  // separately. `byteSize` reads the file length and needs no decryption key,
+  // which is why opening it without one is fine here.
+  const messagesBytes = [...MMKV_STORE_IDS, WALLET_STORAGE_ID].reduce(
     (sum, id) => sum + createMMKV({ id }).byteSize,
     0,
   );
@@ -168,75 +167,62 @@ export default function StorageScreen({ onBack }: Props): React.JSX.Element {
       </ScrollView>
 
       {/* Upload quality modal */}
-      <Modal
+      <BottomSheet
         visible={showQualityModal}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setShowQualityModal(false)}
+        onClose={() => setShowQualityModal(false)}
+        sheetStyle={styles.sheet}
       >
-        <View style={styles.sheetOverlay}>
-          <Pressable
-            style={StyleSheet.absoluteFill}
-            onPress={() => setShowQualityModal(false)}
-          />
-          <View style={styles.sheet}>
-            <View style={styles.sheetHandle} />
-            <Text style={styles.sheetTitle}>Upload quality</Text>
-            <Text style={styles.sheetSubtitle}>
-              Applies to photos sent from your camera or library.
-            </Text>
-            <View style={styles.optionList}>
-              {QUALITY_ORDER.map((key) => {
-                const meta = QUALITY_META[key];
-                const selected = key === uploadQuality;
-                return (
-                  <Pressable
-                    key={key}
+        <Text style={styles.sheetTitle}>Upload quality</Text>
+        <Text style={styles.sheetSubtitle}>
+          Applies to photos sent from your camera or library.
+        </Text>
+        <View style={styles.optionList}>
+          {QUALITY_ORDER.map((key) => {
+            const meta = QUALITY_META[key];
+            const selected = key === uploadQuality;
+            return (
+              <Pressable
+                key={key}
+                style={[styles.optionRow, selected && styles.optionRowSelected]}
+                onPress={() => {
+                  setUploadQuality(key);
+                  setShowQualityModal(false);
+                }}
+                accessibilityRole="button"
+                accessibilityLabel={`Set upload quality to ${meta.label}`}
+              >
+                <View style={styles.optionRowInner}>
+                  <View
                     style={[
-                      styles.optionRow,
-                      selected && styles.optionRowSelected,
+                      styles.optionDot,
+                      { backgroundColor: Colors.surface },
                     ]}
-                    onPress={() => {
-                      setUploadQuality(key);
-                      setShowQualityModal(false);
-                    }}
-                    accessibilityRole="button"
-                    accessibilityLabel={`Set upload quality to ${meta.label}`}
                   >
-                    <View style={styles.optionRowInner}>
-                      <View
-                        style={[
-                          styles.optionDot,
-                          { backgroundColor: Colors.surface },
-                        ]}
-                      >
-                        <Feather
-                          name="image"
-                          size={14}
-                          color={Colors.textSecondary}
-                        />
-                      </View>
-                      <View style={styles.optionText}>
-                        <Text style={styles.optionLabel}>{meta.label}</Text>
-                        <Text style={styles.optionDescription}>
-                          {meta.description}
-                        </Text>
-                      </View>
-                      {selected && (
-                        <Feather
-                          name="check"
-                          size={18}
-                          color={Colors.textPrimary}
-                        />
-                      )}
-                    </View>
-                  </Pressable>
-                );
-              })}
-            </View>
-          </View>
+                    <Feather
+                      name="image"
+                      size={14}
+                      color={Colors.textSecondary}
+                    />
+                  </View>
+                  <View style={styles.optionText}>
+                    <Text style={styles.optionLabel}>{meta.label}</Text>
+                    <Text style={styles.optionDescription}>
+                      {meta.description}
+                    </Text>
+                  </View>
+                  {selected && (
+                    <Feather
+                      name="check"
+                      size={18}
+                      color={Colors.textPrimary}
+                    />
+                  )}
+                </View>
+              </Pressable>
+            );
+          })}
         </View>
-      </Modal>
+      </BottomSheet>
     </View>
   );
 }

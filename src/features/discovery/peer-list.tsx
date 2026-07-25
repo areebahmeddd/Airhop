@@ -9,25 +9,20 @@ import { Feather } from "@expo/vector-icons";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   FlatList,
-  Modal,
   Pressable,
   StyleSheet,
   Text,
   TextInput,
   View,
 } from "react-native";
-import {
-  buildOfflineToken,
-  selectProofsForAmount,
-} from "../../core/payments/cashu";
-import { getMeshService } from "../../services/mesh-service";
+import { describeRoute, sendEcashToPeer } from "../../services/ecash-transfer";
 import { showAlert } from "../../store/alert-store";
 import { useBlockedStore } from "../../store/blocked-store";
 import { useChatStore } from "../../store/chat-store";
 import { useContactsStore } from "../../store/contacts-store";
 import { usePeerStore, type NearbyPeer } from "../../store/peer-store";
-import { useWalletStore } from "../../store/wallet-store";
 import Avatar from "../../ui/components/avatar";
+import BottomSheet from "../../ui/components/bottom-sheet";
 import StatusDot from "../../ui/components/status-dot";
 import {
   FontFamily,
@@ -68,6 +63,10 @@ export default function PeerList({
   const [selectedPeer, setSelectedPeer] = useState<NearbyPeer | null>(null);
   const [sendSatsAmount, setSendSatsAmount] = useState("");
   const [showSendSats, setShowSendSats] = useState(false);
+  // Set while a send is in flight. Quoting involves an await, so without this a
+  // double tap starts two sends; the second now loses the reservation race and
+  // reports a confusing "those coins were just used" instead of doing nothing.
+  const [sendingSats, setSendingSats] = useState(false);
 
   // Refresh "last seen" every 10 seconds and evict stale peers.
   useEffect(() => {
@@ -130,73 +129,34 @@ export default function PeerList({
     setSendSatsAmount("");
   }
 
-  function handleSendSats(peer: NearbyPeer): void {
+  // Ecash hand-off to a peer standing next to you. All of the proof handling
+  // (selection, fees, reserving so an undelivered token can be reclaimed) lives
+  // in the shared transfer service; this only supplies who and how much.
+  async function handleSendSats(peer: NearbyPeer): Promise<void> {
     const amount = parseInt(sendSatsAmount, 10);
-    if (!amount || amount <= 0) return;
+    if (!amount || amount <= 0 || sendingSats) return;
 
-    const { proofsByMint, unit, removeProofs } = useWalletStore.getState();
-    const { addMessage } = useChatStore.getState();
-    const service = getMeshService();
-
-    if (!service) {
-      showAlert("Mesh offline", "Mesh service is not running.");
-      return;
+    setSendingSats(true);
+    let result;
+    try {
+      result = await sendEcashToPeer({ peerID: peer.peerID, amount });
+    } finally {
+      setSendingSats(false);
     }
-
-    const totalBalance = Object.values(proofsByMint).reduce(
-      (s, ps) => s + ps.reduce((a, p) => a + p.amount, 0),
-      0,
-    );
-    if (amount > totalBalance) {
-      showAlert(
-        "Insufficient balance",
-        `You have ${totalBalance.toLocaleString()} sats but tried to send ${amount.toLocaleString()}.`,
-      );
-      return;
-    }
-
-    const mintEntry = Object.entries(proofsByMint)
-      .map(([url, ps]) => ({
-        url,
-        ps,
-        balance: ps.reduce((s, p) => s + p.amount, 0),
-      }))
-      .find((m) => m.balance >= amount);
-
-    if (!mintEntry) {
-      showAlert(
-        "Balance split across mints",
-        "No single mint holds the full amount. Use the Wallet tab to consolidate.",
-      );
-      return;
-    }
-
-    const selection = selectProofsForAmount(mintEntry.ps, amount);
-    if (!selection) return;
-
-    const tokenStr = buildOfflineToken(mintEntry.url, selection.selected, unit);
-    removeProofs(
-      mintEntry.url,
-      selection.selected.map((p) => p.secret),
-    );
-
-    const channel = `dm:${peer.peerID}`;
-    addChannel(channel);
-    addMessage({
-      id: `wallet-sats-${peer.peerID}-${Date.now()}`,
-      channel,
-      senderID: "local",
-      senderNickname: "You",
-      text: tokenStr,
-      timestampMs: Date.now(),
-      isMine: true,
-    });
-    service.sendDm(peer.peerID, tokenStr);
+    if (!result) return;
 
     setSendSatsAmount("");
     setShowSendSats(false);
     closeSheet();
-    onOpenDM?.(channel);
+    onOpenDM?.(`dm:${peer.peerID}`);
+    // The thread we just opened shows the bubble, so only speak up when the
+    // token did not go straight out.
+    if (result.route !== "sent") {
+      showAlert(
+        `${result.prepared.amount.toLocaleString()} ${result.prepared.unit} on its way`,
+        `${describeRoute(result.route)} It stays reclaimable from the Wallet tab until you confirm it arrived, so nothing is lost if it never lands.`,
+      );
+    }
   }
 
   function handleQRScanned(peerID: string): void {
@@ -281,126 +241,113 @@ export default function PeerList({
       )}
 
       {/* Peer detail sheet */}
-      <Modal
+      <BottomSheet
         visible={selectedPeer !== null}
-        transparent
-        animationType="slide"
-        onRequestClose={closeSheet}
+        onClose={closeSheet}
+        sheetStyle={styles.sheet}
       >
         {selectedPeer && (
-          <View style={styles.sheetOverlay}>
-            <Pressable style={StyleSheet.absoluteFill} onPress={closeSheet} />
-            <View style={styles.sheet}>
-              {/* Drag handle */}
-              <View style={styles.handle} />
-
-              {/* Identity */}
-              <View style={styles.sheetIdentity}>
-                <Avatar
-                  username={resolveDisplayName(selectedPeer.peerID)}
-                  peerID={selectedPeer.peerID}
-                  size={64}
+          <>
+            {/* Identity */}
+            <View style={styles.sheetIdentity}>
+              <Avatar
+                username={resolveDisplayName(selectedPeer.peerID)}
+                peerID={selectedPeer.peerID}
+                size={64}
+              />
+              <Text style={styles.sheetUsername}>
+                {resolveDisplayName(selectedPeer.peerID)}
+              </Text>
+              <Text style={styles.sheetPeerID}>{selectedPeer.peerID}</Text>
+              <View style={styles.sheetStatusRow}>
+                <StatusDot
+                  status={isOnline(selectedPeer) ? "online" : "offline"}
+                  size={8}
                 />
-                <Text style={styles.sheetUsername}>
-                  {resolveDisplayName(selectedPeer.peerID)}
+                <Text style={styles.sheetStatusText}>
+                  {isOnline(selectedPeer)
+                    ? "In range"
+                    : `Last seen ${formatLastSeen(selectedPeer.lastSeenMs)} ago`}
                 </Text>
-                <Text style={styles.sheetPeerID}>{selectedPeer.peerID}</Text>
-                <View style={styles.sheetStatusRow}>
-                  <StatusDot
-                    status={isOnline(selectedPeer) ? "online" : "offline"}
-                    size={8}
-                  />
-                  <Text style={styles.sheetStatusText}>
-                    {isOnline(selectedPeer)
-                      ? "In range"
-                      : `Last seen ${formatLastSeen(selectedPeer.lastSeenMs)} ago`}
-                  </Text>
-                </View>
-              </View>
-
-              {/* Message + Send sats: a tight pair of actions, not spread
-                  apart by the sheet's larger identity/actions rhythm. */}
-              <View style={styles.sheetActions}>
-                <Pressable
-                  style={styles.sheetMessageBtn}
-                  onPress={() => handleSendDM(selectedPeer)}
-                  accessibilityRole="button"
-                  accessibilityLabel="Send a direct message"
-                >
-                  <Feather
-                    name="message-circle"
-                    size={18}
-                    color={Colors.textInverse}
-                  />
-                  <Text style={styles.sheetMessageBtnText}>Message</Text>
-                </Pressable>
-
-                {!showSendSats ? (
-                  <Pressable
-                    style={styles.sheetSatsBtn}
-                    onPress={() => setShowSendSats(true)}
-                    accessibilityRole="button"
-                    accessibilityLabel="Send sats"
-                  >
-                    <Feather
-                      name="zap"
-                      size={16}
-                      color={Colors.textSecondary}
-                    />
-                    <Text style={styles.sheetSatsBtnText}>Send sats</Text>
-                  </Pressable>
-                ) : (
-                  <View style={styles.sendSatsRow}>
-                    <TextInput
-                      style={styles.sendSatsInput}
-                      value={sendSatsAmount}
-                      onChangeText={setSendSatsAmount}
-                      placeholder="Amount in sats"
-                      placeholderTextColor={Colors.textMuted}
-                      keyboardType="number-pad"
-                      returnKeyType="send"
-                      autoFocus
-                      selectionColor={Colors.accent}
-                      onSubmitEditing={() => handleSendSats(selectedPeer)}
-                    />
-                    <Pressable
-                      style={[
-                        styles.sendSatsConfirm,
-                        !sendSatsAmount.trim() && { opacity: 0.4 },
-                      ]}
-                      onPress={() => handleSendSats(selectedPeer)}
-                      disabled={!sendSatsAmount.trim()}
-                      accessibilityRole="button"
-                      accessibilityLabel="Confirm send sats"
-                    >
-                      <Feather
-                        name="arrow-right"
-                        size={16}
-                        color={Colors.textInverse}
-                      />
-                    </Pressable>
-                    <Pressable
-                      style={styles.sendSatsCancel}
-                      onPress={() => {
-                        setShowSendSats(false);
-                        setSendSatsAmount("");
-                      }}
-                      accessibilityRole="button"
-                      accessibilityLabel="Cancel send sats"
-                    >
-                      <Feather
-                        name="x"
-                        size={16}
-                        color={Colors.textSecondary}
-                      />
-                    </Pressable>
-                  </View>
-                )}
               </View>
             </View>
-          </View>
+
+            {/* Message + Send sats: a tight pair of actions, not spread
+                  apart by the sheet's larger identity/actions rhythm. */}
+            <View style={styles.sheetActions}>
+              <Pressable
+                style={styles.sheetMessageBtn}
+                onPress={() => handleSendDM(selectedPeer)}
+                accessibilityRole="button"
+                accessibilityLabel="Send a direct message"
+              >
+                <Feather
+                  name="message-circle"
+                  size={18}
+                  color={Colors.textInverse}
+                />
+                <Text style={styles.sheetMessageBtnText}>Message</Text>
+              </Pressable>
+
+              {!showSendSats ? (
+                <Pressable
+                  style={styles.sheetSatsBtn}
+                  onPress={() => setShowSendSats(true)}
+                  accessibilityRole="button"
+                  accessibilityLabel="Send sats"
+                >
+                  <Feather name="zap" size={16} color={Colors.textSecondary} />
+                  <Text style={styles.sheetSatsBtnText}>Send sats</Text>
+                </Pressable>
+              ) : (
+                <View style={styles.sendSatsRow}>
+                  <TextInput
+                    style={styles.sendSatsInput}
+                    value={sendSatsAmount}
+                    onChangeText={setSendSatsAmount}
+                    placeholder="Amount in sats"
+                    placeholderTextColor={Colors.textMuted}
+                    keyboardType="number-pad"
+                    returnKeyType="send"
+                    autoFocus
+                    selectionColor={Colors.accent}
+                    onSubmitEditing={() => void handleSendSats(selectedPeer)}
+                  />
+                  <Pressable
+                    style={[
+                      styles.sendSatsConfirm,
+                      (!sendSatsAmount.trim() || sendingSats) && {
+                        opacity: 0.4,
+                      },
+                    ]}
+                    onPress={() => void handleSendSats(selectedPeer)}
+                    disabled={!sendSatsAmount.trim() || sendingSats}
+                    accessibilityRole="button"
+                    accessibilityLabel="Confirm send sats"
+                  >
+                    <Feather
+                      name="arrow-right"
+                      size={16}
+                      color={Colors.textInverse}
+                    />
+                  </Pressable>
+                  <Pressable
+                    style={styles.sendSatsCancel}
+                    onPress={() => {
+                      setShowSendSats(false);
+                      setSendSatsAmount("");
+                    }}
+                    accessibilityRole="button"
+                    accessibilityLabel="Cancel send sats"
+                  >
+                    <Feather name="x" size={16} color={Colors.textSecondary} />
+                  </Pressable>
+                </View>
+              )}
+            </View>
+          </>
         )}
-      </Modal>
+      </BottomSheet>
 
       {/* QR scanner */}
       <QrScanScreen
@@ -495,25 +442,10 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       lineHeight: FontSize.sm * 1.6,
     },
     // Peer detail sheet
-    sheetOverlay: {
-      flex: 1,
-      backgroundColor: Colors.overlay,
-      justifyContent: "flex-end",
-    },
     sheet: {
-      backgroundColor: Colors.surface,
-      borderTopLeftRadius: Radius["2xl"],
-      borderTopRightRadius: Radius["2xl"],
-      padding: Spacing.xl,
+      paddingHorizontal: Spacing.xl,
+      paddingBottom: Spacing.xl,
       gap: Spacing.xl,
-    },
-    handle: {
-      width: 36,
-      height: 4,
-      borderRadius: 2,
-      backgroundColor: Colors.borderStrong,
-      alignSelf: "center",
-      marginBottom: Spacing.xs,
     },
     sheetIdentity: {
       alignItems: "center",

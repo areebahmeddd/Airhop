@@ -128,6 +128,35 @@ const SECTIONS: {
     ],
   },
   {
+    heading: "Everyday use",
+    questions: [
+      {
+        q: "Will it drain my battery?",
+        a: "It uses more than an app sitting idle and far less than maps or video. Airhop stays on Bluetooth Low Energy, which listens and announces in short bursts and lets the radio sleep in between, and it slows its own announcements down once it can hear other devices. Relaying for other people costs a little more. If you want it to stop entirely, set your status to Away in Profile: that stops scanning and announcing, and nothing runs until you set it back.",
+      },
+      {
+        q: "Why does a messenger ask for my location?",
+        a: "Android ties Bluetooth scanning to the location permission at the system level, so any app that looks for nearby devices has to ask for it, whether or not it cares where you are. Airhop does not read your position for the mesh. The one place it genuinely uses location is the optional location channels, which need a rough area to work out which cell you are in, and you can decline that and still use everything else. Nothing about your position is ever sent to us, because there is no server to send it to.",
+      },
+      {
+        q: "What else does it ask permission for?",
+        a: "Bluetooth and nearby devices, to find and talk to peers, which is the one it cannot work without. Notifications, so a message can reach you when the app is closed. Camera, only to scan a contact's QR code. Photos, only when you attach or save one. Microphone, only when you record a voice note. Every one of them can be refused or revoked later in your device settings, and the app keeps working with whatever is left.",
+      },
+      {
+        q: "Does it work in airplane mode?",
+        a: "Yes, as long as you switch Bluetooth back on, which both iOS and Android let you do without leaving airplane mode. The mesh then works in full: discovery, channels, direct messages, files, and ecash transfers, none of which touch the internet. The internet features stop, so messages to people who are not nearby queue up and send themselves when a route appears, and cashing ecash out to Lightning has to wait until you are back online.",
+      },
+      {
+        q: "What is the notification that will not swipe away?",
+        a: "On Android, that notification is what keeps the mesh alive after you leave the app. Without it the system would suspend Airhop within minutes and you would stop receiving anything. It has a Stop mesh button that shuts the radios down cleanly and takes the notification with it; reopening the app then shows the mesh paused, with a Resume button. iPhones have no equivalent notification, because iOS keeps Bluetooth apps alive differently.",
+      },
+      {
+        q: "Can people tell when I have read their message?",
+        a: "In a direct message, yes, the same way most messengers work. The receipt is only sent when the app is actually open in front of you, so a message that arrives while Airhop is in your pocket stays unread until you look at it. Public and location channels have no receipts at all.",
+      },
+    ],
+  },
+  {
     heading: "Mesh network",
     questions: [
       {
@@ -203,35 +232,6 @@ const SECTIONS: {
             arrive immediately while a large file takes its time.
           </>
         ),
-      },
-    ],
-  },
-  {
-    heading: "Everyday use",
-    questions: [
-      {
-        q: "Will it drain my battery?",
-        a: "It uses more than an app sitting idle and far less than maps or video. Airhop stays on Bluetooth Low Energy, which listens and announces in short bursts and lets the radio sleep in between, and it slows its own announcements down once it can hear other devices. Relaying for other people costs a little more. If you want it to stop entirely, set your status to Away in Profile: that stops scanning and announcing, and nothing runs until you set it back.",
-      },
-      {
-        q: "Why does a messenger ask for my location?",
-        a: "Android ties Bluetooth scanning to the location permission at the system level, so any app that looks for nearby devices has to ask for it, whether or not it cares where you are. Airhop does not read your position for the mesh. The one place it genuinely uses location is the optional location channels, which need a rough area to work out which cell you are in, and you can decline that and still use everything else. Nothing about your position is ever sent to us, because there is no server to send it to.",
-      },
-      {
-        q: "What else does it ask permission for?",
-        a: "Bluetooth and nearby devices, to find and talk to peers, which is the one it cannot work without. Notifications, so a message can reach you when the app is closed. Camera, only to scan a contact's QR code. Photos, only when you attach or save one. Microphone, only when you record a voice note. Every one of them can be refused or revoked later in your device settings, and the app keeps working with whatever is left.",
-      },
-      {
-        q: "Does it work in airplane mode?",
-        a: "Yes, as long as you switch Bluetooth back on, which both iOS and Android let you do without leaving airplane mode. The mesh then works in full: discovery, channels, direct messages, files, and ecash transfers, none of which touch the internet. The internet features stop, so messages to people who are not nearby queue up and send themselves when a route appears, and cashing ecash out to Lightning has to wait until you are back online.",
-      },
-      {
-        q: "What is the notification that will not swipe away?",
-        a: "On Android, that notification is what keeps the mesh alive after you leave the app. Without it the system would suspend Airhop within minutes and you would stop receiving anything. It has a Stop mesh button that shuts the radios down cleanly and takes the notification with it; reopening the app then shows the mesh paused, with a Resume button. iPhones have no equivalent notification, because iOS keeps Bluetooth apps alive differently.",
-      },
-      {
-        q: "Can people tell when I have read their message?",
-        a: "In a direct message, yes, the same way most messengers work. The receipt is only sent when the app is actually open in front of you, so a message that arrives while Airhop is in your pocket stays unread until you look at it. Public and location channels have no receipts at all.",
       },
     ],
   },
@@ -517,8 +517,18 @@ const SECTIONS: {
             <br />
             <ul className="my-2 list-disc space-y-1 pl-5">
               <li>
-                <strong>To try it out:</strong> the community test mints issue free play-money sats,
-                so you can walk through every flow with nothing at risk.
+                <strong>To try it out:</strong>{" "}
+                <a
+                  href="https://testnut.cashu.space"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-gray-900 underline underline-offset-2 transition-colors hover:text-gray-600"
+                >
+                  testnut.cashu.space
+                </a>{" "}
+                is the community test mint. It issues free play-money sats, so you can walk through
+                every flow with nothing at risk. The sats are not real and the mint is wiped
+                periodically, so never keep anything there you would miss.
               </li>
               <li>
                 <strong>For real sats:</strong> pick a publicly run mint with a track record.{" "}

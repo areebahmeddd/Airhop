@@ -7,7 +7,7 @@ const sections = [
     items: [
       {
         title: "iOS",
-        desc: "Requires iOS 16 or later. Bluetooth background mode enabled.",
+        desc: "Requires iOS 16.0 or later. Bluetooth background mode enabled.",
         href: "https://apps.apple.com/app/airhop/id000000000",
       },
       {

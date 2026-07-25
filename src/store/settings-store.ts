@@ -24,10 +24,6 @@ interface SettingsState {
   theme: ThemePreference;
   autoDownloadMedia: boolean;
   uploadQuality: UploadQuality;
-  // Whether the Payments feature is switched on. Off hides the Wallet tab
-  // from the tab bar; it does not touch the wallet's stored proofs, so
-  // turning it back on restores the balance untouched.
-  paymentsEnabled: boolean;
   // Whether this device acts as an internet gateway: relaying mesh-only peers'
   // geohash events to Nostr (toGateway carriers) and, in future, rebroadcasting
   // relay traffic to the mesh. Off by default, matching bitchat; enabling it
@@ -38,15 +34,23 @@ interface SettingsState {
   // Persisted so the choice is applied before the first relay connects at
   // startup (see tor-routing.ts), never leaking the clear net for a Tor user.
   torEnabled: boolean;
+  // Whether Cashu mint HTTP calls may go out over the clear net while Tor is
+  // on. Tor only covers Nostr WebSockets on iOS (Arti is a per-socket SOCKS
+  // shim, and mint calls are plain fetch), so with Tor enabled a mint request
+  // would reveal this device's IP to the mint and link it to the proofs being
+  // swapped. Off by default: mint calls are refused instead, and the wallet
+  // stays fully usable offline. Android is unaffected, since Orbot's VPN routes
+  // every socket, so this flag is only consulted on iOS.
+  allowMintOverClearnet: boolean;
   // Monospace typeface for keys/IDs/geohashes/amounts. Live: changing it
   // recomputes styles immediately via useThemeColors (see ui/theme.ts).
   monoFont: MonoFont;
   setTheme: (theme: ThemePreference) => void;
   setAutoDownloadMedia: (enabled: boolean) => void;
   setUploadQuality: (quality: UploadQuality) => void;
-  setPaymentsEnabled: (enabled: boolean) => void;
   setGatewayEnabled: (enabled: boolean) => void;
   setTorEnabled: (enabled: boolean) => void;
+  setAllowMintOverClearnet: (allowed: boolean) => void;
   setMonoFont: (font: MonoFont) => void;
   // Restore first-run defaults. Used by the panic wipe.
   reset: () => void;
@@ -58,11 +62,9 @@ const DEFAULTS = {
   theme: "system",
   autoDownloadMedia: true,
   uploadQuality: "high",
-  // Opt-in, like the gateway and Tor: a new install starts with the wallet off
-  // so payments never appear until the user deliberately enables them.
-  paymentsEnabled: false,
   gatewayEnabled: false,
   torEnabled: false,
+  allowMintOverClearnet: false,
   // The device's own monospace by default, so a new install looks native and
   // familiar. JetBrains Mono is offered as an opt-in choice under Appearance.
   monoFont: "system",
@@ -92,14 +94,14 @@ export const useSettingsStore = create<SettingsState>()(
       setUploadQuality(quality) {
         set({ uploadQuality: quality });
       },
-      setPaymentsEnabled(enabled) {
-        set({ paymentsEnabled: enabled });
-      },
       setGatewayEnabled(enabled) {
         set({ gatewayEnabled: enabled });
       },
       setTorEnabled(enabled) {
         set({ torEnabled: enabled });
+      },
+      setAllowMintOverClearnet(allowed) {
+        set({ allowMintOverClearnet: allowed });
       },
       setMonoFont(font) {
         set({ monoFont: font });
