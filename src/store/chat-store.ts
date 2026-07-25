@@ -56,13 +56,6 @@ export interface ChatMessage {
   // Local-only notice rendered as centered muted text instead of a bubble
   // (e.g. "you took a screenshot"). Never sent over the mesh.
   isSystem?: boolean;
-  // Local-only, never sent over the mesh, mirroring how WhatsApp/Telegram
-  // already treat starring: private to you.
-  isStarred?: boolean;
-  // Local-only pin: surfaces the message in this conversation's pinned list.
-  // Not shared with other members (a serverless mesh has no channel roster to
-  // sync a shared pin to), so each person pins their own view.
-  isPinned?: boolean;
   // Set only on the sender's own outgoing copy of a forwarded message.
   forwarded?: boolean;
   // Delivery status (own outgoing messages only). Undefined on received
@@ -139,8 +132,6 @@ interface ChatState {
   // Remove a single message. Used by Undo Send to pull an outgoing message back
   // during its brief hold window, before it is ever transmitted.
   removeMessage: (channel: string, id: string) => void;
-  toggleStar: (channel: string, id: string) => void;
-  togglePinMessage: (channel: string, id: string) => void;
   setActiveChannel: (channel: string) => void;
   markChannelRead: (channel: string) => void;
   setLastThread: (channel: string) => void;
@@ -177,6 +168,12 @@ const DEFAULT_CHANNELS = [
   "#region",
 ];
 
+// The widest location channels are the noisiest, so they start muted on a fresh
+// install: the user opts into #city and #region by unmuting, rather than being
+// flooded by them out of the box. Their per-row unread still shows; muted just
+// keeps them from badging the app or raising notifications until unmuted.
+const DEFAULT_MUTED_CHANNELS = ["#city", "#province", "#region"];
+
 const storage = createMMKV({ id: "chat-store" });
 
 const mmkvStorage = {
@@ -200,7 +197,7 @@ export const useChatStore = create<ChatState>()(
       unreadCounts: {},
       channelDescriptions: {},
       pinnedChannels: [],
-      mutedChannels: [],
+      mutedChannels: DEFAULT_MUTED_CHANNELS,
       channelKeys: {},
       channelReach: {},
 
@@ -288,8 +285,13 @@ export const useChatStore = create<ChatState>()(
           const next = existing.map((m) => {
             if (m.id !== id) return m;
             // Never move backwards: a stray "delivered" after "read" is ignored.
+            // The one exception is an explicit reset to "sending": that is only
+            // ever set locally by a retry (never by a late receipt), and it must
+            // be allowed to pull a "failed" bubble back so the retry shows its
+            // in-progress state instead of staying red.
             if (
               m.status !== undefined &&
+              status !== "sending" &&
               STATUS_RANK[status] < STATUS_RANK[m.status]
             ) {
               return m;
@@ -318,34 +320,6 @@ export const useChatStore = create<ChatState>()(
           const next = existing.filter((m) => m.id !== id);
           if (next.length === existing.length) return state;
           return { messages: { ...state.messages, [channel]: next } };
-        });
-      },
-
-      toggleStar(channel: string, id: string) {
-        set((state) => {
-          const existing = state.messages[channel] ?? [];
-          return {
-            messages: {
-              ...state.messages,
-              [channel]: existing.map((m) =>
-                m.id === id ? { ...m, isStarred: !m.isStarred } : m,
-              ),
-            },
-          };
-        });
-      },
-
-      togglePinMessage(channel: string, id: string) {
-        set((state) => {
-          const existing = state.messages[channel] ?? [];
-          return {
-            messages: {
-              ...state.messages,
-              [channel]: existing.map((m) =>
-                m.id === id ? { ...m, isPinned: !m.isPinned } : m,
-              ),
-            },
-          };
         });
       },
 
@@ -572,7 +546,7 @@ export const useChatStore = create<ChatState>()(
           unreadCounts: {},
           channelDescriptions: {},
           pinnedChannels: [],
-          mutedChannels: [],
+          mutedChannels: DEFAULT_MUTED_CHANNELS,
           channelKeys: {},
           channelReach: {},
         });

@@ -31,19 +31,6 @@ function makeMessage(overrides: Partial<ChatMessage> = {}): ChatMessage {
   };
 }
 
-describe("toggleStar", () => {
-  it("stars and unstars a message", () => {
-    const msg = makeMessage();
-    state().addMessage(msg);
-
-    state().toggleStar("#test", msg.id);
-    expect(state().messages["#test"][0].isStarred).toBe(true);
-
-    state().toggleStar("#test", msg.id);
-    expect(state().messages["#test"][0].isStarred).toBe(false);
-  });
-});
-
 // Mesh messages do not arrive in send order: a multi-hop relay is slower than a
 // direct link but still carries the ORIGINAL sender timestamp. The store is the
 // only place that can put them back in order.
@@ -240,10 +227,12 @@ describe("toggleMuteChannel", () => {
     expect(state().mutedChannels).not.toContain("#temp");
   });
 
-  it("clears all mutes on clearAll", () => {
-    state().toggleMuteChannel("#city");
+  it("restores the default mutes on clearAll", () => {
+    // clearAll returns first-run state: user-added mutes are dropped and the
+    // default location channels (#city, #province, #region) go back to muted.
+    state().toggleMuteChannel("dm:aaa");
     state().clearAll();
-    expect(state().mutedChannels).toEqual([]);
+    expect(state().mutedChannels).toEqual(["#city", "#province", "#region"]);
   });
 });
 

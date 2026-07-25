@@ -35,6 +35,7 @@ import {
   FontWeight,
   Radius,
   Spacing,
+  TAB_BAR_CLEARANCE,
   useThemeColors,
 } from "../../ui/theme";
 import { resolveDisplayName } from "../../utils/display-name";
@@ -423,6 +424,8 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
     // three list surfaces in the app feel like one consistent system.
     list: {
       flexGrow: 1,
+      // Clear the floating tab bar so the last peer row can scroll above it.
+      paddingBottom: TAB_BAR_CLEARANCE,
     },
     row: {
       flexDirection: "row",
@@ -578,7 +581,7 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
     sendSatsInput: {
       flex: 1,
       backgroundColor: Colors.surfaceRaised,
-      borderRadius: Radius.md,
+      borderRadius: Radius.xl,
       borderWidth: 1,
       borderColor: Colors.border,
       paddingHorizontal: Spacing.md,

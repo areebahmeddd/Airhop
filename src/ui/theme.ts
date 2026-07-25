@@ -48,6 +48,13 @@ export const Colors = {
   dangerDim: "rgba(220,38,38,0.08)",
   success: "#16A34A",
 
+  // ---- Trust indicators (the only two semantic colors for security UI) ------
+  // Green means one thing only: end-to-end encrypted. Blue means one thing
+  // only: a verified contact. Never reuse either for anything else, so a green
+  // padlock always reads as "encrypted" and a blue shield as "verified".
+  e2ee: "#16A34A", // padlock + "end-to-end encrypted" text
+  verified: "#2563EB", // verified-contact shield/badge
+
   // Mesh-status banner accents: each hue names a distinct network state so the
   // Mesh tab reads at a glance (per-tone bg is the same hue at low alpha).
   relay: "#2563EB", // traffic carried over the internet (Nostr relay)
@@ -59,6 +66,9 @@ export const Colors = {
 
   // ---- Overlays -------------------------------------------------------------
   overlay: "rgba(0,0,0,0.45)",
+  // Translucent fill laid over the tab bar's blur so the frosted glass keeps
+  // enough contrast for icons/labels while still letting content ghost through.
+  tabBarGlass: "rgba(255,255,255,0.55)",
 } as const;
 
 // Dark variant of the same tokens, same keys as Colors so any screen can
@@ -94,6 +104,10 @@ export const DarkColors = {
   dangerDim: "rgba(239,68,68,0.15)",
   success: "#22C55E",
 
+  // Trust indicators (see light palette): green = e2ee, blue = verified.
+  e2ee: "#22C55E",
+  verified: "#3B82F6",
+
   // Brighter hues for the dark canvas; dim backgrounds carry more alpha to stay
   // visible on near-black.
   relay: "#3B82F6",
@@ -104,6 +118,8 @@ export const DarkColors = {
   gatewayDim: "rgba(20,184,166,0.16)",
 
   overlay: "rgba(0,0,0,0.6)",
+  // See light palette: a dark translucent fill over the tab bar's blur.
+  tabBarGlass: "rgba(20,20,22,0.55)",
 } as const;
 
 // Legacy shims so existing component references compile without change.
@@ -134,6 +150,12 @@ export const Spacing = {
   "3xl": 48,
   "4xl": 64,
 } as const;
+
+// Bottom clearance a scrollable tab screen must leave so its last rows clear the
+// floating (absolutely positioned) tab bar instead of hiding behind the frosted
+// glass. Sized to the pill's height + its bottom margin + a little breathing
+// room. Screens apply it as contentContainer paddingBottom.
+export const TAB_BAR_CLEARANCE = 96;
 
 export const FontSize = {
   xs: 11,

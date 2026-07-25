@@ -8,17 +8,7 @@
 
 import { Feather } from "@expo/vector-icons";
 import React, { useMemo, useState } from "react";
-import {
-  Modal,
-  Pressable,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from "react-native";
-import { getMeshService } from "../../services/mesh-service";
-import { showAlert } from "../../store/alert-store";
-import { useBlockedStore } from "../../store/blocked-store";
+import { Modal, Pressable, StyleSheet, Text, View } from "react-native";
 import { useChatStore } from "../../store/chat-store";
 import { useContactsStore } from "../../store/contacts-store";
 import { usePeerStore } from "../../store/peer-store";
@@ -32,6 +22,7 @@ import {
   useThemeColors,
 } from "../../ui/theme";
 import { resolveDisplayName } from "../../utils/display-name";
+import { isNostrId, NOSTR_ID_PREFIX } from "../../utils/username";
 import VerifyContactScanner from "../contacts/verify-contact-scanner";
 
 interface Props {
@@ -47,7 +38,6 @@ interface Props {
 export default function ContactInfoSheet({
   channel,
   onClose,
-  onAfterRemove,
 }: Props): React.JSX.Element {
   const Colors = useThemeColors();
   const styles = useMemo(() => createStyles(Colors), [Colors]);
@@ -56,18 +46,12 @@ export default function ContactInfoSheet({
   const messages = useChatStore((s) =>
     channel ? s.messages[channel] : undefined,
   );
-  const removeChannel = useChatStore((s) => s.removeChannel);
   const contact = useContactsStore((s) =>
     peerID ? s.contacts[peerID] : undefined,
   );
-  const removeContact = useContactsStore((s) => s.removeContact);
-  const renameContact = useContactsStore((s) => s.renameContact);
-  const blockPeer = useBlockedStore((s) => s.blockPeer);
   const peer = usePeerStore((s) => (peerID ? s.peers.get(peerID) : undefined));
   // Snapshot on open, so the reachability line is honest without a live timer.
   const [nowMs] = useState(() => Date.now());
-  const [isEditing, setIsEditing] = useState(false);
-  const [draftName, setDraftName] = useState("");
   const [verifying, setVerifying] = useState(false);
 
   const name = peerID ? resolveDisplayName(peerID) : "";
@@ -79,89 +63,10 @@ export default function ContactInfoSheet({
   // one with a real mesh identity (a 16-hex peer ID). A remote, nostr-only
   // contact has no scannable in-person code, so we don't offer it there.
   const canVerify = !!peerID && !verified && /^[0-9a-f]{16}$/i.test(peerID);
-  // Only verified contacts can be renamed: for those you have actually
-  // confirmed who they are, so a name you assign is trustworthy.
-  const canRename = verified;
-
-  function startEdit(): void {
-    setDraftName(contact?.nickname ?? name);
-    setIsEditing(true);
-  }
-
-  // The pencil is always shown; tapping it on an unverified contact explains
-  // why the name is locked instead of silently doing nothing.
-  function handleEditPress(): void {
-    if (!canRename) {
-      showAlert(
-        "Not verified",
-        "You can rename this contact once you have verified them by scanning their QR code.",
-      );
-      return;
-    }
-    startEdit();
-  }
-
-  function saveEdit(): void {
-    if (!peerID) return;
-    const trimmed = draftName.trim();
-    if (trimmed.length > 0) renameContact(peerID, trimmed);
-    setIsEditing(false);
-  }
-
-  // Reset edit mode on dismiss so reopening never lands mid-edit.
-  function handleClose(): void {
-    setIsEditing(false);
-    onClose();
-  }
-  // Mirrors the DM menu's Remove contact: forget the person and delete the
-  // conversation, then leave the thread. Not a block, they can reach you again.
-  function handleRemoveContact(): void {
-    if (!peerID || !channel) return;
-    showAlert(
-      "Remove contact",
-      `Remove ${name}? This deletes the conversation and forgets the contact. They can still reach you if they message again.`,
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Remove",
-          style: "destructive",
-          onPress: () => {
-            removeChannel(channel);
-            removeContact(peerID);
-            usePeerStore.getState().removePeer(peerID);
-            onClose();
-            onAfterRemove?.();
-          },
-        },
-      ],
-    );
-  }
-
-  function handleBlock(): void {
-    if (!peerID || !channel) return;
-    showAlert(
-      "Block this peer",
-      `Block ${name}? You won't see them on the Mesh tab or receive messages from them, even if they're nearby.`,
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Block",
-          style: "destructive",
-          onPress: () => {
-            blockPeer(peerID);
-            // Tear down the live crypto session and link maps too, not just the
-            // UI entry (forgetPeer also drops them from the peer store).
-            getMeshService()?.forgetPeer(peerID);
-            removeContact(peerID);
-            removeChannel(channel);
-            onClose();
-            onAfterRemove?.();
-          },
-        },
-      ],
-    );
-  }
-
+  // A Nostr/geohash peer is an anonymous, per-cell pseudonym — there is no
+  // lasting identity to verify, so the sheet says "Anonymous" rather than the
+  // "Not verified · scan their QR" line that a mesh peer gets.
+  const isAnonymous = peerID !== null && isNostrId(peerID);
   // The info card's rows, top to bottom. Verification leads (the trust signal),
   // then relationship, reachability, and the always-on encryption guarantee.
   const infoRows: {
@@ -171,23 +76,31 @@ export default function ContactInfoSheet({
     label: string;
     sub?: string;
   }[] = [
-    verified
+    isAnonymous
       ? {
           key: "verify",
-          icon: "shield",
-          iconColor: Colors.online,
-          label: contact
-            ? `Verified since ${formatDate(contact.addedAtMs)}`
-            : "Verified",
-          sub: "Scanned their QR code",
-        }
-      : {
-          key: "verify",
           icon: "shield-off",
-          iconColor: Colors.textMuted,
-          label: "Not verified",
-          sub: "Scan their QR code to confirm this is really them.",
-        },
+          iconColor: Colors.danger,
+          label: "Anonymous",
+          sub: "A geohash pseudonym with no lasting identity to verify.",
+        }
+      : verified
+        ? {
+            key: "verify",
+            icon: "shield",
+            iconColor: Colors.verified,
+            label: contact
+              ? `Verified since ${formatDate(contact.addedAtMs)}`
+              : "Verified",
+            sub: "Scanned their QR code",
+          }
+        : {
+            key: "verify",
+            icon: "shield-off",
+            iconColor: Colors.danger,
+            label: "Not verified",
+            sub: "Scan their QR code to confirm this is really them.",
+          },
   ];
   if (firstMessage) {
     infoRows.push({
@@ -200,7 +113,7 @@ export default function ContactInfoSheet({
   infoRows.push({
     key: "enc",
     icon: "lock",
-    iconColor: Colors.textMuted,
+    iconColor: Colors.e2ee,
     label: "End-to-end encrypted",
     sub: "Noise XX and Double Ratchet",
   });
@@ -211,23 +124,12 @@ export default function ContactInfoSheet({
         visible={channel !== null}
         transparent
         animationType="slide"
-        onRequestClose={handleClose}
+        onRequestClose={onClose}
       >
         <View style={styles.overlay}>
-          <Pressable style={StyleSheet.absoluteFill} onPress={handleClose} />
+          <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
           <View style={styles.sheet}>
             <View style={styles.handle} />
-            {peerID && !isEditing && (
-              <Pressable
-                style={styles.editBtn}
-                onPress={handleEditPress}
-                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                accessibilityRole="button"
-                accessibilityLabel="Edit nickname"
-              >
-                <Feather name="edit-2" size={16} color={Colors.textMuted} />
-              </Pressable>
-            )}
             {peerID && (
               <>
                 <View style={styles.body}>
@@ -238,52 +140,20 @@ export default function ContactInfoSheet({
                     presence={isOnline ? "online" : "offline"}
                     ringColor={Colors.surface}
                   />
-                  {isEditing ? (
-                    <View style={styles.editRow}>
-                      <TextInput
-                        style={styles.nameInput}
-                        value={draftName}
-                        onChangeText={setDraftName}
-                        autoFocus
-                        maxLength={40}
-                        placeholder="Nickname"
-                        placeholderTextColor={Colors.textMuted}
-                        selectionColor={Colors.accent}
-                        textAlign="center"
-                        returnKeyType="done"
-                        onSubmitEditing={saveEdit}
-                      />
-                      <View style={styles.editControls}>
-                        <Pressable
-                          onPress={() => setIsEditing(false)}
-                          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                          accessibilityRole="button"
-                          accessibilityLabel="Cancel"
-                        >
-                          <Feather
-                            name="x"
-                            size={18}
-                            color={Colors.textMuted}
-                          />
-                        </Pressable>
-                        <Pressable
-                          onPress={saveEdit}
-                          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                          accessibilityRole="button"
-                          accessibilityLabel="Save nickname"
-                        >
-                          <Feather
-                            name="check"
-                            size={18}
-                            color={Colors.accent}
-                          />
-                        </Pressable>
-                      </View>
+                  <Text style={styles.name}>{name}</Text>
+                  {/* A Nostr peer has no short mesh ID — its identifier IS a
+                      64-hex public key. Box and label it so it reads as a
+                      deliberate credential, not a stray string. */}
+                  {isNostrId(peerID) ? (
+                    <View style={styles.keyBox}>
+                      <Text style={styles.keyBoxLabel}>Nostr public key</Text>
+                      <Text style={styles.keyBoxValue} selectable>
+                        {peerID.slice(NOSTR_ID_PREFIX.length)}
+                      </Text>
                     </View>
                   ) : (
-                    <Text style={styles.name}>{name}</Text>
+                    <Text style={styles.peerID}>{peerID}</Text>
                   )}
-                  <Text style={styles.peerID}>{peerID}</Text>
 
                   <View style={styles.infoCard}>
                     {infoRows.map((r, i) => (
@@ -309,8 +179,8 @@ export default function ContactInfoSheet({
                   </View>
                 </View>
 
-                <View style={styles.actions}>
-                  {canVerify && (
+                {canVerify && (
+                  <View style={styles.actions}>
                     <Pressable
                       style={styles.verifyBtn}
                       onPress={() => setVerifying(true)}
@@ -324,30 +194,8 @@ export default function ContactInfoSheet({
                       />
                       <Text style={styles.verifyText}>Verify contact</Text>
                     </Pressable>
-                  )}
-                  <Pressable
-                    style={styles.removeBtn}
-                    onPress={handleRemoveContact}
-                    accessibilityRole="button"
-                    accessibilityLabel="Remove contact"
-                  >
-                    <Feather
-                      name="user-x"
-                      size={16}
-                      color={Colors.textPrimary}
-                    />
-                    <Text style={styles.removeText}>Remove contact</Text>
-                  </Pressable>
-                  <Pressable
-                    style={styles.blockBtn}
-                    onPress={handleBlock}
-                    accessibilityRole="button"
-                    accessibilityLabel="Block this peer"
-                  >
-                    <Feather name="slash" size={16} color={Colors.danger} />
-                    <Text style={styles.blockText}>Block contact</Text>
-                  </Pressable>
-                </View>
+                  </View>
+                )}
               </>
             )}
           </View>
@@ -394,13 +242,6 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       backgroundColor: Colors.borderStrong,
       alignSelf: "center",
     },
-    editBtn: {
-      position: "absolute",
-      top: Spacing.base,
-      right: Spacing.base,
-      zIndex: 1,
-      padding: Spacing.xs,
-    },
     body: {
       alignItems: "center",
       gap: Spacing.xs,
@@ -411,30 +252,37 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       color: Colors.textPrimary,
       marginTop: Spacing.sm,
     },
-    editRow: {
-      alignItems: "center",
-      gap: Spacing.sm,
-      marginTop: Spacing.sm,
-    },
-    nameInput: {
-      minWidth: 160,
-      fontSize: FontSize.lg,
-      fontWeight: FontWeight.semibold,
-      color: Colors.textPrimary,
-      textAlign: "center",
-      paddingVertical: 2,
-      borderBottomWidth: 1,
-      borderBottomColor: Colors.border,
-    },
-    editControls: {
-      flexDirection: "row",
-      gap: Spacing.lg,
-    },
     peerID: {
       fontSize: FontSize.xs,
       fontFamily: FontFamily.mono,
       color: Colors.textMuted,
       letterSpacing: 0.3,
+    },
+    // Boxed, labeled Nostr public key (see the render note above).
+    keyBox: {
+      alignSelf: "stretch",
+      marginTop: Spacing.sm,
+      backgroundColor: Colors.surfaceRaised,
+      borderRadius: Radius.lg,
+      borderWidth: 1,
+      borderColor: Colors.border,
+      paddingHorizontal: Spacing.md,
+      paddingVertical: Spacing.sm,
+      gap: 4,
+    },
+    keyBoxLabel: {
+      fontSize: FontSize.xs,
+      fontWeight: FontWeight.semibold,
+      color: Colors.textMuted,
+      textTransform: "uppercase",
+      letterSpacing: 0.6,
+    },
+    keyBoxValue: {
+      fontSize: FontSize.xs,
+      fontFamily: FontFamily.mono,
+      color: Colors.textSecondary,
+      letterSpacing: 0.3,
+      lineHeight: 16,
     },
     // Structured info card: one bordered box, each fact its own icon row.
     infoCard: {
@@ -493,36 +341,6 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       fontSize: FontSize.base,
       fontWeight: FontWeight.bold,
       color: Colors.textInverse,
-    },
-    removeBtn: {
-      minHeight: 50,
-      flexDirection: "row",
-      alignItems: "center",
-      justifyContent: "center",
-      gap: Spacing.sm,
-      paddingVertical: Spacing.md,
-      borderRadius: Radius.full,
-      backgroundColor: Colors.surfaceRaised,
-    },
-    removeText: {
-      fontSize: FontSize.base,
-      fontWeight: FontWeight.medium,
-      color: Colors.textPrimary,
-    },
-    blockBtn: {
-      minHeight: 50,
-      flexDirection: "row",
-      alignItems: "center",
-      justifyContent: "center",
-      gap: Spacing.sm,
-      paddingVertical: Spacing.md,
-      borderRadius: Radius.full,
-      backgroundColor: Colors.surfaceRaised,
-    },
-    blockText: {
-      fontSize: FontSize.base,
-      fontWeight: FontWeight.medium,
-      color: Colors.danger,
     },
   });
 }

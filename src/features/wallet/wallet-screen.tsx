@@ -38,6 +38,7 @@ import {
   FontWeight,
   Radius,
   Spacing,
+  TAB_BAR_CLEARANCE,
   useThemeColors,
 } from "../../ui/theme";
 import { peerIDToUsername } from "../../utils/username";
@@ -1135,7 +1136,7 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
     content: {
       padding: Spacing.base,
       gap: Spacing.base,
-      paddingBottom: Spacing["3xl"],
+      paddingBottom: TAB_BAR_CLEARANCE,
     },
     // Quick actions: bordered pill buttons, matching the profile screen's
     // Share ID / Share QR pills (icon + text side by side). Raised fill
@@ -1144,7 +1145,7 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
     // Balance card
     balanceCard: {
       backgroundColor: Colors.surface,
-      borderRadius: Radius.xl,
+      borderRadius: Radius.lg,
       borderWidth: 1,
       borderColor: Colors.border,
       padding: Spacing.lg,
@@ -1304,7 +1305,7 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       borderTopLeftRadius: Radius["2xl"],
       borderTopRightRadius: Radius["2xl"],
       padding: Spacing.xl,
-      gap: Spacing.base,
+      gap: Spacing.md,
     },
     handle: {
       width: 36,
@@ -1325,7 +1326,7 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
     },
     tokenInput: {
       backgroundColor: Colors.surfaceRaised,
-      borderRadius: Radius.md,
+      borderRadius: Radius.xl,
       borderWidth: 1,
       borderColor: Colors.border,
       paddingHorizontal: Spacing.base,
@@ -1339,7 +1340,6 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
     tokenInputCompact: {
       minHeight: 0,
       fontFamily: undefined,
-      marginTop: Spacing.sm,
     },
     // Stacked full-width pills, primary action on top, the same pattern as
     // every other confirm sheet fixed this session (panic wipe, Tor, etc.).
@@ -1389,7 +1389,7 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       marginTop: 4,
       paddingHorizontal: Spacing.sm,
       paddingVertical: 3,
-      borderRadius: Radius.sm,
+      borderRadius: Radius.full,
       backgroundColor: Colors.surfaceRaised,
       borderWidth: 1,
       borderColor: Colors.border,

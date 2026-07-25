@@ -29,6 +29,7 @@ import {
   FontWeight,
   Radius,
   Spacing,
+  TAB_BAR_CLEARANCE,
   useThemeColors,
 } from "../../ui/theme";
 import { sortConversationsByActivity } from "../../utils/conversation-order";
@@ -525,6 +526,8 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
     },
     list: {
       flexGrow: 1,
+      // Clear the floating tab bar so the last DM row can scroll above it.
+      paddingBottom: TAB_BAR_CLEARANCE,
     },
     // No per-row background, just flat rows directly on the screen background,
     // divided only by the hairline separator below. Matches the WhatsApp

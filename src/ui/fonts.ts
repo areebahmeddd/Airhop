@@ -36,7 +36,7 @@ export const MONO_FONTS: Record<MonoFont, MonoFontSpec> = {
     family: "JetBrainsMono_400Regular",
     label: "JetBrains Mono",
     description: "Modern and easy to read",
-    icon: "code",
+    icon: "terminal",
   },
 };
 

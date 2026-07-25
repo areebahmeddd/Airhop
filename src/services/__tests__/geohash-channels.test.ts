@@ -114,14 +114,15 @@ describe("teleport: manual geohash channels", () => {
 
   it("maps geohash length to the same coverage level as bitchat", () => {
     // bitchat GeohashChannelLevel.level(forLength:): 0-2 region, 3-4 province,
-    // 5 city, 6 neighborhood, 7 block, 8+ building.
+    // 5 city, 6 neighborhood, 7 block, 8+ building. Same buckets; the length-7
+    // label reads "City block" to match the #block default channel's wording.
     expect(geohashLevelName("t")).toBe("Region");
     expect(geohashLevelName("td")).toBe("Region");
     expect(geohashLevelName("tdr")).toBe("Province");
     expect(geohashLevelName("tdr1")).toBe("Province");
     expect(geohashLevelName("tdr1k")).toBe("City");
     expect(geohashLevelName("tdr1ke")).toBe("Neighborhood");
-    expect(geohashLevelName("tdr1ke7")).toBe("Block");
+    expect(geohashLevelName("tdr1ke7")).toBe("City block");
     expect(geohashLevelName("tdr1ke7x")).toBe("Building");
   });
 });

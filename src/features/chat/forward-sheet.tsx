@@ -27,7 +27,7 @@ import {
   useThemeColors,
 } from "../../ui/theme";
 import { channelLabel } from "../../utils/chat-display-name";
-import { peerIDToUsername } from "../../utils/username";
+import { resolveDisplayName } from "../../utils/display-name";
 
 interface Props {
   visible: boolean;
@@ -120,7 +120,7 @@ export default function ForwardSheet({
                       const kind = kindOf(item);
                       const label =
                         kind === "dm"
-                          ? peerIDToUsername(item.slice(3))
+                          ? resolveDisplayName(item.slice(3))
                           : channelLabel(item);
                       const justSent = sentTo === item;
                       return (

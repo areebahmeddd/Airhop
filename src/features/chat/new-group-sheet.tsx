@@ -38,6 +38,10 @@ interface Props {
   onCreated: (channel: string) => void;
 }
 
+// A group holds at most 16 members (matching bitchat); the creator is always
+// one of them, so the picker offers up to 15 others.
+const MAX_OTHER_MEMBERS = 15;
+
 export function NewGroupSheet({ visible, onClose, onBack, onCreated }: Props) {
   const Colors = useThemeColors();
   const styles = useMemo(() => createStyles(Colors), [Colors]);
@@ -56,7 +60,9 @@ export function NewGroupSheet({ visible, onClose, onBack, onCreated }: Props) {
     setSelected((prev) => {
       const next = new Set(prev);
       if (next.has(peerID)) next.delete(peerID);
-      else next.add(peerID);
+      // Cap at 15 others (creator makes 16). Silently ignore taps past the cap
+      // rather than letting createGroup fail later with a misleading error.
+      else if (next.size < MAX_OTHER_MEMBERS) next.add(peerID);
       return next;
     });
   }
@@ -102,26 +108,41 @@ export function NewGroupSheet({ visible, onClose, onBack, onCreated }: Props) {
         <Pressable style={StyleSheet.absoluteFill} onPress={handleClose} />
         <View style={styles.sheet}>
           <View style={styles.handle} />
-          <Text style={styles.title}>New group</Text>
+          <Text style={styles.title}>Create a group</Text>
           {/* Same scannable card as the create-channel sheet, so the two sides
               of the chooser stay comparable: what it protects, who can get in,
               how far it reaches. */}
           <View style={styles.privacyNote}>
             <View style={styles.privacyNoteRow}>
-              <Feather name="lock" size={14} color={Colors.online} />
+              <Feather
+                name="lock"
+                size={14}
+                color={Colors.e2ee}
+                style={styles.noteIcon}
+              />
               <Text style={styles.privacyNoteText}>
                 End-to-end encrypted. Only members can read the messages.
               </Text>
             </View>
             <View style={styles.privacyNoteRow}>
-              <Feather name="users" size={14} color={Colors.textMuted} />
+              <Feather
+                name="users"
+                size={14}
+                color={Colors.textMuted}
+                style={styles.noteIcon}
+              />
               <Text style={styles.privacyNoteText}>
                 Up to 16 people, chosen by you. There is no invite link, so
                 nobody joins by being forwarded one.
               </Text>
             </View>
             <View style={styles.privacyNoteRow}>
-              <Feather name="bluetooth" size={14} color={Colors.textMuted} />
+              <Feather
+                name="bluetooth"
+                size={14}
+                color={Colors.textMuted}
+                style={styles.noteIcon}
+              />
               <Text style={styles.privacyNoteText}>
                 Bluetooth only. Members out of range receive messages once they
                 are back.
@@ -136,7 +157,7 @@ export function NewGroupSheet({ visible, onClose, onBack, onCreated }: Props) {
             placeholder="Group name"
             placeholderTextColor={Colors.textMuted}
             selectionColor={Colors.accent}
-            maxLength={64}
+            maxLength={40}
           />
 
           {/* Label and list are one block: the sheet's own gap would otherwise
@@ -241,13 +262,18 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
     privacyNote: {
       gap: Spacing.sm,
       backgroundColor: Colors.surfaceRaised,
-      borderRadius: Radius.md,
+      borderRadius: Radius.lg,
       padding: Spacing.md,
     },
     privacyNoteRow: {
       flexDirection: "row",
       alignItems: "flex-start",
       gap: Spacing.sm,
+    },
+    // Nudge the leading icon down so it optically centers on the first text
+    // line (the text's lineHeight otherwise leaves the icon sitting high).
+    noteIcon: {
+      marginTop: 2,
     },
     privacyNoteText: {
       flex: 1,
@@ -257,7 +283,7 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
     },
     input: {
       backgroundColor: Colors.surfaceRaised,
-      borderRadius: Radius.md,
+      borderRadius: Radius.xl,
       paddingHorizontal: Spacing.base,
       paddingVertical: Spacing.md,
       color: Colors.textPrimary,

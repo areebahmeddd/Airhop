@@ -94,7 +94,11 @@ import { channelInviteLink } from "../../utils/deep-link";
 import { resolveDisplayName } from "../../utils/display-name";
 import { canSendMedia } from "../../utils/media-policy";
 import { activeMentionQuery, applyMention } from "../../utils/mentions";
-import { peerIDToUsername } from "../../utils/username";
+import {
+  isNostrId,
+  NOSTR_ID_PREFIX,
+  peerIDToUsername,
+} from "../../utils/username";
 import ChannelInfoSheet from "./channel-info-sheet";
 import ContactInfoSheet from "./contact-info-sheet";
 import ForwardSheet from "./forward-sheet";
@@ -181,10 +185,27 @@ interface Props {
 // instead of as a regular chat bubble.
 // How long a just-sent message is held before it actually transmits, giving a
 // window to Undo. Short enough not to read as lag, long enough to react.
-const UNDO_WINDOW_MS = 5000;
+const UNDO_WINDOW_MS = 3000;
 
 function screenshotNoticeText(nickname: string): string {
   return `* ${nickname} took a screenshot *`;
+}
+
+// Slash commands offered by the "/" quick-picker. Only the ones handleSend
+// actually acts on appear here, so the list never advertises a command that does
+// nothing. Both are IRC-style emotes: in a DM they target the peer, in a channel
+// they take a trailing @name.
+const SLASH_COMMANDS: { cmd: string; emoji: string; hint: string }[] = [
+  { cmd: "hug", emoji: "🫂", hint: "Send a warm hug" },
+  { cmd: "slap", emoji: "🐟", hint: "Slap with a large trout" },
+];
+
+// The partial command while typing "/…" at the very start of the draft, before
+// any space ("/hu" -> "hu", "/hug foo" -> null, "not /hug" -> null). Null when
+// the draft is not a command being composed. Mirrors activeMentionQuery for "@".
+function activeSlashQuery(draft: string): string | null {
+  const m = /^\/(\w*)$/.exec(draft);
+  return m ? m[1]!.toLowerCase() : null;
 }
 
 // (A previous isScreenshotNotice() text-sniffer was removed: matching on user
@@ -635,8 +656,7 @@ export default function MessageThread({
 }: Props): React.JSX.Element {
   const Colors = useThemeColors();
   const styles = useMemo(() => createStyles(Colors), [Colors]);
-  const { messages, addMessage, addChannel, toggleStar, togglePinMessage } =
-    useChatStore();
+  const { messages, addMessage, addChannel } = useChatStore();
   // Live peer count, real data from BLE discovery, not a stub.
   // Subscribe to the stable peer map and derive the reachable list locally.
   const peers = usePeerStore((s) => s.peers);
@@ -711,7 +731,9 @@ export default function MessageThread({
   const memberCount = isGroup
     ? (getMeshService()?.groupMemberCount(channel.slice("group:".length)) ?? 0)
     : isGeo
-      ? geoMembers.length
+      ? // Count yourself: you are an active participant in the cell too, and the
+        // member list shows a "You" row, so the pill/subtitle must match it.
+        geoMembers.length + 1
       : peerCount;
 
   // Reverse-geocoded name for a location channel's cell, shown in the header
@@ -824,6 +846,19 @@ export default function MessageThread({
     return out;
   }, [mentionQuery, mentionCandidates, localNickname]);
 
+  // Slash commands matching what is typed after "/". Independent of mentions, so
+  // it also shows in DMs (where there is no one to @-mention but you can still
+  // /hug the peer). The two pickers never show at once: one needs "@…", the
+  // other a leading "/…".
+  const slashQuery = activeSlashQuery(draft);
+  const slashMatches = useMemo(
+    () =>
+      slashQuery === null
+        ? []
+        : SLASH_COMMANDS.filter((c) => c.cmd.startsWith(slashQuery)),
+    [slashQuery],
+  );
+
   const [isPTTActive, setIsPTTActive] = useState(false);
   const isRecording = recorderState.isRecording;
   // Voice recording
@@ -855,7 +890,6 @@ export default function MessageThread({
   } | null>(null);
   // Channel members list: currently-reachable peers, tap one to open the
   // same profile sheet as tapping their avatar on a message.
-  const [showMembersList, setShowMembersList] = useState(false);
   // Notices (bulletin board) sheet for this channel.
   const [showNotices, setShowNotices] = useState(false);
   // A picked attachment held for review before sending, so the user can add a
@@ -884,7 +918,6 @@ export default function MessageThread({
   } | null>(null);
   const [heldMessage, setHeldMessage] = useState<ChatMessage | null>(null);
   const [forwardSource, setForwardSource] = useState<ChatMessage | null>(null);
-  const [showPinned, setShowPinned] = useState(false);
   // Set right after scrolling to a search result, cleared after a brief
   // flash. Not persisted (unlike isStarred), purely a transient UI cue.
   const [highlightedMessageId, setHighlightedMessageId] = useState<
@@ -903,11 +936,6 @@ export default function MessageThread({
   }, [audioRecorder]);
 
   const msgs = useMemo(() => messages[channel] ?? [], [messages, channel]);
-  // Newest pinned first, so the pinned sheet reads like a recent-first list.
-  const pinnedMessages = useMemo(
-    () => msgs.filter((m) => m.isPinned).reverse(),
-    [msgs],
-  );
   const isDM = channel.startsWith("dm:");
 
   // Send read receipts for this DM whenever it is open and its messages change:
@@ -1146,8 +1174,23 @@ export default function MessageThread({
   }
 
   function handleSend(): void {
-    const text = draft.trim();
+    let text = draft.trim();
     if (!text) return;
+    // Fun IRC-style emotes, matching bitchat: /hug and /slap become an action
+    // message both sides see. In a DM the target defaults to the peer; in a
+    // channel it comes from a trailing @name.
+    const emote = /^\/(hug|slap)(?:\s+(.*))?$/i.exec(text);
+    if (emote) {
+      const kind = emote[1].toLowerCase();
+      const target =
+        (emote[2] ?? "").trim().replace(/^@/, "") ||
+        (isDM ? resolveDisplayName(channel.slice(3)) : "");
+      if (target.length === 0) return; // a channel emote needs a @name
+      const emoji = kind === "hug" ? "🫂" : "🐟";
+      const action = kind === "hug" ? "hugs" : "slaps";
+      const suffix = kind === "slap" ? " around a bit with a large trout" : "";
+      text = `* ${emoji} ${localNickname} ${action} ${target}${suffix} *`;
+    }
     // At most one message is ever held: commit the previous one first.
     commitHeld();
 
@@ -1432,8 +1475,6 @@ export default function MessageThread({
     const dmChannel = `dm:${peerID}`;
     addChannel(dmChannel);
     setSenderInfoTarget(null);
-    // Also dismiss the members list, if it was left open behind this sheet.
-    setShowMembersList(false);
     onNavigateToChannel(dmChannel);
   }
 
@@ -1914,28 +1955,6 @@ export default function MessageThread({
           {!isDM && !isGroup && (
             <>
               <Pressable
-                style={styles.memberCountBtn}
-                onPress={() => setShowMembersList(true)}
-                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                accessibilityRole="button"
-                accessibilityLabel={`${memberCount} member${memberCount !== 1 ? "s" : ""} ${isGeo ? "active" : "nearby"}`}
-              >
-                <Feather name="users" size={14} color={Colors.textSecondary} />
-                <Text style={styles.memberCountText}>{memberCount}</Text>
-              </Pressable>
-              <Pressable
-                onPress={handleInvite}
-                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                accessibilityRole="button"
-                accessibilityLabel="Invite someone to this channel"
-              >
-                <Feather
-                  name="user-plus"
-                  size={18}
-                  color={Colors.textSecondary}
-                />
-              </Pressable>
-              <Pressable
                 onPress={openNotices}
                 hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                 accessibilityRole="button"
@@ -1952,28 +1971,20 @@ export default function MessageThread({
                 />
                 {unseenNotices > 0 && <View style={styles.noticeDot} />}
               </Pressable>
+              <Pressable
+                onPress={handleInvite}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                accessibilityRole="button"
+                accessibilityLabel="Invite someone to this channel"
+              >
+                <Feather
+                  name="user-plus"
+                  size={18}
+                  color={Colors.textSecondary}
+                />
+              </Pressable>
             </>
           )}
-          <Pressable
-            onPress={() => setShowPinned(true)}
-            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-            accessibilityRole="button"
-            accessibilityLabel={
-              pinnedMessages.length > 0
-                ? `${pinnedMessages.length} pinned message${pinnedMessages.length !== 1 ? "s" : ""}`
-                : "Pinned messages"
-            }
-          >
-            <MaterialCommunityIcons
-              name="pin"
-              size={18}
-              color={
-                pinnedMessages.length > 0
-                  ? Colors.textPrimary
-                  : Colors.textSecondary
-              }
-            />
-          </Pressable>
         </View>
       </View>
 
@@ -2039,6 +2050,33 @@ export default function MessageThread({
                 <View style={styles.systemRow}>
                   <Feather name="camera" size={12} color={Colors.textMuted} />
                   <Text style={styles.systemRowText}>{item.text}</Text>
+                </View>
+              </View>
+            );
+          }
+
+          // IRC-style emote (/hug, /slap): a real message wrapped in "* … *",
+          // rendered centered and italic like an action rather than a bubble.
+          const isEmoteRow =
+            item.isSystem !== true &&
+            item.attachment === undefined &&
+            /^\* .+ \*$/.test(item.text);
+          if (isEmoteRow) {
+            return (
+              <View>
+                {needsDateSeparator(index) && (
+                  <View style={styles.dateSeparator}>
+                    <View style={styles.dateLine} />
+                    <Text style={styles.dateLabel}>
+                      {formatDateSeparator(item.timestampMs)}
+                    </Text>
+                    <View style={styles.dateLine} />
+                  </View>
+                )}
+                <View style={styles.systemRow}>
+                  <Text style={styles.emoteText}>
+                    {item.text.replace(/^\* /, "").replace(/ \*$/, "")}
+                  </Text>
                 </View>
               </View>
             );
@@ -2185,6 +2223,35 @@ export default function MessageThread({
           previous (already-drained) animation. */}
       {heldMessage && (
         <UndoSendPill key={heldMessage.id} onUndo={undoSend} Colors={Colors} />
+      )}
+
+      {/* "/" command picker: appears while typing a slash command, tap to
+          insert it (with a trailing space, so a DM can send straight away and a
+          channel is ready for the @name). Same shell as the @-mention picker. */}
+      {slashMatches.length > 0 && (
+        <View style={styles.mentionBar}>
+          <ScrollView
+            style={styles.mentionList}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+          >
+            {slashMatches.map((c) => (
+              <Pressable
+                key={c.cmd}
+                style={styles.slashRow}
+                onPress={() => setDraft(`/${c.cmd} `)}
+                accessibilityRole="button"
+                accessibilityLabel={`Command /${c.cmd}: ${c.hint}`}
+              >
+                <Text style={styles.slashEmoji}>{c.emoji}</Text>
+                <View style={styles.slashText}>
+                  <Text style={styles.slashCmd}>/{c.cmd}</Text>
+                  <Text style={styles.slashHint}>{c.hint}</Text>
+                </View>
+              </Pressable>
+            ))}
+          </ScrollView>
+        </View>
       )}
 
       {/* @-mention picker: appears while typing "@", tap to insert. */}
@@ -2440,6 +2507,9 @@ export default function MessageThread({
           channel={showChannelInfo ? channel : null}
           onClose={() => setShowChannelInfo(false)}
           onLeave={onBack}
+          onNavigateToChannel={onNavigateToChannel}
+          localNickname={localNickname}
+          localPeerID={localPeerID}
         />
       )}
 
@@ -2524,151 +2594,6 @@ export default function MessageThread({
         </View>
       </Modal>
 
-      {/* Members list: currently-reachable peers, tap the header count. */}
-      {!isDM && (
-        <Modal
-          visible={showMembersList}
-          transparent
-          animationType="slide"
-          onRequestClose={() => setShowMembersList(false)}
-        >
-          <View style={styles.membersOverlay}>
-            <Pressable
-              style={StyleSheet.absoluteFill}
-              onPress={() => setShowMembersList(false)}
-            />
-            <View style={styles.membersSheet}>
-              <View style={styles.handle} />
-              <Text style={styles.membersTitle}>
-                {memberCount} member{memberCount !== 1 ? "s" : ""}
-              </Text>
-              <ScrollView
-                style={styles.membersList}
-                showsVerticalScrollIndicator={false}
-              >
-                {/* You: your own entry, always first. No action, since you can't
-                    message or open a profile for yourself; the right side reads
-                    "You" instead of the message icon every other row shows. */}
-                <View style={styles.memberRow}>
-                  <Avatar
-                    username={localNickname}
-                    peerID={localPeerID}
-                    size={40}
-                  />
-                  <View style={styles.memberRowInfo}>
-                    <Text style={styles.memberRowName} numberOfLines={1}>
-                      {localNickname}
-                    </Text>
-                  </View>
-                  <Text style={styles.memberRowYou}>You</Text>
-                </View>
-
-                {isGeo ? (
-                  // Geohash channel: participants are Nostr pseudonyms scoped to
-                  // this cell, not BLE peers, so they carry no openable profile.
-                  geoMembers.length === 0 ? (
-                    <Text style={styles.membersEmpty}>
-                      No one else is active in this cell right now.
-                    </Text>
-                  ) : (
-                    geoMembers.map((m) => (
-                      <Pressable
-                        key={m.pubkey}
-                        style={styles.memberRow}
-                        onPress={() => {
-                          // Open an end-to-end encrypted DM with this cell
-                          // participant, from our per-cell identity.
-                          getMeshService()?.openGeoDm(channel, m.pubkey);
-                          setShowMembersList(false);
-                          onNavigateToChannel(`dm:nostr_${m.pubkey}`);
-                        }}
-                        accessibilityRole="button"
-                        accessibilityLabel={`Message ${m.nickname}`}
-                      >
-                        <Avatar
-                          username={m.nickname}
-                          peerID={m.pubkey}
-                          size={40}
-                        />
-                        <View style={styles.memberRowInfo}>
-                          <Text style={styles.memberRowName} numberOfLines={1}>
-                            {m.nickname}
-                          </Text>
-                          <View style={styles.memberRowStatus}>
-                            <View
-                              style={[
-                                styles.memberRowDot,
-                                m.teleported && styles.memberRowDotTeleported,
-                              ]}
-                            />
-                            <Text style={styles.memberRowStatusText}>
-                              {m.teleported ? "Teleported" : "Active"}
-                            </Text>
-                          </View>
-                        </View>
-                        <View style={styles.memberRowAction}>
-                          <Feather
-                            name="message-circle"
-                            size={17}
-                            color={Colors.textSecondary}
-                          />
-                        </View>
-                      </Pressable>
-                    ))
-                  )
-                ) : onlinePeers.length === 0 ? (
-                  <Text style={styles.membersEmpty}>
-                    No one else is currently in range.
-                  </Text>
-                ) : (
-                  onlinePeers.map((peer) => (
-                    <Pressable
-                      key={peer.peerID}
-                      style={styles.memberRow}
-                      onPress={() => {
-                        // Keep the members list open behind the profile sheet
-                        // so the sheet's back arrow returns straight to it.
-                        setSenderInfoTarget({
-                          peerID: peer.peerID,
-                          nickname: peer.nickname,
-                          fromMembers: true,
-                        });
-                      }}
-                      accessibilityRole="button"
-                      accessibilityLabel={`View ${peerIDToUsername(peer.peerID)}'s profile`}
-                    >
-                      <Avatar
-                        username={peerIDToUsername(peer.peerID)}
-                        peerID={peer.peerID}
-                        size={40}
-                      />
-                      <View style={styles.memberRowInfo}>
-                        <Text style={styles.memberRowName} numberOfLines={1}>
-                          {peerIDToUsername(peer.peerID)}
-                        </Text>
-                        <View style={styles.memberRowStatus}>
-                          <View style={styles.memberRowDot} />
-                          <Text style={styles.memberRowStatusText}>
-                            In range
-                          </Text>
-                        </View>
-                      </View>
-                      <View style={styles.memberRowAction}>
-                        <Feather
-                          name="message-circle"
-                          size={17}
-                          color={Colors.textSecondary}
-                        />
-                      </View>
-                    </Pressable>
-                  ))
-                )}
-              </ScrollView>
-            </View>
-          </View>
-        </Modal>
-      )}
-
       {/* Channel sender profile sheet: tap a message's avatar/name. */}
       {!isDM && (
         <Modal
@@ -2709,9 +2634,18 @@ export default function MessageThread({
                   <Text style={styles.dmInfoName}>
                     {resolveDisplayName(senderInfoTarget.peerID)}
                   </Text>
-                  <Text style={styles.dmInfoPeerID}>
-                    {senderInfoTarget.peerID}
-                  </Text>
+                  {isNostrId(senderInfoTarget.peerID) ? (
+                    <View style={styles.keyBox}>
+                      <Text style={styles.keyBoxLabel}>Nostr public key</Text>
+                      <Text style={styles.keyBoxValue} selectable>
+                        {senderInfoTarget.peerID.slice(NOSTR_ID_PREFIX.length)}
+                      </Text>
+                    </View>
+                  ) : (
+                    <Text style={styles.dmInfoPeerID}>
+                      {senderInfoTarget.peerID}
+                    </Text>
+                  )}
                   {onlinePeers.some(
                     (p) => p.peerID === senderInfoTarget.peerID,
                   ) && (
@@ -2785,12 +2719,6 @@ export default function MessageThread({
           actionSheet &&
           void Clipboard.setStringAsync(actionSheet.text).catch(() => {})
         }
-        onTogglePin={() =>
-          actionSheet && togglePinMessage(actionSheet.channel, actionSheet.id)
-        }
-        onToggleStar={() =>
-          actionSheet && toggleStar(actionSheet.channel, actionSheet.id)
-        }
         onInfo={() => {
           // Same close-then-open handoff as Forward, so the two sheets don't
           // fight for the screen.
@@ -2816,75 +2744,8 @@ export default function MessageThread({
           }
         }}
       />
-
-      {/* Pinned messages: tap one to jump to it in the thread. */}
-      <Modal
-        visible={showPinned}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setShowPinned(false)}
-      >
-        <View style={styles.membersOverlay}>
-          <Pressable
-            style={StyleSheet.absoluteFill}
-            onPress={() => setShowPinned(false)}
-          />
-          <View style={styles.membersSheet}>
-            <View style={styles.handle} />
-            <Text style={styles.membersTitle}>Pinned messages</Text>
-            {pinnedMessages.length === 0 ? (
-              <Text style={styles.membersEmpty}>
-                No pinned messages. Long-press a message and choose Pin.
-              </Text>
-            ) : (
-              <ScrollView
-                style={styles.membersList}
-                showsVerticalScrollIndicator={false}
-              >
-                {pinnedMessages.map((m) => (
-                  <Pressable
-                    key={m.id}
-                    style={styles.pinnedRow}
-                    onPress={() => {
-                      setShowPinned(false);
-                      scrollToMessage(m.id);
-                    }}
-                    accessibilityRole="button"
-                    accessibilityLabel={`Go to pinned message from ${m.isMine ? "you" : m.senderNickname}`}
-                  >
-                    <MaterialCommunityIcons
-                      name="pin"
-                      size={16}
-                      color={Colors.textMuted}
-                    />
-                    <View style={styles.pinnedBody}>
-                      <Text style={styles.pinnedMeta} numberOfLines={1}>
-                        {m.isMine ? "You" : m.senderNickname} ·{" "}
-                        {formatPinnedTime(m.timestampMs)}
-                      </Text>
-                      <Text style={styles.pinnedText} numberOfLines={2}>
-                        {m.text.trim().length > 0 ? m.text : "Attachment"}
-                      </Text>
-                    </View>
-                  </Pressable>
-                ))}
-              </ScrollView>
-            )}
-          </View>
-        </View>
-      </Modal>
     </KeyboardAvoidingView>
   );
-}
-
-// Compact "Jul 23, 2:48 PM" stamp for the pinned-messages list.
-function formatPinnedTime(ms: number): string {
-  return new Date(ms).toLocaleString([], {
-    month: "short",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  });
 }
 
 function createStyles(Colors: ReturnType<typeof useThemeColors>) {
@@ -2944,50 +2805,11 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       justifyContent: "flex-end",
       gap: Spacing.md,
     },
-    memberCountBtn: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 4,
-      paddingHorizontal: Spacing.sm,
-      paddingVertical: 4,
-      borderRadius: Radius.full,
-      backgroundColor: Colors.surfaceRaised,
-    },
-    memberCountText: {
-      fontSize: FontSize.xs,
-      fontWeight: FontWeight.semibold,
-      color: Colors.textSecondary,
-    },
     // DM header: avatar + name row, left-aligned after the back arrow.
     headerDmId: {
       flexDirection: "row",
       alignItems: "center",
       gap: Spacing.sm,
-    },
-    // Pinned-messages sheet rows.
-    pinnedRow: {
-      flexDirection: "row",
-      alignItems: "flex-start",
-      gap: Spacing.md,
-      paddingVertical: Spacing.md,
-      paddingHorizontal: Spacing.sm,
-      borderRadius: Radius.md,
-      backgroundColor: Colors.surfaceRaised,
-      marginBottom: Spacing.xs,
-    },
-    pinnedBody: {
-      flex: 1,
-      gap: 2,
-    },
-    pinnedMeta: {
-      fontSize: FontSize.xs,
-      fontWeight: FontWeight.semibold,
-      color: Colors.textSecondary,
-    },
-    pinnedText: {
-      fontSize: FontSize.sm,
-      color: Colors.textPrimary,
-      lineHeight: FontSize.sm * 1.4,
     },
     // Messages
     list: {
@@ -3024,6 +2846,14 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       fontSize: FontSize.xs,
       color: Colors.textMuted,
       fontStyle: "italic",
+    },
+    // Centered, italic emote line (/hug, /slap) — a touch stronger than a system
+    // notice so it reads as a playful action, not a status message.
+    emoteText: {
+      fontSize: FontSize.sm,
+      color: Colors.textSecondary,
+      fontStyle: "italic",
+      textAlign: "center",
     },
     // Empty state
     emptyState: {
@@ -3093,6 +2923,33 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       fontSize: FontSize.base,
       fontWeight: FontWeight.medium,
       color: Colors.textPrimary,
+    },
+    // ---- "/" command picker (shares mentionBar/mentionList) --------------------
+    slashRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: Spacing.md,
+      paddingHorizontal: Spacing.base,
+      paddingVertical: Spacing.sm,
+    },
+    slashEmoji: {
+      fontSize: FontSize.lg,
+      width: 28,
+      textAlign: "center",
+    },
+    slashText: {
+      flex: 1,
+      gap: 1,
+    },
+    slashCmd: {
+      fontSize: FontSize.base,
+      fontWeight: FontWeight.semibold,
+      color: Colors.textPrimary,
+      fontFamily: FontFamily.mono,
+    },
+    slashHint: {
+      fontSize: FontSize.xs,
+      color: Colors.textMuted,
     },
     composeBar: {
       flexDirection: "row",
@@ -3271,7 +3128,7 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
     },
     ecashInput: {
       backgroundColor: Colors.surfaceRaised,
-      borderRadius: Radius.md,
+      borderRadius: Radius.xl,
       borderWidth: 1,
       borderColor: Colors.border,
       paddingHorizontal: Spacing.base,
@@ -3559,6 +3416,32 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       letterSpacing: 0.8,
       textAlign: "center",
     },
+    // Boxed, labeled Nostr public key, consistent with the contact-info sheet.
+    keyBox: {
+      alignSelf: "stretch",
+      marginTop: Spacing.xs,
+      backgroundColor: Colors.surfaceRaised,
+      borderRadius: Radius.lg,
+      borderWidth: 1,
+      borderColor: Colors.border,
+      paddingHorizontal: Spacing.md,
+      paddingVertical: Spacing.sm,
+      gap: 4,
+    },
+    keyBoxLabel: {
+      fontSize: FontSize.xs,
+      fontWeight: FontWeight.semibold,
+      color: Colors.textMuted,
+      textTransform: "uppercase",
+      letterSpacing: 0.6,
+    },
+    keyBoxValue: {
+      fontSize: FontSize.xs,
+      fontFamily: FontFamily.mono,
+      color: Colors.textSecondary,
+      letterSpacing: 0.3,
+      lineHeight: 16,
+    },
     dmInfoStatus: {
       flexDirection: "row",
       alignItems: "center",
@@ -3591,8 +3474,8 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
     },
     composerSheet: {
       backgroundColor: Colors.bg,
-      borderTopLeftRadius: Radius.lg,
-      borderTopRightRadius: Radius.lg,
+      borderTopLeftRadius: Radius["2xl"],
+      borderTopRightRadius: Radius["2xl"],
       paddingHorizontal: Spacing.base,
       paddingTop: Spacing.base,
       paddingBottom: Spacing.xl,
@@ -3630,7 +3513,7 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       paddingHorizontal: Spacing.md,
       paddingTop: Spacing.sm,
       paddingBottom: Spacing.sm,
-      borderRadius: Radius.lg,
+      borderRadius: Radius.xl,
       backgroundColor: Colors.surface,
       color: Colors.textPrimary,
       fontSize: FontSize.base,
@@ -3673,98 +3556,13 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       fontWeight: FontWeight.bold,
       color: Colors.textInverse,
     },
-    // Members list sheet
-    membersOverlay: {
-      flex: 1,
-      backgroundColor: Colors.overlay,
-      justifyContent: "flex-end",
-    },
-    membersSheet: {
-      width: "100%",
-      maxHeight: "70%",
-      backgroundColor: Colors.surface,
-      borderTopLeftRadius: Radius["2xl"],
-      borderTopRightRadius: Radius["2xl"],
-      padding: Spacing.xl,
-      gap: Spacing.md,
-    },
-    membersTitle: {
-      fontSize: FontSize.md,
-      fontWeight: FontWeight.bold,
-      color: Colors.textPrimary,
-    },
-    membersEmpty: {
-      fontSize: FontSize.sm,
-      color: Colors.textMuted,
-      paddingVertical: Spacing.lg,
-      textAlign: "center",
-    },
-    membersList: {
-      width: "100%",
-    },
-    memberRow: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: Spacing.md,
-      padding: Spacing.sm,
-      borderRadius: Radius.lg,
-      backgroundColor: Colors.surfaceRaised,
-      marginBottom: Spacing.xs,
-    },
-    memberRowInfo: {
-      flex: 1,
-      gap: 2,
-    },
-    memberRowName: {
-      fontSize: FontSize.base,
-      fontWeight: FontWeight.medium,
-      color: Colors.textPrimary,
-    },
-    memberRowStatus: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 4,
-    },
-    memberRowDot: {
-      width: 6,
-      height: 6,
-      borderRadius: 3,
-      backgroundColor: Colors.online,
-    },
-    // Teleported participants are not physically present, so a muted dot rather
-    // than the live-presence green.
-    memberRowDotTeleported: {
-      backgroundColor: Colors.textMuted,
-    },
-    memberRowStatusText: {
-      fontSize: FontSize.xs,
-      color: Colors.textMuted,
-    },
-    // Trailing "message this person" affordance on a member row. A bare glyph
-    // read as decoration at 16px; the tinted circle makes it a target and
-    // matches the rounded surfaces used elsewhere in the sheets.
-    memberRowAction: {
-      width: 34,
-      height: 34,
-      borderRadius: Radius.full,
-      backgroundColor: Colors.surfaceRaised,
-      alignItems: "center",
-      justifyContent: "center",
-    },
-    // "You" label on your own member row, where every other row shows the
-    // message icon.
-    memberRowYou: {
-      fontSize: FontSize.sm,
-      fontWeight: FontWeight.medium,
-      color: Colors.textMuted,
-    },
     // Cashu payment cards rendered inside message bubbles. Deliberately distinct
     // from grey file attachments: an accent-tinted card with a hero amount, so
     // money reads as money at a glance (the WhatsApp / GPay payment convention).
     paymentCard: {
       marginTop: Spacing.xs,
       padding: Spacing.md,
-      borderRadius: Radius.md,
+      borderRadius: Radius.lg,
       backgroundColor: Colors.accentGhost,
       borderWidth: 1,
       borderColor: Colors.accent,

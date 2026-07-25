@@ -153,7 +153,7 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
     // Card
     card: {
       backgroundColor: Colors.surface,
-      borderRadius: Radius.xl,
+      borderRadius: Radius.lg,
       borderWidth: 1,
       padding: Spacing.xl,
       alignItems: "center",

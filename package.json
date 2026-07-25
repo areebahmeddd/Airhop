@@ -44,6 +44,7 @@
     "@noble/hashes": "^2.2.0",
     "expo": "~57.0.6",
     "expo-audio": "~57.0.2",
+    "expo-blur": "~57.0.2",
     "expo-build-properties": "~57.0.5",
     "expo-camera": "~57.0.3",
     "expo-clipboard": "~57.0.1",

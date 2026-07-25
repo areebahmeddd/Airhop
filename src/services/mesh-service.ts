@@ -80,6 +80,8 @@ import {
   decodeGroupEnvelope,
   decodeGroupState,
   encodeGroupState,
+  GROUP_KEY_LENGTH,
+  GROUP_MAX_MEMBERS,
   groupFingerprint,
   newGroupID,
   newGroupKey,
@@ -99,6 +101,7 @@ import {
 import {
   decodePrivateMessagePacket,
   NoisePayloadType,
+  type NoisePayloadTypeValue,
 } from "../core/mesh/noise-payload";
 import {
   CarrierDirection,
@@ -1988,7 +1991,9 @@ export class MeshService {
     const group: BitchatGroup = {
       groupID: newGroupID(),
       name: trimmed,
-      epoch: 0,
+      // Epoch starts at 1, matching bitchat's GroupStore (0 is never used on the
+      // wire), so a rotation always lands on a strictly higher epoch.
+      epoch: 1,
       members,
       creatorFingerprint: self.fingerprint,
     };
@@ -2023,6 +2028,143 @@ export class MeshService {
     return groupIDHex;
   }
 
+  // Route a group-state blob to a roster member by fingerprint (its first 16 hex
+  // ARE the peer ID). Sends over their Noise session; if none is up yet, queues
+  // it and starts a handshake so the update lands once they reconnect.
+  private sendGroupStateQueued(
+    peerID: string,
+    type: NoisePayloadTypeValue,
+    stateBytes: Uint8Array,
+  ): void {
+    if (this.router.sendNoisePayload(peerID, type, stateBytes)) return;
+    const owed = this.pendingGroupInvites.get(peerID) ?? [];
+    owed.push(stateBytes);
+    this.pendingGroupInvites.set(peerID, owed);
+    this.ensureNoiseSession(peerID);
+  }
+
+  // Creator-side: add members to a group. Rotates the key (epoch + 1) on every
+  // roster change, invites the new members (0x06) and key-updates the existing
+  // ones (0x07), mirroring bitchat's inviteMember. Returns false when we are not
+  // the creator, no valid new member remains, or the 16 cap would be exceeded.
+  addGroupMembers(groupIDHex: string, memberPeerIDs: string[]): boolean {
+    const group = useGroupStore.getState().get(groupIDHex);
+    if (group === undefined) return false;
+    const myFingerprint = groupFingerprint(this.identity.noiseStaticPubKey);
+    if (group.creatorFingerprint !== myFingerprint) return false; // creator only
+
+    const existing = new Set(group.members.map((m) => m.fingerprint));
+    const additions: GroupMember[] = [];
+    for (const peerID of memberPeerIDs) {
+      const m = this.memberFor(peerID);
+      if (m === null) continue; // keys unknown
+      if (existing.has(m.fingerprint)) continue; // already a member
+      if (additions.some((x) => x.fingerprint === m.fingerprint)) continue;
+      additions.push(m);
+    }
+    if (additions.length === 0) return false;
+    if (group.members.length + additions.length > GROUP_MAX_MEMBERS) {
+      return false;
+    }
+
+    const members = [...group.members, ...additions];
+    const updated: BitchatGroup = {
+      groupID: group.groupID,
+      name: group.name,
+      epoch: group.epoch + 1,
+      members,
+      creatorFingerprint: group.creatorFingerprint,
+    };
+    const key = newGroupKey();
+    const state = signGroupState(updated, key, this.identity.signingPrivKey);
+    if (state === null) return false;
+    const stateBytes = encodeGroupState(state);
+    if (stateBytes === null) return false;
+
+    useGroupStore.getState().upsertLocal(updated, key);
+
+    const added = new Set(additions.map((m) => m.fingerprint));
+    for (const m of members) {
+      if (m.fingerprint === myFingerprint) continue;
+      this.sendGroupStateQueued(
+        m.fingerprint.slice(0, 16),
+        added.has(m.fingerprint)
+          ? NoisePayloadType.GROUP_INVITE
+          : NoisePayloadType.GROUP_KEY_UPDATE,
+        stateBytes,
+      );
+    }
+    return true;
+  }
+
+  // Creator-side: remove a member by fingerprint. Rotates the key so the removed
+  // member can no longer decrypt, key-updates every remaining member (0x07), and
+  // sends the removee a creator-signed state (roster without them) carrying an
+  // all-zero throwaway key so their client deactivates the group. Mirrors
+  // bitchat's removeMember + notifyRemovedMember.
+  removeGroupMember(groupIDHex: string, fingerprint: string): boolean {
+    const group = useGroupStore.getState().get(groupIDHex);
+    if (group === undefined) return false;
+    const myFingerprint = groupFingerprint(this.identity.noiseStaticPubKey);
+    if (group.creatorFingerprint !== myFingerprint) return false; // creator only
+    if (fingerprint === group.creatorFingerprint) return false; // never the creator
+    if (!group.members.some((m) => m.fingerprint === fingerprint)) return false;
+
+    const remaining = group.members.filter(
+      (m) => m.fingerprint !== fingerprint,
+    );
+    const rotated: BitchatGroup = {
+      groupID: group.groupID,
+      name: group.name,
+      epoch: group.epoch + 1,
+      members: remaining,
+      creatorFingerprint: group.creatorFingerprint,
+    };
+    const key = newGroupKey();
+    const state = signGroupState(rotated, key, this.identity.signingPrivKey);
+    if (state === null) return false;
+    const stateBytes = encodeGroupState(state);
+    if (stateBytes === null) return false;
+
+    useGroupStore.getState().upsertLocal(rotated, key);
+
+    for (const m of remaining) {
+      if (m.fingerprint === myFingerprint) continue;
+      this.sendGroupStateQueued(
+        m.fingerprint.slice(0, 16),
+        NoisePayloadType.GROUP_KEY_UPDATE,
+        stateBytes,
+      );
+    }
+
+    // Removal notice, throwaway zero key: best-effort over a live session only,
+    // never chasing a handshake just to tell them they're out.
+    const zeroState = signGroupState(
+      rotated,
+      new Uint8Array(GROUP_KEY_LENGTH),
+      this.identity.signingPrivKey,
+    );
+    const zeroBytes = zeroState === null ? null : encodeGroupState(zeroState);
+    if (zeroBytes !== null) {
+      this.router.sendNoisePayload(
+        fingerprint.slice(0, 16),
+        NoisePayloadType.GROUP_KEY_UPDATE,
+        zeroBytes,
+      );
+    }
+    return true;
+  }
+
+  // Whether we created (and can therefore administer) the given group.
+  isGroupCreator(groupIDHex: string): boolean {
+    const group = useGroupStore.getState().get(groupIDHex);
+    if (group === undefined) return false;
+    return (
+      group.creatorFingerprint ===
+      groupFingerprint(this.identity.noiseStaticPubKey)
+    );
+  }
+
   // A creator-signed group invite / key update arrived over Noise. Verify the
   // signature AND that the Noise peer who sent it is the group's creator, then
   // store the group and surface its channel.
@@ -2037,12 +2179,52 @@ export class MeshService {
     if (senderNoise === undefined) return;
     if (groupFingerprint(senderNoise) !== state.creatorFingerprint) return;
 
-    // We must be in the roster to hold the key.
     const myFingerprint = groupFingerprint(this.identity.noiseStaticPubKey);
-    if (!state.members.some((m) => m.fingerprint === myFingerprint)) return;
+    const groupIDHex = bytesToHex(state.groupID);
+    const channel = groupChannel(groupIDHex);
 
+    // A creator-signed roster that no longer lists us is a removal: drop the
+    // group's key and its chat locally so it disappears from Your Rooms. (The
+    // notice carries a throwaway zero key, so there is nothing to keep anyway.)
+    if (!state.members.some((m) => m.fingerprint === myFingerprint)) {
+      if (useGroupStore.getState().get(groupIDHex) !== undefined) {
+        useGroupStore.getState().remove(groupIDHex);
+        useChatStore.getState().removeChannel(channel);
+      }
+      return;
+    }
+
+    // First time we see this group is a genuine "you were added" — surface it
+    // as a local system notice so the new room isn't a silent surprise.
+    const wasNew = useGroupStore.getState().get(groupIDHex) === undefined;
     useGroupStore.getState().upsertFromState(state);
-    useChatStore.getState().addChannel(groupChannel(bytesToHex(state.groupID)));
+    useChatStore.getState().addChannel(channel);
+    if (wasNew) {
+      const nowMs = Date.now();
+      useChatStore.getState().addMessage({
+        id: `sys-group-join-${groupIDHex}`,
+        channel,
+        senderID: "",
+        senderNickname: "",
+        text: `You were added to ${state.name}.`,
+        timestampMs: nowMs,
+        isMine: false,
+        isSystem: true,
+      });
+      // Ring the bell too, so the invite is discoverable without opening the room.
+      const creator = state.members.find(
+        (m) => m.fingerprint === state.creatorFingerprint,
+      );
+      useActivityStore.getState().record({
+        id: `group-join-${groupIDHex}`,
+        channel,
+        isDM: false,
+        senderID: state.creatorFingerprint.slice(0, 16),
+        senderNickname: creator?.nickname ?? state.name,
+        preview: `Added you to ${state.name}`,
+        timestampMs: nowMs,
+      });
+    }
   }
 
   // Seal a message under the group's current epoch key and broadcast it as a

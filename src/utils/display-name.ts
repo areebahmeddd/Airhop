@@ -15,9 +15,25 @@
 // A Nostr-only correspondent (`nostr_<pubkey>`) has no peer ID to derive from,
 // so it gets a short npub-style label instead of a nonsense generated name.
 
+import { geohashDisplayName } from "../core/nostr/geohash-identity";
 import { useContactsStore } from "../store/contacts-store";
 import { usePeerStore } from "../store/peer-store";
-import { isNostrId, nostrShortLabel, peerIDToUsername } from "./username";
+import {
+  isNostrId,
+  NOSTR_ID_PREFIX,
+  nostrShortLabel,
+  peerIDToUsername,
+} from "./username";
+
+// A Nostr/geohash pseudonym (`nostr_<pubkey>`) is named the same way the cell
+// chat names it (and the same way bitchat does): `anon#<last4>` of the pubkey,
+// or `<nick>#<last4>`. Using the npub label here instead made the very same
+// person you saw as "anon#ed17" in the channel show up as "npub…d4ed17" in the
+// DM header, the DM list and the contact-info sheet. This keeps them identical
+// across all of those. The stored message senderNickname uses this exact form.
+function nostrPseudonym(peerID: string): string {
+  return geohashDisplayName(peerID.slice(NOSTR_ID_PREFIX.length));
+}
 
 // Name shown for a sender inside a PUBLIC channel.
 //
@@ -54,7 +70,7 @@ export function channelDisplayName(
 
 // Resolve outside React (services, stores, event handlers).
 export function resolveDisplayName(peerID: string): string {
-  if (isNostrId(peerID)) return nostrShortLabel(peerID);
+  if (isNostrId(peerID)) return nostrPseudonym(peerID);
 
   const contactName = useContactsStore.getState().nicknameFor(peerID);
   if (contactName !== undefined) return contactName;
@@ -70,7 +86,7 @@ export function useDisplayName(peerID: string): string {
   const contactName = useContactsStore((s) => s.contacts[peerID]?.nickname);
   const announced = usePeerStore((s) => s.peers.get(peerID)?.nickname);
 
-  if (isNostrId(peerID)) return nostrShortLabel(peerID);
+  if (isNostrId(peerID)) return nostrPseudonym(peerID);
   if (contactName !== undefined && contactName.length > 0) return contactName;
   if (announced !== undefined && announced.length > 0) return announced;
   return peerIDToUsername(peerID);

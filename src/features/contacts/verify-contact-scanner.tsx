@@ -299,7 +299,7 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       justifyContent: "center",
     },
     iconOk: {
-      backgroundColor: Colors.online,
+      backgroundColor: Colors.verified,
     },
     iconWarn: {
       backgroundColor: Colors.danger,

@@ -213,7 +213,7 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
     },
     preview: {
       backgroundColor: Colors.surfaceRaised,
-      borderRadius: Radius.md,
+      borderRadius: Radius.lg,
       padding: Spacing.md,
     },
     previewText: {

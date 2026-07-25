@@ -131,21 +131,36 @@ export function GeohashJumpSheet({
               chooser destinations read alike. */}
           <View style={styles.privacyNote}>
             <View style={styles.privacyNoteRow}>
-              <Feather name="map-pin" size={14} color={Colors.textMuted} />
+              <Feather
+                name="map-pin"
+                size={14}
+                color={Colors.textMuted}
+                style={styles.noteIcon}
+              />
               <Text style={styles.privacyNoteText}>
                 Open a public location channel anywhere, even a place you are
                 not.
               </Text>
             </View>
             <View style={styles.privacyNoteRow}>
-              <Feather name="hash" size={14} color={Colors.textMuted} />
+              <Feather
+                name="hash"
+                size={14}
+                color={Colors.textMuted}
+                style={styles.noteIcon}
+              />
               <Text style={styles.privacyNoteText}>
                 Enter its geohash. Everyone whose location falls in that cell
                 shares the channel.
               </Text>
             </View>
             <View style={styles.privacyNoteRow}>
-              <Feather name="globe" size={14} color={Colors.online} />
+              <Feather
+                name="globe"
+                size={14}
+                color={Colors.textMuted}
+                style={styles.noteIcon}
+              />
               <Text style={styles.privacyNoteText}>
                 You show as teleported, not nearby. It reaches over the internet
                 only.
@@ -162,7 +177,7 @@ export function GeohashJumpSheet({
                 setInput(normalizeGeohash(v));
                 setError(null);
               }}
-              placeholder="geohash, e.g. tdr1k"
+              placeholder="geohash"
               placeholderTextColor={Colors.textMuted}
               autoCapitalize="none"
               autoCorrect={false}
@@ -176,7 +191,7 @@ export function GeohashJumpSheet({
               ? `You are already here. Go opens your ${localChannel} channel.`
               : level !== null
                 ? `${level} cell`
-                : "2 to 12 letters and digits (no a, i, l or o)"}
+                : "2 to 12 letters and digits"}
           </Text>
           {error !== null && <Text style={styles.error}>{error}</Text>}
 
@@ -279,13 +294,17 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
     privacyNote: {
       gap: Spacing.sm,
       backgroundColor: Colors.surfaceRaised,
-      borderRadius: Radius.md,
+      borderRadius: Radius.lg,
       padding: Spacing.md,
     },
     privacyNoteRow: {
       flexDirection: "row",
       alignItems: "flex-start",
       gap: Spacing.sm,
+    },
+    // Nudge the leading icon down so it optically centers on the first text line.
+    noteIcon: {
+      marginTop: 2,
     },
     privacyNoteText: {
       flex: 1,
@@ -297,7 +316,7 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       flexDirection: "row",
       alignItems: "center",
       backgroundColor: Colors.surfaceRaised,
-      borderRadius: Radius.md,
+      borderRadius: Radius.xl,
       borderWidth: 1,
       borderColor: Colors.border,
       paddingHorizontal: Spacing.base,

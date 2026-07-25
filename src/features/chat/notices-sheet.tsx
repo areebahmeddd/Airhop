@@ -5,7 +5,7 @@
 // kind-1 note so people who are online but out of Bluetooth range see it.
 //
 // Two scopes, mirroring bitchat:
-//   Here  - this location cell (geo board posts + Nostr location notes)
+//   Geo   - this location cell (geo board posts + Nostr location notes)
 //   Mesh  - the Bluetooth-local board (geohash "", BLE-only)
 //
 // The two feeds are merged with the board copy winning over its own bridged
@@ -164,6 +164,10 @@ export function NoticesSheet({ visible, onClose, channel }: Props) {
   // never show an impossible selection and the mesh post gets a valid expiry.
   const effectiveExpiryDays =
     scope !== "here" && expiryDays === 0 ? 1 : expiryDays;
+  // The permanent (∞) step only exists in a location cell.
+  const expiryOptions = EXPIRY_OPTIONS.filter(
+    (opt) => opt.days !== 0 || scope === "here",
+  );
 
   // Re-render on a slow tick so relative times and fade labels stay fresh.
   const [now, setNow] = useState(() => Date.now());
@@ -266,7 +270,7 @@ export function NoticesSheet({ visible, onClose, channel }: Props) {
                     scope === "here" && styles.tabTextActive,
                   ]}
                 >
-                  Here
+                  Geo
                 </Text>
               </Pressable>
               <Pressable
@@ -309,8 +313,7 @@ export function NoticesSheet({ visible, onClose, channel }: Props) {
               maxLength={CONTENT_MAX * 2}
             />
             <View style={styles.composerControls}>
-              {/* Urgent is mesh-only, matching bitchat: the toggle simply is not
-                  offered in a location cell. */}
+              {/* Urgent is mesh-only, matching bitchat: not offered in a cell. */}
               {scope === "mesh" && (
                 <Pressable
                   style={[styles.urgentToggle, urgent && styles.urgentToggleOn]}
@@ -318,11 +321,6 @@ export function NoticesSheet({ visible, onClose, channel }: Props) {
                   accessibilityRole="button"
                   accessibilityLabel="Mark urgent"
                 >
-                  <Feather
-                    name="alert-triangle"
-                    size={13}
-                    color={urgent ? Colors.textInverse : Colors.textSecondary}
-                  />
                   <Text
                     style={[styles.urgentText, urgent && styles.urgentTextOn]}
                   >
@@ -331,10 +329,9 @@ export function NoticesSheet({ visible, onClose, channel }: Props) {
                 </Pressable>
               )}
 
+              {/* Expiry: a connected segmented track with an accent thumb. */}
               <View style={styles.expiryChips}>
-                {EXPIRY_OPTIONS.filter(
-                  (opt) => opt.days !== 0 || scope === "here",
-                ).map((opt) => (
+                {expiryOptions.map((opt) => (
                   <Pressable
                     key={opt.days}
                     style={[
@@ -447,8 +444,8 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
     },
     sheet: {
       backgroundColor: Colors.surface,
-      borderTopLeftRadius: Radius.xl,
-      borderTopRightRadius: Radius.xl,
+      borderTopLeftRadius: Radius["2xl"],
+      borderTopRightRadius: Radius["2xl"],
       paddingHorizontal: Spacing.lg,
       paddingBottom: Spacing["2xl"],
       maxHeight: "88%",
@@ -476,7 +473,7 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
     tabs: {
       flexDirection: "row",
       backgroundColor: Colors.surfaceRaised,
-      borderRadius: Radius.md,
+      borderRadius: Radius.full,
       padding: 3,
       marginBottom: Spacing.base,
     },
@@ -487,7 +484,7 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       paddingVertical: Spacing.sm,
       alignItems: "center",
       justifyContent: "center",
-      borderRadius: Radius.sm,
+      borderRadius: Radius.full,
     },
     tabActive: { backgroundColor: Colors.surface },
     tabText: {
@@ -498,7 +495,7 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
     tabTextActive: { color: Colors.textPrimary },
     composer: {
       backgroundColor: Colors.surfaceRaised,
-      borderRadius: Radius.lg,
+      borderRadius: Radius.xl,
       padding: Spacing.md,
       marginBottom: Spacing.base,
     },
@@ -532,12 +529,21 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       color: Colors.textSecondary,
     },
     urgentTextOn: { color: Colors.textInverse },
-    expiryChips: { flexDirection: "row", gap: 4 },
+    // Expiry: a connected segmented track (surface + border) with an accent
+    // thumb on the selected step. marginLeft:auto right-aligns it in Geo scope.
+    expiryChips: {
+      flexDirection: "row",
+      marginLeft: "auto",
+      backgroundColor: Colors.surface,
+      borderWidth: 1,
+      borderColor: Colors.border,
+      borderRadius: Radius.full,
+      padding: 3,
+    },
     chip: {
-      paddingHorizontal: Spacing.sm,
+      paddingHorizontal: Spacing.md,
       paddingVertical: 6,
       borderRadius: Radius.full,
-      backgroundColor: Colors.surface,
     },
     chipActive: { backgroundColor: Colors.accent },
     chipText: {
@@ -549,7 +555,7 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
     postBtn: {
       marginTop: Spacing.md,
       backgroundColor: Colors.accent,
-      borderRadius: Radius.md,
+      borderRadius: Radius.full,
       paddingVertical: Spacing.md,
       alignItems: "center",
     },

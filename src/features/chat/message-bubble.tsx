@@ -234,19 +234,6 @@ function MessageBubble({
             </View>
           </View>
         </Pressable>
-
-        {item.isStarred && (
-          <View
-            style={[
-              styles.chipRow,
-              item.isMine ? styles.chipRowMine : styles.chipRowTheirs,
-            ]}
-          >
-            <View style={styles.starChip}>
-              <Feather name="star" size={10} color={Colors.textMuted} />
-            </View>
-          </View>
-        )}
       </View>
     </View>
   );
@@ -282,11 +269,10 @@ function renderMessageText(
   return out;
 }
 
-// WhatsApp-style delivery ticks, kept monochrome to match the app: a single
-// check for sent, a double check for delivered, the same double check at full
-// brightness for read (the app has no second accent colour to spend, so read
-// reads as "brighter", not "blue"). Rendered on the near-black "mine" bubble,
-// hence textInverse.
+// WhatsApp-style delivery ticks: a single check for sent, a dim double check
+// for delivered, and a filled blue double check for read. Everything up to
+// delivered stays monochrome (textInverse on the near-black "mine" bubble); read
+// is the sole status that spends the blue accent, so "seen" is unmistakable.
 function StatusTick({
   status,
   Colors,
@@ -345,11 +331,14 @@ function StatusTick({
         />
       );
     case "read":
+      // Read is the one status that spends colour: a filled blue double-check,
+      // the universal "they've seen it" signal. Delivered stays monochrome
+      // (a dim double-check), so the jump to blue reads as a real state change.
       return (
         <MaterialCommunityIcons
           name="check-all"
           size={SIZE}
-          color={Colors.textInverse}
+          color={Colors.verified}
         />
       );
     case "failed":
@@ -386,7 +375,10 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
     bubble: {
       paddingHorizontal: Spacing.md,
       paddingVertical: Spacing.sm + 2,
-      borderRadius: Radius.lg,
+      // Matches the message input box (Radius.xl) so bubbles and the composer
+      // share the same generous rounding. The one tail corner (below) stays
+      // tight to keep the bubble's pointer.
+      borderRadius: Radius.xl,
     },
     bubbleMine: { backgroundColor: Colors.myBubble },
     bubbleTheirs: { backgroundColor: Colors.theirBubble },
@@ -443,25 +435,6 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       color: Colors.textMuted,
     },
     forwardedTagTextMine: { color: Colors.textInverse },
-    // Star chip row
-    chipRow: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 4,
-      marginTop: -4,
-    },
-    chipRowMine: { justifyContent: "flex-end" },
-    chipRowTheirs: { justifyContent: "flex-start" },
-    starChip: {
-      backgroundColor: Colors.surface,
-      borderWidth: 1,
-      borderColor: Colors.border,
-      borderRadius: Radius.full,
-      width: 22,
-      height: 22,
-      alignItems: "center",
-      justifyContent: "center",
-    },
   });
 }
 

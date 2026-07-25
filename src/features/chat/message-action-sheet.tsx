@@ -2,7 +2,7 @@
 // Reuses the same bottom-sheet chrome as the attachment picker and channel
 // info sheet so it doesn't introduce a new UI paradigm.
 
-import { Feather, MaterialCommunityIcons } from "@expo/vector-icons";
+import { Feather } from "@expo/vector-icons";
 import React, { useMemo } from "react";
 import { Modal, Pressable, StyleSheet, Text, View } from "react-native";
 import type { ChatMessage } from "../../store/chat-store";
@@ -19,8 +19,6 @@ interface Props {
   onClose: () => void;
   onForward: () => void;
   onCopy: () => void;
-  onTogglePin: () => void;
-  onToggleStar: () => void;
   onInfo: () => void;
 }
 
@@ -29,8 +27,6 @@ export default function MessageActionSheet({
   onClose,
   onForward,
   onCopy,
-  onTogglePin,
-  onToggleStar,
   onInfo,
 }: Props): React.JSX.Element | null {
   const Colors = useThemeColors();
@@ -84,26 +80,6 @@ export default function MessageActionSheet({
                 />
               </>
             )}
-            <View style={styles.divider} />
-            <ActionRow
-              iconNode={
-                <MaterialCommunityIcons
-                  name={message.isPinned ? "pin-off" : "pin"}
-                  size={18}
-                  color={Colors.textPrimary}
-                />
-              }
-              label={message.isPinned ? "Unpin" : "Pin"}
-              onPress={() => act(onTogglePin)}
-              color={Colors.textPrimary}
-            />
-            <View style={styles.divider} />
-            <ActionRow
-              icon="star"
-              label={message.isStarred ? "Unstar" : "Star"}
-              onPress={() => act(onToggleStar)}
-              color={Colors.textPrimary}
-            />
           </View>
         </View>
       </View>

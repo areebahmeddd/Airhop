@@ -6,8 +6,9 @@ import {
   JetBrainsMono_400Regular,
   useFonts,
 } from "@expo-google-fonts/jetbrains-mono";
-import { Feather, MaterialCommunityIcons } from "@expo/vector-icons";
+import { Feather } from "@expo/vector-icons";
 import { bytesToHex } from "@noble/hashes/utils.js";
+import { BlurTargetView, BlurView } from "expo-blur";
 import { StatusBar } from "expo-status-bar";
 import React, {
   useCallback,
@@ -49,7 +50,6 @@ import type { Identity } from "./src/core/crypto/identity";
 import { loadIdentity } from "./src/core/crypto/identity";
 import { isValidChannelKey } from "./src/core/mesh/channel-crypto";
 import { primeTorRoutingOnStartup } from "./src/core/nostr/tor-routing";
-import AiScreen from "./src/features/ai/ai-screen";
 import ChannelList from "./src/features/chat/channel-list";
 import ChatSearchResults from "./src/features/chat/chat-search-results";
 import DmList from "./src/features/chat/dm-list";
@@ -112,7 +112,7 @@ import { peerIDToUsername } from "./src/utils/username";
 // ---------------------------------------------------------------------------
 
 type OnboardingStep = "welcome" | "generating" | "reveal";
-type MainTab = "chats" | "mesh" | "ai" | "wallet" | "profile";
+type MainTab = "chats" | "mesh" | "wallet" | "profile";
 type ChatSubTab = "channels" | "dms";
 type ChatView =
   { kind: "list" } | { kind: "thread"; channel: string } | { kind: "search" };
@@ -216,6 +216,10 @@ export default function App(): React.JSX.Element {
   const [chatView, setChatView] = useState<ChatView>({ kind: "list" });
   const [searchQuery, setSearchQuery] = useState("");
   const searchInputRef = useRef<TextInput>(null);
+  // The content region behind the tab bar. On Android the frosted glass blurs a
+  // snapshot of this target (the new expo-blur API); on iOS it is a plain View
+  // and the native backdrop blur ignores it.
+  const blurTargetRef = useRef<View | null>(null);
   // Which message a search result should scroll a thread to on open.
   const [messageTarget, setMessageTarget] = useState<MessageTarget | null>(
     null,
@@ -1051,7 +1055,7 @@ export default function App(): React.JSX.Element {
                 only a genuine tab change slides. Switching Channels/Direct
                 or opening a thread within the same tab does not. */}
               <GestureDetector gesture={swipeGesture}>
-                <View style={styles.content}>
+                <BlurTargetView ref={blurTargetRef} style={styles.content}>
                   <Animated.View
                     key={tab}
                     style={styles.flexFill}
@@ -1101,8 +1105,6 @@ export default function App(): React.JSX.Element {
                         viewMode={meshViewMode}
                         addContactTrigger={meshAddCounter}
                       />
-                    ) : tab === "ai" ? (
-                      <AiScreen />
                     ) : tab === "wallet" ? (
                       <WalletScreen
                         action={walletAction}
@@ -1128,81 +1130,95 @@ export default function App(): React.JSX.Element {
                       />
                     )}
                   </Animated.View>
-                </View>
+                </BlurTargetView>
               </GestureDetector>
 
-              {/* Ongoing attachment transfers, kept visible after you leave the
-                  thread. Sits just above the tab bar. */}
-              {!isInThread && <TransferBadge onOpen={openTransferChannel} />}
-
-              {/* Tab bar */}
+              {/* Floating bottom stack: the ongoing-transfer pill and the
+                  frosted-glass tab bar, both hovering over the content that
+                  scrolls beneath. box-none so taps land on content in the gaps
+                  around the pills, not on the transparent container. */}
               {!isInThread && (
-                <View style={styles.tabBar}>
-                  {tabs.map(({ id, label, icon }) => {
-                    const active = tab === id;
-                    return (
-                      <Pressable
-                        key={id}
-                        style={styles.tabItem}
-                        onPress={() => navigateToTab(id as MainTab)}
-                        accessibilityRole="tab"
-                        accessibilityLabel={label}
-                        accessibilityState={{ selected: active }}
-                      >
-                        <View
-                          style={[
-                            styles.tabIndicator,
-                            active && styles.tabIndicatorActive,
-                          ]}
-                        />
-                        <View style={styles.tabIconWrap}>
-                          {id === "profile" ? (
-                            <Avatar
-                              username={username}
-                              peerID={generatedPeerID}
-                              size={20}
-                              active={active}
+                <View style={styles.floatingBottom} pointerEvents="box-none">
+                  <TransferBadge onOpen={openTransferChannel} />
+                  {/* Outer wrap carries the shadow + rounding; the BlurView must
+                      clip to the pill (overflow hidden), and a clipped view
+                      can't cast the shadow itself. */}
+                  <View style={styles.tabBarWrap}>
+                    <BlurView
+                      intensity={48}
+                      tint={resolvedTheme === "dark" ? "dark" : "light"}
+                      // Android has no native backdrop blur; blurMethod opts into
+                      // the Dimezis implementation and blurTarget tells it which
+                      // view to sample (the content region). Both are no-ops on
+                      // iOS, which blurs the real backdrop natively.
+                      blurMethod="dimezisBlurView"
+                      blurTarget={blurTargetRef}
+                      style={[
+                        styles.tabBar,
+                        { backgroundColor: Colors.tabBarGlass },
+                      ]}
+                    >
+                      {tabs.map(({ id, label, icon }) => {
+                        const active = tab === id;
+                        return (
+                          <Pressable
+                            key={id}
+                            style={styles.tabItem}
+                            onPress={() => navigateToTab(id as MainTab)}
+                            accessibilityRole="tab"
+                            accessibilityLabel={label}
+                            accessibilityState={{ selected: active }}
+                          >
+                            <View
+                              style={[
+                                styles.tabIndicator,
+                                active && styles.tabIndicatorActive,
+                              ]}
                             />
-                          ) : id === "ai" ? (
-                            <MaterialCommunityIcons
-                              name={
-                                icon as React.ComponentProps<
-                                  typeof MaterialCommunityIcons
-                                >["name"]
-                              }
-                              size={22}
-                              color={active ? Colors.accent : Colors.textMuted}
-                            />
-                          ) : (
-                            <Feather
-                              name={
-                                icon as React.ComponentProps<
-                                  typeof Feather
-                                >["name"]
-                              }
-                              size={22}
-                              color={active ? Colors.accent : Colors.textMuted}
-                            />
-                          )}
-                          {id === "chats" && chatsUnread > 0 && (
-                            <View style={styles.tabBadge}>
-                              <Text style={styles.tabBadgeText}>
-                                {chatsUnread > 99 ? "99+" : String(chatsUnread)}
-                              </Text>
+                            <View style={styles.tabIconWrap}>
+                              {id === "profile" ? (
+                                <Avatar
+                                  username={username}
+                                  peerID={generatedPeerID}
+                                  size={20}
+                                  active={active}
+                                />
+                              ) : (
+                                <Feather
+                                  name={
+                                    icon as React.ComponentProps<
+                                      typeof Feather
+                                    >["name"]
+                                  }
+                                  size={22}
+                                  color={
+                                    active ? Colors.accent : Colors.textMuted
+                                  }
+                                />
+                              )}
+                              {id === "chats" && chatsUnread > 0 && (
+                                <View style={styles.tabBadge}>
+                                  <Text style={styles.tabBadgeText}>
+                                    {chatsUnread > 99
+                                      ? "99+"
+                                      : String(chatsUnread)}
+                                  </Text>
+                                </View>
+                              )}
                             </View>
-                          )}
-                        </View>
-                        <Text
-                          style={[
-                            styles.tabLabel,
-                            active && styles.tabLabelActive,
-                          ]}
-                        >
-                          {label}
-                        </Text>
-                      </Pressable>
-                    );
-                  })}
+                            <Text
+                              style={[
+                                styles.tabLabel,
+                                active && styles.tabLabelActive,
+                              ]}
+                            >
+                              {label}
+                            </Text>
+                          </Pressable>
+                        );
+                      })}
+                    </BlurView>
+                  </View>
                 </View>
               )}
             </SafeAreaView>
@@ -1220,14 +1236,10 @@ export default function App(): React.JSX.Element {
 const HEADER_TITLES: Record<MainTab, string> = {
   chats: "Chats",
   mesh: "Mesh",
-  ai: "AI Assistant",
   wallet: "Wallet",
   profile: "You",
 };
 
-// The AI tab is deliberately absent: the assistant isn't finished, so it's
-// kept out of the tab bar while AiScreen and its "ai" branch below stay in
-// place: re-adding the entry here is all it takes to bring the tab back.
 const ALL_TABS: { id: MainTab; label: string; icon: string }[] = [
   { id: "chats", label: "Chats", icon: "message-square" },
   { id: "mesh", label: "Mesh", icon: "radio" },
@@ -1300,13 +1312,13 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
     segmented: {
       flexDirection: "row",
       backgroundColor: Colors.surfaceRaised,
-      borderRadius: 8,
+      borderRadius: Radius.full,
       padding: 2,
     },
     seg: {
       paddingHorizontal: Spacing.md,
       paddingVertical: 7,
-      borderRadius: 6,
+      borderRadius: Radius.full,
     },
     // Icon + label variant of `seg`, used wherever a segment carries an icon
     // alongside its text (Chats' Channels/Direct, Mesh's Radar/List) so every
@@ -1332,11 +1344,12 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
     segTextActive: {
       color: Colors.textPrimary,
     },
-    // Boxed action button (add/create), matching the segmented switcher's radius
+    // Circular action button (add/create), shared by Chats, Mesh and Wallet
+    // headers so every header icon-action reads the same.
     newChannelPill: {
       width: 32,
       height: 32,
-      borderRadius: 8,
+      borderRadius: Radius.full,
       alignItems: "center",
       justifyContent: "center",
       backgroundColor: Colors.surfaceRaised,
@@ -1373,19 +1386,36 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
     content: {
       flex: 1,
     },
-    // Tab bar: floating pill
-    tabBar: {
-      flexDirection: "row",
-      backgroundColor: Colors.surface,
+    // Bottom stack (transfer pill + tab bar) floating over the content beneath.
+    floatingBottom: {
+      position: "absolute",
+      left: 0,
+      right: 0,
+      bottom: 0,
+    },
+    // Outer wrap: carries the shadow + rounding + margins. Kept separate from the
+    // BlurView because the blur must clip to the pill (overflow hidden), and a
+    // clipped view cannot also cast a shadow.
+    tabBarWrap: {
       marginHorizontal: Spacing.base,
       marginBottom: Spacing.md,
-      borderRadius: Radius["2xl"],
-      paddingBottom: Spacing.sm,
+      borderRadius: Radius.full,
       shadowColor: "#000",
-      shadowOffset: { width: 0, height: 4 },
-      shadowOpacity: 0.08,
-      shadowRadius: 12,
-      elevation: 8,
+      shadowOffset: { width: 0, height: 6 },
+      shadowOpacity: 0.12,
+      shadowRadius: 16,
+      elevation: 10,
+    },
+    // The frosted-glass pill itself: the BlurView. A hairline glass-edge border
+    // and a translucent fill (set inline from the theme) sit over the blur.
+    tabBar: {
+      flexDirection: "row",
+      borderRadius: Radius.full,
+      overflow: "hidden",
+      paddingTop: Spacing.xs,
+      paddingBottom: Spacing.sm,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: Colors.border,
     },
     tabItem: {
       flex: 1,
@@ -1417,7 +1447,7 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       minWidth: 16,
       height: 16,
       borderRadius: Radius.full,
-      backgroundColor: Colors.danger,
+      backgroundColor: Colors.accent,
       alignItems: "center",
       justifyContent: "center",
       paddingHorizontal: 3,
@@ -1427,7 +1457,7 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
     tabBadgeText: {
       fontSize: 9,
       fontWeight: FontWeight.bold,
-      color: "#FFFFFF",
+      color: Colors.textInverse,
       lineHeight: 12,
     },
     // Unread badge on the Channels/Direct segmented control, the same visual
@@ -1439,7 +1469,7 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       minWidth: 15,
       height: 15,
       borderRadius: Radius.full,
-      backgroundColor: Colors.danger,
+      backgroundColor: Colors.accent,
       alignItems: "center",
       justifyContent: "center",
       paddingHorizontal: 3,
@@ -1449,7 +1479,7 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
     segBadgeText: {
       fontSize: 9,
       fontWeight: FontWeight.bold,
-      color: "#FFFFFF",
+      color: Colors.textInverse,
       lineHeight: 11,
     },
     tabLine: {},

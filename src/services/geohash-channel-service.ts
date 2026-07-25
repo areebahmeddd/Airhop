@@ -136,7 +136,7 @@ export function geohashLevelName(gh: string): string {
   if (n <= 4) return "Province";
   if (n === 5) return "City";
   if (n === 6) return "Neighborhood";
-  if (n === 7) return "Block";
+  if (n === 7) return "City block";
   return "Building";
 }
 

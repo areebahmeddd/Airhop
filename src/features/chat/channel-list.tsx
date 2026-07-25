@@ -41,6 +41,7 @@ import {
   FontWeight,
   Radius,
   Spacing,
+  TAB_BAR_CLEARANCE,
   useThemeColors,
 } from "../../ui/theme";
 import { sortConversationsByActivity } from "../../utils/conversation-order";
@@ -78,8 +79,21 @@ const DEFAULT_CHANNEL_NAMES = new Set([
   "#region",
 ]);
 
-// Default Channels is collapsed to this many rows until the user expands it.
+// Default Rooms is collapsed to this many rows until the user expands it.
 const DEFAULT_VISIBLE_COUNT = 3;
+
+// Whether the Default Rooms "Show more" section is expanded. Module-level, not
+// component state, on purpose: opening a room or switching tabs unmounts this
+// list, so a useState would reset to collapsed every time. Keeping it here lets
+// the expansion survive the remount when the user comes back to Chats.
+let persistedShowAllDefault = false;
+
+// Which section headers ("Default Rooms" / "Your Rooms") are collapsed. Held at
+// module level for the same reason as persistedShowAllDefault: collapsing a
+// section then opening a room (or switching tabs) unmounts this list, so a plain
+// useState would snap every section back open on return. Persisting the choice
+// keeps a collapsed section collapsed across the remount.
+let persistedCollapsedSections = new Set<string>();
 
 // Single shared left/right inset used by BOTH the section headers and the
 // channel rows, so their leading text ("DEFAULT CHANNELS" / "#bluetooth")
@@ -234,10 +248,20 @@ export default function ChannelList({
   // option; the user opts into internet reach.
   const [newChannelOverNostr, setNewChannelOverNostr] = useState(false);
   const [infoChannel, setInfoChannel] = useState<string | null>(null);
+  // Seed from the module-level set so returning to Chats restores which sections
+  // the user had collapsed instead of snapping them all back open.
   const [collapsedSections, setCollapsedSections] = useState<Set<string>>(
-    new Set(),
+    () => new Set(persistedCollapsedSections),
   );
-  const [showAllDefault, setShowAllDefault] = useState(false);
+  useEffect(() => {
+    persistedCollapsedSections = collapsedSections;
+  }, [collapsedSections]);
+  // Seed from the module-level flag so returning to Chats restores the last
+  // expand/collapse choice instead of snapping back to collapsed.
+  const [showAllDefault, setShowAllDefault] = useState(persistedShowAllDefault);
+  useEffect(() => {
+    persistedShowAllDefault = showAllDefault;
+  }, [showAllDefault]);
   const [refreshing, setRefreshing] = useState(false);
   // Which "Your Rooms" row currently has its swipe-revealed More sheet open.
   const [moreOptionsChannel, setMoreOptionsChannel] = useState<string | null>(
@@ -309,10 +333,10 @@ export default function ChannelList({
 
   const sections: ChannelSection[] = [
     {
-      title: "Default Channels",
+      title: "Default Rooms",
       isDefault: true,
       unread: sumUnread(defaultChannels),
-      data: collapsedSections.has("Default Channels")
+      data: collapsedSections.has("Default Rooms")
         ? []
         : showAllDefault
           ? defaultChannels
@@ -445,7 +469,9 @@ export default function ChannelList({
     const groupName = isGroup
       ? useGroupStore.getState().nameForChannel(item)
       : undefined;
-    const presenceCount = isGeo ? (geoCounts[item] ?? 0) : peerCount;
+    // Count yourself for a geo cell (you are an active participant too), so the
+    // row matches the thread header and member sheet, which also count self.
+    const presenceCount = isGeo ? (geoCounts[item] ?? 0) + 1 : peerCount;
     const presenceLabel = isGeo ? "active" : "nearby";
 
     const row = (
@@ -618,8 +644,8 @@ export default function ChannelList({
                 accessibilityRole="button"
                 accessibilityLabel={
                   showAllDefault
-                    ? "Show fewer default channels"
-                    : `Show ${hiddenCount} more default channels`
+                    ? "Show fewer default rooms"
+                    : `Show ${hiddenCount} more default rooms`
                 }
               >
                 <Text style={styles.showMoreText}>
@@ -676,7 +702,7 @@ export default function ChannelList({
             <Text style={styles.modalTitle}>Create a channel</Text>
             <View style={styles.privacyNote}>
               <View style={styles.privacyNoteRow}>
-                <Feather name="lock" size={14} color={Colors.online} />
+                <Feather name="lock" size={14} color={Colors.e2ee} />
                 <Text style={styles.privacyNoteText}>
                   End-to-end encrypted. Only members can read the messages.
                 </Text>
@@ -1102,7 +1128,7 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
     },
     list: {
       flexGrow: 1,
-      paddingBottom: 88,
+      paddingBottom: TAB_BAR_CLEARANCE,
     },
 
     // ---- Section headers -------------------------------------------------
@@ -1390,7 +1416,7 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
     privacyNote: {
       gap: Spacing.sm,
       backgroundColor: Colors.surfaceRaised,
-      borderRadius: Radius.md,
+      borderRadius: Radius.lg,
       padding: Spacing.md,
     },
     privacyNoteRow: {
@@ -1406,7 +1432,7 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
     },
     modalInput: {
       backgroundColor: Colors.surfaceRaised,
-      borderRadius: Radius.md,
+      borderRadius: Radius.xl,
       paddingHorizontal: Spacing.base,
       paddingVertical: Spacing.md,
       color: Colors.textPrimary,
@@ -1442,7 +1468,7 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       gap: 5,
       paddingHorizontal: Spacing.md,
       paddingVertical: 7,
-      borderRadius: Radius.md,
+      borderRadius: Radius.full,
       borderWidth: 1,
       borderColor: Colors.border,
       backgroundColor: Colors.bg,

@@ -286,7 +286,7 @@ export default function QrScanScreen({
   const confirmPillColor = alreadyContact
     ? Colors.textSecondary
     : foundCard
-      ? Colors.online
+      ? Colors.verified
       : Colors.textMuted;
   const confirmPillLabel = alreadyContact
     ? "Already in your contacts"
@@ -442,7 +442,7 @@ export default function QrScanScreen({
             </View>
 
             <View style={styles.noteRow}>
-              <Feather name="shield" size={14} color={Colors.textMuted} />
+              <Feather name="shield" size={14} color={Colors.verified} />
               <Text style={styles.noteText}>
                 Scanning a QR verifies their public key. A typed ID stays
                 unverified until you meet on the mesh.
@@ -606,7 +606,7 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
     },
     input: {
       backgroundColor: Colors.surfaceRaised,
-      borderRadius: Radius.md,
+      borderRadius: Radius.xl,
       borderWidth: 1,
       borderColor: Colors.border,
       paddingHorizontal: Spacing.base,

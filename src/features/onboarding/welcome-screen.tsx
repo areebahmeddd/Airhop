@@ -194,7 +194,7 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
     checkbox: {
       width: 20,
       height: 20,
-      borderRadius: Radius.sm,
+      borderRadius: Radius.full,
       borderWidth: 1.5,
       borderColor: Colors.borderStrong,
       alignItems: "center",

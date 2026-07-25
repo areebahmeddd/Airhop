@@ -38,6 +38,7 @@ import {
   FontWeight,
   Radius,
   Spacing,
+  TAB_BAR_CLEARANCE,
   useThemeColors,
 } from "../../ui/theme";
 import { peerInviteLink } from "../../utils/deep-link";
@@ -115,7 +116,7 @@ const THEME_META: Record<
   },
   system: {
     label: "System default",
-    description: "Match your device's appearance setting",
+    description: "Uses your device's appearance setting",
     icon: "smartphone",
   },
 };
@@ -230,6 +231,24 @@ export default function ProfileScreen({
     await panicWipe();
     setShowWipeModal(false);
     onWipe?.();
+  }
+
+  // Panic button taps: a single tap opens the confirm sheet; three quick taps
+  // are an escape-hatch easter egg that wipes immediately, no confirmation.
+  const wipeTapCount = useRef(0);
+  const wipeTapTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  function handlePanicPress(): void {
+    wipeTapCount.current += 1;
+    if (wipeTapTimer.current) clearTimeout(wipeTapTimer.current);
+    if (wipeTapCount.current >= 3) {
+      wipeTapCount.current = 0;
+      void handleConfirmWipe();
+      return;
+    }
+    wipeTapTimer.current = setTimeout(() => {
+      wipeTapCount.current = 0;
+      setShowWipeModal(true);
+    }, 400);
   }
 
   const shortPubKey = peerID.slice(0, 8) + " · " + peerID.slice(8);
@@ -522,9 +541,10 @@ export default function ProfileScreen({
         <View style={[shared.settingsGroup, styles.dangerGroup]}>
           <Pressable
             style={styles.dangerRow}
-            onPress={() => setShowWipeModal(true)}
+            onPress={handlePanicPress}
             accessibilityRole="button"
             accessibilityLabel="Trigger panic wipe"
+            accessibilityHint="Triple-tap to wipe immediately without confirming"
           >
             {/* Inner View owns the row layout. Pressable does not reliably
                 propagate flexDirection on all RN versions. */}
@@ -833,7 +853,7 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
     content: {
       padding: Spacing.base,
       gap: Spacing.md,
-      paddingBottom: Spacing["3xl"],
+      paddingBottom: TAB_BAR_CLEARANCE,
     },
     // Header row above the identity block: status edit pencil, top-right
     header: {
@@ -994,7 +1014,7 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
     qrLarge: {
       padding: Spacing.xl,
       backgroundColor: Colors.surface,
-      borderRadius: Radius.xl,
+      borderRadius: Radius.lg,
       borderWidth: 1,
       borderColor: Colors.border,
     },

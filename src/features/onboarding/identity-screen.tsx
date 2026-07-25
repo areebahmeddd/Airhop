@@ -185,7 +185,7 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
     steps: {
       alignSelf: "stretch",
       backgroundColor: Colors.surface,
-      borderRadius: 12,
+      borderRadius: 14,
       padding: Spacing.base,
       gap: Spacing.md,
     },
