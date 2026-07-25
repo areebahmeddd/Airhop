@@ -3,6 +3,12 @@
 All notable changes are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## What's Changed in v1.0.2 · Albatross
+
+- feat: update UI elements and improve user experience across various screens (by @areebahmeddd) [34a68ad]
+
+**Full changelog:** [v1.0.1..v1.0.2](https://github.com/areebahmeddd/Airhop/compare/v1.0.1..v1.0.2)
+
 ## What's Changed in v1.0.1 · Albatross
 
 - refactor: rename "Your Channels" to "Your Rooms" for clarity and consistency (by @areebahmeddd) [837173d]
