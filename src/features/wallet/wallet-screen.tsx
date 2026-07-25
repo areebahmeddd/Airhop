@@ -81,6 +81,7 @@ import {
   isWalletStorageReady,
   selectAccounts,
   useWalletStore,
+  whenWalletHydrated,
   type AccountBalance,
   type WalletTx,
 } from "../../store/wallet-store";
@@ -134,13 +135,18 @@ export default function WalletScreen({
 
   const [locked, setLocked] = useState(() => !isWalletStorageReady());
   useEffect(() => {
-    // Storage opens asynchronously at app start; re-check until it lands so the
-    // locked banner clears itself rather than needing a tab switch.
+    // The encrypted store opens and hydrates asynchronously at app start, so
+    // the banner clears itself rather than needing a tab switch. Settles once:
+    // when the keychain is unavailable the wallet stays locked for good, and
+    // polling for a state that will never change just burns battery.
     if (!locked) return;
-    const timer = setInterval(() => {
-      if (isWalletStorageReady()) setLocked(false);
-    }, 500);
-    return () => clearInterval(timer);
+    let cancelled = false;
+    void whenWalletHydrated().then(() => {
+      if (!cancelled) setLocked(!isWalletStorageReady());
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [locked]);
 
   const peers = usePeerStore((s) => s.peers);
@@ -260,13 +266,21 @@ export default function WalletScreen({
     unitTotals[0] ?? { unit: "sat", balance: 0, unverified: 0, reserved: 0 };
 
   // Sends whose proofs are still held: the token exists, delivery is unproven.
+  // Anything still owed to somebody and still holding a token the user can
+  // hand over.
+  //
+  // Two shapes end up here. A normal send has its proofs reserved and can be
+  // reclaimed. A nutzap whose relay publish failed has no reservation, because
+  // its proofs are already locked to the recipient's key and are not ours to
+  // take back, but it still carries a token that needs delivering. Leaving that
+  // second case out would strand the value with no way to reach it.
   const pendingSends = useMemo(
     () =>
       history.filter(
         (tx) =>
-          tx.kind === "send" &&
           tx.status === "pending" &&
-          reserved[tx.id] !== undefined,
+          (tx.kind === "send" || tx.kind === "nutzap-out") &&
+          (reserved[tx.id] !== undefined || Boolean(tx.token)),
       ),
     [history, reserved],
   );
@@ -879,7 +893,13 @@ export default function WalletScreen({
   useEffect(() => {
     if (!deposit || !showDeposit) return;
     let cancelled = false;
+    // A mint round trip can outlast the poll interval. Without this guard two
+    // claims race for the same quote, and the loser reports a spurious error on
+    // a deposit that actually succeeded.
+    let inFlight = false;
     const timer = setInterval(() => {
+      if (inFlight) return;
+      inFlight = true;
       void (async () => {
         try {
           const minted = await claimLightningDeposit(
@@ -896,6 +916,8 @@ export default function WalletScreen({
           );
         } catch {
           // Still unpaid, or the mint blinked. Keep polling.
+        } finally {
+          inFlight = false;
         }
       })();
     }, DEPOSIT_POLL_MS);
@@ -1032,58 +1054,71 @@ export default function WalletScreen({
       {pendingSends.length > 0 && (
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Pending</Text>
-          {pendingSends.map((tx) => (
-            <View key={tx.id} style={styles.pendingCard}>
-              <View style={styles.pendingHeader}>
-                <Feather name="clock" size={15} color={Colors.textSecondary} />
-                <Text style={styles.pendingAmount}>
-                  {tx.amount.toLocaleString()} {tx.unit}
+          {pendingSends.map((tx) => {
+            // Reclaim is only meaningful while the proofs are still ours. A
+            // nutzap that failed to publish is already locked to the
+            // recipient's key, so offering to pull it back would be a lie.
+            const reclaimable = reserved[tx.id] !== undefined;
+            return (
+              <View key={tx.id} style={styles.pendingCard}>
+                <View style={styles.pendingHeader}>
+                  <Feather
+                    name="clock"
+                    size={15}
+                    color={Colors.textSecondary}
+                  />
+                  <Text style={styles.pendingAmount}>
+                    {tx.amount.toLocaleString()} {tx.unit}
+                  </Text>
+                  <Text style={styles.pendingTime}>
+                    {relativeTime(tx.createdAtMs)}
+                  </Text>
+                </View>
+                <Text style={styles.pendingBody}>
+                  {reclaimable
+                    ? "Built and reserved, delivery unconfirmed. The proofs are held out of your balance so they cannot be spent twice."
+                    : "Already locked to the recipient's key, so only they can spend it. It just has not reached them yet. Share the token to finish."}
+                  {tx.error ? `\n\n${tx.error}` : ""}
                 </Text>
-                <Text style={styles.pendingTime}>
-                  {relativeTime(tx.createdAtMs)}
-                </Text>
+                <View style={styles.pendingActions}>
+                  <Pressable
+                    style={styles.pendingBtn}
+                    onPress={() => void handleCopyToken(tx.token ?? "")}
+                    accessibilityRole="button"
+                    accessibilityLabel="Copy the token again"
+                  >
+                    <Text style={styles.pendingBtnText}>Copy</Text>
+                  </Pressable>
+                  <Pressable
+                    style={styles.pendingBtn}
+                    onPress={() => handleShareToken(tx.token ?? "")}
+                    accessibilityRole="button"
+                    accessibilityLabel="Share the token again"
+                  >
+                    <Text style={styles.pendingBtnText}>Share</Text>
+                  </Pressable>
+                  <Pressable
+                    style={styles.pendingBtn}
+                    onPress={() => markDelivered(tx.id)}
+                    accessibilityRole="button"
+                    accessibilityLabel="Mark this token as delivered"
+                  >
+                    <Text style={styles.pendingBtnText}>Delivered</Text>
+                  </Pressable>
+                  {reclaimable && (
+                    <Pressable
+                      style={[styles.pendingBtn, styles.pendingBtnDanger]}
+                      onPress={() => handleReclaim(tx)}
+                      accessibilityRole="button"
+                      accessibilityLabel="Reclaim this token into your balance"
+                    >
+                      <Text style={styles.pendingBtnDangerText}>Reclaim</Text>
+                    </Pressable>
+                  )}
+                </View>
               </View>
-              <Text style={styles.pendingBody}>
-                Built and reserved, delivery unconfirmed. The proofs are held
-                out of your balance so they cannot be spent twice.
-                {tx.error ? `\n\n${tx.error}` : ""}
-              </Text>
-              <View style={styles.pendingActions}>
-                <Pressable
-                  style={styles.pendingBtn}
-                  onPress={() => void handleCopyToken(tx.token ?? "")}
-                  accessibilityRole="button"
-                  accessibilityLabel="Copy the token again"
-                >
-                  <Text style={styles.pendingBtnText}>Copy</Text>
-                </Pressable>
-                <Pressable
-                  style={styles.pendingBtn}
-                  onPress={() => handleShareToken(tx.token ?? "")}
-                  accessibilityRole="button"
-                  accessibilityLabel="Share the token again"
-                >
-                  <Text style={styles.pendingBtnText}>Share</Text>
-                </Pressable>
-                <Pressable
-                  style={styles.pendingBtn}
-                  onPress={() => markDelivered(tx.id)}
-                  accessibilityRole="button"
-                  accessibilityLabel="Mark this token as delivered"
-                >
-                  <Text style={styles.pendingBtnText}>Delivered</Text>
-                </Pressable>
-                <Pressable
-                  style={[styles.pendingBtn, styles.pendingBtnDanger]}
-                  onPress={() => handleReclaim(tx)}
-                  accessibilityRole="button"
-                  accessibilityLabel="Reclaim this token into your balance"
-                >
-                  <Text style={styles.pendingBtnDangerText}>Reclaim</Text>
-                </Pressable>
-              </View>
-            </View>
-          ))}
+            );
+          })}
         </View>
       )}
 

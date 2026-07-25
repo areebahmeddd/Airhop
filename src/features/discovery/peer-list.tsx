@@ -63,6 +63,10 @@ export default function PeerList({
   const [selectedPeer, setSelectedPeer] = useState<NearbyPeer | null>(null);
   const [sendSatsAmount, setSendSatsAmount] = useState("");
   const [showSendSats, setShowSendSats] = useState(false);
+  // Set while a send is in flight. Quoting involves an await, so without this a
+  // double tap starts two sends; the second now loses the reservation race and
+  // reports a confusing "those coins were just used" instead of doing nothing.
+  const [sendingSats, setSendingSats] = useState(false);
 
   // Refresh "last seen" every 10 seconds and evict stale peers.
   useEffect(() => {
@@ -130,12 +134,15 @@ export default function PeerList({
   // in the shared transfer service; this only supplies who and how much.
   async function handleSendSats(peer: NearbyPeer): Promise<void> {
     const amount = parseInt(sendSatsAmount, 10);
-    if (!amount || amount <= 0) return;
+    if (!amount || amount <= 0 || sendingSats) return;
 
-    const result = await sendEcashToPeer({
-      peerID: peer.peerID,
-      amount,
-    });
+    setSendingSats(true);
+    let result;
+    try {
+      result = await sendEcashToPeer({ peerID: peer.peerID, amount });
+    } finally {
+      setSendingSats(false);
+    }
     if (!result) return;
 
     setSendSatsAmount("");
@@ -309,10 +316,12 @@ export default function PeerList({
                   <Pressable
                     style={[
                       styles.sendSatsConfirm,
-                      !sendSatsAmount.trim() && { opacity: 0.4 },
+                      (!sendSatsAmount.trim() || sendingSats) && {
+                        opacity: 0.4,
+                      },
                     ]}
                     onPress={() => void handleSendSats(selectedPeer)}
-                    disabled={!sendSatsAmount.trim()}
+                    disabled={!sendSatsAmount.trim() || sendingSats}
                     accessibilityRole="button"
                     accessibilityLabel="Confirm send sats"
                   >

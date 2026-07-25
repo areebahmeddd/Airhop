@@ -5,10 +5,7 @@
 // Imports come first in source; Babel hoists jest.mock() calls above them.
 import { panicWipe as identityPanicWipe } from "../../core/crypto/identity";
 import { clearAttachmentCache } from "../../services/file-transfer-service";
-import {
-  LEGACY_WALLET_STORAGE_ID,
-  WALLET_STORAGE_ID,
-} from "../../store/wallet-store";
+import { WALLET_STORAGE_ID } from "../../store/wallet-store";
 import { MMKV_STORE_IDS, panicWipe } from "../panic-wipe";
 
 // identity.panicWipe wipes the Keychain/Keystore; mock it out in tests.
@@ -132,15 +129,11 @@ describe("panicWipe", () => {
 
   test("deletes the encrypted wallet store rather than clearing it", async () => {
     // The wallet file is AES-256 encrypted, so reopening it without the key to
-    // call clearAll() is unreliable. It is removed with deleteMMKV instead, and
-    // both the current id and the pre-encryption one are covered so an old
-    // install's plaintext proofs go too.
+    // call clearAll() is unreliable. It is removed with deleteMMKV instead.
     await panicWipe();
     expect(deleteMMKV).toHaveBeenCalledWith(WALLET_STORAGE_ID);
-    expect(deleteMMKV).toHaveBeenCalledWith(LEGACY_WALLET_STORAGE_ID);
     // It must never appear in the plain clearAll list, or the wipe would depend
     // on being able to decrypt what it is trying to destroy.
     expect(MMKV_STORE_IDS).not.toContain(WALLET_STORAGE_ID);
-    expect(MMKV_STORE_IDS).not.toContain(LEGACY_WALLET_STORAGE_ID);
   });
 });

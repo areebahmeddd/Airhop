@@ -909,6 +909,7 @@ export default function MessageThread({
   const autoDownloadMedia = useSettingsStore((s) => s.autoDownloadMedia);
   const [showAttachMenu, setShowAttachMenu] = useState(false);
   const [showSendEcash, setShowSendEcash] = useState(false);
+  const [sendingEcash, setSendingEcash] = useState(false);
   // Raw string of the token currently being claimed, so its button can show
   // progress and a double tap cannot start two swaps for the same proofs.
   const [claimingToken, setClaimingToken] = useState<string | null>(null);
@@ -1421,14 +1422,21 @@ export default function MessageThread({
   // per screen.
   async function handleSendEcash(): Promise<void> {
     const amount = parseInt(ecashAmount, 10);
-    if (!amount || amount <= 0 || !dmPeerID) return;
+    if (!amount || amount <= 0 || !dmPeerID || sendingEcash) return;
 
-    const result = await sendEcashToPeer({
-      peerID: dmPeerID,
-      amount,
-      memo: ecashMemo.trim() || undefined,
-      senderNickname: localNickname,
-    });
+    // Quoting awaits the mint, so a double tap would otherwise start two sends.
+    setSendingEcash(true);
+    let result;
+    try {
+      result = await sendEcashToPeer({
+        peerID: dmPeerID,
+        amount,
+        memo: ecashMemo.trim() || undefined,
+        senderNickname: localNickname,
+      });
+    } finally {
+      setSendingEcash(false);
+    }
     if (!result) return;
 
     setShowSendEcash(false);
@@ -2626,10 +2634,11 @@ export default function MessageThread({
             <Pressable
               style={[
                 styles.ecashConfirm,
-                !ecashAmount.trim() && styles.ecashConfirmDisabled,
+                (!ecashAmount.trim() || sendingEcash) &&
+                  styles.ecashConfirmDisabled,
               ]}
               onPress={() => void handleSendEcash()}
-              disabled={!ecashAmount.trim()}
+              disabled={!ecashAmount.trim() || sendingEcash}
             >
               <Text style={styles.ecashConfirmText}>Send</Text>
             </Pressable>

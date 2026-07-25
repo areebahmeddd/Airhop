@@ -25,8 +25,10 @@
 
 import {
   Mint,
+  OutputData,
   Wallet,
   isMintOperationError,
+  setGlobalRequestOptions,
   type CounterSource,
   type GetInfoResponse,
   type KeyChainCache,
@@ -34,6 +36,7 @@ import {
   type MintQuoteBolt11Response,
   type Proof,
   type ProofLike,
+  type SerializedOutputData,
 } from "@cashu/cashu-ts";
 import { secp256k1 } from "@noble/curves/secp256k1.js";
 import { bytesToHex, hexToBytes } from "@noble/hashes/utils.js";
@@ -73,10 +76,31 @@ import {
   isWalletStorageReady,
   normalizeMintUrl,
   useWalletStore,
+  whenWalletHydrated,
   type StoredMint,
   type StoredProof,
   type WalletTx,
 } from "../store/wallet-store";
+
+// ---- Network limits ---------------------------------------------------------
+
+// Every mint request is bounded. cashu-ts only builds an AbortController when a
+// timeout is given, and React Native's fetch has none of its own, so without
+// this a mint that accepts the connection and then never answers hangs the call
+// forever. That is not an abstract worry on mobile: captive portals, a dropped
+// cell handover and an overloaded mint all produce exactly that shape.
+//
+// A hang is worse than a failure here, because the UI is built around promises
+// settling. A stuck request leaves the confirm button spinning, holds the
+// per-mint refresh lock so every other mint is unrefreshable, and stalls the
+// startup chain before the nutzap watcher is ever installed. A timeout turns
+// all of that into an ordinary error the user can retry.
+//
+// 20s is generous for a mint round trip on a slow connection while still being
+// well inside the patience of somebody staring at a spinner.
+const MINT_REQUEST_TIMEOUT_MS = 20_000;
+
+setGlobalRequestOptions({ requestTimeout: MINT_REQUEST_TIMEOUT_MS });
 
 // ---- Errors -----------------------------------------------------------------
 
@@ -403,6 +427,12 @@ export async function initWalletService(): Promise<boolean> {
   } catch {
     return false;
   }
+  // Opening the file is not the same as having read it. zustand overwrites the
+  // store with the persisted snapshot when hydration lands, so anything that
+  // credits or spends before that point is discarded. Wait for it, then check:
+  // hydration can fail, and a failed read must not look like an empty wallet.
+  await whenWalletHydrated();
+  if (!isWalletStorageReady()) return false;
   // Backup state comes from the keychain, not the store, so it has to be read
   // before the first mint operation or new proofs would be created with random
   // secrets and quietly fall outside the user's recovery phrase.
@@ -1058,7 +1088,17 @@ export async function prepareSend(params: {
   );
 
   const store = useWalletStore.getState();
-  store.reserveProofs(txId, quote.mintUrl, quote.unit, quote.proofs);
+  // The quote was priced before the awaits above, so another send may have
+  // claimed these coins in the meantime. Reserving is the point at which that
+  // is settled, and losing the race is a retry, not an error worth alarming
+  // anybody about.
+  if (!store.reserveProofs(txId, quote.mintUrl, quote.unit, quote.proofs)) {
+    throw new WalletError(
+      "insufficient",
+      "Those coins were just used by another payment.",
+      "Nothing was deducted. Try again and the wallet will pick a different set.",
+    );
+  }
   store.addTx({
     id: txId,
     kind: "send",
@@ -1359,6 +1399,19 @@ export async function reconcile(): Promise<void> {
     }
   }
 
+  // Melts whose response never arrived. The mint may have paid regardless, in
+  // which case the unused routing reserve is sitting there as change signed
+  // against blanks only this device can unblind.
+  for (const tx of state.history) {
+    if (tx.kind !== "melt" || tx.status !== "pending") continue;
+    if (!tx.quoteId || tx.meltOutputs === undefined) continue;
+    try {
+      await recoverMeltChange(tx);
+    } catch {
+      // Still unknown, or the mint is unreachable. The blanks stay put.
+    }
+  }
+
   // Reserved sends whose proofs the recipient has now redeemed: the value is
   // gone for good, so close them out rather than offering a reclaim that would
   // fail at the mint.
@@ -1506,6 +1559,64 @@ export async function claimLightningDeposit(
   return minted;
 }
 
+// Settle a melt whose response was lost, using the blank outputs saved before
+// the request went out.
+//
+// The mint is the only authority on whether the invoice was actually paid, so
+// this asks rather than guesses:
+//
+//   PAID    the payment went through. Rebuild the change from the signatures
+//           the quote carries and credit it, then close the transaction and
+//           drop the reservation, because those inputs really are spent.
+//   UNPAID  the melt never happened, so the reserved proofs are still good and
+//           go back into the balance.
+//   PENDING the mint is still trying. Leave everything exactly as it is.
+async function recoverMeltChange(tx: WalletTx): Promise<void> {
+  if (!tx.quoteId) return;
+  const store = useWalletStore.getState();
+  const wallet = await getWallet(tx.mintUrl, tx.unit);
+  const quote = await wallet.checkMeltQuoteBolt11(tx.quoteId);
+
+  if (quote.state === "PENDING") return;
+
+  if (quote.state === "UNPAID") {
+    store.releaseReserved(tx.id);
+    store.updateTx(tx.id, {
+      status: "failed",
+      error: "The mint did not pay this invoice. Your balance is unchanged.",
+      meltOutputs: undefined,
+    });
+    return;
+  }
+
+  // PAID. Rebuild the change, if the mint returned any.
+  let recovered = 0;
+  const signatures = quote.change ?? [];
+  if (signatures.length > 0 && Array.isArray(tx.meltOutputs)) {
+    try {
+      const outputs = (tx.meltOutputs as SerializedOutputData[]).map((entry) =>
+        OutputData.deserialize(entry),
+      );
+      const change = wallet.createMeltChangeProofs(outputs, signatures);
+      if (change.length > 0) {
+        creditProofs(tx.mintUrl, tx.unit, change, { verified: true });
+        recovered = change.reduce((sum, p) => sum + p.amount.toNumber(), 0);
+      }
+    } catch {
+      // Malformed or mismatched blanks. The payment still succeeded, so carry
+      // on and close the transaction rather than leaving it pending forever.
+    }
+  }
+
+  store.dropReserved(tx.id);
+  store.updateTx(tx.id, {
+    status: "completed",
+    error: undefined,
+    meltOutputs: undefined,
+    ...(recovered > 0 ? { fee: Math.max(0, (tx.fee ?? 0) - recovered) } : {}),
+  });
+}
+
 // ---- Lightning: withdraw (melt) ---------------------------------------------
 
 export interface MeltQuote {
@@ -1618,7 +1729,15 @@ export async function payLightningInvoice(quote: MeltQuote): Promise<{
   }
 
   const txId = newTxId();
-  store.reserveProofs(txId, quote.mintUrl, quote.unit, selection.selected);
+  if (
+    !store.reserveProofs(txId, quote.mintUrl, quote.unit, selection.selected)
+  ) {
+    throw new WalletError(
+      "insufficient",
+      "Those coins were just used by another payment.",
+      "Nothing was deducted and the invoice was not paid. Try again.",
+    );
+  }
   store.addTx({
     id: txId,
     kind: "melt",
@@ -1636,10 +1755,23 @@ export async function payLightningInvoice(quote: MeltQuote): Promise<{
 
   try {
     const wallet = await getWallet(quote.mintUrl, quote.unit);
-    const result = await wallet.meltProofsBolt11(
+
+    // Split into prepare and complete so the blank change outputs exist before
+    // the request does. Their blinding factors are the only way to unblind the
+    // change the mint signs, and they would otherwise live purely in memory:
+    // lose the response and the unused routing reserve is gone for good.
+    const preview = await wallet.prepareMelt(
+      "bolt11",
       quote.raw,
       selection.selected.map(toProofLike),
     );
+    store.updateTx(txId, {
+      meltOutputs: preview.outputData.map((output) =>
+        OutputData.serialize(output),
+      ),
+    });
+
+    const result = await wallet.completeMelt(preview);
 
     // Unused routing reserve comes back as change proofs.
     const change = result.change;
@@ -1653,6 +1785,8 @@ export async function payLightningInvoice(quote: MeltQuote): Promise<{
     store.updateTx(txId, {
       status: "completed",
       fee: spent - quote.amount,
+      // Change is in hand, so the blanks have served their purpose.
+      meltOutputs: undefined,
     });
     return {
       paid: quote.amount,
@@ -1667,8 +1801,14 @@ export async function payLightningInvoice(quote: MeltQuote): Promise<{
     // would show a balance the mint has already spent.
     if (walletErr.code === "mint-error") {
       store.releaseReserved(txId);
-      store.updateTx(txId, { status: "failed", error: walletErr.message });
+      store.updateTx(txId, {
+        status: "failed",
+        error: walletErr.message,
+        meltOutputs: undefined,
+      });
     } else {
+      // Ambiguous: the mint may have paid. The blanks stay on the transaction
+      // so `reconcile` can recover the change once the quote's state is known.
       store.updateTx(txId, {
         error: `${walletErr.message} Payment status unknown; checked again on next refresh.`,
       });
@@ -2039,35 +2179,40 @@ export async function sendNutzap(params: {
           ) >= params.amount,
       );
     if (shared) {
+      // Locking and publishing fail very differently, so they cannot share a
+      // catch. A failed lock spends nothing, because the mint's swap is atomic.
+      // A failed publish means the value is already committed to the
+      // recipient's key: unspendable by us, and invisible to them until it is
+      // delivered somehow. Falling through in that case would send a second
+      // payment and strand the first forever.
+      let locked: Proof[] | null = null;
+      let txId = "";
       try {
-        const { locked, txId } = await lockProofsForNutzap({
+        const result = await lockProofsForNutzap({
           amount: params.amount,
           mintUrl: shared,
           unit,
           recipientPubkey: info.p2pkPubkey,
         });
-        await publishNutzap({
-          proofs: locked,
+        locked = result.locked;
+        txId = result.txId;
+      } catch {
+        // Nothing left the wallet. Safe to try the tiers below.
+        locked = null;
+      }
+
+      if (locked !== null) {
+        return deliverLockedNutzap({
+          locked,
+          txId,
           mintUrl: shared,
+          unit,
+          amount: params.amount,
           recipientPubkey: params.recipientPubkey,
           senderPrivKey: params.senderPrivKey,
           client: params.client,
           comment: params.comment,
         });
-        useWalletStore.getState().updateTx(txId, { status: "completed" });
-        return {
-          method: "nutzap",
-          amount: params.amount,
-          unit,
-          mintUrl: shared,
-          txId,
-        };
-      } catch (err) {
-        // The proofs were locked to them but the publish failed, or the lock
-        // itself failed. Either way, fall through rather than losing the value:
-        // `lockProofsForNutzap` leaves a pending transaction, and reconcile
-        // will settle it from the proof state.
-        void err;
       }
     }
   }
@@ -2105,6 +2250,94 @@ export async function sendNutzap(params: {
     if (err instanceof WalletError && err.code !== "offline") throw err;
     return sendAsManualToken(params, unit, reason);
   }
+}
+
+// Get already-locked proofs to their owner, once the value has been committed.
+//
+// The proofs are P2PK-locked to the recipient, which changes what is safe: the
+// token string is worthless to anybody else, so it can travel over any channel
+// without the bearer risk an ordinary token carries. That gives two fallbacks
+// after a failed relay publish, neither of which spends anything further.
+//
+// Re-spending is never an option here. The value has already left the wallet
+// and cannot be recovered, so every path below is about delivery, not payment.
+async function deliverLockedNutzap(params: {
+  locked: Proof[];
+  txId: string;
+  mintUrl: string;
+  unit: string;
+  amount: number;
+  recipientPubkey: string;
+  senderPrivKey: Uint8Array;
+  client: NostrClient;
+  comment?: string;
+}): Promise<NutzapSendResult> {
+  const store = useWalletStore.getState();
+  const base = {
+    amount: params.amount,
+    unit: params.unit,
+    mintUrl: params.mintUrl,
+    txId: params.txId,
+  };
+
+  // Preferred: the NIP-61 event, which is what other wallets watch for.
+  try {
+    await publishNutzap({
+      proofs: params.locked,
+      mintUrl: params.mintUrl,
+      recipientPubkey: params.recipientPubkey,
+      senderPrivKey: params.senderPrivKey,
+      client: params.client,
+      comment: params.comment,
+    });
+    store.updateTx(params.txId, { status: "completed" });
+    return { method: "nutzap", ...base };
+  } catch {
+    // Relay refused or unreachable. The money is still theirs; only the
+    // notification failed.
+  }
+
+  // Keep the locked token on the transaction before trying anything else, so a
+  // crash from here on still leaves something the user can hand over by hand.
+  const token = buildToken(
+    params.mintUrl,
+    params.locked.map((p) => toStoredProof(p, { verified: true })),
+    params.unit,
+    params.comment,
+  );
+  store.updateTx(params.txId, { token });
+
+  // Second: an encrypted DM carrying the same locked token.
+  try {
+    const { wrapDm } = await import("../core/nostr/gift-wrap");
+    const { event } = await wrapDm(
+      token,
+      params.senderPrivKey,
+      params.recipientPubkey,
+    );
+    await params.client.publish(event);
+    store.updateTx(params.txId, { status: "completed" });
+    return {
+      method: "dm",
+      ...base,
+      fallbackReason:
+        "the nutzap relay publish failed, so the locked token went as an encrypted message instead",
+    };
+  } catch {
+    // Nothing reached the network at all.
+  }
+
+  store.updateTx(params.txId, {
+    error:
+      "Locked to their key but not yet delivered. Share the token from this transaction to complete it.",
+  });
+  return {
+    method: "token",
+    ...base,
+    token,
+    fallbackReason:
+      "the payment is already locked to their key, but nothing could be published. Share the token to finish delivering it",
+  };
 }
 
 // Last tier: build the token and hand it back. Stays reserved and pending until

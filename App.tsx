@@ -191,9 +191,16 @@ async function startMeshWithPermissions(
   void (async () => {
     const unlocked = await initWalletService();
     if (!unlocked) return;
-    await reconcile().catch(() => {
+
+    // Settling leftovers is a background chore, not a prerequisite. It walks
+    // every pending deposit and reserved send, one mint round trip at a time,
+    // so on a bad network it can take minutes. Awaiting it here would hold the
+    // nutzap watcher behind it and quietly drop incoming payments for that
+    // whole window. Nothing below depends on its result.
+    void reconcile().catch(() => {
       // Offline, or the mint is down. Retried on the next launch.
     });
+
     const client = getMeshService()?.getNostrClient();
     const privKey = getMeshService()?.getNostrPrivKey();
     const pubKey = getMeshService()?.getNostrPubKeyHex();

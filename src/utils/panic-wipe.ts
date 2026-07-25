@@ -30,11 +30,7 @@ import { usePeerStore } from "../store/peer-store";
 import { usePlaceNamesStore } from "../store/place-names-store";
 import { useSettingsStore } from "../store/settings-store";
 import { useTransferStore } from "../store/transfer-store";
-import {
-  LEGACY_WALLET_STORAGE_ID,
-  WALLET_STORAGE_ID,
-  useWalletStore,
-} from "../store/wallet-store";
+import { WALLET_STORAGE_ID, useWalletStore } from "../store/wallet-store";
 
 // The IDs used by all MMKV storage instances in src/store/ and src/core/.
 // peer-store is intentionally absent: it uses in-memory Zustand with no MMKV
@@ -86,9 +82,8 @@ export const MMKV_STORE_IDS = [
 // clearAll() is not reliable. `deleteMMKV` removes the instance and its backing
 // file outright, which works whatever the encryption state. The key itself is
 // already destroyed by clearKeys() wiping the Keychain/Keystore, so even a
-// failed delete leaves ciphertext nobody can open. The legacy plaintext id is
-// included because installs that predate encryption may still have the file.
-const WALLET_STORE_IDS = [WALLET_STORAGE_ID, LEGACY_WALLET_STORAGE_ID] as const;
+// failed delete leaves ciphertext nobody can open.
+const WALLET_STORE_IDS = [WALLET_STORAGE_ID] as const;
 
 export async function panicWipe(): Promise<void> {
   // 1. Destroy all private keys from the OS secure enclave. This also removes

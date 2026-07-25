@@ -200,6 +200,44 @@ describe("reservations", () => {
   it("returns null when releasing an unknown reservation", () => {
     expect(state().releaseReserved("nope")).toBeNull();
   });
+
+  // The reservation is the only thing standing between two concurrent sends and
+  // putting one coin into two tokens. Callers select proofs, then await a mint
+  // round trip, so both arrive here holding the same coins.
+  it("refuses to reserve a proof another send already took", () => {
+    const proof = makeProof(64, "contested");
+    state().addProofs(MINT, "sat", [proof]);
+
+    expect(state().reserveProofs("tx-a", MINT, "sat", [proof])).toBe(true);
+    expect(state().reserveProofs("tx-b", MINT, "sat", [proof])).toBe(false);
+
+    expect(state().reserved["tx-b"]).toBeUndefined();
+    expect(selectBalanceForUnit(state(), "sat")).toBe(0);
+  });
+
+  it("reserves all or nothing when only part of the set is still available", () => {
+    const kept = makeProof(8, "kept");
+    const taken = makeProof(16, "taken");
+    state().addProofs(MINT, "sat", [kept, taken]);
+    state().reserveProofs("tx-a", MINT, "sat", [taken]);
+
+    // A second send that wants both must not quietly reserve just the one it
+    // can get: the token it builds would be short of the amount promised.
+    expect(state().reserveProofs("tx-b", MINT, "sat", [kept, taken])).toBe(
+      false,
+    );
+    expect(state().reserved["tx-b"]).toBeUndefined();
+    expect(selectBalanceForUnit(state(), "sat")).toBe(8);
+  });
+
+  it("is idempotent, so a retry cannot reserve twice under one id", () => {
+    const proof = makeProof(32, "once");
+    state().addProofs(MINT, "sat", [proof]);
+
+    expect(state().reserveProofs("tx-a", MINT, "sat", [proof])).toBe(true);
+    expect(state().reserveProofs("tx-a", MINT, "sat", [proof])).toBe(false);
+    expect(state().reserved["tx-a"].proofs).toHaveLength(1);
+  });
 });
 
 // ---- removeProofs / replaceProofs -------------------------------------------

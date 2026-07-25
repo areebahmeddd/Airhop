@@ -54,9 +54,7 @@ import { createJSONStorage, persist } from "zustand/middleware";
 
 // ---- Constants --------------------------------------------------------------
 
-// Encrypted store. The plaintext v1 id is migrated in and wiped on first run.
-export const WALLET_STORAGE_ID = "wallet-store-v2";
-export const LEGACY_WALLET_STORAGE_ID = "wallet-store";
+export const WALLET_STORAGE_ID = "wallet-store";
 
 // Keychain/Keystore entry holding the MMKV encryption key.
 const ENCRYPTION_KEY_ITEM = "airhop.wallet.mmkvKey.v1";
@@ -134,6 +132,17 @@ export interface WalletTx {
   // Mint/melt quote identifier and the bolt11 invoice it relates to.
   quoteId?: string;
   invoice?: string;
+  // Melt only: the blank change outputs (NUT-08), serialised, written before
+  // the melt request goes out.
+  //
+  // A melt sends the invoice amount plus a routing reserve, and whatever
+  // routing does not use comes back as change the mint signs against these
+  // blanks. Unblinding them needs the blinding factors, which otherwise live
+  // only in memory for the duration of the call. If the response never arrives,
+  // the melt may still have succeeded at the mint and that change becomes
+  // unrecoverable. Persisting them first lets `reconcile` rebuild it later.
+  // Cleared once the change has been credited.
+  meltOutputs?: unknown;
   // Populated on `failed`, shown verbatim in the transaction detail sheet.
   error?: string;
 }
@@ -234,12 +243,15 @@ interface WalletState {
 
   // ---- Reservations ----
   // Move proofs out of the spendable pool and hold them against `txId`.
+  // Returns false and changes nothing when any of the proofs has already been
+  // taken by another send, which is the only thing standing between two
+  // concurrent sends and putting the same coin in two tokens.
   reserveProofs: (
     txId: string,
     mintUrl: string,
     unit: string,
     proofs: StoredProof[],
-  ) => void;
+  ) => boolean;
   // Put a reservation back into the spendable pool (send never landed).
   releaseReserved: (txId: string) => StoredProof[] | null;
   // Drop a reservation for good (recipient confirmed, or mint says spent).
@@ -346,22 +358,6 @@ async function loadOrCreateEncryptionKey(): Promise<string> {
   return fresh;
 }
 
-// Copy the v1 plaintext store into the encrypted one, once, then wipe it.
-// Anything already written to v2 wins: a partial migration must never clobber
-// newer state (that would destroy money).
-function migrateLegacyStore(target: MMKVLike): void {
-  try {
-    const legacy = createMMKV({ id: LEGACY_WALLET_STORAGE_ID });
-    const raw = legacy.getString("wallet-state");
-    if (raw && target.getString("wallet-state") === undefined) {
-      target.set("wallet-state-legacy-v1", raw);
-    }
-    legacy.clearAll();
-  } catch {
-    // A missing or unreadable legacy store is the normal case for new installs.
-  }
-}
-
 // Open (or reuse) the encrypted wallet store. Safe to call repeatedly; the
 // first call wins and every later one awaits the same promise.
 export function bootstrapWalletStorage(): Promise<MMKVLike> {
@@ -385,27 +381,66 @@ export function bootstrapWalletStorage(): Promise<MMKVLike> {
       encryptionKey,
       encryptionType: "AES-256",
     });
-    migrateLegacyStore(mmkv);
     instance = mmkv;
     return mmkv;
   })();
   return ready;
 }
 
-// True once the encrypted store is open. The wallet UI gates spending on this
-// so a Keychain failure surfaces as "wallet locked" rather than a zero balance.
+// Whether zustand has finished replacing the initial empty state with what was
+// on disk. Separate from `instance`, and the distinction matters a great deal.
+//
+// Opening the MMKV file is only step one. zustand's persist middleware then
+// reads it asynchronously and *overwrites* the store with the result. Anything
+// written in that window is silently discarded when hydration lands. A nutzap
+// redeemed one tick too early would be credited and then erased, and a balance
+// check would report an empty wallet to somebody who has money.
+//
+// Left false when hydration fails (an unreadable keychain, a corrupt file), so
+// the wallet reports itself locked rather than presenting an empty balance as
+// though it were real.
+let hydrated = false;
+let hydrationSettled = false;
+const hydrationWaiters: (() => void)[] = [];
+
+// How long startup will wait for hydration before giving up on it. Only reached
+// if the storage promise never settles at all; a normal failure settles fast.
+// Present so a wedged read can never hang app startup behind it.
+const HYDRATION_TIMEOUT_MS = 15_000;
+
+// Called exactly once, from `onRehydrateStorage`, on both the success and the
+// failure path. Waiting on zustand's `onFinishHydration` instead would deadlock:
+// when hydration rejects, zustand invokes the rehydrate callback but leaves
+// `hasHydrated` false and never notifies the finish listeners.
+function settleHydration(ok: boolean): void {
+  if (hydrationSettled) return;
+  hydrated = ok;
+  hydrationSettled = true;
+  for (const waiter of hydrationWaiters.splice(0)) waiter();
+}
+
+// True once the store is both open and populated from disk. Everything that
+// spends, credits, or reports a balance gates on this.
 export function isWalletStorageReady(): boolean {
-  return instance !== null;
+  return instance !== null && hydrated;
+}
+
+// Resolves once hydration has settled, successfully or not. Callers must
+// re-check `isWalletStorageReady()` afterwards rather than assuming success.
+export function whenWalletHydrated(): Promise<void> {
+  if (hydrationSettled) return Promise.resolve();
+  return new Promise((resolve) => {
+    hydrationWaiters.push(resolve);
+    setTimeout(() => {
+      settleHydration(false);
+    }, HYDRATION_TIMEOUT_MS);
+  });
 }
 
 const asyncMMKVStorage = {
   async getItem(name: string): Promise<string | null> {
     const mmkv = await bootstrapWalletStorage();
-    const current = mmkv.getString(name);
-    if (current !== undefined) return current;
-    // First run after the v1 -> v2 migration: adopt the legacy blob.
-    const legacy = mmkv.getString(`${name}-legacy-v1`);
-    return legacy ?? null;
+    return mmkv.getString(name) ?? null;
   },
   async setItem(name: string, value: string): Promise<void> {
     const mmkv = await bootstrapWalletStorage();
@@ -658,13 +693,30 @@ export const useWalletStore = create<WalletState>()(
 
       reserveProofs(txId, mintUrl, unit, proofs) {
         const key = accountKey(mintUrl, unit);
-        const move = new Set(proofs.map((p) => p.secret));
+        const want = new Set(proofs.map((p) => p.secret));
+        let reserved = false;
+
+        // Validate and move in one synchronous pass, and refuse if any of the
+        // requested proofs is no longer spendable.
+        //
+        // Callers select proofs, then await a mint round trip, then land here.
+        // Two sends started close together therefore both pick from the same
+        // pool and both arrive holding the same coins. Trusting the caller
+        // would put one proof into two different tokens: both recipients see a
+        // balance, only the first to reach the mint actually has it, and our
+        // own accounting reserves the same value twice.
         set((state) => {
+          if (state.reserved[txId] !== undefined) return state;
           const existing = state.proofs[key] ?? [];
+          const spendable = new Set(existing.map((p) => p.secret));
+          for (const secret of want) {
+            if (!spendable.has(secret)) return state;
+          }
+          reserved = true;
           return {
             proofs: {
               ...state.proofs,
-              [key]: existing.filter((p) => !move.has(p.secret)),
+              [key]: existing.filter((p) => !want.has(p.secret)),
             },
             reserved: {
               ...state.reserved,
@@ -672,6 +724,8 @@ export const useWalletStore = create<WalletState>()(
             },
           };
         });
+
+        return reserved;
       },
 
       releaseReserved(txId) {
@@ -817,40 +871,13 @@ export const useWalletStore = create<WalletState>()(
     {
       name: "wallet-state",
       storage: createJSONStorage(() => asyncMMKVStorage),
-      version: 2,
-      // v1 stored `{ proofsByMint: Record<mintUrl, StoredProof[]>, unit }` with
-      // a single global unit. Every v1 proof therefore belongs to the account
-      // (mint, that unit). Nothing was verified against a mint back then, so
-      // they all migrate in as unverified, which is the honest state.
-      migrate(persisted, version) {
-        if (version >= 2) return persisted as WalletState;
-        const old = persisted as {
-          proofsByMint?: Record<string, StoredProof[]>;
-          unit?: string;
-        } | null;
-        const unit = old?.unit ?? "sat";
-        const proofs: Record<string, StoredProof[]> = {};
-        const mints: Record<string, StoredMint> = {};
-        for (const [mintUrl, list] of Object.entries(old?.proofsByMint ?? {})) {
-          const url = normalizeMintUrl(mintUrl);
-          mints[url] = { url, addedAtMs: Date.now(), units: [unit] };
-          proofs[accountKey(url, unit)] = list.map((p) => ({
-            ...p,
-            verified: false,
-          }));
-        }
-        return {
-          ...(persisted as object),
-          proofs,
-          mints,
-          reserved: {},
-          history: [],
-          redeemedNutzaps: [],
-          claimedTokens: [],
-          backupEnabled: false,
-          backupVerified: false,
-          counters: {},
-        } as unknown as WalletState;
+      version: 1,
+      // Fires on both the success and the failure path, which is why readiness
+      // is tracked here rather than through `onFinishHydration`. A failure
+      // means the on-disk state could not be read, so the wallet presents
+      // itself as locked instead of as empty.
+      onRehydrateStorage: () => (_state, error) => {
+        settleHydration(error === undefined);
       },
       // Actions are recreated by the initializer; only data is persisted.
       partialize: (state) =>
