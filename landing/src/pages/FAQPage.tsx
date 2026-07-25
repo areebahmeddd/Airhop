@@ -15,6 +15,101 @@ const SECTIONS: {
         a: "Airhop is an open-source iOS and Android app for private, peer-to-peer messaging over Bluetooth mesh. There are no central servers. Messages relay automatically across nearby devices up to 7 hops. It works with zero internet connectivity.",
       },
       {
+        q: "Is Airhop end-to-end encrypted, peer-to-peer, and anonymous?",
+        a: (
+          <>
+            <strong>Peer-to-peer: yes.</strong> The Bluetooth mesh needs no server at all, and the
+            optional Nostr relays are swappable and store nothing you depend on.
+            <br />
+            <br />
+            <strong>End-to-end encrypted: yes.</strong>
+            <ul className="my-2 list-disc space-y-1 pl-5">
+              <li>
+                Direct messages:{" "}
+                <a
+                  href="https://noiseprotocol.org/noise.html"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-gray-900 underline underline-offset-2 transition-colors hover:text-gray-600"
+                >
+                  Noise XX
+                </a>{" "}
+                with{" "}
+                <a
+                  href="https://signal.org/docs/specifications/doubleratchet/"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-gray-900 underline underline-offset-2 transition-colors hover:text-gray-600"
+                >
+                  Double Ratchet
+                </a>{" "}
+                forward secrecy, plus{" "}
+                <a
+                  href="https://github.com/nostr-protocol/nips/blob/master/17.md"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-gray-900 underline underline-offset-2 transition-colors hover:text-gray-600"
+                >
+                  NIP-17
+                </a>{" "}
+                gift-wrapping when they travel over the internet.
+              </li>
+              <li>
+                Private channels:{" "}
+                <a
+                  href="https://en.wikipedia.org/wiki/ChaCha20-Poly1305"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-gray-900 underline underline-offset-2 transition-colors hover:text-gray-600"
+                >
+                  XChaCha20-Poly1305
+                </a>{" "}
+                under a random 32-byte key that only members hold. Nothing on the wire names the
+                channel, so an outsider cannot tell which channel a message belongs to, or that they
+                are missing one.
+              </li>
+              <li>
+                Groups: a shared{" "}
+                <a
+                  href="https://github.com/areebahmeddd/Airhop/blob/main/docs/spec/ARCHITECTURE.md#private-groups-bitchat-compatible"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-gray-900 underline underline-offset-2 transition-colors hover:text-gray-600"
+                >
+                  epoch key
+                </a>{" "}
+                that is handed out one member at a time inside an authenticated Noise session, never
+                broadcast. Every message is bound to its group and key epoch, so an older key cannot
+                be replayed after the key rotates.
+              </li>
+            </ul>
+            The two exceptions are attachments, which are signed rather than encrypted for bitchat
+            compatibility (nobody can forge or alter one, but any device relaying it can open it),
+            and public geohash channels, which are readable by design since anyone nearby can join
+            them.
+            <br />
+            <br />
+            <strong>Anonymous: partially.</strong>
+            <ul className="my-2 list-disc space-y-1 pl-5">
+              <li>
+                No phone number, email, or sign-up. Your identity is a key pair generated on-device,
+                and nothing registers anywhere (fully anonymous).
+              </li>
+              <li>
+                Geohash channels reveal coarse location, and Nostr relays can see which cells you
+                are active in (not anonymous).
+              </li>
+              <li>
+                When messages travel beyond the Bluetooth mesh, only your IP is visible to Nostr
+                relays (messages are NIP-17 gift wrapped) until you turn Tor on, which closes that
+                gap (anonymous once Tor is on).
+              </li>
+            </ul>
+            The location and metadata trade-offs are inherent to any location-aware mesh.
+          </>
+        ),
+      },
+      {
         q: "Is it free?",
         a: "Yes. Airhop is completely free, open-source under MIT, and has no ads, no subscriptions, and no paywall of any kind.",
       },
@@ -24,7 +119,7 @@ const SECTIONS: {
       },
       {
         q: "How is it different from bitchat and other players?",
-        a: "Airhop is built on top of bitchat, but extends it with things bitchat doesn't have at the time of writing, like Double Ratchet forward secrecy, Tor on both iOS and Android, offline Cashu payments, and an offline AI assistant. Beyond the protocol itself, a big part of the focus is the app people actually use day to day: a clean, simple interface that makes the whole thing easy to pick up, not just something that works well under the hood.",
+        a: "Airhop is built on top of bitchat, but extends it with things bitchat doesn't have at the time of writing, like Double Ratchet forward secrecy, Tor on both iOS and Android, offline ecash payments, and an offline AI assistant. Beyond the protocol itself, a big part of the focus is the app people actually use day to day: a clean, simple interface that makes the whole thing easy to pick up, not just something that works well under the hood.",
       },
     ],
   },
@@ -281,14 +376,20 @@ const SECTIONS: {
     heading: "Offline payments",
     questions: [
       {
-        q: "Do I need Bitcoin or a Lightning wallet to use Airhop?",
-        a: "No. Payments are entirely optional, and Airhop works fully without them. A Lightning wallet is only needed once, to load Cashu tokens onto your device before going offline. See the next question for how that works.",
-      },
-      {
-        q: "How do offline payments work?",
+        q: "What is ecash?",
         a: (
           <>
-            Before going offline, you load tokens from a{" "}
+            <a
+              href="https://en.wikipedia.org/wiki/Ecash"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-gray-900 underline underline-offset-2 transition-colors hover:text-gray-600"
+            >
+              Ecash
+            </a>{" "}
+            is bearer digital cash. A mint issues cryptographically signed tokens worth a fixed
+            amount, with no account and no balance sitting on a server.{" "}
+            <strong>Whoever holds a token can spend it, like a banknote.</strong> Airhop uses{" "}
             <a
               href="https://cashu.space"
               target="_blank"
@@ -296,8 +397,21 @@ const SECTIONS: {
               className="text-gray-900 underline underline-offset-2 transition-colors hover:text-gray-600"
             >
               Cashu
-            </a>{" "}
-            mint by depositing via{" "}
+            </a>
+            , an ecash protocol backed by Bitcoin, so tokens move device to device over the mesh
+            with no internet in the middle.
+          </>
+        ),
+      },
+      {
+        q: "Do I need Bitcoin or a Lightning wallet to use Airhop?",
+        a: "No. Payments are entirely optional, and Airhop works fully without them. A Lightning wallet is only needed once, to load ecash tokens onto your device before going offline. See the next question for how that works.",
+      },
+      {
+        q: "How do offline payments work?",
+        a: (
+          <>
+            Before going offline, you load ecash tokens from a Cashu mint by depositing via{" "}
             <a
               href="https://en.wikipedia.org/wiki/Lightning_Network"
               target="_blank"
@@ -461,7 +575,7 @@ export default function FAQPage() {
                       +
                     </span>
                   </summary>
-                  <p className="mt-3 pr-6 text-sm leading-relaxed text-gray-600">{item.a}</p>
+                  <div className="mt-3 pr-6 text-sm leading-relaxed text-gray-600">{item.a}</div>
                 </details>
               ))}
             </section>

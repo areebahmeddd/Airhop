@@ -78,7 +78,7 @@ const NAV_COLUMNS = [
     heading: "Resources",
     links: [
       { label: "Source Code", href: "https://github.com/areebahmeddd/Airhop", external: true },
-      { label: "Blog", href: "/blogs", external: false },
+      { label: "Blogs", href: "/blogs", external: false },
       { label: "FAQ", href: "/faq", external: false },
     ],
   },
@@ -110,9 +110,7 @@ export default function Footer() {
               AIRHOP
             </Link>
             <p className="font-mono text-xs leading-relaxed text-gray-500 select-none">
-              Offline peer-to-peer messaging
-              <br />
-              over Bluetooth mesh.
+              Private mesh communication.
             </p>
             <p className="font-mono text-[10px] text-gray-500 select-none">
               No internet. No servers. No accounts.
