@@ -3,6 +3,15 @@
 All notable changes are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## What's Changed in v1.0.3 · Albatross
+
+- feat(FAQ): enhance FAQ section with detailed encryption and payment information (by @areebahmeddd) [012f367]
+- fix: major bug fixes after testing locally with friends [ see description ] (by @areebahmeddd) [c88a6fa]
+- feat(wallet): rebuild Cashu ecash end to end, with Lightning and recovery (by @areebahmeddd) [3f67e7b]
+- feat: prevent double sending of eCash and sats by introducing sending state (by @areebahmeddd) [d1b74e5]
+
+**Full changelog:** [v1.0.2..v1.0.3](https://github.com/areebahmeddd/Airhop/compare/v1.0.2..v1.0.3)
+
 ## What's Changed in v1.0.2 · Albatross
 
 - feat: update UI elements and improve user experience across various screens (by @areebahmeddd) [34a68ad]
