@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { lazy, Suspense, useEffect } from "react";
 import { Route, Routes, useLocation } from "react-router-dom";
 import Footer from "./components/Footer";
 import Navbar from "./components/Navbar";
@@ -8,6 +8,8 @@ import HomePage from "./pages/HomePage";
 import NotFoundPage from "./pages/NotFoundPage";
 import PrivacyPage from "./pages/PrivacyPage";
 import TermsPage from "./pages/TermsPage";
+
+const ArchitecturePage = lazy(() => import("./pages/ArchitecturePage"));
 
 function ScrollToTop() {
   const { pathname } = useLocation();
@@ -19,7 +21,14 @@ function ScrollToTop() {
 
 export default function App() {
   const { pathname } = useLocation();
-  const knownPaths = ["/", "/faq", "/blogs", "/privacy-policy", "/terms-of-service"];
+  const knownPaths = [
+    "/",
+    "/architecture",
+    "/faq",
+    "/blogs",
+    "/privacy-policy",
+    "/terms-of-service",
+  ];
   const isNotFound = !knownPaths.includes(pathname);
 
   return (
@@ -34,6 +43,14 @@ export default function App() {
       <Navbar />
       <Routes>
         <Route path="/" element={<HomePage />} />
+        <Route
+          path="/architecture"
+          element={
+            <Suspense fallback={<div className="min-h-screen bg-white" />}>
+              <ArchitecturePage />
+            </Suspense>
+          }
+        />
         <Route path="/faq" element={<FAQPage />} />
         <Route path="/blogs" element={<BlogsPage />} />
         <Route path="/privacy-policy" element={<PrivacyPage />} />

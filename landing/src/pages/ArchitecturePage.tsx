@@ -1,0 +1,1516 @@
+import { ArrowLeft } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
+import {
+  FloodPropagation,
+  Fragmentation,
+  GiftWrap,
+  GossipSync,
+  IdentityTree,
+  InternetGateway,
+  ModuleMap,
+  NoiseHandshake,
+  PacketFrame,
+  PresenceStates,
+  ProtectionStack,
+  RoomTypes,
+  RouterLadder,
+  SystemOverview,
+  VoiceBurst,
+  WalletStates,
+} from "../components/ArchitectureDiagrams";
+import { useSEO } from "../hooks/useSEO";
+
+const LAST_UPDATED = "August 01, 2026";
+
+const LINK = "text-gray-900 underline underline-offset-2 transition-colors hover:text-gray-600";
+const CODE = "rounded bg-gray-100 px-1 py-0.5 text-[0.85em] text-gray-900";
+
+const TOC = [
+  {
+    act: "Orientation",
+    items: [
+      { id: "overview", label: "One canvas" },
+      { id: "message", label: "Follow one message" },
+      { id: "concepts", label: "Concepts" },
+    ],
+  },
+  {
+    act: "The system",
+    items: [
+      { id: "identity", label: "Identity" },
+      { id: "transports", label: "Transports" },
+      { id: "mesh", label: "The mesh" },
+      { id: "lifecycle", label: "Status and lifecycle" },
+      { id: "encryption", label: "Encryption" },
+      { id: "rooms", label: "Rooms" },
+    ],
+  },
+  {
+    act: "Beyond the mesh",
+    items: [
+      { id: "bridge", label: "Internet bridge" },
+      { id: "tor", label: "The onion router" },
+    ],
+  },
+  {
+    act: "Optional features",
+    items: [
+      { id: "wallet", label: "The wallet" },
+      { id: "ai", label: "The AI assistant" },
+      { id: "social", label: "Social bridges" },
+    ],
+  },
+  {
+    act: "For developers",
+    items: [
+      { id: "modules", label: "Module map" },
+      { id: "wire", label: "Wire format" },
+      { id: "threat", label: "Threat model" },
+    ],
+  },
+];
+
+const SECTION_IDS = TOC.flatMap((g) => g.items.map((i) => i.id));
+
+function useActiveSection(): string {
+  const [active, setActive] = useState(SECTION_IDS[0]);
+
+  useEffect(() => {
+    const seen = new Map<string, boolean>();
+    const observer = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) seen.set(entry.target.id, entry.isIntersecting);
+        const current = SECTION_IDS.find((id) => seen.get(id));
+        if (current !== undefined) setActive(current);
+      },
+      { rootMargin: "-88px 0px -65% 0px" },
+    );
+
+    for (const id of SECTION_IDS) {
+      const el = document.getElementById(id);
+      if (el !== null) observer.observe(el);
+    }
+    return () => observer.disconnect();
+  }, []);
+
+  return active;
+}
+
+function A({ href, children }: { href: string; children: React.ReactNode }) {
+  return (
+    <a href={href} target="_blank" rel="noopener noreferrer" className={LINK}>
+      {children}
+    </a>
+  );
+}
+
+function C({ children }: { children: React.ReactNode }) {
+  return <code className={CODE}>{children}</code>;
+}
+
+function NUT({ n }: { n: string }) {
+  return <A href={`https://github.com/cashubtc/nuts/blob/main/${n}.md`}>NUT-{n}</A>;
+}
+
+function NIP({ n }: { n: string }) {
+  return <A href={`https://github.com/nostr-protocol/nips/blob/master/${n}.md`}>NIP-{n}</A>;
+}
+
+function Section({
+  id,
+  eyebrow,
+  title,
+  lede,
+  children,
+}: {
+  id: string;
+  eyebrow: string;
+  title: string;
+  lede?: React.ReactNode;
+  children: React.ReactNode;
+}) {
+  return (
+    <section
+      id={id}
+      className="scroll-mt-24 border-t border-gray-100 pt-12 first:border-t-0 first:pt-0"
+    >
+      <div className="font-mono text-[10px] font-semibold tracking-[0.25em] text-gray-400 uppercase">
+        {eyebrow}
+      </div>
+      <h2 className="mt-3 text-xl font-extrabold tracking-tight text-black sm:text-2xl">{title}</h2>
+      {lede && <p className="mt-3 text-sm leading-relaxed text-gray-700">{lede}</p>}
+      <div className="mt-6 space-y-5 text-sm leading-relaxed text-gray-600">{children}</div>
+    </section>
+  );
+}
+
+function Figure({ caption, children }: { caption: React.ReactNode; children: React.ReactNode }) {
+  return (
+    <figure className="my-7">
+      <div className="rounded-xl border border-gray-200 bg-gray-50/50 p-4">
+        <div className="overflow-x-auto">
+          <div className="min-w-[680px]">{children}</div>
+        </div>
+      </div>
+      <figcaption className="mt-2 font-mono text-[11px] leading-relaxed text-gray-500">
+        {caption}
+      </figcaption>
+    </figure>
+  );
+}
+
+function Table({ head, rows }: { head: string[]; rows: React.ReactNode[][] }) {
+  return (
+    <div className="my-6 overflow-x-auto rounded-xl border border-gray-200">
+      <table className="w-full min-w-[560px] border-collapse text-left">
+        <thead>
+          <tr className="border-b border-gray-200 bg-gray-50">
+            {head.map((h) => (
+              <th
+                key={h}
+                className="px-4 py-3 font-mono text-[10px] font-semibold tracking-[0.14em] text-gray-500 uppercase"
+              >
+                {h}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((r, i) => (
+            <tr key={i} className="border-b border-gray-100 last:border-b-0">
+              {r.map((cell, j) => (
+                <td
+                  key={j}
+                  className={`px-4 py-3 align-top text-[13px] leading-relaxed ${
+                    j === 0 ? "font-medium text-gray-900" : "text-gray-600"
+                  }`}
+                >
+                  {cell}
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function Note({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="my-6 border-l-2 border-gray-900 bg-gray-50 py-4 pr-4 pl-5">
+      <div className="font-mono text-[10px] font-semibold tracking-[0.18em] text-gray-500 uppercase">
+        {label}
+      </div>
+      <div className="mt-2 text-[13px] leading-relaxed text-gray-700">{children}</div>
+    </div>
+  );
+}
+
+const SCHEMA = {
+  "@context": "https://schema.org",
+  "@type": "TechArticle",
+  headline: "Airhop Architecture",
+  description:
+    "A full technical breakdown of Airhop: identity, transports, the Bluetooth mesh, encryption, the Nostr internet bridge, Tor, the Cashu wallet, the on-device AI assistant, and the wire format.",
+  dateModified: "2026-08-01",
+  author: { "@type": "Person", name: "Areeb Ahmed" },
+  url: "https://airhop.1mindlabs.org/architecture",
+};
+
+export default function ArchitecturePage() {
+  const active = useActiveSection();
+
+  useSEO({
+    title: "Architecture - Airhop",
+    description:
+      "How Airhop works, top to bottom: identity, transport selection, the Bluetooth mesh, encryption, the Nostr bridge, Tor, offline ecash, on-device AI, and the bitchat-compatible wire format.",
+    path: "/architecture",
+  });
+
+  return (
+    <main id="main-content" className="min-h-screen bg-white font-sans antialiased">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(SCHEMA) }}
+      />
+
+      <div className="mx-auto max-w-6xl px-6 py-16 md:px-10">
+        <Link
+          to="/"
+          className="group inline-flex items-center gap-1.5 text-sm text-gray-500 transition-colors hover:text-gray-700"
+        >
+          <ArrowLeft
+            className="h-3.5 w-3.5 transition-transform duration-200 group-hover:-translate-x-0.5"
+            aria-hidden="true"
+          />
+          Back to home
+        </Link>
+
+        <header className="mt-10 max-w-3xl">
+          <h1 className="text-3xl font-semibold tracking-tight text-gray-900">Architecture</h1>
+          <p className="mt-2 text-sm text-gray-500">Last updated: {LAST_UPDATED}</p>
+        </header>
+
+        <div className="mt-14 lg:grid lg:grid-cols-[176px_1fr] lg:gap-14">
+          <nav aria-label="On this page" className="mb-12 lg:mb-0">
+            <div className="lg:sticky lg:top-24 lg:max-h-[calc(100vh-7rem)] lg:overflow-y-auto">
+              <div className="font-mono text-[10px] font-semibold tracking-[0.18em] text-gray-400 uppercase">
+                On this page
+              </div>
+              <ul className="mt-4 space-y-5">
+                {TOC.map((group) => (
+                  <li key={group.act}>
+                    <div className="font-mono text-[10px] font-semibold tracking-[0.14em] text-gray-900 uppercase">
+                      {group.act}
+                    </div>
+                    <ul className="mt-2 space-y-px">
+                      {group.items.map((item) => {
+                        const isActive = item.id === active;
+                        return (
+                          <li key={item.id}>
+                            <a
+                              href={`#${item.id}`}
+                              aria-current={isActive ? "true" : undefined}
+                              className={`-ml-px block border-l py-1 pl-3 text-[13px] transition-colors ${
+                                isActive
+                                  ? "border-gray-900 font-medium text-gray-900"
+                                  : "border-gray-200 text-gray-500 hover:border-gray-400 hover:text-gray-900"
+                              }`}
+                            >
+                              {item.label}
+                            </a>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </nav>
+
+          <div className="min-w-0 space-y-14">
+            <Section
+              id="overview"
+              eyebrow="Orientation · 01"
+              title="The whole thing on one canvas"
+              lede="Airhop is a protocol written almost entirely in TypeScript, wrapped in the smallest native shell the operating systems will accept. Everything below is a zoom into one region of this picture."
+            >
+              <Figure caption="The app in three columns: what runs on your phone, what carries a message off it, and who that reaches. Only the bottom row needs the internet.">
+                <SystemOverview />
+              </Figure>
+
+              <p>
+                The deliberate choice here is the split. The whole protocol, every packet, every
+                handshake, every routing decision, lives in <C>src/core/</C> as pure TypeScript with
+                no native imports. The Swift and Kotlin code does four things: advertise, scan, hand
+                raw bytes up, and write raw bytes out.{" "}
+                <strong className="text-gray-900">It has no concept of a packet.</strong>
+              </p>
+              <p>
+                That constraint buys two things. The entire protocol is testable in CI without a
+                phone, which is why 700 tests can cover the wire format and the handshakes before a
+                radio is ever involved. And a bug fixed in gossip sync is fixed on both platforms at
+                once, because there is only one implementation of it.
+              </p>
+
+              <Table
+                head={["Layer", "What lives there", "Native?"]}
+                rows={[
+                  ["src/ui/", "shared components and theme tokens", "No"],
+                  ["src/features/", "chat, discovery, wallet, contacts, settings", "No"],
+                  ["src/store/", "Zustand slices persisted to MMKV", "No"],
+                  ["src/services/", "mesh-service, wallet-service, ecash-transfer", "No"],
+                  ["src/core/", "crypto, mesh, nostr, payments, router", "No"],
+                  ["src/bridge/", "TurboModule specs, the only meeting point", "Interface only"],
+                  [
+                    "ios/ · android/",
+                    "CoreBluetooth, GATT server, Arti, foreground service",
+                    "Yes",
+                  ],
+                ]}
+              />
+            </Section>
+
+            <Section
+              id="message"
+              eyebrow="Orientation · 02"
+              title="Follow one message"
+              lede="You type something and press send. From there the router picks a tier, and it is the only part of the system that gets to make that choice."
+            >
+              <Figure
+                caption={
+                  <>
+                    The three tiers in{" "}
+                    <A href="https://github.com/areebahmeddd/Airhop/blob/main/src/core/router/message-router.ts">
+                      message-router.ts
+                    </A>
+                    , which holds the entire routing decision. Each tier is tried in order and the
+                    first one that can carry the message wins.
+                  </>
+                }
+              >
+                <RouterLadder />
+              </Figure>
+
+              <p>
+                Reachability is not a guess. The router keeps a live registry of peers with two
+                different expiry windows, because a directly connected radio link and a peer heard
+                about second-hand are not the same kind of knowledge.
+              </p>
+
+              <Table
+                head={["Peer kind", "Expiry", "Why"]}
+                rows={[
+                  [
+                    "Direct",
+                    "15 seconds",
+                    "A phone you hold a radio link with goes quiet fast when it leaves. Matches bitchat's link timeout.",
+                  ],
+                  [
+                    "Mesh",
+                    "60 seconds",
+                    "Learned from a relayed ANNOUNCE. Multi-hop packets arrive late, so the window has to be generous.",
+                  ],
+                ]}
+              />
+
+              <p>
+                Two cases fall through tier 1 that the diagram cannot show.{" "}
+                <strong className="text-gray-900">
+                  A Noise session can only be established over a direct BLE link, never across
+                  relays.
+                </strong>{" "}
+                So a peer four hops away that you have never messaged has no session to use, and
+                first contact goes over Nostr or courier even though the mesh could physically reach
+                them. Once a session exists it relays across the mesh normally, so this only ever
+                affects the first message.
+              </p>
+              <p>
+                The second is size. A direct message longer than one 255-byte PrivateMessagePacket
+                is not split across the Noise session, it goes to courier instead. Sending a
+                truncated packet that bitchat cannot parse would be worse than taking the slower
+                route.
+              </p>
+
+              <Note label="The choice is automatic">
+                <strong className="text-gray-900">
+                  Airhop picks a tier for you on every message,
+                </strong>{" "}
+                and picks again on the next one, because peers move in and out of range between the
+                two. There is one send button and the ladder runs underneath it, so a message
+                carried by courier and one that went over WiFi look identical to whoever sent it.
+              </Note>
+            </Section>
+
+            <Section
+              id="concepts"
+              eyebrow="Orientation · 03"
+              title="Concepts"
+              lede="This page draws on Bluetooth LE, the Noise protocol family, Nostr and Cashu. Most readers know one or two of them. Here is the vocabulary, and what each idea is doing in this app specifically."
+            >
+              <h3 className="pt-2 text-base font-bold text-gray-900">Radio and mesh</h3>
+              <Table
+                head={["Concept", "What it is", "In Airhop"]}
+                rows={[
+                  [
+                    "BLE",
+                    "Low-power Bluetooth. Devices announce and listen in short bursts instead of holding a connection open",
+                    "The only transport that needs no internet and works across iOS and Android",
+                  ],
+                  [
+                    "GATT central and peripheral",
+                    "The scanning role and the advertising role",
+                    "Every phone runs both at once, which is what makes this a mesh rather than a star",
+                  ],
+                  [
+                    "TTL",
+                    "A hop budget stamped on a packet, reduced by one at each relay",
+                    "Starts at 7, and the packet stops when it reaches zero",
+                  ],
+                  [
+                    "Flooding",
+                    "Rebroadcasting to everyone in range rather than routing along one chosen path",
+                    "The default, because a mesh of strangers cannot agree on a map",
+                  ],
+                  [
+                    "LRU cache",
+                    "A fixed-size cache that discards whatever was used least recently",
+                    "1000 packet IDs over a 5 minute window, so a looped copy is dropped instead of forwarded",
+                  ],
+                  [
+                    "TLV",
+                    "Type-length-value, a self-describing byte layout that older readers can skip past",
+                    "ANNOUNCE payloads, file transfers and courier envelopes",
+                  ],
+                  [
+                    "Golomb-Coded Set",
+                    "A compressed probabilistic set, smaller than a Bloom filter",
+                    "Packs 1000 packet IDs into about 400 bytes so two phones can compare histories cheaply",
+                  ],
+                  [
+                    "Store-and-forward",
+                    "Holding a message until a route to the recipient appears",
+                    "Courier envelopes, 40 at a time, discarded after 24 hours",
+                  ],
+                ]}
+              />
+
+              <h3 className="pt-2 text-base font-bold text-gray-900">Cryptography</h3>
+              <Table
+                head={["Concept", "What it is", "In Airhop"]}
+                rows={[
+                  [
+                    "Ed25519",
+                    "A signature scheme",
+                    "Signs every packet. Relays verify before forwarding, so a forgery dies at the first hop",
+                  ],
+                  [
+                    "X25519",
+                    "Diffie-Hellman key agreement on Curve25519",
+                    "The key exchange inside both Noise patterns",
+                  ],
+                  [
+                    "Noise XX",
+                    "A handshake where both sides prove who they are",
+                    "Live direct-message sessions, and the reason bitchat and Airhop can talk",
+                  ],
+                  [
+                    "Noise X",
+                    "A one-way handshake, sender to recipient, with no reply",
+                    "Sealing a courier envelope to someone who is not there to answer",
+                  ],
+                  [
+                    "Forward secrecy",
+                    "Past messages stay unreadable even if a key leaks later",
+                    "Noise XX gives it once per session, Double Ratchet gives it once per message",
+                  ],
+                  [
+                    "AEAD",
+                    "Encryption that also detects tampering",
+                    "ChaCha20-Poly1305, and XChaCha20-Poly1305 where a longer nonce is safer",
+                  ],
+                  [
+                    "HKDF",
+                    "Derives many keys from one secret, deterministically",
+                    "Turns the signing key into the Nostr identity and every per-cell identity",
+                  ],
+                  [
+                    "Prekey",
+                    "A single-use public key published ahead of time",
+                    "Gossiped as 0x24, so a message to a stranger is forward-secret before you ever meet",
+                  ],
+                ]}
+              />
+
+              <h3 className="pt-2 text-base font-bold text-gray-900">Nostr</h3>
+              <Table
+                head={["Concept", "What it is", "In Airhop"]}
+                rows={[
+                  [
+                    "Relay",
+                    "A simple server that accepts signed events and hands them out again",
+                    "Over 350 independent ones, several queried at once, and none of them ours",
+                  ],
+                  [
+                    "Event kind",
+                    "A number declaring what an event is for",
+                    "Eight are used, listed in the internet bridge section",
+                  ],
+                  [
+                    "Gift wrap",
+                    "Nested encryption that hides who sent a message and who it is for",
+                    "Every internet DM, so a relay operator sees only ciphertext from a throwaway key",
+                  ],
+                  [
+                    "Rumor",
+                    "The innermost event, deliberately left unsigned",
+                    "Gives deniability: a leaked message cannot be proven to have come from you",
+                  ],
+                  [
+                    "Geohash",
+                    "Coordinates encoded as a short string, which gets coarser as you shorten it",
+                    "Scopes location channels, and presence is only broadcast at precision 5 or coarser",
+                  ],
+                  [
+                    "secp256k1",
+                    "The elliptic curve Bitcoin and Nostr both use",
+                    "Your Nostr identity, derived from the signing key rather than stored separately",
+                  ],
+                ]}
+              />
+
+              <h3 className="pt-2 text-base font-bold text-gray-900">Payments</h3>
+              <Table
+                head={["Concept", "What it is", "In Airhop"]}
+                rows={[
+                  [
+                    "Chaumian ecash",
+                    "Bearer tokens a mint signs without being able to see what it signed",
+                    "The mint cannot connect the coins it issued to the coins it later redeems",
+                  ],
+                  [
+                    "Blind signature",
+                    "The mechanism that makes the above possible",
+                    "Why a mint can hold your bitcoin without learning who you pay",
+                  ],
+                  [
+                    "DLEQ",
+                    "A proof that a signature really came from a particular key",
+                    "Lets a phone with no internet confirm a coin is genuine, though never that it is unspent",
+                  ],
+                  [
+                    "P2PK",
+                    "Locking a coin so only one public key can spend it",
+                    "Nutzaps, so the payment event can be public while the money stays private",
+                  ],
+                  [
+                    "BIP-39",
+                    "Twelve words that encode a seed",
+                    "The opt-in recovery phrase, off unless you turn it on",
+                  ],
+                  [
+                    "bolt11",
+                    "The Lightning invoice format",
+                    "How value moves in and out, the only part that needs the internet",
+                  ],
+                ]}
+              />
+            </Section>
+
+            <Section
+              id="identity"
+              eyebrow="The system · 04"
+              title="Identity"
+              lede="There is no account, no server that knows you exist, and nothing to sign up for. Your identity is two key pairs generated on your phone the first time you open the app."
+            >
+              <Figure caption="Two roots, everything else derived. One identity across the mesh, the internet and payments, with no phone number, email or registration anywhere in the chain.">
+                <IdentityTree />
+              </Figure>
+
+              <p>
+                The Nostr key is <strong className="text-gray-900">derived, not separate</strong>.
+                Nostr uses <A href="https://en.bitcoin.it/wiki/Secp256k1">secp256k1</A> and the
+                signing key is <A href="https://ed25519.cr.yp.to">Ed25519</A>, so the two cannot be
+                the same key. Running the signing key through{" "}
+                <A href="https://datatracker.ietf.org/doc/html/rfc5869">HKDF</A> with the label{" "}
+                <C>airhop-nostr-key-v1</C> yields one stable Nostr identity that survives a
+                reinstall from the same keys, without linking to anything real.
+              </p>
+              <p>
+                Location channels go one step further and derive a fresh secp256k1 identity per
+                geohash cell. Being present in one cell therefore cannot be correlated with being
+                present in another, which is the whole point of the exercise.
+              </p>
+
+              <Table
+                head={["Secret", "Where it is stored", "Survives reinstall?"]}
+                rows={[
+                  [
+                    "Noise static private key",
+                    <>
+                      <A href="https://developer.apple.com/documentation/security/storing-keys-in-the-keychain">
+                        Keychain
+                      </A>{" "}
+                      /{" "}
+                      <A href="https://developer.android.com/privacy-and-security/keystore">
+                        Keystore
+                      </A>
+                    </>,
+                    "No",
+                  ],
+                  ["Ed25519 signing private key", "Keychain / Keystore", "No"],
+                  ["Wallet AES-256 key", "Keychain / Keystore", "No"],
+                  [
+                    "Recovery phrase (opt-in)",
+                    "Keychain / Keystore",
+                    "No, unless you wrote it down",
+                  ],
+                  ["Cashu proofs", "MMKV, AES-256 encrypted", "No"],
+                  ["Message history", "MMKV, encrypted at rest", "No"],
+                ]}
+              />
+
+              <p>
+                Display names are not chosen and cannot be registered. The peer ID is{" "}
+                <C>hex(SHA-256(noiseStaticPub)).slice(0, 16)</C>, and the readable name is a
+                deterministic function of it, so <C>swift-falcon-3a9f</C> belongs to exactly one key
+                pair and nobody can squat it. To bind a name to a person you actually know, scan
+                their QR code: the card carries their real public keys, and the peer ID is checked
+                against the Noise key it claims to derive from.
+              </p>
+            </Section>
+
+            <Section
+              id="transports"
+              eyebrow="The system · 05"
+              title="Transports"
+              lede="Four ways a message can move. Only one of them works with no internet and across both platforms, which is why it is the default."
+            >
+              <Table
+                head={["", "BLE mesh", "WiFi direct", "Nostr relays", "Courier"]}
+                rows={[
+                  [
+                    "Carries",
+                    "Everything",
+                    "DMs and files",
+                    "DMs, location channels",
+                    "Text envelopes",
+                  ],
+                  ["Needs internet", "No", "No", "Yes", "No"],
+                  ["iPhone to Android", "Yes", "No", "Yes", "Yes"],
+                  ["Range", "10 to 100 m per hop", "~30 m", "Global", "Wherever people walk"],
+                  ["Max hops", "7", "1", "1", "Unbounded in time"],
+                  ["Speed", "~22 KB/s", "~22 KB/s", "Not used for files", "n/a"],
+                ]}
+              />
+
+              <p>
+                The WiFi column needs two caveats. WiFi direct is Android{" "}
+                <A href="https://wi-fi.org/discover-wi-fi/wi-fi-aware">WiFi Aware</A> on one side
+                and iOS{" "}
+                <A href="https://developer.apple.com/documentation/multipeerconnectivity">
+                  MultipeerConnectivity
+                </A>{" "}
+                on the other.{" "}
+                <strong className="text-gray-900">
+                  They are different protocols on different radios and cannot talk to each other,
+                </strong>{" "}
+                so this path is Android-to-Android or iPhone-to-iPhone only, or at least until a
+                standards-based option exists on both.
+              </p>
+              <p>
+                And WiFi currently shares the same paced send queue as Bluetooth, so it runs at
+                Bluetooth speed today. Lifting that cap is planned, and nothing in the protocol
+                stands in the way.
+              </p>
+
+              <Note label="Why Nostr never carries files">
+                Relays carry small signed events, not file bytes. The usual workaround is to upload
+                the file to an HTTP host and post a link. That host is a central server that can
+                log, throttle or take down your files, which is precisely the thing this project
+                exists to avoid. So attachments travel over Bluetooth or WiFi, or they do not
+                travel.
+              </Note>
+            </Section>
+
+            <Section
+              id="mesh"
+              eyebrow="The system · 06"
+              title="The mesh"
+              lede="Every phone is a scanner and an advertiser at the same time. There is no coordinator and no phone that matters more than another."
+            >
+              <p>
+                A message is broadcast, and every phone that hears it re-broadcasts it with one hop
+                spent.{" "}
+                <strong className="text-gray-900">That is the entire routing algorithm.</strong> It
+                is deliberately simple, because a cleverer one would need state that a mesh of
+                strangers cannot agree on. Four mechanisms stop the obvious failure modes.
+              </p>
+
+              <Figure caption="A message crossing four hops of the seven it is allowed. Both arms of each loop deliver a copy, but a phone forwards only the first one it sees.">
+                <FloodPropagation />
+              </Figure>
+
+              <Table
+                head={["Mechanism", "Value", "The failure it prevents"]}
+                rows={[
+                  ["TTL", "7 hops", "A packet circulating forever"],
+                  [
+                    "Relay jitter",
+                    "10 to 220 ms, random",
+                    "Every phone in a room answering in the same millisecond and colliding",
+                  ],
+                  [
+                    "Deduplication",
+                    "1000-entry LRU, 5 minute window",
+                    "The same packet being re-forwarded every time it loops back",
+                  ],
+                  [
+                    "Fanout",
+                    "about ⌈√n⌉ peers",
+                    "Traffic growing with crowd size instead of staying flat",
+                  ],
+                ]}
+              />
+
+              <p>
+                The packet ID used for deduplication is{" "}
+                <C>SHA-256(type | senderID | timestamp | payload)[0:16]</C>. There is no nonce
+                field, because the content plus its millisecond timestamp is already unique enough
+                to identify a packet across the mesh.
+              </p>
+
+              <h3 className="pt-2 text-base font-bold text-gray-900">Fragments</h3>
+              <p>
+                A BLE write is small. Anything larger than one fragment is split, paced and
+                reassembled on the far side.
+              </p>
+
+              <Figure caption="Fragmentation of a file at the 1 MiB cap. The cap exists to stay compatible with bitchat's decoder and to keep a transfer to something a person will actually wait for.">
+                <Fragmentation />
+              </Figure>
+
+              <h3 className="pt-2 text-base font-bold text-gray-900">Live voice</h3>
+              <p>
+                Everything above assumes the whole message exists before it moves. Push-to-talk is
+                the exception: frames go out{" "}
+                <strong className="text-gray-900">while you are still speaking</strong>, so the
+                other person hears you with under a second of delay. Bandwidth is not what makes
+                this hard. A BLE link moves around 15 KB/s and AAC-LC voice at 16 kHz needs about 2
+                KB/s, which leaves most of the link free for everything else.
+              </p>
+              <p>
+                Staying out of the fragment scheduler is the hard part, and it is solved with size.
+                A burst is capped at 210 bytes, comfortably under the 469-byte fragment limit, so
+                live audio is never split and never queues behind somebody&rsquo;s file transfer.
+              </p>
+
+              <Figure caption="Live frames on top, the reliable fallback underneath. Both rows carry the same audio; only the timing is different.">
+                <VoiceBurst />
+              </Figure>
+
+              <p>
+                It is a delivery strategy rather than a mode, so there is no button to turn it on.
+                Frames go out as type <C>0x29</C> on the public mesh, or wrapped inside a Noise
+                session as <C>voiceFrame</C> for a DM. A receiver holds 350 ms in a jitter buffer,
+                inserts silence for frames that never arrive, and turns a partial burst into a
+                replayable note if the speaker walks out of range mid-sentence.
+              </p>
+
+              <h3 className="pt-2 text-base font-bold text-gray-900">Gossip sync</h3>
+              <p>
+                Flooding only helps if you were there when it happened. Someone who walks back into
+                range has missed everything in between, and re-broadcasting the world at them would
+                be enormously wasteful. Instead, phones exchange a compact probabilistic summary of
+                what they have seen and send back only the difference.
+              </p>
+
+              <Figure
+                caption={
+                  <>
+                    <A href="https://en.wikipedia.org/wiki/Golomb_coding">Golomb-Coded Set</A>{" "}
+                    reconciliation. The filter is a compressed description of a set, not the set
+                    itself, which is how 1000 packet IDs fit in around 400 bytes.
+                  </>
+                }
+              >
+                <GossipSync />
+              </Figure>
+
+              <Table
+                head={["Constant", "Value", "Note"]}
+                rows={[
+                  ["Sync interval", "15 seconds", "Broadcast to direct neighbors only"],
+                  [
+                    "New-peer sync",
+                    "5 seconds after first ANNOUNCE",
+                    "Lets a joiner catch up fast",
+                  ],
+                  ["Gossip cache", "1000 packets", "Rolling window the filter describes"],
+                  ["False positive rate", "1%", "A missed packet, never a wrong one"],
+                  ["Filter budget", "~400 bytes", "Fits comfortably inside one exchange"],
+                  ["Relayed?", "Never", "REQUEST_SYNC stays between neighbors"],
+                ]}
+              />
+
+              <h3 className="pt-2 text-base font-bold text-gray-900">Courier</h3>
+              <p>
+                When there is no path at all, the message waits on other people&rsquo;s phones. A
+                sealed envelope is handed to peers you have some trust relationship with, and they
+                carry it until they meet the recipient.{" "}
+                <strong className="text-gray-900">The carrier cannot read it:</strong> it is
+                encrypted to the recipient before it ever leaves the sender, using a one-way Noise X
+                seal to a one-time prekey so that even a later key compromise does not expose it.
+              </p>
+
+              <Table
+                head={["Limit", "Value", "Why"]}
+                rows={[
+                  ["Pool size", "40 envelopes", "Bounded storage cost for the carrier"],
+                  ["Verified-tier sub-cap", "20 envelopes", "Strangers cannot crowd out favorites"],
+                  [
+                    "Per-peer quota",
+                    "5 favorite, 2 verified",
+                    "One depositor cannot fill the pool",
+                  ],
+                  ["Envelope size", "16 KiB", "Text only, media is never couriered"],
+                  ["Lifetime", "24 hours", "The value bitchat carriers enforce"],
+                  ["Expiry slack", "1 hour", "Clock skew only, longer is refused outright"],
+                ]}
+              />
+
+              <Note label="A carrier judges by its own limits">
+                An envelope stamped with a longer expiry than the carrier allows is not clamped down
+                to the limit, it is refused. A sender that asks for more carriage does not get more,
+                it gets none. That is what closes the storage-pinning vector.
+              </Note>
+            </Section>
+
+            <Section
+              id="lifecycle"
+              eyebrow="The system · 07"
+              title="Status and lifecycle"
+              lede="A mesh only exists while the radios are on. Phones are built to switch radios off, so most of this section is about staying alive without wasting your battery."
+            >
+              <Figure caption="Three presence states, and exactly what each one does to the radios.">
+                <PresenceStates />
+              </Figure>
+
+              <Table
+                head={["Behavior", "Interval", "Why"]}
+                rows={[
+                  [
+                    "Presence broadcast",
+                    "4 s alone, then 15 to 30 s",
+                    "Fast while alone so devices meet quickly, then it backs off",
+                  ],
+                  ["Gossip sync", "15 s", "Lets a returning peer catch up"],
+                  [
+                    "Direct peer timeout",
+                    "15 s",
+                    "A linked peer that goes quiet is demoted quickly",
+                  ],
+                  ["Mesh peer timeout", "60 s", "Relayed peers get longer, packets arrive late"],
+                  ["Geohash heartbeat", "40 to 80 s, randomized", "Avoids lockstep announcements"],
+                  ["Participant window", "5 min", "How long a key stays listed as present"],
+                ]}
+              />
+
+              <p>
+                On Android the mesh survives backgrounding through a foreground service, which is
+                what the notification you cannot swipe away actually is. Without it the system would
+                suspend the app within minutes. It carries a Stop mesh button that shuts the radios
+                down cleanly, which is the same thing as switching to Away.
+              </p>
+
+              <Note label="A backgrounded iPhone is invisible to Android">
+                Once the app leaves the foreground, CoreBluetooth moves the service UUID into the
+                advertisement&rsquo;s overflow area and drops the local name. Only another iOS
+                device scanning for that exact UUID can see it there. iPhone-to-iPhone discovery
+                keeps working, an already connected link keeps carrying traffic, but
+                iPhone-to-Android discovery stops until the app is reopened. This is a platform
+                behavior and cannot be fixed in application code.
+              </Note>
+
+              <p>
+                <strong className="text-gray-900">Panic wipe is the terminal transition.</strong>{" "}
+                Triple-tapping the logo zeroizes keys in memory, deletes every Keychain and Keystore
+                entry, clears all MMKV partitions, and deletes the app sandbox, in under a second.
+                The wallet partition is removed with a full delete rather than a clear, because a
+                file whose key has just been destroyed cannot be reliably reopened.
+              </p>
+            </Section>
+
+            <Section
+              id="encryption"
+              eyebrow="The system · 08"
+              title="Encryption"
+              lede="Different things get different protection. Two rows in the grid below say no, and both are deliberate trade-offs."
+            >
+              <p>
+                Live sessions use <A href="https://noiseprotocol.org/noise.html">Noise XX</A>, the
+                same pattern and the same cipher suite bitchat uses, which is what makes cross-app
+                DMs possible at all.
+              </p>
+
+              <Figure caption="The Noise XX handshake. Both sides prove who they are, and the ephemeral keys mean a later compromise of a static key does not decrypt this session.">
+                <NoiseHandshake />
+              </Figure>
+
+              <p>
+                <strong className="text-gray-900">
+                  Noise XX gives forward secrecy per session. It does not give it per message.
+                </strong>{" "}
+                So a second layer sits on top:{" "}
+                <A href="https://signal.org/docs/specifications/doubleratchet/">Double Ratchet</A>,
+                the same algorithm Signal uses, ratcheting a new key for every message. Its root key
+                is seeded from the Noise static-static exchange, which is why Airhop does not need
+                X3DH: the key agreement has already happened.
+              </p>
+
+              <Figure caption="Every message type and what actually protects it. The two no rows are real trade-offs, not oversights.">
+                <ProtectionStack />
+              </Figure>
+
+              <Note label="Why attachments are signed but not encrypted">
+                Encrypting them would break the file transfer format bitchat already decodes, and
+                cross-app compatibility was judged worth more than confidentiality on media that is
+                usually sent to a room anyway. Nobody can forge or alter an attachment, because the
+                signature covers it, but{" "}
+                <strong className="text-gray-900">any device relaying it can open it.</strong>
+              </Note>
+
+              <Table
+                head={["Primitive", "Algorithm", "Used for"]}
+                rows={[
+                  ["Handshake", "Noise_XX_25519_ChaChaPoly_SHA256", "Live DM sessions"],
+                  ["One-way seal", "Noise_X_25519_ChaChaPoly_SHA256", "Courier envelopes"],
+                  ["Signatures", "Ed25519", "Every packet, boards, prekeys, groups"],
+                  ["Key agreement", "X25519", "Inside both Noise patterns"],
+                  ["AEAD", "ChaCha20-Poly1305", "Noise transport, group messages"],
+                  ["AEAD, long nonce", "XChaCha20-Poly1305", "Private channels, NIP-44"],
+                  ["Hash", "SHA-256", "Peer IDs, packet IDs, HKDF, GCS"],
+                ]}
+              />
+            </Section>
+
+            <Section
+              id="rooms"
+              eyebrow="The system · 09"
+              title="Rooms"
+              lede="Four kinds of room, and what separates them is entirely a question of who holds the key."
+            >
+              <Figure caption="The four room types. The two on the right are encrypted; the two on the left are readable by anyone in range, by design.">
+                <RoomTypes />
+              </Figure>
+
+              <p>
+                <strong className="text-gray-900">Private channels</strong> put the key inside the
+                invite link. There is no roster and no member cap, which sounds careless until you
+                consider the use case: a link has to spread faster than anyone could add people by
+                hand. Messages are sealed with XChaCha20-Poly1305 and broadcast as type <C>0x2a</C>,
+                and nothing on the wire names the channel, so an outsider cannot even tell which
+                channel a message belongs to.
+              </p>
+              <p>
+                <strong className="text-gray-900">Private groups</strong> are the opposite trade.
+                The creator signs a roster of up to 16 and hands the key to each member individually
+                inside their Noise session, so no link exists and nobody can forward their way in.
+                Messages go out as <C>0x25</C> with the group ID and key epoch in the clear, so
+                relays can carry them without being members, and rotating the key bumps the epoch so
+                an old key cannot be replayed.
+              </p>
+
+              <Note label="Why not relay-hosted groups">
+                <NIP n="29" /> was considered and dropped.{" "}
+                <strong className="text-gray-900">
+                  It puts membership enforcement on a relay, which means a server decides who may
+                  speak.
+                </strong>{" "}
+                Both models above keep that decision on the devices holding the keys, which is the
+                whole premise of the project.
+              </Note>
+            </Section>
+
+            <Section
+              id="bridge"
+              eyebrow="Beyond the mesh · 10"
+              title="The internet bridge"
+              lede="When Bluetooth range runs out and there is a connection available, the same conversation continues over Nostr relays. No infrastructure anyone here controls."
+            >
+              <p>
+                <A href="https://nostr.org">Nostr</A> relays are chosen geographically. The app
+                ships a bundled list of over 350 public relays and picks the nearest by{" "}
+                <A href="https://en.wikipedia.org/wiki/Haversine_formula">Haversine</A> distance,
+                connecting to several at once so no single operator is load-bearing.
+              </p>
+
+              <Figure
+                caption={
+                  <>
+                    <NIP n="17" /> gift wrap, built on <NIP n="59" /> and encrypted with{" "}
+                    <NIP n="44" />. Three nested layers, of which the relay can read exactly none.
+                  </>
+                }
+              >
+                <GiftWrap />
+              </Figure>
+
+              <p>
+                The inner rumor is deliberately unsigned.{" "}
+                <strong className="text-gray-900">
+                  That is not an oversight, it is deniability:
+                </strong>{" "}
+                because nothing inside carries your signature, a leaked message cannot be
+                cryptographically proven to have come from you.
+              </p>
+
+              <Table
+                head={["Nostr kind", "What it is"]}
+                rows={[
+                  ["14", "Rumor, the unsigned inner message"],
+                  ["13", "Seal, signed by you, encrypted to them"],
+                  ["1059", "Gift wrap, signed by a throwaway key"],
+                  ["20000", "Location channel message"],
+                  ["20001", "Location channel presence heartbeat"],
+                  ["1401", "Courier drop parked on a relay"],
+                  [
+                    "9321",
+                    <>
+                      Nutzap, ecash locked to a public key (<NIP n="61" />)
+                    </>,
+                  ],
+                  ["10019", "Wallet info, where to send nutzaps"],
+                ]}
+              />
+
+              <h3 className="pt-2 text-base font-bold text-gray-900">Presence and its limits</h3>
+              <p>
+                Location channels show how many people are around. Broadcasting that is a location
+                leak, so it is restricted on purpose: heartbeats are only sent for coarse cells at
+                geohash precision 5 or less, roughly a 5 km square and upward. Finer channels get no
+                presence broadcast at all, and the app shows <C>[? people]</C> rather than{" "}
+                <C>[0 people]</C> so nobody mistakes silence for an empty room. Heartbeats go out
+                every 40 to 80 seconds, randomized so devices in one cell do not announce in
+                lockstep, and a key stays listed for 5 minutes after its last event.
+              </p>
+
+              <h3 className="pt-2 text-base font-bold text-gray-900">The internet gateway</h3>
+              <Figure caption="A phone with a connection carrying a nearby offline phone's public location traffic. Off by default, and never applied to private messages.">
+                <InternetGateway />
+              </Figure>
+            </Section>
+
+            <Section
+              id="tor"
+              eyebrow="Beyond the mesh · 11"
+              title="The Onion Router"
+              lede="Gift wrap hides who is talking to whom. It does not hide your IP address from the relay. Tor closes that gap, and the two platforms close it differently."
+            >
+              <Table
+                head={["", "iOS", "Android"]}
+                rows={[
+                  [
+                    "Implementation",
+                    <>
+                      <A href="https://arti.torproject.org">Arti</A>, compiled into the app binary
+                    </>,
+                    <>
+                      <A href="https://guardianproject.info/apps/org.torproject.android/">Orbot</A>,
+                      a separate app you install
+                    </>,
+                  ],
+                  ["Covers", "The Nostr WebSocket only", "Every connection, as a system VPN"],
+                  ["Mint traffic", "Blocked while Tor is on, unless you opt in", "Covered"],
+                  ["Third-party app needed", "No", "Yes, until Arti is embedded"],
+                ]}
+              />
+
+              <Note label="The iOS asymmetry is a design decision, not a bug">
+                Arti on iOS wraps the Nostr socket, so an HTTP call to a mint would go around it and
+                expose your IP alongside your coins. Rather than leak that quietly, Airhop refuses
+                mint requests entirely while Tor is on and tells you why, with a switch in Settings
+                if you decide the trade is acceptable. Sending and receiving ecash over Bluetooth
+                never touches a mint, so that keeps working either way.
+              </Note>
+
+              <p>
+                <strong className="text-gray-900">
+                  Tor has no effect on the Bluetooth mesh, and cannot.
+                </strong>{" "}
+                Mesh traffic is radio-local: it never reaches an IP network, so there is nothing to
+                route.
+              </p>
+            </Section>
+
+            <Section
+              id="wallet"
+              eyebrow="Optional features · 12"
+              title="The wallet"
+              lede="Cashu ecash, chosen because it is the only payment system where the transfer itself needs no network at all. A coin is a bearer instrument, and handing one over is just a message."
+            >
+              <Figure caption="Where a coin can be. The design is built around the fact that sending never deletes anything.">
+                <WalletStates />
+              </Figure>
+
+              <p>
+                <A href="https://cashu.space">Cashu</A> is a Chaumian ecash protocol backed by
+                Bitcoin.{" "}
+                <strong className="text-gray-900">
+                  The mint is the one trusted party in the entire application,
+                </strong>{" "}
+                which is why Airhop ships with no default mint and never picks one for you. It
+                issues coins against Lightning sats and redeems them later, and thanks to blind
+                signatures it cannot link the coins it issued to the coins it later sees spent.
+              </p>
+
+              <Table
+                head={["Operation", "Spec", "Needs internet"]}
+                rows={[
+                  ["Hand a coin to someone", "none, it is a message", "No"],
+                  [
+                    "Verify a coin is genuine",
+                    <>
+                      <NUT n="12" /> (DLEQ)
+                    </>,
+                    "No",
+                  ],
+                  ["Deposit from Lightning", <NUT n="04" />, "Yes"],
+                  ["Withdraw to Lightning", <NUT n="05" />, "Yes"],
+                  ["Check if a coin is spent", <NUT n="07" />, "Yes"],
+                  ["Lock a coin to a public key", <NUT n="11" />, "Yes"],
+                  [
+                    "Recovery phrase",
+                    <>
+                      <NUT n="13" /> and <NUT n="09" />
+                    </>,
+                    "Yes, to restore",
+                  ],
+                ]}
+              />
+
+              <Note label="Two limits the wallet cannot design around">
+                <strong className="text-gray-900">DLEQ proves origin, not freshness.</strong> A
+                valid proof shows the mint really signed that coin. It can never show the sender did
+                not already spend it, because only the mint knows that. So a coin received offline
+                is shown as unconfirmed on its own line rather than folded silently into your
+                balance.
+                <br />
+                <br />
+                <strong className="text-gray-900">Reclaiming is a race.</strong> An undelivered send
+                can be reclaimed because the coins were reserved rather than deleted, but if the
+                recipient already holds the token string, whoever reaches the mint first keeps the
+                money. The app says so before you tap.
+              </Note>
+
+              <p>
+                Balances are kept per mint and never pooled, so one mint failing cannot take the
+                rest. That is also why a balance can be split in a way that looks strange: a token
+                names exactly one mint, so 60 sats at two different mints cannot combine into a
+                single 100 sat payment. Moving value between mints means one mint paying a Lightning
+                invoice issued by the other.
+              </p>
+              <p>
+                Proofs are bearer secrets, so they get their own MMKV partition opened with an
+                explicit AES-256 key held in the Keychain or Keystore. If that key cannot be read,
+                the wallet reports itself locked rather than falling back to writing coins in
+                plaintext.
+              </p>
+            </Section>
+
+            <Section
+              id="ai"
+              eyebrow="Optional features · 13"
+              title="The AI assistant"
+              lede="A small language model running on the phone itself, for when there is no signal and nobody nearby to ask."
+            >
+              <p>
+                Airhop ships no model of its own. The app lists a few small open-weight models,
+                roughly 1 to 3 billion parameters in GGUF format, with the memory and storage each
+                one needs, and downloads the one you pick from{" "}
+                <A href="https://huggingface.co">Hugging Face</A>.{" "}
+                <strong className="text-gray-900">
+                  That download is the only moment the assistant touches a network.
+                </strong>{" "}
+                Everything after it runs locally, with the radios off if you like.
+              </p>
+              <p>
+                There is no API key and no server, so nothing sees the question or the answer.
+                Conversation history stays in the same encrypted local store as your messages, and
+                the app refuses a download outright if the device cannot hold that model in memory.
+              </p>
+            </Section>
+
+            <Section
+              id="social"
+              eyebrow="Optional features · 14"
+              title="Social bridges"
+              lede="An Ed25519 key pair is already enough to be a Bluesky account or a Fediverse actor. Airhop can lend yours to either, without registering anywhere and without touching the mesh."
+            >
+              <p>
+                Both networks build identity out of keys rather than usernames, which is why this
+                works at all. The <A href="https://atproto.com">AT Protocol</A>, which Bluesky runs
+                on, derives a <C>did:key</C> from your signing key.{" "}
+                <A href="https://www.w3.org/TR/activitypub/">ActivityPub</A>, the W3C standard
+                behind <A href="https://joinmastodon.org">Mastodon</A>, Pixelfed and PeerTube,
+                builds an Actor from the same key. Neither asks you to create an account, because
+                you already hold the only thing either of them needs.
+              </p>
+
+              <Table
+                head={["Network", "Protocol", "What the bridge does"]}
+                rows={[
+                  [
+                    "Bluesky",
+                    "AT Protocol",
+                    "Reads your home and discovery feeds into a tab, cross-posts channel messages as feed records, and cross-references DIDs to show which of your Bluesky contacts are also on Airhop. Point it at your own PDS if you would rather host the data yourself.",
+                  ],
+                  [
+                    "Mastodon and the wider Fediverse",
+                    "ActivityPub",
+                    "Receives mentions and DMs from any compliant server, publishes public channel messages as Notes, and answers WebFinger lookups so someone can find you by handle.",
+                  ],
+                ]}
+              />
+
+              <Note label="What a plugin is not allowed to do">
+                <strong className="text-gray-900">
+                  Mesh traffic is never exposed to a plugin.
+                </strong>{" "}
+                A plugin sees only content you have explicitly marked as shareable, it cannot read
+                private keys, and it cannot contact the network on your behalf without a
+                confirmation for that specific action. Enabling one does not change the wire format,
+                the mesh, or any encryption described above.
+              </Note>
+
+              <p>
+                One integration was deliberately kept out of the core.{" "}
+                <A href="https://en.wikipedia.org/wiki/Unified_Payments_Interface">UPI</A>,
+                India&rsquo;s payment rail, settles bank to bank with full KYC linkage visible to
+                NPCI, which is structurally incompatible with everything on this page. It exists as
+                an opt-in plugin for people who want to pay in rupees while online, gated behind a
+                disclosure that says exactly that, and it never touches the offline path. Cashu
+                remains the payment system Airhop is built around.
+              </p>
+
+              <h3 className="pt-2 text-base font-bold text-gray-900">
+                Everything that is off until you turn it on
+              </h3>
+              <Table
+                head={["Feature", "State on a fresh install"]}
+                rows={[
+                  ["Tor", "Off. iOS has Arti built in, Android needs Orbot installed separately"],
+                  [
+                    "Internet gateway",
+                    "Off. Carries a nearby offline phone's public location traffic, never anyone's private messages",
+                  ],
+                  ["The wallet", "Off. Nothing happens until you add a mint yourself"],
+                  [
+                    "Recovery phrase",
+                    "Off, and one-way once enabled, because a deleted phrase is indistinguishable from deleted coins",
+                  ],
+                  ["AI assistant", "Off. Nothing downloads until you pick a model"],
+                  ["Social bridges", "Off, individually, per plugin"],
+                ]}
+              />
+            </Section>
+
+            <Section
+              id="modules"
+              eyebrow="For developers · 15"
+              title="Module map"
+              lede="About 157 TypeScript files across core, services, store and features, arranged so that dependencies only ever point one direction."
+            >
+              <Figure caption="The layering rule. src/core is the whole protocol and imports nothing native, which is what makes it testable in CI without a phone.">
+                <ModuleMap />
+              </Figure>
+
+              <Table
+                head={["Directory", "Owns"]}
+                rows={[
+                  ["core/crypto/", "identity, noise-xx, noise-x, double-ratchet, contact-exchange"],
+                  [
+                    "core/mesh/",
+                    "packet-codec, flood-router, deduplicator, fragment-manager, gossip-sync, courier-store, announce-manager, group-protocol, channel-crypto, prekey-store, board-packet",
+                  ],
+                  [
+                    "core/nostr/",
+                    "nostr-client, gift-wrap, geo-relay, presence, courier-relay, geohash-identity, tor-routing, tor-websocket",
+                  ],
+                  ["core/payments/", "cashu, nutzap, wallet-seed"],
+                  ["core/router/", "message-router, the transport ladder and peer registry"],
+                  [
+                    "services/",
+                    "mesh-service, wallet-service, ecash-transfer, geohash-channel-service",
+                  ],
+                ]}
+              />
+
+              <h3 className="pt-2 text-base font-bold text-gray-900">The native contract</h3>
+              <p>
+                <strong className="text-gray-900">The bridge is deliberately tiny</strong>, because
+                anything richer would mean protocol knowledge on the native side, which is the one
+                thing this design exists to prevent. TypeScript calls down to start and stop
+                advertising, start and stop scanning, and write bytes to a link. Native calls back
+                up with four events: a packet arrived, a link connected, a link disconnected, a
+                signal reading changed. Bytes cross base64-encoded, because that is the only
+                representation both runtimes agree on safely.
+              </p>
+            </Section>
+
+            <Section
+              id="wire"
+              eyebrow="For developers · 16"
+              title="Wire format"
+              lede="Byte-for-byte identical to bitchat v2. This is what makes an Airhop phone and a bitchat phone join the same mesh with no translation layer and no configuration."
+            >
+              <Figure caption="The v2 packet frame. Version 2 widened the payload length field from 2 bytes to 4, which is what allows large file transfers.">
+                <PacketFrame />
+              </Figure>
+
+              <Table
+                head={["Identifier", "Value"]}
+                rows={[
+                  ["Service UUID", <C>F47B5E2D-4A9E-4C5A-9B3F-8E1D2C3A4B5C</C>],
+                  ["Characteristic UUID", <C>A1B2C3D4-E5F6-4A5B-8C9D-0E1F2A3B4C5D</C>],
+                  ["Protocol version", <C>2</C>],
+                  ["Peer ID in advert", "iOS local name, Android scan-response service data"],
+                ]}
+              />
+
+              <p>
+                The two platforms cannot carry the peer ID the same way. Android puts the first 8
+                bytes in scan-response service data; CoreBluetooth has no service-data API, so iOS
+                advertises the full 16-character peer ID as the local name. Neither can read the
+                other&rsquo;s placement, so a cross-platform link simply skips advert-level dedup
+                and identifies the peer from its first ANNOUNCE.
+              </p>
+
+              <h3 className="pt-2 text-base font-bold text-gray-900">Packet types</h3>
+              <p>
+                Types <C>0x01</C> to <C>0x28</C> are bitchat-defined. <C>0x29</C> and above are
+                Airhop extensions, which bitchat silently drops as unknown, so the two apps coexist
+                without either breaking.
+              </p>
+
+              <Table
+                head={["Type", "Hex", "Purpose"]}
+                rows={[
+                  ["ANNOUNCE", "0x01", "Signed presence, TLV: nickname, keys, direct neighbors"],
+                  ["CHANNEL_MSG", "0x02", "Public channel message, signed plaintext"],
+                  ["LEAVE", "0x03", "Peer departing"],
+                  ["COURIER_ENV", "0x04", "Sealed store-and-forward envelope"],
+                  ["NOISE_HANDSHAKE", "0x10", "Noise XX handshake message"],
+                  ["NOISE_ENCRYPTED", "0x11", "Post-handshake encrypted payload"],
+                  ["DR_ENCRYPTED", "0x12", "Double Ratchet DM · Airhop extension"],
+                  ["FRAGMENT", "0x20", "One 469-byte piece of a larger message"],
+                  ["REQUEST_SYNC", "0x21", "GCS gossip filter, never relayed"],
+                  ["FILE_TRANSFER", "0x22", "File, image, voice note, 1 MiB cap"],
+                  ["BOARD_POST", "0x23", "Signed bulletin post, 1 to 7 day expiry"],
+                  ["PREKEY_BUNDLE", "0x24", "One-time prekeys for forward-secret first contact"],
+                  ["GROUP_MESSAGE", "0x25", "Private group message under an epoch key"],
+                  ["PING / PONG", "0x26 / 0x27", "Directed mesh echo, measures hop distance"],
+                  ["NOSTR_CARRIER", "0x28", "Gateway-ferried Nostr event"],
+                  ["VOICE_FRAME", "0x29", "Live push-to-talk burst · Airhop extension"],
+                  ["CHANNEL_ENC", "0x2a", "Private channel · Airhop extension"],
+                ]}
+              />
+
+              <Note label="How the signature survives relaying">
+                A relay has to decrement the TTL, which would invalidate a naive signature over the
+                whole packet. So{" "}
+                <strong className="text-gray-900">
+                  the signature is computed over the packet re-encoded with <C>ttl=0</C>
+                </strong>{" "}
+                and the signature field absent. Relays can decrement freely and tag solicited sync
+                responses, and the original signature still verifies at every hop.
+              </Note>
+            </Section>
+
+            <Section
+              id="threat"
+              eyebrow="For developers · 17"
+              title="Threat model"
+              lede="What the design defends against, and the four things it does not."
+            >
+              <Table
+                head={["Threat", "Countermeasure"]}
+                rows={[
+                  ["Message forgery", "Ed25519 on every packet, verified before relay or display"],
+                  [
+                    "Impersonation",
+                    "Names derived from the public key, so a name is not an identity",
+                  ],
+                  [
+                    "Replay",
+                    "Timestamp plus content-derived packet ID, deduplicated for 5 minutes",
+                  ],
+                  ["Man in the middle", "Noise XX mutual authentication on every session"],
+                  [
+                    "Relay tampering",
+                    "The signature covers the route field, so any edit invalidates it",
+                  ],
+                  [
+                    "Traffic analysis on Nostr",
+                    "NIP-17 gift wrap hides both ends, Tor hides the IP",
+                  ],
+                  [
+                    "Relay censorship",
+                    "Several relays queried in parallel, any one failing is invisible",
+                  ],
+                  ["Sybil flooding", "TTL bounds propagation, signed announces prevent fake peers"],
+                  [
+                    "Misbehaving BLE devices",
+                    "Connection slots reclaimed from peers that never announce",
+                  ],
+                  ["Device seizure", "Panic wipe, keys in hardware-backed storage"],
+                  [
+                    "Double spend",
+                    "Mint-enforced, and a received coin is unconfirmed until checked",
+                  ],
+                ]}
+              />
+
+              <Note label="What it does not protect against">
+                <strong className="text-gray-900">Physical proximity.</strong> Being on a Bluetooth
+                mesh reveals that you are physically near certain people. That is inherent to the
+                medium.
+                <br />
+                <br />
+                <strong className="text-gray-900">Timing correlation.</strong> An observer watching
+                several radios at once can infer patterns from when packets move, even without
+                reading them.
+                <br />
+                <br />
+                <strong className="text-gray-900">A compromised operating system.</strong> If the OS
+                is owned, every guarantee above is void.
+                <br />
+                <br />
+                <strong className="text-gray-900">Mint trust.</strong> Ecash requires trusting a
+                mint to hold the bitcoin and keep an honest list of what has been spent.
+              </Note>
+
+              <p>
+                Airhop has not had an external security audit. Every change is reviewed personally
+                and run through a{" "}
+                <A href="https://github.com/areebahmeddd/Airhop/blob/main/.github/agents/security-review.md">
+                  security review agent
+                </A>{" "}
+                before shipping, which is not a substitute for a formal audit and is not presented
+                as one. A third-party cryptographic audit is planned.
+              </p>
+            </Section>
+
+            <div className="border-t border-gray-100 pt-10">
+              <div className="font-mono text-[10px] font-semibold tracking-[0.25em] text-gray-400 uppercase">
+                Go deeper
+              </div>
+              <p className="mt-3 text-sm leading-relaxed text-gray-600">
+                This page is the readable version. The specifications it is drawn from live in the
+                repository:{" "}
+                <A href="https://github.com/areebahmeddd/Airhop/blob/main/docs/spec/ARCHITECTURE.md">
+                  ARCHITECTURE.md
+                </A>{" "}
+                for design decisions,{" "}
+                <A href="https://github.com/areebahmeddd/Airhop/blob/main/docs/spec/PROTOCOLS.md">
+                  PROTOCOLS.md
+                </A>{" "}
+                for exact byte layouts and constants,{" "}
+                <A href="https://github.com/areebahmeddd/Airhop/blob/main/docs/dev/GLOSSARY.md">
+                  GLOSSARY.md
+                </A>{" "}
+                for terminology, and{" "}
+                <A href="https://github.com/areebahmeddd/Airhop/blob/main/docs/dev/PROGRESS.md">
+                  PROGRESS.md
+                </A>{" "}
+                for build status and milestones.
+              </p>
+              <p className="mt-4 text-sm leading-relaxed text-gray-600">
+                For the protocol Airhop inherits, read the{" "}
+                <A href="https://github.com/permissionlesstech/bitchat/blob/main/WHITEPAPER.md">
+                  bitchat protocol whitepaper
+                </A>
+                . It covers the mesh layer, the store-and-forward stack and the Noise session model,
+                and is released into the public domain under the{" "}
+                <A href="https://github.com/permissionlesstech/bitchat/blob/main/LICENSE">
+                  Unlicense
+                </A>
+                .
+              </p>
+              <p className="mt-4 text-sm leading-relaxed text-gray-600">
+                Shorter answers to most of this are in the{" "}
+                <Link to="/faq" className={LINK}>
+                  FAQ
+                </Link>
+                .
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+  );
+}

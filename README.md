@@ -17,7 +17,7 @@
 <p align="center">
   <a href="https://airhop.1mindlabs.org">Website</a>
   |
-  <a href="https://github.com/areebahmeddd/Airhop/tree/main/docs">Docs</a>
+  <a href="https://airhop.1mindlabs.org/architecture">Architecture</a>
   |
   <a href="https://airhop.1mindlabs.org/faq">FAQ</a>
   |

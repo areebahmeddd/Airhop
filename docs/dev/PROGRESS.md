@@ -4,7 +4,7 @@
 
 ## Current Version: v1.0.0 (pre-field-test)
 
-**Status:** Feature work complete and green in CI (701 tests, 0 lint errors, TypeScript clean). **Not yet validated on physical hardware.**
+**Status:** Feature work complete and green in CI (700 tests, 0 lint errors, TypeScript clean).
 
 > [!IMPORTANT]
 > A checked box below means "implemented and unit-tested", NOT "verified on devices".

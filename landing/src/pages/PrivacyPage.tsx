@@ -456,7 +456,7 @@ export default function PrivacyPage() {
           <section className="space-y-3">
             <h2 className="text-base font-semibold text-gray-900">Contact</h2>
             <p className="text-sm leading-relaxed">
-              Questions or concerns can be sent to{" "}
+              Questions about this policy can be sent to{" "}
               <a
                 href="mailto:hi@areeb.dev"
                 className="underline underline-offset-2 transition-colors hover:text-gray-900"

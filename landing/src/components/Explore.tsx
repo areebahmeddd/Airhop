@@ -1,7 +1,11 @@
 import { ArrowUpRight } from "lucide-react";
 import { motion } from "motion/react";
+import { Link } from "react-router-dom";
 
-const sections = [
+const sections: {
+  category: string;
+  items: { title: string; desc: string; href: string; internal?: boolean }[];
+}[] = [
   {
     category: "DOWNLOAD",
     items: [
@@ -51,9 +55,10 @@ const sections = [
         href: "https://github.com/areebahmeddd/Airhop",
       },
       {
-        title: "Documentation",
-        desc: "Architecture, wire format, Nostr bridge, and offline payment specs.",
-        href: "https://github.com/areebahmeddd/Airhop/tree/main/docs",
+        title: "Architecture",
+        desc: "The full technical breakdown, from tapping send down to the bytes on the radio.",
+        href: "/architecture",
+        internal: true,
       },
       {
         title: "Contributing",
@@ -94,26 +99,41 @@ export default function Explore() {
                 {section.category}
               </div>
               <div className="space-y-3">
-                {section.items.map((item) => (
-                  <a
-                    key={item.title}
-                    href={item.href}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="group flex items-start justify-between gap-2 border border-gray-100 bg-white p-3 transition-all duration-200 hover:border-black"
-                  >
-                    <div className="min-w-0 space-y-1">
-                      <div className="font-sans text-sm font-semibold text-black">{item.title}</div>
-                      <div className="font-mono text-xs leading-snug text-gray-500">
-                        {item.desc}
+                {section.items.map((item) => {
+                  const cardClass =
+                    "group flex items-start justify-between gap-2 border border-gray-100 bg-white p-3 transition-all duration-200 hover:border-black";
+                  const body = (
+                    <>
+                      <div className="min-w-0 space-y-1">
+                        <div className="font-sans text-sm font-semibold text-black">
+                          {item.title}
+                        </div>
+                        <div className="font-mono text-xs leading-snug text-gray-500">
+                          {item.desc}
+                        </div>
                       </div>
-                    </div>
-                    <ArrowUpRight
-                      size={14}
-                      className="mt-0.5 flex-shrink-0 text-gray-300 transition-colors group-hover:text-black"
-                    />
-                  </a>
-                ))}
+                      <ArrowUpRight
+                        size={14}
+                        className="mt-0.5 flex-shrink-0 text-gray-300 transition-colors group-hover:text-black"
+                      />
+                    </>
+                  );
+                  return item.internal ? (
+                    <Link key={item.title} to={item.href} className={cardClass}>
+                      {body}
+                    </Link>
+                  ) : (
+                    <a
+                      key={item.title}
+                      href={item.href}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className={cardClass}
+                    >
+                      {body}
+                    </a>
+                  );
+                })}
               </div>
             </motion.div>
           ))}

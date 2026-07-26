@@ -8,147 +8,124 @@ const SECTIONS: {
   questions: { q: string; a: React.ReactNode }[];
 }[] = [
   {
-    heading: "The basics",
+    heading: "Basics",
     questions: [
       {
         q: "What is Airhop?",
-        a: "Airhop is an open-source iOS and Android app for private, peer-to-peer messaging over Bluetooth mesh. There are no central servers. Messages relay automatically across nearby devices up to 7 hops. It works with zero internet connectivity.",
-      },
-      {
-        q: "Is Airhop end-to-end encrypted, peer-to-peer, and anonymous?",
         a: (
           <>
-            <strong>Peer-to-peer: yes.</strong> The Bluetooth mesh needs no server at all, and the
-            optional Nostr relays are swappable and store nothing you depend on.
-            <br />
-            <br />
-            <strong>End-to-end encrypted: yes.</strong>
-            <ul className="my-2 list-disc space-y-1 pl-5">
-              <li>
-                Direct messages:{" "}
-                <a
-                  href="https://noiseprotocol.org/noise.html"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-gray-900 underline underline-offset-2 transition-colors hover:text-gray-600"
-                >
-                  Noise XX
-                </a>{" "}
-                with{" "}
-                <a
-                  href="https://signal.org/docs/specifications/doubleratchet/"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-gray-900 underline underline-offset-2 transition-colors hover:text-gray-600"
-                >
-                  Double Ratchet
-                </a>{" "}
-                forward secrecy, plus{" "}
-                <a
-                  href="https://github.com/nostr-protocol/nips/blob/master/17.md"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-gray-900 underline underline-offset-2 transition-colors hover:text-gray-600"
-                >
-                  NIP-17
-                </a>{" "}
-                gift-wrapping when they travel over the internet.
-              </li>
-              <li>
-                Private channels:{" "}
-                <a
-                  href="https://en.wikipedia.org/wiki/ChaCha20-Poly1305"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-gray-900 underline underline-offset-2 transition-colors hover:text-gray-600"
-                >
-                  XChaCha20-Poly1305
-                </a>{" "}
-                under a random 32-byte key that only members hold. Nothing on the wire names the
-                channel, so an outsider cannot tell which channel a message belongs to, or that they
-                are missing one.
-              </li>
-              <li>
-                Groups: a shared{" "}
-                <a
-                  href="https://github.com/areebahmeddd/Airhop/blob/main/docs/spec/ARCHITECTURE.md#private-groups-bitchat-compatible"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-gray-900 underline underline-offset-2 transition-colors hover:text-gray-600"
-                >
-                  epoch key
-                </a>{" "}
-                that is handed out one member at a time inside an authenticated Noise session, never
-                broadcast. Every message is bound to its group and key epoch, so an older key cannot
-                be replayed after the key rotates.
-              </li>
-            </ul>
-            The two exceptions are attachments, which are signed rather than encrypted for bitchat
-            compatibility (nobody can forge or alter one, but any device relaying it can open it),
-            and public geohash channels, which are readable by design since anyone nearby can join
-            them.
-            <br />
-            <br />
-            <strong>Anonymous: partially.</strong>
-            <ul className="my-2 list-disc space-y-1 pl-5">
-              <li>
-                No phone number, email, or sign-up. Your identity is a key pair generated on-device,
-                and nothing registers anywhere (fully anonymous).
-              </li>
-              <li>
-                Geohash channels reveal coarse location, and Nostr relays can see which cells you
-                are active in (not anonymous).
-              </li>
-              <li>
-                When messages travel beyond the Bluetooth mesh, only your IP is visible to Nostr
-                relays (messages are NIP-17 gift wrapped) until you turn Tor on, which closes that
-                gap (anonymous once Tor is on).
-              </li>
-            </ul>
-            The location and metadata trade-offs are inherent to any location-aware mesh.
+            Airhop is an open-source iOS and Android app for private, peer-to-peer messaging over
+            Bluetooth mesh. There are no central servers. Messages relay automatically across nearby
+            devices up to 7 hops. <strong>It works with zero internet connectivity.</strong>
           </>
         ),
-      },
-      {
-        q: "Is it free?",
-        a: "Yes. Airhop is completely free, open-source under MIT, and has no ads, no subscriptions, and no paywall of any kind.",
-      },
-      {
-        q: "Which phones does it work on?",
-        a: "Android 8.0 or later, and iPhones on iOS 16.0 or later. A handful of older Android models ship Bluetooth chips that can receive but never advertise; those phones can still join a mesh and read everything, they just will not show up in anyone else's peer list. Everything else works the same on both platforms, because the protocol itself is shared code.",
       },
       {
         q: "Who is it for?",
         a: "Anyone who needs to communicate when normal networks are unavailable or untrustworthy. Journalists, activists, people in disaster zones, protestors, hikers, and anyone who values communication that cannot be shut down by a third party.",
       },
       {
-        q: "How is it different from bitchat and other players?",
-        a: "Airhop is built on top of bitchat, but extends it with things bitchat doesn't have at the time of writing, like Double Ratchet forward secrecy, Tor on both iOS and Android, offline ecash payments, and an offline AI assistant. Beyond the protocol itself, a big part of the focus is the app people actually use day to day: a clean, simple interface that makes the whole thing easy to pick up, not just something that works well under the hood.",
+        q: "Is it free?",
+        a: (
+          <>
+            Yes. Airhop is completely free, open-source under the{" "}
+            <a
+              href="https://github.com/areebahmeddd/Airhop/blob/main/LICENSE"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-gray-900 underline underline-offset-2 transition-colors hover:text-gray-600"
+            >
+              MIT license
+            </a>
+            , and has <strong>no ads, no subscriptions, and no paywall of any kind.</strong>
+          </>
+        ),
+      },
+      {
+        q: "Which phones does it work on?",
+        a: "Android 8.0 or later, and iPhones on iOS 16.0 or later. A handful of older Android models ship Bluetooth chips that can receive but never advertise; those phones can still join a mesh and read everything, they just will not show up in anyone else's peer list. Everything else works the same on both platforms, because the protocol itself is shared code.",
+      },
+      {
+        q: "How is it different from bitchat and other apps?",
+        a: (
+          <>
+            Most private messengers fall into three groups. Apps like Signal and Session are strong
+            on privacy but need the internet, so they go down when the network does. Meshtastic and
+            goTenna work offline but only with a separate radio you have to buy and carry. Briar,
+            Berty, Bridgefy and{" "}
+            <a
+              href="https://bitchat.free"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-gray-900 underline underline-offset-2 transition-colors hover:text-gray-600"
+            >
+              bitchat
+            </a>{" "}
+            run phone to phone on hardware you already own, and that is where Airhop sits.
+            <br />
+            <br />
+            Against bitchat specifically, Airhop is built on top of it and stays wire-compatible,
+            but adds Double Ratchet forward secrecy, Tor on both iOS and Android, offline ecash
+            payments, and an offline AI assistant, none of which bitchat has today. Beyond the
+            protocol itself, a big part of the focus is the app people actually use day to day: a
+            clean, simple interface that makes the whole thing easy to pick up, not just something
+            that works well under the hood.
+          </>
+        ),
       },
     ],
   },
   {
-    heading: "Everyday use",
+    heading: "Messaging",
     questions: [
       {
-        q: "Will it drain my battery?",
-        a: "It uses more than an app sitting idle and far less than maps or video. Airhop stays on Bluetooth Low Energy, which listens and announces in short bursts and lets the radio sleep in between, and it slows its own announcements down once it can hear other devices. Relaying for other people costs a little more. If you want it to stop entirely, set your status to Away in Profile: that stops scanning and announcing, and nothing runs until you set it back.",
+        q: "What is the difference between channels, groups, and location channels?",
+        a: (
+          <>
+            There are four kinds of room, and what separates them is who can get in.
+            <ul className="my-2 list-disc space-y-1 pl-5">
+              <li>
+                <strong>Public channels:</strong> anyone in Bluetooth range who types the name is in
+                it. Nothing is registered anywhere, nobody owns it, and it stays on the local mesh.
+              </li>
+              <li>
+                <strong>Location channels:</strong> public as well, but scoped to a map cell instead
+                of a name, from a single block up to a whole region. Your own cell opens
+                automatically, and entering a geohash takes you to any other. These bridge over the
+                internet, so you can read a place you are not standing in.
+              </li>
+              <li>
+                <strong>Private channels:</strong> invite-only. The key travels inside the invite
+                link, so anyone holding the link can read, and there is no member limit. Built for a
+                crowd that has to grow faster than anyone could add people by hand.
+              </li>
+              <li>
+                <strong>Private groups:</strong> a fixed roster instead of a link. The creator signs
+                a member list of up to 16 and hands the key to each person individually, so nobody
+                can forward their way in. Bluetooth only.
+              </li>
+            </ul>
+          </>
+        ),
       },
       {
-        q: "Why does a messenger ask for my location?",
-        a: "Android ties Bluetooth scanning to the location permission at the system level, so any app that looks for nearby devices has to ask for it, whether or not it cares where you are. Airhop does not read your position for the mesh. The one place it genuinely uses location is the optional location channels, which need a rough area to work out which cell you are in, and you can decline that and still use everything else. Nothing about your position is ever sent to us, because there is no server to send it to.",
-      },
-      {
-        q: "What else does it ask permission for?",
-        a: "Bluetooth and nearby devices, to find and talk to peers, which is the one it cannot work without. Notifications, so a message can reach you when the app is closed. Camera, only to scan a contact's QR code. Photos, only when you attach or save one. Microphone, only when you record a voice note. Every one of them can be refused or revoked later in your device settings, and the app keeps working with whatever is left.",
-      },
-      {
-        q: "Does it work in airplane mode?",
-        a: "Yes, as long as you switch Bluetooth back on, which both iOS and Android let you do without leaving airplane mode. The mesh then works in full: discovery, channels, direct messages, files, and ecash transfers, none of which touch the internet. The internet features stop, so messages to people who are not nearby queue up and send themselves when a route appears, and cashing ecash out to Lightning has to wait until you are back online.",
-      },
-      {
-        q: "What is the notification that will not swipe away?",
-        a: "On Android, that notification is what keeps the mesh alive after you leave the app. Without it the system would suspend Airhop within minutes and you would stop receiving anything. It has a Stop mesh button that shuts the radios down cleanly and takes the notification with it; reopening the app then shows the mesh paused, with a Resume button. iPhones have no equivalent notification, because iOS keeps Bluetooth apps alive differently.",
+        q: "Can I block someone?",
+        a: (
+          <>
+            Yes. Open the direct conversation from your chat list and pick Block contact. Everything
+            from that peer is then dropped at a single point before it can reach any chat: channel
+            messages, direct messages, files, and anything arriving over Nostr. They also stop
+            appearing on your Mesh tab. The block is saved, so it survives restarting the app, and
+            you can lift it later under Settings then Security.
+            <br />
+            <br />
+            <strong>Blocking is one-sided and local to your phone</strong>, so it hides them from
+            you rather than announcing anything to them. Your device also keeps relaying mesh
+            traffic that happens to route through it, theirs included, because refusing would
+            degrade the network for everyone else routing through you. None of that relayed traffic
+            is ever shown to you.
+          </>
+        ),
       },
       {
         q: "Can people tell when I have read their message?",
@@ -168,19 +145,48 @@ const SECTIONS: {
             with zero internet.
             <br />
             <br />
-            For communication beyond Bluetooth range, Airhop automatically uses the Nostr internet
-            bridge to reach a contact who is online but out of range. Location channels also require
-            a connection.
+            For communication beyond Bluetooth range, Airhop automatically uses the{" "}
+            <a
+              href="https://fiatjaf.com/nostr.html"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-gray-900 underline underline-offset-2 transition-colors hover:text-gray-600"
+            >
+              Nostr
+            </a>{" "}
+            internet bridge to reach a contact who is online but out of range. Location channels
+            also require a connection.
+          </>
+        ),
+      },
+      {
+        q: "What is the difference between Classic Bluetooth and Bluetooth Low Energy?",
+        a: (
+          <>
+            They are two modes of the same Bluetooth chip in your phone. Classic Bluetooth is the
+            one you already use every day. It pairs two devices and holds the connection open, which
+            is what wireless headphones, car audio, and file transfers rely on. It moves data
+            quickly, but it drains the battery and only talks to what you have paired. Bluetooth Low
+            Energy is the lighter mode. Devices announce themselves and listen in short bursts
+            instead of pairing, so one phone can see many nearby devices at once and the radio
+            sleeps between packets.
+            <br />
+            <br />
+            Airhop uses Low Energy. Pairing does not work for a mesh where you have never met the
+            people around you, and an always-open Classic connection would flatten your battery long
+            before the network was useful. Low Energy lets Airhop find peers with no setup and keep
+            relaying quietly in the background. The trade is speed, so messages and voice notes
+            arrive immediately while a large file takes its time.
           </>
         ),
       },
       {
         q: "How does the mesh relay messages?",
-        a: "Every device acts as both a Bluetooth scanner and advertiser simultaneously. Incoming messages are verified, deduplicated against a 1,000-entry recent-seen cache, and re-broadcast with the hop counter decremented. Relay timing is randomized between 10 and 220 milliseconds to prevent collisions. Each node forwards to a deterministic subset of peers rather than every peer in range, which keeps network traffic flat regardless of mesh density.",
+        a: "Every phone listens and announces at the same time, so each one is both a receiver and a relay. When a message arrives, your phone checks its signature, drops it if it has already seen it, and passes it on with one of its 7 hops used up. It waits a random fraction of a second first, somewhere between 10 and 220 milliseconds, so that a room full of phones does not all speak at once and drown each other out. Each phone forwards to a fixed handful of nearby devices rather than everyone in range, which is why a crowded mesh does not carry more traffic than a quiet one.",
       },
       {
         q: "How far can messages travel?",
-        a: "Each Bluetooth hop covers roughly 30 to 50 meters. With a 7-hop maximum, a message can traverse 105 to 350 meters in open conditions. Range scales naturally with user density: every additional device running Airhop in the area is a relay node. Store-and-forward courier messages have no hard range limit and deliver whenever a mesh path eventually exists between sender and recipient.",
+        a: "Each hop covers roughly 30 to 50 meters, and a message is allowed 7 of them, so it can cross 105 to 350 meters in the open before it stops. The more people around you have Airhop, the further it reaches, because every one of their phones is another relay. Messages held for someone who is not around have no range limit at all: your phone simply carries them until a path to that person exists, however long that takes.",
       },
       {
         q: "What media can I send?",
@@ -212,24 +218,82 @@ const SECTIONS: {
           </>
         ),
       },
+    ],
+  },
+  {
+    heading: "Nostr & internet bridge",
+    questions: [
       {
-        q: "What is the difference between Classic Bluetooth and Bluetooth Low Energy?",
+        q: "What is the Nostr bridge?",
         a: (
           <>
-            They are two modes of the same Bluetooth chip in your phone. Classic Bluetooth is the
-            one you already use every day. It pairs two devices and holds the connection open, which
-            is what wireless headphones, car audio, and file transfers rely on. It moves data
-            quickly, but it drains the battery and only talks to what you have paired. Bluetooth Low
-            Energy is the lighter mode. Devices announce themselves and listen in short bursts
-            instead of pairing, so one phone can see many nearby devices at once and the radio
-            sleeps between packets.
-            <br />
-            <br />
-            Airhop uses Low Energy. Pairing does not work for a mesh where you have never met the
-            people around you, and an always-open Classic connection would flatten your battery long
-            before the network was useful. Low Energy lets Airhop find peers with no setup and keep
-            relaying quietly in the background. The trade is speed, so messages and voice notes
-            arrive immediately while a large file takes its time.
+            When you and a contact are out of Bluetooth range and internet is available, Airhop uses{" "}
+            <a
+              href="https://fiatjaf.com/nostr.html"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-gray-900 underline underline-offset-2 transition-colors hover:text-gray-600"
+            >
+              Nostr
+            </a>{" "}
+            relays as an optional internet bridge to continue the conversation. Messages are sent as{" "}
+            <a
+              href="https://github.com/nostr-protocol/nips/blob/master/17.md"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-gray-900 underline underline-offset-2 transition-colors hover:text-gray-600"
+            >
+              NIP-17
+            </a>{" "}
+            gift-wrapped direct messages, so relay operators cannot read them.
+          </>
+        ),
+      },
+      {
+        q: "Do I have to use Nostr?",
+        a: "No. The Nostr bridge is optional. If you prefer to stay purely on the BLE mesh, you can. The app works fully offline without any Nostr configuration.",
+      },
+      {
+        q: "Is Nostr centralized, web3, or decentralized?",
+        a: "Neither centralized nor web3. There is no blockchain, no token, and no company that owns it. Nostr relays are just servers run by independent operators on any hosting provider, not only a couple of big cloud platforms, so no single relay can lock you out or control the network. You are not tied to one relay either. If an operator disappears or blocks you, you move to another. That is what makes it decentralized: not a blockchain consensus mechanism, just nobody being able to own the whole network.",
+      },
+      {
+        q: "Does the Nostr bridge compromise privacy?",
+        a: "No. NIP-17 gift-wrapping encrypts the message content and hides the sender and recipient identities from relay operators. Metadata is minimal. You can also route Nostr traffic through Tor for additional network-level privacy.",
+      },
+      {
+        q: "Does Airhop use Tor?",
+        a: (
+          <>
+            Yes, optionally, on both platforms.{" "}
+            <a
+              href="https://torproject.org"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-gray-900 underline underline-offset-2 transition-colors hover:text-gray-600"
+            >
+              Tor
+            </a>{" "}
+            covers the Nostr bridge specifically. iOS uses{" "}
+            <a
+              href="https://arti.torproject.org"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-gray-900 underline underline-offset-2 transition-colors hover:text-gray-600"
+            >
+              Arti
+            </a>
+            , Android uses{" "}
+            <a
+              href="https://guardianproject.info/apps/org.torproject.android/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-gray-900 underline underline-offset-2 transition-colors hover:text-gray-600"
+            >
+              Orbot
+            </a>
+            . When enabled, all Nostr relay traffic is routed over Tor. It has no effect on the BLE
+            mesh itself, which never touches the internet either way.
           </>
         ),
       },
@@ -238,6 +302,93 @@ const SECTIONS: {
   {
     heading: "Privacy & security",
     questions: [
+      {
+        q: "Is Airhop end-to-end encrypted, peer-to-peer, and anonymous?",
+        a: (
+          <>
+            <strong>Peer-to-peer: yes.</strong> The Bluetooth mesh needs no server at all, and the
+            optional Nostr relays are swappable and store nothing you depend on.
+            <br />
+            <br />
+            <strong>End-to-end encrypted: yes.</strong>
+            <ul className="my-2 list-disc space-y-1 pl-5">
+              <li>
+                <strong>Direct messages:</strong>{" "}
+                <a
+                  href="https://noiseprotocol.org/noise.html"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-gray-900 underline underline-offset-2 transition-colors hover:text-gray-600"
+                >
+                  Noise XX
+                </a>{" "}
+                with{" "}
+                <a
+                  href="https://signal.org/docs/specifications/doubleratchet/"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-gray-900 underline underline-offset-2 transition-colors hover:text-gray-600"
+                >
+                  Double Ratchet
+                </a>{" "}
+                forward secrecy, plus{" "}
+                <a
+                  href="https://github.com/nostr-protocol/nips/blob/master/17.md"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-gray-900 underline underline-offset-2 transition-colors hover:text-gray-600"
+                >
+                  NIP-17
+                </a>{" "}
+                gift-wrapping when they travel over the internet.
+              </li>
+              <li>
+                <strong>Private channels:</strong>{" "}
+                <a
+                  href="https://en.wikipedia.org/wiki/ChaCha20-Poly1305"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-gray-900 underline underline-offset-2 transition-colors hover:text-gray-600"
+                >
+                  XChaCha20-Poly1305
+                </a>{" "}
+                under a random 32-byte key that only members hold. Nothing on the wire names the
+                channel, so an outsider cannot tell which channel a message belongs to, or that they
+                are missing one.
+              </li>
+              <li>
+                <strong>Private groups:</strong> a shared epoch key that is handed out one member at
+                a time inside an authenticated Noise session, never broadcast. Every message is
+                bound to its group and key epoch, so an older key cannot be replayed after the key
+                rotates.
+              </li>
+            </ul>
+            The two exceptions are attachments, which are signed rather than encrypted for bitchat
+            compatibility (nobody can forge or alter one, but any device relaying it can open it),
+            and public geohash channels, which are readable by design since anyone nearby can join
+            them.
+            <br />
+            <br />
+            <strong>Anonymous: partially.</strong>
+            <ul className="my-2 list-disc space-y-1 pl-5">
+              <li>
+                <strong>Fully anonymous:</strong> no phone number, email, or sign-up. Your identity
+                is a key pair generated on-device, and nothing registers anywhere.
+              </li>
+              <li>
+                <strong>Not anonymous:</strong> location channels reveal a coarse area, and Nostr
+                relays can see which cells you are active in.
+              </li>
+              <li>
+                <strong>Anonymous once Tor is on:</strong> when messages travel beyond the Bluetooth
+                mesh, your IP is visible to Nostr relays, though the messages themselves stay NIP-17
+                gift wrapped. Turning Tor on closes that gap.
+              </li>
+            </ul>
+            The location and metadata trade-offs are inherent to any location-aware mesh.
+          </>
+        ),
+      },
       {
         q: "Do I need an account?",
         a: (
@@ -298,59 +449,39 @@ const SECTIONS: {
         ),
       },
       {
-        q: "How is encryption handled?",
+        q: "Is anything stored unencrypted on my phone?",
         a: (
           <>
-            Every direct session uses the{" "}
+            No. Your private keys live in the{" "}
             <a
-              href="https://noiseprotocol.org/noise.html"
+              href="https://developer.apple.com/documentation/security/storing-keys-in-the-keychain"
               target="_blank"
               rel="noopener noreferrer"
               className="text-gray-900 underline underline-offset-2 transition-colors hover:text-gray-600"
             >
-              Noise XX
+              iOS Keychain
             </a>{" "}
-            protocol for a mutual handshake and key exchange.
-            <br />
-            <br />
-            All stored messages use{" "}
+            or{" "}
             <a
-              href="https://signal.org/docs/specifications/doubleratchet/"
+              href="https://developer.android.com/privacy-and-security/keystore"
               target="_blank"
               rel="noopener noreferrer"
               className="text-gray-900 underline underline-offset-2 transition-colors hover:text-gray-600"
             >
-              Double Ratchet
-            </a>{" "}
-            forward secrecy, meaning past messages stay protected even if keys are later
-            compromised. <strong>No plaintext ever touches disk.</strong>
-          </>
-        ),
-      },
-      {
-        q: "What happens if I lose my phone or uninstall the app?",
-        a: (
-          <>
-            <strong>Your identity and message history are permanently gone.</strong> The key pair is
-            stored only on your device and cannot be recovered from any server because no server has
-            it. There is no account recovery for your identity. This is intentional: there is
-            nothing for a third party to hand over, subpoena, or breach.
+              Android Keystore
+            </a>
+            , hardware-backed on modern devices, and never in ordinary app storage. Message history
+            sits in an encrypted local database. <strong>No plaintext ever touches disk.</strong>
             <br />
             <br />
-            <strong>Your ecash balance is the one exception, and only if you opt in.</strong> The
-            wallet has a recovery phrase you can turn on, which lets a new device rebuild the
-            balance from your mints. It is off by default and covers money only, not your identity,
-            chats, or contacts.
-          </>
-        ),
-      },
-      {
-        q: "What is panic wipe?",
-        a: (
-          <>
-            Triple-tapping the logo triggers an immediate wipe of all identity keys and message data
-            in under one second, for high-stakes situations where you need to destroy the app's
-            contents right away. <strong>This cannot be undone.</strong>
+            The wallet is stricter still, because coins are bearer instruments: its storage is a
+            separate partition locked with its own AES-256 key, and that key is itself held in the
+            Keychain or Keystore. If it cannot be read, the wallet reports itself locked rather than
+            falling back to writing coins in the clear.
+            <br />
+            <br />
+            None of it syncs to a cloud backup, because there is no account to sync to, and panic
+            wipe destroys the lot in under a second.
           </>
         ),
       },
@@ -367,96 +498,132 @@ const SECTIONS: {
             <br />
             The limits are deliberately small. At most 40 envelopes at a time, none larger than 16
             KB, and every one is discarded after 24 hours whether or not it was ever delivered. How
-            many any single person can leave with you depends on whether you have verified them. It
+            much any one person can leave with you depends on whether you have verified them. It
             costs you a little storage, and it is the reason the network keeps working when people
             are not in the same place at the same time.
+          </>
+        ),
+      },
+      {
+        q: "What happens if I lose my phone or uninstall the app?",
+        a: (
+          <>
+            <strong>Your identity and message history are permanently gone.</strong> The key pair is
+            stored only on your device and cannot be recovered from any server because no server has
+            it. There is no account recovery for your identity. This is intentional: there is
+            nothing for a third party to hand over, subpoena, or breach.
+            <br />
+            <br />
+            <strong>Your ecash balance is the one exception, and only if you opt in.</strong> The
+            wallet has a recovery phrase you can turn on, which lets a new device rebuild the
+            balance from your mints. It is off by default and covers money only, not your identity,
+            chats, or contacts. The payments section has the full picture.
+          </>
+        ),
+      },
+      {
+        q: "What is panic wipe?",
+        a: (
+          <>
+            Triple-tapping the logo triggers an immediate wipe of all identity keys and message data
+            in under a second, for high-stakes situations where you need to destroy the app's
+            contents right away. <strong>This cannot be undone.</strong>
           </>
         ),
       },
     ],
   },
   {
-    heading: "Nostr & internet bridge",
+    heading: "Everyday use",
     questions: [
       {
-        q: "What is the Nostr bridge?",
+        q: "Will it drain my battery?",
         a: (
           <>
-            When you and a contact are out of Bluetooth range and internet is available, Airhop uses{" "}
-            <a
-              href="https://fiatjaf.com/nostr.html"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-gray-900 underline underline-offset-2 transition-colors hover:text-gray-600"
-            >
-              Nostr
-            </a>{" "}
-            relays as an optional internet bridge to continue the conversation. Messages are sent as{" "}
-            <a
-              href="https://github.com/nostr-protocol/nips/blob/master/17.md"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-gray-900 underline underline-offset-2 transition-colors hover:text-gray-600"
-            >
-              NIP-17
-            </a>{" "}
-            gift-wrapped direct messages, so relay operators cannot read them.
+            It uses more than an app sitting idle and far less than maps or video. Airhop stays on
+            Bluetooth Low Energy, which listens and announces in short bursts and lets the radio
+            sleep in between, and it slows its own announcements down once it can hear other
+            devices. Relaying for other people costs a little more.{" "}
+            <strong>If you want it to stop entirely, set your status to Away in Profile:</strong>{" "}
+            that stops scanning and announcing, and nothing runs until you set it back.
           </>
         ),
       },
       {
-        q: "Is Nostr centralized, web3, or decentralized?",
-        a: "Neither centralized nor web3. There is no blockchain, no token, and no company that owns it. Nostr relays are just servers run by independent operators on any hosting provider, not only a couple of big cloud platforms, so no single relay can lock you out or control the network. You are not tied to one relay either. If an operator disappears or blocks you, you move to another. That is what makes it decentralized: not a blockchain consensus mechanism, just nobody being able to own the whole network.",
+        q: "Why is there a notification I cannot dismiss?",
+        a: "On Android, that notification is what keeps the mesh alive after you leave the app. Without it the system would suspend Airhop within minutes and you would stop receiving anything. It has a Stop mesh button that shuts the radios down cleanly and takes the notification with it; reopening the app then shows the mesh paused, with a Resume button. iPhones have no equivalent notification, because iOS keeps Bluetooth apps alive differently.",
       },
       {
-        q: "Does the Nostr bridge compromise privacy?",
-        a: "No. NIP-17 gift-wrapping encrypts the message content and hides the sender and recipient identities from relay operators. Metadata is minimal. You can also route Nostr traffic through Tor for additional network-level privacy.",
-      },
-      {
-        q: "Does Airhop use Tor?",
+        q: "Why does a messenger ask for my location?",
         a: (
           <>
-            <a
-              href="https://torproject.org"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-gray-900 underline underline-offset-2 transition-colors hover:text-gray-600"
-            >
-              Tor
-            </a>{" "}
-            is available as an optional transport on both platforms for the Nostr bridge
-            specifically. iOS uses{" "}
-            <a
-              href="https://arti.torproject.org"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-gray-900 underline underline-offset-2 transition-colors hover:text-gray-600"
-            >
-              Arti
-            </a>
-            , Android uses{" "}
-            <a
-              href="https://guardianproject.info/apps/org.torproject.android/"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-gray-900 underline underline-offset-2 transition-colors hover:text-gray-600"
-            >
-              Orbot
-            </a>
-            . When enabled, all Nostr relay traffic is routed over Tor. It has no effect on the BLE
-            mesh itself, which never touches the internet either way.
+            Android ties Bluetooth scanning to the location permission at the system level, so any
+            app that looks for nearby devices has to ask for it, whether or not it cares where you
+            are. Airhop does not read your position for the mesh. The one place it genuinely uses
+            location is the optional location channels, which need a rough area to work out which
+            cell you are in, and you can decline that and still use everything else.{" "}
+            <strong>
+              Nothing about your position is ever sent to us, because there is no server to send it
+              to.
+            </strong>
           </>
         ),
       },
       {
-        q: "Do I have to use Nostr?",
-        a: "No. The Nostr bridge is optional. If you prefer to stay purely on the BLE mesh, you can. The app works fully offline without any Nostr configuration.",
+        q: "What else does it ask permission for?",
+        a: (
+          <>
+            <ul className="my-2 list-disc space-y-1 pl-5">
+              <li>
+                <strong>Bluetooth and nearby devices:</strong> to find and talk to peers. The one it
+                cannot work without.
+              </li>
+              <li>
+                <strong>Notifications:</strong> so a message can reach you when the app is closed.
+              </li>
+              <li>
+                <strong>Camera:</strong> only to scan a contact&rsquo;s QR code.
+              </li>
+              <li>
+                <strong>Photos:</strong> only when you attach or save one.
+              </li>
+              <li>
+                <strong>Microphone:</strong> only when you record a voice note.
+              </li>
+            </ul>
+            Every one of them can be refused or revoked later in your device settings, and the app
+            keeps working with whatever is left.
+          </>
+        ),
+      },
+      {
+        q: "Does it work in airplane mode?",
+        a: "Yes, as long as you switch Bluetooth back on, which both iOS and Android let you do without leaving airplane mode. The mesh then works in full: discovery, channels, direct messages, files, and ecash transfers, none of which touch the internet. The internet features stop, so messages to people who are not nearby queue up and send themselves when a route appears, and cashing ecash out to Lightning has to wait until you are back online.",
       },
     ],
   },
   {
     heading: "Payments & wallet",
     questions: [
+      {
+        q: "Do I need Bitcoin or a Lightning wallet to use Airhop?",
+        a: (
+          <>
+            No. <strong>Payments are entirely optional</strong> and every other feature works
+            without them. A{" "}
+            <a
+              href="https://en.wikipedia.org/wiki/Lightning_Network"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-gray-900 underline underline-offset-2 transition-colors hover:text-gray-600"
+            >
+              Lightning
+            </a>{" "}
+            wallet is only needed to move money in or out. Once you have a balance, paying someone
+            next to you needs nothing but Bluetooth.
+          </>
+        ),
+      },
       {
         q: "What is ecash?",
         a: (
@@ -469,9 +636,9 @@ const SECTIONS: {
             >
               Ecash
             </a>{" "}
-            is bearer digital cash. A mint issues cryptographically signed tokens worth a fixed
+            is bearer digital cash. A mint issues cryptographically signed coins worth a fixed
             amount, with no account and no balance sitting on a server.{" "}
-            <strong>Whoever holds a token can spend it, like a banknote.</strong> Airhop uses{" "}
+            <strong>Whoever holds a coin can spend it, like a banknote.</strong> Airhop uses{" "}
             <a
               href="https://cashu.space"
               target="_blank"
@@ -480,14 +647,26 @@ const SECTIONS: {
             >
               Cashu
             </a>
-            , an ecash protocol backed by Bitcoin, so tokens move device to device over the mesh
+            , an ecash protocol backed by Bitcoin, so value moves device to device over the mesh
             with no internet in the middle.
+            <br />
+            <br />
+            Three words come up throughout this section.
+            <ul className="my-2 list-disc space-y-1 pl-5">
+              <li>
+                <strong>Coins:</strong> the money sitting in your wallet.
+              </li>
+              <li>
+                <strong>Token:</strong> the string you hand over when you pay, carrying one or more
+                coins inside it.
+              </li>
+              <li>
+                <strong>Sat:</strong> the unit, one hundred millionth of a bitcoin, small enough
+                that everyday amounts are whole numbers.
+              </li>
+            </ul>
           </>
         ),
-      },
-      {
-        q: "Do I need Bitcoin or a Lightning wallet to use Airhop?",
-        a: "No. Payments are entirely optional and every other feature works without them. A Lightning wallet is only needed to move sats in or out. Once you have a balance, paying someone next to you needs nothing but Bluetooth.",
       },
       {
         q: "What is a mint, and why do I have to add one?",
@@ -513,7 +692,8 @@ const SECTIONS: {
         q: "Which mint should I use?",
         a: (
           <>
-            Any Cashu-compatible mint. Airhop checks the URL is a real mint before saving it.
+            Any Cashu-compatible mint. You add one by pasting its address into the wallet, and
+            Airhop checks it is a real mint before saving it.
             <br />
             <ul className="my-2 list-disc space-y-1 pl-5">
               <li>
@@ -543,8 +723,16 @@ const SECTIONS: {
                 tracks who is running what.
               </li>
               <li>
-                <strong>To trust nobody:</strong> run your own with Nutshell. A Raspberry Pi is
-                enough.
+                <strong>To trust nobody:</strong> run your own with{" "}
+                <a
+                  href="https://github.com/cashubtc/nutshell"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-gray-900 underline underline-offset-2 transition-colors hover:text-gray-600"
+                >
+                  Nutshell
+                </a>
+                . A Raspberry Pi is enough.
               </li>
             </ul>
             Treat the balance like cash in a jacket pocket, not a savings account. Keep small
@@ -583,8 +771,8 @@ const SECTIONS: {
         q: "How do I pay someone with no internet?",
         a: (
           <>
-            Send from the Wallet tab, from a chat, or by tapping a peer on the Mesh tab. Airhop
-            turns the amount into a token and hands it over as an encrypted Bluetooth message.{" "}
+            Send from the Wallet tab, from a chat, or from a peer on the Mesh tab. Airhop turns the
+            amount into a token and hands it over as an encrypted Bluetooth message.{" "}
             <strong>
               No server, no relay, no mint. The two phones do the whole thing themselves.
             </strong>
@@ -600,8 +788,8 @@ const SECTIONS: {
         a: (
           <>
             The money is really yours, but Airhop cannot yet confirm nobody spent it first, so it
-            shows up as <strong>unconfirmed</strong> on a separate line rather than being folded
-            silently into your balance.
+            shows up as unconfirmed on a separate line rather than being folded silently into your
+            balance.
             <br />
             <br />
             Offline, Airhop still checks the mint's signature on every token it receives (a{" "}
@@ -613,9 +801,9 @@ const SECTIONS: {
             >
               DLEQ proof
             </a>
-            ), so a forged token is rejected outright. That proves the mint issued it. It can never
-            prove it is unspent, because only the mint knows that. Tap Refresh once you are online
-            and the unconfirmed line clears.
+            ), so a forged token is rejected outright. That proves the mint issued it.{" "}
+            <strong>It can never prove it is unspent, because only the mint knows that.</strong> Tap
+            Refresh once you are online and the unconfirmed line clears.
           </>
         ),
       },
@@ -639,7 +827,7 @@ const SECTIONS: {
         ),
       },
       {
-        q: "What if I send a payment and it never arrives?",
+        q: "What happens if I send a payment and it never arrives?",
         a: (
           <>
             Nothing is lost. Building a token does not delete your coins, it{" "}
@@ -658,40 +846,16 @@ const SECTIONS: {
         q: "Are there fees?",
         a: (
           <>
-            Nothing is charged for the transfer itself, and nothing goes to this project.
-            <br />
-            <ul className="my-2 list-disc space-y-1 pl-5">
-              <li>
-                Mints usually charge a small fee when coins are swapped. Airhop covers it on your
-                behalf when you send, so{" "}
-                <strong>&ldquo;send 100&rdquo; means they can claim 100</strong>, not 97.
-              </li>
-              <li>
-                Lightning deposits and withdrawals pay normal Lightning routing fees. You see the
-                estimate before confirming, and any unused reserve is returned.
-              </li>
-            </ul>
-          </>
-        ),
-      },
-      {
-        q: "What happens to my ecash if I lose my phone?",
-        a: (
-          <>
-            By default it is gone. Coins are secrets stored only on that device, so the bitcoin
-            stays at the mint and nobody can ever claim it again.
+            Yes, two of them, and neither goes to this project. Handing a payment to someone costs
+            nothing in itself.
             <br />
             <br />
-            <strong>Turn on the recovery phrase to change that.</strong> Airhop generates twelve
-            words and derives your coins from them instead of from random numbers, so a new phone
-            can rebuild the balance by asking your mints which coins they signed. Write the words on
-            paper, keep your mint list beside them, and never store them on the phone they protect.
+            <strong>Mints:</strong> usually a small fee when coins are swapped. Airhop covers it on
+            your behalf when you send, so &ldquo;send 100&rdquo; means they can claim 100, not 97.
             <br />
             <br />
-            Two things it does not cover: your identity, chats and contacts, which have no backup at
-            all; and coins somebody gave you that you never refreshed, since those carry the
-            sender's secrets until they are swapped. The wallet shows exactly how much falls into
-            that second category.
+            <strong>Lightning:</strong> deposits and withdrawals pay normal routing fees. You see
+            the estimate before confirming, and any unused reserve is returned.
           </>
         ),
       },
@@ -699,15 +863,17 @@ const SECTIONS: {
         q: "Why does Airhop say my balance is split across mints?",
         a: (
           <>
-            A token names exactly one mint, so ecash from two different mints can never be combined
-            into a single payment. With 60 sats at one and 60 at another you cannot send 100, even
-            though the total says 120. That is how Cashu works, not something an app can code
-            around.
+            <strong>
+              A token names exactly one mint, so ecash from two different mints can never be
+              combined into a single payment.
+            </strong>{" "}
+            With 60 sats at one and 60 at another you cannot send 100, even though the total says
+            120. That is how Cashu works, not something an app can code around.
             <br />
             <br />
-            You can send two separate payments, or use <strong>Move to one mint</strong>, which has
-            one mint pay a Lightning invoice issued by the other so the balance ends up in one
-            place. It costs a small routing fee and needs internet.
+            You can send two separate payments, or use Move to one mint, which has one mint pay a
+            Lightning invoice issued by the other so the balance ends up in one place. It costs a
+            small routing fee and needs internet.
           </>
         ),
       },
@@ -766,6 +932,60 @@ const SECTIONS: {
             person's funds. And balances in Airhop are kept per mint and never pooled, so one mint
             failing cannot take the rest. Keep small amounts, and run your own mint if the trade is
             not acceptable to you.
+          </>
+        ),
+      },
+      {
+        q: "What happens to my ecash if I lose my phone?",
+        a: (
+          <>
+            By default it is gone. Coins are secrets stored only on that device, so the bitcoin
+            stays at the mint and nobody can ever claim it again.
+            <br />
+            <br />
+            <strong>Turn on the recovery phrase to change that.</strong> Airhop generates twelve
+            words and derives your coins from them instead of from random numbers, so a new phone
+            can rebuild the balance by asking your mints which coins they signed. Write the words on
+            paper, keep your mint list beside them, and never store them on the phone they protect.
+            <br />
+            <br />
+            Two things it does not cover: your identity, chats and contacts, which have no backup at
+            all; and coins somebody gave you that you never refreshed, since those carry the
+            sender's secrets until they are swapped. The wallet shows exactly how much falls into
+            that second category.
+          </>
+        ),
+      },
+    ],
+  },
+  {
+    heading: "AI assistant",
+    questions: [
+      {
+        q: "What is the offline AI assistant?",
+        a: (
+          <>
+            The assistant is optional, and nothing happens until you choose a model. It is a small
+            language model that runs entirely on your phone, so you can ask it things when there is
+            no signal at all: first aid, navigation, general knowledge. Nothing is sent anywhere,
+            there is no API key, and no server sees the question or the answer. Conversation history
+            stays on the device with everything else.
+            <br />
+            <br />
+            <strong>Airhop does not ship a model of its own.</strong> The app lists a few small
+            open-weight models (roughly 1 to 3 billion parameters, in GGUF format) with the size and
+            memory each one needs, and downloads the one you pick from{" "}
+            <a
+              href="https://huggingface.co"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-gray-900 underline underline-offset-2 transition-colors hover:text-gray-600"
+            >
+              Hugging Face
+            </a>
+            . That download is the only part that needs internet, and it happens once. The flow is
+            the same on iOS and Android, and the app blocks a download outright if the device does
+            not have the memory or storage to run it.
           </>
         ),
       },
@@ -904,21 +1124,21 @@ export default function FAQPage() {
 
         <div className="mt-16 border-t border-gray-100 pt-8">
           <p className="text-sm text-gray-500">
-            {"Can't find what you're looking for?"}{" "}
+            Questions not answered here can be sent to{" "}
             <a
               href="mailto:hi@areeb.dev"
               className="text-gray-900 underline underline-offset-2 transition-colors hover:text-gray-600"
             >
-              Email us
+              hi@areeb.dev
             </a>{" "}
-            or{" "}
+            or raised by opening a discussion on{" "}
             <a
               href="https://github.com/areebahmeddd/Airhop/discussions"
               target="_blank"
               rel="noopener noreferrer"
               className="text-gray-900 underline underline-offset-2 transition-colors hover:text-gray-600"
             >
-              open a GitHub discussion
+              GitHub
             </a>
             .
           </p>

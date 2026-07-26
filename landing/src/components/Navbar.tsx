@@ -7,9 +7,10 @@ export default function Navbar() {
   const [isOpen, setIsOpen] = useState(false);
 
   const navItems = [
-    { label: "Features", href: "/#features" },
-    { label: "How It Works", href: "/#how-it-works" },
-    { label: "Explore", href: "/#explore" },
+    { label: "Features", href: "/#features", route: false },
+    { label: "How It Works", href: "/#how-it-works", route: false },
+    { label: "Architecture", href: "/architecture", route: true },
+    { label: "Explore", href: "/#explore", route: false },
   ];
 
   return (
@@ -25,12 +26,21 @@ export default function Navbar() {
       <div className="hidden items-center space-x-8 md:flex">
         {navItems.map((item, index) => (
           <span key={item.label} className="flex items-center">
-            <a
-              href={item.href}
-              className="text-sm font-medium text-gray-700 transition-colors hover:text-black"
-            >
-              {item.label}
-            </a>
+            {item.route ? (
+              <Link
+                to={item.href}
+                className="text-sm font-medium text-gray-700 transition-colors hover:text-black"
+              >
+                {item.label}
+              </Link>
+            ) : (
+              <a
+                href={item.href}
+                className="text-sm font-medium text-gray-700 transition-colors hover:text-black"
+              >
+                {item.label}
+              </a>
+            )}
             {index < navItems.length - 1 && (
               <span className="ml-8 font-normal text-gray-300">|</span>
             )}
@@ -57,16 +67,27 @@ export default function Navbar() {
             transition={{ duration: 0.2 }}
             className="absolute top-full right-0 left-0 z-40 flex flex-col space-y-4 border-b border-gray-100 bg-white p-6 shadow-lg md:hidden"
           >
-            {navItems.map((item) => (
-              <a
-                key={item.label}
-                href={item.href}
-                onClick={() => setIsOpen(false)}
-                className="border-b border-gray-50 py-2 text-base font-semibold text-gray-800 transition-colors hover:text-black"
-              >
-                {item.label}
-              </a>
-            ))}
+            {navItems.map((item) =>
+              item.route ? (
+                <Link
+                  key={item.label}
+                  to={item.href}
+                  onClick={() => setIsOpen(false)}
+                  className="border-b border-gray-50 py-2 text-base font-semibold text-gray-800 transition-colors hover:text-black"
+                >
+                  {item.label}
+                </Link>
+              ) : (
+                <a
+                  key={item.label}
+                  href={item.href}
+                  onClick={() => setIsOpen(false)}
+                  className="border-b border-gray-50 py-2 text-base font-semibold text-gray-800 transition-colors hover:text-black"
+                >
+                  {item.label}
+                </a>
+              ),
+            )}
           </motion.div>
         )}
       </AnimatePresence>
