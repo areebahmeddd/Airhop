@@ -157,6 +157,100 @@ export class GeoRelayDirectory {
   }
 }
 
+// Combine a cell's auto-discovered nearest relays with the user's custom relays,
+// per the Geo-relay discovery toggle. Pure so it is trivially unit-testable.
+//
+//   discovery on  -> the `count` nearest relays (kept intact: converging on them
+//                    is what makes location channels interoperate with bitchat)
+//                    PLUS any custom relays, deduped and additive.
+//   discovery off -> only the custom relays (the user's explicit choice, which
+//                    trades interop for control), unless none are set, in which
+//                    case fall back to the nearest so a channel is never
+//                    left with zero relays.
+export function mergeGeoRelays(
+  nearest: readonly string[],
+  custom: readonly string[],
+  discovery: boolean,
+  count: number,
+): string[] {
+  const near = nearest.slice(0, count);
+  if (!discovery) {
+    return custom.length > 0 ? [...custom] : near;
+  }
+  return [...new Set([...near, ...custom])];
+}
+
+// Validate + normalize a user-entered relay to a `wss://host[:port]` URL, or
+// return null if it is not a well-formed public relay. Ported from bitchat
+// GeoRelayDirectory.validatedDirectoryAddress so a custom relay a user pins is
+// held to the same bar as the ones in bitchat's reviewed directory: ASCII only,
+// wss/https scheme, no credentials/query/fragment/path, a real DNS hostname (at
+// least two labels, each 1-63 chars of [a-z0-9-] with no leading/trailing dash),
+// not a bare IP, and not a loopback/private name. A non-standard port is kept.
+export function validateRelayUrl(raw: string): string | null {
+  const value = raw.trim();
+  // Printable ASCII only (no spaces, no control characters).
+  if (value.length === 0 || !/^[!-~]+$/.test(value)) return null;
+
+  let rest = value;
+  const scheme = /^([a-z][a-z0-9+.-]*):\/\//i.exec(value);
+  if (scheme !== null) {
+    const s = scheme[1].toLowerCase();
+    if (s !== "wss" && s !== "https") return null;
+    rest = value.slice(scheme[0].length);
+  }
+  // No userinfo, query, or fragment.
+  if (rest.includes("@") || rest.includes("?") || rest.includes("#")) {
+    return null;
+  }
+  // Only an empty path or "/" is allowed.
+  const slash = rest.indexOf("/");
+  let authority = rest;
+  if (slash !== -1) {
+    if (rest.slice(slash) !== "/") return null;
+    authority = rest.slice(0, slash);
+  }
+
+  let host = authority;
+  let port: number | undefined;
+  const colon = authority.lastIndexOf(":");
+  if (colon !== -1) {
+    const portStr = authority.slice(colon + 1);
+    if (!/^[0-9]+$/.test(portStr)) return null;
+    port = parseInt(portStr, 10);
+    if (port < 1 || port > 65535) return null;
+    host = authority.slice(0, colon);
+  }
+
+  host = host.toLowerCase();
+  if (
+    host.length === 0 ||
+    host.length > 253 ||
+    host.endsWith(".") ||
+    host === "localhost" ||
+    host.endsWith(".localhost") ||
+    host.endsWith(".local") ||
+    host.endsWith(".internal")
+  ) {
+    return null;
+  }
+
+  const labels = host.split(".");
+  // At least two labels, and not a bare IPv4 (all-numeric labels).
+  if (labels.length < 2 || labels.every((l) => /^[0-9]+$/.test(l))) return null;
+  const labelOk = (l: string): boolean =>
+    l.length >= 1 &&
+    l.length <= 63 &&
+    !l.startsWith("-") &&
+    !l.endsWith("-") &&
+    /^[a-z0-9-]+$/.test(l);
+  if (!labels.every(labelOk)) return null;
+
+  const hostPort =
+    port !== undefined && port !== 443 ? `${host}:${port}` : host;
+  return `wss://${hostPort}`;
+}
+
 // ---- Helpers ----------------------------------------------------------------
 
 function normalizeRelayUrl(raw: string): string | null {

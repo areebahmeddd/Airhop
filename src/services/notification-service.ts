@@ -18,8 +18,11 @@ import { Platform } from "react-native";
 import type { ChatMessage } from "../store/chat-store";
 import { channelLabel } from "../utils/chat-display-name";
 import {
+  NEARBY_COOLDOWN_MS,
+  nearbyNotificationContent,
   notificationContentFor,
   shouldHapticPing,
+  shouldNotifyNearby,
   shouldSystemNotify,
 } from "./notification-policy";
 
@@ -28,14 +31,28 @@ import {
 // surface as a heads-up the way a chat app should.
 const MESSAGES_CHANNEL_ID = "messages";
 
+// Nearby peers get their own Android channel, at low importance: it lands in
+// the shade without a sound or a heads-up card, and the user can silence this
+// one category from system settings without losing message notifications. That
+// per-category control is the whole reason to split the channel rather than
+// reuse the messages one at a lower priority.
+const NEARBY_CHANNEL_ID = "nearby";
+// One id, so a later notice replaces the last rather than stacking.
+const NEARBY_NOTIFICATION_ID = "nearby_peers";
+
 // Live view state the policy consults. Kept module-local (not in a store)
 // because only this service reads it and it must be readable synchronously from
 // the inbound handler.
 let appActive = true;
 let activeChannel = "";
 let navigate: ((channel: string) => void) | null = null;
+let openMesh: (() => void) | null = null;
 let configured = false;
 let responseSub: Notifications.Subscription | null = null;
+// When the last nearby notice went out, for the cooldown. Module state, not
+// persisted: a relaunch is already a rare event, and starting a fresh app run
+// with a clean cooldown is the behaviour a user would expect anyway.
+let lastNearbyNotifiedAtMs: number | null = null;
 
 // Stable per-conversation notification id, so repeated messages from the same
 // chat collapse into (and update) one notification rather than stacking, and so
@@ -55,6 +72,12 @@ export function setNotificationsActiveChannel(channel: string): void {
 
 export function setNotificationNavigator(fn: (channel: string) => void): void {
   navigate = fn;
+}
+
+// Where a nearby-peers notice goes when tapped. Separate from the conversation
+// navigator above because it lands on a tab, not in a chat.
+export function setMeshNavigator(fn: () => void): void {
+  openMesh = fn;
 }
 
 // Ask for notification permission. Kept separate from configureNotifications so
@@ -101,6 +124,15 @@ export async function configureNotifications(): Promise<void> {
       vibrationPattern: [0, 200],
       lockscreenVisibility: Notifications.AndroidNotificationVisibility.PRIVATE,
     });
+    await Notifications.setNotificationChannelAsync(NEARBY_CHANNEL_ID, {
+      name: "Nearby peers",
+      description:
+        "An occasional notice when the mesh finds people in Bluetooth range.",
+      // LOW: no sound, no heads-up card. It waits in the shade to be found.
+      importance: Notifications.AndroidImportance.LOW,
+      vibrationPattern: null,
+      lockscreenVisibility: Notifications.AndroidNotificationVisibility.PRIVATE,
+    });
   }
 
   responseSub?.remove();
@@ -116,10 +148,16 @@ export async function configureNotifications(): Promise<void> {
 }
 
 function routeFromResponse(response: Notifications.NotificationResponse): void {
-  const channel = response.notification.request.content.data?.channel;
+  const data = response.notification.request.content.data;
+  const channel = data?.channel;
   if (typeof channel === "string") {
     navigate?.(channel);
     void dismissNotificationsFor(channel);
+    return;
+  }
+  if (data?.screen === "mesh") {
+    openMesh?.();
+    void dismissNearbyNotification();
   }
 }
 
@@ -177,6 +215,68 @@ export async function handleInboundMessage(
   } catch {
     // Permission denied or the platform refused it: fall back to the in-app
     // badges, which are always accurate regardless.
+  }
+}
+
+// Called whenever the set of nearby peers changes (see App's peer-store
+// observer), with the reachable count before and after. Almost every call is a
+// no-op: shouldNotifyNearby only lets through an empty mesh coming alive while
+// the app is in the background, and then only once per cooldown.
+//
+// This is the one background event that is not a message and still worth
+// surfacing. On Android the foreground service keeps the mesh scanning with the
+// app off screen, so peers really are found while nobody is looking; without
+// this, the only way to learn the mesh had come alive around you was to open
+// the app and check.
+export async function handleNearbyPeers(
+  peerCount: number,
+  previousPeerCount: number,
+): Promise<void> {
+  const nowMs = Date.now();
+  if (
+    !shouldNotifyNearby({
+      appActive,
+      peerCount,
+      previousPeerCount,
+      nowMs,
+      lastNotifiedAtMs: lastNearbyNotifiedAtMs,
+      cooldownMs: NEARBY_COOLDOWN_MS,
+    })
+  ) {
+    return;
+  }
+  // Stamped before the await, so two peers arriving in the same instant cannot
+  // both pass the cooldown and post twice.
+  lastNearbyNotifiedAtMs = nowMs;
+
+  const { title, body } = nearbyNotificationContent(peerCount);
+  try {
+    await Notifications.scheduleNotificationAsync({
+      identifier: NEARBY_NOTIFICATION_ID,
+      content: {
+        title,
+        body,
+        data: { screen: "mesh" },
+        // No sound and no badge on purpose: the badge counts unread messages,
+        // and nobody is waiting on a reply here.
+      },
+      trigger:
+        Platform.OS === "android" ? { channelId: NEARBY_CHANNEL_ID } : null,
+    });
+  } catch {
+    // Permission denied or the platform refused it. The Mesh tab shows the same
+    // peers the moment the app is opened, so nothing is actually lost.
+  }
+}
+
+// Drop the nearby notice once the user is in the app: they can see the mesh for
+// themselves now, and a stale "someone nearby" from ten minutes ago is worse
+// than none. Also called when the notice itself is tapped.
+export async function dismissNearbyNotification(): Promise<void> {
+  try {
+    await Notifications.dismissNotificationAsync(NEARBY_NOTIFICATION_ID);
+  } catch {
+    // Nothing delivered, or the platform has no tray: ignore.
   }
 }
 

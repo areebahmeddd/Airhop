@@ -25,5 +25,11 @@ export const LATEST_RELEASE_PAGE = `${GITHUB_URL}/releases/latest`;
 // manual "Check for updates" action.
 export const LATEST_RELEASE_API = `https://api.github.com/repos/${GITHUB_REPO}/releases/latest`;
 
+// The two store listings, same targets as the landing page. Used to point a
+// user at the store they can actually review on, one per platform.
+export const APP_STORE_URL = "https://apps.apple.com/app/airhop/id000000000";
+export const PLAY_STORE_URL =
+  "https://play.google.com/store/apps/details?id=org.onemindlabs.airhop";
+
 export const AUTHOR_NAME = "Areeb Ahmed";
 export const AUTHOR_URL = "https://areeb.dev";

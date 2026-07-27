@@ -141,6 +141,99 @@ describe("PeerRegistry", () => {
     expect(r.get("aabb")?.isDirect).toBe(false);
   });
 
+  const GATEWAY = 1 << 2;
+  function addPeer(
+    r: PeerRegistry,
+    peerID: string,
+    capabilities?: number,
+    isDirect?: boolean,
+  ): void {
+    r.update({
+      peerID,
+      noisePubKey: new Uint8Array(32),
+      signingPubKey: new Uint8Array(32),
+      nickname: peerID,
+      capabilities,
+      isDirect,
+    });
+  }
+
+  test("hasReachableGateway is false when no peer advertises the bit", () => {
+    const r = new PeerRegistry();
+    addPeer(r, "aabb", 0);
+    addPeer(r, "ccdd", 1 << 3); // groups, not gateway
+    expect(r.hasReachableGateway()).toBe(false);
+    expect(r.firstReachableGateway()).toBeUndefined();
+  });
+
+  test("firstReachableGateway finds a peer advertising the gateway bit", () => {
+    const r = new PeerRegistry();
+    addPeer(r, "aabb", 0);
+    addPeer(r, "ccdd", GATEWAY | (1 << 5)); // gateway + vouch
+    expect(r.hasReachableGateway()).toBe(true);
+    expect(r.firstReachableGateway()?.peerID).toBe("ccdd");
+  });
+
+  test("firstReachableGateway prefers a direct gateway over a mesh one", () => {
+    const r = new PeerRegistry();
+    addPeer(r, "mesh", GATEWAY, false);
+    addPeer(r, "direct", GATEWAY, true);
+    expect(r.firstReachableGateway()?.peerID).toBe("direct");
+  });
+
+  test("capabilities are preserved across a re-announce that omits them", () => {
+    const r = new PeerRegistry();
+    addPeer(r, "aabb", GATEWAY);
+    addPeer(r, "aabb", undefined); // a relayed announce with no capability read
+    expect(r.get("aabb")?.capabilities).toBe(GATEWAY);
+    expect(r.hasReachableGateway()).toBe(true);
+  });
+
+  test("a gateway that turns the bit off stops being reachable", () => {
+    const r = new PeerRegistry();
+    addPeer(r, "aabb", GATEWAY);
+    addPeer(r, "aabb", 0); // explicit empty capabilities clears the bit
+    expect(r.hasReachableGateway()).toBe(false);
+  });
+
+  const BRIDGE = 1 << 7;
+  test("firstReachableBridge finds a peer advertising the bridge bit", () => {
+    const r = new PeerRegistry();
+    addPeer(r, "aabb", GATEWAY); // gateway only, not a bridge
+    addPeer(r, "ccdd", BRIDGE | GATEWAY); // a bridge gateway
+    expect(r.hasReachableBridge()).toBe(true);
+    expect(r.firstReachableBridge()?.peerID).toBe("ccdd");
+    // A gateway-only peer is not a bridge and vice versa.
+    expect(r.firstReachableGateway()?.peerID).toBeDefined();
+  });
+
+  test("bridge and gateway bits are independent", () => {
+    const r = new PeerRegistry();
+    addPeer(r, "aabb", BRIDGE); // bridge but NOT gateway
+    expect(r.hasReachableBridge()).toBe(true);
+    expect(r.hasReachableGateway()).toBe(false);
+  });
+
+  test("PeerEntry preserves bridgeGeohash across a re-announce that omits it", () => {
+    const r = new PeerRegistry();
+    r.update({
+      peerID: "aabb",
+      noisePubKey: new Uint8Array(32),
+      signingPubKey: new Uint8Array(32),
+      nickname: "aabb",
+      capabilities: BRIDGE,
+      bridgeGeohash: "u4pruy",
+    });
+    r.update({
+      peerID: "aabb",
+      noisePubKey: new Uint8Array(32),
+      signingPubKey: new Uint8Array(32),
+      nickname: "aabb",
+      capabilities: BRIDGE,
+    });
+    expect(r.get("aabb")?.bridgeGeohash).toBe("u4pruy");
+  });
+
   test("markDirect sets isDirect=true on a known peer", () => {
     const r = new PeerRegistry();
     r.update({

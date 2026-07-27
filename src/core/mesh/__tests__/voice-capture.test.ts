@@ -1,7 +1,9 @@
 // Tests for voice-capture burst codec.
 // Validates the VOICE_FRAME payload format matches VoiceBurstPacket.swift.
 
+import { ed25519 } from "@noble/curves/ed25519.js";
 import { bytesToHex } from "@noble/hashes/utils.js";
+import type { Packet } from "../packet-codec";
 import {
   BurstFlags,
   decodeBurstPacket,
@@ -9,6 +11,8 @@ import {
   encodeBurstData,
   encodeBurstEnd,
   encodeBurstStart,
+  framesToAdtsFile,
+  VoiceCaptureSession,
   VoiceCodec,
 } from "../voice-capture";
 
@@ -153,5 +157,181 @@ describe("decodeBurstPacket error handling", () => {
     const buf = new Uint8Array(12);
     buf[10] = 0x08; // unknown flag
     expect(decodeBurstPacket(buf)).toBeNull();
+  });
+});
+
+describe("packetizer budget", () => {
+  // The 210-byte content budget exists so a voice packet never enters the
+  // fragment scheduler, which caps concurrent transfers and would starve file
+  // sends while someone talks.
+  function collect(): { packets: Packet[]; session: VoiceCaptureSession } {
+    const packets: Packet[] = [];
+    let onFrame: ((f: Uint8Array) => void) | null = null;
+    const session = new VoiceCaptureSession(
+      {
+        senderPeerID: "aabbccdd00112233",
+        signingPrivKey: ed25519.utils.randomSecretKey(),
+        onPacket: (p) => packets.push(p),
+      },
+      {
+        startCapture: (cb) => {
+          onFrame = cb;
+          return Promise.resolve();
+        },
+        stopCapture: () => Promise.resolve(),
+      },
+    );
+    return {
+      packets,
+      session: Object.assign(session, {
+        feed: (f: Uint8Array) => onFrame?.(f),
+      }),
+    };
+  }
+
+  it("never emits a payload that would need fragmentation", async () => {
+    const { packets, session } = collect();
+    await session.startPtt();
+    // Realistic frames: AAC-LC 16 kHz mono at 16 kbps is about 130 bytes.
+    for (let i = 0; i < 12; i++) {
+      (session as unknown as { feed: (f: Uint8Array) => void }).feed(
+        new Uint8Array(130).fill(i + 1),
+      );
+    }
+    await session.stopPtt();
+
+    for (const packet of packets) {
+      expect(packet.payload.length).toBeLessThanOrEqual(210);
+    }
+  });
+
+  it("drops a frame too large to ever fit its own packet", async () => {
+    const { packets, session } = collect();
+    await session.startPtt();
+    const before = packets.length;
+    (session as unknown as { feed: (f: Uint8Array) => void }).feed(
+      new Uint8Array(400).fill(9),
+    );
+    await session.stopPtt();
+    // START and END only: the oversize frame produced no data packet, rather
+    // than an oversize one that would have been fragmented.
+    const dataPackets = packets.slice(before, packets.length - 1);
+    expect(dataPackets).toHaveLength(0);
+  });
+});
+
+describe("DM burst scoping", () => {
+  // A DM burst is sealed to one peer. It must never also go out as a broadcast,
+  // or audio meant for one person is heard by everyone in range.
+  function dmSession(send: (payload: Uint8Array) => boolean) {
+    const broadcast: Packet[] = [];
+    let onFrame: ((f: Uint8Array) => void) | null = null;
+    const session = new VoiceCaptureSession(
+      {
+        senderPeerID: "aabbccdd00112233",
+        signingPrivKey: ed25519.utils.randomSecretKey(),
+        onPacket: (p) => broadcast.push(p),
+        onDmPayload: send,
+      },
+      {
+        startCapture: (cb) => {
+          onFrame = cb;
+          return Promise.resolve();
+        },
+        stopCapture: () => Promise.resolve(),
+      },
+    );
+    return {
+      broadcast,
+      session,
+      feed: (f: Uint8Array) => onFrame?.(f),
+    };
+  }
+
+  it("never broadcasts a DM burst", async () => {
+    const sealed: Uint8Array[] = [];
+    const { broadcast, session, feed } = dmSession((p) => {
+      sealed.push(p);
+      return true;
+    });
+
+    await session.startPtt();
+    feed(new Uint8Array(130).fill(7));
+    await session.stopPtt();
+
+    expect(broadcast).toHaveLength(0);
+    // START, one DATA, END all went through the sealed path.
+    expect(sealed.length).toBeGreaterThanOrEqual(3);
+  });
+
+  it("sends the same burst bytes a public burst would", async () => {
+    const sealed: Uint8Array[] = [];
+    const { session, feed } = dmSession((p) => {
+      sealed.push(p);
+      return true;
+    });
+
+    await session.startPtt();
+    feed(new Uint8Array(130).fill(7));
+    await session.stopPtt();
+
+    // One wire format, two envelopes: every payload decodes with the same
+    // parser a public VOICE_FRAME packet uses.
+    const kinds = sealed.map((p) => decodeBurstPacket(p)?.kind);
+    expect(kinds[0]).toBe("start");
+    expect(kinds).toContain("data");
+    expect(kinds[kinds.length - 1]).toBe("end");
+  });
+
+  it("stops the burst when the session goes away mid-talk", async () => {
+    // The peer walked off. Live audio has no queue to wait in, so encoding on
+    // into a dead session would just burn the microphone.
+    let alive = true;
+    const { session, feed } = dmSession(() => alive);
+
+    await session.startPtt();
+    expect(session.isActive).toBe(true);
+    alive = false;
+    feed(new Uint8Array(130).fill(7));
+    // The flush that carries this frame fails, and the session closes itself.
+    feed(new Uint8Array(130).fill(8));
+    expect(session.isActive).toBe(false);
+  });
+});
+
+describe("framesToAdtsFile", () => {
+  // The live frames are bare AAC: no container, because the codec byte already
+  // says what they are. A file has to be self-describing, so each frame gets a
+  // seven-byte ADTS header. This is what turns a burst people heard live into
+  // a voice note that anyone out of range can still play.
+  it("prefixes every frame with a valid ADTS header", () => {
+    const frames = [new Uint8Array(120).fill(1), new Uint8Array(96).fill(2)];
+    const file = framesToAdtsFile(frames);
+
+    expect(file.length).toBe(7 + 120 + 7 + 96);
+
+    // Sync word, MPEG-4, layer 0, no CRC.
+    expect(file[0]).toBe(0xff);
+    expect(file[1]).toBe(0xf1);
+    // AAC-LC (profile 1), 16 kHz (index 8), mono (1).
+    expect((file[2] >> 6) & 0x03).toBe(1);
+    expect((file[2] >> 2) & 0x0f).toBe(8);
+    expect(((file[2] & 0x01) << 2) | ((file[3] >> 6) & 0x03)).toBe(1);
+
+    // Frame length field covers header + payload, so a player can walk the file.
+    const first = ((file[3] & 0x03) << 11) | (file[4] << 3) | (file[5] >> 5);
+    expect(first).toBe(7 + 120);
+
+    // The second frame starts exactly where the first said it would end.
+    expect(file[first]).toBe(0xff);
+    const second =
+      ((file[first + 3] & 0x03) << 11) |
+      (file[first + 4] << 3) |
+      (file[first + 5] >> 5);
+    expect(second).toBe(7 + 96);
+  });
+
+  it("returns an empty file for no frames", () => {
+    expect(framesToAdtsFile([]).length).toBe(0);
   });
 });

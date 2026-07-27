@@ -67,9 +67,8 @@ const SECTIONS: {
             Against bitchat specifically, Airhop is built on top of it and stays wire-compatible,
             but adds Double Ratchet forward secrecy, Tor on both iOS and Android, offline ecash
             payments, and an offline AI assistant, none of which bitchat has today. Beyond the
-            protocol itself, a big part of the focus is the app people actually use day to day: a
-            clean, simple interface that makes the whole thing easy to pick up, not just something
-            that works well under the hood.
+            protocol itself, <strong>user experience is everything to us</strong>. Great privacy
+            tools should be easy to use, not something people have to figure out.
           </>
         ),
       },
@@ -154,7 +153,7 @@ const SECTIONS: {
             >
               Nostr
             </a>{" "}
-            internet bridge to reach a contact who is online but out of range. Location channels
+            internet fallback to reach a contact who is online but out of range. Location channels
             also require a connection.
           </>
         ),
@@ -163,13 +162,29 @@ const SECTIONS: {
         q: "What is the difference between Classic Bluetooth and Bluetooth Low Energy?",
         a: (
           <>
-            They are two modes of the same Bluetooth chip in your phone. Classic Bluetooth is the
-            one you already use every day. It pairs two devices and holds the connection open, which
-            is what wireless headphones, car audio, and file transfers rely on. It moves data
-            quickly, but it drains the battery and only talks to what you have paired. Bluetooth Low
-            Energy is the lighter mode. Devices announce themselves and listen in short bursts
-            instead of pairing, so one phone can see many nearby devices at once and the radio
-            sleeps between packets.
+            They are two modes of the same Bluetooth chip in your phone.{" "}
+            <a
+              href="https://en.wikipedia.org/wiki/Bluetooth"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-gray-900 underline underline-offset-2 transition-colors hover:text-gray-600"
+            >
+              Classic Bluetooth
+            </a>{" "}
+            is the one you already use every day. It pairs two devices and holds the connection
+            open, which is what wireless headphones, car audio, and file transfers rely on. It moves
+            data quickly, but it drains the battery and only talks to what you have paired.{" "}
+            <a
+              href="https://en.wikipedia.org/wiki/Bluetooth_Low_Energy"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-gray-900 underline underline-offset-2 transition-colors hover:text-gray-600"
+            >
+              Bluetooth Low Energy
+            </a>{" "}
+            is the lighter mode. Devices announce themselves and listen in short bursts instead of
+            pairing, so one phone can see many nearby devices at once and the radio sleeps between
+            packets.
             <br />
             <br />
             Airhop uses Low Energy. Pairing does not work for a mesh where you have never met the
@@ -221,10 +236,10 @@ const SECTIONS: {
     ],
   },
   {
-    heading: "Nostr & internet bridge",
+    heading: "Nostr & the internet",
     questions: [
       {
-        q: "What is the Nostr bridge?",
+        q: "What is the internet fallback?",
         a: (
           <>
             When you and a contact are out of Bluetooth range and internet is available, Airhop uses{" "}
@@ -236,7 +251,8 @@ const SECTIONS: {
             >
               Nostr
             </a>{" "}
-            relays as an optional internet bridge to continue the conversation. Messages are sent as{" "}
+            relays as an optional internet fallback to continue the conversation. Messages are sent
+            as{" "}
             <a
               href="https://github.com/nostr-protocol/nips/blob/master/17.md"
               target="_blank"
@@ -251,15 +267,177 @@ const SECTIONS: {
       },
       {
         q: "Do I have to use Nostr?",
-        a: "No. The Nostr bridge is optional. If you prefer to stay purely on the BLE mesh, you can. The app works fully offline without any Nostr configuration.",
+        a: "No. The internet fallback is optional. If you prefer to stay purely on the BLE mesh, you can. The app works fully offline without any Nostr configuration.",
       },
       {
         q: "Is Nostr centralized, web3, or decentralized?",
-        a: "Neither centralized nor web3. There is no blockchain, no token, and no company that owns it. Nostr relays are just servers run by independent operators on any hosting provider, not only a couple of big cloud platforms, so no single relay can lock you out or control the network. You are not tied to one relay either. If an operator disappears or blocks you, you move to another. That is what makes it decentralized: not a blockchain consensus mechanism, just nobody being able to own the whole network.",
+        a: (
+          <>
+            Neither{" "}
+            <a
+              href="https://en.wikipedia.org/wiki/Centralisation"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-gray-900 underline underline-offset-2 transition-colors hover:text-gray-600"
+            >
+              centralized
+            </a>{" "}
+            nor web3. There is no blockchain, no token, and no company that owns it. Nostr relays
+            are just servers run by independent operators on any hosting provider, not only a couple
+            of big cloud platforms, so no single relay can lock you out or control the network. You
+            are not tied to one relay either. If an operator disappears or blocks you, you move to
+            another. That is what makes it{" "}
+            <a
+              href="https://en.wikipedia.org/wiki/Decentralization"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-gray-900 underline underline-offset-2 transition-colors hover:text-gray-600"
+            >
+              decentralized
+            </a>
+            : not a blockchain consensus mechanism, just nobody being able to own the whole network.
+          </>
+        ),
       },
       {
-        q: "Does the Nostr bridge compromise privacy?",
+        q: "Why Nostr, and what else did you consider?",
+        a: (
+          <>
+            <p>
+              Nostr is a plain publish-and-relay protocol over WebSockets: your identity is just a
+              keypair, there are no accounts or phone numbers, and relays only forward encrypted
+              data they cannot read. Airhop already carries a keypair for the mesh, so it reuses
+              that with nothing extra to set up. Hundreds of public relays already run on
+              independent hosts, so there is nothing for us to operate and no single server to
+              trust, and it is the same protocol bitchat uses, so the two apps meet on the same
+              relays and stay interoperable.
+            </p>
+            <p className="mt-3">
+              Every alternative pulled the design back toward a single point of control. The
+              traditional approach, plain{" "}
+              <a
+                href="https://en.wikipedia.org/wiki/Transmission_Control_Protocol"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-gray-900 underline underline-offset-2 transition-colors hover:text-gray-600"
+              >
+                TCP
+              </a>{" "}
+              or{" "}
+              <a
+                href="https://en.wikipedia.org/wiki/User_Datagram_Protocol"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-gray-900 underline underline-offset-2 transition-colors hover:text-gray-600"
+              >
+                UDP
+              </a>{" "}
+              connections to a server we run, means one machine at a fixed address that everyone
+              must trust and anyone can block or seize, on top of firewall and NAT hurdles.
+              Federated servers like{" "}
+              <a
+                href="https://matrix.org"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-gray-900 underline underline-offset-2 transition-colors hover:text-gray-600"
+              >
+                Matrix
+              </a>{" "}
+              or{" "}
+              <a
+                href="https://xmpp.org"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-gray-900 underline underline-offset-2 transition-colors hover:text-gray-600"
+              >
+                XMPP
+              </a>{" "}
+              soften that but still need accounts and a homeserver you run or trust. Fully
+              peer-to-peer stacks like{" "}
+              <a
+                href="https://waku.org"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-gray-900 underline underline-offset-2 transition-colors hover:text-gray-600"
+              >
+                Waku
+              </a>{" "}
+              or{" "}
+              <a
+                href="https://libp2p.io"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-gray-900 underline underline-offset-2 transition-colors hover:text-gray-600"
+              >
+                libp2p
+              </a>{" "}
+              match the spirit but carry a heavy peer-discovery layer with far fewer ready public
+              nodes.{" "}
+              <a
+                href="https://scuttlebutt.nz"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-gray-900 underline underline-offset-2 transition-colors hover:text-gray-600"
+              >
+                Secure Scuttlebutt
+              </a>{" "}
+              keeps a permanent, fully replicated log of everything, the opposite of an ephemeral
+              messenger. Nostr is the smallest option that stays serverless in practice, asks
+              nothing of us, and already interoperates with bitchat.
+            </p>
+          </>
+        ),
+      },
+      {
+        q: "Does the internet fallback compromise privacy?",
         a: "No. NIP-17 gift-wrapping encrypts the message content and hides the sender and recipient identities from relay operators. Metadata is minimal. You can also route Nostr traffic through Tor for additional network-level privacy.",
+      },
+      {
+        q: "What is the difference between the internet gateway and the mesh bridge?",
+        a: "Both use the internet to extend the mesh, but they do different jobs. The internet gateway lends your connection to a nearby offline phone so it can still reach the location channels. The mesh bridge links your area's public #bluetooth chat with another Bluetooth crowd that is out of radio range, over the internet, so two separated groups share one conversation. Both are off by default, both only ever touch public traffic and never your DMs, and each has its own switch in Settings. A per-message 'nearby only' control keeps any single bridged message off the internet.",
+      },
+      {
+        q: "Can I run my own Nostr relay?",
+        a: (
+          <>
+            Yes, and Airhop's custom relays are built for it. A relay is just a small always-on
+            server, and a 1 GB VPS runs a personal or small-community one for a few dollars a month.
+            Popular open-source options are{" "}
+            <a
+              href="https://github.com/hoytech/strfry"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-gray-900 underline underline-offset-2 transition-colors hover:text-gray-600"
+            >
+              strfry
+            </a>{" "}
+            (fast, C++), nostr-rs-relay (lightweight, Rust and SQLite), and{" "}
+            <a
+              href="https://github.com/fiatjaf/khatru"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-gray-900 underline underline-offset-2 transition-colors hover:text-gray-600"
+            >
+              khatru
+            </a>{" "}
+            (a Go framework from Nostr's creator, for building your own). If you would rather not
+            touch a terminal, the{" "}
+            <a
+              href="https://apps.umbrel.com/app/nostr-relay"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-gray-900 underline underline-offset-2 transition-colors hover:text-gray-600"
+            >
+              Umbrel
+            </a>{" "}
+            and Start9 app stores install a relay in one click on a home server. One requirement:
+            Airhop accepts only secure public relays, so put yours behind a domain with TLS (a
+            reverse proxy like Caddy, or a Cloudflare Tunnel) and reach it at
+            wss://your-relay.example.com. Plain ws://, IP addresses, and local names are rejected,
+            the same bar other Nostr clients and bitchat use. Then add the URL under Network &amp;
+            Relays → Custom relays.
+          </>
+        ),
       },
       {
         q: "Does Airhop use Tor?",
@@ -274,7 +452,7 @@ const SECTIONS: {
             >
               Tor
             </a>{" "}
-            covers the Nostr bridge specifically. iOS uses{" "}
+            covers Nostr traffic specifically. iOS uses{" "}
             <a
               href="https://arti.torproject.org"
               target="_blank"
@@ -386,6 +564,33 @@ const SECTIONS: {
               </li>
             </ul>
             The location and metadata trade-offs are inherent to any location-aware mesh.
+          </>
+        ),
+      },
+      {
+        q: "Why are public channels not encrypted?",
+        a: (
+          <>
+            Because there is nobody to keep them secret from.{" "}
+            <strong>
+              A public channel is one anyone nearby can join with no invite and no setup
+            </strong>
+            , so any key that lets you join is a key everyone has, and a key everyone has is not a
+            secret. Encrypting with it would look like protection while providing none, which is
+            worse than being plain about it.
+            <br />
+            <br />
+            Public messages are still <strong>signed</strong>, so nobody can forge a message in your
+            name or alter one on its way across the mesh. What you do not get is privacy: assume
+            anyone in range can read a public channel, because that is exactly what it is for.
+            <br />
+            <br />
+            <strong>
+              When it matters, use a private channel, a private group, or a direct message.
+            </strong>{" "}
+            All three are end-to-end encrypted, and all three are one tap away in the same app.
+            Public channels behave the same way in bitchat, which is part of how the two stay
+            compatible.
           </>
         ),
       },
@@ -518,6 +723,36 @@ const SECTIONS: {
             wallet has a recovery phrase you can turn on, which lets a new device rebuild the
             balance from your mints. It is off by default and covers money only, not your identity,
             chats, or contacts. The payments section has the full picture.
+            <br />
+            <br />
+            Losing a phone is not the same as replacing one. If you still have the old device and
+            are simply switching, see the next question.
+          </>
+        ),
+      },
+      {
+        q: "Can I move Airhop to a new phone?",
+        a: (
+          <>
+            Yes.{" "}
+            <strong>
+              Device migration moves your identity, messages, contacts, and wallet to the new phone
+            </strong>{" "}
+            over a direct link between the two devices. It works in either direction between iPhone
+            and Android, and nothing passes through a server, because there is none to pass through.
+            <br />
+            <br />
+            <strong>It is a move, not a copy.</strong> The moment the new phone confirms it has
+            everything, the old one erases its copy. You finish with exactly one active device,
+            which is the only arrangement that works.
+            <br />
+            <br />
+            Two phones cannot share one identity at the same time. Your identity is a single key
+            pair with a single ID on the mesh, so two devices answering to it would leave peers with
+            no way to tell which is which. Direct messages make it stricter still: their encryption
+            ratchets forward one step per message, and two phones stepping the same conversation
+            fall out of sync immediately, after which messages stop decrypting on one or both.
+            Signal and every other messenger with forward secrecy live with the same constraint.
           </>
         ),
       },
@@ -780,6 +1015,27 @@ const SECTIONS: {
             <br />
             The recipient sees a payment card with the amount and a Claim button, not a wall of
             characters.
+          </>
+        ),
+      },
+      {
+        q: "What if they are not on Airhop, or Bluetooth is off?",
+        a: (
+          <>
+            Show the payment as a QR code and let them scan it. Every send screen offers one, and a
+            payment you have already made can be shown again from its Pending card.
+            <br />
+            <br />
+            <strong>
+              The QR holds a plain Cashu token, so any Cashu wallet can read it, not only Airhop.
+            </strong>{" "}
+            That covers paying someone across a table, someone whose Bluetooth is off, and someone
+            who has never heard of Airhop.
+            <br />
+            <br />
+            It works the other way too. Airhop scans a QR with the camera, or reads one out of a
+            saved screenshot, which is how most tokens arrive when they are sent through another
+            chat app.
           </>
         ),
       },
@@ -1074,7 +1330,7 @@ export default function FAQPage() {
   useSEO({
     title: "Frequently Asked Questions - Airhop",
     description:
-      "Answers about Airhop's Bluetooth mesh messaging, encryption, offline payments, the Nostr internet bridge, and bitchat compatibility.",
+      "Answers about Airhop's Bluetooth mesh messaging, encryption, offline payments, the Nostr internet layer, and bitchat compatibility.",
     path: "/faq",
   });
 

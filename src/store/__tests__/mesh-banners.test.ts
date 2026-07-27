@@ -9,6 +9,9 @@ const HEALTHY: MeshBannerInputs = {
   nostrConnected: false,
   torActive: false,
   gatewayEnabled: false,
+  bridgeActive: false,
+  bridgePeopleAcross: 0,
+  internetEnabled: true,
   peerCount: 3,
 };
 
@@ -86,6 +89,60 @@ describe("computeMeshBanners", () => {
   it("shows the gateway note whenever the gateway is enabled", () => {
     const banners = computeMeshBanners({ ...HEALTHY, gatewayEnabled: true });
     expect(banners.map((b) => b.key)).toEqual(["gateway"]);
+  });
+
+  it("shows the bridge note when bridging, with the across-count when known", () => {
+    const none = computeMeshBanners({ ...HEALTHY, bridgeActive: true });
+    expect(none).toEqual([
+      {
+        key: "bridge",
+        label: "Mesh bridge on · public chat linked",
+        tone: "bridge",
+      },
+    ]);
+    const withCount = computeMeshBanners({
+      ...HEALTHY,
+      bridgeActive: true,
+      bridgePeopleAcross: 4,
+    });
+    expect(withCount[0].label).toBe("Mesh bridge on · 4 across the bridge");
+  });
+
+  it("shows only the internet-off note and suppresses relay/tor/gateway/bridge", () => {
+    const banners = computeMeshBanners({
+      ...HEALTHY,
+      internetEnabled: false,
+      peerCount: 0,
+      nostrConnected: true, // would normally raise the relay note
+      torActive: true,
+      gatewayEnabled: true,
+      bridgeActive: true,
+    });
+    expect(banners).toEqual([
+      {
+        key: "internet-off",
+        label: "Internet off · Bluetooth only",
+        tone: "neutral",
+      },
+    ]);
+  });
+
+  it("still shows hard blockers alongside internet-off", () => {
+    const banners = computeMeshBanners({
+      ...HEALTHY,
+      internetEnabled: false,
+      adapterEnabled: false,
+    });
+    expect(banners.map((b) => b.key)).toEqual(["bluetooth", "internet-off"]);
+  });
+
+  it("does not show the bridge note when inactive even if people are cached", () => {
+    const banners = computeMeshBanners({
+      ...HEALTHY,
+      bridgeActive: false,
+      bridgePeopleAcross: 4,
+    });
+    expect(banners.map((b) => b.key)).toEqual([]);
   });
 
   it("stacks location, Nostr and Tor together when all apply", () => {

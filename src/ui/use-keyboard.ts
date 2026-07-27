@@ -8,10 +8,18 @@
 // keyboard. Reading the IME frame directly and lifting by that amount is the one
 // approach that behaves the same on both platforms.
 //
-// The returned height is measured from the BOTTOM OF THE SCREEN, so it includes
-// whatever system inset (nav bar, home indicator) the keyboard covers up. A
-// layout that already sits inside the safe area must subtract its own bottom
-// inset before using this: see `useKeyboardInset`.
+// The catch is that the two platforms do not measure the keyboard from the same
+// place, so there is no single number that suits both callers:
+//
+//   * iOS reports the keyboard's frame in screen coordinates. Its height runs
+//     to the very bottom of the screen and therefore covers the home indicator.
+//   * Android reports `imeInsets.bottom - barInsets.bottom` (RN 0.86,
+//     ReactRootView.checkForKeyboardEvents): the IME height measured from the
+//     TOP OF THE NAVIGATION BAR, with the system inset already taken out.
+//
+// Hence two hooks. `useKeyboardHeight` is the raw platform value, for content
+// anchored to the true bottom of the screen; `useKeyboardInset` is the lift for
+// content that already sits inside the bottom safe area.
 
 import { useEffect, useState } from "react";
 import { Keyboard, Platform } from "react-native";
@@ -24,8 +32,11 @@ const SHOW_EVENT =
 const HIDE_EVENT =
   Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide";
 
-// Height of the on-screen keyboard, measured from the bottom of the screen.
-// 0 when it is closed.
+// The platform's own keyboard height, 0 when closed. Use this for content that
+// draws behind the system bars and is anchored to the true bottom of the
+// screen: a Modal, and so every BottomSheet. Re-fires while the keyboard stays
+// open if its height changes (a suggestion strip appearing, an emoji panel
+// opening), so the value tracks the real IME rather than its first frame.
 export function useKeyboardHeight(): number {
   const [height, setHeight] = useState(0);
 
@@ -44,11 +55,18 @@ export function useKeyboardHeight(): number {
 }
 
 // How far a view whose bottom edge already sits above the system inset has to
-// lift to clear the keyboard. Screens inside the app's root SafeAreaView (every
-// tab, the message thread) want this one; content inside a Modal draws behind
-// the system bars and wants the raw `useKeyboardHeight`.
+// lift to clear the keyboard. Screens inside the app's root SafeAreaView want
+// this one, the message thread's compose bar above all.
+//
+// Only iOS has anything to subtract: its measurement includes the home
+// indicator that such a view is already clear of. Android has taken its
+// navigation bar out already, so subtracting again left the compose bar sitting
+// a navigation bar's height under the keyboard, clipped along its bottom edge.
 export function useKeyboardInset(): number {
   const keyboard = useKeyboardHeight();
   const insets = useSafeAreaInsets();
-  return keyboard > 0 ? Math.max(0, keyboard - insets.bottom) : 0;
+  if (keyboard <= 0) return 0;
+  return Platform.OS === "ios"
+    ? Math.max(0, keyboard - insets.bottom)
+    : keyboard;
 }

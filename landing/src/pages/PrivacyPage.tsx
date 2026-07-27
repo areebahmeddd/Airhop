@@ -181,11 +181,11 @@ export default function PrivacyPage() {
 
           <section className="space-y-3">
             <h2 className="text-base font-semibold text-gray-900">
-              Nostr internet bridge (optional)
+              Nostr and the internet (optional)
             </h2>
             <p className="text-sm leading-relaxed">
-              When the Nostr bridge is enabled, Airhop connects to public or user-selected Nostr
-              relays to extend conversations beyond Bluetooth range.
+              When Airhop uses the internet, it connects to public or user-selected Nostr relays to
+              extend conversations beyond Bluetooth range.
             </p>
             <ul className="list-disc space-y-1.5 pl-5 text-sm leading-relaxed marker:text-gray-400">
               <li>
@@ -281,6 +281,19 @@ export default function PrivacyPage() {
               public to that channel and are signed by their original author, so a gateway cannot
               read private content or alter what it carries. Enabling it uses your own data
               connection and battery. Internet gateway is off by default.
+            </p>
+          </section>
+
+          <section className="space-y-3">
+            <h2 className="text-base font-semibold text-gray-900">Mesh bridge (optional)</h2>
+            <p className="text-sm leading-relaxed">
+              A device with the mesh bridge enabled links your area&apos;s public #bluetooth channel
+              with another Bluetooth crowd out of radio range, carrying that public chat between
+              them over the internet. It only ever touches public #bluetooth traffic, never your
+              private messages, and every bridged message stays signed by its original author, so
+              the bridge cannot read private content or alter what it carries. A per-message
+              &quot;nearby only&quot; control keeps any single message off the internet. Enabling it
+              uses your own data connection and battery. Mesh bridge is off by default.
             </p>
           </section>
 
@@ -381,9 +394,9 @@ export default function PrivacyPage() {
                 and app data from the Profile screen.
               </li>
               <li>
-                <strong>Feature controls.</strong> The Nostr bridge, Tor routing, location channels,
-                and the internet gateway can each be disabled in settings. Anything already
-                published to a relay cannot be recalled.
+                <strong>Feature controls.</strong> Tor routing, the internet gateway, and the mesh
+                bridge can each be turned on or off in settings, and location channels left
+                unjoined. Anything already published to a relay cannot be recalled.
               </li>
               <li>
                 <strong>Wallet.</strong> Remove a mint at any time from the Wallet tab. Removing one

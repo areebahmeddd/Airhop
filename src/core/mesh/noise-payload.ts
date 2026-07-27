@@ -9,13 +9,17 @@
 // understood receipts. This module matches their format exactly.
 
 // bitchat NoisePayloadType (BitchatProtocol.swift). 0x04/0x05 are reserved;
-// voice frames (0x08), verify (0x10/0x11) and vouch (0x12) are later milestones.
+// verify (0x10/0x11) and vouch (0x12) are later milestones.
 export const NoisePayloadType = {
   PRIVATE_MESSAGE: 0x01,
   READ_RECEIPT: 0x02,
   DELIVERED: 0x03,
   GROUP_INVITE: 0x06, // creator-signed group state (invite)
   GROUP_KEY_UPDATE: 0x07, // creator-signed group state (key rotation / roster)
+  // One live push-to-talk burst packet. The body is a VoiceBurstPacket, the
+  // same bytes a public burst carries in a VOICE_FRAME packet, so one wire
+  // format serves both scopes and only the envelope differs.
+  VOICE_FRAME: 0x08,
 } as const;
 export type NoisePayloadTypeValue =
   (typeof NoisePayloadType)[keyof typeof NoisePayloadType];

@@ -9,7 +9,6 @@ export default function Navbar() {
   const navItems = [
     { label: "Features", href: "/#features", route: false },
     { label: "How It Works", href: "/#how-it-works", route: false },
-    { label: "Architecture", href: "/architecture", route: true },
     { label: "Explore", href: "/#explore", route: false },
   ];
 

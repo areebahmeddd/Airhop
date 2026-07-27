@@ -31,9 +31,10 @@ export type PresenceStatus = "online" | "away" | "invisible";
 //   relay    traffic carried over the internet (blue) — Nostr relay
 //   tor      internet traffic onion-routed (purple)   — Tor on
 //   gateway  this device relaying for others (teal)   — internet gateway
+//   bridge   islands stitched over the internet (indigo) — mesh bridge
 //   neutral  a calm, intentional pause (muted)        — Away
 export type BannerTone =
-  "danger" | "caution" | "relay" | "tor" | "gateway" | "neutral";
+  "danger" | "caution" | "relay" | "tor" | "gateway" | "bridge" | "neutral";
 
 export interface MeshBanner {
   // Stable identity for React keys and de-duplication.
@@ -56,6 +57,11 @@ interface MeshStateStore {
   // Whether Nostr traffic is currently routed through Tor (see tor-routing.ts).
   // Mirrored here so the Mesh banner reacts the moment Tor is toggled.
   torActive: boolean;
+  // Whether the mesh bridge is active (bridging with a known rendezvous cell)
+  // and how many people are reachable across it. Mirrored here so the banner and
+  // header react as participants come and go (see bridge-service.ts).
+  bridgeActive: boolean;
+  bridgePeopleAcross: number;
   // Chosen presence. Session-level: the mesh starts Online on every launch, so
   // this resets to match rather than being restored from disk.
   presenceStatus: PresenceStatus;
@@ -65,6 +71,7 @@ interface MeshStateStore {
   setLocationGranted: (granted: boolean) => void;
   setNostrConnected: (connected: boolean) => void;
   setTorActive: (active: boolean) => void;
+  setBridgeState: (active: boolean, peopleAcross: number) => void;
   setPresenceStatus: (status: PresenceStatus) => void;
 }
 
@@ -74,6 +81,8 @@ export const useMeshStateStore = create<MeshStateStore>()((set) => ({
   locationGranted: true,
   nostrConnected: false,
   torActive: false,
+  bridgeActive: false,
+  bridgePeopleAcross: 0,
   presenceStatus: "online",
 
   setAdapterEnabled(enabled) {
@@ -91,6 +100,9 @@ export const useMeshStateStore = create<MeshStateStore>()((set) => ({
   setTorActive(active) {
     set({ torActive: active });
   },
+  setBridgeState(active, peopleAcross) {
+    set({ bridgeActive: active, bridgePeopleAcross: peopleAcross });
+  },
   setPresenceStatus(status) {
     set({ presenceStatus: status });
   },
@@ -106,6 +118,9 @@ export interface MeshBannerInputs {
   nostrConnected: boolean;
   torActive: boolean;
   gatewayEnabled: boolean;
+  bridgeActive: boolean;
+  bridgePeopleAcross: number;
+  internetEnabled: boolean;
   peerCount: number;
 }
 
@@ -151,6 +166,18 @@ export function computeMeshBanners(inputs: MeshBannerInputs): MeshBanner[] {
     });
   }
 
+  // Internet off is a deliberate pure-Bluetooth mode: say so once and skip the
+  // internet-dependent notes below (relay, Tor, gateway, bridge) that cannot
+  // apply while no relay is contacted.
+  if (!inputs.internetEnabled) {
+    banners.push({
+      key: "internet-off",
+      label: "Internet off · Bluetooth only",
+      tone: "neutral",
+    });
+    return banners;
+  }
+
   // Internet fallback: no one is in BLE range but a relay is carrying traffic.
   if (inputs.peerCount === 0 && inputs.nostrConnected) {
     banners.push({
@@ -180,6 +207,20 @@ export function computeMeshBanners(inputs: MeshBannerInputs): MeshBanner[] {
     });
   }
 
+  // Bridge indicator: public mesh chat is stitched across islands over the
+  // internet. Shows the count reachable across the bridge once anyone is seen.
+  if (inputs.bridgeActive) {
+    const across = inputs.bridgePeopleAcross;
+    banners.push({
+      key: "bridge",
+      label:
+        across > 0
+          ? `Mesh bridge on · ${across} across the bridge`
+          : "Mesh bridge on · public chat linked",
+      tone: "bridge",
+    });
+  }
+
   return banners;
 }
 
@@ -193,6 +234,9 @@ export function useMeshBanners(): MeshBanner[] {
   const nostrConnected = useMeshStateStore((s) => s.nostrConnected);
   const torActive = useMeshStateStore((s) => s.torActive);
   const gatewayEnabled = useSettingsStore((s) => s.gatewayEnabled);
+  const bridgeActive = useMeshStateStore((s) => s.bridgeActive);
+  const bridgePeopleAcross = useMeshStateStore((s) => s.bridgePeopleAcross);
+  const internetEnabled = useSettingsStore((s) => s.internetEnabled);
   const peerCount = usePeerStore((s) => s.peers.size);
   return computeMeshBanners({
     presenceStatus,
@@ -202,6 +246,9 @@ export function useMeshBanners(): MeshBanner[] {
     nostrConnected,
     torActive,
     gatewayEnabled,
+    bridgeActive,
+    bridgePeopleAcross,
+    internetEnabled,
     peerCount,
   });
 }

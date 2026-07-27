@@ -3,7 +3,7 @@
     "name": "Airhop",
     "slug": "airhop",
     "scheme": "airhop",
-    "version": "1.0.0",
+    "version": "1.0.3",
     "orientation": "portrait",
     "userInterfaceStyle": "automatic",
     "icon": "./assets/images/icon.png",
@@ -13,6 +13,12 @@
       "backgroundColor": "#ffffff"
     },
     "plugins": [
+      [
+        "expo-navigation-bar",
+        {
+          "enforceContrast": false
+        }
+      ],
       [
         "expo-image-picker",
         {
@@ -35,7 +41,7 @@
       [
         "expo-media-library",
         {
-          "savePhotosPermission": "Airhop saves your QR code image to your photo library when you download it.",
+          "savePhotosPermission": "Airhop saves photos and videos to your photo library when you choose to save one, and when you download your QR code.",
           "isAccessMediaLocationEnabled": false
         }
       ],

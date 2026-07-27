@@ -224,6 +224,11 @@ export class GeohashPresence {
   // only by pubkey, so without it every geohash message would render as a raw
   // hex string with no way to tell participants apart. It is self-asserted and
   // unverified, the same trust level as a nickname in any public chat room.
+  // Returns the signed event and whether a relay ACKed it. On failure the caller
+  // still gets the event so it can be ferried to an internet gateway peer over
+  // the mesh (uplink carrier) instead of being lost. Pass relaysConnected=false
+  // to skip the relay publish entirely (we know we are offline), so the caller
+  // ferries immediately instead of waiting a full publish timeout to fail.
   async publishChannelMessage(
     geohash: string,
     content: string,
@@ -231,7 +236,8 @@ export class GeohashPresence {
     msgId?: string,
     relays?: string[],
     teleported = false,
-  ): Promise<void> {
+    relaysConnected = true,
+  ): Promise<{ event: Event; delivered: boolean }> {
     const tags: string[][] = [["g", geohash]];
     if (nickname !== undefined && nickname.length > 0) {
       tags.push(["n", nickname.slice(0, 32)]);
@@ -257,7 +263,17 @@ export class GeohashPresence {
       },
       this.privKey,
     );
-    await this.client.publish(event, relays);
+    // Known offline: don't spend a publish timeout on a doomed send. Hand the
+    // signed event straight back so the caller can ferry it over the mesh.
+    if (!relaysConnected) return { event, delivered: false };
+    try {
+      await this.client.publish(event, relays);
+      return { event, delivered: true };
+    } catch {
+      // No relay ACKed (offline, or none reachable for this cell). The event is
+      // fully signed and valid; the caller decides whether to ferry it.
+      return { event, delivered: false };
+    }
   }
 
   // ---- Private ---------------------------------------------------------------

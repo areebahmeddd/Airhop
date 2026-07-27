@@ -7,7 +7,11 @@
 // (ANNOUNCE-driven upsertPeer, RSSI-poll-driven updateRssi) touch the same
 // entry from different sources at different cadences.
 
-import { usePeerStore, type NearbyPeer } from "../peer-store";
+import {
+  countReachablePeers,
+  usePeerStore,
+  type NearbyPeer,
+} from "../peer-store";
 
 beforeEach(() => {
   usePeerStore.getState().clearAll();
@@ -88,5 +92,22 @@ describe("updateRssi", () => {
     } finally {
       jest.useRealTimers();
     }
+  });
+});
+
+describe("countReachablePeers", () => {
+  it("counts only peers seen inside the reachable window", () => {
+    const now = 1_000_000;
+    const peers = new Map<string, NearbyPeer>([
+      ["a", makePeer({ peerID: "a", lastSeenMs: now - 1_000 })],
+      ["b", makePeer({ peerID: "b", lastSeenMs: now - 59_000 })],
+      // Walked off without a LEAVE: still in the map, no longer reachable.
+      ["c", makePeer({ peerID: "c", lastSeenMs: now - 120_000 })],
+    ]);
+    expect(countReachablePeers(peers, now)).toBe(2);
+  });
+
+  it("counts an empty map as an empty mesh", () => {
+    expect(countReachablePeers(new Map(), 1_000_000)).toBe(0);
   });
 });

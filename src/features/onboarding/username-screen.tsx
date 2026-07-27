@@ -2,8 +2,8 @@
 // Shows the user their deterministic human-readable username derived from the
 // generated peer ID. Communicates that this is permanent and unique to them.
 
-import React, { useEffect, useMemo, useState } from "react";
-import { Animated, Easing, StyleSheet, Text, View } from "react-native";
+import React, { useMemo } from "react";
+import { StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import PrimaryButton from "../../ui/components/primary-button";
 import {
@@ -30,39 +30,12 @@ export default function UsernameScreen({
   const styles = useMemo(() => createStyles(Colors), [Colors]);
   const username = peerIDToUsername(peerID);
   const accentColor = avatarColor(peerID);
-  const [scaleAnim] = useState(() => new Animated.Value(0.88));
-  const [fadeAnim] = useState(() => new Animated.Value(0));
-
-  useEffect(() => {
-    Animated.parallel([
-      Animated.timing(fadeAnim, {
-        toValue: 1,
-        duration: 450,
-        easing: Easing.out(Easing.ease),
-        useNativeDriver: true,
-      }),
-      Animated.timing(scaleAnim, {
-        toValue: 1,
-        duration: 450,
-        easing: Easing.out(Easing.cubic),
-        useNativeDriver: true,
-      }),
-    ]).start();
-  }, [fadeAnim, scaleAnim]);
 
   return (
     <SafeAreaView style={styles.root}>
-      <Animated.View style={[styles.inner, { opacity: fadeAnim }]}>
+      <View style={styles.inner}>
         {/* Identity card */}
-        <Animated.View
-          style={[
-            styles.card,
-            {
-              borderColor: accentColor + "33",
-              transform: [{ scale: scaleAnim }],
-            },
-          ]}
-        >
+        <View style={[styles.card, { borderColor: accentColor + "33" }]}>
           {/* Avatar */}
           <View
             style={[
@@ -111,14 +84,14 @@ export default function UsernameScreen({
               </View>
             ))}
           </View>
-        </Animated.View>
+        </View>
 
         {/* Explanation */}
         <Text style={styles.explanation}>
           This username is deterministically derived from your public key. It is
           the same on every device that sees your peer ID.
         </Text>
-      </Animated.View>
+      </View>
 
       {/* Footer */}
       <View style={styles.footer}>

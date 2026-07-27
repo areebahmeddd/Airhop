@@ -1,7 +1,109 @@
 // Tests for the Nostr geo-relay directory.
 // geo-relay.ts has no native or network dependencies; fully testable in CI.
 
-import { GeoRelayDirectory, haversineKm, parseRelaysCsv } from "../geo-relay";
+import {
+  GeoRelayDirectory,
+  haversineKm,
+  mergeGeoRelays,
+  parseRelaysCsv,
+  validateRelayUrl,
+} from "../geo-relay";
+
+describe("validateRelayUrl", () => {
+  test("accepts a bare host and normalizes to wss://", () => {
+    expect(validateRelayUrl("relay.example.com")).toBe(
+      "wss://relay.example.com",
+    );
+    expect(validateRelayUrl("  relay.damus.io ")).toBe("wss://relay.damus.io");
+  });
+
+  test("accepts wss:// and https:// input, normalizing to wss://", () => {
+    expect(validateRelayUrl("wss://nos.lol")).toBe("wss://nos.lol");
+    expect(validateRelayUrl("https://relay.primal.net")).toBe(
+      "wss://relay.primal.net",
+    );
+  });
+
+  test("keeps a non-standard port, drops an explicit 443", () => {
+    expect(validateRelayUrl("relay.example.com:8443")).toBe(
+      "wss://relay.example.com:8443",
+    );
+    expect(validateRelayUrl("relay.example.com:443")).toBe(
+      "wss://relay.example.com",
+    );
+  });
+
+  test("allows a trailing slash but no other path", () => {
+    expect(validateRelayUrl("wss://relay.example.com/")).toBe(
+      "wss://relay.example.com",
+    );
+    expect(validateRelayUrl("wss://relay.example.com/path")).toBeNull();
+  });
+
+  test("rejects unsupported schemes", () => {
+    expect(validateRelayUrl("ws://relay.example.com")).toBeNull();
+    expect(validateRelayUrl("http://relay.example.com")).toBeNull();
+    expect(validateRelayUrl("ftp://relay.example.com")).toBeNull();
+  });
+
+  test("rejects IPs, single-label, and loopback/private names", () => {
+    expect(validateRelayUrl("192.168.1.10")).toBeNull();
+    expect(validateRelayUrl("localhost")).toBeNull();
+    expect(validateRelayUrl("mybox.local")).toBeNull();
+    expect(validateRelayUrl("service.internal")).toBeNull();
+    expect(validateRelayUrl("relay")).toBeNull();
+  });
+
+  test("rejects credentials, query, fragment, spaces, and junk", () => {
+    expect(validateRelayUrl("wss://user:pass@relay.example.com")).toBeNull();
+    expect(validateRelayUrl("relay.example.com?x=1")).toBeNull();
+    expect(validateRelayUrl("relay.example.com#f")).toBeNull();
+    expect(validateRelayUrl("relay example.com")).toBeNull();
+    expect(validateRelayUrl("hello world")).toBeNull();
+    expect(validateRelayUrl("")).toBeNull();
+  });
+
+  test("rejects bad DNS labels", () => {
+    expect(validateRelayUrl("-bad.example.com")).toBeNull();
+    expect(validateRelayUrl("bad-.example.com")).toBeNull();
+    expect(validateRelayUrl("a..example.com")).toBeNull();
+  });
+});
+
+describe("mergeGeoRelays", () => {
+  const near = ["wss://n1", "wss://n2", "wss://n3"];
+  const custom = ["wss://c1", "wss://c2"];
+
+  test("discovery on, no custom: just the nearest (capped)", () => {
+    expect(mergeGeoRelays(near, [], true, 2)).toEqual(["wss://n1", "wss://n2"]);
+  });
+
+  test("discovery on, with custom: nearest kept (interop) plus custom, deduped", () => {
+    const out = mergeGeoRelays(near, custom, true, 3);
+    expect(out).toContain("wss://n1"); // interop relays never dropped
+    expect(out).toContain("wss://n2");
+    expect(out).toContain("wss://n3");
+    expect(out).toContain("wss://c1");
+    expect(out).toContain("wss://c2");
+  });
+
+  test("discovery on: a custom relay that is also nearest is not duplicated", () => {
+    expect(
+      mergeGeoRelays(["wss://a", "wss://b"], ["wss://a"], true, 2),
+    ).toEqual(["wss://a", "wss://b"]);
+  });
+
+  test("discovery off, with custom: only the custom relays", () => {
+    expect(mergeGeoRelays(near, custom, false, 5)).toEqual(custom);
+  });
+
+  test("discovery off, no custom: falls back to nearest so it is never empty", () => {
+    expect(mergeGeoRelays(near, [], false, 2)).toEqual([
+      "wss://n1",
+      "wss://n2",
+    ]);
+  });
+});
 
 describe("geo-relay", () => {
   describe("haversineKm", () => {

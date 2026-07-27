@@ -35,6 +35,10 @@ const BITCHAT_ALLOWED_MIME = new Set([
   "image/webp",
   "audio/mp4",
   "audio/m4a",
+  // Receive-side leniency, not something we send: Android recorders and older
+  // Airhop builds label AAC-in-MP4 this way. bitchat would reject it, so we
+  // send the canonical audio/mp4 (see resolveMimeType) and accept both.
+  "audio/x-m4a",
   "audio/aac",
   "audio/mpeg",
   "audio/mp3",
@@ -156,14 +160,61 @@ export function mimeMatchesMagic(
 
 // Attachment kind derived from the MIME type, since bitchat's packet carries no
 // explicit type field.
-export function typeFromMime(
-  mime: string | undefined,
-): "image" | "voice" | "video" | "document" {
+export type AttachmentKind = "image" | "voice" | "video" | "document";
+
+export function typeFromMime(mime: string | undefined): AttachmentKind {
   const m = (mime ?? "").toLowerCase();
   if (m.startsWith("image/")) return "image";
   if (m.startsWith("audio/")) return "voice";
   if (m.startsWith("video/")) return "video";
   return "document";
+}
+
+// Last-resort MIME by file extension, for the pickers that hand back a file
+// with no type at all.
+const MIME_BY_EXTENSION: Record<string, string> = {
+  jpg: "image/jpeg",
+  jpeg: "image/jpeg",
+  png: "image/png",
+  gif: "image/gif",
+  webp: "image/webp",
+  m4a: "audio/mp4",
+  aac: "audio/aac",
+  mp3: "audio/mpeg",
+  wav: "audio/wav",
+  ogg: "audio/ogg",
+  pdf: "application/pdf",
+  mp4: "video/mp4",
+  mov: "video/quicktime",
+};
+
+// The MIME type to put on the wire, which is never blank and never something
+// the far side will refuse.
+//
+// This matters more than it looks. A receiver (ours and bitchat's alike) drops
+// a file whose type is not on the allow-list, and an empty string is not on the
+// allow-list, so a picker that returned no type produced an attachment that
+// sent successfully, showed a full progress bar, and silently never arrived.
+// Anything unrecognised becomes application/octet-stream, which bitchat accepts
+// and renders as a document, so the file lands even when its type does not.
+export function resolveMimeType(
+  declared: string | undefined,
+  fileName: string | undefined,
+): string {
+  const d = declared?.trim().toLowerCase();
+  if (d !== undefined && d.length > 0 && isAllowedMime(d)) return d;
+  const ext = fileName?.toLowerCase().split(".").pop() ?? "";
+  return MIME_BY_EXTENSION[ext] ?? "application/octet-stream";
+}
+
+// bitchat caps photos and voice notes tighter than the 1 MiB ceiling it applies
+// to files in general (FileTransferLimits). Sending past a cap is not a partial
+// success: the peer refuses the whole file, so the check belongs before the
+// first fragment goes out, not after.
+export function maxBytesForType(type: AttachmentKind): number {
+  if (type === "voice") return MAX_VOICE_BYTES;
+  if (type === "image") return MAX_IMAGE_BYTES;
+  return MAX_FILE_BYTES;
 }
 
 // ---- TLV encode/decode ------------------------------------------------------
@@ -198,23 +249,30 @@ function u32(n: number): number[] {
 
 // Encode a FilePacket to the bitchat TLV blob. Returns null when the content is
 // empty or exceeds the 1 MiB ceiling.
+//
+// The metadata tags are built in a plain array and the file bytes are copied in
+// with set(). That split is not stylistic: spreading the content into
+// Array.push passes every byte as a separate function argument, which overflows
+// the call stack somewhere in the tens of kilobytes. Every attachment past that
+// size threw a RangeError from inside the encoder, well before the 1 MiB
+// ceiling this function is supposed to be enforcing.
 export function encodeFilePacket(p: FilePacket): Uint8Array | null {
   if (p.content.length === 0 || p.content.length > MAX_FILE_BYTES) return null;
   const enc = new TextEncoder();
-  const out: number[] = [];
+  const head: number[] = [];
 
   if (p.fileName !== undefined) {
     const b = enc.encode(p.fileName);
     if (b.length <= 0xffff) {
-      out.push(TLV_FILENAME, ...u16(b.length), ...b);
+      head.push(TLV_FILENAME, ...u16(b.length), ...b);
     }
   }
   // fileSize: u16 length = 4, then u32 value (bitchat canonical).
-  out.push(TLV_FILESIZE, ...u16(4), ...u32(p.content.length));
+  head.push(TLV_FILESIZE, ...u16(4), ...u32(p.content.length));
   if (p.mimeType !== undefined) {
     const b = enc.encode(p.mimeType);
     if (b.length <= 0xffff) {
-      out.push(TLV_MIMETYPE, ...u16(b.length), ...b);
+      head.push(TLV_MIMETYPE, ...u16(b.length), ...b);
     }
   }
   // Airhop extensions (bitchat skips these as unknown TLVs, reading their u16
@@ -223,21 +281,25 @@ export function encodeFilePacket(p: FilePacket): Uint8Array | null {
   if (p.channel !== undefined) {
     const b = enc.encode(p.channel);
     if (b.length <= 0xffff) {
-      out.push(TLV_CHANNEL, ...u16(b.length), ...b);
+      head.push(TLV_CHANNEL, ...u16(b.length), ...b);
     }
   }
   if (p.durationMs !== undefined && p.durationMs > 0) {
-    out.push(TLV_DURATION, ...u16(4), ...u32(p.durationMs));
+    head.push(TLV_DURATION, ...u16(4), ...u32(p.durationMs));
   }
   if (p.caption !== undefined && p.caption.length > 0) {
     const b = enc.encode(p.caption);
     if (b.length > 0 && b.length <= MAX_CAPTION_BYTES) {
-      out.push(TLV_CAPTION, ...u16(b.length), ...b);
+      head.push(TLV_CAPTION, ...u16(b.length), ...b);
     }
   }
   // content: u32 length (bitchat canonical), then bytes.
-  out.push(TLV_CONTENT, ...u32(p.content.length), ...p.content);
-  return new Uint8Array(out);
+  head.push(TLV_CONTENT, ...u32(p.content.length));
+
+  const out = new Uint8Array(head.length + p.content.length);
+  out.set(head, 0);
+  out.set(p.content, head.length);
+  return out;
 }
 
 // Decode a bitchat TLV blob. Tolerates bitchat's legacy encodings (fileSize

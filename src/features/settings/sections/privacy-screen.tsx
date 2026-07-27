@@ -64,9 +64,9 @@ const SECTIONS: LegalSection[] = [
     ],
   },
   {
-    heading: "Nostr internet bridge (optional)",
+    heading: "Nostr and the internet (optional)",
     paragraphs: [
-      "When the Nostr bridge is enabled, Airhop connects to public or user-selected Nostr relays to extend conversations beyond Bluetooth range.",
+      "When Airhop uses the internet, it connects to public or user-selected Nostr relays to extend conversations beyond Bluetooth range.",
       {
         bullets: [
           "**Private messages.** Fallback messages use NIP-17 gift wraps. Relay operators can observe event timestamps and network metadata, but not message content.",
@@ -113,6 +113,12 @@ const SECTIONS: LegalSection[] = [
     ],
   },
   {
+    heading: "Mesh bridge (optional)",
+    paragraphs: [
+      'A device with the mesh bridge enabled links your area\'s public #bluetooth channel with another Bluetooth crowd out of radio range, carrying that public chat between them over the internet. It only ever touches public #bluetooth traffic, never your private messages, and every bridged message stays signed by its original author, so the bridge cannot read private content or alter what it carries. A per-message "nearby only" control keeps any single message off the internet. Enabling it uses your own data connection and battery. Mesh bridge is off by default.',
+    ],
+  },
+  {
     heading: "Tor routing (optional)",
     paragraphs: [
       "Airhop supports routing Nostr traffic through Tor using Arti on iOS or Orbot on Android. When enabled, **relay operators cannot observe your IP address.** Tor is off by default.",
@@ -156,7 +162,7 @@ const SECTIONS: LegalSection[] = [
       {
         bullets: [
           "**Panic wipe.** Instantly erase all local keys, messages, queued mail, and app data from the Profile screen.",
-          "**Feature controls.** The Nostr bridge, Tor routing, location channels, and the internet gateway can each be disabled in settings. Anything already published to a relay cannot be recalled.",
+          "**Feature controls.** Tor routing, the internet gateway, and the mesh bridge can each be turned on or off in settings, and location channels left unjoined. Anything already published to a relay cannot be recalled.",
           "**Wallet.** Remove a mint at any time from the Wallet tab. Removing one deletes the coins held there from this device, so withdraw or send them first. A panic wipe destroys the wallet file and its encryption key together.",
           "**System permissions.** Bluetooth, location, microphone, camera, photo library, and notification access can each be revoked in your device settings at any time. Camera access is used only to scan a contact's QR code.",
         ],

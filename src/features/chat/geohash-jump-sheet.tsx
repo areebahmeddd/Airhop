@@ -181,13 +181,16 @@ export function GeohashJumpSheet({
           selectionColor={Colors.accent}
         />
       </View>
-      <Text style={styles.hint}>
-        {localChannel !== null
-          ? `You are already here. Go opens your ${localChannel} channel.`
-          : level !== null
-            ? `${level} cell`
-            : "2 to 12 letters and digits"}
-      </Text>
+      {/* Only speak when there is something to say about what was typed. The
+          length rule is enforced by the disabled Go button, so stating it up
+          front is noise. */}
+      {(localChannel !== null || level !== null) && (
+        <Text style={styles.hint}>
+          {localChannel !== null
+            ? `You are already here. Go opens your ${localChannel} channel.`
+            : `${level} cell`}
+        </Text>
+      )}
       {error !== null && <Text style={styles.error}>{error}</Text>}
 
       {bookmarks.length > 0 && (
@@ -235,6 +238,16 @@ export function GeohashJumpSheet({
           </ScrollView>
         </View>
       )}
+
+      {/* Where a geohash comes from. Every location channel shows its own with
+          a copy button, so the answer is one tap away inside the app rather
+          than something to look up elsewhere. Written as ">"-separated steps:
+          it is a route to follow, not a sentence to parse. */}
+      <Text style={styles.footNote}>
+        {
+          "To find a geohash: open a location channel > tap its name > copy it from there."
+        }
+      </Text>
 
       <View style={styles.actions}>
         <Pressable style={styles.cancel} onPress={handleBack}>
@@ -355,6 +368,11 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
     savedSub: {
       fontSize: FontSize.xs,
       color: Colors.textMuted,
+    },
+    footNote: {
+      fontSize: FontSize.xs,
+      color: Colors.textMuted,
+      lineHeight: 17,
     },
     actions: {
       flexDirection: "row",

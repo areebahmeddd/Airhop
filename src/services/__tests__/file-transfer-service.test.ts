@@ -117,15 +117,33 @@ describe("outbound pacing", () => {
     expect(indices).toEqual([...indices].sort((a, b) => a - b));
   });
 
-  it("rejects a file over the 1 MiB cap before queueing anything", () => {
+  it("rejects a photo over the image cap before queueing anything", () => {
+    // bitchat caps photos at 512 KiB, below the 1 MiB file ceiling. Past it the
+    // peer refuses the whole file, so this has to fail here rather than after a
+    // minute of progress that was never going to land.
     const { service, broadcast } = makeService();
-    const tooBig = new Uint8Array(1 * 1024 * 1024 + 1);
+    const tooBig = new Uint8Array(512 * 1024 + 1);
 
     expect(() => service.sendBytes(tooBig, META, "#test")).toThrow(
-      /too large/i,
+      /over the 512 KB limit/i,
     );
     expect(service.pendingCount).toBe(0);
     expect(broadcast).not.toHaveBeenCalled();
+  });
+
+  it("lets a document run to the 1 MiB file ceiling", () => {
+    const { service, broadcast } = makeService();
+    const doc = { ...META, type: "document" as const, name: "notes.pdf" };
+
+    expect(() =>
+      service.sendBytes(new Uint8Array(512 * 1024 + 1), doc, "#test"),
+    ).not.toThrow();
+    expect(broadcast).not.toHaveBeenCalled(); // paced, nothing drained yet
+    expect(service.pendingCount).toBeGreaterThan(0);
+
+    expect(() =>
+      service.sendBytes(new Uint8Array(1024 * 1024 + 1), doc, "#test"),
+    ).toThrow(/over the 1024 KB limit/i);
   });
 });
 

@@ -24,6 +24,7 @@ jobs:
     runs-on: ubuntu-24.04
     outputs:
       tag: ${{ steps.resolve.outputs.tag }}
+      version: ${{ steps.resolve.outputs.version }}
 
     steps:
       - name: Checkout repository
@@ -47,7 +48,14 @@ jobs:
             echo "::error::Tag '${TAG}' does not exist in this repository."
             exit 1
           fi
+          # The version written into app.json is the tag without its leading v,
+          # so the tag has to be a plain three-part version and nothing else.
+          if ! printf '%s' "${TAG}" | grep -qE '^v[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "::error::Tag '${TAG}' must look like v1.2.3."
+            exit 1
+          fi
           echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+          echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
 
       - name: Generate changelog
         uses: orhun/git-cliff-action@f50e11560dce63f7c33227798f90b924471a88b5 # v4.8.0
@@ -83,7 +91,9 @@ jobs:
           name: ${{ steps.title.outputs.name }}
           body_path: RELEASE_NOTES.md
 
-      - name: Commit changelog to main
+      - name: Commit version and changelog to main
+        env:
+          VERSION: ${{ steps.resolve.outputs.version }}
         run: |
           set -euo pipefail
           git config user.name "github-actions[bot]"
@@ -92,11 +102,14 @@ jobs:
           git fetch origin main
           git checkout -B main origin/main
           cp "${RUNNER_TEMP}/CHANGELOG.md" docs/dev/CHANGELOG.md
-          git add docs/dev/CHANGELOG.md
+          # Keep app.json version in sync so future main builds report it correctly.
+          sed -i -E "s/(\"version\": \")[^\"]*(\")/\1${VERSION}\2/" app.json
+          grep -q "\"version\": \"${VERSION}\"" app.json
+          git add docs/dev/CHANGELOG.md app.json
           if git diff --staged --quiet; then
-            echo "Changelog unchanged; nothing to commit."
+            echo "Version and changelog unchanged."
           else
-            git commit -m "chore(changelog): update for ${{ steps.resolve.outputs.tag }}"
+            git commit -m "chore(release): set version and changelog for ${{ steps.resolve.outputs.tag }}"
             git push origin main
           fi
 
@@ -110,6 +123,14 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ needs.release.outputs.tag }}
+
+      - name: Stamp app version from tag
+        env:
+          VERSION: ${{ needs.release.outputs.version }}
+        run: |
+          set -euo pipefail
+          sed -i -E "s/(\"version\": \")[^\"]*(\")/\1${VERSION}\2/" app.json
+          grep -q "\"version\": \"${VERSION}\"" app.json
 
       - name: Set up Node.js
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0

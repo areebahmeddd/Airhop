@@ -45,9 +45,44 @@ const TLV_NICKNAME = 0x01;
 const TLV_NOISE_PUB = 0x02;
 const TLV_SIGNING_PUB = 0x03;
 const TLV_NEIGHBORS = 0x04;
-const TLV_CAPABILITIES = 0x05; // bitchat capabilities bitfield (decoded, ignored)
+const TLV_CAPABILITIES = 0x05; // bitchat capabilities bitfield (little-endian)
 const TLV_BRIDGE_GEOHASH = 0x06; // bitchat bridge cell (decoded, ignored)
 const TLV_NOSTR_PUB = 0x07; // Airhop extension: secp256k1 X-only Nostr pubkey
+
+// Capability bits, byte-for-byte with bitchat PeerCapabilities (BitFoundation).
+// Advertised in ANNOUNCE TLV 0x05 so peers can degrade per-feature.
+export const Capability = {
+  prekeys: 1 << 0,
+  wifiBulk: 1 << 1,
+  gateway: 1 << 2,
+  groups: 1 << 3,
+  board: 1 << 4,
+  vouch: 1 << 5,
+  meshDiagnostics: 1 << 6,
+  bridge: 1 << 7,
+} as const;
+
+// Minimal little-endian encoding with trailing zero bytes dropped, always at
+// least one byte so an empty set stays distinct from an absent TLV. Mirrors
+// bitchat PeerCapabilities.encoded().
+export function encodeCapabilities(bits: number): Uint8Array {
+  let value = bits >>> 0;
+  const bytes: number[] = [];
+  do {
+    bytes.push(value & 0xff);
+    value = Math.floor(value / 256);
+  } while (value !== 0);
+  return new Uint8Array(bytes);
+}
+
+// Reads the low bytes into a JS-safe integer; bytes beyond the defined bits are
+// ignored for forward compatibility. Mirrors bitchat PeerCapabilities(encoded:).
+export function decodeCapabilities(value: Uint8Array): number {
+  let bits = 0;
+  const n = Math.min(value.length, 6); // stay within 2^48 to avoid float loss
+  for (let i = 0; i < n; i++) bits += value[i] * 2 ** (8 * i);
+  return bits;
+}
 
 export interface AnnounceInfo {
   senderID: Uint8Array; // 8 bytes
@@ -56,6 +91,8 @@ export interface AnnounceInfo {
   signingPubKey: Uint8Array; // 32 bytes Ed25519
   neighborIDs: Uint8Array[]; // up to 10 x 8 bytes
   nostrPubKey?: Uint8Array; // 32 bytes secp256k1 X-only (Airhop extension)
+  capabilities: number; // bitchat capability bits (TLV 0x05); 0 when absent
+  bridgeGeohash?: string; // rendezvous cell a bridge peer advertises (TLV 0x06)
 }
 
 function writeTlv(buf: number[], type: number, value: Uint8Array): void {
@@ -67,6 +104,8 @@ export function encodeAnnouncePayload(
   nickname: string,
   neighborIDs: readonly Uint8Array[] = [],
   nostrPubKey?: Uint8Array,
+  capabilities = 0,
+  bridgeGeohash?: string,
 ): Uint8Array {
   const nicknameBytes = new TextEncoder().encode(nickname.slice(0, 32));
   const buf: number[] = [];
@@ -82,6 +121,20 @@ export function encodeAnnouncePayload(
       neighborBytes.set(capped[i].slice(0, 8), i * 8);
     }
     writeTlv(buf, TLV_NEIGHBORS, neighborBytes);
+  }
+
+  // Only advertise capabilities when we have some: a peer with no bits looks
+  // like an old client (no TLV), matching bitchat's nil-when-absent semantics.
+  if (capabilities !== 0) {
+    writeTlv(buf, TLV_CAPABILITIES, encodeCapabilities(capabilities));
+  }
+
+  // Bridge rendezvous cell (TLV 0x06): a bridge gateway advertises the geohash
+  // cell it ferries so mesh-only peers know which cell to deposit into. Only
+  // written when set (a non-bridging peer omits it, like bitchat).
+  if (bridgeGeohash !== undefined && bridgeGeohash.length > 0) {
+    const cellBytes = new TextEncoder().encode(bridgeGeohash.slice(0, 12));
+    writeTlv(buf, TLV_BRIDGE_GEOHASH, cellBytes);
   }
 
   if (nostrPubKey !== undefined && nostrPubKey.length === 32) {
@@ -100,6 +153,8 @@ export function decodeAnnouncePayload(
   let noisePubKey: Uint8Array | null = null;
   let signingPubKey: Uint8Array | null = null;
   let nostrPubKey: Uint8Array | undefined;
+  let capabilities = 0;
+  let bridgeGeohash: string | undefined;
   const neighborIDs: Uint8Array[] = [];
 
   while (offset + 2 <= payload.length) {
@@ -127,9 +182,10 @@ export function decodeAnnouncePayload(
         }
         break;
       case TLV_CAPABILITIES:
+        capabilities = decodeCapabilities(value);
+        break;
       case TLV_BRIDGE_GEOHASH:
-        // bitchat fields we accept but do not yet act on. Explicit cases so
-        // they are never mistaken for another field.
+        bridgeGeohash = new TextDecoder().decode(value);
         break;
       case TLV_NOSTR_PUB:
         if (value.length === 32) nostrPubKey = value;
@@ -146,6 +202,8 @@ export function decodeAnnouncePayload(
     signingPubKey,
     neighborIDs,
     nostrPubKey,
+    capabilities,
+    bridgeGeohash,
   };
 }
 
@@ -153,21 +211,27 @@ export type SendPacketFn = (packet: Packet) => void;
 
 export class AnnounceManager {
   private timer: ReturnType<typeof setTimeout> | null = null;
+  private broadcastFn: (() => void) | null = null;
 
   // Build and return a signed ANNOUNCE packet ready to send.
   // Pass neighborIDs (each 8 bytes) to include TLV 0x04 so topology gossip works.
   // Pass nostrPubKey (32 bytes secp256k1 X-only) to include TLV 0x07 for Nostr DMs.
+  // Pass capabilities (bitchat capability bits) to include TLV 0x05.
   buildPacket(
     identity: Identity,
     nickname: string,
     neighborIDs: readonly Uint8Array[] = [],
     nostrPubKey?: Uint8Array,
+    capabilities = 0,
+    bridgeGeohash?: string,
   ): Packet {
     const payload = encodeAnnouncePayload(
       identity,
       nickname,
       [...neighborIDs],
       nostrPubKey,
+      capabilities,
+      bridgeGeohash,
     );
     const senderIDBytes = hexToBytes(identity.peerID);
 
@@ -195,6 +259,8 @@ export class AnnounceManager {
   // Pass getNeighborIDs to include TLV 0x04 in each ANNOUNCE. The callback is
   // called on every broadcast tick so the neighbor list stays current.
   // Pass nostrPubKey to include TLV 0x05 (constant for the session lifetime).
+  // Pass getCapabilities to include TLV 0x05; it is read on every tick so a
+  // toggled capability (e.g. the internet gateway) rides the next announce.
   start(
     identity: Identity,
     nickname: string,
@@ -202,13 +268,27 @@ export class AnnounceManager {
     getNeighborIDs?: () => readonly Uint8Array[],
     nostrPubKey?: Uint8Array,
     getPeerCount?: () => number,
+    getCapabilities?: () => number,
+    getBridgeGeohash?: () => string | undefined,
   ): void {
     if (this.timer !== null) this.stop();
 
     const broadcast = (): void => {
       const neighbors = getNeighborIDs?.() ?? [];
-      send(this.buildPacket(identity, nickname, neighbors, nostrPubKey));
+      const capabilities = getCapabilities?.() ?? 0;
+      const bridgeGeohash = getBridgeGeohash?.();
+      send(
+        this.buildPacket(
+          identity,
+          nickname,
+          neighbors,
+          nostrPubKey,
+          capabilities,
+          bridgeGeohash,
+        ),
+      );
     };
+    this.broadcastFn = broadcast;
 
     const nextDelay = (): number => {
       const connected = (getPeerCount?.() ?? 0) > 0;
@@ -230,11 +310,19 @@ export class AnnounceManager {
     scheduleNext();
   }
 
+  // Send one announce immediately, out of the normal cadence, so a state change
+  // (capability toggle, nickname edit) propagates without waiting a full cycle.
+  // No-op until start() has run.
+  announceNow(): void {
+    this.broadcastFn?.();
+  }
+
   stop(): void {
     if (this.timer !== null) {
       clearTimeout(this.timer);
       this.timer = null;
     }
+    this.broadcastFn = null;
   }
 
   // Validate that an incoming ANNOUNCE packet is self-consistent:

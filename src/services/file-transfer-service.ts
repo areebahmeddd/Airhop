@@ -17,8 +17,9 @@ import {
   decodeFilePacket,
   encodeFilePacket,
   isAllowedMime,
-  MAX_FILE_BYTES,
+  maxBytesForType,
   mimeMatchesMagic,
+  resolveMimeType,
   typeFromMime,
 } from "../core/mesh/bitchat-file-packet";
 import { FRAGMENT_SIZE, fragmentPacket } from "../core/mesh/fragment-manager";
@@ -55,9 +56,12 @@ export interface AttachmentMeta {
   caption?: string;
 }
 
-// Only the attachment cache files this service writes carry this prefix, so a
-// directory sweep never touches anything else in the shared cache dir.
-const CACHE_FILE_PREFIX = "airhop_";
+// Only the attachment cache files Airhop writes carry this prefix, so a
+// directory sweep never touches anything else in the shared cache dir. Exported
+// because anything else that generates an attachment file (see image-compress)
+// has to land under the same prefix, or the Storage screen would report a size
+// that its Clear button cannot free.
+export const CACHE_FILE_PREFIX = "airhop_";
 
 export function getAttachmentCacheBytes(): number {
   const dir = new FileSystem.Directory(FileSystem.Paths.cache);
@@ -108,6 +112,31 @@ function defaultAttachmentName(type: ChatAttachment["type"]): string {
   }
 }
 
+// The one send failure worth repeating to the sender verbatim: it names a
+// limit they can do something about. Everything else that can go wrong in here
+// is a runtime fault, and the UI says so in its own words rather than putting a
+// stack-machine message in front of a person.
+export class AttachmentTooLargeError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "AttachmentTooLargeError";
+  }
+}
+
+// How an over-size attachment refers to itself in the error the sender reads.
+function sizeLabel(type: ChatAttachment["type"]): string {
+  switch (type) {
+    case "image":
+      return "This photo";
+    case "video":
+      return "This video";
+    case "voice":
+      return "This voice note";
+    default:
+      return "This file";
+  }
+}
+
 interface ServiceIdentity {
   peerID: string;
   signingPrivKey: Uint8Array;
@@ -141,6 +170,8 @@ export class FileTransferService {
     weight?: number;
   }[] = [];
   private drainTimer: ReturnType<typeof setTimeout> | null = null;
+  // Monotonic, so back-to-back sends cannot collide on a transfer id.
+  private transferSeq = 0;
 
   constructor(
     identity: ServiceIdentity,
@@ -182,18 +213,25 @@ export class FileTransferService {
     meta: AttachmentMeta,
     channel: string,
   ): void {
-    if (fileBytes.length > MAX_FILE_BYTES) {
-      throw new Error(
-        `Attachment too large (${(fileBytes.length / 1024).toFixed(0)} KB). Maximum is 1 MB.`,
+    // Per-type cap, matching bitchat: over it the far side refuses the file, so
+    // fail here with something the sender can act on rather than after a minute
+    // of progress that was never going to land.
+    const cap = maxBytesForType(meta.type);
+    if (fileBytes.length > cap) {
+      throw new AttachmentTooLargeError(
+        `${sizeLabel(meta.type)} is ${(fileBytes.length / 1024).toFixed(0)} KB, over the ${(cap / 1024).toFixed(0)} KB limit.`,
       );
     }
 
     const isDM = channel.startsWith("dm:");
     const recipientPeerID = isDM ? channel.slice(3) : "";
+    const fileName = meta.name || defaultAttachmentName(meta.type);
 
     const tlv = encodeFilePacket({
-      fileName: meta.name || defaultAttachmentName(meta.type),
-      mimeType: meta.mimeType,
+      fileName,
+      // Never the picker's raw value: an empty or unrecognised type is dropped
+      // on arrival, which looked exactly like a successful send from here.
+      mimeType: resolveMimeType(meta.mimeType, fileName),
       content: fileBytes,
       // A DM is routed by the packet's recipient ID (bitchat-compatible), so we
       // omit the channel tag; a channel attachment carries it for Airhop routing.
@@ -224,7 +262,11 @@ export class FileTransferService {
         ? fragmentPacket(pkt, this.identity, signPacket)
         : [pkt];
 
-    const transferId = `tx-${this.identity.peerID}-${String(Date.now())}`;
+    // A counter, not just the clock: two attachments queued in the same
+    // millisecond would otherwise share an id, and the second would take over
+    // the first's progress accounting and leave its card stuck.
+    this.transferSeq += 1;
+    const transferId = `tx-${this.identity.peerID}-${String(Date.now())}-${String(this.transferSeq)}`;
     const perItemBytes = fileBytes.length / (items.length || 1);
     this.outbound.set(transferId, {
       remaining: items.length,
@@ -241,7 +283,7 @@ export class FileTransferService {
           recipientPeerID.slice(0, 8))
         : "",
       type: meta.type,
-      name: meta.name || defaultAttachmentName(meta.type),
+      name: fileName,
       totalBytes: fileBytes.length,
       startedAtMs: Date.now(),
     });

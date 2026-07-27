@@ -51,10 +51,20 @@ const PTT_MAX_BURST_BYTES = 210;
 // Maximum frames per DATA packet (guard against misconfiguration).
 const MAX_FRAMES_PER_PACKET = 8;
 
+// Ceiling on the finalized voice note kept for a burst. At ~130 bytes a frame
+// and 64 ms per frame this is a little over four minutes, well past the 512 KiB
+// the file transfer would accept anyway; the cap is here so a stuck microphone
+// cannot grow the array without bound.
+const MAX_RECORDED_FRAMES = 4096;
+
 // Fixed burst packet header size: burstID(8) + seq(2) + flags(1) = 11 bytes.
 const BURST_HEADER_SIZE = 11;
 
 const BURST_ID_SIZE = 8;
+
+// One AAC-LC frame is 1024 samples, which at 16 kHz is 64 ms. The receiver
+// fills a missing packet with exactly this much silence.
+const MS_PER_FRAME = 64;
 
 // ---- Types ------------------------------------------------------------------
 
@@ -62,7 +72,16 @@ export interface VoiceCaptureConfig {
   senderPeerID: string; // 16 hex chars
   signingPrivKey: Uint8Array;
   codec?: VoiceCodecId;
+  // Emits a signed VOICE_FRAME packet for the public mesh.
   onPacket: (packet: Packet) => void;
+  // Emits the same burst payload for a DM, where it rides inside the peer's
+  // Noise session instead of being broadcast in the clear. When set, the burst
+  // goes here and `onPacket` is not used: a DM burst must never also be
+  // broadcast, or the audio meant for one person is heard by the whole room.
+  //
+  // Returns false when the frame could not be sent (no session), which ends
+  // the burst rather than talking into a void.
+  onDmPayload?: (payload: Uint8Array) => boolean;
 }
 
 export interface AudioCaptureBackend {
@@ -84,6 +103,13 @@ export class VoiceCaptureSession {
   private burstStartMs = 0;
   private pendingFrames: Uint8Array[] = [];
   private pendingSize = 0;
+  // Every frame sent this burst, kept so the same audio can be finalized as an
+  // ordinary voice note when the talker lets go. That copy is what reaches
+  // anyone who was out of range while it was live, and what stays in the chat
+  // afterwards. Bounded: past the cap the burst is longer than anyone will
+  // listen back to, and the live audio is unaffected either way.
+  private recorded: Uint8Array[] = [];
+  private recordedBytes = 0;
   private readonly senderIDBytes: Uint8Array;
 
   constructor(config: VoiceCaptureConfig, backend: AudioCaptureBackend) {
@@ -110,6 +136,8 @@ export class VoiceCaptureSession {
     this.burstStartMs = Date.now();
     this.pendingFrames = [];
     this.pendingSize = 0;
+    this.recorded = [];
+    this.recordedBytes = 0;
 
     // Send START packet (seq=0).
     this.emit(encodeBurstStart(this.burstID, this.codec));
@@ -142,6 +170,8 @@ export class VoiceCaptureSession {
     await this.backend.stopCapture();
     this.pendingFrames = [];
     this.pendingSize = 0;
+    this.recorded = [];
+    this.recordedBytes = 0;
     this.emit(encodeBurstCanceled(this.burstID, this.seq));
   }
 
@@ -153,6 +183,12 @@ export class VoiceCaptureSession {
 
   private addFrame(frameData: Uint8Array): void {
     const frameCost = 2 + frameData.length; // u16 length prefix + data
+    // A single frame that cannot fit a packet on its own is dropped rather
+    // than emitted oversize. The encoder's ~130-byte frames never reach this;
+    // it stops a misconfigured encoder from pushing every voice packet into
+    // the fragment scheduler, which is the one thing the 210-byte budget
+    // exists to prevent. Matches VoiceBurstPacketizer.add in bitchat.
+    if (BURST_HEADER_SIZE + frameCost > PTT_MAX_BURST_BYTES) return;
     // If adding this frame would exceed the budget or the frame count limit,
     // flush what we have first.
     if (
@@ -164,6 +200,25 @@ export class VoiceCaptureSession {
     }
     this.pendingFrames.push(frameData);
     this.pendingSize += frameCost;
+    if (this.recorded.length < MAX_RECORDED_FRAMES) {
+      this.recorded.push(frameData);
+      this.recordedBytes += frameData.length;
+    }
+  }
+
+  // The burst as a standalone, playable file, or null when nothing was
+  // captured. Read after stopPtt; cancelPtt discards it, because a cancelled
+  // burst should leave nothing behind even though the live audio already
+  // played on the far side.
+  finalizedRecording(): Uint8Array | null {
+    if (this.recorded.length === 0) return null;
+    return framesToAdtsFile(this.recorded);
+  }
+
+  // Milliseconds of audio captured, from the frame count rather than the wall
+  // clock: it is the length of what is actually in the file.
+  get recordedDurationMs(): number {
+    return this.recorded.length * MS_PER_FRAME;
   }
 
   private flushPending(): void {
@@ -177,6 +232,16 @@ export class VoiceCaptureSession {
   }
 
   private emit(burstPayload: Uint8Array): void {
+    // A DM burst is sealed to one peer and never broadcast. Same bytes, and
+    // the only difference is the envelope they travel in.
+    if (this.config.onDmPayload !== undefined) {
+      const sent = this.config.onDmPayload(burstPayload);
+      // The session went away mid-burst (peer walked off, or it was never
+      // established). Stop rather than keep encoding into nothing; live audio
+      // has no queue to wait in.
+      if (!sent) this.active = false;
+      return;
+    }
     const packet: Packet = {
       type: PacketType.VOICE_FRAME,
       ttl: 7,
@@ -260,6 +325,60 @@ export function encodeBurstCanceled(
   const buf = new Uint8Array(BURST_HEADER_SIZE);
   writeBurstHeader(buf, burstID, seq, BurstFlags.CANCELED);
   return buf;
+}
+
+// ---- ADTS wrapping ----------------------------------------------------------
+
+// Wrap raw AAC frames in ADTS headers to make a standalone, playable file.
+//
+// The frames on the wire are bare AAC: no container, no header, because the
+// codec byte already says what they are and every byte saved is Bluetooth time.
+// A file needs to be self-describing, and ADTS is the cheapest way to do that:
+// seven bytes in front of each frame carrying the profile, sample rate, and
+// channel count. Every player on both platforms reads it, and audio/aac is on
+// bitchat's MIME allow-list, so the result travels as an ordinary voice note.
+//
+// This is what lets a live burst also become something durable: the people in
+// range heard it as it was spoken, and everyone else gets the recording.
+const ADTS_HEADER_BYTES = 7;
+// Sampling frequency index 8 = 16 kHz, in the MPEG-4 table.
+const ADTS_FREQ_INDEX_16K = 8;
+// AAC-LC. ADTS stores "object type minus one", so AAC-LC (2) is written as 1.
+const ADTS_PROFILE_AAC_LC = 1;
+const ADTS_CHANNELS_MONO = 1;
+
+function writeAdtsHeader(
+  out: Uint8Array,
+  offset: number,
+  frameLen: number,
+): void {
+  const total = ADTS_HEADER_BYTES + frameLen;
+  out[offset] = 0xff;
+  // Sync word continues, MPEG-4, layer 0, no CRC.
+  out[offset + 1] = 0xf1;
+  out[offset + 2] =
+    (ADTS_PROFILE_AAC_LC << 6) |
+    (ADTS_FREQ_INDEX_16K << 2) |
+    ((ADTS_CHANNELS_MONO >> 2) & 0x01);
+  out[offset + 3] = ((ADTS_CHANNELS_MONO & 0x03) << 6) | ((total >> 11) & 0x03);
+  out[offset + 4] = (total >> 3) & 0xff;
+  // Bottom 3 bits of the length, then buffer fullness set to "variable".
+  out[offset + 5] = ((total & 0x07) << 5) | 0x1f;
+  out[offset + 6] = 0xfc;
+}
+
+export function framesToAdtsFile(frames: readonly Uint8Array[]): Uint8Array {
+  let size = 0;
+  for (const frame of frames) size += ADTS_HEADER_BYTES + frame.length;
+  const out = new Uint8Array(size);
+  let off = 0;
+  for (const frame of frames) {
+    writeAdtsHeader(out, off, frame.length);
+    off += ADTS_HEADER_BYTES;
+    out.set(frame, off);
+    off += frame.length;
+  }
+  return out;
 }
 
 // ---- Parsed burst packet types ----------------------------------------------

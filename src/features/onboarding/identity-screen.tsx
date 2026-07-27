@@ -33,16 +33,8 @@ export default function IdentityScreen({
   const Colors = useThemeColors();
   const styles = useMemo(() => createStyles(Colors), [Colors]);
   const [spinAnim] = useState(() => new Animated.Value(0));
-  const [fadeAnim] = useState(() => new Animated.Value(0));
 
   useEffect(() => {
-    // Fade in the screen.
-    Animated.timing(fadeAnim, {
-      toValue: 1,
-      duration: 400,
-      useNativeDriver: true,
-    }).start();
-
     // Spin the ring indicator.
     Animated.loop(
       Animated.timing(spinAnim, {
@@ -80,7 +72,7 @@ export default function IdentityScreen({
     return () => {
       cancelled = true;
     };
-  }, [onComplete, fadeAnim, spinAnim]);
+  }, [onComplete, spinAnim]);
 
   const spin = spinAnim.interpolate({
     inputRange: [0, 1],
@@ -89,7 +81,7 @@ export default function IdentityScreen({
 
   return (
     <SafeAreaView style={styles.root}>
-      <Animated.View style={[styles.inner, { opacity: fadeAnim }]}>
+      <View style={styles.inner}>
         {/* Spinner */}
         <View style={styles.spinnerWrapper}>
           <Animated.View
@@ -116,7 +108,7 @@ export default function IdentityScreen({
             </View>
           ))}
         </View>
-      </Animated.View>
+      </View>
     </SafeAreaView>
   );
 }

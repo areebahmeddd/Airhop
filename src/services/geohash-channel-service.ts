@@ -31,11 +31,8 @@ import {
   encodeBitchatAckEnvelope,
   encodeBitchatDmEnvelope,
 } from "../core/nostr/bitchat-envelope";
-import { GeoRelayDirectory } from "../core/nostr/geo-relay";
-import {
-  loadGeoRelays,
-  refreshGeoRelays,
-} from "../core/nostr/geo-relay-source";
+import { GeoRelayDirectory, mergeGeoRelays } from "../core/nostr/geo-relay";
+import { loadGeoRelays } from "../core/nostr/geo-relay-source";
 import {
   deriveGeohashIdentity,
   deriveGeohashSeed,
@@ -54,6 +51,7 @@ import {
 import { useActivityStore } from "../store/activity-store";
 import { useChatStore } from "../store/chat-store";
 import { useNoticesStore } from "../store/notices-store";
+import { useSettingsStore } from "../store/settings-store";
 import { getCoarseLocation, type Coords } from "./location-service";
 
 // Channel name → geohash precision.
@@ -173,6 +171,18 @@ const TAG_GEOHASH = "g";
 const TAG_EXPIRATION = "expiration"; // NIP-40
 const TAG_TOPIC = "t"; // ["t","urgent"] parity with urgent board posts
 
+// Hooks the mesh layer supplies so geohash chat can cross the mesh/internet
+// boundary through a gateway peer. Both are optional; without them the service
+// is a plain internet-only geohash client.
+export interface GatewayHooks {
+  // Relays were unreachable for our own post: ferry the signed event to a nearby
+  // internet gateway peer over the mesh (uplink carrier), if one is reachable.
+  uplink(event: NostrEvent, geohash: string): void;
+  // Every channel event our relay subscription delivers. When this device is a
+  // gateway it may rebroadcast the event onto the mesh (downlink carrier).
+  onRelayEvent(event: NostrEvent, geohash: string): void;
+}
+
 export interface GeoParticipant {
   pubkey: string;
   nickname: string;
@@ -219,23 +229,26 @@ export class GeohashChannelService {
   // One presence broadcaster per geohash, since each signs with its own key.
   private readonly presenceByGeohash = new Map<string, GeohashPresence>();
 
+  // Mesh<->internet bridge hooks, injected by MeshService. Undefined in tests
+  // and in an internet-only build.
+  private readonly gateway?: GatewayHooks;
+
   constructor(
     client: NostrClient,
     signingPrivKey: Uint8Array,
     nickname: string,
     localPeerID: string,
+    gateway?: GatewayHooks,
   ) {
     this.client = client;
     this.nickname = nickname;
     this.localPeerID = localPeerID;
+    this.gateway = gateway;
     this.geohashSeed = deriveGeohashSeed(signingPrivKey);
-    // Load the freshest relay list we have synchronously (cached CSV from a
-    // prior fetch, else the vendored snapshot), then refresh from the live
-    // directory bitchat also reads so our closest-relay picks stay aligned.
+    // Load the vendored relay directory synchronously. It is kept current by a
+    // weekly CI sync from bitchat's reviewed list (see geo-relay-source.ts); we
+    // never fetch it at runtime, so there is nothing to refresh here.
     this.relayDirectory.loadEntries(loadGeoRelays());
-    void refreshGeoRelays().then((fresh) => {
-      if (fresh) this.relayDirectory.loadEntries(fresh);
-    });
   }
 
   // The identity used for one geohash. Derived lazily and cached.
@@ -317,9 +330,16 @@ export class GeohashChannelService {
   // routing our geohash traffic through these relays instead of the default DM
   // pool is what makes the public location channels actually interoperate.
   private relaysForGeohash(geohash: string): string[] {
-    return this.relayDirectory.closestRelaysToGeohash(
+    const nearest = this.relayDirectory.closestRelaysToGeohash(
       geohash,
       decodeGeohash,
+      GEO_RELAY_COUNT,
+    );
+    const { geoRelayDiscovery, customRelays } = useSettingsStore.getState();
+    return mergeGeoRelays(
+      nearest,
+      customRelays,
+      geoRelayDiscovery,
       GEO_RELAY_COUNT,
     );
   }
@@ -329,11 +349,13 @@ export class GeohashChannelService {
   relaysForChannel(channel: string, count = GEO_RELAY_COUNT): string[] {
     const geohash = this.channelGeohash.get(channel);
     if (geohash === undefined) return [];
-    return this.relayDirectory.closestRelaysToGeohash(
+    const nearest = this.relayDirectory.closestRelaysToGeohash(
       geohash,
       decodeGeohash,
       count,
     );
+    const { geoRelayDiscovery, customRelays } = useSettingsStore.getState();
+    return mergeGeoRelays(nearest, customRelays, geoRelayDiscovery, count);
   }
 
   // The geohash this channel currently resolves to, or null when location is
@@ -371,23 +393,28 @@ export class GeohashChannelService {
   ): Promise<boolean> {
     const geohash = this.channelGeohash.get(channel);
     if (geohash === undefined) return false;
-    try {
-      await this.presenceFor(geohash).publishChannelMessage(
-        geohash,
-        text,
-        this.nickname,
-        msgId,
-        this.relaysForGeohash(geohash),
-        // A teleported cell is one we are not standing in, so mark our posts
-        // teleported for bitchat's participant list, matching its own clients.
-        isManualGeoChannel(channel),
-      );
-      return true;
-    } catch {
-      // Relay unreachable. The BLE broadcast still happened, so this is a
-      // partial send rather than a failure.
-      return false;
+    const { event, delivered } = await this.presenceFor(
+      geohash,
+    ).publishChannelMessage(
+      geohash,
+      text,
+      this.nickname,
+      msgId,
+      this.relaysForGeohash(geohash),
+      // A teleported cell is one we are not standing in, so mark our posts
+      // teleported for bitchat's participant list, matching its own clients.
+      isManualGeoChannel(channel),
+      // Skip the publish attempt (and its timeout) when no relay is live, so an
+      // offline send ferries to a gateway immediately instead of after ~8s.
+      this.client.isConnected,
+    );
+    if (!delivered) {
+      // No relay reachable directly. If a nearby peer bridges to the internet,
+      // hand it our signed event to publish on our behalf. The BLE broadcast of
+      // this same message still happened, so this is additive, not a failure.
+      this.gateway?.uplink(event, geohash);
     }
+    return delivered;
   }
 
   // Everyone who has posted in this channel recently, newest first.
@@ -679,6 +706,12 @@ export class GeohashChannelService {
     const close = this.presenceFor(geohash).subscribeChannel(
       geohash,
       (event) => {
+        // Gateway downlink: hand every inbound relay event to the mesh layer,
+        // which rebroadcasts it to mesh-only peers when this device is a
+        // gateway. Runs before the own-echo/membership gates below because a
+        // gateway must relay events for the cell whether or not it renders
+        // them, and even for cells it is only bridging.
+        this.gateway?.onRelayEvent(event, geohash);
         // Ignore the echo of our own publishes; the sender already rendered
         // the message optimistically.
         if (event.pubkey === selfPubkey) return;

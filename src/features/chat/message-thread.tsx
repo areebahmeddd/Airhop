@@ -15,6 +15,7 @@ import * as Clipboard from "expo-clipboard";
 import * as DocumentPicker from "expo-document-picker";
 import * as FileSystem from "expo-file-system";
 import * as ImagePicker from "expo-image-picker";
+import * as MediaLibrary from "expo-media-library";
 import * as ScreenCapture from "expo-screen-capture";
 import * as Sharing from "expo-sharing";
 import { useVideoPlayer, VideoView } from "expo-video";
@@ -56,12 +57,14 @@ import {
   reportWalletError,
   sendEcashToPeer,
 } from "../../services/ecash-transfer";
+import { AttachmentTooLargeError } from "../../services/file-transfer-service";
 import {
   isGeoChannel,
   isManualGeoChannel,
   manualGeohashOf,
   type GeoParticipant,
 } from "../../services/geohash-channel-service";
+import { prepareImageForSend } from "../../services/image-compress";
 import { hasLocationPermission } from "../../services/location-service";
 import { getMeshService } from "../../services/mesh-service";
 import { hostOf, receiveToken } from "../../services/wallet-service";
@@ -74,6 +77,7 @@ import {
 } from "../../store/chat-store";
 import { useContactsStore } from "../../store/contacts-store";
 import { useGroupStore } from "../../store/group-store";
+import { useMeshStateStore } from "../../store/mesh-state-store";
 import { usePeerStore } from "../../store/peer-store";
 import { usePlaceNamesStore } from "../../store/place-names-store";
 import {
@@ -88,6 +92,7 @@ import {
 import { useWalletStore } from "../../store/wallet-store";
 import Avatar from "../../ui/components/avatar";
 import BottomSheet from "../../ui/components/bottom-sheet";
+import Toast from "../../ui/components/toast";
 import {
   FontFamily,
   FontSize,
@@ -102,6 +107,7 @@ import { resolveDisplayName } from "../../utils/display-name";
 import { canSendMedia } from "../../utils/media-policy";
 import { activeMentionQuery, applyMention } from "../../utils/mentions";
 import { ensurePermission } from "../../utils/permissions";
+import { resolveThreadScroll } from "../../utils/thread-scroll";
 import {
   isNostrId,
   NOSTR_ID_PREFIX,
@@ -186,14 +192,16 @@ interface Props {
   // put) and when picking "Message" on a channel sender's profile sheet
   // (jump straight into the DM with them).
   onNavigateToChannel: (channel: string) => void;
+  // Unread waiting on the list this thread was opened from, so the back button
+  // can say what is behind it. Scoped by the parent to the matching side:
+  // Direct while in a DM, Rooms while in a channel or group. The thread you
+  // are reading is the active channel, so it never counts toward its own badge.
+  backUnreadCount?: number;
 }
 
 // Broadcast wire format for a screenshot notice, matching bitchat's action
 // message convention so both platforms recognize it and render it inline
 // instead of as a regular chat bubble.
-// How long a just-sent message is held before it actually transmits, giving a
-// window to Undo. Short enough not to read as lag, long enough to react.
-const UNDO_WINDOW_MS = 3000;
 
 // How close to the end of the thread still counts as "at the bottom", in points.
 // Roughly one bubble: near enough that following a new message reads as the list
@@ -208,6 +216,55 @@ const SHEET_HANDOFF_MS = 250;
 // scrim: the point of that sheet is to look at one photo, and the thread behind
 // it competing for attention defeats that.
 const COMPOSER_SCRIM = "rgba(0,0,0,0.85)";
+
+// Photo and video bubbles are all one width, so a run of them lines up down the
+// thread instead of each bubble taking the width of whatever caption happens to
+// sit under it. The height follows the photo's own shape, clamped: unclamped, a
+// phone screenshot (about 0.45 wide-to-tall) would be a column half the screen
+// high, and a panorama would be a letterbox slit. Beyond the clamp the photo is
+// centre-cropped to fit, which is what every messenger does, and tapping still
+// opens the untouched original full screen.
+// A voice note is speech on a ~22 KB/s radio, so it is recorded as speech:
+// mono, 16 kHz (the band a voice actually occupies), 32 kbps. The stock
+// HIGH_QUALITY preset is 44.1 kHz stereo at 128 kbps, four times the bytes for
+// nothing anyone can hear on a phone speaker, which put a one-minute note over
+// the 512 KiB wire cap and spent a minute of Bluetooth getting there. Still AAC
+// in an .m4a container, so bitchat and any ordinary player read it unchanged.
+const VOICE_RECORDING = {
+  ...RecordingPresets.HIGH_QUALITY,
+  sampleRate: 16000,
+  numberOfChannels: 1,
+  bitRate: 32000,
+};
+
+// Attachments leave one at a time on one paced queue, so at most this many
+// transfer cards can be telling the user anything; the rest are at 0% and get
+// counted on a single line instead.
+const TRANSFER_CARD_LIMIT = 2;
+
+// How often to re-check whether the mic button would go live. Slow on purpose:
+// this only changes when peers arrive or leave, and the answer drives an icon,
+// not a decision.
+const LIVE_AVAILABILITY_POLL_MS = 3000;
+
+// A burst shorter than this is a mis-tap, not a message. Nothing is kept for
+// it: the room may have heard a click, and a quarter-second bubble in the
+// thread afterwards is worse than nothing.
+const MIN_BURST_KEEP_MS = 500;
+
+const MEDIA_BUBBLE_WIDTH = 220;
+const MEDIA_MIN_ASPECT = 0.75; // portrait floor: 220 x 293
+const MEDIA_MAX_ASPECT = 1.9; // landscape ceiling: 220 x 116
+// Until the real dimensions are read, 4:3 keeps the row from jumping far.
+const MEDIA_DEFAULT_ASPECT = 4 / 3;
+
+function mediaHeightForAspect(aspect: number | null): number {
+  const ratio = Math.min(
+    MEDIA_MAX_ASPECT,
+    Math.max(MEDIA_MIN_ASPECT, aspect ?? MEDIA_DEFAULT_ASPECT),
+  );
+  return Math.round(MEDIA_BUBBLE_WIDTH / ratio);
+}
 
 function screenshotNoticeText(nickname: string): string {
   return `* ${nickname} took a screenshot *`;
@@ -244,6 +301,10 @@ function activeSlashQuery(draft: string): string | null {
 
 // (A previous isScreenshotNotice() text-sniffer was removed: matching on user
 // text let any peer forge a system row and destroyed the real message content.)
+
+// Fixed bar heights for the voice-note waveform. A constant, not a literal in
+// the render, so the playhead maths below has one length to divide by.
+const VOICE_WAVE_BARS = [6, 12, 8, 16, 10, 14, 8, 6, 12, 10, 8, 14];
 
 interface VoiceNoteBubbleProps {
   uri: string;
@@ -297,19 +358,21 @@ const videoAttachmentStyles = StyleSheet.create({
 function UndoSendPill({
   onUndo,
   Colors,
+  durationMs,
 }: {
   onUndo: () => void;
   Colors: ReturnType<typeof useThemeColors>;
+  durationMs: number;
 }): React.JSX.Element {
   const styles = useMemo(() => createUndoStyles(Colors), [Colors]);
   const progress = useSharedValue(1);
   useEffect(() => {
     progress.value = 1;
     progress.value = withTiming(0, {
-      duration: UNDO_WINDOW_MS,
+      duration: durationMs,
       easing: Easing.linear,
     });
-  }, [progress]);
+  }, [progress, durationMs]);
   const fillStyle = useAnimatedStyle(() => ({
     width: `${progress.value * 100}%`,
   }));
@@ -393,9 +456,18 @@ function TransferProgressList({
 
   if (mine.length === 0) return null;
 
+  // Only the front of the queue gets a card. Attachments go out one at a time
+  // over one paced radio queue, so everything behind the first is sitting at 0%
+  // by definition: five voice notes fired off in a row produced five near
+  // identical cards, four of them reporting nothing, shoving the thread and the
+  // compose bar up the screen. One card for what is moving, one line for what
+  // is waiting.
+  const shown = mine.slice(0, TRANSFER_CARD_LIMIT);
+  const queued = mine.length - shown.length;
+
   return (
     <View style={styles.wrap}>
-      {mine.map((t) => {
+      {shown.map((t) => {
         const pct =
           t.totalBytes > 0
             ? Math.min(
@@ -502,6 +574,9 @@ function TransferProgressList({
           </View>
         );
       })}
+      {queued > 0 && (
+        <Text style={styles.queued}>{queued} more waiting to send</Text>
+      )}
     </View>
   );
 }
@@ -569,6 +644,13 @@ function createTransferStyles(Colors: ReturnType<typeof useThemeColors>) {
       paddingHorizontal: Spacing.md,
       paddingVertical: Spacing.sm,
     },
+    // The tail of the queue, as one muted line rather than a stack of cards
+    // that all say 0%.
+    queued: {
+      fontSize: FontSize.xs,
+      color: Colors.textMuted,
+      paddingHorizontal: Spacing.md,
+    },
     body: { flex: 1, gap: 3 },
     topRow: {
       flexDirection: "row",
@@ -609,6 +691,54 @@ function createTransferStyles(Colors: ReturnType<typeof useThemeColors>) {
   });
 }
 
+// A photo in a bubble, sized to its own shape.
+//
+// The dimensions are read off the file rather than carried in the attachment:
+// a photo that arrived from a peer has no metadata beyond its bytes, so this is
+// the one path that works for both what we sent and what we received.
+function ImageAttachment({
+  uri,
+  onPress,
+}: {
+  uri: string;
+  onPress: () => void;
+}): React.JSX.Element {
+  const Colors = useThemeColors();
+  const styles = useMemo(() => createStyles(Colors), [Colors]);
+  const [aspect, setAspect] = useState<number | null>(null);
+
+  useEffect(() => {
+    let alive = true;
+    Image.getSize(
+      uri,
+      (w, h) => {
+        if (alive && h > 0) setAspect(w / h);
+      },
+      () => {
+        // Unreadable file: the default shape below still renders the frame, and
+        // the Image itself shows its own failure state.
+      },
+    );
+    return () => {
+      alive = false;
+    };
+  }, [uri]);
+
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="imagebutton"
+      accessibilityLabel="View photo full screen"
+    >
+      <Image
+        source={{ uri }}
+        style={[styles.attachImage, { height: mediaHeightForAspect(aspect) }]}
+        resizeMode="cover"
+      />
+    </Pressable>
+  );
+}
+
 function VoiceNoteBubble({
   uri,
   durationMs,
@@ -639,12 +769,30 @@ function VoiceNoteBubble({
     }
   }, [isPlaying, onFinished, player, status.didJustFinish]);
 
+  // How long the clip runs. The sender's own figure is authoritative when it is
+  // there, but a voice note from bitchat has none: bitchat's file packet has no
+  // duration field, so those arrived reading 0:00. The player knows the real
+  // answer once the file is loaded, which covers every source.
+  const totalSecs =
+    durationMs > 0
+      ? Math.round(durationMs / 1000)
+      : Math.round(status.duration);
+  // Elapsed while playing, total when idle, the way every messenger does it.
+  const shownSecs = isPlaying ? Math.floor(status.currentTime) : totalSecs;
+  // How far through, for the waveform fill. Guarded against a duration of 0,
+  // which is what an unloaded or unreadable file reports.
+  const progress =
+    isPlaying && status.duration > 0
+      ? Math.min(1, status.currentTime / status.duration)
+      : 0;
+
   // The play button sits on a neutral surface circle (same pattern as every
   // other icon-in-a-circle in this app), so its icon is always readable
   // regardless of theme. The waveform bars and duration text sit directly
   // on the bubble itself, so those still need to track isMine like the
   // message text next to them does.
-  const onBubbleColor = isMine ? styles.onMyBubble : styles.onTheirBubble;
+  const barColor = isMine ? styles.barOnMyBubble : styles.barOnTheirBubble;
+  const textColor = isMine ? styles.textOnMyBubble : styles.textOnTheirBubble;
 
   return (
     <View style={styles.attachVoice}>
@@ -660,20 +808,27 @@ function VoiceNoteBubble({
           color={Colors.textPrimary}
         />
       </Pressable>
+      {/* The bars are decorative, not a real waveform (the file is not
+          analysed), but they carry the one thing that is real: how far in you
+          are. Bars behind the playhead are solid, the rest stay faded, so a
+          glance says both "this is playing" and "this much is left". */}
       <View style={styles.attachVoiceWave}>
-        {[6, 12, 8, 16, 10, 14, 8, 6, 12, 10, 8, 14].map((h, i) => (
-          <View
-            key={i}
-            style={[
-              styles.attachVoiceBar,
-              onBubbleColor,
-              { height: h, opacity: isPlaying ? 1 : 0.5 },
-            ]}
-          />
-        ))}
+        {VOICE_WAVE_BARS.map((h, i) => {
+          const played = isPlaying && i / VOICE_WAVE_BARS.length < progress;
+          return (
+            <View
+              key={i}
+              style={[
+                styles.attachVoiceBar,
+                barColor,
+                { height: h, opacity: played ? 1 : 0.4 },
+              ]}
+            />
+          );
+        })}
       </View>
-      <Text style={[styles.attachVoiceDuration, onBubbleColor]}>
-        {formatDuration(Math.round(durationMs / 1000))}
+      <Text style={[styles.attachVoiceDuration, textColor]}>
+        {formatDuration(shownSecs)}
       </Text>
     </View>
   );
@@ -687,6 +842,7 @@ export default function MessageThread({
   targetMessageId,
   targetMessageTrigger,
   onNavigateToChannel,
+  backUnreadCount = 0,
 }: Props): React.JSX.Element {
   const Colors = useThemeColors();
   const styles = useMemo(() => createStyles(Colors), [Colors]);
@@ -809,6 +965,9 @@ export default function MessageThread({
     }
   }, [channelGeohash]);
 
+  const bridgeActive = useMeshStateStore((s) => s.bridgeActive);
+  const bridgePeopleAcross = useMeshStateStore((s) => s.bridgePeopleAcross);
+
   // Header subtitle for a channel (not a group/DM): place name and/or live
   // count, falling back to a plain label.
   const channelSubtitleParts: string[] = [];
@@ -818,12 +977,22 @@ export default function MessageThread({
   if (memberCount > 0) {
     channelSubtitleParts.push(`${memberCount} ${isGeo ? "active" : "nearby"}`);
   }
+  // On the public mesh channel, show that it is bridged (and how many are
+  // reachable across the bridge) so people in the thread know their messages
+  // are reaching beyond Bluetooth, not just the Mesh-tab banner.
+  if (channel === "#bluetooth" && bridgeActive) {
+    channelSubtitleParts.push(
+      bridgePeopleAcross > 0
+        ? `${bridgePeopleAcross} across bridge`
+        : "bridged",
+    );
+  }
   const channelSubtitle =
     channelSubtitleParts.length > 0
       ? channelSubtitleParts.join("  ·  ")
       : "Public channel";
 
-  const audioRecorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
+  const audioRecorder = useAudioRecorder(VOICE_RECORDING);
   const recorderState = useAudioRecorderState(audioRecorder);
   const dmPeerID = channel.startsWith("dm:") ? channel.slice(3) : null;
   const isDMPeerOnline =
@@ -896,17 +1065,33 @@ export default function MessageThread({
   );
 
   const [isPTTActive, setIsPTTActive] = useState(false);
+  // Whether this hold is streaming live or recording a note to send on
+  // release. Decided per press, not per app: see handleTalkStart.
+  const [isTalkingLive, setIsTalkingLive] = useState(false);
+  // Display name of whoever is talking right now, or null. Drives the floor
+  // courtesy hint on the mic button.
+  const [liveTalker, setLiveTalker] = useState<string | null>(null);
+  // Which press of the mic button we are on, and whether that press went live.
+  // Refs rather than state because the gesture handlers are async and read
+  // these after awaits, where a render-old closure would lie to them.
+  const holdSeqRef = useRef(0);
+  const liveHoldRef = useRef(false);
+  const liveVoiceEnabled = useSettingsStore((s) => s.liveVoiceEnabled);
   const isRecording = recorderState.isRecording;
   // Voice recording
   const [recordingSecs, setRecordingSecs] = useState(0);
   const recordingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const [playingUri, setPlayingUri] = useState<string | null>(null);
+  // Which voice note is playing, by message id. One at a time: starting a
+  // second pauses the first, since two clips over one speaker is noise.
+  const [playingMessageId, setPlayingMessageId] = useState<string | null>(null);
   const [revealedAttachments, setRevealedAttachments] = useState<Set<string>>(
     new Set(),
   );
   // URI of the photo currently shown in the full-screen viewer, or null.
   const [fullscreenImage, setFullscreenImage] = useState<string | null>(null);
   const autoDownloadMedia = useSettingsStore((s) => s.autoDownloadMedia);
+  const bridgeEnabled = useSettingsStore((s) => s.bridgeEnabled);
+  const undoSendSeconds = useSettingsStore((s) => s.undoSendSeconds);
   const [showAttachMenu, setShowAttachMenu] = useState(false);
   const [showSendEcash, setShowSendEcash] = useState(false);
   const [sendingEcash, setSendingEcash] = useState(false);
@@ -939,10 +1124,14 @@ export default function MessageThread({
   const [pendingAttachment, setPendingAttachment] =
     useState<PendingAttachment | null>(null);
   const [captionDraft, setCaptionDraft] = useState("");
-  const [showScreenshotWarning, setShowScreenshotWarning] = useState(false);
   // Brief delivery status hint shown below the compose bar for DMs.
   // "queued" = no route available; cleared after 4 seconds.
   const [dmStatus, setDmStatus] = useState<"queued" | "no-reach" | null>(null);
+  // Brief confirmation pill. Separate from dmStatus: that strip explains why a
+  // message has not arrived and belongs above the compose bar; this confirms
+  // something the user just did and has to show up wherever they did it,
+  // including over the full-screen photo viewer.
+  const [toast, setToast] = useState<string | null>(null);
   const dmStatusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const listRef = useRef<FlatList<ChatMessage>>(null);
   // Long-press action sheet target.
@@ -957,8 +1146,12 @@ export default function MessageThread({
   const pendingSendRef = useRef<{
     msg: ChatMessage;
     timer: ReturnType<typeof setTimeout>;
+    nearbyOnly: boolean;
   } | null>(null);
   const [heldMessage, setHeldMessage] = useState<ChatMessage | null>(null);
+  // "Nearby only": keep the next public #bluetooth message off the internet
+  // bridge (radio-only), even while bridging is on. Reset after each send.
+  const [nearbyOnly, setNearbyOnly] = useState(false);
   const [forwardSource, setForwardSource] = useState<ChatMessage | null>(null);
   // Set right after scrolling to a search result, cleared after a brief
   // flash. Not persisted (unlike isStarred), purely a transient UI cue.
@@ -1003,11 +1196,21 @@ export default function MessageThread({
     if (isDM && appActive) getMeshService()?.sendReadReceipts(channel.slice(3));
   }, [isDM, channel, msgs, appActive]);
 
-  // Where the reader is in the thread, and whether they have been placed at the
-  // newest message yet. Refs, not state: these are read inside scroll handlers
-  // on every frame and must never themselves cause a render.
+  // Where the reader is in the thread. Refs, not state: these are read inside
+  // scroll handlers on every frame and must never themselves cause a render.
   const atBottomRef = useRef(true);
-  const hasLandedRef = useRef(false);
+  // True until the reader takes hold of the list, by dragging it or by being
+  // sent to a specific message. Until then we are still placing them at the
+  // newest message, and every layout measurement the list reports is another
+  // chance to do that: opening a thread is not one event, it is one per batch
+  // FlatList renders. Treating those as the reader's own position is what made
+  // reopening a thread scroll itself down two or three times over.
+  const landingRef = useRef(true);
+  // Message count the list has already been scrolled for, seeded with what is
+  // on screen at mount so the first measurement counts as landing, not as new
+  // content. This is what separates "a message arrived" from "the list is still
+  // measuring itself".
+  const msgCountRef = useRef(msgs.length);
   // The one piece of it the UI needs, so the jump-to-latest pill can appear.
   const [showJumpToLatest, setShowJumpToLatest] = useState(false);
 
@@ -1020,6 +1223,10 @@ export default function MessageThread({
     // end, and none of them mean the reader has scrolled away.
     const atBottom = distanceFromBottom <= AT_BOTTOM_TOLERANCE;
     atBottomRef.current = atBottom;
+    // While still landing, a scroll event is our own placement caught mid-way
+    // through the list settling, not the reader moving. Offering to jump to
+    // the latest message at that point flashes a pill they never earned.
+    if (landingRef.current) return;
     setShowJumpToLatest((shown) => (shown === !atBottom ? shown : !atBottom));
   }
 
@@ -1078,6 +1285,9 @@ export default function MessageThread({
     (id: string) => {
       const index = msgs.findIndex((m) => m.id === id);
       if (index === -1) return;
+      // Being sent to a message ends the landing: the reader is looking at a
+      // specific point in the thread now, so nothing may pull them off it.
+      landingRef.current = false;
       listRef.current?.scrollToIndex({
         index,
         animated: true,
@@ -1202,7 +1412,12 @@ export default function MessageThread({
         isMine: true,
         isSystem: true,
       });
-      setShowScreenshotWarning(true);
+      showAlert(
+        "Heads up",
+        isDM
+          ? `${resolveDisplayName(channel.slice(3))} was notified that you took a screenshot of this conversation.`
+          : "Everyone in this channel was notified that you took a screenshot.",
+      );
     });
     return () => subscription.remove();
   }, [channel, isDM, isGroup, localNickname, localPeerID, addMessage]);
@@ -1210,7 +1425,7 @@ export default function MessageThread({
   // The real transmission, run when the hold window elapses or is committed.
   // Reads everything from the message and from live getters, so it is safe to
   // call from a stale closure (a fired timer, or the unmount flush).
-  function transmit(msg: ChatMessage): void {
+  function transmit(msg: ChatMessage, nearbyOnly = false): void {
     const setStatus = useChatStore.getState().setMessageStatus;
     const msgChannel = msg.channel;
     const service = getMeshService();
@@ -1258,7 +1473,7 @@ export default function MessageThread({
     } else {
       // A channel broadcast that reaches no link and no Nostr cell reaches no
       // one; say so rather than rendering a confident sent bubble.
-      const sent = service.sendChannelMessage(msgChannel, msg.text);
+      const sent = service.sendChannelMessage(msgChannel, msg.text, nearbyOnly);
       const reached = sent.bleLinks > 0 || sent.nostr;
       setStatus(msgChannel, msg.id, reached ? "sent" : "failed");
       if (!reached) showNoReachStatus();
@@ -1280,7 +1495,7 @@ export default function MessageThread({
     clearTimeout(pending.timer);
     pendingSendRef.current = null;
     setHeldMessage(null);
-    transmit(pending.msg);
+    transmit(pending.msg, pending.nearbyOnly);
   }
 
   // Resend a failed message: flip it back to sending and run the send path,
@@ -1306,6 +1521,9 @@ export default function MessageThread({
             name: att.name ?? "",
             mimeType: att.mimeType ?? "",
             durationMs: att.durationMs ?? 0,
+            // The caption lives on the message text. Without it a retried photo
+            // arrived stripped of the words that went with it.
+            caption: item.text || undefined,
           });
           setStatus(item.channel, item.id, reached ? "sent" : "failed");
           if (!reached) showNoReachStatus();
@@ -1358,8 +1576,24 @@ export default function MessageThread({
     addMessage(msg);
     setDraft("");
 
-    const timer = setTimeout(commitHeld, UNDO_WINDOW_MS);
-    pendingSendRef.current = { msg, timer };
+    // Capture nearby-only at send time (only meaningful on the bridged public
+    // channel), then reset the composer flag for the next message.
+    const nearby = nearbyOnly && channel === "#bluetooth";
+    if (nearbyOnly) setNearbyOnly(false);
+
+    // Undo send is a preference (General settings). When it is off, there is no
+    // hold window: transmit right away with no pill. Otherwise hold the message
+    // for the chosen number of seconds behind the undo pill.
+    if (undoSendSeconds <= 0) {
+      transmit(msg, nearby);
+      return;
+    }
+    const timer = setTimeout(commitHeld, undoSendSeconds * 1000);
+    pendingSendRef.current = {
+      msg,
+      timer,
+      nearbyOnly: nearby,
+    };
     setHeldMessage(msg);
   }
 
@@ -1385,7 +1619,7 @@ export default function MessageThread({
       if (pending) {
         clearTimeout(pending.timer);
         pendingSendRef.current = null;
-        transmitRef.current(pending.msg);
+        transmitRef.current(pending.msg, pending.nearbyOnly);
       }
     };
   }, []);
@@ -1521,11 +1755,21 @@ export default function MessageThread({
           showNoReachStatus();
         }
       } catch (err) {
-        // File too large or URI unreadable. Alert the sender with a reason
-        // so they know the attachment did not reach the other device.
-        const reason =
-          err instanceof Error ? err.message : "Could not read the file.";
-        showAlert("Attachment not sent", reason);
+        // The bubble is already on screen, so mark it failed the way an
+        // unreachable send is: the thread should not show a message as sent
+        // when nothing left the device.
+        useChatStore
+          .getState()
+          .setMessageStatus(targetChannel, msg.id, "failed");
+        // Only our own size messages are fit to show: anything else is a
+        // runtime error, and "Maximum call stack size exceeded" tells the
+        // sender nothing they can act on.
+        showAlert(
+          "Attachment not sent",
+          err instanceof AttachmentTooLargeError
+            ? err.message
+            : "Something went wrong reading that file. Try another one.",
+        );
       }
     })();
   }
@@ -1666,21 +1910,231 @@ export default function MessageThread({
   // Send the staged attachment with its (optional) caption, then clear the
   // composer. The caption rides the file packet, so media + caption arrive as
   // one message.
+  //
+  // A photo is resized first. A camera file is measured in megabytes and the
+  // mesh takes 512 KiB, so without this step the common case (open camera, take
+  // a picture, send it) could not work at all. The sheet closes straight away
+  // and the bubble appears when the resize lands, which is the ordering every
+  // messenger uses; the resize never throws, so a photo it cannot read simply
+  // goes on as it was.
   function confirmPendingAttachment(): void {
     const p = pendingAttachment;
     if (p === null) return;
-    sendAttachmentMessage(p.type, p.uri, p.name, p.mimeType, undefined, {
-      sizeBytes: p.sizeBytes,
-      caption: captionDraft,
-    });
+    const caption = captionDraft;
     setPendingAttachment(null);
     setCaptionDraft("");
+
+    if (p.type !== "image") {
+      sendAttachmentMessage(p.type, p.uri, p.name, p.mimeType, undefined, {
+        sizeBytes: p.sizeBytes,
+        caption,
+      });
+      return;
+    }
+    void (async () => {
+      const ready = await prepareImageForSend(
+        p.uri,
+        p.name,
+        p.mimeType,
+        UPLOAD_QUALITY_VALUES[useSettingsStore.getState().uploadQuality],
+      );
+      sendAttachmentMessage(
+        "image",
+        ready.uri,
+        ready.name,
+        ready.mimeType,
+        undefined,
+        { sizeBytes: ready.sizeBytes, caption },
+      );
+    })();
   }
 
   function cancelPendingAttachment(): void {
     setPendingAttachment(null);
     setCaptionDraft("");
   }
+
+  // Hold the mic. One gesture, and the app picks the delivery that the mesh can
+  // actually manage right now:
+  //
+  //   live burst   when the native audio module exists, somebody is in
+  //                Bluetooth range to hear it, and live voice is switched on
+  //   voice note   otherwise, exactly as before
+  //
+  // The choice is made per press rather than once at startup, because the thing
+  // it depends on (is anyone in range) changes as people walk around.
+  // Write the finished burst to the attachment cache and send it the way any
+  // voice note is sent. Best-effort throughout: the live audio already went
+  // out, so a failure here costs the record of the message, not the message.
+  async function sendLiveBurstAsNote(
+    bytes: Uint8Array,
+    durationMs: number,
+  ): Promise<void> {
+    try {
+      const file = new FileSystem.File(
+        FileSystem.Paths.cache,
+        `airhop_${String(Date.now())}_voice.aac`,
+      );
+      file.create({ overwrite: true, intermediates: true });
+      file.write(bytes);
+      sendAttachmentMessage(
+        "voice",
+        file.uri,
+        "voice.aac",
+        "audio/aac",
+        durationMs,
+      );
+    } catch {
+      // Cache full or unwritable. Nothing to tell the user: they were heard.
+    }
+  }
+
+  async function handleTalkStart(): Promise<void> {
+    // Opening the mic is not instant: a permission prompt can sit on screen for
+    // seconds, and the audio session itself takes a moment. A finger can be
+    // long gone by the time either finishes, so every press takes a number and
+    // anything that resolves against an older one is discarded. Without this, a
+    // quick tap left the microphone open and streaming with nothing held down.
+    const hold = holdSeqRef.current + 1;
+    holdSeqRef.current = hold;
+    setIsPTTActive(true);
+
+    const service = getMeshService();
+    const canGoLive = service?.canSendLiveVoice(channel) === true;
+    if (!canGoLive) {
+      await startRecording();
+      return;
+    }
+    const granted = await ensurePermission(
+      () => AudioModule.getRecordingPermissionsAsync(),
+      () => AudioModule.requestRecordingPermissionsAsync(),
+      { label: "Microphone access", purpose: "talk to people nearby" },
+    );
+    if (hold !== holdSeqRef.current) return; // let go while the prompt was up
+    if (!granted) {
+      setIsPTTActive(false);
+      return;
+    }
+    const live = await service.startVoiceBurst(channel, () => {
+      // Capture died under us (a call took the mic). Close the burst and drop
+      // the live state so the HUD does not claim to still be transmitting.
+      liveHoldRef.current = false;
+      setIsTalkingLive(false);
+      setIsPTTActive(false);
+      setToast("Recording stopped");
+    });
+    if (hold !== holdSeqRef.current) {
+      // Released while the mic was opening. Close it now rather than leaving a
+      // burst running that nobody is holding.
+      if (live) await service.stopVoiceBurst();
+      return;
+    }
+    if (live) {
+      liveHoldRef.current = true;
+      setIsTalkingLive(true);
+      setRecordingSecs(0);
+      recordingTimerRef.current = setInterval(() => {
+        setRecordingSecs((s) => s + 1);
+      }, 1000);
+      return;
+    }
+    // Live was offered and could not start. Fall back rather than dropping the
+    // press: the user held the button and expects to have said something.
+    await startRecording();
+  }
+
+  async function handleTalkEnd(): Promise<void> {
+    // Invalidate any start still in flight, so a burst that opens after this
+    // point closes itself instead of running on.
+    holdSeqRef.current += 1;
+    setIsPTTActive(false);
+    // The ref, not the state: this handler can be a render behind, and being
+    // wrong here means either a stuck microphone or a voice note that never
+    // sends.
+    if (!liveHoldRef.current) {
+      await stopRecording();
+      return;
+    }
+    liveHoldRef.current = false;
+    setIsTalkingLive(false);
+    if (recordingTimerRef.current) {
+      clearInterval(recordingTimerRef.current);
+      recordingTimerRef.current = null;
+    }
+    setRecordingSecs(0);
+    const finalized = await getMeshService()?.stopVoiceBurst();
+    // The same audio, now as an ordinary voice note. People in range heard it
+    // live; this is what reaches anyone who was not, and what stays in the
+    // thread afterwards. It rides the existing attachment path, so it is a
+    // normal message row with a normal bubble and needs no special handling on
+    // either end. Too short to be worth sending is treated as a slip of the
+    // finger rather than a message.
+    if (finalized && finalized.durationMs >= MIN_BURST_KEEP_MS) {
+      await sendLiveBurstAsNote(finalized.bytes, finalized.durationMs);
+    }
+  }
+
+  // Who is talking right now, for the floor-courtesy hint. Resolved to a
+  // display name here so the button can say it.
+  useEffect(() => {
+    const service = getMeshService();
+    if (!service) return;
+    return service.setPttActivityListener((talkers) => {
+      const first = talkers[0];
+      setLiveTalker(first === undefined ? null : resolveDisplayName(first));
+    });
+  }, []);
+
+  // Whether the next hold will go live, so the button can show which it is.
+  // Re-checked as peers come and go: in a DM it depends on that peer having a
+  // session and a link, in a room on anyone being in range at all.
+  const [liveAvailable, setLiveAvailable] = useState(false);
+  useEffect(() => {
+    function sample(): void {
+      setLiveAvailable(getMeshService()?.canSendLiveVoice(channel) === true);
+    }
+    sample();
+    const timer = setInterval(sample, LIVE_AVAILABILITY_POLL_MS);
+    return () => clearInterval(timer);
+  }, [channel, liveVoiceEnabled]);
+
+  // Inbound bursts only make sound while this conversation is what the user is
+  // actually looking at, with the app in front of them. Anything else and the
+  // burst is tracked but silent, so audio never starts from a screen nobody is
+  // on. Cleared on unmount, which covers leaving the thread entirely.
+  useEffect(() => {
+    const service = getMeshService();
+    if (!service) return;
+    service.setLiveVoiceAudible(appActive);
+    return () => service.setLiveVoiceAudible(false);
+  }, [appActive, channel]);
+
+  // Nothing may keep the microphone open once this screen is not in front of
+  // the user. Backgrounding the app, taking a call, or navigating away while
+  // still holding the button all land here, and all of them end the burst with
+  // a proper END so the far side hears a finish rather than the audio simply
+  // stopping and timing out. Live voice is foreground-only by design.
+  useEffect(() => {
+    if (appActive) return;
+    if (!liveHoldRef.current) return;
+    holdSeqRef.current += 1;
+    liveHoldRef.current = false;
+    setIsTalkingLive(false);
+    setIsPTTActive(false);
+    void getMeshService()?.stopVoiceBurst();
+  }, [appActive]);
+
+  useEffect(
+    () => () => {
+      // Unmount: the thread is gone, so there is nobody to finalize a note for.
+      // End the burst anyway rather than leaving a live microphone behind.
+      if (liveHoldRef.current) {
+        liveHoldRef.current = false;
+        void getMeshService()?.stopVoiceBurst();
+      }
+    },
+    [],
+  );
 
   async function startRecording(): Promise<void> {
     const granted = await ensurePermission(
@@ -1701,6 +2155,11 @@ export default function MessageThread({
         setRecordingSecs((s) => s + 1);
       }, 1000);
     } catch {
+      // Hand the session back before bailing out. Leaving allowsRecording on
+      // keeps iOS in play-and-record, which routes playback to the earpiece:
+      // one failed recording and every voice note afterwards sounds broken,
+      // with nothing on screen to explain why.
+      await setAudioModeAsync({ allowsRecording: false }).catch(() => {});
       showAlert(
         "Error",
         "Could not start recording. Check microphone permissions.",
@@ -1717,18 +2176,24 @@ export default function MessageThread({
     setRecordingSecs(0);
     try {
       await audioRecorder.stop();
-      await setAudioModeAsync({ allowsRecording: false });
       const uri = audioRecorder.uri;
       if (!uri) return;
+      // audio/mp4 is bitchat's name for AAC-in-MP4, which is what the recorder
+      // produces. The old "audio/x-m4a" is not on either client's allow-list,
+      // so every voice note was refused on arrival while looking sent here.
       sendAttachmentMessage(
         "voice",
         uri,
         "voice.m4a",
-        "audio/x-m4a",
+        "audio/mp4",
         duration * 1000,
       );
     } catch {
       // Discard on error.
+    } finally {
+      // Always, even if stop() threw: an audio session left in record mode
+      // sends every later playback to the earpiece instead of the speaker.
+      await setAudioModeAsync({ allowsRecording: false }).catch(() => {});
     }
   }
 
@@ -1800,21 +2265,17 @@ export default function MessageThread({
         // Tap a loaded photo to view it full-screen, the standard gesture in
         // WhatsApp / Signal / Telegram.
         return (
-          <Pressable
+          <ImageAttachment
+            uri={attachment.uri}
             onPress={() => setFullscreenImage(attachment.uri)}
-            accessibilityRole="imagebutton"
-            accessibilityLabel="View photo full screen"
-          >
-            <Image
-              source={{ uri: attachment.uri }}
-              style={styles.attachImage}
-              resizeMode="cover"
-            />
-          </Pressable>
+          />
         );
       }
       case "voice": {
-        const isPlaying = playingUri === attachment.uri;
+        // Keyed by the message, not the file. Forwarding a voice note reuses
+        // the same cached file, so two bubbles could share a uri and both play
+        // at once off a single tap.
+        const isPlaying = playingMessageId === messageId;
         return (
           <VoiceNoteBubble
             uri={attachment.uri}
@@ -1822,11 +2283,11 @@ export default function MessageThread({
             isPlaying={isPlaying}
             isMine={isMine}
             onToggle={() =>
-              setPlayingUri((current) =>
-                current === attachment.uri ? null : attachment.uri,
+              setPlayingMessageId((current) =>
+                current === messageId ? null : messageId,
               )
             }
-            onFinished={() => setPlayingUri(null)}
+            onFinished={() => setPlayingMessageId(null)}
           />
         );
       }
@@ -1852,7 +2313,7 @@ export default function MessageThread({
               <Text
                 style={[
                   styles.attachDocName,
-                  isMine ? styles.onMyBubble : styles.onTheirBubble,
+                  isMine ? styles.textOnMyBubble : styles.textOnTheirBubble,
                 ]}
                 numberOfLines={2}
               >
@@ -1862,7 +2323,7 @@ export default function MessageThread({
                 <Text
                   style={[
                     styles.attachDocMeta,
-                    isMine ? styles.onMyBubble : styles.onTheirBubble,
+                    isMine ? styles.textOnMyBubble : styles.textOnTheirBubble,
                   ]}
                   numberOfLines={1}
                 >
@@ -1909,6 +2370,44 @@ export default function MessageThread({
   // expo-sharing is used rather than Linking.openURL because Android blocks
   // direct file:// URIs from other apps. Sharing goes through a FileProvider
   // and works on both platforms.
+  // Get an attachment out of Airhop and onto the device.
+  //
+  // Received files live in the app's private cache: cleared with the cache,
+  // gone on uninstall, and invisible to every other app. Documents already had
+  // a way out (the share sheet, below); a photo or video did not, so the one
+  // thing people actually want to keep was the one thing trapped in here.
+  //
+  // Photos and videos go to the system gallery, which is where someone looks
+  // for them. Everything else has no gallery to go to, so it gets the share
+  // sheet, which can hand it to Files, a mail app, or anything else installed.
+  async function saveAttachmentToDevice(
+    attachment: ChatAttachment,
+  ): Promise<void> {
+    if (attachment.type !== "image" && attachment.type !== "video") {
+      await openAttachment(attachment);
+      return;
+    }
+    const granted = await ensurePermission(
+      () => MediaLibrary.getPermissionsAsync(true),
+      () => MediaLibrary.requestPermissionsAsync(true),
+      { label: "Photo access", purpose: "save this to your photos" },
+    );
+    if (!granted) return;
+    try {
+      await MediaLibrary.saveToLibraryAsync(attachment.uri);
+      setToast(
+        attachment.type === "video"
+          ? "Saved to your videos"
+          : "Saved to your photos",
+      );
+    } catch {
+      showAlert(
+        "Not saved",
+        "The file could not be saved. It may have been cleared from the cache.",
+      );
+    }
+  }
+
   async function openAttachment(attachment: ChatAttachment): Promise<void> {
     try {
       if (!(await Sharing.isAvailableAsync())) {
@@ -2046,9 +2545,20 @@ export default function MessageThread({
           style={styles.backButton}
           hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           accessibilityRole="button"
-          accessibilityLabel="Go back"
+          accessibilityLabel={
+            backUnreadCount > 0
+              ? `Go back, ${backUnreadCount} unread`
+              : "Go back"
+          }
         >
           <Feather name="chevron-left" size={24} color={Colors.textPrimary} />
+          {backUnreadCount > 0 && (
+            <View style={styles.backBadge}>
+              <Text style={styles.backBadgeText}>
+                {backUnreadCount > 99 ? "99+" : String(backUnreadCount)}
+              </Text>
+            </View>
+          )}
         </Pressable>
 
         <Pressable
@@ -2089,41 +2599,48 @@ export default function MessageThread({
           )}
         </Pressable>
 
-        <View style={styles.headerRight}>
-          {!isDM && !isGroup && (
-            <>
-              <Pressable
-                onPress={openNotices}
-                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                accessibilityRole="button"
-                accessibilityLabel={
-                  unseenNotices > 0
-                    ? `Notices for this channel, ${String(unseenNotices)} new`
-                    : "Notices for this channel"
-                }
-              >
-                <MaterialCommunityIcons
-                  name="bulletin-board"
-                  size={18}
-                  color={Colors.textSecondary}
-                />
-                {unseenNotices > 0 && <View style={styles.noticeDot} />}
-              </Pressable>
-              <Pressable
-                onPress={handleInvite}
-                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                accessibilityRole="button"
-                accessibilityLabel="Invite someone to this channel"
-              >
-                <Feather
-                  name="user-plus"
-                  size={18}
-                  color={Colors.textSecondary}
-                />
-              </Pressable>
-            </>
-          )}
-        </View>
+        {/* Channel actions, on one track: the same pill the notice composer's
+            expiry steps sit in, so a row of icon buttons is spaced and shaped
+            the way every other cluster of small controls in the app is. Only
+            channels have these, so the pill is absent (not empty) elsewhere. */}
+        {!isDM && !isGroup && (
+          <View style={styles.headerActions}>
+            <Pressable
+              style={styles.headerAction}
+              onPress={openNotices}
+              hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+              accessibilityRole="button"
+              accessibilityLabel={
+                unseenNotices > 0
+                  ? `Notices for this channel, ${String(unseenNotices)} new`
+                  : "Notices for this channel"
+              }
+            >
+              <MaterialCommunityIcons
+                name="bulletin-board"
+                size={18}
+                color={Colors.textSecondary}
+              />
+              {unseenNotices > 0 && <View style={styles.noticeDot} />}
+            </Pressable>
+            {/* Hairline between the two, so the track reads as two buttons
+                rather than one wide one. */}
+            <View style={styles.headerActionDivider} />
+            <Pressable
+              style={styles.headerAction}
+              onPress={handleInvite}
+              hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+              accessibilityRole="button"
+              accessibilityLabel="Invite someone to this channel"
+            >
+              <Feather
+                name="user-plus"
+                size={18}
+                color={Colors.textSecondary}
+              />
+            </Pressable>
+          </View>
+        )}
       </View>
 
       {/* Peer offline notice: shown in DM threads when the peer is not in
@@ -2263,6 +2780,12 @@ export default function MessageThread({
             );
           }}
           onScroll={handleListScroll}
+          // The reader taking hold of the list ends the landing: from here on
+          // their position is theirs, and only being at the bottom brings the
+          // thread along with new messages.
+          onScrollBeginDrag={() => {
+            landingRef.current = false;
+          }}
           // 16ms would fire this every frame; 100 is plenty to know which end of
           // the thread someone is reading, and costs a fraction as much.
           scrollEventThrottle={100}
@@ -2272,25 +2795,23 @@ export default function MessageThread({
             // otherwise yank the view back to the bottom mid-flash.
             if (highlightedMessageId || msgs.length === 0) return;
 
-            // Opening a thread lands at the newest message, instantly - every
-            // messenger does this, and animating it would just show the user a
-            // scroll they didn't ask for.
-            if (!hasLandedRef.current) {
-              hasLandedRef.current = true;
-              listRef.current?.scrollToEnd({ animated: false });
-              return;
-            }
+            // Did the thread gain a message, or is the list only measuring
+            // itself? That is the whole question here, and the rule that
+            // answers it lives in resolveThreadScroll.
+            const countChanged = msgs.length !== msgCountRef.current;
+            msgCountRef.current = msgs.length;
 
-            // After that, only follow the thread if the reader is already at the
-            // bottom. Scrolling up is a deliberate act - reading back, quoting
-            // something, looking at an old photo - and yanking them to the newest
-            // message because someone typed, or because an image two screens up
-            // finished loading, is the single most disruptive thing a chat list
-            // can do. When they aren't at the bottom the jump-to-latest pill
-            // appears instead, and the choice stays theirs.
-            if (atBottomRef.current) {
-              listRef.current?.scrollToEnd({ animated: true });
-            }
+            const scroll = resolveThreadScroll({
+              landing: landingRef.current,
+              atBottom: atBottomRef.current,
+              countChanged,
+            });
+            if (scroll === "none") return;
+            listRef.current?.scrollToEnd({ animated: scroll === "animated" });
+            // Keep the flag honest: content that grew between our scroll and
+            // the throttled scroll event it triggers would otherwise report the
+            // reader as having moved away from a bottom they never left.
+            if (landingRef.current) atBottomRef.current = true;
           }}
           onScrollToIndexFailed={(info) => {
             // Bubble heights vary (attachments/tokens/multi-line text), so
@@ -2390,8 +2911,51 @@ export default function MessageThread({
           >
             <Feather name="x" size={24} color="#FFFFFF" />
           </Pressable>
+          {/* Save and share, where someone is already looking at the photo.
+              Both act on the file as it arrived, untouched. */}
+          {fullscreenImage !== null && (
+            <View style={styles.fullscreenActions}>
+              <Pressable
+                style={styles.fullscreenAction}
+                onPress={() =>
+                  void saveAttachmentToDevice({
+                    type: "image",
+                    uri: fullscreenImage,
+                  })
+                }
+                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                accessibilityRole="button"
+                accessibilityLabel="Save photo to your photos"
+              >
+                <Feather name="download" size={22} color="#FFFFFF" />
+              </Pressable>
+              <Pressable
+                style={styles.fullscreenAction}
+                onPress={() =>
+                  void openAttachment({ type: "image", uri: fullscreenImage })
+                }
+                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                accessibilityRole="button"
+                accessibilityLabel="Share photo"
+              >
+                <Feather name="share-2" size={22} color="#FFFFFF" />
+              </Pressable>
+            </View>
+          )}
+          {/* Inside the Modal on purpose: a toast mounted in the thread below
+              would be behind this viewer, so saving from here would look like
+              it did nothing. Lifted clear of the action row. */}
+          <Toast
+            message={toast}
+            onHide={() => setToast(null)}
+            bottomOffset={112}
+          />
         </Pressable>
       </Modal>
+
+      {/* Same pill for a save made from the thread itself (the long-press
+          menu), floated above the compose bar. */}
+      <Toast message={toast} onHide={() => setToast(null)} bottomOffset={88} />
 
       {/* Live attachment transfers for this thread: one card each, sending or
           receiving, with percent, speed and time remaining. */}
@@ -2402,7 +2966,12 @@ export default function MessageThread({
           fresh, in sync with the new hold window, instead of continuing the
           previous (already-drained) animation. */}
       {heldMessage && (
-        <UndoSendPill key={heldMessage.id} onUndo={undoSend} Colors={Colors} />
+        <UndoSendPill
+          key={heldMessage.id}
+          onUndo={undoSend}
+          Colors={Colors}
+          durationMs={undoSendSeconds * 1000}
+        />
       )}
 
       {/* "/" command picker: appears while typing a slash command, tap to
@@ -2460,6 +3029,34 @@ export default function MessageThread({
         </View>
       )}
 
+      {/* Nearby-only control: only on the bridged public channel while bridging.
+          Lets the user keep a single message radio-only. */}
+      {channel === "#bluetooth" && bridgeEnabled && (
+        <Pressable
+          style={styles.nearbyOnlyRow}
+          onPress={() => setNearbyOnly((v) => !v)}
+          accessibilityRole="switch"
+          accessibilityState={{ checked: nearbyOnly }}
+          accessibilityLabel="Nearby only: keep this message off the mesh bridge"
+        >
+          <Feather
+            name={nearbyOnly ? "bluetooth" : "globe"}
+            size={13}
+            color={nearbyOnly ? Colors.textPrimary : Colors.textMuted}
+          />
+          <Text
+            style={[
+              styles.nearbyOnlyText,
+              nearbyOnly && { color: Colors.textPrimary },
+            ]}
+          >
+            {nearbyOnly
+              ? "Nearby only · stays on Bluetooth"
+              : "Bridging to nearby areas · tap for nearby only"}
+          </Text>
+        </Pressable>
+      )}
+
       {/* Compose bar */}
       <View style={styles.composeBar}>
         {/* Attach: only where media can actually be delivered (see mediaAllowed). */}
@@ -2502,22 +3099,40 @@ export default function MessageThread({
           // media is allowed; otherwise the bar is just text + send.
           mediaAllowed && (
             <Pressable
-              style={[styles.pttButton, isPTTActive && styles.pttButtonActive]}
-              onPressIn={() => {
-                setIsPTTActive(true);
-                void startRecording();
-              }}
-              onPressOut={() => {
-                setIsPTTActive(false);
-                void stopRecording();
-              }}
+              style={[
+                styles.pttButton,
+                isPTTActive && styles.pttButtonActive,
+                // Somebody else has the floor. The button still works: a mesh
+                // has no floor arbiter, and refusing to send would desync the
+                // moment the network partitions. It just says so first.
+                liveTalker !== null && !isPTTActive && styles.pttButtonBusy,
+              ]}
+              onPressIn={() => void handleTalkStart()}
+              onPressOut={() => void handleTalkEnd()}
               accessibilityRole="button"
-              accessibilityLabel="Hold to talk"
+              accessibilityLabel={
+                liveTalker !== null
+                  ? `${liveAvailable ? "Hold to talk live" : "Hold to record a voice note"}. ${liveTalker} is talking`
+                  : liveAvailable
+                    ? "Hold to talk live"
+                    : "Hold to record a voice note"
+              }
             >
+              {/* A different action gets a different icon. The same button can
+                  stream live or record a note depending on who is in range,
+                  and that changes as people walk about, so the button has to
+                  say which one the next hold will be rather than leaving the
+                  user to find out afterwards. */}
               <Feather
-                name="mic"
+                name={liveAvailable ? "radio" : "mic"}
                 size={16}
-                color={isPTTActive ? Colors.danger : Colors.textMuted}
+                color={
+                  isPTTActive
+                    ? Colors.danger
+                    : liveTalker !== null
+                      ? Colors.accent
+                      : Colors.textMuted
+                }
               />
             </Pressable>
           )
@@ -2525,33 +3140,65 @@ export default function MessageThread({
       </View>
 
       {/* In-compose voice recording bar: replaces compose row while recording */}
-      {isRecording && (
+      {(isRecording || isTalkingLive) && (
         <View style={styles.recordingBar}>
           <Pressable
             style={styles.recordingCancel}
-            onPress={() => void cancelRecording()}
+            onPress={() => {
+              if (isTalkingLive) {
+                setIsTalkingLive(false);
+                setIsPTTActive(false);
+                void getMeshService()?.cancelVoiceBurst();
+                return;
+              }
+              void cancelRecording();
+            }}
             accessibilityRole="button"
-            accessibilityLabel="Cancel recording"
+            accessibilityLabel={
+              isTalkingLive ? "Stop talking and discard" : "Cancel recording"
+            }
           >
             <Feather name="x" size={18} color={Colors.textMuted} />
           </Pressable>
+          {/* LIVE is not decoration. A voice note can be cancelled before
+              anyone hears it; a live burst cannot, because it already played
+              on the other phone. The sender has to be able to tell which one
+              they are in without thinking about it. */}
+          {isTalkingLive && (
+            <View style={styles.liveBadge}>
+              <View style={styles.liveDot} />
+              <Text style={styles.liveBadgeText}>LIVE</Text>
+            </View>
+          )}
           {/* Animated-look waveform (static bars that suggest audio) */}
           <View style={styles.recordingWave}>
             {[5, 10, 7, 14, 9, 12, 6, 11, 8, 13, 7, 10].map((h, i) => (
-              <View key={i} style={[styles.recordingBar_bar, { height: h }]} />
+              <View
+                key={i}
+                style={[
+                  styles.recordingBar_bar,
+                  { height: h },
+                  isTalkingLive && styles.recordingBarLive,
+                ]}
+              />
             ))}
           </View>
           <Text style={styles.recordingTimer}>
             {formatDuration(recordingSecs)}
           </Text>
-          <Pressable
-            style={styles.recordingStop}
-            onPress={() => void stopRecording()}
-            accessibilityRole="button"
-            accessibilityLabel="Stop recording and send"
-          >
-            <Feather name="send" size={16} color={Colors.textInverse} />
-          </Pressable>
+          {/* A live burst ends by letting go, so there is nothing to "send".
+              Showing a send button would imply the audio is still waiting on
+              this device when it left as it was spoken. */}
+          {!isTalkingLive && (
+            <Pressable
+              style={styles.recordingStop}
+              onPress={() => void stopRecording()}
+              accessibilityRole="button"
+              accessibilityLabel="Stop recording and send"
+            >
+              <Feather name="send" size={16} color={Colors.textInverse} />
+            </Pressable>
+          )}
         </View>
       )}
 
@@ -2811,34 +3458,6 @@ export default function MessageThread({
         </BottomSheet>
       )}
 
-      {/* Screenshot privacy notice: shown right after a screenshot is taken,
-          confirming the other side has been told. */}
-      <Modal
-        visible={showScreenshotWarning}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setShowScreenshotWarning(false)}
-      >
-        <View style={styles.screenshotOverlay}>
-          <View style={styles.screenshotCard}>
-            <Text style={styles.screenshotTitle}>Heads up</Text>
-            <Text style={styles.screenshotMessage}>
-              {isDM
-                ? `${displayName} was notified that you took a screenshot of this conversation.`
-                : "Everyone in this channel was notified that you took a screenshot."}
-            </Text>
-            <Pressable
-              style={styles.screenshotButton}
-              onPress={() => setShowScreenshotWarning(false)}
-              accessibilityRole="button"
-              accessibilityLabel="OK"
-            >
-              <Text style={styles.screenshotButtonText}>OK</Text>
-            </Pressable>
-          </View>
-        </View>
-      </Modal>
-
       {/* Long-press action sheet: forward/copy/star. */}
       <MessageActionSheet
         message={actionSheet}
@@ -2859,6 +3478,10 @@ export default function MessageThread({
           // fight for the screen.
           const target = actionSheet;
           if (target) scheduleSheetHandoff(() => setInfoMessageId(target.id));
+        }}
+        onSave={() => {
+          const attachment = actionSheet?.attachment;
+          if (attachment) void saveAttachmentToDevice(attachment);
         }}
       />
 
@@ -2906,6 +3529,30 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       alignItems: "center",
       justifyContent: "center",
     },
+    // Same badge as the tab bar and the Channels/Direct segments: accent fill,
+    // inverse text, hairline ring in the surface behind it so it reads as a
+    // cutout rather than a sticker. Sits on the chevron so "what is behind this
+    // button" is answered by the button itself.
+    backBadge: {
+      position: "absolute",
+      top: 0,
+      right: 0,
+      minWidth: 16,
+      height: 16,
+      borderRadius: Radius.full,
+      backgroundColor: Colors.accent,
+      alignItems: "center",
+      justifyContent: "center",
+      paddingHorizontal: 3,
+      borderWidth: 1.5,
+      borderColor: Colors.bg,
+    },
+    backBadgeText: {
+      fontSize: 9,
+      fontWeight: FontWeight.bold,
+      color: Colors.textInverse,
+      lineHeight: 12,
+    },
     headerCenter: {
       flex: 1,
       flexDirection: "column",
@@ -2934,11 +3581,31 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       color: Colors.textMuted,
       letterSpacing: 0.5,
     },
-    headerRight: {
+    // Channel actions: a connected track (surface + hairline border) holding
+    // fully-rounded icon buttons, matching the notice composer's expiry steps.
+    // The 3pt inset is what keeps a button's own rounding clear of the track's.
+    headerActions: {
       flexDirection: "row",
       alignItems: "center",
-      justifyContent: "flex-end",
-      gap: Spacing.md,
+      backgroundColor: Colors.surface,
+      borderWidth: 1,
+      borderColor: Colors.border,
+      borderRadius: Radius.full,
+      padding: 3,
+    },
+    headerAction: {
+      width: 32,
+      height: 32,
+      borderRadius: Radius.full,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    // Short of the track's full height, so it divides the buttons without
+    // touching the border and reading as a second edge.
+    headerActionDivider: {
+      width: 1,
+      height: 20,
+      backgroundColor: Colors.borderStrong,
     },
     // DM header: avatar + name row, left-aligned after the back arrow.
     headerDmId: {
@@ -3119,6 +3786,18 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       gap: Spacing.sm,
       backgroundColor: Colors.bg,
     },
+    nearbyOnlyRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: Spacing.xs,
+      paddingHorizontal: Spacing.base,
+      paddingTop: Spacing.xs,
+      backgroundColor: Colors.bg,
+    },
+    nearbyOnlyText: {
+      fontSize: FontSize.xs,
+      color: Colors.textMuted,
+    },
     attachButton: {
       width: 36,
       height: 36,
@@ -3160,6 +3839,37 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       justifyContent: "center",
       flexShrink: 0,
       marginBottom: 1,
+    },
+    // Somebody else has the floor: an accent ring, not a disabled state. The
+    // button still sends; the tint is a courtesy, not a lock.
+    pttButtonBusy: {
+      borderColor: Colors.accent,
+    },
+    // LIVE badge on the recording bar. Danger-tinted like the recording dot
+    // everywhere else in the app, in the same pill idiom as the rest.
+    liveBadge: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: Spacing.xs,
+      paddingHorizontal: Spacing.sm,
+      paddingVertical: 3,
+      borderRadius: Radius.full,
+      backgroundColor: Colors.dangerDim,
+    },
+    liveDot: {
+      width: 6,
+      height: 6,
+      borderRadius: 3,
+      backgroundColor: Colors.danger,
+    },
+    liveBadgeText: {
+      fontSize: FontSize.xs,
+      fontWeight: FontWeight.semibold,
+      color: Colors.danger,
+      letterSpacing: 0.5,
+    },
+    recordingBarLive: {
+      backgroundColor: Colors.danger,
     },
     pttButtonActive: {
       backgroundColor: Colors.dangerDim,
@@ -3359,16 +4069,19 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       flexShrink: 0,
     },
     // Attachment bubbles (rendered inside the chat bubble)
+    // Height comes from the photo's own aspect at render time; see
+    // mediaHeightForAspect. A percentage width was what made these render as
+    // slivers: the bubble's width is decided by its caption, so "100%" of a
+    // two-character caption is a two-character-wide photo.
     attachImage: {
-      width: "100%",
-      height: 180,
+      width: MEDIA_BUBBLE_WIDTH,
       borderRadius: Radius.md,
       marginBottom: Spacing.xs,
       backgroundColor: Colors.surfaceRaised,
     },
     attachImagePlaceholder: {
-      width: 200,
-      height: 120,
+      width: MEDIA_BUBBLE_WIDTH,
+      height: mediaHeightForAspect(MEDIA_DEFAULT_ASPECT),
       borderRadius: Radius.md,
       backgroundColor: Colors.surfaceRaised,
       alignItems: "center",
@@ -3393,8 +4106,8 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
     // Video poster shown before the player is mounted: a neutral surface with a
     // centered play badge, matching the image "tap to load" gate.
     attachVideoPoster: {
-      width: 200,
-      height: 120,
+      width: MEDIA_BUBBLE_WIDTH,
+      height: mediaHeightForAspect(MEDIA_DEFAULT_ASPECT),
       borderRadius: Radius.md,
       backgroundColor: Colors.surfaceRaised,
       alignItems: "center",
@@ -3428,6 +4141,22 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       width: 40,
       height: 40,
       borderRadius: 20,
+      backgroundColor: "rgba(0,0,0,0.5)",
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    // Bottom of the viewer, opposite the close button, so neither covers the
+    // photo's middle. Same scrim-on-black circles as the close.
+    fullscreenActions: {
+      position: "absolute",
+      bottom: 48,
+      flexDirection: "row",
+      gap: Spacing.base,
+    },
+    fullscreenAction: {
+      width: 48,
+      height: 48,
+      borderRadius: 24,
       backgroundColor: "rgba(0,0,0,0.5)",
       alignItems: "center",
       justifyContent: "center",
@@ -3503,14 +4232,15 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
     // on a bubble (not a neutral surface) stays correctly readable through
     // both themes. Sets both `color` and `backgroundColor`; each consumer
     // (Text vs. View) only reads the property it cares about.
-    onMyBubble: {
-      color: Colors.textInverse,
-      backgroundColor: Colors.textInverse,
-    },
-    onTheirBubble: {
-      color: Colors.textPrimary,
-      backgroundColor: Colors.textPrimary,
-    },
+    // Anything drawn directly on a bubble has to flip with it, the way the
+    // message text next to it does. Text flips its colour and a waveform bar
+    // flips its fill, so they are two styles: one that set both painted the
+    // duration a solid block, the bars' backgroundColor landing behind digits
+    // that were already the same colour.
+    textOnMyBubble: { color: Colors.textInverse },
+    textOnTheirBubble: { color: Colors.textPrimary },
+    barOnMyBubble: { backgroundColor: Colors.textInverse },
+    barOnTheirBubble: { backgroundColor: Colors.textPrimary },
     // DM peer info sheet
     dmInfoSheet: {
       width: "100%",
@@ -3581,16 +4311,19 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       backgroundColor: Colors.online,
     },
     // Unseen-notices dot on the header's board icon.
+    // Sits inside the icon button now that it lives on a track: hung off the
+    // corner it would straddle the pill's border. Ringed in the track's own
+    // colour so it reads as a cutout, the same trick the back badge uses.
     noticeDot: {
       position: "absolute",
-      top: -2,
-      right: -2,
+      top: 5,
+      right: 5,
       width: 8,
       height: 8,
       borderRadius: 4,
       backgroundColor: Colors.accent,
       borderWidth: 1,
-      borderColor: Colors.bg,
+      borderColor: Colors.surface,
     },
     // Attachment composer (caption before send).
     composerSheet: {
@@ -3734,44 +4467,6 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       fontSize: FontSize.xs,
       fontWeight: FontWeight.semibold,
       color: Colors.textInverse,
-    },
-    // Screenshot privacy notice modal: centered card, single action.
-    screenshotOverlay: {
-      flex: 1,
-      backgroundColor: Colors.overlay,
-      alignItems: "center",
-      justifyContent: "center",
-      paddingHorizontal: Spacing.xl,
-    },
-    screenshotCard: {
-      width: "100%",
-      maxWidth: 340,
-      backgroundColor: Colors.surface,
-      borderRadius: Radius.xl,
-      padding: Spacing.xl,
-      gap: Spacing.sm,
-    },
-    screenshotTitle: {
-      fontSize: FontSize.lg,
-      fontWeight: FontWeight.bold,
-      color: Colors.textPrimary,
-    },
-    screenshotMessage: {
-      fontSize: FontSize.base,
-      color: Colors.textSecondary,
-      lineHeight: 21,
-      marginBottom: Spacing.sm,
-    },
-    screenshotButton: {
-      backgroundColor: Colors.surfaceRaised,
-      borderRadius: Radius.full,
-      paddingVertical: Spacing.md,
-      alignItems: "center",
-    },
-    screenshotButtonText: {
-      fontSize: FontSize.base,
-      fontWeight: FontWeight.semibold,
-      color: Colors.textPrimary,
     },
   });
 }

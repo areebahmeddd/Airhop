@@ -78,8 +78,10 @@ export default function TermsPage() {
               remain there.
             </p>
             <p className="text-sm leading-relaxed">
-              If you turn on the internet gateway, your device relays other people&apos;s public
-              location-channel messages. You do not author that content and cannot control it.
+              If you turn on the internet gateway or the mesh bridge, your device relays other
+              people&apos;s public messages over the internet: location-channel traffic for the
+              gateway, public #bluetooth chat for the bridge. You do not author that content and
+              cannot control it.
             </p>
           </section>
 

@@ -49,13 +49,14 @@ import { peerInviteLink } from "../../utils/deep-link";
 import { panicWipe } from "../../utils/panic-wipe";
 import { ensurePermission } from "../../utils/permissions";
 import AboutScreen from "./sections/about-screen";
-import DonateScreen from "./sections/donate-screen";
+import GeneralScreen from "./sections/general-screen";
 import HelpScreen from "./sections/help-screen";
 import LicensesScreen from "./sections/licenses-screen";
 import NetworkScreen from "./sections/network-screen";
 import PrivacyScreen from "./sections/privacy-screen";
 import SecurityScreen from "./sections/security-screen";
 import StorageScreen from "./sections/storage-screen";
+import SupportScreen from "./sections/support-screen";
 import TermsScreen from "./sections/terms-screen";
 import VersionScreen from "./sections/version-screen";
 import {
@@ -158,13 +159,14 @@ const FEATURES: {
 // Which sub-screen is currently pushed. "root" renders the hub itself.
 type SettingsView =
   | "root"
+  | "general"
   | "security"
   | "network"
   | "storage"
   | "help"
   | "terms"
   | "privacy"
-  | "donate"
+  | "support"
   | "about"
   | "version"
   | "licenses";
@@ -319,6 +321,9 @@ export default function ProfileScreen({
 
   // ---- Sub-screens --------------------------------------------------------
 
+  if (view === "general") {
+    return <GeneralScreen onBack={() => setView("root")} />;
+  }
   if (view === "security") {
     return <SecurityScreen onBack={() => setView("root")} />;
   }
@@ -343,8 +348,8 @@ export default function ProfileScreen({
   if (view === "privacy") {
     return <PrivacyScreen onBack={() => setView("help")} />;
   }
-  if (view === "donate") {
-    return <DonateScreen onBack={() => setView("root")} />;
+  if (view === "support") {
+    return <SupportScreen onBack={() => setView("root")} />;
   }
   if (view === "about") {
     return (
@@ -478,23 +483,30 @@ export default function ProfileScreen({
       <View style={shared.section}>
         <View style={shared.settingsGroup}>
           <SettingLinkRow
+            icon="settings"
+            label="General"
+            description="Undo send, media, reset"
+            onPress={() => setView("general")}
+          />
+          <GroupDivider />
+          <SettingLinkRow
             icon="lock"
             label="Privacy & Security"
-            description="Tor routing, Internet gateway, protocols"
+            description="Tor, internet gateway, mesh bridge, protocols"
             onPress={() => setView("security")}
           />
           <GroupDivider />
           <SettingLinkRow
             icon="radio"
-            label="Network"
-            description="Mesh relays, Nostr fallback, bitchat compatibility"
+            label="Network & Relays"
+            description="Internet fallback, nostr relays, bitchat compatibility"
             onPress={() => setView("network")}
           />
           <GroupDivider />
           <SettingLinkRow
             icon="hard-drive"
             label="Storage & Data"
-            description="Usage, cache, and media quality on this device"
+            description="Usage and cache"
             onPress={() => setView("storage")}
           />
           <GroupDivider />
@@ -514,9 +526,9 @@ export default function ProfileScreen({
           <GroupDivider />
           <SettingLinkRow
             icon="heart"
-            label="Donate"
-            description="Support development directly"
-            onPress={() => setView("donate")}
+            label="Support"
+            description="Help keep development active"
+            onPress={() => setView("support")}
           />
           <GroupDivider />
           <SettingLinkRow

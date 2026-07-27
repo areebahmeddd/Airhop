@@ -190,11 +190,6 @@ const CATALOG: {
         license: "MIT",
         repo: "https://github.com/software-mansion/react-native-svg",
       },
-      {
-        name: "react-native-vision-camera",
-        license: "MIT",
-        repo: "https://github.com/mrousavy/react-native-vision-camera",
-      },
     ],
   },
   {

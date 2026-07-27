@@ -255,3 +255,64 @@ describe("FragmentManager", () => {
     }
   });
 });
+
+describe("FragmentManager reassembly timeout", () => {
+  const identity = makeIdentity();
+
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
+  test("survives a transfer that runs longer than the timeout", () => {
+    // The case the whole feature exists for: a photo-sized file over Bluetooth.
+    // The sender paces fragments 20ms apart, so a real transfer runs well past
+    // 30 seconds. Timing out on total duration deleted the half-built file
+    // mid-flight and the rest of the fragments started an assembly that could
+    // never complete, losing the file with no error anywhere.
+    jest.useFakeTimers();
+    jest.setSystemTime(new Date("2026-01-01T00:00:00Z"));
+
+    const packet = makeLargePacket(FRAG_DATA_SIZE * 8, identity);
+    const frags = fragmentPacket(packet, identity, signPacket);
+    const manager = new FragmentManager();
+    const senderID = frags[0].senderID;
+    let reassembled: Packet | null = null;
+
+    for (const f of frags) {
+      // 10 seconds between fragments: slow, but never silent for 30.
+      jest.advanceTimersByTime(10_000);
+      manager.receive(senderID, f.payload, (p) => {
+        reassembled = p;
+      });
+    }
+
+    expect(reassembled).not.toBeNull();
+  });
+
+  test("drops an assembly that goes silent", () => {
+    // The case the timeout is actually for: the sender walked out of range
+    // part way through, so the partial file must not sit in memory forever.
+    jest.useFakeTimers();
+    jest.setSystemTime(new Date("2026-01-01T00:00:00Z"));
+
+    const packet = makeLargePacket(FRAG_DATA_SIZE * 4, identity);
+    const frags = fragmentPacket(packet, identity, signPacket);
+    const manager = new FragmentManager();
+    const senderID = frags[0].senderID;
+    let reassembled: Packet | null = null;
+
+    manager.receive(senderID, frags[0].payload, (p) => {
+      reassembled = p;
+    });
+    jest.advanceTimersByTime(31_000);
+    // The rest arrives after the gap: the stale half is gone, so this cannot
+    // complete, and nothing is left holding its bytes.
+    for (const f of frags.slice(1)) {
+      manager.receive(senderID, f.payload, (p) => {
+        reassembled = p;
+      });
+    }
+
+    expect(reassembled).toBeNull();
+  });
+});

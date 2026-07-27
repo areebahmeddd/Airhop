@@ -77,11 +77,7 @@ const NAV_COLUMNS = [
   {
     heading: "Resources",
     links: [
-      {
-        label: "Documentation",
-        href: "https://github.com/areebahmeddd/Airhop/tree/main/docs",
-        external: true,
-      },
+      { label: "Architecture", href: "/architecture", external: false },
       { label: "Blogs", href: "/blogs", external: false },
       { label: "FAQ", href: "/faq", external: false },
     ],

@@ -21,6 +21,7 @@ import {
   Spacing,
   useThemeColors,
 } from "../../ui/theme";
+import HelloSheet from "./hello-sheet";
 
 const TERMS_URL = "https://airhop.1mindlabs.org/terms-of-service";
 const PRIVACY_URL = "https://airhop.1mindlabs.org/privacy-policy";
@@ -36,6 +37,10 @@ export default function WelcomeScreen({
   const styles = useMemo(() => createStyles(Colors), [Colors]);
   const { width } = useWindowDimensions();
   const [agreed, setAgreed] = useState(false);
+  // Opens with the screen. This screen is only ever reached on a fresh install
+  // or after a panic wipe, so the note lands exactly where it should with no
+  // "seen it" flag to store (and nothing left behind for a wipe to miss).
+  const [showHello, setShowHello] = useState(true);
   // Size the bird to about half the screen width, capped, so it reads big on
   // phones without overflowing tablets. Cell rounded to a whole pixel keeps
   // the pixel edges crisp.
@@ -100,6 +105,8 @@ export default function WelcomeScreen({
           </Pressable>
         </View>
       </View>
+
+      <HelloSheet visible={showHello} onClose={() => setShowHello(false)} />
     </SafeAreaView>
   );
 }

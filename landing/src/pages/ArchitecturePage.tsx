@@ -8,6 +8,7 @@ import {
   GossipSync,
   IdentityTree,
   InternetGateway,
+  MeshBridge,
   ModuleMap,
   NoiseHandshake,
   PacketFrame,
@@ -44,12 +45,14 @@ const TOC = [
       { id: "lifecycle", label: "Status and lifecycle" },
       { id: "encryption", label: "Encryption" },
       { id: "rooms", label: "Rooms" },
+      { id: "attachments", label: "Attachments" },
+      { id: "voice", label: "Live voice" },
     ],
   },
   {
     act: "Beyond the mesh",
     items: [
-      { id: "bridge", label: "Internet bridge" },
+      { id: "bridge", label: "Internet layer" },
       { id: "tor", label: "The onion router" },
     ],
   },
@@ -213,7 +216,7 @@ const SCHEMA = {
   "@type": "TechArticle",
   headline: "Airhop Architecture",
   description:
-    "A full technical breakdown of Airhop: identity, transports, the Bluetooth mesh, encryption, the Nostr internet bridge, Tor, the Cashu wallet, the on-device AI assistant, and the wire format.",
+    "A full technical breakdown of Airhop: identity, transports, the Bluetooth mesh, encryption, the Nostr internet layer, Tor, the Cashu wallet, the on-device AI assistant, and the wire format.",
   dateModified: "2026-08-01",
   author: { "@type": "Person", name: "Areeb Ahmed" },
   url: "https://airhop.1mindlabs.org/architecture",
@@ -225,7 +228,7 @@ export default function ArchitecturePage() {
   useSEO({
     title: "Architecture - Airhop",
     description:
-      "How Airhop works, top to bottom: identity, transport selection, the Bluetooth mesh, encryption, the Nostr bridge, Tor, offline ecash, on-device AI, and the bitchat-compatible wire format.",
+      "How Airhop works, top to bottom: identity, transport selection, the Bluetooth mesh, encryption, the internet layer, Tor, offline ecash, on-device AI, and the bitchat-compatible wire format.",
     path: "/architecture",
   });
 
@@ -311,7 +314,7 @@ export default function ArchitecturePage() {
               </p>
               <p>
                 That constraint buys two things. The entire protocol is testable in CI without a
-                phone, which is why 700 tests can cover the wire format and the handshakes before a
+                phone, which is why 850 tests can cover the wire format and the handshakes before a
                 radio is ever involved. And a bug fixed in gossip sync is fixed on both platforms at
                 once, because there is only one implementation of it.
               </p>
@@ -517,7 +520,7 @@ export default function ArchitecturePage() {
                   [
                     "Event kind",
                     "A number declaring what an event is for",
-                    "Eight are used, listed in the internet bridge section",
+                    "Eight are used, listed in the internet layer section",
                   ],
                   [
                     "Gift wrap",
@@ -654,7 +657,7 @@ export default function ArchitecturePage() {
                 rows={[
                   [
                     "Carries",
-                    "Everything",
+                    "Everything, including live voice",
                     "DMs and files",
                     "DMs, location channels",
                     "Text envelopes",
@@ -752,33 +755,6 @@ export default function ArchitecturePage() {
               <Figure caption="Fragmentation of a file at the 1 MiB cap. The cap exists to stay compatible with bitchat's decoder and to keep a transfer to something a person will actually wait for.">
                 <Fragmentation />
               </Figure>
-
-              <h3 className="pt-2 text-base font-bold text-gray-900">Live voice</h3>
-              <p>
-                Everything above assumes the whole message exists before it moves. Push-to-talk is
-                the exception: frames go out{" "}
-                <strong className="text-gray-900">while you are still speaking</strong>, so the
-                other person hears you with under a second of delay. Bandwidth is not what makes
-                this hard. A BLE link moves around 15 KB/s and AAC-LC voice at 16 kHz needs about 2
-                KB/s, which leaves most of the link free for everything else.
-              </p>
-              <p>
-                Staying out of the fragment scheduler is the hard part, and it is solved with size.
-                A burst is capped at 210 bytes, comfortably under the 469-byte fragment limit, so
-                live audio is never split and never queues behind somebody&rsquo;s file transfer.
-              </p>
-
-              <Figure caption="Live frames on top, the reliable fallback underneath. Both rows carry the same audio; only the timing is different.">
-                <VoiceBurst />
-              </Figure>
-
-              <p>
-                It is a delivery strategy rather than a mode, so there is no button to turn it on.
-                Frames go out as type <C>0x29</C> on the public mesh, or wrapped inside a Noise
-                session as <C>voiceFrame</C> for a DM. A receiver holds 350 ms in a jitter buffer,
-                inserts silence for frames that never arrive, and turns a partial burst into a
-                replayable note if the speaker walks out of range mid-sentence.
-              </p>
 
               <h3 className="pt-2 text-base font-bold text-gray-900">Gossip sync</h3>
               <p>
@@ -996,10 +972,147 @@ export default function ArchitecturePage() {
             </Section>
 
             <Section
+              id="attachments"
+              eyebrow="The system · 10"
+              title="Attachments"
+              lede="A photo taken on a modern phone is five megabytes. The mesh takes half a megabyte and moves it at about 22 KB/s. Something has to give, and it should not be the send button."
+            >
+              <p>
+                Every attachment is <strong className="text-gray-900">one packet</strong>, not a
+                stream of chunks. The whole file goes into a single TLV payload and the fragment
+                layer splits it for the radio, which is the same path a long text message takes. An
+                earlier plan to chunk large files ourselves was dropped: bitchat enforces its size
+                cap when it <em>decodes</em> a packet, so anything larger is refused outright and
+                interop breaks in both directions.
+              </p>
+
+              <Table
+                head={["", "Photo", "Voice note", "Video", "Anything else"]}
+                rows={[
+                  ["Cap", "512 KB", "512 KB", "1 MB", "1 MB"],
+                  ["Resized first", "Yes", "No", "No", "No"],
+                  ["Sent as", "JPEG", "AAC", "MP4 or MOV", "As-is"],
+                ]}
+              />
+
+              <p>
+                Photos are fitted before they leave. The longest edge comes down to 1600 pixels,
+                which is still worth looking at full screen, and the file is re-encoded until it
+                fits the budget: quality first, then resolution once quality alone stops helping.
+                Most photos need one pass. A photo already under the cap is left untouched rather
+                than re-encoded for nothing.
+              </p>
+
+              <Note label="What the quality setting actually does">
+                Low, Medium and High do not choose a file size, because every photo lands under the
+                same 512 KB either way.{" "}
+                <strong className="text-gray-900">They choose where the compression starts.</strong>{" "}
+                Low starts lower and reaches a sendable file in one pass, so it gets moving sooner
+                on a weak link. High starts high, keeps more detail, and may take a pass or two to
+                fit. There is a floor below which JPEG artefacts show on a phone screen; past that
+                point the resolution comes down instead.
+              </Note>
+
+              <p>
+                Two things are checked that sound pedantic and are not. The MIME type is resolved
+                rather than passed through, because pickers routinely return nothing and a file with
+                no type is dropped on arrival by both apps, which looks exactly like a successful
+                send from the other end. And on receive, the declared type is checked against the
+                file's magic bytes, so a file cannot claim to be a photo and arrive as something
+                else.
+              </p>
+              <p>
+                Received files live in the app's own cache, not your gallery, and Settings shows
+                what they cost with a button that actually frees it. Saving one to the gallery is a
+                deliberate act, from the photo viewer or the long-press menu.
+              </p>
+            </Section>
+
+            <Section
+              id="voice"
+              eyebrow="The system · 11"
+              title="Live voice"
+              lede="Holding the mic is a walkie-talkie, not a recording. Audio leaves as you speak and arrives about half a second later."
+            >
+              <p>
+                A voice note is a file: you record it, it sends, they play it. Live voice takes the
+                same gesture and makes it immediate. Speech is encoded to AAC-LC at 16 kHz mono, one
+                frame per 64 ms, and each frame goes out as it is produced. About{" "}
+                <strong className="text-gray-900">15 packets a second, roughly 2 KB/s</strong>{" "}
+                against a link that carries about 22 KB/s, so talking leaves most of it free for
+                everything else.
+              </p>
+              <p>
+                Staying out of the fragment scheduler is the hard part, and it is solved with size.
+                A burst is capped at 210 bytes, comfortably under the 469-byte fragment limit, so
+                live audio is never split and never queues behind somebody&rsquo;s file transfer.
+              </p>
+
+              <Figure caption="Live frames on top, the reliable copy underneath. Both rows carry the same audio; only the timing is different.">
+                <VoiceBurst />
+              </Figure>
+
+              <Table
+                head={["", "Public room", "Direct message"]}
+                rows={[
+                  ["Packet", "0x29, broadcast", "0x08 inside Noise"],
+                  ["Who hears it", "Everyone in range", "One person"],
+                  ["Protected by", "Ed25519 signature", "The Noise session"],
+                  ["Relayed", "Yes, up to 5 to 7 hops", "Yes, like any DM"],
+                ]}
+              />
+
+              <p>
+                Latency is a budget, and the jitter buffer spends most of it. A frame takes 64 ms to
+                accumulate, a few milliseconds to encode, and 30 to 60 ms to cross one radio hop.
+                The receiver then holds 350 ms of audio before starting, which is what turns an
+                irregular stream of packets into a voice.{" "}
+                <strong className="text-gray-900">
+                  Mouth to ear is about 470 ms on one hop, and stays under a second across three.
+                </strong>{" "}
+                Relaying voice uses a tighter jitter window than ordinary traffic (8 to 25 ms rather
+                than up to 220) for exactly this reason: the ordinary window would spend the whole
+                buffer before the third hop.
+              </p>
+              <p>
+                Loss is handled by carrying on. A missing packet becomes 64 ms of silence and
+                playback continues, because a retransmit that arrives after the moment has passed is
+                worth nothing. For the same reason a burst can begin at any packet: if the opening
+                packet is lost, or you walk into range mid-sentence, the receiver starts from
+                whatever it hears first.
+              </p>
+
+              <Note label="Every burst is also a voice note">
+                People in range hear you live. Everyone else{" "}
+                <strong className="text-gray-900">
+                  gets the same audio as an ordinary voice note when you let go
+                </strong>
+                , so someone who was out of range, or who arrived later, still has the message. It
+                is also what puts the conversation in the chat history, since live audio by itself
+                leaves nothing behind.
+              </Note>
+
+              <p>
+                It is a delivery strategy rather than a mode: the same hold on the same button
+                streams live where the mesh can carry it and records a voice note where it cannot,
+                and the button says which one you are about to get. One setting turns the whole
+                thing off, in both directions at once, and voice goes back to behaving exactly as it
+                did before.
+              </p>
+              <p>
+                Live voice is offered only where unencrypted media already is: public mesh rooms and
+                direct messages. A private channel or group would have its audio broadcast in the
+                clear, which would quietly undo the thing that makes it private, so holding the mic
+                there records a voice note instead. Location channels are excluded too, since that
+                would put your voice on public relays.
+              </p>
+            </Section>
+
+            <Section
               id="bridge"
-              eyebrow="Beyond the mesh · 10"
-              title="The internet bridge"
-              lede="When Bluetooth range runs out and there is a connection available, the same conversation continues over Nostr relays. No infrastructure anyone here controls."
+              eyebrow="Beyond the mesh · 12"
+              title="The internet layer"
+              lede="When Bluetooth range runs out and there is a connection available, the same conversation continues over Nostr relays. No infrastructure anyone here controls. Two features ride this layer: the internet gateway and the mesh bridge."
             >
               <p>
                 <A href="https://nostr.org">Nostr</A> relays are chosen geographically. The app
@@ -1059,15 +1172,41 @@ export default function ArchitecturePage() {
               </p>
 
               <h3 className="pt-2 text-base font-bold text-gray-900">The internet gateway</h3>
-              <Figure caption="A phone with a connection carrying a nearby offline phone's public location traffic. Off by default, and never applied to private messages.">
+              <Figure caption="A phone with a connection carrying a nearby offline phone's public location traffic. Never applied to private messages.">
                 <InternetGateway />
               </Figure>
+              <p>
+                A phone with no signal can still reach the location channels if someone beside it
+                lends their connection. Turn the gateway on and your phone relays that offline
+                peer's public geohash traffic to Nostr and carries the channel back over Bluetooth,
+                riding packet type <C>0x28</C> and verified against each event's own Schnorr
+                signature first. It only ever touches public location chat, never a private message,
+                which it could not read anyway. Off by default: it spends your data and battery on a
+                neighbor's behalf.
+              </p>
+
+              <h3 className="pt-2 text-base font-bold text-gray-900">The mesh bridge</h3>
+              <Figure caption="Two Bluetooth crowds, out of radio range, sharing one public channel through a rendezvous cell on Nostr. Public channel only, never DMs.">
+                <MeshBridge />
+              </Figure>
+              <p>
+                Where the gateway carries one offline phone, the mesh bridge links two whole
+                Bluetooth crowds that are out of radio range of each other. Turn it on and your
+                public <C>#bluetooth</C> messages get a second, signed copy published to a
+                rendezvous for your ~1.2 km neighborhood, tagged with a distinct <C>r</C> so it
+                never mixes with the location channels. Another crowd in the same cell, also
+                bridging, sees them, marked with a network glyph. No phone becomes a server: every
+                bridging device signs with an unlinkable per-cell key, duplicates collapse on a
+                content-derived ID whether they arrive by radio or relay, and a per-message{" "}
+                <C>nearby only</C> switch keeps any single message off the internet. Off by default,
+                public channel only, never DMs.
+              </p>
             </Section>
 
             <Section
               id="tor"
-              eyebrow="Beyond the mesh · 11"
-              title="The Onion Router"
+              eyebrow="Beyond the mesh · 13"
+              title="The onion router"
               lede="Gift wrap hides who is talking to whom. It does not hide your IP address from the relay. Tor closes that gap, and the two platforms close it differently."
             >
               <Table
@@ -1108,9 +1247,9 @@ export default function ArchitecturePage() {
 
             <Section
               id="wallet"
-              eyebrow="Optional features · 12"
+              eyebrow="Optional features · 14"
               title="The wallet"
-              lede="Cashu ecash, chosen because it is the only payment system where the transfer itself needs no network at all. A coin is a bearer instrument, and handing one over is just a message."
+              lede="Cashu ecash, chosen because it is the only payment system where the transfer itself needs no network at all. A coin is a bearer instrument, and handing one over is just a message, or a QR code on a screen."
             >
               <Figure caption="Where a coin can be. The design is built around the fact that sending never deletes anything.">
                 <WalletStates />
@@ -1130,7 +1269,7 @@ export default function ArchitecturePage() {
               <Table
                 head={["Operation", "Spec", "Needs internet"]}
                 rows={[
-                  ["Hand a coin to someone", "none, it is a message", "No"],
+                  ["Hand a coin to someone", "none, a message or a QR code", "No"],
                   [
                     "Verify a coin is genuine",
                     <>
@@ -1183,7 +1322,7 @@ export default function ArchitecturePage() {
 
             <Section
               id="ai"
-              eyebrow="Optional features · 13"
+              eyebrow="Optional features · 15"
               title="The AI assistant"
               lede="A small language model running on the phone itself, for when there is no signal and nobody nearby to ask."
             >
@@ -1195,7 +1334,7 @@ export default function ArchitecturePage() {
                 <strong className="text-gray-900">
                   That download is the only moment the assistant touches a network.
                 </strong>{" "}
-                Everything after it runs locally, with the radios off if you like.
+                Everything after it runs locally.
               </p>
               <p>
                 There is no API key and no server, so nothing sees the question or the answer.
@@ -1206,7 +1345,7 @@ export default function ArchitecturePage() {
 
             <Section
               id="social"
-              eyebrow="Optional features · 14"
+              eyebrow="Optional features · 16"
               title="Social bridges"
               lede="An Ed25519 key pair is already enough to be a Bluesky account or a Fediverse actor. Airhop can lend yours to either, without registering anywhere and without touching the mesh."
             >
@@ -1267,6 +1406,10 @@ export default function ArchitecturePage() {
                     "Internet gateway",
                     "Off. Carries a nearby offline phone's public location traffic, never anyone's private messages",
                   ],
+                  [
+                    "Mesh bridge",
+                    "Off. Links your area's public #bluetooth chat with another out-of-range Bluetooth crowd over the internet, never your DMs",
+                  ],
                   ["The wallet", "Off. Nothing happens until you add a mint yourself"],
                   [
                     "Recovery phrase",
@@ -1280,7 +1423,7 @@ export default function ArchitecturePage() {
 
             <Section
               id="modules"
-              eyebrow="For developers · 15"
+              eyebrow="For developers · 17"
               title="Module map"
               lede="About 157 TypeScript files across core, services, store and features, arranged so that dependencies only ever point one direction."
             >
@@ -1323,7 +1466,7 @@ export default function ArchitecturePage() {
 
             <Section
               id="wire"
-              eyebrow="For developers · 16"
+              eyebrow="For developers · 18"
               title="Wire format"
               lede="Byte-for-byte identical to bitchat v2. This is what makes an Airhop phone and a bitchat phone join the same mesh with no translation layer and no configuration."
             >
@@ -1392,7 +1535,7 @@ export default function ArchitecturePage() {
 
             <Section
               id="threat"
-              eyebrow="For developers · 17"
+              eyebrow="For developers · 19"
               title="Threat model"
               lede="What the design defends against, and the four things it does not."
             >

@@ -38,6 +38,14 @@ import {
   TextInput,
   View,
 } from "react-native";
+import QRCode from "react-native-qrcode-svg";
+import {
+  canEncodeTokenQr,
+  formatAmount,
+  TOKEN_QR_ERROR_CORRECTION,
+  TOKEN_QR_MAX_CHARS,
+  tokenQrPayload,
+} from "../../core/payments/cashu";
 import {
   isValidRecoveryPhrase,
   pickVerificationPositions,
@@ -77,6 +85,7 @@ import {
 } from "../../services/wallet-service";
 import { showAlert, useAlertStore } from "../../store/alert-store";
 import { usePeerStore } from "../../store/peer-store";
+import { useSettingsStore } from "../../store/settings-store";
 import {
   isWalletStorageReady,
   selectAccounts,
@@ -97,9 +106,14 @@ import {
   useThemeColors,
 } from "../../ui/theme";
 import { peerIDToUsername } from "../../utils/username";
+import TokenScanner from "./token-scanner";
 
 // The four quick actions triggered from the App-level header.
 export type WalletAction = "receive" | "send" | "zap" | "addMint";
+
+// How long a bottom sheet takes to slide out. Presenting the camera before it
+// has gone would stack two modals, which iOS refuses.
+const SHEET_EXIT_MS = 260;
 
 // How often to poll a pending Lightning deposit while its sheet is open.
 const DEPOSIT_POLL_MS = 3000;
@@ -169,6 +183,9 @@ export default function WalletScreen({
   const [showWithdraw, setShowWithdraw] = useState(false);
   const [showPeerPicker, setShowPeerPicker] = useState(false);
   const [showConsolidate, setShowConsolidate] = useState(false);
+  const [showScanner, setShowScanner] = useState(false);
+  // A pending send re-shown as a QR, for handing it over after the fact.
+  const [qrToken, setQrToken] = useState<WalletTx | null>(null);
   const [showRestore, setShowRestore] = useState(false);
 
   // Recovery-phrase sheet. One sheet, three steps, because they have to happen
@@ -210,6 +227,10 @@ export default function WalletScreen({
   // The token produced by the most recent send, still reserved and reclaimable.
   const [pending, setPending] = useState<PreparedSend | null>(null);
   const [deposit, setDeposit] = useState<LightningDeposit | null>(null);
+  const [depositClock, setDepositClock] = useState(0);
+  const depositExpiresAtMs = deposit?.expiresAtMs;
+  const depositExpired =
+    depositExpiresAtMs !== undefined && depositClock >= depositExpiresAtMs;
 
   // One busy flag per long-running action, so a spinner sits on the button that
   // caused it instead of blocking the whole screen.
@@ -304,6 +325,31 @@ export default function WalletScreen({
     return { covered: total - unbacked, unbacked };
   }, [accounts, primary.unit]);
 
+  // Denomination the user last chose. Purely a display preference: sats and
+  // bitcoin are the same number scaled by a constant, so nothing here touches a
+  // balance, a quote, or anything that gets sent.
+  const bitcoinUnit = useSettingsStore((s) => s.bitcoinUnit);
+  const setBitcoinUnit = useSettingsStore((s) => s.setBitcoinUnit);
+
+  const headline = useMemo(
+    () => formatAmount(primary.balance, primary.unit, bitcoinUnit),
+    [primary.balance, primary.unit, bitcoinUnit],
+  );
+
+  // Only sat balances have a bitcoin denomination to switch to; a mint issuing
+  // usd is already quoting a currency, so the toggle is inert there.
+  function toggleBitcoinUnit(): void {
+    if (primary.unit !== "sat") return;
+    setBitcoinUnit(bitcoinUnit === "sat" ? "btc" : "sat");
+  }
+
+  // "21,500 sat" / "0.000215 BTC", for the lines that sit under the headline
+  // and must agree with it.
+  function showAmount(amount: number, unit: string): string {
+    const formatted = formatAmount(amount, unit, bitcoinUnit);
+    return `${formatted.value} ${formatted.label}`;
+  }
+
   // Mints holding spendable value in the primary unit. Two or more means the
   // balance cannot pay any amount larger than the biggest single mint holds.
   const splitAccounts = useMemo(
@@ -381,6 +427,31 @@ export default function WalletScreen({
     } finally {
       setBusy(null);
     }
+  }
+
+  // The camera is presented from inside the Receive sheet, and iOS shows one
+  // modal at a time: opening the scanner while the sheet is still on screen
+  // silently does nothing. So the sheet closes first, its exit animation is
+  // allowed to finish, and only then does the camera come up. Every path back
+  // restores the sheet the same way, so the scanner always feels like a
+  // detour rather than somewhere the user got dropped.
+  function openScanner(): void {
+    setShowReceive(false);
+    setTimeout(() => setShowScanner(true), SHEET_EXIT_MS);
+  }
+
+  function returnToReceive(): void {
+    setShowScanner(false);
+    setTimeout(() => setShowReceive(true), SHEET_EXIT_MS);
+  }
+
+  // A scanned token is put in the field rather than claimed on the spot. The
+  // Receive sheet already shows what is about to happen, and silently crediting
+  // whatever the camera saw would remove the last chance to notice a mint you
+  // do not recognise.
+  function handleScannedToken(token: string): void {
+    setTokenInput(token);
+    returnToReceive();
   }
 
   // ---- Send ----
@@ -879,6 +950,7 @@ export default function WalletScreen({
         description: "Airhop wallet top-up",
       });
       setDeposit(created);
+      setDepositClock(Date.now());
       setDepositAmount("");
     } catch (err) {
       reportError(err, "Could not create the invoice");
@@ -887,11 +959,20 @@ export default function WalletScreen({
     }
   }
 
-  // Poll the open deposit until the invoice is paid. Stops as soon as the sheet
-  // closes; an unclaimed deposit is picked up by `reconcile` on next launch, so
-  // nothing is lost by giving up here.
+  // A bolt11 invoice is only good for a few minutes. Without a clock the sheet
+  // would sit on "Waiting for payment…" forever against an invoice nobody can
+  // pay any more, which reads as a hang rather than an expiry.
   useEffect(() => {
-    if (!deposit || !showDeposit) return;
+    if (!showDeposit || depositExpiresAtMs === undefined) return;
+    const timer = setInterval(() => setDepositClock(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, [showDeposit, depositExpiresAtMs]);
+
+  // Poll the open deposit until the invoice is paid. Stops as soon as the sheet
+  // closes or the invoice expires; an unclaimed deposit is picked up by
+  // `reconcile` on next launch, so nothing is lost by giving up here.
+  useEffect(() => {
+    if (!deposit || !showDeposit || depositExpired) return;
     let cancelled = false;
     // A mint round trip can outlast the poll interval. Without this guard two
     // claims race for the same quote, and the loser reports a spurious error on
@@ -925,7 +1006,7 @@ export default function WalletScreen({
       cancelled = true;
       clearInterval(timer);
     };
-  }, [deposit, showDeposit]);
+  }, [deposit, showDeposit, depositExpired]);
 
   // ---- Lightning withdrawal ----
 
@@ -1002,12 +1083,24 @@ export default function WalletScreen({
       <View style={styles.section}>
         <View style={styles.balanceCard}>
           <Text style={styles.balanceLabel}>Spendable</Text>
-          <View style={styles.balanceRow}>
-            <Text style={styles.balanceAmount}>
-              {primary.balance.toLocaleString()}
-            </Text>
-            <Text style={styles.balanceUnit}>{primary.unit}</Text>
-          </View>
+          {/* Tapping the balance switches between sats and bitcoin. No
+              animation on purpose: a balance that morphs is a balance people
+              stop trusting. Same place, same size, instant. */}
+          <Pressable
+            style={styles.balanceRow}
+            onPress={toggleBitcoinUnit}
+            disabled={primary.unit !== "sat"}
+            accessibilityRole="button"
+            accessibilityLabel={`Balance ${headline.value} ${headline.label}`}
+            accessibilityHint={
+              primary.unit === "sat"
+                ? "Switches between satoshis and bitcoin"
+                : undefined
+            }
+          >
+            <Text style={styles.balanceAmount}>{headline.value}</Text>
+            <Text style={styles.balanceUnit}>{headline.label}</Text>
+          </Pressable>
 
           {/* Everything that is not plain spendable balance is stated
               explicitly rather than folded into the number above. */}
@@ -1015,8 +1108,8 @@ export default function WalletScreen({
             <View style={styles.balanceNote}>
               <Feather name="clock" size={12} color={Colors.textMuted} />
               <Text style={styles.balanceNoteText}>
-                {primary.unverified.toLocaleString()} {primary.unit} not yet
-                confirmed with the mint
+                {showAmount(primary.unverified, primary.unit)} not yet confirmed
+                with the mint
               </Text>
             </View>
           )}
@@ -1028,8 +1121,8 @@ export default function WalletScreen({
                 color={Colors.textMuted}
               />
               <Text style={styles.balanceNoteText}>
-                {primary.reserved.toLocaleString()} {primary.unit} reserved for
-                a send in flight
+                {showAmount(primary.reserved, primary.unit)} reserved for a send
+                in flight
               </Text>
             </View>
           )}
@@ -1038,7 +1131,7 @@ export default function WalletScreen({
             .filter((u) => u.unit !== primary.unit && u.balance > 0)
             .map((u) => (
               <Text key={u.unit} style={styles.balanceNoteText}>
-                {u.balance.toLocaleString()} {u.unit} at a separate mint account
+                {showAmount(u.balance, u.unit)} at a separate mint account
               </Text>
             ))}
 
@@ -1081,6 +1174,14 @@ export default function WalletScreen({
                   {tx.error ? `\n\n${tx.error}` : ""}
                 </Text>
                 <View style={styles.pendingActions}>
+                  <Pressable
+                    style={styles.pendingBtn}
+                    onPress={() => setQrToken(tx)}
+                    accessibilityRole="button"
+                    accessibilityLabel="Show this token as a QR code"
+                  >
+                    <Text style={styles.pendingBtnText}>QR</Text>
+                  </Pressable>
                   <Pressable
                     style={styles.pendingBtn}
                     onPress={() => void handleCopyToken(tx.token ?? "")}
@@ -1178,9 +1279,17 @@ export default function WalletScreen({
                 </View>
                 <View style={styles.mintRight}>
                   <Text style={styles.mintBalance}>
-                    {account.balance.toLocaleString()}
+                    {
+                      formatAmount(account.balance, account.unit, bitcoinUnit)
+                        .value
+                    }
                   </Text>
-                  <Text style={styles.mintUnit}>{account.unit}</Text>
+                  <Text style={styles.mintUnit}>
+                    {
+                      formatAmount(account.balance, account.unit, bitcoinUnit)
+                        .label
+                    }
+                  </Text>
                   <Pressable
                     style={[
                       styles.smallBtn,
@@ -1297,10 +1406,22 @@ export default function WalletScreen({
         <Text style={styles.sectionTitle}>Backup</Text>
         <View style={styles.backupCard}>
           <View style={styles.backupHeader}>
+            {/* Only a finished backup earns an intact shield, and the calm
+                color is the blue this app reserves for verified, never the
+                green that means end-to-end encrypted.
+
+                Both unsafe states are a struck shield in red: no phrase at all,
+                and a phrase whose written copy was never confirmed. The second
+                is the more dangerous of the two, so it must not borrow the
+                reassuring glyph while the setup is still half-done. */}
             <Feather
-              name={backupEnabled ? "shield" : "shield-off"}
+              name={backupEnabled && backupVerified ? "shield" : "shield-off"}
               size={16}
-              color={backupEnabled ? Colors.online : Colors.textMuted}
+              color={
+                backupEnabled && backupVerified
+                  ? Colors.verified
+                  : Colors.danger
+              }
             />
             <Text style={styles.backupTitle}>Recovery phrase</Text>
             <View
@@ -1554,6 +1675,15 @@ export default function WalletScreen({
           autoCorrect={false}
           selectionColor={Colors.accent}
         />
+        <Pressable
+          style={styles.generatedActionBtn}
+          onPress={openScanner}
+          accessibilityRole="button"
+          accessibilityLabel="Scan an ecash QR code"
+        >
+          <Feather name="camera" size={18} color={Colors.accent} />
+          <Text style={styles.generatedActionText}>Scan QR</Text>
+        </Pressable>
         <SheetActions
           styles={styles}
           confirmLabel={busy === "receive" ? "Receiving…" : "Receive"}
@@ -1721,14 +1851,36 @@ export default function WalletScreen({
             </Text>
           )}
         </View>
-        <TextInput
-          style={[styles.tokenInput, styles.tokenInputMono]}
-          value={pending?.token ?? ""}
-          editable={false}
-          multiline
-          numberOfLines={3}
-          selectionColor={Colors.accent}
-        />
+        {/* A QR rather than the raw string: nobody reads 400 characters of
+            base64, and this is the one form every Cashu wallet can take. Falls
+            back to the text for a token too large to encode, which needs an
+            unusually fragmented balance. */}
+        {pending !== null && canEncodeTokenQr(pending.token) ? (
+          <View style={styles.qrFrame}>
+            <QRCode
+              value={tokenQrPayload(pending.token)}
+              size={200}
+              ecl={TOKEN_QR_ERROR_CORRECTION}
+              color="#000000"
+              backgroundColor="#FFFFFF"
+            />
+          </View>
+        ) : (
+          <>
+            <TextInput
+              style={[styles.tokenInput, styles.tokenInputMono]}
+              value={pending?.token ?? ""}
+              editable={false}
+              multiline
+              numberOfLines={3}
+              selectionColor={Colors.accent}
+            />
+            <Text style={styles.generatedHint}>
+              This token is split across too many coins to fit in a QR code.
+              Share or copy it instead, or refresh at the mint to consolidate.
+            </Text>
+          </>
+        )}
         <Text style={styles.generatedHint}>
           Whoever holds this string owns the money. The proofs are reserved, not
           spent: if it never reaches anyone you can reclaim them under Pending.
@@ -1833,6 +1985,21 @@ export default function WalletScreen({
               {deposit.unit}. The wallet is watching for the payment and will
               issue your ecash automatically.
             </Text>
+            {/* bolt11 is bech32, so the all-uppercase form is equivalent and
+                encodes in the QR alphanumeric mode: same invoice, denser code,
+                easier scan. Length is checked so an unusually long invoice
+                degrades to the text field instead of throwing. */}
+            {deposit.invoice.length <= TOKEN_QR_MAX_CHARS && (
+              <View style={styles.qrFrame}>
+                <QRCode
+                  value={deposit.invoice.toUpperCase()}
+                  size={200}
+                  ecl={TOKEN_QR_ERROR_CORRECTION}
+                  backgroundColor="#FFFFFF"
+                  color="#000000"
+                />
+              </View>
+            )}
             <TextInput
               style={[styles.tokenInput, styles.tokenInputMono]}
               value={deposit.invoice}
@@ -1863,10 +2030,26 @@ export default function WalletScreen({
                 <Text style={styles.generatedActionText}>Open in wallet</Text>
               </Pressable>
             </View>
-            <View style={styles.waitingRow}>
-              <ActivityIndicator size="small" color={Colors.textMuted} />
-              <Text style={styles.waitingText}>Waiting for payment…</Text>
-            </View>
+            {depositExpired ? (
+              <View style={styles.waitingRow}>
+                <Feather name="clock" size={16} color={Colors.textMuted} />
+                <Text style={styles.waitingText}>
+                  This invoice expired. If you already paid it, the balance is
+                  credited automatically.
+                </Text>
+              </View>
+            ) : (
+              <View style={styles.waitingRow}>
+                <ActivityIndicator size="small" color={Colors.textMuted} />
+                <Text style={styles.waitingText}>
+                  {depositExpiresAtMs === undefined
+                    ? "Waiting for payment…"
+                    : `Waiting for payment · expires in ${formatCountdown(
+                        depositExpiresAtMs - depositClock,
+                      )}`}
+                </Text>
+              </View>
+            )}
             <View style={styles.modalActions}>
               <Pressable
                 style={styles.modalCancel}
@@ -1876,6 +2059,20 @@ export default function WalletScreen({
               >
                 <Text style={styles.modalCancelText}>Close</Text>
               </Pressable>
+              {depositExpired && (
+                <Pressable
+                  style={styles.modalConfirm}
+                  disabled={busy !== null}
+                  onPress={() => {
+                    setDeposit(null);
+                    void handleCreateDeposit();
+                  }}
+                  accessibilityRole="button"
+                  accessibilityLabel="Create a new invoice"
+                >
+                  <Text style={styles.modalConfirmText}>New invoice</Text>
+                </Pressable>
+              )}
             </View>
           </>
         )}
@@ -2091,6 +2288,7 @@ export default function WalletScreen({
               }
               onConfirm={handleVerifyPhrase}
               onCancel={() => setBackupStep("show")}
+              cancelLabel="Back"
             />
           </>
         )}
@@ -2252,6 +2450,48 @@ export default function WalletScreen({
         />
       </BottomSheet>
 
+      <TokenScanner
+        visible={showScanner}
+        onClose={returnToReceive}
+        onToken={handleScannedToken}
+      />
+
+      {/* Re-show a pending token as a QR, for handing it over later. */}
+      <BottomSheet
+        visible={qrToken !== null}
+        onClose={() => setQrToken(null)}
+        sheetStyle={styles.modalSheet}
+      >
+        <Text style={styles.modalTitle}>
+          {qrToken
+            ? `${qrToken.amount.toLocaleString()} ${qrToken.unit}`
+            : "Token"}
+        </Text>
+        <Text style={styles.modalSubtitle}>
+          Have them scan this from their wallet. Still reclaimable until you
+          mark it delivered.
+        </Text>
+        {qrToken?.token !== undefined && canEncodeTokenQr(qrToken.token) ? (
+          <View style={styles.qrFrame}>
+            <QRCode
+              value={tokenQrPayload(qrToken.token)}
+              size={200}
+              ecl={TOKEN_QR_ERROR_CORRECTION}
+              color="#000000"
+              backgroundColor="#FFFFFF"
+            />
+          </View>
+        ) : (
+          <Text style={styles.modalSubtitle}>
+            This token is split across too many coins to fit in a QR code. Share
+            or copy it instead.
+          </Text>
+        )}
+        <Pressable style={styles.modalCancel} onPress={() => setQrToken(null)}>
+          <Text style={styles.modalCancelText}>Done</Text>
+        </Pressable>
+      </BottomSheet>
+
       {/* Peer picker for a mesh hand-off */}
       <BottomSheet
         visible={showPeerPicker}
@@ -2313,19 +2553,23 @@ export default function WalletScreen({
 
 type Styles = ReturnType<typeof createStyles>;
 
-// The stacked confirm/cancel pair every sheet in the app uses.
+// The stacked confirm/cancel pair every sheet in the app uses. The secondary
+// label is overridable because a step in the middle of a flow goes back rather
+// than out, and "Cancel" there reads as "throw away what I just did".
 function SheetActions({
   styles,
   confirmLabel,
   confirmDisabled,
   onConfirm,
   onCancel,
+  cancelLabel = "Cancel",
 }: {
   styles: Styles;
   confirmLabel: string;
   confirmDisabled: boolean;
   onConfirm: () => void;
   onCancel: () => void;
+  cancelLabel?: string;
 }): React.JSX.Element {
   return (
     <View style={styles.modalActions}>
@@ -2341,8 +2585,13 @@ function SheetActions({
       >
         <Text style={styles.modalConfirmText}>{confirmLabel}</Text>
       </Pressable>
-      <Pressable style={styles.modalCancel} onPress={onCancel}>
-        <Text style={styles.modalCancelText}>Cancel</Text>
+      <Pressable
+        style={styles.modalCancel}
+        onPress={onCancel}
+        accessibilityRole="button"
+        accessibilityLabel={cancelLabel}
+      >
+        <Text style={styles.modalCancelText}>{cancelLabel}</Text>
       </Pressable>
     </View>
   );
@@ -2475,6 +2724,15 @@ function relativeTime(ms: number): string {
   const days = Math.floor(hours / 24);
   if (days < 7) return `${String(days)}d ago`;
   return new Date(ms).toLocaleDateString();
+}
+
+// Whole seconds under a minute, m:ss above it. Never negative: the expired
+// branch takes over at zero, but a clock that ticks past the deadline between
+// renders should not flash "-1s".
+function formatCountdown(remainingMs: number): string {
+  const total = Math.max(0, Math.ceil(remainingMs / 1000));
+  if (total < 60) return `${total}s`;
+  return `${Math.floor(total / 60)}m ${String(total % 60).padStart(2, "0")}s`;
 }
 
 function createStyles(Colors: ReturnType<typeof useThemeColors>) {
@@ -2786,7 +3044,7 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       backgroundColor: Colors.surfaceRaised,
     },
     pillOn: {
-      borderColor: Colors.online,
+      borderColor: Colors.verified,
     },
     pillWarn: {
       borderColor: Colors.danger,
@@ -2798,7 +3056,7 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       fontWeight: FontWeight.semibold,
     },
     pillTextOn: {
-      color: Colors.online,
+      color: Colors.verified,
     },
     pillTextWarn: {
       color: Colors.danger,
@@ -3141,6 +3399,12 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       fontSize: FontSize.base,
       color: Colors.textInverse,
       fontWeight: FontWeight.bold,
+    },
+    qrFrame: {
+      alignSelf: "center",
+      padding: Spacing.base,
+      borderRadius: Radius.lg,
+      backgroundColor: "#FFFFFF",
     },
     // Quote breakdown
     quoteBox: {

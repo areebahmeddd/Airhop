@@ -29,6 +29,21 @@ interface PeerState {
 // the PeerRegistry TTL in message-router.ts).
 const REACHABLE_TTL_MS = 60_000;
 
+// How many of a peer map's entries are still reachable. Exported because the
+// map outlives reachability: a peer who walks out of range without a LEAVE (or
+// a BLE disconnect) sits in the map until something evicts it, so counting
+// entries would report a mesh that is no longer there. Takes the map rather
+// than reading the store so a caller can measure a previous state too.
+export function countReachablePeers(
+  peers: Map<string, NearbyPeer>,
+  nowMs: number = Date.now(),
+): number {
+  const cutoff = nowMs - REACHABLE_TTL_MS;
+  let count = 0;
+  for (const peer of peers.values()) if (peer.lastSeenMs >= cutoff) count++;
+  return count;
+}
+
 export const usePeerStore = create<PeerState>()((set, get) => ({
   peers: new Map(),
 

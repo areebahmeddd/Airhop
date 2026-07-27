@@ -104,6 +104,14 @@ export class NostrClient {
     return [...this.relays];
   }
 
+  // Whether any relay in the pool is currently live. Lets callers skip a doomed
+  // publish (which would otherwise block a full PUBLISH_TIMEOUT_MS before
+  // rejecting) and route straight to a mesh gateway uplink. Mirrors bitchat's
+  // synchronous relaysConnected() check.
+  get isConnected(): boolean {
+    return this.connected;
+  }
+
   // Recompute "any relay live" and notify only on a has-any / has-none flip, so
   // the UI's internet-bridge indicator tracks real connectivity without churn.
   private reconcileConnected(): void {

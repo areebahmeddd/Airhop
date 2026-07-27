@@ -8,12 +8,15 @@
 // despite being fully implemented and tested.
 //
 // The CSV is vendored in this repo at assets/data/relays.csv and is the single
-// source of truth. Airhop does NOT fetch a relay list at runtime from any
-// third-party URL. Bundling it means no network dependency on first launch, no
-// third party learning who is asking for relays, and no fetch to fail offline
+// source of truth at runtime. Airhop does NOT fetch a relay list at runtime from
+// any third-party URL. Bundling it means no network dependency on first launch,
+// no third party learning who is asking for relays, and no fetch to fail offline
 // (which is exactly when this app matters most).
 //
-// Canonical copy: https://github.com/areebahmeddd/Airhop/blob/main/assets/data/relays.csv
+// Upstream: the vendored CSV is refreshed weekly by .github/workflows/relays.yaml
+// from bitchat's REVIEWED relay list
+// (https://raw.githubusercontent.com/permissionlesstech/bitchat/main/relays/online_relays_gps.csv),
+// so our closest-relay picks stay aligned with bitchat's for geohash interop.
 //
 // Run after updating that CSV:
 //   node scripts/generate-relays.js

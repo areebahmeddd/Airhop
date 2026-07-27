@@ -11,9 +11,22 @@
 // The router does not know about encryption, signatures, or message types.
 // Callers are responsible for verifying signatures before passing a packet in.
 import { Deduplicator } from "./deduplicator";
-import { computePacketId, type Packet } from "./packet-codec";
+import { computePacketId, PacketType, type Packet } from "./packet-codec";
 
 const DEFAULT_TTL = 7;
+
+// Neighbour count at which the mesh counts as dense. Matches bitchat's
+// TransportConfig.bleHighDegreeThreshold.
+const HIGH_DEGREE_THRESHOLD = 6;
+
+// Time-critical relays (media fragments and live voice) use a much tighter
+// window than ordinary traffic. Matches bitchat's bleFragmentRelay* constants.
+const TIME_CRITICAL_MIN_DELAY_MS = 8;
+const TIME_CRITICAL_MAX_DELAY_MS = 25;
+// ...and a TTL clamp, so a sustained stream cannot flood a dense graph to full
+// depth. bleFragmentRelayTtlCap / bleFragmentRelayTtlCapDense.
+const TIME_CRITICAL_TTL_CAP = 7;
+const TIME_CRITICAL_TTL_CAP_DENSE = 5;
 
 // Relay delay scales with how many neighbours we can hear (our "degree"),
 // matching bitchat's RelayController. In a sparse mesh we relay almost
@@ -37,6 +50,40 @@ function jitterMs(degree: number): number {
     max = 220;
   }
   return min + Math.floor(Math.random() * (max - min + 1));
+}
+
+// Whether a packet type is carrying something the listener is waiting on right
+// now, rather than something that merely has to arrive.
+//
+// Live voice is the reason this exists. A talker emits a steady ~15 packets a
+// second and the receiver plays them out of a 350 ms jitter buffer, so relay
+// delay is not a throughput question, it is the difference between hearing a
+// sentence and hearing gaps. The ordinary window above spends up to 220 ms per
+// hop, which three hops of relaying turns into more than the entire buffer.
+// Media fragments get the same treatment for the same reason, and this is the
+// policy bitchat applies to both.
+function isTimeCritical(type: number): boolean {
+  return type === PacketType.FRAGMENT || type === PacketType.VOICE_FRAME;
+}
+
+// TTL a packet may be relayed with, after clamping. Time-critical floods are
+// contained harder in a dense graph, where full-depth flooding of a sustained
+// stream would crowd out everything else; a sparse mesh keeps full depth so
+// voice reaches as far as text does.
+function relayTtl(packet: Packet, degree: number): number {
+  const ttl = Math.min(packet.ttl, DEFAULT_TTL);
+  if (!isTimeCritical(packet.type)) return ttl;
+  const cap =
+    degree >= HIGH_DEGREE_THRESHOLD
+      ? TIME_CRITICAL_TTL_CAP_DENSE
+      : TIME_CRITICAL_TTL_CAP;
+  return Math.min(ttl, cap);
+}
+
+function relayDelayMs(packet: Packet, degree: number): number {
+  if (!isTimeCritical(packet.type)) return jitterMs(degree);
+  const span = TIME_CRITICAL_MAX_DELAY_MS - TIME_CRITICAL_MIN_DELAY_MS;
+  return TIME_CRITICAL_MIN_DELAY_MS + Math.floor(Math.random() * (span + 1));
 }
 
 export type SendFn = (packet: Packet) => void;
@@ -65,8 +112,15 @@ export class FloodRouter {
     if (this.dedup.has(pid)) return false;
     this.dedup.add(pid);
 
-    if (packet.ttl > 1) {
-      this.scheduleRelay({ ...packet, ttl: packet.ttl - 1 }, pid, send);
+    const degree = this.getDegree();
+    const ttl = relayTtl(packet, degree);
+    if (ttl > 1) {
+      this.scheduleRelay(
+        { ...packet, ttl: ttl - 1 },
+        pid,
+        send,
+        relayDelayMs(packet, degree),
+      );
     }
 
     return true;
@@ -78,7 +132,12 @@ export class FloodRouter {
     this.dedup.add(computePacketId(packet));
   }
 
-  private scheduleRelay(packet: Packet, pid: Uint8Array, send: SendFn): void {
+  private scheduleRelay(
+    packet: Packet,
+    pid: Uint8Array,
+    send: SendFn,
+    delayMs: number,
+  ): void {
     const idKey = Array.from(pid)
       .map((b) => b.toString(16).padStart(2, "0"))
       .join("");
@@ -86,7 +145,7 @@ export class FloodRouter {
     const timer = setTimeout(() => {
       this.pending.delete(idKey);
       send(packet);
-    }, jitterMs(this.getDegree()));
+    }, delayMs);
 
     this.pending.set(idKey, timer);
   }

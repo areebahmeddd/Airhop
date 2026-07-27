@@ -541,3 +541,85 @@ export function formatTokenSummary(info: TokenInfo): string {
   const amount = `${info.amount.toLocaleString()} ${info.unit}`;
   return info.memo ? `${amount} - ${info.memo}` : amount;
 }
+
+// ---- QR hand-off ------------------------------------------------------------
+
+// Most characters a token can have and still fit in one QR code.
+//
+// A Cashu token is base64url, which is outside QR's alphanumeric character set,
+// so it always encodes in byte mode. Byte mode at the largest QR version tops
+// out at 2,953 bytes with the lowest error-correction level, and the generator
+// this app uses throws rather than truncating past that. Measured against that
+// generator, not taken on faith.
+//
+// The low correction level is the right trade here: a token QR is read off a
+// bright screen held at arm's length, not off a crumpled receipt, so redundancy
+// buys little and costs a third of the capacity.
+export const TOKEN_QR_MAX_CHARS = 2953;
+export const TOKEN_QR_ERROR_CORRECTION = "L";
+
+// Whether this token fits in a QR code.
+//
+// In practice roughly two dozen proofs fit, and an ordinary payment carries a
+// handful, so this is false only for an unusually fragmented token. Callers
+// must check rather than render blindly: past the limit the generator throws,
+// which would take the whole sheet down with it.
+export function canEncodeTokenQr(token: string): boolean {
+  return token.length > 0 && token.length <= TOKEN_QR_MAX_CHARS;
+}
+
+// What to put in the QR.
+//
+// The bare token, with no `cashu:` scheme in front. Every Cashu wallet reads the
+// bare form, only some read the URI form, and the prefix would spend capacity on
+// nothing. Scanning stays permissive in the other direction: `bareToken` strips
+// a scheme if one is present, so a QR produced by a wallet that adds one is
+// still read correctly.
+export function tokenQrPayload(token: string): string {
+  return bareToken(token) ?? token;
+}
+
+// Which denomination a balance is shown in. Not a currency conversion: one
+// bitcoin is exactly 100,000,000 satoshis by definition, so this is a rename,
+// not a rate. It needs no price feed, no network, and cannot go stale.
+export type BitcoinUnit = "sat" | "btc";
+
+const SATS_PER_BTC_DIGITS = 8;
+
+// Render an amount for display, in the denomination the user picked.
+//
+// Only `sat` amounts have a bitcoin denomination to switch to. Every other unit
+// is the mint's own (a mint may issue usd or eur directly), and those are
+// already the thing they say they are: reformatting them as bitcoin would
+// invent an exchange rate nobody supplied.
+//
+// Returns the number and its label separately so the caller can style them
+// apart, which the balance card does.
+export function formatAmount(
+  amount: number,
+  unit: string,
+  display: BitcoinUnit,
+): { value: string; label: string } {
+  if (unit !== "sat" || display === "sat") {
+    return { value: amount.toLocaleString(), label: unit };
+  }
+  return { value: satsToBtc(amount), label: "BTC" };
+}
+
+// Exact sat -> BTC rendering, done on the digits rather than by dividing.
+//
+// Float division would be the obvious approach and is the wrong one for money:
+// it invites rounding at the last decimal place, and a balance that rounds up
+// is a balance that lies. Shifting the decimal point in the integer's own
+// digits cannot round at all.
+export function satsToBtc(sats: number): string {
+  const negative = sats < 0;
+  const digits = String(Math.abs(Math.trunc(sats))).padStart(
+    SATS_PER_BTC_DIGITS + 1,
+    "0",
+  );
+  const whole = digits.slice(0, -SATS_PER_BTC_DIGITS);
+  const fraction = digits.slice(-SATS_PER_BTC_DIGITS).replace(/0+$/, "");
+  const rendered = fraction.length > 0 ? `${whole}.${fraction}` : whole;
+  return negative ? `-${rendered}` : rendered;
+}

@@ -8,6 +8,7 @@ import {
 } from "@expo-google-fonts/jetbrains-mono";
 import { Feather } from "@expo/vector-icons";
 import { bytesToHex } from "@noble/hashes/utils.js";
+import { NavigationBar } from "expo-navigation-bar";
 import { StatusBar } from "expo-status-bar";
 import React, {
   useCallback,
@@ -21,6 +22,7 @@ import {
   BackHandler,
   DeviceEventEmitter,
   Linking,
+  Platform,
   Pressable,
   StyleSheet,
   Text,
@@ -32,14 +34,7 @@ import {
   GestureDetector,
   GestureHandlerRootView,
 } from "react-native-gesture-handler";
-import Animated, {
-  Easing,
-  runOnJS,
-  SlideInLeft,
-  SlideInRight,
-  SlideOutLeft,
-  SlideOutRight,
-} from "react-native-reanimated";
+import { runOnJS } from "react-native-reanimated";
 import {
   initialWindowMetrics,
   SafeAreaProvider,
@@ -55,6 +50,7 @@ import ChatSearchResults from "./src/features/chat/chat-search-results";
 import DmList from "./src/features/chat/dm-list";
 import MessageThread from "./src/features/chat/message-thread";
 import NotificationCenter from "./src/features/chat/notification-center";
+import { StartNewSheet } from "./src/features/chat/start-new-sheet";
 import PeerList from "./src/features/discovery/peer-list";
 import IdentityScreen from "./src/features/onboarding/identity-screen";
 import UsernameScreen from "./src/features/onboarding/username-screen";
@@ -70,10 +66,13 @@ import {
 import { getMeshService, initMeshService } from "./src/services/mesh-service";
 import {
   configureNotifications,
+  dismissNearbyNotification,
   dismissNotificationsFor,
   handleInboundMessage,
+  handleNearbyPeers,
   requestNotificationPermission,
   setAppBadgeCount,
+  setMeshNavigator,
   setNotificationNavigator,
   setNotificationsActiveChannel,
   setNotificationsAppActive,
@@ -93,6 +92,7 @@ import {
   useMeshBanners,
   useMeshStateStore,
 } from "./src/store/mesh-state-store";
+import { countReachablePeers, usePeerStore } from "./src/store/peer-store";
 import { useTransferStore } from "./src/store/transfer-store";
 import { useWalletStore } from "./src/store/wallet-store";
 import Avatar from "./src/ui/components/avatar";
@@ -276,11 +276,6 @@ export default function App(): React.JSX.Element {
   // sub-screen (About, Version, ...) pops ProfileScreen back to its root, the
   // same way tapping Chats returns to the conversation list.
   const [profileResetSignal, setProfileResetSignal] = useState(0);
-  // Which way the last tab change moved through the tabs, so the content
-  // transition slides the same direction the tab bar (or swipe) implied.
-  const [tabDirection, setTabDirection] = useState<"forward" | "backward">(
-    "forward",
-  );
   const [chatSubTab, setChatSubTab] = useState<ChatSubTab>("channels");
   const [chatView, setChatView] = useState<ChatView>({ kind: "list" });
   const [searchQuery, setSearchQuery] = useState("");
@@ -289,13 +284,13 @@ export default function App(): React.JSX.Element {
   const [messageTarget, setMessageTarget] = useState<MessageTarget | null>(
     null,
   );
-  // Counter-based trigger: incrementing tells ChannelList to open its join modal.
-  const [newChanCounter, setNewChanCounter] = useState(0);
+  // Counter-based trigger: incrementing opens the "start something new" chooser.
+  const [startNewTrigger, setStartNewTrigger] = useState(0);
   const [meshViewMode, setMeshViewMode] = useState<"list" | "radar">("radar");
   // Counter-based trigger: incrementing tells PeerList to open the add-contact scanner.
   const [meshAddCounter, setMeshAddCounter] = useState(0);
   // Counter-based trigger: incrementing (with an action) tells WalletScreen
-  // to open the matching modal, same pattern as newChanCounter/meshAddCounter.
+  // to open the matching modal, same pattern as startNewTrigger/meshAddCounter.
   const [walletAction, setWalletAction] = useState<WalletAction | null>(null);
   // Whether there is any ecash at all to spend. Selected as a boolean so the
   // header only re-renders when the answer flips, not on every proof change.
@@ -429,6 +424,9 @@ export default function App(): React.JSX.Element {
   // The ref lets a notification tap open the right thread without re-registering
   // the handler on every render.
   const openChannelRef = useRef<(channel: string) => void>(() => undefined);
+  // Same trick for the tab navigator, which a tapped nearby-peers notice uses
+  // to land on Mesh.
+  const navigateToTabRef = useRef<(tab: MainTab) => void>(() => undefined);
 
   // Foreground/background tracking, so a banner is only raised when the user is
   // not already looking at the app.
@@ -459,7 +457,12 @@ export default function App(): React.JSX.Element {
     syncPermissions();
     const sub = AppState.addEventListener("change", (next) => {
       setNotificationsAppActive(next === "active");
-      if (next === "active") syncPermissions();
+      if (next === "active") {
+        syncPermissions();
+        // The Mesh tab is a tap away now, so a "someone nearby" from earlier is
+        // stale the moment the app is open.
+        void dismissNearbyNotification();
+      }
     });
     return () => sub.remove();
   }, []);
@@ -520,8 +523,26 @@ export default function App(): React.JSX.Element {
         }
       }
     });
+    // Nearby peers, while nobody is looking. The mesh keeps scanning with the
+    // app in the background (Android's foreground service), so this is a real
+    // event the user would otherwise never learn about. Counted by the store's
+    // own reachability rule rather than by map size, because a peer who left
+    // without a LEAVE lingers in the map: measure both sides of the change with
+    // one clock so the comparison is honest. Everything about when it is worth
+    // a notification is in shouldNotifyNearby.
+    setMeshNavigator(() => navigateToTabRef.current("mesh"));
+    const unsubscribePeers = usePeerStore.subscribe((state, prev) => {
+      const nowMs = Date.now();
+      void handleNearbyPeers(
+        countReachablePeers(state.peers, nowMs),
+        countReachablePeers(prev.peers, nowMs),
+      );
+    });
     void configureNotifications();
-    return unsubscribe;
+    return () => {
+      unsubscribe();
+      unsubscribePeers();
+    };
   }, [appReady, onboardingStep, username]);
 
   // Tell the notifier which conversation is open, so it suppresses that chat's
@@ -662,13 +683,9 @@ export default function App(): React.JSX.Element {
   }
 
   // Single entry point for every tab change (tab bar tap, swipe gesture,
-  // deep-link-style jumps like opening a DM from Mesh) so the slide
-  // direction always matches TABS order instead of only working for taps.
+  // deep-link-style jumps like opening a DM from Mesh).
   const navigateToTab = useCallback(
     (nextTab: MainTab, resetChatView = true): void => {
-      const nextIndex = TABS.findIndex((t) => t.id === nextTab);
-      const currentIndex = TABS.findIndex((t) => t.id === tab);
-      setTabDirection(nextIndex >= currentIndex ? "forward" : "backward");
       setTab(nextTab);
       if (nextTab === "chats" && resetChatView) {
         setChatView({ kind: "list" });
@@ -679,8 +696,10 @@ export default function App(): React.JSX.Element {
         setProfileResetSignal((n) => n + 1);
       }
     },
-    [tab],
+    [],
   );
+  // Keep the notification tap handler pointed at the latest navigateToTab.
+  navigateToTabRef.current = navigateToTab;
 
   function openDMFromMesh(channel: string): void {
     setActiveChannel(channel);
@@ -728,15 +747,6 @@ export default function App(): React.JSX.Element {
     [tab, isInThread, navigateToTab],
   );
 
-  const tabEntering =
-    tabDirection === "forward"
-      ? SlideInRight.duration(240).easing(Easing.out(Easing.cubic))
-      : SlideInLeft.duration(240).easing(Easing.out(Easing.cubic));
-  const tabExiting =
-    tabDirection === "forward"
-      ? SlideOutLeft.duration(200).easing(Easing.in(Easing.cubic))
-      : SlideOutRight.duration(200).easing(Easing.in(Easing.cubic));
-
   // ---- Render ------------------------------------------------------------
 
   // Render nothing until the identity check resolves (and the bundled font is
@@ -756,6 +766,15 @@ export default function App(): React.JSX.Element {
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider initialMetrics={initialWindowMetrics}>
         <StatusBar style={resolvedTheme === "dark" ? "light" : "dark"} />
+        {/* Android system nav bar: tint its buttons/pill to the theme, the same
+            way the status bar above does, so the top and bottom chrome read as
+            one themed surface. Driven by our in-app theme, not the OS scheme, so
+            forcing dark while the phone is light still gets light buttons. Under
+            edge-to-edge the bar is transparent and our content draws behind it,
+            so only the button contrast is ours to set. Null on iOS. */}
+        {Platform.OS === "android" && (
+          <NavigationBar style={resolvedTheme === "dark" ? "dark" : "light"} />
+        )}
         <CustomAlert />
         <NotificationCenter
           visible={showActivity}
@@ -763,15 +782,7 @@ export default function App(): React.JSX.Element {
           onOpenChannel={openChannelFromActivity}
         />
 
-        {/* Keyed by screen: welcome -> generating -> reveal -> main app each
-            get their own mount, so this slide plays on every step of
-            onboarding as well as the final hand-off into the main app. */}
-        <Animated.View
-          key={onboardingStep ?? "main"}
-          style={styles.flexFill}
-          entering={SlideInRight.duration(280).easing(Easing.out(Easing.cubic))}
-          exiting={SlideOutLeft.duration(220).easing(Easing.in(Easing.cubic))}
-        >
+        <View style={styles.flexFill}>
           {/* Onboarding flow */}
           {onboardingStep !== null && (
             <>
@@ -834,13 +845,13 @@ export default function App(): React.JSX.Element {
                             ]}
                             onPress={() => setChatSubTab("channels")}
                             accessibilityRole="button"
-                            accessibilityLabel="Channels"
+                            accessibilityLabel="Rooms"
                             accessibilityState={{
                               selected: chatSubTab === "channels",
                             }}
                           >
-                            {/* Same icon language as the channel rows below:
-                                hash for channels, message-circle for DMs. */}
+                            {/* Same icon language as the rows below: hash for
+                                rooms, message-circle for DMs. */}
                             <Feather
                               name="hash"
                               size={14}
@@ -857,7 +868,7 @@ export default function App(): React.JSX.Element {
                                   styles.segTextActive,
                               ]}
                             >
-                              Channels
+                              Rooms
                             </Text>
                             {channelsUnread > 0 && (
                               <View style={styles.segBadge}>
@@ -906,10 +917,10 @@ export default function App(): React.JSX.Element {
                             )}
                           </Pressable>
                         </View>
-                        {/* Bell: notification history, shown on both the
-                            Channels and Direct sub-tabs, badged with unseen
-                            activity. Plain icon, no filled box (unlike the +),
-                            so the two read as different weights of action. */}
+                        {/* Bell: notification history, shown on both the Rooms
+                            and Direct sub-tabs, badged with unseen activity.
+                            Plain icon, no filled box (unlike the +), so the two
+                            read as different weights of action. */}
                         <Pressable
                           style={styles.headerIconBtn}
                           onPress={openActivityCenter}
@@ -933,20 +944,21 @@ export default function App(): React.JSX.Element {
                             </View>
                           )}
                         </Pressable>
-                        {chatSubTab === "channels" && (
-                          <Pressable
-                            style={styles.newChannelPill}
-                            onPress={() => setNewChanCounter((c) => c + 1)}
-                            accessibilityRole="button"
-                            accessibilityLabel="Create a channel"
-                          >
-                            <Feather
-                              name="plus"
-                              size={18}
-                              color={Colors.textSecondary}
-                            />
-                          </Pressable>
-                        )}
+                        {/* Shown on both sub-tabs. What it opens is the same
+                            chooser either way, so the header keeps its shape
+                            when you switch between Rooms and Direct. */}
+                        <Pressable
+                          style={styles.newChannelPill}
+                          onPress={() => setStartNewTrigger((c) => c + 1)}
+                          accessibilityRole="button"
+                          accessibilityLabel="Start something new"
+                        >
+                          <Feather
+                            name="plus"
+                            size={18}
+                            color={Colors.textSecondary}
+                          />
+                        </Pressable>
                       </View>
                     </>
                   ) : tab === "mesh" ? (
@@ -1175,89 +1187,96 @@ export default function App(): React.JSX.Element {
               )}
 
               {/* Content: swipe left/right to step through tabs, matching the
-                tab bar's order. The inner Animated.View is keyed by tab so
-                only a genuine tab change slides. Switching Channels/Direct
-                or opening a thread within the same tab does not. */}
+                tab bar's order. */}
               <GestureDetector gesture={swipeGesture}>
                 <View style={styles.content}>
-                  <Animated.View
-                    key={tab}
-                    style={styles.flexFill}
-                    entering={tabEntering}
-                    exiting={tabExiting}
-                  >
-                    {tab === "chats" && chatView.kind === "thread" ? (
-                      // Keyed by channel so switching threads REMOUNTS. Without
-                      // this the component persisted across a channel change and
-                      // leaked per-thread state: an unsent draft typed in one
-                      // chat reappeared in the next, and a "queued for delivery"
-                      // banner from the old chat rendered over the new one.
-                      <MessageThread
-                        key={chatView.channel}
-                        channel={chatView.channel}
-                        localNickname={username}
-                        localPeerID={generatedPeerID}
-                        onBack={closeThread}
-                        targetMessageId={
-                          messageTarget?.channel === chatView.channel
-                            ? messageTarget.messageId
-                            : undefined
-                        }
-                        targetMessageTrigger={
-                          messageTarget?.channel === chatView.channel
-                            ? messageTarget.trigger
-                            : undefined
-                        }
-                        onNavigateToChannel={openChannel}
-                      />
-                    ) : tab === "chats" && chatView.kind === "search" ? (
-                      <ChatSearchResults
-                        query={searchQuery}
-                        onSelectChat={handleSelectChatResult}
-                        onSelectMessage={handleSelectMessageResult}
-                      />
-                    ) : tab === "chats" && chatSubTab === "channels" ? (
-                      <ChannelList
-                        onSelectChannel={openChannel}
-                        newChannelTrigger={newChanCounter}
-                      />
-                    ) : tab === "chats" ? (
-                      <DmList onSelectDM={openChannel} />
-                    ) : tab === "mesh" ? (
-                      <PeerList
-                        onOpenDM={openDMFromMesh}
-                        viewMode={meshViewMode}
-                        addContactTrigger={meshAddCounter}
-                      />
-                    ) : tab === "wallet" ? (
-                      <WalletScreen
-                        action={walletAction}
-                        actionTrigger={walletActionTrigger}
-                      />
-                    ) : (
-                      <ProfileScreen
-                        key={`profile-${profileResetSignal}`}
-                        peerID={generatedPeerID}
-                        username={username}
-                        onWipe={() => {
-                          // The mesh is already down and its keys released: the
-                          // wipe does that first, before it clears anything.
-                          // All that is left here is putting the shell back to
-                          // a first-run state.
-                          setGeneratedPeerID(FALLBACK_PEER_ID);
-                          // Reset navigation to the fresh-start landing tab.
-                          // Panic wipe is triggered from Profile, so without this
-                          // the re-onboarded app reopens on the Profile screen
-                          // instead of Mesh.
-                          setTab("mesh");
-                          setChatView({ kind: "list" });
-                          setOnboardingStep("welcome");
-                        }}
-                      />
-                    )}
-                  </Animated.View>
+                  {tab === "chats" && chatView.kind === "thread" ? (
+                    // Keyed by channel so switching threads REMOUNTS. Without
+                    // this the component persisted across a channel change and
+                    // leaked per-thread state: an unsent draft typed in one
+                    // chat reappeared in the next, and a "queued for delivery"
+                    // banner from the old chat rendered over the new one.
+                    <MessageThread
+                      key={chatView.channel}
+                      channel={chatView.channel}
+                      localNickname={username}
+                      localPeerID={generatedPeerID}
+                      onBack={closeThread}
+                      targetMessageId={
+                        messageTarget?.channel === chatView.channel
+                          ? messageTarget.messageId
+                          : undefined
+                      }
+                      targetMessageTrigger={
+                        messageTarget?.channel === chatView.channel
+                          ? messageTarget.trigger
+                          : undefined
+                      }
+                      onNavigateToChannel={openChannel}
+                      // Scoped to the list this thread sits under, so the back
+                      // button counts what you would actually find on the
+                      // screen it returns to. Same split the Channels/Direct
+                      // segments use, from the same source.
+                      backUnreadCount={
+                        chatView.channel.startsWith("dm:")
+                          ? dmsUnread
+                          : channelsUnread
+                      }
+                    />
+                  ) : tab === "chats" && chatView.kind === "search" ? (
+                    <ChatSearchResults
+                      query={searchQuery}
+                      onSelectChat={handleSelectChatResult}
+                      onSelectMessage={handleSelectMessageResult}
+                    />
+                  ) : tab === "chats" && chatSubTab === "channels" ? (
+                    <ChannelList onSelectChannel={openChannel} />
+                  ) : tab === "chats" ? (
+                    <DmList onSelectDM={openChannel} />
+                  ) : tab === "mesh" ? (
+                    <PeerList
+                      onOpenDM={openDMFromMesh}
+                      viewMode={meshViewMode}
+                      addContactTrigger={meshAddCounter}
+                    />
+                  ) : tab === "wallet" ? (
+                    <WalletScreen
+                      action={walletAction}
+                      actionTrigger={walletActionTrigger}
+                    />
+                  ) : (
+                    <ProfileScreen
+                      key={`profile-${profileResetSignal}`}
+                      peerID={generatedPeerID}
+                      username={username}
+                      onWipe={() => {
+                        // The mesh is already down and its keys released: the
+                        // wipe does that first, before it clears anything.
+                        // All that is left here is putting the shell back to
+                        // a first-run state.
+                        setGeneratedPeerID(FALLBACK_PEER_ID);
+                        // Reset navigation to the fresh-start landing tab.
+                        // Panic wipe is triggered from Profile, so without this
+                        // the re-onboarded app reopens on the Profile screen
+                        // instead of Mesh.
+                        setTab("mesh");
+                        setChatView({ kind: "list" });
+                        setOnboardingStep("welcome");
+                      }}
+                    />
+                  )}
                 </View>
               </GestureDetector>
+
+              {/* The header "+" flow, mounted beside the Chats list rather than
+                  inside it: both sub-tabs share one copy of the chooser and its
+                  forms. Sheets render in a Modal, so this sits anywhere. */}
+              {tab === "chats" && chatView.kind === "list" && (
+                <StartNewSheet
+                  trigger={startNewTrigger}
+                  onOpenChannel={openChannel}
+                />
+              )}
 
               {/* Floating bottom stack: the ongoing-transfer pill and the tab
                   bar, both hovering over the content that scrolls beneath.
@@ -1336,7 +1355,7 @@ export default function App(): React.JSX.Element {
               )}
             </SafeAreaView>
           )}
-        </Animated.View>
+        </View>
       </SafeAreaProvider>
     </GestureHandlerRootView>
   );

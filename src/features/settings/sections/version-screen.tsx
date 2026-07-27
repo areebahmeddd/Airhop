@@ -13,6 +13,7 @@ import {
   Animated,
   Easing,
   Linking,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -28,6 +29,7 @@ import {
   LICENSE_URL,
 } from "../../../data/app-info";
 import { birdForVersion } from "../../../data/releases";
+import { useSettingsStore } from "../../../store/settings-store";
 import PrimaryButton from "../../../ui/components/primary-button";
 import {
   FontFamily,
@@ -48,6 +50,7 @@ type CheckState =
   | { status: "checking" }
   | { status: "latest" }
   | { status: "update"; version: string; url: string }
+  | { status: "tor-blocked" }
   | { status: "error" };
 
 // Compares two dotted version strings numerically. Returns a positive number
@@ -136,6 +139,14 @@ export default function VersionScreen({ onBack }: Props): React.JSX.Element {
   }
 
   async function checkForUpdates() {
+    // On iOS the Tor tunnel only covers nostr-tools WebSockets, so this plain
+    // fetch to GitHub would egress over clearnet and reveal the real IP while Tor
+    // is on. Skip it rather than leak (same fail-closed choice as the wallet mint
+    // gate; the relay directory avoids the problem entirely by being vendored).
+    if (Platform.OS === "ios" && useSettingsStore.getState().torEnabled) {
+      setCheck({ status: "tor-blocked" });
+      return;
+    }
     setCheck({ status: "checking" });
     try {
       const res = await fetch(LATEST_RELEASE_API, {
@@ -168,6 +179,10 @@ export default function VersionScreen({ onBack }: Props): React.JSX.Element {
   }
 
   const checking = check.status === "checking";
+  // When a newer release exists, the primary button becomes the download CTA:
+  // it opens the release page (notes + downloadable builds). The result line
+  // below still links the notes. Reopening the screen resets to a fresh check.
+  const update = check.status === "update" ? check : null;
 
   return (
     <View style={shared.container}>
@@ -198,10 +213,22 @@ export default function VersionScreen({ onBack }: Props): React.JSX.Element {
 
         <View style={styles.actions}>
           <PrimaryButton
-            label={checking ? "Checking" : "Check for updates"}
-            onPress={() => void checkForUpdates()}
+            label={
+              update
+                ? `Download ${update.version}`
+                : checking
+                  ? "Checking"
+                  : "Check for updates"
+            }
+            onPress={() =>
+              update ? void Linking.openURL(update.url) : void checkForUpdates()
+            }
             disabled={checking}
-            accessibilityLabel="Check for updates"
+            accessibilityLabel={
+              update
+                ? `Download version ${update.version}`
+                : "Check for updates"
+            }
           />
           <UpdateResult check={check} styles={styles} Colors={Colors} />
         </View>
@@ -268,19 +295,31 @@ function UpdateResult({
   }
 
   if (check.status === "update") {
+    // The button above is the download CTA; here we just link what's new.
     return (
       <Pressable
         style={styles.result}
         onPress={() => void Linking.openURL(check.url)}
         accessibilityRole="link"
-        accessibilityLabel={`Version ${check.version} is available, view release notes`}
+        accessibilityLabel={`View release notes for version ${check.version}`}
       >
         <Feather name="arrow-up-circle" size={16} color={Colors.textPrimary} />
         <Text style={styles.resultText}>
-          Version {check.version} is available.{" "}
           <Text style={styles.resultLink}>View release notes</Text>
         </Text>
       </Pressable>
+    );
+  }
+
+  if (check.status === "tor-blocked") {
+    return (
+      <View style={styles.result}>
+        <Feather name="shield" size={16} color={Colors.textMuted} />
+        <Text style={styles.resultText}>
+          Update check is paused while Tor is on, so it cannot leak your IP.
+          Check the releases page in a browser.
+        </Text>
+      </View>
     );
   }
 

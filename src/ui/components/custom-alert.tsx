@@ -1,17 +1,22 @@
 // Global alert modal, the visual counterpart to src/store/alert-store.ts's
-// `showAlert()`. Mounted once at the app root (App.tsx) so any screen can
-// call `showAlert(title, message, buttons)` and get this design-language
-// modal instead of the OS-native Alert.alert box.
+// `showAlert()`. Mounted once at the app root (App.tsx) so any screen can call
+// `showAlert(title, message, buttons)` and get this design-language dialog
+// instead of the OS-native Alert.alert box.
 //
-// Centered card, same shape as message-thread.tsx's screenshot notice
-// modal. Buttons stack full-width, most-notable action on top: a
-// non-cancel button (destructive red, or solid default) first, the cancel
-// button, if any, plain/bordered underneath. Tapping the backdrop only
-// dismisses; it never invokes a button's onPress, so a stray tap can't
-// accidentally trigger a destructive action.
+// It rides the app's one BottomSheet, so a confirm or a notice slides up from
+// the bottom exactly like every picker and panel does, landing within a thumb's
+// reach, rather than dropping a generic card in the middle of the screen. One
+// modal language, everywhere.
+//
+// Buttons stack full-width, the most notable action on top: a non-cancel button
+// (destructive red, or solid default) first, the cancel button, if any, plain
+// underneath and so closest to the thumb, the safe action easiest to hit. A
+// backdrop tap or a drag-down dismisses; neither invokes a button's onPress, so
+// a stray gesture can never trigger a destructive action.
 
 import React, { useMemo } from "react";
-import { Modal, Pressable, StyleSheet, Text, View } from "react-native";
+import { Pressable, StyleSheet, Text, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { type AlertButtonConfig, useAlertStore } from "../../store/alert-store";
 import {
   FontSize,
@@ -20,10 +25,12 @@ import {
   Spacing,
   useThemeColors,
 } from "../theme";
+import BottomSheet from "./bottom-sheet";
 
 export default function CustomAlert(): React.JSX.Element {
   const Colors = useThemeColors();
   const styles = useMemo(() => createStyles(Colors), [Colors]);
+  const insets = useSafeAreaInsets();
   const { visible, title, message, buttons, hide } = useAlertStore();
 
   const cancelButton = buttons.find((b) => b.style === "cancel");
@@ -36,67 +43,56 @@ export default function CustomAlert(): React.JSX.Element {
   }
 
   return (
-    <Modal
+    <BottomSheet
       visible={visible}
-      transparent
-      animationType="fade"
-      onRequestClose={hide}
+      onClose={hide}
+      // Clear the device's gesture-nav inset so the bottom-most button never
+      // sits under the system bar (the sheet renders in its own Modal, outside
+      // the screen's SafeAreaView, so it has to bake the inset in itself).
+      sheetStyle={[styles.sheet, { paddingBottom: Spacing.xl + insets.bottom }]}
     >
-      <View style={styles.overlay}>
-        <Pressable style={StyleSheet.absoluteFill} onPress={hide} />
-        <View style={styles.card}>
-          <Text style={styles.title}>{title}</Text>
-          {message && <Text style={styles.message}>{message}</Text>}
-          <View style={styles.actions}>
-            {ordered.map((button, i) => (
-              <Pressable
-                key={`${button.text}-${i}`}
-                style={
-                  button.style === "destructive"
-                    ? styles.btnDestructive
-                    : button.style === "cancel"
-                      ? styles.btnCancel
-                      : styles.btnDefault
-                }
-                onPress={() => handlePress(button)}
-                accessibilityRole="button"
-                accessibilityLabel={button.text}
-              >
-                <Text
-                  style={
-                    button.style === "destructive"
-                      ? styles.btnDestructiveText
-                      : button.style === "cancel"
-                        ? styles.btnCancelText
-                        : styles.btnDefaultText
-                  }
-                >
-                  {button.text}
-                </Text>
-              </Pressable>
-            ))}
-          </View>
-        </View>
+      <Text style={styles.title}>{title}</Text>
+      {message ? <Text style={styles.message}>{message}</Text> : null}
+      <View style={styles.actions}>
+        {ordered.map((button, i) => (
+          <Pressable
+            key={`${button.text}-${i}`}
+            style={
+              button.style === "destructive"
+                ? styles.btnDestructive
+                : button.style === "cancel"
+                  ? styles.btnCancel
+                  : styles.btnDefault
+            }
+            onPress={() => handlePress(button)}
+            accessibilityRole="button"
+            accessibilityLabel={button.text}
+          >
+            <Text
+              style={
+                button.style === "destructive"
+                  ? styles.btnDestructiveText
+                  : button.style === "cancel"
+                    ? styles.btnCancelText
+                    : styles.btnDefaultText
+              }
+            >
+              {button.text}
+            </Text>
+          </Pressable>
+        ))}
       </View>
-    </Modal>
+    </BottomSheet>
   );
 }
 
 function createStyles(Colors: ReturnType<typeof useThemeColors>) {
   return StyleSheet.create({
-    overlay: {
-      flex: 1,
-      backgroundColor: Colors.overlay,
-      alignItems: "center",
-      justifyContent: "center",
+    // Rides on BottomSheet's shared base (surface, top radii, grab handle). The
+    // handle already owns the top spacing, so this only adds the sides and the
+    // gap between title, message, and actions.
+    sheet: {
       paddingHorizontal: Spacing.xl,
-    },
-    card: {
-      width: "100%",
-      maxWidth: 340,
-      backgroundColor: Colors.surface,
-      borderRadius: Radius.xl,
-      padding: Spacing.xl,
       gap: Spacing.sm,
     },
     title: {
@@ -104,6 +100,8 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       fontWeight: FontWeight.bold,
       color: Colors.textPrimary,
     },
+    // Left-aligned, not centered: body copy is easier to read against a
+    // consistent left edge, and a confirm's message is often two or three lines.
     message: {
       fontSize: FontSize.base,
       color: Colors.textSecondary,
@@ -113,6 +111,7 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
     actions: {
       width: "100%",
       gap: Spacing.sm,
+      marginTop: Spacing.xs,
     },
     btnDefault: {
       width: "100%",

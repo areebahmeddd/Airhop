@@ -12,8 +12,10 @@ import {
   View,
 } from "react-native";
 import { setTorRouting } from "../../../core/nostr/tor-routing";
+import { requestLocationPermission } from "../../../services/location-service";
 import { showAlert } from "../../../store/alert-store";
 import { useBlockedStore } from "../../../store/blocked-store";
+import { useMeshStateStore } from "../../../store/mesh-state-store";
 import { useSettingsStore } from "../../../store/settings-store";
 import BottomSheet from "../../../ui/components/bottom-sheet";
 import { useThemeColors } from "../../../ui/theme";
@@ -39,6 +41,15 @@ export default function SecurityScreen({ onBack }: Props): React.JSX.Element {
   const torEnabled = useSettingsStore((s) => s.torEnabled);
   const gatewayEnabled = useSettingsStore((s) => s.gatewayEnabled);
   const setGatewayEnabled = useSettingsStore((s) => s.setGatewayEnabled);
+  const bridgeEnabled = useSettingsStore((s) => s.bridgeEnabled);
+  const setBridgeEnabled = useSettingsStore((s) => s.setBridgeEnabled);
+  const bridgeConsented = useSettingsStore((s) => s.bridgeConsented);
+  const setBridgeConsented = useSettingsStore((s) => s.setBridgeConsented);
+  // All three connectivity toggles need the internet; disabled while it is off.
+  const internetEnabled = useSettingsStore((s) => s.internetEnabled);
+  // The bridge needs a location fix to find its neighborhood cell; surface a
+  // hint when it is on but location is denied.
+  const locationGranted = useMeshStateStore((s) => s.locationGranted);
   const allowMintOverClearnet = useSettingsStore(
     (s) => s.allowMintOverClearnet,
   );
@@ -110,6 +121,35 @@ export default function SecurityScreen({ onBack }: Props): React.JSX.Element {
     }
   }
 
+  // First time the bridge is turned on, confirm the one privacy-relevant fact:
+  // it makes your public messages leave Bluetooth range. After that, it toggles
+  // silently. Turning it off never prompts.
+  function handleBridgeToggle(value: boolean): void {
+    if (!value || bridgeConsented) {
+      setBridgeEnabled(value);
+      return;
+    }
+    showAlert(
+      "Turn on the mesh bridge?",
+      "Your public #bluetooth messages will be published to your neighborhood over the internet, so people beyond Bluetooth range can read them. Private messages are never bridged, and 'nearby only' keeps any single message local.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Turn on",
+          onPress: () => {
+            setBridgeConsented(true);
+            setBridgeEnabled(true);
+          },
+        },
+      ],
+    );
+  }
+
+  async function grantLocation(): Promise<void> {
+    const granted = await requestLocationPermission();
+    useMeshStateStore.getState().setLocationGranted(granted);
+  }
+
   return (
     <View style={styles.container}>
       <SubHeader title="Privacy & Security" onBack={onBack} />
@@ -117,23 +157,32 @@ export default function SecurityScreen({ onBack }: Props): React.JSX.Element {
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
       >
+        {/* The connectivity toggles (Tor, gateway, bridge), grouped apart from
+            the always-on guarantees below. All three ride the internet, so they
+            are disabled while Internet fallback is off (a note explains where). */}
         <View style={styles.section}>
           <View style={styles.settingsGroup}>
+            {!internetEnabled && (
+              <>
+                <SettingRow
+                  icon="wifi-off"
+                  label="Internet is off"
+                  description="Tor, the gateway, and the bridge all use the internet. Turn on Internet fallback under Network to use them."
+                />
+                <GroupDivider />
+              </>
+            )}
             <SettingRow
               icon="globe"
               label="Tor routing"
               // Standard description regardless of on/off; the switch and the Mesh
               // banner communicate state.
-              description={
-                Platform.OS === "android"
-                  ? "Requires Orbot · Install from the Play Store"
-                  : "Route Nostr traffic through Tor for enhanced privacy"
-              }
+              description="Route Nostr traffic through Tor for extra privacy"
               control={
                 <SettingSwitch
                   value={torEnabled}
                   onValueChange={(v) => void handleTorToggle(v)}
-                  disabled={torStarting}
+                  disabled={torStarting || !internetEnabled}
                 />
               }
             />
@@ -164,28 +213,75 @@ export default function SecurityScreen({ onBack }: Props): React.JSX.Element {
             <SettingRow
               icon="radio"
               label="Internet gateway"
-              // Standard description regardless of on/off; the switch shows state.
-              description="Relay nearby offline peers' location messages to the internet. Uses your data and battery."
+              description="Lend your connection to a nearby offline phone so it can still reach the location channels. Uses your data and battery."
               control={
                 <SettingSwitch
                   value={gatewayEnabled}
                   onValueChange={setGatewayEnabled}
+                  disabled={!internetEnabled}
                 />
               }
             />
             <GroupDivider />
             <SettingRow
+              icon="git-merge"
+              label="Mesh bridge"
+              description="Link this area's public #bluetooth chat with another out-of-range Bluetooth crowd over the internet."
+              control={
+                <SettingSwitch
+                  value={bridgeEnabled}
+                  onValueChange={handleBridgeToggle}
+                  disabled={!internetEnabled}
+                />
+              }
+            />
+            {/* The bridge derives its neighborhood cell from a location fix, so
+                without permission it stays inert. Offer a one-tap grant rather
+                than leaving it silently doing nothing. */}
+            {bridgeEnabled && !locationGranted && (
+              <>
+                <GroupDivider />
+                <SettingRow
+                  icon="alert-triangle"
+                  label="Mesh bridge needs location"
+                  description="It finds your neighborhood from a location fix. Grant location to start bridging."
+                  control={
+                    <Pressable
+                      onPress={() => void grantLocation()}
+                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                      accessibilityRole="button"
+                      accessibilityLabel="Grant location permission"
+                    >
+                      <Text
+                        style={[styles.settingValue, { color: Colors.accent }]}
+                      >
+                        Grant
+                      </Text>
+                    </Pressable>
+                  }
+                />
+              </>
+            )}
+          </View>
+        </View>
+
+        {/* Always-on guarantees: not choices, just what is true of every
+            message. Shown as a locked-on switch so it reads as "on and not
+            changeable" rather than plain text. */}
+        <View style={styles.section}>
+          <View style={styles.settingsGroup}>
+            <SettingRow
               icon="repeat"
               label="Forward secrecy"
               description="Double Ratchet is always on for DMs"
-              control={<Text style={styles.alwaysOn}>Always on</Text>}
+              control={<SettingSwitch value={true} disabled />}
             />
             <GroupDivider />
             <SettingRow
               icon="check-circle"
               label="Signed packets"
               description="Every packet is Ed25519-signed"
-              control={<Text style={styles.alwaysOn}>Always on</Text>}
+              control={<SettingSwitch value={true} disabled />}
             />
           </View>
         </View>

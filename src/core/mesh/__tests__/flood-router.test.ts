@@ -140,3 +140,84 @@ describe("FloodRouter", () => {
     });
   });
 });
+
+describe("FloodRouter time-critical relay policy", () => {
+  // Live voice and media fragments are relayed on a much tighter schedule than
+  // ordinary traffic. Voice is the reason: a talker emits ~15 packets a second
+  // and the far side plays them out of a 350 ms jitter buffer, so the ordinary
+  // window (up to 220 ms per hop) would spend the whole buffer on relaying
+  // before three hops were done.
+  function voicePacket(ttl = 7): Packet {
+    return {
+      type: PacketType.VOICE_FRAME,
+      ttl,
+      flags: Flags.SIGNED,
+      senderID: new Uint8Array(8),
+      recipientID: new Uint8Array(8),
+      timestamp: Date.now(),
+      signature: new Uint8Array(64),
+      payload: new Uint8Array([1, 2, 3]),
+    };
+  }
+
+  beforeEach(() => {
+    jest.useFakeTimers();
+  });
+
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
+  it("relays a voice frame inside the jitter buffer's budget", () => {
+    // Dense mesh, where ordinary traffic would wait 100-220 ms.
+    const router = new FloodRouter(() => 12);
+    const sent: Packet[] = [];
+    router.receive(voicePacket(), (p) => sent.push(p));
+
+    jest.advanceTimersByTime(25);
+    expect(sent).toHaveLength(1);
+    router.flush();
+  });
+
+  it("leaves ordinary traffic on the wider window", () => {
+    const router = new FloodRouter(() => 12);
+    const sent: Packet[] = [];
+    router.receive({ ...voicePacket(), type: PacketType.CHANNEL_MSG }, (p) =>
+      sent.push(p),
+    );
+
+    jest.advanceTimersByTime(25);
+    expect(sent).toHaveLength(0); // still waiting; ordinary jitter starts at 100
+    jest.advanceTimersByTime(220);
+    expect(sent).toHaveLength(1);
+    router.flush();
+  });
+
+  it("clamps voice TTL in a dense mesh so a stream cannot flood to full depth", () => {
+    const router = new FloodRouter(() => 12);
+    const sent: Packet[] = [];
+    router.receive(voicePacket(7), (p) => sent.push(p));
+    jest.advanceTimersByTime(30);
+    // Clamped to 5, then decremented for the hop.
+    expect(sent[0].ttl).toBe(4);
+    router.flush();
+  });
+
+  it("keeps full depth in a sparse mesh, so voice reaches as far as text", () => {
+    const router = new FloodRouter(() => 2);
+    const sent: Packet[] = [];
+    router.receive(voicePacket(7), (p) => sent.push(p));
+    jest.advanceTimersByTime(30);
+    expect(sent[0].ttl).toBe(6);
+    router.flush();
+  });
+
+  it("still drops a voice frame that has run out of TTL", () => {
+    const router = new FloodRouter(() => 2);
+    const sent: Packet[] = [];
+    expect(router.receive(voicePacket(1), (p) => sent.push(p))).toBe(true);
+    jest.advanceTimersByTime(60);
+    expect(sent).toHaveLength(0);
+    router.flush();
+  });
+});

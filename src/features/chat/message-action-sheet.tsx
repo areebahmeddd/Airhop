@@ -1,4 +1,4 @@
-// Long-press context menu for a message: forward, copy, star.
+// Long-press context menu for a message: save, forward, copy, info.
 // Reuses the same bottom-sheet chrome as the attachment picker and channel
 // info sheet so it doesn't introduce a new UI paradigm.
 
@@ -21,6 +21,9 @@ interface Props {
   onForward: () => void;
   onCopy: () => void;
   onInfo: () => void;
+  // Get an attachment out of the app. Received files live in Airhop's private
+  // cache, so without this a photo or a document dies with the cache.
+  onSave: () => void;
 }
 
 export default function MessageActionSheet({
@@ -29,6 +32,7 @@ export default function MessageActionSheet({
   onForward,
   onCopy,
   onInfo,
+  onSave,
 }: Props): React.JSX.Element | null {
   const Colors = useThemeColors();
   const styles = useMemo(() => createStyles(Colors), [Colors]);
@@ -44,6 +48,12 @@ export default function MessageActionSheet({
   const canShowInfo =
     message.isMine && !message.isSystem && message.status !== undefined;
 
+  // Photos and videos have somewhere to go (the system gallery); everything
+  // else goes out through the share sheet, so the row says what will happen.
+  const isGallery =
+    message.attachment?.type === "image" ||
+    message.attachment?.type === "video";
+
   return (
     <BottomSheet visible onClose={onClose} sheetStyle={styles.sheet}>
       {/* Everyday actions, grouped in one box so it matches the channel
@@ -58,7 +68,18 @@ export default function MessageActionSheet({
             color={Colors.textPrimary}
           />
         )}
-        {canShowInfo && <View style={styles.divider} />}
+        {message.attachment && (
+          <>
+            {canShowInfo && <View style={styles.divider} />}
+            <ActionRow
+              icon={isGallery ? "download" : "share-2"}
+              label={isGallery ? "Save to photos" : "Save a copy"}
+              onPress={() => act(onSave)}
+              color={Colors.textPrimary}
+            />
+          </>
+        )}
+        {(canShowInfo || message.attachment) && <View style={styles.divider} />}
         <ActionRow
           icon="corner-up-right"
           label="Forward"

@@ -63,6 +63,8 @@ export const Colors = {
   torDim: "rgba(124,58,237,0.09)",
   gateway: "#0D9488", // this device relaying for offline peers (gateway)
   gatewayDim: "rgba(13,148,136,0.09)",
+  bridge: "#4F46E5", // public mesh chat stitched across islands (bridge)
+  bridgeDim: "rgba(79,70,229,0.09)",
 
   // ---- Overlays -------------------------------------------------------------
   overlay: "rgba(0,0,0,0.45)",
@@ -113,6 +115,8 @@ export const DarkColors = {
   torDim: "rgba(139,92,246,0.16)",
   gateway: "#14B8A6",
   gatewayDim: "rgba(20,184,166,0.16)",
+  bridge: "#6366F1",
+  bridgeDim: "rgba(99,102,241,0.16)",
 
   overlay: "rgba(0,0,0,0.6)",
 } as const;

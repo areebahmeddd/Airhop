@@ -25,7 +25,7 @@
   |
   <a href="https://airhop.1mindlabs.org/privacy-policy">Privacy Policy</a>
   |
-  <a href="https://razorpay.me/@1mindlabs">Donate</a>
+  <a href="https://airhop.1mindlabs.org/#support">Support</a>
 </p>
 
 <p align="center">
@@ -40,7 +40,7 @@
 
 Airhop is an iOS + Android app (macOS and Windows coming soon) for private, offline-first peer-to-peer communication over [Bluetooth mesh](https://en.wikipedia.org/wiki/Mesh_networking) networks, with [Nostr](https://nostr.org) internet bridging and [Cashu](https://cashu.space) [ecash](https://en.wikipedia.org/wiki/Ecash) payments. **Our mission is to make censorship-resistant communication available to anyone: during natural disasters, internet blackouts, mass protests, or any situation where networks are unavailable, surveilled, or shut down.**
 
-Built on the foundation of [bitchat](https://bitchat.free), using the same [BLE wire protocol](docs/spec/PROTOCOLS.md), [service UUIDs](docs/spec/PROTOCOLS.md#1-ble-identifiers), and security model, meaning **Airhop-installed devices** can automatically discover and join the same mesh as nearby **Bitchat-installed devices**, relay messages, and exchange DMs with zero setup. Airhop also extends the protocol with [Double Ratchet](https://signal.org/docs/specifications/doubleratchet) forward secrecy, [Tor](https://torproject.org) on both platforms, offline Cashu payments, and offline AI (not present in bitchat _at the time of writing_).
+Built on the foundation of [bitchat](https://bitchat.free), using the same [BLE wire protocol](docs/spec/PROTOCOLS.md), and [service UUIDs](docs/spec/PROTOCOLS.md#1-ble-identifiers), meaning **Airhop-installed devices** can automatically discover and join the same mesh as nearby **Bitchat-installed devices**, relay messages, and exchange DMs with zero setup. Airhop also extends the protocol with [Double Ratchet](https://signal.org/docs/specifications/doubleratchet) forward secrecy, [Tor](https://torproject.org) on both platforms, offline ecash payments, and offline AI (not present in bitchat _at the time of writing_).
 
 > [!NOTE]
 > Airhop is an independent side project built and maintained by [Areeb Ahmed](https://github.com/areebahmeddd) in his free time. It is not backed by any company or organization, not affiliated with or endorsed by permissionlesstech or the bitchat project, and not an impersonation of any existing app or service.
@@ -50,32 +50,35 @@ Built on the foundation of [bitchat](https://bitchat.free), using the same [BLE 
 
 ## Built-in Features
 
-| Category          | Feature                   | Description                                                                                                                                           |
-| ----------------- | ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 💬 **Messaging**  | Private DMs               | One-on-one end-to-end encrypted messaging                                                                                                             |
-|                   | Public channels           | IRC-style group chat rooms anyone nearby can join                                                                                                     |
-|                   | Location channels         | Public rooms scoped to a geohash cell, from a block to a region, bridged over the internet. Jump to any cell to read a place you are not in           |
-|                   | Private channels          | Invite-only encrypted rooms. A shared key travels in the invite link, so anyone with the link joins and reads; there is no member cap                 |
-|                   | Private groups            | Fixed-roster encrypted group chats. The creator signs the member list (up to 16) and shares the key over Noise; only listed members can read          |
-|                   | Bulletin board            | Signed notices that outlive chat: pin a post to your mesh or location for 1 to 7 days, with urgent flags. Late arrivals catch up automatically        |
-|                   | Voice notes               | Record and send voice messages over the local mesh (AAC, 16 kHz mono, only `.m4a`)                                                                    |
-|                   | Video sharing             | Record or pick a video and send it over the mesh (H.264 or HEVC in `.mp4` / `.mov`)                                                                   |
-|                   | File transfer             | Send **any** file format using chunked streaming (images, documents, archives), up to 1 MB per file                                                   |
-|                   | Store-and-forward courier | Messages are delivered automatically when a route becomes available, sealed to a one-time prekey for forward secrecy                                  |
-| 🔒 **Identity**   | No-account identity       | Identity is an Ed25519 key pair stored only on your device                                                                                            |
-|                   | Human-readable names      | Deterministic usernames derived from your public key                                                                                                  |
-|                   | QR contacts               | Add a contact by scanning their QR code; carries their public keys, not just an ID                                                                    |
-|                   | End-to-end encryption     | Secure sessions using the Noise XX protocol                                                                                                           |
-|                   | Forward secrecy           | Double Ratchet protects past messages even if keys are later compromised                                                                              |
-|                   | Panic wipe                | Triple-tap instantly erases keys and local messages (nuke your account)                                                                               |
-| 🕸️ **Networking** | Bluetooth mesh            | Communicate with nearby devices without internet                                                                                                      |
-|                   | Multi-hop routing         | Messages automatically relay across nearby devices (up to 7 hops)                                                                                     |
-|                   | WiFi high-bandwidth mode  | Faster file transfers between two Android devices, or two iPhones. Not across platforms                                                               |
-|                   | bitchat compatibility     | Airhop nodes communicate directly with bitchat on iOS and Android                                                                                     |
-| 🌐 **Internet**   | Nostr bridge              | Continue conversations over Nostr relays when Bluetooth range ends                                                                                    |
-|                   | Geo-relay discovery       | Discover location-based channels across 350+ distributed Nostr relays                                                                                 |
-|                   | Internet gateway          | Let a nearby offline phone reach a location channel: when enabled, your device forwards its Bluetooth traffic to Nostr on its behalf. Off by default. |
-|                   | Tor integration           | Route Nostr traffic through Tor (Arti on iOS, Orbot on Android)                                                                                       |
+| Category          | Feature                   | Description                                                                                                                                    |
+| ----------------- | ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| 💬 **Messaging**  | Private DMs               | One-on-one end-to-end encrypted messaging                                                                                                      |
+|                   | Public channels           | IRC-style group chat rooms anyone nearby can join                                                                                              |
+|                   | Location channels         | Public rooms scoped to a geohash cell, from a block to a region, bridged over the internet. Jump to any cell to read a place you are not in    |
+|                   | Private channels          | Invite-only encrypted rooms. A shared key travels in the invite link, so anyone with the link joins and reads; there is no member cap          |
+|                   | Private groups            | Fixed-roster encrypted group chats. The creator signs the member list (up to 16) and shares the key over Noise; only listed members can read   |
+|                   | Bulletin board            | Signed notices that outlive chat: pin a post to your mesh or location for 1 to 7 days, with urgent flags. Late arrivals catch up automatically |
+|                   | Photo sharing             | Send a photo over the mesh (PNG, JPEG, GIF, WebP), up to 512 KB                                                                                |
+|                   | Video sharing             | Send a video over the mesh (MP4, MOV), up to 1 MB                                                                                              |
+|                   | Voice notes               | Send a voice message over the mesh (AAC, 16 kHz mono), up to 512 KB                                                                            |
+|                   | Live voice                | Hold the mic to talk to people in range, walkie-talkie style. Arrives in about half a second, then lands in the chat as a voice note           |
+|                   | File transfer             | Send any file format over the mesh (documents, archives, anything else), up to 1 MB per file                                                   |
+|                   | Store-and-forward courier | Messages are delivered automatically when a route becomes available, sealed to a one-time prekey for forward secrecy                           |
+| 🔒 **Identity**   | No-account identity       | Identity is an Ed25519 key pair stored only on your device                                                                                     |
+|                   | Human-readable names      | Deterministic usernames derived from your public key                                                                                           |
+|                   | QR contacts               | Add a contact by scanning their QR code; carries their public keys, not just an ID                                                             |
+|                   | End-to-end encryption     | Secure sessions using the Noise XX protocol                                                                                                    |
+|                   | Forward secrecy           | Double Ratchet protects past messages even if keys are later compromised                                                                       |
+|                   | Panic wipe                | Triple-tap instantly erases keys and local messages (nuke your account)                                                                        |
+| 🕸️ **Networking** | Bluetooth mesh            | Communicate with nearby devices without internet                                                                                               |
+|                   | Multi-hop routing         | Messages automatically relay across nearby devices (up to 7 hops)                                                                              |
+|                   | WiFi high-bandwidth mode  | Faster file transfers between two Android devices, or two iPhones. Not across platforms                                                        |
+|                   | bitchat compatibility     | Airhop nodes communicate directly with bitchat on iOS and Android                                                                              |
+| 🌐 **Internet**   | Internet fallback         | DMs and channels keep flowing over Nostr relays when a user moves out of Bluetooth range                                                       |
+|                   | Geo-relay discovery       | Discover location-based channels across 350+ distributed Nostr relays                                                                          |
+|                   | Internet gateway          | Lend your connection to a nearby offline phone so it can still reach the location (geohash) channels. Off by default                           |
+|                   | Mesh bridge               | Link this area's public #bluetooth chat with another out-of-range Bluetooth crowd over the internet. Off by default                            |
+|                   | Tor integration           | Route Nostr traffic through Tor (Arti on iOS, Orbot on Android)                                                                                |
 
 **TL;DR: No internet required. No central servers. No accounts. No tracking.**
 
@@ -147,7 +150,7 @@ Offline and private messengers generally fall into three categories:
 - Radio-based mesh networks that work offline but require dedicated hardware.
 - Phone-to-phone mesh apps that use Bluetooth and WiFi on devices people already own.
 
-Airhop belongs to the third category and extends it by adding a Nostr-based internet bridge for long-distance communication when connectivity is available. The table is grouped in that order.
+Airhop belongs to the third category and extends it with a Nostr-based internet layer for long-distance communication when connectivity is available. The table is grouped in that order.
 
 | Project                                    | Transport                     | Encryption                | Works offline | Hardware-free | Open source | Platforms                       |
 | ------------------------------------------ | ----------------------------- | ------------------------- | ------------- | ------------- | ----------- | ------------------------------- |
@@ -238,7 +241,7 @@ Airhop would not exist without the work of the bitchat community. Thank you to e
 
 ## Support
 
-Help keep the project going by making a voluntary donation through our app or website, or simply give this repository a star.
+Help keep the project going by contributing through the app or website, sponsoring on GitHub, or simply giving this repository a star.
 
 <a href="https://www.star-history.com/?repos=areebahmeddd%2FAirhop&type=date&logscale=&legend=top-left">
  <picture>

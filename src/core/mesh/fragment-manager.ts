@@ -34,7 +34,16 @@ export const FRAG_DATA_SIZE = FRAGMENT_SIZE - FRAG_HEADER_LEN; // 456 bytes
 // Max simultaneous reassembly slots. Matches bitchat.
 const MAX_CONCURRENT = 128;
 
-// Reassembly timeout (30 seconds). After this, partial assemblies are dropped.
+// How long a partial assembly may sit SILENT before it is dropped. Measured
+// from the last fragment that arrived, not from the first.
+//
+// That distinction is the whole point. A 512 KiB photo is about 1,120
+// fragments, and the sender paces them 20ms apart, so it cannot arrive in under
+// ~22 seconds; a 1 MiB file takes twice that. Timing out on total duration
+// deleted the half-built file mid-transfer, and the fragments still coming in
+// then started a fresh assembly that could never reach its total, so the file
+// was lost silently and permanently. Idle time is the thing that actually means
+// the sender is gone.
 const TIMEOUT_MS = 30_000;
 
 // Hard cap on total reassembled size. Guards against memory exhaustion while
@@ -174,7 +183,8 @@ type AssemblyKey = string; // `${senderHex}_${streamHex}`
 interface Assembly {
   total: number;
   fragments: Map<number, Uint8Array>;
-  createdAt: number;
+  // When the last fragment landed. Drives the idle timeout; see TIMEOUT_MS.
+  updatedAt: number;
   byteCount: number;
 }
 
@@ -206,7 +216,7 @@ export class FragmentManager {
       asm = {
         total: header.total,
         fragments: new Map(),
-        createdAt: Date.now(),
+        updatedAt: Date.now(),
         byteCount: 0,
       };
       this.assemblies.set(key, asm);
@@ -221,6 +231,9 @@ export class FragmentManager {
 
     asm.fragments.set(header.index, header.data);
     asm.byteCount += header.data.length;
+    // Progress keeps the assembly alive: a transfer that is still arriving is
+    // not a stale one, however long it has been running.
+    asm.updatedAt = Date.now();
 
     onProgress?.({
       key,
@@ -244,11 +257,11 @@ export class FragmentManager {
     }
   }
 
-  // Purge assemblies older than TIMEOUT_MS.
+  // Purge assemblies that have received nothing for TIMEOUT_MS.
   evictExpired(): void {
     const cutoff = Date.now() - TIMEOUT_MS;
     for (const [key, asm] of this.assemblies) {
-      if (asm.createdAt < cutoff) this.assemblies.delete(key);
+      if (asm.updatedAt < cutoff) this.assemblies.delete(key);
     }
   }
 

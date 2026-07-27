@@ -39,6 +39,10 @@ import RadarView from "./radar-view";
 
 type ViewMode = "list" | "radar";
 
+// One height for every control in the send-sats row: the amount field and both
+// icon buttons. Referenced once each, so the row cannot drift out of alignment.
+const SEND_SATS_ROW_HEIGHT = 44;
+
 interface Props {
   onOpenDM?: (channel: string) => void;
   viewMode: ViewMode;
@@ -510,29 +514,34 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       alignItems: "center",
       gap: Spacing.sm,
     },
+    // The amount row replaces the Message/Send sats pills in place, so it keeps
+    // their shape: everything in it is fully rounded and one height, which makes
+    // the two 40x40 icon buttons circles rather than the rounded squares that
+    // read as a different control set from the pills above them.
     sendSatsInput: {
       flex: 1,
+      height: SEND_SATS_ROW_HEIGHT,
       backgroundColor: Colors.surfaceRaised,
-      borderRadius: Radius.xl,
+      borderRadius: Radius.full,
       borderWidth: 1,
       borderColor: Colors.border,
-      paddingHorizontal: Spacing.md,
-      paddingVertical: Spacing.sm,
+      paddingHorizontal: Spacing.base,
+      paddingVertical: 0,
       fontSize: FontSize.base,
       color: Colors.textPrimary,
     },
     sendSatsConfirm: {
-      width: 40,
-      height: 40,
-      borderRadius: Radius.md,
+      width: SEND_SATS_ROW_HEIGHT,
+      height: SEND_SATS_ROW_HEIGHT,
+      borderRadius: Radius.full,
       backgroundColor: Colors.accent,
       alignItems: "center",
       justifyContent: "center",
     },
     sendSatsCancel: {
-      width: 40,
-      height: 40,
-      borderRadius: Radius.md,
+      width: SEND_SATS_ROW_HEIGHT,
+      height: SEND_SATS_ROW_HEIGHT,
+      borderRadius: Radius.full,
       backgroundColor: Colors.surfaceRaised,
       borderWidth: 1,
       borderColor: Colors.border,

@@ -58,6 +58,9 @@ export interface ChatMessage {
   isSystem?: boolean;
   // Set only on the sender's own outgoing copy of a forwarded message.
   forwarded?: boolean;
+  // True when this public message arrived from another mesh island across the
+  // mesh bridge (rendered with a network glyph), rather than over Bluetooth.
+  viaBridge?: boolean;
   // Delivery status (own outgoing messages only). Undefined on received
   // messages and legacy rows. See MessageStatus.
   status?: MessageStatus;

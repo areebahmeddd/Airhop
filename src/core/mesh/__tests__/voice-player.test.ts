@@ -76,11 +76,16 @@ describe("VoicePlayer", () => {
     player.close();
   });
 
-  it("discards DATA packets with no prior START", () => {
+  it("starts playing from DATA when the START was missed", () => {
+    // This used to discard the burst, which meant one lost packet at the head
+    // silenced the whole thing, and walking into range mid-sentence got you
+    // nothing until the talker let go and pressed again. The codec is not in
+    // doubt (0x01 is the only value the format defines), so a burst can be
+    // picked up from any DATA packet. Receive-side only: nothing on the wire
+    // changes and a bitchat sender does nothing differently.
     const player = new VoicePlayer(backend);
-    // DATA without START → silently ignored, no session created.
     player.handlePacket(makeDataPacket(1, 1), "peerA");
-    expect(player.activeSessions).toHaveLength(0);
+    expect(player.activeSessions).toHaveLength(1);
     player.close();
   });
 
@@ -130,5 +135,40 @@ describe("VoicePlayer", () => {
 
   it("uses codec from START packet (AAC-LC 16 kHz mono = 0x01)", () => {
     expect(VoiceCodec.AAC_LC_16KHZ_MONO).toBe(0x01);
+  });
+});
+
+describe("VoicePlayer resource caps", () => {
+  // A room where a lot of people talk at once must not grow a jitter buffer per
+  // talker without limit. Only one burst can be making sound anyway.
+  it("evicts the oldest burst past the concurrency cap", () => {
+    const played: string[] = [];
+    const player = new VoicePlayer({
+      playFrames: (burstIDHex) => {
+        played.push(burstIDHex);
+        return Promise.resolve();
+      },
+      endSession: () => undefined,
+    });
+
+    for (let i = 0; i < 12; i++) {
+      const burstID = new Uint8Array(8).fill(i + 1);
+      player.handlePacket(
+        {
+          type: PacketType.VOICE_FRAME,
+          ttl: 7,
+          flags: Flags.SIGNED,
+          senderID: new Uint8Array(8).fill(i + 1),
+          recipientID: new Uint8Array(8),
+          timestamp: Date.now(),
+          signature: new Uint8Array(64),
+          payload: encodeBurstStart(burstID, VoiceCodec.AAC_LC_16KHZ_MONO),
+        },
+        `peer${String(i)}`,
+      );
+    }
+
+    expect(player.activeSessions.length).toBeLessThanOrEqual(8);
+    player.close();
   });
 });

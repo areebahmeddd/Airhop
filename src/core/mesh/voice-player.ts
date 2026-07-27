@@ -11,7 +11,11 @@
 
 import { bytesToHex } from "@noble/hashes/utils.js";
 import type { Packet } from "./packet-codec";
-import { decodeBurstPacket, type VoiceCodecId } from "./voice-capture";
+import {
+  decodeBurstPacket,
+  VoiceCodec,
+  type VoiceCodecId,
+} from "./voice-capture";
 
 // 350 ms jitter buffer per ROADMAP.md.
 const JITTER_BUFFER_MS = 350;
@@ -22,6 +26,9 @@ const SESSION_TIMEOUT_MS = 5_000;
 // Maximum frames held in the jitter buffer per session (prevents memory abuse
 // if packets arrive much faster than they are played back).
 const MAX_BUFFERED_FRAMES = 64;
+
+// Concurrent inbound bursts. Matches bitchat's pttMaxConcurrentAssemblies.
+const MAX_CONCURRENT_SESSIONS = 8;
 
 // ---- Types ------------------------------------------------------------------
 
@@ -204,7 +211,14 @@ export class VoicePlayer {
   // Feed a raw VOICE_FRAME packet into the player. Handles session lifecycle and
   // frame routing automatically. Call this from the BLE packet receive path.
   handlePacket(packet: Packet, senderPeerID: string): void {
-    const burst = decodeBurstPacket(packet.payload);
+    this.handleBurstPayload(packet.payload, senderPeerID);
+  }
+
+  // The same burst bytes, however they arrived: broadcast in a VOICE_FRAME
+  // packet, or sealed inside a peer's Noise session as a DM. Everything from
+  // here down is scope-agnostic, which is the point of the shared format.
+  handleBurstPayload(payload: Uint8Array, senderPeerID: string): void {
+    const burst = decodeBurstPacket(payload);
     if (!burst) return;
 
     const burstIDHex = bytesToHex(burst.burstID);
@@ -212,24 +226,36 @@ export class VoicePlayer {
 
     switch (burst.kind) {
       case "start": {
+        // Only so many bursts can be in flight at once. Every one holds a
+        // jitter buffer, and only one of them can be making sound, so past this
+        // point a new burst is buying nothing at the cost of memory. Matches
+        // bitchat's pttMaxConcurrentAssemblies. The oldest goes rather than
+        // refusing the new one: a talker who just started is more likely to be
+        // the one being listened to than one whose buffer has gone stale.
         if (!this.sessions.has(key)) {
-          const session = new VoiceSession(
-            burstIDHex,
-            senderPeerID,
-            burst.codec,
-            this.backend,
-            (id) => {
-              this.sessions.delete(`${senderPeerID}:${id}`);
-            },
-          );
-          this.sessions.set(key, session);
+          this.openSession(key, burst.burstID, senderPeerID, burst.codec);
         }
         break;
       }
       case "data": {
-        const session = this.sessions.get(key);
-        // Discard DATA packets for unknown sessions (no START received).
-        if (!session) break;
+        // A burst whose START we never saw. Two ordinary things cause this and
+        // neither should mean silence: the START packet was lost (one dropped
+        // packet at the head of a burst would otherwise mute the whole thing),
+        // or we walked into range while somebody was already mid-sentence.
+        //
+        // Starting from a DATA packet is safe because the codec is not really
+        // in question: 0x01 is the only value the format defines, and a burst
+        // in any other codec would have been refused at the START anyway. This
+        // is a receive-side recovery, so nothing on the wire changes and a
+        // bitchat sender needs to do nothing differently.
+        const session =
+          this.sessions.get(key) ??
+          this.openSession(
+            key,
+            burst.burstID,
+            senderPeerID,
+            VoiceCodec.AAC_LC_16KHZ_MONO,
+          );
         session.addFrames(burst.seq, burst.frames);
         break;
       }
@@ -247,6 +273,38 @@ export class VoicePlayer {
         break;
       }
     }
+  }
+
+  private openSession(
+    key: string,
+    burstID: Uint8Array,
+    senderPeerID: string,
+    codec: VoiceCodecId,
+  ): VoiceSession {
+    // Only so many bursts can be in flight at once. Every one holds a jitter
+    // buffer, and only one of them can be making sound, so past this point a
+    // new burst buys nothing at the cost of memory. Matches bitchat's
+    // pttMaxConcurrentAssemblies. The oldest goes rather than refusing the new
+    // one: a talker who just started is likelier to be the one being listened
+    // to than one whose buffer has gone stale.
+    if (this.sessions.size >= MAX_CONCURRENT_SESSIONS) {
+      const oldest = this.sessions.keys().next().value;
+      if (oldest !== undefined) {
+        this.sessions.get(oldest)?.destroy();
+        this.sessions.delete(oldest);
+      }
+    }
+    const session = new VoiceSession(
+      bytesToHex(burstID),
+      senderPeerID,
+      codec,
+      this.backend,
+      (id) => {
+        this.sessions.delete(`${senderPeerID}:${id}`);
+      },
+    );
+    this.sessions.set(key, session);
+    return session;
   }
 
   // Active PTT sessions (for UI display).

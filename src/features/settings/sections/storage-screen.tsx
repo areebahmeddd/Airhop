@@ -1,4 +1,7 @@
-// Storage & Data sub-screen, WhatsApp-style.
+// Storage & Data sub-screen: a meter, not a settings screen. Nothing here is a
+// preference, so there is nothing to decide; you come to read a number or to
+// free some space. The media preferences that used to sit at the bottom moved
+// to General, where taste belongs (see general-screen.tsx).
 //
 // Every number here is real, not decorative:
 //   - Storage Usage: MMKV byteSize for chat-store + wallet-store, plus the
@@ -7,33 +10,22 @@
 //     tracked in mesh-service.ts. Resets when the app restarts.
 //   - Cache: the same on-disk attachment total, with a working Clear action
 //     that actually deletes the files.
-//   - Auto Download: gates whether incoming photos/videos render inline in
-//     a chat thread immediately or need a tap to reveal (message-thread.tsx).
-//   - Upload Quality: the JPEG compression factor actually passed to
-//     expo-image-picker when you attach a photo (message-thread.tsx).
 
-import Feather from "@expo/vector-icons/Feather";
 import React, { useCallback, useMemo, useState } from "react";
-import { Pressable, ScrollView, Text, View } from "react-native";
+import { ScrollView, Text, View } from "react-native";
 import { createMMKV } from "react-native-mmkv";
 import {
   clearAttachmentCache,
   getAttachmentCacheBytes,
 } from "../../../services/file-transfer-service";
 import { getMeshService } from "../../../services/mesh-service";
-import {
-  useSettingsStore,
-  type UploadQuality,
-} from "../../../store/settings-store";
+import { showAlert } from "../../../store/alert-store";
 import { WALLET_STORAGE_ID } from "../../../store/wallet-store";
-import BottomSheet from "../../../ui/components/bottom-sheet";
-import { useThemeColors } from "../../../ui/theme";
 import { MMKV_STORE_IDS } from "../../../utils/panic-wipe";
 import {
   GroupDivider,
   SettingLinkRow,
   SettingRow,
-  SettingSwitch,
   SubHeader,
   useSharedStyles,
 } from "../shared";
@@ -47,16 +39,6 @@ function formatBytes(bytes: number): string {
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
-
-const QUALITY_META: Record<
-  UploadQuality,
-  { label: string; description: string }
-> = {
-  low: { label: "Low", description: "Smaller uploads, faster over BLE" },
-  medium: { label: "Medium", description: "Balanced size and quality" },
-  high: { label: "High", description: "Best quality, largest uploads" },
-};
-const QUALITY_ORDER: UploadQuality[] = ["low", "medium", "high"];
 
 function readStorageStats() {
   // The wallet store is not in MMKV_STORE_IDS (the panic wipe deletes its file
@@ -76,14 +58,8 @@ function readStorageStats() {
 }
 
 export default function StorageScreen({ onBack }: Props): React.JSX.Element {
-  const Colors = useThemeColors();
   const styles = useSharedStyles();
   const [stats, setStats] = useState(readStorageStats);
-  const [showQualityModal, setShowQualityModal] = useState(false);
-  const autoDownloadMedia = useSettingsStore((s) => s.autoDownloadMedia);
-  const setAutoDownloadMedia = useSettingsStore((s) => s.setAutoDownloadMedia);
-  const uploadQuality = useSettingsStore((s) => s.uploadQuality);
-  const setUploadQuality = useSettingsStore((s) => s.setUploadQuality);
 
   const refresh = useCallback(() => setStats(readStorageStats()), []);
 
@@ -92,9 +68,28 @@ export default function StorageScreen({ onBack }: Props): React.JSX.Element {
     [stats],
   );
 
+  // Clearing removes real media from disk, not just disposable temp files, so
+  // confirm first (Panic wipe is the only other destructive action here, and it
+  // confirms too). Nothing to do when the cache is already empty. On success,
+  // acknowledge with the amount freed so the tap has visible feedback.
   function handleClearCache(): void {
-    clearAttachmentCache();
-    refresh();
+    if (stats.cacheBytes === 0) return;
+    showAlert(
+      "Clear cached media?",
+      "Received photos, videos, and voice notes will be removed from this device and may need re-downloading. Messages and wallet are untouched.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Clear",
+          style: "destructive",
+          onPress: () => {
+            const freed = clearAttachmentCache();
+            refresh();
+            showAlert("Cache cleared", `Freed ${formatBytes(freed)}.`);
+          },
+        },
+      ],
+    );
   }
 
   return (
@@ -137,92 +132,9 @@ export default function StorageScreen({ onBack }: Props): React.JSX.Element {
               accessibilityLabel="Clear attachment cache"
               control={<Text style={styles.settingValue}>Clear</Text>}
             />
-            <GroupDivider />
-            <SettingRow
-              icon="download"
-              label="Auto-download media"
-              description="Load incoming photos and videos automatically"
-              control={
-                <SettingSwitch
-                  value={autoDownloadMedia}
-                  onValueChange={setAutoDownloadMedia}
-                />
-              }
-            />
-            <GroupDivider />
-            <SettingLinkRow
-              icon="image"
-              label="Upload quality"
-              description={QUALITY_META[uploadQuality].description}
-              onPress={() => setShowQualityModal(true)}
-              chevron={false}
-              control={
-                <Text style={styles.settingValue}>
-                  {QUALITY_META[uploadQuality].label}
-                </Text>
-              }
-            />
           </View>
         </View>
       </ScrollView>
-
-      {/* Upload quality modal */}
-      <BottomSheet
-        visible={showQualityModal}
-        onClose={() => setShowQualityModal(false)}
-        sheetStyle={styles.sheet}
-      >
-        <Text style={styles.sheetTitle}>Upload quality</Text>
-        <Text style={styles.sheetSubtitle}>
-          Applies to photos sent from your camera or library.
-        </Text>
-        <View style={styles.optionList}>
-          {QUALITY_ORDER.map((key) => {
-            const meta = QUALITY_META[key];
-            const selected = key === uploadQuality;
-            return (
-              <Pressable
-                key={key}
-                style={[styles.optionRow, selected && styles.optionRowSelected]}
-                onPress={() => {
-                  setUploadQuality(key);
-                  setShowQualityModal(false);
-                }}
-                accessibilityRole="button"
-                accessibilityLabel={`Set upload quality to ${meta.label}`}
-              >
-                <View style={styles.optionRowInner}>
-                  <View
-                    style={[
-                      styles.optionDot,
-                      { backgroundColor: Colors.surface },
-                    ]}
-                  >
-                    <Feather
-                      name="image"
-                      size={14}
-                      color={Colors.textSecondary}
-                    />
-                  </View>
-                  <View style={styles.optionText}>
-                    <Text style={styles.optionLabel}>{meta.label}</Text>
-                    <Text style={styles.optionDescription}>
-                      {meta.description}
-                    </Text>
-                  </View>
-                  {selected && (
-                    <Feather
-                      name="check"
-                      size={18}
-                      color={Colors.textPrimary}
-                    />
-                  )}
-                </View>
-              </Pressable>
-            );
-          })}
-        </View>
-      </BottomSheet>
     </View>
   );
 }

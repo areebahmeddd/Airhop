@@ -18,8 +18,8 @@ bitchat is an excellent foundation. Airhop fills the gaps it left open.
 
 ### Gap 3: Live PTT Voice (from day 1)
 
-**bitchat problem:** Fully designed (`PUSH-TO-TALK-DESIGN.md`) but never shipped.  
-**Airhop:** `0x29: voiceFrame` is reserved in the packet registry, but live PTT is **not shipped yet** either: it needs a streaming-mic native module on both platforms. Voice _notes_ work today and ride `FILE_TRANSFER`.
+**bitchat status:** shipped, both phases of `PUSH-TO-TALK-DESIGN.md`. `NoisePayloadType.voiceFrame = 0x08` carries DM bursts and `MessageType.voiceFrame = 0x29` carries public mesh bursts.  
+**Airhop:** shipped, matching it. The burst format is byte-identical to `VoiceBurstPacket.swift`, both scopes work (broadcast and Noise-sealed DM), and audio is captured and played by a native module on each platform (`AudioRecord` + `MediaCodec` on Android, `AVAudioEngine` + `AVAudioConverter` on iOS). Holding the mic streams live where the mesh can carry it and records a voice note where it cannot, and every burst also lands in the chat as a note so people who were out of range still get it.
 
 ### Gap 4: File Transfers
 
@@ -129,10 +129,13 @@ bitchat is an excellent foundation. Airhop fills the gaps it left open.
 - [x] Android: Orbot SOCKS5 detection via `getTorProxyPort()` (probes localhost:9050)
 - [x] `src/core/mesh/voice-capture.ts`: PTT frame encoder (VOICE_FRAME 0x29, AAC/Opus 16 kHz)
 - [x] `src/core/mesh/voice-player.ts`: 350ms jitter buffer, ordered frame delivery
+- [x] `src/bridge/NativeAirhopVoice.ts` + `AirhopVoiceModule.kt` / `.swift`: streaming mic and speaker (AAC-LC 16 kHz mono, off the JS thread)
+- [x] `VOICE_FRAME` (0x29) send/receive/relay in mesh-service, plus `NoisePayloadType.VOICE_FRAME` (0x08) for DM bursts
+- [x] Hold-to-talk UI: live HUD, floor-courtesy hint, autoplay gating, live-voice setting
 - [x] `src/bridge/NativeAirhopTor.ts`: TurboModule spec for Tor module
 - [x] `src/core/router/message-router.ts`: Nostr added as priority-2 transport (BLE > Nostr > Courier)
 
-**Milestone:** Cross-city DMs via Nostr. Live voice PTT over BLE. Tor routing on iOS via Arti.
+**Milestone:** Cross-city DMs via Nostr. Tor routing on iOS via Arti. Live PTT over BLE, in public rooms and DMs, interoperating with bitchat.
 
 ### v0.8.0: High Bandwidth + Double Ratchet ✅
 
@@ -141,11 +144,10 @@ bitchat is an excellent foundation. Airhop fills the gaps it left open.
 - [x] `src/core/crypto/double-ratchet.ts`: Signal DR per-message forward secrecy
 - [x] `src/core/crypto/x3dh.ts`: X3DH prekey agreement; bundles published to Nostr
 - [x] WiFi Aware native module (Android) + MultipeerConnectivity (iOS)
-- [x] Chunked file transfer >1 MiB (streaming reassembly)
-- [x] Video frame capture (react-native-vision-camera v5, HEVC)
-- [x] `0x30: videoFrame` packet type (WiFi Direct only)
+- [~] Chunked file transfer >1 MiB: **dropped, see Gap 4.** bitchat enforces the 1 MiB cap when it _decodes_ a packet, so anything larger is rejected outright and interop breaks in both directions. Airhop sends one `BitchatFilePacket` per file and lets the fragment layer split it
+- [~] Video frame capture (`react-native-vision-camera` is a dependency but nothing in `src/` imports it) and `0x30: videoFrame`: **dropped, see Gap 2.** The removal is recorded in `packet-codec.ts` so the type is not reintroduced by accident
 
-**Milestone:** Offline video calling over WiFi Aware. Double Ratchet passing test vectors.
+**Milestone:** Double Ratchet passing test vectors. Same-platform WiFi transport for faster transfers. Offline video calling was **dropped**: WiFi Aware and MultipeerConnectivity cannot interoperate, so it could never work iOS ↔ Android.
 
 ### v0.9.0: Production Hardening ✅
 
@@ -169,9 +171,9 @@ bitchat is an excellent foundation. Airhop fills the gaps it left open.
 - [x] Visual design (monochromatic dark theme, Feather icon system, design token system)
 - [x] Animations and transitions (keyframe spin/fade for key generation, fade-up reveal)
 - [x] Navigation shell (5-tab state machine, sub-tabs, Android BackHandler)
-- [x] Accessibility audit
-- [x] App Store and Play Store submission
-- [x] YouTube demo series: full offline mesh demo, voice PTT across 3 devices, Nostr bridge handoff, panic wipe
+- [ ] Accessibility audit
+- [ ] App Store and Play Store submission
+- [ ] YouTube demo series: full offline mesh demo, voice PTT across 3 devices, Nostr bridge handoff, panic wipe
 
 **Milestone:** UI complete. Accessibility audit and store submission are next.
 
@@ -198,7 +200,7 @@ The existing `AI` tab (`src/features/ai/ai-screen.tsx`) is currently a placehold
 
 #### Cashu Wallet (Shipped in v1.0.0)
 
-The `Wallet` tab is a real wallet, not a token viewer. Cashu is the primary rail because it is the only ecash system that settles fully offline over BLE; Lightning moves value in and out, and Nutzaps are a secondary online path.
+The `Wallet` tab is a real wallet, not a token viewer. Cashu is the primary rail because its tokens are plain strings, so value moves device to device over BLE with no server in the middle. Lightning moves value in and out, and Nutzaps are a secondary online path.
 
 - [x] `src/core/payments/cashu.ts`: detection (bitchat-identical), decoding, NUT-12 DLEQ verification against cached keysets, fee-aware proof selection
 - [x] `src/core/payments/nutzap.ts`: NIP-61 kind 9321 / 10019 construction and parsing
@@ -211,7 +213,8 @@ The `Wallet` tab is a real wallet, not a token viewer. Cashu is the primary rail
 - [x] Opt-in recovery phrase (NUT-13 / NUT-09), off by default, with uncovered balance shown rather than hidden
 - [x] Mint management: validated add, per-mint balances, consolidate a split balance over Lightning
 - [x] Nutzap send and receive, with honest fallback to an encrypted DM when the recipient publishes no NIP-61 info
-- [ ] QR display and scan for tokens, for hand-off without a mesh link
+- [x] Tap the balance to read it in sats or bitcoin, a pure display switch with no price feed
+- [x] QR display and scan for tokens, so a hand-off works without BLE and to Cashu wallets that are not Airhop
 
 **Milestone:** A user sends and receives Cashu ecash entirely offline over BLE, tops up and cashes out over Lightning, and can rebuild the balance on a new device from twelve words.
 

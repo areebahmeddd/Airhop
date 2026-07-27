@@ -12,8 +12,11 @@ import {
   attachmentSummary,
   isDirectMessage,
   messagePreview,
+  NEARBY_COOLDOWN_MS,
+  nearbyNotificationContent,
   notificationContentFor,
   shouldHapticPing,
+  shouldNotifyNearby,
   shouldSystemNotify,
 } from "../notification-policy";
 
@@ -138,5 +141,66 @@ describe("attachment previews", () => {
         msg({ text: "", attachment: { type: "voice", uri: "x" } }),
       ),
     ).toBe("🎤 Voice message");
+  });
+});
+
+describe("shouldNotifyNearby", () => {
+  const base = {
+    appActive: false,
+    peerCount: 1,
+    previousPeerCount: 0,
+    nowMs: 10_000_000,
+    lastNotifiedAtMs: null,
+    cooldownMs: NEARBY_COOLDOWN_MS,
+  };
+
+  it("notifies when an empty mesh comes alive in the background", () => {
+    expect(shouldNotifyNearby(base)).toBe(true);
+  });
+
+  it("stays quiet in the foreground, where the Mesh tab already shows them", () => {
+    expect(shouldNotifyNearby({ ...base, appActive: true })).toBe(false);
+  });
+
+  it("stays quiet when peers join a mesh that already had someone", () => {
+    expect(
+      shouldNotifyNearby({ ...base, peerCount: 3, previousPeerCount: 2 }),
+    ).toBe(false);
+  });
+
+  it("stays quiet when the last peer leaves", () => {
+    expect(
+      shouldNotifyNearby({ ...base, peerCount: 0, previousPeerCount: 1 }),
+    ).toBe(false);
+  });
+
+  it("holds the cooldown when a radio flaps", () => {
+    // Peer drops out and comes back: a genuine 0 -> 1 edge, twice, minutes
+    // apart. The second one must not buzz.
+    expect(
+      shouldNotifyNearby({
+        ...base,
+        lastNotifiedAtMs: base.nowMs - 5 * 60 * 1000,
+      }),
+    ).toBe(false);
+  });
+
+  it("notifies again once the cooldown has passed", () => {
+    expect(
+      shouldNotifyNearby({
+        ...base,
+        lastNotifiedAtMs: base.nowMs - NEARBY_COOLDOWN_MS - 1,
+      }),
+    ).toBe(true);
+  });
+});
+
+describe("nearbyNotificationContent", () => {
+  it("counts people and never names them", () => {
+    expect(nearbyNotificationContent(1).title).toBe("Someone nearby");
+    expect(nearbyNotificationContent(4).title).toBe("4 people nearby");
+    expect(nearbyNotificationContent(1).body).toBe(
+      "In Bluetooth range now. Tap to open the mesh.",
+    );
   });
 });

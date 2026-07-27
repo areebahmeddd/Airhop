@@ -14,9 +14,11 @@ interface Props {
   // and ringed with the accent color like an active one, instead of always
   // showing its full peer color.
   active?: boolean;
-  // Presence dot overlaid at the bottom-right: green when reachable, grey when
-  // not. Omit for no dot. `ringColor` should match the background the avatar
-  // sits on so the dot reads as a badge; defaults to the base background.
+  // Presence dot overlaid at the bottom-right, shown only when the peer is
+  // reachable. "offline" draws nothing: absence already says it, and a grey
+  // dot on every offline avatar is noise. Omit for no dot. `ringColor` should
+  // match the background the avatar sits on so the dot reads as a badge;
+  // defaults to the base background.
   presence?: "online" | "offline";
   ringColor?: string;
 }
@@ -46,7 +48,6 @@ export default function Avatar({
   const dotSize = Math.max(8, Math.round(size * 0.1875));
   const dotBorder = Math.max(1.5, Math.round(size * 0.02));
   const dotInset = Math.max(1, Math.round(size * 0.02));
-  const presenceColor = presence === "online" ? Colors.online : Colors.offline;
 
   return (
     <View
@@ -64,7 +65,7 @@ export default function Avatar({
       ]}
     >
       <Text style={[styles.initials, { fontSize, color: bg }]}>{initials}</Text>
-      {presence !== undefined && (
+      {presence === "online" && (
         <View
           style={{
             position: "absolute",
@@ -75,7 +76,7 @@ export default function Avatar({
             borderRadius: dotSize / 2,
             borderWidth: dotBorder,
             borderColor: ringColor ?? Colors.bg,
-            backgroundColor: presenceColor,
+            backgroundColor: Colors.online,
           }}
         />
       )}

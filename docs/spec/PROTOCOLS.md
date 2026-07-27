@@ -67,38 +67,117 @@ Variable sections (in this exact order after the header):
 
 All type values match bitchat `MessageType.swift` / `MessageType.kt` (public domain). Types `0x01–0x28` are bitchat-defined; `0x29+` are Airhop extensions. bitchat nodes silently drop unknown types.
 
-| Name              | Hex    | Direction         | Description                                                                                                                                                                                                              |
-| ----------------- | ------ | ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `ANNOUNCE`        | `0x01` | Broadcast         | Signed presence heartbeat. Payload is TLV-encoded (1-byte length): `0x01` nickname, `0x02` Noise pubkey (32B), `0x03` Ed25519 signing pubkey (32B), `0x04` direct neighbors (optional, up to 10 × 8B peer IDs).          |
-| `CHANNEL_MSG`     | `0x02` | Broadcast         | Public channel message. Plaintext + signed. Channel name embedded in payload.                                                                                                                                            |
-| `LEAVE`           | `0x03` | Broadcast         | Peer departing notification.                                                                                                                                                                                             |
-| `COURIER_ENV`     | `0x04` | Broadcast         | Store-and-forward sealed envelope. Noise X encrypted. TLV format (see section 6).                                                                                                                                        |
-| `NOISE_HANDSHAKE` | `0x10` | Unicast           | Noise XX handshake message (initiator msg1 / responder msg2 / initiator msg3). recipientID set.                                                                                                                          |
-| `NOISE_ENCRYPTED` | `0x11` | Unicast           | Post-handshake encrypted payload: DM text, receipts, group invites (`0x06`/`0x07`), metadata. recipientID set. HAS_RECIPIENT flag set.                                                                                   |
-| `DR_ENCRYPTED`    | `0x12` | Unicast           | Double Ratchet encrypted DM (per-message forward secrecy beyond Noise transport). Airhop-to-Airhop only; bitchat drops as unknown. (Airhop extension)                                                                    |
-| `FRAGMENT`        | `0x20` | Broadcast/Unicast | BLE fragment of a larger message. Stream ID + index + total in payload header. See section 7.                                                                                                                            |
-| `REQUEST_SYNC`    | `0x21` | Broadcast         | GCS filter gossip request. TTL=2 (local-only). Type-aware (SyncTypeFlags bit 8 = board posts). Payload TLV format (see section 5).                                                                                       |
-| `FILE_TRANSFER`   | `0x22` | Broadcast/Unicast | Binary file / audio / image payload. Single `BitchatFilePacket` TLV, 1 MiB cap, MIME allow-list + magic-byte validation.                                                                                                 |
-| `BOARD_POST`      | `0x23` | Broadcast         | Signed bulletin-board post or tombstone (TLV). Ed25519-signed by the author; persists until its author-chosen expiry (max 7 days) and gossip-syncs.                                                                      |
-| `PREKEY_BUNDLE`   | `0x24` | Broadcast         | Signed batch of one-time Curve25519 prekeys (TLV). Gossiped; a sender seals a courier envelope to a prekey for forward-secret async first contact.                                                                       |
-| `GROUP_MESSAGE`   | `0x25` | Broadcast         | Private-group message: cleartext groupID + epoch framing a ChaCha20-Poly1305 body with an Ed25519-signed inner payload. Roster/key travel over Noise (`0x06`/`0x07`).                                                    |
-| `PING`            | `0x26` | Unicast           | Directed mesh echo request: 8-byte nonce + origin TTL. Unsigned; the reply's echoed nonce binds it to the probe.                                                                                                         |
-| `PONG`            | `0x27` | Unicast           | Directed mesh echo reply: echoed nonce + origin TTL. Hops = originTTL − receivedTTL + 1.                                                                                                                                 |
-| `NOSTR_CARRIER`   | `0x28` | Broadcast/Unicast | Gateway-ferried signed Nostr event (direction byte + geohash + event JSON). Verified against its own Schnorr signature before use.                                                                                       |
-| `VOICE_FRAME`     | `0x29` | Broadcast         | PTT audio burst. Matches `VoiceBurstPacket.swift`. **Reserved, not yet sent or handled.** live PTT needs a streaming-mic native module on both platforms. Voice _notes_ ride `FILE_TRANSFER` instead. (Airhop extension) |
-| `CHANNEL_ENC`     | `0x2a` | Broadcast         | Airhop private channel: XChaCha20-Poly1305 sealed message. bitchat drops as unknown. (Airhop extension)                                                                                                                  |
+| Name              | Hex    | Direction         | Description                                                                                                                                                                                                                                                                |
+| ----------------- | ------ | ----------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ANNOUNCE`        | `0x01` | Broadcast         | Signed presence heartbeat. Payload is TLV-encoded (1-byte length): `0x01` nickname, `0x02` Noise pubkey (32B), `0x03` Ed25519 signing pubkey (32B), `0x04` direct neighbors (optional, up to 10 × 8B peer IDs).                                                            |
+| `CHANNEL_MSG`     | `0x02` | Broadcast         | Public channel message. Plaintext + signed. Channel name embedded in payload.                                                                                                                                                                                              |
+| `LEAVE`           | `0x03` | Broadcast         | Peer departing notification.                                                                                                                                                                                                                                               |
+| `COURIER_ENV`     | `0x04` | Broadcast         | Store-and-forward sealed envelope. Noise X encrypted. TLV format (see section 6).                                                                                                                                                                                          |
+| `NOISE_HANDSHAKE` | `0x10` | Unicast           | Noise XX handshake message (initiator msg1 / responder msg2 / initiator msg3). recipientID set.                                                                                                                                                                            |
+| `NOISE_ENCRYPTED` | `0x11` | Unicast           | Post-handshake encrypted payload: DM text, receipts, group invites (`0x06`/`0x07`), live voice (`0x08`), metadata. recipientID set. HAS_RECIPIENT flag set.                                                                                                                |
+| `DR_ENCRYPTED`    | `0x12` | Unicast           | Double Ratchet encrypted DM (per-message forward secrecy beyond Noise transport). Airhop-to-Airhop only; bitchat drops as unknown. (Airhop extension)                                                                                                                      |
+| `FRAGMENT`        | `0x20` | Broadcast/Unicast | BLE fragment of a larger message. Stream ID + index + total in payload header. See section 7.                                                                                                                                                                              |
+| `REQUEST_SYNC`    | `0x21` | Broadcast         | GCS filter gossip request. TTL=2 (local-only). Type-aware (SyncTypeFlags bit 8 = board posts). Payload TLV format (see section 5).                                                                                                                                         |
+| `FILE_TRANSFER`   | `0x22` | Broadcast/Unicast | Binary file / audio / image payload. Single `BitchatFilePacket` TLV (section 3.2), MIME allow-list + magic-byte validation.                                                                                                                                                |
+| `BOARD_POST`      | `0x23` | Broadcast         | Signed bulletin-board post or tombstone (TLV). Ed25519-signed by the author; persists until its author-chosen expiry (max 7 days) and gossip-syncs.                                                                                                                        |
+| `PREKEY_BUNDLE`   | `0x24` | Broadcast         | Signed batch of one-time Curve25519 prekeys (TLV). Gossiped; a sender seals a courier envelope to a prekey for forward-secret async first contact.                                                                                                                         |
+| `GROUP_MESSAGE`   | `0x25` | Broadcast         | Private-group message: cleartext groupID + epoch framing a ChaCha20-Poly1305 body with an Ed25519-signed inner payload. Roster/key travel over Noise (`0x06`/`0x07`).                                                                                                      |
+| `PING`            | `0x26` | Unicast           | Directed mesh echo request: 8-byte nonce + origin TTL. Unsigned; the reply's echoed nonce binds it to the probe.                                                                                                                                                           |
+| `PONG`            | `0x27` | Unicast           | Directed mesh echo reply: echoed nonce + origin TTL. Hops = originTTL − receivedTTL + 1.                                                                                                                                                                                   |
+| `NOSTR_CARRIER`   | `0x28` | Broadcast/Unicast | Gateway-ferried signed Nostr event (direction byte + geohash + event JSON). Verified against its own Schnorr signature before use.                                                                                                                                         |
+| `VOICE_FRAME`     | `0x29` | Broadcast         | One live push-to-talk burst packet, signed like a public message. Payload is a `VoiceBurstPacket` (section 3.1). Also shipped by bitchat, so live voice works between the two. A DM burst carries the same payload inside `NoisePayloadType.VOICE_FRAME` (`0x08`) instead. |
+| `CHANNEL_ENC`     | `0x2a` | Broadcast         | Airhop private channel: XChaCha20-Poly1305 sealed message. bitchat drops as unknown. (Airhop extension)                                                                                                                                                                    |
+
+### 3.1 Voice burst payload
+
+One packet of a live push-to-talk burst. The same bytes are the payload of a
+`VOICE_FRAME` (`0x29`) broadcast and of a `NoisePayloadType.VOICE_FRAME`
+(`0x08`) DM, so one format serves both scopes and only the envelope differs.
+Byte-identical to bitchat's `VoiceBurstPacket.swift`.
+
+```
+[burstID: 8][seq: u16 BE][flags: u8][payload...]
+```
+
+| flags  | Meaning  | Payload                                                |
+| ------ | -------- | ------------------------------------------------------ |
+| `0x01` | START    | `[codec: u8]` (`0x01` = AAC-LC, 16 kHz, mono, 16 kbps) |
+| `0x00` | DATA     | repeated `[len: u16 BE][raw AAC frame]`                |
+| `0x02` | END      | `[totalDataPackets: u16 BE][durationMs: u32 BE]`       |
+| `0x04` | CANCELED | empty; receivers discard the burst                     |
+
+`seq` 0 is reserved for START; DATA packets start at 1. Frames carry no ADTS
+header: the codec byte fully describes them, and the receiver rebuilds the
+`AudioSpecificConfig` from it.
+
+Notes that matter for interoperating:
+
+- **A burst can begin at a DATA packet.** START is sent once, so a lost packet
+  at the head of a burst, or walking into range mid-sentence, would otherwise
+  mean silence. Both Airhop and bitchat open the assembly with the default
+  codec in that case.
+- **Payloads stay under 210 bytes** (`pttMaxBurstContentBytes`) so a voice
+  packet never enters the fragment scheduler, which caps concurrent transfers
+  and would starve file sends while somebody talks.
+- **Voice frames are never padded and never gossiped.** Padding would push
+  them into fragmentation; gossip replay of stale audio is worthless.
+- **Relayed on the fragment policy**: 8–25 ms jitter, TTL clamped to 5 in a
+  dense mesh and 7 otherwise, so multi-hop audio stays inside the receiver's
+  350 ms jitter buffer.
+
+### 3.2 File packet payload
+
+One whole file per packet, as a TLV blob. There is no app-level chunking: the
+fragment layer splits the packet for the radio and reassembles it on the far
+side. Byte-compatible with bitchat's `BitchatFilePacket`.
+
+| Tag    | Field      | Length | Notes                                 |
+| ------ | ---------- | ------ | ------------------------------------- |
+| `0x01` | fileName   | u16    |                                       |
+| `0x02` | fileSize   | u16    | value is u32                          |
+| `0x03` | mimeType   | u16    |                                       |
+| `0x04` | content    | u32    | last; u16 accepted for legacy senders |
+| `0x05` | channel    | u16    | Airhop: routes a room attachment      |
+| `0x06` | durationMs | u16    | Airhop: voice length, value is u32    |
+| `0x07` | caption    | u16    | Airhop: media caption, 512 bytes max  |
+
+Tags `0x05`–`0x07` are Airhop additions. bitchat skips unknown tags by reading
+their u16 length, so they cost nothing in either direction: a bitchat client
+reads the file and ignores the extras.
+
+**Size caps are per type, not one number.** bitchat enforces them when it
+_decodes_, so exceeding one is not a partial success — the whole file is
+refused. Airhop checks before the first fragment goes out.
+
+| Type          | Cap     |
+| ------------- | ------- |
+| Photo         | 512 KiB |
+| Voice note    | 512 KiB |
+| Anything else | 1 MiB   |
+
+**MIME is resolved, never passed through.** A picker often returns nothing, and
+an empty or unrecognised type is dropped on arrival by both clients, which looks
+identical to a successful send from the sender's side. The type is taken from
+the declared value when the allow-list admits it, else inferred from the file
+extension, else `application/octet-stream`, which is always accepted and renders
+as a document. On receive, the declared type is checked against the file's magic
+bytes, so a file cannot lie about what it is.
 
 ## 4. Routing Constants
 
-| Constant                  | Value          | Source                                      |
-| ------------------------- | -------------- | ------------------------------------------- |
-| Default TTL               | `7`            | `TransportConfig.swift`                     |
-| Relay jitter range        | `10–220 ms`    | Random delay before re-broadcast            |
-| Fragment size             | `469 bytes`    | Max BLE payload per fragment                |
-| Max concurrent assemblies | `128`          | In-flight fragment reassembly slots         |
-| Dedup LRU size            | `1000 entries` | Seen-packetID cache (16-byte IDs)           |
-| Dedup expiry window       | `5 minutes`    | PacketID expiry in dedup cache              |
-| Fanout subset size        | `~⌈sqrt(n)⌉`   | Deterministic fanout, excludes ingress peer |
+| Constant                  | Value          | Source                                       |
+| ------------------------- | -------------- | -------------------------------------------- |
+| Default TTL               | `7`            | `TransportConfig.swift`                      |
+| Relay jitter range        | `10–220 ms`    | Random delay before re-broadcast             |
+| Fragment size             | `469 bytes`    | Max BLE payload per fragment                 |
+| Max concurrent assemblies | `128`          | In-flight fragment reassembly slots          |
+| Dedup LRU size            | `1000 entries` | Seen-packetID cache (16-byte IDs)            |
+| Dedup expiry window       | `5 minutes`    | PacketID expiry in dedup cache               |
+| Fanout subset size        | `~⌈sqrt(n)⌉`   | Deterministic fanout, excludes ingress peer  |
+| Voice relay jitter        | `8–25 ms`      | Live voice and fragments (`TransportConfig`) |
+| Voice relay TTL cap       | `7` / `5`      | Sparse / dense (degree ≥ 6) meshes           |
+| Voice jitter buffer       | `350 ms`       | Buffered before live playback starts         |
+| Concurrent voice bursts   | `8`            | Inbound assembly cap per device              |
 
 ## 5. Gossip Sync Constants
 

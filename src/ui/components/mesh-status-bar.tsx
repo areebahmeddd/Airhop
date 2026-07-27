@@ -51,6 +51,8 @@ function dotColor(
       return Colors.tor;
     case "gateway":
       return Colors.gateway;
+    case "bridge":
+      return Colors.bridge;
     case "neutral":
       return Colors.textMuted;
   }

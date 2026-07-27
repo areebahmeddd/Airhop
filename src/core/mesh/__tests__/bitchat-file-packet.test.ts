@@ -7,7 +7,11 @@ import {
   encodeFilePacket,
   isAllowedMime,
   MAX_FILE_BYTES,
+  MAX_IMAGE_BYTES,
+  MAX_VOICE_BYTES,
+  maxBytesForType,
   mimeMatchesMagic,
+  resolveMimeType,
   typeFromMime,
 } from "../bitchat-file-packet";
 
@@ -154,5 +158,84 @@ describe("bitchat-file-packet", () => {
       expect(typeFromMime("video/mp4")).toBe("video");
       expect(typeFromMime("application/pdf")).toBe("document");
     });
+  });
+});
+
+describe("resolveMimeType", () => {
+  it("keeps a type the far side will accept", () => {
+    expect(resolveMimeType("image/jpeg", "photo.jpg")).toBe("image/jpeg");
+  });
+
+  it("never returns an empty type", () => {
+    // A picker that returns no type used to put "" on the wire, which is not on
+    // the allow-list, so the file was dropped on arrival while reporting a
+    // completed send here.
+    expect(resolveMimeType(undefined, "photo.jpg")).toBe("image/jpeg");
+    expect(resolveMimeType("", "clip.m4a")).toBe("audio/mp4");
+    expect(resolveMimeType("   ", "notes.pdf")).toBe("application/pdf");
+  });
+
+  it("falls back to octet-stream, which bitchat accepts", () => {
+    expect(resolveMimeType(undefined, "notes.xyz")).toBe(
+      "application/octet-stream",
+    );
+    expect(resolveMimeType(undefined, undefined)).toBe(
+      "application/octet-stream",
+    );
+    // A real type that is not on the allow-list is still better sent as bytes
+    // than dropped.
+    expect(resolveMimeType("text/plain", "readme.txt")).toBe(
+      "application/octet-stream",
+    );
+  });
+
+  it("resolves to something the allow-list admits, whatever the input", () => {
+    for (const [mime, name] of [
+      ["", ""],
+      ["text/csv", "rows.csv"],
+      [undefined, "a.jpeg"],
+      ["AUDIO/MP4", "voice.m4a"],
+    ] as [string | undefined, string | undefined][]) {
+      expect(isAllowedMime(resolveMimeType(mime, name))).toBe(true);
+    }
+  });
+
+  it("accepts the m4a spelling Android recorders use", () => {
+    // We send audio/mp4; older Airhop builds and some recorders say x-m4a.
+    expect(isAllowedMime("audio/x-m4a")).toBe(true);
+    expect(typeFromMime("audio/x-m4a")).toBe("voice");
+  });
+});
+
+describe("maxBytesForType", () => {
+  it("caps photos and voice notes tighter than files, matching bitchat", () => {
+    expect(maxBytesForType("image")).toBe(MAX_IMAGE_BYTES);
+    expect(maxBytesForType("voice")).toBe(MAX_VOICE_BYTES);
+    expect(maxBytesForType("document")).toBe(MAX_FILE_BYTES);
+    expect(maxBytesForType("video")).toBe(MAX_FILE_BYTES);
+  });
+});
+
+describe("large payloads", () => {
+  it("encodes a photo-sized file without blowing the call stack", () => {
+    // Regression: the encoder used to spread the content into Array.push, which
+    // passes every byte as a function argument. Anything past a few tens of KB
+    // threw a RangeError from inside the encoder, so an attachment big enough
+    // to matter never made it onto the wire at all.
+    const big = new Uint8Array(400 * 1024);
+    big.set(PNG, 0);
+    for (let i = PNG.length; i < big.length; i++) big[i] = i & 0xff;
+
+    const encoded = encodeFilePacket({
+      fileName: "photo.png",
+      mimeType: "image/png",
+      content: big,
+    });
+    expect(encoded).not.toBeNull();
+
+    const decoded = decodeFilePacket(encoded as Uint8Array);
+    expect(decoded?.content.length).toBe(big.length);
+    expect(decoded?.content[big.length - 1]).toBe(big[big.length - 1]);
+    expect(decoded?.fileName).toBe("photo.png");
   });
 });

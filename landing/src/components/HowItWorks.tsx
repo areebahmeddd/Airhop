@@ -1,5 +1,7 @@
-﻿import { motion, useReducedMotion } from "motion/react";
+﻿import { ArrowRight } from "lucide-react";
+import { motion, useReducedMotion } from "motion/react";
 import { lazy, Suspense } from "react";
+import { Link } from "react-router-dom";
 import { useInView } from "../hooks/useInView";
 
 const RelayMap = lazy(() => import("./RelayMap"));
@@ -36,9 +38,19 @@ export default function HowItWorks() {
           <p className="font-mono text-sm leading-relaxed font-normal text-gray-700 sm:text-base">
             Airhop nodes discover each other automatically over Bluetooth and form a self-healing
             mesh. A message sent from one device floods the network and relays across nearby nodes
-            up to 7 hops. When internet is available, Nostr relays extend the mesh globally without
-            requiring any infrastructure we control.
+            up to 7 hops. When internet is available, Nostr relays extend the mesh globally, with no
+            infrastructure we control.
           </p>
+          <Link
+            to="/architecture"
+            className="group inline-flex items-center gap-1.5 font-mono text-[11px] font-bold tracking-widest text-gray-500 uppercase transition-colors hover:text-black"
+          >
+            Read the full architecture
+            <ArrowRight
+              size={13}
+              className="flex-shrink-0 transition-transform duration-200 group-hover:translate-x-0.5"
+            />
+          </Link>
         </motion.div>
 
         <motion.div

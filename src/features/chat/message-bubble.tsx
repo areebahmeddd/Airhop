@@ -9,6 +9,7 @@ import { Feather, MaterialCommunityIcons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import React, { useMemo } from "react";
 import {
+  Linking,
   Pressable,
   StyleSheet,
   Text,
@@ -137,7 +138,18 @@ function MessageBubble({
                 : undefined
             }
           >
-            <Text style={styles.senderName}>{item.senderNickname}</Text>
+            <View style={styles.senderNameRow}>
+              <Text style={styles.senderName}>{item.senderNickname}</Text>
+              {item.viaBridge && (
+                // Arrived from another mesh island across the mesh bridge.
+                <Feather
+                  name="globe"
+                  size={11}
+                  color={Colors.bridge}
+                  accessibilityLabel="via the mesh bridge"
+                />
+              )}
+            </View>
           </Pressable>
         )}
 
@@ -197,6 +209,8 @@ function MessageBubble({
                   item.isMine
                     ? styles.messageMentionMine
                     : styles.messageMentionTheirs,
+                  item.isMine ? styles.messageLinkMine : styles.messageLink,
+                  handleLongPress,
                 )}
               </Text>
             )}
@@ -239,32 +253,61 @@ function MessageBubble({
   );
 }
 
-// Render message text with @mentions emphasised, the way every chat app does.
-// A mention is an "@" at a word start followed by nickname characters; anything
-// else (an email's "@", a lone "@") is left plain. Highlighting is syntactic,
-// so it does not need the roster.
+// Render message text with @mentions emphasised and URLs tappable, the way
+// every chat app does. A mention is an "@" at a word start followed by nickname
+// characters; anything else (an email's "@", a lone "@") is left plain.
+// Highlighting is syntactic, so it does not need the roster. A link opens in
+// the system browser; it keeps the bubble's long-press so a message that is
+// nothing but a link can still reach the action sheet.
 function renderMessageText(
   text: string,
   mentionStyle: StyleProp<TextStyle>,
+  linkStyle: StyleProp<TextStyle>,
+  onLongPress: () => void,
 ): React.ReactNode {
-  const re = /(^|\s)(@[A-Za-z0-9_-]+)/g;
+  const re = /(^|\s)(@[A-Za-z0-9_-]+)|(https?:\/\/\S+|www\.\S+)/g;
   const out: React.ReactNode[] = [];
   let last = 0;
   let key = 0;
   let m: RegExpExecArray | null;
   while ((m = re.exec(text)) !== null) {
-    const lead = m[1];
-    const mention = m[2];
-    // Plain run up to and including the leading whitespace.
-    out.push(text.slice(last, m.index + lead.length));
+    const url = m[3];
+    if (url === undefined) {
+      const lead = m[1];
+      // Plain run up to and including the leading whitespace.
+      out.push(text.slice(last, m.index + lead.length));
+      out.push(
+        <Text key={key++} style={mentionStyle}>
+          {m[2]}
+        </Text>,
+      );
+      last = m.index + m[0].length;
+      continue;
+    }
+    // Trailing punctuation is almost always sentence punctuation, not part of
+    // the URL ("see https://x.com/a." or "(https://x.com/a)").
+    const trimmed = url.replace(/[.,!?;:)\]}'"]+$/, "");
+    out.push(text.slice(last, m.index));
     out.push(
-      <Text key={key++} style={mentionStyle}>
-        {mention}
+      <Text
+        key={key++}
+        style={linkStyle}
+        onPress={() => {
+          const href = trimmed.startsWith("www.")
+            ? `https://${trimmed}`
+            : trimmed;
+          void Linking.openURL(href).catch(() => {});
+        }}
+        onLongPress={onLongPress}
+        suppressHighlighting
+        accessibilityRole="link"
+      >
+        {trimmed}
       </Text>,
     );
-    last = m.index + m[0].length;
+    last = m.index + trimmed.length;
   }
-  if (last === 0) return text; // no mentions: return the raw string, no spans
+  if (last === 0) return text; // nothing matched: raw string, no spans
   out.push(text.slice(last));
   return out;
 }
@@ -366,11 +409,16 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
     bubbleWrapper: { maxWidth: "75%", gap: 2 },
     bubbleWrapperMine: { alignItems: "flex-end" },
     bubbleWrapperTheirs: { alignItems: "flex-start" },
+    senderNameRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 4,
+      marginBottom: 2,
+    },
     senderName: {
       fontSize: FontSize.xs,
       color: Colors.textMuted,
       marginLeft: Spacing.md,
-      marginBottom: 2,
     },
     bubble: {
       paddingHorizontal: Spacing.md,
@@ -404,6 +452,17 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
     messageMentionTheirs: {
       color: Colors.accent,
       fontWeight: FontWeight.bold,
+    },
+    // Links are underlined so they read as tappable in both bubbles. Same
+    // colour reasoning as mentions: the accent on the light "theirs" bubble,
+    // inherited text on the near-black "mine" one.
+    messageLink: {
+      color: Colors.accent,
+      textDecorationLine: "underline",
+    },
+    messageLinkMine: {
+      color: Colors.textInverse,
+      textDecorationLine: "underline",
     },
     metaRow: {
       flexDirection: "row",

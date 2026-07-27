@@ -379,8 +379,30 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       fontWeight: FontWeight.bold,
       color: Colors.textInverse,
     },
-    // Modal option list: one selectable row (icon dot + label/description +
-    // check), each row a real bounded box, not just padding on transparent
+    // Grouped modal option list: one bounded box holding every choice, rows
+    // separated by hairlines rather than each row carrying its own border.
+    // Selection reads from the check plus a raised row background.
+    optionGroup: {
+      width: "100%",
+      backgroundColor: Colors.surface,
+      borderRadius: Radius.lg,
+      borderWidth: 1,
+      borderColor: Colors.border,
+      overflow: "hidden",
+    },
+    optionRowGrouped: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: Spacing.md,
+      paddingHorizontal: Spacing.base,
+      paddingVertical: Spacing.md,
+      minHeight: 60,
+    },
+    optionRowGroupedSelected: {
+      backgroundColor: Colors.surfaceRaised,
+    },
+    // Standalone option list: one selectable row (icon dot + label/description
+    // + check), each row a real bounded box, not just padding on transparent
     // background, so unselected and selected states are both unmistakable.
     optionList: {
       width: "100%",
