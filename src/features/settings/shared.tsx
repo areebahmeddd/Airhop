@@ -13,6 +13,7 @@ import {
   FontWeight,
   Radius,
   Spacing,
+  TAB_BAR_CLEARANCE,
   useThemeColors,
 } from "../../ui/theme";
 
@@ -208,10 +209,13 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       flex: 1,
       backgroundColor: Colors.bg,
     },
+    // Every settings sub-screen scrolls under the floating tab bar, which stays
+    // mounted while you drill in, so the last row needs the same clearance the
+    // hub itself leaves. Without it the final row sits behind the pill.
     content: {
       padding: Spacing.base,
       gap: Spacing.md,
-      paddingBottom: Spacing["3xl"],
+      paddingBottom: TAB_BAR_CLEARANCE,
     },
     // Sub-screen back header
     subHeader: {

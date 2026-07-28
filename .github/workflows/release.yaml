@@ -102,10 +102,14 @@ jobs:
           git fetch origin main
           git checkout -B main origin/main
           cp "${RUNNER_TEMP}/CHANGELOG.md" docs/dev/CHANGELOG.md
-          # Keep app.json version in sync so future main builds report it correctly.
+          # Keep app.json and iOS MARKETING_VERSION in sync with the tag so version
+          # reporting stays consistent. Android reads app.json at build time; iOS reads
+          # MARKETING_VERSION from the Xcode project.
           sed -i -E "s/(\"version\": \")[^\"]*(\")/\1${VERSION}\2/" app.json
           grep -q "\"version\": \"${VERSION}\"" app.json
-          git add docs/dev/CHANGELOG.md app.json
+          sed -i -E "s/(MARKETING_VERSION = )[^;]*(;)/\1${VERSION}\2/" ios/Airhop.xcodeproj/project.pbxproj
+          grep -q "MARKETING_VERSION = ${VERSION};" ios/Airhop.xcodeproj/project.pbxproj
+          git add docs/dev/CHANGELOG.md app.json ios/Airhop.xcodeproj/project.pbxproj
           if git diff --staged --quiet; then
             echo "Version and changelog unchanged."
           else

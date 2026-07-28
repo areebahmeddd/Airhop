@@ -36,6 +36,7 @@ import {
   FontSize,
   FontWeight,
   Spacing,
+  TAB_BAR_CLEARANCE,
   useThemeColors,
 } from "../../../ui/theme";
 import { SubHeader, useSharedStyles } from "../shared";
@@ -94,32 +95,35 @@ export default function VersionScreen({ onBack }: Props): React.JSX.Element {
   function playFlap() {
     if (flapping.current) return;
     flapping.current = true;
-    // Alternate downstroke/glide a few times, then settle on the glide frame.
-    const frames = [1, 0, 1, 0];
+    // Two beats: downstroke, glide, downstroke, then settle back to the glide
+    // frame. The trailing frame is the settle timer's job, not a fourth entry
+    // here, so the swap ends the moment the wings are back up rather than
+    // holding a dead frame while the tap stays locked out.
+    const frames = [1, 0, 1];
     frames.forEach((f, i) => {
-      flapTimers.current.push(setTimeout(() => setBirdFrame(f), i * 110));
+      flapTimers.current.push(setTimeout(() => setBirdFrame(f), i * FLAP_MS));
     });
     flapTimers.current.push(
-      setTimeout(
-        () => {
-          setBirdFrame(0);
-          flapping.current = false;
-          flapTimers.current = [];
-        },
-        frames.length * 110 + 40,
-      ),
+      setTimeout(() => {
+        setBirdFrame(0);
+        flapping.current = false;
+        flapTimers.current = [];
+      }, frames.length * FLAP_MS),
     );
+    // The lift rides the two downstrokes and springs back as the wings come
+    // up, so the hop and the flap finish together instead of the bird landing
+    // mid-beat.
     Animated.sequence([
       Animated.timing(hop, {
         toValue: -10,
-        duration: 150,
+        duration: frames.length * FLAP_MS,
         easing: Easing.out(Easing.quad),
         useNativeDriver: true,
       }),
       Animated.spring(hop, {
         toValue: 0,
-        friction: 4,
-        tension: 140,
+        friction: 5,
+        tension: 120,
         useNativeDriver: true,
       }),
     ]).start();
@@ -361,6 +365,9 @@ const BIRD_FRAMES = [
   ],
 ];
 const BIRD_CELL = 3;
+// Milliseconds a wing frame holds. At 110 the beat read as a slideshow; 80 is
+// fast enough to look like one motion and still let each frame register.
+const FLAP_MS = 80;
 
 function PixelBird({
   color,
@@ -429,10 +436,13 @@ function PixelHeart({ color }: { color: string }): React.JSX.Element {
 
 function createStyles(Colors: ReturnType<typeof useThemeColors>) {
   return StyleSheet.create({
+    // The credit is pinned to the foot of the page (marginTop auto), so it
+    // lands wherever the content ends: without tab-bar clearance it ends up
+    // behind the floating pill instead of above it.
     content: {
       flexGrow: 1,
       padding: Spacing.base,
-      paddingBottom: Spacing.xl,
+      paddingBottom: TAB_BAR_CLEARANCE,
     },
     hero: {
       alignItems: "center",

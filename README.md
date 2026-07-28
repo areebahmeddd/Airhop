@@ -150,10 +150,12 @@ Offline and private messengers generally fall into three categories:
 - Radio-based mesh networks that work offline but require dedicated hardware.
 - Phone-to-phone mesh apps that use Bluetooth and WiFi on devices people already own.
 
-Airhop belongs to the third category and extends it with a Nostr-based internet layer for long-distance communication when connectivity is available. The table is grouped in that order.
+Airhop belongs to the third category and extends it with a Nostr-based internet layer for long-distance communication when connectivity is available. The table is grouped in that order, starting with the apps most people already measure private messaging against.
 
 | Project                                    | Transport                     | Encryption                | Works offline | Hardware-free | Open source | Platforms                       |
 | ------------------------------------------ | ----------------------------- | ------------------------- | ------------- | ------------- | ----------- | ------------------------------- |
+| [Signal](https://signal.org)               | Centralized servers           | Signal protocol           | ❌            | ✅            | ✅          | iOS, Android, Desktop           |
+| [Threema](https://threema.ch)              | Centralized servers           | NaCl + Ibex               | ❌            | ✅            | ⚠️          | iOS, Android, Desktop           |
 | [Session](https://getsession.org)          | Onion routing (service nodes) | Session protocol          | ❌            | ✅            | ✅          | iOS, Android, Desktop           |
 | [White Noise](https://www.whitenoise.chat) | Nostr relays                  | MLS (Marmot)              | ❌            | ✅            | ✅          | iOS, Android                    |
 | [Meshtastic](https://meshtastic.org)       | LoRa radio                    | AES-256                   | ✅            | ❌            | ✅          | iOS, Android, Web + hardware    |
@@ -163,6 +165,10 @@ Airhop belongs to the third category and extends it with a Nostr-based internet 
 | [Berty](https://berty.tech)                | Bluetooth + mDNS + Tor        | Noise                     | ✅            | ✅            | ✅          | iOS, Android                    |
 | [bitchat](https://bitchat.free)            | Bluetooth + Nostr             | Noise XX                  | ✅            | ✅            | ✅          | iOS, Android                    |
 | [Airhop](https://airhop.1mindlabs.org)     | Bluetooth + WiFi + Nostr      | Noise XX + Double Ratchet | ✅            | ✅            | ✅          | iOS, Android, Desktop, Web, CLI |
+
+⚠️ Threema's client apps are open source, but its servers are not, and the app is a paid one-time purchase.
+
+Signal and Threema are here as the benchmark rather than as alternatives. Both are excellent at what they do, and neither is trying to work without a network: Signal ties an account to a phone number and Threema to a Threema ID, and both stop entirely when the network does. Airhop is aimed at the moment after that, when there is no network to be excellent on.
 
 ## Getting Started
 

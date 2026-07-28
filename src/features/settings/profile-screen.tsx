@@ -156,6 +156,31 @@ const FEATURES: {
   },
 ];
 
+// What a phone-to-phone move will carry. Shown in the transfer sheet so the
+// scope of the feature is stated before it exists: people ask "does my wallet
+// come with me" long before they ask how it works.
+const TRANSFER_ITEMS: {
+  icon: keyof typeof Feather.glyphMap;
+  label: string;
+  description: string;
+}[] = [
+  {
+    icon: "key",
+    label: "Identity and keys",
+    description: "Your peer ID, username, and contacts",
+  },
+  {
+    icon: "message-square",
+    label: "Chats and history",
+    description: "Conversations, groups, and the channels you have joined",
+  },
+  {
+    icon: "credit-card",
+    label: "Wallet balance",
+    description: "Cashu proofs and transaction history",
+  },
+];
+
 // Which sub-screen is currently pushed. "root" renders the hub itself.
 type SettingsView =
   | "root"
@@ -204,6 +229,7 @@ export default function ProfileScreen({
   const status = useMeshStateStore((s) => s.presenceStatus);
   const [showStatusModal, setShowStatusModal] = useState(false);
   const [showWipeModal, setShowWipeModal] = useState(false);
+  const [showTransferModal, setShowTransferModal] = useState(false);
   const [showThemeModal, setShowThemeModal] = useState(false);
   const theme = useSettingsStore((s) => s.theme);
   const setTheme = useSettingsStore((s) => s.setTheme);
@@ -492,7 +518,7 @@ export default function ProfileScreen({
           <SettingLinkRow
             icon="lock"
             label="Privacy & Security"
-            description="Tor, internet gateway, mesh bridge, protocols"
+            description="Live voice, tor, internet gateway, mesh bridge"
             onPress={() => setView("security")}
           />
           <GroupDivider />
@@ -536,6 +562,25 @@ export default function ProfileScreen({
             label="About"
             description="Version, changelog, and source"
             onPress={() => setView("about")}
+          />
+        </View>
+      </View>
+
+      {/* Moving to a new phone. Not built yet, so the row carries the same
+          "Coming soon" tag as the unshipped feature rows above and opens a
+          sheet describing the move rather than starting one. It sits directly
+          above the danger zone because both answer "I am leaving this device",
+          and the safe answer should be the one you reach first. */}
+      <View style={shared.section}>
+        <View style={shared.settingsGroup}>
+          <SettingLinkRow
+            icon="smartphone"
+            label="Transfer to a new phone"
+            description="Move your identity, chats, and wallet to another device"
+            onPress={() => setShowTransferModal(true)}
+            chevron={false}
+            control={<Text style={shared.comingSoon}>Coming soon</Text>}
+            accessibilityLabel="Transfer to a new phone, coming soon"
           />
         </View>
       </View>
@@ -767,6 +812,61 @@ export default function ProfileScreen({
         </View>
       </BottomSheet>
 
+      {/* Transfer sheet: a preview, not a flow. It states what a move will
+          carry and how it will run, so the shape of the feature is settled
+          before anything is behind it. There is nothing to start yet, so the
+          only action is dismissing it. */}
+      <BottomSheet
+        visible={showTransferModal}
+        onClose={() => setShowTransferModal(false)}
+        sheetStyle={shared.sheet}
+      >
+        <View style={shared.sheetIconWrap}>
+          <Feather name="smartphone" size={22} color={Colors.textSecondary} />
+        </View>
+        <Text style={shared.sheetTitle}>Transfer to a new phone</Text>
+        <Text style={shared.sheetSubtitle}>
+          Hold both phones together and move everything across over Bluetooth.
+          Nothing passes through a server, so it works with no internet.
+        </Text>
+        <View style={[shared.settingsGroup, styles.appearanceGroup]}>
+          {TRANSFER_ITEMS.map((item, i) => (
+            <React.Fragment key={item.label}>
+              {i > 0 && <View style={shared.groupDivider} />}
+              <View style={styles.optionRowGrouped}>
+                <View style={styles.optionIconGrouped}>
+                  <Feather
+                    name={item.icon}
+                    size={18}
+                    color={Colors.textSecondary}
+                  />
+                </View>
+                <View style={shared.optionText}>
+                  <Text style={shared.optionLabel}>{item.label}</Text>
+                  <Text style={shared.optionDescription}>
+                    {item.description}
+                  </Text>
+                </View>
+              </View>
+            </React.Fragment>
+          ))}
+        </View>
+        <Text style={styles.transferNote}>
+          Coming in a future update. When it ships, the old phone clears itself
+          once the move finishes, so one identity only ever lives on one device.
+        </Text>
+        <View style={shared.sheetActions}>
+          <Pressable
+            style={shared.sheetBtnPrimary}
+            onPress={() => setShowTransferModal(false)}
+            accessibilityRole="button"
+            accessibilityLabel="Got it"
+          >
+            <Text style={shared.sheetBtnTextPrimary}>Got it</Text>
+          </Pressable>
+        </View>
+      </BottomSheet>
+
       {/* Panic wipe modal: confirm, then wipe and drop straight to onboarding
           rather than making the user tap through a second "Wiped" screen. */}
       <BottomSheet
@@ -871,6 +971,15 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       marginTop: Spacing.md,
       marginBottom: Spacing.xs,
       marginLeft: Spacing.xs,
+    },
+    // Footnote under the transfer list: quieter than sheetSubtitle, since it
+    // qualifies what was just described rather than introducing it.
+    transferNote: {
+      fontSize: FontSize.xs,
+      color: Colors.textMuted,
+      textAlign: "center",
+      lineHeight: FontSize.xs * 1.5,
+      paddingHorizontal: Spacing.xs,
     },
     // One row inside the Appearance box (no per-row border; the box + dividers
     // group them, matching the settings and room-actions sheets).

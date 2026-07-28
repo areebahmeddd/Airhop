@@ -31,6 +31,7 @@ import React, {
 import {
   ActivityIndicator,
   Pressable,
+  RefreshControl,
   ScrollView,
   Share,
   StyleSheet,
@@ -42,6 +43,7 @@ import QRCode from "react-native-qrcode-svg";
 import {
   canEncodeTokenQr,
   formatAmount,
+  isLikelyTestMint,
   TOKEN_QR_ERROR_CORRECTION,
   TOKEN_QR_MAX_CHARS,
   tokenQrPayload,
@@ -74,6 +76,7 @@ import {
   quoteSend,
   receiveToken,
   reclaimSend,
+  reconcile,
   refreshAccount,
   restoreFromRecoveryPhrase,
   sendNutzap,
@@ -84,6 +87,7 @@ import {
   type RestoreResult,
 } from "../../services/wallet-service";
 import { showAlert, useAlertStore } from "../../store/alert-store";
+import { useContactsStore } from "../../store/contacts-store";
 import { usePeerStore } from "../../store/peer-store";
 import { useSettingsStore } from "../../store/settings-store";
 import {
@@ -106,7 +110,7 @@ import {
   useThemeColors,
 } from "../../ui/theme";
 import { peerIDToUsername } from "../../utils/username";
-import TokenScanner from "./token-scanner";
+import TokenScanner, { type ScanTarget } from "./token-scanner";
 
 // The four quick actions triggered from the App-level header.
 export type WalletAction = "receive" | "send" | "zap" | "addMint";
@@ -120,6 +124,11 @@ const DEPOSIT_POLL_MS = 3000;
 
 // A peer counts as reachable for a hand-off if it was heard from this recently.
 const PEER_ONLINE_WINDOW_MS = 60_000;
+
+// Activity rows shown before the list has to be asked for. Three is enough to
+// answer "did that go through", which is the only question this section gets
+// asked on the way past; the rest is history and can wait for a tap.
+const ACTIVITY_COLLAPSED_COUNT = 3;
 
 interface Props {
   action?: WalletAction | null;
@@ -183,7 +192,8 @@ export default function WalletScreen({
   const [showWithdraw, setShowWithdraw] = useState(false);
   const [showPeerPicker, setShowPeerPicker] = useState(false);
   const [showConsolidate, setShowConsolidate] = useState(false);
-  const [showScanner, setShowScanner] = useState(false);
+  const [scannerTarget, setScannerTarget] = useState<ScanTarget | null>(null);
+  const [pullRefreshing, setPullRefreshing] = useState(false);
   // A pending send re-shown as a QR, for handing it over after the fact.
   const [qrToken, setQrToken] = useState<WalletTx | null>(null);
   const [showRestore, setShowRestore] = useState(false);
@@ -214,6 +224,32 @@ export default function WalletScreen({
   const [sendAmount, setSendAmount] = useState("");
   const [sendMemo, setSendMemo] = useState("");
   const [zapNpub, setZapNpub] = useState("");
+
+  // Zapping addresses an identity, so both halves need one on screen: theirs to
+  // send to, and ours to hand out. Without this the Zap sheet asked for
+  // something the app never showed you anywhere.
+  const myNpub = useMemo(() => {
+    const hex = getMeshService()?.getNostrPubKeyHex();
+    if (hex === undefined || hex.length === 0) return null;
+    try {
+      return nip19.npubEncode(hex);
+    } catch {
+      return null;
+    }
+  }, []);
+
+  // Contacts learned from a QR card or an ANNOUNCE already carry a Nostr key.
+  // Typing 63 characters by hand when the app knows them is a self-inflicted
+  // wound, so offer them instead.
+  const contacts = useContactsStore((c) => c.contacts);
+  const zapContacts = useMemo(
+    () =>
+      Object.values(contacts)
+        .filter((c) => c.nostrPubkeyHex !== undefined)
+        .sort((a, b) => a.nickname.localeCompare(b.nickname))
+        .slice(0, 8),
+    [contacts],
+  );
   const [zapAmount, setZapAmount] = useState("");
   const [zapNote, setZapNote] = useState("");
   const [mintUrlInput, setMintUrlInput] = useState("");
@@ -313,17 +349,66 @@ export default function WalletScreen({
 
   const recent = useMemo(() => history.slice(0, 12), [history]);
 
+  const [showAllActivity, setShowAllActivity] = useState(false);
+  const visibleActivity = showAllActivity
+    ? recent
+    : recent.slice(0, ACTIVITY_COLLAPSED_COUNT);
+
   const mintList = useMemo(() => Object.values(mints), [mints]);
 
-  // How much of the primary unit the recovery phrase could actually rebuild.
-  // Coins received from other people carry their secrets, so they sit outside
-  // the phrase until a swap re-issues them under ours.
-  const coverage = useMemo(() => {
-    const forUnit = accounts.filter((a) => a.unit === primary.unit);
-    const unbacked = forUnit.reduce((sum, a) => sum + a.unbacked, 0);
-    const total = forUnit.reduce((sum, a) => sum + a.balance, 0);
-    return { covered: total - unbacked, unbacked };
-  }, [accounts, primary.unit]);
+  // A mint that advertises several currencies produces one account per
+  // currency, so adding a single mint can spill four near-identical rows that
+  // all read as separate mints and all hold nothing. Show the accounts that
+  // actually hold something, and for a mint holding nothing anywhere keep one
+  // row so it stays visible after being added. Preferring the sat row for that
+  // placeholder matches what the rest of the wallet is denominated in.
+  // Test mints hand out fake sats. Nothing stops you using one, but a balance
+  // that cannot be cashed out should never look like one that can.
+  const holdsTestMoney = useMemo(
+    () =>
+      accounts.some(
+        (a) =>
+          (a.balance > 0 || a.reserved > 0) &&
+          isLikelyTestMint({
+            url: a.mintUrl,
+            name: mints[a.mintUrl]?.name,
+            description: mints[a.mintUrl]?.description,
+          }),
+      ),
+    [accounts, mints],
+  );
+
+  const visibleAccounts = useMemo(() => {
+    const funded = accounts.filter(
+      (a) => a.balance > 0 || a.reserved > 0 || a.proofCount > 0,
+    );
+    const covered = new Set(funded.map((a) => a.mintUrl));
+    const placeholders = new Map<string, AccountBalance>();
+    for (const account of accounts) {
+      if (covered.has(account.mintUrl)) continue;
+      const current = placeholders.get(account.mintUrl);
+      if (
+        current === undefined ||
+        (current.unit !== "sat" && account.unit === "sat")
+      ) {
+        placeholders.set(account.mintUrl, account);
+      }
+    }
+    return [...funded, ...placeholders.values()];
+  }, [accounts]);
+
+  // How much of the primary unit the recovery phrase could NOT rebuild. Coins
+  // received from other people carry their secrets, so they sit outside the
+  // phrase until a swap re-issues them under ours. Only the shortfall is
+  // counted: the card states the guarantee in general terms and names an
+  // amount only where the guarantee does not hold.
+  const unbackedBalance = useMemo(
+    () =>
+      accounts
+        .filter((a) => a.unit === primary.unit)
+        .reduce((sum, a) => sum + a.unbacked, 0),
+    [accounts, primary.unit],
+  );
 
   // Denomination the user last chose. Purely a display preference: sats and
   // bitcoin are the same number scaled by a constant, so nothing here touches a
@@ -397,6 +482,13 @@ export default function WalletScreen({
       setShowReceive(false);
       setTokenInput("");
 
+      if (result.outcome === "own-pending") {
+        showAlert(
+          "This is your own payment",
+          "These coins are still reserved for a send you have not settled, so there is nothing to claim. Use Reclaim on that payment to put them straight back in your balance.",
+        );
+        return;
+      }
       if (result.outcome === "duplicate") {
         showAlert(
           "Already in your wallet",
@@ -435,23 +527,40 @@ export default function WalletScreen({
   // allowed to finish, and only then does the camera come up. Every path back
   // restores the sheet the same way, so the scanner always feels like a
   // detour rather than somewhere the user got dropped.
-  function openScanner(): void {
-    setShowReceive(false);
-    setTimeout(() => setShowScanner(true), SHEET_EXIT_MS);
+  function reopenSheetFor(target: ScanTarget): void {
+    setTimeout(() => {
+      if (target === "token") setShowReceive(true);
+      else setShowWithdraw(true);
+    }, SHEET_EXIT_MS);
   }
 
-  function returnToReceive(): void {
-    setShowScanner(false);
-    setTimeout(() => setShowReceive(true), SHEET_EXIT_MS);
+  function openScanner(target: ScanTarget): void {
+    if (target === "token") setShowReceive(false);
+    else setShowWithdraw(false);
+    setTimeout(() => setScannerTarget(target), SHEET_EXIT_MS);
   }
 
-  // A scanned token is put in the field rather than claimed on the spot. The
-  // Receive sheet already shows what is about to happen, and silently crediting
-  // whatever the camera saw would remove the last chance to notice a mint you
-  // do not recognise.
-  function handleScannedToken(token: string): void {
-    setTokenInput(token);
-    returnToReceive();
+  function closeScanner(): void {
+    if (scannerTarget === null) return;
+    const target = scannerTarget;
+    setScannerTarget(null);
+    reopenSheetFor(target);
+  }
+
+  // A scan fills the field rather than acting on the spot. The sheet already
+  // shows what is about to happen, and silently claiming or paying whatever the
+  // camera saw would remove the last chance to check it.
+  function handleScanned(value: string): void {
+    if (scannerTarget === null) return;
+    const target = scannerTarget;
+    if (target === "token") {
+      setTokenInput(value);
+    } else {
+      setWithdrawInvoice(value);
+      setWithdrawQuote(null);
+    }
+    setScannerTarget(null);
+    reopenSheetFor(target);
   }
 
   // ---- Send ----
@@ -673,6 +782,54 @@ export default function WalletScreen({
       reportError(err, "Could not add mint");
     } finally {
       setBusy(null);
+    }
+  }
+
+  // The global counterpart to the per-mint buttons. Pull is the standard
+  // gesture for "bring this up to date", so it does the whole job: settle
+  // anything left hanging first, then reconcile every funded account with its
+  // mint.
+  //
+  // Deliberately silent on success. The gesture is its own feedback and the
+  // numbers changing is the result, so an alert per mint would turn a routine
+  // pull into a stack of dialogs to dismiss. Only trouble is worth speaking up
+  // about, and then once, not once per mint.
+  async function handlePullRefresh(): Promise<void> {
+    // Empty accounts exist purely because a mint advertises the currency, and
+    // there is nothing at the mint to reconcile them against.
+    const funded = accounts.filter((a) => a.proofCount > 0 || a.reserved > 0);
+    if (locked) return;
+    setPullRefreshing(true);
+    try {
+      // Sequenced, not raced: this claims paid deposits and recovers melt
+      // change, so it adds proofs to the very accounts the refresh below is
+      // about to swap. Running both at once would have them treading on each
+      // other for no gain, since neither is slow enough to be worth it.
+      try {
+        await reconcile();
+      } catch {
+        // Best effort. A mint that cannot be reached here gets another chance
+        // on the next pull, and the refresh below is still worth attempting.
+      }
+      const results = await Promise.allSettled(
+        funded.map((a) => refreshAccount(a.mintUrl, a.unit)),
+      );
+      const failed = funded.filter((_, i) => results[i]?.status === "rejected");
+      if (failed.length === 0) return;
+      const hosts = [...new Set(failed.map((a) => hostOf(a.mintUrl)))];
+      if (failed.length === funded.length) {
+        reportError(
+          (results[0] as PromiseRejectedResult | undefined)?.reason,
+          "Refresh failed",
+        );
+      } else {
+        showAlert(
+          "Partly refreshed",
+          `Could not reach ${hosts.join(", ")}. Everything else is up to date.`,
+        );
+      }
+    } finally {
+      setPullRefreshing(false);
     }
   }
 
@@ -1055,6 +1212,14 @@ export default function WalletScreen({
       style={styles.container}
       contentContainerStyle={styles.content}
       showsVerticalScrollIndicator={false}
+      refreshControl={
+        <RefreshControl
+          refreshing={pullRefreshing}
+          onRefresh={() => void handlePullRefresh()}
+          tintColor={Colors.textMuted}
+          colors={[Colors.accent]}
+        />
+      }
     >
       {locked && (
         <View style={[styles.banner, styles.bannerDanger]}>
@@ -1134,6 +1299,13 @@ export default function WalletScreen({
                 {showAmount(u.balance, u.unit)} at a separate mint account
               </Text>
             ))}
+
+          {holdsTestMoney && (
+            <Text style={styles.testNote}>
+              Includes play money from a test mint. It is not bitcoin and cannot
+              be cashed out.
+            </Text>
+          )}
 
           <Text style={styles.balanceSubtitle}>
             {mintList.length} mint{mintList.length === 1 ? "" : "s"}
@@ -1226,7 +1398,7 @@ export default function WalletScreen({
       {/* Mint accounts */}
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Mints</Text>
-        {accounts.length === 0 ? (
+        {visibleAccounts.length === 0 ? (
           <View style={styles.emptyCard}>
             <Text style={styles.emptyTitle}>No mint yet</Text>
             <Text style={styles.emptyBody}>
@@ -1246,16 +1418,10 @@ export default function WalletScreen({
             </Pressable>
           </View>
         ) : (
-          accounts.map((account) => {
+          visibleAccounts.map((account) => {
             const record = mints[account.mintUrl];
             return (
-              <Pressable
-                key={account.key}
-                style={styles.mintRow}
-                onLongPress={() => handleRemoveMint(account)}
-                accessibilityRole="button"
-                accessibilityLabel={`${hostOf(account.mintUrl)}, ${account.balance.toLocaleString()} ${account.unit}. Long press to remove.`}
-              >
+              <View key={account.key} style={styles.mintRow}>
                 <View style={styles.mintLeft}>
                   <View style={styles.mintIconCircle}>
                     <Feather
@@ -1265,15 +1431,32 @@ export default function WalletScreen({
                     />
                   </View>
                   <View style={styles.mintInfo}>
-                    <Text style={styles.mintName} numberOfLines={1}>
-                      {record?.name ?? hostOf(account.mintUrl)}
-                    </Text>
-                    <Text style={styles.mintMeta}>
-                      {account.proofCount} proof
-                      {account.proofCount === 1 ? "" : "s"}
-                      {account.unverified > 0
-                        ? ` · ${account.unverified.toLocaleString()} unconfirmed`
-                        : ""}
+                    <View style={styles.mintNameRow}>
+                      <Text style={styles.mintName} numberOfLines={1}>
+                        {record?.name ?? hostOf(account.mintUrl)}
+                      </Text>
+                      {isLikelyTestMint({
+                        url: account.mintUrl,
+                        name: record?.name,
+                        description: record?.description,
+                      }) && (
+                        <View style={styles.testBadge}>
+                          <Text style={styles.testBadgeText}>TEST</Text>
+                        </View>
+                      )}
+                    </View>
+                    <Text style={styles.mintMeta} numberOfLines={1}>
+                      {[
+                        record?.name !== undefined
+                          ? hostOf(account.mintUrl)
+                          : null,
+                        `${account.proofCount} proof${account.proofCount === 1 ? "" : "s"}`,
+                        account.unverified > 0
+                          ? `${account.unverified.toLocaleString()} unconfirmed`
+                          : null,
+                      ]
+                        .filter((part) => part !== null)
+                        .join(" · ")}
                     </Text>
                   </View>
                 </View>
@@ -1290,29 +1473,49 @@ export default function WalletScreen({
                         .label
                     }
                   </Text>
-                  <Pressable
-                    style={[
-                      styles.smallBtn,
-                      networkBlocked && styles.smallBtnDisabled,
-                    ]}
-                    disabled={networkBlocked || refreshingMint !== null}
-                    onPress={() =>
-                      void handleRefreshMint(account.mintUrl, account.unit)
-                    }
-                    accessibilityRole="button"
-                    accessibilityLabel={`Confirm proofs with ${hostOf(account.mintUrl)}`}
-                  >
-                    {refreshingMint === account.mintUrl ? (
-                      <ActivityIndicator
-                        size="small"
+                  <View style={styles.mintActions}>
+                    <Pressable
+                      style={[
+                        styles.iconBtn,
+                        networkBlocked && styles.smallBtnDisabled,
+                      ]}
+                      disabled={networkBlocked || refreshingMint !== null}
+                      onPress={() =>
+                        void handleRefreshMint(account.mintUrl, account.unit)
+                      }
+                      hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Confirm proofs with ${hostOf(account.mintUrl)}`}
+                    >
+                      {refreshingMint === account.mintUrl ? (
+                        <ActivityIndicator
+                          size="small"
+                          color={Colors.textSecondary}
+                        />
+                      ) : (
+                        <Feather
+                          name="refresh-cw"
+                          size={13}
+                          color={Colors.textSecondary}
+                        />
+                      )}
+                    </Pressable>
+                    <Pressable
+                      style={styles.iconBtn}
+                      onPress={() => handleRemoveMint(account)}
+                      hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Remove ${hostOf(account.mintUrl)}`}
+                    >
+                      <Feather
+                        name="x"
+                        size={14}
                         color={Colors.textSecondary}
                       />
-                    ) : (
-                      <Text style={styles.smallBtnText}>Refresh</Text>
-                    )}
-                  </Pressable>
+                    </Pressable>
+                  </View>
                 </View>
-              </Pressable>
+              </View>
             );
           })
         )}
@@ -1457,8 +1660,8 @@ export default function WalletScreen({
           {backupEnabled ? (
             <>
               <Text style={styles.backupBody}>
-                {coverage.covered.toLocaleString()} {primary.unit} can be
-                rebuilt on a new device from your twelve words.
+                Your balance can be rebuilt on a new device from your twelve
+                words.
               </Text>
               {/* A phrase that exists but was never copied out is the most
                   dangerous state of all: the card would otherwise read as
@@ -1478,7 +1681,7 @@ export default function WalletScreen({
                   </Text>
                 </View>
               )}
-              {coverage.unbacked > 0 && (
+              {unbackedBalance > 0 && (
                 <View style={styles.backupWarnRow}>
                   <Feather
                     name="alert-circle"
@@ -1486,7 +1689,7 @@ export default function WalletScreen({
                     color={Colors.textSecondary}
                   />
                   <Text style={styles.backupWarnText}>
-                    {coverage.unbacked.toLocaleString()} {primary.unit} is not
+                    {unbackedBalance.toLocaleString()} {primary.unit} is not
                     covered yet. Coins you were given carry the secrets of
                     whoever sent them, so they only come under your phrase once
                     they are swapped. Refresh a mint to secure them.
@@ -1553,12 +1756,22 @@ export default function WalletScreen({
         </View>
       </View>
 
-      {/* Activity */}
-      {recent.length > 0 && (
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Activity</Text>
+      {/* Activity. Always shown: a section that disappears when empty leaves
+          people wondering whether the app forgot their payments or never had
+          them, and it makes the tab reflow as soon as the first one lands. */}
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Activity</Text>
+        {recent.length === 0 ? (
+          <View style={styles.emptyCard}>
+            <Text style={styles.emptyTitle}>Nothing yet</Text>
+            <Text style={styles.emptyBody}>
+              Payments you send and receive show up here, newest first, with the
+              mint and the fee for each one.
+            </Text>
+          </View>
+        ) : (
           <View style={styles.historyCard}>
-            {recent.map((tx, index) => (
+            {visibleActivity.map((tx, index) => (
               <View key={tx.id}>
                 {index > 0 && <View style={styles.historyDivider} />}
                 <View style={styles.historyRow}>
@@ -1584,7 +1797,7 @@ export default function WalletScreen({
                   <Text
                     style={[
                       styles.historyAmount,
-                      isCredit(tx) ? styles.historyCredit : undefined,
+                      isCredit(tx) ? styles.historyCredit : styles.historyDebit,
                     ]}
                   >
                     {isCredit(tx) ? "+" : "−"}
@@ -1593,9 +1806,36 @@ export default function WalletScreen({
                 </View>
               </View>
             ))}
+            {recent.length > ACTIVITY_COLLAPSED_COUNT && (
+              <>
+                <View style={styles.historyDivider} />
+                <Pressable
+                  style={styles.historyMoreRow}
+                  onPress={() => setShowAllActivity((v) => !v)}
+                  accessibilityRole="button"
+                  accessibilityState={{ expanded: showAllActivity }}
+                  accessibilityLabel={
+                    showAllActivity
+                      ? "Show fewer payments"
+                      : `Show ${String(recent.length - ACTIVITY_COLLAPSED_COUNT)} more payments`
+                  }
+                >
+                  <Text style={styles.historyMoreText}>
+                    {showAllActivity
+                      ? "Show less"
+                      : `Show ${String(recent.length - ACTIVITY_COLLAPSED_COUNT)} more`}
+                  </Text>
+                  <Feather
+                    name={showAllActivity ? "chevron-up" : "chevron-down"}
+                    size={14}
+                    color={Colors.textMuted}
+                  />
+                </Pressable>
+              </>
+            )}
           </View>
-        </View>
-      )}
+        )}
+      </View>
 
       {/* What each header action does, and whether it needs internet. */}
       <View style={styles.section}>
@@ -1663,6 +1903,28 @@ export default function WalletScreen({
           Paste a Cashu token. Online it is redeemed at the mint straight away;
           offline it is stored and confirmed the next time you refresh.
         </Text>
+        {myNpub !== null && (
+          <Pressable
+            style={styles.npubRow}
+            onPress={() => {
+              void Clipboard.setStringAsync(myNpub);
+              showAlert(
+                "Copied",
+                "Give this to someone and they can zap you from Airhop or any other Nostr wallet, with no Bluetooth needed.",
+              );
+            }}
+            accessibilityRole="button"
+            accessibilityLabel="Copy your Nostr key so people can zap you"
+          >
+            <View style={styles.npubText}>
+              <Text style={styles.npubLabel}>Your Nostr key</Text>
+              <Text style={styles.npubValue} numberOfLines={1}>
+                {myNpub}
+              </Text>
+            </View>
+            <Feather name="copy" size={16} color={Colors.accent} />
+          </Pressable>
+        )}
         <TextInput
           style={styles.tokenInput}
           value={tokenInput}
@@ -1677,7 +1939,7 @@ export default function WalletScreen({
         />
         <Pressable
           style={styles.generatedActionBtn}
-          onPress={openScanner}
+          onPress={() => openScanner("token")}
           accessibilityRole="button"
           accessibilityLabel="Scan an ecash QR code"
         >
@@ -1746,6 +2008,38 @@ export default function WalletScreen({
           so nobody else can spend it. If not, it goes as an encrypted DM
           instead and you will be told which happened.
         </Text>
+        {zapContacts.length > 0 && (
+          <View style={styles.zapContacts}>
+            {zapContacts.map((contact) => {
+              const hex = contact.nostrPubkeyHex;
+              if (hex === undefined) return null;
+              const selected = zapNpub === hex;
+              return (
+                <Pressable
+                  key={contact.peerID}
+                  style={[
+                    styles.zapContactChip,
+                    selected && styles.zapContactChipOn,
+                  ]}
+                  onPress={() => setZapNpub(selected ? "" : hex)}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected }}
+                  accessibilityLabel={`Zap ${contact.nickname}`}
+                >
+                  <Text
+                    style={[
+                      styles.zapContactText,
+                      selected && styles.zapContactTextOn,
+                    ]}
+                    numberOfLines={1}
+                  >
+                    {contact.nickname}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        )}
         <TextInput
           style={styles.tokenInput}
           value={zapNpub}
@@ -1901,7 +2195,7 @@ export default function WalletScreen({
             accessibilityRole="button"
             accessibilityLabel="Share token"
           >
-            <Feather name="share" size={18} color={Colors.accent} />
+            <Feather name="share-2" size={18} color={Colors.accent} />
             <Text style={styles.generatedActionText}>Share</Text>
           </Pressable>
           <Pressable
@@ -2108,6 +2402,15 @@ export default function WalletScreen({
           autoCorrect={false}
           selectionColor={Colors.accent}
         />
+        <Pressable
+          style={styles.generatedActionBtn}
+          onPress={() => openScanner("invoice")}
+          accessibilityRole="button"
+          accessibilityLabel="Scan a Lightning invoice QR code"
+        >
+          <Feather name="camera" size={18} color={Colors.accent} />
+          <Text style={styles.generatedActionText}>Scan QR</Text>
+        </Pressable>
         <MintPicker
           styles={styles}
           Colors={Colors}
@@ -2451,9 +2754,10 @@ export default function WalletScreen({
       </BottomSheet>
 
       <TokenScanner
-        visible={showScanner}
-        onClose={returnToReceive}
-        onToken={handleScannedToken}
+        visible={scannerTarget !== null}
+        target={scannerTarget ?? "token"}
+        onClose={closeScanner}
+        onScanned={handleScanned}
       />
 
       {/* Re-show a pending token as a QR, for handing it over later. */}
@@ -2951,6 +3255,7 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       flexShrink: 0,
     },
     mintInfo: {
+      flexShrink: 1,
       flex: 1,
       gap: 2,
     },
@@ -2967,6 +3272,93 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
     mintRight: {
       alignItems: "flex-end",
       gap: 1,
+    },
+    npubRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: Spacing.sm,
+      paddingHorizontal: Spacing.base,
+      paddingVertical: Spacing.sm,
+      borderRadius: Radius.lg,
+      backgroundColor: Colors.surfaceRaised,
+      borderWidth: 1,
+      borderColor: Colors.border,
+    },
+    npubText: {
+      flex: 1,
+      gap: 1,
+    },
+    npubLabel: {
+      fontSize: FontSize.xs,
+      color: Colors.textMuted,
+    },
+    npubValue: {
+      fontSize: FontSize.xs,
+      color: Colors.textSecondary,
+      fontFamily: FontFamily.mono,
+    },
+    zapContacts: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      gap: Spacing.xs,
+    },
+    zapContactChip: {
+      paddingHorizontal: Spacing.sm,
+      paddingVertical: 4,
+      borderRadius: Radius.full,
+      backgroundColor: Colors.surfaceRaised,
+      borderWidth: 1,
+      borderColor: Colors.border,
+    },
+    zapContactChipOn: {
+      borderColor: Colors.accent,
+    },
+    zapContactText: {
+      fontSize: FontSize.xs,
+      color: Colors.textSecondary,
+    },
+    zapContactTextOn: {
+      color: Colors.accent,
+      fontWeight: FontWeight.semibold,
+    },
+    mintActions: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: Spacing.xs,
+      marginTop: Spacing.xs,
+    },
+    iconBtn: {
+      width: 28,
+      height: 28,
+      alignItems: "center",
+      justifyContent: "center",
+      borderRadius: Radius.full,
+      backgroundColor: Colors.surfaceRaised,
+      borderWidth: 1,
+      borderColor: Colors.border,
+    },
+    mintNameRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: Spacing.xs,
+    },
+    testBadge: {
+      paddingHorizontal: 5,
+      paddingVertical: 1,
+      borderRadius: Radius.sm,
+      borderWidth: 1,
+      borderColor: Colors.borderStrong,
+    },
+    testBadgeText: {
+      fontSize: 9,
+      fontWeight: FontWeight.semibold,
+      color: Colors.textMuted,
+      letterSpacing: 0.5,
+    },
+    testNote: {
+      fontSize: FontSize.sm,
+      color: Colors.textMuted,
+      lineHeight: FontSize.sm * 1.4,
     },
     mintBalance: {
       fontSize: FontSize.md,
@@ -3279,9 +3671,26 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
     historyCredit: {
       color: Colors.online,
     },
+    // Money leaving is worth reading at a glance, the same way money arriving
+    // already was. Failed and reclaimed sends never got here: nothing left.
+    historyDebit: {
+      color: Colors.danger,
+    },
     historyDivider: {
       height: StyleSheet.hairlineWidth,
       backgroundColor: Colors.border,
+    },
+    historyMoreRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: Spacing.xs,
+      paddingVertical: Spacing.md,
+    },
+    historyMoreText: {
+      fontSize: FontSize.sm,
+      fontWeight: FontWeight.medium,
+      color: Colors.textMuted,
     },
     // Info panel
     infoPanel: {

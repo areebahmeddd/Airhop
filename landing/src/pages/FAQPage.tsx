@@ -72,6 +72,51 @@ const SECTIONS: {
           </>
         ),
       },
+      {
+        q: "What does Airhop deliberately not do?",
+        a: (
+          <>
+            Some things are missing because they are still being built, and some because they cannot
+            work without breaking something that matters more. The second kind:
+            <ul className="my-2 list-disc space-y-1 pl-5">
+              <li>
+                <strong>No voice or video calling.</strong> The fast transports that could carry a
+                call are different protocols on iPhone and Android with no bridge between them, so
+                it could never work across the two. Holding the mic to talk live is what replaces
+                it.
+              </li>
+              <li>
+                <strong>Only text crosses the internet.</strong> Photos, files, and voice notes ride
+                Bluetooth, so sending one needs the other person in range.
+              </li>
+              <li>
+                <strong>1 MB per file.</strong> bitchat refuses anything larger the moment it
+                decodes the packet, so a bigger file would be dropped outright by half the mesh.
+              </li>
+              <li>
+                <strong>Attachments do not queue.</strong> A text message waits on your phone until
+                a route appears. A file has to leave while a link exists, so it fails and offers a
+                retry rather than sitting in a queue that may never drain.
+              </li>
+              <li>
+                <strong>No cloud backup.</strong> Nothing is stored off your phone, so losing the
+                phone loses the history. That is the trade for having nothing to seize or subpoena.
+              </li>
+            </ul>
+            Desktop, browser, and watch apps are not here yet, but those are planned rather than
+            ruled out. The{" "}
+            <a
+              href="https://github.com/areebahmeddd/Airhop/blob/main/docs/design/ROADMAP.md"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-gray-900 underline underline-offset-2 transition-colors hover:text-gray-600"
+            >
+              roadmap
+            </a>{" "}
+            tracks what is next.
+          </>
+        ),
+      },
     ],
   },
   {
@@ -129,6 +174,37 @@ const SECTIONS: {
       {
         q: "Can people tell when I have read their message?",
         a: "In a direct message, yes, the same way most messengers work. The receipt is only sent when the app is actually open in front of you, so a message that arrives while Airhop is in your pocket stays unread until you look at it. Public and location channels have no receipts at all.",
+      },
+      {
+        q: "Can I talk instead of typing?",
+        a: (
+          <>
+            Yes. Hold the mic button and it behaves like a walkie-talkie: your voice leaves as you
+            speak and arrives about half a second later, instead of being recorded and sent when you
+            let go. When you release it, the same audio also lands in the chat as an ordinary voice
+            note, so anyone who was out of range or joined late still gets it.
+            <br />
+            <br />
+            It is offered in the public Bluetooth channel and in direct messages.{" "}
+            <strong>Private channels and groups are excluded on purpose</strong>: a live burst in a
+            room is broadcast unencrypted, so streaming one into a room whose text is encrypted
+            would quietly undo the thing that makes it private. Location channels are excluded too,
+            since that would put your voice on public relays. Holding the mic in any of them records
+            a voice note instead, and it does the same when nobody is in range to hear you live, so
+            the same gesture always produces something.
+            <br />
+            <br />
+            Live voice can be switched off entirely in Settings, and incoming audio only plays while
+            you have that conversation open in front of you. The{" "}
+            <Link
+              to="/architecture"
+              className="text-gray-900 underline underline-offset-2 transition-colors hover:text-gray-600"
+            >
+              architecture page
+            </Link>{" "}
+            describes how the frames travel.
+          </>
+        ),
       },
     ],
   },
@@ -201,11 +277,36 @@ const SECTIONS: {
       },
       {
         q: "How far can messages travel?",
-        a: "Each hop covers roughly 30 to 50 meters, and a message is allowed 7 of them, so it can cross 105 to 350 meters in the open before it stops. The more people around you have Airhop, the further it reaches, because every one of their phones is another relay. Messages held for someone who is not around have no range limit at all: your phone simply carries them until a path to that person exists, however long that takes.",
+        a: "Each hop covers roughly 30 to 50 meters, and a message is allowed 7 of them, so it can cross 105 to 350 meters in the open before it stops. The more people around you have Airhop, the further it reaches, because every one of their phones is another relay. Messages held for someone who is not around have no range limit at all: your phone simply carries them until a path to that person exists, however long that takes. That applies to text. An attachment is not carried this way and needs a live link at the moment you send it.",
       },
       {
         q: "What media can I send?",
-        a: "Images, voice notes, videos, and any other file format, all over Bluetooth using chunked streaming. Large files are split into fragments, paced so the radio is not overrun, and reassembled on the other side. Videos are sent as files and play inline; they are not live streams. Bluetooth carries roughly 22 KB/s, so a file near the 1 MB limit takes about 45 seconds, but it works with no internet at all. On Android to Android or iPhone to iPhone, a faster direct WiFi link is used automatically when both devices support it.",
+        a: "Images, voice notes, videos, and any other file format, all over Bluetooth using chunked streaming. Large files are split into fragments, paced so the radio is not overrun, and reassembled on the other side. Videos are sent as files and play inline; they are not live streams. The 1 MB ceiling is bitchat's, enforced the moment it decodes a packet, so raising it would mean every bitchat peer silently dropping the file; photos and voice notes are capped tighter at 512 KB for the same reason. Bluetooth carries roughly 22 KB/s, so a file near the 1 MB limit takes about 45 seconds, but it works with no internet at all. On Android to Android or iPhone to iPhone, a faster direct WiFi link is used automatically when both devices support it.",
+      },
+      {
+        q: "Why is there no video or voice calling?",
+        a: (
+          <>
+            Two reasons, and neither of them is a to-do.
+            <br />
+            <br />
+            <strong>Bandwidth.</strong> Bluetooth Low Energy moves roughly 15 KB/s on a link. Live
+            voice fits inside that at about 2 KB/s, which is exactly why holding the mic works.
+            Video does not fit at any quality worth watching, so a call would have to ride the fast
+            transports instead.
+            <br />
+            <br />
+            <strong>The fast transports cannot talk to each other.</strong> They are WiFi Aware on
+            Android and MultipeerConnectivity on iPhone: different protocols, with no bridge between
+            them. A call built on either could only ever connect Android to Android, or iPhone to
+            iPhone. A calling feature that fails on half the pairs is worse than none, so the video
+            packet type was removed from the protocol rather than shipped half working.
+            <br />
+            <br />
+            What you get instead is live push-to-talk voice, which covers what a call on a mesh is
+            usually for, and video as a file that plays inline in the chat.
+          </>
+        ),
       },
       {
         q: "Is Airhop compatible with bitchat?",
@@ -262,6 +363,32 @@ const SECTIONS: {
               NIP-17
             </a>{" "}
             gift-wrapped direct messages, so relay operators cannot read them.
+          </>
+        ),
+      },
+      {
+        q: "Why can't I send a photo or file over the internet?",
+        a: (
+          <>
+            Because the fallback carries text, not media. Attachments travel on the Bluetooth
+            file-transfer path and are never bridged to Nostr, so the attach button is offered only
+            where the file can actually arrive: the public Bluetooth channel, and direct messages
+            with someone reachable over the mesh. It is missing in location channels, in a cell you
+            have teleported into, and in a conversation with someone you only know through a relay,
+            because everyone there is reached over the internet and the file would go nowhere.
+            <br />
+            <br />
+            It is missing in private channels and groups for a different reason. An attachment is
+            signed but not encrypted, for bitchat compatibility, so broadcasting one into a room
+            whose text is encrypted would quietly undo the privacy of that room. bitchat draws the
+            same line in the same places, which is part of how the two apps stay predictable to each
+            other.
+            <br />
+            <br />
+            In practice:{" "}
+            <strong>text reaches anyone, anywhere; media waits until you are near</strong>. And
+            unlike a text message, an attachment does not sit in a queue and send itself later. The
+            send fails while nobody is in range, and you retry it when somebody is.
           </>
         ),
       },
@@ -484,11 +611,32 @@ const SECTIONS: {
         q: "Is Airhop end-to-end encrypted, peer-to-peer, and anonymous?",
         a: (
           <>
-            <strong>Peer-to-peer: yes.</strong> The Bluetooth mesh needs no server at all, and the
-            optional Nostr relays are swappable and store nothing you depend on.
+            <strong>
+              <a
+                href="https://en.wikipedia.org/wiki/Peer-to-peer"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-gray-900 underline underline-offset-2 transition-colors hover:text-gray-600"
+              >
+                Peer-to-peer
+              </a>
+              : yes.
+            </strong>{" "}
+            The Bluetooth mesh needs no server at all, and the optional Nostr relays are swappable
+            and store nothing you depend on.
             <br />
             <br />
-            <strong>End-to-end encrypted: yes.</strong>
+            <strong>
+              <a
+                href="https://en.wikipedia.org/wiki/End-to-end_encryption"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-gray-900 underline underline-offset-2 transition-colors hover:text-gray-600"
+              >
+                End-to-end encrypted
+              </a>
+              : yes.
+            </strong>
             <ul className="my-2 list-disc space-y-1 pl-5">
               <li>
                 <strong>Direct messages:</strong>{" "}
@@ -541,10 +689,12 @@ const SECTIONS: {
                 rotates.
               </li>
             </ul>
-            The two exceptions are attachments, which are signed rather than encrypted for bitchat
+            The exceptions are attachments, which are signed rather than encrypted for bitchat
             compatibility (nobody can forge or alter one, but any device relaying it can open it),
-            and public geohash channels, which are readable by design since anyone nearby can join
-            them.
+            live voice in a public room, which is broadcast the same way while you hold the mic (a
+            burst inside a direct message is sealed in the same Noise session as your text), and
+            public geohash channels, which are readable by design since anyone nearby can join them.
+            That is why neither media nor live voice is offered in a private channel or group.
             <br />
             <br />
             <strong>Anonymous: partially.</strong>
@@ -817,13 +967,15 @@ const SECTIONS: {
                 <strong>Notifications:</strong> so a message can reach you when the app is closed.
               </li>
               <li>
-                <strong>Camera:</strong> only to scan a contact&rsquo;s QR code.
+                <strong>Camera:</strong> only to scan a contact&rsquo;s QR code, or to take a photo
+                or video you are attaching.
               </li>
               <li>
                 <strong>Photos:</strong> only when you attach or save one.
               </li>
               <li>
-                <strong>Microphone:</strong> only when you record a voice note.
+                <strong>Microphone:</strong> only when you record a voice note or hold the mic to
+                talk live.
               </li>
             </ul>
             Every one of them can be refused or revoked later in your device settings, and the app

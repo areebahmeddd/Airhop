@@ -3118,18 +3118,26 @@ export default function MessageThread({
                     : "Hold to record a voice note"
               }
             >
-              {/* A different action gets a different icon. The same button can
-                  stream live or record a note depending on who is in range,
-                  and that changes as people walk about, so the button has to
-                  say which one the next hold will be rather than leaving the
-                  user to find out afterwards. */}
+              {/* Always the mic: that is this app's icon for voice, and the
+                  radio glyph already means "the mesh" everywhere else (peer
+                  list, radar, network settings), so borrowing it here would
+                  say the wrong thing. State is carried by colour instead,
+                  which is how the rest of the app shows it:
+
+                    muted  hold records a voice note
+                    accent hold goes out live
+                    danger you are live right now
+
+                  The busy ring is a separate property (the border), so
+                  "live is available" and "somebody else is talking" can be
+                  true at once and both remain readable. */}
               <Feather
-                name={liveAvailable ? "radio" : "mic"}
+                name="mic"
                 size={16}
                 color={
                   isPTTActive
                     ? Colors.danger
-                    : liveTalker !== null
+                    : liveAvailable
                       ? Colors.accent
                       : Colors.textMuted
                 }

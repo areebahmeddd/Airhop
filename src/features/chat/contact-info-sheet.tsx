@@ -7,6 +7,7 @@
 // Remove contact / Block actions.
 
 import { Feather } from "@expo/vector-icons";
+import * as Clipboard from "expo-clipboard";
 import React, { useMemo, useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { useChatStore } from "../../store/chat-store";
@@ -68,6 +69,25 @@ export default function ContactInfoSheet({
   // lasting identity to verify, so the sheet says "Anonymous" rather than the
   // "Not verified · scan their QR" line that a mesh peer gets.
   const isAnonymous = peerID !== null && isNostrId(peerID);
+
+  // The identifier under the name is the one string in this sheet nobody can
+  // retype, and for a Nostr contact it is the only handle they have at all.
+  // Selecting it by hand fights the sheet's pan-to-dismiss gesture, so copying
+  // is a tap. The check replaces the glyph in place: no dialog on top of a
+  // sheet for something this small.
+  const [copied, setCopied] = useState(false);
+  const idValue =
+    peerID === null
+      ? ""
+      : isNostrId(peerID)
+        ? peerID.slice(NOSTR_ID_PREFIX.length)
+        : peerID;
+
+  function handleCopyID(): void {
+    void Clipboard.setStringAsync(idValue).catch(() => {});
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
+  }
   // The info card's rows, top to bottom. Relationship leads, then verification
   // (the trust signal), then the always-on encryption guarantee.
   const infoRows: {
@@ -142,14 +162,37 @@ export default function ContactInfoSheet({
                       64-hex public key. Box and label it so it reads as a
                       deliberate credential, not a stray string. */}
               {isNostrId(peerID) ? (
-                <View style={styles.keyBox}>
+                <Pressable
+                  style={styles.keyBox}
+                  onPress={handleCopyID}
+                  accessibilityRole="button"
+                  accessibilityLabel="Copy Nostr public key"
+                >
                   <Text style={styles.keyBoxLabel}>Nostr public key</Text>
-                  <Text style={styles.keyBoxValue} selectable>
-                    {peerID.slice(NOSTR_ID_PREFIX.length)}
-                  </Text>
-                </View>
+                  <View style={styles.keyBoxRow}>
+                    <Text style={styles.keyBoxValue}>{idValue}</Text>
+                    <Feather
+                      name={copied ? "check" : "copy"}
+                      size={15}
+                      color={copied ? Colors.online : Colors.textMuted}
+                    />
+                  </View>
+                </Pressable>
               ) : (
-                <Text style={styles.peerID}>{peerID}</Text>
+                <Pressable
+                  style={styles.peerIDRow}
+                  onPress={handleCopyID}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  accessibilityRole="button"
+                  accessibilityLabel="Copy peer ID"
+                >
+                  <Text style={styles.peerID}>{peerID}</Text>
+                  <Feather
+                    name={copied ? "check" : "copy"}
+                    size={13}
+                    color={copied ? Colors.online : Colors.textMuted}
+                  />
+                </Pressable>
               )}
 
               <View style={styles.infoCard}>
@@ -225,6 +268,12 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       color: Colors.textPrimary,
       marginTop: Spacing.sm,
     },
+    // Mesh peer ID + its copy glyph, kept on one centered line.
+    peerIDRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: Spacing.xs,
+    },
     peerID: {
       fontSize: FontSize.xs,
       fontFamily: FontFamily.mono,
@@ -250,7 +299,15 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       textTransform: "uppercase",
       letterSpacing: 0.6,
     },
+    // The key wraps to two lines, so the glyph centers against the block
+    // rather than sitting on the first line.
+    keyBoxRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: Spacing.sm,
+    },
     keyBoxValue: {
+      flex: 1,
       fontSize: FontSize.xs,
       fontFamily: FontFamily.mono,
       color: Colors.textSecondary,

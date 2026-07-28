@@ -743,7 +743,7 @@ export interface ReceiveResult {
   // "stored"      kept offline; DLEQ passed but the mint has not confirmed it
   //               is unspent, so it counts as unverified balance
   // "duplicate"   every proof was already in the wallet; nothing was credited
-  outcome: "swapped" | "stored" | "duplicate";
+  outcome: "swapped" | "stored" | "duplicate" | "own-pending";
   // Why we did not swap, when outcome is "stored".
   offlineReason?: string;
   // Result of the offline DLEQ check, for the receipt UI.
@@ -802,6 +802,33 @@ export async function receiveToken(
       mintUrl: url,
       memo: info.memo,
       outcome: "duplicate",
+      dleq: dleq.status === "valid" ? "valid" : "unchecked",
+    };
+  }
+
+  // Our own send that has not settled yet. Sending moves proofs out of the
+  // spendable pool and into reservation, so the check above cannot see them and
+  // this would otherwise look like a stranger's token.
+  //
+  // Redeeming it would work, but badly: it pays the mint a swap fee to hand
+  // back money we already hold, files it in history as money received, and
+  // leaves the original send pending until `reconcile` happened to notice the
+  // proofs were spent. Reclaim on that transaction does the same job directly
+  // and settles the balance immediately, so point there instead.
+  const reservedSecrets = new Set<string>();
+  for (const entry of Object.values(store.reserved)) {
+    for (const proof of entry.proofs) reservedSecrets.add(proof.secret);
+  }
+  if (
+    reservedSecrets.size > 0 &&
+    info.token.proofs.every((p) => reservedSecrets.has(p.secret))
+  ) {
+    return {
+      amount: info.amount,
+      unit: info.unit,
+      mintUrl: url,
+      memo: info.memo,
+      outcome: "own-pending",
       dleq: dleq.status === "valid" ? "valid" : "unchecked",
     };
   }

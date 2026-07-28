@@ -35,18 +35,25 @@ import {
 } from "../../ui/theme";
 import { ensurePermission } from "../../utils/permissions";
 
+// What the camera is being pointed at. The mechanics are identical; only the
+// validator and the wording change, so one screen serves both rather than two
+// near-copies drifting apart.
+export type ScanTarget = "token" | "invoice";
+
 interface Props {
   visible: boolean;
+  target: ScanTarget;
   onClose: () => void;
-  // Called with the bare token string once a valid one is read. The caller
-  // decides what to do with it; nothing is claimed here.
-  onToken: (token: string) => void;
+  // Called with the scanned value once it validates. The caller decides what to
+  // do with it; nothing is claimed or paid here.
+  onScanned: (value: string) => void;
 }
 
 export default function TokenScanner({
   visible,
+  target,
   onClose,
-  onToken,
+  onScanned,
 }: Props): React.JSX.Element | null {
   const Colors = useThemeColors();
   const styles = useMemo(() => createStyles(Colors), [Colors]);
@@ -64,9 +71,9 @@ export default function TokenScanner({
     hasScannedRef.current = false;
   }
 
-  function finish(token: string): void {
+  function finish(value: string): void {
     reset();
-    onToken(token);
+    onScanned(value);
   }
 
   function dismiss(): void {
@@ -106,12 +113,16 @@ export default function TokenScanner({
 
     try {
       const scans = await scanFromURLAsync(picked.assets[0].uri, ["qr"]);
-      const token = readToken(scans[0]?.data);
-      if (token === null) {
-        setError("No ecash token found in that image.");
+      const value = readScan(scans[0]?.data, target);
+      if (value === null) {
+        setError(
+          target === "token"
+            ? "No ecash token found in that image."
+            : "No Lightning invoice found in that image.",
+        );
         return;
       }
-      finish(token);
+      finish(value);
     } catch {
       setError("Could not read that image.");
     }
@@ -119,12 +130,12 @@ export default function TokenScanner({
 
   function handleBarcodeScanned(raw: string): void {
     if (hasScannedRef.current) return;
-    const token = readToken(raw);
-    // Not latching on a miss is deliberate: a non-token QR should not end the
+    const value = readScan(raw, target);
+    // Not latching on a miss is deliberate: an unrelated QR should not end the
     // session, it should just keep scanning until a real one comes into frame.
-    if (token === null) return;
+    if (value === null) return;
     hasScannedRef.current = true;
-    finish(token);
+    finish(value);
   }
 
   function handleCameraMountError(): void {
@@ -163,8 +174,10 @@ export default function TokenScanner({
             </View>
             <View style={styles.reticle} />
             <Text style={styles.cameraHint}>
-              Point at an ecash QR code. It is read on this device; nothing is
-              sent anywhere.
+              {target === "token"
+                ? "Point at an ecash QR code."
+                : "Point at a Lightning invoice QR code."}{" "}
+              It is read on this device; nothing is sent anywhere.
             </Text>
           </SafeAreaView>
         </View>
@@ -173,10 +186,13 @@ export default function TokenScanner({
           <Pressable style={StyleSheet.absoluteFill} onPress={dismiss} />
           <View style={styles.sheet}>
             <View style={styles.handle} />
-            <Text style={styles.title}>Scan ecash</Text>
+            <Text style={styles.title}>
+              {target === "token" ? "Scan ecash" : "Scan invoice"}
+            </Text>
             <Text style={styles.subtitle}>
-              Read a Cashu token from another wallet. Works with any Cashu
-              wallet, not only Airhop.
+              {target === "token"
+                ? "Read a Cashu token from another wallet. Works with any Cashu wallet, not only Airhop."
+                : "Read a Lightning invoice to pay it from your balance."}
             </Text>
             {error !== null && <Text style={styles.error}>{error}</Text>}
 
@@ -208,11 +224,25 @@ export default function TokenScanner({
   );
 }
 
-// A scanned string is only accepted if it really is a token. `bareToken` also
-// strips a `cashu:` scheme, so a QR from a wallet that adds one still reads.
-function readToken(raw: string | undefined): string | null {
+// A scanned string is only accepted if it really is what we asked for.
+function readScan(raw: string | undefined, target: ScanTarget): string | null {
   if (typeof raw !== "string" || raw.length === 0) return null;
-  return bareToken(raw);
+  // `bareToken` also strips a `cashu:` scheme, so a QR from a wallet that adds
+  // one still reads.
+  if (target === "token") return bareToken(raw);
+  return bareInvoice(raw);
+}
+
+// bolt11 is bech32, so wallets legitimately encode it in either case, and many
+// prefix a `lightning:` scheme. Normalise to the lowercase bare form the mint
+// expects. Only the human-readable prefix is checked here; the mint is the one
+// that validates the invoice properly, and duplicating that badly would only
+// reject invoices that are actually fine.
+function bareInvoice(raw: string): string | null {
+  const trimmed = raw.trim().replace(/^lightning:/i, "");
+  return /^ln(bc|tb|bcrt|tbs)[0-9]/i.test(trimmed)
+    ? trimmed.toLowerCase()
+    : null;
 }
 
 function createStyles(Colors: ReturnType<typeof useThemeColors>) {
@@ -320,8 +350,8 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
     },
     cancelText: {
       fontSize: FontSize.base,
-      color: Colors.textSecondary,
-      fontWeight: FontWeight.medium,
+      color: Colors.textPrimary,
+      fontWeight: FontWeight.semibold,
     },
   });
 }

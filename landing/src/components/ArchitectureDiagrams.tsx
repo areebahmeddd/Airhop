@@ -1428,7 +1428,7 @@ export function ModuleMap() {
     },
   ];
   return (
-    <svg viewBox="0 0 920 400" className="h-auto w-full" role="img" aria-label="Module layering">
+    <svg viewBox="0 0 920 416" className="h-auto w-full" role="img" aria-label="Module layering">
       <Arrow id="mm-arrow" />
       {layers.map((l, i) => {
         const y = 16 + i * 54;
@@ -1458,7 +1458,7 @@ export function ModuleMap() {
         x1={40}
         y1={24}
         x2={40}
-        y2={370}
+        y2={380}
         stroke={LINE}
         strokeWidth={1.2}
         markerEnd="url(#mm-arrow)"
@@ -1476,7 +1476,7 @@ export function ModuleMap() {
       >
         DEPENDS ON
       </text>
-      <text x={70} y={392} fontFamily={MONO} fontSize={10} fill={MUTED}>
+      <text x={70} y={404} fontFamily={MONO} fontSize={10} fill={MUTED}>
         Every arrow points down and none point back up. A layer never imports from the one above it.
       </text>
     </svg>

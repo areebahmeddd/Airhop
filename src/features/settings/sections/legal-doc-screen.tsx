@@ -17,6 +17,7 @@ import {
   FontSize,
   FontWeight,
   Spacing,
+  TAB_BAR_CLEARANCE,
   useThemeColors,
 } from "../../../ui/theme";
 import { SubHeader, useSharedStyles } from "../shared";
@@ -144,7 +145,7 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
   return StyleSheet.create({
     content: {
       padding: Spacing.base,
-      paddingBottom: Spacing["3xl"],
+      paddingBottom: TAB_BAR_CLEARANCE,
       gap: Spacing.xl,
     },
     lastUpdated: {

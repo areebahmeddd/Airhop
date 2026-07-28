@@ -80,11 +80,25 @@ export default function MessageInfoSheet({
                 sub="Handed to the mesh for best-effort delivery"
               />
             )}
+            {/* Queued has not left the device, so it gets its own line rather
+                than falling through to "Sent" below. Same glyph and wording as
+                the bubble's hourglass, so the two never disagree about the
+                same message. */}
+            {status === "queued" && (
+              <InfoLine
+                styles={styles}
+                icon="timer-sand"
+                color={Colors.textSecondary}
+                label="Waiting to send"
+                sub="Held on this phone until there is a route to them"
+              />
+            )}
 
             {status !== undefined &&
               status !== "sending" &&
               status !== "failed" &&
-              status !== "carried" && (
+              status !== "carried" &&
+              status !== "queued" && (
                 <>
                   <InfoLine
                     styles={styles}

@@ -555,6 +555,32 @@ export function formatTokenSummary(info: TokenInfo): string {
 // The low correction level is the right trade here: a token QR is read off a
 // bright screen held at arm's length, not off a crumpled receipt, so redundancy
 // buys little and costs a third of the capacity.
+// Mints that hand out play money. Test mints say so about themselves, so the
+// mint's own name and description carry the signal and there is no list to keep
+// up to date. The hostname check is a backstop for a mint that forgets to.
+//
+// This only ever adds a warning label, never blocks anything, so the heuristic
+// is deliberately permissive: a false positive costs a needless badge, while a
+// false negative lets someone mistake fake sats for real ones.
+const TEST_MINT_WORDS =
+  /(testnut|fakes?wallet|tests?mint|testing|testnet|regtest|signet)/i;
+
+export function isLikelyTestMint(mint: {
+  url: string;
+  name?: string;
+  description?: string;
+}): boolean {
+  if (TEST_MINT_WORDS.test(`${mint.name ?? ""} ${mint.description ?? ""}`)) {
+    return true;
+  }
+  try {
+    const host = new URL(mint.url).hostname.toLowerCase();
+    return host.includes("testnut") || /(^|.)test./.test(host);
+  } catch {
+    return false;
+  }
+}
+
 export const TOKEN_QR_MAX_CHARS = 2953;
 export const TOKEN_QR_ERROR_CORRECTION = "L";
 

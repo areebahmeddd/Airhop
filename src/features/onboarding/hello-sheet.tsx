@@ -33,19 +33,20 @@ export default function HelloSheet({
   const styles = useMemo(() => createStyles(Colors), [Colors]);
   return (
     <BottomSheet visible={visible} onClose={onClose} sheetStyle={styles.sheet}>
-      <Text style={styles.title}>Welcome to Airhop!</Text>
+      <Text style={styles.title}>Welcome to Airhop</Text>
 
       <View style={styles.body}>
         <Text style={styles.paragraph}>
-          Hi, I&apos;m Areeb. Airhop is an independent side project I build and
-          maintain in my free time. It is not backed by any company, not
-          affiliated with or endorsed by permissionlesstech or the bitchat
-          project, and not an impersonation of any existing app or service.
+          Hi, I&apos;m Areeb. I built Airhop on top of bitchat as an
+          independent, open source side project. It&apos;s not affiliated with
+          or endorsed by the bitchat project or permissionless tech, just
+          something I enjoy building and sharing with the community.
         </Text>
         <Text style={styles.paragraph}>
-          This is the first release on iOS and Android. I have tested it
-          extensively, but bugs are expected. Found one, or want a feature? Open
-          an issue on{" "}
+          This is the first iOS and Android release, so while I&apos;ve tested
+          it with friends, you&apos;ll probably run into a few bugs. If you do,
+          or if you have an idea for a feature, I&apos;d love to hear from you.
+          Open an issue on{" "}
           <Text
             style={styles.link}
             onPress={() => void Linking.openURL(GITHUB_URL)}
@@ -53,7 +54,7 @@ export default function HelloSheet({
           >
             GitHub
           </Text>{" "}
-          or email{" "}
+          or send me an email at{" "}
           <Text
             style={styles.link}
             onPress={() => void Linking.openURL(EMAIL_URL)}
@@ -64,7 +65,7 @@ export default function HelloSheet({
           .
         </Text>
         <Text style={styles.paragraph}>
-          And if Airhop turns out to be useful to you, a star on{" "}
+          If Airhop is useful to you, consider leaving a star on{" "}
           <Text
             style={styles.link}
             onPress={() => void Linking.openURL(GITHUB_URL)}
@@ -72,15 +73,16 @@ export default function HelloSheet({
           >
             GitHub
           </Text>{" "}
-          (all the code is open source) or a review on the{" "}
+          or a review on the{" "}
           <Text
             style={styles.link}
             onPress={() => void Linking.openURL(STORE_URL)}
             suppressHighlighting
           >
             {STORE_NAME}
-          </Text>{" "}
-          helps more people find it. Thanks : )
+          </Text>
+          . It helps more people discover the project. Thanks for giving it a
+          try!
         </Text>
       </View>
 

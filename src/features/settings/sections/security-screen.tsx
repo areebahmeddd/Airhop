@@ -39,6 +39,8 @@ export default function SecurityScreen({ onBack }: Props): React.JSX.Element {
   // setTorRouting owns. torStarting only disables the switch while a toggle is
   // in flight, so it can't be double-tapped mid-operation.
   const torEnabled = useSettingsStore((s) => s.torEnabled);
+  const liveVoiceEnabled = useSettingsStore((s) => s.liveVoiceEnabled);
+  const setLiveVoiceEnabled = useSettingsStore((s) => s.setLiveVoiceEnabled);
   const gatewayEnabled = useSettingsStore((s) => s.gatewayEnabled);
   const setGatewayEnabled = useSettingsStore((s) => s.setGatewayEnabled);
   const bridgeEnabled = useSettingsStore((s) => s.bridgeEnabled);
@@ -172,6 +174,24 @@ export default function SecurityScreen({ onBack }: Props): React.JSX.Element {
                 <GroupDivider />
               </>
             )}
+            {/* Above the internet toggles because it is not one of them: live
+                voice never leaves Bluetooth, so it stays available when
+                everything below is greyed out. It sits here rather than under
+                Storage because what it really controls is whether a microphone
+                opens and whether a stranger's voice comes out of your phone,
+                which is a privacy decision before it is a media one. */}
+            <SettingRow
+              icon="mic"
+              label="Live voice"
+              description="Walkie-talkie over Bluetooth: hold the mic and people in range hear you as you speak. Off records a voice note instead"
+              control={
+                <SettingSwitch
+                  value={liveVoiceEnabled}
+                  onValueChange={setLiveVoiceEnabled}
+                />
+              }
+            />
+            <GroupDivider />
             <SettingRow
               icon="globe"
               label="Tor routing"

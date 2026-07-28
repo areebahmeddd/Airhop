@@ -6,6 +6,7 @@
 // service (wired in v0.7+).
 
 import { Feather } from "@expo/vector-icons";
+import * as Clipboard from "expo-clipboard";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   FlatList,
@@ -71,6 +72,13 @@ export default function PeerList({
   // double tap starts two sends; the second now loses the reservation race and
   // reports a confusing "those coins were just used" instead of doing nothing.
   const [sendingSats, setSendingSats] = useState(false);
+  const [copiedPeerID, setCopiedPeerID] = useState(false);
+
+  function handleCopyPeerID(id: string): void {
+    void Clipboard.setStringAsync(id).catch(() => {});
+    setCopiedPeerID(true);
+    setTimeout(() => setCopiedPeerID(false), 1500);
+  }
 
   // Refresh "last seen" every 10 seconds and evict stale peers.
   useEffect(() => {
@@ -262,7 +270,23 @@ export default function PeerList({
               <Text style={styles.sheetUsername}>
                 {resolveDisplayName(selectedPeer.peerID)}
               </Text>
-              <Text style={styles.sheetPeerID}>{selectedPeer.peerID}</Text>
+              {/* Same copy affordance as the contact sheet: one tap, and the
+                  glyph turns into a check in place. Hand-selecting the ID
+                  would fight this sheet's pan-to-dismiss gesture. */}
+              <Pressable
+                style={styles.sheetPeerIDRow}
+                onPress={() => handleCopyPeerID(selectedPeer.peerID)}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                accessibilityRole="button"
+                accessibilityLabel="Copy peer ID"
+              >
+                <Text style={styles.sheetPeerID}>{selectedPeer.peerID}</Text>
+                <Feather
+                  name={copiedPeerID ? "check" : "copy"}
+                  size={13}
+                  color={copiedPeerID ? Colors.online : Colors.textMuted}
+                />
+              </Pressable>
               <View style={styles.sheetStatusRow}>
                 <StatusDot
                   status={isOnline(selectedPeer) ? "online" : "offline"}
@@ -459,6 +483,12 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       fontSize: FontSize.lg,
       fontWeight: FontWeight.bold,
       color: Colors.textPrimary,
+    },
+    // Peer ID + its copy glyph, kept on one centered line.
+    sheetPeerIDRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: Spacing.xs,
     },
     sheetPeerID: {
       fontSize: FontSize.xs,

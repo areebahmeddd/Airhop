@@ -352,6 +352,9 @@ export class MeshService {
   private gatewayUnsub: (() => void) | null = null;
   // Unsubscribe for the settings listener that toggles the bridge on/off.
   private bridgeUnsub: (() => void) | null = null;
+  // Unsubscribe for the settings listener that tears live voice down when the
+  // user switches it off mid-burst.
+  private liveVoiceUnsub: (() => void) | null = null;
   // Unsubscribe for the contacts-store listener that binds a peer's durable
   // Nostr pubkey from the registry when a contact is created.
   private contactsUnsub: (() => void) | null = null;
@@ -651,6 +654,22 @@ export class MeshService {
         this.bridgeService?.setEnabled(state.bridgeEnabled);
         this.announceManager.announceNow();
       }
+    });
+
+    // Turning live voice off has to take effect now, not at the end of whatever
+    // is currently being said. The per-burst checks elsewhere stop the NEXT
+    // burst in either direction; this stops the one in progress: the microphone
+    // closes with a proper END so the far side hears a finish rather than a
+    // timeout, and any incoming burst goes quiet immediately instead of
+    // draining the jitter buffer first.
+    //
+    // Only the off edge does anything. Turning it back on needs no work: the
+    // next hold opens a fresh burst and the next inbound START opens a fresh
+    // session, so flipping the switch repeatedly settles wherever it lands.
+    this.liveVoiceUnsub?.();
+    this.liveVoiceUnsub = useSettingsStore.subscribe((state, prev) => {
+      if (state.liveVoiceEnabled === prev.liveVoiceEnabled) return;
+      if (!state.liveVoiceEnabled) this.closeVoice();
     });
 
     // Periodic gossip filter, so peers can tell us what they're missing.
@@ -1174,11 +1193,21 @@ export class MeshService {
   // Drop every live-voice resource. Called when the mesh stops, so a burst
   // cannot outlive the radios that were carrying it.
   private closeVoice(): void {
-    void this.cancelVoiceBurst();
+    // END, not CANCELED. The words already spoken were real and have already
+    // been heard on the other side; CANCELED would tell receivers to throw away
+    // audio they have played, which is both wrong and pointless. END closes the
+    // burst cleanly so the far side hears a finish rather than waiting out a
+    // timeout.
+    void this.stopVoiceBurst();
     this.pttPlayer?.close();
     this.pttPlayback?.close();
     this.pttPlayer = null;
     this.pttPlayback = null;
+    // Tell the UI the floor is free. Without this the mic button would keep
+    // saying somebody is talking after the sessions that said so are gone,
+    // because the activity report is normally driven by inbound frames and
+    // those have just stopped arriving.
+    this.reportPttActivity();
   }
 
   // ---------------------------------------------------------------------------
@@ -3521,6 +3550,14 @@ export class MeshService {
         // either; stop rather than burning attempts on every queued message.
         break;
       }
+      // The bubble has been showing the queued hourglass since the original
+      // send. It has now genuinely left the device, so say so here rather than
+      // leaving the correction to a delivery receipt: a receipt that never
+      // arrives (older peer, dropped ack, a slow relay round trip) would leave
+      // "waiting to send" on a message that went out an hour ago. "sent" and
+      // "queued" share a rank, so this advances the bubble without ever
+      // overwriting a delivered or read ack that raced ahead of it.
+      useChatStore.getState().setMessageStatus(msg.channel, msg.id, "sent");
       outbox.resolve(msg.id);
     }
   }
@@ -3935,6 +3972,8 @@ export class MeshService {
     this.chatUnsub = null;
     this.gatewayUnsub?.();
     this.gatewayUnsub = null;
+    this.liveVoiceUnsub?.();
+    this.liveVoiceUnsub = null;
     this.bridgeUnsub?.();
     this.bridgeUnsub = null;
     this.contactsUnsub?.();

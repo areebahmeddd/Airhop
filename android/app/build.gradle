@@ -4,6 +4,16 @@ apply plugin: "com.facebook.react"
 
 def projectRoot = rootDir.getAbsoluteFile().getParentFile().getAbsolutePath()
 
+// Single source of truth for the app version: app.json's expo.version, the same
+// value the release workflow stamps from the git tag. Read it here so the APK's
+// versionName and versionCode always track the tag instead of a hardcoded number
+// that silently drifts. versionCode is a monotonic integer derived from the
+// three-part version (major*10000 + minor*100 + patch), so 1.0.4 -> 10004.
+def expoVersion = new groovy.json.JsonSlurper()
+    .parseText(new File(projectRoot, "app.json").text).expo.version
+def (verMajor, verMinor, verPatch) = expoVersion.tokenize('.').collect { it.toInteger() }
+def computedVersionCode = verMajor * 10000 + verMinor * 100 + verPatch
+
 /**
  * This is the configuration block to customize your React Native Android app.
  * By default you don't need to apply any configuration, just uncomment the lines you need.
@@ -92,8 +102,8 @@ android {
         applicationId 'org.onemindlabs.airhop'
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 1
-        versionName "1.0.0"
+        versionCode computedVersionCode
+        versionName expoVersion
 
         buildConfigField "String", "REACT_NATIVE_RELEASE_LEVEL", "\"${findProperty('reactNativeReleaseLevel') ?: 'stable'}\""
     }
