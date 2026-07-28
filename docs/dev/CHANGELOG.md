@@ -3,6 +3,13 @@
 All notable changes are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## What's Changed in v1.0.5 · Albatross
+
+- chore: trigger Cloudflare Pages deployment (by @areebahmeddd) [41a72d5]
+- feat: enhance token scanner and wallet screen functionality (by @areebahmeddd) [cd65ac5]
+
+**Full changelog:** [v1.0.4..v1.0.5](https://github.com/areebahmeddd/Airhop/compare/v1.0.4..v1.0.5)
+
 ## What's Changed in v1.0.4 · Albatross
 
 - feat(FAQ): enhance FAQ section with detailed encryption and payment information (by @areebahmeddd) [012f367]
