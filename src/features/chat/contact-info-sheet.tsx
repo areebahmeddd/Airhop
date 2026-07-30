@@ -19,6 +19,7 @@ import {
   FontFamily,
   FontSize,
   FontWeight,
+  HIT_SLOP,
   Radius,
   Spacing,
   useThemeColors,
@@ -132,12 +133,21 @@ export default function ContactInfoSheet({
             sub: "Scan their QR code to confirm this is really them.",
           },
   );
+  // The guarantee is the same either way, but the mechanism is not, and naming
+  // the wrong one is the kind of small inaccuracy that costs trust in the
+  // things around it. A relay-only contact has no mesh identity to run a Noise
+  // handshake against, so their messages are NIP-17 gift-wrapped instead. On
+  // the mesh it is Noise XX, and Double Ratchet on top of it when both ends are
+  // Airhop; a bitchat peer gets Noise alone, which is why that half is stated
+  // as a condition rather than a promise.
   infoRows.push({
     key: "enc",
     icon: "lock",
     iconColor: Colors.e2ee,
     label: "End-to-end encrypted",
-    sub: "Noise XX and Double Ratchet",
+    sub: isAnonymous
+      ? "NIP-17 gift-wrapped, so relays cannot read it"
+      : "Noise XX, plus Double Ratchet between Airhop devices",
   });
 
   return (
@@ -182,7 +192,7 @@ export default function ContactInfoSheet({
                 <Pressable
                   style={styles.peerIDRow}
                   onPress={handleCopyID}
-                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  hitSlop={HIT_SLOP}
                   accessibilityRole="button"
                   accessibilityLabel="Copy peer ID"
                 >

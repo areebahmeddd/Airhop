@@ -8,14 +8,23 @@ import React, { useMemo } from "react";
 import { Pressable, StyleSheet, Switch, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
+  DISABLED_OPACITY,
   FontFamily,
   FontSize,
   FontWeight,
+  HIT_SLOP,
+  MIN_TOUCH,
   Radius,
   Spacing,
   TAB_BAR_CLEARANCE,
   useThemeColors,
 } from "../../ui/theme";
+
+// Circle diameters for the two round shapes in the shared sheet vocabulary: the
+// icon medallion at the top of a confirm sheet, and an option row's leading dot.
+// Named so their radii cannot drift off centre.
+const SHEET_ICON_SIZE = 48;
+const OPTION_DOT_SIZE = 34;
 
 // One theme-reactive StyleSheet shared by the settings hub and every
 // sub-screen, so light/dark mode stays pixel-for-pixel consistent across
@@ -160,7 +169,7 @@ export function SettingSwitch({
       trackColor={{ false: Colors.borderStrong, true: Colors.online }}
       thumbColor="#FFFFFF"
       ios_backgroundColor={Colors.borderStrong}
-      style={[props.disabled === true && { opacity: 0.45 }, style]}
+      style={[props.disabled === true && { opacity: DISABLED_OPACITY }, style]}
       {...props}
     />
   );
@@ -189,13 +198,18 @@ export function SubHeader({
       <Pressable
         onPress={onBack}
         style={styles.subHeaderBack}
-        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+        hitSlop={HIT_SLOP}
         accessibilityRole="button"
         accessibilityLabel="Go back"
       >
         <Feather name="chevron-left" size={24} color={Colors.textPrimary} />
       </Pressable>
-      <Text style={styles.subHeaderTitle}>{title}</Text>
+      {/* The screen's name, so a screen reader announces where the drill-in
+          landed. Twelve sub-screens share this header and none of them was
+          exposing a heading. */}
+      <Text style={styles.subHeaderTitle} accessibilityRole="header">
+        {title}
+      </Text>
       <View style={styles.subHeaderSpacer} />
     </View>
   );
@@ -269,12 +283,16 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       backgroundColor: Colors.border,
       marginLeft: Spacing.base,
     },
+    // A row with a description is comfortably past the touch floor already; one
+    // without (a bare label plus a switch, which is most of Network and General)
+    // came to ~39pt. The minimum only ever affects those.
     settingRow: {
       flexDirection: "row",
       alignItems: "center",
       justifyContent: "space-between",
       paddingHorizontal: Spacing.base,
       paddingVertical: Spacing.md,
+      minHeight: MIN_TOUCH,
       gap: Spacing.sm,
     },
     settingIcon: {
@@ -323,9 +341,9 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       gap: Spacing.md,
     },
     sheetIconWrap: {
-      width: 48,
-      height: 48,
-      borderRadius: 24,
+      width: SHEET_ICON_SIZE,
+      height: SHEET_ICON_SIZE,
+      borderRadius: Radius.full,
       backgroundColor: Colors.surfaceRaised,
       borderWidth: 1,
       borderColor: Colors.border,
@@ -431,9 +449,9 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       gap: Spacing.md,
     },
     optionDot: {
-      width: 34,
-      height: 34,
-      borderRadius: 17,
+      width: OPTION_DOT_SIZE,
+      height: OPTION_DOT_SIZE,
+      borderRadius: Radius.full,
       alignItems: "center",
       justifyContent: "center",
       flexShrink: 0,

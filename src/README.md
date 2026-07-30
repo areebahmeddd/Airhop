@@ -39,14 +39,14 @@ Tests are co-located with their module in a `__tests__/` directory. All `src/cor
 | Layer            | Suites | Tests   | Statements | Excluded                             |
 | ---------------- | ------ | ------- | ---------- | ------------------------------------ |
 | `core/crypto/`   | 5      | 53      | 93%        | -                                    |
-| `core/mesh/`     | 22     | 275     | 84%        | Live BLE I/O (native boundary)       |
-| `core/nostr/`    | 9      | 77      | 75%        | Network calls (`NostrClient` mocked) |
-| `core/payments/` | 3      | 70      | 74%        | Mint connectivity (network)          |
-| `core/router/`   | 1      | 30      | 80%        | BLE and WiFi transports (native)     |
-| `services/`      | 4      | 46      | 14%        | Mesh and mint I/O (native + network) |
-| `store/`         | 11     | 141     | 73%        | MMKV persistence (mocked)            |
-| `utils/`         | 9      | 85      | 67%        | -                                    |
-| **Total**        | **64** | **777** | **68%**    |                                      |
+| `core/mesh/`     | 23     | 310     | 84%        | Live BLE I/O (native boundary)       |
+| `core/nostr/`    | 10     | 101     | 75%        | Network calls (`NostrClient` mocked) |
+| `core/payments/` | 3      | 88      | 74%        | Mint connectivity (network)          |
+| `core/router/`   | 1      | 38      | 80%        | BLE and WiFi transports (native)     |
+| `services/`      | 5      | 70      | 14%        | Mesh and mint I/O (native + network) |
+| `store/`         | 13     | 164     | 73%        | MMKV persistence (mocked)            |
+| `utils/`         | 12     | 116     | 67%        | -                                    |
+| **Total**        | **72** | **940** | **68%**    |                                      |
 
 `services/` is the outlier because it is the layer that owns sockets and HTTP:
 `mesh-service` needs a radio and `wallet-service` needs a live mint, so most of

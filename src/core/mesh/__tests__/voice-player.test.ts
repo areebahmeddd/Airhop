@@ -172,3 +172,83 @@ describe("VoicePlayer resource caps", () => {
     player.close();
   });
 });
+
+// A peer in Bluetooth range can send whatever it likes for as long as it likes,
+// and an honest client's own 120-second limit is no defence because a hostile
+// one simply does not have it. These pin the inbound ceilings that stop one
+// talker holding the floor indefinitely. Matches bitchat's pttMaxBurstBytes and
+// pttInboundMaxBytesPerSecond.
+describe("VoicePlayer inbound burst caps", () => {
+  function makeBackend(): AudioPlaybackBackend {
+    return {
+      playFrames: async () => {
+        /* discard: these tests assert session lifecycle, not audio */
+      },
+      endSession: () => {
+        /* no-op */
+      },
+    };
+  }
+
+  it("cuts off a burst that exceeds the per-second rate", () => {
+    const player = new VoicePlayer(makeBackend());
+    player.handlePacket(makeStartPacket(1), "aabbccdd00112233");
+    expect(player.activeSessions).toHaveLength(1);
+
+    // 6 KB/s with 2s of startup slack means ~12 KB is the most a brand-new
+    // burst may deliver. Firing 30 KB of well-formed packets back to back is
+    // not speech, it is someone holding the floor.
+    for (let seq = 1; seq <= 200; seq++) {
+      player.handlePacket(
+        makeDataPacket(1, seq, new Uint8Array(150)),
+        "aabbccdd00112233",
+      );
+    }
+
+    expect(player.activeSessions).toHaveLength(0);
+  });
+
+  it("keeps a burst arriving at a plausible speech rate", () => {
+    const player = new VoicePlayer(makeBackend());
+    player.handlePacket(makeStartPacket(2), "aabbccdd00112233");
+
+    // Real speech is ~2 KB/s; a few hundred bytes per packet is normal.
+    for (let seq = 1; seq <= 10; seq++) {
+      player.handlePacket(
+        makeDataPacket(2, seq, new Uint8Array(200)),
+        "aabbccdd00112233",
+      );
+    }
+
+    expect(player.activeSessions).toHaveLength(1);
+  });
+
+  it("does not hand a cut-off burst a fresh budget", () => {
+    // The flaw this guards: tearing the session down freed the slot, and the
+    // NEXT packet of the same flood opened a replacement with its byte count
+    // back at zero. A peer could then stream forever, one cap at a time.
+    const player = new VoicePlayer(makeBackend());
+    player.handlePacket(makeStartPacket(3), "aabbccdd00112233");
+    for (let seq = 1; seq <= 200; seq++) {
+      player.handlePacket(
+        makeDataPacket(3, seq, new Uint8Array(150)),
+        "aabbccdd00112233",
+      );
+    }
+    expect(player.activeSessions).toHaveLength(0);
+
+    // More of the same burst must NOT reopen it.
+    for (let seq = 201; seq <= 260; seq++) {
+      player.handlePacket(
+        makeDataPacket(3, seq, new Uint8Array(150)),
+        "aabbccdd00112233",
+      );
+    }
+    expect(player.activeSessions).toHaveLength(0);
+
+    // A genuinely new burst from the same peer is unaffected: a burst is
+    // identified by 8 random bytes, so this is a different conversation.
+    player.handlePacket(makeStartPacket(4), "aabbccdd00112233");
+    expect(player.activeSessions).toHaveLength(1);
+  });
+});

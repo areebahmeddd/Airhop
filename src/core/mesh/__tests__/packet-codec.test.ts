@@ -5,6 +5,8 @@
 // byte-level behavior that must match bitchat iOS/Android: v1 + v2 headers,
 // PKCS#7 padding, raw-DEFLATE compression, and signing over the padded encoding.
 import { ed25519 } from "@noble/curves/ed25519.js";
+import { deflateRaw } from "pako";
+import { optimalBlockSize, pad } from "../message-padding";
 import {
   BROADCAST_ID,
   computePacketId,
@@ -18,6 +20,7 @@ import {
   verifyPacket,
   type Packet,
 } from "../packet-codec";
+import { compress } from "../packet-compression";
 
 function makePacket(overrides: Partial<Packet> = {}): Packet {
   return {
@@ -187,6 +190,158 @@ describe("packet-codec", () => {
       const p = makePacket({ ttl: 7 });
       p.signature = signPacket(p, priv);
       expect(verifyPacket({ ...p, ttl: 6 }, pub)).toBe(true);
+    });
+  });
+
+  // bitchat signs and verifies over the RE-ENCODED packet, so a re-encode has
+  // to reproduce the originator's exact bytes. DEFLATE output is not canonical
+  // and the three implementations use three different encoders (Apple's
+  // compression_encode_buffer on iOS, zlib on Android, pako here), so a
+  // re-encode must reuse the payload as received rather than compressing again.
+  //
+  // These tests stand in for a foreign encoder using pako's pre-2.2 hash: it
+  // emits a VALID but different DEFLATE stream for the same input, which is
+  // exactly the shape of the cross-implementation difference.
+  describe("foreign-encoder compatibility", () => {
+    // Same derivation as packet-compression: @types/pako 2.0.4 predates the
+    // legacyHash option, so take the type from the function itself.
+    type DeflateOpts = NonNullable<Parameters<typeof deflateRaw>[1]> & {
+      legacyHash: boolean;
+    };
+    const LEGACY_ENCODER: DeflateOpts = { level: 6, legacyHash: true };
+
+    // Verified to encode differently under the two hashes.
+    const TEXT =
+      "the mesh is up near the north gate. relay running all evening if anyone needs a bridge out to the wider network tonight. ".repeat(
+        3,
+      );
+
+    const SENDER = new Uint8Array([
+      0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88,
+    ]);
+    const TIMESTAMP = 1_700_000_000_000;
+
+    // Assemble the v2 frame by hand (broadcast, compressed, no route) instead of
+    // going through encodePacket. Building the fixture with our own encoder
+    // would be circular: it would re-compress and the frame would stop being
+    // foreign, so the tests would pass even with the fix removed.
+    function buildFrame(
+      ttl: number,
+      compressedPayload: Uint8Array,
+      originalSize: number,
+      signature: Uint8Array | null,
+    ): Uint8Array {
+      const isSigned = signature !== null;
+      const payloadDataSize = compressedPayload.length + 4; // + originalSize field
+      const size = 16 + 8 + payloadDataSize + (isSigned ? 64 : 0); // header + senderID
+      const buf = new Uint8Array(size);
+      const view = new DataView(buf.buffer);
+      let off = 0;
+      buf[off++] = 2; // version
+      buf[off++] = PacketType.ANNOUNCE;
+      buf[off++] = ttl;
+      view.setUint32(off, Math.floor(TIMESTAMP / 0x100000000), false);
+      view.setUint32(off + 4, TIMESTAMP >>> 0, false);
+      off += 8;
+      buf[off++] = Flags.COMPRESSED | (isSigned ? Flags.SIGNED : 0);
+      view.setUint32(off, payloadDataSize, false);
+      off += 4;
+      buf.set(SENDER, off);
+      off += 8;
+      view.setUint32(off, originalSize, false);
+      off += 4;
+      buf.set(compressedPayload, off);
+      off += compressedPayload.length;
+      if (signature !== null) buf.set(signature, off);
+      return pad(buf, optimalBlockSize(buf.length));
+    }
+
+    // A frame exactly as another implementation would have put it on the wire:
+    // signed over its own encoding, compressed by an encoder that is not ours.
+    function foreignFrame(ttl = 7) {
+      const payload = new TextEncoder().encode(TEXT);
+      const foreignBytes = deflateRaw(payload, LEGACY_ENCODER);
+      const priv = ed25519.utils.randomSecretKey();
+      const pub = ed25519.getPublicKey(priv);
+      // Signing preimage: same frame with ttl=0 and no signature (bitchat
+      // toBinaryDataForSigning), padded.
+      const preimage = buildFrame(0, foreignBytes, payload.length, null);
+      const signature = ed25519.sign(preimage, priv);
+      const frame = buildFrame(ttl, foreignBytes, payload.length, signature);
+      return { frame, payload, foreignBytes, pub };
+    }
+
+    it("the fixture really differs from our own encoder", () => {
+      const { payload, foreignBytes } = foreignFrame();
+      const ours = compress(payload);
+      expect(ours).not.toBeNull();
+      // Both are valid DEFLATE for the same input, but not the same bytes.
+      expect(Array.from(foreignBytes)).not.toEqual(Array.from(ours!));
+    });
+
+    it("decodes a foreign frame, preserving its wire payload", () => {
+      const { frame, payload, foreignBytes } = foreignFrame();
+      const decoded = decodePacket(frame)!;
+      expect(decoded).not.toBeNull();
+      expect(Array.from(decoded.payload)).toEqual(Array.from(payload));
+      expect(decoded.wirePayload!.compressed).toBe(true);
+      expect(Array.from(decoded.wirePayload!.bytes)).toEqual(
+        Array.from(foreignBytes),
+      );
+    });
+
+    it("verifies a signed packet compressed by another implementation", () => {
+      const { frame, pub } = foreignFrame();
+      const decoded = decodePacket(frame)!;
+      // Verifies because the signing blob was rebuilt from the originator's
+      // bytes rather than re-compressed with our encoder.
+      expect(verifyPacket(decoded, pub)).toBe(true);
+    });
+
+    it("re-encoding a decoded foreign frame is byte-identical", () => {
+      const { frame } = foreignFrame();
+      const decoded = decodePacket(frame)!;
+      expect(Array.from(encodePacket(decoded))).toEqual(Array.from(frame));
+    });
+
+    it("relaying preserves the originator's compressed bytes and signature", () => {
+      const { frame, foreignBytes, pub } = foreignFrame(7);
+
+      // Relay exactly as flood-router does: decrement TTL and re-encode. The
+      // originator's payload bytes must survive the hop, or every node
+      // downstream would reject a legitimate packet.
+      const received = decodePacket(frame)!;
+      const relayed = decodePacket(
+        encodePacket({ ...received, ttl: received.ttl - 1 }),
+      )!;
+
+      expect(relayed.ttl).toBe(6);
+      expect(Array.from(relayed.wirePayload!.bytes)).toEqual(
+        Array.from(foreignBytes),
+      );
+      expect(verifyPacket(relayed, pub)).toBe(true);
+    });
+
+    it("rejects a same-length payload swap on a compressed packet", () => {
+      const { frame, pub } = foreignFrame();
+      const decoded = decodePacket(frame)!;
+
+      // Same length, so a length-based staleness check would let the wire form
+      // through and sign the pre-swap bytes. The payload binding must catch it.
+      const swapped = Uint8Array.from(decoded.payload);
+      swapped[0] ^= 0xff;
+      expect(swapped.length).toBe(decoded.payload.length);
+      expect(verifyPacket({ ...decoded, payload: swapped }, pub)).toBe(false);
+    });
+
+    it("still compresses with our own encoder for locally built packets", () => {
+      const payload = new TextEncoder().encode(TEXT);
+      const wire = encodePacket(makePacket({ payload }));
+      const decoded = decodePacket(wire)!;
+      expect(decoded.wirePayload!.compressed).toBe(true);
+      expect(Array.from(decoded.wirePayload!.bytes)).toEqual(
+        Array.from(compress(payload)!),
+      );
     });
 
     it("stays valid after being tagged as a solicited sync response (isRSR)", () => {

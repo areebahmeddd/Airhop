@@ -20,10 +20,19 @@ import type { BannerTone, MeshBanner } from "../../store/mesh-state-store";
 import {
   FontSize,
   FontWeight,
+  hitSlopFor,
+  MaxFontScale,
   Radius,
   Spacing,
   useThemeColors,
 } from "../theme";
+
+// The tone dot's diameter. Named so its radius below stays a circle.
+const DOT_SIZE = 6;
+
+// Drawn height of the "Resume" pill: 5pt padding either side of an 11pt label.
+// Named only so hitSlopFor() has something honest to measure against.
+const RESUME_PILL_HEIGHT = 24;
 
 interface Props {
   banners: MeshBanner[];
@@ -66,11 +75,26 @@ export default function MeshStatusBar({
   if (banners.length === 0) return null;
 
   return (
-    <View>
-      {banners.map((banner) => (
+    // One live region for the stack. Bluetooth being switched off, a permission
+    // being revoked in system settings, or Tor coming up are all things that
+    // happen TO the user rather than because of them, and until now the only way
+    // to learn about any of them was to look. "polite" so it waits for a pause
+    // rather than cutting across whatever is being read.
+    <View accessibilityLiveRegion="polite">
+      {banners.map((banner, index) => (
         <View
           key={banner.key}
-          style={[styles.bar, { backgroundColor: Colors.accentGhost }]}
+          style={[
+            styles.bar,
+            { backgroundColor: Colors.accentGhost },
+            // Several banners can be up at once, and with one flat tint behind
+            // all of them they ran together as a single paragraph. A hairline
+            // between keeps them countable.
+            index > 0 && {
+              borderTopWidth: StyleSheet.hairlineWidth,
+              borderTopColor: Colors.border,
+            },
+          ]}
         >
           <View
             style={[
@@ -78,18 +102,27 @@ export default function MeshStatusBar({
               { backgroundColor: dotColor(banner.tone, Colors) },
             ]}
           />
-          <Text style={[styles.label, { color: Colors.textSecondary }]}>
+          <Text
+            style={[styles.label, { color: Colors.textSecondary }]}
+            maxFontSizeMultiplier={MaxFontScale.chrome}
+          >
             {banner.label}
           </Text>
           {banner.key === "paused" && onResume && (
             <Pressable
               style={[styles.action, { borderColor: Colors.border }]}
               onPress={onResume}
-              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              // The pill draws small so the banner stays slim; the slop is what
+              // gets the target to the 44pt floor. It was 8, leaving it at 39.
+              hitSlop={hitSlopFor(RESUME_PILL_HEIGHT)}
               accessibilityRole="button"
               accessibilityLabel="Resume the mesh"
+              accessibilityHint="Turns Bluetooth advertising and scanning back on"
             >
-              <Text style={[styles.actionText, { color: Colors.textPrimary }]}>
+              <Text
+                style={[styles.actionText, { color: Colors.textPrimary }]}
+                maxFontSizeMultiplier={MaxFontScale.chrome}
+              >
                 Resume
               </Text>
             </Pressable>
@@ -109,9 +142,12 @@ const styles = StyleSheet.create({
     gap: Spacing.sm,
   },
   indicator: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
+    width: DOT_SIZE,
+    height: DOT_SIZE,
+    borderRadius: DOT_SIZE / 2,
+    // Never let the dot be squeezed out by a long label wrapping beside it: it
+    // is the only thing carrying the banner's severity.
+    flexShrink: 0,
   },
   label: {
     flex: 1,
@@ -123,7 +159,8 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     borderRadius: Radius.full,
     paddingHorizontal: Spacing.md,
-    paddingVertical: 3,
+    paddingVertical: 5,
+    flexShrink: 0,
   },
   actionText: {
     fontSize: FontSize.xs,

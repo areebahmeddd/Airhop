@@ -1,0 +1,342 @@
+// Join with a link: paste an Airhop invite instead of tapping one.
+//
+// Tapping a link only works when the link is somewhere tappable. An invite read
+// off another phone, copied out of a message that arrived over the mesh, or
+// written down, had nowhere to go. This is that door, and it goes through the
+// same parseAirhopLink + applyAirhopLink pair the OS deep link uses, so a
+// pasted invite and a tapped one land in exactly the same place.
+//
+// It accepts every Airhop link rather than only channel invites: rejecting a
+// valid peer or contact link because the sheet is named "join" would be a
+// dead end for no reason. What the link will do is stated before you commit.
+
+import { Feather } from "@expo/vector-icons";
+import * as Clipboard from "expo-clipboard";
+import { useMemo, useState } from "react";
+import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { isValidChannelKey } from "../../core/mesh/channel-crypto";
+import { applyAirhopLink } from "../../services/link-router";
+import { showAlert } from "../../store/alert-store";
+import BottomSheet from "../../ui/components/bottom-sheet";
+import {
+  FontFamily,
+  FontSize,
+  FontWeight,
+  HIT_SLOP,
+  Radius,
+  Spacing,
+  useThemeColors,
+} from "../../ui/theme";
+import { parseAirhopLink } from "../../utils/deep-link";
+import { resolveDisplayName } from "../../utils/display-name";
+
+interface Props {
+  visible: boolean;
+  /** Dismiss entirely: backdrop tap or system back. */
+  onClose: () => void;
+  /** Step back to whatever opened this sheet, for the Back button. */
+  onBack: () => void;
+  onJoined: (channel: string) => void;
+}
+
+export function JoinLinkSheet({
+  visible,
+  onClose,
+  onBack,
+  onJoined,
+}: Props): React.JSX.Element {
+  const Colors = useThemeColors();
+  const styles = useMemo(() => createStyles(Colors), [Colors]);
+
+  const [input, setInput] = useState("");
+
+  // Parsed live, so the sheet can say what the link is before it is used. A
+  // private invite whose key is malformed is treated as unusable rather than
+  // joined as a public channel: that would build a room that silently drops
+  // every message it receives.
+  const link = useMemo(() => {
+    const trimmed = input.trim();
+    if (trimmed.length === 0) return null;
+    const parsed = parseAirhopLink(trimmed);
+    if (parsed === null) return null;
+    if (
+      parsed.kind === "channel" &&
+      parsed.key !== undefined &&
+      !isValidChannelKey(parsed.key)
+    ) {
+      return null;
+    }
+    return parsed;
+  }, [input]);
+
+  // One line describing what Join will do. Only shown once something has been
+  // typed, so an empty sheet is not already complaining.
+  const preview = useMemo(() => {
+    if (input.trim().length === 0) return null;
+    if (link === null) {
+      return { ok: false, text: "That is not an Airhop link." };
+    }
+    if (link.kind === "channel") {
+      if (link.key === undefined) {
+        return {
+          ok: true,
+          text: `Public channel ${link.channel}. Anyone nearby can read it.`,
+        };
+      }
+      return {
+        ok: true,
+        text: `Private channel ${link.channel}. ${
+          link.overNostr
+            ? "Reaches members over Bluetooth and the internet."
+            : "Stays on Bluetooth range."
+        }`,
+      };
+    }
+    if (link.kind === "peer") {
+      return {
+        ok: true,
+        text: `Direct message with ${resolveDisplayName(link.peerID)}.`,
+      };
+    }
+    return {
+      ok: true,
+      text: "A contact card. Adds them to your contacts and opens the chat.",
+    };
+  }, [input, link]);
+
+  function reset(): void {
+    setInput("");
+  }
+
+  async function handlePaste(): Promise<void> {
+    const text = await Clipboard.getStringAsync().catch(() => "");
+    if (text.length > 0) setInput(text.trim());
+  }
+
+  function handleJoin(): void {
+    if (link === null) return;
+    const channel = applyAirhopLink(link);
+    if (channel === null) {
+      // Only a contact card can be refused, and only because its peer ID is not
+      // the fingerprint of its own key, which means it was tampered with.
+      showAlert(
+        "That link could not be verified",
+        "The contact card does not match its own keys, so it was not added. Ask them to send a fresh one.",
+      );
+      return;
+    }
+    // A private channel is identified by its key, not its name, so this invite
+    // may be a different room that happens to share a name with one already
+    // joined. It lands in its own room; say so, because the name in the list
+    // will not be the name in the link.
+    if (link.kind === "channel" && channel !== link.channel) {
+      showAlert(
+        `Joined as ${channel}`,
+        `You are already in a different ${link.channel}. Channel names are just labels, so this invite opened its own room and the one you were in is untouched. Rename either from its channel info.`,
+      );
+    }
+    reset();
+    onJoined(channel);
+  }
+
+  function handleClose(): void {
+    reset();
+    onClose();
+  }
+
+  function handleBack(): void {
+    reset();
+    onBack();
+  }
+
+  return (
+    <BottomSheet
+      visible={visible}
+      onClose={handleClose}
+      sheetStyle={styles.sheet}
+    >
+      <Text style={styles.title}>Join with a link</Text>
+
+      {/* Same scannable card as the other chooser destinations. */}
+      <View style={styles.privacyNote}>
+        <View style={styles.privacyNoteRow}>
+          <Feather
+            name="link"
+            size={14}
+            color={Colors.textMuted}
+            style={styles.noteIcon}
+          />
+          <Text style={styles.privacyNoteText}>
+            Paste an invite that starts with airhop://. Tapping one works too;
+            this is for a link you cannot tap.
+          </Text>
+        </View>
+        <View style={styles.privacyNoteRow}>
+          <Feather
+            name="lock"
+            size={14}
+            color={Colors.e2ee}
+            style={styles.noteIcon}
+          />
+          <Text style={styles.privacyNoteText}>
+            A private channel invite carries the key, so joining is instant and
+            nothing is asked of anyone else.
+          </Text>
+        </View>
+        <View style={styles.privacyNoteRow}>
+          <Feather
+            name="bluetooth"
+            size={14}
+            color={Colors.textMuted}
+            style={styles.noteIcon}
+          />
+          <Text style={styles.privacyNoteText}>
+            Works offline. The link is read on this device, and the room reaches
+            however its creator set it up.
+          </Text>
+        </View>
+      </View>
+
+      <View style={styles.inputRow}>
+        <TextInput
+          style={styles.input}
+          value={input}
+          onChangeText={setInput}
+          placeholder="airhop://channel/..."
+          placeholderTextColor={Colors.textMuted}
+          autoCapitalize="none"
+          autoCorrect={false}
+          returnKeyType="go"
+          onSubmitEditing={handleJoin}
+          selectionColor={Colors.accent}
+        />
+        <Pressable
+          onPress={() => void handlePaste()}
+          hitSlop={HIT_SLOP}
+          accessibilityRole="button"
+          accessibilityLabel="Paste from clipboard"
+        >
+          <Feather name="clipboard" size={16} color={Colors.textMuted} />
+        </Pressable>
+      </View>
+
+      {preview !== null && (
+        <Text style={preview.ok ? styles.hint : styles.error}>
+          {preview.text}
+        </Text>
+      )}
+
+      <View style={styles.actions}>
+        <Pressable style={styles.cancel} onPress={handleBack}>
+          <Text style={styles.cancelText}>Back</Text>
+        </Pressable>
+        <Pressable
+          style={[styles.confirm, link === null && styles.confirmDisabled]}
+          onPress={handleJoin}
+          disabled={link === null}
+        >
+          <Text style={styles.confirmText}>Join</Text>
+        </Pressable>
+      </View>
+    </BottomSheet>
+  );
+}
+
+function createStyles(Colors: ReturnType<typeof useThemeColors>) {
+  return StyleSheet.create({
+    sheet: {
+      paddingHorizontal: Spacing.xl,
+      paddingBottom: Spacing.xl,
+      gap: Spacing.md,
+    },
+    title: {
+      fontSize: FontSize.md,
+      fontWeight: FontWeight.semibold,
+      color: Colors.textPrimary,
+    },
+    privacyNote: {
+      gap: Spacing.sm,
+      backgroundColor: Colors.surfaceRaised,
+      borderRadius: Radius.lg,
+      padding: Spacing.md,
+    },
+    privacyNoteRow: {
+      flexDirection: "row",
+      alignItems: "flex-start",
+      gap: Spacing.sm,
+    },
+    // Nudge the leading icon down so it optically centers on the first text line.
+    noteIcon: {
+      marginTop: 2,
+    },
+    privacyNoteText: {
+      flex: 1,
+      fontSize: FontSize.sm,
+      color: Colors.textSecondary,
+      lineHeight: 19,
+    },
+    inputRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: Spacing.sm,
+      backgroundColor: Colors.surfaceRaised,
+      borderRadius: Radius.xl,
+      borderWidth: 1,
+      borderColor: Colors.border,
+      paddingHorizontal: Spacing.base,
+    },
+    input: {
+      flex: 1,
+      paddingVertical: Spacing.md,
+      color: Colors.textPrimary,
+      fontSize: FontSize.sm,
+      fontFamily: FontFamily.mono,
+    },
+    hint: {
+      fontSize: FontSize.xs,
+      color: Colors.textMuted,
+      marginTop: -Spacing.xs,
+      lineHeight: 17,
+    },
+    error: {
+      fontSize: FontSize.xs,
+      color: Colors.danger,
+      marginTop: -Spacing.xs,
+    },
+    actions: {
+      flexDirection: "row",
+      gap: Spacing.sm,
+      marginTop: Spacing.xs,
+    },
+    cancel: {
+      flex: 1,
+      minHeight: 50,
+      backgroundColor: Colors.surfaceRaised,
+      borderRadius: Radius.full,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    // Dismiss actions read at full contrast, matching the wallet sheets,
+    // the scanner and the alert buttons: a muted label on a filled pill
+    // reads as disabled rather than as the quieter of two choices.
+    cancelText: {
+      fontSize: FontSize.base,
+      color: Colors.textPrimary,
+      fontWeight: FontWeight.semibold,
+    },
+    confirm: {
+      flex: 1,
+      minHeight: 50,
+      backgroundColor: Colors.accent,
+      borderRadius: Radius.full,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    confirmDisabled: { opacity: 0.4 },
+    confirmText: {
+      fontSize: FontSize.base,
+      color: Colors.textInverse,
+      fontWeight: FontWeight.semibold,
+    },
+  });
+}

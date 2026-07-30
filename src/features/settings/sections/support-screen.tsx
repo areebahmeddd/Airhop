@@ -1,6 +1,8 @@
-// Support sub-screen: Dodo Payments, a hosted checkout covering cards, UPI,
-// netbanking, and wallets worldwide, plus GitHub Sponsors (no platform fee)
-// and Bitcoin (coming soon).
+// Support sub-screen, ordered by how most people will actually pay: Dodo
+// Payments first (a hosted checkout covering cards, UPI, netbanking and wallets
+// worldwide), then GitHub Sponsors (no platform fee). The checkout says
+// "coming soon" until the account clears review rather than being hidden, so
+// the page reads as the whole plan rather than a shorter one.
 
 import React, { useMemo } from "react";
 import { Linking, ScrollView, StyleSheet, Text, View } from "react-native";
@@ -71,19 +73,13 @@ export default function SupportScreen({ onBack }: Props): React.JSX.Element {
               accessibilityLabel="Support through GitHub Sponsors"
               external
             />
-            <GroupDivider />
-            <SettingRow
-              icon="dollar-sign"
-              label="Bitcoin"
-              control={<Text style={styles.comingSoon}>Coming soon</Text>}
-            />
           </View>
         </View>
         <View style={localStyles.note}>
           <Text style={localStyles.noteText}>
-            I build Airhop in my free time, with no investors and no ads. If it
-            is useful to you, a one-off or monthly contribution helps keep it
-            going. Every feature stays free either way.
+            I build Airhop in my free time. There are no investors and no ads.
+            If it is useful to you, a contribution goes a long way toward
+            keeping development active. Every feature stays free either way.
           </Text>
         </View>
       </ScrollView>

@@ -16,6 +16,7 @@ import { Linking, ScrollView, StyleSheet, Text, View } from "react-native";
 import {
   FontSize,
   FontWeight,
+  Radius,
   Spacing,
   TAB_BAR_CLEARANCE,
   useThemeColors,
@@ -184,7 +185,7 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
     dot: {
       width: 4,
       height: 4,
-      borderRadius: 2,
+      borderRadius: Radius.full,
       backgroundColor: Colors.textMuted,
       marginTop: 8,
       flexShrink: 0,

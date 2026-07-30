@@ -335,3 +335,84 @@ describe("framesToAdtsFile", () => {
     expect(framesToAdtsFile([]).length).toBe(0);
   });
 });
+
+// One hold may only occupy the radio for so long. Matches bitchat's
+// PTTCaptureEngine.maxCaptureDuration: past the ceiling the session stays open
+// and stops encoding, so the gesture still belongs to the user and releasing
+// still ends the burst properly.
+describe("burst duration ceiling", () => {
+  function collect(): {
+    packets: Packet[];
+    session: VoiceCaptureSession & { feed: (f: Uint8Array) => void };
+  } {
+    const packets: Packet[] = [];
+    let onFrame: ((f: Uint8Array) => void) | null = null;
+    const session = new VoiceCaptureSession(
+      {
+        senderPeerID: "aabbccdd00112233",
+        signingPrivKey: ed25519.utils.randomSecretKey(),
+        onPacket: (p) => packets.push(p),
+      },
+      {
+        startCapture: (cb) => {
+          onFrame = cb;
+          return Promise.resolve();
+        },
+        stopCapture: () => Promise.resolve(),
+      },
+    );
+    return {
+      packets,
+      session: Object.assign(session, {
+        feed: (f: Uint8Array) => onFrame?.(f),
+      }),
+    };
+  }
+
+  const frame = () => new Uint8Array(130).fill(9);
+
+  it("stops emitting once the burst passes two minutes", async () => {
+    const now = jest.spyOn(Date, "now");
+    try {
+      now.mockReturnValue(1_000_000);
+      const { packets, session } = collect();
+      await session.startPtt();
+
+      // Well inside the ceiling: these are carried.
+      for (let i = 0; i < 12; i++) session.feed(frame());
+      const during = packets.length;
+      expect(during).toBeGreaterThan(1); // START plus at least one DATA
+
+      // Two minutes and a second later, the mic is still held.
+      now.mockReturnValue(1_000_000 + 121_000);
+      for (let i = 0; i < 12; i++) session.feed(frame());
+
+      expect(packets.length).toBe(during);
+    } finally {
+      now.mockRestore();
+    }
+  });
+
+  it("still ends the burst properly when the user finally releases", async () => {
+    const now = jest.spyOn(Date, "now");
+    try {
+      now.mockReturnValue(2_000_000);
+      const { packets, session } = collect();
+      await session.startPtt();
+      for (let i = 0; i < 12; i++) session.feed(frame());
+
+      now.mockReturnValue(2_000_000 + 121_000);
+      for (let i = 0; i < 12; i++) session.feed(frame());
+      await session.stopPtt();
+
+      // The END is what tells every listener the burst is over; suppressing
+      // frames must never suppress that, or the far side waits for a timeout.
+      const last = decodeBurstPacket(packets[packets.length - 1].payload);
+      expect(last?.kind).toBe("end");
+      // And the audio captured before the ceiling is still a playable note.
+      expect(session.finalizedRecording()).not.toBeNull();
+    } finally {
+      now.mockRestore();
+    }
+  });
+});

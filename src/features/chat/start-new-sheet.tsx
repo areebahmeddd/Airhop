@@ -26,6 +26,7 @@ import {
   useThemeColors,
 } from "../../ui/theme";
 import { GeohashJumpSheet } from "./geohash-jump-sheet";
+import { JoinLinkSheet } from "./join-link-sheet";
 import { NewGroupSheet } from "./new-group-sheet";
 
 interface Props {
@@ -49,6 +50,7 @@ export function StartNewSheet({
   const [showJoinModal, setShowJoinModal] = useState(false);
   const [showNewGroup, setShowNewGroup] = useState(false);
   const [showGeohash, setShowGeohash] = useState(false);
+  const [showJoinLink, setShowJoinLink] = useState(false);
   const [newChannel, setNewChannel] = useState("");
   // Reach for a new channel. Defaults to Bluetooth-only, the most private
   // option; the user opts into internet reach.
@@ -76,6 +78,15 @@ export function StartNewSheet({
         !c.startsWith("group:") &&
         c.toLowerCase() === normalizedInput,
     );
+  // A name needs at least one character after the "#".
+  //
+  // handleAdd already refused anything shorter, but it refused it by returning
+  // silently while Create sat there at full contrast. So an empty field, or a
+  // lone "#", gave a live button that did nothing: the user cannot tell that
+  // from a broken app. Both reasons a name is unusable now gate the same button,
+  // and both say so.
+  const nameTooShort = normalizedInput.length < 2;
+  const canCreate = !nameTooShort && !nameAlreadyExists;
 
   // Close the channel form and clear its inputs. `backToChooser` reopens the
   // step before it, so Back reads as "go back" rather than "lose my place": the
@@ -90,7 +101,7 @@ export function StartNewSheet({
 
   function handleAdd(): void {
     const name = newChannel.trim().replace(/^#*/, "#");
-    if (name.length < 2 || nameAlreadyExists) return;
+    if (!canCreate) return;
     // Every custom channel is private and end-to-end encrypted: it gets a fresh
     // key here, shared only with people you send the invite link to. Reach is
     // the creator's choice: local mesh only, or also bridged over Nostr.
@@ -129,7 +140,8 @@ export function StartNewSheet({
             <View style={styles.chooserText}>
               <Text style={styles.chooserTitle}>Private Channel</Text>
               <Text style={styles.chooserDesc}>
-                A room anyone with the link can join.
+                A room anyone with the link can join. Create one, or join with a
+                link you were sent.
               </Text>
             </View>
           </Pressable>
@@ -182,6 +194,8 @@ export function StartNewSheet({
         <Pressable
           style={styles.modalCancel}
           onPress={() => setShowChooser(false)}
+          accessibilityRole="button"
+          accessibilityLabel="Cancel"
         >
           <Text style={styles.modalCancelText}>Cancel</Text>
         </Pressable>
@@ -238,7 +252,7 @@ export function StartNewSheet({
             selectionColor={Colors.accent}
           />
           {nameAlreadyExists && (
-            <Text style={styles.inputError}>
+            <Text style={styles.inputError} accessibilityLiveRegion="polite">
               A channel with this name already exists.
             </Text>
           )}
@@ -311,20 +325,52 @@ export function StartNewSheet({
           </Text>
         </View>
 
+        {/* The other half of this sheet: a private channel is either one you
+            start or one you were invited to, and both belong to the same
+            decision. It sits below the form rather than beside it because
+            creating is the common case and joining is the answer to "I already
+            have a link". The typed name is kept, so Back lands where it left. */}
+        <Pressable
+          style={styles.joinLinkRow}
+          onPress={() => {
+            setShowJoinModal(false);
+            setShowJoinLink(true);
+          }}
+          accessibilityRole="button"
+          accessibilityLabel="Join a private channel with an invite link"
+        >
+          <Feather name="link" size={14} color={Colors.accent} />
+          <Text style={styles.joinLinkText}>
+            Have an invite link? Join with it
+          </Text>
+        </Pressable>
+
         <View style={styles.modalActions}>
           <Pressable
             style={styles.modalCancel}
             onPress={() => resetJoinModal(true)}
+            accessibilityRole="button"
+            accessibilityLabel="Back to the chooser"
           >
             <Text style={styles.modalCancelText}>Back</Text>
           </Pressable>
           <Pressable
             style={[
               styles.modalConfirm,
-              nameAlreadyExists && styles.modalConfirmDisabled,
+              !canCreate && styles.modalConfirmDisabled,
             ]}
             onPress={handleAdd}
-            disabled={nameAlreadyExists}
+            disabled={!canCreate}
+            accessibilityRole="button"
+            accessibilityLabel="Create channel"
+            accessibilityState={{ disabled: !canCreate }}
+            accessibilityHint={
+              nameTooShort
+                ? "Enter a channel name first"
+                : nameAlreadyExists
+                  ? "That name is already taken"
+                  : undefined
+            }
           >
             <Text style={styles.modalConfirmText}>Create</Text>
           </Pressable>
@@ -354,6 +400,24 @@ export function StartNewSheet({
         }}
         onJoined={(channel) => {
           setShowGeohash(false);
+          onOpenChannel(channel);
+        }}
+      />
+
+      {/* Step 3: paste an invite. Reached from the private-channel form, so
+          Back returns there rather than to the chooser. Opens whatever the link
+          points at, which is usually a channel but may be a DM or a card. */}
+      <JoinLinkSheet
+        visible={showJoinLink}
+        onClose={() => setShowJoinLink(false)}
+        onBack={() => {
+          setShowJoinLink(false);
+          setShowJoinModal(true);
+        }}
+        onJoined={(channel) => {
+          setShowJoinLink(false);
+          // Joined, so the half-typed create form behind this is finished with.
+          resetJoinModal();
           onOpenChannel(channel);
         }}
       />
@@ -425,12 +489,16 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       flexDirection: "row",
       gap: Spacing.sm,
     },
+    // paddingVertical 9, not 7: at 7 the chip measured ~30pt and these two sit
+    // side by side, so hitSlop would overlap and blur the boundary between
+    // "Bluetooth only" and "Bluetooth + Internet". Same fix, and the same
+    // number, as the header's segmented control.
     optionChip: {
       flexDirection: "row",
       alignItems: "center",
       gap: 5,
       paddingHorizontal: Spacing.md,
-      paddingVertical: 7,
+      paddingVertical: 9,
       borderRadius: Radius.full,
       borderWidth: 1,
       borderColor: Colors.border,
@@ -455,6 +523,21 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       color: Colors.textMuted,
       lineHeight: 17,
     },
+    // The "join instead" escape hatch under the create form. Quiet: it is the
+    // second reason to be here, not a competing button, so it reads as a line
+    // of text with the accent doing the work of saying it is tappable.
+    joinLinkRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: Spacing.xs,
+      paddingVertical: Spacing.xs,
+    },
+    joinLinkText: {
+      fontSize: FontSize.sm,
+      color: Colors.accent,
+      fontWeight: FontWeight.medium,
+    },
     modalActions: {
       flexDirection: "row",
       gap: Spacing.sm,
@@ -469,10 +552,13 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       alignItems: "center",
       justifyContent: "center",
     },
+    // Dismiss actions read at full contrast, matching the wallet sheets,
+    // the scanner and the alert buttons: a muted label on a filled pill
+    // reads as disabled rather than as the quieter of two choices.
     modalCancelText: {
       fontSize: FontSize.base,
-      color: Colors.textSecondary,
-      fontWeight: FontWeight.medium,
+      color: Colors.textPrimary,
+      fontWeight: FontWeight.semibold,
     },
     modalConfirm: {
       flex: 1,

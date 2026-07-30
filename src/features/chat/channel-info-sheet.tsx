@@ -36,6 +36,8 @@ import {
   FontFamily,
   FontSize,
   FontWeight,
+  HIT_SLOP,
+  hitSlopFor,
   Radius,
   Spacing,
   useThemeColors,
@@ -416,7 +418,7 @@ export default function ChannelInfoSheet({
         <Pressable
           style={styles.cornerBtn}
           onPress={() => useGeohashBookmarksStore.getState().toggle(geohash)}
-          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          hitSlop={hitSlopFor(28)}
           accessibilityRole="button"
           accessibilityLabel={
             bookmarked ? "Remove bookmark" : "Bookmark this place"
@@ -510,7 +512,7 @@ export default function ChannelInfoSheet({
                   <Pressable
                     style={styles.copyBtn}
                     onPress={handleCopyGeohash}
-                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                    hitSlop={HIT_SLOP}
                     accessibilityRole="button"
                     accessibilityLabel="Copy geohash"
                   >
@@ -540,7 +542,7 @@ export default function ChannelInfoSheet({
                 setSearching((s) => !s);
                 setMemberSearch("");
               }}
-              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              hitSlop={HIT_SLOP}
               accessibilityRole="button"
               accessibilityLabel="Search members"
             >
@@ -601,7 +603,7 @@ export default function ChannelInfoSheet({
                 {m.onChat && (
                   <Pressable
                     onPress={m.onChat}
-                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                    hitSlop={HIT_SLOP}
                     accessibilityRole="button"
                     accessibilityLabel={`Message ${m.name}`}
                   >
@@ -615,7 +617,7 @@ export default function ChannelInfoSheet({
                 {m.onRemove && (
                   <Pressable
                     onPress={m.onRemove}
-                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                    hitSlop={HIT_SLOP}
                     accessibilityRole="button"
                     accessibilityLabel={`Remove ${m.name}`}
                   >

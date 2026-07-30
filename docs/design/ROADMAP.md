@@ -218,25 +218,11 @@ The `Wallet` tab is a real wallet, not a token viewer. Cashu is the primary rail
 
 **Milestone:** A user sends and receives Cashu ecash entirely offline over BLE, tops up and cashes out over Lightning, and can rebuild the balance on a new device from twelve words.
 
-### v1.2.0: Stabilization
-
-**Goal:** Harden the v1.0.0 release before expanding to new platforms.
-
-No new features ship in this range. The focus is production bugs found after launch, race conditions in the BLE and crypto state machines, UI iteration from real user feedback, and extended cross-device battery and compatibility testing. The mesh backend gets battle-tested across as many device and OS combinations as possible before the codebase expands to new targets.
-
-Alongside stabilization, v1.2.0 ships Airhop's **own embedded Tor binary for Android**, mirroring what `arti.xcframework` already gives iOS. Today Android Tor routing depends on the user installing Orbot (a third-party app) and running it in VPN mode; bundling an Arti-based Android library removes that external dependency so Android gets the same one-toggle, no-install Tor experience as iOS, with no reliance on any third-party app.
-
-- [ ] Bundle an Arti-based Android Tor library (JNI over the Rust `arti` core), exposing the same SOCKS5 endpoint contract as iOS
-- [ ] Route the Android Tor WebSocket through the embedded proxy (the JS Tor routing layer already exists and is platform-agnostic; only the native provider changes)
-- [ ] Keep Orbot detection as a fallback for users who prefer their own Tor, but no longer require it
-
-**Milestone:** Zero open P0/P1 bugs. BLE state machine stable across Pixel, Samsung, and Xiaomi device classes. Embedded Tor on both iOS and Android, no third-party app required. Ready to expand to new platforms.
-
-### v1.3.0: Plugin Integrations
+### v1.2.0: Plugin Integrations
 
 **Goal:** Extend Airhop with opt-in plugins for social federation and regional payment systems, without touching the core protocol.
 
-Airhop's identity model (Ed25519 keypairs, no accounts) is compatible in spirit with both the [AT Protocol](https://atproto.com) (ATProto, used by Bluesky) and [ActivityPub](https://w3.org/TR/activitypub/) (the W3C standard used by Mastodon, Pixelfed, PeerTube, and the broader Fediverse). v1.3.0 introduces `SocialPlugin` and `PaymentPlugin` interfaces that let users opt in to bridging their Airhop identity to these networks and payment systems. Each plugin is a discrete, auditable integration that users enable individually.
+Airhop's identity model (Ed25519 keypairs, no accounts) is compatible in spirit with both the [AT Protocol](https://atproto.com) (ATProto, used by Bluesky) and [ActivityPub](https://w3.org/TR/activitypub/) (the W3C standard used by Mastodon, Pixelfed, PeerTube, and the broader Fediverse). v1.2.0 introduces `SocialPlugin` and `PaymentPlugin` interfaces that let users opt in to bridging their Airhop identity to these networks and payment systems. Each plugin is a discrete, auditable integration that users enable individually.
 
 All plugins are strictly opt-in. Users who do not enable any plugin are unaffected. The BLE mesh protocol, wire format, and on-device encryption are unchanged. No plugin can access private keys or relay traffic without explicit per-action user confirmation.
 
@@ -278,6 +264,20 @@ For Indian users who want to transact in Rupees when online, UPI works cleanly a
 - [ ] Plugin capability model: no plugin can access private keys or contact the network on behalf of the user without a per-action confirmation
 
 **Milestone:** A user can link their Airhop identity to a Bluesky DID and a Mastodon actor, view their Bluesky feed inside Airhop, and optionally cross-post to both networks. Indian users can initiate UPI payments from a contact's profile when online.
+
+### v1.3.0: Stabilization
+
+**Goal:** Harden the shipped release before expanding to new platforms.
+
+No new features ship in this range. The focus is production bugs found after launch, race conditions in the BLE and crypto state machines, UI iteration from real user feedback, and extended cross-device battery and compatibility testing. The mesh backend gets battle-tested across as many device and OS combinations as possible before the codebase expands to new targets.
+
+Alongside stabilization, v1.3.0 ships Airhop's **own embedded Tor binary for Android**, mirroring what `arti.xcframework` already gives iOS. Today Android Tor routing depends on the user installing Orbot (a third-party app) and running it in VPN mode; bundling an Arti-based Android library removes that external dependency so Android gets the same one-toggle, no-install Tor experience as iOS, with no reliance on any third-party app.
+
+- [ ] Bundle an Arti-based Android Tor library (JNI over the Rust `arti` core), exposing the same SOCKS5 endpoint contract as iOS
+- [ ] Route the Android Tor WebSocket through the embedded proxy (the JS Tor routing layer already exists and is platform-agnostic; only the native provider changes)
+- [ ] Keep Orbot detection as a fallback for users who prefer their own Tor, but no longer require it
+
+**Milestone:** Zero open P0/P1 bugs. BLE state machine stable across Pixel, Samsung, and Xiaomi device classes. Embedded Tor on both iOS and Android, no third-party app required. Ready to expand to new platforms.
 
 ### v1.4.0: Web / Browser
 

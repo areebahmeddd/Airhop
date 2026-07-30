@@ -192,6 +192,17 @@ final class AirhopBLEModule: RCTEventEmitter {
                 // an acknowledged write rather than losing the packet.
                 let maxUnacked = peripheral.maximumWriteValueLength(for: .withoutResponse)
                 let writeType: CBCharacteristicWriteType = data.count <= maxUnacked ? .withoutResponse : .withResponse
+                // CoreBluetooth also discards an unacknowledged write issued
+                // while its transmit queue is full, and says so ONLY through
+                // canSendWriteWithoutResponse. Reporting the refusal (as the
+                // Android module already does) is what lets the fragment pacer
+                // hold the chunk and offer it again; writing regardless is how a
+                // file transfer reached 100% here while the far side sat on a
+                // stream missing a fragment it can never ask for.
+                if writeType == .withoutResponse && !peripheral.canSendWriteWithoutResponse {
+                    reject("WRITE_BUSY", "BLE transmit queue full for link \(linkID)", nil)
+                    return
+                }
                 peripheral.writeValue(data, for: characteristic, type: writeType)
                 resolve(nil)
                 return

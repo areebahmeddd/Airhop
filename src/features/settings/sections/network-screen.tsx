@@ -8,7 +8,7 @@ import { validateRelayUrl } from "../../../core/nostr/geo-relay";
 import { getMeshService } from "../../../services/mesh-service";
 import { showAlert } from "../../../store/alert-store";
 import { useSettingsStore } from "../../../store/settings-store";
-import { useThemeColors } from "../../../ui/theme";
+import { HIT_SLOP, useThemeColors } from "../../../ui/theme";
 import {
   GroupDivider,
   SettingRow,
@@ -195,7 +195,7 @@ export default function NetworkScreen({ onBack }: Props): React.JSX.Element {
                       </Text>
                       <Pressable
                         onPress={() => handleRemoveRelay(url)}
-                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                        hitSlop={HIT_SLOP}
                         accessibilityRole="button"
                         accessibilityLabel={`Remove ${url}`}
                       >
@@ -231,7 +231,7 @@ export default function NetworkScreen({ onBack }: Props): React.JSX.Element {
                   {relayInput.trim().length > 0 && (
                     <Pressable
                       onPress={handleAddRelay}
-                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                      hitSlop={HIT_SLOP}
                       accessibilityRole="button"
                       accessibilityLabel="Add relay"
                     >

@@ -3,10 +3,12 @@
 // else. The design communicates confidence through restraint.
 
 import Feather from "@expo/vector-icons/Feather";
+import * as Haptics from "expo-haptics";
 import React, { useMemo, useState } from "react";
 import {
   Linking,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   useWindowDimensions,
@@ -17,6 +19,7 @@ import PrimaryButton from "../../ui/components/primary-button";
 import {
   FontSize,
   FontWeight,
+  HIT_SLOP,
   Radius,
   Spacing,
   useThemeColors,
@@ -48,63 +51,116 @@ export default function WelcomeScreen({
     2,
     Math.round(Math.min(width * 0.5, 240) / BIRD_PIXELS[0].length),
   );
+
+  function toggleAgreed(): void {
+    // A selection tick, the lightest feedback the OS offers, matching how a
+    // native checkbox or picker feels. Not an impact: nothing happened yet.
+    void Haptics.selectionAsync().catch(() => {});
+    setAgreed((v) => !v);
+  }
+
   return (
     <SafeAreaView style={styles.root}>
-      {/* Centered brand mark filling the space above the footer. Uses the
-          primary text color, so it is a black bird on a light background and a
-          white bird in dark mode. */}
-      <View style={styles.hero}>
-        <PixelBird color={Colors.textPrimary} cell={birdCell} />
-      </View>
+      {/* Scrolls only when it has to. `flexGrow: 1` on the content lets the hero
+          keep its `flex: 1` and stay centered on a normal portrait screen; on a
+          short viewport (landscape, a small phone at the largest OS text size)
+          the wordmark, CTA and consent row used to be clipped off the bottom
+          with no way to reach them, which on the very first screen means the
+          app cannot be started at all. */}
+      <ScrollView
+        contentContainerStyle={styles.scroll}
+        showsVerticalScrollIndicator={false}
+        bounces={false}
+      >
+        {/* Centered brand mark filling the space above the footer. Uses the
+            primary text color, so it is a black bird on a light background and a
+            white bird in dark mode. */}
+        {/* minHeight keeps the mark whole once the content is taller than the
+            viewport: with only `flex: 1` the leftover space is zero on a short
+            screen and the bird collapses to nothing. */}
+        <View
+          style={[
+            styles.hero,
+            { minHeight: BIRD_PIXELS.length * birdCell + Spacing["3xl"] },
+          ]}
+        >
+          <PixelBird color={Colors.textPrimary} cell={birdCell} />
+        </View>
 
-      {/* Bottom: wordmark + tagline, left-aligned, then CTA */}
-      <View style={styles.footer}>
-        <View style={styles.textBlock}>
-          <Text style={styles.wordmark}>airhop</Text>
-          <Text style={styles.tagline}>Private mesh communication.</Text>
-        </View>
-        <View style={styles.actions}>
-          <PrimaryButton
-            label="Get started"
-            onPress={onContinue}
-            disabled={!agreed}
-            accessibilityLabel="Get started"
-          />
-          <Pressable
-            style={styles.agreement}
-            onPress={() => setAgreed((v) => !v)}
-            accessibilityRole="checkbox"
-            accessibilityState={{ checked: agreed }}
-            accessibilityLabel="Agree to the Terms of Service and Privacy Policy"
-            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-          >
-            <View style={[styles.checkbox, agreed && styles.checkboxChecked]}>
-              {agreed ? (
-                <Feather name="check" size={13} color={Colors.textInverse} />
-              ) : null}
-            </View>
-            <Text style={styles.agreementText}>
-              By tapping Get started, you agree to our{" "}
-              <Text
-                style={styles.link}
-                onPress={() => void Linking.openURL(TERMS_URL)}
-                suppressHighlighting
-              >
-                Terms of Service
-              </Text>{" "}
-              and{" "}
-              <Text
-                style={styles.link}
-                onPress={() => void Linking.openURL(PRIVACY_URL)}
-                suppressHighlighting
-              >
-                Privacy Policy
-              </Text>
-              .
+        {/* Bottom: wordmark + tagline, left-aligned, then CTA */}
+        <View style={styles.footer}>
+          <View style={styles.textBlock}>
+            <Text style={styles.wordmark} accessibilityRole="header">
+              airhop
             </Text>
-          </Pressable>
+            <Text style={styles.tagline}>Private mesh communication.</Text>
+          </View>
+          <View style={styles.actions}>
+            <PrimaryButton
+              label="Get started"
+              onPress={onContinue}
+              disabled={!agreed}
+              accessibilityLabel="Get started"
+              // A dimmed button with no stated reason is a dead end. The hint is
+              // read out the moment focus lands on it, so the blocker is
+              // announced before the tap that would do nothing.
+              accessibilityHint={
+                agreed ? undefined : "Agree to the terms below to continue"
+              }
+            />
+            <Pressable
+              style={styles.agreement}
+              onPress={toggleAgreed}
+              accessibilityRole="checkbox"
+              accessibilityState={{ checked: agreed }}
+              accessibilityLabel="Agree to the Terms of Service and Privacy Policy"
+              // The two inline links are inside an accessible parent, which
+              // means a screen reader treats the whole row as one element and
+              // never reaches them. Exposing them as custom actions is the
+              // supported way back in: VoiceOver and TalkBack both offer them
+              // from the actions menu, so the documents are reachable without
+              // breaking the row into three separate stops.
+              accessibilityActions={[
+                { name: "terms", label: "Open Terms of Service" },
+                { name: "privacy", label: "Open Privacy Policy" },
+              ]}
+              onAccessibilityAction={(event) => {
+                if (event.nativeEvent.actionName === "terms") {
+                  void Linking.openURL(TERMS_URL);
+                } else if (event.nativeEvent.actionName === "privacy") {
+                  void Linking.openURL(PRIVACY_URL);
+                }
+              }}
+              hitSlop={HIT_SLOP}
+            >
+              <View style={[styles.checkbox, agreed && styles.checkboxChecked]}>
+                {agreed ? (
+                  <Feather name="check" size={13} color={Colors.textInverse} />
+                ) : null}
+              </View>
+              <Text style={styles.agreementText}>
+                By tapping Get started, you agree to our{" "}
+                <Text
+                  style={styles.link}
+                  onPress={() => void Linking.openURL(TERMS_URL)}
+                  suppressHighlighting
+                >
+                  Terms of Service
+                </Text>{" "}
+                and{" "}
+                <Text
+                  style={styles.link}
+                  onPress={() => void Linking.openURL(PRIVACY_URL)}
+                  suppressHighlighting
+                >
+                  Privacy Policy
+                </Text>
+                .
+              </Text>
+            </Pressable>
+          </View>
         </View>
-      </View>
+      </ScrollView>
 
       <HelloSheet visible={showHello} onClose={() => setShowHello(false)} />
     </SafeAreaView>
@@ -157,6 +213,9 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
     root: {
       flex: 1,
       backgroundColor: Colors.bg,
+    },
+    scroll: {
+      flexGrow: 1,
     },
     // Fills the space above the footer and centers the brand mark in it.
     hero: {

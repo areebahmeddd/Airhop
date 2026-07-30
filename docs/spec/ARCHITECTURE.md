@@ -597,10 +597,10 @@ Each decision records what was considered, what was chosen, and why.
 | Package                          | Version | Purpose                                                          | License |
 | -------------------------------- | ------- | ---------------------------------------------------------------- | ------- |
 | `@noble/curves`                  | `^2.2`  | X25519, Ed25519 (Noise XX, signing)                              | MIT     |
-| `@noble/ciphers`                 | `^2.2`  | ChaCha20-Poly1305 (Noise, Nostr NIP-44                           | MIT     |
+| `@noble/ciphers`                 | `^2.2`  | ChaCha20-Poly1305 (Noise, Nostr NIP-44)                          | MIT     |
 | `@noble/hashes`                  | `^2.2`  | SHA-256, HKDF, HMAC                                              | MIT     |
-| `react-native-get-random-values` | `^2.0`  | Polyfill `crypto.getRandomValues` for @noble (requires RN ≥0.81) | MIT     |
-| `nostr-tools`                    | `^2.23` | Nostr client, NIP-17/59 gift-wrap                                | MIT     |
+| `react-native-get-random-values` | `~1.11` | Polyfill `crypto.getRandomValues` for @noble (Expo SDK 57 pin)   | MIT     |
+| `nostr-tools`                    | `^2.24` | Nostr client, NIP-17/59 gift-wrap                                | MIT     |
 | `react-native-encrypted-storage` | `^4.0`  | Private key storage (Keychain/Keystore)                          | MIT     |
 | `react-native-mmkv`              | `^4.3`  | Fast JSI key-value store (requires `react-native-nitro-modules`) | MIT     |
 | `react-native-nitro-modules`     | `^0.36` | Peer dep for react-native-mmkv v4                                | MIT     |

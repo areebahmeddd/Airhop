@@ -157,11 +157,11 @@ describe("joinPrivateChannel", () => {
     expect(state().channelReach["#secret"]).toBe("ble+nostr");
   });
 
-  it("does not duplicate the channel when joined twice", () => {
+  it("does not duplicate the channel when the same room is joined twice", () => {
     state().joinPrivateChannel("#secret", "k1", false);
-    state().joinPrivateChannel("#secret", "k2", false);
+    state().joinPrivateChannel("#secret", "k1", false);
     expect(state().channels.filter((c) => c === "#secret")).toHaveLength(1);
-    expect(state().channelKeys["#secret"]).toBe("k2");
+    expect(state().channelKeys["#secret"]).toBe("k1");
   });
 
   it("drops the key and reach when the channel is removed", () => {
@@ -334,5 +334,62 @@ describe("mergeChannel", () => {
     state().addMessage(makeMessage({ id: "m1", channel: "#test" }));
     state().mergeChannel("#test", "#test");
     expect(state().messages["#test"]).toHaveLength(1);
+  });
+});
+
+// A private channel is identified by its KEY, never its name: the name is a
+// local label that never touches the wire, so two unrelated rooms can both be
+// called "#team". Joining the second under the same label used to overwrite the
+// first one's key, which silently orphaned a room the user was still in (its
+// traffic no longer decrypted). These pin the rule that a clash gets its own
+// room and that re-joining one you already hold is idempotent.
+describe("joinPrivateChannel key clashes", () => {
+  const KEY_A = "a".repeat(43);
+  const KEY_B = "b".repeat(43);
+
+  it("keeps the asked-for name when it is free", () => {
+    expect(state().joinPrivateChannel("#team", KEY_A, false)).toBe("#team");
+    expect(state().channelKeys["#team"]).toBe(KEY_A);
+  });
+
+  it("is idempotent for the same name and key", () => {
+    state().joinPrivateChannel("#team", KEY_A, false);
+    expect(state().joinPrivateChannel("#team", KEY_A, true)).toBe("#team");
+    expect(state().channels.filter((c) => c === "#team")).toHaveLength(1);
+    // Reach still follows the newer invite.
+    expect(state().channelReach["#team"]).toBe("ble+nostr");
+  });
+
+  it("gives a different key its own room instead of stealing the label", () => {
+    state().joinPrivateChannel("#team", KEY_A, false);
+    const landed = state().joinPrivateChannel("#team", KEY_B, false);
+
+    expect(landed).toBe("#team-2");
+    // The room already joined is untouched: same label, same key.
+    expect(state().channelKeys["#team"]).toBe(KEY_A);
+    expect(state().channelKeys["#team-2"]).toBe(KEY_B);
+    expect(state().channels).toContain("#team");
+    expect(state().channels).toContain("#team-2");
+  });
+
+  it("returns the existing room when that key is already held elsewhere", () => {
+    state().joinPrivateChannel("#team", KEY_A, false);
+    state().joinPrivateChannel("#team", KEY_B, false); // lands in #team-2
+    // The same invite again, under its original name: go back to #team-2
+    // rather than minting #team-3 on every re-tap.
+    expect(state().joinPrivateChannel("#team", KEY_B, false)).toBe("#team-2");
+    expect(state().channels.filter((c) => c.startsWith("#team"))).toHaveLength(
+      2,
+    );
+  });
+
+  it("keeps a suffixed label short enough to survive an invite link", () => {
+    // 30 chars is the parser's ceiling; a name at the limit must still fit
+    // once "-2" is appended, or the room could never be shared onwards.
+    const long = "#" + "x".repeat(30);
+    state().joinPrivateChannel(long, KEY_A, false);
+    const landed = state().joinPrivateChannel(long, KEY_B, false);
+    expect(landed.length - 1).toBeLessThanOrEqual(30);
+    expect(landed.endsWith("-2")).toBe(true);
   });
 });

@@ -256,8 +256,8 @@ export default function PrivacyPage() {
               <li>
                 <strong>Tor.</strong> On Android, Orbot covers mint traffic along with everything
                 else. On iOS, Tor only wraps Nostr connections, so{" "}
-                <strong>mint requests are blocked while Tor is on</strong> unless you opt in under
-                Privacy &amp; Security. Mesh payments are unaffected either way.
+                <strong>mint requests are blocked while Tor is on</strong> unless you opt in beside
+                the Tor switch in Settings. Mesh payments are unaffected either way.
               </li>
               <li>
                 <strong>Nutzaps are public.</strong> A NIP-61 nutzap is an unencrypted Nostr event.

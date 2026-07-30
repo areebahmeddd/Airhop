@@ -2,9 +2,13 @@
 //
 // Spec: https://signal.org/docs/specifications/doubleratchet/
 //
-// Provides per-message forward secrecy and break-in recovery. Used for all
-// offline courier DMs. Initialized from a root key derived by static-static
-// ECDH over the two peers' Noise static keys (see mesh-service.ts).
+// Provides per-message forward secrecy and break-in recovery. Used for LIVE
+// direct messages between two Airhop peers (packet type DR_ENCRYPTED); offline
+// courier mail takes the one-way Noise X + one-time prekey path instead.
+//
+// The root key comes from the completed Noise XX handshake's transcript hash,
+// which commits to both parties' ephemeral keys, so it cannot be reconstructed
+// from long-term keys after the fact. See tryInitDR in mesh-service.ts.
 //
 // The ratchet has two interleaved components:
 //   Symmetric-key ratchet: derives sending/receiving message keys from chain keys
@@ -146,8 +150,11 @@ export interface RatchetState {
 // ---- Initialization ---------------------------------------------------------
 
 // Initialize the ratchet as the SENDER (Alice):
-//   - rk:   shared secret from the static-static ECDH (32 bytes)
-//   - dhPub: recipient's signed prekey public (Bob's SPK_pub, 32 bytes)
+//   - rk:    the shared root key (32 bytes), from the Noise handshake transcript
+//   - dhPub: the key Bob's ratchet starts on, which is his Noise static public
+//            key. Alice cannot know a fresh ephemeral of Bob's without another
+//            round-trip, and the transcript-derived root key is what keeps this
+//            chain secret despite that key being long-lived.
 //
 // Alice performs the first DH ratchet step immediately so she can send.
 export function initSender(rk: Uint8Array, dhPub: Uint8Array): RatchetState {
@@ -168,11 +175,12 @@ export function initSender(rk: Uint8Array, dhPub: Uint8Array): RatchetState {
 }
 
 // Initialize the ratchet as the RECEIVER (Bob):
-//   - rk:       shared secret from the static-static ECDH (32 bytes)
-//   - dhsPriv:  Bob's signed prekey private (SPK_priv, 32 bytes)
+//   - rk:      the same root key Alice derived (32 bytes)
+//   - dhsPriv: Bob's Noise static private key, the counterpart to the public key
+//             Alice started her chain against
 //
-// Bob holds the key pair used by Alice to initialize; he waits for her first
-// message to perform his first DH ratchet step.
+// Bob's ratchet begins on that long-term key and rotates to a fresh one on his
+// first DH ratchet step, which happens when he replies.
 export function initReceiver(
   rk: Uint8Array,
   dhsPriv: Uint8Array,

@@ -12,7 +12,9 @@ import { useTransferStore } from "../../store/transfer-store";
 import {
   FontSize,
   FontWeight,
+  MaxFontScale,
   Radius,
+  Shadow,
   Spacing,
   useThemeColors,
 } from "../theme";
@@ -67,10 +69,19 @@ export default function TransferBadge({
         size={16}
         color={stalled ? Colors.syncing : Colors.accent}
       />
-      <Text style={styles.label} numberOfLines={1}>
+      {/* Capped like the tab bar's labels: this is a fixed-height floating pill
+          with a filename in it, so at the largest OS text size an uncapped label
+          burst the shape rather than becoming more readable. */}
+      <Text
+        style={styles.label}
+        numberOfLines={1}
+        maxFontSizeMultiplier={MaxFontScale.chrome}
+      >
         {label}
       </Text>
-      <Text style={styles.pct}>{pct}%</Text>
+      <Text style={styles.pct} maxFontSizeMultiplier={MaxFontScale.chrome}>
+        {pct}%
+      </Text>
       <View style={styles.track}>
         <View
           style={[
@@ -99,11 +110,7 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       borderRadius: Radius.full,
       backgroundColor: Colors.surface,
       overflow: "hidden",
-      shadowColor: "#000",
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.1,
-      shadowRadius: 6,
-      elevation: 4,
+      ...Shadow.medium,
     },
     label: {
       flex: 1,

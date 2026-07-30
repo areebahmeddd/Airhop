@@ -24,16 +24,22 @@ import { useContactsStore } from "../../store/contacts-store";
 import { usePeerStore } from "../../store/peer-store";
 import Avatar from "../../ui/components/avatar";
 import BottomSheet from "../../ui/components/bottom-sheet";
+import EmptyState from "../../ui/components/empty-state";
 import {
+  Duration,
   FontSize,
   FontWeight,
+  MaxFontScale,
+  MIN_TOUCH,
   Radius,
   Spacing,
   TAB_BAR_CLEARANCE,
   useThemeColors,
 } from "../../ui/theme";
+import { usePullRefreshColors } from "../../ui/use-pull-refresh";
 import { sortConversationsByActivity } from "../../utils/conversation-order";
 import { resolveDisplayName } from "../../utils/display-name";
+import { formatListTimestamp } from "../../utils/format";
 import { messagePreviewText } from "../../utils/message-preview";
 import ContactInfoSheet from "./contact-info-sheet";
 
@@ -49,6 +55,7 @@ interface Props {
 export default function DmList({ onSelectDM }: Props): React.JSX.Element {
   const Colors = useThemeColors();
   const styles = useMemo(() => createStyles(Colors), [Colors]);
+  const pullRefreshColors = usePullRefreshColors();
   const {
     channels,
     messages,
@@ -216,12 +223,35 @@ export default function DmList({ onSelectDM }: Props): React.JSX.Element {
           const isPinned = pinnedChannels.includes(item);
           const isMuted = mutedChannels.includes(item);
 
+          // Formatted once for both the visible timestamp and the label below.
+          const timeLabel =
+            last === undefined ? null : formatListTimestamp(last.timestampMs);
+
+          // The whole row as one sentence, matching the room list. Previously
+          // only the name and online state were spoken, so the unread count,
+          // last message and time (all on screen) were inaudible.
+          const rowLabel = [
+            username,
+            isOnline ? "in range" : null,
+            (unreadCounts[item] ?? 0) > 0
+              ? `${String(unreadCounts[item] ?? 0)} unread`
+              : null,
+            isMuted ? "muted" : null,
+            isPinned ? "pinned" : null,
+            last
+              ? `${last.isMine ? "You: " : ""}${messagePreviewText(last)}`
+              : "No messages yet",
+            timeLabel,
+          ]
+            .filter((part) => part !== null)
+            .join(", ");
+
           const row = (
             <Pressable
               style={styles.row}
               onPress={() => onSelectDM(item)}
               accessibilityRole="button"
-              accessibilityLabel={`Open DM with ${username}${isOnline ? ", online" : ""}`}
+              accessibilityLabel={rowLabel}
             >
               {/* Avatar with presence dot (green in range, grey otherwise) */}
               <Avatar
@@ -239,9 +269,7 @@ export default function DmList({ onSelectDM }: Props): React.JSX.Element {
                   </Text>
                   <View style={styles.rowMeta}>
                     {last ? (
-                      <Text style={styles.timestamp}>
-                        {formatTime(last.timestampMs)}
-                      </Text>
+                      <Text style={styles.timestamp}>{timeLabel}</Text>
                     ) : null}
                     {isMuted && (
                       <Feather
@@ -271,8 +299,15 @@ export default function DmList({ onSelectDM }: Props): React.JSX.Element {
                     <Text style={styles.previewEmpty}>No messages yet</Text>
                   )}
                   {(unreadCounts[item] ?? 0) > 0 && (
-                    <View style={styles.badge}>
-                      <Text style={styles.badgeText}>
+                    <View
+                      style={styles.badge}
+                      importantForAccessibility="no-hide-descendants"
+                      accessibilityElementsHidden
+                    >
+                      <Text
+                        style={styles.badgeText}
+                        maxFontSizeMultiplier={MaxFontScale.badge}
+                      >
                         {(unreadCounts[item] ?? 0) > 99
                           ? "99+"
                           : String(unreadCounts[item] ?? 0)}
@@ -290,8 +325,8 @@ export default function DmList({ onSelectDM }: Props): React.JSX.Element {
           // and fading in/out on add/remove.
           return (
             <Animated.View
-              layout={LinearTransition.duration(220)}
-              entering={FadeIn.duration(180)}
+              layout={LinearTransition.duration(Duration.slow)}
+              entering={FadeIn.duration(Duration.base)}
             >
               <Swipeable
                 ref={(ref) => {
@@ -327,22 +362,15 @@ export default function DmList({ onSelectDM }: Props): React.JSX.Element {
           <RefreshControl
             refreshing={refreshing}
             onRefresh={handleRefresh}
-            tintColor={Colors.textMuted}
+            {...pullRefreshColors}
           />
         }
         ListEmptyComponent={
-          <View style={styles.emptyState}>
-            <Feather
-              name="message-circle"
-              size={36}
-              color={Colors.textMuted}
-              style={{ opacity: 0.4 }}
-            />
-            <Text style={styles.emptyTitle}>No direct messages</Text>
-            <Text style={styles.emptySubtitle}>
-              Go to the Mesh tab and tap a peer{"\n"}to start an encrypted DM.
-            </Text>
-          </View>
+          <EmptyState
+            icon="message-circle"
+            title="No direct messages"
+            subtitle="Go to the Mesh tab and tap a peer to start an encrypted DM."
+          />
         }
         contentContainerStyle={styles.list}
       />
@@ -433,9 +461,9 @@ export default function DmList({ onSelectDM }: Props): React.JSX.Element {
             </View>
 
             {/* Destructive actions in their own red box. */}
-            <View style={styles.moreRowsGroupDanger}>
+            <View style={styles.moreRowsGroup}>
               <Pressable
-                style={styles.moreRowDanger}
+                style={styles.moreRow}
                 onPress={() => handleRemoveContactDM(moreOptionsDM)}
                 accessibilityRole="button"
               >
@@ -445,9 +473,9 @@ export default function DmList({ onSelectDM }: Props): React.JSX.Element {
                 </Text>
               </Pressable>
 
-              <View style={styles.moreDividerDanger} />
+              <View style={styles.moreDivider} />
               <Pressable
-                style={styles.moreRowDanger}
+                style={styles.moreRow}
                 onPress={() => handleBlockDM(moreOptionsDM)}
                 accessibilityRole="button"
               >
@@ -457,9 +485,9 @@ export default function DmList({ onSelectDM }: Props): React.JSX.Element {
                 </Text>
               </Pressable>
 
-              <View style={styles.moreDividerDanger} />
+              <View style={styles.moreDivider} />
               <Pressable
-                style={styles.moreRowDanger}
+                style={styles.moreRow}
                 onPress={() => handleDeleteDM(moreOptionsDM)}
                 accessibilityRole="button"
               >
@@ -479,19 +507,6 @@ export default function DmList({ onSelectDM }: Props): React.JSX.Element {
       />
     </View>
   );
-}
-
-function formatTime(ms: number): string {
-  const d = new Date(ms);
-  const now = new Date();
-  if (
-    d.getDate() === now.getDate() &&
-    d.getMonth() === now.getMonth() &&
-    d.getFullYear() === now.getFullYear()
-  ) {
-    return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-  }
-  return d.toLocaleDateString([], { month: "short", day: "numeric" });
 }
 
 function createStyles(Colors: ReturnType<typeof useThemeColors>) {
@@ -567,39 +582,6 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       marginLeft: 62, // avatar (46) + gap (16)
     },
     // Empty state
-    emptyState: {
-      flex: 1,
-      alignItems: "center",
-      justifyContent: "center",
-      paddingVertical: Spacing["4xl"],
-      gap: Spacing.md,
-    },
-    emptyIcon: {
-      width: 64,
-      height: 64,
-      borderRadius: 32,
-      backgroundColor: Colors.surface,
-      borderWidth: 1,
-      borderColor: Colors.border,
-      alignItems: "center",
-      justifyContent: "center",
-      marginBottom: Spacing.sm,
-    },
-    emptyIconText: {
-      fontSize: FontSize.xl,
-      color: Colors.textMuted,
-    },
-    emptyTitle: {
-      fontSize: FontSize.md,
-      fontWeight: FontWeight.semibold,
-      color: Colors.textSecondary,
-    },
-    emptySubtitle: {
-      fontSize: FontSize.sm,
-      color: Colors.textMuted,
-      textAlign: "center",
-      lineHeight: FontSize.sm * 1.6,
-    },
     badge: {
       backgroundColor: Colors.accent,
       borderRadius: Radius.full,
@@ -612,7 +594,8 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       flexShrink: 0,
     },
     badgeText: {
-      fontSize: 10,
+      fontSize: FontSize["2xs"],
+      fontVariant: ["tabular-nums"],
       fontWeight: FontWeight.bold,
       color: Colors.textInverse,
     },
@@ -650,15 +633,17 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       fontWeight: FontWeight.semibold,
       color: Colors.textPrimary,
     },
-    // Two grouped boxes: neutral actions in one card, destructive in a solid
-    // red card. Rows are transparent; the card owns the background and the
-    // rounded corners (overflow clips the rows to the radius).
+    // Two grouped boxes: neutral actions in one card, destructive in another, so
+    // a mis-tap cannot cross from Mute into Block. Rows are transparent; the card
+    // owns the background and the rounded corners (overflow clips the rows to the
+    // radius).
+    //
+    // The "-Danger" halves of all three of these were byte-identical copies of
+    // their neutral counterparts, kept alive by a comment promising "a solid red
+    // card" that the code never delivered. What separates the destructive group
+    // is being a separate box with red content in it, and that is what these
+    // three styles plus moreRowTextDanger now say, once each.
     moreRowsGroup: {
-      backgroundColor: Colors.surfaceRaised,
-      borderRadius: Radius.lg,
-      overflow: "hidden",
-    },
-    moreRowsGroupDanger: {
       backgroundColor: Colors.surfaceRaised,
       borderRadius: Radius.lg,
       overflow: "hidden",
@@ -669,20 +654,11 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       gap: Spacing.md,
       paddingVertical: Spacing.md,
       paddingHorizontal: Spacing.base,
-    },
-    moreRowDanger: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: Spacing.md,
-      paddingVertical: Spacing.md,
-      paddingHorizontal: Spacing.base,
+      // Same 44pt floor as the room list's sheet. Half the rows here are
+      // destructive, which is where an undersized target costs the most.
+      minHeight: MIN_TOUCH,
     },
     moreDivider: {
-      height: StyleSheet.hairlineWidth,
-      backgroundColor: Colors.border,
-      marginLeft: Spacing.base,
-    },
-    moreDividerDanger: {
       height: StyleSheet.hairlineWidth,
       backgroundColor: Colors.border,
       marginLeft: Spacing.base,

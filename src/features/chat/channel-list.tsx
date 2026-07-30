@@ -33,16 +33,23 @@ import { useGroupStore } from "../../store/group-store";
 import { usePeerStore } from "../../store/peer-store";
 import { usePlaceNamesStore } from "../../store/place-names-store";
 import BottomSheet from "../../ui/components/bottom-sheet";
+import EmptyState from "../../ui/components/empty-state";
 import {
+  Duration,
   FontSize,
   FontWeight,
+  MaxFontScale,
+  MIN_TOUCH,
   Radius,
   Spacing,
   TAB_BAR_CLEARANCE,
   useThemeColors,
 } from "../../ui/theme";
+import { usePullRefreshColors } from "../../ui/use-pull-refresh";
 import { sortConversationsByActivity } from "../../utils/conversation-order";
+import { formatListTimestamp } from "../../utils/format";
 import { messagePreviewText } from "../../utils/message-preview";
+import { sumUnread } from "../../utils/unread";
 import ChannelInfoSheet from "./channel-info-sheet";
 
 // ---------------------------------------------------------------------------
@@ -166,6 +173,7 @@ export default function ChannelList({
 }: Props): React.JSX.Element {
   const Colors = useThemeColors();
   const styles = useMemo(() => createStyles(Colors), [Colors]);
+  const pullRefreshColors = usePullRefreshColors();
   const {
     channels,
     messages,
@@ -281,13 +289,15 @@ export default function ChannelList({
   // Section-level unread totals, computed from the FULL channel list (not the
   // possibly-collapsed/sliced `data` below) so the badge stays accurate even
   // while a section is collapsed or showing only its top rows.
-  // Section badge totals exclude muted channels, matching the app-level badges:
-  // a muted channel keeps its own per-row count but does not add to any header.
-  function sumUnread(list: string[]): number {
-    return list.reduce(
-      (sum, c) =>
-        sum + (mutedChannels.includes(c) ? 0 : (unreadCounts[c] ?? 0)),
-      0,
+  //
+  // Delegates to utils/unread rather than re-implementing the muted rule, which
+  // is what this had been doing: the same "a muted channel keeps its own row
+  // count but adds to no header" decision written out twice, in two shapes, in
+  // two files that both have to change together.
+  function sectionUnread(list: string[]): number {
+    const inSection = new Set(list);
+    return sumUnread(unreadCounts, mutedChannels, (channel) =>
+      inSection.has(channel),
     );
   }
 
@@ -295,7 +305,7 @@ export default function ChannelList({
     {
       title: "Default Rooms",
       isDefault: true,
-      unread: sumUnread(defaultChannels),
+      unread: sectionUnread(defaultChannels),
       data: collapsedSections.has("Default Rooms")
         ? []
         : showAllDefault
@@ -305,7 +315,7 @@ export default function ChannelList({
     {
       title: "Your Rooms",
       isDefault: false,
-      unread: sumUnread(ownChannels),
+      unread: sectionUnread(ownChannels),
       data: collapsedSections.has("Your Rooms") ? [] : ownChannels,
     },
   ];
@@ -412,12 +422,35 @@ export default function ChannelList({
     const presenceCount = isGeo ? (geoCounts[item] ?? 0) + 1 : peerCount;
     const presenceLabel = isGeo ? "active" : "nearby";
 
+    // Formatted once and used by both the visible timestamp and the label
+    // below. Calling the formatter twice per row meant building three Date
+    // objects per row per render, on the app's longest list.
+    const timeLabel =
+      last === undefined ? null : formatListTimestamp(last.timestampMs);
+
+    // Everything the row shows, as one sentence, in the order the eye takes it.
+    // The label was just "Open channel #city": the unread count, who spoke last,
+    // whether it is muted and how long ago were all on screen and none of them
+    // were spoken, which is precisely the information you scan a chat list for.
+    const rowLabel = [
+      isGroup ? `Group ${groupName ?? "Group"}` : `Room ${channelLabel(item)}`,
+      unread > 0 ? `${String(unread)} unread` : null,
+      isMuted ? "muted" : null,
+      isPinned ? "pinned" : null,
+      last
+        ? `${last.isMine ? "You" : last.senderNickname}: ${messagePreviewText(last)}`
+        : "No messages yet",
+      timeLabel,
+    ]
+      .filter((part) => part !== null)
+      .join(", ");
+
     const row = (
       <Pressable
         style={styles.channelRow}
         onPress={() => onSelectChannel(item)}
         accessibilityRole="button"
-        accessibilityLabel={`Open ${isGroup ? "group" : "channel"} ${groupName ?? item}`}
+        accessibilityLabel={rowLabel}
       >
         <View style={styles.channelRowBody}>
           {/* Head line: channel name + timestamp + pin indicator */}
@@ -441,11 +474,7 @@ export default function ChannelList({
               )}
             </View>
             <View style={styles.channelRowMeta}>
-              {last && (
-                <Text style={styles.channelTimestamp}>
-                  {formatTime(last.timestampMs)}
-                </Text>
-              )}
+              {last && <Text style={styles.channelTimestamp}>{timeLabel}</Text>}
               {isMuted && (
                 <Feather name="bell-off" size={13} color={Colors.textMuted} />
               )}
@@ -498,8 +527,8 @@ export default function ChannelList({
     // there's no separate inline info icon anywhere.
     return (
       <Animated.View
-        layout={LinearTransition.duration(220)}
-        entering={FadeIn.duration(180)}
+        layout={LinearTransition.duration(Duration.slow)}
+        entering={FadeIn.duration(Duration.base)}
       >
         <Swipeable
           ref={(ref) => {
@@ -548,12 +577,29 @@ export default function ChannelList({
               style={styles.sectionHeader}
               onPress={() => toggleSection(section.title)}
               accessibilityRole="button"
-              accessibilityLabel={`${isCollapsed ? "Expand" : "Collapse"} ${section.title}`}
+              accessibilityLabel={
+                section.unread > 0
+                  ? `${section.title}, ${String(section.unread)} unread`
+                  : section.title
+              }
+              // `expanded` is what makes the chevron mean something to a screen
+              // reader. Naming the action in the label instead ("Collapse Your
+              // Rooms") stated the next tap but never the current state, so
+              // there was no way to tell an expanded section from a collapsed
+              // one without counting the rows underneath.
+              accessibilityState={{ expanded: !isCollapsed }}
             >
               <Text style={styles.sectionTitle}>{section.title}</Text>
               {section.unread > 0 && (
-                <View style={styles.sectionBadge}>
-                  <Text style={styles.sectionBadgeText}>
+                <View
+                  style={styles.sectionBadge}
+                  importantForAccessibility="no-hide-descendants"
+                  accessibilityElementsHidden
+                >
+                  <Text
+                    style={styles.sectionBadgeText}
+                    maxFontSizeMultiplier={MaxFontScale.badge}
+                  >
                     {section.unread > 99 ? "99+" : section.unread}
                   </Text>
                 </View>
@@ -600,19 +646,18 @@ export default function ChannelList({
 
           if (ownChannels.length > 0) return null;
           return (
-            <View style={styles.ownEmpty}>
-              <Feather
-                name="hash"
-                size={26}
-                color={Colors.textMuted}
-                style={styles.ownEmptyIcon}
-              />
-              <Text style={styles.ownEmptyText}>No rooms yet</Text>
-              <Text style={styles.ownEmptyHint}>
-                Tap <Text style={styles.ownEmptyAccent}>+</Text> above to join
-                or create one
-              </Text>
-            </View>
+            <EmptyState
+              compact
+              icon="hash"
+              title="No rooms yet"
+              subtitle={
+                <Text style={styles.ownEmptyHint}>
+                  Tap <Text style={styles.ownEmptyAccent}>+</Text> above to join
+                  or create one
+                </Text>
+              }
+              accessibilityLabel="No rooms yet. Use the add button in the header to join or create one"
+            />
           );
         }}
         ItemSeparatorComponent={() => <View style={styles.separator} />}
@@ -620,7 +665,7 @@ export default function ChannelList({
           <RefreshControl
             refreshing={refreshing}
             onRefresh={handleRefresh}
-            tintColor={Colors.textMuted}
+            {...pullRefreshColors}
           />
         }
         stickySectionHeadersEnabled={false}
@@ -722,9 +767,9 @@ export default function ChannelList({
             {/* Destructive action in its own red box. Default channels are
                     built-in and can't be left, so they have no red group. */}
             {!DEFAULT_CHANNEL_NAMES.has(moreOptionsChannel) && (
-              <View style={styles.moreRowsGroupDanger}>
+              <View style={styles.moreRowsGroup}>
                 <Pressable
-                  style={styles.moreRowDanger}
+                  style={styles.moreRow}
                   onPress={() => handleLeaveChannel(moreOptionsChannel)}
                   accessibilityRole="button"
                 >
@@ -746,18 +791,6 @@ export default function ChannelList({
       />
     </View>
   );
-}
-
-function formatTime(ms: number): string {
-  const d = new Date(ms);
-  const now = new Date();
-  const isToday =
-    d.getDate() === now.getDate() &&
-    d.getMonth() === now.getMonth() &&
-    d.getFullYear() === now.getFullYear();
-  return isToday
-    ? d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
-    : d.toLocaleDateString([], { month: "short", day: "numeric" });
 }
 
 // ---------------------------------------------------------------------------
@@ -782,12 +815,15 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
     // ALL of them instead of just pushing the chevron to the far edge.
     // sectionHeaderSpacer (flex: 1) does that job instead, so the title always
     // sits flush at the same left inset (ROW_INSET) as a channel row's "#".
+    // paddingBottom raised from sm to md: the header is tappable (it collapses
+    // the section) and at 8 it measured ~39pt tall. hitSlop is not usable here
+    // because it would reach into the first row beneath it.
     sectionHeader: {
       flexDirection: "row",
       alignItems: "center",
       paddingHorizontal: ROW_INSET,
       paddingTop: Spacing.lg,
-      paddingBottom: Spacing.sm,
+      paddingBottom: Spacing.md,
       backgroundColor: Colors.bg,
     },
     sectionTitle: {
@@ -811,9 +847,10 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       marginLeft: Spacing.xs,
     },
     sectionBadgeText: {
-      fontSize: 10,
+      fontSize: FontSize["2xs"],
       fontWeight: FontWeight.bold,
       color: Colors.textInverse,
+      fontVariant: ["tabular-nums"],
     },
     // Shared 20x20 trailing-icon slot for the section collapse chevron.
     trailingIconBtn: {
@@ -909,9 +946,10 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       paddingHorizontal: 5,
     },
     channelUnreadBadgeText: {
-      fontSize: 10,
+      fontSize: FontSize["2xs"],
       fontWeight: FontWeight.bold,
       color: Colors.textInverse,
+      fontVariant: ["tabular-nums"],
     },
     separator: {
       height: StyleSheet.hairlineWidth,
@@ -939,17 +977,20 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
 
     // ---- Your Rooms: "More" sheet --------------------------------------------
 
-    // Tight, boxed group, not spread out with the sheet's default gap,
-    // which reads as loose and disconnected for a same-purpose action list.
-    // Two grouped boxes: neutral actions in one card, destructive in a solid
-    // red card. Rows are transparent; the card owns the background and the
-    // rounded corners (overflow clips the rows to the radius).
+    // Tight, boxed group, not spread out with the sheet's default gap, which
+    // reads as loose and disconnected for a same-purpose action list. Rows are
+    // transparent; the card owns the background and the rounded corners
+    // (overflow clips the rows to the radius).
+    //
+    // There were four styles here, not two: `moreRowsGroupDanger` was
+    // byte-identical to `moreRowsGroup` and `moreRowDanger` to `moreRow`. The
+    // comment they carried promised "destructive in a solid red card", which
+    // was never true and had drifted away from the code long ago. What actually
+    // separates the destructive group is that it is a SEPARATE box (so a
+    // mis-tap cannot cross from Mute into Leave) with red content inside, and
+    // that reads correctly. So: one box style, one row style, and the red lives
+    // where it belongs, on the icon and the label.
     moreRowsGroup: {
-      backgroundColor: Colors.surfaceRaised,
-      borderRadius: Radius.lg,
-      overflow: "hidden",
-    },
-    moreRowsGroupDanger: {
       backgroundColor: Colors.surfaceRaised,
       borderRadius: Radius.lg,
       overflow: "hidden",
@@ -960,13 +1001,9 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       gap: Spacing.md,
       paddingVertical: Spacing.md,
       paddingHorizontal: Spacing.base,
-    },
-    moreRowDanger: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: Spacing.md,
-      paddingVertical: Spacing.md,
-      paddingHorizontal: Spacing.base,
+      // At 12pt padding around a 15pt label the row measured 39pt. Every action
+      // in this sheet is a one-tap commitment, several destructive.
+      minHeight: MIN_TOUCH,
     },
     moreDivider: {
       height: StyleSheet.hairlineWidth,
@@ -990,6 +1027,7 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       justifyContent: "center",
       gap: Spacing.xs,
       paddingVertical: Spacing.md,
+      minHeight: MIN_TOUCH,
       backgroundColor: Colors.bg,
     },
     showMoreText: {
@@ -1000,23 +1038,9 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
 
     // ---- Your Rooms empty state ---------------------------------------------
 
-    ownEmpty: {
-      alignItems: "center",
-      justifyContent: "center",
-      paddingHorizontal: Spacing.xl,
-      paddingVertical: Spacing["2xl"],
-      gap: Spacing.xs,
-    },
-    ownEmptyIcon: {
-      marginBottom: Spacing.xs,
-      opacity: 0.6,
-    },
-    ownEmptyText: {
-      fontSize: FontSize.base,
-      fontWeight: FontWeight.semibold,
-      color: Colors.textSecondary,
-      textAlign: "center",
-    },
+    // The container, the icon and the title all moved to <EmptyState/>. Only the
+    // hint survives locally, because it is the one empty state in the app whose
+    // sentence has an inline accent glyph in the middle of it.
     ownEmptyHint: {
       fontSize: FontSize.sm,
       color: Colors.textMuted,

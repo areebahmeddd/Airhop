@@ -19,7 +19,9 @@ export type DeepLink =
 
 // Channel names are kept short and simple, matching what the create-channel
 // modal accepts, so a link can't stuff a huge or weird string into the list.
-const MAX_CHANNEL_NAME = 30;
+// Exported because any name the app invents for itself (the clash suffix in
+// chat-store) must still fit through this parser when it is shared onwards.
+export const MAX_CHANNEL_NAME = 30;
 
 export function parseAirhopLink(url: string): DeepLink | null {
   const trimmed = url.trim();

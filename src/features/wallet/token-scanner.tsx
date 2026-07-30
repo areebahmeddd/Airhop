@@ -29,6 +29,7 @@ import { bareToken } from "../../core/payments/cashu";
 import {
   FontSize,
   FontWeight,
+  HIT_SLOP,
   Radius,
   Spacing,
   useThemeColors,
@@ -165,7 +166,7 @@ export default function TokenScanner({
               <Pressable
                 onPress={dismiss}
                 style={styles.cameraIconBtn}
-                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                hitSlop={HIT_SLOP}
                 accessibilityRole="button"
                 accessibilityLabel="Close scanner"
               >
@@ -265,7 +266,7 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
     cameraIconBtn: {
       width: 36,
       height: 36,
-      borderRadius: 18,
+      borderRadius: Radius.full,
       alignItems: "center",
       justifyContent: "center",
       backgroundColor: "rgba(0,0,0,0.45)",
@@ -301,7 +302,7 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
     handle: {
       width: 36,
       height: 4,
-      borderRadius: 2,
+      borderRadius: Radius.xs,
       backgroundColor: Colors.borderStrong,
       alignSelf: "center",
       marginTop: Spacing.sm,

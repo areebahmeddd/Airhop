@@ -26,6 +26,7 @@ import { useContactsStore } from "../../store/contacts-store";
 import {
   FontSize,
   FontWeight,
+  HIT_SLOP,
   Radius,
   Spacing,
   useThemeColors,
@@ -146,7 +147,7 @@ export default function VerifyContactScanner({
             <Pressable
               onPress={onClose}
               style={styles.iconBtn}
-              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              hitSlop={HIT_SLOP}
               accessibilityRole="button"
               accessibilityLabel="Close"
             >

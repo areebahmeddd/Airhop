@@ -15,5 +15,5 @@
       "@utils/*": ["./src/utils/*"]
     }
   },
-  "include": ["App.tsx", "nativewind-env.d.ts", "src/**/*", "*.ts", "*.tsx"]
+  "include": ["App.tsx", "src/**/*", "*.ts", "*.tsx"]
 }

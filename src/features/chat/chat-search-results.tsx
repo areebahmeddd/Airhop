@@ -43,6 +43,7 @@ import {
   type NoticeHit,
   type SearchableNotice,
 } from "../../utils/chat-search";
+import { formatListTimestamp } from "../../utils/format";
 
 // The filter chips shown above search, one per content kind Airhop supports.
 const MEDIA_FILTERS: {
@@ -75,19 +76,6 @@ type ResultRow =
 interface ResultSection {
   title: string;
   data: ResultRow[];
-}
-
-function formatTime(ms: number): string {
-  const d = new Date(ms);
-  const now = new Date();
-  if (
-    d.getDate() === now.getDate() &&
-    d.getMonth() === now.getMonth() &&
-    d.getFullYear() === now.getFullYear()
-  ) {
-    return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-  }
-  return d.toLocaleDateString([], { month: "short", day: "numeric" });
 }
 
 export default function ChatSearchResults({
@@ -406,7 +394,9 @@ function MessageResultRow({
           <Text style={styles.messageChannel} numberOfLines={1}>
             {chatDisplayName(hit.channel)}
           </Text>
-          <Text style={styles.messageTime}>{formatTime(hit.timestampMs)}</Text>
+          <Text style={styles.messageTime}>
+            {formatListTimestamp(hit.timestampMs)}
+          </Text>
         </View>
         <Text style={styles.messageSnippet} numberOfLines={2}>
           <Text style={styles.messageSender}>
@@ -456,7 +446,9 @@ function NoticeResultRow({
           <Text style={styles.messageChannel} numberOfLines={1}>
             {chatDisplayName(hit.channel)}
           </Text>
-          <Text style={styles.messageTime}>{formatTime(hit.timestampMs)}</Text>
+          <Text style={styles.messageTime}>
+            {formatListTimestamp(hit.timestampMs)}
+          </Text>
         </View>
         <Text style={styles.messageSnippet} numberOfLines={2}>
           <Text style={styles.messageSender}>
@@ -514,7 +506,9 @@ function MediaResultRow({
           <Text style={styles.messageChannel} numberOfLines={1}>
             {chatDisplayName(hit.channel)}
           </Text>
-          <Text style={styles.messageTime}>{formatTime(hit.timestampMs)}</Text>
+          <Text style={styles.messageTime}>
+            {formatListTimestamp(hit.timestampMs)}
+          </Text>
         </View>
         <Text style={styles.messageSnippet} numberOfLines={2}>
           <Text style={styles.messageSender}>
@@ -614,7 +608,7 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
     channelIcon: {
       width: 36,
       height: 36,
-      borderRadius: 18,
+      borderRadius: Radius.full,
       backgroundColor: Colors.surface,
       borderWidth: 1,
       borderColor: Colors.border,

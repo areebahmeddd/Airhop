@@ -2,8 +2,14 @@
  * @jest-environment node
  */
 import { ed25519, x25519 } from "@noble/curves/ed25519.js";
+import { hkdf } from "@noble/hashes/hkdf.js";
+import { sha256 } from "@noble/hashes/sha2.js";
 import { bytesToHex } from "@noble/hashes/utils.js";
 import { NoiseHandshake } from "../noise-xx";
+
+// Mirrors DR_SEED_INFO in mesh-service: the tests assert the derivation, so they
+// have to use the same info string it does.
+const INFO = new TextEncoder().encode("airhop-dr-seed-v1");
 
 // Generate a deterministic-looking but actually random keypair pair for tests.
 function makeKeypair() {
@@ -135,5 +141,69 @@ describe("Noise XX handshake", () => {
     const msg2 = responder.writeMsg2();
     // Initiator that did the original msg1 tries to consume this msg2
     expect(() => initiator.readMsg2(msg2)).toThrow();
+  });
+});
+
+// The seam between Noise and the Double Ratchet.
+//
+// tryInitDR seeds the ratchet's root key from `handshakeHash`, which only works
+// because both sides derive the identical hash and because that hash is not
+// reconstructible from long-term keys. Both properties are asserted here
+// together, since a change to either one silently breaks every Airhop-to-Airhop
+// DM: the sender would encrypt under a root key the receiver cannot derive, and
+// messages would fail to decrypt with no visible cause.
+describe("Double Ratchet seeding", () => {
+  function completeHandshake(iPriv: Uint8Array, rPriv: Uint8Array) {
+    const initiator = NoiseHandshake.createInitiator(iPriv);
+    const responder = NoiseHandshake.createResponder(rPriv);
+    responder.readMsg1(initiator.writeMsg1());
+    initiator.readMsg2(responder.writeMsg2());
+    responder.readMsg3(initiator.writeMsg3());
+    return { i: initiator.split(), r: responder.split() };
+  }
+
+  test("both sides can seed the same root key with no extra round-trips", () => {
+    const iKeys = makeKeypair();
+    const rKeys = makeKeypair();
+    const { i, r } = completeHandshake(iKeys.priv, rKeys.priv);
+
+    const rootI = hkdf(sha256, i.handshakeHash, undefined, INFO, 32);
+    const rootR = hkdf(sha256, r.handshakeHash, undefined, INFO, 32);
+
+    expect(bytesToHex(rootI)).toBe(bytesToHex(rootR));
+  });
+
+  test("the root key is NOT derivable from the two static keys alone", () => {
+    // This is the property the seeding change exists for. An attacker who later
+    // obtains both long-term keys and has recorded the traffic must not be able
+    // to reconstruct the root key; the static-static ECDH they CAN compute has
+    // to be a different value from the transcript-derived one.
+    const iKeys = makeKeypair();
+    const rKeys = makeKeypair();
+    const { i } = completeHandshake(iKeys.priv, rKeys.priv);
+
+    const staticStatic = hkdf(
+      sha256,
+      x25519.getSharedSecret(iKeys.priv, rKeys.pub),
+      undefined,
+      INFO,
+      32,
+    );
+    const fromTranscript = hkdf(sha256, i.handshakeHash, undefined, INFO, 32);
+
+    expect(bytesToHex(fromTranscript)).not.toBe(bytesToHex(staticStatic));
+  });
+
+  test("two handshakes between the SAME pair yield different root keys", () => {
+    // Fresh ephemerals every handshake, so re-pairing does not replay the old
+    // chain. A static-static seed was identical for a given pair forever.
+    const iKeys = makeKeypair();
+    const rKeys = makeKeypair();
+    const first = completeHandshake(iKeys.priv, rKeys.priv);
+    const second = completeHandshake(iKeys.priv, rKeys.priv);
+
+    expect(bytesToHex(first.i.handshakeHash)).not.toBe(
+      bytesToHex(second.i.handshakeHash),
+    );
   });
 });

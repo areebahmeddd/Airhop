@@ -104,6 +104,11 @@ const CATALOG: {
         repo: "https://github.com/expo/expo",
       },
       {
+        name: "expo-image-manipulator",
+        license: "MIT",
+        repo: "https://github.com/expo/expo",
+      },
+      {
         name: "expo-image-picker",
         license: "MIT",
         repo: "https://github.com/expo/expo",
@@ -115,6 +120,11 @@ const CATALOG: {
       },
       {
         name: "expo-media-library",
+        license: "MIT",
+        repo: "https://github.com/expo/expo",
+      },
+      {
+        name: "expo-navigation-bar",
         license: "MIT",
         repo: "https://github.com/expo/expo",
       },
@@ -153,17 +163,27 @@ const CATALOG: {
   {
     category: "UI & rendering",
     description:
-      "What draws the interface: icons, styling, gestures, animation, SVG and QR rendering, and the camera preview.",
+      "What draws the interface: fonts, icons, gestures, animation, and SVG and QR rendering.",
     packages: [
+      {
+        name: "@expo-google-fonts/fira-code",
+        license: "MIT AND OFL-1.1",
+        repo: "https://github.com/expo/google-fonts",
+      },
+      {
+        name: "@expo-google-fonts/jetbrains-mono",
+        license: "MIT AND OFL-1.1",
+        repo: "https://github.com/expo/google-fonts",
+      },
       {
         name: "@expo/vector-icons",
         license: "MIT",
         repo: "https://github.com/expo/vector-icons",
       },
       {
-        name: "nativewind",
+        name: "expo-font",
         license: "MIT",
-        repo: "https://github.com/nativewind/nativewind",
+        repo: "https://github.com/expo/expo",
       },
       {
         name: "react-native-gesture-handler",
@@ -195,7 +215,7 @@ const CATALOG: {
   {
     category: "Cryptography & protocol",
     description:
-      "The building blocks for encryption and messaging: key exchange, ciphers, hashing, wire compression, ecash tokens, and Nostr support.",
+      "The building blocks for encryption and messaging: key exchange, ciphers, hashing, seed phrases, wire compression, ecash tokens, and Nostr support.",
     packages: [
       {
         name: "@cashu/cashu-ts",
@@ -216,6 +236,11 @@ const CATALOG: {
         name: "@noble/hashes",
         license: "MIT",
         repo: "https://github.com/paulmillr/noble-hashes",
+      },
+      {
+        name: "@scure/bip39",
+        license: "MIT",
+        repo: "https://github.com/paulmillr/scure-bip39",
       },
       {
         name: "nostr-tools",

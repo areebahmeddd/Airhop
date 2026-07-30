@@ -5,6 +5,7 @@
 // Compass N is decorative: BLE gives proximity only, not bearing.
 
 import { Feather } from "@expo/vector-icons";
+import * as Haptics from "expo-haptics";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   Animated,
@@ -21,10 +22,13 @@ import StatusDot from "../../ui/components/status-dot";
 import {
   FontSize,
   FontWeight,
+  hitSlopFor,
+  MaxFontScale,
   Radius,
   Spacing,
   useThemeColors,
 } from "../../ui/theme";
+import { useReducedMotion } from "../../ui/use-reduced-motion";
 import { resolveDisplayName } from "../../utils/display-name";
 
 // ---------------------------------------------------------------------------
@@ -59,8 +63,30 @@ const RING_THRESHOLDS: [number, number] = [15_000, 45_000]; // ms
 const RING_FR: [number, number, number] = [0.3, 0.54, 0.78];
 const RING_LABELS: [string, string, string] = ["Strong", "Medium", "Weak"];
 
+// Cardinal letters as data rather than four near-identical JSX blocks with four
+// different hand-tuned offset pairs. Each offset is relative to the canvas
+// centre and expressed against the outer ring radius, so the set stays put if
+// the ring fractions above are ever retuned.
+const COMPASS: {
+  label: string;
+  top: (r: number) => number;
+  left: (r: number) => number;
+}[] = [
+  { label: "N", top: (r) => -r - 20, left: () => -5 },
+  { label: "S", top: (r) => r + 7, left: () => -5 },
+  { label: "W", top: () => -8, left: (r) => -r - 16 },
+  { label: "E", top: () => -8, left: (r) => r + 6 },
+];
+
 const AVATAR_SIZE = 34;
 const SELF_SIZE = 42;
+
+// Smallest dial worth drawing. The canvas is normally sized to the shorter axis
+// of the space it is given, but in landscape (or a split view) that axis can
+// fall to almost nothing, and the `canvasSize > 0` guard below then rendered a
+// completely blank Mesh tab. Flooring it means the dial stays legible and the
+// screen keeps saying something.
+const MIN_CANVAS = 180;
 
 // Consecutive taps within this window count toward the easter egg.
 const TAP_WINDOW_MS = 2500;
@@ -83,6 +109,11 @@ export default function RadarView({
   const away = useMeshStateStore((s) => s.presenceStatus === "away");
   const adapterEnabled = useMeshStateStore((s) => s.adapterEnabled);
   const permissionGranted = useMeshStateStore((s) => s.permissionGranted);
+  // An endlessly expanding ring is the textbook vestibular trigger, and it
+  // carries nothing the status line below the dial does not already say in
+  // words. So under "reduce motion" the sweep does not run at all (WCAG 2.3.3)
+  // and the centre tap answers with a haptic instead of a wave.
+  const reducedMotion = useReducedMotion();
   // The sonar means "a scan is running". It sweeps when one is, and stops when
   // one is not, whichever of the three reasons applies. Anything else is the
   // screen claiming to look for peers while the radio sits idle.
@@ -113,6 +144,14 @@ export default function RadarView({
   // events, so a manual rescan would find nothing a moment's wait would not.
   // Five taps in quick succession regenerate the ambient waves.
   function handleCenterPress(): void {
+    if (reducedMotion) {
+      // The wave is the whole feedback for this tap, so with motion off the
+      // touch still has to land somewhere. A selection tick is the quietest
+      // acknowledgement the OS offers, which suits an action that is
+      // deliberately cosmetic anyway.
+      void Haptics.selectionAsync().catch(() => {});
+      return;
+    }
     waveAnimRef.current?.stop();
     manualWave.setValue(0);
     waveAnimRef.current = Animated.timing(manualWave, {
@@ -163,7 +202,7 @@ export default function RadarView({
   // The line under the radar says which of the three reasons it is, and the
   // centre tap keeps its own one-shot wave so the screen still answers a touch.
   useEffect(() => {
-    if (!scanning) {
+    if (!scanning || reducedMotion) {
       ring1.setValue(0);
       ring2.setValue(0);
       ring3.setValue(0);
@@ -197,7 +236,7 @@ export default function RadarView({
     ]);
     anim.start();
     return () => anim.stop();
-  }, [ring1, ring2, ring3, waveEpoch, scanning]);
+  }, [ring1, ring2, ring3, waveEpoch, scanning, reducedMotion]);
 
   // Unmounting mid-tap must not leave a timer or an animation callback holding
   // a handle to this component.
@@ -275,15 +314,20 @@ export default function RadarView({
       style={styles.container}
       onLayout={(e) => {
         const { width, height } = e.nativeEvent.layout;
-        setCanvasSize(Math.min(width - 24, height - 60));
+        setCanvasSize(Math.max(MIN_CANVAS, Math.min(width - 24, height - 60)));
       }}
     >
       {canvasSize > 0 && (
         <>
-          {/* ---- Radar canvas ------------------------------------------- */}
-          <View
-            style={[styles.canvas, { width: canvasSize, height: canvasSize }]}
-          >
+          {/* ---- Radar canvas -------------------------------------------
+              The rings, the compass and the sweep are one picture of "who is
+              around me", and none of it means anything read out piece by piece:
+              a screen reader was stepping through four unlabelled compass
+              letters and three ring names before reaching a peer. The canvas is
+              therefore hidden as a whole and the individual peers and the centre
+              button opt back in below, which leaves a screen reader with
+              exactly the actionable elements plus the status line. */}
+          <View style={{ width: canvasSize, height: canvasSize }}>
             {/* Pulse rings: expand from center to outer ring boundary */}
             {([ring1, ring2, ring3] as Animated.Value[]).map((val, i) => {
               const d = outerR * 2;
@@ -332,57 +376,61 @@ export default function RadarView({
               ]}
             />
 
-            {/* Static distance guide rings with labels */}
-            {RING_FR.map((fr, i) => {
-              const r = C * fr;
-              const d = r * 2;
-              return (
-                <React.Fragment key={i}>
-                  <View
-                    style={[
-                      styles.guideRing,
-                      {
-                        width: d,
-                        height: d,
-                        borderRadius: r,
-                        top: C - r,
-                        left: C - r,
-                      },
-                    ]}
-                  />
-                  <Text
-                    style={[
-                      styles.ringLabel,
-                      { top: C - r + 5, left: C + r * 0.48 },
-                    ]}
-                  >
-                    {RING_LABELS[i]}
-                  </Text>
-                </React.Fragment>
-              );
-            })}
+            {/* Static distance guide rings with labels, and the cardinal
+                letters. Both are chart furniture: the rings are named in the
+                hint line under the dial and the compass is decorative (BLE
+                gives proximity, never bearing), so neither is worth a screen
+                reader stop. Capped font scaling because they are absolutely
+                positioned against the ring geometry and cannot reflow. */}
+            <View
+              style={StyleSheet.absoluteFill}
+              pointerEvents="none"
+              importantForAccessibility="no-hide-descendants"
+              accessibilityElementsHidden
+            >
+              {RING_FR.map((fr, i) => {
+                const r = C * fr;
+                const d = r * 2;
+                return (
+                  <React.Fragment key={i}>
+                    <View
+                      style={[
+                        styles.guideRing,
+                        {
+                          width: d,
+                          height: d,
+                          borderRadius: r,
+                          top: C - r,
+                          left: C - r,
+                        },
+                      ]}
+                    />
+                    <Text
+                      style={[
+                        styles.ringLabel,
+                        { top: C - r + 5, left: C + r * 0.48 },
+                      ]}
+                      maxFontSizeMultiplier={MaxFontScale.badge}
+                    >
+                      {RING_LABELS[i]}
+                    </Text>
+                  </React.Fragment>
+                );
+              })}
 
-            {/* Cardinal directions: decorative, BLE gives proximity not bearing */}
-            <Text
-              style={[styles.compassDir, { top: C - outerR - 20, left: C - 5 }]}
-            >
-              N
-            </Text>
-            <Text
-              style={[styles.compassDir, { top: C + outerR + 7, left: C - 5 }]}
-            >
-              S
-            </Text>
-            <Text
-              style={[styles.compassDir, { top: C - 8, left: C - outerR - 16 }]}
-            >
-              W
-            </Text>
-            <Text
-              style={[styles.compassDir, { top: C - 8, left: C + outerR + 6 }]}
-            >
-              E
-            </Text>
+              {COMPASS.map(({ label, top, left }) => (
+                <Text
+                  key={label}
+                  style={[
+                    styles.compassDir,
+                    { top: C + top(outerR), left: C + left(outerR) },
+                  ]}
+                  maxFontSizeMultiplier={MaxFontScale.badge}
+                >
+                  {label}
+                </Text>
+              ))}
+            </View>
 
             {/* Center dot: local device. Tap to rescan (with a sonar burst). */}
             <Pressable
@@ -392,8 +440,14 @@ export default function RadarView({
               ]}
               onPress={handleCenterPress}
               accessibilityRole="button"
-              accessibilityLabel="Rescan for nearby peers"
-              hitSlop={10}
+              accessibilityLabel="You, at the centre of the mesh"
+              // The label used to promise a rescan. It does not do one: BLE
+              // scanning runs continuously and peers arrive on announce events,
+              // as the comment on handleCenterPress says. Naming it "rescan"
+              // meant a screen reader user was told the one control on this
+              // screen would fetch peers, and it never did.
+              accessibilityHint="Plays a sonar sweep. Scanning is already continuous"
+              hitSlop={hitSlopFor(SELF_SIZE)}
             >
               <Animated.View
                 style={[styles.selfDot, { transform: [{ scale: selfScale }] }]}
@@ -420,32 +474,39 @@ export default function RadarView({
             )}
           </View>
 
-          {/* ---- Status -------------------------------------------------- */}
-          <Text style={styles.statusText}>
-            {peers.length > 0
-              ? `${peers.length} peer${peers.length !== 1 ? "s" : ""} in range`
-              : away
-                ? "Mesh paused \u00b7 You're away"
-                : !adapterEnabled
-                  ? "Bluetooth off \u00b7 not scanning"
-                  : !permissionGranted
-                    ? "Bluetooth permission needed"
-                    : "Scanning for nearby peers\u2026"}
-          </Text>
-          <Text style={styles.hintText}>
-            {/* Signal strength, NOT distance. RSSI varies by tens of dB with
+          {/* ---- Status --------------------------------------------------
+              One live region around both lines, so switching Bluetooth off or
+              being denied the permission is announced when it happens rather
+              than only if the user happens to swipe back down here. Two
+              separate Texts were also two separate stops reading one sentence
+              in halves. */}
+          <View style={styles.status} accessibilityLiveRegion="polite">
+            <Text style={styles.statusText}>
+              {peers.length > 0
+                ? `${peers.length} peer${peers.length !== 1 ? "s" : ""} in range`
+                : away
+                  ? "Mesh paused \u00b7 You're away"
+                  : !adapterEnabled
+                    ? "Bluetooth off \u00b7 not scanning"
+                    : !permissionGranted
+                      ? "Bluetooth permission needed"
+                      : "Scanning for nearby peers\u2026"}
+            </Text>
+            <Text style={styles.hintText}>
+              {/* Signal strength, NOT distance. RSSI varies by tens of dB with
                 orientation, obstacles and radio, so any metre figure derived
                 from it would be invented. Ring = signal, and the label says so. */}
-            {peers.length > 0
-              ? "Ring position reflects signal strength, not distance"
-              : away
-                ? "Set your status to Online in Profile to discover peers"
-                : !adapterEnabled
-                  ? "Turn Bluetooth on to discover peers"
-                  : !permissionGranted
-                    ? "Allow Bluetooth in Settings to discover peers"
-                    : "Rings show BLE signal strength, not distance"}
-          </Text>
+              {peers.length > 0
+                ? "Ring position reflects signal strength, not distance"
+                : away
+                  ? "Set your status to Online in Profile to discover peers"
+                  : !adapterEnabled
+                    ? "Turn Bluetooth on to discover peers"
+                    : !permissionGranted
+                      ? "Allow Bluetooth in Settings to discover peers"
+                      : "Rings show BLE signal strength, not distance"}
+            </Text>
+          </View>
         </>
       )}
     </View>
@@ -483,14 +544,22 @@ function PeerNode({
     <Pressable
       style={[styles.peerNode, { top, left }]}
       onPress={onPress}
+      // The node draws at 34pt so a dial full of peers stays readable; the slop
+      // brings the target to the 44pt floor without moving anything.
+      hitSlop={hitSlopFor(AVATAR_SIZE)}
       accessibilityRole="button"
-      accessibilityLabel={`View peer ${username}, ${isOnline ? "online" : "recently seen"}`}
+      accessibilityLabel={`${username}, ${isOnline ? "in range" : "recently seen"}`}
+      accessibilityHint="Opens options to message or pay this peer"
     >
       <Avatar username={username} peerID={peer.peerID} size={AVATAR_SIZE} />
       <View style={styles.statusBadge}>
         <StatusDot status={isOnline ? "online" : "offline"} size={7} />
       </View>
-      <Text style={styles.peerLabel} numberOfLines={1}>
+      <Text
+        style={styles.peerLabel}
+        numberOfLines={1}
+        maxFontSizeMultiplier={MaxFontScale.badge}
+      >
         {username.split("-")[0]}
       </Text>
     </Pressable>
@@ -511,9 +580,6 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       gap: Spacing.sm,
       paddingBottom: Spacing.xl,
     },
-    canvas: {
-      // width + height set dynamically
-    },
     pulseRing: {
       position: "absolute",
       borderWidth: 1.5,
@@ -531,13 +597,13 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
     },
     ringLabel: {
       position: "absolute",
-      fontSize: 10,
+      fontSize: FontSize["2xs"],
       color: Colors.textMuted,
       letterSpacing: 0.2,
     },
     compassDir: {
       position: "absolute",
-      fontSize: 10,
+      fontSize: FontSize["2xs"],
       fontWeight: FontWeight.semibold,
       color: Colors.textMuted,
       letterSpacing: 0.5,
@@ -575,11 +641,18 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       padding: 1,
     },
     peerLabel: {
-      fontSize: FontSize.xs - 1,
+      // Was `FontSize.xs - 1`, arithmetic on a token to reach a size the scale
+      // did not have. It has one now.
+      fontSize: FontSize["2xs"],
       color: Colors.textMuted,
       textAlign: "center",
       width: AVATAR_SIZE + 16,
       marginLeft: -8,
+    },
+    status: {
+      alignSelf: "stretch",
+      gap: Spacing.xs,
+      paddingHorizontal: Spacing.base,
     },
     statusText: {
       fontSize: FontSize.sm,

@@ -581,15 +581,33 @@ export function isLikelyTestMint(mint: {
   }
 }
 
-export const TOKEN_QR_MAX_CHARS = 2953;
+// How large the code is drawn, and how much it may carry. These two are ONE
+// decision and must move together, which is why they live side by side.
+//
+// The limit is not the format's capacity, it is what survives being read off
+// one phone's screen by another phone's camera. A token is base64url, so it is
+// case-sensitive and cannot use the dense alphanumeric mode a bolt11 invoice
+// gets by being upper-cased: every character costs a full byte. More characters
+// means a higher QR version, more modules in the same square, and fewer screen
+// pixels per module.
+//
+// This pair budgets roughly 2.7 screen pixels per module at the ceiling:
+//   264 px drawn / version 20 (97 modules) = 2.72 px per module
+// which reads reliably screen to screen. The previous pair promised the format
+// maximum (2953 chars, version 40, 177 modules) inside a 200 px square, or 1.1
+// px per module: a code that is valid, renders fine, and cannot be scanned by
+// anything. A 10 sat token from a mint that issues DLEQ witnesses is already
+// ~650 characters, so that ceiling was routinely being handed out.
+export const TOKEN_QR_SIZE = 264;
+export const TOKEN_QR_MAX_CHARS = 1159;
 export const TOKEN_QR_ERROR_CORRECTION = "L";
 
-// Whether this token fits in a QR code.
+// Whether this token can be handed over as a QR.
 //
-// In practice roughly two dozen proofs fit, and an ordinary payment carries a
-// handful, so this is false only for an unusually fragmented token. Callers
-// must check rather than render blindly: past the limit the generator throws,
-// which would take the whole sheet down with it.
+// False for a token split across so many proofs that the code would be too
+// dense to read at the size it is drawn. Callers must check rather than render
+// blindly, and offer copy or the mesh hand-off instead: past the format limit
+// the generator throws, which would take the whole sheet down with it.
 export function canEncodeTokenQr(token: string): boolean {
   return token.length > 0 && token.length <= TOKEN_QR_MAX_CHARS;
 }

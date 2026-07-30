@@ -30,6 +30,25 @@ const MAX_BUFFERED_FRAMES = 64;
 // Concurrent inbound bursts. Matches bitchat's pttMaxConcurrentAssemblies.
 const MAX_CONCURRENT_SESSIONS = 8;
 
+// Total audio bytes one burst may deliver before it is cut off, and the rate it
+// may deliver them at. Matches bitchat's pttMaxBurstBytes and
+// pttInboundMaxBytesPerSecond.
+//
+// The buffer cap above bounds MEMORY; these bound TIME. Without them a peer in
+// range can hold the floor indefinitely, streaming into whichever room the
+// listener happens to be looking at, and an honest client's own 120-second limit
+// is no help because a hostile one simply does not have it. Real speech arrives
+// at about 2 KB/s, so the rate ceiling is generous enough that a burst crossing
+// it is not speech.
+const MAX_BURST_BYTES = 384 * 1024;
+const MAX_BYTES_PER_SECOND = 6_000;
+
+// How many cut-off bursts are remembered, so one that broke a cap cannot simply
+// carry on and be handed a fresh budget by the next packet. Bounded because the
+// memory only has to outlive the flood that caused it; a burst is identified by
+// 8 random bytes, so a talker starting a genuinely new one is never affected.
+const MAX_CUTOFF_MEMORY = 32;
+
 // ---- Types ------------------------------------------------------------------
 
 // Injected playback backend - the platform satisfies this interface.
@@ -69,6 +88,8 @@ class VoiceSession {
   private ended = false;
   private endReceived = false;
   private startMs = Date.now();
+  // Cumulative audio bytes delivered by this burst, for the caps above.
+  private receivedBytes = 0;
 
   constructor(
     burstIDHex: string,
@@ -85,9 +106,28 @@ class VoiceSession {
     this.resetTimeout();
   }
 
-  // Called for each DATA burst packet.
-  addFrames(seq: number, frames: Uint8Array[]): void {
-    if (this.ended) return;
+  // Called for each DATA burst packet. Returns false when the burst broke a cap
+  // and was cut off, so the caller can drop the session rather than keep feeding
+  // a corpse.
+  addFrames(seq: number, frames: Uint8Array[]): boolean {
+    if (this.ended) return false;
+
+    this.receivedBytes += frames.reduce((sum, f) => sum + f.length, 0);
+    // +2s of slack so the very first packets, which arrive before any elapsed
+    // time has accumulated, are not judged as an infinite rate.
+    const elapsedSec = (Date.now() - this.startMs) / 1000 + 2;
+    if (
+      this.receivedBytes > MAX_BURST_BYTES ||
+      this.receivedBytes > MAX_BYTES_PER_SECOND * elapsedSec
+    ) {
+      // Play what legitimately arrived, then close. Cutting off mid-sentence is
+      // the right outcome for a burst that is no longer plausibly speech.
+      this.markEnded();
+      this.flush();
+      this.destroy();
+      return false;
+    }
+
     if (this.buffer.length >= MAX_BUFFERED_FRAMES) {
       // Drop oldest entry to make room (buffer overrun protection).
       this.buffer.shift();
@@ -100,6 +140,7 @@ class VoiceSession {
 
     this.resetTimeout();
     this.scheduleFlush();
+    return true;
   }
 
   // Called when the END burst packet is received.
@@ -203,6 +244,11 @@ export class VoicePlayer {
   private readonly backend: AudioPlaybackBackend;
   // Key: "${senderPeerID}:${sessionId}"
   private sessions = new Map<string, VoiceSession>();
+  // Bursts cut off for breaking a cap. Every packet of such a burst is ignored
+  // from then on, including its END: without this the session was torn down and
+  // the very next packet opened a replacement with its byte count back at zero,
+  // which handed a flooding peer an unlimited budget one cap at a time.
+  private readonly cutOffBursts = new Set<string>();
 
   constructor(backend: AudioPlaybackBackend) {
     this.backend = backend;
@@ -223,6 +269,9 @@ export class VoicePlayer {
 
     const burstIDHex = bytesToHex(burst.burstID);
     const key = `${senderPeerID}:${burstIDHex}`;
+    // Already cut off for flooding: every remaining packet of this burst is
+    // dead to us, END included.
+    if (this.cutOffBursts.has(key)) return;
 
     switch (burst.kind) {
       case "start": {
@@ -256,7 +305,16 @@ export class VoicePlayer {
             senderPeerID,
             VoiceCodec.AAC_LC_16KHZ_MONO,
           );
-        session.addFrames(burst.seq, burst.frames);
+        if (!session.addFrames(burst.seq, burst.frames)) {
+          // Cut off: free the slot, and remember the burst so its remaining
+          // packets cannot open a fresh one.
+          this.sessions.delete(key);
+          if (this.cutOffBursts.size >= MAX_CUTOFF_MEMORY) {
+            const oldest = this.cutOffBursts.keys().next().value;
+            if (oldest !== undefined) this.cutOffBursts.delete(oldest);
+          }
+          this.cutOffBursts.add(key);
+        }
         break;
       }
       case "end": {
@@ -319,5 +377,6 @@ export class VoicePlayer {
   close(): void {
     for (const session of this.sessions.values()) session.destroy();
     this.sessions.clear();
+    this.cutOffBursts.clear();
   }
 }

@@ -4,7 +4,12 @@
 
 import React, { useMemo } from "react";
 import { StyleSheet, Text, View } from "react-native";
-import { avatarColor, FontWeight, useThemeColors } from "../theme";
+import { avatarColor, FontWeight, useThemeColors, withAlpha } from "../theme";
+
+// How strongly the peer's hashed colour tints the circle behind its initials.
+// Low, so the initials stay the contrasting element and a wall of avatars in a
+// list does not read as a wall of colour.
+const TINT_ALPHA = 0.13;
 
 interface Props {
   username: string;
@@ -57,7 +62,7 @@ export default function Avatar({
           width: size,
           height: size,
           borderRadius: size / 2,
-          backgroundColor: bg + "22",
+          backgroundColor: withAlpha(bg, TINT_ALPHA),
           borderColor,
           borderWidth: active ? 1.5 : 1,
         },

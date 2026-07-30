@@ -314,7 +314,7 @@ export default function ArchitecturePage() {
               </p>
               <p>
                 That constraint buys two things. The entire protocol is testable in CI without a
-                phone, which is why 850 tests can cover the wire format and the handshakes before a
+                phone, which is why 900 tests can cover the wire format and the handshakes before a
                 radio is ever involved. And a bug fixed in gossip sync is fixed on both platforms at
                 once, because there is only one implementation of it.
               </p>
@@ -1595,16 +1595,6 @@ export default function ArchitecturePage() {
                 <strong className="text-gray-900">Mint trust.</strong> Ecash requires trusting a
                 mint to hold the bitcoin and keep an honest list of what has been spent.
               </Note>
-
-              <p>
-                Airhop has not had an external security audit. Every change is reviewed personally
-                and run through a{" "}
-                <A href="https://github.com/areebahmeddd/Airhop/blob/main/.github/agents/security-review.md">
-                  security review agent
-                </A>{" "}
-                before shipping, which is not a substitute for a formal audit and is not presented
-                as one. A third-party cryptographic audit is planned.
-              </p>
             </Section>
 
             <div className="border-t border-gray-100 pt-10">

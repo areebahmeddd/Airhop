@@ -228,7 +228,7 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
     channelIcon: {
       width: 36,
       height: 36,
-      borderRadius: 18,
+      borderRadius: Radius.full,
       backgroundColor: Colors.surface,
       alignItems: "center",
       justifyContent: "center",

@@ -161,6 +161,7 @@ import { BridgeService } from "./bridge-service";
 import {
   FileTransferService,
   type AttachmentMeta,
+  type SendOutcome,
 } from "./file-transfer-service";
 import {
   geohashChannel,
@@ -180,9 +181,9 @@ import {
 
 const BLE_SERVICE_UUID = "F47B5E2D-4A9E-4C5A-9B3F-8E1D2C3A4B5C";
 
-// HKDF info string used to derive the Double Ratchet root key from the
-// Noise XX static ECDH result. Airhop-to-Airhop only: bitchat nodes never
-// receive DR_ENCRYPTED packets.
+// HKDF info string used to derive the Double Ratchet root key from the Noise XX
+// handshake transcript hash. Airhop-to-Airhop only: bitchat nodes never receive
+// DR_ENCRYPTED packets.
 const DR_SEED_INFO = new TextEncoder().encode("airhop-dr-seed-v1");
 
 // How often to sweep the outbox for queued DMs that can now go over Nostr.
@@ -428,9 +429,10 @@ export class MeshService {
   private pttPlayback: NativeAudioPlayback | null = null;
   // Called when a burst starts or ends, so the UI can show who is talking.
   private onPttActivity: ((talkers: string[]) => void) | null = null;
-  // Whether the user is actually looking at the conversation a burst belongs
-  // to, with the app in front of them. See setLiveVoiceAudible.
-  private liveVoiceAudible = false;
+  // The conversation the user is looking at right now, with the app in front of
+  // them, or null. A burst is only played when it belongs to THIS channel. See
+  // setLiveVoiceAudible.
+  private audibleChannel: string | null = null;
 
   // WiFi direct links (MC on iOS, WiFi Aware on Android). Separate maps
   // because WiFi IDs must never collide with BLE link IDs.
@@ -485,41 +487,61 @@ export class MeshService {
       noiseStaticPrivKey: identity.noiseStaticPrivKey,
     };
 
-    const broadcastFn = (packet: Packet): void => {
+    // Resolves to whether at least one link took the packet. Callers that do not
+    // care (most of them) can ignore it; the fragment pacer cannot, because a
+    // refused write it does not retry is a file the far side can never finish.
+    const broadcastFn = async (packet: Packet): Promise<boolean> => {
       this.floodRouter.originate(packet);
       // Our own broadcasts are gossipable too: a peer who arrives later should
       // be able to catch up on messages we originated, not just relayed ones.
       this.gossip.track(packet);
       const b64 = bytesToBase64(encodePacket(packet));
-      for (const linkID of this.connectedLinks) {
-        this.sendBle(linkID, b64).catch(() => {
-          this.connectedLinks.delete(linkID);
-        });
-      }
+      const results = await Promise.all(
+        [...this.connectedLinks].map((linkID) =>
+          this.sendBle(linkID, b64).then(
+            () => true,
+            () => {
+              // A link that refuses a write is not necessarily gone: the stack
+              // says the same thing when its queue is simply full. Dropping it
+              // from connectedLinks on the first refusal tore down healthy links
+              // mid-transfer. Link teardown belongs to the disconnect event.
+              return false;
+            },
+          ),
+        ),
+      );
+      return results.some(Boolean);
     };
     this.broadcastPacket = broadcastFn;
 
-    const unicastFn = (recipientPeerID: string, packet: Packet): void => {
+    const unicastFn = async (
+      recipientPeerID: string,
+      packet: Packet,
+    ): Promise<boolean> => {
       // Prefer WiFi direct (higher throughput for large attachments).
       const wifiLink = this.wifiPeerToLink.get(recipientPeerID);
       if (wifiLink && this.wifiConnectedLinks.has(wifiLink)) {
-        this.sendWifi(wifiLink, bytesToBase64(encodePacket(packet))).catch(
+        return this.sendWifi(
+          wifiLink,
+          bytesToBase64(encodePacket(packet)),
+        ).then(
+          () => true,
           () => {
             this.wifiConnectedLinks.delete(wifiLink);
             this.wifiPeerToLink.delete(recipientPeerID);
             this.wifiLinkToPeer.delete(wifiLink);
+            return false;
           },
         );
-        return;
       }
       // Fall back to a direct BLE link.
       const linkID = this.peerToLink.get(recipientPeerID);
       if (linkID) {
         this.floodRouter.originate(packet);
-        this.sendBle(linkID, bytesToBase64(encodePacket(packet))).catch(
-          () => {},
+        return this.sendBle(linkID, bytesToBase64(encodePacket(packet))).then(
+          () => true,
+          () => false,
         );
-        return;
       }
       // No direct link: flood the recipient-addressed, TTL-bounded packet over
       // the mesh so an intermediate node relays it to the recipient. This is
@@ -533,8 +555,11 @@ export class MeshService {
         packet.type !== PacketType.FILE_TRANSFER &&
         packet.type !== PacketType.FRAGMENT
       ) {
-        broadcastFn(packet);
+        return broadcastFn(packet);
       }
+      // Nothing carried it. For a fragment this is the signal to hold on to it
+      // and try again rather than counting it as gone.
+      return false;
     };
 
     // Store the unicast closure so sendDRMessage can use it without
@@ -865,15 +890,15 @@ export class MeshService {
         const b64 = bytesToBase64(encodePacket(relay));
         for (const lid of this.connectedLinks) {
           if (lid === linkID) continue;
-          this.sendBle(lid, b64).catch(() => {
-            this.connectedLinks.delete(lid);
-          });
+          // A refusal means the stack's queue is full, not that the link is
+          // gone; the disconnect event owns teardown. Dropping a relay
+          // neighbour on its first busy moment is how a crowded room lost its
+          // relays exactly when it needed them.
+          this.sendBle(lid, b64).catch(() => {});
         }
         for (const wlid of this.wifiConnectedLinks) {
           if (wlid === linkID) continue;
-          this.sendWifi(wlid, b64).catch(() => {
-            this.wifiConnectedLinks.delete(wlid);
-          });
+          this.sendWifi(wlid, b64).catch(() => {});
         }
       });
       this.fragmentManager.receive(
@@ -893,15 +918,13 @@ export class MeshService {
       const b64 = bytesToBase64(encodePacket(relay));
       for (const lid of this.connectedLinks) {
         if (lid === linkID) continue; // never relay back on the incoming link
-        this.sendBle(lid, b64).catch(() => {
-          this.connectedLinks.delete(lid);
-        });
+        // Same rule as the fragment relay above: a busy radio is not a
+        // dead link, and teardown belongs to the disconnect event.
+        this.sendBle(lid, b64).catch(() => {});
       }
       for (const wlid of this.wifiConnectedLinks) {
         if (wlid === linkID) continue;
-        this.sendWifi(wlid, b64).catch(() => {
-          this.wifiConnectedLinks.delete(wlid);
-        });
+        this.sendWifi(wlid, b64).catch(() => {});
       }
     });
     if (!isNew) return;
@@ -1009,6 +1032,12 @@ export class MeshService {
     // stranger's audio come out of their phone.
     if (!useSettingsStore.getState().liveVoiceEnabled) return;
 
+    // A public burst belongs to the Bluetooth room. Ignore it unless that is
+    // what the user is looking at, so it neither plays nor claims the floor in
+    // some other thread. Whoever spoke also sends the same audio as a voice
+    // note, which is what carries it to anyone who was not watching.
+    if (this.audibleChannel !== BRIDGE_CHANNEL) return;
+
     const signingKey = this.registry.get(senderID)?.signingPubKey;
     if (signingKey === undefined || !verifyPacket(packet, signingKey)) return;
 
@@ -1024,7 +1053,9 @@ export class MeshService {
     // The gate is read per batch of frames, not captured once: someone can
     // background the app or leave the thread in the middle of a burst, and the
     // audio should stop there rather than play on to the end.
-    this.pttPlayback = new NativeAudioPlayback(() => this.liveVoiceAudible);
+    this.pttPlayback = new NativeAudioPlayback(
+      () => this.audibleChannel !== null,
+    );
     this.pttPlayer = new VoicePlayer(this.pttPlayback);
     return this.pttPlayer;
   }
@@ -1077,16 +1108,17 @@ export class MeshService {
     return this.connectedLinks.size + this.wifiConnectedLinks.size > 0;
   }
 
-  // Whether inbound bursts should actually make sound right now.
+  // Which conversation the user is watching, or null when none is (the app is
+  // backgrounded, or they are on a list rather than in a thread).
   //
-  // Set by the open thread: audio plays only when the app is in front of the
-  // user and they are looking at the conversation the burst belongs to. Anything
-  // else and the burst is still tracked (so "X is talking" stays accurate) but
-  // stays silent. Defaults to false, so a burst can never surprise someone
-  // whose UI has not told us they are watching. Matches bitchat's
+  // Set by the open thread. A burst only makes sound when it belongs to this
+  // exact channel, so live audio can never arrive from a room the user is not
+  // looking at: reading a DM should not play whatever somebody keyed up in the
+  // public room, and vice versa. Defaults to null, so a burst can never surprise
+  // someone whose UI has not told us they are watching. Matches bitchat's
   // liveVoiceEnabled && isAppActive && isViewing.
-  setLiveVoiceAudible(audible: boolean): void {
-    this.liveVoiceAudible = audible;
+  setLiveVoiceAudible(channel: string | null): void {
+    this.audibleChannel = channel;
   }
 
   // Open the mic and start streaming a burst to everyone in range. Returns
@@ -1326,7 +1358,7 @@ export class MeshService {
         }
         this.registry.setSession(senderID, session);
         // Seed the Double Ratchet for Airhop-to-Airhop sessions.
-        this.tryInitDR(senderID, "initiator");
+        this.tryInitDR(senderID, "initiator", session.handshakeHash);
         this.flushPendingGroupInvites(senderID);
 
         const msg3Pkt = this.makeHandshakePacket(packet.senderID.slice(), msg3);
@@ -1358,7 +1390,7 @@ export class MeshService {
         }
         this.registry.setSession(senderID, session);
         // Seed the Double Ratchet for Airhop-to-Airhop sessions.
-        this.tryInitDR(senderID, "responder");
+        this.tryInitDR(senderID, "responder", session.handshakeHash);
         this.flushPendingGroupInvites(senderID);
         // Flush any DMs carried over from an initiator->responder reset. Normal
         // responders have none; only a simultaneous-initiation flip queues them.
@@ -1412,10 +1444,15 @@ export class MeshService {
     }
   }
 
-  // Initialize a Double Ratchet state from the Noise XX static ECDH.
-  // Only activated for Airhop peers (those that announced a Nostr pubkey);
-  // bitchat nodes don't understand DR_ENCRYPTED and must keep using NOISE_ENCRYPTED.
-  private tryInitDR(peerID: string, role: "initiator" | "responder"): void {
+  // Initialize a Double Ratchet state from the Noise XX handshake that just
+  // completed. Only activated for Airhop peers (those that announced a Nostr
+  // pubkey); bitchat nodes don't understand DR_ENCRYPTED and must keep using
+  // NOISE_ENCRYPTED.
+  private tryInitDR(
+    peerID: string,
+    role: "initiator" | "responder",
+    handshakeHash: Uint8Array,
+  ): void {
     const peer = this.registry.get(peerID);
     // The nostrPubkey field is only populated from ANNOUNCE TLV 0x07, which
     // bitchat iOS and Android never send (0x05 and 0x06 are their capabilities
@@ -1424,14 +1461,25 @@ export class MeshService {
     // A peer without it keeps the plain Noise transport, still a valid route,
     // hence the flush below runs either way.
     if (peer?.nostrPubkey && peer.noisePubKey) {
-      // Both parties derive the same ECDH secret from each other's Noise static
-      // public keys. This is identical to the static-static DH in Noise_XX and
-      // requires no extra round-trips.
-      const dhSeed = x25519.getSharedSecret(
-        this.identity.noiseStaticPrivKey,
-        peer.noisePubKey,
-      );
-      const rootKey = hkdf(sha256, dhSeed, undefined, DR_SEED_INFO, 32);
+      // The root key comes from the completed handshake's transcript hash, not
+      // from a static-static ECDH.
+      //
+      // Both sides already hold the identical hash, so this still costs no
+      // extra round-trips. The difference is what it is made of: Noise XX mixes
+      // both parties' EPHEMERAL keys into that hash, and those private keys are
+      // destroyed when the handshake splits. A static-static seed was derivable
+      // forever from long-term keys alone, which cost the ratchet its forward
+      // secrecy exactly where it matters most.
+      //
+      // Concretely, with a static-static seed an attacker who later obtained
+      // ONE side's static private key could recompute the root key, read the
+      // initiator's first ratchet public key straight off the DR header, and
+      // decrypt every message sent before the responder's first reply. Since
+      // receipts travel over plain Noise and do not advance the ratchet, a
+      // conversation nobody replied to stayed in that chain for its whole life.
+      // Seeding from the transcript closes that: the root key cannot be
+      // reconstructed from long-term keys at all.
+      const rootKey = hkdf(sha256, handshakeHash, undefined, DR_SEED_INFO, 32);
 
       this.drStates.set(
         peerID,
@@ -1468,6 +1516,8 @@ export class MeshService {
     // no separate signature to check: getting here at all proves the sender.
     if (payload.type === NoisePayloadType.VOICE_FRAME) {
       if (!useSettingsStore.getState().liveVoiceEnabled) return;
+      // Same rule as a public burst: only audible in the thread it belongs to.
+      if (this.audibleChannel !== channel) return;
       const player = this.ensurePttPlayer();
       if (player === null) return;
       player.handleBurstPayload(payload.body, senderID);
@@ -3426,13 +3476,14 @@ export class MeshService {
     channel: string,
     bytes: Uint8Array,
     meta: AttachmentMeta,
+    onOutcome?: SendOutcome,
   ): boolean {
     const reached = channel.startsWith("dm:")
       ? this.peerToLink.has(channel.slice(3)) ||
         this.wifiPeerToLink.has(channel.slice(3))
       : this.connectedLinks.size + this.wifiConnectedLinks.size > 0;
     if (!reached) return false;
-    this.fileXfer.sendBytes(bytes, meta, channel);
+    this.fileXfer.sendBytes(bytes, meta, channel, onOutcome);
     return true;
   }
 

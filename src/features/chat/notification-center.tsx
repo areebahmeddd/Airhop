@@ -22,10 +22,22 @@ import {
   useActivityStore,
   type ActivityEntry,
 } from "../../store/activity-store";
+import { showAlert } from "../../store/alert-store";
 import Avatar from "../../ui/components/avatar";
-import { FontSize, FontWeight, Spacing, useThemeColors } from "../../ui/theme";
+import EmptyState from "../../ui/components/empty-state";
+import {
+  Duration,
+  FontSize,
+  FontWeight,
+  HIT_SLOP,
+  MIN_TOUCH,
+  Radius,
+  Spacing,
+  useThemeColors,
+} from "../../ui/theme";
 import { channelLabel } from "../../utils/chat-display-name";
 import { resolveDisplayName } from "../../utils/display-name";
+import { formatListTimestamp } from "../../utils/format";
 
 interface Props {
   visible: boolean;
@@ -43,6 +55,21 @@ export default function NotificationCenter({
   const entries = useActivityStore((s) => s.entries);
   const clearAll = useActivityStore((s) => s.clearAll);
 
+  // Clearing wiped the entire history on a single tap of a small text button in
+  // the corner, with nothing to undo it. Every other irreversible action in this
+  // app asks first (leave a room, clear a chat, remove a contact, panic wipe),
+  // through this same alert. This was the one that did not.
+  function handleClearAll(): void {
+    showAlert(
+      "Clear notifications",
+      `Remove all ${String(entries.length)} notifications from this list? The messages themselves stay in their conversations.`,
+      [
+        { text: "Cancel", style: "cancel" },
+        { text: "Clear", style: "destructive", onPress: clearAll },
+      ],
+    );
+  }
+
   return (
     <Modal
       visible={visible}
@@ -57,18 +84,20 @@ export default function NotificationCenter({
             onPress={onClose}
             accessibilityRole="button"
             accessibilityLabel="Close notifications"
-            hitSlop={8}
+            hitSlop={HIT_SLOP}
           >
             <Feather name="chevron-left" size={24} color={Colors.textPrimary} />
           </Pressable>
-          <Text style={styles.headerTitle}>Notifications</Text>
+          <Text style={styles.headerTitle} accessibilityRole="header">
+            Notifications
+          </Text>
           {entries.length > 0 ? (
             <Pressable
               style={styles.headerBtn}
-              onPress={clearAll}
+              onPress={handleClearAll}
               accessibilityRole="button"
-              accessibilityLabel="Clear all notifications"
-              hitSlop={8}
+              accessibilityLabel={`Clear all ${String(entries.length)} notifications`}
+              hitSlop={HIT_SLOP}
             >
               <Text style={styles.clearText}>Clear</Text>
             </Pressable>
@@ -90,19 +119,11 @@ export default function NotificationCenter({
           ItemSeparatorComponent={() => <View style={styles.separator} />}
           contentContainerStyle={styles.list}
           ListEmptyComponent={
-            <View style={styles.emptyState}>
-              <Feather
-                name="bell"
-                size={36}
-                color={Colors.textMuted}
-                style={{ opacity: 0.4 }}
-              />
-              <Text style={styles.emptyTitle}>No notifications yet</Text>
-              <Text style={styles.emptySubtitle}>
-                Messages, mentions, and notices from{"\n"}your channels and
-                chats show up here.
-              </Text>
-            </View>
+            <EmptyState
+              icon="bell"
+              title="No notifications yet"
+              subtitle="Messages, mentions, and notices from your channels and chats show up here."
+            />
           }
         />
       </SafeAreaView>
@@ -125,16 +146,26 @@ function Row({
     ? resolveDisplayName(entry.senderID)
     : entry.senderNickname;
   const room = entry.isDM ? "" : channelLabel(entry.channel);
-  const a11y = entry.isDM
-    ? `Open conversation with ${name}`
-    : entry.kind === "notice"
-      ? `Open notices in ${room}`
-      : `Open ${room}`;
+  // Formatted once for both the visible time and the row label below.
+  const timeLabel = formatListTimestamp(entry.timestampMs);
+  // The row's whole content, in reading order, then where the tap goes. The
+  // label used to be only the destination ("Open #city"), so the sender, the
+  // preview, the time and the unseen dot were all silent: a screen reader user
+  // heard a list of identical "Open" buttons.
+  const a11y = [
+    entry.seen ? null : "New",
+    name,
+    entry.isDM ? null : entry.kind === "notice" ? `notice in ${room}` : room,
+    entry.preview,
+    timeLabel,
+  ]
+    .filter((part) => part !== null)
+    .join(", ");
 
   return (
     <Animated.View
-      entering={FadeIn.duration(200)}
-      layout={LinearTransition.duration(200)}
+      entering={FadeIn.duration(Duration.base)}
+      layout={LinearTransition.duration(Duration.slow)}
     >
       <Pressable
         style={[styles.row, !entry.seen && styles.rowUnseen]}
@@ -149,7 +180,7 @@ function Row({
               {name}
               {!entry.isDM && <Text style={styles.channelTag}> in {room}</Text>}
             </Text>
-            <Text style={styles.time}>{formatTime(entry.timestampMs)}</Text>
+            <Text style={styles.time}>{timeLabel}</Text>
           </View>
           <Text style={styles.preview} numberOfLines={2}>
             {entry.preview}
@@ -159,18 +190,6 @@ function Row({
       </Pressable>
     </Animated.View>
   );
-}
-
-function formatTime(ms: number): string {
-  const d = new Date(ms);
-  const now = new Date();
-  const isToday =
-    d.getDate() === now.getDate() &&
-    d.getMonth() === now.getMonth() &&
-    d.getFullYear() === now.getFullYear();
-  return isToday
-    ? d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
-    : d.toLocaleDateString([], { month: "short", day: "numeric" });
 }
 
 function createStyles(Colors: ReturnType<typeof useThemeColors>) {
@@ -188,9 +207,11 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       borderBottomWidth: StyleSheet.hairlineWidth,
       borderBottomColor: Colors.border,
     },
+    // 44pt tall, not 32: this is a full-screen modal's own header, so its two
+    // controls are the only way out of it and the only way to clear the list.
     headerBtn: {
       minWidth: 60,
-      height: 32,
+      height: MIN_TOUCH,
       justifyContent: "center",
     },
     headerTitle: {
@@ -251,7 +272,7 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
     unseenDot: {
       width: 8,
       height: 8,
-      borderRadius: 4,
+      borderRadius: Radius.full,
       backgroundColor: Colors.accent,
       marginLeft: Spacing.xs,
     },
@@ -259,24 +280,6 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       height: StyleSheet.hairlineWidth,
       backgroundColor: Colors.border,
       marginLeft: 60 + Spacing.base,
-    },
-    emptyState: {
-      flex: 1,
-      alignItems: "center",
-      justifyContent: "center",
-      paddingVertical: Spacing["4xl"],
-      gap: Spacing.md,
-    },
-    emptyTitle: {
-      fontSize: FontSize.md,
-      fontWeight: FontWeight.semibold,
-      color: Colors.textSecondary,
-    },
-    emptySubtitle: {
-      fontSize: FontSize.sm,
-      color: Colors.textMuted,
-      textAlign: "center",
-      lineHeight: FontSize.sm * 1.6,
     },
   });
 }

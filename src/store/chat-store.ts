@@ -4,6 +4,7 @@
 import { createMMKV } from "react-native-mmkv";
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
+import { MAX_CHANNEL_NAME } from "../utils/deep-link";
 
 export type AttachmentType = "image" | "voice" | "document" | "video";
 
@@ -102,13 +103,21 @@ interface ChatState {
   channelReach: Record<string, "ble" | "ble+nostr">;
 
   addChannel: (channel: string) => void;
-  // Join (or create) a private channel with its E2E key and reach. Used both
-  // when you create a channel and when you tap someone's invite link.
+  // Join (or create) a private channel with its E2E key and reach. Used when
+  // you create a channel, when you tap someone's invite link, and when you
+  // paste one into the app.
+  //
+  // Returns the channel it actually landed in, which is not always the name
+  // asked for: a private channel is identified by its KEY, never its name (the
+  // name never touches the wire), so two unrelated rooms can both be called
+  // "#team". Joining the second under the same label would overwrite the first
+  // one's key and orphan it, so a clash lands in a suffixed room of its own.
+  // Callers open whatever comes back rather than the name they passed in.
   joinPrivateChannel: (
     channel: string,
     keyBase64: string,
     overNostr: boolean,
-  ) => void;
+  ) => string;
   removeChannel: (channel: string) => void;
   // Returns false if the rename was rejected (name unchanged, or already taken)
   // so callers don't apply follow-up edits to the wrong channel.
@@ -177,6 +186,43 @@ const DEFAULT_CHANNELS = [
 // keeps them from badging the app or raising notifications until unmuted.
 const DEFAULT_MUTED_CHANNELS = ["#city", "#province", "#region"];
 
+// Where a private channel with this key belongs, given the rooms already
+// joined. Normally the name asked for. When that name is already taken by a
+// DIFFERENT key it is a genuine second room that happens to share a label
+// (nothing stops two people naming a channel "#team"), so it gets its own
+// suffixed one rather than overwriting the key of the room already there.
+// Re-joining a room already held, under any label, is a no-op that returns
+// where it already lives, so tapping the same invite twice never duplicates it.
+//
+// The suffix is `-2`, `-3`, ... and never whitespace: this label is what an
+// onward invite link carries, and the link parser rejects names with spaces or
+// past MAX_CHANNEL_NAME. The base is trimmed so the suffixed name still fits.
+export function freeChannelLabel(
+  channelKeys: Record<string, string>,
+  channel: string,
+  keyBase64: string,
+): string {
+  if (
+    channelKeys[channel] === undefined ||
+    channelKeys[channel] === keyBase64
+  ) {
+    return channel;
+  }
+  // Already joined under some other label: go back to that room.
+  for (const [name, key] of Object.entries(channelKeys)) {
+    if (key === keyBase64) return name;
+  }
+  for (let n = 2; n < 100; n++) {
+    const suffix = `-${String(n)}`;
+    const base = channel.slice(0, 1 + MAX_CHANNEL_NAME - suffix.length);
+    const candidate = `${base}${suffix}`;
+    if (channelKeys[candidate] === undefined) return candidate;
+  }
+  // 98 rooms sharing one name is not a real scenario; fall back to the name as
+  // given rather than looping, and let the last one win as it used to.
+  return channel;
+}
+
 const storage = createMMKV({ id: "chat-store" });
 
 const mmkvStorage = {
@@ -216,16 +262,18 @@ export const useChatStore = create<ChatState>()(
         keyBase64: string,
         overNostr: boolean,
       ) {
+        const target = freeChannelLabel(get().channelKeys, channel, keyBase64);
         set((state) => ({
-          channels: state.channels.includes(channel)
+          channels: state.channels.includes(target)
             ? state.channels
-            : [...state.channels, channel],
-          channelKeys: { ...state.channelKeys, [channel]: keyBase64 },
+            : [...state.channels, target],
+          channelKeys: { ...state.channelKeys, [target]: keyBase64 },
           channelReach: {
             ...state.channelReach,
-            [channel]: overNostr ? "ble+nostr" : "ble",
+            [target]: overNostr ? "ble+nostr" : "ble",
           },
         }));
+        return target;
       },
 
       addMessage(msg: ChatMessage) {

@@ -27,10 +27,17 @@ import Avatar from "../../ui/components/avatar";
 import {
   FontSize,
   FontWeight,
+  HIT_SLOP,
+  hitSlopFor,
   Radius,
   Spacing,
   useThemeColors,
 } from "../../ui/theme";
+
+// Drawn size of a sender's avatar in a channel thread. Tapping it (or the name
+// beside it) opens that sender's profile, so both carry hitSlopFor() to reach the
+// 44pt floor from 32pt without making the bubbles taller.
+const AVATAR_TAP_SIZE = 32;
 
 // Memoized (see the export) so a thread of hundreds of messages doesn't
 // re-render every bubble on each keyboard/scroll/state tick, which is what
@@ -101,7 +108,7 @@ function MessageBubble({
           <Pressable
             onPress={onPressSender ? () => onPressSender(item) : undefined}
             disabled={!onPressSender}
-            hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
+            hitSlop={hitSlopFor(AVATAR_TAP_SIZE)}
             accessibilityRole={onPressSender ? "button" : undefined}
             accessibilityLabel={
               onPressSender
@@ -130,7 +137,7 @@ function MessageBubble({
           <Pressable
             onPress={onPressSender ? () => onPressSender(item) : undefined}
             disabled={!onPressSender}
-            hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
+            hitSlop={hitSlopFor(AVATAR_TAP_SIZE)}
             accessibilityRole={onPressSender ? "button" : undefined}
             accessibilityLabel={
               onPressSender
@@ -236,7 +243,7 @@ function MessageBubble({
                 (item.status === "failed" && onRetry ? (
                   <Pressable
                     onPress={() => onRetry(item)}
-                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                    hitSlop={HIT_SLOP}
                     accessibilityRole="button"
                     accessibilityLabel="Failed to send. Tap to retry."
                   >

@@ -28,10 +28,16 @@ import {
   FontFamily,
   FontSize,
   FontWeight,
+  HIT_SLOP,
   Radius,
   Spacing,
   useThemeColors,
 } from "../../ui/theme";
+import { geohashNeighbours } from "../../utils/geohash-grid";
+
+// How long typing has to stop before the cell's name is looked up. Long enough
+// that a six-character geohash costs one lookup rather than six.
+const NAME_LOOKUP_DEBOUNCE_MS = 500;
 
 interface Props {
   visible: boolean;
@@ -54,6 +60,21 @@ export function GeohashJumpSheet({
   const [input, setInput] = useState("");
   const [error, setError] = useState<string | null>(null);
 
+  // The cell this phone is standing in, at neighbourhood precision. Null with
+  // no location grant, which is why every part of this sheet that uses it is
+  // conditional rather than assumed.
+  const homeCell = visible
+    ? (getMeshService()?.getChannelGeohash("#neighborhood") ?? null)
+    : null;
+
+  // The eight cells touching yours. This is the "where do I actually want to
+  // go" case: people ask for the next street or the next town, not for a
+  // geohash they have memorised. Typing one is still there for anyone who has.
+  const neighbours = useMemo(
+    () => (homeCell ? geohashNeighbours(homeCell) : []),
+    [homeCell],
+  );
+
   const bookmarks = useGeohashBookmarksStore((s) => s.bookmarks);
   const placeNames = usePlaceNamesStore((s) => s.names);
   // Resolve names for saved places so the list reads "~Kumaraswamy Layout"
@@ -63,8 +84,32 @@ export function GeohashJumpSheet({
     for (const gh of bookmarks) usePlaceNamesStore.getState().resolve(gh);
   }, [visible, bookmarks]);
 
+  // And for the cells around you, which is what makes Nearby readable: "N ·
+  // Jayanagar" is a place, "N · #tdr1kz" is a string. Eight lookups on open,
+  // once ever, since the store caches a cell's name forever.
+  useEffect(() => {
+    if (!visible) return;
+    for (const n of neighbours)
+      usePlaceNamesStore.getState().resolve(n.geohash);
+  }, [visible, neighbours]);
+
+  // The typed cell, once it is long enough to mean somewhere. Debounced:
+  // resolving on every keystroke would geocode "r", "rd", "rdr" and so on,
+  // which is five wasted round trips and five prefixes of your destination
+  // handed to the platform geocoder for no reason.
+  useEffect(() => {
+    if (!visible || !isValidGeohash(input)) return;
+    const timer = setTimeout(() => {
+      usePlaceNamesStore.getState().resolve(input);
+    }, NAME_LOOKUP_DEBOUNCE_MS);
+    return () => clearTimeout(timer);
+  }, [visible, input]);
+
   const valid = isValidGeohash(input);
   const level = valid ? geohashLevelName(input) : null;
+  // Undefined until the lookup lands, or forever if it cannot: the hint reads
+  // fine either way.
+  const typedName = valid ? placeNames[input] : undefined;
   // If the entered cell is one the user is already standing in, "Go" opens that
   // existing channel rather than a duplicate teleported room. Read live from the
   // mesh service; it only changes when the user physically moves.
@@ -188,10 +233,37 @@ export function GeohashJumpSheet({
         <Text style={styles.hint}>
           {localChannel !== null
             ? `You are already here. Go opens your ${localChannel} channel.`
-            : `${level} cell`}
+            : // The name is appended, never substituted: the level is always
+              // true, and the name is a best-effort lookup that is simply
+              // absent offline or where the geocoder has nothing to say.
+              `${level} cell${typedName !== undefined ? ` · ~${typedName}` : ""}`}
         </Text>
       )}
       {error !== null && <Text style={styles.error}>{error}</Text>}
+
+      {/* Nearby: the cells around yours, one tap each. Only when we know where
+          you are, since "nearby" is meaningless otherwise. */}
+      {neighbours.length > 0 && (
+        <View style={styles.saved}>
+          <Text style={styles.savedLabel}>NEARBY</Text>
+          <View style={styles.nearbyWrap}>
+            {neighbours.map((n) => (
+              <Pressable
+                key={n.geohash}
+                style={styles.nearbyChip}
+                onPress={() => openGeohash(n.geohash)}
+                accessibilityRole="button"
+                accessibilityLabel={`Open the cell to your ${n.direction}`}
+              >
+                <Text style={styles.nearbyDir}>{n.direction}</Text>
+                <Text style={styles.nearbyHash} numberOfLines={1}>
+                  {placeNames[n.geohash] ?? `#${n.geohash}`}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+        </View>
+      )}
 
       {bookmarks.length > 0 && (
         <View style={styles.saved}>
@@ -226,7 +298,7 @@ export function GeohashJumpSheet({
                     onPress={() =>
                       useGeohashBookmarksStore.getState().remove(gh)
                     }
-                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                    hitSlop={HIT_SLOP}
                     accessibilityRole="button"
                     accessibilityLabel={`Remove ${name ?? gh} from saved places`}
                   >
@@ -369,6 +441,36 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       fontSize: FontSize.xs,
       color: Colors.textMuted,
     },
+    // Nearby cells: a wrapped row of small chips, direction over geohash, so
+    // eight of them fit without a horizontal scroller to discover.
+    nearbyWrap: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      gap: Spacing.xs,
+    },
+    nearbyChip: {
+      minWidth: 76,
+      maxWidth: 132,
+      alignItems: "center",
+      gap: 1,
+      paddingVertical: Spacing.xs,
+      paddingHorizontal: Spacing.sm,
+      borderRadius: Radius.lg,
+      borderWidth: 1,
+      borderColor: Colors.border,
+      backgroundColor: Colors.surfaceRaised,
+    },
+    nearbyDir: {
+      fontSize: FontSize.xs,
+      fontWeight: FontWeight.semibold,
+      color: Colors.textSecondary,
+      letterSpacing: 0.5,
+    },
+    nearbyHash: {
+      fontSize: FontSize.xs,
+      fontFamily: FontFamily.mono,
+      color: Colors.textMuted,
+    },
     footNote: {
       fontSize: FontSize.xs,
       color: Colors.textMuted,
@@ -387,10 +489,13 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       alignItems: "center",
       justifyContent: "center",
     },
+    // Dismiss actions read at full contrast, matching the wallet sheets,
+    // the scanner and the alert buttons: a muted label on a filled pill
+    // reads as disabled rather than as the quieter of two choices.
     cancelText: {
       fontSize: FontSize.base,
-      color: Colors.textSecondary,
-      fontWeight: FontWeight.medium,
+      color: Colors.textPrimary,
+      fontWeight: FontWeight.semibold,
     },
     confirm: {
       flex: 1,

@@ -51,6 +51,18 @@ const PTT_MAX_BURST_BYTES = 210;
 // Maximum frames per DATA packet (guard against misconfiguration).
 const MAX_FRAMES_PER_PACKET = 8;
 
+// How long one hold may keep sending. Matches bitchat's
+// PTTCaptureEngine.maxCaptureDuration.
+//
+// Past this the session stays open but stops encoding: the gesture belongs to
+// the user, so releasing still ends the burst normally with an END packet and
+// still produces the voice note. Nothing is torn down under their finger. What
+// stops is airtime, which matters because a burst is ~2 KB/s of a link that
+// carries ~15 KB/s in total, and because every listener now cuts a burst off at
+// its own inbound ceiling anyway. Enforcing it here means one sender stops
+// sending, rather than every receiver independently deciding to stop listening.
+export const MAX_BURST_MS = 120_000;
+
 // Ceiling on the finalized voice note kept for a burst. At ~130 bytes a frame
 // and 64 ms per frame this is a little over four minutes, well past the 512 KiB
 // the file transfer would accept anyway; the cap is here so a stuck microphone
@@ -182,6 +194,12 @@ export class VoiceCaptureSession {
   // ---- Private ----------------------------------------------------------------
 
   private addFrame(frameData: Uint8Array): void {
+    // Past the burst ceiling, drop the frame. Deliberately silent: the button
+    // is still held, and the release path is what reports the burst as finished.
+    // Dropping here caps the live stream and the finalized note together, since
+    // both are fed from this one call.
+    if (Date.now() - this.burstStartMs >= MAX_BURST_MS) return;
+
     const frameCost = 2 + frameData.length; // u16 length prefix + data
     // A single frame that cannot fit a packet on its own is dropped rather
     // than emitted oversize. The encoder's ~130-byte frames never reach this;

@@ -59,6 +59,17 @@ Variable sections (in this exact order after the header):
 
 **Signature coverage** (`toBinaryDataForSigning()`): encode the full packet with `ttl=0`, `isRSR=false`, `hasSignature=0` (no signature field), then Ed25519-sign the resulting bytes. This allows relays to decrement TTL and tag solicited responses without invalidating the original signature.
 
+**Re-encoding must preserve the payload as received.** Because the signature covers a re-encoding of the packet, verifying re-encodes and therefore re-compresses. DEFLATE output is not canonical: bitchat iOS compresses with Apple's `compression_encode_buffer`, bitchat Android with `java.util.zip.Deflater`, and Airhop with pako. All three inflate each other's streams, but they are not guaranteed to emit identical bytes for identical input, and the "only if smaller" check can even make them disagree on whether to compress at all. A re-encode that compresses again would therefore produce a different signing preimage and reject a valid packet.
+
+Airhop's decoder keeps the payload exactly as it arrived (compressed bytes and the `isCompressed` decision) and its encoder reuses that form instead of re-compressing. This is required in two places:
+
+- **Verification**, so a packet signed by any implementation verifies here.
+- **Relaying**, because a relay re-encodes. Re-compressing would replace the originator's bytes with the relay's own and invalidate the signature for every node downstream.
+
+Locally originated packets have no received form and are compressed normally, so this never changes what Airhop emits. The reuse is keyed to the decoded payload, so replacing the payload discards the received form and falls back to compressing, keeping tampering detectable.
+
+Airhop's outbound DEFLATE is byte-identical to reference zlib (`pako` with `legacyHash: false`, locked by test vectors in `packet-compression.test.ts`). Verified against zlib 1.3.1, which is also what Android's `Deflater` produces. **Not yet verified against Apple's encoder**, which requires running `CompressionUtil.compress` on Apple hardware.
+
 **Packet deduplication** uses `PacketID = SHA-256(type[1] | senderID[8] | timestamp_u64_BE[8] | payload)[0:16]` per `PacketIdUtil.swift` / `PacketIdUtil.kt`. There is no nonce field.
 
 **Source route field** (when `hasRoute=1`): `count` (1 byte) followed by `count × 8` bytes of intermediate hop Peer IDs. The sender and final recipient are NOT in the route list; they are in the header.

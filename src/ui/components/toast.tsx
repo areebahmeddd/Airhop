@@ -20,12 +20,12 @@ import Animated, {
   useSharedValue,
   withTiming,
 } from "react-native-reanimated";
-import { FontSize, Radius, Spacing, useThemeColors } from "../theme";
+import { Duration, FontSize, Radius, Spacing, useThemeColors } from "../theme";
 
 // Long enough to read a few words without looking for it, short enough that it
 // never sits in the way of the next thing.
 const VISIBLE_MS = 2200;
-const FADE_MS = 180;
+const FADE_MS = Duration.base;
 
 interface Props {
   message: string | null;

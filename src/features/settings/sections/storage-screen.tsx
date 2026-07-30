@@ -21,6 +21,7 @@ import {
 import { getMeshService } from "../../../services/mesh-service";
 import { showAlert } from "../../../store/alert-store";
 import { WALLET_STORAGE_ID } from "../../../store/wallet-store";
+import { formatBytes } from "../../../utils/format";
 import { MMKV_STORE_IDS } from "../../../utils/panic-wipe";
 import {
   GroupDivider,
@@ -32,12 +33,6 @@ import {
 
 interface Props {
   onBack: () => void;
-}
-
-function formatBytes(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
 function readStorageStats() {

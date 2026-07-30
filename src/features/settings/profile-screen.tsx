@@ -4,8 +4,8 @@
 // at the very bottom, outside every section.
 
 import Feather from "@expo/vector-icons/Feather";
-import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import * as FileSystem from "expo-file-system";
+import * as Haptics from "expo-haptics";
 import * as MediaLibrary from "expo-media-library";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -40,6 +40,8 @@ import {
   FontFamily,
   FontSize,
   FontWeight,
+  HIT_SLOP,
+  MIN_TOUCH,
   Radius,
   Spacing,
   TAB_BAR_CLEARANCE,
@@ -48,24 +50,20 @@ import {
 import { peerInviteLink } from "../../utils/deep-link";
 import { panicWipe } from "../../utils/panic-wipe";
 import { ensurePermission } from "../../utils/permissions";
+import ConnectivityGroup from "./connectivity-group";
 import AboutScreen from "./sections/about-screen";
 import GeneralScreen from "./sections/general-screen";
 import HelpScreen from "./sections/help-screen";
 import LicensesScreen from "./sections/licenses-screen";
 import NetworkScreen from "./sections/network-screen";
+import PermissionsScreen from "./sections/permissions-screen";
 import PrivacyScreen from "./sections/privacy-screen";
 import SecurityScreen from "./sections/security-screen";
 import StorageScreen from "./sections/storage-screen";
 import SupportScreen from "./sections/support-screen";
 import TermsScreen from "./sections/terms-screen";
 import VersionScreen from "./sections/version-screen";
-import {
-  GroupDivider,
-  SettingLinkRow,
-  SettingRow,
-  SettingSwitch,
-  useSharedStyles,
-} from "./shared";
+import { GroupDivider, SettingLinkRow, useSharedStyles } from "./shared";
 
 // Presence on the mesh. Online broadcasts + scans, Away stops the mesh
 // entirely, Invisible keeps scanning but stops advertising our presence.
@@ -106,6 +104,10 @@ function getStatusMeta(Colors: ReturnType<typeof useThemeColors>): Record<
 
 const STATUS_ORDER: Status[] = ["online", "away", "invisible"];
 
+// Diameter of the presence dot overlaid on the profile avatar. Named so its
+// radius follows it rather than being a hand-halved 9.
+const STATUS_DOT_SIZE = 18;
+
 const THEME_META: Record<
   ThemePreference,
   { label: string; description: string; icon: keyof typeof Feather.glyphMap }
@@ -127,34 +129,6 @@ const THEME_META: Record<
   },
 };
 const THEME_ORDER: ThemePreference[] = ["light", "dark", "system"];
-
-// Payments has shipped, so it sits at the top of the features group with a
-// switch locked on rather than a "Coming soon" tag. The rest aren't built
-// yet: each one expands in place to explain what it will do, rather than
-// linking out or staying silent about it.
-type FeatureKey = "ai" | "feeds";
-
-const FEATURES: {
-  key: FeatureKey;
-  label: string;
-  // Unused for "ai": that row renders a robot glyph from
-  // MaterialCommunityIcons instead, which Feather has no equivalent for.
-  icon: keyof typeof Feather.glyphMap;
-  description: string;
-}[] = [
-  {
-    key: "ai",
-    label: "AI",
-    icon: "cpu",
-    description: "Private on-device assistant, no network calls",
-  },
-  {
-    key: "feeds",
-    label: "Feeds",
-    icon: "rss",
-    description: "Read and post to Bluesky and Mastodon feeds",
-  },
-];
 
 // What a phone-to-phone move will carry. Shown in the transfer sheet so the
 // scope of the feature is stated before it exists: people ask "does my wallet
@@ -187,6 +161,7 @@ type SettingsView =
   | "general"
   | "security"
   | "network"
+  | "permissions"
   | "storage"
   | "help"
   | "terms"
@@ -279,6 +254,16 @@ export default function ProfileScreen({
     if (wipeTapTimer.current) clearTimeout(wipeTapTimer.current);
     if (wipeTapCount.current >= 3) {
       wipeTapCount.current = 0;
+      // The triple tap skips every dialog by design: it exists for the moment
+      // when there is no time to read one. That makes it the only irreversible
+      // action in the app with no visual confirmation at all, so it gets the
+      // one unmistakable non-visual one. A warning notification, not an impact:
+      // it is the OS pattern for "something serious just happened", and it is
+      // the only signal a user gets that the wipe fired rather than that they
+      // merely mistapped.
+      void Haptics.notificationAsync(
+        Haptics.NotificationFeedbackType.Warning,
+      ).catch(() => {});
       void handleConfirmWipe();
       return;
     }
@@ -356,6 +341,9 @@ export default function ProfileScreen({
   if (view === "network") {
     return <NetworkScreen onBack={() => setView("root")} />;
   }
+  if (view === "permissions") {
+    return <PermissionsScreen onBack={() => setView("root")} />;
+  }
   if (view === "storage") {
     return <StorageScreen onBack={() => setView("root")} />;
   }
@@ -408,7 +396,7 @@ export default function ProfileScreen({
           onPress={() => setShowStatusModal(true)}
           accessibilityRole="button"
           accessibilityLabel="Edit status"
-          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          hitSlop={HIT_SLOP}
         >
           <Feather name="edit-2" size={15} color={Colors.textSecondary} />
         </Pressable>
@@ -463,47 +451,12 @@ export default function ProfileScreen({
         </Pressable>
       </View>
 
-      {/* Features. Payments is live, so it leads the group. Its switch is
-          locked on: the Wallet tab is part of what Airhop is, not something to
-          switch off. The rest aren't built yet: each row states what it will
-          do and carries a "Coming soon" tag, the same shape as the Payments
-          row above it. */}
-      <View style={shared.section}>
-        <View style={shared.settingsGroup}>
-          <SettingRow
-            icon="credit-card"
-            label="Wallet"
-            description="Send Cashu ecash peer to peer over the mesh"
-            control={
-              <SettingSwitch
-                value
-                disabled
-                accessibilityLabel="Payments (always on)"
-              />
-            }
-          />
-          {FEATURES.map((feature) => (
-            <React.Fragment key={feature.key}>
-              <GroupDivider />
-              <SettingRow
-                icon={feature.key === "ai" ? undefined : feature.icon}
-                iconOverride={
-                  feature.key === "ai" ? (
-                    <MaterialCommunityIcons
-                      name="robot-outline"
-                      size={18}
-                      color={Colors.textSecondary}
-                    />
-                  ) : undefined
-                }
-                label={feature.label}
-                description={feature.description}
-                control={<Text style={shared.comingSoon}>Coming soon</Text>}
-              />
-            </React.Fragment>
-          ))}
-        </View>
-      </View>
+      {/* The connectivity toggles, in the box the feature list used to hold.
+          Wallet/AI/Feeds were a standing statement about the app rather than
+          controls, so they read as chrome on the first screen and have moved
+          under General; these four are the switches people open Settings to
+          flip, and they belong where the thumb already is. */}
+      <ConnectivityGroup />
 
       {/* Settings nav: each row drills into its own sub-screen */}
       <View style={shared.section}>
@@ -511,14 +464,14 @@ export default function ProfileScreen({
           <SettingLinkRow
             icon="settings"
             label="General"
-            description="Undo send, media, reset"
+            description="Optional features, undo send, media, reset"
             onPress={() => setView("general")}
           />
           <GroupDivider />
           <SettingLinkRow
             icon="lock"
             label="Privacy & Security"
-            description="Live voice, tor, internet gateway, mesh bridge"
+            description="Forward secrecy, signed packets, blocked peers"
             onPress={() => setView("security")}
           />
           <GroupDivider />
@@ -527,6 +480,13 @@ export default function ProfileScreen({
             label="Network & Relays"
             description="Internet fallback, nostr relays, bitchat compatibility"
             onPress={() => setView("network")}
+          />
+          <GroupDivider />
+          <SettingLinkRow
+            icon="key"
+            label="Permissions"
+            description="Bluetooth, location, notifications, camera, mic"
+            onPress={() => setView("permissions")}
           />
           <GroupDivider />
           <SettingLinkRow
@@ -937,9 +897,9 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       position: "absolute",
       right: 2,
       bottom: 2,
-      width: 18,
-      height: 18,
-      borderRadius: 9,
+      width: STATUS_DOT_SIZE,
+      height: STATUS_DOT_SIZE,
+      borderRadius: Radius.full,
       borderWidth: 2,
       borderColor: Colors.bg,
     },
@@ -1027,6 +987,7 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       alignItems: "center",
       justifyContent: "center",
       paddingVertical: Spacing.sm + 2,
+      minHeight: MIN_TOUCH,
       borderRadius: Radius.full,
       backgroundColor: Colors.surface,
       borderWidth: 1,

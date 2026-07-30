@@ -7,8 +7,10 @@
 
 import { Feather } from "@expo/vector-icons";
 import * as Clipboard from "expo-clipboard";
+import * as Haptics from "expo-haptics";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
+  ActivityIndicator,
   FlatList,
   Pressable,
   StyleSheet,
@@ -24,11 +26,14 @@ import { useContactsStore } from "../../store/contacts-store";
 import { usePeerStore, type NearbyPeer } from "../../store/peer-store";
 import Avatar from "../../ui/components/avatar";
 import BottomSheet from "../../ui/components/bottom-sheet";
+import EmptyState from "../../ui/components/empty-state";
 import StatusDot from "../../ui/components/status-dot";
 import {
+  DISABLED_OPACITY,
   FontFamily,
   FontSize,
   FontWeight,
+  HIT_SLOP,
   Radius,
   Spacing,
   TAB_BAR_CLEARANCE,
@@ -73,11 +78,23 @@ export default function PeerList({
   // reports a confusing "those coins were just used" instead of doing nothing.
   const [sendingSats, setSendingSats] = useState(false);
   const [copiedPeerID, setCopiedPeerID] = useState(false);
+  // Held so the "copied" tick can be cancelled if the sheet closes first.
+  // Without this the timer fired into an unmounted component.
+  const copyResetRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    return () => {
+      if (copyResetRef.current !== null) clearTimeout(copyResetRef.current);
+    };
+  }, []);
 
   function handleCopyPeerID(id: string): void {
     void Clipboard.setStringAsync(id).catch(() => {});
+    // A copy is silent and the glyph swap is easy to miss mid-tap, so the
+    // confirmation is also felt. Matches how the wallet confirms a copied token.
+    void Haptics.selectionAsync().catch(() => {});
     setCopiedPeerID(true);
-    setTimeout(() => setCopiedPeerID(false), 1500);
+    if (copyResetRef.current !== null) clearTimeout(copyResetRef.current);
+    copyResetRef.current = setTimeout(() => setCopiedPeerID(false), 1500);
   }
 
   // Refresh "last seen" every 10 seconds and evict stale peers.
@@ -145,8 +162,8 @@ export default function PeerList({
   // (selection, fees, reserving so an undelivered token can be reclaimed) lives
   // in the shared transfer service; this only supplies who and how much.
   async function handleSendSats(peer: NearbyPeer): Promise<void> {
-    const amount = parseInt(sendSatsAmount, 10);
-    if (!amount || amount <= 0 || sendingSats) return;
+    const amount = parsedSats;
+    if (amount === null || sendingSats) return;
 
     setSendingSats(true);
     let result;
@@ -170,6 +187,21 @@ export default function PeerList({
       );
     }
   }
+
+  // The typed amount as a number, or null when it is not a spendable one.
+  //
+  // handleSendSats used to parse this itself and silently `return` on anything
+  // invalid, while the confirm button only greyed out on an EMPTY field. So a
+  // "0", a stray "-" or a pasted "12.5" left an enabled arrow that did nothing
+  // at all when tapped: the worst class of dead control, because the user has
+  // no way to tell it from a failed send. One source of validity now drives
+  // both the button's disabled state and the send.
+  const parsedSats = useMemo(() => {
+    const trimmed = sendSatsAmount.trim();
+    if (!/^\d+$/.test(trimmed)) return null;
+    const value = Number.parseInt(trimmed, 10);
+    return Number.isSafeInteger(value) && value > 0 ? value : null;
+  }, [sendSatsAmount]);
 
   function handleQRScanned(peerID: string): void {
     const channel = `dm:${peerID}`;
@@ -234,19 +266,11 @@ export default function PeerList({
           }}
           ItemSeparatorComponent={() => <View style={styles.rowSeparator} />}
           ListEmptyComponent={
-            <View style={styles.listEmptyState}>
-              <Feather
-                name="radio"
-                size={36}
-                color={Colors.textMuted}
-                style={{ opacity: 0.4 }}
-              />
-              <Text style={styles.listEmptyTitle}>No peers nearby</Text>
-              <Text style={styles.listEmptySubtitle}>
-                Other Airhop or bitchat devices{"\n"}within BLE range appear
-                here.
-              </Text>
-            </View>
+            <EmptyState
+              icon="radio"
+              title="No peers nearby"
+              subtitle="Other Airhop or bitchat devices within Bluetooth range appear here."
+            />
           }
           contentContainerStyle={styles.list}
         />
@@ -276,9 +300,14 @@ export default function PeerList({
               <Pressable
                 style={styles.sheetPeerIDRow}
                 onPress={() => handleCopyPeerID(selectedPeer.peerID)}
-                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                hitSlop={HIT_SLOP}
                 accessibilityRole="button"
-                accessibilityLabel="Copy peer ID"
+                // The ID itself is 16 characters of hex, which a screen reader
+                // spells out one character at a time. The label states the
+                // action; the value is not something anyone listens to.
+                accessibilityLabel={
+                  copiedPeerID ? "Peer ID copied" : "Copy peer ID"
+                }
               >
                 <Text style={styles.sheetPeerID}>{selectedPeer.peerID}</Text>
                 <Feather
@@ -344,20 +373,38 @@ export default function PeerList({
                   <Pressable
                     style={[
                       styles.sendSatsConfirm,
-                      (!sendSatsAmount.trim() || sendingSats) && {
-                        opacity: 0.4,
-                      },
+                      (parsedSats === null || sendingSats) &&
+                        styles.sendSatsConfirmDisabled,
                     ]}
                     onPress={() => void handleSendSats(selectedPeer)}
-                    disabled={!sendSatsAmount.trim() || sendingSats}
+                    disabled={parsedSats === null || sendingSats}
                     accessibilityRole="button"
-                    accessibilityLabel="Confirm send sats"
+                    accessibilityLabel={
+                      parsedSats === null
+                        ? "Send sats, enter an amount first"
+                        : `Send ${String(parsedSats)} sats`
+                    }
+                    accessibilityState={{
+                      disabled: parsedSats === null || sendingSats,
+                      busy: sendingSats,
+                    }}
                   >
-                    <Feather
-                      name="arrow-right"
-                      size={16}
-                      color={Colors.textInverse}
-                    />
+                    {/* Quoting the token is a network round trip, so a send can
+                        sit for a second or two. A frozen arrow gave no sign the
+                        tap had registered, which is what invites the double tap
+                        the `sendingSats` guard exists to survive. */}
+                    {sendingSats ? (
+                      <ActivityIndicator
+                        size="small"
+                        color={Colors.textInverse}
+                      />
+                    ) : (
+                      <Feather
+                        name="arrow-right"
+                        size={16}
+                        color={Colors.textInverse}
+                      />
+                    )}
                   </Pressable>
                   <Pressable
                     style={styles.sendSatsCancel}
@@ -365,6 +412,7 @@ export default function PeerList({
                       setShowSendSats(false);
                       setSendSatsAmount("");
                     }}
+                    disabled={sendingSats}
                     accessibilityRole="button"
                     accessibilityLabel="Cancel send sats"
                   >
@@ -402,6 +450,12 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       // Clear the floating tab bar so the last peer row can scroll above it.
       paddingBottom: TAB_BAR_CLEARANCE,
     },
+    // No row background. The header comment claims these rows match dm-list and
+    // channel-list, and in every respect but this they did: those two are flat
+    // on the screen background with only a hairline between them, while this one
+    // filled each row with `surface`. On the same screen as the radar the two
+    // Mesh views therefore had different canvases, and switching Radar/List
+    // changed the page colour as well as the content.
     row: {
       flexDirection: "row",
       alignItems: "center",
@@ -409,7 +463,6 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       paddingVertical: Spacing.md,
       gap: Spacing.md,
       minHeight: 72,
-      backgroundColor: Colors.surface,
     },
     avatarWrapper: {
       position: "relative",
@@ -449,25 +502,9 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
     rowSeparator: {
       height: StyleSheet.hairlineWidth,
       backgroundColor: Colors.border,
+      // Aligned to the text, past the avatar: avatar (46) + gap (16). Same
+      // inset the DM list uses, so the two read as one list style.
       marginLeft: 62,
-    },
-    listEmptyState: {
-      flex: 1,
-      alignItems: "center",
-      justifyContent: "center",
-      paddingVertical: Spacing["4xl"],
-      gap: Spacing.md,
-    },
-    listEmptyTitle: {
-      fontSize: FontSize.md,
-      fontWeight: FontWeight.semibold,
-      color: Colors.textSecondary,
-    },
-    listEmptySubtitle: {
-      fontSize: FontSize.sm,
-      color: Colors.textMuted,
-      textAlign: "center",
-      lineHeight: FontSize.sm * 1.6,
     },
     // Peer detail sheet
     sheet: {
@@ -567,6 +604,9 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       backgroundColor: Colors.accent,
       alignItems: "center",
       justifyContent: "center",
+    },
+    sendSatsConfirmDisabled: {
+      opacity: DISABLED_OPACITY,
     },
     sendSatsCancel: {
       width: SEND_SATS_ROW_HEIGHT,

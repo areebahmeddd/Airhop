@@ -37,10 +37,10 @@ export default function HelloSheet({
 
       <View style={styles.body}>
         <Text style={styles.paragraph}>
-          Hi, I&apos;m Areeb. I built Airhop on top of bitchat as an
-          independent, open source side project. It&apos;s not affiliated with
-          or endorsed by the bitchat project or permissionless tech, just
-          something I enjoy building and sharing with the community.
+          Hey there. Airhop is built on top of bitchat as an independent, open
+          source side project. It&apos;s not affiliated with or endorsed by the
+          bitchat project or permissionless tech, just something I enjoy
+          building and sharing with the community.
         </Text>
         <Text style={styles.paragraph}>
           This is the first iOS and Android release, so while I&apos;ve tested

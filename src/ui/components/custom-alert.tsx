@@ -27,6 +27,11 @@ import {
 } from "../theme";
 import BottomSheet from "./bottom-sheet";
 
+// Height of a dialog button. Comfortably past the 44pt floor because these are
+// the app's confirm/cancel pairs, several of them destructive, and they are
+// stacked so there is no adjacency to worry about.
+const ALERT_BUTTON_HEIGHT = 50;
+
 export default function CustomAlert(): React.JSX.Element {
   const Colors = useThemeColors();
   const styles = useMemo(() => createStyles(Colors), [Colors]);
@@ -58,11 +63,9 @@ export default function CustomAlert(): React.JSX.Element {
           <Pressable
             key={`${button.text}-${i}`}
             style={
-              button.style === "destructive"
-                ? styles.btnDestructive
-                : button.style === "cancel"
-                  ? styles.btnCancel
-                  : styles.btnDefault
+              button.style === "default" || button.style === undefined
+                ? styles.btnDefault
+                : styles.btnOutline
             }
             onPress={() => handlePress(button)}
             accessibilityRole="button"
@@ -113,9 +116,15 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       gap: Spacing.sm,
       marginTop: Spacing.xs,
     },
+    // Two button shapes, not three: the solid accent one for a plain default
+    // action, and a bordered outline one shared by destructive and cancel.
+    // `btnDestructive` and `btnCancel` were byte-identical, which meant the two
+    // could silently drift apart while looking like a deliberate pair. What
+    // actually distinguishes them is the label colour, and that is all that
+    // differs now.
     btnDefault: {
       width: "100%",
-      minHeight: 50,
+      minHeight: ALERT_BUTTON_HEIGHT,
       borderRadius: Radius.full,
       backgroundColor: Colors.accent,
       alignItems: "center",
@@ -126,9 +135,9 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       fontWeight: FontWeight.bold,
       color: Colors.textInverse,
     },
-    btnDestructive: {
+    btnOutline: {
       width: "100%",
-      minHeight: 50,
+      minHeight: ALERT_BUTTON_HEIGHT,
       borderRadius: Radius.full,
       backgroundColor: Colors.surfaceRaised,
       borderWidth: 1,
@@ -140,16 +149,6 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       fontSize: FontSize.base,
       fontWeight: FontWeight.semibold,
       color: Colors.danger,
-    },
-    btnCancel: {
-      width: "100%",
-      minHeight: 50,
-      borderRadius: Radius.full,
-      backgroundColor: Colors.surfaceRaised,
-      borderWidth: 1,
-      borderColor: Colors.border,
-      alignItems: "center",
-      justifyContent: "center",
     },
     btnCancelText: {
       fontSize: FontSize.base,

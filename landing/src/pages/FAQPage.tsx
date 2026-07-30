@@ -910,9 +910,34 @@ const SECTIONS: {
         q: "What is panic wipe?",
         a: (
           <>
-            Triple-tapping the logo triggers an immediate wipe of all identity keys and message data
-            in under a second, for high-stakes situations where you need to destroy the app's
-            contents right away. <strong>This cannot be undone.</strong>
+            Triple-tapping the logo destroys every identity key and all message data in under a
+            second, for a situation where you need the app emptied right now.{" "}
+            <strong>This cannot be undone.</strong>
+            <br />
+            <br />
+            Because your peer ID and your Nostr key are both derived from the keys it destroys,
+            wiping them ends both identities at once. The next launch generates fresh ones, so you
+            come back as a different username with no cryptographic link to the old one.
+            <br />
+            <br />
+            <strong>What it cannot reach:</strong>
+            <ul className="my-2 list-disc space-y-1 pl-5">
+              <li>Messages already delivered. Those are on other people's phones.</li>
+              <li>
+                Anything you published over the internet. Your old identity and its messages stay on
+                the relays that carried them.
+              </li>
+              <li>
+                Your IP address, if you were not using Tor. Relays saw it alongside what you
+                published, and that link outlives the wipe.
+              </li>
+              <li>
+                Contacts who scanned your QR code. They still hold your old keys on their device.
+              </li>
+            </ul>
+            So a wipe makes you unlinkable <strong>from here on</strong>, because the new identity
+            shares nothing with the old one. It cannot retract the past. It is an escape hatch, not
+            a time machine.
           </>
         ),
       },

@@ -32,6 +32,7 @@ import BottomSheet from "../../ui/components/bottom-sheet";
 import {
   FontSize,
   FontWeight,
+  HIT_SLOP,
   Radius,
   Spacing,
   useThemeColors,
@@ -393,7 +394,7 @@ export function NoticesSheet({ visible, onClose, channel }: Props) {
                   {mine && row.post !== undefined && (
                     <Pressable
                       onPress={() => handleDelete(row.post as BoardPost)}
-                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                      hitSlop={HIT_SLOP}
                       accessibilityRole="button"
                       accessibilityLabel="Delete notice"
                     >
@@ -551,7 +552,7 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       borderRadius: Radius.sm,
     },
     urgentBadgeText: {
-      fontSize: 9,
+      fontSize: FontSize["2xs"],
       fontWeight: FontWeight.bold,
       color: Colors.textInverse,
       letterSpacing: 0.5,

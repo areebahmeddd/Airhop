@@ -7,7 +7,6 @@ import {
   useFonts,
 } from "@expo-google-fonts/jetbrains-mono";
 import { Feather } from "@expo/vector-icons";
-import { bytesToHex } from "@noble/hashes/utils.js";
 import { NavigationBar } from "expo-navigation-bar";
 import { StatusBar } from "expo-status-bar";
 import React, {
@@ -40,10 +39,8 @@ import {
   SafeAreaProvider,
   SafeAreaView,
 } from "react-native-safe-area-context";
-import { decodeQRContent } from "./src/core/crypto/contact-exchange";
 import type { Identity } from "./src/core/crypto/identity";
 import { loadIdentity } from "./src/core/crypto/identity";
-import { isValidChannelKey } from "./src/core/mesh/channel-crypto";
 import { primeTorRoutingOnStartup } from "./src/core/nostr/tor-routing";
 import ChannelList from "./src/features/chat/channel-list";
 import ChatSearchResults from "./src/features/chat/chat-search-results";
@@ -59,6 +56,7 @@ import ProfileScreen from "./src/features/settings/profile-screen";
 import WalletScreen, {
   type WalletAction,
 } from "./src/features/wallet/wallet-screen";
+import { applyAirhopLink } from "./src/services/link-router";
 import {
   hasLocationPermission,
   requestLocationPermission,
@@ -87,7 +85,6 @@ import {
 import { useActivityStore } from "./src/store/activity-store";
 import { showAlert } from "./src/store/alert-store";
 import { subscribeInboundMessages, useChatStore } from "./src/store/chat-store";
-import { useContactsStore } from "./src/store/contacts-store";
 import {
   useMeshBanners,
   useMeshStateStore,
@@ -100,9 +97,13 @@ import CustomAlert from "./src/ui/components/custom-alert";
 import MeshStatusBar from "./src/ui/components/mesh-status-bar";
 import TransferBadge from "./src/ui/components/transfer-badge";
 import {
+  DISABLED_OPACITY,
   FontSize,
   FontWeight,
+  hitSlopFor,
+  MaxFontScale,
   Radius,
+  Shadow,
   Spacing,
   useResolvedTheme,
   useThemeColors,
@@ -569,43 +570,10 @@ export default function App(): React.JSX.Element {
       if (url === null) return;
       const link = parseAirhopLink(url);
       if (link === null) return;
-      if (link.kind === "channel") {
-        // A private channel invite carries its E2E key; a public one does not.
-        if (link.key !== undefined && isValidChannelKey(link.key)) {
-          useChatStore
-            .getState()
-            .joinPrivateChannel(link.channel, link.key, link.overNostr);
-        } else {
-          useChatStore.getState().addChannel(link.channel);
-        }
-        openChannelRef.current(link.channel);
-      } else if (link.kind === "peer") {
-        const channel = `dm:${link.peerID}`;
-        useChatStore.getState().addChannel(channel);
-        openChannelRef.current(channel);
-      } else {
-        // A scanned contact card: verify + import the keys, then open the DM.
-        const card = decodeQRContent(link.card);
-        if (card === null) return;
-        // Reject a card whose peer ID isn't the fingerprint of its Noise key;
-        // accepting it would encrypt every DM to whoever forged the QR. Seeds
-        // the routing registry and inbound Nostr map as a side effect.
-        const accepted = getMeshService()?.addVerifiedContact(card) ?? false;
-        if (!accepted) return;
-        useContactsStore.getState().addContact({
-          peerID: card.peerID,
-          noisePubKeyHex: bytesToHex(card.noisePubKey),
-          signingPubKeyHex: bytesToHex(card.signingPubKey),
-          nickname: card.nickname,
-          addedAtMs: Date.now(),
-          source: "qr",
-          // The card carries the peer's Nostr pubkey (internet reachability).
-          nostrPubkeyHex: bytesToHex(card.nostrPubKey),
-        });
-        const channel = `dm:${card.peerID}`;
-        useChatStore.getState().addChannel(channel);
-        openChannelRef.current(channel);
-      }
+      // What the link does lives in services/link-router, shared with the Join
+      // sheet's paste field, so a tapped link and a pasted one behave the same.
+      const channel = applyAirhopLink(link);
+      if (channel !== null) openChannelRef.current(channel);
     };
     void Linking.getInitialURL().then(handle);
     const sub = Linking.addEventListener("url", ({ url }) => handle(url));
@@ -834,9 +802,19 @@ export default function App(): React.JSX.Element {
                   {tab === "chats" && chatView.kind === "list" ? (
                     // Chats header: title left, segmented + New button right
                     <>
-                      <Text style={styles.headerTitle}>Chats</Text>
+                      <Text style={styles.headerTitle} numberOfLines={1}>
+                        Chats
+                      </Text>
                       <View style={styles.headerControls}>
-                        <View style={styles.segmented}>
+                        {/* tablist goes on the segmented track itself, not on
+                            headerControls: the outer row also holds the bell and
+                            the + button, and calling those two "tabs" would have
+                            a screen reader announce "tab 3 of 4" for an action
+                            that navigates nowhere. */}
+                        <View
+                          style={styles.segmented}
+                          accessibilityRole="tablist"
+                        >
                           <Pressable
                             style={[
                               styles.seg,
@@ -844,8 +822,16 @@ export default function App(): React.JSX.Element {
                               chatSubTab === "channels" && styles.segActive,
                             ]}
                             onPress={() => setChatSubTab("channels")}
-                            accessibilityRole="button"
-                            accessibilityLabel="Rooms"
+                            accessibilityRole="tab"
+                            // The count lives in the label rather than being
+                            // left to the badge Text below: read on its own, a
+                            // trailing "3" is ambiguous, and TalkBack merges the
+                            // subtree into one node either way.
+                            accessibilityLabel={
+                              channelsUnread > 0
+                                ? `Rooms, ${String(channelsUnread)} unread`
+                                : "Rooms"
+                            }
                             accessibilityState={{
                               selected: chatSubTab === "channels",
                             }}
@@ -867,12 +853,22 @@ export default function App(): React.JSX.Element {
                                 chatSubTab === "channels" &&
                                   styles.segTextActive,
                               ]}
+                              maxFontSizeMultiplier={MaxFontScale.chrome}
                             >
                               Rooms
                             </Text>
                             {channelsUnread > 0 && (
-                              <View style={styles.segBadge}>
-                                <Text style={styles.segBadgeText}>
+                              <View
+                                style={styles.segBadge}
+                                // Already spoken by the label above; left
+                                // visible it would be read a second time.
+                                importantForAccessibility="no-hide-descendants"
+                                accessibilityElementsHidden
+                              >
+                                <Text
+                                  style={styles.segBadgeText}
+                                  maxFontSizeMultiplier={MaxFontScale.badge}
+                                >
                                   {channelsUnread > 99 ? "99+" : channelsUnread}
                                 </Text>
                               </View>
@@ -885,8 +881,12 @@ export default function App(): React.JSX.Element {
                               chatSubTab === "dms" && styles.segActive,
                             ]}
                             onPress={() => setChatSubTab("dms")}
-                            accessibilityRole="button"
-                            accessibilityLabel="Direct messages"
+                            accessibilityRole="tab"
+                            accessibilityLabel={
+                              dmsUnread > 0
+                                ? `Direct messages, ${String(dmsUnread)} unread`
+                                : "Direct messages"
+                            }
                             accessibilityState={{
                               selected: chatSubTab === "dms",
                             }}
@@ -905,12 +905,20 @@ export default function App(): React.JSX.Element {
                                 styles.segText,
                                 chatSubTab === "dms" && styles.segTextActive,
                               ]}
+                              maxFontSizeMultiplier={MaxFontScale.chrome}
                             >
                               Direct
                             </Text>
                             {dmsUnread > 0 && (
-                              <View style={styles.segBadge}>
-                                <Text style={styles.segBadgeText}>
+                              <View
+                                style={styles.segBadge}
+                                importantForAccessibility="no-hide-descendants"
+                                accessibilityElementsHidden
+                              >
+                                <Text
+                                  style={styles.segBadgeText}
+                                  maxFontSizeMultiplier={MaxFontScale.badge}
+                                >
                                   {dmsUnread > 99 ? "99+" : dmsUnread}
                                 </Text>
                               </View>
@@ -924,6 +932,7 @@ export default function App(): React.JSX.Element {
                         <Pressable
                           style={styles.headerIconBtn}
                           onPress={openActivityCenter}
+                          hitSlop={hitSlopFor(HEADER_ICON_SIZE)}
                           accessibilityRole="button"
                           accessibilityLabel={
                             activityUnseen > 0
@@ -937,8 +946,15 @@ export default function App(): React.JSX.Element {
                             color={Colors.textSecondary}
                           />
                           {activityUnseen > 0 && (
-                            <View style={styles.bellBadge}>
-                              <Text style={styles.bellBadgeText}>
+                            <View
+                              style={styles.bellBadge}
+                              importantForAccessibility="no-hide-descendants"
+                              accessibilityElementsHidden
+                            >
+                              <Text
+                                style={styles.bellBadgeText}
+                                maxFontSizeMultiplier={MaxFontScale.badge}
+                              >
                                 {activityUnseen > 99 ? "99+" : activityUnseen}
                               </Text>
                             </View>
@@ -950,6 +966,7 @@ export default function App(): React.JSX.Element {
                         <Pressable
                           style={styles.newChannelPill}
                           onPress={() => setStartNewTrigger((c) => c + 1)}
+                          hitSlop={hitSlopFor(HEADER_ICON_SIZE)}
                           accessibilityRole="button"
                           accessibilityLabel="Start something new"
                         >
@@ -965,9 +982,16 @@ export default function App(): React.JSX.Element {
                     // Mesh header: title left, view toggle + add-contact button
                     // right. Radar is the default view.
                     <>
-                      <Text style={styles.headerTitle}>Mesh</Text>
+                      <Text style={styles.headerTitle} numberOfLines={1}>
+                        Mesh
+                      </Text>
                       <View style={styles.headerControls}>
-                        <View style={styles.segmented}>
+                        {/* Same reasoning as the Chats header: the track is the
+                            tablist, the add-contact pill beside it is not. */}
+                        <View
+                          style={styles.segmented}
+                          accessibilityRole="tablist"
+                        >
                           <Pressable
                             style={[
                               styles.seg,
@@ -975,7 +999,7 @@ export default function App(): React.JSX.Element {
                               meshViewMode === "radar" && styles.segActive,
                             ]}
                             onPress={() => setMeshViewMode("radar")}
-                            accessibilityRole="button"
+                            accessibilityRole="tab"
                             accessibilityLabel="Radar view"
                             accessibilityState={{
                               selected: meshViewMode === "radar",
@@ -996,6 +1020,7 @@ export default function App(): React.JSX.Element {
                                 meshViewMode === "radar" &&
                                   styles.segTextActive,
                               ]}
+                              maxFontSizeMultiplier={MaxFontScale.chrome}
                             >
                               Radar
                             </Text>
@@ -1007,7 +1032,7 @@ export default function App(): React.JSX.Element {
                               meshViewMode === "list" && styles.segActive,
                             ]}
                             onPress={() => setMeshViewMode("list")}
-                            accessibilityRole="button"
+                            accessibilityRole="tab"
                             accessibilityLabel="List view"
                             accessibilityState={{
                               selected: meshViewMode === "list",
@@ -1027,6 +1052,7 @@ export default function App(): React.JSX.Element {
                                 styles.segText,
                                 meshViewMode === "list" && styles.segTextActive,
                               ]}
+                              maxFontSizeMultiplier={MaxFontScale.chrome}
                             >
                               List
                             </Text>
@@ -1035,8 +1061,9 @@ export default function App(): React.JSX.Element {
                         <Pressable
                           style={styles.newChannelPill}
                           onPress={() => setMeshAddCounter((c) => c + 1)}
+                          hitSlop={hitSlopFor(HEADER_ICON_SIZE)}
                           accessibilityRole="button"
-                          accessibilityLabel="Add contact"
+                          accessibilityLabel="Add contact by scanning a QR code"
                         >
                           <Feather
                             name="user-plus"
@@ -1051,13 +1078,20 @@ export default function App(): React.JSX.Element {
                     // icon-box style as Mesh's "add contact" pill, moved up
                     // here from a row inside the balance card.
                     <>
-                      <Text style={styles.headerTitle}>Wallet</Text>
+                      <Text style={styles.headerTitle} numberOfLines={1}>
+                        Wallet
+                      </Text>
                       <View style={styles.headerControls}>
                         {/* Send and Zap both spend, so they are dimmed with
                             nothing to spend. Letting them open a sheet that can
                             only end in "not enough balance" is the classic way
                             to waste somebody's time. Receive and Add mint stay
-                            live, since those are how a new wallet gets started. */}
+                            live, since those are how a new wallet gets started.
+
+                            A dim glyph alone does not say WHY, and this is the
+                            one header where two of four actions are routinely
+                            off, so the reason rides in the accessibility label
+                            rather than being left to be inferred. */}
                         <Pressable
                           style={[
                             styles.newChannelPill,
@@ -1065,9 +1099,14 @@ export default function App(): React.JSX.Element {
                           ]}
                           disabled={!hasSpendableEcash}
                           onPress={() => triggerWalletAction("send")}
+                          hitSlop={hitSlopFor(HEADER_ICON_SIZE)}
                           accessibilityRole="button"
                           accessibilityState={{ disabled: !hasSpendableEcash }}
-                          accessibilityLabel="Send ecash token"
+                          accessibilityLabel={
+                            hasSpendableEcash
+                              ? "Send ecash token"
+                              : "Send ecash token, unavailable with an empty balance"
+                          }
                         >
                           <Feather
                             name="arrow-up"
@@ -1078,6 +1117,7 @@ export default function App(): React.JSX.Element {
                         <Pressable
                           style={styles.newChannelPill}
                           onPress={() => triggerWalletAction("receive")}
+                          hitSlop={hitSlopFor(HEADER_ICON_SIZE)}
                           accessibilityRole="button"
                           accessibilityLabel="Receive ecash token"
                         >
@@ -1094,9 +1134,14 @@ export default function App(): React.JSX.Element {
                           ]}
                           disabled={!hasSpendableEcash}
                           onPress={() => triggerWalletAction("zap")}
+                          hitSlop={hitSlopFor(HEADER_ICON_SIZE)}
                           accessibilityRole="button"
                           accessibilityState={{ disabled: !hasSpendableEcash }}
-                          accessibilityLabel="Zap a Nostr contact"
+                          accessibilityLabel={
+                            hasSpendableEcash
+                              ? "Zap a Nostr contact"
+                              : "Zap a Nostr contact, unavailable with an empty balance"
+                          }
                         >
                           <Feather
                             name="zap"
@@ -1107,6 +1152,7 @@ export default function App(): React.JSX.Element {
                         <Pressable
                           style={styles.newChannelPill}
                           onPress={() => triggerWalletAction("addMint")}
+                          hitSlop={hitSlopFor(HEADER_ICON_SIZE)}
                           accessibilityRole="button"
                           accessibilityLabel="Add a Cashu mint"
                         >
@@ -1120,7 +1166,9 @@ export default function App(): React.JSX.Element {
                     </>
                   ) : (
                     // Standard header: just the title
-                    <Text style={styles.headerTitle}>{HEADER_TITLES[tab]}</Text>
+                    <Text style={styles.headerTitle} numberOfLines={1}>
+                      {HEADER_TITLES[tab]}
+                    </Text>
                   )}
                 </View>
               )}
@@ -1134,7 +1182,7 @@ export default function App(): React.JSX.Element {
                   {chatView.kind === "search" && (
                     <Pressable
                       onPress={handleCancelSearch}
-                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                      hitSlop={hitSlopFor(20)}
                       accessibilityRole="button"
                       accessibilityLabel="Close search"
                     >
@@ -1157,11 +1205,26 @@ export default function App(): React.JSX.Element {
                       placeholderTextColor={Colors.textMuted}
                       returnKeyType="search"
                       selectionColor={Colors.accent}
+                      // A placeholder is not a label: it disappears the moment
+                      // there is a query, so a screen reader landing on a
+                      // half-typed field would otherwise announce nothing but
+                      // the text itself.
+                      accessibilityLabel="Search chats and messages"
+                      // Search is a name/content scan, never an address or a
+                      // sentence, so the OS should not try to help.
+                      autoCorrect={false}
+                      autoCapitalize="none"
+                      // iOS gets the native clear affordance for free; the
+                      // explicit button below covers Android, so only one of
+                      // the two ever renders.
+                      clearButtonMode={
+                        Platform.OS === "ios" ? "while-editing" : "never"
+                      }
                     />
-                    {searchQuery.length > 0 && (
+                    {Platform.OS !== "ios" && searchQuery.length > 0 && (
                       <Pressable
                         onPress={() => setSearchQuery("")}
-                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                        hitSlop={hitSlopFor(16)}
                         accessibilityRole="button"
                         accessibilityLabel="Clear search"
                       >
@@ -1289,16 +1352,25 @@ export default function App(): React.JSX.Element {
                       clips its children to the pill (overflow hidden), and a
                       clipped view can't cast the shadow itself. */}
                   <View style={styles.tabBarWrap}>
-                    <View style={styles.tabBar}>
+                    {/* accessibilityRole="tablist" is what tells VoiceOver and
+                        TalkBack that the four children below are one group of
+                        alternatives ("tab 2 of 4"). Without it each tab was an
+                        unrelated button and the set had no announced size. */}
+                    <View style={styles.tabBar} accessibilityRole="tablist">
                       {TABS.map(({ id, label, icon }) => {
                         const active = tab === id;
+                        const unread = id === "chats" ? chatsUnread : 0;
                         return (
                           <Pressable
                             key={id}
                             style={styles.tabItem}
                             onPress={() => navigateToTab(id as MainTab)}
                             accessibilityRole="tab"
-                            accessibilityLabel={label}
+                            accessibilityLabel={
+                              unread > 0
+                                ? `${label}, ${String(unread)} unread`
+                                : label
+                            }
                             accessibilityState={{ selected: active }}
                           >
                             <View
@@ -1328,12 +1400,17 @@ export default function App(): React.JSX.Element {
                                   }
                                 />
                               )}
-                              {id === "chats" && chatsUnread > 0 && (
-                                <View style={styles.tabBadge}>
-                                  <Text style={styles.tabBadgeText}>
-                                    {chatsUnread > 99
-                                      ? "99+"
-                                      : String(chatsUnread)}
+                              {unread > 0 && (
+                                <View
+                                  style={styles.tabBadge}
+                                  importantForAccessibility="no-hide-descendants"
+                                  accessibilityElementsHidden
+                                >
+                                  <Text
+                                    style={styles.tabBadgeText}
+                                    maxFontSizeMultiplier={MaxFontScale.badge}
+                                  >
+                                    {unread > 99 ? "99+" : String(unread)}
                                   </Text>
                                 </View>
                               )}
@@ -1343,6 +1420,11 @@ export default function App(): React.JSX.Element {
                                 styles.tabLabel,
                                 active && styles.tabLabelActive,
                               ]}
+                              // The pill is a fixed height, so an uncapped
+                              // label at the largest OS text size pushed the
+                              // icon out of it entirely.
+                              maxFontSizeMultiplier={MaxFontScale.chrome}
+                              numberOfLines={1}
                             >
                               {label}
                             </Text>
@@ -1379,6 +1461,10 @@ const TABS: { id: MainTab; label: string; icon: string }[] = [
   { id: "profile", label: "You", icon: "user" },
 ];
 
+// The drawn size of a header icon button. Deliberately smaller than MIN_TOUCH so
+// the header stays light; hitSlopFor() makes up the difference for the thumb.
+const HEADER_ICON_SIZE = 32;
+
 // ---------------------------------------------------------------------------
 // Styles
 // ---------------------------------------------------------------------------
@@ -1406,6 +1492,11 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       fontWeight: FontWeight.semibold,
       color: Colors.textPrimary,
       letterSpacing: -0.2,
+      // The Wallet header packs four action pills beside this title. On a narrow
+      // device at a large text size the row used to overflow rather than the
+      // title giving up its width first.
+      flexShrink: 1,
+      marginRight: Spacing.sm,
     },
     // Search bar (Chats tab only), moved up from ChannelList so one search
     // spans both Channels and Direct instead of being duplicated per sub-tab.
@@ -1447,9 +1538,13 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       borderRadius: Radius.full,
       padding: 2,
     },
+    // Raised from 7 to 9 vertical padding: at 7 the segment measured ~30pt
+    // tall, under the 44pt floor, and hitSlop is not an option here because
+    // slop on adjacent segments overlaps and makes the boundary unpredictable.
+    // Growing the track itself is the only honest fix.
     seg: {
       paddingHorizontal: Spacing.md,
-      paddingVertical: 7,
+      paddingVertical: 9,
       borderRadius: Radius.full,
     },
     // Icon + label variant of `seg`, used wherever a segment carries an icon
@@ -1462,11 +1557,7 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
     },
     segActive: {
       backgroundColor: Colors.surface,
-      shadowColor: "#000",
-      shadowOffset: { width: 0, height: 1 },
-      shadowOpacity: 0.1,
-      shadowRadius: 1,
-      elevation: 1,
+      ...Shadow.low,
     },
     segText: {
       fontSize: FontSize.sm,
@@ -1479,21 +1570,21 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
     // Circular action button (add/create), shared by Chats, Mesh and Wallet
     // headers so every header icon-action reads the same.
     newChannelPill: {
-      width: 32,
-      height: 32,
+      width: HEADER_ICON_SIZE,
+      height: HEADER_ICON_SIZE,
       borderRadius: Radius.full,
       alignItems: "center",
       justifyContent: "center",
       backgroundColor: Colors.surfaceRaised,
     },
     headerPillDisabled: {
-      opacity: 0.35,
+      opacity: DISABLED_OPACITY,
     },
     // Same tap target as the + pill but with no filled background, so the bell
     // sits as a lighter-weight action beside it.
     headerIconBtn: {
-      width: 32,
-      height: 32,
+      width: HEADER_ICON_SIZE,
+      height: HEADER_ICON_SIZE,
       alignItems: "center",
       justifyContent: "center",
     },
@@ -1514,9 +1605,12 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       borderColor: Colors.bg,
     },
     bellBadgeText: {
-      fontSize: 9,
+      fontSize: FontSize["2xs"],
       fontWeight: FontWeight.bold,
       color: Colors.textInverse,
+      // Fixed-width digits so a count ticking 9 -> 10 -> 11 does not make the
+      // badge breathe. Same on all three badge styles below.
+      fontVariant: ["tabular-nums"],
     },
     content: {
       flex: 1,
@@ -1535,11 +1629,7 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       marginHorizontal: Spacing.base,
       marginBottom: Spacing.md,
       borderRadius: Radius.full,
-      shadowColor: "#000",
-      shadowOffset: { width: 0, height: 6 },
-      shadowOpacity: 0.12,
-      shadowRadius: 16,
-      elevation: 10,
+      ...Shadow.high,
     },
     // The pill itself: a solid surface with a hairline edge.
     tabBar: {
@@ -1561,7 +1651,7 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
     tabIndicator: {
       width: 24,
       height: 3,
-      borderRadius: 2,
+      borderRadius: Radius.xs,
       backgroundColor: "transparent",
       marginBottom: 2,
     },
@@ -1590,19 +1680,23 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       borderColor: Colors.surface,
     },
     tabBadgeText: {
-      fontSize: 9,
+      fontSize: FontSize["2xs"],
       fontWeight: FontWeight.bold,
       color: Colors.textInverse,
       lineHeight: 12,
+      fontVariant: ["tabular-nums"],
     },
     // Unread badge on the Channels/Direct segmented control, the same visual
     // language as tabBadge, just anchored to a smaller pill instead of a tab icon.
+    // 16pt, matching the tab and bell badges: all three sit on chrome, so they
+    // are the same object at the same size. It was 15, which read as a third
+    // badge size for no reason anyone could name.
     segBadge: {
       position: "absolute",
       top: -5,
       right: -6,
-      minWidth: 15,
-      height: 15,
+      minWidth: 16,
+      height: 16,
       borderRadius: Radius.full,
       backgroundColor: Colors.accent,
       alignItems: "center",
@@ -1612,14 +1706,14 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       borderColor: Colors.surfaceRaised,
     },
     segBadgeText: {
-      fontSize: 9,
+      fontSize: FontSize["2xs"],
       fontWeight: FontWeight.bold,
       color: Colors.textInverse,
       lineHeight: 11,
+      fontVariant: ["tabular-nums"],
     },
-    tabLine: {},
     tabLabel: {
-      fontSize: 10,
+      fontSize: FontSize["2xs"],
       fontWeight: FontWeight.medium,
       color: Colors.textMuted,
       letterSpacing: 0.1,

@@ -37,6 +37,7 @@ import {
   StyleSheet,
   Text,
   TextInput,
+  useWindowDimensions,
   View,
 } from "react-native";
 import QRCode from "react-native-qrcode-svg";
@@ -46,6 +47,7 @@ import {
   isLikelyTestMint,
   TOKEN_QR_ERROR_CORRECTION,
   TOKEN_QR_MAX_CHARS,
+  TOKEN_QR_SIZE,
   tokenQrPayload,
 } from "../../core/payments/cashu";
 import {
@@ -101,14 +103,18 @@ import {
 import Avatar from "../../ui/components/avatar";
 import BottomSheet from "../../ui/components/bottom-sheet";
 import {
+  DISABLED_OPACITY,
   FontFamily,
   FontSize,
   FontWeight,
+  hitSlopFor,
+  MIN_TOUCH,
   Radius,
   Spacing,
   TAB_BAR_CLEARANCE,
   useThemeColors,
 } from "../../ui/theme";
+import { usePullRefreshColors } from "../../ui/use-pull-refresh";
 import { peerIDToUsername } from "../../utils/username";
 import TokenScanner, { type ScanTarget } from "./token-scanner";
 
@@ -130,6 +136,12 @@ const PEER_ONLINE_WINDOW_MS = 60_000;
 // asked on the way past; the rest is history and can wait for a tap.
 const ACTIVITY_COLLAPSED_COUNT = 3;
 
+// Drawn size of the per-mint icon buttons (confirm proofs, remove mint). Small
+// on purpose so a mint row stays a row rather than a card, with hitSlopFor()
+// making the target up to MIN_TOUCH. One of the two deletes proofs permanently,
+// so it is not a target to leave at 28pt.
+const MINT_ICON_SIZE = 28;
+
 interface Props {
   action?: WalletAction | null;
   actionTrigger?: number;
@@ -141,6 +153,7 @@ export default function WalletScreen({
 }: Props): React.JSX.Element {
   const Colors = useThemeColors();
   const styles = useMemo(() => createStyles(Colors), [Colors]);
+  const pullRefreshColors = usePullRefreshColors();
 
   // Narrow subscriptions: the whole store changes on every history write, and
   // this screen re-renders a list of peers on a timer as it is.
@@ -434,6 +447,17 @@ export default function WalletScreen({
     const formatted = formatAmount(amount, unit, bitcoinUnit);
     return `${formatted.value} ${formatted.label}`;
   }
+
+  // How big a hand-off QR is drawn. TOKEN_QR_SIZE is the size its character
+  // ceiling was budgeted against, clamped to what the sheet actually has: the
+  // sheet's own padding plus the white frame's takes 80, and on a narrow phone
+  // the full size would be clipped, which reads as a broken code rather than a
+  // small one.
+  const { width: windowWidth } = useWindowDimensions();
+  const qrSize = Math.min(
+    TOKEN_QR_SIZE,
+    windowWidth - Spacing.xl * 2 - Spacing.base * 2,
+  );
 
   // Mints holding spendable value in the primary unit. Two or more means the
   // balance cannot pay any amount larger than the biggest single mint holds.
@@ -1216,8 +1240,7 @@ export default function WalletScreen({
         <RefreshControl
           refreshing={pullRefreshing}
           onRefresh={() => void handlePullRefresh()}
-          tintColor={Colors.textMuted}
-          colors={[Colors.accent]}
+          {...pullRefreshColors}
         />
       }
     >
@@ -1263,7 +1286,18 @@ export default function WalletScreen({
                 : undefined
             }
           >
-            <Text style={styles.balanceAmount}>{headline.value}</Text>
+            {/* 38pt digits, so a seven-figure balance or a large OS text size
+                used to run off the edge of the card and get clipped: the one
+                number in the app that must never be half-visible. Shrinking to
+                fit keeps it on one line and keeps the unit beside it. */}
+            <Text
+              style={styles.balanceAmount}
+              numberOfLines={1}
+              adjustsFontSizeToFit
+              minimumFontScale={0.6}
+            >
+              {headline.value}
+            </Text>
             <Text style={styles.balanceUnit}>{headline.label}</Text>
           </Pressable>
 
@@ -1483,7 +1517,7 @@ export default function WalletScreen({
                       onPress={() =>
                         void handleRefreshMint(account.mintUrl, account.unit)
                       }
-                      hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                      hitSlop={hitSlopFor(MINT_ICON_SIZE)}
                       accessibilityRole="button"
                       accessibilityLabel={`Confirm proofs with ${hostOf(account.mintUrl)}`}
                     >
@@ -1503,7 +1537,7 @@ export default function WalletScreen({
                     <Pressable
                       style={styles.iconBtn}
                       onPress={() => handleRemoveMint(account)}
-                      hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                      hitSlop={hitSlopFor(MINT_ICON_SIZE)}
                       accessibilityRole="button"
                       accessibilityLabel={`Remove ${hostOf(account.mintUrl)}`}
                     >
@@ -2153,7 +2187,7 @@ export default function WalletScreen({
           <View style={styles.qrFrame}>
             <QRCode
               value={tokenQrPayload(pending.token)}
-              size={200}
+              size={qrSize}
               ecl={TOKEN_QR_ERROR_CORRECTION}
               color="#000000"
               backgroundColor="#FFFFFF"
@@ -2161,14 +2195,16 @@ export default function WalletScreen({
           </View>
         ) : (
           <>
-            <TextInput
-              style={[styles.tokenInput, styles.tokenInputMono]}
-              value={pending?.token ?? ""}
-              editable={false}
-              multiline
-              numberOfLines={3}
-              selectionColor={Colors.accent}
-            />
+            <View style={styles.readonlyValueBox}>
+              <Text
+                style={styles.readonlyValue}
+                selectable
+                numberOfLines={3}
+                ellipsizeMode="tail"
+              >
+                {pending?.token ?? ""}
+              </Text>
+            </View>
             <Text style={styles.generatedHint}>
               This token is split across too many coins to fit in a QR code.
               Share or copy it instead, or refresh at the mint to consolidate.
@@ -2287,21 +2323,26 @@ export default function WalletScreen({
               <View style={styles.qrFrame}>
                 <QRCode
                   value={deposit.invoice.toUpperCase()}
-                  size={200}
+                  size={qrSize}
                   ecl={TOKEN_QR_ERROR_CORRECTION}
                   backgroundColor="#FFFFFF"
                   color="#000000"
                 />
               </View>
             )}
-            <TextInput
-              style={[styles.tokenInput, styles.tokenInputMono]}
-              value={deposit.invoice}
-              editable={false}
-              multiline
-              numberOfLines={4}
-              selectionColor={Colors.accent}
-            />
+            {/* Head first, truncated at the end: the `lnbc` prefix and the
+                amount are the only part of an invoice a person can check by
+                eye, and Copy sits right below for the rest. */}
+            <View style={styles.readonlyValueBox}>
+              <Text
+                style={styles.readonlyValue}
+                selectable
+                numberOfLines={4}
+                ellipsizeMode="tail"
+              >
+                {deposit.invoice}
+              </Text>
+            </View>
             <View style={styles.generatedActions}>
               <Pressable
                 style={styles.generatedActionBtn}
@@ -2779,7 +2820,7 @@ export default function WalletScreen({
           <View style={styles.qrFrame}>
             <QRCode
               value={tokenQrPayload(qrToken.token)}
-              size={200}
+              size={qrSize}
               ecl={TOKEN_QR_ERROR_CORRECTION}
               color="#000000"
               backgroundColor="#FFFFFF"
@@ -3165,9 +3206,16 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       flexWrap: "wrap",
       gap: Spacing.sm,
     },
+    // The five pending-send actions (QR, Copy, Share, Delivered, Reclaim) were
+    // the smallest targets in the app: 4pt of padding around 13pt of text made
+    // each one ~21pt tall, in a tight horizontal row, and one of them moves
+    // money back into the balance. They sit in a flexWrap row, so giving them a
+    // real height costs a wrap on a narrow screen and nothing else.
     pendingBtn: {
       paddingHorizontal: Spacing.md,
-      paddingVertical: Spacing.xs,
+      paddingVertical: Spacing.sm,
+      minHeight: MIN_TOUCH,
+      justifyContent: "center",
       borderRadius: Radius.full,
       backgroundColor: Colors.surfaceRaised,
       borderWidth: 1,
@@ -3215,6 +3263,7 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       marginTop: Spacing.xs,
       paddingHorizontal: Spacing.base,
       paddingVertical: Spacing.sm,
+      minHeight: MIN_TOUCH,
       borderRadius: Radius.full,
       borderWidth: 1,
       borderColor: Colors.border,
@@ -3246,7 +3295,7 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
     mintIconCircle: {
       width: 40,
       height: 40,
-      borderRadius: 20,
+      borderRadius: Radius.full,
       backgroundColor: Colors.surfaceRaised,
       borderWidth: 1,
       borderColor: Colors.border,
@@ -3328,8 +3377,8 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       marginTop: Spacing.xs,
     },
     iconBtn: {
-      width: 28,
-      height: 28,
+      width: MINT_ICON_SIZE,
+      height: MINT_ICON_SIZE,
       alignItems: "center",
       justifyContent: "center",
       borderRadius: Radius.full,
@@ -3350,7 +3399,7 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       borderColor: Colors.borderStrong,
     },
     testBadgeText: {
-      fontSize: 9,
+      fontSize: FontSize["2xs"],
       fontWeight: FontWeight.semibold,
       color: Colors.textMuted,
       letterSpacing: 0.5,
@@ -3382,7 +3431,7 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       borderColor: Colors.border,
     },
     smallBtnDisabled: {
-      opacity: 0.4,
+      opacity: DISABLED_OPACITY,
     },
     smallBtnText: {
       fontSize: FontSize.xs,
@@ -3396,6 +3445,7 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       gap: Spacing.sm,
       paddingHorizontal: Spacing.base,
       paddingVertical: Spacing.md,
+      minHeight: MIN_TOUCH,
       borderRadius: Radius.lg,
       borderWidth: 1,
       borderColor: Colors.border,
@@ -3508,7 +3558,7 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
     bulletDot: {
       width: 5,
       height: 5,
-      borderRadius: 2.5,
+      borderRadius: Radius.full,
       backgroundColor: Colors.textMuted,
       marginTop: 7,
       flexShrink: 0,
@@ -3766,6 +3816,33 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       fontFamily: FontFamily.mono,
       fontSize: FontSize.xs,
       letterSpacing: 0.3,
+    },
+    // A long machine string the user reads but never types: a bolt11 invoice, a
+    // cashu token. Same box as `tokenInput` so the sheets keep one shape, but a
+    // Text and not a disabled TextInput, because on Android `numberOfLines`
+    // pins a multiline TextInput to that many lines and then scrolls the
+    // overflow to the cursor, which sits at the end of a programmatic value.
+    // The box showed the tail of the string with the `lnbc`/`cashuB` head, the
+    // part that says what the thing even is, scrolled out of sight above, and
+    // left a row of half-glyphs along the top edge that reads as a rendering
+    // fault. Text lays out from the top and never scrolls, so the head is
+    // always what you see and the ellipsis reads as deliberate. Copy stays the
+    // way to get the whole string; nobody transcribes 300 characters by eye.
+    readonlyValueBox: {
+      backgroundColor: Colors.surfaceRaised,
+      borderRadius: Radius.xl,
+      borderWidth: 1,
+      borderColor: Colors.border,
+      paddingHorizontal: Spacing.base,
+      paddingVertical: Spacing.md,
+      minHeight: 80,
+    },
+    readonlyValue: {
+      color: Colors.textSecondary,
+      fontSize: FontSize.xs,
+      fontFamily: FontFamily.mono,
+      letterSpacing: 0.3,
+      lineHeight: 16,
     },
     // Stacked, full-width pill actions, same shape and rhythm as every other
     // sheet in the app (see `settings/shared` sheetActions): the group owns the

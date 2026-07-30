@@ -12,6 +12,7 @@
 
 import { decodeFilePacket } from "../../core/mesh/bitchat-file-packet";
 import { PacketType, type Packet } from "../../core/mesh/packet-codec";
+import { useTransferStore } from "../../store/transfer-store";
 import { FileTransferService } from "../file-transfer-service";
 
 // The service only touches expo-file-system on the RECEIVE path; a shallow
@@ -34,15 +35,29 @@ const META = {
   durationMs: 0,
 };
 
-function makeService() {
-  const broadcast = jest.fn();
-  const unicast = jest.fn();
+// The transport now answers whether it ACCEPTED the packet, and the pacer waits
+// for that answer before offering the next fragment. `accepted` lets a test play
+// a radio that is refusing writes, which is the case that used to lose files.
+function makeService(accepted = true) {
+  const broadcast = jest.fn().mockResolvedValue(accepted);
+  const unicast = jest.fn().mockResolvedValue(accepted);
   const service = new FileTransferService(IDENTITY, broadcast, unicast);
   return { service, broadcast, unicast };
 }
 
+// Fire the pacer's timer, then let the awaited transport answer settle so the
+// next tick is scheduled. Advancing fake timers alone only does the first half.
+async function tick(times = 1, ms = 20): Promise<void> {
+  for (let i = 0; i < times; i++) {
+    jest.advanceTimersByTime(ms);
+    await Promise.resolve();
+    await Promise.resolve();
+  }
+}
+
 beforeEach(() => {
   jest.useFakeTimers();
+  useTransferStore.getState().clearAll();
 });
 
 afterEach(() => {
@@ -69,41 +84,41 @@ describe("outbound pacing", () => {
     expect(service.pendingCount).toBeGreaterThan(1);
   });
 
-  it("drains one packet per tick and eventually sends all of them", () => {
+  it("drains one packet per tick and eventually sends all of them", async () => {
     const { service, broadcast } = makeService();
 
     service.sendBytes(FILE, META, "#test");
     const queued = service.pendingCount;
     expect(queued).toBeGreaterThan(1);
 
-    jest.advanceTimersByTime(20);
+    await tick();
     expect(broadcast).toHaveBeenCalledTimes(1);
 
-    jest.advanceTimersByTime(20);
+    await tick();
     expect(broadcast).toHaveBeenCalledTimes(2);
 
     // Drain the rest.
-    jest.advanceTimersByTime(20 * (queued + 2));
+    await tick(queued + 2);
     expect(broadcast).toHaveBeenCalledTimes(queued);
     expect(service.pendingCount).toBe(0);
   });
 
-  it("unicasts to the peer for a DM channel instead of broadcasting", () => {
+  it("unicasts to the peer for a DM channel instead of broadcasting", async () => {
     const { service, broadcast, unicast } = makeService();
 
     service.sendBytes(FILE, META, "dm:9f8e7d6c5b4a3210");
-    jest.advanceTimersByTime(20 * 500);
+    await tick(500);
 
     expect(broadcast).not.toHaveBeenCalled();
     expect(unicast).toHaveBeenCalled();
     expect(unicast.mock.calls[0][0]).toBe("9f8e7d6c5b4a3210");
   });
 
-  it("preserves fragment order through the queue", () => {
+  it("preserves fragment order through the queue", async () => {
     const { service, broadcast } = makeService();
 
     service.sendBytes(FILE, META, "#test");
-    jest.advanceTimersByTime(20 * 500);
+    await tick(500);
 
     // Every dispatched packet is a FRAGMENT of the original chunk, and the
     // receiver reassembles by index, but ordering still matters for the
@@ -147,6 +162,108 @@ describe("outbound pacing", () => {
   });
 });
 
+// The bug these guard: two phones sending a photo to each other at the same
+// time. 20ms pacing already sits at what BLE carries one-way, so the second
+// direction fills the stack's write queue and it starts refusing. A refusal
+// that is dropped is a fragment the receiver can never ask for, so its stream
+// stalls at a couple of percent and dies on the idle timeout, while the sender
+// marches to 100% and reports "sent". Nothing on this wire acknowledges a
+// fragment, so holding on to a refused one is the only thing that can save it.
+describe("radio backpressure", () => {
+  const FILE = (() => {
+    const f = new Uint8Array(4000);
+    for (let i = 0; i < f.length; i++) f[i] = (i * 167 + 13) & 0xff;
+    return f;
+  })();
+
+  it("keeps a refused fragment instead of counting it as sent", async () => {
+    const { service, broadcast } = makeService(false);
+
+    service.sendBytes(FILE, META, "#test");
+    const queued = service.pendingCount;
+
+    await tick(3, 60);
+
+    // It was offered, and it is still ours to offer again.
+    expect(broadcast).toHaveBeenCalled();
+    expect(service.pendingCount).toBe(queued);
+  });
+
+  it("re-offers the SAME fragment, so the stream keeps its order", async () => {
+    const { service, broadcast } = makeService(false);
+
+    service.sendBytes(FILE, META, "#test");
+    await tick(3, 60);
+
+    const indexOf = (call: unknown[]) => {
+      const pkt = call[0] as Packet;
+      return (pkt.payload[8] << 8) | pkt.payload[9];
+    };
+    const offered = broadcast.mock.calls.map(indexOf);
+    expect(offered.every((i) => i === offered[0])).toBe(true);
+  });
+
+  it("resumes from where it stalled once the radio takes writes again", async () => {
+    const { service, broadcast } = makeService(false);
+
+    service.sendBytes(FILE, META, "#test");
+    const queued = service.pendingCount;
+    await tick(3, 60);
+    expect(service.pendingCount).toBe(queued);
+
+    broadcast.mockResolvedValue(true);
+    await tick(queued + 2);
+
+    expect(service.pendingCount).toBe(0);
+  });
+
+  it("gives up honestly on a link that never recovers", async () => {
+    const { service } = makeService(false);
+    const outcome = jest.fn();
+
+    service.sendBytes(FILE, META, "#test", outcome);
+    // Past REFUSAL_LIMIT (250) consecutive refusals.
+    await tick(260, 60);
+
+    expect(outcome).toHaveBeenCalledWith(false);
+    expect(service.pendingCount).toBe(0);
+  });
+
+  it("reports the outcome once the whole file is away", async () => {
+    const { service } = makeService();
+    const outcome = jest.fn();
+
+    service.sendBytes(FILE, META, "#test", outcome);
+    await tick(service.pendingCount + 2);
+
+    expect(outcome).toHaveBeenCalledWith(true);
+  });
+
+  it("does not resurrect a transfer cancelled mid-flight", async () => {
+    const { service } = makeService(false);
+    const outcome = jest.fn();
+
+    service.sendBytes(FILE, META, "#test", outcome);
+    await tick(1, 60);
+
+    // Cancel while a refused fragment is on its way back to the queue.
+    const id = Object.keys(
+      (
+        jest.requireActual("../../store/transfer-store") as {
+          useTransferStore: {
+            getState: () => { transfers: Record<string, unknown> };
+          };
+        }
+      ).useTransferStore.getState().transfers,
+    )[0];
+    service.cancel(id);
+    await tick(3, 60);
+
+    expect(service.pendingCount).toBe(0);
+    expect(outcome).toHaveBeenCalledWith(false);
+  });
+});
+
 describe("wire format (BitchatFilePacket)", () => {
   const PNG = new Uint8Array([
     0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1, 2, 3, 4, 5,
@@ -158,10 +275,10 @@ describe("wire format (BitchatFilePacket)", () => {
     durationMs: 0,
   };
 
-  it("sends a small DM file as one FILE_TRANSFER packet decoding to the file", () => {
+  it("sends a small DM file as one FILE_TRANSFER packet decoding to the file", async () => {
     const { service, unicast } = makeService();
     service.sendBytes(PNG, IMG_META, "dm:1122334455667788");
-    jest.advanceTimersByTime(40);
+    await tick(2);
 
     expect(unicast).toHaveBeenCalledTimes(1);
     const pkt = unicast.mock.calls[0][1] as Packet;
@@ -174,10 +291,10 @@ describe("wire format (BitchatFilePacket)", () => {
     expect(fp.channel).toBeUndefined();
   });
 
-  it("tags a channel attachment with its channel for routing", () => {
+  it("tags a channel attachment with its channel for routing", async () => {
     const { service, broadcast } = makeService();
     service.sendBytes(PNG, IMG_META, "#region");
-    jest.advanceTimersByTime(40);
+    await tick(2);
 
     const pkt = broadcast.mock.calls[0][0] as Packet;
     expect(decodeFilePacket(pkt.payload)!.channel).toBe("#region");

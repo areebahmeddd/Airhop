@@ -23,6 +23,9 @@ export interface ThreadScrollInput {
   atBottom: boolean;
   // The thread gained or lost a message since the last measurement.
   countChanged: boolean;
+  // This measurement is the reader's own outgoing message arriving in the
+  // thread they are looking at.
+  ownMessage: boolean;
 }
 
 // "instant" for placing the reader, "animated" for a message arriving under
@@ -33,7 +36,14 @@ export function resolveThreadScroll({
   landing,
   atBottom,
   countChanged,
+  ownMessage,
 }: ThreadScrollInput): ThreadScroll {
+  // Your own message is the one thing that earns the trip regardless of where
+  // you were reading, because sending IS the request to be at the end: the
+  // message went to the bottom of the thread, and a composer that files your
+  // words somewhere off screen reads as a failed send. Every chat app answers a
+  // send the same way, and it is the only exception to the rule below.
+  if (ownMessage) return "animated";
   // Scrolling up is a deliberate act: reading back, quoting something, looking
   // at an old photo. Yanking someone to the bottom because a peer typed, or
   // because an image two screens up finished loading, is the single most
@@ -41,4 +51,44 @@ export function resolveThreadScroll({
   // trip instead, and the choice stays theirs.
   if (!landing && !atBottom) return "none";
   return countChanged ? "animated" : "instant";
+}
+
+// ---- Finishing the landing ---------------------------------------------------
+//
+// The landing above is driven entirely by content-size events, so it ends the
+// moment the content stops changing height - whether or not it actually arrived.
+// A list that is not inverted mounts its OLDEST rows first and walks down as
+// later batches render, so "open at the newest message" is a run of scrolls, and
+// losing the last one leaves the reader a row short of the end. Nothing measured
+// that, and the jump-to-latest pill is suppressed for the whole landing, so a
+// near miss stranded them with no way back.
+//
+// So once the content holds still, check the placement rather than assume it,
+// then hand the list back to the reader.
+
+export type LandingSettle = "correct" | "finish";
+
+export interface LandingSettleInput {
+  // Distance from the end the last scroll event reported, or null if none has
+  // come back since the last placement.
+  distanceFromBottom: number | null;
+  // How far off the end still counts as arrived. Deliberately much tighter than
+  // the "has the reader wandered off" tolerance: those are different questions.
+  // Deciding somebody drifted away can afford to be generous, because being
+  // wrong only shows a pill they can ignore. Deciding our own placement landed
+  // cannot, because being wrong is the bug - a gap of well under one bubble is
+  // exactly what this exists to close, and a generous threshold would call it
+  // arrived and walk away.
+  tolerance: number;
+}
+
+export function resolveLandingSettle({
+  distanceFromBottom,
+  tolerance,
+}: LandingSettleInput): LandingSettle {
+  // No scroll event since the last placement means no evidence of arriving.
+  // Correct rather than assume: scrolling to an end you are already at costs
+  // nothing, while skipping it is the whole defect.
+  if (distanceFromBottom === null) return "correct";
+  return distanceFromBottom > tolerance ? "correct" : "finish";
 }

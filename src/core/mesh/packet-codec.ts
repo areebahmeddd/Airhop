@@ -99,6 +99,31 @@ const MIN_DECODE_SIZE = V1_HEADER_SIZE + SENDER_ID_SIZE; // 22 bytes
 const TTL_OFFSET = 2; // u8
 const FLAGS_OFFSET = 11; // u8
 
+// The payload exactly as it appeared on the wire, recorded by decodePacket.
+//
+// DEFLATE output is not canonical: bitchat iOS compresses with Apple's
+// compression_encode_buffer, Android with java.util.zip.Deflater (zlib), and we
+// use pako. All three inflate each other's streams, but none is guaranteed to
+// emit the same bytes for the same input, and the size check in compress() can
+// even make them disagree on whether to compress at all.
+//
+// That matters because both bitchat platforms sign and verify over the
+// RE-ENCODED packet, so a re-encode has to reproduce the originator's exact
+// bytes. Keeping the wire form lets us do that without re-compressing, which
+// fixes two things: signature verification of foreign-encoded packets, and
+// relaying (a relay re-encodes, so recompressing would swap the originator's
+// bytes for ours and break verification for every node downstream).
+export interface WirePayload {
+  bytes: Uint8Array; // payload as transmitted (compressed iff `compressed`)
+  compressed: boolean; // whether the originator compressed it
+  // The exact `payload` array these bytes decode to. The encoder only reuses
+  // the wire form when this is reference-identical to the packet's `payload`,
+  // so replacing the payload (tampering, rewriting) discards the wire form and
+  // falls back to compressing. Without that binding a same-length payload swap
+  // would be signed against the pre-swap bytes and verify anyway.
+  forPayload: Uint8Array;
+}
+
 export interface Packet {
   type: PacketType;
   ttl: number;
@@ -116,6 +141,11 @@ export interface Packet {
   // Optional fields: encoder derives HAS_ROUTE and IS_RSR flags from these.
   isRSR?: boolean;
   route?: readonly Uint8Array[]; // intermediate hop peerIDs, each 8 bytes
+  // Set by decodePacket only. When present the encoder reuses these bytes
+  // verbatim instead of compressing `payload` again. Never set it by hand on a
+  // packet you built: it is keyed to `payload` and the encoder discards it if
+  // the two disagree.
+  wirePayload?: WirePayload;
 }
 
 // Encode a u64 into big-endian at `offset` in a DataView.
@@ -157,8 +187,29 @@ export function encodePacket(p: Packet, padding = true): Uint8Array {
   let payload = p.payload;
   let isCompressed = false;
   let originalSize = 0;
-  if (shouldCompress(payload)) {
-    const maxRepresentable = version === 2 ? 0xffffffff : 0xffff;
+  // A decoded packet carries its wire form. Reuse it so re-encoding reproduces
+  // the originator's bytes exactly (see WirePayload). Only trust it when it
+  // still describes `payload`, so a caller that swapped the payload out falls
+  // back to compressing rather than emitting a mismatched frame.
+  const maxRepresentable = version === 2 ? 0xffffffff : 0xffff;
+  const wire = p.wirePayload;
+  // The originalSize field is version-sized, so refuse a wire form whose size
+  // this version cannot express rather than truncating it. Only reachable if a
+  // caller re-encodes a v2 frame as v1, which nothing does today.
+  const canReuseWire =
+    wire !== undefined &&
+    wire.forPayload === p.payload &&
+    (!wire.compressed || p.payload.length <= maxRepresentable);
+  if (canReuseWire) {
+    if (wire!.compressed) {
+      payload = wire!.bytes;
+      originalSize = p.payload.length;
+      isCompressed = true;
+    }
+    // Not compressed on the wire: leave `payload` as-is and do NOT consult
+    // shouldCompress. The originator decided not to compress, and re-deriving
+    // that decision with a different encoder can disagree at the size check.
+  } else if (shouldCompress(payload)) {
     if (payload.length <= maxRepresentable) {
       const c = compress(payload);
       if (c !== null) {
@@ -307,6 +358,7 @@ function decodeCore(raw: Uint8Array): Packet | null {
 
   // Payload: payloadLen covers the payload plus the compression preamble.
   let payload: Uint8Array;
+  let wirePayload: WirePayload;
   if (isCompressed) {
     if (payloadLen < lengthFieldBytes) return null;
     const origSize =
@@ -320,10 +372,12 @@ function decodeCore(raw: Uint8Array): Packet | null {
     const decompressed = decompress(compressed, origSize);
     if (decompressed === null) return null;
     payload = decompressed;
+    wirePayload = { bytes: compressed, compressed: true, forPayload: payload };
   } else {
     if (off + payloadLen > raw.length) return null;
     payload = raw.slice(off, off + payloadLen);
     off += payloadLen;
+    wirePayload = { bytes: payload, compressed: false, forPayload: payload };
   }
 
   let signature = new Uint8Array(SIGNATURE_SIZE);
@@ -341,6 +395,7 @@ function decodeCore(raw: Uint8Array): Packet | null {
     timestamp,
     signature,
     payload,
+    wirePayload,
     version,
     isRSR: isRSR || undefined,
     route: route.length > 0 ? route : undefined,

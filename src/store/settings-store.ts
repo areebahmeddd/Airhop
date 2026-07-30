@@ -43,10 +43,6 @@ interface SettingsState {
   // by an unlinkable per-cell key) so an out-of-range island can see them. A
   // per-message "nearby only" control keeps any single message radio-only.
   bridgeEnabled: boolean;
-  // Whether the user has acknowledged the one-time "this publishes your public
-  // messages" notice shown the first time the mesh bridge is enabled. Persisted
-  // so the consent dialog appears once, not on every toggle.
-  bridgeConsented: boolean;
   // Whether Nostr traffic is routed through Tor. On iOS this drives the in-app
   // Arti SOCKS proxy; on Android it records that the user relies on Orbot's VPN.
   // Persisted so the choice is applied before the first relay connects at
@@ -88,7 +84,6 @@ interface SettingsState {
   setUploadQuality: (quality: UploadQuality) => void;
   setGatewayEnabled: (enabled: boolean) => void;
   setBridgeEnabled: (enabled: boolean) => void;
-  setBridgeConsented: (consented: boolean) => void;
   setInternetEnabled: (enabled: boolean) => void;
   setGeoRelayDiscovery: (enabled: boolean) => void;
   addCustomRelay: (url: string) => void;
@@ -111,7 +106,6 @@ const DEFAULTS = {
   uploadQuality: "high",
   gatewayEnabled: false,
   bridgeEnabled: false,
-  bridgeConsented: false,
   internetEnabled: true,
   geoRelayDiscovery: true,
   customRelays: [] as string[],
@@ -158,9 +152,6 @@ export const useSettingsStore = create<SettingsState>()(
       },
       setBridgeEnabled(enabled) {
         set({ bridgeEnabled: enabled });
-      },
-      setBridgeConsented(consented) {
-        set({ bridgeConsented: consented });
       },
       setInternetEnabled(enabled) {
         set({ internetEnabled: enabled });

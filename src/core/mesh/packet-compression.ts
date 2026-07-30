@@ -5,9 +5,19 @@
 // header) and stores the original size so the receiver can restore it. iOS uses
 // Apple's COMPRESSION_ZLIB and Android uses java.util.zip.Deflater with
 // DEFAULT_COMPRESSION (level 6) + nowrap=true; both are reference zlib, and the
-// two interoperate. pako is a faithful zlib port, so deflateRaw at level 6
-// produces the same bytes, which matters because the Ed25519 signature is taken
-// over the compressed encoding, so our output must match theirs to verify.
+// two interoperate.
+//
+// Our compressed bytes must match theirs byte for byte. Both sides sign the
+// re-encoded packet (packet-codec signingBytes / bitchat
+// toBinaryDataForSigning) and the VERIFY path re-encodes too, so verification
+// re-compresses. A different encoder means a different signing blob and a
+// signature that will not verify, even though the payload is identical.
+//
+// Deflate output is not canonical: any conforming encoder produces a valid
+// stream, but not the same bytes. pako's original hash does NOT match reference
+// zlib. pako 2.2.0 added the ANZAC++ hash, which does, behind `legacyHash`.
+// That option still defaults to true on 2.x for backwards compatibility, so we
+// set it explicitly. pako 3 makes false the default.
 
 import { deflateRaw, inflateRaw } from "pako";
 
@@ -17,6 +27,20 @@ export const COMPRESSION_THRESHOLD = 100;
 // zlib DEFAULT_COMPRESSION, the level Android passes and iOS's COMPRESSION_ZLIB
 // matches. Do not change: it would break signature parity with bitchat.
 const COMPRESSION_LEVEL = 6;
+
+// pako 2.2.0 added `legacyHash`, but @types/pako 2.0.4 predates it, so it is
+// not in DeflateFunctionOptions yet. Derive the type from deflateRaw rather
+// than casting, so the rest of the options stay checked.
+type DeflateOptions = NonNullable<Parameters<typeof deflateRaw>[1]> & {
+  legacyHash: boolean;
+};
+
+// legacyHash: false selects the zlib-compatible hash. Do not change: it is what
+// makes our output byte-identical to bitchat's, and signatures depend on it.
+const DEFLATE_OPTIONS: DeflateOptions = {
+  level: COMPRESSION_LEVEL,
+  legacyHash: false,
+};
 
 // Whether compressing is worthwhile: large enough, and not already high-entropy
 // (already-compressed / encrypted data barely shrinks). Mirrors bitchat's
@@ -33,7 +57,7 @@ export function shouldCompress(data: Uint8Array): boolean {
 export function compress(data: Uint8Array): Uint8Array | null {
   if (data.length < COMPRESSION_THRESHOLD) return null;
   try {
-    const out = deflateRaw(data, { level: COMPRESSION_LEVEL });
+    const out = deflateRaw(data, DEFLATE_OPTIONS);
     if (out.length > 0 && out.length < data.length) return out;
     return null;
   } catch {

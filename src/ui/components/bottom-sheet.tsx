@@ -54,7 +54,7 @@ import Animated, {
   withSpring,
   withTiming,
 } from "react-native-reanimated";
-import { Radius, Spacing, useThemeColors } from "../theme";
+import { Duration, Radius, Spacing, useThemeColors } from "../theme";
 import { useKeyboardHeight } from "../use-keyboard";
 
 // Pull further than this share of the sheet's own height and letting go
@@ -70,7 +70,7 @@ const DISMISS_VELOCITY = 900;
 // reads as playful on a photo app reads as sloppy on a messenger.
 const OPEN_SPRING = { damping: 26, stiffness: 280, mass: 0.9 } as const;
 const CLOSE_TIMING = {
-  duration: 220,
+  duration: Duration.slow,
   easing: Easing.out(Easing.cubic),
 } as const;
 
@@ -313,7 +313,7 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
     handle: {
       width: 36,
       height: 4,
-      borderRadius: 2,
+      borderRadius: Radius.xs,
       backgroundColor: Colors.borderStrong,
       alignSelf: "center",
       marginTop: Spacing.sm,

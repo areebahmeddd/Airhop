@@ -44,6 +44,7 @@ import {
   FontFamily,
   FontSize,
   FontWeight,
+  HIT_SLOP,
   Radius,
   Spacing,
   useThemeColors,
@@ -347,7 +348,7 @@ export default function QrScanScreen({
               <Pressable
                 onPress={() => setStage("entry")}
                 style={styles.scanIconBtn}
-                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                hitSlop={HIT_SLOP}
                 accessibilityRole="button"
                 accessibilityLabel="Back"
               >

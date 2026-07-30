@@ -1,7 +1,8 @@
 // General sub-screen: the preferences that answer to taste rather than to a
 // domain. Every other section owns a subject (privacy, network, storage, help)
 // and its rows are about that subject; these are about how you like the app to
-// behave. Messages first, then media, with reset kept apart at the bottom.
+// behave. Features first, then messages, then media, with reset kept apart at
+// the bottom.
 //
 // The two media rows sat under Storage & Data before, borrowed from where
 // WhatsApp and Signal keep theirs. Theirs gate downloads and bandwidth; these
@@ -11,6 +12,7 @@
 // that reports usage.
 
 import Feather from "@expo/vector-icons/Feather";
+import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import React, { useState } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import { setTorRouting } from "../../../core/nostr/tor-routing";
@@ -69,6 +71,33 @@ const QUALITY_META: Record<
 };
 const QUALITY_ORDER: UploadQuality[] = ["low", "medium", "high"];
 
+// The unshipped features. Each row states what it will do rather than linking
+// out or staying silent about it, so the answer to "can Airhop do X" is on a
+// screen instead of only in a changelog.
+type FeatureKey = "ai" | "feeds";
+
+const FEATURES: {
+  key: FeatureKey;
+  label: string;
+  // Unused for "ai": that row renders a robot glyph from
+  // MaterialCommunityIcons instead, which Feather has no equivalent for.
+  icon: keyof typeof Feather.glyphMap;
+  description: string;
+}[] = [
+  {
+    key: "ai",
+    label: "AI",
+    icon: "cpu",
+    description: "Private on-device assistant, no network calls",
+  },
+  {
+    key: "feeds",
+    label: "Feeds",
+    icon: "rss",
+    description: "Read and post to Bluesky and Mastodon feeds",
+  },
+];
+
 export default function GeneralScreen({ onBack }: Props): React.JSX.Element {
   const Colors = useThemeColors();
   const styles = useSharedStyles();
@@ -111,6 +140,53 @@ export default function GeneralScreen({ onBack }: Props): React.JSX.Element {
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
       >
+        {/* Features. Wallet has shipped, so it leads the group with a switch
+            locked on: the Wallet tab is part of what Airhop is, not something
+            to switch off. The rest aren't built yet and carry a "Coming soon"
+            tag in the same row shape.
+
+            This sat on the settings hub, above the nav list, where it was the
+            first thing you saw and none of it was actionable: one switch you
+            cannot move and two rows that only say "later". The hub now opens on
+            the connectivity toggles instead, and this reads as what it is, a
+            note on what the app does and will do. */}
+        <View style={styles.section}>
+          <View style={styles.settingsGroup}>
+            <SettingRow
+              icon="credit-card"
+              label="Wallet"
+              description="Send Cashu ecash peer to peer over the mesh"
+              control={
+                <SettingSwitch
+                  value
+                  disabled
+                  accessibilityLabel="Wallet (always on)"
+                />
+              }
+            />
+            {FEATURES.map((feature) => (
+              <React.Fragment key={feature.key}>
+                <GroupDivider />
+                <SettingRow
+                  icon={feature.key === "ai" ? undefined : feature.icon}
+                  iconOverride={
+                    feature.key === "ai" ? (
+                      <MaterialCommunityIcons
+                        name="robot-outline"
+                        size={18}
+                        color={Colors.textSecondary}
+                      />
+                    ) : undefined
+                  }
+                  label={feature.label}
+                  description={feature.description}
+                  control={<Text style={styles.comingSoon}>Coming soon</Text>}
+                />
+              </React.Fragment>
+            ))}
+          </View>
+        </View>
+
         <View style={styles.section}>
           <View style={styles.settingsGroup}>
             <SettingLinkRow

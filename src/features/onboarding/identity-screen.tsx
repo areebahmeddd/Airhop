@@ -11,9 +11,14 @@ import {
   FontFamily,
   FontSize,
   FontWeight,
+  Radius,
   Spacing,
   useThemeColors,
 } from "../../ui/theme";
+
+// Diameter of the keygen spinner ring. Named so the radius below cannot drift
+// out of step with it and quietly stop being a circle.
+const SPINNER_SIZE = 64;
 
 interface Props {
   onComplete: (peerID: string) => void;
@@ -82,25 +87,46 @@ export default function IdentityScreen({
   return (
     <SafeAreaView style={styles.root}>
       <View style={styles.inner}>
-        {/* Spinner */}
-        <View style={styles.spinnerWrapper}>
+        {/* Spinner. Purely decorative for a screen reader: the heading below
+            already announces what is happening, so a second "in progress"
+            element would just be read twice.
+
+            The rotation is deliberately NOT gated on reduce-motion. Both
+            platforms keep their own system spinners turning under that setting
+            because an activity indicator conveys status rather than decoration,
+            and this screen has nothing else to say "still working". */}
+        <View
+          style={styles.spinnerWrapper}
+          importantForAccessibility="no-hide-descendants"
+          accessibilityElementsHidden
+        >
           <Animated.View
             style={[styles.spinnerRing, { transform: [{ rotate: spin }] }]}
           />
           <View style={styles.spinnerDot} />
         </View>
 
-        {/* Copy */}
-        <View style={styles.copy}>
-          <Text style={styles.heading}>Generating your identity</Text>
+        {/* Copy. The live region is what makes the transition audible: this
+            screen replaces the welcome screen with no navigation event, so
+            without it a screen reader user hears nothing at all after tapping
+            Get started and again nothing when it moves on. */}
+        <View style={styles.copy} accessibilityLiveRegion="polite">
+          <Text style={styles.heading} accessibilityRole="header">
+            Generating your identity
+          </Text>
           <Text style={styles.body}>
             Creating an Ed25519 key pair on this device.{"\n"}
             Nothing is sent anywhere.
           </Text>
         </View>
 
-        {/* Steps */}
-        <View style={styles.steps}>
+        {/* Steps: a description of the work, not a checklist. Read as one
+            element so it is four short phrases rather than four stops. */}
+        <View
+          style={styles.steps}
+          accessible
+          accessibilityLabel={`Steps: ${STEPS.join(". ")}`}
+        >
           {STEPS.map((step) => (
             <View key={step} style={styles.step}>
               <View style={styles.stepDot} />
@@ -142,18 +168,22 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
     },
     spinnerRing: {
       position: "absolute",
-      width: 64,
-      height: 64,
-      borderRadius: 32,
+      width: SPINNER_SIZE,
+      height: SPINNER_SIZE,
+      borderRadius: SPINNER_SIZE / 2,
       borderWidth: 1.5,
       borderColor: "transparent",
       borderTopColor: Colors.accent,
-      borderRightColor: "rgba(0,0,0,0.08)",
+      // Was a hardcoded rgba(0,0,0,0.08): black on black, so in dark mode the
+      // ring's trailing arc simply did not exist and the spinner read as a
+      // single floating tick. The border token is the same value in spirit and
+      // resolves correctly in both themes.
+      borderRightColor: Colors.border,
     },
     spinnerDot: {
       width: 8,
       height: 8,
-      borderRadius: 4,
+      borderRadius: Radius.full,
       backgroundColor: Colors.accent,
     },
     // Copy
@@ -177,7 +207,12 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
     steps: {
       alignSelf: "stretch",
       backgroundColor: Colors.surface,
-      borderRadius: 14,
+      borderRadius: Radius.lg,
+      // Every other card in the app carries a hairline edge; this one was the
+      // sole exception, so on the near-white onboarding background it had no
+      // boundary at all.
+      borderWidth: 1,
+      borderColor: Colors.border,
       padding: Spacing.base,
       gap: Spacing.md,
     },
@@ -189,7 +224,7 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
     stepDot: {
       width: 4,
       height: 4,
-      borderRadius: 3,
+      borderRadius: Radius.xs,
       backgroundColor: Colors.textMuted,
     },
     stepText: {

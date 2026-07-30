@@ -42,6 +42,22 @@ import { useTransferStore } from "../store/transfer-store";
 // fragments and the transfer never completes on the far side.
 const INTER_FRAGMENT_MS = 20;
 
+// How long to wait after the radio REFUSES a fragment before offering it again.
+//
+// 20ms of pacing assumes the link can always take the next write, and one-way
+// that is roughly true: 456 data bytes every 20ms is ~22 KB/s, right at what BLE
+// carries. It stops being true the moment the same link is also carrying a
+// transfer in the other direction, which is what two people sending a photo at
+// the same time does. The stack's write queue fills, it starts refusing, and
+// backing off is the only thing that lets it drain.
+const REFUSED_BACKOFF_MS = 60;
+
+// How many consecutive refusals a single transfer tolerates before it is
+// declared failed. At the backoff above this is about fifteen seconds of a link
+// that will not take a single byte, which is a peer that has gone, not a busy
+// radio. Counted per transfer so one dead conversation cannot fail another.
+const REFUSAL_LIMIT = 250;
+
 // Progress-store write throttle: refresh the card ~4x/sec rather than on every
 // drained fragment.
 const PROGRESS_UPDATE_MS = 250;
@@ -96,8 +112,22 @@ export function clearAttachmentCache(): number {
   return freed;
 }
 
-export type BroadcastFn = (packet: Packet) => void;
-export type UnicastFn = (recipientPeerID: string, packet: Packet) => void;
+// Both resolve to whether the RADIO ACCEPTED the packet, not whether anyone
+// received it (there are no per-fragment acknowledgements on this wire). A
+// false is the transport saying "my write queue is full, do not hand me another
+// one yet", which is the difference between pacing and losing a file: a refused
+// fragment that is not offered again is a stream the far side can never
+// complete, and it has no way to ask for it.
+export type BroadcastFn = (packet: Packet) => Promise<boolean>;
+export type UnicastFn = (
+  recipientPeerID: string,
+  packet: Packet,
+) => Promise<boolean>;
+
+// Told once per attachment whether it actually left the device, so the bubble
+// can settle on "sent" or fall back to the red tap-to-retry mark instead of
+// claiming a send the radio refused.
+export type SendOutcome = (delivered: boolean) => void;
 
 function defaultAttachmentName(type: ChatAttachment["type"]): string {
   switch (type) {
@@ -158,6 +188,10 @@ export class FileTransferService {
       totalBytes: number;
       sentBytes: number;
       lastPushMs: number;
+      // Consecutive refusals from the radio for this transfer's fragments.
+      // Reset by any accepted write; see REFUSAL_LIMIT.
+      refusals: number;
+      onOutcome?: SendOutcome;
     }
   >();
 
@@ -195,12 +229,19 @@ export class FileTransferService {
   // fragment layer and simply time out if abandoned).
   cancel(transferId: string): void {
     if (transferId.startsWith("tx-")) {
+      const tx = this.outbound.get(transferId);
+      // Delete the accounting BEFORE clearing the queue: a fragment already
+      // awaiting the radio checks for it on the way back, and its absence is
+      // what stops a cancelled transfer requeueing itself.
       this.outbound.delete(transferId);
       for (let i = this.outQueue.length - 1; i >= 0; i--) {
         if (this.outQueue[i].transferId === transferId) {
           this.outQueue.splice(i, 1);
         }
       }
+      // The bubble is still showing "sending". Settle it, or it sits on a clock
+      // face forever for a transfer that is never coming back.
+      tx?.onOutcome?.(false);
     }
     useTransferStore.getState().cancel(transferId);
   }
@@ -212,6 +253,7 @@ export class FileTransferService {
     fileBytes: Uint8Array,
     meta: AttachmentMeta,
     channel: string,
+    onOutcome?: SendOutcome,
   ): void {
     // Per-type cap, matching bitchat: over it the far side refuses the file, so
     // fail here with something the sender can act on rather than after a minute
@@ -273,6 +315,8 @@ export class FileTransferService {
       totalBytes: fileBytes.length,
       sentBytes: 0,
       lastPushMs: Date.now(),
+      refusals: 0,
+      onOutcome,
     });
     useTransferStore.getState().begin({
       id: transferId,
@@ -304,20 +348,79 @@ export class FileTransferService {
     this.scheduleDrain();
   }
 
-  private scheduleDrain(): void {
+  private scheduleDrain(delayMs: number = INTER_FRAGMENT_MS): void {
     if (this.drainTimer !== null) return;
     this.drainTimer = setTimeout(() => {
       this.drainTimer = null;
-      const next = this.outQueue.shift();
-      if (next !== undefined) {
-        if (next.isDM) this.unicast(next.recipientPeerID, next.pkt);
-        else this.broadcast(next.pkt);
-        if (next.transferId !== undefined) {
-          this.reportSendProgress(next.transferId, next.weight ?? 0);
-        }
+      void this.drainOne();
+    }, delayMs);
+  }
+
+  // Hand exactly one fragment to the radio and react to what it says.
+  //
+  // The whole file depends on this being honest. Progress used to be counted
+  // the instant a fragment was handed over, so a refused write left the sender
+  // marching to 100% and "sent" while the receiver sat on a stream missing its
+  // third fragment forever, went quiet, and failed. Now a refusal keeps the
+  // fragment: it goes back to the front of the queue (order matters to nothing
+  // on the wire, but retrying out of order would leave gaps behind), the pacing
+  // eases off to let the stack drain, and nothing is counted as sent until it is.
+  private async drainOne(): Promise<void> {
+    const next = this.outQueue.shift();
+    if (next === undefined) return;
+
+    let accepted = false;
+    try {
+      accepted = next.isDM
+        ? await this.unicast(next.recipientPeerID, next.pkt)
+        : await this.broadcast(next.pkt);
+    } catch {
+      // A transport that threw is a transport that did not take it.
+      accepted = false;
+    }
+
+    const tx =
+      next.transferId !== undefined
+        ? this.outbound.get(next.transferId)
+        : undefined;
+
+    if (accepted) {
+      if (tx !== undefined) tx.refusals = 0;
+      if (next.transferId !== undefined) {
+        this.reportSendProgress(next.transferId, next.weight ?? 0);
       }
-      if (this.outQueue.length > 0) this.scheduleDrain();
-    }, INTER_FRAGMENT_MS);
+    } else if (next.transferId === undefined) {
+      // Not part of a tracked transfer, so there is no card to fail and nobody
+      // waiting on it. Drop it rather than retrying forever.
+    } else if (tx === undefined) {
+      // Cancelled while this fragment was in flight. Its accounting is already
+      // gone, so requeueing would resurrect a transfer the user stopped.
+    } else {
+      tx.refusals += 1;
+      if (tx.refusals >= REFUSAL_LIMIT) {
+        this.failTransfer(next.transferId);
+      } else {
+        this.outQueue.unshift(next);
+      }
+    }
+
+    if (this.outQueue.length > 0) {
+      this.scheduleDrain(accepted ? INTER_FRAGMENT_MS : REFUSED_BACKOFF_MS);
+    }
+  }
+
+  // Give up on a transfer the radio will not carry: drop its queued fragments,
+  // fail its card, and tell the caller so the bubble stops claiming it was sent.
+  private failTransfer(transferId: string): void {
+    const tx = this.outbound.get(transferId);
+    this.outbound.delete(transferId);
+    for (let i = this.outQueue.length - 1; i >= 0; i--) {
+      if (this.outQueue[i].transferId === transferId) {
+        this.outQueue.splice(i, 1);
+      }
+    }
+    useTransferStore.getState().fail(transferId);
+    tx?.onOutcome?.(false);
   }
 
   private reportSendProgress(transferId: string, weight: number): void {
@@ -329,6 +432,9 @@ export class FileTransferService {
     if (tx.remaining <= 0) {
       this.outbound.delete(transferId);
       store.finish(transferId);
+      // Every fragment was accepted by the radio. That is as much as this side
+      // can ever know: files carry no delivery receipt on either app.
+      tx.onOutcome?.(true);
       return;
     }
     const now = Date.now();
