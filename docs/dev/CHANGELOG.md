@@ -3,7 +3,7 @@
 All notable changes are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
-## What's Changed in v0.9.9
+## What's Changed in v0.9.8
 
 - refactor: rename "Your Channels" to "Your Rooms" for clarity and consistency (by @areebahmeddd) [837173d]
 - feat(app/core): geohash support, ui fixes, docs update, updated tests and feature wiring (by @areebahmeddd) [f0dc507]
@@ -15,15 +15,8 @@ All notable changes are documented here. The format follows [Keep a Changelog](h
 - fix: major bug fixes after testing locally with friends [ see description ] (by @areebahmeddd) [c88a6fa]
 - feat(wallet): rebuild Cashu ecash end to end, with Lightning and recovery (#7) (by @Areeb Ahmed) [aaaa15a]
 - feat(landing): add architecture diagrams for airhop (by @areebahmeddd) [f323a58]
-- feat(core): add live voice detection, mesh bridge, qr for cashu payments (by @areebahmeddd) [21f1865]
-- chore: trigger Cloudflare Pages deployment (by @areebahmeddd) [41a72d5]
-- feat: enhance token scanner and wallet screen functionality (by @areebahmeddd) [cd65ac5]
-- feat: add hooks for pull-to-refresh colors and reduced motion settings (by @areebahmeddd) [bae500d]
-- feat: implement permission primer for Bluetooth and Location requests (by @areebahmeddd) [24dd0ab]
-- feat: enforce timestamp freshness for ANNOUNCE packets to prevent replay attacks (by @areebahmeddd) [7434a86]
-- fix: minor fixes for apk signing and openssf score (by @areebahmeddd) [21a0568]
 
-**Full changelog:** [v0.9.7..v0.9.9](https://github.com/areebahmeddd/Airhop/compare/v0.9.7..v0.9.9)
+**Full changelog:** [v0.9.7..v0.9.8](https://github.com/areebahmeddd/Airhop/compare/v0.9.7..v0.9.8)
 
 ## What's Changed in v0.9.7
 
