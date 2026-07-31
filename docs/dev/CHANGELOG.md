@@ -3,6 +3,15 @@
 All notable changes are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## What's Changed in v1.0.6 · Albatross
+
+- feat: add hooks for pull-to-refresh colors and reduced motion settings (by @areebahmeddd) [bae500d]
+- feat: implement permission primer for Bluetooth and Location requests (by @areebahmeddd) [24dd0ab]
+- feat: enforce timestamp freshness for ANNOUNCE packets to prevent replay attacks (by @areebahmeddd) [7434a86]
+- fix: minor fixes for apk signing and openssf score (by @areebahmeddd) [21a0568]
+
+**Full changelog:** [v1.0.5..v1.0.6](https://github.com/areebahmeddd/Airhop/compare/v1.0.5..v1.0.6)
+
 ## What's Changed in v1.0.5 · Albatross
 
 - chore: trigger Cloudflare Pages deployment (by @areebahmeddd) [41a72d5]
