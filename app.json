@@ -3,7 +3,7 @@
     "name": "Airhop",
     "slug": "airhop",
     "scheme": "airhop",
-    "version": "0.9.7",
+    "version": "0.9.8",
     "orientation": "portrait",
     "userInterfaceStyle": "automatic",
     "icon": "./assets/images/icon.png",
