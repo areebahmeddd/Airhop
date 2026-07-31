@@ -4,7 +4,7 @@
 
 ## Current Version: v1.0.0
 
-**Status:** Feature work complete and green in CI (1,107 tests across 87 suites, 0 lint errors, TypeScript clean).
+**Status:** Feature work complete and green in CI (1,132 tests across 90 suites, 0 lint errors, TypeScript clean).
 
 **Verified by tests:** packet codec (v1 and v2 headers, padding, compression),
 fragment format and reassembly progress, Noise XX, Double Ratchet, courier

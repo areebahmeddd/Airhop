@@ -42,7 +42,10 @@ import {
 import AirhopBLE from "./src/bridge/NativeAirhopBLE";
 import type { Identity } from "./src/core/crypto/identity";
 import { loadIdentity } from "./src/core/crypto/identity";
-import { primeTorRoutingOnStartup } from "./src/core/nostr/tor-routing";
+import {
+  primeTorRoutingOnStartup,
+  revalidateTorRouting,
+} from "./src/core/nostr/tor-routing";
 import ChannelList from "./src/features/chat/channel-list";
 import ChatSearchResults from "./src/features/chat/chat-search-results";
 import DmList from "./src/features/chat/dm-list";
@@ -605,6 +608,10 @@ export default function App(): React.JSX.Element {
         // The Mesh tab is a tap away now, so a "someone nearby" from earlier is
         // stale the moment the app is open.
         void dismissNearbyNotification();
+        // A trip away from Airhop is how Orbot gets stopped, so returning is
+        // when a "Tor on" claim is most likely to have gone stale. Cheap and
+        // Android-only; iOS owns Arti and hears about it directly.
+        void revalidateTorRouting();
       }
     });
     return () => sub.remove();

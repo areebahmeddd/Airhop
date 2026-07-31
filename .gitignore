@@ -59,6 +59,8 @@ android/captures/
 *.iml
 *.keystore
 !debug.keystore
+# Release keystores are injected by CI
+*.jks
 
 # Editors and IDEs
 .idea/

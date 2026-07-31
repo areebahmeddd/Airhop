@@ -40,13 +40,14 @@ Tests are co-located with their module in a `__tests__/` directory. All `src/cor
 | ---------------- | ------ | --------- | ------------------------------------ |
 | `core/crypto/`   | 5      | 58        | -                                    |
 | `core/mesh/`     | 23     | 338       | Live BLE I/O (native boundary)       |
-| `core/nostr/`    | 10     | 101       | Network calls (`NostrClient` mocked) |
+| `core/nostr/`    | 11     | 111       | Network calls (`NostrClient` mocked) |
 | `core/payments/` | 3      | 88        | Mint connectivity (network)          |
 | `core/router/`   | 1      | 38        | BLE and WiFi transports (native)     |
-| `services/`      | 19     | 181       | Native radios (modelled, see below)  |
-| `store/`         | 14     | 177       | MMKV persistence (mocked)            |
+| `i18n/`          | 2      | 15        | -                                    |
+| `services/`      | 19     | 176       | Native radios (modelled, see below)  |
+| `store/`         | 14     | 182       | MMKV persistence (mocked)            |
 | `utils/`         | 12     | 126       | -                                    |
-| **Total**        | **87** | **1,107** |                                      |
+| **Total**        | **90** | **1,132** |                                      |
 
 `services/` includes the lifecycle and multi-device suites, which is why it is no
 longer the thin layer it once was: the rules `mesh-service` enforces are now

@@ -164,21 +164,27 @@ export const strings = {
     "If Airhop is useful to you, consider leaving a star on {github} or a review on the {store}. It helps more people discover the project. Thanks for giving it a try!",
 
   // ---- Onboarding: permission primer --------------------------------------
-  // Shown once, before the OS asks. The Location row only appears on Android,
-  // where BLE scanning is coupled to it; saying "Android needs this" on an
-  // iPhone would be both wrong and alarming.
-  "onboarding.primer.title": "Two permissions",
-  "onboarding.primer.lede":
-    "Your phone is about to ask. Here is what each one is for.",
+  // Shown once, before the OS prompts. The Location row is Android-only.
+  //
+  // Every row is two sentences: what the permission does, then the limit on it.
+  // The lede promises both, so keep the second sentence in translation. The
+  // title stays count-free; the rows are platform-dependent.
+  "onboarding.primer.title": "Before your phone asks",
+  "onboarding.primer.lede": "Here is what each one does, and what it does not.",
   "onboarding.primer.bluetooth.title": "Bluetooth",
   "onboarding.primer.bluetooth.body":
-    "Finds phones near you and carries messages between them. This is the mesh.",
+    "Finds nearby devices and relays messages between them. This creates the mesh and works without an internet connection.",
   "onboarding.primer.location.title": "Location",
-  // The denial in the second sentence is the whole point of this row. Keep it
-  // as direct in translation: "does not track you" must not soften into
-  // "aims to respect your privacy".
+  // "Precise" is load-bearing: geohash channels publish a coarse cell to
+  // relays, so dropping it makes the sentence false. Keep "never tracks you"
+  // equally direct in translation.
   "onboarding.primer.location.body":
-    "Android will not return Bluetooth scan results without it. Airhop does not track you: your exact position never leaves this device.",
+    "Android requires location permission to detect nearby Bluetooth devices. Airhop never tracks you or sends your precise location off your device.",
+  "onboarding.primer.notifications.title": "Notifications",
+  // "Created locally" is literal: notifications are raised on-device when a
+  // message lands, with no push server in the path.
+  "onboarding.primer.notifications.body":
+    "Receive alerts for new messages even when the app is closed. Notifications are created locally on your device, with no server involvement.",
   "onboarding.primer.footnote":
     "You can say no. Messages still travel over the internet, and you can change your mind later in Settings.",
   "onboarding.primer.cta_a11y": "Continue to the permission prompts",
@@ -292,24 +298,24 @@ export const strings = {
   // consequences attached is what makes people deny all of them.
   "settings.permissions.bluetooth": "Bluetooth",
   "settings.permissions.bluetooth_desc":
-    "Finds nearby phones and carries your messages between them. Without it the mesh cannot run.",
+    "Finds nearby devices and relays messages between them. Without it, the mesh cannot work.",
   "settings.permissions.location": "Location",
-  // The parenthetical is the point of the row, not a footnote. It answers the
-  // question the user is actually asking.
+  // "Precise" is load-bearing: geohash channels publish a coarse cell to
+  // relays, so dropping it makes the sentence false.
   "settings.permissions.location_desc":
-    "Opens the channels for where you are, and on Android it is what lets Bluetooth scan. Without it those channels stay closed. (Airhop does not track your location.)",
+    "Opens nearby channels so Bluetooth can find devices. Without it, those channels stay closed. Your precise location never leaves your device.",
   "settings.permissions.notifications": "Notifications",
   "settings.permissions.notifications_desc":
-    "Tells you about a message that arrives while Airhop is closed. Without it you see it the next time you open the app.",
+    "Receive alerts for new messages even when the app is closed. Without it, you only see them when you open Airhop.",
   "settings.permissions.camera": "Camera",
   "settings.permissions.camera_desc":
-    "Scans a contact's QR code, and takes a photo or video to send. Without it you can still send from your library.",
+    "Scan QR codes and capture photos or videos to send. Without it, you can still share media from your library.",
   "settings.permissions.photos": "Photos",
   "settings.permissions.photos_desc":
-    "Attaches a photo from your library, and saves one you were sent. Without it you can still take one with the camera.",
+    "Send photos from your library and save received media. Without it, you can still take and send new photos with the camera.",
   "settings.permissions.microphone": "Microphone",
   "settings.permissions.microphone_desc":
-    "Records a voice note, and carries live voice when you hold the mic. Without it neither can be sent.",
+    "Record and send voice messages or use live voice. Without it, voice messages and live voice won't work.",
   "settings.permissions.allow": "Allow this permission",
   "settings.permissions.open_settings":
     "Open system settings to change this permission",

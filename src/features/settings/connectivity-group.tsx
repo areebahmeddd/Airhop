@@ -187,10 +187,11 @@ export default function ConnectivityGroup(): React.JSX.Element {
   // switch itself is driven by the persisted preference, so it always reflects
   // the real routing state rather than a copy that can drift.
   async function handleTorToggle(value: boolean): Promise<void> {
-    // Android routes through Orbot's VPN, which the app cannot start. setTorRouting
-    // verifies Orbot is installed and a VPN is up before enabling; if it isn't, we
-    // surface the install guide (orbot-missing) or a "start Orbot" hint
-    // (orbot-inactive) from the result below rather than assuming it worked.
+    // Android routes through Orbot's VPN, which the app cannot start.
+    // setTorRouting probes Orbot's SOCKS port and requires a VPN transport
+    // before enabling; if either is missing, we surface the install guide
+    // (orbot-missing) or a "start Orbot" hint (orbot-inactive) from the result
+    // below rather than assuming it worked.
     try {
       setTorStarting(true);
       const result = await setTorRouting(value);

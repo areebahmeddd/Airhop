@@ -6,12 +6,15 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   sbom:
     name: Generate SBOM
     runs-on: ubuntu-24.04
+    # Needed to upload the SBOM as a release asset.
+    permissions:
+      contents: write
 
     steps:
       - name: Checkout repository

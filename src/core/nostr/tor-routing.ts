@@ -42,9 +42,53 @@ export interface TorRoutingResult {
   //   timeout        Arti did not bootstrap in time (iOS)
   //   error          Arti failed to start (iOS)
   //   orbot-missing  Orbot is not installed (Android)
-  //   orbot-inactive Orbot is installed but no VPN is up, so nothing is routing (Android)
+  //   orbot-inactive Orbot is installed but is not actually routing (Android)
   reason?:
     "unavailable" | "timeout" | "error" | "orbot-missing" | "orbot-inactive";
+}
+
+// What we could establish about Android's Tor path.
+interface AndroidTorProbe {
+  // The security decision: is traffic genuinely going through Tor right now.
+  routing: boolean;
+  // Messaging only. Picks between "install Orbot" and "start Orbot", and must
+  // never be used to decide whether Tor is on.
+  orbotInstalled: boolean;
+}
+
+// Establish whether Android is actually routing through Orbot.
+//
+// Two independent signals, both required:
+//
+//   port !== 0   something answers on Orbot's SOCKS port, so Orbot's Tor daemon
+//                is genuinely running. This is the signal the old check lacked,
+//                and the reason an installed-but-idle Orbot sitting beside an
+//                unrelated VPN used to read as "Tor on - internet traffic
+//                routed" while nothing was routed at all.
+//   vpnActive    a VPN transport is up, so app traffic is being captured. Orbot
+//                routes transparently in VPN mode, so without this Tor may be
+//                running with nothing being sent through it.
+//
+// Neither is sufficient alone. The pair still cannot prove the VPN belongs to
+// Orbot rather than to something else running alongside it, because Android
+// exposes no per-VPN ownership to other apps. That last gap closes only when
+// Airhop owns the Tor process itself, which is what embedding Arti buys us.
+//
+// Both calls are already off the JS thread natively (the port probe runs on its
+// own thread with a 500 ms connect timeout) and neither throws into callers:
+// a rejection is read as "not routing", which is the safe direction.
+async function probeAndroidTorProxy(): Promise<AndroidTorProbe> {
+  const [port, availability] = await Promise.all([
+    NativeAirhopBLE.getTorProxyPort().catch(() => 0),
+    NativeAirhopBLE.getTorAvailability().catch(() => ({
+      orbotInstalled: false,
+      vpnActive: false,
+    })),
+  ]);
+  return {
+    routing: port !== 0 && availability.vpnActive,
+    orbotInstalled: availability.orbotInstalled,
+  };
 }
 
 // Whether Nostr WebSockets are currently routed through the in-app Tor proxy.
@@ -92,21 +136,16 @@ export async function setTorRouting(
 }
 
 async function enableTorRouting(): Promise<TorRoutingResult> {
-  // Android: we cannot start Orbot ourselves, but we must not flip the toggle
-  // "on" while nothing is actually routing. Orbot's VPN mode captures app traffic
-  // transparently, so require both that Orbot is installed and that a VPN is up
-  // before we persist the intent. If either is missing, report why and leave the
-  // toggle off. (getTorAvailability resolves both false on iOS, but this branch
-  // is Android-only.)
+  // Android: we cannot start Orbot ourselves, so the most we can do is refuse to
+  // claim Tor is on unless we can show it is. probeAndroidTorProxy makes that
+  // call; orbotInstalled only picks which of the two messages to show.
   if (Platform.OS === "android") {
-    const availability = await NativeAirhopBLE.getTorAvailability().catch(
-      () => ({ orbotInstalled: false, vpnActive: false }),
-    );
-    if (!availability.orbotInstalled) {
-      return { ok: false, reason: "orbot-missing" };
-    }
-    if (!availability.vpnActive) {
-      return { ok: false, reason: "orbot-inactive" };
+    const probe = await probeAndroidTorProxy();
+    if (!probe.routing) {
+      return {
+        ok: false,
+        reason: probe.orbotInstalled ? "orbot-inactive" : "orbot-missing",
+      };
     }
     setTorActive(true);
     useSettingsStore.getState().setTorEnabled(true);
@@ -158,19 +197,21 @@ export function primeTorRoutingOnStartup(): void {
   if (!useSettingsStore.getState().torEnabled) return;
 
   if (Platform.OS === "android") {
-    // The preference is on, but Orbot may have been uninstalled or its VPN
-    // stopped since. Re-verify before claiming Tor is active, so the toggle does
+    // The preference is on, but Orbot may have been uninstalled or stopped since
+    // we last ran. Re-verify before claiming Tor is active, so the toggle does
     // not show green when nothing is routing. Done async (the mesh has not
     // started yet); the settings switch is driven by the persisted preference,
-    // which we clear if Tor is no longer actually available.
-    void NativeAirhopBLE.getTorAvailability()
-      .then((availability) => {
-        if (availability.orbotInstalled && availability.vpnActive) {
+    // which we clear if Tor is no longer actually routing. Clearing it is the
+    // point: leaving it set would show an "on" switch over clear-net traffic,
+    // which is the exact thing this path exists to prevent.
+    void probeAndroidTorProxy()
+      .then(({ routing }) => {
+        if (routing) {
           setTorActive(true);
-        } else {
-          setTorActive(false);
-          useSettingsStore.getState().setTorEnabled(false);
+          return;
         }
+        setTorActive(false);
+        useSettingsStore.getState().setTorEnabled(false);
       })
       .catch(() => {});
     return;
@@ -186,4 +227,31 @@ export function primeTorRoutingOnStartup(): void {
   setTorActive(true);
   // Start Arti in the background; relays retry over Tor until it is ready.
   void NativeAirhopTor.startTor().catch(() => {});
+}
+
+// Re-check Android's Tor path and stand the flag down if it has gone away.
+//
+// Enabling is a point-in-time check, so without this a session that began with
+// Orbot up keeps a green banner forever, even after the user switches to Orbot,
+// stops it, and comes back. App foreground is exactly when that round trip
+// lands, which is where this is wired.
+//
+// Deliberately does NOT rebuild the Nostr transport on failure. On Android the
+// socket factory is the same either way (Orbot routes at the OS level, so there
+// is no per-socket Tor path to tear down). If Orbot's VPN has dropped, traffic
+// is already on the clear net whether we reconnect or not, and forcing a
+// reconnect would only open fresh clear-net sockets we did not have to open.
+// The honest and minimal action is to stop claiming Tor is on.
+//
+// No-ops on iOS, where Airhop owns Arti and its status arrives over
+// TorStatusChanged rather than by probing, and no-ops when Tor is already off.
+export async function revalidateTorRouting(): Promise<void> {
+  if (Platform.OS !== "android") return;
+  if (!torActive) return;
+
+  const { routing } = await probeAndroidTorProxy();
+  if (routing) return;
+
+  setTorActive(false);
+  useSettingsStore.getState().setTorEnabled(false);
 }

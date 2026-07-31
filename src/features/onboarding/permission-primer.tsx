@@ -1,32 +1,20 @@
-// The one screen shown before the OS asks for Bluetooth and Location.
+// The sheet shown once before the OS permission prompts.
 //
-// Not a gate. It is a sheet, it appears once per install, its single button
-// resolves whatever the user does, and nothing downstream branches on it. The
-// app behind it is already usable.
+// Not a gate: the app behind it already works, and its one button resolves
+// whatever the user does. It exists because a chat app asking for location
+// reads as tracking, and because two refusals block the permission for good,
+// leaving only the Settings deep-link.
 //
-// It exists because the Android ask is genuinely confusing on its face - a chat
-// app wanting your location reads as tracking - and because a refusal there is
-// the most expensive mistake in the whole flow: two "Don't allow"s and the
-// permission is blocked for good, after which the only route back is the
-// Settings deep-link. Saying why first is the cheapest possible insurance
-// against that, and it is what every app with a non-obvious permission does.
-//
-// Deliberately says what Airhop does NOT do with location, because that is the
-// actual question in the user's head, and answering it is the whole point.
+// Each row says what the permission does and what it does not.
 
 import Feather from "@expo/vector-icons/Feather";
 import React, { useMemo } from "react";
 import { Platform, StyleSheet, Text, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useT, type Translator } from "../../i18n";
 import BottomSheet from "../../ui/components/bottom-sheet";
 import PrimaryButton from "../../ui/components/primary-button";
-import {
-  FontSize,
-  FontWeight,
-  Radius,
-  Spacing,
-  useThemeColors,
-} from "../../ui/theme";
+import { FontSize, FontWeight, Spacing, useThemeColors } from "../../ui/theme";
 
 interface Props {
   visible: boolean;
@@ -40,9 +28,9 @@ interface Reason {
   body: string;
 }
 
-// Android couples BLE scanning to location and iOS does not, so the second row
-// only appears where it is true. Saying "Android needs this" on an iPhone would
-// be both wrong and alarming.
+// One row per prompt startMeshWithPermissions fires, in the order it fires
+// them, so the sheet previews what the user is about to see. Location is
+// Android-only: BLE scanning is coupled to it there and not on iOS.
 function reasons(T: Translator): Reason[] {
   const rows: Reason[] = [
     {
@@ -62,6 +50,12 @@ function reasons(T: Translator): Reason[] {
       body: T("onboarding.primer.location.body"),
     });
   }
+  rows.push({
+    icon: "bell",
+    key: "notifications",
+    title: T("onboarding.primer.notifications.title"),
+    body: T("onboarding.primer.notifications.body"),
+  });
   return rows;
 }
 
@@ -71,6 +65,7 @@ export default function PermissionPrimer({
 }: Props): React.JSX.Element {
   const Colors = useThemeColors();
   const T = useT();
+  const insets = useSafeAreaInsets();
   const styles = useMemo(() => createStyles(Colors), [Colors]);
   const rows = useMemo(() => reasons(T), [T]);
 
@@ -78,15 +73,22 @@ export default function PermissionPrimer({
     // Dismissing by drag or backdrop counts as acknowledged. The sheet is an
     // explanation, not a question, so there is no wrong way to close it and
     // nothing should be waiting on a specific gesture.
-    <BottomSheet visible={visible} onClose={onAcknowledge}>
-      <View style={styles.body}>
+    <BottomSheet
+      visible={visible}
+      onClose={onAcknowledge}
+      // Bottom padding is inline because it has to clear the home indicator.
+      sheetStyle={[styles.sheet, { paddingBottom: Spacing.xl + insets.bottom }]}
+    >
+      <View style={styles.head}>
         <Text style={styles.title}>{T("onboarding.primer.title")}</Text>
         <Text style={styles.lede}>{T("onboarding.primer.lede")}</Text>
+      </View>
 
+      <View style={styles.rows}>
         {rows.map((row) => (
           <View key={row.key} style={styles.row}>
             <View style={styles.iconWrap}>
-              <Feather name={row.icon} size={16} color={Colors.textSecondary} />
+              <Feather name={row.icon} size={18} color={Colors.textSecondary} />
             </View>
             <View style={styles.rowText}>
               <Text style={styles.rowTitle}>{row.title}</Text>
@@ -94,15 +96,15 @@ export default function PermissionPrimer({
             </View>
           </View>
         ))}
-
-        <Text style={styles.footnote}>{T("onboarding.primer.footnote")}</Text>
-
-        <PrimaryButton
-          label={T("common.continue")}
-          onPress={onAcknowledge}
-          accessibilityLabel={T("onboarding.primer.cta_a11y")}
-        />
       </View>
+
+      <Text style={styles.footnote}>{T("onboarding.primer.footnote")}</Text>
+
+      <PrimaryButton
+        label={T("common.continue")}
+        onPress={onAcknowledge}
+        accessibilityLabel={T("onboarding.primer.cta_a11y")}
+      />
     </BottomSheet>
   );
 }
@@ -111,32 +113,41 @@ function createStyles(
   Colors: ReturnType<typeof useThemeColors>,
 ): ReturnType<typeof StyleSheet.create> {
   return StyleSheet.create({
-    body: {
+    // The standard sheet body box. BottomSheet supplies only the scrim, the
+    // radius and the grab handle, so padding is every caller's own.
+    sheet: {
+      paddingHorizontal: Spacing.xl,
       gap: Spacing.base,
     },
+    head: {
+      gap: Spacing.xs,
+    },
+    // Sheet titles are `md` semibold app-wide.
     title: {
-      fontSize: FontSize.xl,
-      fontWeight: FontWeight.bold,
+      fontSize: FontSize.md,
+      fontWeight: FontWeight.semibold,
       color: Colors.textPrimary,
     },
     lede: {
       fontSize: FontSize.sm,
+      lineHeight: FontSize.sm * 1.55,
       color: Colors.textSecondary,
-      marginTop: -Spacing.sm,
+    },
+    rows: {
+      gap: Spacing.base,
     },
     row: {
       flexDirection: "row",
       gap: Spacing.md,
       alignItems: "flex-start",
     },
+    // The settings-row icon column: these are the same permissions
+    // Settings > Permissions lists, and nothing in the app boxes a list icon.
     iconWrap: {
-      width: 32,
-      height: 32,
-      borderRadius: Radius.sm,
-      alignItems: "center",
-      justifyContent: "center",
-      backgroundColor: Colors.accentGhost,
+      width: 22,
       flexShrink: 0,
+      // Optical alignment with the cap height of the title beside it.
+      paddingTop: 1,
     },
     rowText: {
       flex: 1,
@@ -144,18 +155,18 @@ function createStyles(
     },
     rowTitle: {
       fontSize: FontSize.base,
-      fontWeight: FontWeight.semibold,
+      fontWeight: FontWeight.medium,
       color: Colors.textPrimary,
     },
     rowBody: {
       fontSize: FontSize.sm,
       color: Colors.textSecondary,
-      lineHeight: FontSize.sm + 6,
+      lineHeight: FontSize.sm * 1.5,
     },
     footnote: {
       fontSize: FontSize.xs,
       color: Colors.textMuted,
-      lineHeight: FontSize.xs + 5,
+      lineHeight: FontSize.xs * 1.5,
     },
   });
 }

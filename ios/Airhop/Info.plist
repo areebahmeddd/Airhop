@@ -52,6 +52,20 @@
 	<!-- Coarse location resolves which geohash cell the location channels
 	     (#block, #city, #region, etc.) belong to. Raw coordinates never leave
 	     the device; only the truncated geohash is published. -->
+	<!-- Camera, microphone and photo library. These are declared in app.json's
+	     ios.infoPlist and by the expo-camera / expo-audio / expo-image-picker
+	     plugins, but this Info.plist is hand-maintained (see docs/dev/IOS-BUILD.md)
+	     rather than regenerated, so they have to be kept in step here.
+	     Without them iOS does not deny the request - it terminates the process
+	     the moment AVCaptureDevice or AVAudioSession is touched. -->
+	<key>NSCameraUsageDescription</key>
+	<string>Airhop uses the camera to scan a contact's QR code, and to capture photos and videos to share with nearby peers.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Airhop uses the microphone to record voice notes and to carry live voice to nearby peers.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Airhop accesses your photo library to share images and videos over the mesh.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>Airhop saves photos and videos to your library when you choose to save one, and when you download your QR code.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>Airhop uses your approximate location to place you in nearby area channels (block, city, region). Your exact position never leaves your device.</string>
 	<!-- Required for MultipeerConnectivity on iOS 14+. Without this the system

@@ -114,15 +114,43 @@ android {
             keyAlias 'androiddebugkey'
             keyPassword 'android'
         }
+        // Real release key, populated from the environment. The release workflow
+        // decodes the keystore from a GitHub secret and exports these four vars;
+        // a developer can sign locally by exporting the same four. When none are
+        // set (a normal dev machine or a PR build) this stays empty and the
+        // release buildType below falls back to the debug key, so unsigned local
+        // builds still produce an installable APK. The keystore file is never
+        // committed (see .gitignore).
+        release {
+            def ksFile = System.getenv("ANDROID_KEYSTORE_FILE")
+            if (ksFile) {
+                storeFile file(ksFile)
+                storePassword System.getenv("ANDROID_KEYSTORE_PASSWORD")
+                keyAlias System.getenv("ANDROID_KEY_ALIAS")
+                keyPassword System.getenv("ANDROID_KEY_PASSWORD")
+            }
+        }
     }
     buildTypes {
         debug {
             signingConfig signingConfigs.debug
         }
         release {
-            // Caution! In production, you need to generate your own keystore file.
-            // see https://reactnative.dev/docs/signed-apk-android.
-            signingConfig signingConfigs.debug
+            // Sign with the real release key when it is present in the environment
+            // (CI decodes it from a secret, see the release workflow), otherwise
+            // fall back to the debug key so local and PR builds still produce an
+            // installable APK. The debug fallback never ships: the release job
+            // always has the secret.
+            signingConfig System.getenv("ANDROID_KEYSTORE_FILE") ? signingConfigs.release : signingConfigs.debug
+            // The distributed release APK carries only arm64-v8a, the architecture
+            // of every real Android phone. Dropping the x86_64 copy of every native
+            // library roughly halves the native payload. This is scoped to the
+            // release build alone: debug still builds both ABIs (see
+            // reactNativeArchitectures in gradle.properties), so x86_64 emulators
+            // keep working for development.
+            ndk {
+                abiFilters "arm64-v8a"
+            }
             def enableShrinkResources = findProperty('android.enableShrinkResourcesInReleaseBuilds') ?: 'false'
             shrinkResources enableShrinkResources.toBoolean()
             minifyEnabled enableMinifyInReleaseBuilds

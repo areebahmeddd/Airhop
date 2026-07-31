@@ -12,7 +12,7 @@ on:
         type: string
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: release-${{ inputs.tag || github.ref_name }}
@@ -22,6 +22,9 @@ jobs:
   release:
     name: Create Release
     runs-on: ubuntu-24.04
+    # Pushes the version/changelog commit to main and creates the release.
+    permissions:
+      contents: write
     outputs:
       tag: ${{ steps.resolve.outputs.tag }}
       version: ${{ steps.resolve.outputs.version }}
@@ -121,6 +124,9 @@ jobs:
     name: Build Android APK
     runs-on: ubuntu-24.04
     needs: release
+    # Attaches the built APK to the release.
+    permissions:
+      contents: write
 
     steps:
       - name: Checkout repository
@@ -158,8 +164,25 @@ jobs:
       - name: Install pinned Android NDK
         run: ${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager --install "ndk;27.1.12297006"
 
+      - name: Decode release keystore
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          set -euo pipefail
+          if [ -n "${ANDROID_KEYSTORE_BASE64:-}" ]; then
+            echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > "${RUNNER_TEMP}/airhop-release.keystore"
+            echo "ANDROID_KEYSTORE_FILE=${RUNNER_TEMP}/airhop-release.keystore" >> "$GITHUB_ENV"
+            echo "Release keystore decoded; the build will be signed with the release key."
+          else
+            echo "::warning::ANDROID_KEYSTORE_BASE64 is not set. Falling back to the debug key. Add the four signing secrets to ship a properly signed release."
+          fi
+
       - name: Build release APK
         working-directory: android
+        env:
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
           chmod +x gradlew
           ./gradlew assembleRelease --no-daemon
@@ -175,3 +198,23 @@ jobs:
         with:
           tag_name: ${{ needs.release.outputs.tag }}
           files: dist/airhop.apk
+
+      # Google Play needs an AAB, not an APK. It is signed with the same upload
+      # key and kept as a workflow artifact (not attached to the public release,
+      # since users cannot install an AAB) for you to download and upload to the
+      # Play Console.
+      - name: Build release AAB (Google Play upload bundle)
+        working-directory: android
+        env:
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: ./gradlew bundleRelease --no-daemon
+
+      - name: Upload AAB as build artifact
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: airhop-playstore-aab
+          path: android/app/build/outputs/bundle/release/app-release.aab
+          if-no-files-found: error
+          retention-days: 90
