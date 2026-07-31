@@ -55,6 +55,8 @@ import {
   mayContainToken,
   type EmbeddedToken,
 } from "../../core/payments/cashu";
+import { t, useT, useTPlural, type TranslationKey } from "../../i18n";
+import { chevronBack, textAlignEnd } from "../../i18n/layout";
 import {
   describeRoute,
   reportWalletError,
@@ -151,8 +153,8 @@ interface PendingAttachment {
 const ATTACH_OPTIONS: {
   action: AttachAction;
   icon: React.ComponentProps<typeof Feather>["name"];
-  label: string;
-  desc: string;
+  labelKey: TranslationKey;
+  descKey: TranslationKey;
   // Only offered inside a DM: sending ecash to a broadcast channel isn't
   // a peer-to-peer payment, so it doesn't belong in a public channel's
   // attach sheet.
@@ -161,32 +163,32 @@ const ATTACH_OPTIONS: {
   {
     action: "camera",
     icon: "camera",
-    label: "Camera",
-    desc: "Take a photo or video",
+    labelKey: "chat.attach.camera",
+    descKey: "chat.attach.camera_desc",
   },
   {
     action: "library",
     icon: "image",
-    label: "Photo Library",
-    desc: "Choose from your library",
+    labelKey: "chat.attach.library",
+    descKey: "chat.attach.library_desc",
   },
   {
     action: "document",
     icon: "file-text",
-    label: "Document",
-    desc: "Send any file or PDF",
+    labelKey: "chat.attach.document",
+    descKey: "chat.attach.document_desc",
   },
   {
     action: "voice",
     icon: "mic",
-    label: "Voice Note",
-    desc: "Record and send a voice message",
+    labelKey: "chat.attach.voice",
+    descKey: "chat.attach.voice_desc",
   },
   {
     action: "ecash",
     icon: "zap",
-    label: "Send ecash",
-    desc: "Send Cashu sats from your wallet",
+    labelKey: "chat.attach.ecash",
+    descKey: "chat.attach.ecash_desc",
     dmOnly: true,
   },
 ];
@@ -316,9 +318,19 @@ const JUMP_BUTTON_SIZE = 36;
 // actually acts on appear here, so the list never advertises a command that does
 // nothing. Both are IRC-style emotes: in a DM they target the peer, in a channel
 // they take a trailing @name.
-const SLASH_COMMANDS: { cmd: string; emoji: string; hint: string }[] = [
-  { cmd: "hug", emoji: "🫂", hint: "Send a warm hug" },
-  { cmd: "slap", emoji: "🐟", hint: "Slap with a large trout" },
+// Keys, not text: a module constant is evaluated once at import, so translated
+// strings here would freeze in whichever language the app started in.
+//
+// `cmd` is NOT a key and is never translated: it is the token the parser
+// matches, and the text these emotes transmit is recognised as an English
+// substring by bitchat on receipt. Only the hint describing it is localised.
+const SLASH_COMMANDS: {
+  cmd: string;
+  emoji: string;
+  hintKey: TranslationKey;
+}[] = [
+  { cmd: "hug", emoji: "🫂", hintKey: "chat.cmd.hug_hint" },
+  { cmd: "slap", emoji: "🐟", hintKey: "chat.cmd.slap_hint" },
 ];
 
 // The partial command while typing "/…" at the very start of the draft, before
@@ -388,6 +400,7 @@ function UndoSendPill({
   Colors: ReturnType<typeof useThemeColors>;
   durationMs: number;
 }): React.JSX.Element {
+  const T = useT();
   const styles = useMemo(() => createUndoStyles(Colors), [Colors]);
   const progress = useSharedValue(1);
   useEffect(() => {
@@ -404,14 +417,14 @@ function UndoSendPill({
   return (
     <View style={styles.pill}>
       <Feather name="clock" size={14} color={Colors.textSecondary} />
-      <Text style={styles.label}>Sending…</Text>
+      <Text style={styles.label}>{T("chat.status.sending")}</Text>
       <Pressable
         onPress={onUndo}
         hitSlop={HIT_SLOP}
         accessibilityRole="button"
-        accessibilityLabel="Undo send"
+        accessibilityLabel={T("chat.status.undo_send")}
       >
-        <Text style={styles.undo}>Undo</Text>
+        <Text style={styles.undo}>{T("chat.status.undo")}</Text>
       </Pressable>
       <View style={styles.track}>
         <Animated.View style={[styles.fill, fillStyle]} />
@@ -471,6 +484,7 @@ function TransferProgressList({
   channel: string;
 }): React.JSX.Element | null {
   const Colors = useThemeColors();
+  const T = useT();
   const styles = useMemo(() => createTransferStyles(Colors), [Colors]);
   // Subscribe to the whole map, then filter, so any advance() re-renders us.
   const transfers = useTransferStore((s) => s.transfers);
@@ -502,20 +516,22 @@ function TransferProgressList({
         const speed = transferSpeedBps(t);
         const eta = transferEtaSec(t);
 
+        // `t` here is the Transfer, which shadows the module translator, so
+        // this reads through the component's `T` instead.
         const verb =
           t.status === "done"
             ? t.direction === "send"
-              ? "Sent"
-              : "Received"
+              ? T("chat.status.sent")
+              : T("chat.status.received")
             : t.status === "failed"
-              ? "Failed"
+              ? T("chat.status.failed")
               : t.status === "cancelled"
-                ? "Cancelled"
+                ? T("chat.status.cancelled")
                 : t.status === "stalled"
-                  ? "Waiting"
+                  ? T("chat.status.waiting")
                   : t.direction === "send"
-                    ? "Sending"
-                    : "Receiving";
+                    ? T("chat.status.sending_short")
+                    : T("chat.status.receiving");
 
         const detail =
           t.status === "active"
@@ -720,6 +736,7 @@ function ImageAttachment({
   uri: string;
   onPress: () => void;
 }): React.JSX.Element {
+  const T = useT();
   const Colors = useThemeColors();
   const styles = useMemo(() => createStyles(Colors), [Colors]);
   const [aspect, setAspect] = useState<number | null>(null);
@@ -745,7 +762,7 @@ function ImageAttachment({
     <Pressable
       onPress={onPress}
       accessibilityRole="imagebutton"
-      accessibilityLabel="View photo full screen"
+      accessibilityLabel={T("chat.media.view_full")}
     >
       <Image
         source={{ uri }}
@@ -764,6 +781,7 @@ function VoiceNoteBubble({
   onToggle,
   onFinished,
 }: VoiceNoteBubbleProps): React.JSX.Element {
+  const T = useT();
   const Colors = useThemeColors();
   const styles = useMemo(() => createStyles(Colors), [Colors]);
   const player = useAudioPlayer(uri);
@@ -834,7 +852,9 @@ function VoiceNoteBubble({
         style={styles.attachVoicePlay}
         onPress={onToggle}
         accessibilityRole="button"
-        accessibilityLabel={isPlaying ? "Pause voice note" : "Play voice note"}
+        accessibilityLabel={
+          isPlaying ? T("chat.media.pause_voice") : T("chat.media.play_voice")
+        }
       >
         <Feather
           name={isPlaying ? "pause" : "play"}
@@ -845,14 +865,14 @@ function VoiceNoteBubble({
       {/* The bars are decorative, not a real waveform (the file is not
           analysed), but they carry the one thing that is real: how far in you
           are. Bars behind the playhead are solid, the rest stay faded, so a
-          glance says both "this is playing" and "this much is left". */}
+          glance says both T("chat.media.playing") and T("chat.media.remaining"). */}
       <Pressable
         style={styles.attachVoiceWave}
         onPress={handleSeek}
         onLayout={(e) => setWaveWidth(e.nativeEvent.layout.width)}
         accessibilityRole="adjustable"
-        accessibilityLabel="Voice note position"
-        accessibilityHint="Tap along the bars to jump to that point"
+        accessibilityLabel={T("chat.media.voice_position")}
+        accessibilityHint={T("chat.media.voice_scrub")}
       >
         {VOICE_WAVE_BARS.map((h, i) => {
           const played = i / VOICE_WAVE_BARS.length < progress;
@@ -885,6 +905,8 @@ export default function MessageThread({
   onNavigateToChannel,
   backUnreadCount = 0,
 }: Props): React.JSX.Element {
+  const T = useT();
+  const TP = useTPlural();
   const Colors = useThemeColors();
   const styles = useMemo(() => createStyles(Colors), [Colors]);
   // How far the compose bar has to lift to clear the on-screen keyboard.
@@ -919,7 +941,8 @@ export default function MessageThread({
   // people wondering whether the app is broken or they are in the wrong place.
   const mediaBlocked = mediaBlockedReason(channel);
   function explainMediaBlocked(): void {
-    if (mediaBlocked !== null) showAlert("Not available here", mediaBlocked);
+    if (mediaBlocked !== null)
+      showAlert(t("chat.thread.not_available"), mediaBlocked);
   }
   // Teleported cells are keyed `geohash:<gh>`; the header shows them as `#<gh>`,
   // matching bitchat's location-channel badge, not the raw internal key.
@@ -1037,7 +1060,7 @@ export default function MessageThread({
   // leading with the kind means a narrow screen ellipsizes the live count
   // rather than the label that carries the privacy.
   if (isPrivate) {
-    channelSubtitleParts.push("Private channel");
+    channelSubtitleParts.push(T("chat.thread.private_channel"));
   }
   if (isGeo && geoPlaceName !== undefined) {
     channelSubtitleParts.push(`~${geoPlaceName}`);
@@ -1062,8 +1085,8 @@ export default function MessageThread({
     channelSubtitleParts.length > 0
       ? channelSubtitleParts.join("  ·  ")
       : isGeo
-        ? "Location channel"
-        : "Public channel";
+        ? T("chat.thread.location_channel")
+        : T("chat.thread.public_channel");
 
   const audioRecorder = useAudioRecorder(VOICE_RECORDING);
   const recorderState = useAudioRecorderState(audioRecorder);
@@ -1502,8 +1525,8 @@ export default function MessageThread({
       });
       if (result.outcome === "duplicate") {
         showAlert(
-          "Already claimed",
-          "Every proof in this token is already in your wallet, so nothing was added.",
+          t("chat.ecash.already_claimed"),
+          t("chat.ecash.already_claimed_body"),
         );
         return;
       }
@@ -1566,16 +1589,16 @@ export default function MessageThread({
         channel,
         senderID: localPeerID,
         senderNickname: localNickname,
-        text: "You took a screenshot",
+        text: t("chat.screenshot.you_took"),
         timestampMs: Date.now(),
         isMine: true,
         isSystem: true,
       });
       showAlert(
-        "Heads up",
+        t("chat.screenshot.heads_up"),
         isDM
           ? `${resolveDisplayName(channel.slice(3))} was notified that you took a screenshot of this conversation.`
-          : "Everyone in this channel was notified that you took a screenshot.",
+          : t("chat.screenshot.notified"),
       );
     });
     return () => subscription.remove();
@@ -1969,10 +1992,10 @@ export default function MessageThread({
         // runtime error, and "Maximum call stack size exceeded" tells the
         // sender nothing they can act on.
         showAlert(
-          "Attachment not sent",
+          t("chat.attach.not_sent"),
           err instanceof AttachmentTooLargeError
             ? err.message
-            : "Something went wrong reading that file. Try another one.",
+            : t("chat.attach.read_failed"),
         );
       }
     })();
@@ -2051,7 +2074,10 @@ export default function MessageThread({
     const granted = await ensurePermission(
       () => ImagePicker.getCameraPermissionsAsync(),
       () => ImagePicker.requestCameraPermissionsAsync(),
-      { label: "Camera access", purpose: "take a photo to send" },
+      {
+        label: t("chat.perm.camera_label"),
+        purpose: t("chat.perm.camera_purpose"),
+      },
     );
     if (!granted) return;
     const result = await ImagePicker.launchCameraAsync({
@@ -2076,7 +2102,10 @@ export default function MessageThread({
     const granted = await ensurePermission(
       () => ImagePicker.getMediaLibraryPermissionsAsync(),
       () => ImagePicker.requestMediaLibraryPermissionsAsync(),
-      { label: "Photo access", purpose: "pick a photo or video to send" },
+      {
+        label: t("chat.perm.photo_label"),
+        purpose: t("chat.perm.photo_purpose"),
+      },
     );
     if (!granted) return;
     const result = await ImagePicker.launchImageLibraryAsync({
@@ -2215,7 +2244,10 @@ export default function MessageThread({
     const granted = await ensurePermission(
       () => AudioModule.getRecordingPermissionsAsync(),
       () => AudioModule.requestRecordingPermissionsAsync(),
-      { label: "Microphone access", purpose: "talk to people nearby" },
+      {
+        label: t("chat.perm.mic_label"),
+        purpose: t("chat.perm.mic_live_purpose"),
+      },
     );
     if (hold !== holdSeqRef.current) return; // let go while the prompt was up
     if (!granted) {
@@ -2228,7 +2260,7 @@ export default function MessageThread({
       liveHoldRef.current = false;
       setIsTalkingLive(false);
       setIsPTTActive(false);
-      setToast("Recording stopped");
+      setToast(t("chat.perm.recording_stopped"));
     });
     if (hold !== holdSeqRef.current) {
       // Released while the mic was opening. Close it now rather than leaving a
@@ -2348,7 +2380,10 @@ export default function MessageThread({
     const granted = await ensurePermission(
       () => AudioModule.getRecordingPermissionsAsync(),
       () => AudioModule.requestRecordingPermissionsAsync(),
-      { label: "Microphone access", purpose: "record a voice note" },
+      {
+        label: t("chat.perm.mic_label"),
+        purpose: t("chat.perm.mic_note_purpose"),
+      },
     );
     if (!granted) return;
     await setAudioModeAsync({
@@ -2368,10 +2403,7 @@ export default function MessageThread({
       // one failed recording and every voice note afterwards sounds broken,
       // with nothing on screen to explain why.
       await setAudioModeAsync({ allowsRecording: false }).catch(() => {});
-      showAlert(
-        "Error",
-        "Could not start recording. Check microphone permissions.",
-      );
+      showAlert(T("chat.thread.error"), t("chat.perm.record_failed"));
     }
   }
 
@@ -2439,7 +2471,7 @@ export default function MessageThread({
             <View style={styles.attachImagePlaceholder}>
               <Feather name="image" size={28} color={Colors.textMuted} />
               <Text style={styles.attachImagePlaceholderText}>
-                {attachment.name ?? "Image"}
+                {attachment.name ?? t("chat.media.image")}
               </Text>
             </View>
           );
@@ -2461,7 +2493,7 @@ export default function MessageThread({
                 })
               }
               accessibilityRole="button"
-              accessibilityLabel="Tap to load photo"
+              accessibilityLabel={t("chat.media.tap_load_photo")}
             >
               <Feather name="image" size={28} color={Colors.textMuted} />
               <Text style={styles.attachImagePlaceholderText}>
@@ -2525,7 +2557,7 @@ export default function MessageThread({
                 ]}
                 numberOfLines={2}
               >
-                {attachment.name ?? "Document"}
+                {attachment.name ?? t("chat.attach.document")}
               </Text>
               {docSubtitle(attachment) !== null && (
                 <Text
@@ -2558,7 +2590,7 @@ export default function MessageThread({
                 setRevealedAttachments((prev) => new Set(prev).add(messageId))
               }
               accessibilityRole="button"
-              accessibilityLabel="Tap to load video"
+              accessibilityLabel={t("chat.media.tap_load_video")}
             >
               <View style={styles.attachVideoPlayBadge}>
                 <Feather name="play" size={20} color={Colors.textPrimary} />
@@ -2598,42 +2630,36 @@ export default function MessageThread({
     const granted = await ensurePermission(
       () => MediaLibrary.getPermissionsAsync(true),
       () => MediaLibrary.requestPermissionsAsync(true),
-      { label: "Photo access", purpose: "save this to your photos" },
+      {
+        label: t("chat.perm.photo_label"),
+        purpose: t("chat.perm.photo_save_purpose"),
+      },
     );
     if (!granted) return;
     try {
       await MediaLibrary.saveToLibraryAsync(attachment.uri);
       setToast(
         attachment.type === "video"
-          ? "Saved to your videos"
-          : "Saved to your photos",
+          ? t("chat.media.saved_videos")
+          : t("chat.media.saved_photos"),
       );
     } catch {
-      showAlert(
-        "Not saved",
-        "The file could not be saved. It may have been cleared from the cache.",
-      );
+      showAlert(t("chat.media.not_saved"), t("chat.media.not_saved_body"));
     }
   }
 
   async function openAttachment(attachment: ChatAttachment): Promise<void> {
     try {
       if (!(await Sharing.isAvailableAsync())) {
-        showAlert(
-          "Can't open file",
-          "This device has no app available to open or share this file.",
-        );
+        showAlert(t("chat.media.cant_open"), t("chat.media.no_app"));
         return;
       }
       await Sharing.shareAsync(attachment.uri, {
         mimeType: attachment.mimeType,
-        dialogTitle: attachment.name ?? "Attachment",
+        dialogTitle: attachment.name ?? t("chat.attach.generic"),
       });
     } catch {
-      showAlert(
-        "Can't open file",
-        "The file could not be opened. It may have been cleared from the cache.",
-      );
+      showAlert(t("chat.media.cant_open"), t("chat.media.open_failed"));
     }
   }
 
@@ -2661,7 +2687,9 @@ export default function MessageThread({
           (isTokenClaimed(token) ? (
             <View style={styles.paymentCardClaimed}>
               <Feather name="check" size={13} color={Colors.online} />
-              <Text style={styles.paymentCardClaimedText}>Claimed</Text>
+              <Text style={styles.paymentCardClaimedText}>
+                {t("chat.ecash.claimed")}
+              </Text>
             </View>
           ) : (
             <Pressable
@@ -2675,7 +2703,9 @@ export default function MessageThread({
               accessibilityLabel={`Claim ${token.info.amount.toLocaleString()} ${token.info.unit}`}
             >
               <Text style={styles.paymentCardClaimText}>
-                {claimingToken === token.raw ? "Claiming…" : "Claim"}
+                {claimingToken === token.raw
+                  ? t("chat.ecash.claiming")
+                  : t("chat.ecash.claim")}
               </Text>
             </Pressable>
           ))}
@@ -2714,7 +2744,7 @@ export default function MessageThread({
   const displayName = channel.startsWith("dm:")
     ? resolveDisplayName(channel.slice(3))
     : isGroup
-      ? (groupName ?? "Group")
+      ? (groupName ?? T("chat.thread.group"))
       : channel;
 
   return (
@@ -2735,10 +2765,10 @@ export default function MessageThread({
           accessibilityLabel={
             backUnreadCount > 0
               ? `Go back, ${String(backUnreadCount)} unread`
-              : "Go back"
+              : T("chat.thread.go_back")
           }
         >
-          <Feather name="chevron-left" size={24} color={Colors.textPrimary} />
+          <Feather name={chevronBack} size={24} color={Colors.textPrimary} />
           {backUnreadCount > 0 && (
             <View
               style={styles.backBadge}
@@ -2789,7 +2819,7 @@ export default function MessageThread({
                   tag: a bare member count said nothing about who can read it. */}
               <Text style={styles.headerSubtitle} numberOfLines={1}>
                 {isGroup
-                  ? `Private group  ·  ${memberCount} member${memberCount !== 1 ? "s" : ""}`
+                  ? TP("chat.group_members", memberCount)
                   : channelSubtitle}
               </Text>
             </>
@@ -2812,7 +2842,7 @@ export default function MessageThread({
               accessibilityLabel={
                 unseenNotices > 0
                   ? `Notices for this channel, ${String(unseenNotices)} new`
-                  : "Notices for this channel"
+                  : T("chat.thread.notices")
               }
             >
               <MaterialCommunityIcons
@@ -2834,7 +2864,7 @@ export default function MessageThread({
                   onPress={handleInvite}
                   hitSlop={hitSlopFor(32)}
                   accessibilityRole="button"
-                  accessibilityLabel="Invite someone to this channel"
+                  accessibilityLabel={T("chat.thread.invite")}
                 >
                   <Feather
                     name="user-plus"
@@ -2861,8 +2891,8 @@ export default function MessageThread({
           />
           <Text style={styles.peerOfflineBannerText}>
             {dmInternetReachable
-              ? "Not in Bluetooth range. Delivering over the internet."
-              : "Not nearby. We'll deliver when they're back in range or online."}
+              ? T("chat.thread.not_in_range")
+              : T("chat.thread.not_nearby")}
           </Text>
         </View>
       )}
@@ -3051,10 +3081,10 @@ export default function MessageThread({
           }}
           ListEmptyComponent={
             <View style={styles.emptyState}>
-              <Text style={styles.emptyTitle}>No messages yet</Text>
+              <Text style={styles.emptyTitle}>{T("chat.thread.empty")}</Text>
               <Text style={styles.emptySubtitle}>
                 {isDM
-                  ? "Start an encrypted conversation."
+                  ? T("chat.thread.empty_desc")
                   : `Say something in ${channel}.`}
               </Text>
             </View>
@@ -3064,15 +3094,15 @@ export default function MessageThread({
 
         {/* Jump to latest: only while the reader is away from the end, so it is
             an offer rather than permanent chrome. This is the other half of not
-            auto-scrolling - without a way back, "we left you where you were"
-            turns into "we stranded you".
+            auto-scrolling - without a way back, T("chat.teleport.stayed")
+            turns into T("chat.teleport.stranded").
 
             Badged with how many messages have arrived since they scrolled away,
             in the same shape as the back button's unread badge. Reading back in
-            a busy channel, the difference between "nothing happened" and "nine
+            a busy channel, the difference between T("chat.teleport.nothing") and "nine
             people replied" is the whole reason to take the trip, and a bare
             chevron makes you guess. Absent when the count is zero, so it says
-            "you moved" rather than a misleading zero. */}
+            T("chat.teleport.moved") rather than a misleading zero. */}
         {showJumpToLatest && msgs.length > 0 && (
           <Pressable
             style={styles.jumpToLatest}
@@ -3082,7 +3112,7 @@ export default function MessageThread({
             accessibilityLabel={
               newWhileAway > 0
                 ? `Jump to latest message, ${String(newWhileAway)} new`
-                : "Jump to latest message"
+                : T("chat.thread.jump_latest")
             }
           >
             <Feather name="chevron-down" size={20} color={Colors.textPrimary} />
@@ -3110,11 +3140,7 @@ export default function MessageThread({
       {isDM && dmStatus === "queued" && (
         <View style={styles.dmStatusBar}>
           <Feather name="clock" size={12} color={Colors.textMuted} />
-          <Text style={styles.dmStatusText}>
-            {
-              "Can't reach them right now. Message will send when a route is available."
-            }
-          </Text>
+          <Text style={styles.dmStatusText}>{T("chat.thread.no_route")}</Text>
         </View>
       )}
       {!isDM && dmStatus === "no-reach" && (
@@ -3142,7 +3168,7 @@ export default function MessageThread({
               source={{ uri: fullscreenImage }}
               style={styles.fullscreenImage}
               resizeMode="contain"
-              accessibilityLabel="Photo"
+              accessibilityLabel={T("chat.media.photo")}
             />
           )}
           <Pressable
@@ -3150,7 +3176,7 @@ export default function MessageThread({
             onPress={() => setFullscreenImage(null)}
             hitSlop={hitSlopFor(20)}
             accessibilityRole="button"
-            accessibilityLabel="Close photo"
+            accessibilityLabel={T("chat.media.close_photo")}
           >
             <Feather name="x" size={24} color="#FFFFFF" />
           </Pressable>
@@ -3168,7 +3194,7 @@ export default function MessageThread({
                 }
                 hitSlop={hitSlopFor(20)}
                 accessibilityRole="button"
-                accessibilityLabel="Save photo to your photos"
+                accessibilityLabel={T("chat.media.save_photo")}
               >
                 <Feather name="download" size={22} color="#FFFFFF" />
               </Pressable>
@@ -3179,7 +3205,7 @@ export default function MessageThread({
                 }
                 hitSlop={hitSlopFor(20)}
                 accessibilityRole="button"
-                accessibilityLabel="Share photo"
+                accessibilityLabel={T("chat.media.share_photo")}
               >
                 <Feather name="share-2" size={22} color="#FFFFFF" />
               </Pressable>
@@ -3233,12 +3259,15 @@ export default function MessageThread({
                 style={styles.slashRow}
                 onPress={() => setDraft(`/${c.cmd} `)}
                 accessibilityRole="button"
-                accessibilityLabel={`Command /${c.cmd}: ${c.hint}`}
+                accessibilityLabel={T("chat.cmd.a11y", {
+                  cmd: c.cmd,
+                  hint: T(c.hintKey),
+                })}
               >
                 <Text style={styles.slashEmoji}>{c.emoji}</Text>
                 <View style={styles.slashText}>
                   <Text style={styles.slashCmd}>/{c.cmd}</Text>
-                  <Text style={styles.slashHint}>{c.hint}</Text>
+                  <Text style={styles.slashHint}>{T(c.hintKey)}</Text>
                 </View>
               </Pressable>
             ))}
@@ -3280,7 +3309,7 @@ export default function MessageThread({
           onPress={() => setNearbyOnly((v) => !v)}
           accessibilityRole="switch"
           accessibilityState={{ checked: nearbyOnly }}
-          accessibilityLabel="Nearby only: keep this message off the mesh bridge"
+          accessibilityLabel={T("chat.bridge.nearby_only")}
         >
           <Feather
             name={nearbyOnly ? "bluetooth" : "globe"}
@@ -3294,8 +3323,8 @@ export default function MessageThread({
             ]}
           >
             {nearbyOnly
-              ? "Nearby only · stays on Bluetooth"
-              : "Bridging to nearby areas · tap for nearby only"}
+              ? T("chat.bridge.nearby_label")
+              : T("chat.bridge.bridging_label")}
           </Text>
         </Pressable>
       )}
@@ -3310,7 +3339,7 @@ export default function MessageThread({
           hitSlop={hitSlopFor(COMPOSE_ATTACH_SIZE)}
           accessibilityRole="button"
           accessibilityLabel={
-            mediaAllowed ? "Attach a file" : "Attachments not available here"
+            mediaAllowed ? T("chat.attach.file") : T("chat.attach.unavailable")
           }
           accessibilityState={{ disabled: !mediaAllowed }}
         >
@@ -3320,7 +3349,7 @@ export default function MessageThread({
           style={styles.input}
           value={draft}
           onChangeText={setDraft}
-          placeholder={"Message\u2026"}
+          placeholder={T("chat.thread.message_placeholder")}
           placeholderTextColor={Colors.textMuted}
           multiline
           maxLength={2000}
@@ -3330,7 +3359,7 @@ export default function MessageThread({
           selectionColor={Colors.accent}
           // The placeholder is the only thing naming this field, and it vanishes
           // the moment there is a draft.
-          accessibilityLabel="Message"
+          accessibilityLabel={T("chat.thread.message")}
         />
 
         {draft.trim().length > 0 ? (
@@ -3340,7 +3369,7 @@ export default function MessageThread({
             onPress={handleSend}
             hitSlop={hitSlopFor(COMPOSE_BUTTON_SIZE)}
             accessibilityRole="button"
-            accessibilityLabel="Send message"
+            accessibilityLabel={T("chat.thread.send")}
           >
             <Feather name="arrow-up" size={18} color={Colors.textInverse} />
           </Pressable>
@@ -3352,7 +3381,7 @@ export default function MessageThread({
             onPress={explainMediaBlocked}
             hitSlop={hitSlopFor(COMPOSE_BUTTON_SIZE)}
             accessibilityRole="button"
-            accessibilityLabel="Voice notes not available here"
+            accessibilityLabel={T("chat.voice.unavailable")}
             accessibilityState={{ disabled: true }}
           >
             <Feather name="mic" size={16} color={Colors.textMuted} />
@@ -3390,14 +3419,14 @@ export default function MessageThread({
               accessibilityRole="button"
               accessibilityLabel={
                 liveTalker !== null
-                  ? `${liveAvailable ? "Hold to talk live" : "Hold to record a voice note"}. ${liveTalker} is talking`
+                  ? `${liveAvailable ? T("chat.voice.hold_live") : T("chat.voice.hold_record")}. ${liveTalker} is talking`
                   : liveAvailable
-                    ? "Hold to talk live"
-                    : "Hold to record a voice note"
+                    ? T("chat.voice.hold_live")
+                    : T("chat.voice.hold_record")
               }
             >
               {/* Always the mic: that is this app's icon for voice, and the
-                  radio glyph already means "the mesh" everywhere else (peer
+                  radio glyph already means T("chat.voice.the_mesh") everywhere else (peer
                   list, radar, network settings), so borrowing it here would
                   say the wrong thing. State is carried by colour instead,
                   which is how the rest of the app shows it:
@@ -3407,7 +3436,7 @@ export default function MessageThread({
                     danger you are live right now
 
                   The busy ring is a separate property (the border), so
-                  "live is available" and "somebody else is talking" can be
+                  T("chat.voice.live_available") and T("chat.voice.someone_talking") can be
                   true at once and both remain readable. */}
               <Feather
                 name="mic"
@@ -3441,7 +3470,9 @@ export default function MessageThread({
             }}
             accessibilityRole="button"
             accessibilityLabel={
-              isTalkingLive ? "Stop talking and discard" : "Cancel recording"
+              isTalkingLive
+                ? T("chat.voice.stop_discard")
+                : T("chat.voice.cancel_recording")
             }
           >
             <Feather name="x" size={18} color={Colors.textMuted} />
@@ -3487,7 +3518,7 @@ export default function MessageThread({
             ]}
             accessibilityLabel={
               burstEnded
-                ? "Two minute limit reached, release to send"
+                ? T("chat.voice.limit_reached")
                 : formatDuration(recordingSecs)
             }
           >
@@ -3501,7 +3532,7 @@ export default function MessageThread({
               style={styles.recordingStop}
               onPress={() => void stopRecording()}
               accessibilityRole="button"
-              accessibilityLabel="Stop recording and send"
+              accessibilityLabel={T("chat.voice.stop_send")}
             >
               <Feather name="send" size={16} color={Colors.textInverse} />
             </Pressable>
@@ -3515,23 +3546,23 @@ export default function MessageThread({
         onClose={() => setShowAttachMenu(false)}
         sheetStyle={styles.attachSheet}
       >
-        <Text style={styles.attachSheetTitle}>Attach</Text>
+        <Text style={styles.attachSheetTitle}>{T("chat.attach.title")}</Text>
         {ATTACH_OPTIONS.filter((o) => !o.dmOnly || isDM).map(
-          ({ action, icon, label, desc }, i) => (
+          ({ action, icon, labelKey, descKey }, i) => (
             <React.Fragment key={action}>
               {i > 0 && <View style={styles.attachSeparator} />}
               <Pressable
                 style={styles.attachOption}
                 onPress={() => handleAttachAction(action)}
                 accessibilityRole="button"
-                accessibilityLabel={label}
+                accessibilityLabel={T(labelKey)}
               >
                 <View style={styles.attachOptionIcon}>
                   <Feather name={icon} size={20} color={Colors.textSecondary} />
                 </View>
                 <View style={styles.attachOptionBody}>
-                  <Text style={styles.attachOptionLabel}>{label}</Text>
-                  <Text style={styles.attachOptionDesc}>{desc}</Text>
+                  <Text style={styles.attachOptionLabel}>{T(labelKey)}</Text>
+                  <Text style={styles.attachOptionDesc}>{T(descKey)}</Text>
                 </View>
               </Pressable>
             </React.Fragment>
@@ -3549,7 +3580,7 @@ export default function MessageThread({
           onPress={() => setShowAttachMenu(false)}
           accessibilityRole="button"
         >
-          <Text style={styles.attachCancelText}>Cancel</Text>
+          <Text style={styles.attachCancelText}>{T("common.cancel")}</Text>
         </Pressable>
       </BottomSheet>
 
@@ -3561,7 +3592,7 @@ export default function MessageThread({
           onClose={() => setShowSendEcash(false)}
           sheetStyle={styles.ecashSheet}
         >
-          <Text style={styles.ecashTitle}>Send ecash</Text>
+          <Text style={styles.ecashTitle}>{T("chat.ecash.title")}</Text>
           <Text style={styles.ecashSubtitle}>
             Built offline from your wallet and sent as a token to {displayName}.
           </Text>
@@ -3569,7 +3600,7 @@ export default function MessageThread({
             style={styles.ecashInput}
             value={ecashAmount}
             onChangeText={setEcashAmount}
-            placeholder="Amount in sats"
+            placeholder={T("chat.ecash.amount")}
             placeholderTextColor={Colors.textMuted}
             keyboardType="number-pad"
             returnKeyType="next"
@@ -3579,7 +3610,7 @@ export default function MessageThread({
             style={[styles.ecashInput, styles.ecashInputCompact]}
             value={ecashMemo}
             onChangeText={setEcashMemo}
-            placeholder="Memo (optional)"
+            placeholder={T("chat.ecash.memo")}
             placeholderTextColor={Colors.textMuted}
             autoCapitalize="sentences"
             selectionColor={Colors.accent}
@@ -3594,7 +3625,9 @@ export default function MessageThread({
               onPress={() => void handleSendEcash()}
               disabled={!ecashAmount.trim() || sendingEcash}
             >
-              <Text style={styles.ecashConfirmText}>Send</Text>
+              <Text style={styles.ecashConfirmText}>
+                {T("chat.ecash.send")}
+              </Text>
             </Pressable>
             <Pressable
               style={styles.ecashCancel}
@@ -3604,7 +3637,7 @@ export default function MessageThread({
                 setEcashMemo("");
               }}
             >
-              <Text style={styles.ecashCancelText}>Cancel</Text>
+              <Text style={styles.ecashCancelText}>{T("common.cancel")}</Text>
             </Pressable>
           </View>
         </BottomSheet>
@@ -3623,7 +3656,7 @@ export default function MessageThread({
       )}
 
       {/* DM peer info: opens when the user taps the DM header. The same shared
-          sheet the DM list's "Contact info" action uses, so the two never
+          sheet the DM list's T("chat.thread.contact_info") action uses, so the two never
           diverge. */}
       {isDM && (
         <ContactInfoSheet
@@ -3666,14 +3699,16 @@ export default function MessageThread({
             />
             <Text style={styles.composerFileName} numberOfLines={1}>
               {pendingAttachment?.name ??
-                (pendingAttachment?.type === "video" ? "Video" : "Document")}
+                (pendingAttachment?.type === "video"
+                  ? T("chat.media.video")
+                  : T("chat.attach.document"))}
             </Text>
           </View>
         )}
         <View style={styles.composerInputRow}>
           <TextInput
             style={styles.composerInput}
-            placeholder="Add a caption…"
+            placeholder={T("chat.attach.caption")}
             placeholderTextColor={Colors.textMuted}
             value={captionDraft}
             onChangeText={setCaptionDraft}
@@ -3684,7 +3719,7 @@ export default function MessageThread({
             style={styles.composerSend}
             onPress={confirmPendingAttachment}
             accessibilityRole="button"
-            accessibilityLabel="Send attachment"
+            accessibilityLabel={T("chat.attach.send")}
           >
             <Feather name="send" size={18} color={Colors.textInverse} />
           </Pressable>
@@ -3706,10 +3741,10 @@ export default function MessageThread({
                   onPress={() => setSenderInfoTarget(null)}
                   hitSlop={hitSlopFor(28)}
                   accessibilityRole="button"
-                  accessibilityLabel="Back to members"
+                  accessibilityLabel={T("chat.thread.back_to_members")}
                 >
                   <Feather
-                    name="chevron-left"
+                    name={chevronBack}
                     size={24}
                     color={Colors.textPrimary}
                   />
@@ -3726,7 +3761,9 @@ export default function MessageThread({
                 </Text>
                 {isNostrId(senderInfoTarget.peerID) ? (
                   <View style={styles.keyBox}>
-                    <Text style={styles.keyBoxLabel}>Nostr public key</Text>
+                    <Text style={styles.keyBoxLabel}>
+                      {T("chat.thread.nostr_key")}
+                    </Text>
                     <Text style={styles.keyBoxValue} selectable>
                       {senderInfoTarget.peerID.slice(NOSTR_ID_PREFIX.length)}
                     </Text>
@@ -3741,7 +3778,9 @@ export default function MessageThread({
                 ) && (
                   <View style={styles.dmInfoStatus}>
                     <View style={styles.dmInfoDot} />
-                    <Text style={styles.dmInfoStatusText}>In BLE range</Text>
+                    <Text style={styles.dmInfoStatusText}>
+                      {T("chat.thread.in_ble_range")}
+                    </Text>
                   </View>
                 )}
               </View>
@@ -3757,7 +3796,9 @@ export default function MessageThread({
                     size={16}
                     color={Colors.textInverse}
                   />
-                  <Text style={styles.senderInfoMessageText}>Message</Text>
+                  <Text style={styles.senderInfoMessageText}>
+                    {T("chat.thread.message")}
+                  </Text>
                 </Pressable>
               </View>
             </>
@@ -3843,7 +3884,7 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
     backBadge: {
       position: "absolute",
       top: 0,
-      right: 0,
+      end: 0,
       minWidth: 16,
       height: 16,
       borderRadius: Radius.full,
@@ -3934,7 +3975,7 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
     // Floats at the end of the list, clear of the compose bar below it.
     jumpToLatest: {
       position: "absolute",
-      right: Spacing.base,
+      end: Spacing.base,
       bottom: Spacing.md,
       width: JUMP_BUTTON_SIZE,
       height: JUMP_BUTTON_SIZE,
@@ -3952,7 +3993,7 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
     jumpBadge: {
       position: "absolute",
       top: -2,
-      right: -2,
+      end: -2,
       minWidth: 16,
       height: 16,
       borderRadius: Radius.full,
@@ -4264,7 +4305,7 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
     attachSeparator: {
       height: StyleSheet.hairlineWidth,
       backgroundColor: Colors.border,
-      marginLeft: 40 + Spacing.base + Spacing.sm,
+      marginStart: 40 + Spacing.base + Spacing.sm,
     },
     attachNote: {
       flexDirection: "row",
@@ -4403,7 +4444,7 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       fontWeight: FontWeight.medium,
       color: Colors.danger,
       minWidth: 32,
-      textAlign: "right",
+      textAlign: textAlignEnd,
       flexShrink: 0,
     },
     recordingTimerEnded: {
@@ -4487,7 +4528,7 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
     fullscreenClose: {
       position: "absolute",
       top: 48,
-      right: 20,
+      end: 20,
       width: 40,
       height: 40,
       borderRadius: Radius.full,
@@ -4599,7 +4640,7 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
     dmInfoBack: {
       position: "absolute",
       top: Spacing.base,
-      left: Spacing.base,
+      start: Spacing.base,
       zIndex: 1,
       padding: Spacing.xs,
     },
@@ -4667,7 +4708,7 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
     noticeDot: {
       position: "absolute",
       top: 5,
-      right: 5,
+      end: 5,
       width: 8,
       height: 8,
       borderRadius: Radius.full,

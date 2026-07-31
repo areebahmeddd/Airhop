@@ -5,6 +5,7 @@
 import { Feather } from "@expo/vector-icons";
 import React, { useMemo } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
+import { useT } from "../../i18n";
 import type { ChatMessage } from "../../store/chat-store";
 import BottomSheet from "../../ui/components/bottom-sheet";
 import {
@@ -34,6 +35,7 @@ export default function MessageActionSheet({
   onInfo,
   onSave,
 }: Props): React.JSX.Element | null {
+  const T = useT();
   const Colors = useThemeColors();
   const styles = useMemo(() => createStyles(Colors), [Colors]);
 
@@ -63,7 +65,7 @@ export default function MessageActionSheet({
         {canShowInfo && (
           <ActionRow
             icon="info"
-            label="Message info"
+            label={T("chat.action.info")}
             onPress={() => act(onInfo)}
             color={Colors.textPrimary}
           />
@@ -73,7 +75,11 @@ export default function MessageActionSheet({
             {canShowInfo && <View style={styles.divider} />}
             <ActionRow
               icon={isGallery ? "download" : "share-2"}
-              label={isGallery ? "Save to photos" : "Save a copy"}
+              label={
+                isGallery
+                  ? T("chat.action.save_photos")
+                  : T("chat.action.save_copy")
+              }
               onPress={() => act(onSave)}
               color={Colors.textPrimary}
             />
@@ -82,7 +88,7 @@ export default function MessageActionSheet({
         {(canShowInfo || message.attachment) && <View style={styles.divider} />}
         <ActionRow
           icon="corner-up-right"
-          label="Forward"
+          label={T("chat.action.forward")}
           onPress={() => act(onForward)}
           color={Colors.textPrimary}
         />
@@ -91,7 +97,7 @@ export default function MessageActionSheet({
             <View style={styles.divider} />
             <ActionRow
               icon="copy"
-              label="Copy"
+              label={T("common.copy")}
               onPress={() => act(onCopy)}
               color={Colors.textPrimary}
             />
@@ -153,7 +159,7 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
     divider: {
       height: StyleSheet.hairlineWidth,
       backgroundColor: Colors.border,
-      marginLeft: Spacing.base,
+      marginStart: Spacing.base,
     },
     actionLabel: {
       fontSize: FontSize.base,

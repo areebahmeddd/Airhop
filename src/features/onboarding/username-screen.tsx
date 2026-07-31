@@ -5,6 +5,7 @@
 import React, { useMemo } from "react";
 import { ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { useT, type Translator } from "../../i18n";
 import PrimaryButton from "../../ui/components/primary-button";
 import {
   avatarColor,
@@ -32,9 +33,11 @@ export default function UsernameScreen({
   onEnter,
 }: Props): React.JSX.Element {
   const Colors = useThemeColors();
+  const T = useT();
   const styles = useMemo(() => createStyles(Colors), [Colors]);
   const username = peerIDToUsername(peerID);
   const accentColor = avatarColor(peerID);
+  const props = identityProps(T);
 
   return (
     <SafeAreaView style={styles.root}>
@@ -55,9 +58,11 @@ export default function UsernameScreen({
           <View
             style={[styles.card, { borderColor: withAlpha(accentColor, 0.2) }]}
             accessible
-            accessibilityLabel={`Your name on the mesh is ${username}. Peer ID ${peerID}. ${PROPS.map(
-              (p) => `${p.label}: ${p.value}`,
-            ).join(". ")}`}
+            accessibilityLabel={T("onboarding.username.card_a11y", {
+              username,
+              peerID,
+              props: props.map((p) => `${p.label}: ${p.value}`).join(". "),
+            })}
           >
             {/* Avatar */}
             <View
@@ -75,13 +80,15 @@ export default function UsernameScreen({
             </View>
 
             {/* Username */}
-            <Text style={styles.label}>Your name on the mesh</Text>
+            <Text style={styles.label}>{T("onboarding.username.label")}</Text>
             <Text style={[styles.username, { color: accentColor }]}>
               {username}
             </Text>
 
             {/* Peer ID */}
-            <Text style={styles.peerIDLabel}>Peer ID</Text>
+            <Text style={styles.peerIDLabel}>
+              {T("onboarding.username.peer_id")}
+            </Text>
             <Text style={styles.peerID}>
               {peerID.slice(0, 8)}
               {"\u2009\u00b7\u2009"}
@@ -93,7 +100,7 @@ export default function UsernameScreen({
 
             {/* Properties */}
             <View style={styles.props}>
-              {PROPS.map((p) => (
+              {props.map((p) => (
                 <View key={p.label} style={styles.propRow}>
                   <Text style={styles.propLabel}>{p.label}</Text>
                   <Text
@@ -111,17 +118,16 @@ export default function UsernameScreen({
 
           {/* Explanation */}
           <Text style={styles.explanation}>
-            This username is deterministically derived from your public key. It
-            is the same on every device that sees your peer ID.
+            {T("onboarding.username.explanation")}
           </Text>
         </View>
 
         {/* Footer */}
         <View style={styles.footer}>
           <PrimaryButton
-            label="Enter Airhop"
+            label={T("onboarding.username.cta")}
             onPress={onEnter}
-            accessibilityLabel="Enter Airhop"
+            accessibilityLabel={T("onboarding.username.cta")}
           />
         </View>
       </ScrollView>
@@ -129,11 +135,30 @@ export default function UsernameScreen({
   );
 }
 
-const PROPS = [
-  { label: "Algorithm", value: "Ed25519 + X25519", accent: false },
-  { label: "Storage", value: "OS Keychain only", accent: false },
-  { label: "Account required", value: "None", accent: true },
-] as const;
+// Built per render rather than as a module constant: the labels are
+// translated, so the table has to be able to change language.
+function identityProps(
+  T: Translator,
+): { label: string; value: string; accent: boolean }[] {
+  return [
+    {
+      label: T("onboarding.username.prop.algorithm"),
+      // A cryptosystem name, not prose. Never translated, never transliterated.
+      value: "Ed25519 + X25519",
+      accent: false,
+    },
+    {
+      label: T("onboarding.username.prop.storage"),
+      value: T("onboarding.username.prop.storage_value"),
+      accent: false,
+    },
+    {
+      label: T("onboarding.username.prop.account"),
+      value: T("onboarding.username.prop.account_value"),
+      accent: true,
+    },
+  ];
+}
 
 function createStyles(Colors: ReturnType<typeof useThemeColors>) {
   return StyleSheet.create({

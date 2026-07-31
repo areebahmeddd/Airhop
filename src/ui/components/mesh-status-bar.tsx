@@ -16,6 +16,7 @@
 
 import React from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
+import { t, useLanguage } from "../../i18n";
 import type {
   BannerAction,
   BannerTone,
@@ -79,18 +80,22 @@ function dotColor(
 // What the button promises to do, for a screen reader. The visible label is
 // deliberately terse ("Turn on"), which reads as an unanswered question without
 // the surrounding banner text that a screen reader announces separately.
+//
+// Module-level `t` rather than the hook: this is called during render from the
+// component below, which subscribes to the locale itself, so the lookup is
+// always current without threading a translator through.
 function actionHint(kind: BannerAction): string {
   switch (kind) {
     case "resume":
-      return "Turns Bluetooth advertising and scanning back on";
+      return t("mesh.banner.hint.resume");
     case "enable-bluetooth":
-      return "Asks Android to switch Bluetooth on";
+      return t("mesh.banner.hint.enable_bluetooth");
     case "open-location-settings":
-      return "Opens the system location settings";
+      return t("mesh.banner.hint.location_settings");
     case "open-app-settings":
-      return "Opens Airhop's permissions in system settings";
+      return t("mesh.banner.hint.app_settings");
     case "open-background-limits":
-      return "Opens this phone's background activity settings";
+      return t("mesh.banner.hint.battery_settings");
   }
 }
 
@@ -100,6 +105,10 @@ export default function MeshStatusBar({
   onDismiss,
 }: Props): React.JSX.Element | null {
   const Colors = useThemeColors();
+  // The accessibility hints below are built with the module-level `t`, so this
+  // is what makes them re-read on a language change rather than relying on an
+  // ancestor to re-render.
+  void useLanguage();
   if (banners.length === 0) return null;
 
   return (
@@ -143,7 +152,7 @@ export default function MeshStatusBar({
               hitSlop={hitSlopFor(RESUME_PILL_HEIGHT)}
               accessibilityRole="button"
               accessibilityLabel={`Dismiss: ${banner.label}`}
-              accessibilityHint="Hides this note for good"
+              accessibilityHint={t("mesh.banner.hint.dismiss")}
             >
               <Text
                 style={[styles.dismissText, { color: Colors.textMuted }]}

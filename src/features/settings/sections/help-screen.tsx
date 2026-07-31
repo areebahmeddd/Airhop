@@ -9,6 +9,10 @@ import {
   useSharedStyles,
 } from "../shared";
 
+import { useT } from "../../../i18n";
+
+const CONTACT_EMAIL = "hi@areeb.dev";
+
 interface Props {
   onBack: () => void;
   onOpenTerms: () => void;
@@ -21,9 +25,10 @@ export default function HelpScreen({
   onOpenPrivacy,
 }: Props): React.JSX.Element {
   const styles = useSharedStyles();
+  const T = useT();
   return (
     <View style={styles.container}>
-      <SubHeader title="Help and feedback" onBack={onBack} />
+      <SubHeader title={T("settings.section.help")} onBack={onBack} />
       <ScrollView
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
@@ -32,51 +37,53 @@ export default function HelpScreen({
           <View style={styles.settingsGroup}>
             <SettingLinkRow
               icon="life-buoy"
-              label="Contact us"
-              description="hi@areeb.dev"
-              onPress={() => void Linking.openURL("mailto:hi@areeb.dev")}
-              accessibilityLabel="Email hi@areeb.dev"
+              label={T("settings.help.contact")}
+              description={CONTACT_EMAIL}
+              onPress={() => void Linking.openURL("mailto:" + CONTACT_EMAIL)}
+              accessibilityLabel={T("settings.help.contact_a11y", {
+                address: CONTACT_EMAIL,
+              })}
               external
             />
             <GroupDivider />
             <SettingLinkRow
               icon="alert-circle"
-              label="Report a bug"
-              description="Open an issue on GitHub"
+              label={T("settings.help.bug")}
+              description={T("settings.help.bug_desc")}
               onPress={() =>
                 void Linking.openURL(
                   "https://github.com/areebahmeddd/airhop/issues/new",
                 )
               }
-              accessibilityLabel="Report a bug on GitHub"
+              accessibilityLabel={T("settings.help.bug_a11y")}
               external
             />
             <GroupDivider />
             <SettingLinkRow
               icon="help-circle"
-              label="Frequently asked questions"
-              description="Answers to common questions"
+              label={T("settings.help.faq")}
+              description={T("settings.help.faq_desc")}
               onPress={() =>
                 void Linking.openURL("https://airhop.1mindlabs.org/faq")
               }
-              accessibilityLabel="Open FAQ"
+              accessibilityLabel={T("settings.help.faq_a11y")}
               external
             />
             <GroupDivider />
             <SettingLinkRow
               icon="file-text"
-              label="Terms of Service"
-              description="How Airhop can be used"
+              label={T("legal.terms")}
+              description={T("settings.help.terms_desc")}
               onPress={onOpenTerms}
-              accessibilityLabel="Open Terms of Service"
+              accessibilityLabel={T("settings.help.terms_a11y")}
             />
             <GroupDivider />
             <SettingLinkRow
               icon="shield"
-              label="Privacy Policy"
-              description="What we don't collect"
+              label={T("legal.privacy")}
+              description={T("settings.help.privacy_desc")}
               onPress={onOpenPrivacy}
-              accessibilityLabel="Open Privacy Policy"
+              accessibilityLabel={T("settings.help.privacy_a11y")}
             />
           </View>
         </View>

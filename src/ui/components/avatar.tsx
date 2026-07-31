@@ -74,7 +74,7 @@ export default function Avatar({
         <View
           style={{
             position: "absolute",
-            right: dotInset,
+            end: dotInset,
             bottom: dotInset,
             width: dotSize,
             height: dotSize,

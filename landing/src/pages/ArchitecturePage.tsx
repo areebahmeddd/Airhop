@@ -1228,7 +1228,7 @@ export default function ArchitecturePage() {
                   ],
                   ["Covers", "The Nostr WebSocket only", "Every connection, as a system VPN"],
                   ["Mint traffic", "Blocked while Tor is on, unless you opt in", "Covered"],
-                  ["Third-party app needed", "No", "Yes, until Arti is embedded"],
+                  ["Third-party app needed", "No", "Yes"],
                 ]}
               />
 
@@ -1547,10 +1547,6 @@ export default function ArchitecturePage() {
                 head={["Threat", "Countermeasure"]}
                 rows={[
                   [
-                    "Message forgery",
-                    "Ed25519 checked against the key bound to the claimed sender, before anything is shown. A missing key fails the check rather than skipping it",
-                  ],
-                  [
                     "Impersonation",
                     "A peer ID is the hash of its own public key, so claiming someone else's means producing their key",
                   ],
@@ -1559,13 +1555,21 @@ export default function ArchitecturePage() {
                     "The first signing key seen for a peer is pinned. Only an in-person QR scan can replace it",
                   ],
                   [
-                    "Replay",
-                    "Content-derived packet ID, deduplicated for 5 minutes, plus a freshness window where staleness is itself the attack",
+                    "Message forgery",
+                    "Ed25519 checked against the key bound to the claimed sender, before anything is shown. A missing key fails the check rather than skipping it",
                   ],
                   ["Man in the middle", "Noise XX mutual authentication on every session"],
                   [
                     "Relay tampering",
                     "The signature covers the route field, so any edit invalidates it",
+                  ],
+                  [
+                    "Replay",
+                    "Content-derived packet ID, deduplicated for 5 minutes, plus a freshness window where staleness is itself the attack",
+                  ],
+                  [
+                    "Reading someone else's mail",
+                    "A directed packet is forwarded by relays but only opened by the peer it is addressed to",
                   ],
                   [
                     "Traffic analysis on Nostr",
@@ -1578,10 +1582,6 @@ export default function ArchitecturePage() {
                   [
                     "Sybil flooding",
                     "TTL bounds propagation, and peer tables are capped with eviction that never drops a real BLE neighbour",
-                  ],
-                  [
-                    "Reading someone else's mail",
-                    "A directed packet is forwarded by relays but only opened by the peer it is addressed to",
                   ],
                   [
                     "Misbehaving BLE devices",

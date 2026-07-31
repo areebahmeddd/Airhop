@@ -46,7 +46,7 @@
 
 **[NIP-17](https://github.com/nostr-protocol/nips/blob/master/17.md)**: The Nostr private direct message standard. Wraps messages using gift-wrap (NIP-59) so relay operators see neither sender, recipient, nor content.
 
-**[NIP-29](https://github.com/nostr-protocol/nips/blob/master/29.md)**: Nostr relay-managed groups. Considered and rejected for Airhop: it puts membership enforcement on a relay. See ARCHITECTURE.md section 7.
+**[NIP-29](https://github.com/nostr-protocol/nips/blob/master/29.md)**: Nostr relay-managed groups. Considered and rejected for Airhop: it puts membership enforcement on a relay. See ARCHITECTURE.md section 6, Groups & Channels.
 
 **[NIP-44](https://github.com/nostr-protocol/nips/blob/master/44.md)**: The Nostr encryption standard using XChaCha20-Poly1305 with versioning. Used inside NIP-17 gift-wrap envelopes.
 
@@ -82,6 +82,22 @@
 
 **[Arti](https://gitlab.torproject.org/tpo/core/arti)**: The Tor Project's Rust implementation of the Tor client. Bundled as an xcframework in bitchat iOS; Airhop uses the same approach to route all Nostr traffic through Tor on iOS by default.
 
-**[Orbot](https://guardianproject.info/apps/org.torproject.android/)**: Guardian Project's Android app providing a Tor SOCKS5 proxy on `localhost:9050`. Airhop detects Orbot and routes all Nostr traffic through it when available, with an embedded Tor binary as the long-term default.
+**[Orbot](https://guardianproject.info/apps/org.torproject.android/)**: Guardian Project's Android app providing a Tor SOCKS5 proxy on `localhost:9050`. Airhop detects Orbot and routes all Nostr traffic through it when available.
 
 **[TurboModule](https://reactnative.dev/docs/the-new-architecture/what-are-turbo-native-modules)**: React Native's new architecture native module system. `src/bridge/NativeAirhopBLE.ts` is a TurboModule TypeScript spec (Codegen input) that provides a typed interface over the Swift and Kotlin BLE implementations.
+
+## Localization
+
+**[BCP 47](https://www.rfc-editor.org/info/bcp47)**: The standard for language tags (`en`, `pt-BR`, `zh-Hans`). `src/i18n/languages.ts` is keyed on these.
+
+**[CLDR plural category](https://cldr.unicode.org/index/cldr-spec/plural-rules)**: The set of grammatical number forms a language uses. English has `one` and `other`, Russian four, Arabic six, Chinese only `other`. `tPlural` selects one per call; English's rule is the only one implemented, and a second language means selecting through `Intl.PluralRules` instead.
+
+**Endonym**: A language's name in its own script (`فارسی`, `русский`, `简体中文`). What a language picker lists, matching bitchat's `AppLanguageSettings.endonym(for:)`.
+
+**[ICU](https://icu.unicode.org/)**: The Unicode internationalization library the platform exposes through `Intl`. Backs date, time and number formatting, so `src/utils/format.ts` pins the locale and numbering system to keep output stable across OS versions. Hermes exposes `DateTimeFormat`, `NumberFormat` and `Collator` from it, but not `PluralRules`.
+
+**LTR / RTL**: Left-to-right and right-to-left layout direction. `I18nManager` sets it once per process, so changing between them needs a relaunch; layout uses logical properties plus the helpers in `src/i18n/layout.ts`.
+
+**Locale**: A language plus its formatting conventions. In Airhop a locale is a TypeScript module under `src/i18n/locales/`, compiled into the bundle rather than fetched. English is the only one today.
+
+**Translation key**: The identifier a string is looked up by (`chat.dm.clear`). Code holds keys, never sentences; `TranslationKey` is derived from `en.ts`, so an unknown key is a compile error.

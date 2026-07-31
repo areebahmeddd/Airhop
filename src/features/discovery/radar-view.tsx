@@ -33,6 +33,7 @@ import {
 } from "../../ui/theme";
 import { useReducedMotion } from "../../ui/use-reduced-motion";
 
+import { t, useT, useTPlural, type TranslationKey } from "../../i18n";
 import { resolveDisplayName } from "../../utils/display-name";
 
 // What the dial says when there are no peers, per reason.
@@ -44,45 +45,45 @@ import { resolveDisplayName } from "../../utils/display-name";
 function blockerHeadline(blocker: BleBlocker): string {
   switch (blocker) {
     case "none":
-      return "Scanning for nearby peers…";
+      return t("mesh.radar.scanning");
     case "starting":
-      return "Starting the mesh…";
+      return t("mesh.radar.starting");
     case "unsupported":
-      return "No Bluetooth on this device";
+      return t("mesh.radar.no_bluetooth");
     case "adapter-off":
-      return "Bluetooth off · not scanning";
+      return t("mesh.radar.bluetooth_off");
     case "permission-denied":
-      return "Bluetooth permission needed";
+      return t("mesh.radar.permission_needed");
     case "permission-blocked":
-      return "Bluetooth blocked";
+      return t("mesh.radar.blocked");
     case "precise-location":
-      return "Precise location needed";
+      return t("mesh.radar.precise_location");
     case "location-services-off":
-      return "Location off · not scanning";
+      return t("mesh.radar.location_off");
   }
 }
 
 function blockerHint(blocker: BleBlocker): string {
   switch (blocker) {
     case "none":
-      return "Rings show BLE signal strength, not distance";
+      return t("mesh.radar.hint_rings");
     case "starting":
-      return "Checking Bluetooth and permissions";
+      return t("mesh.radar.hint_checking");
     case "unsupported":
-      return "Messages still travel over the internet";
+      return t("mesh.radar.hint_internet");
     case "adapter-off":
-      return "Turn Bluetooth on to discover peers";
+      return t("mesh.radar.hint_turn_on");
     case "permission-denied":
-      return "Allow Bluetooth to discover peers";
+      return t("mesh.radar.hint_allow");
     case "permission-blocked":
-      return "Allow Bluetooth in Settings to discover peers";
+      return t("mesh.radar.hint_allow_settings");
     // Naming the exact setting matters here: the user believes they already
     // granted location, and they did - just not precisely enough for Android to
     // release scan results.
     case "precise-location":
-      return "Switch location from Approximate to Precise in Settings";
+      return t("mesh.radar.hint_precise");
     case "location-services-off":
-      return "Android needs location on to return Bluetooth scan results";
+      return t("mesh.radar.hint_android_location");
   }
 }
 
@@ -116,7 +117,13 @@ const RING_THRESHOLDS: [number, number] = [15_000, 45_000]; // ms
 
 // Radii as fraction of half the canvas size (C).
 const RING_FR: [number, number, number] = [0.3, 0.54, 0.78];
-const RING_LABELS: [string, string, string] = ["Strong", "Medium", "Weak"];
+// Keys, not text: evaluated once at import, so translated strings here would
+// freeze in whichever language the app started in.
+const RING_LABEL_KEYS: [TranslationKey, TranslationKey, TranslationKey] = [
+  "mesh.radar.signal_strong",
+  "mesh.radar.signal_medium",
+  "mesh.radar.signal_weak",
+];
 
 // Cardinal letters as data rather than four near-identical JSX blocks with four
 // different hand-tuned offset pairs. Each offset is relative to the canvas
@@ -156,6 +163,8 @@ export default function RadarView({
   now,
   onSelectPeer,
 }: Props): React.JSX.Element {
+  const T = useT();
+  const TP = useTPlural();
   const Colors = useThemeColors();
   const styles = useMemo(() => createStyles(Colors), [Colors]);
   const [canvasSize, setCanvasSize] = useState(0);
@@ -469,7 +478,7 @@ export default function RadarView({
                       ]}
                       maxFontSizeMultiplier={MaxFontScale.badge}
                     >
-                      {RING_LABELS[i]}
+                      {T(RING_LABEL_KEYS[i])}
                     </Text>
                   </React.Fragment>
                 );
@@ -497,13 +506,13 @@ export default function RadarView({
               ]}
               onPress={handleCenterPress}
               accessibilityRole="button"
-              accessibilityLabel="You, at the centre of the mesh"
+              accessibilityLabel={T("mesh.radar.you_centre")}
               // The label used to promise a rescan. It does not do one: BLE
               // scanning runs continuously and peers arrive on announce events,
               // as the comment on handleCenterPress says. Naming it "rescan"
               // meant a screen reader user was told the one control on this
               // screen would fetch peers, and it never did.
-              accessibilityHint="Plays a sonar sweep. Scanning is already continuous"
+              accessibilityHint={T("mesh.radar.sonar_hint")}
               hitSlop={hitSlopFor(SELF_SIZE)}
             >
               <Animated.View
@@ -540,9 +549,9 @@ export default function RadarView({
           <View style={styles.status} accessibilityLiveRegion="polite">
             <Text style={styles.statusText}>
               {peers.length > 0
-                ? `${peers.length} peer${peers.length !== 1 ? "s" : ""} in range`
+                ? TP("mesh.peers_in_range", peers.length)
                 : away
-                  ? "Mesh paused \u00b7 You're away"
+                  ? T("mesh.radar.paused")
                   : blockerHeadline(blocker)}
             </Text>
             <Text style={styles.hintText}>
@@ -550,9 +559,9 @@ export default function RadarView({
                 orientation, obstacles and radio, so any metre figure derived
                 from it would be invented. Ring = signal, and the label says so. */}
               {peers.length > 0
-                ? "Ring position reflects signal strength, not distance"
+                ? T("mesh.radar.ring_hint")
                 : away
-                  ? "Set your status to Online in Profile to discover peers"
+                  ? T("mesh.radar.set_online")
                   : blockerHint(blocker)}
             </Text>
           </View>
@@ -585,6 +594,7 @@ function PeerNode({
   now,
   onPress,
 }: PeerNodeProps): React.JSX.Element {
+  const T = useT();
   const Colors = useThemeColors();
   const styles = useMemo(() => createStyles(Colors), [Colors]);
   const username = resolveDisplayName(peer.peerID);
@@ -597,8 +607,8 @@ function PeerNode({
       // brings the target to the 44pt floor without moving anything.
       hitSlop={hitSlopFor(AVATAR_SIZE)}
       accessibilityRole="button"
-      accessibilityLabel={`${username}, ${isOnline ? "in range" : "recently seen"}`}
-      accessibilityHint="Opens options to message or pay this peer"
+      accessibilityLabel={`${username}, ${isOnline ? T("mesh.radar.in_range") : T("mesh.radar.recently_seen")}`}
+      accessibilityHint={T("mesh.radar.peer_hint")}
     >
       <Avatar username={username} peerID={peer.peerID} size={AVATAR_SIZE} />
       <View style={styles.statusBadge}>

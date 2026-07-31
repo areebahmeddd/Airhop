@@ -48,6 +48,14 @@ Never suggest UI code for a feature whose `src/core/` service isn't tested.
 - Never change BLE Service UUID (`F47B5E2D...`) or Characteristic UUID (`A1B2C3D4...`).
 - Never change peer ID derivation (`hex(SHA-256(noiseStaticPubKey)).slice(0, 16)`).
 
+### User-Facing Copy
+
+- **Never hardcode a user-facing string.** Add a key to `src/i18n/locales/en.ts`, use `T("your.key")`. CI fails on any hardcoded string (`npm run i18n:audit`).
+- English is the shipping language and `en.ts` is the whole catalog. Ten languages land in v1.3.0, which the extraction makes a set of new files rather than a sweep of every screen.
+- Placeholders are named (`{count}`), never positional. Plurals go through `tPlural`, never `count === 1` at a call site.
+- Layout uses logical properties (`marginStart`, `start`, `textAlignEnd`), never `marginLeft` / `left` / `textAlign: "right"`.
+- **Some strings must never be translated** because they cross the wire: the `username.ts` word lists, the transmitted `/hug` and `/slap` text (bitchat matches it as an English substring), slash command tokens, channel names. Read [`localization.md`](.github/skills/localization.md) before touching any of them.
+
 ### Storage
 
 - Private keys: `react-native-encrypted-storage` only (iOS Keychain / Android Keystore)
@@ -66,6 +74,7 @@ Never suggest UI code for a feature whose `src/core/` service isn't tested.
 | Screen logic                                                  | `src/features/`          |
 | UI components                                                 | `src/ui/`                |
 | State management                                              | `src/store/`             |
+| UI copy: the catalog, the runtime, RTL helpers                | `src/i18n/`              |
 | TurboModule specs (Codegen input)                             | `src/bridge/`            |
 | iOS native                                                    | `ios/`                   |
 | Android native                                                | `android/`               |
@@ -94,6 +103,7 @@ Skills are reference files in `.github/skills/`. Read the relevant one before wo
 | [`nostr-gift-wrap.md`](.github/skills/nostr-gift-wrap.md)                 | `gift-wrap.ts`, `courier-relay.ts`, any Nostr DM or event handling             |
 | [`prekeys-and-courier.md`](.github/skills/prekeys-and-courier.md)         | `prekey-bundle.ts`, `prekey-store.ts`, `courier-store.ts`, offline mail        |
 | [`private-groups.md`](.github/skills/private-groups.md)                   | `group-protocol.ts`, `group-store.ts`, anything touching `0x25` or group state |
+| [`localization.md`](.github/skills/localization.md)                       | `src/i18n/`, any user-facing copy anywhere, right-to-left layout               |
 
 ## TypeScript Conventions
 
@@ -106,11 +116,13 @@ Skills are reference files in `.github/skills/`. Read the relevant one before wo
 
 ## Common Mistakes to Avoid
 
-| Mistake                                    | Correct approach                                             |
-| ------------------------------------------ | ------------------------------------------------------------ |
-| Using `Math.random()` for nonces           | Use `@noble/hashes` HKDF or `crypto.getRandomValues`         |
-| Storing keys in Zustand store              | Zustand is MMKV-persisted; use `EncryptedStorage` for keys   |
-| Writing routing logic in Swift/Kotlin      | Routing lives in `src/core/mesh/flood-router.ts`             |
-| Creating a new native module for BLE       | Extend `AirhopBLEModule`; one module only                    |
-| Hardcoding a relay URL                     | Load from `assets/data/relays.csv` via `GeoRelayDirectory`   |
-| Changing packet byte layout "to fix a bug" | Understand the wire format in `docs/spec/PROTOCOLS.md` first |
+| Mistake                                     | Correct approach                                             |
+| ------------------------------------------- | ------------------------------------------------------------ |
+| Using `Math.random()` for nonces            | Use `@noble/hashes` HKDF or `crypto.getRandomValues`         |
+| Storing keys in Zustand store               | Zustand is MMKV-persisted; use `EncryptedStorage` for keys   |
+| Writing routing logic in Swift/Kotlin       | Routing lives in `src/core/mesh/flood-router.ts`             |
+| Creating a new native module for BLE        | Extend `AirhopBLEModule`; one module only                    |
+| Hardcoding a relay URL                      | Load from `assets/data/relays.csv` via `GeoRelayDirectory`   |
+| Writing a user-facing string inline         | Add a key to `src/i18n/locales/en.ts` and use `T("key")`     |
+| Using `marginLeft` / `left` in a stylesheet | Use `marginStart` / `start`, so right-to-left flips          |
+| Changing packet byte layout "to fix a bug"  | Understand the wire format in `docs/spec/PROTOCOLS.md` first |

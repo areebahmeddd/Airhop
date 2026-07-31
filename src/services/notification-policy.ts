@@ -1,10 +1,17 @@
 // Notification policy: the pure decisions behind message notifications.
 //
-// Kept free of any native import so it is trivially unit-testable and so the
-// rules live in one obvious place. notification-service.ts owns the side
-// effects (presenting, dismissing, badging); this file only answers "should we,
-// and with what text".
+// Free of any platform API so it is trivially unit-testable and so the rules
+// live in one obvious place. notification-service.ts owns the side effects
+// (presenting, dismissing, badging); this file only answers "should we, and
+// with what text".
+//
+// "With what text" is why the translation runtime is imported here. That is a
+// pure catalog lookup, not a platform call: the strings are plain TypeScript
+// compiled into the bundle, and the one native read behind it (the device's
+// language list) is mocked in tests and falls back to English if it throws. The
+// decisions above it stay independent of it either way.
 
+import { t, tPlural } from "../i18n";
 import type { ChatAttachment, ChatMessage } from "../store/chat-store";
 
 // A DM channel is keyed "dm:<peerID>" (see chat-store). Everything else is a
@@ -18,13 +25,15 @@ export function isDirectMessage(channel: string): boolean {
 export function attachmentSummary(attachment: ChatAttachment): string {
   switch (attachment.type) {
     case "image":
-      return "📷 Photo";
+      return t("notif.preview.photo");
     case "voice":
-      return "🎤 Voice message";
+      return t("notif.preview.voice");
     case "video":
-      return "🎥 Video";
+      return t("notif.preview.video");
     case "document":
-      return attachment.name ? `📄 ${attachment.name}` : "📄 Document";
+      return attachment.name
+        ? `📄 ${attachment.name}`
+        : t("notif.preview.document");
   }
 }
 
@@ -54,7 +63,12 @@ export function notificationContentFor(
   }
   return {
     title: channelLabel ?? msg.channel,
-    body: `${msg.senderNickname}: ${preview}`,
+    // The sender's nickname is user content and stays exactly as they set it;
+    // only the punctuation joining it to the preview is translated.
+    body: t("notif.channel_message", {
+      sender: msg.senderNickname,
+      preview,
+    }),
   };
 }
 
@@ -133,7 +147,7 @@ export function nearbyNotificationContent(peerCount: number): {
   body: string;
 } {
   return {
-    title: peerCount === 1 ? "Someone nearby" : `${peerCount} people nearby`,
-    body: "In Bluetooth range now. Tap to open the mesh.",
+    title: tPlural("notif.nearby.title", peerCount),
+    body: t("notif.nearby.body"),
   };
 }

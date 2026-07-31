@@ -20,6 +20,7 @@ import type {
   VoiceCodecId,
 } from "../core/mesh/voice-capture";
 import type { AudioPlaybackBackend } from "../core/mesh/voice-player";
+import { t } from "../i18n";
 
 const EVT_FRAME = "AirhopVoice.frame";
 const EVT_CAPTURE_ERROR = "AirhopVoice.captureError";
@@ -68,7 +69,7 @@ export class NativeAudioCapture implements AudioCaptureBackend {
 
   async startCapture(onFrame: (frame: Uint8Array) => void): Promise<void> {
     const native = NativeAirhopVoice;
-    if (!native || !this.emitter) throw new Error("Live voice not available");
+    if (!native || !this.emitter) throw new Error(t("voice.unavailable"));
 
     // Subscribe before starting, so no frame from the first moments is missed.
     this.frameSub = this.emitter.addListener(
@@ -82,7 +83,7 @@ export class NativeAudioCapture implements AudioCaptureBackend {
     this.errorSub = this.emitter.addListener(
       EVT_CAPTURE_ERROR,
       (event: { message?: string }) => {
-        this.onFailure(event.message ?? "Recording stopped");
+        this.onFailure(event.message ?? t("voice.recording_stopped"));
       },
     );
 

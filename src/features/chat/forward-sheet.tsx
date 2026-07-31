@@ -9,6 +9,7 @@
 import { Feather } from "@expo/vector-icons";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { useT, type TranslationKey } from "../../i18n";
 import { isManualGeoChannel } from "../../services/geohash-channel-service";
 import { useChatStore } from "../../store/chat-store";
 import Avatar from "../../ui/components/avatar";
@@ -41,11 +42,11 @@ function kindOf(channel: string): ForwardKind {
 }
 
 // Section order top-to-bottom. Only non-empty sections render.
-const SECTION_ORDER: { kind: ForwardKind; title: string }[] = [
-  { kind: "channel", title: "Channels" },
-  { kind: "group", title: "Groups" },
-  { kind: "location", title: "Locations" },
-  { kind: "dm", title: "Direct messages" },
+const SECTION_ORDER: { kind: ForwardKind; titleKey: TranslationKey }[] = [
+  { kind: "channel", titleKey: "chat.forward.channels" },
+  { kind: "group", titleKey: "chat.forward.groups" },
+  { kind: "location", titleKey: "chat.forward.locations" },
+  { kind: "dm", titleKey: "chat.forward.dms" },
 ];
 
 const ICON_FOR: Record<
@@ -63,6 +64,7 @@ export default function ForwardSheet({
   onClose,
   onForward,
 }: Props): React.JSX.Element {
+  const T = useT();
   const Colors = useThemeColors();
   const styles = useMemo(() => createStyles(Colors), [Colors]);
   const channels = useChatStore((s) => s.channels);
@@ -70,8 +72,9 @@ export default function ForwardSheet({
 
   const sections = useMemo(() => {
     const targets = channels.filter((c) => c !== excludeChannel);
-    return SECTION_ORDER.map(({ kind, title }) => ({
-      title,
+    return SECTION_ORDER.map(({ kind, titleKey }) => ({
+      kind,
+      titleKey,
       data: targets.filter((c) => kindOf(c) === kind),
     })).filter((s) => s.data.length > 0);
   }, [channels, excludeChannel]);
@@ -106,7 +109,7 @@ export default function ForwardSheet({
       sheetStyle={styles.sheet}
       scrollable
     >
-      <Text style={styles.title}>Forward to…</Text>
+      <Text style={styles.title}>{T("chat.forward.title")}</Text>
       <ScrollView
         style={styles.list}
         contentContainerStyle={styles.listContent}
@@ -114,11 +117,11 @@ export default function ForwardSheet({
         showsVerticalScrollIndicator={false}
       >
         {sections.length === 0 ? (
-          <Text style={styles.empty}>No other chats yet.</Text>
+          <Text style={styles.empty}>{T("chat.forward.none")}</Text>
         ) : (
           sections.map((section) => (
-            <View key={section.title} style={styles.section}>
-              <Text style={styles.sectionHeader}>{section.title}</Text>
+            <View key={section.kind} style={styles.section}>
+              <Text style={styles.sectionHeader}>{T(section.titleKey)}</Text>
               <View style={styles.group}>
                 {section.data.map((item, i) => {
                   const kind = kindOf(item);
@@ -216,7 +219,7 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
     divider: {
       height: StyleSheet.hairlineWidth,
       backgroundColor: Colors.border,
-      marginLeft: 60,
+      marginStart: 60,
     },
     row: {
       flexDirection: "row",

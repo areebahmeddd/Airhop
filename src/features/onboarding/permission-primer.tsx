@@ -17,6 +17,7 @@
 import Feather from "@expo/vector-icons/Feather";
 import React, { useMemo } from "react";
 import { Platform, StyleSheet, Text, View } from "react-native";
+import { useT, type Translator } from "../../i18n";
 import BottomSheet from "../../ui/components/bottom-sheet";
 import PrimaryButton from "../../ui/components/primary-button";
 import {
@@ -34,6 +35,7 @@ interface Props {
 
 interface Reason {
   icon: keyof typeof Feather.glyphMap;
+  key: string;
   title: string;
   body: string;
 }
@@ -41,19 +43,23 @@ interface Reason {
 // Android couples BLE scanning to location and iOS does not, so the second row
 // only appears where it is true. Saying "Android needs this" on an iPhone would
 // be both wrong and alarming.
-function reasons(): Reason[] {
+function reasons(T: Translator): Reason[] {
   const rows: Reason[] = [
     {
       icon: "bluetooth",
-      title: "Bluetooth",
-      body: "Finds phones near you and carries messages between them. This is the mesh.",
+      // Keyed on the permission rather than the translated title, so the list
+      // key stays stable when the language changes.
+      key: "bluetooth",
+      title: T("onboarding.primer.bluetooth.title"),
+      body: T("onboarding.primer.bluetooth.body"),
     },
   ];
   if (Platform.OS === "android") {
     rows.push({
       icon: "map-pin",
-      title: "Location",
-      body: "Android will not return Bluetooth scan results without it. Airhop does not track you: your exact position never leaves this device.",
+      key: "location",
+      title: T("onboarding.primer.location.title"),
+      body: T("onboarding.primer.location.body"),
     });
   }
   return rows;
@@ -64,8 +70,9 @@ export default function PermissionPrimer({
   onAcknowledge,
 }: Props): React.JSX.Element {
   const Colors = useThemeColors();
+  const T = useT();
   const styles = useMemo(() => createStyles(Colors), [Colors]);
-  const rows = useMemo(() => reasons(), []);
+  const rows = useMemo(() => reasons(T), [T]);
 
   return (
     // Dismissing by drag or backdrop counts as acknowledged. The sheet is an
@@ -73,13 +80,11 @@ export default function PermissionPrimer({
     // nothing should be waiting on a specific gesture.
     <BottomSheet visible={visible} onClose={onAcknowledge}>
       <View style={styles.body}>
-        <Text style={styles.title}>Two permissions</Text>
-        <Text style={styles.lede}>
-          Your phone is about to ask. Here is what each one is for.
-        </Text>
+        <Text style={styles.title}>{T("onboarding.primer.title")}</Text>
+        <Text style={styles.lede}>{T("onboarding.primer.lede")}</Text>
 
         {rows.map((row) => (
-          <View key={row.title} style={styles.row}>
+          <View key={row.key} style={styles.row}>
             <View style={styles.iconWrap}>
               <Feather name={row.icon} size={16} color={Colors.textSecondary} />
             </View>
@@ -90,15 +95,12 @@ export default function PermissionPrimer({
           </View>
         ))}
 
-        <Text style={styles.footnote}>
-          You can say no. Messages still travel over the internet, and you can
-          change your mind later in Settings.
-        </Text>
+        <Text style={styles.footnote}>{T("onboarding.primer.footnote")}</Text>
 
         <PrimaryButton
-          label="Continue"
+          label={T("common.continue")}
           onPress={onAcknowledge}
-          accessibilityLabel="Continue to the permission prompts"
+          accessibilityLabel={T("onboarding.primer.cta_a11y")}
         />
       </View>
     </BottomSheet>

@@ -15,6 +15,7 @@
 import * as Haptics from "expo-haptics";
 import * as Notifications from "expo-notifications";
 import { Platform } from "react-native";
+import { t } from "../i18n";
 import type { ChatMessage } from "../store/chat-store";
 import { channelLabel } from "../utils/chat-display-name";
 import {
@@ -119,15 +120,14 @@ export async function configureNotifications(): Promise<void> {
 
   if (Platform.OS === "android") {
     await Notifications.setNotificationChannelAsync(MESSAGES_CHANNEL_ID, {
-      name: "Messages",
+      name: t("notif.channel.messages"),
       importance: Notifications.AndroidImportance.HIGH,
       vibrationPattern: [0, 200],
       lockscreenVisibility: Notifications.AndroidNotificationVisibility.PRIVATE,
     });
     await Notifications.setNotificationChannelAsync(NEARBY_CHANNEL_ID, {
-      name: "Nearby peers",
-      description:
-        "An occasional notice when the mesh finds people in Bluetooth range.",
+      name: t("notif.channel.nearby"),
+      description: t("notif.channel.nearby_desc"),
       // LOW: no sound, no heads-up card. It waits in the shade to be found.
       importance: Notifications.AndroidImportance.LOW,
       vibrationPattern: null,

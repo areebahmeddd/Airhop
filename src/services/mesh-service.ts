@@ -147,6 +147,7 @@ import {
   type NostrSendFn,
   type RouterIdentity,
 } from "../core/router/message-router";
+import { t } from "../i18n";
 import { useActivityStore } from "../store/activity-store";
 import { useBlockedStore } from "../store/blocked-store";
 import { useBoardStore } from "../store/board-store";
@@ -2272,7 +2273,7 @@ export class MeshService {
   // key is a FAILED check, not a skipped one - and drops anything that neither
   // verifies against the registry nor against a persisted identity, logging
   // "Dropping public message with missing/invalid signature for claimed sender".
-  // ARCHITECTURE.md section 3 says the same thing: "Receivers verify signatures
+  // ARCHITECTURE.md section 2 (Identity) says the same thing: "Receivers verify signatures
   // before relaying or displaying any message."
   //
   // The cost is that a public message can arrive before its author's ANNOUNCE
@@ -2542,14 +2543,16 @@ export class MeshService {
     }
     if (Date.now() - post.createdAt > NOTICE_BELL_WINDOW_MS) return;
     const nickname =
-      post.authorNickname.length > 0 ? post.authorNickname : "Someone";
+      post.authorNickname.length > 0 ? post.authorNickname : t("notif.someone");
     useActivityStore.getState().record({
       id: bytesToHex(post.postID),
       channel: this.channelForNoticeGeohash(post.geohash),
       isDM: false,
       senderID: bytesToHex(post.authorSigningKey),
       senderNickname: nickname,
-      preview: `${isUrgent(post) ? "Urgent notice · " : "Notice · "}${post.content}`,
+      preview: t(isUrgent(post) ? "notif.notice_urgent" : "notif.notice", {
+        content: post.content,
+      }),
       timestampMs: post.createdAt,
       kind: "notice",
       geohash: post.geohash,
@@ -3156,7 +3159,7 @@ export class MeshService {
           this.registry.get(senderHex)?.nickname ?? senderHex.slice(0, 8),
         // Real type/name are unknown until the file's TLV decodes on completion.
         type: "document",
-        name: "Incoming file",
+        name: t("notif.incoming_file"),
         totalBytes: p.total * FRAG_DATA_SIZE,
         startedAtMs: Date.now(),
       });

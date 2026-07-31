@@ -19,6 +19,7 @@ import {
 } from "react-native";
 import QRCode from "react-native-qrcode-svg";
 import { encodeQRContent } from "../../core/crypto/contact-exchange";
+import { t, useT, type TranslationKey } from "../../i18n";
 import {
   destroyMeshService,
   getMeshService,
@@ -82,20 +83,20 @@ function getStatusMeta(Colors: ReturnType<typeof useThemeColors>): Record<
 > {
   return {
     online: {
-      label: "Online",
-      description: "Discoverable, advertising and scanning",
+      label: t("settings.status.online"),
+      description: t("settings.status.online_desc"),
       color: Colors.online,
       icon: "wifi",
     },
     away: {
-      label: "Away",
-      description: "Mesh paused, not scanning or advertising",
+      label: t("settings.status.away"),
+      description: t("settings.status.away_desc"),
       color: Colors.offline,
       icon: "moon",
     },
     invisible: {
-      label: "Invisible",
-      description: "Scanning, but hidden from discovery",
+      label: t("settings.status.invisible"),
+      description: t("settings.status.invisible_desc"),
       color: Colors.danger,
       icon: "eye-off",
     },
@@ -108,23 +109,30 @@ const STATUS_ORDER: Status[] = ["online", "away", "invisible"];
 // radius follows it rather than being a hand-halved 9.
 const STATUS_DOT_SIZE = 18;
 
+// Keys, not text: a module constant is evaluated once at import, so translated
+// strings here would freeze in whichever language the app started in. The
+// component translates them on render. Guarded by `npm run i18n:audit`.
 const THEME_META: Record<
   ThemePreference,
-  { label: string; description: string; icon: keyof typeof Feather.glyphMap }
+  {
+    labelKey: TranslationKey;
+    descriptionKey: TranslationKey;
+    icon: keyof typeof Feather.glyphMap;
+  }
 > = {
   light: {
-    label: "Light",
-    description: "Always use the light palette",
+    labelKey: "settings.theme.light",
+    descriptionKey: "settings.theme.light_desc",
     icon: "sun",
   },
   dark: {
-    label: "Dark",
-    description: "Always use the dark palette",
+    labelKey: "settings.theme.dark",
+    descriptionKey: "settings.theme.dark_desc",
     icon: "moon",
   },
   system: {
-    label: "System default",
-    description: "Uses your device's appearance setting",
+    labelKey: "settings.theme.system",
+    descriptionKey: "settings.theme.system_desc",
     icon: "smartphone",
   },
 };
@@ -133,25 +141,28 @@ const THEME_ORDER: ThemePreference[] = ["light", "dark", "system"];
 // What a phone-to-phone move will carry. Shown in the transfer sheet so the
 // scope of the feature is stated before it exists: people ask "does my wallet
 // come with me" long before they ask how it works.
+// Keys, not text: a module constant is evaluated once at import, so translated
+// strings here would freeze in whichever language the app started in. The
+// component translates them on render. Guarded by `npm run i18n:audit`.
 const TRANSFER_ITEMS: {
   icon: keyof typeof Feather.glyphMap;
-  label: string;
-  description: string;
+  labelKey: TranslationKey;
+  descriptionKey: TranslationKey;
 }[] = [
   {
     icon: "key",
-    label: "Identity and keys",
-    description: "Your peer ID, username, and contacts",
+    labelKey: "settings.transfer.identity",
+    descriptionKey: "settings.transfer.identity_desc",
   },
   {
     icon: "message-square",
-    label: "Chats and history",
-    description: "Conversations, groups, and the channels you have joined",
+    labelKey: "settings.transfer.chats",
+    descriptionKey: "settings.transfer.chats_desc",
   },
   {
     icon: "credit-card",
-    label: "Wallet balance",
-    description: "Cashu proofs and transaction history",
+    labelKey: "settings.transfer.wallet",
+    descriptionKey: "settings.transfer.wallet_desc",
   },
 ];
 
@@ -193,6 +204,7 @@ export default function ProfileScreen({
   onWipe,
 }: Props): React.JSX.Element {
   const Colors = useThemeColors();
+  const T = useT();
   const shared = useSharedStyles();
   const styles = useMemo(() => createStyles(Colors), [Colors]);
   const STATUS_META = useMemo(() => getStatusMeta(Colors), [Colors]);
@@ -299,7 +311,10 @@ export default function ProfileScreen({
     const granted = await ensurePermission(
       () => MediaLibrary.getPermissionsAsync(true),
       () => MediaLibrary.requestPermissionsAsync(true),
-      { label: "Photo access", purpose: "save your QR code" },
+      {
+        label: t("settings.qr.permission_label"),
+        purpose: t("settings.qr.permission_purpose"),
+      },
     );
     if (!granted) return;
     qrRef.current?.toDataURL(async (base64) => {
@@ -312,11 +327,11 @@ export default function ProfileScreen({
         file.create();
         file.write(base64, { encoding: "base64" });
         await MediaLibrary.saveToLibraryAsync(file.uri);
-        showAlert("Saved", "QR code saved to your photo library.");
+        showAlert(t("settings.qr.saved"), t("settings.qr.saved_body"));
       } catch {
         showAlert(
-          "Couldn't save",
-          "The QR code could not be saved. Try again.",
+          t("settings.qr.save_failed"),
+          t("settings.qr.save_failed_body"),
         );
       }
     });
@@ -326,7 +341,7 @@ export default function ProfileScreen({
     // A tappable deep link that opens Airhop straight into a chat with me.
     await Share.share({
       message: `Add me on Airhop - offline-first, private mesh messaging.\n\n${peerInviteLink(peerID)}`,
-      title: "Add me on Airhop",
+      title: t("settings.qr.share_message"),
     });
   }
 
@@ -395,7 +410,7 @@ export default function ProfileScreen({
           style={styles.headerEditBtn}
           onPress={() => setShowStatusModal(true)}
           accessibilityRole="button"
-          accessibilityLabel="Edit status"
+          accessibilityLabel={T("settings.status.edit")}
           hitSlop={HIT_SLOP}
         >
           <Feather name="edit-2" size={15} color={Colors.textSecondary} />
@@ -416,7 +431,7 @@ export default function ProfileScreen({
         <Text style={styles.username}>{username}</Text>
         <Text style={styles.statusLabel}>{STATUS_META[status].label}</Text>
         <View style={styles.peerIDGroup}>
-          <Text style={styles.peerIDLabel}>Peer ID</Text>
+          <Text style={styles.peerIDLabel}>{T("settings.peer_id")}</Text>
           <Text style={styles.peerID}>{shortPubKey}</Text>
         </View>
       </View>
@@ -427,7 +442,7 @@ export default function ProfileScreen({
           style={styles.sharePill}
           onPress={() => void handleSharePeerID()}
           accessibilityRole="button"
-          accessibilityLabel="Share your Peer ID"
+          accessibilityLabel={T("settings.share_peer_id")}
         >
           <View style={styles.sharePillInner}>
             <Feather name="share-2" size={13} color={Colors.textSecondary} />
@@ -440,7 +455,7 @@ export default function ProfileScreen({
           style={styles.sharePill}
           onPress={() => setShowQRModal(true)}
           accessibilityRole="button"
-          accessibilityLabel="Show QR code"
+          accessibilityLabel={T("settings.qr.show")}
         >
           <View style={styles.sharePillInner}>
             <Feather name="eye" size={13} color={Colors.textSecondary} />
@@ -463,84 +478,86 @@ export default function ProfileScreen({
         <View style={shared.settingsGroup}>
           <SettingLinkRow
             icon="settings"
-            label="General"
-            description="Optional features, undo send, media, reset"
+            label={T("settings.section.general")}
+            description={T("settings.section.general_desc")}
             onPress={() => setView("general")}
           />
           <GroupDivider />
           <SettingLinkRow
             icon="lock"
-            label="Privacy & Security"
-            description="Forward secrecy, signed packets, blocked peers"
+            label={T("settings.section.privacy")}
+            description={T("settings.section.privacy_desc")}
             onPress={() => setView("security")}
           />
           <GroupDivider />
           <SettingLinkRow
             icon="radio"
-            label="Network & Relays"
-            description="Internet fallback, nostr relays, bitchat compatibility"
+            label={T("settings.section.network")}
+            description={T("settings.section.network_desc")}
             onPress={() => setView("network")}
           />
           <GroupDivider />
           <SettingLinkRow
             icon="key"
-            label="Permissions"
-            description="Bluetooth, location, notifications, camera, mic"
+            label={T("settings.section.permissions")}
+            description={T("settings.section.permissions_desc")}
             onPress={() => setView("permissions")}
           />
           <GroupDivider />
           <SettingLinkRow
             icon="hard-drive"
-            label="Storage & Data"
-            description="Usage and cache"
+            label={T("settings.section.storage")}
+            description={T("settings.section.storage_desc")}
             onPress={() => setView("storage")}
           />
           <GroupDivider />
           <SettingLinkRow
             icon="sliders"
-            label="Appearance"
-            description="Theme and font"
+            label={T("settings.section.appearance")}
+            description={T("settings.section.appearance_desc")}
             onPress={() => setShowThemeModal(true)}
           />
           <GroupDivider />
           <SettingLinkRow
             icon="help-circle"
-            label="Help and feedback"
-            description="Contact us, report a bug, or read the FAQ"
+            label={T("settings.section.help")}
+            description={T("settings.section.help_desc")}
             onPress={() => setView("help")}
           />
           <GroupDivider />
           <SettingLinkRow
             icon="heart"
-            label="Support"
-            description="Help keep development active"
+            label={T("settings.section.support")}
+            description={T("settings.section.support_desc")}
             onPress={() => setView("support")}
           />
           <GroupDivider />
           <SettingLinkRow
             icon="info"
-            label="About"
-            description="Version, changelog, and source"
+            label={T("settings.section.about")}
+            description={T("settings.section.about_desc")}
             onPress={() => setView("about")}
           />
         </View>
       </View>
 
       {/* Moving to a new phone. Not built yet, so the row carries the same
-          "Coming soon" tag as the unshipped feature rows above and opens a
+          T("settings.coming_soon") tag as the unshipped feature rows above and opens a
           sheet describing the move rather than starting one. It sits directly
-          above the danger zone because both answer "I am leaving this device",
+          above the danger zone because both answer T("settings.transfer.leaving"),
           and the safe answer should be the one you reach first. */}
       <View style={shared.section}>
         <View style={shared.settingsGroup}>
           <SettingLinkRow
             icon="smartphone"
-            label="Transfer to a new phone"
-            description="Move your identity, chats, and wallet to another device"
+            label={T("settings.transfer.title")}
+            description={T("settings.transfer.desc")}
             onPress={() => setShowTransferModal(true)}
             chevron={false}
-            control={<Text style={shared.comingSoon}>Coming soon</Text>}
-            accessibilityLabel="Transfer to a new phone, coming soon"
+            control={
+              <Text style={shared.comingSoon}>{T("settings.coming_soon")}</Text>
+            }
+            accessibilityLabel={T("settings.transfer.coming_soon_a11y")}
           />
         </View>
       </View>
@@ -552,8 +569,8 @@ export default function ProfileScreen({
             style={styles.dangerRow}
             onPress={handlePanicPress}
             accessibilityRole="button"
-            accessibilityLabel="Trigger panic wipe"
-            accessibilityHint="Triple-tap to wipe immediately without confirming"
+            accessibilityLabel={T("settings.wipe.trigger")}
+            accessibilityHint={T("settings.wipe.trigger_desc")}
           >
             {/* Inner View owns the row layout. Pressable does not reliably
                 propagate flexDirection on all RN versions. */}
@@ -566,7 +583,9 @@ export default function ProfileScreen({
                 />
               </View>
               <View style={styles.dangerRowContent}>
-                <Text style={styles.dangerLabel}>Panic wipe</Text>
+                <Text style={styles.dangerLabel}>
+                  {T("settings.wipe.title")}
+                </Text>
                 <Text style={styles.dangerDescription}>
                   Instantly destroy all keys, messages, and proofs
                 </Text>
@@ -582,7 +601,7 @@ export default function ProfileScreen({
         onClose={() => setShowQRModal(false)}
         sheetStyle={shared.sheet}
       >
-        <Text style={shared.sheetTitle}>Your QR Code</Text>
+        <Text style={shared.sheetTitle}>{T("settings.qr.title")}</Text>
         <View style={styles.qrLarge}>
           <QRCode
             value={qrValue}
@@ -600,19 +619,23 @@ export default function ProfileScreen({
             style={styles.qrShareBtn}
             onPress={() => void handleShareQR()}
             accessibilityRole="button"
-            accessibilityLabel="Share QR code"
+            accessibilityLabel={T("settings.qr.share")}
           >
             <Feather name="share-2" size={16} color={Colors.textInverse} />
-            <Text style={styles.qrShareText}>Share QR</Text>
+            <Text style={styles.qrShareText}>
+              {T("settings.qr.share_short")}
+            </Text>
           </Pressable>
           <Pressable
             style={styles.qrDownloadBtn}
             onPress={() => void handleDownloadQR()}
             accessibilityRole="button"
-            accessibilityLabel="Download QR code"
+            accessibilityLabel={T("settings.qr.download")}
           >
             <Feather name="download" size={16} color={Colors.textPrimary} />
-            <Text style={styles.qrDownloadText}>Download QR</Text>
+            <Text style={styles.qrDownloadText}>
+              {T("settings.qr.download_short")}
+            </Text>
           </Pressable>
         </View>
       </BottomSheet>
@@ -623,7 +646,7 @@ export default function ProfileScreen({
         onClose={() => setShowStatusModal(false)}
         sheetStyle={shared.sheet}
       >
-        <Text style={shared.sheetTitle}>Status</Text>
+        <Text style={shared.sheetTitle}>{T("settings.status.title")}</Text>
         <Text style={shared.sheetSubtitle}>
           Choose how visible you are on the mesh.
         </Text>
@@ -641,7 +664,9 @@ export default function ProfileScreen({
                   ]}
                   onPress={() => handleSelectStatus(key)}
                   accessibilityRole="button"
-                  accessibilityLabel={`Set status to ${meta.label}`}
+                  accessibilityLabel={T("settings.status.set_a11y", {
+                    value: meta.label,
+                  })}
                 >
                   <View
                     style={[shared.optionDot, { backgroundColor: meta.color }]}
@@ -674,7 +699,9 @@ export default function ProfileScreen({
         onClose={() => setShowThemeModal(false)}
         sheetStyle={shared.sheet}
       >
-        <Text style={shared.sheetTitle}>Appearance</Text>
+        <Text style={shared.sheetTitle}>
+          {T("settings.section.appearance")}
+        </Text>
 
         <Text style={styles.appearanceGroupLabel}>THEME</Text>
         <View style={[shared.settingsGroup, styles.appearanceGroup]}>
@@ -694,7 +721,9 @@ export default function ProfileScreen({
                     setShowThemeModal(false);
                   }}
                   accessibilityRole="button"
-                  accessibilityLabel={`Set appearance to ${meta.label}`}
+                  accessibilityLabel={T("settings.theme.set_a11y", {
+                    value: T(meta.labelKey),
+                  })}
                 >
                   <View style={styles.optionIconGrouped}>
                     <Feather
@@ -704,9 +733,9 @@ export default function ProfileScreen({
                     />
                   </View>
                   <View style={shared.optionText}>
-                    <Text style={shared.optionLabel}>{meta.label}</Text>
+                    <Text style={shared.optionLabel}>{T(meta.labelKey)}</Text>
                     <Text style={shared.optionDescription}>
-                      {meta.description}
+                      {T(meta.descriptionKey)}
                     </Text>
                   </View>
                   {selected && (
@@ -739,7 +768,9 @@ export default function ProfileScreen({
                   ]}
                   onPress={() => setMonoFont(key)}
                   accessibilityRole="button"
-                  accessibilityLabel={`Set monospace font to ${meta.label}`}
+                  accessibilityLabel={T("settings.font.set_a11y", {
+                    value: T(meta.labelKey),
+                  })}
                 >
                   <View style={styles.optionIconGrouped}>
                     <Feather
@@ -752,10 +783,10 @@ export default function ProfileScreen({
                     <Text
                       style={[shared.optionLabel, { fontFamily: meta.family }]}
                     >
-                      {meta.label}
+                      {T(meta.labelKey)}
                     </Text>
                     <Text style={shared.optionDescription}>
-                      {meta.description}
+                      {T(meta.descriptionKey)}
                     </Text>
                   </View>
                   {selected && (
@@ -781,17 +812,16 @@ export default function ProfileScreen({
         onClose={() => setShowTransferModal(false)}
         sheetStyle={shared.sheet}
       >
-        <View style={shared.sheetIconWrap}>
-          <Feather name="smartphone" size={22} color={Colors.textSecondary} />
-        </View>
-        <Text style={shared.sheetTitle}>Transfer to a new phone</Text>
-        <Text style={shared.sheetSubtitle}>
+        <Text style={[shared.sheetTitle, styles.sheetTextLeft]}>
+          {T("settings.transfer.title")}
+        </Text>
+        <Text style={[shared.sheetSubtitle, styles.sheetTextLeft]}>
           Hold both phones together and move everything across over Bluetooth.
           Nothing passes through a server, so it works with no internet.
         </Text>
         <View style={[shared.settingsGroup, styles.appearanceGroup]}>
           {TRANSFER_ITEMS.map((item, i) => (
-            <React.Fragment key={item.label}>
+            <React.Fragment key={item.labelKey}>
               {i > 0 && <View style={shared.groupDivider} />}
               <View style={styles.optionRowGrouped}>
                 <View style={styles.optionIconGrouped}>
@@ -802,16 +832,16 @@ export default function ProfileScreen({
                   />
                 </View>
                 <View style={shared.optionText}>
-                  <Text style={shared.optionLabel}>{item.label}</Text>
+                  <Text style={shared.optionLabel}>{T(item.labelKey)}</Text>
                   <Text style={shared.optionDescription}>
-                    {item.description}
+                    {T(item.descriptionKey)}
                   </Text>
                 </View>
               </View>
             </React.Fragment>
           ))}
         </View>
-        <Text style={styles.transferNote}>
+        <Text style={[styles.transferNote, styles.sheetTextLeft]}>
           Coming in a future update. When it ships, the old phone clears itself
           once the move finishes, so one identity only ever lives on one device.
         </Text>
@@ -820,22 +850,26 @@ export default function ProfileScreen({
             style={shared.sheetBtnPrimary}
             onPress={() => setShowTransferModal(false)}
             accessibilityRole="button"
-            accessibilityLabel="Got it"
+            accessibilityLabel={T("settings.wipe.got_it")}
           >
-            <Text style={shared.sheetBtnTextPrimary}>Got it</Text>
+            <Text style={shared.sheetBtnTextPrimary}>
+              {T("settings.wipe.got_it")}
+            </Text>
           </Pressable>
         </View>
       </BottomSheet>
 
       {/* Panic wipe modal: confirm, then wipe and drop straight to onboarding
-          rather than making the user tap through a second "Wiped" screen. */}
+          rather than making the user tap through a second T("settings.wipe.done") screen. */}
       <BottomSheet
         visible={showWipeModal}
         onClose={() => setShowWipeModal(false)}
         sheetStyle={shared.sheet}
       >
-        <Text style={shared.sheetTitle}>Panic wipe</Text>
-        <Text style={shared.sheetSubtitle}>
+        <Text style={[shared.sheetTitle, styles.sheetTextLeft]}>
+          {T("settings.wipe.title")}
+        </Text>
+        <Text style={[shared.sheetSubtitle, styles.sheetTextLeft]}>
           This will instantly destroy all your keys, messages, and wallet
           proofs. This cannot be undone.
         </Text>
@@ -844,17 +878,17 @@ export default function ProfileScreen({
             style={styles.wipeConfirmBtn}
             onPress={() => void handleConfirmWipe()}
             accessibilityRole="button"
-            accessibilityLabel="Wipe now"
+            accessibilityLabel={T("settings.wipe.now")}
           >
-            <Text style={styles.wipeConfirmText}>Wipe now</Text>
+            <Text style={styles.wipeConfirmText}>{T("settings.wipe.now")}</Text>
           </Pressable>
           <Pressable
             style={styles.wipeCancelBtn}
             onPress={() => setShowWipeModal(false)}
             accessibilityRole="button"
-            accessibilityLabel="Cancel"
+            accessibilityLabel={T("common.cancel")}
           >
-            <Text style={styles.wipeCancelText}>Cancel</Text>
+            <Text style={styles.wipeCancelText}>{T("common.cancel")}</Text>
           </Pressable>
         </View>
       </BottomSheet>
@@ -895,7 +929,7 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
     },
     statusDot: {
       position: "absolute",
-      right: 2,
+      end: 2,
       bottom: 2,
       width: STATUS_DOT_SIZE,
       height: STATUS_DOT_SIZE,
@@ -930,16 +964,20 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       letterSpacing: 0.8,
       marginTop: Spacing.md,
       marginBottom: Spacing.xs,
-      marginLeft: Spacing.xs,
+      marginStart: Spacing.xs,
     },
     // Footnote under the transfer list: quieter than sheetSubtitle, since it
     // qualifies what was just described rather than introducing it.
     transferNote: {
       fontSize: FontSize.xs,
       color: Colors.textMuted,
-      textAlign: "center",
       lineHeight: FontSize.xs * 1.5,
-      paddingHorizontal: Spacing.xs,
+    },
+    // The shared sheet centres its children; the transfer and wipe sheets read
+    // as a block of prose, so their text stretches full width and reads left.
+    sheetTextLeft: {
+      alignSelf: "stretch",
+      textAlign: "left",
     },
     // One row inside the Appearance box (no per-row border; the box + dividers
     // group them, matching the settings and room-actions sheets).
@@ -1001,7 +1039,7 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       fontSize: FontSize.sm,
       color: Colors.textSecondary,
       fontWeight: FontWeight.medium,
-      marginLeft: Spacing.xs,
+      marginStart: Spacing.xs,
     },
     // Danger zone, uses settingsGroup box for consistency with other sections
     dangerGroup: {

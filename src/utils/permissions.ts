@@ -18,6 +18,7 @@
 // Callers get a plain boolean and can stay linear.
 
 import { Linking } from "react-native";
+import { t } from "../i18n";
 import { showAlert } from "../store/alert-store";
 
 // The shape every Expo permission response shares (expo-camera,
@@ -39,8 +40,11 @@ interface Copy {
 // dead end and a two-tap fix.
 export function showBlockedAlert({ label, purpose }: Copy): void {
   showAlert(`${label} is off`, `Turn it on in Settings to ${purpose}.`, [
-    { text: "Open Settings", onPress: () => void Linking.openSettings() },
-    { text: "Not now", style: "cancel" },
+    {
+      text: t("permission.open_settings"),
+      onPress: () => void Linking.openSettings(),
+    },
+    { text: t("permission.not_now"), style: "cancel" },
   ]);
 }
 

@@ -11,6 +11,7 @@ import {
   formatTokenSummary,
   mayContainToken,
 } from "../core/payments/cashu";
+import { t } from "../i18n";
 import type { AttachmentType, ChatMessage } from "../store/chat-store";
 import { chatDisplayName } from "./chat-display-name";
 import { messagePreviewText } from "./message-preview";
@@ -156,13 +157,13 @@ export function filterMessages(
 function attachmentKindWord(type: AttachmentType): string {
   switch (type) {
     case "image":
-      return "Photo";
+      return t("transfer.kind.photo");
     case "video":
-      return "Video";
+      return t("transfer.kind.video");
     case "voice":
-      return "Voice note";
+      return t("transfer.kind.voice");
     case "document":
-      return "Document";
+      return t("transfer.kind.document");
   }
 }
 

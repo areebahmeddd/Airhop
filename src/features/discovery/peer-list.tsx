@@ -18,6 +18,8 @@ import {
   TextInput,
   View,
 } from "react-native";
+import { t, useT } from "../../i18n";
+import { arrowForward } from "../../i18n/layout";
 import { describeRoute, sendEcashToPeer } from "../../services/ecash-transfer";
 import { showAlert } from "../../store/alert-store";
 import { useBlockedStore } from "../../store/blocked-store";
@@ -63,6 +65,7 @@ export default function PeerList({
   viewMode,
   addContactTrigger,
 }: Props): React.JSX.Element {
+  const T = useT();
   const Colors = useThemeColors();
   const styles = useMemo(() => createStyles(Colors), [Colors]);
   const { peers, evictStale } = usePeerStore();
@@ -128,7 +131,7 @@ export default function PeerList({
 
   function formatLastSeen(ms: number): string {
     const diffSec = Math.floor((now - ms) / 1000);
-    if (diffSec < 5) return "just now";
+    if (diffSec < 5) return t("mesh.peer.just_now");
     if (diffSec < 60) return `${diffSec}s`;
     if (diffSec < 3600) return `${Math.floor(diffSec / 60)}m`;
     return `${Math.floor(diffSec / 3600)}h`;
@@ -268,8 +271,8 @@ export default function PeerList({
           ListEmptyComponent={
             <EmptyState
               icon="radio"
-              title="No peers nearby"
-              subtitle="Other Airhop or bitchat devices within Bluetooth range appear here."
+              title={T("mesh.peer.none")}
+              subtitle={T("mesh.peer.none_desc")}
             />
           }
           contentContainerStyle={styles.list}
@@ -306,7 +309,9 @@ export default function PeerList({
                 // spells out one character at a time. The label states the
                 // action; the value is not something anyone listens to.
                 accessibilityLabel={
-                  copiedPeerID ? "Peer ID copied" : "Copy peer ID"
+                  copiedPeerID
+                    ? T("mesh.peer.id_copied")
+                    : T("mesh.peer.copy_id")
                 }
               >
                 <Text style={styles.sheetPeerID}>{selectedPeer.peerID}</Text>
@@ -323,7 +328,7 @@ export default function PeerList({
                 />
                 <Text style={styles.sheetStatusText}>
                   {isOnline(selectedPeer)
-                    ? "In range"
+                    ? T("mesh.peer.in_range")
                     : `Last seen ${formatLastSeen(selectedPeer.lastSeenMs)} ago`}
                 </Text>
               </View>
@@ -336,14 +341,16 @@ export default function PeerList({
                 style={styles.sheetMessageBtn}
                 onPress={() => handleSendDM(selectedPeer)}
                 accessibilityRole="button"
-                accessibilityLabel="Send a direct message"
+                accessibilityLabel={T("mesh.peer.send_dm")}
               >
                 <Feather
                   name="message-circle"
                   size={18}
                   color={Colors.textInverse}
                 />
-                <Text style={styles.sheetMessageBtnText}>Message</Text>
+                <Text style={styles.sheetMessageBtnText}>
+                  {T("mesh.peer.message")}
+                </Text>
               </Pressable>
 
               {!showSendSats ? (
@@ -351,10 +358,12 @@ export default function PeerList({
                   style={styles.sheetSatsBtn}
                   onPress={() => setShowSendSats(true)}
                   accessibilityRole="button"
-                  accessibilityLabel="Send sats"
+                  accessibilityLabel={T("mesh.peer.send_sats")}
                 >
                   <Feather name="zap" size={16} color={Colors.textSecondary} />
-                  <Text style={styles.sheetSatsBtnText}>Send sats</Text>
+                  <Text style={styles.sheetSatsBtnText}>
+                    {T("mesh.peer.send_sats")}
+                  </Text>
                 </Pressable>
               ) : (
                 <View style={styles.sendSatsRow}>
@@ -362,7 +371,7 @@ export default function PeerList({
                     style={styles.sendSatsInput}
                     value={sendSatsAmount}
                     onChangeText={setSendSatsAmount}
-                    placeholder="Amount in sats"
+                    placeholder={T("mesh.peer.amount_placeholder")}
                     placeholderTextColor={Colors.textMuted}
                     keyboardType="number-pad"
                     returnKeyType="send"
@@ -381,7 +390,7 @@ export default function PeerList({
                     accessibilityRole="button"
                     accessibilityLabel={
                       parsedSats === null
-                        ? "Send sats, enter an amount first"
+                        ? T("mesh.peer.amount_first")
                         : `Send ${String(parsedSats)} sats`
                     }
                     accessibilityState={{
@@ -400,7 +409,7 @@ export default function PeerList({
                       />
                     ) : (
                       <Feather
-                        name="arrow-right"
+                        name={arrowForward}
                         size={16}
                         color={Colors.textInverse}
                       />
@@ -414,7 +423,7 @@ export default function PeerList({
                     }}
                     disabled={sendingSats}
                     accessibilityRole="button"
-                    accessibilityLabel="Cancel send sats"
+                    accessibilityLabel={T("mesh.peer.cancel_send")}
                   >
                     <Feather name="x" size={16} color={Colors.textSecondary} />
                   </Pressable>
@@ -470,7 +479,7 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
     },
     rowStatusBadge: {
       position: "absolute",
-      right: -1,
+      end: -1,
       bottom: -1,
       backgroundColor: Colors.bg,
       borderRadius: Radius.full,
@@ -504,7 +513,7 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       backgroundColor: Colors.border,
       // Aligned to the text, past the avatar: avatar (46) + gap (16). Same
       // inset the DM list uses, so the two read as one list style.
-      marginLeft: 62,
+      marginStart: 62,
     },
     // Peer detail sheet
     sheet: {

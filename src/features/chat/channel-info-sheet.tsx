@@ -16,12 +16,13 @@ import {
   View,
 } from "react-native";
 import { GROUP_MAX_MEMBERS } from "../../core/mesh/group-protocol";
+import { t, useT, useTPlural, type TranslationKey } from "../../i18n";
 import {
-  type GeoParticipant,
   geohashLevelName,
   isGeoChannel,
   isManualGeoChannel,
   manualGeohashOf,
+  type GeoParticipant,
 } from "../../services/geohash-channel-service";
 import { getMeshService } from "../../services/mesh-service";
 import { showAlert } from "../../store/alert-store";
@@ -29,7 +30,10 @@ import { useChatStore } from "../../store/chat-store";
 import { useGeohashBookmarksStore } from "../../store/geohash-bookmarks-store";
 import { useGroupStore } from "../../store/group-store";
 import { usePeerStore } from "../../store/peer-store";
-import { usePlaceNamesStore } from "../../store/place-names-store";
+import {
+  placeNameKey,
+  usePlaceNamesStore,
+} from "../../store/place-names-store";
 import Avatar from "../../ui/components/avatar";
 import BottomSheet from "../../ui/components/bottom-sheet";
 import {
@@ -55,45 +59,46 @@ const DEFAULT_CHANNEL_NAMES = new Set([
 ]);
 
 // Static metadata for each default channel.
+// Keys, not text: a module constant is evaluated once at import, so translated
+// strings here would freeze in whichever language the app started in. The
+// component translates them on render. Guarded by `npm run i18n:audit`.
 const CHANNEL_SCOPE: Record<
   string,
-  { tag: string; description: string; transport: string }
+  {
+    tagKey: TranslationKey;
+    descriptionKey: TranslationKey;
+    transportKey: TranslationKey;
+  }
 > = {
   "#bluetooth": {
-    tag: "Local mesh · Bluetooth only",
-    description:
-      "Reaches devices within Bluetooth range (roughly 10 to 100 metres). No internet required. Ideal for local coordination.",
-    transport: "Bluetooth only",
+    tagKey: "chat.scope.mesh",
+    descriptionKey: "chat.scope.mesh_desc",
+    transportKey: "chat.transport.bluetooth",
   },
   "#block": {
-    tag: "City block · ~100m",
-    description:
-      "City-block level coverage. Messages are bridged over the internet so peers outside Bluetooth range but nearby can participate.",
-    transport: "Bluetooth + Internet",
+    tagKey: "chat.scope.block",
+    descriptionKey: "chat.scope.block_desc",
+    transportKey: "chat.transport.both",
   },
   "#neighborhood": {
-    tag: "Neighborhood · ~1km",
-    description:
-      "Neighborhood coverage. Relay-assisted so peers across the area are reachable even without a direct Bluetooth link.",
-    transport: "Bluetooth + Internet",
+    tagKey: "chat.scope.neighborhood",
+    descriptionKey: "chat.scope.neighborhood_desc",
+    transportKey: "chat.transport.both",
   },
   "#city": {
-    tag: "City · ~10km",
-    description:
-      "City-wide channel. Uses geo-located internet relays to reach peers across the metro area.",
-    transport: "Bluetooth + Internet",
+    tagKey: "chat.scope.city",
+    descriptionKey: "chat.scope.city_desc",
+    transportKey: "chat.transport.both",
   },
   "#province": {
-    tag: "Province or state · ~100km",
-    description:
-      "Provincial or state coverage. Bridged over the internet for regional reach across hundreds of kilometres.",
-    transport: "Bluetooth + Internet",
+    tagKey: "chat.scope.province",
+    descriptionKey: "chat.scope.province_desc",
+    transportKey: "chat.transport.both",
   },
   "#region": {
-    tag: "Country or region · ~1000km",
-    description:
-      "Country-wide coverage. Any Airhop or bitchat user in the region can join and read messages.",
-    transport: "Bluetooth + Internet",
+    tagKey: "chat.scope.country",
+    descriptionKey: "chat.scope.country_desc",
+    transportKey: "chat.transport.both",
   },
 };
 
@@ -120,6 +125,8 @@ export default function ChannelInfoSheet({
   localNickname,
   localPeerID,
 }: Props): React.JSX.Element | null {
+  const T = useT();
+  const TP = useTPlural();
   const Colors = useThemeColors();
   const styles = useMemo(() => createStyles(Colors), [Colors]);
   const { removeChannel, channelKeys, channelReach, addChannel } =
@@ -178,7 +185,7 @@ export default function ChannelInfoSheet({
     channelGeohash !== null ? s.bookmarks.includes(channelGeohash) : false,
   );
   const placeName = usePlaceNamesStore((s) =>
-    channelGeohash !== null ? s.names[channelGeohash] : undefined,
+    channelGeohash !== null ? s.names[placeNameKey(channelGeohash)] : undefined,
   );
   useEffect(() => {
     if (channelGeohash !== null) {
@@ -239,12 +246,12 @@ export default function ChannelInfoSheet({
   const manualGh = isManualGeo ? (manualGeohashOf(channel) ?? "") : "";
   // Description: protocol default for a named channel, else a per-type line.
   const resolvedDescription =
-    scopeData?.description ??
+    (scopeData === undefined ? undefined : T(scopeData.descriptionKey)) ??
     (isGroup
-      ? "A private group. Only the members the creator added can read it, and it stays on Bluetooth."
+      ? T("chat.info.group_desc")
       : isManualGeo
-        ? "A public location channel for this geohash cell. Anyone in the cell, on Airhop or bitchat, shares it over the internet. You are teleported, not physically here."
-        : "A custom channel. Anyone who knows the name can join from any Airhop or bitchat device.");
+        ? T("chat.info.teleported_desc")
+        : T("chat.info.custom_desc"));
 
   // The three at-a-glance facts, computed once so the card below stays declarative:
   // privacy (is it encrypted), reach (which transports carry it), and location
@@ -255,36 +262,38 @@ export default function ChannelInfoSheet({
   const privacyIcon: IconName = encrypted ? "lock" : "unlock";
   const privacyColor = encrypted ? Colors.e2ee : Colors.danger;
   const privacyLabel = encrypted
-    ? "Private · end-to-end encrypted"
-    : "Public · unencrypted";
+    ? T("chat.info.private_e2ee")
+    : T("chat.info.public_plain");
 
   let reachIcon: IconName = "bluetooth";
-  let reachLabel = "Bluetooth only";
+  let reachLabel = T("chat.transport.bluetooth");
   if (isGroup) {
     reachIcon = "bluetooth";
-    reachLabel = "Bluetooth only";
+    reachLabel = T("chat.transport.bluetooth");
   } else if (isManualGeo) {
     reachIcon = "globe";
-    reachLabel = "Internet only";
+    reachLabel = T("chat.transport.internet");
   } else if (isPrivate) {
     reachIcon = overNostr ? "globe" : "bluetooth";
-    reachLabel = overNostr ? "Bluetooth + Internet" : "Bluetooth only";
+    reachLabel = overNostr
+      ? T("chat.transport.both")
+      : T("chat.transport.bluetooth");
   } else if (isGeo && geohash !== null) {
     reachIcon = "globe";
-    reachLabel = "Bluetooth + Internet";
+    reachLabel = T("chat.transport.both");
   }
 
   // One adaptive caveat under the card: whichever nuance actually matters for
   // this channel, rather than three stacked explanations.
   const detailHint = isGroup
-    ? "Only the members shown below can read this group. Messages stay on Bluetooth, so members out of range receive them once they are back."
+    ? T("chat.info.group_privacy")
     : isManualGeo
-      ? "A place you teleported to. It reaches everyone in this cell over the internet, and nobody in Bluetooth range."
+      ? T("chat.info.teleport_privacy")
       : isGeo && geohash === null
-        ? "Location is off, so this channel reaches nearby devices over Bluetooth only. Turn on location to reach its area cell over the internet."
+        ? T("chat.info.location_off_privacy")
         : isPrivate
-          ? "Only people you invite via the link can read it. It stays hidden from everyone else, even peers nearby."
-          : "Anyone who joins can read every message. Use a direct message for private conversation; DMs are end-to-end encrypted.";
+          ? T("chat.info.invite_privacy")
+          : T("chat.info.public_privacy");
 
   function handleCopyGeohash(): void {
     if (geohash === null) return;
@@ -306,12 +315,12 @@ export default function ChannelInfoSheet({
 
   function handleRemoveMember(fingerprint: string, memberName: string): void {
     showAlert(
-      "Remove member",
+      t("chat.info.remove_member"),
       `Remove ${memberName} from the group? The group key rotates so they can no longer read new messages.`,
       [
-        { text: "Cancel", style: "cancel" },
+        { text: T("common.cancel"), style: "cancel" },
         {
-          text: "Remove",
+          text: T("common.remove"),
           style: "destructive",
           onPress: () => {
             getMeshService()?.removeGroupMember(groupIDHex, fingerprint);
@@ -383,7 +392,9 @@ export default function ChannelInfoSheet({
             onClose();
           },
         }));
-  const memberSectionTitle = isGeo ? "Active" : "Members";
+  const memberSectionTitle = isGeo
+    ? T("chat.info.active")
+    : T("chat.info.members");
   const showYouRow =
     !isGroup && localNickname !== undefined && localPeerID !== undefined;
   const memberTotal = members.length + (showYouRow ? 1 : 0);
@@ -421,7 +432,9 @@ export default function ChannelInfoSheet({
           hitSlop={hitSlopFor(28)}
           accessibilityRole="button"
           accessibilityLabel={
-            bookmarked ? "Remove bookmark" : "Bookmark this place"
+            bookmarked
+              ? T("chat.info.remove_bookmark")
+              : T("chat.info.bookmark")
           }
         >
           <MaterialCommunityIcons
@@ -445,7 +458,7 @@ export default function ChannelInfoSheet({
 
         <Text style={styles.channelName} numberOfLines={1}>
           {isGroup
-            ? (groupName ?? "Group")
+            ? (groupName ?? T("chat.group_badge"))
             : isManualGeo
               ? manualGh
               : channel.replace(/^#/, "")}
@@ -453,11 +466,11 @@ export default function ChannelInfoSheet({
 
         <Text style={styles.scopeTag}>
           {isGroup
-            ? `Private group  ·  ${groupMembers.length} member${groupMembers.length !== 1 ? "s" : ""}`
-            : (scopeData?.tag ??
+            ? TP("chat.group_members", groupMembers.length)
+            : ((scopeData === undefined ? undefined : T(scopeData.tagKey)) ??
               (isManualGeo
                 ? `${geohashLevelName(manualGh)}  ·  teleported`
-                : "Custom channel"))}
+                : T("chat.info.custom_channel")))}
           {placeName !== undefined && `  ·  ~${placeName}`}
         </Text>
       </View>
@@ -474,7 +487,7 @@ export default function ChannelInfoSheet({
       >
         {/* About */}
         <View style={styles.section}>
-          <Text style={styles.sectionLabel}>About</Text>
+          <Text style={styles.sectionLabel}>{T("chat.info.about")}</Text>
           <Text style={styles.description}>{resolvedDescription}</Text>
         </View>
 
@@ -506,7 +519,9 @@ export default function ChannelInfoSheet({
                     color={Colors.textSecondary}
                   />
                   <Text style={styles.factValue} numberOfLines={1}>
-                    <Text style={styles.factGeohashLabel}>Geohash </Text>
+                    <Text style={styles.factGeohashLabel}>
+                      {T("chat.info.geohash")}{" "}
+                    </Text>
                     <Text style={styles.factGeohash}>{geohash}</Text>
                   </Text>
                   <Pressable
@@ -514,7 +529,7 @@ export default function ChannelInfoSheet({
                     onPress={handleCopyGeohash}
                     hitSlop={HIT_SLOP}
                     accessibilityRole="button"
-                    accessibilityLabel="Copy geohash"
+                    accessibilityLabel={T("chat.info.copy_geohash")}
                   >
                     <Feather
                       name={copied ? "check" : "copy"}
@@ -531,7 +546,7 @@ export default function ChannelInfoSheet({
 
         {/* Members: a group's signed roster, a geo cell's active
                 participants, or the nearby BLE peers — one layout for all three,
-                with a "You" row, a search toggle, and a chat action per member. */}
+                with a T("chat.you") row, a search toggle, and a chat action per member. */}
         <View style={styles.section}>
           <View style={styles.memberHeaderRow}>
             <Text style={styles.sectionLabel}>
@@ -544,7 +559,7 @@ export default function ChannelInfoSheet({
               }}
               hitSlop={HIT_SLOP}
               accessibilityRole="button"
-              accessibilityLabel="Search members"
+              accessibilityLabel={T("chat.info.search_members")}
             >
               <Feather
                 name="search"
@@ -559,7 +574,7 @@ export default function ChannelInfoSheet({
               style={styles.memberSearchInput}
               value={memberSearch}
               onChangeText={setMemberSearch}
-              placeholder="Search members..."
+              placeholder={T("chat.info.search_members_placeholder")}
               placeholderTextColor={Colors.textMuted}
               autoFocus
               autoCapitalize="none"
@@ -570,7 +585,7 @@ export default function ChannelInfoSheet({
 
           <View style={styles.memberList}>
             {/* You: your own row, no chat action (you can't DM yourself);
-                    the right side reads "You". */}
+                    the right side reads T("chat.you"). */}
             {showYouRow && youMatches && (
               <View style={styles.memberRow}>
                 <Avatar
@@ -582,9 +597,11 @@ export default function ChannelInfoSheet({
                   {localNickname}
                 </Text>
                 {selfTeleported && (
-                  <Text style={styles.memberTag}>Teleported</Text>
+                  <Text style={styles.memberTag}>
+                    {T("chat.info.teleported")}
+                  </Text>
                 )}
-                <Text style={styles.memberYou}>You</Text>
+                <Text style={styles.memberYou}>{T("chat.you")}</Text>
               </View>
             )}
 
@@ -595,10 +612,12 @@ export default function ChannelInfoSheet({
                   {m.name}
                 </Text>
                 {isGroup && m.id === groupCreatorFp && (
-                  <Text style={styles.memberTag}>Creator</Text>
+                  <Text style={styles.memberTag}>{t("chat.info.creator")}</Text>
                 )}
                 {m.teleported && (
-                  <Text style={styles.memberTag}>Teleported</Text>
+                  <Text style={styles.memberTag}>
+                    {t("chat.info.teleported")}
+                  </Text>
                 )}
                 {m.onChat && (
                   <Pressable
@@ -629,7 +648,9 @@ export default function ChannelInfoSheet({
 
             {visibleCount === 0 && (
               <Text style={styles.noMembers}>
-                {query.length > 0 ? "No matches." : "No one here yet."}
+                {query.length > 0
+                  ? T("chat.info.no_matches")
+                  : T("chat.info.no_one_here")}
               </Text>
             )}
           </View>
@@ -642,14 +663,16 @@ export default function ChannelInfoSheet({
                 setShowAddMembers(true);
               }}
               accessibilityRole="button"
-              accessibilityLabel="Add members"
+              accessibilityLabel={T("chat.info.add_members")}
             >
               <Feather
                 name="user-plus"
                 size={16}
                 color={Colors.textSecondary}
               />
-              <Text style={styles.addMembersText}>Add members</Text>
+              <Text style={styles.addMembersText}>
+                {T("chat.info.add_members")}
+              </Text>
             </Pressable>
           )}
         </View>
@@ -662,7 +685,7 @@ export default function ChannelInfoSheet({
             sheetStyle={styles.sheet}
             scrollable
           >
-            <Text style={styles.addTitle}>Add members</Text>
+            <Text style={styles.addTitle}>{T("chat.info.add_members")}</Text>
             {addablePeers.length === 0 ? (
               <Text style={styles.noMembers}>
                 No reachable peers to add. Members must be nearby.
@@ -712,10 +735,12 @@ export default function ChannelInfoSheet({
               onPress={handleAddMembers}
               disabled={addSelected.size === 0}
               accessibilityRole="button"
-              accessibilityLabel="Add selected members"
+              accessibilityLabel={T("chat.info.add_selected")}
             >
               <Text style={styles.addConfirmText}>
-                {addSelected.size > 0 ? `Add ${addSelected.size}` : "Add"}
+                {addSelected.size > 0
+                  ? `Add ${addSelected.size}`
+                  : T("chat.info.add")}
               </Text>
             </Pressable>
           </BottomSheet>
@@ -731,11 +756,15 @@ export default function ChannelInfoSheet({
               style={styles.leaveBtn}
               onPress={handleLeave}
               accessibilityRole="button"
-              accessibilityLabel={isGroup ? "Leave group" : "Leave channel"}
+              accessibilityLabel={
+                isGroup
+                  ? T("chat.info.leave_group")
+                  : T("chat.info.leave_channel")
+              }
             >
               <Feather name="log-out" size={15} color={Colors.danger} />
               <Text style={styles.leaveBtnText}>
-                {isGroup ? "Leave group" : "Leave"}
+                {isGroup ? T("chat.info.leave_group") : T("chat.info.leave")}
               </Text>
             </Pressable>
           </View>
@@ -770,7 +799,7 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       // Top-right corner of the sheet, mirroring the pencil on the contact sheet.
       position: "absolute",
       top: Spacing.base,
-      right: Spacing.base,
+      end: Spacing.base,
       zIndex: 1,
       padding: Spacing.xs,
     },

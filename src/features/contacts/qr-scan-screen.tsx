@@ -36,6 +36,8 @@ import {
   decodeQRContent,
   type ContactCard,
 } from "../../core/crypto/contact-exchange";
+import { t, useT } from "../../i18n";
+import { chevronBack } from "../../i18n/layout";
 import { getMeshService } from "../../services/mesh-service";
 import { useContactsStore } from "../../store/contacts-store";
 import Avatar from "../../ui/components/avatar";
@@ -103,6 +105,7 @@ export default function QrScanScreen({
   onClose,
   onPeerFound,
 }: Props): React.JSX.Element {
+  const T = useT();
   const Colors = useThemeColors();
   const styles = useMemo(() => createStyles(Colors), [Colors]);
   const [stage, setStage] = useState<Stage>("entry");
@@ -143,9 +146,7 @@ export default function QrScanScreen({
   function handleManualContinue(): void {
     const parsed = parsePeerID(input);
     if (!parsed) {
-      setError(
-        "Enter a valid 16-character peer ID or paste an airhop://peer/… link.",
-      );
+      setError(t("contacts.scan.invalid_id"));
       return;
     }
     setError(null);
@@ -169,14 +170,15 @@ export default function QrScanScreen({
     const granted = await ensurePermission(
       getCameraPermission,
       requestCameraPermission,
-      { label: "Camera access", purpose: "scan a contact's QR code" },
+      {
+        label: t("contacts.scan.camera_label"),
+        purpose: t("contacts.scan.camera_purpose"),
+      },
     );
     if (!granted) {
       // A plain "not now" needs no dialog on top of the one just dismissed:
       // the hub already offers two other ways to add someone.
-      setError(
-        "Camera access is needed to scan. You can still add by peer ID.",
-      );
+      setError(t("contacts.scan.camera_needed"));
       return;
     }
     hasScannedRef.current = false;
@@ -187,9 +189,7 @@ export default function QrScanScreen({
   // app, or unavailable on this hardware). Say so instead of leaving the black
   // preview to speak for itself.
   function handleCameraMountError(): void {
-    setError(
-      "Couldn't start the camera. Close other camera apps and try again.",
-    );
+    setError(t("contacts.scan.camera_failed"));
     setStage("entry");
   }
 
@@ -199,12 +199,13 @@ export default function QrScanScreen({
     const granted = await ensurePermission(
       () => ImagePicker.getMediaLibraryPermissionsAsync(),
       () => ImagePicker.requestMediaLibraryPermissionsAsync(),
-      { label: "Photo access", purpose: "scan a QR code you've saved" },
+      {
+        label: t("contacts.scan.photo_label"),
+        purpose: t("contacts.scan.photo_purpose"),
+      },
     );
     if (!granted) {
-      setError(
-        "Photo access is needed to pick an image. You can still add by peer ID.",
-      );
+      setError(t("contacts.scan.photo_needed"));
       return;
     }
     const picked = await ImagePicker.launchImageLibraryAsync({
@@ -217,14 +218,14 @@ export default function QrScanScreen({
       const raw = scans[0]?.data;
       const result = raw ? parseScan(raw) : null;
       if (!result) {
-        setError("No Airhop QR code found in that image.");
+        setError(t("contacts.scan.no_qr"));
         return;
       }
       setFoundPeerID(result.peerID);
       setFoundCard(result.card);
       setStage("confirm");
     } catch {
-      setError("Couldn't read a QR code from that image.");
+      setError(t("contacts.scan.unreadable"));
     }
   }
 
@@ -250,9 +251,7 @@ export default function QrScanScreen({
       const accepted =
         getMeshService()?.addVerifiedContact(card, { inPerson: true }) ?? false;
       if (!accepted) {
-        setError(
-          "This QR code is invalid: its peer ID doesn't match its keys. It may have been tampered with.",
-        );
+        setError(t("contacts.scan.tampered"));
         setStage("entry");
         return;
       }
@@ -312,11 +311,13 @@ export default function QrScanScreen({
       ? Colors.verified
       : Colors.textMuted;
   const confirmPillLabel = alreadyContact
-    ? "Already in your contacts"
+    ? T("contacts.scan.already_added")
     : foundCard
-      ? "Verified via QR"
-      : "Not verified yet";
-  const confirmPrimaryLabel = alreadyContact ? "Message" : "Add Contact";
+      ? T("contacts.qr.verified")
+      : T("contacts.qr.not_verified");
+  const confirmPrimaryLabel = alreadyContact
+    ? T("contacts.qr.message")
+    : T("contacts.qr.add");
 
   // The entry and confirm steps ride in a bottom sheet, matching the app's other
   // sheets (contact info, channel info). The camera is a full-bleed surface
@@ -351,11 +352,13 @@ export default function QrScanScreen({
                 style={styles.scanIconBtn}
                 hitSlop={HIT_SLOP}
                 accessibilityRole="button"
-                accessibilityLabel="Back"
+                accessibilityLabel={T("common.back")}
               >
-                <Feather name="chevron-left" size={24} color="#FFFFFF" />
+                <Feather name={chevronBack} size={24} color="#FFFFFF" />
               </Pressable>
-              <Text style={styles.scanTitle}>Scan QR code</Text>
+              <Text style={styles.scanTitle}>
+                {T("contacts.qr.scan_title")}
+              </Text>
               <View style={styles.scanIconBtn} />
             </View>
 
@@ -379,14 +382,14 @@ export default function QrScanScreen({
         {stage !== "confirm" && (
           <>
             <View style={styles.sheetHead}>
-              <Text style={styles.sheetTitle}>Add Contact</Text>
+              <Text style={styles.sheetTitle}>{T("contacts.qr.add")}</Text>
               <Text style={styles.sheetSubtitle}>
                 Reach someone who isn&apos;t nearby on the mesh.
               </Text>
             </View>
 
             <View style={styles.field}>
-              <Text style={styles.fieldLabel}>Peer ID</Text>
+              <Text style={styles.fieldLabel}>{T("contacts.qr.peer_id")}</Text>
               <TextInput
                 style={[styles.input, error ? styles.inputError : null]}
                 value={input}
@@ -394,7 +397,7 @@ export default function QrScanScreen({
                   setInput(v);
                   setError(null);
                 }}
-                placeholder="Paste or type a peer ID"
+                placeholder={T("contacts.qr.peer_id_placeholder")}
                 placeholderTextColor={Colors.textMuted}
                 autoCapitalize="none"
                 autoCorrect={false}
@@ -416,7 +419,7 @@ export default function QrScanScreen({
               onPress={handleManualContinue}
               disabled={!canContinueManual}
             >
-              <Text style={styles.primaryBtnText}>Continue</Text>
+              <Text style={styles.primaryBtnText}>{T("common.continue")}</Text>
             </Pressable>
 
             <View style={styles.dividerRow}>
@@ -426,20 +429,24 @@ export default function QrScanScreen({
             </View>
 
             {/* One grouped card with a hairline divider, matching the
-                "Start something new" chooser so the two sheets read alike. */}
+                T("contacts.qr.start_new") chooser so the two sheets read alike. */}
             <View style={styles.optionGroup}>
               <Pressable
                 style={styles.optionRow}
                 onPress={handleScanWithCamera}
                 accessibilityRole="button"
-                accessibilityLabel="Scan QR code with camera"
+                accessibilityLabel={T("contacts.qr.scan_camera_a11y")}
               >
                 <View style={styles.optionIcon}>
                   <Feather name="camera" size={18} color={Colors.textPrimary} />
                 </View>
                 <View style={styles.optionText}>
-                  <Text style={styles.optionTitle}>Scan QR code</Text>
-                  <Text style={styles.optionSub}>Use your camera</Text>
+                  <Text style={styles.optionTitle}>
+                    {T("contacts.qr.scan_title")}
+                  </Text>
+                  <Text style={styles.optionSub}>
+                    {T("contacts.qr.scan_camera_desc")}
+                  </Text>
                 </View>
               </Pressable>
 
@@ -449,14 +456,18 @@ export default function QrScanScreen({
                 style={styles.optionRow}
                 onPress={handlePickFromGallery}
                 accessibilityRole="button"
-                accessibilityLabel="Upload QR image from gallery"
+                accessibilityLabel={T("contacts.qr.upload_a11y")}
               >
                 <View style={styles.optionIcon}>
                   <Feather name="image" size={18} color={Colors.textPrimary} />
                 </View>
                 <View style={styles.optionText}>
-                  <Text style={styles.optionTitle}>Upload from gallery</Text>
-                  <Text style={styles.optionSub}>Pick a saved QR image</Text>
+                  <Text style={styles.optionTitle}>
+                    {T("contacts.qr.upload")}
+                  </Text>
+                  <Text style={styles.optionSub}>
+                    {T("contacts.qr.upload_desc")}
+                  </Text>
                 </View>
               </Pressable>
             </View>
@@ -507,9 +518,9 @@ export default function QrScanScreen({
               <Pressable
                 onPress={handleRescan}
                 accessibilityRole="button"
-                accessibilityLabel="Back"
+                accessibilityLabel={T("common.back")}
               >
-                <Text style={styles.rescanText}>Back</Text>
+                <Text style={styles.rescanText}>{T("common.back")}</Text>
               </Pressable>
             </View>
           </>
@@ -652,7 +663,7 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
     optionDivider: {
       height: StyleSheet.hairlineWidth,
       backgroundColor: Colors.border,
-      marginLeft: Spacing.base,
+      marginStart: Spacing.base,
     },
     optionRow: {
       flexDirection: "row",

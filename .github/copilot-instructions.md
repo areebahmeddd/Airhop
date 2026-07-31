@@ -41,11 +41,20 @@ Apply these to every suggestion, every file, every PR:
 
 8. **Polyfill at entry point.** `import 'react-native-get-random-values'` must be the first import in `App.tsx` before any `@noble` import.
 
+9. **Never hardcode user-facing text.** Add a key to `src/i18n/locales/en.ts` and use `T("your.key")` (component) or `t("your.key")` (outside React). English is the shipping language and ten land in v1.3.0, so the catalog is both what keeps copy reviewable in one diff today and what makes that a new file rather than a sweep of every screen. CI fails on any hardcoded string. See [`localization.md`](.github/skills/localization.md).
+
+10. **Never translate anything that crosses the wire.** The `username.ts` adjective/noun lists derive identity. The transmitted `/hug` and `/slap` text is matched as an **English substring** by bitchat on receipt. Slash command tokens, channel names (`#bluetooth`) and geohashes are protocol. Translate the hint that describes a command, never the command. Enforced by `src/i18n/__tests__/catalog.test.ts`.
+
+11. **Never translate at module load.** `const X = { label: t("k") }` type-checks, renders fine, and freezes in whichever language the app started in. Module constants hold `TranslationKey`s; the component translates on render. Enforced by `npm run i18n:audit`.
+
+12. **Layout uses logical properties.** `marginStart` / `marginEnd` / `start` / `end`, never `marginLeft` / `left`. `textAlign: "right"` becomes `textAlignEnd` from `src/i18n/layout.ts`; directional chevrons come from there too. No right-to-left language ships yet, which is exactly why this needs enforcing: a physical `marginLeft` added now is not noticed until the first Arabic build.
+
 ## Project Folder Structure
 
 ```
 src/
   bridge/       # TurboModule TypeScript specs (Codegen input only)
+  i18n/         # translation runtime + the bundled English catalog
   core/
     crypto/     # identity, noise-xx, noise-x, double-ratchet, x3dh
     mesh/       # packet-codec, flood-router, deduplicator, fragments, gossip, courier
@@ -86,6 +95,7 @@ Full constant table: [`docs/spec/PROTOCOLS.md`](docs/spec/PROTOCOLS.md)
 - Named exports only in `src/core/` and `src/bridge/`
 - File naming: `kebab-case.ts`
 - Max 400 lines per file. Split by responsibility if longer.
+- User-facing strings live in `src/i18n/locales/en.ts`, never inline in a component
 
 ## Code Style
 
@@ -111,3 +121,4 @@ Skills are reference files in `.github/skills/`. Read the relevant one before wo
 | [`ble-native-boundary.md`](.github/skills/ble-native-boundary.md)         | `android/`, `ios/`, `src/bridge/`, TurboModule specs                          |
 | [`mesh-routing.md`](.github/skills/mesh-routing.md)                       | `flood-router.ts`, `deduplicator.ts`, `fragment-manager.ts`, `gossip-sync.ts` |
 | [`nostr-gift-wrap.md`](.github/skills/nostr-gift-wrap.md)                 | `gift-wrap.ts`, `courier-relay.ts`, any Nostr DM or event handling            |
+| [`localization.md`](.github/skills/localization.md)                       | `src/i18n/`, any user-facing copy anywhere, right-to-left layout              |

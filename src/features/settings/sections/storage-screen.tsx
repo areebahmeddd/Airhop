@@ -31,6 +31,7 @@ import {
   useSharedStyles,
 } from "../shared";
 
+import { t, useT } from "../../../i18n";
 interface Props {
   onBack: () => void;
 }
@@ -54,6 +55,7 @@ function readStorageStats() {
 
 export default function StorageScreen({ onBack }: Props): React.JSX.Element {
   const styles = useSharedStyles();
+  const T = useT();
   const [stats, setStats] = useState(readStorageStats);
 
   const refresh = useCallback(() => setStats(readStorageStats()), []);
@@ -70,17 +72,20 @@ export default function StorageScreen({ onBack }: Props): React.JSX.Element {
   function handleClearCache(): void {
     if (stats.cacheBytes === 0) return;
     showAlert(
-      "Clear cached media?",
-      "Received photos, videos, and voice notes will be removed from this device and may need re-downloading. Messages and wallet are untouched.",
+      t("settings.storage.clear_title"),
+      t("settings.storage.clear_body"),
       [
-        { text: "Cancel", style: "cancel" },
+        { text: t("common.cancel"), style: "cancel" },
         {
-          text: "Clear",
+          text: t("settings.storage.clear"),
           style: "destructive",
           onPress: () => {
             const freed = clearAttachmentCache();
             refresh();
-            showAlert("Cache cleared", `Freed ${formatBytes(freed)}.`);
+            showAlert(
+              t("settings.storage.cleared"),
+              t("settings.storage.freed", { size: formatBytes(freed) }),
+            );
           },
         },
       ],
@@ -89,7 +94,7 @@ export default function StorageScreen({ onBack }: Props): React.JSX.Element {
 
   return (
     <View style={styles.container}>
-      <SubHeader title="Storage & Data" onBack={onBack} />
+      <SubHeader title={T("settings.section.storage")} onBack={onBack} />
       <ScrollView
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
@@ -98,7 +103,7 @@ export default function StorageScreen({ onBack }: Props): React.JSX.Element {
           <View style={styles.settingsGroup}>
             <SettingRow
               icon="activity"
-              label="Network usage"
+              label={T("settings.storage.network_usage")}
               description={`This session · ${formatBytes(stats.network.sent)} sent, ${formatBytes(stats.network.received)} received`}
               control={
                 <Text style={styles.settingValue}>
@@ -109,8 +114,8 @@ export default function StorageScreen({ onBack }: Props): React.JSX.Element {
             <GroupDivider />
             <SettingRow
               icon="hard-drive"
-              label="Storage usage"
-              description="Messages, wallet proofs, and cached attachments"
+              label={T("settings.storage.storage_usage")}
+              description={T("settings.storage.storage_usage_desc")}
               control={
                 <Text style={styles.settingValue}>
                   {formatBytes(totalBytes)}
@@ -120,12 +125,16 @@ export default function StorageScreen({ onBack }: Props): React.JSX.Element {
             <GroupDivider />
             <SettingLinkRow
               icon="trash-2"
-              label="Cache"
+              label={T("settings.storage.cache")}
               description={`${formatBytes(stats.cacheBytes)} of received attachments`}
               onPress={handleClearCache}
               chevron={false}
-              accessibilityLabel="Clear attachment cache"
-              control={<Text style={styles.settingValue}>Clear</Text>}
+              accessibilityLabel={T("settings.storage.clear_cache")}
+              control={
+                <Text style={styles.settingValue}>
+                  {T("settings.storage.clear")}
+                </Text>
+              }
             />
           </View>
         </View>

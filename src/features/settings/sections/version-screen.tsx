@@ -29,6 +29,7 @@ import {
   LICENSE_URL,
 } from "../../../data/app-info";
 import { birdForVersion } from "../../../data/releases";
+import { useT } from "../../../i18n";
 import { useSettingsStore } from "../../../store/settings-store";
 import PrimaryButton from "../../../ui/components/primary-button";
 import {
@@ -71,6 +72,7 @@ function compareVersions(a: string, b: string): number {
 
 export default function VersionScreen({ onBack }: Props): React.JSX.Element {
   const Colors = useThemeColors();
+  const T = useT();
   const shared = useSharedStyles();
   const styles = useMemo(() => createStyles(Colors), [Colors]);
   const [check, setCheck] = useState<CheckState>({ status: "idle" });
@@ -190,7 +192,7 @@ export default function VersionScreen({ onBack }: Props): React.JSX.Element {
 
   return (
     <View style={shared.container}>
-      <SubHeader title="Version" onBack={onBack} />
+      <SubHeader title={T("settings.about.version")} onBack={onBack} />
       <ScrollView
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
@@ -208,7 +210,9 @@ export default function VersionScreen({ onBack }: Props): React.JSX.Element {
             <Text style={styles.version}>Version {APP_VERSION}</Text>
             {bird ? (
               <View style={styles.codenameRow}>
-                <Text style={styles.codenameLabel}>Codename</Text>
+                <Text style={styles.codenameLabel}>
+                  {T("settings.version.codename")}
+                </Text>
                 <Text style={styles.codenameName}>{bird}</Text>
               </View>
             ) : null}
@@ -221,8 +225,8 @@ export default function VersionScreen({ onBack }: Props): React.JSX.Element {
               update
                 ? `Download ${update.version}`
                 : checking
-                  ? "Checking"
-                  : "Check for updates"
+                  ? T("settings.version.checking")
+                  : T("settings.version.check")
             }
             onPress={() =>
               update ? void Linking.openURL(update.url) : void checkForUpdates()
@@ -231,7 +235,7 @@ export default function VersionScreen({ onBack }: Props): React.JSX.Element {
             accessibilityLabel={
               update
                 ? `Download version ${update.version}`
-                : "Check for updates"
+                : T("settings.version.check")
             }
           />
           <UpdateResult check={check} styles={styles} Colors={Colors} />
@@ -239,7 +243,9 @@ export default function VersionScreen({ onBack }: Props): React.JSX.Element {
 
         <View style={styles.credit}>
           <View style={styles.creditRow}>
-            <Text style={styles.creditText}>Made with</Text>
+            <Text style={styles.creditText}>
+              {T("settings.version.made_with")}
+            </Text>
             <PixelHeart color={Colors.textPrimary} />
             <Text style={styles.creditText}>by</Text>
             <Text
@@ -278,13 +284,16 @@ function UpdateResult({
   styles: ReturnType<typeof createStyles>;
   Colors: ReturnType<typeof useThemeColors>;
 }): React.JSX.Element | null {
+  const T = useT();
   if (check.status === "idle") return null;
 
   if (check.status === "checking") {
     return (
       <View style={styles.result}>
         <ActivityIndicator size="small" color={Colors.textMuted} />
-        <Text style={styles.resultText}>Checking for updates</Text>
+        <Text style={styles.resultText}>
+          {T("settings.version.checking_title")}
+        </Text>
       </View>
     );
   }
@@ -293,7 +302,9 @@ function UpdateResult({
     return (
       <View style={styles.result}>
         <Feather name="check-circle" size={16} color={Colors.success} />
-        <Text style={styles.resultText}>You are on the latest version.</Text>
+        <Text style={styles.resultText}>
+          {T("settings.version.up_to_date")}
+        </Text>
       </View>
     );
   }
@@ -309,7 +320,9 @@ function UpdateResult({
       >
         <Feather name="arrow-up-circle" size={16} color={Colors.textPrimary} />
         <Text style={styles.resultText}>
-          <Text style={styles.resultLink}>View release notes</Text>
+          <Text style={styles.resultLink}>
+            {T("settings.version.release_notes")}
+          </Text>
         </Text>
       </Pressable>
     );

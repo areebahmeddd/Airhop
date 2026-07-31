@@ -7,6 +7,7 @@
 
 import type { Feather } from "@expo/vector-icons";
 import type { ComponentProps } from "react";
+import type { TranslationKey } from "../i18n";
 import type { MonoFont } from "../store/settings-store";
 
 export interface MonoFontSpec {
@@ -14,28 +15,31 @@ export interface MonoFontSpec {
   // others must be loaded via useFonts in App.tsx under this exact name.
   family: string;
   // Shown in the Appearance picker.
-  label: string;
-  description: string;
+  // Keys, not text: this is a module constant, so translated strings would
+  // freeze in the language the app started in. The picker translates them on
+  // render. "Fira Code" and "JetBrains Mono" are product names and stay put.
+  labelKey: TranslationKey;
+  descriptionKey: TranslationKey;
   icon: ComponentProps<typeof Feather>["name"];
 }
 
 export const MONO_FONTS: Record<MonoFont, MonoFontSpec> = {
   system: {
     family: "monospace",
-    label: "System",
-    description: "Uses your device's default monospace font",
+    labelKey: "settings.font.system",
+    descriptionKey: "settings.font.system_desc",
     icon: "type",
   },
   firacode: {
     family: "FiraCode_400Regular",
-    label: "Fira Code",
-    description: "Clean with distinctive characters",
+    labelKey: "settings.font.firacode",
+    descriptionKey: "settings.font.firacode_desc",
     icon: "code",
   },
   jetbrains: {
     family: "JetBrainsMono_400Regular",
-    label: "JetBrains Mono",
-    description: "Modern and easy to read",
+    labelKey: "settings.font.jetbrains",
+    descriptionKey: "settings.font.jetbrains_desc",
     icon: "terminal",
   },
 };

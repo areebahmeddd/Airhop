@@ -10,6 +10,7 @@ import { Feather } from "@expo/vector-icons";
 import * as Clipboard from "expo-clipboard";
 import React, { useMemo, useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
+import { useT } from "../../i18n";
 import { useChatStore } from "../../store/chat-store";
 import { useContactsStore } from "../../store/contacts-store";
 import { usePeerStore } from "../../store/peer-store";
@@ -42,6 +43,7 @@ export default function ContactInfoSheet({
   channel,
   onClose,
 }: Props): React.JSX.Element {
+  const T = useT();
   const Colors = useThemeColors();
   const styles = useMemo(() => createStyles(Colors), [Colors]);
   const peerID = channel?.startsWith("dm:") ? channel.slice(3) : null;
@@ -112,8 +114,8 @@ export default function ContactInfoSheet({
           key: "verify",
           icon: "shield-off",
           iconColor: Colors.danger,
-          label: "Anonymous",
-          sub: "A geohash pseudonym with no lasting identity to verify.",
+          label: T("chat.contact.anonymous"),
+          sub: T("chat.contact.anonymous_desc"),
         }
       : verified
         ? {
@@ -122,15 +124,15 @@ export default function ContactInfoSheet({
             iconColor: Colors.verified,
             label: contact
               ? `Verified since ${formatDate(contact.addedAtMs)}`
-              : "Verified",
-            sub: "Scanned their QR code",
+              : T("chat.contact.verified"),
+            sub: T("chat.contact.verified_desc"),
           }
         : {
             key: "verify",
             icon: "shield-off",
             iconColor: Colors.danger,
-            label: "Not verified",
-            sub: "Scan their QR code to confirm this is really them.",
+            label: T("chat.contact.not_verified"),
+            sub: T("chat.contact.not_verified_desc"),
           },
   );
   // The guarantee is the same either way, but the mechanism is not, and naming
@@ -144,10 +146,10 @@ export default function ContactInfoSheet({
     key: "enc",
     icon: "lock",
     iconColor: Colors.e2ee,
-    label: "End-to-end encrypted",
+    label: T("chat.contact.e2ee"),
     sub: isAnonymous
-      ? "NIP-17 gift-wrapped, so relays cannot read it"
-      : "Noise XX, plus Double Ratchet between Airhop devices",
+      ? T("chat.contact.e2ee_nostr")
+      : T("chat.contact.e2ee_mesh"),
   });
 
   return (
@@ -176,9 +178,11 @@ export default function ContactInfoSheet({
                   style={styles.keyBox}
                   onPress={handleCopyID}
                   accessibilityRole="button"
-                  accessibilityLabel="Copy Nostr public key"
+                  accessibilityLabel={T("chat.contact.copy_nostr")}
                 >
-                  <Text style={styles.keyBoxLabel}>Nostr public key</Text>
+                  <Text style={styles.keyBoxLabel}>
+                    {T("chat.contact.nostr_key")}
+                  </Text>
                   <View style={styles.keyBoxRow}>
                     <Text style={styles.keyBoxValue}>{idValue}</Text>
                     <Feather
@@ -194,7 +198,7 @@ export default function ContactInfoSheet({
                   onPress={handleCopyID}
                   hitSlop={HIT_SLOP}
                   accessibilityRole="button"
-                  accessibilityLabel="Copy peer ID"
+                  accessibilityLabel={T("chat.contact.copy_peer_id")}
                 >
                   <Text style={styles.peerID}>{peerID}</Text>
                   <Feather
@@ -231,10 +235,12 @@ export default function ContactInfoSheet({
                   style={styles.verifyBtn}
                   onPress={() => setVerifying(true)}
                   accessibilityRole="button"
-                  accessibilityLabel="Verify contact"
+                  accessibilityLabel={T("chat.contact.verify")}
                 >
                   <Feather name="shield" size={16} color={Colors.textInverse} />
-                  <Text style={styles.verifyText}>Verify contact</Text>
+                  <Text style={styles.verifyText}>
+                    {T("chat.contact.verify")}
+                  </Text>
                 </Pressable>
               </View>
             )}
@@ -362,7 +368,7 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
     infoDivider: {
       height: StyleSheet.hairlineWidth,
       backgroundColor: Colors.border,
-      marginLeft: Spacing.base + 18 + Spacing.md,
+      marginStart: Spacing.base + 18 + Spacing.md,
     },
     actions: {
       gap: Spacing.sm,

@@ -49,6 +49,7 @@ import {
   useSharedStyles,
 } from "../shared";
 
+import { useT, type TranslationKey } from "../../../i18n";
 interface Props {
   onBack: () => void;
 }
@@ -73,49 +74,50 @@ type PermState = "granted" | "askable" | "blocked" | "unmanaged";
 interface PermMeta {
   key: PermKey;
   icon: keyof typeof Feather.glyphMap;
-  label: string;
+  labelKey: TranslationKey;
   // Two halves, in the same order on every row: what Airhop uses it for, then
   // what breaks without it. The second half is a consequence, not a
   // justification: people deciding whether to revoke need to know the cost.
-  need: string;
+  // Both halves live in one key so a translator can join or reorder them.
+  needKey: TranslationKey;
 }
 
 const PERMISSIONS: PermMeta[] = [
   {
     key: "bluetooth",
     icon: "bluetooth",
-    label: "Bluetooth",
-    need: "Finds nearby phones and carries your messages between them. Without it the mesh cannot run.",
+    labelKey: "settings.permissions.bluetooth",
+    needKey: "settings.permissions.bluetooth_desc",
   },
   {
     key: "location",
     icon: "map-pin",
-    label: "Location",
-    need: "Opens the channels for where you are, and on Android it is what lets Bluetooth scan. Without it those channels stay closed. (Airhop does not track your location.)",
+    labelKey: "settings.permissions.location",
+    needKey: "settings.permissions.location_desc",
   },
   {
     key: "notifications",
     icon: "bell",
-    label: "Notifications",
-    need: "Tells you about a message that arrives while Airhop is closed. Without it you see it the next time you open the app.",
+    labelKey: "settings.permissions.notifications",
+    needKey: "settings.permissions.notifications_desc",
   },
   {
     key: "camera",
     icon: "camera",
-    label: "Camera",
-    need: "Scans a contact's QR code, and takes a photo or video to send. Without it you can still send from your library.",
+    labelKey: "settings.permissions.camera",
+    needKey: "settings.permissions.camera_desc",
   },
   {
     key: "photos",
     icon: "image",
-    label: "Photos",
-    need: "Attaches a photo from your library, and saves one you were sent. Without it you can still take one with the camera.",
+    labelKey: "settings.permissions.photos",
+    needKey: "settings.permissions.photos_desc",
   },
   {
     key: "microphone",
     icon: "mic",
-    label: "Microphone",
-    need: "Records a voice note, and carries live voice when you hold the mic. Without it neither can be sent.",
+    labelKey: "settings.permissions.microphone",
+    needKey: "settings.permissions.microphone_desc",
   },
 ];
 
@@ -130,6 +132,7 @@ export default function PermissionsScreen({
   onBack,
 }: Props): React.JSX.Element {
   const styles = useSharedStyles();
+  const T = useT();
   const [states, setStates] = useState<Record<PermKey, PermState>>({
     bluetooth: "unmanaged",
     location: "unmanaged",
@@ -260,9 +263,11 @@ export default function PermissionsScreen({
           onPress={() => void Linking.openSettings()}
           hitSlop={HIT_SLOP}
           accessibilityRole="button"
-          accessibilityLabel="Open system settings to change this permission"
+          accessibilityLabel={T("settings.permissions.open_settings")}
         >
-          <Text style={styles.settingValue}>System</Text>
+          <Text style={styles.settingValue}>
+            {T("settings.permissions.system")}
+          </Text>
         </Pressable>
       );
     }
@@ -274,8 +279,8 @@ export default function PermissionsScreen({
         }
         accessibilityLabel={
           state === "askable"
-            ? "Allow this permission"
-            : "Open system settings to change this permission"
+            ? T("settings.permissions.allow")
+            : T("settings.permissions.open_settings")
         }
       />
     );
@@ -283,7 +288,7 @@ export default function PermissionsScreen({
 
   return (
     <View style={styles.container}>
-      <SubHeader title="Permissions" onBack={onBack} />
+      <SubHeader title={T("settings.section.permissions")} onBack={onBack} />
       <ScrollView
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
@@ -295,8 +300,8 @@ export default function PermissionsScreen({
                 {index > 0 && <GroupDivider />}
                 <SettingRow
                   icon={perm.icon}
-                  label={perm.label}
-                  description={perm.need}
+                  label={T(perm.labelKey)}
+                  description={T(perm.needKey)}
                   control={action(perm.key, states[perm.key])}
                 />
               </React.Fragment>

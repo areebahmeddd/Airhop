@@ -14,6 +14,7 @@
 // launch, never restored from disk.
 
 import { create } from "zustand";
+import { t, useLanguage } from "../i18n";
 import {
   getDeviceBrand,
   needsBatteryOptimizationPrompt,
@@ -233,39 +234,45 @@ function bleBlockerBanner(blocker: BleBlocker): MeshBanner | null {
     case "starting":
       return {
         key: "ble-starting",
-        label: "Starting the mesh…",
+        label: t("mesh.banner.starting"),
         tone: "neutral",
       };
 
     case "unsupported":
       return {
         key: "ble-unsupported",
-        label: "No Bluetooth on this device · internet only",
+        label: t("mesh.banner.no_bluetooth"),
         tone: "caution",
       };
 
     case "adapter-off":
       return {
         key: "ble-adapter-off",
-        label: "Bluetooth off · mesh unavailable",
+        label: t("mesh.banner.bluetooth_off"),
         tone: "danger",
-        action: { label: "Turn on", kind: "enable-bluetooth" },
+        action: {
+          label: t("mesh.banner.action.turn_on"),
+          kind: "enable-bluetooth",
+        },
       };
 
     case "permission-denied":
       return {
         key: "ble-permission",
-        label: "Bluetooth permission needed",
+        label: t("mesh.banner.permission_needed"),
         tone: "danger",
-        action: { label: "Allow", kind: "open-app-settings" },
+        action: {
+          label: t("mesh.banner.action.allow"),
+          kind: "open-app-settings",
+        },
       };
 
     case "permission-blocked":
       return {
         key: "ble-permission-blocked",
-        label: "Bluetooth blocked · allow it in Settings",
+        label: t("mesh.banner.blocked"),
         tone: "danger",
-        action: { label: "Settings", kind: "open-app-settings" },
+        action: { label: t("common.settings"), kind: "open-app-settings" },
       };
 
     // Android 12+ only. Re-requesting will not re-offer Precise, so Settings is
@@ -273,9 +280,9 @@ function bleBlockerBanner(blocker: BleBlocker): MeshBanner | null {
     case "precise-location":
       return {
         key: "ble-precise-location",
-        label: "Precise location needed to find peers",
+        label: t("mesh.banner.precise_location"),
         tone: "danger",
-        action: { label: "Settings", kind: "open-app-settings" },
+        action: { label: t("common.settings"), kind: "open-app-settings" },
       };
 
     // The permission is granted and the radio is on; the OS-wide location
@@ -284,9 +291,12 @@ function bleBlockerBanner(blocker: BleBlocker): MeshBanner | null {
     case "location-services-off":
       return {
         key: "ble-location-services",
-        label: "Location off · Android needs it to find peers",
+        label: t("mesh.banner.location_off_android"),
         tone: "danger",
-        action: { label: "Turn on", kind: "open-location-settings" },
+        action: {
+          label: t("mesh.banner.action.turn_on"),
+          kind: "open-location-settings",
+        },
       };
   }
 }
@@ -304,9 +314,9 @@ export function computeMeshBanners(inputs: MeshBannerInputs): MeshBanner[] {
     return [
       {
         key: "paused",
-        label: "Mesh paused · You're away",
+        label: t("mesh.banner.paused"),
         tone: "neutral",
-        action: { label: "Resume", kind: "resume" },
+        action: { label: t("mesh.banner.action.resume"), kind: "resume" },
       },
     ];
   }
@@ -332,7 +342,10 @@ export function computeMeshBanners(inputs: MeshBannerInputs): MeshBanner[] {
       key: "background-limits",
       label: `${inputs.backgroundLimitsBrand} may pause the mesh in the background`,
       tone: "caution",
-      action: { label: "Fix", kind: "open-background-limits" },
+      action: {
+        label: t("mesh.banner.action.fix"),
+        kind: "open-background-limits",
+      },
       dismissible: true,
     });
   }
@@ -342,7 +355,7 @@ export function computeMeshBanners(inputs: MeshBannerInputs): MeshBanner[] {
   if (!inputs.locationGranted) {
     banners.push({
       key: "location",
-      label: "Location off · location channels unavailable",
+      label: t("mesh.banner.location_off"),
       tone: "caution",
     });
   }
@@ -356,7 +369,7 @@ export function computeMeshBanners(inputs: MeshBannerInputs): MeshBanner[] {
   if (inputs.powerSaving === true) {
     banners.push({
       key: "power-saving",
-      label: "Battery saver · scanning less often",
+      label: t("mesh.banner.battery_saver"),
       tone: "neutral",
     });
   }
@@ -367,7 +380,7 @@ export function computeMeshBanners(inputs: MeshBannerInputs): MeshBanner[] {
   if (!inputs.internetEnabled) {
     banners.push({
       key: "internet-off",
-      label: "Internet off · Bluetooth only",
+      label: t("mesh.banner.internet_off"),
       tone: "neutral",
     });
     return banners;
@@ -377,7 +390,7 @@ export function computeMeshBanners(inputs: MeshBannerInputs): MeshBanner[] {
   if (inputs.peerCount === 0 && inputs.nostrConnected) {
     banners.push({
       key: "nostr",
-      label: "No local peers · relaying via Nostr",
+      label: t("mesh.banner.relaying"),
       tone: "relay",
     });
   }
@@ -387,7 +400,7 @@ export function computeMeshBanners(inputs: MeshBannerInputs): MeshBanner[] {
   if (inputs.torActive) {
     banners.push({
       key: "tor",
-      label: "Tor on · internet traffic routed",
+      label: t("mesh.banner.tor"),
       tone: "tor",
     });
   }
@@ -397,7 +410,7 @@ export function computeMeshBanners(inputs: MeshBannerInputs): MeshBanner[] {
   if (inputs.gatewayEnabled) {
     banners.push({
       key: "gateway",
-      label: "Internet gateway on · relaying nearby peers",
+      label: t("mesh.banner.gateway"),
       tone: "gateway",
     });
   }
@@ -411,7 +424,7 @@ export function computeMeshBanners(inputs: MeshBannerInputs): MeshBanner[] {
       label:
         across > 0
           ? `Mesh bridge on · ${across} across the bridge`
-          : "Mesh bridge on · public chat linked",
+          : t("mesh.banner.bridge"),
       tone: "bridge",
     });
   }
@@ -422,6 +435,12 @@ export function computeMeshBanners(inputs: MeshBannerInputs): MeshBanner[] {
 // Hook form for components: recomputes as presence, permissions, relay, Tor and
 // peers change.
 export function useMeshBanners(): MeshBanner[] {
+  // Every banner label and action below is translated at call time, so the
+  // language is a real input to this computation. Subscribing states that
+  // outright: without it the banners would still refresh, but only because a
+  // parent happened to re-render, which is the kind of coupling that survives
+  // exactly until somebody memoises the parent.
+  void useLanguage();
   const presenceStatus = useMeshStateStore((s) => s.presenceStatus);
   const bleBlocker = useMeshStateStore((s) => s.bleBlocker);
   const locationGranted = useMeshStateStore((s) => s.locationGranted);

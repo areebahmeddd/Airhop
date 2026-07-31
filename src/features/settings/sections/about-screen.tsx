@@ -17,6 +17,7 @@ import {
   GITHUB_URL,
   LATEST_RELEASE_PAGE,
 } from "../../../data/app-info";
+import { useT } from "../../../i18n";
 import {
   GroupDivider,
   SettingLinkRow,
@@ -36,9 +37,10 @@ export default function AboutScreen({
   onOpenLicenses,
 }: Props): React.JSX.Element {
   const styles = useSharedStyles();
+  const T = useT();
   return (
     <View style={styles.container}>
-      <SubHeader title="About" onBack={onBack} />
+      <SubHeader title={T("settings.section.about")} onBack={onBack} />
       <ScrollView
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
@@ -47,37 +49,37 @@ export default function AboutScreen({
           <View style={styles.settingsGroup}>
             <SettingLinkRow
               icon="tag"
-              label="Version"
-              description="Current release"
+              label={T("settings.about.version")}
+              description={T("settings.about.version_desc")}
               control={<Text style={styles.settingValue}>{APP_VERSION}</Text>}
               onPress={onOpenVersion}
-              accessibilityLabel="View version and check for updates"
+              accessibilityLabel={T("settings.about.version_a11y")}
             />
             <GroupDivider />
             <SettingLinkRow
               icon="clock"
-              label="Release notes"
-              description="What's new in the latest release"
+              label={T("settings.about.release_notes")}
+              description={T("settings.about.release_notes_desc")}
               onPress={() => void Linking.openURL(LATEST_RELEASE_PAGE)}
-              accessibilityLabel="Open the latest release notes on GitHub"
+              accessibilityLabel={T("settings.about.release_notes_a11y")}
               external
             />
             <GroupDivider />
             <SettingLinkRow
               icon="github"
-              label="Source Code"
+              label={T("settings.about.source")}
               description="areebahmeddd/Airhop"
               onPress={() => void Linking.openURL(GITHUB_URL)}
-              accessibilityLabel="Open source code on GitHub"
+              accessibilityLabel={T("settings.about.source_a11y")}
               external
             />
             <GroupDivider />
             <SettingLinkRow
               icon="file-text"
-              label="Open source licenses"
-              description="Third-party open source packages"
+              label={T("settings.about.licenses")}
+              description={T("settings.about.licenses_desc")}
               onPress={onOpenLicenses}
-              accessibilityLabel="View third-party licenses"
+              accessibilityLabel={T("settings.about.licenses_a11y")}
             />
           </View>
         </View>

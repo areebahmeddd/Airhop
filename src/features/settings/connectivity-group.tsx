@@ -27,6 +27,7 @@ import {
   View,
 } from "react-native";
 import { setTorRouting } from "../../core/nostr/tor-routing";
+import { useT, type TranslationKey } from "../../i18n";
 import { requestLocationPermission } from "../../services/location-service";
 import { showAlert } from "../../store/alert-store";
 import { useMeshStateStore } from "../../store/mesh-state-store";
@@ -42,10 +43,13 @@ import {
 
 type ToggleKey = "liveVoice" | "tor" | "gateway" | "bridge";
 
+// Keys rather than text: this is a module constant, so it cannot call a hook,
+// and building it once at module load would freeze the copy in whichever
+// language the app started in. The component translates it on render.
 interface ConfirmCopy {
-  title: string;
-  body: string;
-  action: string;
+  title: TranslationKey;
+  body: TranslationKey;
+  action: TranslationKey;
 }
 
 // One entry per switch per direction. Written as the consequence of the tap
@@ -55,50 +59,50 @@ interface ConfirmCopy {
 const CONFIRM: Record<ToggleKey, { on: ConfirmCopy; off: ConfirmCopy }> = {
   liveVoice: {
     on: {
-      title: "Turn on live voice?",
-      body: "Holding the mic sends your voice to everyone in Bluetooth range as you speak, and their voice plays on your phone. Nothing is recorded.",
-      action: "Turn on",
+      title: "settings.conn.live_voice_on_title",
+      body: "settings.conn.live_voice_on_body",
+      action: "settings.conn.turn_on",
     },
     off: {
-      title: "Turn off live voice?",
-      body: "Holding the mic records a voice note instead. It sends when you let go, and nobody hears it until they play it.",
-      action: "Turn off",
+      title: "settings.conn.live_voice_off_title",
+      body: "settings.conn.live_voice_off_body",
+      action: "settings.conn.turn_off",
     },
   },
   tor: {
     on: {
-      title: "Route Nostr traffic through Tor?",
-      body: "Relays stop seeing your IP address. Connecting takes longer and messages arrive slower. Bluetooth is unaffected.",
-      action: "Turn on",
+      title: "settings.conn.tor_on_title",
+      body: "settings.conn.tor_on_body",
+      action: "settings.conn.turn_on",
     },
     off: {
-      title: "Turn off Tor routing?",
-      body: "Nostr traffic goes back over your ordinary connection, so relays see your IP address again. Bluetooth is unaffected either way.",
-      action: "Turn off",
+      title: "settings.conn.tor_off_title",
+      body: "settings.conn.tor_off_body",
+      action: "settings.conn.turn_off",
     },
   },
   gateway: {
     on: {
-      title: "Turn on the internet gateway?",
-      body: "Nearby phones with no connection of their own will send and receive location-channel messages through yours. It uses your mobile data and battery, and their messages stay encrypted end to end, so you cannot read what passes through.",
-      action: "Turn on",
+      title: "settings.conn.gateway_on_title",
+      body: "settings.conn.gateway_on_body",
+      action: "settings.conn.turn_on",
     },
     off: {
-      title: "Turn off the internet gateway?",
-      body: "Nearby offline phones stop reaching the location channels through yours. Your own messages are unaffected.",
-      action: "Turn off",
+      title: "settings.conn.gateway_off_title",
+      body: "settings.conn.gateway_off_body",
+      action: "settings.conn.turn_off",
     },
   },
   bridge: {
     on: {
-      title: "Turn on the mesh bridge?",
-      body: "Your public #bluetooth messages will be published to your neighborhood over the internet, so people beyond Bluetooth range can read them. Private messages are never bridged, and 'nearby only' keeps any single message local.",
-      action: "Turn on",
+      title: "settings.conn.bridge_on_title",
+      body: "settings.conn.bridge_on_body",
+      action: "settings.conn.turn_on",
     },
     off: {
-      title: "Turn off the mesh bridge?",
-      body: "Your public #bluetooth messages stay in Bluetooth range again, and messages from the bridged crowd stop arriving here.",
-      action: "Turn off",
+      title: "settings.conn.bridge_off_title",
+      body: "settings.conn.bridge_off_body",
+      action: "settings.conn.turn_off",
     },
   },
 };
@@ -114,6 +118,7 @@ interface Pending {
 export default function ConnectivityGroup(): React.JSX.Element {
   const Colors = useThemeColors();
   const styles = useSharedStyles();
+  const T = useT();
   // The switch reflects the persisted preference (user intent), which
   // setTorRouting owns. torStarting only disables the switch while a toggle is
   // in flight, so it can't be double-tapped mid-operation.
@@ -196,14 +201,14 @@ export default function ConnectivityGroup(): React.JSX.Element {
           setShowOrbotModal(true);
         } else {
           showAlert(
-            "Tor",
+            T("settings.conn.tor_short"),
             result.reason === "orbot-inactive"
-              ? "Orbot is installed but not connected. Open Orbot, start its VPN, then turn this on."
+              ? T("settings.conn.tor_orbot_idle")
               : result.reason === "unavailable"
-                ? "Tor routing is not available in this build."
+                ? T("settings.conn.tor_unavailable")
                 : result.reason === "timeout"
-                  ? "Could not connect through Tor within 60 seconds. Check your network connection and try again."
-                  : "Could not start Tor. Ensure the app has network access.",
+                  ? T("settings.conn.tor_timeout")
+                  : T("settings.conn.tor_failed"),
           );
         }
       }
@@ -217,8 +222,16 @@ export default function ConnectivityGroup(): React.JSX.Element {
     useMeshStateStore.getState().setLocationGranted(granted);
   }
 
-  const copy =
+  const confirm =
     pending === null ? null : CONFIRM[pending.key][pending.next ? "on" : "off"];
+  const copy =
+    confirm === null
+      ? null
+      : {
+          title: T(confirm.title),
+          body: T(confirm.body),
+          action: T(confirm.action),
+        };
 
   return (
     <View style={styles.section}>
@@ -229,8 +242,8 @@ export default function ConnectivityGroup(): React.JSX.Element {
           <>
             <SettingRow
               icon="wifi-off"
-              label="Internet is off"
-              description="Tor, the gateway, and the bridge all use the internet. Turn on Internet fallback under Network to use them."
+              label={T("settings.conn.internet_off")}
+              description={T("settings.conn.internet_off_desc")}
             />
             <GroupDivider />
           </>
@@ -240,8 +253,8 @@ export default function ConnectivityGroup(): React.JSX.Element {
             everything below is greyed out. */}
         <SettingRow
           icon="mic"
-          label="Live voice"
-          description="Walkie-talkie over Bluetooth: hold the mic and people in range hear you as you speak."
+          label={T("settings.conn.live_voice")}
+          description={T("settings.conn.live_voice_desc")}
           control={
             <SettingSwitch
               value={liveVoiceEnabled}
@@ -252,10 +265,10 @@ export default function ConnectivityGroup(): React.JSX.Element {
         <GroupDivider />
         <SettingRow
           icon="globe"
-          label="Tor routing"
+          label={T("settings.conn.tor")}
           // Standard description regardless of on/off; the switch and the Mesh
           // banner communicate state.
-          description="Route Nostr traffic through Tor for extra privacy"
+          description={T("settings.conn.tor_desc")}
           control={
             <SettingSwitch
               value={torEnabled}
@@ -280,8 +293,8 @@ export default function ConnectivityGroup(): React.JSX.Element {
             <GroupDivider />
             <SettingRow
               icon="alert-triangle"
-              label="Allow mint traffic over clear net"
-              description="Tor on iOS only covers Nostr. Leave off to block mint requests; ecash over the mesh keeps working either way."
+              label={T("settings.conn.mint_clearnet")}
+              description={T("settings.conn.mint_clearnet_desc")}
               control={
                 <SettingSwitch
                   value={allowMintOverClearnet}
@@ -294,8 +307,8 @@ export default function ConnectivityGroup(): React.JSX.Element {
         <GroupDivider />
         <SettingRow
           icon="git-merge"
-          label="Mesh bridge"
-          description="Link this area's public #bluetooth chat with another out-of-range Bluetooth crowd over the internet."
+          label={T("settings.conn.bridge")}
+          description={T("settings.conn.bridge_desc")}
           control={
             <SettingSwitch
               value={bridgeEnabled}
@@ -313,14 +326,14 @@ export default function ConnectivityGroup(): React.JSX.Element {
             <GroupDivider />
             <SettingRow
               icon="alert-triangle"
-              label="Mesh bridge needs location"
-              description="It finds your neighborhood from a location fix. Grant location to start bridging."
+              label={T("settings.conn.bridge_needs_location")}
+              description={T("settings.conn.bridge_needs_location_desc")}
               control={
                 <Pressable
                   onPress={() => void grantLocation()}
                   hitSlop={HIT_SLOP}
                   accessibilityRole="button"
-                  accessibilityLabel="Grant location permission"
+                  accessibilityLabel={T("settings.conn.grant_location")}
                 >
                   <Text style={[styles.settingValue, { color: Colors.accent }]}>
                     Grant
@@ -341,8 +354,8 @@ export default function ConnectivityGroup(): React.JSX.Element {
             phone beside it, which is what cast draws. */}
         <SettingRow
           icon="cast"
-          label="Internet gateway"
-          description="Lend your connection to a nearby offline phone so it can still reach the location channels."
+          label={T("settings.conn.gateway")}
+          description={T("settings.conn.gateway_desc")}
           control={
             <SettingSwitch
               value={gatewayEnabled}
@@ -381,9 +394,9 @@ export default function ConnectivityGroup(): React.JSX.Element {
               style={styles.sheetBtn}
               onPress={() => setConfirmVisible(false)}
               accessibilityRole="button"
-              accessibilityLabel="Cancel"
+              accessibilityLabel={T("common.cancel")}
             >
-              <Text style={styles.sheetBtnText}>Cancel</Text>
+              <Text style={styles.sheetBtnText}>{T("common.cancel")}</Text>
             </Pressable>
           </View>
         </BottomSheet>
@@ -408,17 +421,19 @@ export default function ConnectivityGroup(): React.JSX.Element {
             style={styles.sheetBtnPrimary}
             onPress={handleGetOrbot}
             accessibilityRole="button"
-            accessibilityLabel="Get Orbot"
+            accessibilityLabel={T("settings.conn.get_orbot")}
           >
-            <Text style={styles.sheetBtnTextPrimary}>Get Orbot</Text>
+            <Text style={styles.sheetBtnTextPrimary}>
+              {T("settings.conn.get_orbot")}
+            </Text>
           </Pressable>
           <Pressable
             style={styles.sheetBtn}
             onPress={() => setShowOrbotModal(false)}
             accessibilityRole="button"
-            accessibilityLabel="Later"
+            accessibilityLabel={T("settings.conn.later")}
           >
-            <Text style={styles.sheetBtnText}>Later</Text>
+            <Text style={styles.sheetBtnText}>{T("settings.conn.later")}</Text>
           </Pressable>
         </View>
       </BottomSheet>
@@ -434,6 +449,6 @@ const localStyles = StyleSheet.create({
     alignItems: "stretch",
   },
   textLeft: {
-    textAlign: "left",
+    textAlign: "auto",
   },
 });

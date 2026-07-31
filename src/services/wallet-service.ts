@@ -68,6 +68,7 @@ import {
   recoveryPhraseToSeed,
   storePhrase,
 } from "../core/payments/wallet-seed";
+import { t } from "../i18n";
 import { useMeshStateStore } from "../store/mesh-state-store";
 import { useSettingsStore } from "../store/settings-store";
 import {
@@ -154,7 +155,11 @@ function asWalletError(err: unknown, fallback: WalletErrorCode): WalletError {
   const message = err instanceof Error ? err.message : String(err);
   // fetch failures in React Native surface as a bare "Network request failed".
   if (/network|fetch|timeout|abort/i.test(message)) {
-    return new WalletError("offline", "Could not reach the mint.", message);
+    return new WalletError(
+      "offline",
+      t("wallet.svc.mint_unreachable"),
+      message,
+    );
   }
   return new WalletError(fallback, message, String(err));
 }
@@ -181,8 +186,8 @@ function assertMintNetworkAllowed(): void {
   if (useSettingsStore.getState().allowMintOverClearnet) return;
   throw new WalletError(
     "tor-blocked",
-    "Mint requests do not go through Tor on iOS.",
-    "Arti only wraps Nostr WebSockets, so this request would reach the mint over the clear net and link your IP to these proofs. Allow it under Settings > Security, or turn Tor off first. Sending and receiving ecash over the mesh still works.",
+    t("wallet.svc.tor_ios"),
+    t("wallet.svc.tor_ios_body"),
   );
 }
 
@@ -334,8 +339,8 @@ async function getWallet(
     }
     throw new WalletError(
       "offline",
-      "This mint's keys are not cached on this device.",
-      "Open the wallet once while online to fetch them.",
+      t("wallet.svc.keys_uncached"),
+      t("wallet.svc.keys_uncached_body"),
     );
   }
 
@@ -572,15 +577,15 @@ export async function restoreFromRecoveryPhrase(params: {
   if (!isValidRecoveryPhrase(phrase)) {
     throw new WalletError(
       "invalid-token",
-      "That recovery phrase is not valid.",
-      "Check for a mistyped or missing word. The phrase has a built-in checksum, so a single wrong word makes the whole thing invalid.",
+      t("wallet.svc.phrase_invalid"),
+      t("wallet.svc.phrase_invalid_body"),
     );
   }
   if (params.mintUrls.length === 0) {
     throw new WalletError(
       "no-mint",
-      "Add at least one mint first.",
-      "Recovery works by asking a mint which coins it signed for you, so it needs to know which mint to ask.",
+      t("wallet.svc.need_mint"),
+      t("wallet.svc.need_mint_body"),
     );
   }
 
@@ -667,7 +672,7 @@ export async function restoreFromRecoveryPhrase(params: {
       amount: recovered[unit] ?? 0,
       unit,
       mintUrl: mintsScanned[0] ?? params.mintUrls[0],
-      memo: "Restored from recovery phrase",
+      memo: t("wallet.svc.restored"),
     });
   }
 
@@ -678,8 +683,8 @@ function assertUnlocked(): void {
   if (!isWalletStorageReady()) {
     throw new WalletError(
       "locked",
-      "Wallet storage is locked.",
-      "Airhop keeps ecash proofs in an encrypted file whose key lives in the device keychain. Unlock the device and reopen the app.",
+      t("wallet.svc.storage_locked"),
+      t("wallet.svc.storage_locked_body"),
     );
   }
 }
@@ -701,10 +706,10 @@ export async function addMint(rawUrl: string): Promise<AddMintResult> {
   try {
     parsed = new URL(url);
   } catch {
-    throw new WalletError("no-mint", "That is not a valid URL.");
+    throw new WalletError("no-mint", t("wallet.svc.bad_url"));
   }
   if (parsed.protocol !== "https:" && parsed.protocol !== "http:") {
-    throw new WalletError("no-mint", "A mint URL must start with https://.");
+    throw new WalletError("no-mint", t("wallet.svc.needs_https"));
   }
   // http is allowed only for loopback (running Nutshell locally). Anywhere else
   // it would send proofs over an unauthenticated channel.
@@ -715,8 +720,8 @@ export async function addMint(rawUrl: string): Promise<AddMintResult> {
   if (parsed.protocol === "http:" && !isLoopback) {
     throw new WalletError(
       "no-mint",
-      "Refusing to use a mint over plain http.",
-      "Anyone on the network path could read or alter your proofs. Use an https:// mint.",
+      t("wallet.svc.refuse_http"),
+      t("wallet.svc.refuse_http_body"),
     );
   }
 
@@ -732,7 +737,7 @@ export async function addMint(rawUrl: string): Promise<AddMintResult> {
   wallets.set(accountKey(url, "sat"), wallet);
 
   const record = storedMint(url);
-  if (!record) throw new WalletError("no-mint", "Mint could not be saved.");
+  if (!record) throw new WalletError("no-mint", t("wallet.svc.mint_not_saved"));
   return { mint: record, units: record.units ?? ["sat"] };
 }
 
@@ -771,8 +776,8 @@ export async function receiveToken(
   if (!info) {
     throw new WalletError(
       "invalid-token",
-      "That is not a readable Cashu token.",
-      "Tokens start with cashuA or cashuB. Check nothing was cut off when it was copied.",
+      t("wallet.svc.unreadable_token"),
+      t("wallet.svc.unreadable_token_body"),
     );
   }
 
@@ -790,7 +795,7 @@ export async function receiveToken(
   if (dleq.status === "invalid") {
     throw new WalletError(
       "forged-token",
-      "This token was not signed by the mint it names.",
+      t("wallet.svc.wrong_mint"),
       dleq.reason,
     );
   }
@@ -883,8 +888,8 @@ export async function receiveToken(
       ) {
         throw new WalletError(
           "already-spent",
-          "These proofs have already been spent.",
-          "Whoever sent this token redeemed it first, or sent the same token to someone else.",
+          t("wallet.svc.already_spent"),
+          t("wallet.svc.already_spent_body"),
         );
       }
       if (walletErr.code !== "offline" && walletErr.code !== "tor-blocked") {
@@ -904,7 +909,7 @@ export async function receiveToken(
   return storeOffline(
     url,
     info,
-    "receiving offline",
+    t("wallet.svc.receiving_offline"),
     dleqLabel,
     opts.counterparty,
   );
@@ -1032,7 +1037,7 @@ export async function quoteSend(params: {
   const unit = params.unit ?? "sat";
   const amount = Math.floor(params.amount);
   if (!Number.isFinite(amount) || amount <= 0) {
-    throw new WalletError("insufficient", "Enter an amount greater than zero.");
+    throw new WalletError("insufficient", t("wallet.svc.amount_positive"));
   }
 
   const account = pickAccount(amount, unit, params.mintUrl);
@@ -1147,8 +1152,8 @@ export async function prepareSend(params: {
   if (!store.reserveProofs(txId, quote.mintUrl, quote.unit, quote.proofs)) {
     throw new WalletError(
       "insufficient",
-      "Those coins were just used by another payment.",
-      "Nothing was deducted. Try again and the wallet will pick a different set.",
+      t("wallet.svc.coins_raced"),
+      t("wallet.svc.coins_raced_body"),
     );
   }
   store.addTx({
@@ -1219,8 +1224,8 @@ function pickAccount(
   if (candidates.length === 0) {
     throw new WalletError(
       "no-mint",
-      "No ecash yet.",
-      "Add a mint and deposit over Lightning, or receive a token from someone.",
+      t("wallet.svc.no_ecash"),
+      t("wallet.svc.no_ecash_body"),
     );
   }
 
@@ -1243,7 +1248,7 @@ function pickAccount(
   if (total >= amount) {
     throw new WalletError(
       "insufficient",
-      "Your balance is split across mints.",
+      t("wallet.svc.split_across_mints"),
       `No single mint holds ${String(amount)} ${unit}. Ecash from different mints cannot be combined into one token: consolidate at one mint first, or send in separate amounts.`,
     );
   }
@@ -1341,7 +1346,7 @@ export async function refreshAccount(
       amount: spent.reduce((s, p) => s + p.amount, 0),
       unit,
       mintUrl: url,
-      error: "Mint reported these proofs as already spent.",
+      error: t("wallet.svc.mint_says_spent"),
     });
   }
 
@@ -1510,11 +1515,11 @@ export async function createLightningDeposit(params: {
   const url = normalizeMintUrl(params.mintUrl);
   const amount = Math.floor(params.amount);
   if (!Number.isFinite(amount) || amount <= 0) {
-    throw new WalletError("insufficient", "Enter an amount greater than zero.");
+    throw new WalletError("insufficient", t("wallet.svc.amount_positive"));
   }
 
   const wallet = await getWallet(url, unit);
-  requireNut(url, 4, "issue ecash against a Lightning invoice");
+  requireNut(url, 4, t("wallet.svc.issue_against_invoice"));
 
   let quote: MintQuoteBolt11Response;
   try {
@@ -1566,7 +1571,7 @@ export async function claimLightningDeposit(
   const tx = store.history.find(
     (t) => t.quoteId === quoteId && t.kind === "mint",
   );
-  if (!tx) throw new WalletError("mint-error", "Unknown deposit.");
+  if (!tx) throw new WalletError("mint-error", t("wallet.svc.unknown_deposit"));
 
   const wallet = await getWallet(url, unit);
   let quote: MintQuoteBolt11Response;
@@ -1589,11 +1594,11 @@ export async function claimLightningDeposit(
     if (expired) {
       store.updateTx(tx.id, {
         status: "expired",
-        error: "The invoice expired before it was paid.",
+        error: t("wallet.svc.invoice_expired_before"),
       });
-      throw new WalletError("mint-error", "That invoice expired.");
+      throw new WalletError("mint-error", t("wallet.svc.invoice_expired"));
     }
-    throw new WalletError("offline", "The invoice has not been paid yet.");
+    throw new WalletError("offline", t("wallet.svc.invoice_unpaid"));
   }
 
   let proofs: Proof[];
@@ -1635,7 +1640,7 @@ async function recoverMeltChange(tx: WalletTx): Promise<void> {
     store.releaseReserved(tx.id);
     store.updateTx(tx.id, {
       status: "failed",
-      error: "The mint did not pay this invoice. Your balance is unchanged.",
+      error: t("wallet.svc.mint_did_not_pay"),
       meltOutputs: undefined,
     });
     return;
@@ -1706,13 +1711,13 @@ export async function quoteLightningWithdrawal(params: {
   if (!/^ln(bc|tb|bcrt)[0-9a-z]+$/i.test(invoice)) {
     throw new WalletError(
       "invalid-token",
-      "That is not a Lightning invoice.",
-      "Paste a bolt11 invoice starting with lnbc.",
+      t("wallet.svc.not_an_invoice"),
+      t("wallet.svc.not_an_invoice_body"),
     );
   }
 
   const wallet = await getWallet(url, unit);
-  requireNut(url, 5, "pay a Lightning invoice");
+  requireNut(url, 5, t("wallet.svc.pay_invoice"));
 
   let quote: MeltQuoteBolt11Response;
   try {
@@ -1776,7 +1781,7 @@ export async function payLightningInvoice(quote: MeltQuote): Promise<{
   if (!selection) {
     throw new WalletError(
       "insufficient",
-      "Not enough balance for this invoice.",
+      t("wallet.svc.insufficient_for_invoice"),
     );
   }
 
@@ -1786,8 +1791,8 @@ export async function payLightningInvoice(quote: MeltQuote): Promise<{
   ) {
     throw new WalletError(
       "insufficient",
-      "Those coins were just used by another payment.",
-      "Nothing was deducted and the invoice was not paid. Try again.",
+      t("wallet.svc.coins_raced"),
+      t("wallet.svc.coins_raced_invoice_body"),
     );
   }
   store.addTx({
@@ -1921,13 +1926,13 @@ export async function consolidateMints(params: {
   if (from === to) {
     throw new WalletError(
       "no-mint",
-      "Pick a different destination mint.",
-      "The source and destination are the same mint, so there is nothing to move.",
+      t("wallet.svc.same_mint"),
+      t("wallet.svc.same_mint_body"),
     );
   }
 
-  requireNut(from, 5, "pay a Lightning invoice");
-  requireNut(to, 4, "issue ecash against a Lightning invoice");
+  requireNut(from, 5, t("wallet.svc.pay_invoice"));
+  requireNut(to, 4, t("wallet.svc.issue_against_invoice"));
 
   const store = useWalletStore.getState();
   const available = store.proofs[accountKey(from, unit)] ?? [];
@@ -1968,7 +1973,7 @@ export async function consolidateMints(params: {
     } catch (err) {
       // The invoice we just asked for cannot be paid from this mint at this
       // size. Abandon it so it does not linger in history as a live deposit.
-      abandonDeposit(deposit.txId, "Quote failed, consolidation retried");
+      abandonDeposit(deposit.txId, t("wallet.svc.quote_failed_retried"));
       const walletErr = asWalletError(err, "mint-error");
       if (walletErr.code !== "insufficient") throw walletErr;
       target = Math.floor(target * 0.95);
@@ -1982,7 +1987,7 @@ export async function consolidateMints(params: {
       storedMint(from)?.feePpkByKeysetId,
     );
     if (quote.total + inputFee > sourceBalance) {
-      abandonDeposit(deposit.txId, "Amount did not fit, consolidation retried");
+      abandonDeposit(deposit.txId, t("wallet.svc.amount_unfit_retried"));
       const overshoot = quote.total + inputFee - sourceBalance;
       target -= overshoot;
       continue;
@@ -2004,7 +2009,7 @@ export async function consolidateMints(params: {
 
   throw new WalletError(
     "insufficient",
-    "Could not size this transfer.",
+    t("wallet.svc.cannot_size"),
     `After Lightning routing fees, ${hostOf(from)} cannot move a useful amount to ${hostOf(to)}. Try moving a specific smaller amount instead.`,
   );
 }
@@ -2103,8 +2108,8 @@ async function redeemNutzapProofs(params: {
   if (useWalletStore.getState().mints[url] === undefined) {
     throw new WalletError(
       "untrusted-mint",
-      "That payment names a mint you do not use.",
-      "Add the mint yourself first if you trust it; nothing is redeemed from a mint you have not chosen.",
+      t("wallet.svc.unknown_mint"),
+      t("wallet.svc.unknown_mint_body"),
     );
   }
 
@@ -2234,7 +2239,7 @@ export async function sendNutzap(params: {
   // No relays, or Tor is blocking mint calls: nothing can be published, so go
   // straight to a manual token, which needs neither.
   if (!params.client || !params.senderPrivKey) {
-    return sendAsManualToken(params, unit, "no relay connection");
+    return sendAsManualToken(params, unit, t("wallet.svc.no_relay"));
   }
 
   let info: NutzapInfo | null = null;
@@ -2298,8 +2303,8 @@ export async function sendNutzap(params: {
   }
 
   const reason = info
-    ? "no shared mint with enough balance"
-    : "recipient has not published nutzap info (NIP-61 kind 10019)";
+    ? t("wallet.svc.no_shared_mint")
+    : t("wallet.svc.no_nutzap_info");
 
   // Second tier: an ordinary offline token, delivered inside an encrypted DM.
   // Reserved, not spent, so a publish failure is recoverable.
@@ -2400,23 +2405,20 @@ async function deliverLockedNutzap(params: {
     return {
       method: "dm",
       ...base,
-      fallbackReason:
-        "the nutzap relay publish failed, so the locked token went as an encrypted message instead",
+      fallbackReason: t("wallet.svc.relay_publish_failed"),
     };
   } catch {
     // Nothing reached the network at all.
   }
 
   store.updateTx(params.txId, {
-    error:
-      "Locked to their key but not yet delivered. Share the token from this transaction to complete it.",
+    error: t("wallet.svc.locked_undelivered"),
   });
   return {
     method: "token",
     ...base,
     token,
-    fallbackReason:
-      "the payment is already locked to their key, but nothing could be published. Share the token to finish delivering it",
+    fallbackReason: t("wallet.svc.locked_unpublished"),
   };
 }
 

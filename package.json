@@ -30,6 +30,7 @@
     "prebuild": "expo prebuild",
     "test": "jest --watchAll",
     "coverage": "jest --passWithNoTests --coverage",
+    "i18n:audit": "node scripts/i18n-audit.js",
     "format": "prettier --write \"**/*.{ts,tsx,js,json,md}\"",
     "format:check": "prettier --check \"**/*.{ts,tsx,js,json,md}\"",
     "lint": "eslint .",
@@ -93,13 +94,6 @@
     "prettier": "^3.9.6",
     "prettier-plugin-organize-imports": "^4.3.0",
     "typescript": "~6.0.3"
-  },
-  "allowScripts": {
-    "expo-audio": true,
-    "react-native-get-random-values": true,
-    "react-native-nitro-modules": true,
-    "react-native-reanimated": true,
-    "react-native-worklets": true
   },
   "jest": {
     "preset": "jest-expo",

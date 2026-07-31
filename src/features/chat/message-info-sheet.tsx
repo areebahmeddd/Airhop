@@ -7,6 +7,7 @@
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import React, { useMemo } from "react";
 import { StyleSheet, Text, View } from "react-native";
+import { useT } from "../../i18n";
 import type { ChatMessage } from "../../store/chat-store";
 import BottomSheet from "../../ui/components/bottom-sheet";
 import {
@@ -28,6 +29,7 @@ export default function MessageInfoSheet({
   message,
   onClose,
 }: Props): React.JSX.Element {
+  const T = useT();
   const Colors = useThemeColors();
   const styles = useMemo(() => createStyles(Colors), [Colors]);
 
@@ -43,7 +45,7 @@ export default function MessageInfoSheet({
       onClose={onClose}
       sheetStyle={styles.sheet}
     >
-      <Text style={styles.title}>Message info</Text>
+      <Text style={styles.title}>{T("chat.info.title")}</Text>
 
       {message && (
         <>
@@ -59,7 +61,7 @@ export default function MessageInfoSheet({
                 styles={styles}
                 icon="clock-outline"
                 color={Colors.textMuted}
-                label="Sending…"
+                label={T("chat.info.sending")}
               />
             )}
             {status === "failed" && (
@@ -67,7 +69,7 @@ export default function MessageInfoSheet({
                 styles={styles}
                 icon="alert-circle-outline"
                 color={Colors.danger}
-                label="Failed to send"
+                label={T("chat.info.failed")}
               />
             )}
             {status === "carried" && (
@@ -75,9 +77,9 @@ export default function MessageInfoSheet({
                 styles={styles}
                 icon="account-arrow-right"
                 color={Colors.textSecondary}
-                label="Carried by a friend"
+                label={T("chat.info.courier")}
                 time={formatDateTime(message.timestampMs)}
-                sub="Handed to the mesh for best-effort delivery"
+                sub={T("chat.info.courier_desc")}
               />
             )}
             {/* Queued has not left the device, so it gets its own line rather
@@ -89,8 +91,8 @@ export default function MessageInfoSheet({
                 styles={styles}
                 icon="timer-sand"
                 color={Colors.textSecondary}
-                label="Waiting to send"
-                sub="Held on this phone until there is a route to them"
+                label={T("chat.info.queued")}
+                sub={T("chat.info.queued_desc")}
               />
             )}
 
@@ -104,7 +106,7 @@ export default function MessageInfoSheet({
                     styles={styles}
                     icon="check"
                     color={Colors.textSecondary}
-                    label="Sent"
+                    label={T("chat.info.sent")}
                     time={formatDateTime(message.timestampMs)}
                   />
                   {isDM && (
@@ -169,6 +171,7 @@ function InfoLine({
   sub?: string;
   pending?: boolean;
 }): React.JSX.Element {
+  const T = useT();
   return (
     <View style={styles.line}>
       <MaterialCommunityIcons name={icon} size={18} color={color} />
@@ -176,7 +179,9 @@ function InfoLine({
         <Text style={styles.lineLabel}>{label}</Text>
         {sub && <Text style={styles.lineSub}>{sub}</Text>}
       </View>
-      <Text style={styles.lineTime}>{time ?? (pending ? "Waiting…" : "")}</Text>
+      <Text style={styles.lineTime}>
+        {time ?? (pending ? T("chat.info.waiting") : "")}
+      </Text>
     </View>
   );
 }

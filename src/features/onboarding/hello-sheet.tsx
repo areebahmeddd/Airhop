@@ -9,11 +9,14 @@
 import React, { useMemo } from "react";
 import { Linking, Platform, StyleSheet, Text, View } from "react-native";
 import { APP_STORE_URL, GITHUB_URL, PLAY_STORE_URL } from "../../data/app-info";
+import { useT } from "../../i18n";
+import { useRichText } from "../../i18n/rich-text";
 import BottomSheet from "../../ui/components/bottom-sheet";
 import PrimaryButton from "../../ui/components/primary-button";
 import { FontSize, FontWeight, Spacing, useThemeColors } from "../../ui/theme";
 
-const EMAIL_URL = "mailto:hi@areeb.dev";
+const EMAIL_ADDRESS = "hi@areeb.dev";
+const EMAIL_URL = `mailto:${EMAIL_ADDRESS}`;
 
 // Point at the one store the user can actually review on, rather than naming
 // both and making them work out which is theirs.
@@ -30,63 +33,62 @@ export default function HelloSheet({
   onClose,
 }: Props): React.JSX.Element {
   const Colors = useThemeColors();
+  const T = useT();
   const styles = useMemo(() => createStyles(Colors), [Colors]);
+
+  // Built once and shared by both paragraphs that mention GitHub, so the two
+  // links can never drift apart.
+  const links = useMemo(
+    () => ({
+      github: (
+        <Text
+          style={styles.link}
+          onPress={() => void Linking.openURL(GITHUB_URL)}
+          suppressHighlighting
+        >
+          GitHub
+        </Text>
+      ),
+      email: (
+        <Text
+          style={styles.link}
+          onPress={() => void Linking.openURL(EMAIL_URL)}
+          suppressHighlighting
+        >
+          {EMAIL_ADDRESS}
+        </Text>
+      ),
+      store: (
+        <Text
+          style={styles.link}
+          onPress={() => void Linking.openURL(STORE_URL)}
+          suppressHighlighting
+        >
+          {STORE_NAME}
+        </Text>
+      ),
+    }),
+    [styles.link],
+  );
+
+  const p2 = useRichText("onboarding.hello.p2", links);
+  const p3 = useRichText("onboarding.hello.p3", links);
+
   return (
     <BottomSheet visible={visible} onClose={onClose} sheetStyle={styles.sheet}>
-      <Text style={styles.title}>Welcome to Airhop</Text>
+      <Text style={styles.title}>{T("onboarding.hello.title")}</Text>
 
       <View style={styles.body}>
-        <Text style={styles.paragraph}>
-          Hey there. Airhop is built on top of bitchat as an independent, open
-          source side project. It&apos;s not affiliated with or endorsed by the
-          bitchat project or permissionless tech, just something I enjoy
-          building and sharing with the community.
-        </Text>
-        <Text style={styles.paragraph}>
-          This is the first iOS and Android release, so while I&apos;ve tested
-          it with friends, you&apos;ll probably run into a few bugs. If you do,
-          or if you have an idea for a feature, I&apos;d love to hear from you.
-          Open an issue on{" "}
-          <Text
-            style={styles.link}
-            onPress={() => void Linking.openURL(GITHUB_URL)}
-            suppressHighlighting
-          >
-            GitHub
-          </Text>{" "}
-          or send me an email at{" "}
-          <Text
-            style={styles.link}
-            onPress={() => void Linking.openURL(EMAIL_URL)}
-            suppressHighlighting
-          >
-            hi@areeb.dev
-          </Text>
-          .
-        </Text>
-        <Text style={styles.paragraph}>
-          If Airhop is useful to you, consider leaving a star on{" "}
-          <Text
-            style={styles.link}
-            onPress={() => void Linking.openURL(GITHUB_URL)}
-            suppressHighlighting
-          >
-            GitHub
-          </Text>{" "}
-          or a review on the{" "}
-          <Text
-            style={styles.link}
-            onPress={() => void Linking.openURL(STORE_URL)}
-            suppressHighlighting
-          >
-            {STORE_NAME}
-          </Text>
-          . It helps more people discover the project. Thanks for giving it a
-          try!
-        </Text>
+        <Text style={styles.paragraph}>{T("onboarding.hello.p1")}</Text>
+        <Text style={styles.paragraph}>{p2}</Text>
+        <Text style={styles.paragraph}>{p3}</Text>
       </View>
 
-      <PrimaryButton label="OK" onPress={onClose} accessibilityLabel="OK" />
+      <PrimaryButton
+        label={T("common.ok")}
+        onPress={onClose}
+        accessibilityLabel={T("common.ok")}
+      />
     </BottomSheet>
   );
 }

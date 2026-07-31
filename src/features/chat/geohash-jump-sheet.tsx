@@ -15,6 +15,7 @@ import {
   TextInput,
   View,
 } from "react-native";
+import { t, useT } from "../../i18n";
 import {
   geohashLevelName,
   isValidGeohash,
@@ -54,6 +55,7 @@ export function GeohashJumpSheet({
   onBack,
   onJoined,
 }: Props) {
+  const T = useT();
   const Colors = useThemeColors();
   const styles = useMemo(() => createStyles(Colors), [Colors]);
 
@@ -143,7 +145,7 @@ export function GeohashJumpSheet({
     }
     const channel = getMeshService()?.joinGeohash(input);
     if (channel === undefined) {
-      setError("Could not open that cell. Try again in a moment.");
+      setError(t("chat.jump.failed"));
       return;
     }
     reset();
@@ -167,7 +169,7 @@ export function GeohashJumpSheet({
       sheetStyle={styles.sheet}
       scrollable
     >
-      <Text style={styles.title}>Go to a place</Text>
+      <Text style={styles.title}>{T("chat.jump.title")}</Text>
       {/* Same scannable card as the other create sheets, so all three
               chooser destinations read alike. */}
       <View style={styles.privacyNote}>
@@ -267,7 +269,7 @@ export function GeohashJumpSheet({
 
       {bookmarks.length > 0 && (
         <View style={styles.saved}>
-          <Text style={styles.savedLabel}>SAVED PLACES</Text>
+          <Text style={styles.savedLabel}>{T("chat.jump.saved")}</Text>
           <ScrollView
             style={styles.savedList}
             showsVerticalScrollIndicator={false}
@@ -315,15 +317,11 @@ export function GeohashJumpSheet({
           a copy button, so the answer is one tap away inside the app rather
           than something to look up elsewhere. Written as ">"-separated steps:
           it is a route to follow, not a sentence to parse. */}
-      <Text style={styles.footNote}>
-        {
-          "To find a geohash: open a location channel > tap its name > copy it from there."
-        }
-      </Text>
+      <Text style={styles.footNote}>{T("chat.jump.how")}</Text>
 
       <View style={styles.actions}>
         <Pressable style={styles.cancel} onPress={handleBack}>
-          <Text style={styles.cancelText}>Back</Text>
+          <Text style={styles.cancelText}>{t("common.back")}</Text>
         </Pressable>
         <Pressable
           style={[styles.confirm, !valid && styles.confirmDisabled]}
@@ -384,7 +382,7 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       fontSize: FontSize.base,
       color: Colors.textMuted,
       fontFamily: FontFamily.mono,
-      marginRight: Spacing.xs,
+      marginEnd: Spacing.xs,
     },
     input: {
       flex: 1,

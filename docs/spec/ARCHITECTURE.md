@@ -8,55 +8,22 @@
 
 ## Table of Contents
 
-1. [Project Folder Structure](#1-project-folder-structure)
-2. [Core Feature Matrix](#2-core-feature-matrix)
-3. [Identity: No Accounts, Ever](#3-identity--no-accounts-ever)
-4. [Adaptive Transport Stack](#4-adaptive-transport-stack)
+1. [Core Feature Matrix](#1-core-feature-matrix)
+2. [Identity: No Accounts, Ever](#2-identity-no-accounts-ever)
+3. [Adaptive Transport Stack](#3-adaptive-transport-stack)
+4. [Messaging Protocol](#4-messaging-protocol)
 5. [Encryption Architecture](#5-encryption-architecture)
-6. [Messaging Protocol](#6-messaging-protocol)
-7. [Groups & Channels](#7-groups--channels)
-8. [Payments: Offline-First Ecash](#8-payments--offline-first-ecash)
+6. [Groups & Channels](#6-groups--channels)
+7. [Payments: Offline-First Ecash](#7-payments-offline-first-ecash)
+8. [Localization](#8-localization)
 9. [Privacy & Tor Integration](#9-privacy--tor-integration)
 10. [Security Threat Model](#10-security-threat-model)
-11. [Native Module Architecture](#11-native-module-architecture)
-12. [Protocol Decision Log](#12-protocol-decision-log)
-13. [Dependency Manifest](#13-dependency-manifest)
+11. [Project Folder Structure](#11-project-folder-structure)
+12. [Native Module Architecture](#12-native-module-architecture)
+13. [Protocol Decision Log](#13-protocol-decision-log)
+14. [Dependency Manifest](#14-dependency-manifest)
 
-## 1. Project Folder Structure
-
-### The guiding rule: if it compiles to JS, it lives in `src/`. If it touches hardware, it lives in `android/` or `ios/`
-
-Directories, not files, since the file list moves every release:
-
-| Path            | Holds                                                                         |
-| --------------- | ----------------------------------------------------------------------------- |
-| `android/`      | Kotlin BLE module and the foreground service that keeps the mesh alive        |
-| `ios/`          | Swift BLE module built on CoreBluetooth                                       |
-| `src/bridge/`   | TurboModule specs. The only place native and TypeScript meet                  |
-| `src/core/`     | The whole protocol in pure TypeScript: crypto, mesh, nostr, payments, routing |
-| `src/services/` | Long-lived runtime wiring, chiefly the mesh service that owns the radios      |
-| `src/features/` | Screens and screen-level logic                                                |
-| `src/store/`    | Zustand state with MMKV persistence                                           |
-| `src/ui/`       | Shared components and theme tokens                                            |
-| `src/utils/`    | Stateless helpers                                                             |
-| `assets/data/`  | Bundled relay list, refreshed by CI                                           |
-
-`src/core/` has no native dependencies, so the entire protocol is testable in CI
-without a phone. That is why the test suite can cover the wire format, the
-handshakes and the routing while the radios stay unproven until a field test.
-
-### Will native code cause problems building or shipping?
-
-**No. This is exactly how every production React Native app with native modules ships.**
-
-- `android/` is compiled by Gradle into a `.aab` (Play Store). Xcode is not involved.
-- `ios/` is compiled by Xcode into an `.ipa` (App Store Connect). Gradle is not involved.
-- EAS Build (Expo's CI) runs both builds in parallel on cloud VMs
-- Google Play and Apple App Store treat the result as a fully native app. They don't know or care that TypeScript orchestrates the native layers
-
-**Consistency guarantee for ALL features on BOTH platforms:** Every feature lives in `src/core/` TypeScript. The ~2,400 lines of native BLE code expose an _identical_ TypeScript interface on both platforms. A bug fix in gossip sync fixes both iOS and Android at once. Protocol upgrades ship simultaneously. No drift.
-
-## 2. Core Feature Matrix
+## 1. Core Feature Matrix
 
 | Feature                   | Offline (BLE)            | Online (Nostr)      | Notes                                                                                                                                          |
 | ------------------------- | ------------------------ | ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -89,7 +56,7 @@ Optional, shipped but switchable:
 | AT Protocol     | Yes            | Opt-in bridge to Bluesky using the Airhop identity  |
 | ActivityPub     | Yes            | Opt-in bridge to Mastodon using the Airhop identity |
 
-## 3. Identity: No Accounts, Ever
+## 2. Identity: No Accounts, Ever
 
 Airhop identity is a **cryptographic key pair generated locally, stored in OS Keychain, never transmitted to any server.**
 
@@ -155,7 +122,7 @@ The panic wipe deletes this partition with `deleteMMKV` rather than `clearAll`,
 since the file cannot be reliably reopened without its key, and the key itself
 is destroyed by the same wipe that clears the Keychain.
 
-## 4. Adaptive Transport Stack
+## 3. Adaptive Transport Stack
 
 Airhop routes messages through the best available transport **automatically, without user involvement.** The user sees one interface regardless of which radio is carrying their message.
 
@@ -275,6 +242,20 @@ waiting on is not worth a banner.
 > `batteryPercent: -1` there, which the policy reads as "unknown" and leaves the
 > mode alone.
 
+## 4. Messaging Protocol
+
+### Wire format (bitchat v2, binary)
+
+Airhop is **100% wire-compatible with bitchat**. Airhop nodes appear as normal peers to bitchat devices on the mesh. Unknown packet types (Airhop extensions) are silently dropped by bitchat. No disruption.
+
+> **See [`docs/spec/PROTOCOLS.md`](../spec/PROTOCOLS.md) for the complete byte layout (section 2), packet type registry (section 3), routing constants (section 4), and all other protocol constants.**
+
+### Routing logic
+
+Public channel messages: **TTL flood**, every peer re-broadcasts with TTL decremented  
+Direct messages: **flood with recipientID**, only recipient decrypts; others relay until TTL=0  
+Courier envelopes: **spray-and-wait**, trusted peers carry sealed blobs for offline recipients
+
 ## 5. Encryption Architecture
 
 ### Session Encryption: Noise XX
@@ -324,21 +305,7 @@ Courier envelope:     Noise X (one-way seal to recipient's static key) wrapping 
 Nostr DM:             NIP-44 encryption (XChaCha20-Poly1305, versioned) + NIP-17 gift-wrap
 ```
 
-## 6. Messaging Protocol
-
-### Wire format (bitchat v2, binary)
-
-Airhop is **100% wire-compatible with bitchat**. Airhop nodes appear as normal peers to bitchat devices on the mesh. Unknown packet types (Airhop extensions) are silently dropped by bitchat. No disruption.
-
-> **See [`docs/spec/PROTOCOLS.md`](../spec/PROTOCOLS.md) for the complete byte layout (section 2), packet type registry (section 3), routing constants (section 4), and all other protocol constants.**
-
-### Routing logic
-
-Public channel messages: **TTL flood**, every peer re-broadcasts with TTL decremented  
-Direct messages: **flood with recipientID**, only recipient decrypts; others relay until TTL=0  
-Courier envelopes: **spray-and-wait**, trusted peers carry sealed blobs for offline recipients
-
-## 7. Groups & Channels
+## 6. Groups & Channels
 
 ### Mesh Channels (offline-first)
 
@@ -398,7 +365,7 @@ its geohash rather than by being there, nobody in Bluetooth range is in it, so
 it runs over Nostr only. Its messages carry a `t=teleport` tag, so bitchat lists
 the sender as teleported rather than nearby.
 
-## 8. Payments: Offline-First Ecash
+## 7. Payments: Offline-First Ecash
 
 > bitchat already includes `CashuTokenDecoderTests.swift`; this validates Cashu as the right choice. We are not inventing; we are completing what bitchat started.
 
@@ -519,6 +486,84 @@ Two limits are worth stating explicitly, because wallets often blur them:
 library owns proof selection (RGLI), fee arithmetic, blinding, and the mint HTTP
 surface; `src/services/wallet-service.ts` owns everything above it.
 
+## 8. Localization
+
+Airhop ships in English. Every user-facing string in the app is in one catalog,
+`src/i18n/locales/en.ts`, and a second language is a second file. Working
+reference: [`.github/skills/localization.md`](../../.github/skills/localization.md).
+
+### Why it is a protocol concern and not a polish concern
+
+The mission statement scopes this app to blackouts, protests and disasters. The
+languages that matters in are Persian, Arabic, Urdu, Bengali, Hindi, Tamil,
+Indonesian, Filipino, Nepali, Ukrainian and Russian. An English-only UI in a
+network shutdown in Tehran or Dhaka is a product that does not work for the
+person it was built for, and every other feature in this document is downstream
+of someone being able to read the join button.
+
+That is the target. Ten languages land in v1.3.0 (see
+[ROADMAP.md](../design/ROADMAP.md)). The work in this release is the part that
+touches screens, so that one touches none.
+
+### Scope
+
+| In this release                                                  | In v1.3.0                                                 |
+| ---------------------------------------------------------------- | --------------------------------------------------------- |
+| Every user-facing string in one catalog, 1,035 keys              | Nine more catalogs                                        |
+| Zero hardcoded strings, enforced in CI (`i18n:audit -- --max 0`) | Locale store and in-app picker                            |
+| Plurals through `tPlural`, never concatenation                   | CLDR plural rules beyond English's one/other              |
+| Stylesheets on logical properties, so RTL is a catalog away      | Device language negotiation                               |
+| Formatting centralised in `src/utils/format.ts`                  | Translated OS permission dialogs and service notification |
+
+A language reaches a user by being listed in `src/i18n/languages.ts`, and it can
+be listed only once its catalog compiles, which requires every key. There is no
+coverage threshold and no partial state to manage.
+
+### Decisions
+
+| Decision                                                   | Rationale                                                                                                                                                                                                                                                                                                 |
+| ---------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Bundled catalogs, never fetched                            | A translation download is a network call and a fingerprint. It would also fail in exactly the conditions this app exists for. Every locale is compiled into the bundle, so the text is byte-identical on every device running a given build                                                               |
+| No i18n library                                            | i18next and react-intl bring namespaces, lazy network backends and untyped runtime keys. None is usable by an offline-first app with a bundled catalog, and the codebase already hand-rolls its sheet, alert, toast and theme layers                                                                      |
+| Completeness enforced by `tsc`, not by a test              | Every locale is `Record<TranslationKey, string>` derived from `en.ts`, so a partial locale does not compile. bitchat needs `LocalizationCoverageTests.swift` because `.xcstrings` permits partial locales; here one cannot be constructed                                                                 |
+| The runtime carries what the shipped catalog needs         | One language needs no locale store, plural polyfill, device negotiation or picker. Each arrives with the language that requires it, listed in the skill file so the set is known rather than rediscovered                                                                                                 |
+| Strings the OS renders stay where the OS reads them        | iOS permission dialogs live in `app.json`, the Android service notification in Kotlin. Routing them through the catalog costs a generated per-locale bundle or a bridge call, and both arrive with the second language                                                                                    |
+| Prose numerals follow the locale, machine data stays Latin | A byte count, a clock time and a wallet balance sit in the monospace face next to Latin units. Numbers inside a translated sentence get no override                                                                                                                                                       |
+| Keys named after bitchat's                                 | bitchat is public domain, ships 30 languages, and its catalog is vendored here. A key that matches theirs is a translation that can be lifted rather than commissioned. This is the single biggest lever on the cost of the whole effort                                                                  |
+| Counts go through `tPlural`, never concatenation           | `"item" + "s"` is untranslatable: no language outside English pluralises by appending to the stem, Russian needs four forms and Arabic six. Eight of these were found and fixed during extraction. The English one/other rule lives in the runtime, in one place, and is where CLDR selection replaces it |
+| Translation never happens at module load                   | A module constant holding `t("key")` type-checks, renders correctly, and freezes in whichever language the app started in. Constants hold `TranslationKey`s and the component translates on render. `npm run i18n:audit` fails the build on it; it found 25 on its first run                              |
+
+### What never gets translated
+
+Some strings are not copy: they cross the wire, or an identity derives from
+them, and a translated variant is an interop bug rather than a cosmetic one.
+The full list with reasons is in the skill file, and `catalog.test.ts` enforces
+it. The two that matter most:
+
+- **The username word lists** (`src/utils/username.ts`). A peer's generated name
+  must resolve identically on every device and in bitchat.
+- **The transmitted `/hug` and `/slap` text.** It is sent as message content, and
+  bitchat/ios recognises an incoming emote by matching the **English** substrings
+  in `ChatPublicConversationCoordinator.swift`. bitchat is itself fully localized
+  and still keeps these as English literals, for exactly this reason.
+
+Terms of Service and Privacy Policy stay in English, with the reader chrome
+around them translated. English is the authoritative version, and a
+machine-translated liability clause is not something to ship.
+
+### Consistency across devices
+
+The text is identical everywhere, because it is compiled in. What varies, and
+what is done about it:
+
+| Varies                                        | Handling                                                                                                                                                                                                                                                                                                                                                                                      |
+| --------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Intl` date and number output, per OS and OEM | Centralised in `src/utils/format.ts`, formatted in the **app's** language rather than the device's, with cached formatters and Latin numerals for machine data                                                                                                                                                                                                                                |
+| Font glyph coverage for non-Latin scripts     | Monospace is restricted to machine data. Translated prose never uses it                                                                                                                                                                                                                                                                                                                       |
+| `Intl` availability across engines            | Hermes ships a partial Intl: `DateTimeFormat`, `NumberFormat` and `Collator` are present, `PluralRules` is not, on either platform. Nothing calls the missing one. Plural selection is English's one/other, decided in `src/i18n/index.ts` and not by the engine. A second language needs `@formatjs/intl-pluralrules`                                                                        |
+| Cached reverse-geocoded place names           | Come from the OS geocoder, which answers in the **device's** language and takes no locale argument on either platform. `place-names-store.ts` keys its cache on that language, sampled once at startup, so changing the phone's language re-resolves rather than leaving every channel labelled in the old one forever. This is the one place in the app where device language is read at all |
+| Layout direction on a right-to-left device    | React Native mirrors the whole layout when the device is set to Arabic or Hebrew, which would put English text in a right-to-left frame. `initI18n()` pins direction to the app's language at startup, so the app looks the same everywhere. It becomes language-driven the day an RTL catalog ships                                                                                          |
+
 ## 9. Privacy & Tor Integration
 
 ### Metadata minimization
@@ -532,11 +577,10 @@ surface; `src/services/wallet-service.ts` owns everything above it.
 
 ### Tor: Both Platforms
 
-| Platform        | Tor Integration                                                                                                                        | Default               |
-| --------------- | -------------------------------------------------------------------------------------------------------------------------------------- | --------------------- |
-| iOS             | **[Arti](https://gitlab.torproject.org/tpo/core/arti)** Rust xcframework (same as bitchat-ios), embedded in app binary                 | Off by default        |
-| Android Phase 1 | **[Orbot](https://guardianproject.info/apps/org.torproject.android/)** proxy detection: SOCKS5 on `localhost:9050` if Orbot is running | Optional, with prompt |
-| Android Phase 2 | Embed `tor` binary in APK (legal, Tor Project permits)                                                                                 | Off by default        |
+| Platform | Tor Integration                                                                                                                        | Default               |
+| -------- | -------------------------------------------------------------------------------------------------------------------------------------- | --------------------- |
+| iOS      | **[Arti](https://gitlab.torproject.org/tpo/core/arti)** Rust xcframework (same as bitchat-ios), embedded in app binary                 | Off by default        |
+| Android  | **[Orbot](https://guardianproject.info/apps/org.torproject.android/)** proxy detection: SOCKS5 on `localhost:9050` if Orbot is running | Optional, with prompt |
 
 Tor is used exclusively for **Nostr relay connections**. BLE traffic is radio-local and cannot be routed through Tor.
 
@@ -604,7 +648,42 @@ already authenticates them. Signatures are required exactly where a claimed
 sender is otherwise unverifiable: announces, public and private channel
 messages, attachments, voice frames, board posts, and gateway uplinks.
 
-## 11. Native Module Architecture
+## 11. Project Folder Structure
+
+### The guiding rule: if it compiles to JS, it lives in `src/`. If it touches hardware, it lives in `android/` or `ios/`
+
+Directories, not files, since the file list moves every release:
+
+| Path            | Holds                                                                         |
+| --------------- | ----------------------------------------------------------------------------- |
+| `android/`      | Kotlin BLE module and the foreground service that keeps the mesh alive        |
+| `ios/`          | Swift BLE module built on CoreBluetooth                                       |
+| `src/bridge/`   | TurboModule specs. The only place native and TypeScript meet                  |
+| `src/core/`     | The whole protocol in pure TypeScript: crypto, mesh, nostr, payments, routing |
+| `src/services/` | Long-lived runtime wiring, chiefly the mesh service that owns the radios      |
+| `src/features/` | Screens and screen-level logic                                                |
+| `src/store/`    | Zustand state with MMKV persistence                                           |
+| `src/ui/`       | Shared components and theme tokens                                            |
+| `src/utils/`    | Stateless helpers                                                             |
+| `src/i18n/`     | Translation runtime and the bundled English catalog                           |
+| `assets/data/`  | Bundled relay list, refreshed by CI                                           |
+
+`src/core/` has no native dependencies, so the entire protocol is testable in CI
+without a phone. That is why the test suite can cover the wire format, the
+handshakes and the routing while the radios stay unproven until a field test.
+
+### Will native code cause problems building or shipping?
+
+**No. This is exactly how every production React Native app with native modules ships.**
+
+- `android/` is compiled by Gradle into a `.aab` (Play Store). Xcode is not involved.
+- `ios/` is compiled by Xcode into an `.ipa` (App Store Connect). Gradle is not involved.
+- EAS Build (Expo's CI) runs both builds in parallel on cloud VMs
+- Google Play and Apple App Store treat the result as a fully native app. They don't know or care that TypeScript orchestrates the native layers
+
+**Consistency guarantee for ALL features on BOTH platforms:** Every feature lives in `src/core/` TypeScript. The ~2,400 lines of native BLE code expose an _identical_ TypeScript interface on both platforms. A bug fix in gossip sync fixes both iOS and Android at once. Protocol upgrades ship simultaneously. No drift.
+
+## 12. Native Module Architecture
 
 ### One native module per hardware capability
 
@@ -663,7 +742,7 @@ iPhone-to-Android discovery stops until the app is reopened. An already
 connected link keeps carrying traffic. Android has no equivalent restriction:
 the foreground service keeps it advertising normally.
 
-## 12. Protocol Decision Log
+## 13. Protocol Decision Log
 
 Each decision records what was considered, what was chosen, and why.
 
@@ -698,7 +777,7 @@ Each decision records what was considered, what was chosen, and why.
 - Double Ratchet (Signal's algorithm) provides per-message key rotation; compromise of one message's key doesn't expose adjacent messages
 - This also handles offline mail: even when Bob is offline, a DR-ratcheted message can be sent via courier and forward secrecy is maintained
 
-## 13. Dependency Manifest
+## 14. Dependency Manifest
 
 ### Core (required from day 1)
 

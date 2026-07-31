@@ -18,6 +18,51 @@ import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 import { decodeGeohash } from "../core/nostr/presence";
 
+// The device's language, resolved on first use and then reused.
+//
+// Read through Intl rather than a localization package: this is the only
+// consumer of it in the app, and Hermes implements DateTimeFormat on both
+// platforms, backed by android.icu and NSFoundation. The value is only ever a
+// cache key, so what matters is that it differs between languages, not that it
+// is a well-formed BCP-47 tag.
+//
+// Resolved lazily rather than at module scope so that importing this store
+// costs nothing. It is imported by the panic wipe, which runs on paths where
+// no place name is ever looked up.
+let deviceLocale: string | null = null;
+
+function getDeviceLocale(): string {
+  if (deviceLocale === null) {
+    try {
+      deviceLocale = Intl.DateTimeFormat().resolvedOptions().locale;
+    } catch {
+      deviceLocale = "en";
+    }
+  }
+  return deviceLocale;
+}
+
+// Cache keys fold in the language the name was resolved in.
+//
+// Reverse geocoding is done by the OS, and both platforms answer in the
+// device's language: iOS CLGeocoder follows the bundle's preferred
+// localization and Android's Geocoder follows the default Locale, and neither
+// takes a locale argument. So a cell resolved while the phone was in English
+// stays "Kumaraswamy Layout" and one resolved in Hindi comes back in
+// Devanagari.
+//
+// Keyed on the geohash alone, as this was, the cache never expired: changing
+// the phone's language left every previously seen channel labelled in the old
+// one, permanently. Keying on the language makes a change re-resolve, and
+// keeps both spellings for the user who switches back and forth.
+//
+// The language is sampled once per process, so a change made while Airhop is
+// running lands on the next launch rather than immediately. That is the cheap
+// end of the trade and still strictly better than never.
+export function placeNameKey(geohash: string): string {
+  return `${getDeviceLocale()}|${geohash}`;
+}
+
 interface PlaceNamesState {
   // geohash -> resolved place name.
   names: Record<string, string>;
@@ -66,8 +111,9 @@ export const usePlaceNamesStore = create<PlaceNamesState>()(
 
       resolve(geohash: string) {
         if (geohash.length === 0) return;
-        if (get().names[geohash] !== undefined || inFlight.has(geohash)) return;
-        inFlight.add(geohash);
+        const key = placeNameKey(geohash);
+        if (get().names[key] !== undefined || inFlight.has(key)) return;
+        inFlight.add(key);
         void (async () => {
           try {
             const { lat, lng } = decodeGeohash(geohash);
@@ -78,13 +124,13 @@ export const usePlaceNamesStore = create<PlaceNamesState>()(
             const first = results[0];
             const name = first ? pickName(geohash, first) : null;
             if (name !== null) {
-              set((state) => ({ names: { ...state.names, [geohash]: name } }));
+              set((state) => ({ names: { ...state.names, [key]: name } }));
             }
           } catch {
             // Geocoder or network unavailable: leave it unresolved so a later
             // session can try again. The UI just omits the name meanwhile.
           } finally {
-            inFlight.delete(geohash);
+            inFlight.delete(key);
           }
         })();
       },

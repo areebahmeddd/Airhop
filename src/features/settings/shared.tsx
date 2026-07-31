@@ -7,6 +7,8 @@ import Feather from "@expo/vector-icons/Feather";
 import React, { useMemo } from "react";
 import { Pressable, StyleSheet, Switch, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useT } from "../../i18n";
+import { chevronBack, chevronForward } from "../../i18n/layout";
 import {
   DISABLED_OPACITY,
   FontFamily,
@@ -113,6 +115,7 @@ export function SettingLinkRow({
   accessibilityLabel?: string;
 }): React.JSX.Element {
   const Colors = useThemeColors();
+  const T = useT();
   const styles = useSharedStyles();
   return (
     <Pressable
@@ -121,7 +124,9 @@ export function SettingLinkRow({
       accessibilityRole="button"
       accessibilityLabel={
         external
-          ? `${accessibilityLabel ?? label}, opens outside the app`
+          ? T("settings.opens_externally", {
+              label: accessibilityLabel ?? label,
+            })
           : (accessibilityLabel ?? label)
       }
     >
@@ -142,7 +147,7 @@ export function SettingLinkRow({
         <Feather name="arrow-up-right" size={15} color={Colors.textMuted} />
       ) : (
         chevron && (
-          <Feather name="chevron-right" size={16} color={Colors.textMuted} />
+          <Feather name={chevronForward} size={16} color={Colors.textMuted} />
         )
       )}
     </Pressable>
@@ -192,6 +197,7 @@ export function SubHeader({
   onBack,
 }: SubHeaderProps): React.JSX.Element {
   const Colors = useThemeColors();
+  const T = useT();
   const styles = useSharedStyles();
   return (
     <View style={styles.subHeader}>
@@ -200,9 +206,9 @@ export function SubHeader({
         style={styles.subHeaderBack}
         hitSlop={HIT_SLOP}
         accessibilityRole="button"
-        accessibilityLabel="Go back"
+        accessibilityLabel={T("settings.back")}
       >
-        <Feather name="chevron-left" size={24} color={Colors.textPrimary} />
+        <Feather name={chevronBack} size={24} color={Colors.textPrimary} />
       </Pressable>
       {/* The screen's name, so a screen reader announces where the drill-in
           landed. Twelve sub-screens share this header and none of them was
@@ -246,7 +252,7 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       height: 32,
       alignItems: "center",
       justifyContent: "center",
-      marginLeft: -Spacing.xs,
+      marginStart: -Spacing.xs,
     },
     subHeaderTitle: {
       flex: 1,
@@ -281,7 +287,7 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
     groupDivider: {
       height: StyleSheet.hairlineWidth,
       backgroundColor: Colors.border,
-      marginLeft: Spacing.base,
+      marginStart: Spacing.base,
     },
     // A row with a description is comfortably past the touch floor already; one
     // without (a bare label plus a switch, which is most of Network and General)
@@ -400,6 +406,15 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       fontSize: FontSize.base,
       fontWeight: FontWeight.bold,
       color: Colors.textInverse,
+    },
+    // Grouped modal option list: one bounded box holding every choice, rows
+    // separated by hairlines rather than each row carrying its own border.
+    // Selection reads from the check plus a raised row background.
+    // A sheet whose option list is longer than the sheet. The language picker
+    // ships with ten entries and targets thirty, so it scrolls from the start
+    sheetScroll: {
+      width: "100%",
+      maxHeight: 380,
     },
     // Grouped modal option list: one bounded box holding every choice, rows
     // separated by hairlines rather than each row carrying its own border.

@@ -19,6 +19,7 @@ import {
   useSharedStyles,
 } from "../shared";
 
+import { t, useT } from "../../../i18n";
 interface Props {
   onBack: () => void;
 }
@@ -26,18 +27,19 @@ interface Props {
 export default function SecurityScreen({ onBack }: Props): React.JSX.Element {
   const Colors = useThemeColors();
   const styles = useSharedStyles();
+  const T = useT();
   // Subscribe to the array itself (not the isBlocked function, whose identity
   // never changes) so the list re-renders when a block is added or removed.
   const blockedPeerIDs = useBlockedStore((s) => s.blockedPeerIDs);
 
   function confirmUnblock(peerID: string): void {
     showAlert(
-      "Unblock this peer",
-      `${resolveDisplayName(peerID)} will be able to message you again and will reappear on the Mesh tab when nearby.`,
+      t("settings.security.unblock_title"),
+      t("settings.security.unblock_body", { name: resolveDisplayName(peerID) }),
       [
-        { text: "Cancel", style: "cancel" },
+        { text: t("common.cancel"), style: "cancel" },
         {
-          text: "Unblock",
+          text: t("settings.security.unblock"),
           onPress: () => {
             useBlockedStore.getState().unblockPeer(peerID);
           },
@@ -48,7 +50,7 @@ export default function SecurityScreen({ onBack }: Props): React.JSX.Element {
 
   return (
     <View style={styles.container}>
-      <SubHeader title="Privacy & Security" onBack={onBack} />
+      <SubHeader title={T("settings.section.privacy")} onBack={onBack} />
       <ScrollView
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
@@ -60,15 +62,15 @@ export default function SecurityScreen({ onBack }: Props): React.JSX.Element {
           <View style={styles.settingsGroup}>
             <SettingRow
               icon="repeat"
-              label="Forward secrecy"
-              description="Double Ratchet is always on for DMs"
+              label={T("settings.security.forward_secrecy")}
+              description={T("settings.security.forward_secrecy_desc")}
               control={<SettingSwitch value={true} disabled />}
             />
             <GroupDivider />
             <SettingRow
               icon="check-circle"
-              label="Signed packets"
-              description="Every packet is Ed25519-signed"
+              label={T("settings.security.signed_packets")}
+              description={T("settings.security.signed_packets_desc")}
               control={<SettingSwitch value={true} disabled />}
             />
           </View>
@@ -83,8 +85,8 @@ export default function SecurityScreen({ onBack }: Props): React.JSX.Element {
             {blockedPeerIDs.length === 0 ? (
               <SettingRow
                 icon="slash"
-                label="No blocked peers"
-                description="Blocked peers can't message you or appear on the Mesh tab"
+                label={T("settings.security.no_blocked")}
+                description={T("settings.security.no_blocked_desc")}
               />
             ) : (
               blockedPeerIDs.map((peerID, index) => (

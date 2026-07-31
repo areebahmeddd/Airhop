@@ -13,6 +13,7 @@ import {
   View,
 } from "react-native";
 import { THIRD_PARTY_LICENSES } from "../../../data/licenses";
+import { useT } from "../../../i18n";
 import { FontSize, Spacing, useThemeColors } from "../../../ui/theme";
 import { GroupDivider, SubHeader, useSharedStyles } from "../shared";
 
@@ -21,12 +22,13 @@ interface Props {
 }
 
 export default function LicensesScreen({ onBack }: Props): React.JSX.Element {
+  const T = useT();
   const Colors = useThemeColors();
   const styles = useSharedStyles();
   const local = useMemo(() => createStyles(Colors), [Colors]);
   return (
     <View style={styles.container}>
-      <SubHeader title="Open source licenses" onBack={onBack} />
+      <SubHeader title={T("settings.about.licenses")} onBack={onBack} />
       <ScrollView
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}

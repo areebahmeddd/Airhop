@@ -16,6 +16,7 @@ import {
   TextInput,
   View,
 } from "react-native";
+import { t, useT } from "../../i18n";
 import { getMeshService } from "../../services/mesh-service";
 import { groupChannel } from "../../store/group-store";
 import { usePeerStore } from "../../store/peer-store";
@@ -43,6 +44,7 @@ interface Props {
 const MAX_OTHER_MEMBERS = 15;
 
 export function NewGroupSheet({ visible, onClose, onBack, onCreated }: Props) {
+  const T = useT();
   const Colors = useThemeColors();
   const styles = useMemo(() => createStyles(Colors), [Colors]);
 
@@ -78,7 +80,7 @@ export function NewGroupSheet({ visible, onClose, onBack, onCreated }: Props) {
     if (trimmed.length === 0 || selected.size === 0) return;
     const id = getMeshService()?.createGroup(trimmed, [...selected]);
     if (id === undefined || id === null) {
-      setError("Could not reach every member. Try again while they're nearby.");
+      setError(t("chat.group.unreachable"));
       return;
     }
     reset();
@@ -104,7 +106,7 @@ export function NewGroupSheet({ visible, onClose, onBack, onCreated }: Props) {
       sheetStyle={styles.sheet}
       scrollable
     >
-      <Text style={styles.title}>Create a group</Text>
+      <Text style={styles.title}>{T("chat.group.create_title")}</Text>
       {/* Same scannable card as the create-channel sheet, so the two sides
               of the chooser stay comparable: what it protects, who can get in,
               how far it reaches. */}
@@ -150,7 +152,7 @@ export function NewGroupSheet({ visible, onClose, onBack, onCreated }: Props) {
         style={styles.input}
         value={name}
         onChangeText={setName}
-        placeholder="Group name"
+        placeholder={T("chat.group.name_placeholder")}
         placeholderTextColor={Colors.textMuted}
         selectionColor={Colors.accent}
         maxLength={40}
@@ -208,14 +210,14 @@ export function NewGroupSheet({ visible, onClose, onBack, onCreated }: Props) {
 
       <View style={styles.actions}>
         <Pressable style={styles.cancel} onPress={handleBack}>
-          <Text style={styles.cancelText}>Back</Text>
+          <Text style={styles.cancelText}>{T("common.back")}</Text>
         </Pressable>
         <Pressable
           style={[styles.confirm, !canCreate && styles.confirmDisabled]}
           onPress={handleCreate}
           disabled={!canCreate}
         >
-          <Text style={styles.confirmText}>Create</Text>
+          <Text style={styles.confirmText}>{T("chat.group.create")}</Text>
         </Pressable>
       </View>
     </BottomSheet>

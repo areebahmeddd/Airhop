@@ -5,6 +5,7 @@ import Feather from "@expo/vector-icons/Feather";
 import React, { useState } from "react";
 import { Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { validateRelayUrl } from "../../../core/nostr/geo-relay";
+import { useT } from "../../../i18n";
 import { getMeshService } from "../../../services/mesh-service";
 import { showAlert } from "../../../store/alert-store";
 import { useSettingsStore } from "../../../store/settings-store";
@@ -24,6 +25,7 @@ interface Props {
 export default function NetworkScreen({ onBack }: Props): React.JSX.Element {
   const Colors = useThemeColors();
   const styles = useSharedStyles();
+  const T = useT();
   const internetEnabled = useSettingsStore((s) => s.internetEnabled);
   const setInternetEnabled = useSettingsStore((s) => s.setInternetEnabled);
   const geoRelayDiscovery = useSettingsStore((s) => s.geoRelayDiscovery);
@@ -51,12 +53,12 @@ export default function NetworkScreen({ onBack }: Props): React.JSX.Element {
       return;
     }
     showAlert(
-      "Turn off the internet?",
-      "Airhop will run on Bluetooth only. It stops contacting any Nostr relay, and Tor, the internet gateway, and the mesh bridge all turn off. Nearby Bluetooth chat keeps working.",
+      T("settings.network.internet_off_title"),
+      T("settings.network.internet_off_body"),
       [
-        { text: "Cancel", style: "cancel" },
+        { text: T("common.cancel"), style: "cancel" },
         {
-          text: "Turn off",
+          text: T("settings.network.turn_off"),
           style: "destructive",
           onPress: () => setInternet(false),
         },
@@ -87,19 +89,19 @@ export default function NetworkScreen({ onBack }: Props): React.JSX.Element {
     if (customRelays.length === 0) {
       setRelaysExpanded(true);
       showAlert(
-        "Add a custom relay first",
-        "Auto-discovery is what points Airhop at the nearest relays. Turning it off only makes sense once you have pinned your own relays below, so add at least one first.",
-        [{ text: "OK", style: "cancel" }],
+        T("settings.network.discovery_needs_relay"),
+        T("settings.network.discovery_needs_relay_body"),
+        [{ text: T("common.ok"), style: "cancel" }],
       );
       return; // leave discovery on
     }
     showAlert(
-      "Use only your custom relays?",
-      "Location channels and the mesh bridge will stop auto-selecting the nearest relays and use only the ones you added. This can reduce reach, and you may stop meeting bitchat users, who converge on the nearest relays.",
+      T("settings.network.custom_only_title"),
+      T("settings.network.custom_only_body"),
       [
-        { text: "Cancel", style: "cancel" },
+        { text: T("common.cancel"), style: "cancel" },
         {
-          text: "Turn off",
+          text: T("settings.network.turn_off"),
           style: "destructive",
           onPress: () => setGeoRelayDiscovery(false),
         },
@@ -118,7 +120,7 @@ export default function NetworkScreen({ onBack }: Props): React.JSX.Element {
 
   return (
     <View style={styles.container}>
-      <SubHeader title="Network & Relays" onBack={onBack} />
+      <SubHeader title={T("settings.section.network")} onBack={onBack} />
       <ScrollView
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
@@ -127,8 +129,8 @@ export default function NetworkScreen({ onBack }: Props): React.JSX.Element {
           <View style={styles.settingsGroup}>
             <SettingRow
               icon="radio"
-              label="Internet fallback"
-              description="Continue over Nostr relays when mesh peers are out of range."
+              label={T("settings.network.internet")}
+              description={T("settings.network.internet_desc")}
               control={
                 <SettingSwitch
                   value={internetEnabled}
@@ -139,8 +141,8 @@ export default function NetworkScreen({ onBack }: Props): React.JSX.Element {
             <GroupDivider />
             <SettingRow
               icon="map-pin"
-              label="Geo-relay discovery"
-              description="Auto-select the nearest relays for a location cell from 350+ distributed relays."
+              label={T("settings.network.discovery")}
+              description={T("settings.network.discovery_desc")}
               control={
                 <SettingSwitch
                   value={geoRelayDiscovery}
@@ -159,16 +161,18 @@ export default function NetworkScreen({ onBack }: Props): React.JSX.Element {
               disabled={!internetEnabled}
               accessibilityRole="button"
               accessibilityState={{ expanded: relaysExpanded }}
-              accessibilityLabel="Custom relays"
+              accessibilityLabel={T("settings.network.custom")}
             >
               <View style={styles.settingIcon}>
                 <Feather name="server" size={18} color={Colors.textSecondary} />
               </View>
               <View style={styles.settingLabelGroup}>
-                <Text style={styles.settingLabel}>Custom relays</Text>
+                <Text style={styles.settingLabel}>
+                  {T("settings.network.custom")}
+                </Text>
                 <Text style={styles.settingDescription}>
                   {customRelays.length === 0
-                    ? "Add your own Nostr relays"
+                    ? T("settings.network.custom_desc")
                     : `${customRelays.length} added`}
                 </Text>
               </View>
@@ -233,7 +237,7 @@ export default function NetworkScreen({ onBack }: Props): React.JSX.Element {
                       onPress={handleAddRelay}
                       hitSlop={HIT_SLOP}
                       accessibilityRole="button"
-                      accessibilityLabel="Add relay"
+                      accessibilityLabel={T("settings.network.add_relay")}
                     >
                       <Text
                         style={[styles.settingValue, { color: Colors.accent }]}
@@ -263,8 +267,8 @@ export default function NetworkScreen({ onBack }: Props): React.JSX.Element {
             <GroupDivider />
             <SettingRow
               icon="bluetooth"
-              label="bitchat compatibility"
-              description="Same BLE mesh as bitchat, fully interoperable. This is always on, and cannot be disabled."
+              label={T("settings.network.bitchat")}
+              description={T("settings.network.bitchat_desc")}
               control={<SettingSwitch value={true} disabled />}
             />
           </View>

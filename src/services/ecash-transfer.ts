@@ -20,6 +20,7 @@
 //      until either they confirm it landed or the mint tells us the proofs were
 //      redeemed (which `reconcile` checks).
 
+import { t } from "../i18n";
 import { showAlert, useAlertStore } from "../store/alert-store";
 import { useChatStore, type ChatMessage } from "../store/chat-store";
 import { getMeshService, type MeshService } from "./mesh-service";
@@ -59,13 +60,13 @@ export interface SendEcashResult {
 export function describeRoute(route: DeliveryRoute): string {
   switch (route) {
     case "sent":
-      return "Handed straight to their device over the mesh.";
+      return t("wallet.xfer.route_mesh");
     case "sent-nostr":
-      return "They were out of Bluetooth range, so it went over the internet instead.";
+      return t("wallet.xfer.route_nostr");
     case "needs-courier":
-      return "No route to them right now. It will be carried by other devices and delivered when one reaches them.";
+      return t("wallet.xfer.route_courier");
     case "queued":
-      return "They are not reachable yet. It is queued and will send as soon as they are.";
+      return t("wallet.xfer.route_queued");
   }
 }
 
@@ -82,8 +83,8 @@ export async function sendEcashToPeer(
   const service = getMeshService();
   if (!service) {
     showAlert(
-      "Mesh offline",
-      "The mesh service is not running, so there is no way to hand the token over. Nothing has been deducted.",
+      t("wallet.xfer.mesh_offline"),
+      t("wallet.xfer.mesh_offline_body"),
     );
     return null;
   }
@@ -94,7 +95,7 @@ export async function sendEcashToPeer(
       // Ask before reserving anything. An inexact offline send overpays and
       // cannot be undone once the recipient redeems.
       const confirmed = await confirm(
-        "Can't send that exact amount",
+        t("wallet.err.exact_amount"),
         `Your proofs can't make exactly ${amount.toLocaleString()} ${unit} offline. The smallest token you can build is ${quote.spend.toLocaleString()} ${unit}, and the extra ${(quote.spend - amount).toLocaleString()} ${unit} goes to them with no way to get it back.\n\nRefreshing at the mint while online splits your proofs into denominations that make this exact.`,
         `Send ${quote.spend.toLocaleString()}`,
       );
@@ -146,7 +147,7 @@ export function deliverTokenToPeer(params: {
     id: params.prepared.txId,
     channel,
     senderID: service.getPeerID(),
-    senderNickname: params.senderNickname ?? "You",
+    senderNickname: params.senderNickname ?? t("chat.you"),
     text: params.prepared.token,
     timestampMs: Date.now(),
     isMine: true,
@@ -173,25 +174,25 @@ export function deliverTokenToPeer(params: {
 export function reportWalletError(err: unknown): void {
   if (err instanceof WalletError) {
     const titles: Record<string, string> = {
-      locked: "Wallet locked",
-      offline: "Mint unreachable",
-      "tor-blocked": "Blocked while Tor is on",
-      insufficient: "Not enough balance",
-      inexact: "Can't send that exact amount",
-      "no-mint": "No mint",
-      unsupported: "Mint can't do that",
-      "mint-error": "Mint refused",
-      "invalid-token": "Unreadable token",
-      "forged-token": "Token rejected",
-      "already-spent": "Already spent",
+      locked: t("wallet.err.locked"),
+      offline: t("wallet.err.mint_unreachable"),
+      "tor-blocked": t("wallet.err.tor_blocked"),
+      insufficient: t("wallet.err.insufficient"),
+      inexact: t("wallet.err.exact_amount"),
+      "no-mint": t("wallet.err.no_mint"),
+      unsupported: t("wallet.err.mint_unsupported"),
+      "mint-error": t("wallet.err.mint_refused"),
+      "invalid-token": t("wallet.err.unreadable"),
+      "forged-token": t("wallet.err.rejected"),
+      "already-spent": t("wallet.err.already_spent"),
     };
     showAlert(
-      titles[err.code] ?? "Could not send",
+      titles[err.code] ?? t("wallet.xfer.could_not_send"),
       err.detail ? `${err.message}\n\n${err.detail}` : err.message,
     );
     return;
   }
-  showAlert("Could not send", String(err));
+  showAlert(t("wallet.xfer.could_not_send"), String(err));
 }
 
 // The app's alert store is callback-based; this wraps it so the send flow above
@@ -223,7 +224,11 @@ function confirm(
       setTimeout(() => finish(false), 0);
     });
     showAlert(title, message, [
-      { text: "Cancel", style: "cancel", onPress: () => finish(false) },
+      {
+        text: t("common.cancel"),
+        style: "cancel",
+        onPress: () => finish(false),
+      },
       {
         text: confirmLabel,
         style: "destructive",

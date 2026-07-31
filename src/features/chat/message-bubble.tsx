@@ -18,6 +18,7 @@ import {
   type TextStyle,
 } from "react-native";
 import type { EmbeddedToken } from "../../core/payments/cashu";
+import { useT } from "../../i18n";
 import type {
   ChatAttachment,
   ChatMessage,
@@ -88,6 +89,7 @@ function MessageBubble({
   onPressSender,
   highlighted,
 }: Props): React.JSX.Element {
+  const T = useT();
   const Colors = useThemeColors();
   const styles = useMemo(() => createStyles(Colors), [Colors]);
 
@@ -153,7 +155,7 @@ function MessageBubble({
                   name="globe"
                   size={11}
                   color={Colors.bridge}
-                  accessibilityLabel="via the mesh bridge"
+                  accessibilityLabel={T("chat.bubble.via_bridge")}
                 />
               )}
             </View>
@@ -245,7 +247,7 @@ function MessageBubble({
                     onPress={() => onRetry(item)}
                     hitSlop={HIT_SLOP}
                     accessibilityRole="button"
-                    accessibilityLabel="Failed to send. Tap to retry."
+                    accessibilityLabel={T("chat.bubble.failed_retry")}
                   >
                     <StatusTick status={item.status} Colors={Colors} />
                   </Pressable>
@@ -425,7 +427,7 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
     senderName: {
       fontSize: FontSize.xs,
       color: Colors.textMuted,
-      marginLeft: Spacing.md,
+      marginStart: Spacing.md,
     },
     bubble: {
       paddingHorizontal: Spacing.md,

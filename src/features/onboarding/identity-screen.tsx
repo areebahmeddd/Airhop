@@ -7,6 +7,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { Animated, Easing, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { generateIdentity, saveIdentity } from "../../core/crypto/identity";
+import { useT, type TranslationKey } from "../../i18n";
 import {
   FontFamily,
   FontSize,
@@ -36,8 +37,10 @@ export default function IdentityScreen({
   onComplete,
 }: Props): React.JSX.Element {
   const Colors = useThemeColors();
+  const T = useT();
   const styles = useMemo(() => createStyles(Colors), [Colors]);
   const [spinAnim] = useState(() => new Animated.Value(0));
+  const steps = STEP_KEYS.map((key) => T(key));
 
   useEffect(() => {
     // Spin the ring indicator.
@@ -112,12 +115,9 @@ export default function IdentityScreen({
             Get started and again nothing when it moves on. */}
         <View style={styles.copy} accessibilityLiveRegion="polite">
           <Text style={styles.heading} accessibilityRole="header">
-            Generating your identity
+            {T("onboarding.identity.heading")}
           </Text>
-          <Text style={styles.body}>
-            Creating an Ed25519 key pair on this device.{"\n"}
-            Nothing is sent anywhere.
-          </Text>
+          <Text style={styles.body}>{T("onboarding.identity.body")}</Text>
         </View>
 
         {/* Steps: a description of the work, not a checklist. Read as one
@@ -125,9 +125,11 @@ export default function IdentityScreen({
         <View
           style={styles.steps}
           accessible
-          accessibilityLabel={`Steps: ${STEPS.join(". ")}`}
+          accessibilityLabel={T("onboarding.identity.steps_a11y", {
+            steps: steps.join(". "),
+          })}
         >
-          {STEPS.map((step) => (
+          {steps.map((step) => (
             <View key={step} style={styles.step}>
               <View style={styles.stepDot} />
               <Text style={styles.stepText}>{step}</Text>
@@ -139,12 +141,12 @@ export default function IdentityScreen({
   );
 }
 
-const STEPS = [
-  "Generating X25519 static key pair",
-  "Generating Ed25519 signing key pair",
-  "Storing keys in OS Keychain",
-  "Deriving peer ID",
-] as const;
+const STEP_KEYS: TranslationKey[] = [
+  "onboarding.identity.step.x25519",
+  "onboarding.identity.step.ed25519",
+  "onboarding.identity.step.keychain",
+  "onboarding.identity.step.peer_id",
+];
 
 function createStyles(Colors: ReturnType<typeof useThemeColors>) {
   return StyleSheet.create({

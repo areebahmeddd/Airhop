@@ -21,6 +21,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { decodeQRContent } from "../../core/crypto/contact-exchange";
+import { useT } from "../../i18n";
 import { getMeshService } from "../../services/mesh-service";
 import { useContactsStore } from "../../store/contacts-store";
 import {
@@ -51,6 +52,7 @@ export default function VerifyContactScanner({
   name,
   onClose,
 }: Props): React.JSX.Element {
+  const T = useT();
   const Colors = useThemeColors();
   const styles = useMemo(() => createStyles(Colors), [Colors]);
   const [permission, requestPermission] = useCameraPermissions();
@@ -150,7 +152,7 @@ export default function VerifyContactScanner({
               style={styles.iconBtn}
               hitSlop={HIT_SLOP}
               accessibilityRole="button"
-              accessibilityLabel="Close"
+              accessibilityLabel={T("common.close")}
             >
               <Feather name="x" size={22} color="#FFFFFF" />
             </Pressable>
@@ -175,7 +177,9 @@ export default function VerifyContactScanner({
               a blank screen for the second it takes. */}
           {outcome === null && awaitingAnswer && (
             <View style={styles.resultCard}>
-              <Text style={styles.resultBody}>Waiting for camera access…</Text>
+              <Text style={styles.resultBody}>
+                {T("contacts.verify.waiting_camera")}
+              </Text>
             </View>
           )}
 
@@ -185,7 +189,9 @@ export default function VerifyContactScanner({
               <View style={[styles.resultIcon, styles.iconNeutral]}>
                 <Feather name="camera-off" size={26} color="#FFFFFF" />
               </View>
-              <Text style={styles.resultTitle}>Camera is off</Text>
+              <Text style={styles.resultTitle}>
+                {T("contacts.verify.camera_off")}
+              </Text>
               <Text style={styles.resultBody}>
                 Turn on camera access in Settings to verify by QR.
               </Text>
@@ -193,12 +199,14 @@ export default function VerifyContactScanner({
                 style={styles.primaryBtn}
                 onPress={() => void Linking.openSettings()}
                 accessibilityRole="button"
-                accessibilityLabel="Open Settings"
+                accessibilityLabel={T("contacts.verify.open_settings")}
               >
-                <Text style={styles.primaryBtnText}>Open Settings</Text>
+                <Text style={styles.primaryBtnText}>
+                  {T("contacts.verify.open_settings")}
+                </Text>
               </Pressable>
               <Pressable onPress={onClose}>
-                <Text style={styles.secondaryText}>Close</Text>
+                <Text style={styles.secondaryText}>{T("common.close")}</Text>
               </Pressable>
             </View>
           )}
@@ -209,12 +217,16 @@ export default function VerifyContactScanner({
               <View style={[styles.resultIcon, styles.iconOk]}>
                 <Feather name="check" size={26} color="#FFFFFF" />
               </View>
-              <Text style={styles.resultTitle}>Verified</Text>
+              <Text style={styles.resultTitle}>
+                {T("contacts.verify.verified")}
+              </Text>
               <Text style={styles.resultBody}>
                 {name}&apos;s key matches. You can trust this contact.
               </Text>
               <Pressable style={styles.primaryBtn} onPress={onClose}>
-                <Text style={styles.primaryBtnText}>Done</Text>
+                <Text style={styles.primaryBtnText}>
+                  {T("contacts.verify.done")}
+                </Text>
               </Pressable>
             </View>
           )}
@@ -225,16 +237,20 @@ export default function VerifyContactScanner({
               <View style={[styles.resultIcon, styles.iconWarn]}>
                 <Feather name="alert-triangle" size={26} color="#FFFFFF" />
               </View>
-              <Text style={styles.resultTitle}>Different contact</Text>
+              <Text style={styles.resultTitle}>
+                {T("contacts.verify.different")}
+              </Text>
               <Text style={styles.resultBody}>
                 This QR belongs to someone else. Ask {name} to show their own
                 code.
               </Text>
               <Pressable style={styles.primaryBtn} onPress={handleRetry}>
-                <Text style={styles.primaryBtnText}>Scan again</Text>
+                <Text style={styles.primaryBtnText}>
+                  {T("contacts.verify.scan_again")}
+                </Text>
               </Pressable>
               <Pressable onPress={onClose}>
-                <Text style={styles.secondaryText}>Cancel</Text>
+                <Text style={styles.secondaryText}>{T("common.cancel")}</Text>
               </Pressable>
             </View>
           )}
@@ -245,15 +261,19 @@ export default function VerifyContactScanner({
               <View style={[styles.resultIcon, styles.iconWarn]}>
                 <Feather name="alert-triangle" size={26} color="#FFFFFF" />
               </View>
-              <Text style={styles.resultTitle}>Couldn&apos;t verify</Text>
+              <Text style={styles.resultTitle}>
+                {T("contacts.verify.failed")}
+              </Text>
               <Text style={styles.resultBody}>
                 This QR looks tampered with: its ID doesn&apos;t match its key.
               </Text>
               <Pressable style={styles.primaryBtn} onPress={handleRetry}>
-                <Text style={styles.primaryBtnText}>Scan again</Text>
+                <Text style={styles.primaryBtnText}>
+                  {T("contacts.verify.scan_again")}
+                </Text>
               </Pressable>
               <Pressable onPress={onClose}>
-                <Text style={styles.secondaryText}>Cancel</Text>
+                <Text style={styles.secondaryText}>{T("common.cancel")}</Text>
               </Pressable>
             </View>
           )}

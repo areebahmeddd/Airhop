@@ -8,11 +8,18 @@
 // cache a wrong answer that would stick around after connectivity returns.
 
 import * as Location from "expo-location";
-import { usePlaceNamesStore } from "../place-names-store";
+import { placeNameKey, usePlaceNamesStore } from "../place-names-store";
 
 jest.mock("expo-location", () => ({ reverseGeocodeAsync: jest.fn() }));
 
 const reverseGeocodeAsync = Location.reverseGeocodeAsync as jest.Mock;
+
+// Cache keys fold in the device language the name came back in (see
+// placeNameKey), so the tests read through the same helper the store and the UI
+// use rather than assuming a bare geohash key.
+function cached(geohash: string): string | undefined {
+  return usePlaceNamesStore.getState().names[placeNameKey(geohash)];
+}
 
 // The store's lookup is fire-and-forget, so tests wait for its microtasks.
 async function settle(): Promise<void> {
@@ -33,7 +40,7 @@ describe("offline and failure handling", () => {
     expect(() => usePlaceNamesStore.getState().resolve("tdr1k")).not.toThrow();
     await settle();
 
-    expect(usePlaceNamesStore.getState().names["tdr1k"]).toBeUndefined();
+    expect(cached("tdr1k")).toBeUndefined();
   });
 
   it("leaves the cell unnamed when the geocoder knows nothing (open water)", async () => {
@@ -42,7 +49,7 @@ describe("offline and failure handling", () => {
     usePlaceNamesStore.getState().resolve("td");
     await settle();
 
-    expect(usePlaceNamesStore.getState().names["td"]).toBeUndefined();
+    expect(cached("td")).toBeUndefined();
   });
 
   it("retries on a later call, so coming back online resolves it", async () => {
@@ -54,7 +61,7 @@ describe("offline and failure handling", () => {
     usePlaceNamesStore.getState().resolve("tdr1k");
     await settle();
 
-    expect(usePlaceNamesStore.getState().names["tdr1k"]).toBe("Bengaluru");
+    expect(cached("tdr1k")).toBe("Bengaluru");
   });
 
   it("collapses concurrent lookups for the same cell into one round trip", async () => {
@@ -90,7 +97,7 @@ describe("offline and failure handling", () => {
     usePlaceNamesStore.getState().resolve("tdr1k");
     await settle();
 
-    expect(usePlaceNamesStore.getState().names["td"]).toBe("Karnataka");
-    expect(usePlaceNamesStore.getState().names["tdr1k"]).toBe("Bengaluru");
+    expect(cached("td")).toBe("Karnataka");
+    expect(cached("tdr1k")).toBe("Bengaluru");
   });
 });

@@ -18,6 +18,8 @@ import {
 } from "react-native";
 import Animated, { FadeIn, LinearTransition } from "react-native-reanimated";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { t, useT } from "../../i18n";
+import { chevronBack, textAlignEnd } from "../../i18n/layout";
 import {
   useActivityStore,
   type ActivityEntry,
@@ -50,6 +52,7 @@ export default function NotificationCenter({
   onClose,
   onOpenChannel,
 }: Props): React.JSX.Element {
+  const T = useT();
   const Colors = useThemeColors();
   const styles = useMemo(() => createStyles(Colors), [Colors]);
   const entries = useActivityStore((s) => s.entries);
@@ -61,11 +64,15 @@ export default function NotificationCenter({
   // through this same alert. This was the one that did not.
   function handleClearAll(): void {
     showAlert(
-      "Clear notifications",
+      t("chat.notif.clear"),
       `Remove all ${String(entries.length)} notifications from this list? The messages themselves stay in their conversations.`,
       [
-        { text: "Cancel", style: "cancel" },
-        { text: "Clear", style: "destructive", onPress: clearAll },
+        { text: T("common.cancel"), style: "cancel" },
+        {
+          text: t("chat.notif.clear_short"),
+          style: "destructive",
+          onPress: clearAll,
+        },
       ],
     );
   }
@@ -83,10 +90,10 @@ export default function NotificationCenter({
             style={styles.headerBtn}
             onPress={onClose}
             accessibilityRole="button"
-            accessibilityLabel="Close notifications"
+            accessibilityLabel={T("chat.notif.close")}
             hitSlop={HIT_SLOP}
           >
-            <Feather name="chevron-left" size={24} color={Colors.textPrimary} />
+            <Feather name={chevronBack} size={24} color={Colors.textPrimary} />
           </Pressable>
           <Text style={styles.headerTitle} accessibilityRole="header">
             Notifications
@@ -99,7 +106,9 @@ export default function NotificationCenter({
               accessibilityLabel={`Clear all ${String(entries.length)} notifications`}
               hitSlop={HIT_SLOP}
             >
-              <Text style={styles.clearText}>Clear</Text>
+              <Text style={styles.clearText}>
+                {T("chat.notif.clear_short")}
+              </Text>
             </Pressable>
           ) : (
             <View style={styles.headerBtn} />
@@ -121,8 +130,8 @@ export default function NotificationCenter({
           ListEmptyComponent={
             <EmptyState
               icon="bell"
-              title="No notifications yet"
-              subtitle="Messages, mentions, and notices from your channels and chats show up here."
+              title={T("chat.notif.none")}
+              subtitle={T("chat.notif.none_desc")}
             />
           }
         />
@@ -140,6 +149,7 @@ function Row({
   styles: ReturnType<typeof createStyles>;
   onPress: () => void;
 }): React.JSX.Element {
+  const T = useT();
   // DMs read best under the peer's resolved contact name; a channel message or
   // notice keeps the sender's nickname and tags which room it came from.
   const name = entry.isDM
@@ -153,7 +163,7 @@ function Row({
   // preview, the time and the unseen dot were all silent: a screen reader user
   // heard a list of identical "Open" buttons.
   const a11y = [
-    entry.seen ? null : "New",
+    entry.seen ? null : T("chat.notif.new"),
     name,
     entry.isDM ? null : entry.kind === "notice" ? `notice in ${room}` : room,
     entry.preview,
@@ -223,7 +233,7 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       fontSize: FontSize.sm,
       fontWeight: FontWeight.medium,
       color: Colors.accent,
-      textAlign: "right",
+      textAlign: textAlignEnd,
     },
     list: {
       flexGrow: 1,
@@ -263,7 +273,7 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
     time: {
       fontSize: FontSize.xs,
       color: Colors.textMuted,
-      marginLeft: Spacing.sm,
+      marginStart: Spacing.sm,
     },
     preview: {
       fontSize: FontSize.sm,
@@ -274,12 +284,12 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       height: 8,
       borderRadius: Radius.full,
       backgroundColor: Colors.accent,
-      marginLeft: Spacing.xs,
+      marginStart: Spacing.xs,
     },
     separator: {
       height: StyleSheet.hairlineWidth,
       backgroundColor: Colors.border,
-      marginLeft: 60 + Spacing.base,
+      marginStart: 60 + Spacing.base,
     },
   });
 }

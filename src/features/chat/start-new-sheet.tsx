@@ -16,6 +16,7 @@ import { Feather } from "@expo/vector-icons";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { generateChannelKey } from "../../core/mesh/channel-crypto";
+import { useT } from "../../i18n";
 import { useChatStore } from "../../store/chat-store";
 import BottomSheet from "../../ui/components/bottom-sheet";
 import {
@@ -41,6 +42,7 @@ export function StartNewSheet({
   trigger,
   onOpenChannel,
 }: Props): React.JSX.Element {
+  const T = useT();
   const Colors = useThemeColors();
   const styles = useMemo(() => createStyles(Colors), [Colors]);
   const channels = useChatStore((s) => s.channels);
@@ -122,7 +124,7 @@ export function StartNewSheet({
         onClose={() => setShowChooser(false)}
         sheetStyle={styles.modalSheet}
       >
-        <Text style={styles.modalTitle}>Start something new</Text>
+        <Text style={styles.modalTitle}>{T("chat.new.title")}</Text>
 
         <View style={styles.chooserGroup}>
           <Pressable
@@ -132,13 +134,15 @@ export function StartNewSheet({
               setShowJoinModal(true);
             }}
             accessibilityRole="button"
-            accessibilityLabel="Create a private channel"
+            accessibilityLabel={T("chat.new.channel")}
           >
             <View style={styles.chooserIcon}>
               <Feather name="hash" size={18} color={Colors.textPrimary} />
             </View>
             <View style={styles.chooserText}>
-              <Text style={styles.chooserTitle}>Private Channel</Text>
+              <Text style={styles.chooserTitle}>
+                {T("chat.new.channel_label")}
+              </Text>
               <Text style={styles.chooserDesc}>
                 A room anyone with the link can join. Create one, or join with a
                 link you were sent.
@@ -155,13 +159,15 @@ export function StartNewSheet({
               setShowNewGroup(true);
             }}
             accessibilityRole="button"
-            accessibilityLabel="Create a private group"
+            accessibilityLabel={T("chat.new.group")}
           >
             <View style={styles.chooserIcon}>
               <Feather name="users" size={18} color={Colors.textPrimary} />
             </View>
             <View style={styles.chooserText}>
-              <Text style={styles.chooserTitle}>Private Group</Text>
+              <Text style={styles.chooserTitle}>
+                {T("chat.new.group_label")}
+              </Text>
               <Text style={styles.chooserDesc}>
                 Pick specific people. Up to 16. Stays on Bluetooth.
               </Text>
@@ -177,13 +183,15 @@ export function StartNewSheet({
               setShowGeohash(true);
             }}
             accessibilityRole="button"
-            accessibilityLabel="Go to a place by geohash"
+            accessibilityLabel={T("chat.new.place")}
           >
             <View style={styles.chooserIcon}>
               <Feather name="map-pin" size={18} color={Colors.textPrimary} />
             </View>
             <View style={styles.chooserText}>
-              <Text style={styles.chooserTitle}>Go to a place</Text>
+              <Text style={styles.chooserTitle}>
+                {T("chat.new.place_label")}
+              </Text>
               <Text style={styles.chooserDesc}>
                 Open a location channel anywhere by its geohash.
               </Text>
@@ -195,9 +203,9 @@ export function StartNewSheet({
           style={styles.modalCancel}
           onPress={() => setShowChooser(false)}
           accessibilityRole="button"
-          accessibilityLabel="Cancel"
+          accessibilityLabel={T("common.cancel")}
         >
-          <Text style={styles.modalCancelText}>Cancel</Text>
+          <Text style={styles.modalCancelText}>{T("common.cancel")}</Text>
         </Pressable>
       </BottomSheet>
 
@@ -207,7 +215,7 @@ export function StartNewSheet({
         onClose={() => resetJoinModal()}
         sheetStyle={styles.modalSheet}
       >
-        <Text style={styles.modalTitle}>Create a private channel</Text>
+        <Text style={styles.modalTitle}>{T("chat.new.channel")}</Text>
         <View style={styles.privacyNote}>
           <View style={styles.privacyNoteRow}>
             <Feather name="lock" size={14} color={Colors.e2ee} />
@@ -230,8 +238,8 @@ export function StartNewSheet({
             />
             <Text style={styles.privacyNoteText}>
               {newChannelOverNostr
-                ? "Reaches members over Bluetooth and the internet."
-                : "Works over Bluetooth range, not the internet."}
+                ? T("chat.new.reach_internet")
+                : T("chat.new.reach_mesh")}
             </Text>
           </View>
         </View>
@@ -258,12 +266,12 @@ export function StartNewSheet({
           )}
         </View>
 
-        {/* Reach. Encryption is always on (the removed "Private"/"Nostr"
+        {/* Reach. Encryption is always on (the removed T("chat.new.private")/"Nostr"
             pickers only set unread labels); this choice actually changes the
             send path: local mesh only, or also sealed and published over
             Nostr for out-of-range members. */}
         <View style={styles.optionGroup}>
-          <Text style={styles.optionLabel}>Reach</Text>
+          <Text style={styles.optionLabel}>{T("chat.new.reach")}</Text>
           <View style={styles.optionRow}>
             <Pressable
               style={[
@@ -320,8 +328,8 @@ export function StartNewSheet({
           </View>
           <Text style={styles.reachHint}>
             {newChannelOverNostr
-              ? "Reaches members over the internet too. Relays can see the channel is active, never its messages or who is in it."
-              : "Stays on the local mesh. Most private, nothing leaves Bluetooth range."}
+              ? T("chat.new.reach_internet_desc")
+              : T("chat.new.reach_mesh_desc")}
           </Text>
         </View>
 
@@ -337,7 +345,7 @@ export function StartNewSheet({
             setShowJoinLink(true);
           }}
           accessibilityRole="button"
-          accessibilityLabel="Join a private channel with an invite link"
+          accessibilityLabel={T("chat.new.join_link")}
         >
           <Feather name="link" size={14} color={Colors.accent} />
           <Text style={styles.joinLinkText}>
@@ -350,9 +358,9 @@ export function StartNewSheet({
             style={styles.modalCancel}
             onPress={() => resetJoinModal(true)}
             accessibilityRole="button"
-            accessibilityLabel="Back to the chooser"
+            accessibilityLabel={T("chat.new.back_to_chooser")}
           >
-            <Text style={styles.modalCancelText}>Back</Text>
+            <Text style={styles.modalCancelText}>{T("common.back")}</Text>
           </Pressable>
           <Pressable
             style={[
@@ -362,17 +370,17 @@ export function StartNewSheet({
             onPress={handleAdd}
             disabled={!canCreate}
             accessibilityRole="button"
-            accessibilityLabel="Create channel"
+            accessibilityLabel={T("chat.new.create_channel")}
             accessibilityState={{ disabled: !canCreate }}
             accessibilityHint={
               nameTooShort
-                ? "Enter a channel name first"
+                ? T("chat.new.name_required")
                 : nameAlreadyExists
-                  ? "That name is already taken"
+                  ? T("chat.new.name_taken")
                   : undefined
             }
           >
-            <Text style={styles.modalConfirmText}>Create</Text>
+            <Text style={styles.modalConfirmText}>{T("chat.new.create")}</Text>
           </Pressable>
         </View>
       </BottomSheet>
@@ -587,7 +595,7 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
     chooserDivider: {
       height: StyleSheet.hairlineWidth,
       backgroundColor: Colors.border,
-      marginLeft: Spacing.base,
+      marginStart: Spacing.base,
     },
     chooserRow: {
       flexDirection: "row",

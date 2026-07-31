@@ -2,7 +2,16 @@
 
 > **This is the spec sheet.** Exact constants, byte layouts, and UUIDs. When writing `packet-codec.ts` or the native BLE module, read this document. When in doubt about a value, this document wins.
 >
-> Source of truth: `bitchat/ios/localPackages/BitFoundation/Sources/BitFoundation/BinaryProtocol.swift` and `bitchat/android/.../protocol/BinaryProtocol.kt`. Both iOS and Android use the same binary format.
+> Source of truth: `bitchat/ios/localPackages/BitFoundation/Sources/BitFoundation/BinaryProtocol.swift` and `bitchat/android/.../protocol/BinaryProtocol.kt`. Both iOS and Android use the same header layout and the same framing.
+>
+> **They do not implement the same set of packet types.** bitchat-android's
+> `MessageType` enum stops at `FILE_TRANSFER (0x22)`: it has no `0x23` board
+> post, `0x24` prekey bundle, `0x25` group message, `0x26`/`0x27` ping/pong,
+> `0x28` gateway carrier or `0x29` voice frame. Those exist on bitchat-iOS
+> only. Anything Airhop sends above `0x22` therefore reaches iOS peers and is
+> ignored by Android ones, exactly as an unknown type should be. Read every
+> "bitchat compatible" note in these docs as "bitchat-iOS compatible, ignored
+> by bitchat-android" for those types.
 
 ## 1. BLE Identifiers
 

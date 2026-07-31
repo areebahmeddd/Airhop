@@ -6,19 +6,74 @@
 // an if) which is how they drift in behaviour next. One definition each, so
 // every list row in the app agrees on what "yesterday" looks like.
 //
-// Everything here is locale-aware by way of `toLocale*String([])`: passing an
-// empty locale list uses the device's own, so a 24-hour phone shows 24-hour
-// times and a phone set to Japanese gets Japanese weekday names for free.
+// Locale
+// ------
+// Everything here formats in the app's language, not the device's. Those are
+// different once there is a language picker: a user reading Airhop in Spanish
+// on an English phone should see "mar" beside a message, not "Tue". This is the
+// whole reason `toLocale*String([])` is gone. The empty locale list meant "ask
+// the OS", which is exactly the value that diverges.
+//
+// Reactivity: the language is read at call time from the i18n store. Every
+// screen that renders a timestamp sits under App.tsx, which subscribes to that
+// store for its own copy, so a language change re-renders the tree and these
+// are re-run. No formatter needs to be a hook.
+//
+// Digits: month and weekday names come from Intl and are correct per locale for
+// free. Numerals are pinned to Latin here on purpose. A byte count, a duration
+// and a clock time are machine data, they sit in `FontFamily.mono` next to
+// Latin units ("MB", "sats"), and a run of Arabic-Indic digits beside a Latin
+// unit reads worse than either alone. Prose numbers, the ones inside a
+// translated sentence, get no such override and follow the locale.
+
+import { getLanguage, t } from "../i18n";
 
 // Milliseconds in a day, for the calendar-distance arithmetic below.
 const DAY_MS = 86_400_000;
 
 /** Clock time only, e.g. "14:32". For a row already grouped under a date. */
+// Latin digits are requested through the BCP-47 extension rather than the
+// `numberingSystem` option. Both are standard, but an extension an engine does
+// not implement is ignored during locale negotiation, whereas an option it does
+// not implement can throw. Hermes ships a partial Intl, so the form that
+// degrades quietly is the correct one here. Month and weekday names are words,
+function latinLocale(): string {
+  return `${getLanguage()}-u-nu-latn`;
+}
+
+// `Intl.DateTimeFormat` is expensive to construct and these run once per list
+// row, so instances are cached per language and shape. `toLocaleDateString`
+// built a fresh one on every call.
+const dateFormatters = new Map<string, Intl.DateTimeFormat>();
+
+function formatter(options: Intl.DateTimeFormatOptions): Intl.DateTimeFormat {
+  const locale = latinLocale();
+  const key = `${locale}|${JSON.stringify(options)}`;
+  const cached = dateFormatters.get(key);
+  if (cached !== undefined) return cached;
+  const made = new Intl.DateTimeFormat(locale, options);
+  dateFormatters.set(key, made);
+  return made;
+}
+
+const numberFormatters = new Map<string, Intl.NumberFormat>();
+
+function numberFormatter(options: Intl.NumberFormatOptions): Intl.NumberFormat {
+  const locale = latinLocale();
+  const key = `${locale}|${JSON.stringify(options)}`;
+  const cached = numberFormatters.get(key);
+  if (cached !== undefined) return cached;
+  const made = new Intl.NumberFormat(locale, options);
+  numberFormatters.set(key, made);
+  return made;
+}
+
+/** Clock time only, e.g. "14:32". For a row already grouped under a date. */
 export function formatClockTime(ms: number): string {
-  return new Date(ms).toLocaleTimeString([], {
+  return formatter({
     hour: "2-digit",
     minute: "2-digit",
-  });
+  }).format(ms);
 }
 
 /**
@@ -52,16 +107,19 @@ export function formatListTimestamp(ms: number): string {
   const days = calendarDaysAgo(then, now);
 
   if (days <= 0) return formatClockTime(ms);
-  if (days === 1) return "Yesterday";
-  if (days < 7) return then.toLocaleDateString([], { weekday: "short" });
+  if (days === 1) return t("format.yesterday");
+  if (days < 7) return formatter({ weekday: "short" }).format(then);
   if (then.getFullYear() === now.getFullYear()) {
-    return then.toLocaleDateString([], { month: "short", day: "numeric" });
+    return formatter({
+      month: "short",
+      day: "numeric",
+    }).format(then);
   }
-  return then.toLocaleDateString([], {
+  return formatter({
     year: "numeric",
     month: "short",
     day: "numeric",
-  });
+  }).format(then);
 }
 
 /**
@@ -74,28 +132,60 @@ export function formatDateSeparator(ms: number): string {
   const now = new Date();
   const days = calendarDaysAgo(then, now);
 
-  if (days <= 0) return "Today";
-  if (days === 1) return "Yesterday";
-  if (days < 7) return then.toLocaleDateString([], { weekday: "long" });
+  if (days <= 0) return t("format.today");
+  if (days === 1) return t("format.yesterday");
+  if (days < 7) return formatter({ weekday: "long" }).format(then);
   if (then.getFullYear() === now.getFullYear()) {
-    return then.toLocaleDateString([], {
+    return formatter({
       weekday: "short",
       month: "short",
       day: "numeric",
-    });
+    }).format(then);
   }
-  return then.toLocaleDateString([], {
+  return formatter({
     year: "numeric",
     month: "short",
     day: "numeric",
-  });
+  }).format(then);
+}
+
+/** A full date for a record rather than a list row, e.g. "4 March 2026". */
+export function formatLongDate(ms: number): string {
+  return formatter({
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+  }).format(ms);
+}
+
+/**
+ * A count inside a translated sentence, e.g. a wallet balance or a hop count.
+ *
+ * Grouped with the locale's own separator (1,000 / 1.000 / 1 000), because that
+ * is what makes a long number readable, but with Latin digits: these sit beside
+ * Latin units and in the monospace face, per the note at the top of this file.
+ */
+export function formatNumber(value: number): string {
+  return numberFormatter({}).format(value);
 }
 
 /** Byte count for a file row or a storage figure, e.g. "1.4 MB". */
 export function formatBytes(bytes: number): string {
-  if (bytes < 1024) return `${String(bytes)} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  // Grouping is off throughout: the largest value any branch can produce is
+  // 1023 (bytes and kilobytes are promoted past that) and a grouped "1,023 B"
+  // is noise. Latin digits and a locale decimal separator, so German reads
+  // "1,4 MB" without the digits changing script.
+  if (bytes < 1024) return `${formatFixed(bytes, 0)} B`;
+  if (bytes < 1024 * 1024) return `${formatFixed(bytes / 1024, 0)} KB`;
+  return `${formatFixed(bytes / (1024 * 1024), 1)} MB`;
+}
+
+function formatFixed(value: number, fractionDigits: number): string {
+  return numberFormatter({
+    minimumFractionDigits: fractionDigits,
+    maximumFractionDigits: fractionDigits,
+    useGrouping: false,
+  }).format(value);
 }
 
 /** Elapsed or remaining seconds as m:ss, for recordings and transfer ETAs. */

@@ -163,44 +163,11 @@ bitchat is an excellent foundation. Airhop fills the gaps it left open.
 
 **Milestone:** Feature-complete. Every core service has passing tests. No known protocol bugs.
 
-### v1.0.0: UI + App Store Release ✅
+### v0.9.5: Cashu Wallet ✅
 
-**Goal:** Production UI polish and public release.
+**Goal:** A real wallet in the `Wallet` tab, not a token viewer.
 
-- [x] Onboarding flow (welcome screen, animated identity generation, username reveal)
-- [x] Visual design (monochromatic dark theme, Feather icon system, design token system)
-- [x] Animations and transitions (keyframe spin/fade for key generation, fade-up reveal)
-- [x] Navigation shell (4-tab state machine, sub-tabs, Android BackHandler)
-- [x] Accessibility audit
-- [x] App Store and Play Store submission
-- [x] YouTube demo series: full offline mesh demo, voice PTT across 3 devices, Nostr bridge handoff, panic wipe
-
-**Milestone:** UI complete, accessibility audited, and submitted to both stores.
-
-### v1.1.0: AI + Wallets
-
-**Goal:** An offline local AI assistant and a Cashu ecash wallet, shipped as two independent, self-contained additions to the existing tab shell.
-
-Both features are built to Airhop's core constraint: no network dependency for the on-device experience. The AI assistant never phones home for inference, and the wallet's primary path (Cashu) never requires internet either. Neither feature touches the BLE mesh protocol, wire format, or crypto layer.
-
-#### AI Assistant
-
-There is no AI tab today. v1.1.0 creates it, along with `src/features/ai/ai-screen.tsx`, and wires up a real, fully local inference path: a user downloads a small open-weight model once, and every question after that is answered entirely on-device, with zero network calls, so it works mid-blackout or deep off-grid exactly the same as with a full signal.
-
-- [ ] Model picker and download flow: a short list of small, offline-capable GGUF models (1–3B parameters, e.g. Gemma 4) with size and RAM shown before download
-- [ ] On-device inference engine (e.g. `llama.rn` / `llama.cpp` bindings) running fully offline, no server, no API key, no telemetry
-- [ ] `src/core/ai/model-manager.ts`: download, verify checksum, store under app sandbox, delete/swap models
-- [ ] `src/core/ai/inference.ts`: prompt/response loop against the loaded model, streamed token output
-- [ ] Chat-style AI UI in a new `src/features/ai/ai-screen.tsx`: ask critical or general questions (first-aid, survival, navigation, general knowledge) when there is no network at all
-- [ ] Conversation history kept local-only (MMKV), never leaves the device
-- [ ] Clear on-screen indicator that the model is fully offline and no data is transmitted
-- [ ] Low-end device fallback: warn and block download if the device lacks the RAM/storage for the selected model
-
-**Milestone:** A user with zero connectivity downloads a model once, then asks it questions and gets answered fully offline, with no server round-trip of any kind.
-
-#### Cashu Wallet (Shipped in v1.0.0)
-
-The `Wallet` tab is a real wallet, not a token viewer. Cashu is the primary rail because its tokens are plain strings, so value moves device to device over BLE with no server in the middle. Lightning moves value in and out, and Nutzaps are a secondary online path.
+Cashu is the primary rail because its tokens are plain strings, so value moves device to device over BLE with no server in the middle. Lightning moves value in and out, and Nutzaps are a secondary online path.
 
 - [x] `src/core/payments/cashu.ts`: detection (bitchat-identical), decoding, NUT-12 DLEQ verification against cached keysets, fee-aware proof selection
 - [x] `src/core/payments/nutzap.ts`: NIP-61 kind 9321 / 10019 construction and parsing
@@ -218,74 +185,113 @@ The `Wallet` tab is a real wallet, not a token viewer. Cashu is the primary rail
 
 **Milestone:** A user sends and receives Cashu ecash entirely offline over BLE, tops up and cashes out over Lightning, and can rebuild the balance on a new device from twelve words.
 
+### v0.9.6: String Extraction ✅
+
+**Goal:** Every user-facing string in one catalog, with the compiler enforcing it.
+
+English ships. The other languages land in v1.3.0, and because the extraction is complete they are catalog files rather than screen work.
+
+- [x] Translation runtime with no library (`src/i18n/`): `t` / `useT` / `tPlural`, named-placeholder interpolation
+- [x] Completeness enforced by `tsc`: every locale is a `Record<TranslationKey, string>` derived from `en.ts`, so a partial locale does not compile and there is no runtime fallback
+- [x] 1,035 keys across 62 files, zero hardcoded user-facing strings
+- [x] Plurals through `tPlural`, never concatenation
+- [x] Right-to-left groundwork (`src/i18n/layout.ts`): logical properties app-wide, mirrored chevrons; `radar-view.tsx` exempt as a polar plot of physical space
+- [x] Layout direction pinned at startup, so a device set to Arabic does not mirror an English UI
+- [x] CI guards: a hardcoded-string ceiling of zero, and module-load-time translations
+
+**Milestone:** Every screen reads from the catalog, and CI cannot regress it.
+
+### v1.0.0: UI + App Store Release ✅
+
+**Goal:** Production UI polish and public release.
+
+- [x] Onboarding flow (welcome screen, animated identity generation, username reveal)
+- [x] Visual design (monochromatic dark theme, Feather icon system, design token system)
+- [x] Animations and transitions (keyframe spin/fade for key generation, fade-up reveal)
+- [x] Navigation shell (4-tab state machine, sub-tabs, Android BackHandler)
+- [x] Accessibility audit
+- [x] App Store and Play Store submission
+- [x] YouTube demo series: full offline mesh demo, voice PTT across 3 devices, Nostr bridge handoff, panic wipe
+
+**Milestone:** UI complete, accessibility audited, and submitted to both stores.
+
+### v1.1.0: AI Assistant
+
+**Goal:** An offline local AI assistant, shipped as a self-contained addition to the existing tab shell.
+
+It is built to Airhop's core constraint: no network dependency for the on-device experience. The assistant never phones home for inference, and it does not touch the BLE mesh protocol, wire format, or crypto layer.
+
+- [ ] Model picker and download flow: a short list of small, offline-capable GGUF models (1–3B parameters, e.g. Gemma 4) with size and RAM shown before download
+- [ ] On-device inference engine (e.g. `llama.rn` / `llama.cpp` bindings) running fully offline, no server, no API key, no telemetry
+- [ ] `src/core/ai/model-manager.ts`: download, verify checksum, store under app sandbox, delete/swap models
+- [ ] `src/core/ai/inference.ts`: prompt/response loop against the loaded model, streamed token output
+- [ ] Chat-style AI UI in a new `src/features/ai/ai-screen.tsx`: ask critical or general questions (first-aid, survival, navigation, general knowledge) when there is no network at all
+- [ ] Conversation history kept local-only (MMKV), never leaves the device
+- [ ] Clear on-screen indicator that the model is fully offline and no data is transmitted
+- [ ] Low-end device fallback: warn and block download if the device lacks the RAM/storage for the selected model
+
+**Milestone:** A user with zero connectivity downloads a model once, then asks it questions and gets answered fully offline, with no server round-trip of any kind.
+
 ### v1.2.0: Plugin Integrations
 
-**Goal:** Extend Airhop with opt-in plugins for social federation and regional payment systems, without touching the core protocol.
+**Goal:** Opt-in plugins for social federation and regional payments, without touching the core protocol.
 
-Airhop's identity model (Ed25519 keypairs, no accounts) is compatible in spirit with both the [AT Protocol](https://atproto.com) (ATProto, used by Bluesky) and [ActivityPub](https://w3.org/TR/activitypub/) (the W3C standard used by Mastodon, Pixelfed, PeerTube, and the broader Fediverse). v1.2.0 introduces `SocialPlugin` and `PaymentPlugin` interfaces that let users opt in to bridging their Airhop identity to these networks and payment systems. Each plugin is a discrete, auditable integration that users enable individually.
-
-All plugins are strictly opt-in. Users who do not enable any plugin are unaffected. The BLE mesh protocol, wire format, and on-device encryption are unchanged. No plugin can access private keys or relay traffic without explicit per-action user confirmation.
+Airhop's identity model (Ed25519 keypairs, no accounts) maps onto both the [AT Protocol](https://atproto.com) used by Bluesky and [ActivityPub](https://w3.org/TR/activitypub/) used by the Fediverse, so bridging is an integration rather than a redesign. Every plugin is opt-in and separately auditable: users who enable none are unaffected, the mesh protocol and wire format are unchanged, and no plugin reaches private keys or relay traffic without a per-action confirmation. UPI is included as an online-only convenience, not a private rail. Every UPI transaction is KYC-linked and visible to NPCI, so Cashu remains the offline payment system.
 
 #### AT Protocol (Bluesky)
 
-- [ ] AT Protocol DID resolution and keypair association (`did:key` derived from Airhop's Ed25519 identity)
-- [ ] Read feed integration: pull Bluesky home and discovery feeds into a dedicated Airhop tab
-- [ ] Post bridge: optionally publish Airhop channel messages as Bluesky records (`app.bsky.feed.post` lexicon)
-- [ ] Follow graph import: discover which Bluesky contacts are also Airhop users via DID cross-referencing
-- [ ] PDS (Personal Data Server) self-hosting option for users who want full data sovereignty
+- [ ] DID resolution and keypair association (`did:key` derived from Airhop's Ed25519 identity)
+- [ ] Read feed integration: Bluesky home and discovery feeds in a dedicated tab
+- [ ] Post bridge: optionally publish channel messages as `app.bsky.feed.post` records
+- [ ] Follow graph import: find which Bluesky contacts are also Airhop users via DID cross-referencing
+- [ ] PDS (Personal Data Server) self-hosting option for full data sovereignty
 
 #### ActivityPub / Fediverse
 
-- [ ] ActivityPub Actor construction from Airhop's Ed25519 identity
-- [ ] Mastodon-compatible inbox and outbox: receive mentions and DMs from any ActivityPub-compliant server
-- [ ] Outbound posting: optionally broadcast Airhop public channel messages as ActivityPub Notes
-- [ ] WebFinger lookup for Fediverse contact discovery
+- [ ] Actor construction from Airhop's Ed25519 identity
+- [ ] Mastodon-compatible inbox and outbox: mentions and DMs from any compliant server
+- [ ] Outbound posting: optionally broadcast public channel messages as Notes
+- [ ] WebFinger lookup for contact discovery
 
-#### UPI Payment Plugin (India)
-
-UPI is an overlay on India's IMPS infrastructure operated by NPCI under RBI. Every transaction is a real-time bank-to-bank transfer with full KYC linkage, visible to NPCI and the Indian government. This is structurally incompatible with Airhop's core threat model, so Cashu remains the correct offline payment system.
-
-For Indian users who want to transact in Rupees when online, UPI works cleanly as an opt-in plugin. Android's standard UPI deep link (`upi://pay?pa=...`) lets any UPI-registered app (GPay, PhonePe, BHIM) handle payment initiation with no NPCI API keys required.
+#### UPI Payments (India)
 
 - [ ] `UPIPaymentPlugin` implementing the `PaymentPlugin` interface
-- [ ] Deep link payment initiation: `upi://pay?pa=recipient@upi&am=...&cu=INR` (Android only)
-- [ ] Opt-in only, disabled by default
-- [ ] Disclosure shown on enable: "UPI transactions are linked to your verified identity and visible to NPCI. Do not use for sensitive communications."
-- [ ] Only activates when internet is available; no offline UPI
-- [ ] Shares UPI ID as contact info only; no bank details transmitted
-
-> Additional plugins for new integrations can be proposed and documented here as the ecosystem grows.
+- [ ] Deep link initiation (`upi://pay?pa=...&am=...&cu=INR`), Android only, handled by any UPI-registered app
+- [ ] Opt-in, disabled by default, online only
+- [ ] Disclosure on enable: transactions are linked to a verified identity and visible to NPCI
+- [ ] Shares the UPI ID as contact info only; no bank details transmitted
 
 #### Plugin Architecture
 
-- [ ] Define a generic `Plugin` interface in `src/core/` with typed subtypes for each integration category, so any future integration can be added without modifying core protocol code
-- [ ] Plugin registry: users see available plugins and opt in per-plugin with explicit permission prompts
-- [ ] Strict data boundary: plugins can only access content the user explicitly marks as shareable; BLE mesh traffic is never exposed to plugins
-- [ ] Plugin capability model: no plugin can access private keys or contact the network on behalf of the user without a per-action confirmation
+- [ ] Generic `Plugin` interface in `src/core/` with typed subtypes per integration category
+- [ ] Plugin registry with per-plugin opt-in and explicit permission prompts
+- [ ] Strict data boundary: plugins see only what the user marks shareable, never mesh traffic
+- [ ] Capability model: no key access or network call on the user's behalf without a per-action confirmation
 
-**Milestone:** A user can link their Airhop identity to a Bluesky DID and a Mastodon actor, view their Bluesky feed inside Airhop, and optionally cross-post to both networks. Indian users can initiate UPI payments from a contact's profile when online.
+**Milestone:** An Airhop identity linked to a Bluesky DID and a Mastodon actor, cross-posting to both. Indian users initiate UPI payments from a contact's profile when online.
 
 ### v1.3.0: Stabilization
 
-**Goal:** Harden the shipped release before expanding to new platforms.
+**Goal:** Harden the shipped release before expanding to new platforms, and ship the catalog in ten languages.
 
-No new features ship in this range. The focus is production bugs found after launch, race conditions in the BLE and crypto state machines, UI iteration from real user feedback, and extended cross-device battery and compatibility testing. The mesh backend gets battle-tested across as many device and OS combinations as possible before the codebase expands to new targets.
+No new features ship in this range. The mesh backend gets battle-tested across as many device and OS combinations as possible, and the extraction from v0.9.6 becomes translations.
 
-Alongside stabilization, v1.3.0 ships Airhop's **own embedded Tor binary for Android**, mirroring what `arti.xcframework` already gives iOS. Today Android Tor routing depends on the user installing Orbot (a third-party app) and running it in VPN mode; bundling an Arti-based Android library removes that external dependency so Android gets the same one-toggle, no-install Tor experience as iOS, with no reliance on any third-party app.
+- [ ] Production bugs found after launch
+- [ ] Race conditions in the BLE and crypto state machines
+- [ ] UI iteration from real user feedback
+- [ ] Extended cross-device battery and compatibility testing
+- [ ] Ten languages (`en ar de es fa hi id pt-BR ru zh-Hans`), chosen to cover every script class and layout hazard in bitchat/ios's thirty. Keys are named after bitchat's, so much of the catalog can be lifted from its public-domain `Localizable.xcstrings`
+- [ ] Runtime a second language needs: locale store, CLDR plurals via `@formatjs/intl-pluralrules`, device language negotiation, in-app picker
+- [ ] Right-to-left pass on device in Arabic
+- [ ] Translated iOS permission dialogs and Android service notification
 
-- [ ] Bundle an Arti-based Android Tor library (JNI over the Rust `arti` core), exposing the same SOCKS5 endpoint contract as iOS
-- [ ] Route the Android Tor WebSocket through the embedded proxy (the JS Tor routing layer already exists and is platform-agnostic; only the native provider changes)
-- [ ] Keep Orbot detection as a fallback for users who prefer their own Tor, but no longer require it
-
-**Milestone:** Zero open P0/P1 bugs. BLE state machine stable across Pixel, Samsung, and Xiaomi device classes. Embedded Tor on both iOS and Android, no third-party app required. Ready to expand to new platforms.
+**Milestone:** Zero open P0/P1 bugs. BLE state machine stable across Pixel, Samsung, and Xiaomi device classes. Ten complete catalogs, each compiling against English. Ready to expand to new platforms.
 
 ### v1.4.0: Web / Browser
 
 **Goal:** A Nostr-only web companion that shares the TypeScript protocol core.
 
-Web Bluetooth cannot advertise as a GATT Peripheral, so browser tabs cannot participate in the BLE mesh. The web target is a Nostr-only interface: private DMs, group channels, geo-relay discovery, Cashu payments, and full identity and crypto. It is a lightweight companion for desktop or remote use, not a mesh node.
-
-Browser support is limited by the Web Bluetooth API. Chrome and Edge support it. Firefox and Safari do not, and there is no polyfill path. The app will detect the browser and show a clear unsupported notice on Firefox and Safari rather than silently failing.
+Web Bluetooth cannot advertise as a GATT Peripheral, so a browser tab cannot join the BLE mesh. The web target is Nostr-only: private DMs, group channels, geo-relay discovery, Cashu payments, identity and crypto. A companion for desktop or remote use, not a mesh node. Chrome and Edge support Web Bluetooth; Firefox and Safari do not, and there is no polyfill path, so those get an explicit notice rather than a silent failure.
 
 - [ ] `react-native-web` build target
 - [ ] BLE-dependent code paths gated behind platform checks so the build does not fail
@@ -312,21 +318,21 @@ The TypeScript protocol core runs in Node.js without React Native. A terminal no
 
 ### v1.6.0: Smartwatch Companions
 
-**Goal:** Lightweight companion apps for Apple Watch and Wear OS that extend Airhop's interface to the wrist without requiring any change to the core protocol.
+**Goal:** Companion apps for Apple Watch and Wear OS, with no change to the core protocol.
 
-Neither watchOS nor Wear OS provide the background BLE execution primitives needed to act as a full mesh relay node. The watch apps are companion interfaces that communicate with the Airhop phone app, not standalone nodes.
+Neither watchOS nor Wear OS provides the background BLE execution primitives needed to relay mesh traffic, so both are companion interfaces to the phone app rather than standalone nodes.
 
-**Apple Watch (watchOS)**
-Built in SwiftUI using WatchConnectivity to communicate with the iOS Airhop app.
+#### Apple Watch (watchOS)
 
+- [ ] SwiftUI app talking to the iOS app over WatchConnectivity
 - [ ] Incoming message notifications with sender name and channel
 - [ ] Quick reply from a set of short pre-defined responses
-- [ ] Panic wipe trigger: a specific gesture or button sequence on the watch sends an immediate wipe command to the paired iPhone, destroying all keys and message content in under one second
-- [ ] App Clip / glanceable recent messages complication
+- [ ] Panic wipe trigger: a gesture sends an immediate wipe command to the paired iPhone, destroying all keys and message content in under a second
+- [ ] Glanceable recent-messages complication
 
-**Wear OS (Android)**
-Built in Kotlin with Jetpack Compose for Wear, using the Wearable Data Layer API.
+#### Wear OS (Android)
 
+- [ ] Kotlin app on Compose for Wear, using the Wearable Data Layer API
 - [ ] Incoming message notifications mirrored from the Android app
 - [ ] Quick reply support
 - [ ] Panic wipe trigger matching the Apple Watch behaviour
@@ -338,9 +344,7 @@ Built in Kotlin with Jetpack Compose for Wear, using the Wearable Data Layer API
 
 **Goal:** Native desktop apps, macOS first.
 
-**macOS** is the priority. CoreBluetooth runs on macOS with the same API surface as iOS. The existing Swift `AirhopBLEModule` requires minimal changes. The bitchat project already ships a macOS target, so this path is well-understood.
-
-**Windows** is secondary. BLE is supported via WinRT Bluetooth APIs, but it requires a new native module since the Swift code does not run on Windows. The `react-native-windows` target is the React Native path. This is a separate work stream and ships as a point release after macOS stabilizes.
+macOS is the priority: CoreBluetooth has the same API surface as iOS, so the existing Swift `AirhopBLEModule` needs minimal change, and bitchat already ships a macOS target. Windows is secondary and ships as a point release after macOS stabilizes, since WinRT needs a new native module that the Swift code cannot provide.
 
 - [ ] `react-native-macos` target added to the project
 - [ ] `AirhopBLEModule.swift` audited and tested on macOS (CoreBluetooth is identical)
@@ -355,31 +359,29 @@ Built in Kotlin with Jetpack Compose for Wear, using the Wearable Data Layer API
 
 ### v1.8.0: SDK / Library
 
-**Goal:** Extract the protocol core into a versioned, documented public package and extend it to other languages before the security audit locks down the API surface.
+**Goal:** Extract the protocol core into a versioned public package before the audit locks down the API surface.
 
-`src/core/` is already structured as a pure TypeScript library: named exports, strict mode, no UI coupling. v1.8.0 formalises this into a standalone package. Shipping the SDK before the audit means v1.9.0 covers the public API as well as the internal protocol, and third-party developers building on `@airhop/core` inherit the same cryptographic guarantees.
+`src/core/` is already a pure TypeScript library: named exports, strict mode, no UI coupling. Shipping the SDK before v1.9.0 puts the public API inside the audit scope, and lets developers build bitchat-compatible apps without reimplementing Noise XX, the GCS gossip filter, Double Ratchet, or the packet codec. More independent implementations of the same wire protocol means a larger, more resilient mesh for everyone.
 
-Developers will be able to build bitchat-compatible applications without reimplementing Noise XX, the GCS gossip filter, Double Ratchet, or the packet codec. More independent implementations of the same wire protocol means a larger, more resilient mesh network for everyone.
+#### SDK Packages
 
 - [ ] Extract `src/core/` as a standalone npm package (`@airhop/core`) with semantic versioning
 - [ ] Extract `AirhopBLEModule` as a distributable React Native library (`@airhop/ble`)
 - [ ] Compile `@airhop/core` to WebAssembly for cross-language embedding
-- [ ] Python SDK (`airhop-core` on PyPI) wrapping the WASM build; targets server-side relay nodes and research tooling
+- [ ] Python SDK (`airhop-core` on PyPI) over the WASM build, for server-side relays and research tooling
 - [ ] Rust crate (`airhop-core` on crates.io) for high-performance relay and IoT infrastructure
-- [ ] Go module for deployment in server and container contexts
-- [ ] Define and stabilize the public API surface; mark internal utilities as private
-- [ ] Developer documentation: API reference, integration guide, example apps for each language
+- [ ] Go module for server and container deployment
+- [ ] Stabilize the public API surface; mark internal utilities as private
+- [ ] Developer documentation: API reference, integration guide, example app per language
 - [ ] Publish all packages under the MIT license
-- [ ] Example: a minimal bitchat-compatible node built entirely on `@airhop/core` in under 200 lines
+- [ ] Example: a minimal bitchat-compatible node on `@airhop/core` in under 200 lines
 
 #### Custom Application Profiles
 
-The SDK enables organizations and developers to ship purpose-built versions of Airhop with a specific subset of features, custom branding, and modified defaults. The protocol layer and security guarantees remain unchanged; only the application surface is configurable.
-
-- [ ] Define a build-time configuration interface for enabling and disabling feature modules (`payments`, `voice`, `video`, `nostr`, etc.)
-- [ ] Document the supported customization surface and the hard constraints that cannot be changed (crypto stack, packet signing, wire protocol)
-- [ ] Reference build: a stripped-down emergency communications profile using `@airhop/core` and `@airhop/ble` with location sharing prioritized and no payment features
-- [ ] Reference build: a high-anonymity profile with no persistent usernames, ephemeral-only channels, and stricter Tor defaults
+- [ ] Build-time configuration for enabling and disabling feature modules (`payments`, `voice`, `video`, `nostr`)
+- [ ] Document the customization surface and the constraints that cannot change (crypto stack, packet signing, wire protocol)
+- [ ] Reference build: emergency communications, location sharing prioritized, no payments
+- [ ] Reference build: high anonymity, no persistent usernames, ephemeral-only channels, stricter Tor defaults
 
 **Milestone:** `@airhop/core` published on npm, PyPI, and crates.io. A third-party app built on the SDK joins the mesh. Two reference custom builds ship.
 
@@ -402,32 +404,29 @@ This phase exists because cryptographic correctness cannot be self-certified. Th
 
 ### v2.0.0: Flagship Interface
 
-**Goal:** Ship a production-grade chat interface after the SDK and security audit are complete, and formalise the public-transparency commitment.
+**Goal:** A production-grade chat interface once the SDK and audit are complete, plus a standing transparency commitment.
+
+Private communication should be understandable, not merely trusted. v2.0.0 redesigns the interface for both modern and constrained devices, and makes the documentation and audit trail a permanent obligation rather than a release artifact.
 
 #### Flagship Chat Interface
 
-A complete redesign of the UI targeting both modern and constrained devices, following established messaging app UX conventions.
-
-- [ ] Full UI/UX audit against established messaging app conventions (signal, whatsapp, telegram interaction patterns)
-- [ ] Redesign with a consistent design system: typography scale, spacing, colour tokens, dark and light mode
-- [ ] Accessibility audit: WCAG 2.1 AA compliance, screen reader support, dynamic text sizing
-- [ ] Performance profiling on low-end hardware (2GB RAM Android devices, iPhone 7 class)
+- [ ] Full UI/UX audit against established messaging conventions (Signal, WhatsApp, Telegram interaction patterns)
+- [ ] Redesign on a consistent design system: typography scale, spacing, colour tokens, light and dark
+- [ ] Accessibility audit: WCAG 2.1 AA, screen reader support, dynamic text sizing
+- [ ] Performance profiling on low-end hardware (2GB RAM Android, iPhone 7 class)
 - [ ] Reduced-motion mode and battery-aware rendering
 - [ ] Broad device compatibility: Android API 21+ (Android 5.0, 2014), iOS 14+
-- [ ] Smooth animations via `react-native-reanimated` that degrade gracefully on old hardware
-
-**Milestone:** The redesigned UI ships as an update across iOS, Android, macOS, and web. WCAG 2.1 AA verified.
+- [ ] Smooth animations via `react-native-reanimated`, degrading gracefully on old hardware
 
 #### Transparency and Public Knowledge
 
-Airhop is built on the premise that private communication should be understandable, not just trusted. v2.0.0 formalises a commitment to keeping the technical documentation current and making the knowledge behind it accessible.
+- [ ] 100% of public API behaviour documented; no undocumented features, no silent changes between releases
+- [ ] CVEs and security findings disclosed as soon as a fix is available, with timeline and impact
+- [ ] Audit reports published in full, unredacted
+- [ ] Blog series on building private decentralized applications: Noise, offline-first architecture, BLE mesh design, Cashu, Nostr identity
+- [ ] YouTube deep dives: how the BLE mesh works, how Noise XX is implemented, how Double Ratchet gives forward secrecy, how Cashu tokens move offline
 
-- [ ] 100% of public API behaviour documented; no undocumented features or silent changes between releases
-- [ ] CVEs and security findings disclosed publicly as soon as a fix is available, with a clear timeline and impact assessment
-- [ ] Audit reports published in full with no redactions
-- [ ] Blog series: practical guides on building truly private, decentralized applications covering topics such as Noise protocol implementation, offline-first architecture, BLE mesh design, Cashu integration, and Nostr identity management
-- [ ] Each guide written for developers who want to build on top of Airhop or implement compatible systems independently
-- [ ] YouTube deep-dive series: how the BLE mesh works, how Noise XX is implemented, how Double Ratchet provides forward secrecy, how Cashu tokens transfer offline
+**Milestone:** The redesigned UI ships across iOS, Android, macOS, and web, WCAG 2.1 AA verified, with audit reports and documentation public.
 
 _Personal goal: I hope this thing takes off and I become a millionaire_
 

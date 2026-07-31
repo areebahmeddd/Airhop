@@ -26,6 +26,7 @@ import React, { useMemo, useRef, useState } from "react";
 import { Modal, Pressable, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { bareToken } from "../../core/payments/cashu";
+import { t, useT } from "../../i18n";
 import {
   FontSize,
   FontWeight,
@@ -56,6 +57,7 @@ export default function TokenScanner({
   onClose,
   onScanned,
 }: Props): React.JSX.Element | null {
+  const T = useT();
   const Colors = useThemeColors();
   const styles = useMemo(() => createStyles(Colors), [Colors]);
 
@@ -87,7 +89,10 @@ export default function TokenScanner({
     const granted = await ensurePermission(
       getCameraPermission,
       requestCameraPermission,
-      { label: "Camera access", purpose: "scan an ecash QR code" },
+      {
+        label: t("wallet.scan.camera_label"),
+        purpose: t("wallet.scan.camera_purpose"),
+      },
     );
     if (!granted) return;
     hasScannedRef.current = false;
@@ -102,7 +107,10 @@ export default function TokenScanner({
     const granted = await ensurePermission(
       () => ImagePicker.getMediaLibraryPermissionsAsync(),
       () => ImagePicker.requestMediaLibraryPermissionsAsync(),
-      { label: "Photo access", purpose: "read an ecash QR from an image" },
+      {
+        label: t("wallet.scan.photo_label"),
+        purpose: t("wallet.scan.photo_purpose"),
+      },
     );
     if (!granted) return;
 
@@ -118,14 +126,14 @@ export default function TokenScanner({
       if (value === null) {
         setError(
           target === "token"
-            ? "No ecash token found in that image."
-            : "No Lightning invoice found in that image.",
+            ? t("wallet.scan.no_token")
+            : t("wallet.scan.no_invoice"),
         );
         return;
       }
       finish(value);
     } catch {
-      setError("Could not read that image.");
+      setError(t("wallet.scan.unreadable"));
     }
   }
 
@@ -140,9 +148,7 @@ export default function TokenScanner({
   }
 
   function handleCameraMountError(): void {
-    setError(
-      "Couldn't start the camera. Close other camera apps and try again.",
-    );
+    setError(t("wallet.scan.camera_failed"));
     setCameraReady(false);
   }
 
@@ -168,7 +174,7 @@ export default function TokenScanner({
                 style={styles.cameraIconBtn}
                 hitSlop={HIT_SLOP}
                 accessibilityRole="button"
-                accessibilityLabel="Close scanner"
+                accessibilityLabel={T("wallet.scan.close")}
               >
                 <Feather name="x" size={20} color="#FFFFFF" />
               </Pressable>
@@ -176,8 +182,8 @@ export default function TokenScanner({
             <View style={styles.reticle} />
             <Text style={styles.cameraHint}>
               {target === "token"
-                ? "Point at an ecash QR code."
-                : "Point at a Lightning invoice QR code."}{" "}
+                ? T("wallet.scan.aim_token")
+                : T("wallet.scan.aim_invoice")}{" "}
               It is read on this device; nothing is sent anywhere.
             </Text>
           </SafeAreaView>
@@ -188,12 +194,14 @@ export default function TokenScanner({
           <View style={styles.sheet}>
             <View style={styles.handle} />
             <Text style={styles.title}>
-              {target === "token" ? "Scan ecash" : "Scan invoice"}
+              {target === "token"
+                ? T("wallet.scan.title_token")
+                : T("wallet.scan.title_invoice")}
             </Text>
             <Text style={styles.subtitle}>
               {target === "token"
-                ? "Read a Cashu token from another wallet. Works with any Cashu wallet, not only Airhop."
-                : "Read a Lightning invoice to pay it from your balance."}
+                ? T("wallet.scan.desc_token")
+                : T("wallet.scan.desc_invoice")}
             </Text>
             {error !== null && <Text style={styles.error}>{error}</Text>}
 
@@ -201,22 +209,26 @@ export default function TokenScanner({
               style={styles.action}
               onPress={() => void handleUseCamera()}
               accessibilityRole="button"
-              accessibilityLabel="Scan with the camera"
+              accessibilityLabel={T("wallet.scan.use_camera_a11y")}
             >
               <Feather name="camera" size={18} color={Colors.accent} />
-              <Text style={styles.actionText}>Use camera</Text>
+              <Text style={styles.actionText}>
+                {T("wallet.scan.use_camera")}
+              </Text>
             </Pressable>
             <Pressable
               style={styles.action}
               onPress={() => void handleUseImage()}
               accessibilityRole="button"
-              accessibilityLabel="Read a QR code from a saved image"
+              accessibilityLabel={T("wallet.scan.pick_image_a11y")}
             >
               <Feather name="image" size={18} color={Colors.accent} />
-              <Text style={styles.actionText}>Pick from photos</Text>
+              <Text style={styles.actionText}>
+                {T("wallet.scan.pick_image")}
+              </Text>
             </Pressable>
             <Pressable style={styles.cancel} onPress={dismiss}>
-              <Text style={styles.cancelText}>Cancel</Text>
+              <Text style={styles.cancelText}>{T("common.cancel")}</Text>
             </Pressable>
           </View>
         </View>

@@ -48,6 +48,7 @@ import {
   KIND_PRESENCE,
   TAG_MESSAGE_ID,
 } from "../core/nostr/presence";
+import { t } from "../i18n";
 import { useActivityStore } from "../store/activity-store";
 import { useChatStore } from "../store/chat-store";
 import { useNoticesStore } from "../store/notices-store";
@@ -130,12 +131,12 @@ export function isValidGeohash(gh: string): boolean {
 // GeohashChannelLevel.level(forLength:). Used only for display labels.
 export function geohashLevelName(gh: string): string {
   const n = gh.length;
-  if (n <= 2) return "Region";
-  if (n <= 4) return "Province";
-  if (n === 5) return "City";
-  if (n === 6) return "Neighborhood";
-  if (n === 7) return "City block";
-  return "Building";
+  if (n <= 2) return t("mesh.level.region");
+  if (n <= 4) return t("mesh.level.province");
+  if (n === 5) return t("mesh.level.city");
+  if (n === 6) return t("mesh.level.neighborhood");
+  if (n === 7) return t("mesh.level.block");
+  return t("mesh.level.building");
 }
 
 // Relays to publish/subscribe per geohash cell. Matches bitchat's
@@ -836,7 +837,9 @@ export class GeohashChannelService {
         isDM: false,
         senderID: event.pubkey,
         senderNickname:
-          nickname !== undefined && nickname.length > 0 ? nickname : "Someone",
+          nickname !== undefined && nickname.length > 0
+            ? nickname
+            : t("notif.someone"),
         preview: `${isUrgent ? "Urgent notice · " : "Notice · "}${event.content}`,
         timestampMs: createdAtMs,
         kind: "notice",

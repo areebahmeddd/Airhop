@@ -8,6 +8,7 @@
 //   - `group:<id>`           -> the group's name from group-store
 //   - `#name` / everything   -> the name without its leading #
 
+import { t } from "../i18n";
 import {
   isManualGeoChannel,
   manualGeohashOf,
@@ -19,7 +20,9 @@ export function chatDisplayName(channel: string): string {
   if (channel.startsWith("dm:")) return peerIDToUsername(channel.slice(3));
   if (isManualGeoChannel(channel)) return manualGeohashOf(channel) ?? channel;
   if (channel.startsWith("group:")) {
-    return useGroupStore.getState().nameForChannel(channel) ?? "Group";
+    return (
+      useGroupStore.getState().nameForChannel(channel) ?? t("chat.group_badge")
+    );
   }
   return channel.replace(/^#/, "");
 }
@@ -31,7 +34,9 @@ export function chatDisplayName(channel: string): string {
 // its own "#name". Not for DMs (those use the sender/contact name).
 export function channelLabel(channel: string): string {
   if (channel.startsWith("group:")) {
-    return useGroupStore.getState().nameForChannel(channel) ?? "Group";
+    return (
+      useGroupStore.getState().nameForChannel(channel) ?? t("chat.group_badge")
+    );
   }
   if (isManualGeoChannel(channel)) {
     return `#${manualGeohashOf(channel) ?? channel}`;

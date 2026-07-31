@@ -58,6 +58,8 @@ import ProfileScreen from "./src/features/settings/profile-screen";
 import WalletScreen, {
   type WalletAction,
 } from "./src/features/wallet/wallet-screen";
+import { initI18n, t, useT, useTPlural, type TranslationKey } from "./src/i18n";
+import { arrowBack } from "./src/i18n/layout";
 import { applyAirhopLink } from "./src/services/link-router";
 import {
   hasLocationPermission,
@@ -124,11 +126,17 @@ import {
   hasBlePermissions,
 } from "./src/utils/ble-permissions";
 import { parseAirhopLink } from "./src/utils/deep-link";
+import { formatNumber } from "./src/utils/format";
 import { mentionsNickname } from "./src/utils/mentions";
 import { messagePreviewText } from "./src/utils/message-preview";
 import { showBlockedAlert } from "./src/utils/permissions";
 import { sumUnread } from "./src/utils/unread";
 import { peerIDToUsername } from "./src/utils/username";
+
+// Layout direction is a native flag that React Native reads once, at startup,
+// before anything mounts. Setting it here, at module scope, is the only place
+// early enough for the very first frame to be correct.
+initI18n();
 
 // ---------------------------------------------------------------------------
 // Navigation types
@@ -211,8 +219,8 @@ async function startMeshWithPermissions(
     // deep-linked dialog the camera and photo flows use, rather than a
     // dead-end box reciting a path to tap through.
     showBlockedAlert({
-      label: "Bluetooth access",
-      purpose: "discover nearby devices over the mesh",
+      label: t("permission.bluetooth.label"),
+      purpose: t("permission.bluetooth.purpose"),
     });
   }
   // A denial that can still be re-asked gets no dialog. The Mesh banner already
@@ -264,8 +272,11 @@ async function startMeshWithPermissions(
         client,
         onRedeemed: (amount, unit, from) => {
           showAlert(
-            `+${amount.toLocaleString()} ${unit}`,
-            `Nutzap received from ${from.slice(0, 12)}… and redeemed into your wallet.`,
+            t("wallet.nutzap.received_title", {
+              amount: formatNumber(amount),
+              unit,
+            }),
+            t("wallet.nutzap.received_body", { from: from.slice(0, 12) }),
           );
         },
       }),
@@ -375,6 +386,12 @@ export default function App(): React.JSX.Element {
   const Colors = useThemeColors();
   const styles = useMemo(() => createStyles(Colors), [Colors]);
   const resolvedTheme = useResolvedTheme();
+  // App is the root, so subscribing here is what makes a language change
+  // re-render every screen below it, the same way useThemeColors does for a
+  // theme change. It is also why the formatters in utils/format.ts can read
+  // the language at call time instead of each being a hook.
+  const T = useT();
+  const TP = useTPlural();
 
   // appReady guards against a flash of the welcome screen on every launch.
   // The identity check is async, so we render nothing until it resolves.
@@ -936,7 +953,7 @@ export default function App(): React.JSX.Element {
                     // Chats header: title left, segmented + New button right
                     <>
                       <Text style={styles.headerTitle} numberOfLines={1}>
-                        Chats
+                        {T("nav.tab.chats")}
                       </Text>
                       <View style={styles.headerControls}>
                         {/* tablist goes on the segmented track itself, not on
@@ -962,8 +979,10 @@ export default function App(): React.JSX.Element {
                             // subtree into one node either way.
                             accessibilityLabel={
                               channelsUnread > 0
-                                ? `Rooms, ${String(channelsUnread)} unread`
-                                : "Rooms"
+                                ? TP("a11y.unread_count", channelsUnread, {
+                                    label: T("chat.subtab.rooms"),
+                                  })
+                                : T("chat.subtab.rooms")
                             }
                             accessibilityState={{
                               selected: chatSubTab === "channels",
@@ -1017,8 +1036,10 @@ export default function App(): React.JSX.Element {
                             accessibilityRole="tab"
                             accessibilityLabel={
                               dmsUnread > 0
-                                ? `Direct messages, ${String(dmsUnread)} unread`
-                                : "Direct messages"
+                                ? TP("a11y.unread_count", dmsUnread, {
+                                    label: T("chat.subtab.dms"),
+                                  })
+                                : T("chat.subtab.dms")
                             }
                             accessibilityState={{
                               selected: chatSubTab === "dms",
@@ -1069,8 +1090,10 @@ export default function App(): React.JSX.Element {
                           accessibilityRole="button"
                           accessibilityLabel={
                             activityUnseen > 0
-                              ? `Notifications, ${String(activityUnseen)} new`
-                              : "Notifications"
+                              ? TP("a11y.new_count", activityUnseen, {
+                                  label: T("nav.notifications"),
+                                })
+                              : T("nav.notifications")
                           }
                         >
                           <Feather
@@ -1101,7 +1124,7 @@ export default function App(): React.JSX.Element {
                           onPress={() => setStartNewTrigger((c) => c + 1)}
                           hitSlop={hitSlopFor(HEADER_ICON_SIZE)}
                           accessibilityRole="button"
-                          accessibilityLabel="Start something new"
+                          accessibilityLabel={T("chat.new.title")}
                         >
                           <Feather
                             name="plus"
@@ -1133,7 +1156,7 @@ export default function App(): React.JSX.Element {
                             ]}
                             onPress={() => setMeshViewMode("radar")}
                             accessibilityRole="tab"
-                            accessibilityLabel="Radar view"
+                            accessibilityLabel={T("mesh.view.radar")}
                             accessibilityState={{
                               selected: meshViewMode === "radar",
                             }}
@@ -1166,7 +1189,7 @@ export default function App(): React.JSX.Element {
                             ]}
                             onPress={() => setMeshViewMode("list")}
                             accessibilityRole="tab"
-                            accessibilityLabel="List view"
+                            accessibilityLabel={T("mesh.view.list")}
                             accessibilityState={{
                               selected: meshViewMode === "list",
                             }}
@@ -1196,7 +1219,7 @@ export default function App(): React.JSX.Element {
                           onPress={() => setMeshAddCounter((c) => c + 1)}
                           hitSlop={hitSlopFor(HEADER_ICON_SIZE)}
                           accessibilityRole="button"
-                          accessibilityLabel="Add contact by scanning a QR code"
+                          accessibilityLabel={T("contacts.qr.scan_a11y")}
                         >
                           <Feather
                             name="user-plus"
@@ -1217,7 +1240,7 @@ export default function App(): React.JSX.Element {
                       <View style={styles.headerControls}>
                         {/* Send and Zap both spend, so they are dimmed with
                             nothing to spend. Letting them open a sheet that can
-                            only end in "not enough balance" is the classic way
+                            only end in T("wallet.action.no_balance") is the classic way
                             to waste somebody's time. Receive and Add mint stay
                             live, since those are how a new wallet gets started.
 
@@ -1237,8 +1260,8 @@ export default function App(): React.JSX.Element {
                           accessibilityState={{ disabled: !hasSpendableEcash }}
                           accessibilityLabel={
                             hasSpendableEcash
-                              ? "Send ecash token"
-                              : "Send ecash token, unavailable with an empty balance"
+                              ? T("wallet.action.send")
+                              : T("wallet.action.send_disabled")
                           }
                         >
                           <Feather
@@ -1252,7 +1275,7 @@ export default function App(): React.JSX.Element {
                           onPress={() => triggerWalletAction("receive")}
                           hitSlop={hitSlopFor(HEADER_ICON_SIZE)}
                           accessibilityRole="button"
-                          accessibilityLabel="Receive ecash token"
+                          accessibilityLabel={T("wallet.action.receive")}
                         >
                           <Feather
                             name="arrow-down"
@@ -1272,8 +1295,8 @@ export default function App(): React.JSX.Element {
                           accessibilityState={{ disabled: !hasSpendableEcash }}
                           accessibilityLabel={
                             hasSpendableEcash
-                              ? "Zap a Nostr contact"
-                              : "Zap a Nostr contact, unavailable with an empty balance"
+                              ? T("wallet.action.zap")
+                              : T("wallet.action.zap_disabled")
                           }
                         >
                           <Feather
@@ -1287,7 +1310,7 @@ export default function App(): React.JSX.Element {
                           onPress={() => triggerWalletAction("addMint")}
                           hitSlop={hitSlopFor(HEADER_ICON_SIZE)}
                           accessibilityRole="button"
-                          accessibilityLabel="Add a Cashu mint"
+                          accessibilityLabel={T("wallet.action.add_mint")}
                         >
                           <Feather
                             name="plus"
@@ -1300,7 +1323,7 @@ export default function App(): React.JSX.Element {
                   ) : (
                     // Standard header: just the title
                     <Text style={styles.headerTitle} numberOfLines={1}>
-                      {HEADER_TITLES[tab]}
+                      {T(HEADER_TITLES[tab])}
                     </Text>
                   )}
                 </View>
@@ -1317,10 +1340,10 @@ export default function App(): React.JSX.Element {
                       onPress={handleCancelSearch}
                       hitSlop={hitSlopFor(20)}
                       accessibilityRole="button"
-                      accessibilityLabel="Close search"
+                      accessibilityLabel={T("chat.search.close")}
                     >
                       <Feather
-                        name="arrow-left"
+                        name={arrowBack}
                         size={20}
                         color={Colors.textPrimary}
                       />
@@ -1334,7 +1357,7 @@ export default function App(): React.JSX.Element {
                       value={searchQuery}
                       onChangeText={setSearchQuery}
                       onFocus={() => setChatView({ kind: "search" })}
-                      placeholder="Search chats"
+                      placeholder={T("chat.search.placeholder")}
                       placeholderTextColor={Colors.textMuted}
                       returnKeyType="search"
                       selectionColor={Colors.accent}
@@ -1342,7 +1365,7 @@ export default function App(): React.JSX.Element {
                       // there is a query, so a screen reader landing on a
                       // half-typed field would otherwise announce nothing but
                       // the text itself.
-                      accessibilityLabel="Search chats and messages"
+                      accessibilityLabel={T("chat.search.a11y")}
                       // Search is a name/content scan, never an address or a
                       // sentence, so the OS should not try to help.
                       autoCorrect={false}
@@ -1359,7 +1382,7 @@ export default function App(): React.JSX.Element {
                         onPress={() => setSearchQuery("")}
                         hitSlop={hitSlopFor(16)}
                         accessibilityRole="button"
-                        accessibilityLabel="Clear search"
+                        accessibilityLabel={T("chat.search.clear")}
                       >
                         <Feather
                           name="x-circle"
@@ -1497,9 +1520,10 @@ export default function App(): React.JSX.Element {
                         alternatives ("tab 2 of 4"). Without it each tab was an
                         unrelated button and the set had no announced size. */}
                     <View style={styles.tabBar} accessibilityRole="tablist">
-                      {TABS.map(({ id, label, icon }) => {
+                      {TABS.map(({ id, labelKey, icon }) => {
                         const active = tab === id;
                         const unread = id === "chats" ? chatsUnread : 0;
+                        const label = T(labelKey);
                         return (
                           <Pressable
                             key={id}
@@ -1508,7 +1532,7 @@ export default function App(): React.JSX.Element {
                             accessibilityRole="tab"
                             accessibilityLabel={
                               unread > 0
-                                ? `${label}, ${String(unread)} unread`
+                                ? TP("a11y.unread_count", unread, { label })
                                 : label
                             }
                             accessibilityState={{ selected: active }}
@@ -1587,18 +1611,21 @@ export default function App(): React.JSX.Element {
 // Config
 // ---------------------------------------------------------------------------
 
-const HEADER_TITLES: Record<MainTab, string> = {
-  chats: "Chats",
-  mesh: "Mesh",
-  wallet: "Wallet",
-  profile: "You",
+// Module-level tables cannot call a hook, so they hold keys rather than text
+// and the component translates on render. This is the pattern for every static
+// table in the app: the table stays a table, and the language stays live.
+const HEADER_TITLES: Record<MainTab, TranslationKey> = {
+  chats: "nav.tab.chats",
+  mesh: "nav.tab.mesh",
+  wallet: "nav.tab.wallet",
+  profile: "nav.tab.profile",
 };
 
-const TABS: { id: MainTab; label: string; icon: string }[] = [
-  { id: "chats", label: "Chats", icon: "message-square" },
-  { id: "mesh", label: "Mesh", icon: "radio" },
-  { id: "wallet", label: "Wallet", icon: "credit-card" },
-  { id: "profile", label: "You", icon: "user" },
+const TABS: { id: MainTab; labelKey: TranslationKey; icon: string }[] = [
+  { id: "chats", labelKey: "nav.tab.chats", icon: "message-square" },
+  { id: "mesh", labelKey: "nav.tab.mesh", icon: "radio" },
+  { id: "wallet", labelKey: "nav.tab.wallet", icon: "credit-card" },
+  { id: "profile", labelKey: "nav.tab.profile", icon: "user" },
 ];
 
 // The drawn size of a header icon button. Deliberately smaller than MIN_TOUCH so
@@ -1636,7 +1663,7 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       // device at a large text size the row used to overflow rather than the
       // title giving up its width first.
       flexShrink: 1,
-      marginRight: Spacing.sm,
+      marginEnd: Spacing.sm,
     },
     // Search bar (Chats tab only), moved up from ChannelList so one search
     // spans both Channels and Direct instead of being duplicated per sub-tab.

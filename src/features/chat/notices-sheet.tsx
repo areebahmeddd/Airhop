@@ -25,6 +25,7 @@ import {
   View,
 } from "react-native";
 import { isUrgent, type BoardPost } from "../../core/mesh/board-packet";
+import { t, useT, type TranslationKey } from "../../i18n";
 import { getMeshService } from "../../services/mesh-service";
 import { useBoardStore } from "../../store/board-store";
 import { useNoticesStore, type LocationNote } from "../../store/notices-store";
@@ -41,12 +42,13 @@ import {
 const CONTENT_MAX = 512;
 // days: 0 is the permanent (∞) option, offered only in a location cell (it is a
 // standalone Nostr note with no expiry; the mesh board always expires <= 7 days).
-const EXPIRY_OPTIONS = [
-  { label: "1 day", days: 1 },
-  { label: "3 days", days: 3 },
-  { label: "7 days", days: 7 },
-  { label: "∞", days: 0 },
-] as const;
+const EXPIRY_OPTIONS: { labelKey: TranslationKey | null; days: number }[] = [
+  { labelKey: "chat.notices.1_day", days: 1 },
+  { labelKey: "chat.notices.3_days", days: 3 },
+  { labelKey: "chat.notices.7_days", days: 7 },
+  // The infinity glyph is a symbol, not a word, and reads the same everywhere.
+  { labelKey: null, days: 0 },
+];
 
 // A board post's Nostr bridge arrives as a same-content note signed by an
 // unlinkable key; match heuristically within this window and drop the copy.
@@ -111,7 +113,7 @@ function mergeNotices(posts: BoardPost[], notes: LocationNote[]): NoticeRow[] {
 
 function ageLabel(ms: number, now: number): string {
   const s = Math.max(0, Math.floor((now - ms) / 1000));
-  if (s < 60) return "just now";
+  if (s < 60) return t("chat.notices.just_now");
   const m = Math.floor(s / 60);
   if (m < 60) return `${m}m ago`;
   const h = Math.floor(m / 60);
@@ -127,7 +129,7 @@ function fadeLabel(
   const s = Math.max(0, Math.floor((expiresAtMs - now) / 1000));
   if (s <= 0) return "fading";
   const h = Math.floor(s / 3600);
-  if (h < 1) return "fades soon";
+  if (h < 1) return t("chat.notices.fades_soon");
   if (h < 24) return `fades in ${h}h`;
   return `fades in ${Math.floor(h / 24)}d`;
 }
@@ -139,6 +141,7 @@ interface Props {
 }
 
 export function NoticesSheet({ visible, onClose, channel }: Props) {
+  const T = useT();
   const Colors = useThemeColors();
   const styles = useMemo(() => createStyles(Colors), [Colors]);
 
@@ -242,10 +245,10 @@ export function NoticesSheet({ visible, onClose, channel }: Props) {
           size={18}
           color={Colors.textPrimary}
         />
-        <Text style={styles.title}>Notices</Text>
+        <Text style={styles.title}>{T("chat.notices.title")}</Text>
       </View>
 
-      {/* Scope tabs: only offer "Here" when a location cell is resolved. */}
+      {/* Scope tabs: only offer T("chat.notices.here") when a location cell is resolved. */}
       {geohash !== null && (
         <View style={styles.tabs}>
           <Pressable
@@ -295,8 +298,8 @@ export function NoticesSheet({ visible, onClose, channel }: Props) {
           onChangeText={setDraft}
           placeholder={
             scope === "here"
-              ? "Post a notice to this area"
-              : "Post a notice to the mesh"
+              ? T("chat.notices.post_area")
+              : T("chat.notices.post_mesh")
           }
           placeholderTextColor={Colors.textMuted}
           multiline
@@ -309,7 +312,7 @@ export function NoticesSheet({ visible, onClose, channel }: Props) {
               style={[styles.urgentToggle, urgent && styles.urgentToggleOn]}
               onPress={() => setUrgent((u) => !u)}
               accessibilityRole="button"
-              accessibilityLabel="Mark urgent"
+              accessibilityLabel={T("chat.notices.mark_urgent")}
             >
               <Text style={[styles.urgentText, urgent && styles.urgentTextOn]}>
                 Urgent
@@ -335,7 +338,7 @@ export function NoticesSheet({ visible, onClose, channel }: Props) {
                     effectiveExpiryDays === opt.days && styles.chipTextActive,
                   ]}
                 >
-                  {opt.label}
+                  {opt.labelKey === null ? "∞" : T(opt.labelKey)}
                 </Text>
               </Pressable>
             ))}
@@ -346,9 +349,9 @@ export function NoticesSheet({ visible, onClose, channel }: Props) {
           onPress={handlePost}
           disabled={!canPost}
           accessibilityRole="button"
-          accessibilityLabel="Post notice"
+          accessibilityLabel={T("chat.notices.post")}
         >
-          <Text style={styles.postBtnText}>Post</Text>
+          <Text style={styles.postBtnText}>{T("chat.notices.post_short")}</Text>
         </Pressable>
       </View>
 
@@ -396,9 +399,9 @@ export function NoticesSheet({ visible, onClose, channel }: Props) {
                       onPress={() => handleDelete(row.post as BoardPost)}
                       hitSlop={HIT_SLOP}
                       accessibilityRole="button"
-                      accessibilityLabel="Delete notice"
+                      accessibilityLabel={t("chat.notices.delete")}
                     >
-                      <Text style={styles.rowDelete}>Delete</Text>
+                      <Text style={styles.rowDelete}>{T("common.delete")}</Text>
                     </Pressable>
                   )}
                 </View>
@@ -492,7 +495,7 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
     // thumb on the selected step. marginLeft:auto right-aligns it in Geo scope.
     expiryChips: {
       flexDirection: "row",
-      marginLeft: "auto",
+      marginStart: "auto",
       backgroundColor: Colors.surface,
       borderWidth: 1,
       borderColor: Colors.border,
@@ -566,7 +569,7 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
     rowTime: {
       fontSize: FontSize.xs,
       color: Colors.textMuted,
-      marginLeft: "auto",
+      marginStart: "auto",
     },
     rowContent: {
       fontSize: FontSize.base,
@@ -584,7 +587,7 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       fontSize: FontSize.xs,
       fontWeight: FontWeight.semibold,
       color: Colors.danger,
-      marginLeft: "auto",
+      marginStart: "auto",
     },
   });
 }

@@ -2,7 +2,7 @@
 
 > Updated when milestones complete, blockers are found, or decisions are made. It is the canonical answer to "where are we right now?"
 
-## Current Version: v1.0.0 (pre-field-test)
+## Current Version: v1.0.0
 
 **Status:** Feature work complete and green in CI (1,107 tests across 87 suites, 0 lint errors, TypeScript clean).
 
@@ -51,8 +51,6 @@ checkable against the code rather than taken on trust.
 
 ## v0.5.0: Foundation ✅
 
-**Goal:** Hello World BLE mesh between two phones.
-
 ### Project scaffold
 
 - [x] `package.json`, `app.json`, `tsconfig.json`, `babel.config.js`, `metro.config.js`, `App.tsx` created
@@ -62,7 +60,7 @@ checkable against the code rather than taken on trust.
 - [x] Set up ESLint (`eslint.config.js` with `eslint-config-expo` flat config)
 - [x] Run `npx expo prebuild` to generate `ios/` and `android/` native project directories
 - [x] Configure Jest for `src/core/` (pure TypeScript, no native deps in test env)
-- [x] Create folder structure matching `docs/spec/ARCHITECTURE.md`, section 1
+- [x] Create folder structure matching `docs/spec/ARCHITECTURE.md`, section 11
 
 ### Native BLE module
 
@@ -85,13 +83,11 @@ checkable against the code rather than taken on trust.
 - [x] `src/core/mesh/announce-manager.ts`: signed presence broadcasts
 - [x] `src/core/crypto/identity.ts`: key generation, Keychain storage, peer ID
 
-### Tests (must pass before milestone)
+### Tests
 
 - [x] `packet-codec.test.ts`: encode/decode round-trip, byte layout matches PROTOCOLS.md
 - [x] `deduplicator.test.ts`: LRU eviction, expiry window
 - [x] `flood-router.test.ts`: TTL decrement, jitter scheduling
-
-**Milestone:** Two phones on BLE discover each other and exchange signed ANNOUNCE packets.
 
 ## v0.6.0: Core Messaging ✅
 
@@ -103,8 +99,6 @@ checkable against the code rather than taken on trust.
 - [x] `src/core/mesh/courier-store.ts`: sealed envelopes, trust tiers, spray-and-wait, daily recipient tags
 - [x] `src/core/router/message-router.ts`: transport selection (BLE mesh broadcast / unicast, courier fallback)
 - [x] Basic UI: channel list, message thread, peer list (minimal, functional)
-
-**Milestone:** Full offline BLE mesh chat. Airhop ↔ bitchat message delivery verified.
 
 ## v0.7.0: Internet Bridge + Voice ✅
 
@@ -125,8 +119,6 @@ checkable against the code rather than taken on trust.
 - [x] `src/bridge/NativeAirhopTorSocket.ts` + `src/core/nostr/tor-websocket.ts` + `src/core/nostr/tor-routing.ts`: JS Tor WebSocket shim, socket-implementation swap, and the single toggle/startup choke point that rebuilds the Nostr transport
 - [x] Android: `getTorProxyPort()`: probes localhost:9050 for Orbot SOCKS5 (in AirhopBLEModule.kt)
 
-**Milestone:** Cross-city DMs via Nostr. Live voice PTT over BLE. Tor routing available on iOS via Arti.
-
 ## v0.8.0: High Bandwidth + Double Ratchet ✅
 
 - [x] `src/core/crypto/double-ratchet.ts`: Signal DR per-message forward secrecy.
@@ -139,21 +131,15 @@ checkable against the code rather than taken on trust.
       redundant (see ARCHITECTURE.md section 5)
 - [x] WiFi Aware native module (Android) + MultipeerConnectivity (iOS)
 - [x] Video and any other file type shared as attachments, played inline
-
-**Not built, deliberately.** Earlier drafts of this file claimed a `0x30`
-videoFrame packet type, app-level chunking above 1 MiB, and "offline video
-calling over WiFi Aware". None of that exists or should:
-
-- `0x30` was removed and is recorded in `packet-codec.ts` as reserved-never-to-
-  return, because WiFi Aware and MultipeerConnectivity cannot interoperate, so
-  the type described a feature that could never work across platforms.
-- There is no app-level chunking. One file is one `FILE_TRANSFER` packet and the
-  fragment layer splits it, which is what keeps Airhop byte-compatible with
-  bitchat. Size caps are per type (512 KiB photo/voice, 1 MiB otherwise).
-- VISION.md lists "a video call app" under what Airhop is not building.
-
-**Milestone:** Double Ratchet passing test vectors; recorded video shared as a
-file and played inline.
+- [~] `0x30` videoFrame and offline video calling: **dropped.** WiFi Aware and
+  MultipeerConnectivity cannot interoperate, so the type described a feature
+  that could never work across platforms. `packet-codec.ts` records `0x30` as
+  reserved-never-to-return, and VISION.md lists "a video call app" under what
+  Airhop is not building
+- [~] App-level chunking above 1 MiB: **dropped.** One file is one
+  `FILE_TRANSFER` packet and the fragment layer splits it, which is what
+  keeps Airhop byte-compatible with bitchat. Size caps are per type (512 KiB
+  photo/voice, 1 MiB otherwise)
 
 ## v0.9.0: Production Hardening ✅
 
@@ -165,36 +151,7 @@ file and played inline.
 - [x] Georelays in-app relay map (`GeoRelayDirectory.nearestRelaysWithDistance()` added to geo-relay.ts)
 - [x] Full cross-platform compat test (`src/core/mesh/__tests__/compat.test.ts`: peer ID derivation, packet byte offsets, signature relay compat, ANNOUNCE TLV, fragment constants, BLE UUIDs)
 
-**Milestone:** Feature-complete. Every core service has passing tests. No known protocol bugs.
-
-## v1.0.0: UI + App Store Release ✅
-
-- [x] Onboarding flow: 3-screen sequence (welcome, animated identity generation with Ed25519/X25519 key gen, username reveal with deterministic peer ID username)
-- [x] Visual design: monochromatic dark theme (`#080808` base, single white accent), Feather icon system, design token system (`Colors`, `FontSize`, `FontWeight`, `Spacing`) in `src/ui/theme.ts`
-- [x] Animations: keyframe spin + opacity fade during identity generation, fade-up reveal on username screen
-- [x] Navigation shell: 4-tab state machine (Chats / Mesh / Wallet / Profile), sub-tab segment (Channels / Direct), Android BackHandler for in-thread back navigation. The AI tab arrives with the assistant in v1.1.0; there is no placeholder tab for it today
-- [x] Safe area + status bar: `SafeAreaProvider` + `SafeAreaView` from `react-native-safe-area-context` v5, `StatusBar` from `expo-status-bar` (replaces deprecated `react-native` equivalents)
-- [x] Keyboard handling: `KeyboardAvoidingView` in message thread (iOS padding, Android default)
-- [x] Component library: `Avatar` (deterministic colour + initials from peer ID), `StatusDot` (online indicator); kebab-case naming, all imports updated
-- [x] Accessibility audit
-- [x] App Store and Play Store submission
-- [x] YouTube demo series
-
-**Milestone:** UI complete and dev-ready.
-
-## v1.1.0: AI + Wallets
-
-### AI Assistant
-
-- [ ] Model picker and download flow: small offline-capable GGUF models (1–3B params, e.g. Gemma 2 2B), size/RAM shown before download
-- [ ] On-device inference engine (e.g. `llama.rn` / `llama.cpp` bindings), fully offline, no server, no telemetry
-- [ ] `src/core/ai/model-manager.ts`: download, checksum verify, store under app sandbox, delete/swap models
-- [ ] `src/core/ai/inference.ts`: prompt/response loop against the loaded model, streamed token output
-- [ ] Chat-style AI UI in `src/features/ai/` (the directory does not exist yet): ask critical or general questions with zero network
-- [ ] Conversation history kept local-only (MMKV)
-- [ ] Low-end device fallback: block download if device lacks RAM/storage for the selected model
-
-### Cashu Wallet (Shipped in v1.0.0)
+## v0.9.5: Cashu Wallet ✅
 
 - [x] `src/core/payments/cashu.ts`: detection (bitchat-identical), decoding, NUT-12 DLEQ verification, fee-aware proof selection
 - [x] `src/core/payments/nutzap.ts`: NIP-61 kind 9321 / 10019 construction and parsing
@@ -210,7 +167,43 @@ file and played inline.
 - [x] Tap the balance to read it in sats or bitcoin (display only, no price feed)
 - [x] QR display and scan for tokens
 
-**Milestone:** A user with zero connectivity downloads a model once and asks it questions fully offline. A user sends and receives Cashu ecash entirely offline over BLE, tops up and cashes out over Lightning, and can rebuild the balance on a new device from twelve words.
+## v0.9.6: String Extraction ✅
+
+English ships. The other languages land in v1.3.0, and because the extraction is complete they are catalog files rather than screen work.
+
+- [x] Translation runtime, no library (`src/i18n/index.ts`: `t` / `useT` / `tPlural`, named-placeholder interpolation)
+- [x] Completeness enforced by `tsc` (`src/i18n/locales/types.ts`: every locale is `Record<TranslationKey, string>` derived from `en.ts`, so a partial locale does not compile and no runtime fallback exists)
+- [x] Full extraction: 1,035 keys across 62 files, zero hardcoded user-facing strings
+- [x] Plurals through `tPlural`, never concatenation. Eight concatenated plurals found and fixed; the English one/other rule lives in one function, where CLDR selection replaces it
+- [x] Right-to-left groundwork (`src/i18n/layout.ts`: `textAlignEnd`, mirrored chevrons; logical properties app-wide; `radar-view.tsx` exempt as a polar plot of physical space)
+- [x] Layout direction pinned at startup, so a device set to Arabic does not mirror an English UI
+- [x] Formatting centralised in `src/utils/format.ts`, cached formatters, Latin numerals for machine data
+- [x] `scripts/i18n-audit.js`: hardcoded strings, unreferenced keys, and translations frozen at module load
+- [x] CI guards: hardcoded-string ceiling at zero, and module-load-time translations
+- [x] i18n tests (`src/i18n/__tests__/`: placeholder parity, plural shape, do-not-translate enforcement)
+
+## v1.0.0: UI + App Store Release ✅
+
+- [x] Onboarding flow: 3-screen sequence (welcome, animated identity generation with Ed25519/X25519 key gen, username reveal with deterministic peer ID username)
+- [x] Visual design: monochromatic dark theme (`#080808` base, single white accent), Feather icon system, design token system (`Colors`, `FontSize`, `FontWeight`, `Spacing`) in `src/ui/theme.ts`
+- [x] Animations: keyframe spin + opacity fade during identity generation, fade-up reveal on username screen
+- [x] Navigation shell: 4-tab state machine (Chats / Mesh / Wallet / Profile), sub-tab segment (Channels / Direct), Android BackHandler for in-thread back navigation. The AI tab arrives with the assistant in v1.1.0; there is no placeholder tab for it today
+- [x] Safe area + status bar: `SafeAreaProvider` + `SafeAreaView` from `react-native-safe-area-context` v5, `StatusBar` from `expo-status-bar` (replaces deprecated `react-native` equivalents)
+- [x] Keyboard handling: `KeyboardAvoidingView` in message thread (iOS padding, Android default)
+- [x] Component library: `Avatar` (deterministic colour + initials from peer ID), `StatusDot` (online indicator); kebab-case naming, all imports updated
+- [x] Accessibility audit
+- [x] App Store and Play Store submission
+- [x] YouTube demo series
+
+## v1.1.0: AI Assistant
+
+- [ ] Model picker and download flow: small offline-capable GGUF models (1–3B params, e.g. Gemma 2 2B), size/RAM shown before download
+- [ ] On-device inference engine (e.g. `llama.rn` / `llama.cpp` bindings), fully offline, no server, no telemetry
+- [ ] `src/core/ai/model-manager.ts`: download, checksum verify, store under app sandbox, delete/swap models
+- [ ] `src/core/ai/inference.ts`: prompt/response loop against the loaded model, streamed token output
+- [ ] Chat-style AI UI in `src/features/ai/` (the directory does not exist yet): ask critical or general questions with zero network
+- [ ] Conversation history kept local-only (MMKV)
+- [ ] Low-end device fallback: block download if device lacks RAM/storage for the selected model
 
 ## v1.2.0: Plugin Integrations
 
@@ -222,9 +215,14 @@ file and played inline.
 
 ## v1.3.0: Stabilization
 
-No new features. Production bug fixes, race condition resolution in BLE and crypto layers, UI iteration from user feedback, and extended cross-device compatibility testing. Also ships an embedded Arti-based Tor library for Android, so Orbot is no longer required.
-
-**Milestone:** Zero open P0/P1 bugs. BLE state machine stable across Pixel, Samsung, and Xiaomi device classes. Embedded Tor on both platforms. Ready to expand to new platforms.
+- [ ] Production bugs found after launch
+- [ ] Race conditions in the BLE and crypto state machines
+- [ ] UI iteration from user feedback
+- [ ] Extended cross-device battery and compatibility testing
+- [ ] Ten languages (`en ar de es fa hi id pt-BR ru zh-Hans`), chosen to cover every script class and layout hazard in bitchat/ios's thirty. Keys are named after bitchat's, so much of the catalog can be lifted from its public-domain `Localizable.xcstrings`
+- [ ] Runtime a second language needs: locale store, CLDR plurals via `@formatjs/intl-pluralrules`, device language negotiation, in-app picker
+- [ ] Right-to-left pass on device in Arabic
+- [ ] Translated iOS permission dialogs and Android service notification
 
 ## v1.4.0: Web / Browser
 
@@ -381,7 +379,7 @@ vectors: 58 tests, all green.
 | Cross-language Noise XX testing                                 | Gap         | JS ↔ bitchat iOS interoperability testing still requires a device-based test harness.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             | Must be completed before App Store submission.                                                                                                                                                                                                                                                   |
 | Mesh DM retry after silent session discard                      | Limitation  | A DM sent over an established Noise session that the peer silently discarded (e.g. it restarted) is not re-sent once the session is re-established. bitchat retains such DMs until an authenticated delivery ack and retries them (#1462); Airhop only retries the courier/Nostr tiers, not in-session mesh DMs. Rare in practice, and the sender still sees no delivery tick.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    | An in-flight mesh DM can be lost across a peer restart with no automatic resend.                                                                                                                                                                                                                 |
 | Attachment encryption                                           | Limitation  | Media (photos, videos, files, voice) uses the BLE file-transfer path only, signed but intentionally not encrypted to remain wire-compatible with bitchat. Media is restricted to Bluetooth mesh and mesh DMs only.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                | Preserves full wire compatibility with bitchat.                                                                                                                                                                                                                                                  |
-| Tor on Android needs Orbot                                      | Dependency  | iOS embeds Arti, but Android currently relies on Orbot running in VPN mode. Enabling is gated on Orbot installed + VPN active, so it never turns on into clearnet; but a mid-session Orbot/VPN drop is not yet detected, so Android traffic can silently revert to clearnet until re-checked (inherent to the transparent-VPN model). Planned to be replaced with an embedded Arti library in v1.3.0.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             | Android Tor requires a third-party app until v1.3.0; iOS is self-contained.                                                                                                                                                                                                                      |
+| Tor on Android needs Orbot                                      | Dependency  | iOS embeds Arti, but Android currently relies on Orbot running in VPN mode. Enabling is gated on Orbot installed + VPN active, so it never turns on into clearnet; but a mid-session Orbot/VPN drop is not yet detected, so Android traffic can silently revert to clearnet until re-checked (inherent to the transparent-VPN model).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             | Android Tor requires a third-party app; iOS is self-contained.                                                                                                                                                                                                                                   |
 | Backgrounded iPhone is invisible to Android                     | Platform    | CoreBluetooth moves the service UUID into the advertisement overflow area and drops the local name once the app is backgrounded. Only another iOS device scanning for that UUID can read it. Established links keep working; discovery is what stops.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             | iPhone-to-Android discovery needs the iPhone app open. Not fixable in app code.                                                                                                                                                                                                                  |
 | BLE advertising is not on every Android device                  | Platform    | Some devices at the API 26 floor ship chipsets or firmware with no BLE peripheral support, so `bluetoothLeAdvertiser` is null. They scan and receive normally but never advertise.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                | Affected devices can join a mesh but cannot be discovered by others.                                                                                                                                                                                                                             |
 | Peer ID in the advert differs per platform                      | Platform    | Android carries 8 bytes of the peer ID in scan-response service data. CoreBluetooth has no service-data API, so iOS uses the local name instead. Neither can read the other's placement.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          | Cross-platform links skip advert-level dedup and identify on the first ANNOUNCE.                                                                                                                                                                                                                 |
@@ -389,7 +387,7 @@ vectors: 58 tests, all green.
 | ~~Double Ratchet seeded from public material~~                  | Fixed       | `tryInitDR` derived the ratchet's root key from the Noise **handshake hash**. That hash is public by construction: `mixHash` absorbs only bytes that went over the wire, while the secret DH outputs go into the chaining key via `mixKey`. The code comment argued the opposite - that XX "mixes both parties' EPHEMERAL keys into that hash" - true of the ephemeral PUBLIC keys, which is exactly the part an observer already has. Handshakes flood at TTL 7, so anyone in the room (not just the two peers) could capture msg1/2/3, recompute the root key, and then forge a DR message attributed to either side or decrypt one. `onDREncrypted` has no signature check, delegating authentication entirely to the ratchet, so nothing else stood in the way. Now seeded from a third HKDF output of the same split (`exporterSecret`), which descends from the chaining key. HKDF chains block N from N-1, so the transport keys k1/k2 are bit-identical and bitchat interop is untouched. | Closes forgery and decryption of Airhop-to-Airhop DMs by any bystander. No wire change, but old and new builds derive different root keys, so DR messages will not decrypt across that boundary; the plain Noise transport still works between them.                                             |
 | ~~ANNOUNCE replayable indefinitely~~                            | Fixed       | Nothing bounded an announce's timestamp, so a captured one could be rebroadcast forever: still correctly signed, still correctly key-bound, so every other check passed and a peer who left hours ago kept reappearing in the room. Now bounded to 15 minutes either side of the local clock (`ANNOUNCE_MAX_SKEW_MS`), the union of what iOS (900s, backwards only) and Android (600s, symmetric) accept, so no announce a bitchat device would accept is refused. Accepts everything while the clock is still near zero, matching iOS, so a phone whose clock has not been set can still join.                                                                                                                                                                                                                                                                                                                                                                                                   | Closes presence spoofing by replay. Impersonation was already closed by key pinning; this stops a departed peer being made to look present.                                                                                                                                                      |
 | ~~ANNOUNCE could rebind a known peer's signing key~~            | Fixed       | The announce decides which key every later packet is checked against, so this sat one layer beneath the public-message fix below and defeated it entirely. Three holes compounded: the signature was verified only `if (flags & SIGNED)`, letting a sender opt out of being checked; the claimed `senderID` was never checked against the Noise key in the payload; and the registry overwrote whatever signing key it already held. Since a peer ID is `SHA-256(noise pubkey)[0:16]` and that key is broadcast in the clear, an attacker could replay a victim's ID and Noise key, attach their OWN signing key, and sign it - internally consistent, nothing detectably wrong in isolation. All three checks now match bitchat (`.missingSignature`, `.senderMismatch`, `.signingKeyMismatch`); a scanned QR contact card still outranks the pin, so an in-person exchange can correct a bad binding. Receive-side only: no wire format, TLV or derivation changed.                             | Closes full peer impersonation on public and encrypted channels. Verified by reverting the fix: the forged message rendered as the victim **and** the victim's own later messages stopped verifying, so the attack both impersonated and silenced them. Regression-tested by scenario C08.       |
-| ~~Public messages accepted without a valid signature~~          | Fixed       | `onChannelMsg`/`onChannelEnc` only verified when the packet was signed AND the sender was already in the registry, so an UNSIGNED packet claiming a known peer's ID was displayed as that peer, and any packet from an unknown peer was displayed unchecked. Now a missing key is a FAILED check rather than a skipped one, matching bitchat's `BLEPublicMessageHandler` (`key.map { verify } ?? false`) and what ARCHITECTURE.md section 3 already promised.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     | Closes a message-forgery and contact-impersonation vector on every public channel.                                                                                                                                                                                                               |
+| ~~Public messages accepted without a valid signature~~          | Fixed       | `onChannelMsg`/`onChannelEnc` only verified when the packet was signed AND the sender was already in the registry, so an UNSIGNED packet claiming a known peer's ID was displayed as that peer, and any packet from an unknown peer was displayed unchecked. Now a missing key is a FAILED check rather than a skipped one, matching bitchat's `BLEPublicMessageHandler` (`key.map { verify } ?? false`) and what ARCHITECTURE.md section 2 (Identity) already promised.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          | Closes a message-forgery and contact-impersonation vector on every public channel.                                                                                                                                                                                                               |
 | ~~"Direct" peer standing inferred from TTL~~                    | Fixed       | A peer counted as directly connected when `packet.ttl == 7`, a plaintext field an attacker sets freely. One hostile link could claim unlimited direct identities, overwrite `linkToPeer` for the genuine peer on that link, and stay immune to eviction. A link now binds to one peer, and direct standing follows the link lifecycle. bitchat rejects the same case as `BLEIngressRejection.directSenderMismatch`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               | Closes a Sybil vector that defeated the peer caps and broke RSSI/disconnect attribution.                                                                                                                                                                                                         |
 | ~~Courier accepted any expiry~~                                 | Fixed       | Deposit had no upper bound on an envelope's expiry, so a peer could stamp years out and hold a pool slot indefinitely. Now bounded to the same 24 h + 1 h slack bitchat enforces, and a verified-tier sub-cap of 20 stops strangers filling the pool.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             | Closes a storage-pinning vector and matches bitchat's limits exactly.                                                                                                                                                                                                                            |
 | ~~Peer registry and radar grew without bound~~                  | Fixed       | Reads were TTL-bounded but the maps were never swept, so a flood of announced identities was held for the life of the process. Both are now capped at 200 with oldest-first eviction that never drops a direct neighbour, matching `prekey-store.ts`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             | Bounds memory and per-scan cost under a hostile or simply crowded room.                                                                                                                                                                                                                          |

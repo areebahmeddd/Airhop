@@ -33,6 +33,7 @@ import {
   signPacket,
   type Packet,
 } from "../core/mesh/packet-codec";
+import { t } from "../i18n";
 import { useChatStore, type ChatAttachment } from "../store/chat-store";
 import { useTransferStore } from "../store/transfer-store";
 import { canSendMedia } from "../utils/media-policy";
@@ -134,13 +135,13 @@ export type SendOutcome = (delivered: boolean) => void;
 function defaultAttachmentName(type: ChatAttachment["type"]): string {
   switch (type) {
     case "image":
-      return "Photo";
+      return t("transfer.kind.photo");
     case "video":
-      return "Video";
+      return t("transfer.kind.video");
     case "voice":
-      return "Voice note";
+      return t("transfer.kind.voice");
     default:
-      return "File";
+      return t("transfer.kind.file");
   }
 }
 
@@ -159,13 +160,13 @@ export class AttachmentTooLargeError extends Error {
 function sizeLabel(type: ChatAttachment["type"]): string {
   switch (type) {
     case "image":
-      return "This photo";
+      return t("transfer.this.photo");
     case "video":
-      return "This video";
+      return t("transfer.this.video");
     case "voice":
-      return "This voice note";
+      return t("transfer.this.voice");
     default:
-      return "This file";
+      return t("transfer.this.file");
   }
 }
 

@@ -15,6 +15,7 @@ import * as Clipboard from "expo-clipboard";
 import { useMemo, useState } from "react";
 import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { isValidChannelKey } from "../../core/mesh/channel-crypto";
+import { t, useT } from "../../i18n";
 import { applyAirhopLink } from "../../services/link-router";
 import { showAlert } from "../../store/alert-store";
 import BottomSheet from "../../ui/components/bottom-sheet";
@@ -45,6 +46,7 @@ export function JoinLinkSheet({
   onBack,
   onJoined,
 }: Props): React.JSX.Element {
+  const T = useT();
   const Colors = useThemeColors();
   const styles = useMemo(() => createStyles(Colors), [Colors]);
 
@@ -74,7 +76,7 @@ export function JoinLinkSheet({
   const preview = useMemo(() => {
     if (input.trim().length === 0) return null;
     if (link === null) {
-      return { ok: false, text: "That is not an Airhop link." };
+      return { ok: false, text: t("chat.join.not_airhop") };
     }
     if (link.kind === "channel") {
       if (link.key === undefined) {
@@ -87,8 +89,8 @@ export function JoinLinkSheet({
         ok: true,
         text: `Private channel ${link.channel}. ${
           link.overNostr
-            ? "Reaches members over Bluetooth and the internet."
-            : "Stays on Bluetooth range."
+            ? t("chat.join.reach_internet")
+            : t("chat.join.reach_mesh")
         }`,
       };
     }
@@ -100,7 +102,7 @@ export function JoinLinkSheet({
     }
     return {
       ok: true,
-      text: "A contact card. Adds them to your contacts and opens the chat.",
+      text: t("chat.join.contact_card"),
     };
   }, [input, link]);
 
@@ -119,10 +121,7 @@ export function JoinLinkSheet({
     if (channel === null) {
       // Only a contact card can be refused, and only because its peer ID is not
       // the fingerprint of its own key, which means it was tampered with.
-      showAlert(
-        "That link could not be verified",
-        "The contact card does not match its own keys, so it was not added. Ask them to send a fresh one.",
-      );
+      showAlert(t("chat.join.unverified"), t("chat.join.unverified_body"));
       return;
     }
     // A private channel is identified by its key, not its name, so this invite
@@ -155,7 +154,7 @@ export function JoinLinkSheet({
       onClose={handleClose}
       sheetStyle={styles.sheet}
     >
-      <Text style={styles.title}>Join with a link</Text>
+      <Text style={styles.title}>{T("chat.join.title")}</Text>
 
       {/* Same scannable card as the other chooser destinations. */}
       <View style={styles.privacyNote}>
@@ -214,7 +213,7 @@ export function JoinLinkSheet({
           onPress={() => void handlePaste()}
           hitSlop={HIT_SLOP}
           accessibilityRole="button"
-          accessibilityLabel="Paste from clipboard"
+          accessibilityLabel={T("chat.join.paste")}
         >
           <Feather name="clipboard" size={16} color={Colors.textMuted} />
         </Pressable>
@@ -228,14 +227,14 @@ export function JoinLinkSheet({
 
       <View style={styles.actions}>
         <Pressable style={styles.cancel} onPress={handleBack}>
-          <Text style={styles.cancelText}>Back</Text>
+          <Text style={styles.cancelText}>{T("common.back")}</Text>
         </Pressable>
         <Pressable
           style={[styles.confirm, link === null && styles.confirmDisabled]}
           onPress={handleJoin}
           disabled={link === null}
         >
-          <Text style={styles.confirmText}>Join</Text>
+          <Text style={styles.confirmText}>{T("chat.join.join")}</Text>
         </Pressable>
       </View>
     </BottomSheet>

@@ -20,6 +20,7 @@ import {
 } from "react-native";
 import { Swipeable } from "react-native-gesture-handler";
 import Animated, { FadeIn, LinearTransition } from "react-native-reanimated";
+import { t, type TranslationKey, useT } from "../../i18n";
 import {
   geohashLevelName,
   isGeoChannel,
@@ -31,7 +32,10 @@ import { showAlert } from "../../store/alert-store";
 import { useChatStore } from "../../store/chat-store";
 import { useGroupStore } from "../../store/group-store";
 import { usePeerStore } from "../../store/peer-store";
-import { usePlaceNamesStore } from "../../store/place-names-store";
+import {
+  placeNameKey,
+  usePlaceNamesStore,
+} from "../../store/place-names-store";
 import BottomSheet from "../../ui/components/bottom-sheet";
 import EmptyState from "../../ui/components/empty-state";
 import {
@@ -104,36 +108,37 @@ let persistedCollapsedSections = new Set<string>();
 const ROW_INSET = Spacing.base;
 
 // Scope info for built-in bitchat-compatible channels.
-const CHANNEL_SCOPE: Record<string, { tag: string; description: string }> = {
+//
+// Keys, not text: a module constant is evaluated once at import, so holding
+// translated strings here would freeze them in whichever language the app
+// started in. The component translates on render.
+const CHANNEL_SCOPE: Record<
+  string,
+  { tagKey: TranslationKey; descriptionKey: TranslationKey }
+> = {
   "#bluetooth": {
-    tag: "Local mesh · Bluetooth only",
-    description:
-      "Reaches devices within Bluetooth range (roughly 10 to 100 metres). No internet required. Ideal for local coordination.",
+    tagKey: "chat.scope.mesh",
+    descriptionKey: "chat.scope.mesh_desc",
   },
   "#block": {
-    tag: "City block · ~100m",
-    description:
-      "City-block level coverage. Messages are bridged over the internet so peers outside Bluetooth range but nearby can participate.",
+    tagKey: "chat.scope.block",
+    descriptionKey: "chat.scope.block_desc",
   },
   "#neighborhood": {
-    tag: "Neighborhood · ~1km",
-    description:
-      "Neighborhood coverage. Relay-assisted so peers across the area are reachable even without a direct Bluetooth link.",
+    tagKey: "chat.scope.neighborhood",
+    descriptionKey: "chat.scope.neighborhood_desc",
   },
   "#city": {
-    tag: "City · ~10km",
-    description:
-      "City-wide channel. Uses geo-located internet relays to reach peers across the metro area.",
+    tagKey: "chat.scope.city",
+    descriptionKey: "chat.scope.city_desc",
   },
   "#province": {
-    tag: "Province or state · ~100km",
-    description:
-      "Provincial or state coverage. Bridged over the internet for regional reach across hundreds of kilometres.",
+    tagKey: "chat.scope.province",
+    descriptionKey: "chat.scope.province_desc",
   },
   "#region": {
-    tag: "Country or region · ~1000km",
-    description:
-      "Country-wide coverage. Any Airhop or bitchat user in the region can join and read messages.",
+    tagKey: "chat.scope.country",
+    descriptionKey: "chat.scope.country_desc",
   },
 };
 
@@ -159,7 +164,9 @@ interface Props {
 function channelLabel(channel: string): string {
   if (isManualGeoChannel(channel)) return `#${manualGeohashOf(channel)}`;
   if (channel.startsWith("group:")) {
-    return useGroupStore.getState().nameForChannel(channel) ?? "Group";
+    return (
+      useGroupStore.getState().nameForChannel(channel) ?? t("chat.group_badge")
+    );
   }
   return channel;
 }
@@ -171,6 +178,7 @@ function channelLabel(channel: string): string {
 export default function ChannelList({
   onSelectChannel,
 }: Props): React.JSX.Element {
+  const T = useT();
   const Colors = useThemeColors();
   const styles = useMemo(() => createStyles(Colors), [Colors]);
   const pullRefreshColors = usePullRefreshColors();
@@ -303,20 +311,20 @@ export default function ChannelList({
 
   const sections: ChannelSection[] = [
     {
-      title: "Default Rooms",
+      title: T("chat.rooms.default"),
       isDefault: true,
       unread: sectionUnread(defaultChannels),
-      data: collapsedSections.has("Default Rooms")
+      data: collapsedSections.has(T("chat.rooms.default"))
         ? []
         : showAllDefault
           ? defaultChannels
           : defaultChannels.slice(0, DEFAULT_VISIBLE_COUNT),
     },
     {
-      title: "Your Rooms",
+      title: T("chat.rooms.yours"),
       isDefault: false,
       unread: sectionUnread(ownChannels),
-      data: collapsedSections.has("Your Rooms") ? [] : ownChannels,
+      data: collapsedSections.has(T("chat.rooms.yours")) ? [] : ownChannels,
     },
   ];
 
@@ -352,12 +360,12 @@ export default function ChannelList({
   function handleClearChat(channel: string): void {
     setMoreOptionsChannel(null);
     showAlert(
-      "Clear messages",
+      t("chat.clear_messages"),
       `Delete all messages in ${channelLabel(channel)}? This can't be undone.`,
       [
-        { text: "Cancel", style: "cancel" },
+        { text: T("common.cancel"), style: "cancel" },
         {
-          text: "Clear",
+          text: t("chat.clear_confirm"),
           style: "destructive",
           onPress: () => clearChannelMessages(channel),
         },
@@ -368,12 +376,12 @@ export default function ChannelList({
   function handleLeaveChannel(channel: string): void {
     setMoreOptionsChannel(null);
     showAlert(
-      "Leave room",
+      t("chat.rooms.leave"),
       `Leave ${channelLabel(channel)}? You will stop receiving its messages, and its history is removed from this device.`,
       [
-        { text: "Cancel", style: "cancel" },
+        { text: T("common.cancel"), style: "cancel" },
         {
-          text: "Leave",
+          text: t("chat.rooms.leave_confirm"),
           style: "destructive",
           onPress: () => removeChannel(channel),
         },
@@ -397,13 +405,18 @@ export default function ChannelList({
     const manualGh = isManualGeo ? (manualGeohashOf(item) ?? "") : "";
     const scopeTag = isManualGeo
       ? `${geohashLevelName(manualGh)}  ·  teleported`
-      : CHANNEL_SCOPE[item]?.tag;
+      : (() => {
+          const scope = CHANNEL_SCOPE[item];
+          return scope === undefined ? undefined : T(scope.tagKey);
+        })();
     // Reverse-geocoded place name for this cell, e.g. "~Kumaraswamy Layout",
     // shown between the coverage tag and the active count. Only present once the
     // cell has a geohash (teleported always; named only with location on).
     const rowGeohash = isManualGeo ? manualGh : geoHashes[item];
     const placeName =
-      rowGeohash !== undefined ? placeNames[rowGeohash] : undefined;
+      rowGeohash !== undefined
+        ? placeNames[placeNameKey(rowGeohash)]
+        : undefined;
     const isDefault = DEFAULT_CHANNEL_NAMES.has(item);
     const isPinned = isYourChannel && pinnedChannels.includes(item);
     const isMuted = mutedChannels.includes(item);
@@ -433,13 +446,15 @@ export default function ChannelList({
     // whether it is muted and how long ago were all on screen and none of them
     // were spoken, which is precisely the information you scan a chat list for.
     const rowLabel = [
-      isGroup ? `Group ${groupName ?? "Group"}` : `Room ${channelLabel(item)}`,
+      isGroup
+        ? `Group ${groupName ?? t("chat.group_badge")}`
+        : `Room ${channelLabel(item)}`,
       unread > 0 ? `${String(unread)} unread` : null,
       isMuted ? "muted" : null,
       isPinned ? "pinned" : null,
       last
-        ? `${last.isMine ? "You" : last.senderNickname}: ${messagePreviewText(last)}`
-        : "No messages yet",
+        ? `${last.isMine ? t("chat.you") : last.senderNickname}: ${messagePreviewText(last)}`
+        : t("chat.no_messages"),
       timeLabel,
     ]
       .filter((part) => part !== null)
@@ -464,7 +479,7 @@ export default function ChannelList({
               )}
               {isGroup ? (
                 <Text style={styles.channelName} numberOfLines={1}>
-                  {groupName ?? "Group"}
+                  {groupName ?? t("chat.group_badge")}
                 </Text>
               ) : (
                 <Text style={styles.channelName} numberOfLines={1}>
@@ -503,12 +518,14 @@ export default function ChannelList({
             {last ? (
               <Text style={styles.channelPreview} numberOfLines={1}>
                 <Text style={styles.channelPreviewSender}>
-                  {last.isMine ? "You" : last.senderNickname}:{" "}
+                  {last.isMine ? t("chat.you") : last.senderNickname}:{" "}
                 </Text>
                 {messagePreviewText(last)}
               </Text>
             ) : (
-              <Text style={styles.channelPreviewEmpty}>No messages yet</Text>
+              <Text style={styles.channelPreviewEmpty}>
+                {T("chat.no_messages")}
+              </Text>
             )}
             {unread > 0 && (
               <View style={styles.channelUnreadBadge}>
@@ -549,7 +566,7 @@ export default function ChannelList({
                   size={18}
                   color={Colors.textSecondary}
                 />
-                <Text style={styles.swipeActionText}>More</Text>
+                <Text style={styles.swipeActionText}>{T("chat.more")}</Text>
               </Pressable>
             </View>
           )}
@@ -628,12 +645,14 @@ export default function ChannelList({
                 accessibilityRole="button"
                 accessibilityLabel={
                   showAllDefault
-                    ? "Show fewer default rooms"
+                    ? t("chat.rooms.show_fewer")
                     : `Show ${hiddenCount} more default rooms`
                 }
               >
                 <Text style={styles.showMoreText}>
-                  {showAllDefault ? "Show less" : `Show ${hiddenCount} more`}
+                  {showAllDefault
+                    ? t("chat.rooms.show_less")
+                    : `Show ${hiddenCount} more`}
                 </Text>
                 <Feather
                   name={showAllDefault ? "chevron-up" : "chevron-down"}
@@ -649,14 +668,14 @@ export default function ChannelList({
             <EmptyState
               compact
               icon="hash"
-              title="No rooms yet"
+              title={t("chat.rooms.none")}
               subtitle={
                 <Text style={styles.ownEmptyHint}>
                   Tap <Text style={styles.ownEmptyAccent}>+</Text> above to join
                   or create one
                 </Text>
               }
-              accessibilityLabel="No rooms yet. Use the add button in the header to join or create one"
+              accessibilityLabel={t("chat.rooms.none_desc")}
             />
           );
         }}
@@ -672,7 +691,7 @@ export default function ChannelList({
         contentContainerStyle={styles.list}
       />
 
-      {/* Your Rooms: swipe "More" sheet with chat info, pin, clear, delete */}
+      {/* Your Rooms: swipe T("chat.more") sheet with chat info, pin, clear, delete */}
       <BottomSheet
         visible={moreOptionsChannel !== null}
         onClose={() => setMoreOptionsChannel(null)}
@@ -695,7 +714,7 @@ export default function ChannelList({
                 accessibilityRole="button"
               >
                 <Feather name="info" size={18} color={Colors.textSecondary} />
-                <Text style={styles.moreRowText}>Room info</Text>
+                <Text style={styles.moreRowText}>{T("chat.rooms.info")}</Text>
               </Pressable>
 
               {!DEFAULT_CHANNEL_NAMES.has(moreOptionsChannel) && (
@@ -720,8 +739,8 @@ export default function ChannelList({
                     />
                     <Text style={styles.moreRowText}>
                       {pinnedChannels.includes(moreOptionsChannel)
-                        ? "Unpin room"
-                        : "Pin room"}
+                        ? T("chat.rooms.unpin")
+                        : T("chat.rooms.pin")}
                     </Text>
                   </Pressable>
                 </>
@@ -744,8 +763,8 @@ export default function ChannelList({
                 />
                 <Text style={styles.moreRowText}>
                   {mutedChannels.includes(moreOptionsChannel)
-                    ? "Unmute room"
-                    : "Mute room"}
+                    ? T("chat.rooms.unmute")
+                    : T("chat.rooms.mute")}
                 </Text>
               </Pressable>
 
@@ -760,7 +779,9 @@ export default function ChannelList({
                   size={18}
                   color={Colors.textSecondary}
                 />
-                <Text style={styles.moreRowText}>Clear messages</Text>
+                <Text style={styles.moreRowText}>
+                  {T("chat.clear_messages")}
+                </Text>
               </Pressable>
             </View>
 
@@ -844,7 +865,7 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       alignItems: "center",
       justifyContent: "center",
       paddingHorizontal: 4,
-      marginLeft: Spacing.xs,
+      marginStart: Spacing.xs,
     },
     sectionBadgeText: {
       fontSize: FontSize["2xs"],
@@ -890,7 +911,7 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       alignItems: "center",
       gap: 4,
       flex: 1,
-      marginRight: Spacing.sm,
+      marginEnd: Spacing.sm,
       overflow: "hidden",
     },
     channelRowMeta: {
@@ -1008,7 +1029,7 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
     moreDivider: {
       height: StyleSheet.hairlineWidth,
       backgroundColor: Colors.border,
-      marginLeft: Spacing.base,
+      marginStart: Spacing.base,
     },
     moreRowText: {
       fontSize: FontSize.base,

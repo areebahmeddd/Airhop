@@ -12,7 +12,7 @@
 //   - Deterministic: same peerID always gives the same username.
 //   - Collision-resistant: 128 × 128 × 65536 ≈ 1 billion unique names.
 //   - Human-readable: common English words, no offensive terms.
-//   - Consistent with ARCHITECTURE.md §3 ("Adjective + Noun + 4-digit suffix").
+//   - Consistent with ARCHITECTURE.md §2 Identity ("Adjective + Noun + 4-digit suffix").
 
 // 128 adjectives. Selection: byte[0] % 128.
 const ADJECTIVES: readonly string[] = [

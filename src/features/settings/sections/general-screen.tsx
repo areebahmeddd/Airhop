@@ -16,6 +16,7 @@ import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import React, { useState } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import { setTorRouting } from "../../../core/nostr/tor-routing";
+import { useT, type TranslationKey, type Translator } from "../../../i18n";
 import { getMeshService } from "../../../services/mesh-service";
 import { showAlert } from "../../../store/alert-store";
 import {
@@ -40,34 +41,64 @@ interface Props {
 // Undo-send window choices. 0 seconds means no hold: a message transmits the
 // instant you send it, with no pill. The rest hold it that long behind an
 // "undo" pill before it goes out.
-const UNDO_OPTIONS: { value: number; label: string; description: string }[] = [
-  { value: 0, label: "Off", description: "Send right away, no undo" },
+//
+// The tables in this file hold translation keys rather than text, because a
+// module constant cannot call a hook. The component translates them on render,
+// which is also what keeps them live when the language changes.
+const UNDO_OPTIONS: {
+  value: number;
+  labelKey: TranslationKey;
+  descriptionKey: TranslationKey;
+}[] = [
+  {
+    value: 0,
+    labelKey: "common.off",
+    descriptionKey: "settings.general.undo_off_desc",
+  },
   {
     value: 2,
-    label: "2 seconds",
-    description: "A quick chance to take it back",
+    labelKey: "settings.general.undo_2",
+    descriptionKey: "settings.general.undo_2_desc",
   },
-  { value: 5, label: "5 seconds", description: "A longer window" },
-  { value: 10, label: "10 seconds", description: "The longest window" },
+  {
+    value: 5,
+    labelKey: "settings.general.undo_5",
+    descriptionKey: "settings.general.undo_5_desc",
+  },
+  {
+    value: 10,
+    labelKey: "settings.general.undo_10",
+    descriptionKey: "settings.general.undo_10_desc",
+  },
 ];
 
-function undoLabel(seconds: number): string {
-  return (
-    UNDO_OPTIONS.find((o) => o.value === seconds)?.label ?? `${seconds} seconds`
-  );
+function undoLabel(T: Translator, seconds: number): string {
+  const match = UNDO_OPTIONS.find((o) => o.value === seconds);
+  return match
+    ? T(match.labelKey)
+    : T("settings.general.undo_seconds", { count: seconds });
 }
 
 const QUALITY_META: Record<
   UploadQuality,
-  { label: string; description: string }
+  { labelKey: TranslationKey; descriptionKey: TranslationKey }
 > = {
   // Every photo is fitted to the same 512 KB budget before it is sent, so this
   // is not a size dial: it is how much detail to try to keep inside that
   // budget. Low reaches a sendable file in one pass and gets moving sooner,
   // High holds on to detail and may take a couple of passes to fit.
-  low: { label: "Low", description: "Smallest photos, quickest to send" },
-  medium: { label: "Medium", description: "Balanced detail and speed" },
-  high: { label: "High", description: "Keeps the most detail" },
+  low: {
+    labelKey: "settings.general.quality_low",
+    descriptionKey: "settings.general.quality_low_desc",
+  },
+  medium: {
+    labelKey: "settings.general.quality_medium",
+    descriptionKey: "settings.general.quality_medium_desc",
+  },
+  high: {
+    labelKey: "settings.general.quality_high",
+    descriptionKey: "settings.general.quality_high_desc",
+  },
 };
 const QUALITY_ORDER: UploadQuality[] = ["low", "medium", "high"];
 
@@ -78,28 +109,32 @@ type FeatureKey = "ai" | "feeds";
 
 const FEATURES: {
   key: FeatureKey;
-  label: string;
+  // "AI" and "Feeds" are product names for unshipped features, so the label is
+  // a key like everything else: several languages will want to translate
+  // "Feeds", and none should be forced to.
+  labelKey: TranslationKey;
   // Unused for "ai": that row renders a robot glyph from
   // MaterialCommunityIcons instead, which Feather has no equivalent for.
   icon: keyof typeof Feather.glyphMap;
-  description: string;
+  descriptionKey: TranslationKey;
 }[] = [
   {
     key: "ai",
-    label: "AI",
+    labelKey: "settings.general.feature_ai",
     icon: "cpu",
-    description: "Private on-device assistant, no network calls",
+    descriptionKey: "settings.general.feature_ai_desc",
   },
   {
     key: "feeds",
-    label: "Feeds",
+    labelKey: "settings.general.feature_feeds",
     icon: "rss",
-    description: "Read and post to Bluesky and Mastodon feeds",
+    descriptionKey: "settings.general.feature_feeds_desc",
   },
 ];
 
 export default function GeneralScreen({ onBack }: Props): React.JSX.Element {
   const Colors = useThemeColors();
+  const T = useT();
   const styles = useSharedStyles();
   const undoSendSeconds = useSettingsStore((s) => s.undoSendSeconds);
   const setUndoSendSeconds = useSettingsStore((s) => s.setUndoSendSeconds);
@@ -124,25 +159,29 @@ export default function GeneralScreen({ onBack }: Props): React.JSX.Element {
 
   function handleReset(): void {
     showAlert(
-      "Reset settings?",
-      "Every preference goes back to its default: appearance, undo send, and connectivity (internet, Tor, gateway, bridge, relays). Your identity, messages, contacts, and wallet are untouched.",
+      T("settings.general.reset_title"),
+      T("settings.general.reset_body"),
       [
-        { text: "Cancel", style: "cancel" },
-        { text: "Reset", style: "destructive", onPress: doReset },
+        { text: T("common.cancel"), style: "cancel" },
+        {
+          text: T("settings.general.reset_confirm"),
+          style: "destructive",
+          onPress: doReset,
+        },
       ],
     );
   }
 
   return (
     <View style={styles.container}>
-      <SubHeader title="General" onBack={onBack} />
+      <SubHeader title={T("settings.section.general")} onBack={onBack} />
       <ScrollView
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
       >
         {/* Features. Wallet has shipped, so it leads the group with a switch
             locked on: the Wallet tab is part of what Airhop is, not something
-            to switch off. The rest aren't built yet and carry a "Coming soon"
+            to switch off. The rest aren't built yet and carry a T("settings.coming_soon")
             tag in the same row shape.
 
             This sat on the settings hub, above the nav list, where it was the
@@ -154,13 +193,13 @@ export default function GeneralScreen({ onBack }: Props): React.JSX.Element {
           <View style={styles.settingsGroup}>
             <SettingRow
               icon="credit-card"
-              label="Wallet"
-              description="Send Cashu ecash peer to peer over the mesh"
+              label={T("settings.general.feature_wallet")}
+              description={T("settings.general.feature_wallet_desc")}
               control={
                 <SettingSwitch
                   value
                   disabled
-                  accessibilityLabel="Wallet (always on)"
+                  accessibilityLabel={T("settings.general.feature_wallet_a11y")}
                 />
               }
             />
@@ -178,9 +217,13 @@ export default function GeneralScreen({ onBack }: Props): React.JSX.Element {
                       />
                     ) : undefined
                   }
-                  label={feature.label}
-                  description={feature.description}
-                  control={<Text style={styles.comingSoon}>Coming soon</Text>}
+                  label={T(feature.labelKey)}
+                  description={T(feature.descriptionKey)}
+                  control={
+                    <Text style={styles.comingSoon}>
+                      {T("settings.coming_soon")}
+                    </Text>
+                  }
                 />
               </React.Fragment>
             ))}
@@ -191,11 +234,11 @@ export default function GeneralScreen({ onBack }: Props): React.JSX.Element {
           <View style={styles.settingsGroup}>
             <SettingLinkRow
               icon="rotate-ccw"
-              label="Undo send"
-              description="Hold a sent message briefly so you can take it back before it goes out."
+              label={T("settings.general.undo")}
+              description={T("settings.general.undo_desc")}
               control={
                 <Text style={styles.settingValue}>
-                  {undoLabel(undoSendSeconds)}
+                  {undoLabel(T, undoSendSeconds)}
                 </Text>
               }
               onPress={() => setShowUndoSheet(true)}
@@ -209,12 +252,12 @@ export default function GeneralScreen({ onBack }: Props): React.JSX.Element {
           <View style={styles.settingsGroup}>
             <SettingLinkRow
               icon="image"
-              label="Upload quality"
-              description={QUALITY_META[uploadQuality].description}
+              label={T("settings.general.quality")}
+              description={T(QUALITY_META[uploadQuality].descriptionKey)}
               onPress={() => setShowQualitySheet(true)}
               control={
                 <Text style={styles.settingValue}>
-                  {QUALITY_META[uploadQuality].label}
+                  {T(QUALITY_META[uploadQuality].labelKey)}
                 </Text>
               }
             />
@@ -226,8 +269,8 @@ export default function GeneralScreen({ onBack }: Props): React.JSX.Element {
                 for the shoulder-surfing case, worth naming honestly. */}
             <SettingRow
               icon="eye"
-              label="Show media automatically"
-              description="Photos and videos appear in the chat. Turn off to keep them behind a tap"
+              label={T("settings.general.show_media")}
+              description={T("settings.general.show_media_desc")}
               control={
                 <SettingSwitch
                   value={autoDownloadMedia}
@@ -245,8 +288,8 @@ export default function GeneralScreen({ onBack }: Props): React.JSX.Element {
           <View style={styles.settingsGroup}>
             <SettingLinkRow
               icon="refresh-ccw"
-              label="Reset settings"
-              description="Put every preference back to its default. Your identity, messages, contacts, and wallet are untouched."
+              label={T("settings.general.reset")}
+              description={T("settings.general.reset_desc")}
               chevron={false}
               onPress={handleReset}
             />
@@ -259,7 +302,7 @@ export default function GeneralScreen({ onBack }: Props): React.JSX.Element {
         onClose={() => setShowUndoSheet(false)}
         sheetStyle={styles.sheet}
       >
-        <Text style={styles.sheetTitle}>Undo send</Text>
+        <Text style={styles.sheetTitle}>{T("settings.general.undo")}</Text>
         <View style={styles.optionGroup}>
           {UNDO_OPTIONS.map((opt, i) => {
             const selected = opt.value === undoSendSeconds;
@@ -276,12 +319,14 @@ export default function GeneralScreen({ onBack }: Props): React.JSX.Element {
                     setShowUndoSheet(false);
                   }}
                   accessibilityRole="button"
-                  accessibilityLabel={`Undo send: ${opt.label}`}
+                  accessibilityLabel={T("settings.general.undo_a11y", {
+                    value: T(opt.labelKey),
+                  })}
                 >
                   <View style={styles.optionText}>
-                    <Text style={styles.optionLabel}>{opt.label}</Text>
+                    <Text style={styles.optionLabel}>{T(opt.labelKey)}</Text>
                     <Text style={styles.optionDescription}>
-                      {opt.description}
+                      {T(opt.descriptionKey)}
                     </Text>
                   </View>
                   {selected && (
@@ -303,7 +348,7 @@ export default function GeneralScreen({ onBack }: Props): React.JSX.Element {
         onClose={() => setShowQualitySheet(false)}
         sheetStyle={styles.sheet}
       >
-        <Text style={styles.sheetTitle}>Upload quality</Text>
+        <Text style={styles.sheetTitle}>{T("settings.general.quality")}</Text>
         <Text style={styles.sheetSubtitle}>
           Applies to photos sent from your camera or library. Every photo is
           fitted to the mesh either way.
@@ -325,12 +370,14 @@ export default function GeneralScreen({ onBack }: Props): React.JSX.Element {
                     setShowQualitySheet(false);
                   }}
                   accessibilityRole="button"
-                  accessibilityLabel={`Set upload quality to ${meta.label}`}
+                  accessibilityLabel={T("settings.general.quality_a11y", {
+                    value: T(meta.labelKey),
+                  })}
                 >
                   <View style={styles.optionText}>
-                    <Text style={styles.optionLabel}>{meta.label}</Text>
+                    <Text style={styles.optionLabel}>{T(meta.labelKey)}</Text>
                     <Text style={styles.optionDescription}>
-                      {meta.description}
+                      {T(meta.descriptionKey)}
                     </Text>
                   </View>
                   {selected && (

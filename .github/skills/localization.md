@@ -1,0 +1,150 @@
+---
+description: >
+  Reference for the translation catalog, the i18n runtime, and right-to-left
+  layout. Read this before adding any user-facing string, touching src/i18n/,
+  or writing a stylesheet. Airhop ships English only; every string still goes
+  through the catalog. The mistakes that compile are pluralising by
+  concatenation, translating at module load, nailing a style to a physical side,
+  and translating a string that crosses the wire to bitchat.
+---
+
+# Localization
+
+Implementation: `src/i18n/`. Tooling: `scripts/i18n-audit.js`. Reference: `bitchat/ios/bitchat/Localizable.xcstrings` (30 languages, public domain).
+
+| Fact              | Value                                  |
+| ----------------- | -------------------------------------- |
+| Shipping          | `en`                                   |
+| Catalog           | 1,035 keys, 12 of them plurals         |
+| Files wired       | 62                                     |
+| Hardcoded strings | 0, enforced by `i18n:audit -- --max 0` |
+
+## The Rule
+
+Never write a user-facing string inline. Add a key to `src/i18n/locales/en.ts` and use `T("your.key")` in a component or `t("your.key")` outside React.
+
+This holds even though only English ships. The catalog is what makes every string in the app greppable, reviewable in one diff, and consistent in wording, and it is the reason a second language is a new file rather than a sweep of ninety screens.
+
+## What Ships
+
+English. Ten languages land in v1.3.0; see [ROADMAP.md](../../docs/design/ROADMAP.md) and [Adding a Language](#adding-a-language) below.
+
+The runtime carries what the shipped catalog needs, so there is no locale store, picker, device negotiation or plural polyfill yet. Each arrives with the language that requires it.
+
+A language reaches a user by being listed in `languages.ts`, and it can be listed only once its catalog compiles, which requires every key. There is no coverage threshold and no partial state to manage.
+
+## File Layout
+
+| Path                        | Holds                                                   |
+| --------------------------- | ------------------------------------------------------- |
+| `src/i18n/index.ts`         | `t` / `useT` / `tPlural`, the plural rule, the RTL flag |
+| `src/i18n/languages.ts`     | the language table, and the seam a second one goes in   |
+| `src/i18n/layout.ts`        | RTL helpers React Native has no logical form for        |
+| `src/i18n/rich-text.tsx`    | a translated sentence with React nodes substituted in   |
+| `src/i18n/locales/en.ts`    | the catalog, hand-written, the source of truth          |
+| `src/i18n/locales/types.ts` | `TranslationKey` and `PluralKey`, derived from `en.ts`  |
+
+## Completeness Is a Type
+
+Every locale is annotated `Strings`, which is `Record<TranslationKey, string>` derived from `en.ts`. A locale missing a key does not compile, so there is no runtime fallback.
+
+bitchat's `.xcstrings` permits partial locales, which is why it carries `LocalizationCoverageTests.swift`. Airhop needs no equivalent.
+
+So adding an English key breaks every incomplete locale at compile time rather than degrading it at runtime in front of a user.
+
+## Plurals
+
+Use `tPlural`. Never concatenate.
+
+```ts
+tPlural("mesh.peers_in_range", count); // correct
+`${n} peer${n !== 1 ? "s" : ""} in range`; // wrong
+```
+
+No language outside English pluralises by appending to the stem. Russian needs one/few/many/other, Arabic all six CLDR categories, Chinese and Indonesian only `other`.
+
+The English one/other rule lives in `src/i18n/index.ts`, in one function, and is the only sanctioned `count === 1` in the codebase. A second language replaces it with `Intl.PluralRules`, which Hermes does not implement on either platform, so that also means adding `@formatjs/intl-pluralrules` with `polyfill-force` and per-language locale data.
+
+Plurals live in a separate `plurals` map because a flat `Record<TranslationKey, string>` cannot express per-language category sets. `catalog.test.ts` asserts English carries exactly one and other.
+
+After any large change, grep for `!== 1 ?` and `=== 1 ?`.
+
+## Placeholders
+
+Named (`{count}`, `{name}`), never positional. Translators reorder sentences; a named placeholder survives that, a positional one does not.
+
+For a sentence with a link or other node inside it, use `useRichText`. Do not concatenate `<Text>` fragments.
+
+## Never Translate at Module Load
+
+```ts
+const SCOPES = { tag: t("chat.scope.mesh") }; // wrong
+const SCOPES = { tagKey: "chat.scope.mesh" }; // correct
+```
+
+A module constant is evaluated once at import, so the first form freezes in whichever language the app started in. It type-checks and renders correctly. `npm run i18n:audit` fails the build on it.
+
+## What Not to Translate
+
+These cross the wire or derive an identity. `catalog.test.ts` enforces the list.
+
+| Thing                                  | Where                                    | Why                                                                                         |
+| -------------------------------------- | ---------------------------------------- | ------------------------------------------------------------------------------------------- |
+| Adjective and noun word lists          | `src/utils/username.ts`                  | Identity derivation. One peer must resolve to one name on every device and in bitchat       |
+| Transmitted `/hug` and `/slap` text    | `message-thread.tsx`                     | bitchat matches the English substrings in `ChatPublicConversationCoordinator.swift:538-541` |
+| Slash command tokens                   | `/hug`, `/who`, `/msg`, `/pay`           | The parser matches them. Translate the hint instead                                         |
+| Channel names and geohashes            | `#bluetooth`, cell ids                   | Protocol identifiers. They may sit inside translated prose but must survive verbatim        |
+| Nicknames, group names, notices        | everywhere                               | User content                                                                                |
+| Licence texts                          | `src/data/licenses.ts`                   | Quoted verbatim in the original                                                             |
+| Terms and Privacy clauses              | `terms-screen.tsx`, `privacy-screen.tsx` | English is authoritative. The reader chrome around them is translated                       |
+| Mint and relay error strings           | wallet, nostr                            | Authored by a remote server                                                                 |
+| "Airhop", "Ed25519 + X25519", "GitHub" | everywhere                               | Proper nouns and cryptosystem names                                                         |
+
+Strings the OS renders are also outside the catalog: the iOS permission dialogs live in `app.json`'s `infoPlist` and the Android foreground-service notification lives in Kotlin. Routing them through the catalog costs a generated per-locale bundle or a bridge call, and both arrive with the second language.
+
+## Right to Left
+
+No RTL language ships yet, which is exactly why the rules below need enforcing. The stylesheets are already written for it, and a physical `marginLeft` added now is not noticed until the first Arabic build.
+
+- Logical properties only: `marginStart`, `marginEnd`, `start`, `end`. Never `marginLeft` or `left`. `flexDirection: "row"` flips on its own.
+- `textAlign` has no logical end value in React Native. Use `textAlignEnd` from `src/i18n/layout.ts`, and `textAlign: "auto"` for the leading edge.
+- Directional glyphs do not mirror. Use `chevronForward`, `chevronBack`, `arrowBack`. `arrow-up-right` means outward, not rightward, and stays as it is.
+- `radar-view.tsx` must never mirror. It is a polar plot of physical space.
+- `initI18n()` pins layout direction to the app's language at startup. Without it React Native mirrors the whole layout on a device set to Arabic, putting English text in a right-to-left frame.
+
+## Commands
+
+| Command                          | Does                                                                   |
+| -------------------------------- | ---------------------------------------------------------------------- |
+| `npm run i18n:audit`             | hardcoded strings, worst file first. Also fails on frozen translations |
+| `npm run i18n:audit -- --list`   | every hit with a line number                                           |
+| `npm run i18n:audit -- --unused` | catalog keys nothing references                                        |
+| `npm run i18n:audit -- --max 0`  | CI: fail if any hardcoded string is added                              |
+
+## Adding a Language
+
+Extraction is done, so this is translation work plus a contained set of code changes. Scheduled for v1.3.0. In order:
+
+1. Translate `en.ts` into `src/i18n/locales/<code>.ts`, exporting `strings` and `plurals` typed as `Strings` and `Plurals`. It will not compile until every key is present, which is the point. Lift what you can from `bitchat/ios/bitchat/Localizable.xcstrings`, which is public domain and where Airhop's key names came from.
+2. Add the entry to `LANGUAGES` in `languages.ts`, and add the code to `LanguageCode` and `LANGUAGE_ORDER`.
+3. In `index.ts`, replace the `locale` and `language` constants with a store, and replace the English plural rule with `Intl.PluralRules`. Install `@formatjs/intl-pluralrules`, import `polyfill-force.js` and the locale data for each language: Hermes has no `Intl.PluralRules` on either platform, and Node does, so a missing polyfill passes every test and throws on the first screen that renders a count.
+4. Add a picker if the language is not to be chosen by the device alone. iOS 13+ and Android 13+ offer a per-app language in system settings; Android 8 to 12 does not, and Airhop supports minSdk 26.
+5. Add device language negotiation: `expo-localization` and its `app.json` plugin config (`supportedLocales`, `supportsRTL`, `allowDynamicLocaleChangesAndroid`). Add generated `InfoPlist.strings` if the permission dialogs are to be translated too, and push the Android service notification text across the bridge.
+6. Point `CATALOGS` in `catalog.test.ts` at both locales. Every rule in it then applies to the new one: placeholder parity, plural categories, and the do-not-translate list.
+
+## What Not to Do
+
+- Write a user-facing string inline.
+- Pluralise with `n === 1 ? "" : "s"` at a call site.
+- Call `t()` at module scope.
+- Use `marginLeft`, `left`, or `textAlign: "right"` in a stylesheet.
+- Translate anything in the table above.
+- Set translated prose in `FontFamily.mono`. JetBrains Mono and Fira Code carry no Arabic, Devanagari or Han glyphs, so it falls back per OEM. Mono is for machine data.
+- Ship a language whose catalog is not complete.
+
+## Where to Read More
+
+- `src/i18n/locales/en.ts`: the catalog, with per-section reasoning inline
+- `src/i18n/index.ts`: why there is no i18n library here
+- `docs/spec/ARCHITECTURE.md` section 8: decision log and device-consistency table
+- `bitchat/ios/bitchat/Localizable.xcstrings`: the catalog to harvest from

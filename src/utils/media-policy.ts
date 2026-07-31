@@ -1,3 +1,4 @@
+import { t } from "../i18n";
 // Where media (photos, videos, files, voice notes) may be sent.
 //
 // Media rides the BLE file-transfer path only: it is flood-broadcast over
@@ -45,10 +46,10 @@ function isLocationChannel(channel: string): boolean {
 export function mediaBlockedReason(channel: string): string | null {
   if (canSendMedia(channel)) return null;
   if (channel.startsWith("dm:nostr_")) {
-    return "You only know this person through a relay, and photos, files and voice notes travel over Bluetooth. Text reaches them anywhere, media needs them nearby.";
+    return t("media.blocked.nostr_only");
   }
   if (isLocationChannel(channel)) {
-    return "A location channel reaches people over the internet, and photos, files and voice notes travel over Bluetooth, so they would never arrive.";
+    return t("media.blocked.location_channel");
   }
   // Everything left is a private room: a `#name` channel or a `group:<id>`.
   return `An attachment is signed but not encrypted, so sending one into a private ${channel.startsWith("group:") ? "group" : "channel"} would broadcast it in the clear while the text here stays encrypted.`;

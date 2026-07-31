@@ -15,6 +15,8 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { useT } from "../../i18n";
+import { useRichText } from "../../i18n/rich-text";
 import PrimaryButton from "../../ui/components/primary-button";
 import {
   FontSize,
@@ -37,6 +39,7 @@ export default function WelcomeScreen({
   onContinue,
 }: Props): React.JSX.Element {
   const Colors = useThemeColors();
+  const T = useT();
   const styles = useMemo(() => createStyles(Colors), [Colors]);
   const { width } = useWindowDimensions();
   const [agreed, setAgreed] = useState(false);
@@ -50,6 +53,34 @@ export default function WelcomeScreen({
   const birdCell = Math.max(
     2,
     Math.round(Math.min(width * 0.5, 240) / BIRD_PIXELS[0].length),
+  );
+
+  // The consent line is one translated sentence with the two document names
+  // substituted in as tappable nodes, so a translator can put them wherever
+  // their language needs them. See i18n/rich-text.tsx.
+  const consent = useRichText(
+    "onboarding.welcome.consent",
+    {
+      terms: (
+        <Text
+          style={styles.link}
+          onPress={() => void Linking.openURL(TERMS_URL)}
+          suppressHighlighting
+        >
+          {T("legal.terms")}
+        </Text>
+      ),
+      privacy: (
+        <Text
+          style={styles.link}
+          onPress={() => void Linking.openURL(PRIVACY_URL)}
+          suppressHighlighting
+        >
+          {T("legal.privacy")}
+        </Text>
+      ),
+    },
+    { cta: T("onboarding.welcome.cta") },
   );
 
   function toggleAgreed(): void {
@@ -93,19 +124,21 @@ export default function WelcomeScreen({
             <Text style={styles.wordmark} accessibilityRole="header">
               airhop
             </Text>
-            <Text style={styles.tagline}>Private mesh communication.</Text>
+            <Text style={styles.tagline}>
+              {T("onboarding.welcome.tagline")}
+            </Text>
           </View>
           <View style={styles.actions}>
             <PrimaryButton
-              label="Get started"
+              label={T("onboarding.welcome.cta")}
               onPress={onContinue}
               disabled={!agreed}
-              accessibilityLabel="Get started"
+              accessibilityLabel={T("onboarding.welcome.cta")}
               // A dimmed button with no stated reason is a dead end. The hint is
               // read out the moment focus lands on it, so the blocker is
               // announced before the tap that would do nothing.
               accessibilityHint={
-                agreed ? undefined : "Agree to the terms below to continue"
+                agreed ? undefined : T("onboarding.welcome.cta_hint")
               }
             />
             <Pressable
@@ -113,7 +146,7 @@ export default function WelcomeScreen({
               onPress={toggleAgreed}
               accessibilityRole="checkbox"
               accessibilityState={{ checked: agreed }}
-              accessibilityLabel="Agree to the Terms of Service and Privacy Policy"
+              accessibilityLabel={T("onboarding.welcome.consent_a11y")}
               // The two inline links are inside an accessible parent, which
               // means a screen reader treats the whole row as one element and
               // never reaches them. Exposing them as custom actions is the
@@ -121,8 +154,11 @@ export default function WelcomeScreen({
               // from the actions menu, so the documents are reachable without
               // breaking the row into three separate stops.
               accessibilityActions={[
-                { name: "terms", label: "Open Terms of Service" },
-                { name: "privacy", label: "Open Privacy Policy" },
+                { name: "terms", label: T("onboarding.welcome.open_terms") },
+                {
+                  name: "privacy",
+                  label: T("onboarding.welcome.open_privacy"),
+                },
               ]}
               onAccessibilityAction={(event) => {
                 if (event.nativeEvent.actionName === "terms") {
@@ -138,25 +174,7 @@ export default function WelcomeScreen({
                   <Feather name="check" size={13} color={Colors.textInverse} />
                 ) : null}
               </View>
-              <Text style={styles.agreementText}>
-                By tapping Get started, you agree to our{" "}
-                <Text
-                  style={styles.link}
-                  onPress={() => void Linking.openURL(TERMS_URL)}
-                  suppressHighlighting
-                >
-                  Terms of Service
-                </Text>{" "}
-                and{" "}
-                <Text
-                  style={styles.link}
-                  onPress={() => void Linking.openURL(PRIVACY_URL)}
-                  suppressHighlighting
-                >
-                  Privacy Policy
-                </Text>
-                .
-              </Text>
+              <Text style={styles.agreementText}>{consent}</Text>
             </Pressable>
           </View>
         </View>

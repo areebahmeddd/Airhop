@@ -6,6 +6,7 @@
 
 import React, { useMemo } from "react";
 import { Linking, ScrollView, StyleSheet, Text, View } from "react-native";
+import { useT } from "../../../i18n";
 import { FontSize, Radius, Spacing, useThemeColors } from "../../../ui/theme";
 import {
   GroupDivider,
@@ -37,11 +38,12 @@ const GITHUB_SPONSORS_URL = "https://github.com/sponsors/areebahmeddd";
 
 export default function SupportScreen({ onBack }: Props): React.JSX.Element {
   const Colors = useThemeColors();
+  const T = useT();
   const styles = useSharedStyles();
   const localStyles = useMemo(() => createLocalStyles(Colors), [Colors]);
   return (
     <View style={styles.container}>
-      <SubHeader title="Support" onBack={onBack} />
+      <SubHeader title={T("settings.section.support")} onBack={onBack} />
       <ScrollView
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
@@ -51,36 +53,36 @@ export default function SupportScreen({ onBack }: Props): React.JSX.Element {
             {DODO_CHECKOUT_URL ? (
               <SettingLinkRow
                 icon="credit-card"
-                label="Card or UPI"
-                description="Netbanking and wallets too, worldwide"
+                label={T("settings.support.card")}
+                description={T("settings.support.card_desc")}
                 onPress={() => void Linking.openURL(DODO_CHECKOUT_URL)}
-                accessibilityLabel="Support by card, UPI, netbanking, or wallet"
+                accessibilityLabel={T("settings.support.card_a11y")}
                 external
               />
             ) : (
               <SettingRow
                 icon="credit-card"
-                label="Card or UPI"
-                control={<Text style={styles.comingSoon}>Coming soon</Text>}
+                label={T("settings.support.card")}
+                control={
+                  <Text style={styles.comingSoon}>
+                    {T("settings.coming_soon")}
+                  </Text>
+                }
               />
             )}
             <GroupDivider />
             <SettingLinkRow
               icon="github"
-              label="GitHub Sponsors"
-              description="Monthly or one-time, no platform fee"
+              label={T("settings.support.sponsors")}
+              description={T("settings.support.sponsors_desc")}
               onPress={() => void Linking.openURL(GITHUB_SPONSORS_URL)}
-              accessibilityLabel="Support through GitHub Sponsors"
+              accessibilityLabel={T("settings.support.sponsors_a11y")}
               external
             />
           </View>
         </View>
         <View style={localStyles.note}>
-          <Text style={localStyles.noteText}>
-            I build Airhop in my free time. There are no investors and no ads.
-            If it is useful to you, a contribution goes a long way toward
-            keeping development active. Every feature stays free either way.
-          </Text>
+          <Text style={localStyles.noteText}>{T("settings.support.note")}</Text>
         </View>
       </ScrollView>
     </View>

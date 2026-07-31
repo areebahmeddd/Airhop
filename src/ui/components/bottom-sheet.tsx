@@ -54,6 +54,7 @@ import Animated, {
   withSpring,
   withTiming,
 } from "react-native-reanimated";
+import { useT } from "../../i18n";
 import { Duration, Radius, Spacing, useThemeColors } from "../theme";
 import { useKeyboardHeight } from "../use-keyboard";
 
@@ -103,6 +104,7 @@ export default function BottomSheet({
   scrollable = false,
   scrimColor,
 }: Props): React.JSX.Element | null {
+  const T = useT();
   const Colors = useThemeColors();
   const styles = useMemo(() => createStyles(Colors), [Colors]);
   const { height: screenHeight } = useWindowDimensions();
@@ -275,7 +277,7 @@ export default function BottomSheet({
             style={StyleSheet.absoluteFill}
             onPress={dismiss}
             accessibilityRole="button"
-            accessibilityLabel="Close"
+            accessibilityLabel={T("common.close")}
           />
           {scrollable ? (
             sheet

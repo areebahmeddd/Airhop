@@ -49,6 +49,10 @@ jobs:
       - name: Run type check
         run: npm run typecheck
 
+      # Extraction is complete, so any inline user-facing string or translation evaluated at module load fails the build.
+      - name: Check no hardcoded strings
+        run: npm run i18n:audit -- --max 0
+
   test:
     name: Unit Tests
     runs-on: ubuntu-24.04

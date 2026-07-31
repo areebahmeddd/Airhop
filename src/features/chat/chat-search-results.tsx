@@ -18,6 +18,7 @@ import {
   View,
 } from "react-native";
 import { isUrgent } from "../../core/mesh/board-packet";
+import { t, useT, type TranslationKey } from "../../i18n";
 import { geohashChannel } from "../../services/geohash-channel-service";
 import { getMeshService } from "../../services/mesh-service";
 import { useBoardStore } from "../../store/board-store";
@@ -46,17 +47,19 @@ import {
 import { formatListTimestamp } from "../../utils/format";
 
 // The filter chips shown above search, one per content kind Airhop supports.
+// Keys, not text: evaluated once at import, so translated strings here would
+// freeze in the language the app started in.
 const MEDIA_FILTERS: {
   key: MediaFilter;
-  label: string;
+  labelKey: TranslationKey;
   icon: React.ComponentProps<typeof Feather>["name"];
 }[] = [
-  { key: "photos", label: "Photos", icon: "image" },
-  { key: "videos", label: "Videos", icon: "video" },
-  { key: "audio", label: "Audio", icon: "mic" },
-  { key: "documents", label: "Documents", icon: "file-text" },
-  { key: "links", label: "Links", icon: "link" },
-  { key: "ecash", label: "Ecash", icon: "dollar-sign" },
+  { key: "photos", labelKey: "chat.search.photos", icon: "image" },
+  { key: "videos", labelKey: "chat.search.videos", icon: "video" },
+  { key: "audio", labelKey: "chat.search.audio", icon: "mic" },
+  { key: "documents", labelKey: "chat.search.documents", icon: "file-text" },
+  { key: "links", labelKey: "chat.search.links", icon: "link" },
+  { key: "ecash", labelKey: "chat.search.ecash", icon: "dollar-sign" },
 ];
 
 // Debounce so fast typing doesn't recompute the scan on every keystroke.
@@ -83,6 +86,7 @@ export default function ChatSearchResults({
   onSelectChat,
   onSelectMessage,
 }: Props): React.JSX.Element {
+  const T = useT();
   const Colors = useThemeColors();
   const styles = useMemo(() => createStyles(Colors), [Colors]);
   const channels = useChatStore((s) => s.channels);
@@ -160,7 +164,7 @@ export default function ChatSearchResults({
     ...(chatHits.length > 0
       ? [
           {
-            title: "Chats",
+            title: T("chat.search.section_chats"),
             data: chatHits.map((hit): ResultRow => ({ kind: "chat", hit })),
           },
         ]
@@ -168,7 +172,7 @@ export default function ChatSearchResults({
     ...(messageHits.length > 0
       ? [
           {
-            title: "Messages",
+            title: T("chat.search.section_messages"),
             data: messageHits.map((hit): ResultRow => ({
               kind: "message",
               hit,
@@ -179,7 +183,7 @@ export default function ChatSearchResults({
     ...(noticeHits.length > 0
       ? [
           {
-            title: "Notices",
+            title: T("chat.search.section_notices"),
             data: noticeHits.map((hit): ResultRow => ({
               kind: "notice",
               hit,
@@ -214,7 +218,9 @@ export default function ChatSearchResults({
               onPress={() => setFilter(selected ? null : f.key)}
               accessibilityRole="button"
               accessibilityState={{ selected }}
-              accessibilityLabel={`Filter by ${f.label}`}
+              accessibilityLabel={t("chat.search.filter_by", {
+                filter: t(f.labelKey),
+              })}
             >
               <Feather
                 name={f.icon}
@@ -224,7 +230,7 @@ export default function ChatSearchResults({
               <Text
                 style={[styles.chipText, selected && styles.chipTextSelected]}
               >
-                {f.label}
+                {t(f.labelKey)}
               </Text>
             </Pressable>
           );
@@ -243,8 +249,13 @@ export default function ChatSearchResults({
             />
             <Text style={styles.emptyText}>
               {trimmed.length > 0
-                ? `No ${activeFilter.label.toLowerCase()} matching “${trimmed}”`
-                : `No ${activeFilter.label.toLowerCase()} yet`}
+                ? T("chat.search.no_matches", {
+                    filter: T(activeFilter.labelKey).toLowerCase(),
+                    query: trimmed,
+                  })
+                : T("chat.search.no_media", {
+                    filter: T(activeFilter.labelKey).toLowerCase(),
+                  })}
             </Text>
           </View>
         ) : (
@@ -370,6 +381,7 @@ function MessageResultRow({
   colors: ReturnType<typeof useThemeColors>;
   onPress: (channel: string, messageId: string) => void;
 }): React.JSX.Element {
+  const T = useT();
   const before = hit.snippet.slice(0, hit.matchStart);
   const match = hit.snippet.slice(hit.matchStart, hit.matchEnd);
   const after = hit.snippet.slice(hit.matchEnd);
@@ -400,7 +412,7 @@ function MessageResultRow({
         </View>
         <Text style={styles.messageSnippet} numberOfLines={2}>
           <Text style={styles.messageSender}>
-            {hit.isMine ? "You" : hit.senderNickname}:{" "}
+            {hit.isMine ? T("chat.you") : hit.senderNickname}:{" "}
           </Text>
           {before}
           <Text style={styles.messageMatch}>{match}</Text>
@@ -424,6 +436,7 @@ function NoticeResultRow({
   colors: ReturnType<typeof useThemeColors>;
   onPress: (channel: string) => void;
 }): React.JSX.Element {
+  const T = useT();
   const before = hit.snippet.slice(0, hit.matchStart);
   const match = hit.snippet.slice(hit.matchStart, hit.matchEnd);
   const after = hit.snippet.slice(hit.matchEnd);
@@ -452,7 +465,7 @@ function NoticeResultRow({
         </View>
         <Text style={styles.messageSnippet} numberOfLines={2}>
           <Text style={styles.messageSender}>
-            {hit.isUrgent ? "Urgent · " : ""}
+            {hit.isUrgent ? `${T("chat.search.urgent")} ` : ""}
             {hit.author}:{" "}
           </Text>
           {before}
@@ -479,6 +492,7 @@ function MediaResultRow({
   colors: ReturnType<typeof useThemeColors>;
   onPress: (channel: string, messageId: string) => void;
 }): React.JSX.Element {
+  const T = useT();
   const before = hit.snippet.slice(0, hit.matchStart);
   const match = hit.snippet.slice(hit.matchStart, hit.matchEnd);
   const after = hit.snippet.slice(hit.matchEnd);
@@ -487,9 +501,11 @@ function MediaResultRow({
       style={styles.row}
       onPress={() => onPress(hit.channel, hit.messageId)}
       accessibilityRole="button"
-      accessibilityLabel={`${chatDisplayName(hit.channel)}, ${filter.label} from ${
-        hit.isMine ? "you" : hit.senderNickname
-      }`}
+      accessibilityLabel={T("chat.search.result_a11y", {
+        chat: chatDisplayName(hit.channel),
+        kind: T(filter.labelKey),
+        sender: hit.isMine ? T("chat.search.you") : hit.senderNickname,
+      })}
     >
       <View style={styles.mediaThumb}>
         <Feather name={filter.icon} size={16} color={colors.textSecondary} />
@@ -512,7 +528,7 @@ function MediaResultRow({
         </View>
         <Text style={styles.messageSnippet} numberOfLines={2}>
           <Text style={styles.messageSender}>
-            {hit.isMine ? "You" : hit.senderNickname}:{" "}
+            {hit.isMine ? T("chat.you") : hit.senderNickname}:{" "}
           </Text>
           {before}
           <Text style={styles.messageMatch}>{match}</Text>
