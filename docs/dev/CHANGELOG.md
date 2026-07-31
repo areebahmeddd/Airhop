@@ -3,75 +3,6 @@
 All notable changes are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
-## What's Changed in v1.0.6 · Albatross
-
-- feat: add hooks for pull-to-refresh colors and reduced motion settings (by @areebahmeddd) [bae500d]
-- feat: implement permission primer for Bluetooth and Location requests (by @areebahmeddd) [24dd0ab]
-- feat: enforce timestamp freshness for ANNOUNCE packets to prevent replay attacks (by @areebahmeddd) [7434a86]
-- fix: minor fixes for apk signing and openssf score (by @areebahmeddd) [21a0568]
-
-**Full changelog:** [v1.0.5..v1.0.6](https://github.com/areebahmeddd/Airhop/compare/v1.0.5..v1.0.6)
-
-## What's Changed in v1.0.5 · Albatross
-
-- chore: trigger Cloudflare Pages deployment (by @areebahmeddd) [41a72d5]
-- feat: enhance token scanner and wallet screen functionality (by @areebahmeddd) [cd65ac5]
-
-**Full changelog:** [v1.0.4..v1.0.5](https://github.com/areebahmeddd/Airhop/compare/v1.0.4..v1.0.5)
-
-## What's Changed in v1.0.4 · Albatross
-
-- feat(FAQ): enhance FAQ section with detailed encryption and payment information (by @areebahmeddd) [012f367]
-- fix: major bug fixes after testing locally with friends [ see description ] (by @areebahmeddd) [c88a6fa]
-- feat(wallet): rebuild Cashu ecash end to end, with Lightning and recovery (#7) (by @Areeb Ahmed) [aaaa15a]
-- feat(landing): add architecture diagrams for airhop (by @areebahmeddd) [f323a58]
-- feat(core): add live voice detection, mesh bridge, qr for cashu payments (by @areebahmeddd) [21f1865]
-
-**Full changelog:** [v1.0.2..v1.0.4](https://github.com/areebahmeddd/Airhop/compare/v1.0.2..v1.0.4)
-
-## What's Changed in v1.0.2 · Albatross
-
-- feat: update UI elements and improve user experience across various screens (by @areebahmeddd) [34a68ad]
-
-**Full changelog:** [v1.0.1..v1.0.2](https://github.com/areebahmeddd/Airhop/compare/v1.0.1..v1.0.2)
-
-## What's Changed in v1.0.1 · Albatross
-
-- refactor: rename "Your Channels" to "Your Rooms" for clarity and consistency (by @areebahmeddd) [837173d]
-- feat(app/core): geohash support, ui fixes, docs update, updated tests and feature wiring (by @areebahmeddd) [f0dc507]
-- fix(core): Tor functionality, internet gateway, other minor ui bug fixes (by @areebahmeddd) [7322a68]
-- feat(chat): add unseen notices tracking and display in message thread (by @areebahmeddd) [16dfba6]
-- feat: add monospace font selection and update UI components (by @areebahmeddd) [fdb64f9]
-
-**Full changelog:** [v1.0.0..v1.0.1](https://github.com/areebahmeddd/Airhop/compare/v1.0.0..v1.0.1)
-
-## What's Changed in v1.0.0 · Albatross
-
-- feat(project): run claude fable 5 to make it compatible with bitchat (potentially) (by @areebahmeddd) [2c4ae56]
-
-**Full changelog:** [v0.9.9..v1.0.0](https://github.com/areebahmeddd/Airhop/compare/v0.9.9..v1.0.0)
-
-## What's Changed in v0.9.9
-
-- docs(landing): copy tweaks, footer order, sitemap refresh (by @areebahmeddd) [f989e94]
-- refactor(settings): tidy feature rows, network/storage/donate copy (by @areebahmeddd) [482dc8e]
-- feat(settings): tappable links in Terms and Privacy screens (by @areebahmeddd) [f45ac39]
-- style(chat): rounded-pill action buttons across sheets and modals (by @areebahmeddd) [b9e79ce]
-- feat(onboarding): require agreeing to terms before continuing (by @areebahmeddd) [4d186f7]
-- feat(settings): open-source licenses screen with repos and grouping (by @areebahmeddd) [cb92153]
-- fix(identity): label Nostr peers by npub tail, never "undefined" (by @areebahmeddd) [ce97219]
-- feat(settings): version screen with update check and release codenames (by @areebahmeddd) [8aa8c54]
-
-**Full changelog:** [v0.9.8..v0.9.9](https://github.com/areebahmeddd/Airhop/compare/v0.9.8..v0.9.9)
-
-## What's Changed in v0.9.8
-
-- docs: notifications + foreground-service lifecycle (by @areebahmeddd) [4ed7840]
-- refactor(chat): share pinned+recent conversation ordering, add DM pinning (by @areebahmeddd) [5112a93]
-- feat(chat): local message notifications with activity bell (by @areebahmeddd) [7105d0a]
-
-**Full changelog:** [v0.9.7..v0.9.8](https://github.com/areebahmeddd/Airhop/compare/v0.9.7..v0.9.8)
-
 ## What's Changed in v0.9.7
 
 - feat: update footer with new links and add PixelHeart animation (by @areebahmeddd) [6c79d4b]
@@ -83,6 +14,18 @@ All notable changes are documented here. The format follows [Keep a Changelog](h
 - feat(file-transfer): raise attachment cap to 50 MB to match bitchat (by @areebahmeddd) [70d5333]
 - feat(mesh): adapt relay jitter and announce cadence to mesh density (by @areebahmeddd) [c942bde]
 - feat(chat): live attachment transfer progress with cancel (by @areebahmeddd) [6a92ed5]
+- docs: notifications + foreground-service lifecycle (by @areebahmeddd) [4ed7840]
+- refactor(chat): share pinned+recent conversation ordering, add DM pinning (by @areebahmeddd) [5112a93]
+- feat(chat): local message notifications with activity bell (by @areebahmeddd) [7105d0a]
+- docs(landing): copy tweaks, footer order, sitemap refresh (by @areebahmeddd) [f989e94]
+- refactor(settings): tidy feature rows, network/storage/donate copy (by @areebahmeddd) [482dc8e]
+- feat(settings): tappable links in Terms and Privacy screens (by @areebahmeddd) [f45ac39]
+- style(chat): rounded-pill action buttons across sheets and modals (by @areebahmeddd) [b9e79ce]
+- feat(onboarding): require agreeing to terms before continuing (by @areebahmeddd) [4d186f7]
+- feat(settings): open-source licenses screen with repos and grouping (by @areebahmeddd) [cb92153]
+- fix(identity): label Nostr peers by npub tail, never "undefined" (by @areebahmeddd) [ce97219]
+- feat(settings): version screen with update check and release codenames (by @areebahmeddd) [8aa8c54]
+- feat(project): run claude fable 5 to make it compatible with bitchat (potentially) (by @areebahmeddd) [2c4ae56]
 
 **Full changelog:** [v0.9.6..v0.9.7](https://github.com/areebahmeddd/Airhop/compare/v0.9.6..v0.9.7)
 
