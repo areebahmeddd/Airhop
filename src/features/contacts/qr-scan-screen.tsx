@@ -247,7 +247,8 @@ export default function QrScanScreen({
       // Reject a card whose peer ID isn't the fingerprint of its own Noise key.
       // Such a QR is claiming an identity it cannot prove. Accepting it would
       // mean every DM "to that contact" gets encrypted to whoever forged it.
-      const accepted = getMeshService()?.addVerifiedContact(card) ?? false;
+      const accepted =
+        getMeshService()?.addVerifiedContact(card, { inPerson: true }) ?? false;
       if (!accepted) {
         setError(
           "This QR code is invalid: its peer ID doesn't match its keys. It may have been tampered with.",

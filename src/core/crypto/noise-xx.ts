@@ -39,7 +39,20 @@ export interface NoiseSession {
   // The peer's X25519 static public key, authenticated by the handshake.
   readonly remoteStaticPubKey: Uint8Array;
   // SHA-256 of the full handshake transcript. Used for channel binding.
+  //
+  // PUBLIC. Every input to it is a byte that went over the wire: the protocol
+  // name, the prologue, and each handshake message verbatim. An eavesdropper who
+  // captured the three handshake packets recomputes it exactly. It is safe as a
+  // channel binder, which is all Noise defines it for, and it must never be used
+  // as key material. Use `exporterSecret` for that.
   readonly handshakeHash: Uint8Array;
+  // A 32-byte secret for deriving keys OUTSIDE the transport (Airhop seeds its
+  // Double Ratchet from it). Unlike `handshakeHash` this descends from the
+  // chaining key, so it depends on the ephemeral DH outputs and cannot be
+  // recomputed by an observer. It is the third HKDF output of the same split
+  // that produces the transport keys, so k1/k2 are bit-identical to a two-output
+  // split and bitchat transport interop is unaffected.
+  readonly exporterSecret: Uint8Array;
   // Encrypt `plaintext` → [4-byte BE nonce][ciphertext+tag]
   encrypt(plaintext: Uint8Array): Uint8Array;
   // Decrypt [4-byte BE nonce][ciphertext+tag] → plaintext.
@@ -150,6 +163,7 @@ function makeTransportSession(
   recvKey: Uint8Array,
   remoteStaticPubKey: Uint8Array,
   handshakeHash: Uint8Array,
+  exporterSecret: Uint8Array,
 ): NoiseSession {
   let sendCounter = 0;
   let recvCounter = 0;
@@ -161,6 +175,7 @@ function makeTransportSession(
   return {
     remoteStaticPubKey: remoteStaticPubKey.slice(),
     handshakeHash: handshakeHash.slice(),
+    exporterSecret: exporterSecret.slice(),
 
     encrypt(plaintext: Uint8Array): Uint8Array {
       if (sendCounter > 0xffffffff)
@@ -381,7 +396,10 @@ export class NoiseHandshake {
       throw new Error("Noise: handshake not complete");
     }
 
-    const [k1, k2] = noiseHkdf(this.ck, new Uint8Array(0), 2);
+    // Three outputs, not two. HKDF derives each block from the previous one, so
+    // k1 and k2 are bit-identical to a two-output split: the transport keys
+    // bitchat negotiates are untouched by asking for a third value here.
+    const [k1, k2, exporterSecret] = noiseHkdf(this.ck, new Uint8Array(0), 3);
 
     // Initiator sends with k1, receives with k2. Responder is flipped.
     const [sendKey, recvKey] = this.role === "initiator" ? [k1, k2] : [k2, k1];
@@ -391,6 +409,7 @@ export class NoiseHandshake {
       recvKey,
       this.remoteStaticPub,
       this.h,
+      exporterSecret,
     );
 
     // Zero sensitive state

@@ -38,15 +38,15 @@ Tests are co-located with their module in a `__tests__/` directory. All `src/cor
 
 | Layer            | Suites | Tests     | Excluded                             |
 | ---------------- | ------ | --------- | ------------------------------------ |
-| `core/crypto/`   | 5      | 56        | -                                    |
-| `core/mesh/`     | 23     | 330       | Live BLE I/O (native boundary)       |
+| `core/crypto/`   | 5      | 58        | -                                    |
+| `core/mesh/`     | 23     | 338       | Live BLE I/O (native boundary)       |
 | `core/nostr/`    | 10     | 101       | Network calls (`NostrClient` mocked) |
 | `core/payments/` | 3      | 88        | Mint connectivity (network)          |
 | `core/router/`   | 1      | 38        | BLE and WiFi transports (native)     |
-| `services/`      | 19     | 179       | Native radios (modelled, see below)  |
-| `store/`         | 14     | 175       | MMKV persistence (mocked)            |
+| `services/`      | 19     | 181       | Native radios (modelled, see below)  |
+| `store/`         | 14     | 177       | MMKV persistence (mocked)            |
 | `utils/`         | 12     | 126       | -                                    |
-| **Total**        | **87** | **1,093** |                                      |
+| **Total**        | **87** | **1,107** |                                      |
 
 `services/` includes the lifecycle and multi-device suites, which is why it is no
 longer the thin layer it once was: the rules `mesh-service` enforces are now
@@ -72,9 +72,11 @@ their threads, and no sat is created or destroyed.
 Covered today: multi-hop delivery across a chain that cannot hear itself, a
 25-phone room, a live mixed Airhop/bitchat mesh, parallel attachment transfers,
 live push-to-talk sharing a radio with a file send, offline ecash and
-double-spend refusal, replay and Sybil floods, impersonation at both the message
-and the ANNOUNCE layer (the latter being the one that picks which key a claimed
-sender is checked against), panic wipe, crash recovery, a
+double-spend refusal, replay and Sybil floods, impersonation at the message, the
+attachment and the ANNOUNCE layer (the last being the one that picks which key a
+claimed sender is checked against), a private attachment being rendered by the
+relays that merely carried it, a recorded voice burst replayed at strangers hours
+later, panic wipe, crash recovery, a
 seeded soak of hundreds of random events, and the features that only mean
 anything with a third device present: private groups with an outsider in the
 room, a bulletin notice reaching someone who arrived later, store-and-forward

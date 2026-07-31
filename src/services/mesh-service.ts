@@ -42,6 +42,7 @@ import {
   AnnounceManager,
   Capability,
   decodeAnnouncePayload,
+  isAnnounceFresh,
 } from "../core/mesh/announce-manager";
 import {
   decodeBoardWire,
@@ -116,6 +117,7 @@ import {
   decodePacket,
   encodePacket,
   Flags,
+  isBroadcast,
   PacketType,
   signPacket,
   verifyPacket,
@@ -226,6 +228,11 @@ const MESH_PONG_MIN_INTERVAL_MS = 100;
 // announce); an age check is the equivalent safety net here. Generous enough to
 // cover a multi-hop round trip.
 const HANDSHAKE_TIMEOUT_MS = 30_000;
+
+// How stale a live-voice frame may be before it is treated as a straggler or a
+// replay rather than something anyone should start hearing. Matches bitchat's
+// TransportConfig.pttPublicFrameMaxAgeSeconds (30s).
+const PTT_FRAME_MAX_AGE_MS = 30_000;
 
 interface PendingHandshake {
   handshake: NoiseHandshake;
@@ -1022,6 +1029,21 @@ export class MeshService {
         this.onRequestSync(packet, linkID);
         break;
       case PacketType.FILE_TRANSFER:
+        // An attachment is authenticated exactly like a public message, and for
+        // the same reason: handleIncoming attributes the file to packet.senderID
+        // and renders it in that peer's thread. Without this, the signature rule
+        // that onChannelMsg enforces for text was simply absent for media, so
+        // anyone in range could drop a photo into a DM thread the UI badges as
+        // verified and end-to-end encrypted, attributed to that contact.
+        //
+        // Safe for interop in both directions: we always set SIGNED and sign on
+        // the send path, and bitchat already refuses the unsigned case
+        // ("Dropping raw file transfer with missing/invalid signature",
+        // BLEFileTransferHandler.swift:143). Fragmented files are covered too -
+        // fragmentPacket carries the whole signed inner packet as its data, so a
+        // reassembled packet arrives back here still carrying its signature.
+        if (!this.senderIsAuthentic(packet, bytesToHex(packet.senderID)))
+          return;
         this.fileXfer.onFileTransfer(packet);
         break;
       case PacketType.BOARD_POST:
@@ -1075,6 +1097,23 @@ export class MeshService {
     // some other thread. Whoever spoke also sends the same audio as a voice
     // note, which is what carries it to anyone who was not watching.
     if (this.audibleChannel !== BRIDGE_CHANNEL) return;
+
+    // Live means live. A signature proves who spoke, never when: the signing
+    // preimage normalises ttl and isRSR, so a burst captured off the air
+    // replays byte-for-byte and verifies perfectly. The deduplicator is not a
+    // defence here - its window is five minutes and its state is per device, so
+    // it does nothing at all for a phone that never heard the original. Without
+    // this, someone could record Alice in one room and play her voice out of
+    // strangers' phones days later, attributed to her and presented as live.
+    //
+    // 30s matches bitchat's TransportConfig.pttPublicFrameMaxAgeSeconds, and
+    // the broadcast requirement matches BLEPacketFreshnessPolicy
+    // .isBroadcastRecipient; BLEService.handleVoiceFrame applies both before it
+    // even checks the signature. Generous next to the couple of seconds a frame
+    // needs to cross the mesh, and tight enough that a burst cannot outlive the
+    // moment it was spoken.
+    if (!isBroadcast(packet)) return;
+    if (Math.abs(Date.now() - packet.timestamp) > PTT_FRAME_MAX_AGE_MS) return;
 
     const signingKey = this.registry.get(senderID)?.signingPubKey;
     if (signingKey === undefined || !verifyPacket(packet, signingKey)) return;
@@ -1415,7 +1454,7 @@ export class MeshService {
 
         // Now that the far side can decrypt, seed the ratchet and release
         // everything that was waiting on this session.
-        this.tryInitDR(senderID, "initiator", session.handshakeHash);
+        this.tryInitDR(senderID, "initiator", session.exporterSecret);
         this.flushPendingGroupInvites(senderID);
         // Flush queued messages. Use this.sendDm so they go through DR if ready.
         const queued = pending.pendingText.slice();
@@ -1444,7 +1483,7 @@ export class MeshService {
         }
         this.registry.setSession(senderID, session);
         // Seed the Double Ratchet for Airhop-to-Airhop sessions.
-        this.tryInitDR(senderID, "responder", session.handshakeHash);
+        this.tryInitDR(senderID, "responder", session.exporterSecret);
         this.flushPendingGroupInvites(senderID);
         // Flush any DMs carried over from an initiator->responder reset. Normal
         // responders have none; only a simultaneous-initiation flip queues them.
@@ -1505,7 +1544,7 @@ export class MeshService {
   private tryInitDR(
     peerID: string,
     role: "initiator" | "responder",
-    handshakeHash: Uint8Array,
+    exporterSecret: Uint8Array,
   ): void {
     const peer = this.registry.get(peerID);
     // The nostrPubkey field is only populated from ANNOUNCE TLV 0x07, which
@@ -1515,25 +1554,26 @@ export class MeshService {
     // A peer without it keeps the plain Noise transport, still a valid route,
     // hence the flush below runs either way.
     if (peer?.nostrPubkey && peer.noisePubKey) {
-      // The root key comes from the completed handshake's transcript hash, not
-      // from a static-static ECDH.
+      // The root key comes from the handshake's EXPORTER SECRET: a value that
+      // descends from the Noise chaining key, so it depends on the ephemeral DH
+      // outputs and no observer can reconstruct it.
       //
-      // Both sides already hold the identical hash, so this still costs no
-      // extra round-trips. The difference is what it is made of: Noise XX mixes
-      // both parties' EPHEMERAL keys into that hash, and those private keys are
-      // destroyed when the handshake splits. A static-static seed was derivable
-      // forever from long-term keys alone, which cost the ratchet its forward
-      // secrecy exactly where it matters most.
+      // It must not come from the transcript hash, which is what this used to
+      // do. The reasoning behind that was wrong in a specific way worth
+      // recording: Noise XX does mix both parties' ephemeral keys into the
+      // handshake, but it mixes the ephemeral PUBLIC keys into the hash `h` via
+      // mixHash, while the secret DH outputs go into the chaining key `ck` via
+      // mixKey. Every input to `h` is a byte that was transmitted in the clear,
+      // so anyone who captured the three handshake packets - which flood the
+      // mesh at TTL 7, so that is anyone in the room, not just the two peers -
+      // could recompute the root key exactly, derive the receiving chain, and
+      // forge or read DR messages. `ck` is the half that is actually secret.
       //
-      // Concretely, with a static-static seed an attacker who later obtained
-      // ONE side's static private key could recompute the root key, read the
-      // initiator's first ratchet public key straight off the DR header, and
-      // decrypt every message sent before the responder's first reply. Since
-      // receipts travel over plain Noise and do not advance the ratchet, a
-      // conversation nobody replied to stayed in that chain for its whole life.
-      // Seeding from the transcript closes that: the root key cannot be
-      // reconstructed from long-term keys at all.
-      const rootKey = hkdf(sha256, handshakeHash, undefined, DR_SEED_INFO, 32);
+      // The original goal still holds and is still met: a static-static seed
+      // would have been recoverable forever from long-term keys alone, and the
+      // exporter secret is not, because the ephemeral private keys that shaped
+      // `ck` are destroyed when the handshake splits.
+      const rootKey = hkdf(sha256, exporterSecret, undefined, DR_SEED_INFO, 32);
 
       this.drStates.set(
         peerID,
@@ -1804,6 +1844,12 @@ export class MeshService {
   private onAnnounce(packet: Packet, linkID: string): void {
     const info = decodeAnnouncePayload(packet.payload, packet.senderID);
     if (!info) return;
+
+    // A correctly signed, correctly key-bound announce is still replayable
+    // forever if nothing bounds its age: capture one and rebroadcast it, and a
+    // peer who left keeps reappearing. Both upstreams bound it (see
+    // ANNOUNCE_MAX_SKEW_MS). Cheapest check here, so it goes first.
+    if (!isAnnounceFresh(packet.timestamp, Date.now())) return;
 
     const peerID = bytesToHex(packet.senderID);
 
@@ -3175,6 +3221,22 @@ export class MeshService {
 
     if (carrier.direction === CarrierDirection.FROM_GATEWAY) {
       // Downlink: render the ferried geohash chat into its channel.
+      //
+      // The same three structural gates the uplink applies below, for the same
+      // reason. A downlink carrier is unsigned at the packet layer by design
+      // (it is a broadcast), so the only thing vouching for the payload is the
+      // inner event's own Nostr signature - and that proves who wrote it, not
+      // that it belongs in this room, this cell, or this moment. Without these,
+      // anyone in BLE range could take any correctly signed event off a public
+      // relay and have it rendered as live chat here: a months-old message
+      // replayed as current, or a kind-1 note the author never posted as chat.
+      // BridgeService.handleDownlink already gates its own path this way.
+      if (event.kind !== GEOHASH_CHANNEL_KIND) return;
+      if (!this.isFreshCarrierEvent(event)) return;
+      const inCell = event.tags.some(
+        (t) => t.length >= 2 && t[0] === "g" && t[1] === carrier.geohash,
+      );
+      if (!inCell) return;
       this.geoChannels?.ingestCarriedEvent(event);
       return;
     }
@@ -3818,13 +3880,28 @@ export class MeshService {
   // (`senderMismatch`). Without it a forged QR could claim someone else's peer
   // ID while supplying attacker-controlled keys, and every DM the user then
   // "sent to that contact" would be encrypted to the attacker instead.
-  addVerifiedContact(card: {
-    peerID: string;
-    noisePubKey: Uint8Array;
-    signingPubKey: Uint8Array;
-    nickname: string;
-    nostrPubKey?: Uint8Array;
-  }): boolean {
+  // `inPerson` says the card came off a camera, i.e. the user was physically
+  // looking at the other phone. Only that earns the right to re-pin keys, so it
+  // defaults to false: a card that arrived some other way (an airhop:// link
+  // tapped in a browser or a message) proves nothing about who sent it, and
+  // must not be able to overwrite a key already bound to that peer.
+  //
+  // Without the distinction the TOFU pin in PeerRegistry.update was bypassable
+  // by anyone who could get a link in front of the user. A peer ID is
+  // SHA-256(noise pubkey), and that key is public, so an attacker can build a
+  // card carrying a victim's real peer ID and noise key - passing the binding
+  // check below - while substituting their own SIGNING key. Announce-level
+  // pinning refuses exactly that; a "trusted" link would have waved it through.
+  addVerifiedContact(
+    card: {
+      peerID: string;
+      noisePubKey: Uint8Array;
+      signingPubKey: Uint8Array;
+      nickname: string;
+      nostrPubKey?: Uint8Array;
+    },
+    opts: { inPerson?: boolean } = {},
+  ): boolean {
     const derived = bytesToHex(sha256(card.noisePubKey)).slice(0, 16);
     if (derived !== card.peerID.toLowerCase()) return false;
 
@@ -3841,11 +3918,12 @@ export class MeshService {
       signingPubKey: card.signingPubKey,
       nickname: card.nickname,
       nostrPubkey: nostrPubkeyHex,
-      // A scanned contact card is an in-person, out-of-band exchange, so it
+      // A SCANNED contact card is an in-person, out-of-band exchange, so it
       // outranks the TOFU pin an over-the-air announce established and is
       // allowed to re-pin. Without this, a peer whose keys were first learned
-      // from a spoofed announce could never be corrected by meeting them.
-      trusted: true,
+      // from a spoofed announce could never be corrected by meeting them. A
+      // card that arrived any other way gets no such standing.
+      trusted: opts.inPerson === true,
     });
 
     // A v2 card carries the peer's Nostr pubkey. Map it for inbound replies now,

@@ -54,30 +54,30 @@ handshakes and the routing while the radios stay unproven until a field test.
 - EAS Build (Expo's CI) runs both builds in parallel on cloud VMs
 - Google Play and Apple App Store treat the result as a fully native app. They don't know or care that TypeScript orchestrates the native layers
 
-**Consistency guarantee for ALL features on BOTH platforms:** Every feature lives in `src/core/` TypeScript. The ~900 lines of native BLE code expose an _identical_ TypeScript interface on both platforms. A bug fix in gossip sync fixes both iOS and Android at once. Protocol upgrades ship simultaneously. No drift.
+**Consistency guarantee for ALL features on BOTH platforms:** Every feature lives in `src/core/` TypeScript. The ~2,400 lines of native BLE code expose an _identical_ TypeScript interface on both platforms. A bug fix in gossip sync fixes both iOS and Android at once. Protocol upgrades ship simultaneously. No drift.
 
 ## 2. Core Feature Matrix
 
-| Feature                   | Offline (BLE)            | Online (Nostr)      | Notes                                                                                          |
-| ------------------------- | ------------------------ | ------------------- | ---------------------------------------------------------------------------------------------- |
-| Peer discovery            | Yes, announce broadcasts | Yes, kind 20001     | Peers show on the mesh radar and in the location cell                                          |
-| Public channels           | Yes, TTL flood           | Yes, kind 20000     | `#bluetooth` stays local; `#block` to `#region` also bridge                                    |
-| Private channels          | Yes, sealed `0x2a`       | Optional, same blob | Airhop only. Key rides an invite link, no member cap                                           |
-| Private groups            | Yes, sealed `0x25`       | No                  | bitchat compatible. Creator-signed roster, max 16, Bluetooth only                              |
-| Private DMs               | Yes, Noise XX (+DR)      | Yes, NIP-17 wrap    | Receipts on every path. DR only between Airhop peers                                           |
-| Bulletin board            | Yes, signed `0x23`       | Yes, kind 1 mirror  | Public and signed, 1 to 7 day expiry, gossip catch-up                                          |
-| Voice notes               | Yes, as a file           | No                  | Recorded AAC, not live                                                                         |
-| Video sharing             | Yes, as a file           | No                  | Recorded and played inline. Live streaming is not possible across platforms                    |
-| File transfer             | Yes, per-type caps       | No                  | 512 KiB photos and voice, 1 MiB otherwise. Enforced by bitchat's decoder, so not ours to raise |
-| Store-and-forward courier | Yes, sealed envelope     | Yes, parked drop    | 24 hour life, as bitchat carriers enforce. Sealed to a one-time prekey for forward secrecy     |
-| Live push-to-talk         | Yes, `0x29` bursts       | No                  | AAC-LC 16 kHz mono, 350 ms jitter buffer. Also shipped by bitchat, so it works between the two |
-| Payments (Cashu)          | Yes, token in a message  | Yes, NIP-61 Nutzap  | Transfer works offline, redemption needs internet                                              |
-| Contact verification      | Yes, QR exchange         | n/a                 | The card carries public keys, and the peer ID is checked against its noise key                 |
-| Panic wipe                | Yes                      | Yes                 | Triple-tap. Destroys keys, messages, groups, board, prekeys                                    |
-| Internet gateway          | Relays for others        | Yes                 | Off by default. Carries public location traffic for offline peers                              |
-| Tor routing               | n/a                      | Yes                 | Arti on iOS, Orbot on Android. BLE is local, so nothing to route                               |
-| Relay discovery           | n/a                      | Yes                 | Bundled CSV, refreshed from the georelays repo                                                 |
-| bitchat compatibility     | Yes                      | Yes                 | Same wire format both directions. Airhop-only types are simply ignored                         |
+| Feature                   | Offline (BLE)            | Online (Nostr)      | Notes                                                                                                                                          |
+| ------------------------- | ------------------------ | ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| Peer discovery            | Yes, announce broadcasts | Yes, kind 20001     | Peers show on the mesh radar and in the location cell                                                                                          |
+| Public channels           | Yes, TTL flood           | Yes, kind 20000     | `#bluetooth` stays local; `#block` to `#region` also bridge                                                                                    |
+| Private channels          | Yes, sealed `0x2a`       | Optional, same blob | Airhop only. Key rides an invite link, no member cap                                                                                           |
+| Private groups            | Yes, sealed `0x25`       | No                  | bitchat compatible. Creator-signed roster, max 16, Bluetooth only                                                                              |
+| Private DMs               | Yes, Noise XX (+DR)      | Yes, NIP-17 wrap    | Receipts on every path. DR only between Airhop peers                                                                                           |
+| Bulletin board            | Yes, signed `0x23`       | Yes, kind 1 mirror  | Public and signed, 1 to 7 day expiry, gossip catch-up                                                                                          |
+| Voice notes               | Yes, as a file           | No                  | Recorded AAC, not live                                                                                                                         |
+| Video sharing             | Yes, as a file           | No                  | Recorded and played inline. Live streaming is not possible across platforms                                                                    |
+| File transfer             | Yes, per-type caps       | No                  | 512 KiB photos and voice, 1 MiB otherwise. Enforced by bitchat's decoder, so not ours to raise                                                 |
+| Store-and-forward courier | Yes, sealed envelope     | Yes, parked drop    | 24 hour life, as bitchat carriers enforce. Sealed to a one-time prekey for forward secrecy                                                     |
+| Live push-to-talk         | Yes, `0x29` bursts       | No                  | AAC-LC 16 kHz mono, 350 ms jitter buffer. Also shipped by bitchat, so it works between the two                                                 |
+| Payments (Cashu)          | Yes, token in a message  | Yes, NIP-61 Nutzap  | Transfer works offline, redemption needs internet                                                                                              |
+| Contact verification      | Yes, QR exchange         | n/a                 | The card carries public keys, checked against the noise key. Source is `qr`, `link` or `manual`; only an in-person camera scan may re-pin keys |
+| Panic wipe                | Yes                      | Yes                 | Panic button on Profile. Destroys keys, messages, groups, board, prekeys                                                                       |
+| Internet gateway          | Relays for others        | Yes                 | Off by default. Carries public location traffic for offline peers                                                                              |
+| Tor routing               | n/a                      | Yes                 | Arti on iOS, Orbot on Android. BLE is local, so nothing to route                                                                               |
+| Relay discovery           | n/a                      | Yes                 | Bundled CSV, refreshed from the georelays repo                                                                                                 |
+| bitchat compatibility     | Yes                      | Yes                 | Same wire format both directions. Airhop-only types are simply ignored                                                                         |
 
 Optional, shipped but switchable:
 
@@ -126,7 +126,7 @@ This prevents impersonation and username squatting. Users verify real identity v
 - Every packet is **Ed25519-signed** by the sender
 - Receivers **verify signatures before relaying or displaying** any message
 - A peer cannot forge another peer's messages without their private key
-- Relay nodes drop unsigned or invalid-signature packets immediately
+- Receivers drop unsigned or invalid-signature packets before displaying or acting on them. Relaying is deliberately separate: a node forwards opaque bytes it may not be able to verify (it may not hold the sender's key yet), and the flood router runs before per-type verification
 - Name collisions are impossible: the name is derived from the public key
 
 ### Key storage
@@ -163,8 +163,8 @@ Airhop routes messages through the best available transport **automatically, wit
 MessageRouter.ts - transport selection logic
 
 Priority order:
-1. BLE Mesh          - always preferred if recipient is nearby (confirmed by announce)
-2. WiFi Aware/Direct - if both parties have it active and are in range (~30m, 250Mbps)
+1. WiFi Aware/Direct - if both parties have it active and are in range (~30m, 250Mbps)
+2. BLE Mesh          - if the recipient is nearby (confirmed by announce)
 3. Nostr Relay       - if internet available, for confirmed offline recipients
 4. Courier           - if everything else fails (spray-and-wait through mesh peers)
 ```
@@ -202,7 +202,7 @@ Identical to bitchat's proven design:
 - **Geographic relay selection**: [Haversine](https://en.wikipedia.org/wiki/Haversine_formula) distance from device location to relay server → lowest latency
 - **NIP-17 gift-wrap** for private DMs (metadata-minimal, no message content on relays)
 - **Kind 20000/20001**: geohash public channels and presence heartbeats
-- **Tor-proxied by default** on iOS (Arti); optional via Orbot on Android
+- **Tor is off by default on both platforms**; one toggle turns it on (Arti on iOS, Orbot on Android)
 - **No single relay dependency**: `SimplePool` connects to 3–5 relays simultaneously; first ACK wins
 
 ### Radio Power Policy (Android)
@@ -295,7 +295,7 @@ The XX handshake produces two symmetric keys (`send`, `recv`). Messages are then
 
 ```
 Algorithm: Signal Double Ratchet (same as Signal/WhatsApp)
-Root key seeded from: the completed Noise XX transcript hash, no extra round trips
+Root key seeded from: the Noise XX exporter secret, no extra round trips
 ```
 
 Used for all DMs stored in the courier / offline outbox:
@@ -304,15 +304,15 @@ Used for all DMs stored in the courier / offline outbox:
 - **Break-in recovery**: if an attacker learns current keys, future messages are still protected after a few ratchet steps
 - Prekey bundles: one-time public prekeys are signed and gossiped over the mesh as `0x24`, never published to Nostr. A sender seals courier mail to one of them, so an undelivered message stays protected even if the recipient's long-lived key leaks later. X3DH is not used: the Noise handshake already seeds the ratchet, which made a separate key agreement redundant.
 
-  The seed is the handshake's **transcript hash**, not a static-static ECDH. Both sides already hold the identical hash, so it still costs no extra round trips, but Noise XX mixes both parties' ephemeral keys into it and those private keys are destroyed when the handshake splits. A static-static seed was derivable forever from long-term keys alone: anyone who later obtained one side's static private key could recompute the root key, read the initiator's first ratchet public key straight off the DR header, and decrypt every message sent before the first reply. Seeding from the transcript closes that
+  The seed is the handshake's **exporter secret**: a third HKDF output of `split()`, alongside the two transport keys, descending from the Noise chaining key. Both sides already hold it, so it still costs no extra round trips, and because the chaining key absorbs the ephemeral DH outputs (whose private halves are destroyed when the handshake splits) it cannot be reconstructed from long-term keys either. It must NOT be the transcript hash: `mixHash` absorbs only bytes that went over the wire, so that hash is public to anyone who captured the handshake, and handshakes flood the mesh at TTL 7. Nor a static-static ECDH, which would be derivable forever from long-term keys alone
 
 ### Packet Signing: [Ed25519](https://ed25519.cr.yp.to/)
 
 Every packet carries an Ed25519 signature from the sender:
 
-- Signed before transmission, verified before relay or display
+- Signed before transmission, verified before display or action
 - Signature covers all packet fields except TTL and signature itself
-- **Prevents replay across different contexts**: packet includes timestamp + nonce
+- **Bounds replay**: the packet carries a millisecond timestamp, and the deduplicator rejects any packet ID it has already seen. There is no nonce field. Where staleness is itself the attack, a freshness window backs this up (announces 15 min, live voice 30 s), because the deduplicator is per-device and cannot speak for a phone that never heard the original
 
 ### Summary
 
@@ -346,7 +346,7 @@ Channels are prefixed with `#`, same as bitchat. They are **not** registered any
 
 - Fully offline: no server, no registration
 - History: 6-hour public message window (gossip sync reconciles on connect)
-- Channel discovery: scan announce packets for `channelMemberships[]` field
+- Channel discovery: a channel exists as soon as someone broadcasts on it; there is no membership advertisement
 - Moderation: client-side block list (muted peer IDs don't relay to UI)
 
 ### Private channels (Airhop only)
@@ -373,6 +373,8 @@ Noise session. No link exists, so nobody can forward their way in.
 - Bluetooth only. A group message does not bridge to Nostr, so a member who
   walks out of range stops receiving it until they return
 - Rotating the key bumps the epoch, and older epochs are refused
+- A group also pins the `creatorFingerprint` it was created with, and a state
+  naming a different creator is refused even at a higher epoch
 
 ### Not used: NIP-29
 
@@ -430,8 +432,9 @@ When internet is available, users can send **Nutzaps** (NIP-61):
 1. Sender fetches recipient's `kind:10019` (trusted mints + P2PK pubkey)
 2. Sender mints/swaps ecash P2PK-locked to recipient's `kind:10019` pubkey
 3. Sender publishes `kind:9321` nutzap event to recipient's relays
-4. Recipient's client swaps token into their wallet
-5. Transaction history stored in `kind:7376` events (NIP-60)
+4. Recipient's client swaps token into their wallet, and refuses outright if the
+   event names a mint the wallet does not already hold
+5. Transaction history is stored locally in `wallet-store`; Airhop does not publish NIP-60 events
 
 ### Payment security model
 
@@ -531,83 +534,116 @@ surface; `src/services/wallet-service.ts` owns everything above it.
 
 | Platform        | Tor Integration                                                                                                                        | Default               |
 | --------------- | -------------------------------------------------------------------------------------------------------------------------------------- | --------------------- |
-| iOS             | **[Arti](https://gitlab.torproject.org/tpo/core/arti)** Rust xcframework (same as bitchat-ios), embedded in app binary                 | On by default         |
+| iOS             | **[Arti](https://gitlab.torproject.org/tpo/core/arti)** Rust xcframework (same as bitchat-ios), embedded in app binary                 | Off by default        |
 | Android Phase 1 | **[Orbot](https://guardianproject.info/apps/org.torproject.android/)** proxy detection: SOCKS5 on `localhost:9050` if Orbot is running | Optional, with prompt |
-| Android Phase 2 | Embed `tor` binary in APK (legal, Tor Project permits)                                                                                 | On by default         |
+| Android Phase 2 | Embed `tor` binary in APK (legal, Tor Project permits)                                                                                 | Off by default        |
 
 Tor is used exclusively for **Nostr relay connections**. BLE traffic is radio-local and cannot be routed through Tor.
 
 ### Panic Wipe
 
-Triggered by triple-tap on the logo (same as bitchat):
+Triggered by the panic button on the Profile screen
+(`src/features/settings/profile-screen.tsx`). A single tap opens a confirmation
+sheet; three quick taps skip it and wipe immediately.
 
-1. Immediately zeroize all private keys in memory
-2. Delete all Keychain/Keystore entries
-3. Clear all MMKV databases
-4. Delete all files in app sandbox
-5. Terminate app process
+1. Remove all private keys from the secure store (Keychain/Keystore)
+2. Clear or delete every MMKV partition, including the encrypted wallet file
+3. Delete received media files from the cache (photos, videos, voice notes)
 
-After panic wipe: fresh install state. No forensic recovery possible.
+The app is left in an empty, first-run state and drops straight to onboarding.
+The process is not terminated and the app sandbox is not otherwise touched.
 
 ## 10. Security Threat Model
 
+### The attacker
+
+Anyone within radio range can transmit anything. They can forge any plaintext
+header field (`senderID`, `ttl`, `flags`, `timestamp`), replay packets they
+captured, mint unlimited identities, and drop or alter anything passing through
+them. They cannot break Ed25519, X25519, ChaCha20-Poly1305, or SHA-256 preimage
+resistance. Everything below is written against that attacker.
+
 ### Threats and countermeasures
 
-| Threat                                            | Countermeasure                                                                         |
-| ------------------------------------------------- | -------------------------------------------------------------------------------------- |
-| **Message forgery**                               | Ed25519 signature on every packet; invalid signatures dropped before relay             |
-| **Identity impersonation**                        | Usernames deterministically derived from pubkey; name ≠ identity                       |
-| **Replay attack**                                 | Packet includes timestamp + 8-byte random nonce; deduplicator rejects seen nonces      |
-| **Man-in-the-middle (session)**                   | Noise XX mutual authentication; both parties sign their static keys into the handshake |
-| **Traffic analysis (Nostr)**                      | NIP-17 gift-wrap hides sender, recipient, content from relay; Tor hides IP             |
-| **Traffic analysis (BLE)**                        | Short ephemeral peer IDs rotate; payload encrypted; observer sees random bytes         |
-| **Relay censorship**                              | 3–5 relays queried in parallel; any single relay failure is transparent                |
-| **Sybil attack on mesh**                          | TTL limits propagation; signed announces prevent fake peer injection                   |
-| **Key compromise (session)**                      | Noise XX perfect forward secrecy: past sessions safe even if static key leaked         |
-| **Key compromise (stored DM)**                    | Double Ratchet: per-message keys; compromise of one message doesn't expose others      |
-| **Malicious relay injecting messages**            | Message must be signed by claimed sender's private key; relay cannot forge             |
-| **Malicious mesh peer relaying modified packets** | Full signature chain; any modification invalidates signature                           |
-| **Cashu double-spend**                            | Mint enforces with blind signature tracking; receiver redeems promptly                 |
-| **Physical device seizure**                       | Panic wipe (triple-tap); keys in Keychain (hardware-backed on modern devices)          |
-| **Screen surveillance**                           | App background blurs sensitive content (standard iOS/Android API)                      |
+| Threat                                 | Countermeasure                                                                                                                                            |
+| -------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Message forgery**                    | Ed25519 signature verified against the key bound to the claimed sender. A missing key or a missing SIGNED flag is a FAILED check, never a skipped one     |
+| **Identity impersonation**             | `peerID == SHA-256(noiseStaticPubKey)[0:16]`, enforced on announces and on completed Noise sessions, so a peer ID cannot be claimed without its key       |
+| **Signing-key substitution**           | TOFU pinning: once a signing key is bound to a peer ID it is never replaced over the air. Only an in-person QR scan may re-pin                            |
+| **Replay attack**                      | Content-derived packet IDs plus a deduplicator, and freshness windows where staleness itself is the attack: ANNOUNCE 15 min, live voice 30 s              |
+| **Man-in-the-middle (session)**        | Noise XX mutual authentication, with the authenticated static key required to derive the peer ID it claims                                                |
+| **Traffic analysis (Nostr)**           | NIP-17 gift-wrap hides sender, recipient and content from the relay; Tor hides the IP; per-cell ephemeral identities for geohash channels                 |
+| **Traffic analysis (BLE)**             | Payloads are encrypted and padded to fixed buckets, so an observer sees uniform random bytes                                                              |
+| **Relay censorship**                   | Several relays queried in parallel; any single relay failure is transparent                                                                               |
+| **Sybil flooding the mesh**            | TTL bounds propagation; the registry and radar are capped with oldest-first eviction that never drops a peer holding a real BLE link                      |
+| **Key compromise (session)**           | Noise XX forward secrecy: past sessions stay safe if a static key later leaks                                                                             |
+| **Key compromise (DM history)**        | Double Ratchet per-message keys, seeded from the Noise **exporter secret** (never the public transcript hash), so the chain is not derivable by observers |
+| **Malicious relay injecting messages** | A relay cannot produce the sender's signature, and forwarding is separate from delivery                                                                   |
+| **Confused-deputy delivery**           | Directed packets are relayed but only rendered by the addressee, so a relay never surfaces someone else's private content                                 |
+| **Group takeover**                     | A group keeps the creator it was created with; a state naming a different creator is refused even at a higher epoch                                       |
+| **Hostile payment source**             | Ecash is only redeemed from a mint the user already added; incoming proofs are DLEQ-verified before anything is stored                                    |
+| **Cashu double-spend**                 | Mint enforces with blind-signature tracking; the receiver redeems promptly                                                                                |
+| **Physical device seizure**            | Panic wipe (triple-tap); keys in Keychain/Keystore (hardware-backed on modern devices)                                                                    |
+| **Screen surveillance**                | App background blurs sensitive content (standard iOS/Android API)                                                                                         |
 
 ### What Airhop does NOT protect against
 
 - **Physical proximity**: BLE mesh reveals you are geographically near certain peers
+- **A stable peer ID**: it derives from your long-term Noise key and does NOT rotate, so the same device is linkable across sessions until the identity is regenerated. Only the per-cell geohash identities are ephemeral
+- **Attachment confidentiality**: photos, files and voice notes are signed but NOT encrypted, to stay wire-compatible with bitchat. They are therefore restricted to `#bluetooth` and mesh DMs, and never bridged
 - **Traffic timing correlation**: an observer watching multiple BLE radios could infer communication patterns
-- **Compromised OS**: if the device OS is compromised, all security guarantees are void
-- **Mint trust**: Cashu requires trusting the mint for token redemption; choose reputable mints
+- **Who you are talking to on the mesh**: packet headers carry sender and recipient IDs in the clear, as bitchat's do
+- **Compromised OS**: if the device OS is compromised, all guarantees are void
+- **Mint trust**: Cashu requires trusting the mint to honour redemption; choose reputable mints
+
+Not every packet is signed, and that is deliberate rather than an omission.
+Noise handshake messages are unsigned (matching bitchat: the peer may not hold
+our signing key yet, and the handshake authenticates itself), and messages inside
+a Noise session or a ratchet carry no redundant signature because the session
+already authenticates them. Signatures are required exactly where a claimed
+sender is otherwise unverifiable: announces, public and private channel
+messages, attachments, voice frames, board posts, and gateway uplinks.
 
 ## 11. Native Module Architecture
 
-### Why only one native module?
+### One native module per hardware capability
 
-The BLE hardware requires native code. Everything else (routing, crypto, Nostr, payments) is pure TypeScript. This is a deliberate constraint: native code is harder to test, harder to keep consistent across platforms, and harder to reason about security-wise.
+Hardware requires native code. Everything else (routing, crypto, Nostr, payments) is pure TypeScript. This is a deliberate constraint: native code is harder to test, harder to keep consistent across platforms, and harder to reason about security-wise. So there is exactly one module per capability, and no more.
 
-**One native module: `AirhopBLEModule`**
+| Module                               | Platform | Capability                                             |
+| ------------------------------------ | -------- | ------------------------------------------------------ |
+| `AirhopBLEModule`                    | Both     | BLE GATT Peripheral + Central, radio state, power mode |
+| `AirhopVoiceModule`                  | Both     | AAC-LC capture and playback for voice notes and PTT    |
+| `AirhopWiFiModule`                   | Android  | WiFi Aware same-platform fast path                     |
+| `AirhopMCModule`                     | iOS      | MultipeerConnectivity same-platform fast path          |
+| `AirhopTorModule`, `AirhopTorSocket` | iOS      | Embedded Arti and the SOCKS socket it fronts           |
 
-It does exactly four things:
-
-1. Advertises as a BLE GATT Peripheral (makes the device visible)
-2. Scans as a BLE GATT Central (discovers other devices)
-3. Accepts incoming connections and routes raw bytes to TypeScript
-4. Sends raw bytes from TypeScript to connected peers
-
-It knows nothing about the protocol. It has no concept of packets, routing, or encryption. That logic lives in TypeScript where it's testable, consistent, and portable.
+None of them knows anything about the protocol. They have no concept of packets, routing, or encryption. That logic lives in TypeScript where it's testable, consistent, and portable.
 
 ### The contract between native and TypeScript
 
-The bridge spec lives in `src/bridge/`, and React Native Codegen turns it into
-the native bridge for both platforms. It is deliberately tiny. TypeScript calls
-down to do four things: start and stop advertising, start and stop scanning, and
-write bytes to a connected link. Bytes cross the bridge base64-encoded, since
-that is the only representation both runtimes agree on safely.
+The bridge specs live in `src/bridge/`, and React Native Codegen turns them into
+the native bridge for both platforms. Bytes cross the bridge base64-encoded,
+since that is the only representation both runtimes agree on safely.
 
-Native calls back up with four events: a packet arrived on a link, a link
-connected, a link disconnected, and a signal-strength reading changed.
+`src/bridge/NativeAirhopBLE.ts` is the largest of them, and it is still small:
+twelve methods.
 
-That is the whole surface. Anything richer would mean protocol knowledge on the
-native side, which is the one thing this design exists to prevent.
+1. `startAdvertising` / `stopAdvertising` - GATT Peripheral
+2. `startScanning` / `stopScanning` - GATT Central
+3. `writeToLink` - raw bytes to a connected peer
+4. `getRadioState` - support, power, authorization, location, battery, in one answer
+5. `setPowerMode` - how hard to run the radios
+6. `requestEnableBluetooth` / `openLocationSettings` - one-tap fixes for the Mesh banner
+7. `setBackgroundServiceEnabled` - hold the process up, independent of advertising
+8. `getTorProxyPort` / `getTorAvailability` - is a SOCKS proxy actually routing
+
+Native calls back up with six events: `packetReceived`, `linkConnected`,
+`linkDisconnected`, `rssiUpdated`, `adapterStateChanged`, and
+`powerStateChanged`.
+
+Anything richer would mean protocol knowledge on the native side, which is the
+one thing this design exists to prevent.
 
 ### Background execution
 
@@ -686,12 +722,14 @@ Each decision records what was considered, what was chosen, and why.
 
 ### Media / Voice (Phase 2)
 
-| Package                      | Version | Purpose                             | License |
-| ---------------------------- | ------- | ----------------------------------- | ------- |
-| `react-native-audio-record`  | `^0.2`  | PTT audio capture (AAC 16kHz)       | MIT     |
-| `react-native-sound`         | `^0.13` | Voice note and PTT playback         | MIT     |
-| `react-native-fs`            | `^2.20` | File system access for media        | MIT     |
-| `react-native-vision-camera` | `^5.1`  | Video frame capture (Phase 3, HEVC) | MIT     |
+| Package              | Version | Purpose                                     | License |
+| -------------------- | ------- | ------------------------------------------- | ------- |
+| `expo-audio`         | `~57.0` | Voice note and PTT capture and playback     | MIT     |
+| `expo-video`         | `~57.0` | Inline video playback                       | MIT     |
+| `expo-camera`        | `~57.0` | Photo capture and QR scanning               | MIT     |
+| `expo-file-system`   | `~57.0` | Attachment cache on disk                    | MIT     |
+| `expo-image-picker`  | `~57.0` | Picking photos and videos to send           | MIT     |
+| `expo-media-library` | `^57.0` | Saving received media to the device gallery | MIT     |
 
 ### Payments (Phase 2)
 
@@ -702,12 +740,15 @@ Each decision records what was considered, what was chosen, and why.
 
 ### UX / Polish (Phase 1+)
 
-| Package                    | Version          | Purpose                         | License |
-| -------------------------- | ---------------- | ------------------------------- | ------- |
-| `@react-navigation/native` | `^7.x`           | Screen navigation, deep links   | MIT     |
-| `react-native-reanimated`  | `^4.x`           | Hardware-accelerated animations | MIT     |
-| `nativewind`               | `^4.x`           | Tailwind CSS for React Native   | MIT     |
-| `react-native-camera`      | via VisionCamera | QR code scanning                | MIT     |
+| Package                        | Version | Purpose                         | License |
+| ------------------------------ | ------- | ------------------------------- | ------- |
+| `react-native-reanimated`      | `^4.x`  | Hardware-accelerated animations | MIT     |
+| `react-native-gesture-handler` | `^2.32` | Gestures, sheets, swipe actions | MIT     |
+| `react-native-qrcode-svg`      | `^6.3`  | Rendering the contact card QR   | MIT     |
+
+There is no navigation library. `App.tsx` holds a hand-rolled 4-tab state
+machine, and screens are plain components. Styling is StyleSheet plus the theme
+tokens in `src/ui/`; there is no Tailwind or NativeWind.
 
 ### Build toolchain
 
@@ -716,11 +757,9 @@ Each decision records what was considered, what was chosen, and why.
 | `expo`                             | `SDK 57` | Bare workflow, EAS Build, config plugins       |
 | `react`                            | `^19.2`  | Required by React Native 0.86 (peer dep)       |
 | `react-native`                     | `^0.86`  | New Architecture (default since 0.76)          |
-| `typescript`                       | `^7.0`   | Strict mode, no `baseUrl`, `./`-prefixed paths |
-| `tailwindcss`                      | `^3.4`   | v3 required by NativeWind v4 (v4 incompatible) |
+| `typescript`                       | `~6.0.3` | Strict mode, no `baseUrl`, `./`-prefixed paths |
 | `jest`                             | `^29`    | Unit tests for all `src/core/`                 |
 | `prettier`                         | `^3.9`   | Formatting                                     |
-| `prettier-plugin-tailwindcss`      | `^0.8`   | Auto-sort NativeWind class names               |
 | `prettier-plugin-organize-imports` | `^4.3`   | Auto-sort import blocks                        |
 
 _ARCHITECTURE.md is the ground truth for implementation decisions. Cross-reference ROADMAP.md for phased timeline and ROADMAP.md Gap Analysis for competitive differentiation. All protocol decisions above are final unless explicitly revisited with evidence._

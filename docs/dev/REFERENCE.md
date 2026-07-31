@@ -117,7 +117,7 @@ Every BLE packet is a compact binary structure:
 - **Version 2** packets may carry an explicit **source route** (array of peer ID hops).
 - **Signatures** (Ed25519) exclude the TTL byte so relays can decrement it without invalidating them.
 - Packets are **padded** toward uniform sizes to defeat traffic analysis.
-- **[LZ4](https://lz4.github.io/lz4/) compression** is applied to message payloads before they are sent.
+- **Raw [DEFLATE](https://datatracker.ietf.org/doc/html/rfc1951) compression** is applied to message payloads before they are sent (`CompressionUtil.swift` uses `COMPRESSION_ZLIB`; `CompressionUtil.kt` uses `Deflater` in raw, headerless mode).
 
 ### 3.3 Controlled Flood Routing
 
@@ -443,9 +443,12 @@ A "gateway" device can bridge the BLE mesh to the Nostr internet:
 
 ### 8.4 Push-to-Talk / Live Voice Streaming
 
-**Status: Designed, not yet shipped (iOS only, in design phase).**
+**Status: Shipped on iOS.** `bitchat-ios/bitchat/Features/voice/` holds
+`PTTAudioCodec`, `PTTAudioFormat`, `PTTCaptureEngine`, `PTTBurstPlayer` and
+`PTTSettings`; `Protocols/VoiceBurstPacket.swift` is the wire format, and
+`MessageType.voiceFrame = 0x29` carries public bursts.
 
-The `docs/PUSH-TO-TALK-DESIGN.md` describes a complete PTT design:
+Scopes, as designed and now shipped:
 
 | Scenario                   | Delivery                                                    |
 | -------------------------- | ----------------------------------------------------------- |
@@ -454,17 +457,17 @@ The `docs/PUSH-TO-TALK-DESIGN.md` describes a complete PTT design:
 | Public mesh chat           | Live broadcast stream (signed) + voice note                 |
 | Geohash (Nostr) channels   | Not available                                               |
 
-**Wire protocol designed:**
+**Wire protocol:**
 
-- New packet type `0x29` (`voiceFrame`) for public broadcasts.
-- New `NoisePayloadType.voiceFrame = 0x08` for DMs.
+- Packet type `0x29` (`voiceFrame`) for public broadcasts.
+- `NoisePayloadType.voiceFrame = 0x08` for DMs.
 - AAC-LC at 16 kHz, ~2 KB/s, ~1 frame/packet, ~15.6 pkt/s.
 - Each burst shares an 8-byte random `burstID`; sequence numbers allow gap detection.
 - Jitter buffer: 350 ms before playback starts.
 - **No delivery acks, no retransmit** for individual frames (live audio; reliability is the fallback voice note).
 - Bandwidth math: BLE mesh moves ~15 KB/s per link; voice needs ~2 KB/s; fits with margin.
 
-**This feature does not yet exist in shipping code.** VoiceRecorder and VoiceVisualizer exist on both platforms, but live streaming is not implemented.
+VoiceRecorder and VoiceVisualizer exist on both platforms for the voice-note fallback; the live path is iOS only.
 
 ### 8.5 Video Calling
 
@@ -481,9 +484,9 @@ There is no design document, no code, and no packet type for video calling. The 
 - The receiver hears the audio only **after the entire file arrives**.
 - This works on BLE mesh. It does **not** work on Nostr or geohash channels.
 
-### PTT Design (iOS, Not Yet Shipped)
+### PTT (iOS, Shipped)
 
-The full design exists in `bitchat/ios/docs/PUSH-TO-TALK-DESIGN.md`. Key elements:
+The design is in `bitchat/ios/docs/PUSH-TO-TALK-DESIGN.md` and the code is in `bitchat-ios/bitchat/Features/voice/`. Key elements:
 
 - `AVAudioEngine` input tap → `PTTInputResampler` → `PTTFrameEncoder` → packetizer → BLE.
 - Simultaneously writes to `.m4a` for finalized note delivery (no remux needed).
@@ -500,7 +503,7 @@ bitchat/ios/bitchat/
 ├── App/               # AppRuntime (composition root), ConversationStore, LocationChannelsModel
 ├── Features/
 │   ├── media/         # ImageUtils.swift
-│   └── voice/         # (PTT design docs only, not yet implemented)
+│   └── voice/         # PTTAudioCodec, PTTCaptureEngine, PTTBurstPlayer, VoiceRecorder
 ├── Identity/          # IdentityModels.swift, SecureIdentityStateManager.swift
 ├── Models/            # BitchatMessage, BitchatPeer, NoisePayload, ReadReceipt
 ├── Noise/             # NoiseProtocol, NoiseSession, NoiseSessionManager, NoiseEncryptionService
@@ -608,8 +611,8 @@ bitchat/android/app/src/main/java/com/bitchat/android/
 
 | Aspect         | iOS                             | Android                                        |
 | -------------- | ------------------------------- | ---------------------------------------------- |
-| Crypto         | Noise XX (Curve25519/ChaCha20)  | X25519 + AES-256-GCM                           |
-| Tor            | Yes (Arti/Rust)                 | No                                             |
+| Crypto         | Noise XX (Curve25519/ChaCha20)  | Same: `Noise_XX_25519_ChaChaPoly_SHA256`       |
+| Tor            | Yes (Arti/Rust)                 | Yes (Arti, `ArtiTorManager.kt`)                |
 | UI             | SwiftUI                         | Jetpack Compose + Material Design 3            |
 | Background BLE | CoreBluetooth state restoration | Foreground service required                    |
 | macOS support  | Yes (Catalyst)                  | No                                             |
@@ -807,7 +810,6 @@ No forensic recovery is possible after panic wipe without the Keychain, which is
 | Gap                                     | Severity | Notes                                                                   |
 | --------------------------------------- | -------- | ----------------------------------------------------------------------- |
 | **No video support**                    | High     | No packet type, no codec, BLE bandwidth insufficient (~15 KB/s)         |
-| **No live voice (PTT)**                 | Medium   | Designed but not shipped; voice notes work as fallback                  |
 | **No video calling**                    | High     | Architecturally infeasible over BLE; would require internet path        |
 | **Courier envelopes = text only**       | Medium   | 16 KiB cap; images cannot be physically relayed                         |
 | **Nostr path = text only**              | Medium   | Media does not ride Nostr                                               |
@@ -851,9 +853,8 @@ From the whitepaper's "Future Work" section and observed codebase state:
 
 ### In Progress / Designed
 
-1. **Push-to-Talk live voice** (iOS, `PUSH-TO-TALK-DESIGN.md`): full wire protocol designed.
-2. **Architecture V2**: ongoing refactor to `AppRuntime` composition root, feature-scoped models.
-3. **Bluetooth architecture improvements**: `BLEOutboundWriteBuffer`, `BLEIngressLinkRegistry`, `BLEFanoutSelector` separation in progress.
+1. **Architecture V2**: ongoing refactor to `AppRuntime` composition root, feature-scoped models.
+2. **Bluetooth architecture improvements**: `BLEOutboundWriteBuffer`, `BLEIngressLinkRegistry`, `BLEFanoutSelector` separation in progress.
 
 ### Inferred from Codebase
 
@@ -876,7 +877,7 @@ From the whitepaper's "Future Work" section and observed codebase state:
 | Nostr          | Custom Swift NIP-17/NIP-59 implementation                                        |
 | Tor            | Arti (Rust, bundled as xcframework)                                              |
 | Crypto         | CryptoKit (Curve25519, ChaCha20-Poly1305, SHA-256) + P256K (secp256k1 for Nostr) |
-| Compression    | LZ4                                                                              |
+| Compression    | Raw DEFLATE (`COMPRESSION_ZLIB`)                                                 |
 | Key Storage    | iOS Keychain                                                                     |
 | Persistence    | File system (AES-ChaChaPoly encrypted), UserDefaults                             |
 | Geolocation    | DB-IP database via `georelays`                                                   |
@@ -891,9 +892,9 @@ From the whitepaper's "Future Work" section and observed codebase state:
 | BLE            | Android BluetoothLE API (GATT client + server) |
 | Noise Protocol | Custom Kotlin implementation                   |
 | Nostr          | Custom Kotlin NIP-17 implementation            |
-| Tor            | Not yet integrated                             |
-| Crypto         | X25519 key exchange + AES-256-GCM              |
-| Compression    | LZ4                                            |
+| Tor            | Arti (`net/ArtiTorManager.kt`)                 |
+| Crypto         | X25519 + ChaCha20-Poly1305 (Noise XX, as iOS)  |
+| Compression    | Raw DEFLATE (`java.util.zip.Deflater`, nowrap) |
 | Key Storage    | Android Keystore                               |
 | Persistence    | Coroutines + ConcurrentHashMap, file system    |
 | Min API        | 26 (Android 8.0)                               |

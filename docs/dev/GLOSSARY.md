@@ -6,11 +6,9 @@
 
 **[X25519](https://cr.yp.to/ecdh.html)**: Elliptic curve Diffie-Hellman using Curve25519. The key agreement function inside both Noise XX and Noise X.
 
-**[SHA-256](https://en.wikipedia.org/wiki/SHA-2)**: A cryptographic hash function. Used for Peer ID derivation (`hex(SHA-256(noiseStaticPubKey)).slice(0, 16)`), packet deduplication IDs, and as the hash function inside the Noise suite.
+**[SHA-256](https://en.wikipedia.org/wiki/SHA-2)**: A cryptographic hash function. Used for Peer ID derivation (`hex(SHA-256(noiseStaticPubKey)).slice(0, 16)`), packet deduplication IDs, the hash function inside the Noise suite, and the hash inside GCS filters during gossip sync (`gossip-sync.ts`; Airhop does not use SipHash).
 
 **[HKDF](https://datatracker.ietf.org/doc/html/rfc5869)**: HMAC-based Key Derivation Function. Derives session keys and subkeys from Diffie-Hellman shared secrets inside the Noise handshake and Double Ratchet.
-
-**[SipHash-2-4](https://131002.net/siphash/)**: A fast keyed hash designed to resist hash-flooding attacks. Used as the hash function inside GCS filters during gossip sync.
 
 **[ChaCha20-Poly1305](https://datatracker.ietf.org/doc/html/rfc7539)**: An authenticated encryption cipher (AEAD). Used as the symmetric cipher inside the Noise XX and Noise X handshakes.
 
@@ -20,7 +18,7 @@
 
 **[Double Ratchet](https://signal.org/docs/specifications/doubleratchet/)**: A key agreement algorithm that provides per-message forward secrecy. The same algorithm used by Signal and WhatsApp. Airhop applies it to all stored DMs so that compromise of one message key does not expose others.
 
-**[X3DH](https://signal.org/docs/specifications/x3dh/)**: Extended Triple Diffie-Hellman. A key agreement protocol that lets a sender initiate a Double Ratchet session with a recipient who is offline, using prekey bundles the recipient publishes to Nostr in advance.
+**[X3DH](https://signal.org/docs/specifications/x3dh/)**: Extended Triple Diffie-Hellman. A key agreement protocol that lets a sender initiate a Double Ratchet session with a recipient who is offline, using prekey bundles the recipient publishes in advance. Airhop deliberately does not use X3DH: the Noise handshake already seeds the ratchet, and one-time prekeys are gossiped over the mesh as `0x24`, never published to Nostr.
 
 ## Networking and Transport
 
@@ -34,6 +32,8 @@
 
 **[MultipeerConnectivity](https://developer.apple.com/documentation/multipeerconnectivity)**: Apple's framework for peer-to-peer networking between iOS and macOS devices over WiFi or Bluetooth without a router. Used for high-bandwidth transfers between two Apple devices. It runs on Apple's proprietary AWDL and cannot interoperate with Android WiFi Aware, so it is never a cross-platform path.
 
+**[NFC (Near Field Communication)](https://en.wikipedia.org/wiki/Near-field_communication)**: Short-range radio for tap-to-exchange between two devices held together. The appeal for a messenger is that the range itself is the security property: a few centimetres is hard to eavesdrop on and impossible to spoof from across a room, which makes it a natural way to bind a key fingerprint to a person standing in front of you. **Not implemented in Airhop.** Contact exchange is camera QR only (`qr-scan-screen.tsx`), which gives the same in-person guarantee with no extra dependency and works on every device.
+
 **GCS (Golomb-Coded Set)**: A probabilistic data structure, more compact than a Bloom filter, that encodes a set of hashes. Used in gossip sync to let two peers compare which messages each holds and exchange only what is missing. See [Golomb coding](https://en.wikipedia.org/wiki/Golomb_coding).
 
 **[LRU (Least Recently Used)](https://en.wikipedia.org/wiki/Cache_replacement_policies#LRU)**: A cache eviction policy that removes the least-recently-accessed entry when the cache is full. Used for the 1,000-entry packet deduplication seen-set and the 1,000-packet gossip cache.
@@ -46,7 +46,7 @@
 
 **[NIP-17](https://github.com/nostr-protocol/nips/blob/master/17.md)**: The Nostr private direct message standard. Wraps messages using gift-wrap (NIP-59) so relay operators see neither sender, recipient, nor content.
 
-**[NIP-29](https://github.com/nostr-protocol/nips/blob/master/29.md)**: Nostr relay-managed groups. Used in Airhop for internet-connected group chats with persistent relay-side membership.
+**[NIP-29](https://github.com/nostr-protocol/nips/blob/master/29.md)**: Nostr relay-managed groups. Considered and rejected for Airhop: it puts membership enforcement on a relay. See ARCHITECTURE.md section 7.
 
 **[NIP-44](https://github.com/nostr-protocol/nips/blob/master/44.md)**: The Nostr encryption standard using XChaCha20-Poly1305 with versioning. Used inside NIP-17 gift-wrap envelopes.
 
@@ -76,11 +76,9 @@
 
 ## Tools and Libraries
 
-**[LZ4](https://lz4.github.io/lz4/)**: An extremely fast lossless compression algorithm. Applied to BLE packet payloads before transmission to fit more content within the 469-byte fragment limit.
+**[DEFLATE (raw)](https://datatracker.ietf.org/doc/html/rfc1951)**: A lossless compression algorithm. Applied to BLE packet payloads before transmission to fit more content within the 469-byte fragment limit. `packet-compression.ts` uses pako's `deflateRaw` / `inflateRaw`, matching bitchat's headerless zlib stream.
 
 **[AAC (Advanced Audio Coding)](https://en.wikipedia.org/wiki/Advanced_Audio_Coding)**: A lossy audio compression format. Airhop encodes push-to-talk voice at 16 kHz mono using AAC before transmission as BLE `VOICE_FRAME` packets.
-
-**[NFC (Near-Field Communication)](https://en.wikipedia.org/wiki/Near-field_communication)**: A short-range (<4 cm) radio standard for device-to-device data exchange. Used in Airhop for tap-to-add-contact, physically binding a cryptographic key fingerprint to a person you meet in person.
 
 **[Arti](https://gitlab.torproject.org/tpo/core/arti)**: The Tor Project's Rust implementation of the Tor client. Bundled as an xcframework in bitchat iOS; Airhop uses the same approach to route all Nostr traffic through Tor on iOS by default.
 

@@ -26,10 +26,19 @@ export interface Contact {
   signingPubKeyHex: string; // 32-byte Ed25519, hex
   nickname: string;
   addedAtMs: number;
-  // How this contact was learned. A QR scan carries the peer's real keys;
-  // "manual" means only a peer ID was typed in, so the keys are unknown and the
-  // identity is unverified until their first ANNOUNCE arrives.
-  source: "qr" | "manual";
+  // How this contact was learned, which is what "Verified" is allowed to mean.
+  //
+  // "qr"     scanned off the other person's screen with the camera. The keys are
+  //          real AND the user was standing there, so this is the only source
+  //          that earns the verified shield.
+  // "link"   the same card, but delivered as an airhop:// link. The keys are
+  //          equally real and equally self-consistent - what is missing is any
+  //          evidence about WHO sent it, since a link can be posted on a web
+  //          page or pasted into a message by anyone. Treated as a convenience,
+  //          never as verification.
+  // "manual" only a peer ID was typed in, so the keys are unknown and the
+  //          identity is unverified until their first ANNOUNCE arrives.
+  source: "qr" | "link" | "manual";
   // The peer's Nostr public key (secp256k1 hex), once we've learned it from a
   // v2 QR card or their ANNOUNCE. This is what makes an out-of-range contact
   // reachable over the internet: the registry forgets a peer's npub 60s after

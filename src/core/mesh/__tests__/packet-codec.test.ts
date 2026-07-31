@@ -416,4 +416,40 @@ describe("packet-codec", () => {
       expect(computePacketId(a)).not.toEqual(computePacketId(b));
     });
   });
+
+  describe("malformed frames decode to null rather than throwing", () => {
+    // decodePacket is fed arbitrary bytes off the radio and has no try/catch
+    // around it in mesh-service, so a throw here does not stay here: it escapes
+    // into the native packetReceived listener. Returning null is the contract.
+    it("a COMPRESSED frame whose length field runs off the end returns null", () => {
+      // 24 bytes exactly: v2 header (16, payloadLength being a 4-byte BE field
+      // at offset 12) + senderID (8), with COMPRESSED set and HAS_RECIPIENT
+      // clear. That leaves the read offset sitting precisely at the end of the
+      // buffer, and DataView.getUint32 throws RangeError past the end instead of
+      // reading garbage. payloadLength must be >= 4 to reach the read, and small
+      // enough to clear the MAX_PAYLOAD_BYTES gate, so it goes in the LOW byte.
+      const raw = new Uint8Array(24);
+      raw[0] = 2; // version
+      raw[1] = PacketType.CHANNEL_MSG;
+      raw[2] = 7; // ttl
+      raw[11] = Flags.COMPRESSED; // flags
+      raw[15] = 4; // payloadLength = 4, big-endian across 12..15
+      // bytes 16..23 are the 8-byte senderID (zeros), ending the buffer.
+
+      expect(() => decodePacket(raw)).not.toThrow();
+      expect(decodePacket(raw)).toBeNull();
+    });
+
+    it("truncating a valid frame at every length never throws", () => {
+      // The general form of the same contract, since one hand-built frame only
+      // proves the one offset. Every prefix of a real packet is a frame the
+      // radio could plausibly hand us after a dropped fragment.
+      const full = encodePacket(
+        makePacket({ payload: new Uint8Array([1, 2, 3, 4, 5]) }),
+      );
+      for (let n = 0; n < full.length; n++) {
+        expect(() => decodePacket(full.slice(0, n))).not.toThrow();
+      }
+    });
+  });
 });

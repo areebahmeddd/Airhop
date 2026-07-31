@@ -10,12 +10,14 @@ import { sha256 } from "@noble/hashes/sha2.js";
 import { bytesToHex } from "@noble/hashes/utils.js";
 import type { Identity } from "../../crypto/identity";
 import {
+  ANNOUNCE_MAX_SKEW_MS,
   AnnounceManager,
   Capability,
   decodeAnnouncePayload,
   decodeCapabilities,
   encodeAnnouncePayload,
   encodeCapabilities,
+  isAnnounceFresh,
 } from "../announce-manager";
 
 function makeIdentity(): Identity {
@@ -37,6 +39,48 @@ function makeIdentity(): Identity {
 // bitchat PeerCapabilities.localSupported = [.vouch, .prekeys, .groups]
 //   prekeys 1<<0 | groups 1<<3 | vouch 1<<5 = 0x01 | 0x08 | 0x20 = 0x29
 const BITCHAT_LOCAL_SUPPORTED = 0x29;
+
+describe("isAnnounceFresh", () => {
+  // Well past the guard window so the real comparison is what is being tested.
+  const NOW = 10 * ANNOUNCE_MAX_SKEW_MS;
+
+  test("accepts an announce stamped now", () => {
+    expect(isAnnounceFresh(NOW, NOW)).toBe(true);
+  });
+
+  test("accepts clock skew in both directions up to the bound", () => {
+    expect(isAnnounceFresh(NOW - ANNOUNCE_MAX_SKEW_MS, NOW)).toBe(true);
+    expect(isAnnounceFresh(NOW + ANNOUNCE_MAX_SKEW_MS, NOW)).toBe(true);
+  });
+
+  test("refuses a replayed announce from beyond the bound", () => {
+    expect(isAnnounceFresh(NOW - ANNOUNCE_MAX_SKEW_MS - 1, NOW)).toBe(false);
+    // An hour-old capture is the actual attack: still signed, still key-bound.
+    expect(isAnnounceFresh(NOW - 60 * 60 * 1000, NOW)).toBe(false);
+  });
+
+  test("refuses a far-future timestamp", () => {
+    // The forward half, which iOS does not check. Parking a timestamp in the
+    // future is how you build a packet that never becomes stale.
+    expect(isAnnounceFresh(NOW + ANNOUNCE_MAX_SKEW_MS + 1, NOW)).toBe(false);
+  });
+
+  test("accepts everything when the clock has not been set yet", () => {
+    // A device early in the epoch must still be able to join a mesh. Without
+    // the guard this underflows and drops every announce instead.
+    expect(isAnnounceFresh(0, 0)).toBe(true);
+    expect(isAnnounceFresh(ANNOUNCE_MAX_SKEW_MS * 5, 1000)).toBe(true);
+  });
+
+  test("is never tighter than either upstream in the direction it checks", () => {
+    // iOS BLEPacketFreshnessPolicy: 900s, backwards only.
+    // Android AnnouncementIdentityValidator: 600s, symmetric.
+    // Anything either upstream accepts, we must accept, or we drop legitimate
+    // bitchat traffic.
+    expect(ANNOUNCE_MAX_SKEW_MS).toBeGreaterThanOrEqual(900 * 1000);
+    expect(ANNOUNCE_MAX_SKEW_MS).toBeGreaterThanOrEqual(600 * 1000);
+  });
+});
 
 describe("encodeCapabilities / decodeCapabilities", () => {
   test("gateway bit is a single 0x04 byte", () => {

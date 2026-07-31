@@ -1541,19 +1541,26 @@ export default function ArchitecturePage() {
               id="threat"
               eyebrow="For developers · 19"
               title="Threat model"
-              lede="What the design defends against, and the four things it does not."
+              lede="What the design defends against, and the six things it does not."
             >
               <Table
                 head={["Threat", "Countermeasure"]}
                 rows={[
-                  ["Message forgery", "Ed25519 on every packet, verified before relay or display"],
+                  [
+                    "Message forgery",
+                    "Ed25519 checked against the key bound to the claimed sender, before anything is shown. A missing key fails the check rather than skipping it",
+                  ],
                   [
                     "Impersonation",
-                    "Names derived from the public key, so a name is not an identity",
+                    "A peer ID is the hash of its own public key, so claiming someone else's means producing their key",
+                  ],
+                  [
+                    "Key substitution",
+                    "The first signing key seen for a peer is pinned. Only an in-person QR scan can replace it",
                   ],
                   [
                     "Replay",
-                    "Timestamp plus content-derived packet ID, deduplicated for 5 minutes",
+                    "Content-derived packet ID, deduplicated for 5 minutes, plus a freshness window where staleness is itself the attack",
                   ],
                   ["Man in the middle", "Noise XX mutual authentication on every session"],
                   [
@@ -1568,7 +1575,14 @@ export default function ArchitecturePage() {
                     "Relay censorship",
                     "Several relays queried in parallel, any one failing is invisible",
                   ],
-                  ["Sybil flooding", "TTL bounds propagation, signed announces prevent fake peers"],
+                  [
+                    "Sybil flooding",
+                    "TTL bounds propagation, and peer tables are capped with eviction that never drops a real BLE neighbour",
+                  ],
+                  [
+                    "Reading someone else's mail",
+                    "A directed packet is forwarded by relays but only opened by the peer it is addressed to",
+                  ],
                   [
                     "Misbehaving BLE devices",
                     "Connection slots reclaimed from peers that never announce",
@@ -1585,6 +1599,18 @@ export default function ArchitecturePage() {
                 <strong className="text-gray-900">Physical proximity.</strong> Being on a Bluetooth
                 mesh reveals that you are physically near certain people. That is inherent to the
                 medium.
+                <br />
+                <br />
+                <strong className="text-gray-900">A linkable device.</strong> Your peer ID comes
+                from your long-term key, so it does not rotate. The same phone is recognisable
+                across sessions until you regenerate the identity. Only the per-area location
+                identities are throwaway.
+                <br />
+                <br />
+                <strong className="text-gray-900">Attachments in the clear.</strong> Photos, files
+                and voice notes are signed but not encrypted, so that bitchat can read them. They
+                are therefore kept to the public Bluetooth room and direct mesh messages, and never
+                sent over the internet.
                 <br />
                 <br />
                 <strong className="text-gray-900">Timing correlation.</strong> An observer watching

@@ -109,6 +109,31 @@ export const useGroupStore = create<GroupState>((set, get) => {
       const existing = state.groups.find((g) => g.groupID === entry.groupID);
       // Ignore an older or equal epoch: the newest key/roster wins.
       if (existing !== undefined && entry.epoch < existing.epoch) return state;
+      // A group keeps the creator it was created with.
+      //
+      // The epoch guard above orders updates but says nothing about who is
+      // allowed to make them, and the caller only checks that a state is signed
+      // by the creator it names - which an attacker satisfies by naming
+      // themselves. groupID and epoch travel in cleartext in every group
+      // message, so both are free to read off the air: anyone could send a
+      // self-signed state for a known groupID at a higher epoch and replace the
+      // key, the roster and the creator in one step. Members would then encrypt
+      // to a key the attacker holds, while the real group silently stopped
+      // seeing them.
+      //
+      // Pinning here rather than at the call site because this is the last
+      // point every path goes through, local and remote alike.
+      //
+      // bitchat's ChatGroupCoordinator.applyGroupState has the same gap (it
+      // checks sender-is-creator, signature, self-membership and epoch, but
+      // never against the stored creator), so this is deliberately stricter
+      // than upstream rather than a divergence from it.
+      if (
+        existing !== undefined &&
+        entry.creatorFingerprint !== existing.creatorFingerprint
+      ) {
+        return state;
+      }
       const groups = [
         ...state.groups.filter((g) => g.groupID !== entry.groupID),
         entry,

@@ -47,6 +47,12 @@ export function applyAirhopLink(link: DeepLink): string | null {
   // Reject a card whose peer ID isn't the fingerprint of its Noise key;
   // accepting it would encrypt every DM to whoever forged the card. Seeds the
   // routing registry and inbound Nostr map as a side effect.
+  //
+  // Deliberately NOT in person. Both routes into this function are links - the
+  // OS handing one over, or the user pasting one - and neither says anything
+  // about who produced it. So the card may not re-pin keys already bound to
+  // that peer (see addVerifiedContact), and the contact it writes is not
+  // verified.
   const accepted = getMeshService()?.addVerifiedContact(card) ?? false;
   if (!accepted) return null;
   useContactsStore.getState().addContact({
@@ -55,7 +61,13 @@ export function applyAirhopLink(link: DeepLink): string | null {
     signingPubKeyHex: bytesToHex(card.signingPubKey),
     nickname: card.nickname,
     addedAtMs: Date.now(),
-    source: "qr",
+    // "link", not "qr". The card is self-consistent, but a link proves only
+    // that someone put it somewhere the user tapped: a web page, an SMS, a
+    // message in another app. Recording it as a scan would have shown the
+    // verified shield and "Scanned their QR code" for a person the user has
+    // never met, under a nickname the sender chose. Verification is an
+    // in-person act, and this is the one path that cannot witness it.
+    source: "link",
     // The card carries the peer's Nostr pubkey (internet reachability).
     nostrPubkeyHex: bytesToHex(card.nostrPubKey),
   });

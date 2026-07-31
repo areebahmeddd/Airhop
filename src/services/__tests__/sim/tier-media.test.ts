@@ -44,11 +44,83 @@ jest.mock("../../../bridge/NativeAirhopVoice", () => {
   return { __esModule: true, default: mod };
 });
 
+import { encodeFilePacket } from "../../../core/mesh/bitchat-file-packet";
+import {
+  encodePacket,
+  Flags,
+  PacketType,
+  signPacket,
+  type Packet,
+} from "../../../core/mesh/packet-codec";
 import { SimDevice, type DeviceSpec } from "./harness/device";
 import { exactlyOnce, noCrashes, noForgedSenders } from "./harness/invariants";
 import { media, sameBytes } from "./harness/media-fabric";
 import { RadioFabric } from "./harness/radio-fabric";
 import { Scenario, waitFor } from "./harness/scenario";
+
+const B64 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+
+// The bridge carries base64, so an injected packet has to be encoded the way
+// the native module would encode it.
+function toBase64(bytes: Uint8Array): string {
+  let out = "";
+  for (let i = 0; i < bytes.length; i += 3) {
+    const b0 = bytes[i];
+    const b1 = bytes[i + 1];
+    const b2 = bytes[i + 2];
+    out += B64[b0 >> 2];
+    out += B64[((b0 & 0x03) << 4) | ((b1 ?? 0) >> 4)];
+    out += b1 === undefined ? "=" : B64[((b1 & 0x0f) << 2) | ((b2 ?? 0) >> 6)];
+    out += b2 === undefined ? "=" : B64[b2 & 0x3f];
+  }
+  return out;
+}
+
+function peerIdToBytes(hex: string): Uint8Array {
+  const out = new Uint8Array(8);
+  for (let i = 0; i < 8; i++) {
+    out[i] = parseInt(hex.slice(i * 2, i * 2 + 2), 16);
+  }
+  return out;
+}
+
+// An attachment packet that CLAIMS to come from `claimedPeerID`.
+function forgeAttachment(opts: {
+  claimedPeerID: string;
+  recipientPeerID?: string;
+  channel?: string;
+  content: Uint8Array;
+  caption: string;
+  timestamp: number;
+  signWith?: Uint8Array;
+}): string {
+  const tlv = encodeFilePacket({
+    fileName: "photo.jpg",
+    mimeType: "image/jpeg",
+    content: opts.content,
+    channel: opts.channel,
+    caption: opts.caption,
+  })!;
+  const directed = opts.recipientPeerID !== undefined;
+  const packet: Packet = {
+    type: PacketType.FILE_TRANSFER,
+    ttl: 7,
+    flags:
+      (directed ? Flags.HAS_RECIPIENT : 0) |
+      (opts.signWith !== undefined ? Flags.SIGNED : 0),
+    senderID: peerIdToBytes(opts.claimedPeerID),
+    recipientID: directed
+      ? peerIdToBytes(opts.recipientPeerID!)
+      : new Uint8Array(8),
+    timestamp: opts.timestamp,
+    signature: new Uint8Array(64),
+    payload: tlv,
+  };
+  if (opts.signWith !== undefined) {
+    packet.signature = signPacket(packet, opts.signWith);
+  }
+  return toBase64(encodePacket(packet));
+}
 
 let scenario: Scenario | null = null;
 
@@ -313,6 +385,205 @@ test("M04 a voice note is delivered as a playable file", async () => {
   );
   s.expectNone("process health", noCrashes(devices));
   s.assert(true);
+});
+
+test("M08 an attachment cannot be forged, misrouted, or aimed at a room you never joined", async () => {
+  // Attachments carry the same authority as text - they render in a thread with
+  // a sender's name on them - so they need the same three rules text has.
+  const s = (scenario = new Scenario({
+    id: "M08",
+    title: "attachment forgery, confused deputy, and channel injection",
+    seed: 41,
+  }));
+  const { radio, devices } = room(s, [
+    android("alice", 11),
+    android("bob", 22),
+    android("mallory", 77),
+  ]);
+  const [alice, bob, mallory] = devices;
+  await waitFor(s.world, () => bob.peers().includes(alice.peerID), 20_000);
+  await waitFor(s.world, () => bob.peers().includes(mallory.peerID), 20_000);
+  const channel = "#bluetooth";
+  for (const d of devices) d.joinChannel(channel);
+
+  const captions = (): string[] =>
+    [...bob.texts(channel), ...bob.texts(`dm:${alice.peerID}`)].filter(Boolean);
+
+  // 1. Unsigned, claiming alice. This is the one that used to work: nothing on
+  //    the attachment path looked at the signature at all.
+  radio.injectTo(
+    bob.id,
+    mallory.id,
+    forgeAttachment({
+      claimedPeerID: alice.peerID,
+      recipientPeerID: bob.peerID,
+      content: media.jpeg(2_000),
+      caption: "unsigned, claiming alice",
+      timestamp: s.world.now,
+    }),
+  );
+  await s.world.advance(2_000);
+  s.check(
+    "an UNSIGNED attachment claiming a known peer is not rendered",
+    !captions().includes("unsigned, claiming alice"),
+    `bob sees [${captions().join(" | ")}]`,
+  );
+
+  // 2. Signed, but with mallory's key while claiming alice's ID.
+  radio.injectTo(
+    bob.id,
+    mallory.id,
+    forgeAttachment({
+      claimedPeerID: alice.peerID,
+      recipientPeerID: bob.peerID,
+      content: media.jpeg(2_000),
+      caption: "signed by the wrong key",
+      timestamp: s.world.now,
+      signWith: mallory.identity.signingPrivKey,
+    }),
+  );
+  await s.world.advance(2_000);
+  s.check(
+    "an attachment signed by the WRONG key is not rendered",
+    !captions().includes("signed by the wrong key"),
+    `bob sees [${captions().join(" | ")}]`,
+  );
+
+  // 3. Confused deputy: correctly signed by mallory, but addressed to ALICE.
+  //    Bob is only a relay here and must forward without ever rendering it.
+  //    Before the fix this landed in bob's thread with mallory, which is how a
+  //    private photo leaked to every node within seven hops of either end.
+  radio.injectTo(
+    bob.id,
+    mallory.id,
+    forgeAttachment({
+      claimedPeerID: mallory.peerID,
+      recipientPeerID: alice.peerID,
+      content: media.jpeg(2_000),
+      caption: "addressed to alice, not bob",
+      timestamp: s.world.now,
+      signWith: mallory.identity.signingPrivKey,
+    }),
+  );
+  await s.world.advance(2_000);
+  s.check(
+    "an attachment addressed to someone else is relayed but never rendered",
+    ![
+      ...bob.texts(channel),
+      ...bob.texts(`dm:${mallory.peerID}`),
+      ...bob.texts(`dm:${alice.peerID}`),
+    ].includes("addressed to alice, not bob"),
+    `bob sees [${captions().join(" | ")}]`,
+  );
+
+  // 4. Channel injection: a genuinely signed broadcast from mallory tagged for
+  //    a room bob never joined. The tag used to be honoured verbatim, and the
+  //    room was created on the spot to hold it.
+  radio.injectTo(
+    bob.id,
+    mallory.id,
+    forgeAttachment({
+      claimedPeerID: mallory.peerID,
+      channel: "#never-joined",
+      content: media.jpeg(2_000),
+      caption: "into a room you never joined",
+      timestamp: s.world.now,
+      signWith: mallory.identity.signingPrivKey,
+    }),
+  );
+  await s.world.advance(2_000);
+  s.check(
+    "an attachment cannot conjure a channel bob never joined",
+    !bob.channels().includes("#never-joined"),
+    `bob's rooms = [${bob.channels().join(", ")}]`,
+  );
+
+  // The control: a real attachment from alice still arrives. A rule that
+  // dropped everything would pass all four checks above and be worthless.
+  alice.sendAttachment(`dm:${bob.peerID}`, media.jpeg(3_000), {
+    type: "image",
+    name: "real.jpg",
+    mimeType: "image/jpeg",
+    caption: "genuinely alice",
+  });
+  const arrived = await waitFor(
+    s.world,
+    () => bob.texts(`dm:${alice.peerID}`).includes("genuinely alice"),
+    30_000,
+  );
+  s.check("a genuine attachment from alice still arrives", arrived);
+
+  s.expectNone("no forged senders", noForgedSenders(devices));
+  s.expectNone("process health", noCrashes(devices));
+  s.assert();
+});
+
+test("M07 a recorded voice burst cannot be replayed later at someone else", async () => {
+  // Live voice is the one feature where a signature alone is not enough.
+  //
+  // The signing preimage normalises ttl and isRSR, so a captured VOICE_FRAME
+  // replays byte-for-byte and verifies perfectly against the real speaker's
+  // announce-bound key. The deduplicator is no defence either: its window is
+  // five minutes and its state is per device, so it has nothing to say about a
+  // phone that never heard the original. Without a freshness bound, someone
+  // could record Alice in one room and play her voice out of a stranger's phone
+  // later, attributed to her and presented as live.
+  const s = (scenario = new Scenario({
+    id: "M07",
+    title: "voice burst replay",
+    seed: 31,
+  }));
+  const { radio, devices } = room(s, [
+    android("alice", 11),
+    android("bob", 22),
+    android("carol", 33),
+  ]);
+  const [alice, bob, carol] = devices;
+  await waitFor(s.world, () => bob.peers().includes(alice.peerID), 20_000);
+  await waitFor(s.world, () => carol.peers().includes(alice.peerID), 20_000);
+  const channel = "#bluetooth";
+  for (const d of devices) d.joinChannel(channel);
+  bob.listenTo(channel);
+  carol.listenTo(channel);
+
+  // Capture everything Alice puts on the air, exactly as an attacker with a
+  // radio would. No keys, no session, no cooperation from anyone.
+  const captured: string[] = [];
+  const untap = radio.tapWrites((fromID, _linkID, dataBase64) => {
+    if (fromID === alice.id) captured.push(dataBase64);
+  });
+
+  const started = await alice.startVoiceBurst(channel);
+  s.check("the microphone opened", started);
+  await s.world.advance(1_000);
+  await alice.stopVoiceBurst();
+  await s.world.advance(2_000);
+  untap();
+
+  const heardLive = carol.voice?.framesPlayed.length ?? 0;
+  s.check(
+    "carol heard the burst live",
+    heardLive > 0,
+    `${String(heardLive)} frames played`,
+  );
+  s.check("frames were captured off the air", captured.length > 0);
+
+  // Well past the 30s window. Also past the deduplicator's five minutes, so
+  // dedup cannot be what refuses the replay.
+  await s.world.advance(10 * 60 * 1000);
+
+  const bobBefore = bob.voice?.framesPlayed.length ?? 0;
+  for (const frame of captured) radio.injectTo(bob.id, alice.id, frame);
+  await s.world.advance(3_000);
+
+  s.check(
+    "replaying alice's recorded burst plays nothing",
+    (bob.voice?.framesPlayed.length ?? 0) === bobBefore,
+    `before=${String(bobBefore)} after=${String(bob.voice?.framesPlayed.length)}`,
+  );
+  s.expectNone("no forged senders", noForgedSenders(devices));
+  s.expectNone("process health", noCrashes(devices));
+  s.assert();
 });
 
 test("M05 live push-to-talk reaches the other phone's speaker", async () => {

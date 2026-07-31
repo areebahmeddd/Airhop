@@ -28,12 +28,14 @@ import {
   encodePacket,
   Flags,
   isBroadcast,
+  isForMe,
   PacketType,
   signPacket,
   type Packet,
 } from "../core/mesh/packet-codec";
 import { useChatStore, type ChatAttachment } from "../store/chat-store";
 import { useTransferStore } from "../store/transfer-store";
+import { canSendMedia } from "../utils/media-policy";
 
 // ---- Types ------------------------------------------------------------------
 
@@ -457,6 +459,59 @@ export class FileTransferService {
     if (!mimeMatchesMagic(fp.mimeType, fp.content)) return;
 
     const senderPeerID = bytesToHex(packet.senderID);
+
+    // A directed attachment is for its addressee, not for whoever relays it.
+    //
+    // FILE_TRANSFER floods like everything else, so a DM attachment travelling
+    // from A to B is forwarded by B onto all of B's other links, and by every
+    // node after that, out to TTL 7. Without this check each of those nodes fell
+    // into the `dm:<sender>` branch below, wrote the file to its own cache and
+    // rendered it in its own thread with A. A private photo sent to one person
+    // was therefore readable by every device within seven hops of either end,
+    // with no key, no session and no signature needed - only proximity.
+    //
+    // Every other directed handler in mesh-service already scopes itself this
+    // way (onNoiseHandshake, onNoiseEncrypted, onDREncrypted, onPing, onPong);
+    // this path was the exception. bitchat scopes it in
+    // BLEFileTransferPolicy.deliveryPlan, which returns "relay only, do not
+    // deliver" when recipientID is not the local peer.
+    //
+    // Relaying is unaffected: that already happened in handleRaw before this
+    // point, so forwarding for other people still works. Only the decision to
+    // DELIVER is narrowed.
+    if (
+      !isBroadcast(packet) &&
+      !isForMe(packet, hexToBytes(this.identity.peerID))
+    ) {
+      return;
+    }
+
+    // The channel tag is attacker-controlled: it is an arbitrary UTF-8 string
+    // read straight off the wire, and it used to decide, unchecked, which room
+    // the attachment landed in. Two rules bring it in line with the rest of the
+    // app, both mirroring what already exists elsewhere:
+    //
+    //   - It must name a room the user actually joined. onChannelMsg makes the
+    //     same check with the same reasoning ("any peer in radio range could
+    //     inject arbitrary channels into someone's list"), and this path is the
+    //     one that was still calling addChannel() on an unvalidated name.
+    //   - Media may only travel where canSendMedia() allows. The send side has
+    //     always refused to put an attachment into a private #channel or a
+    //     group: an attachment is signed but NOT encrypted, so one landing in an
+    //     encrypted room breaks exactly the promise that room makes. Enforcing
+    //     it only when sending meant an outsider who knew the room's name could
+    //     do what a member is forbidden from doing.
+    //
+    // Only the tag is validated. The derived fallbacks below are computed here
+    // from the packet's own routing, so they are not attacker-chosen: a DM is
+    // addressed by recipient ID and carries no tag at all (bitchat routes DM
+    // attachments the same way), which is why this is not simply a blanket
+    // membership check that would drop a first attachment from a new contact.
+    if (fp.channel !== undefined) {
+      if (!canSendMedia(fp.channel)) return;
+      if (!useChatStore.getState().channels.includes(fp.channel)) return;
+    }
+
     // Route: the Airhop channel tag if present, else a DM to us by sender, else
     // the public mesh room.
     const channel =

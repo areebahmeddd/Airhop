@@ -23,12 +23,12 @@ bitchat is an excellent foundation. Airhop fills the gaps it left open.
 
 ### Gap 4: File Transfers
 
-**bitchat position:** Hard 1 MiB cap in `FileTransferLimits`, enforced at the binary-protocol decode layer.  
-**Airhop:** Matches it. An earlier plan for 64 KB chunked streaming with no protocol cap was dropped: the cap is enforced when bitchat _decodes_ a packet, so anything larger is rejected outright and would have broken interop in both directions. Airhop sends one `BitchatFilePacket` per file (1 MiB cap, MIME allow-list, magic-byte validation) and lets the fragment layer split it for the radio. A larger Airhop-only path remains possible later, but it cannot be the default without losing bitchat compatibility.
+**bitchat position:** Per-type caps in `FileTransferLimits`, enforced at the binary-protocol decode layer. 1 MiB is the ceiling for general files; photos and voice notes are capped at 512 KiB.  
+**Airhop:** Matches it. An earlier plan for 64 KB chunked streaming with no protocol cap was dropped: the cap is enforced when bitchat _decodes_ a packet, so anything larger is rejected outright and would have broken interop in both directions. Airhop sends one `BitchatFilePacket` per file (512 KiB photos and voice, 1 MiB otherwise, MIME allow-list, magic-byte validation) and lets the fragment layer split it for the radio. A larger Airhop-only path remains possible later, but it cannot be the default without losing bitchat compatibility.
 
 ### Gap 5: Tor on iOS and Android
 
-**bitchat problem:** Tor on iOS only (via Arti xcframework) at the time of writing. Android has no Tor integration.  
+**bitchat problem:** Tor was iOS-only (via Arti xcframework) when Airhop's design was set. bitchat-android has since added `ArtiTorManager.kt`, wired through `BitchatApplication` and `OkHttpProvider`, so both platforms now have it.  
 **Airhop:** iOS embeds `arti.xcframework` with a full `AirhopTorManager` (SOCKS5 on port 39050, bootstrap monitor, network path recovery). Android detects Orbot via a TCP probe on localhost:9050. Both platforms route Nostr traffic through the detected proxy.
 
 ### Gap 6: Double Ratchet for Offline Mail
@@ -54,7 +54,7 @@ bitchat is an excellent foundation. Airhop fills the gaps it left open.
 │                                                                             │
 │  ┌─────────────┐  ┌──────────────┐  ┌──────────────┐  ┌─────────────────┐   │
 │  │ Mesh Chat   │  │ Direct Msgs  │  │ Location Chs │  │ Contacts & Keys │   │
-│  │ (public)    │  │ (Noise/DR)   │  │ (geo Nostr)  │  │ (QR/manual)     │   │
+│  │ (public)    │  │ (Noise/DR)   │  │ (geo Nostr)  │  │ (QR/link/manual)│   │
 │  └─────────────┘  └──────────────┘  └──────────────┘  └─────────────────┘   │
 │                                                                             │
 │  ┌─────────────────────────────────────────────────────────────────────┐    │
@@ -65,7 +65,7 @@ bitchat is an excellent foundation. Airhop fills the gaps it left open.
 │                                 │                                           │
 │  ┌──────────────────────────────▼──────────────────────────────────────┐    │
 │  │              CRYPTO ENGINE (TypeScript, @noble)                     │    │
-│  │  NoiseXX │ DoubleRatchet │ X3DH │ HKDF │ Ed25519-sign │ GCS-filter  │    │
+│  │  NoiseXX │ DoubleRatchet │ HKDF │ Ed25519-sign │ GCS-filter         │    │
 │  └──────────┬─────────────────────────────────────┬────────────────────┘    │
 │             │                                     │                         │
 │  ┌──────────▼──────────────────┐     ┌────────────▼───────────────────┐     │
@@ -77,8 +77,8 @@ bitchat is an excellent foundation. Airhop fills the gaps it left open.
 │             │ JSI TurboModule                                               │
 │  ┌──────────▼──────────────────────────────────────────────────────────┐    │
 │  │              AIRHOP NATIVE BLE MODULE                               │    │
-│  │  iOS: CBPeripheralManager + CBCentralManager (Swift ~400 lines)     │    │
-│  │  Android: BluetoothGattServer + BluetoothLeScanner (Kotlin ~500 ln) │    │
+│  │  iOS: CBPeripheralManager + CBCentralManager (Swift ~920 lines)     │    │
+│  │  Android: BluetoothGattServer + BluetoothLeScanner (Kotlin ~1,500)  │    │
 │  └─────────────────────────────────────────────────────────────────────┘    │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
@@ -90,9 +90,9 @@ bitchat is an excellent foundation. Airhop fills the gaps it left open.
 **Goal:** Hello World BLE mesh between two phones.
 
 - [x] Set up Expo bare workflow with TypeScript strict
-- [x] `AirhopBLEModule` iOS (Swift, ~400 lines): dual-role GATT server + client
-- [x] `AirhopBLEModule` Android (Kotlin, ~490 lines): dual-role GATT
-- [x] `AirhopForegroundService.kt`: background keepalive (foreground service, `connectedDevice` type), started with the mesh from `AirhopBLEModule` so the process, BLE, and Nostr socket survive backgrounding
+- [x] `AirhopBLEModule` iOS (Swift, ~920 lines): dual-role GATT server + client
+- [x] `AirhopBLEModule` Android (Kotlin, ~1,500 lines): dual-role GATT
+- [x] `AirhopForegroundService.kt` (~170 lines): background keepalive (foreground service, `connectedDevice` type), started with the mesh from `AirhopBLEModule` so the process, BLE, and Nostr socket survive backgrounding
 - [x] Wire TurboModule to `src/bridge/NativeAirhopBLE.ts`
 - [x] `src/core/mesh/packet-codec.ts`: binary encode/decode matching bitchat v2 (`PROTOCOLS.md`, section 2)
 - [x] `src/core/mesh/flood-router.ts`: TTL flood, jitter 10-220ms, dedup
@@ -142,10 +142,10 @@ bitchat is an excellent foundation. Airhop fills the gaps it left open.
 **Goal:** High-bandwidth transport and per-message forward secrecy.
 
 - [x] `src/core/crypto/double-ratchet.ts`: Signal DR per-message forward secrecy
-- [x] `src/core/crypto/x3dh.ts`: X3DH prekey agreement; bundles published to Nostr
+- [~] X3DH: **dropped.** The Noise handshake already seeds the ratchet, so a separate key agreement was redundant. One-time prekey bundles (`src/core/mesh/prekey-bundle.ts`) are gossiped over the mesh as `0x24`, never published to Nostr.
 - [x] WiFi Aware native module (Android) + MultipeerConnectivity (iOS)
 - [~] Chunked file transfer >1 MiB: **dropped, see Gap 4.** bitchat enforces the 1 MiB cap when it _decodes_ a packet, so anything larger is rejected outright and interop breaks in both directions. Airhop sends one `BitchatFilePacket` per file and lets the fragment layer split it
-- [~] Video frame capture (`react-native-vision-camera` is a dependency but nothing in `src/` imports it) and `0x30: videoFrame`: **dropped, see Gap 2.** The removal is recorded in `packet-codec.ts` so the type is not reintroduced by accident
+- [~] Video frame capture (`react-native-vision-camera` was removed from `package.json` entirely) and `0x30: videoFrame`: **dropped, see Gap 2.** The removal is recorded in `packet-codec.ts` so the type is not reintroduced by accident
 
 **Milestone:** Double Ratchet passing test vectors. Same-platform WiFi transport for faster transfers. Offline video calling was **dropped**: WiFi Aware and MultipeerConnectivity cannot interoperate, so it could never work iOS ↔ Android.
 
@@ -170,12 +170,12 @@ bitchat is an excellent foundation. Airhop fills the gaps it left open.
 - [x] Onboarding flow (welcome screen, animated identity generation, username reveal)
 - [x] Visual design (monochromatic dark theme, Feather icon system, design token system)
 - [x] Animations and transitions (keyframe spin/fade for key generation, fade-up reveal)
-- [x] Navigation shell (5-tab state machine, sub-tabs, Android BackHandler)
+- [x] Navigation shell (4-tab state machine, sub-tabs, Android BackHandler)
 - [x] Accessibility audit
 - [x] App Store and Play Store submission
 - [x] YouTube demo series: full offline mesh demo, voice PTT across 3 devices, Nostr bridge handoff, panic wipe
 
-**Milestone:** UI complete. Accessibility audit and store submission are next.
+**Milestone:** UI complete, accessibility audited, and submitted to both stores.
 
 ### v1.1.0: AI + Wallets
 
@@ -185,13 +185,13 @@ Both features are built to Airhop's core constraint: no network dependency for t
 
 #### AI Assistant
 
-The existing `AI` tab (`src/features/ai/ai-screen.tsx`) is currently a placeholder. v1.1.0 wires up a real, fully local inference path: a user downloads a small open-weight model once, and every question after that is answered entirely on-device, with zero network calls, so it works mid-blackout or deep off-grid exactly the same as with a full signal.
+There is no AI tab today. v1.1.0 creates it, along with `src/features/ai/ai-screen.tsx`, and wires up a real, fully local inference path: a user downloads a small open-weight model once, and every question after that is answered entirely on-device, with zero network calls, so it works mid-blackout or deep off-grid exactly the same as with a full signal.
 
 - [ ] Model picker and download flow: a short list of small, offline-capable GGUF models (1–3B parameters, e.g. Gemma 4) with size and RAM shown before download
 - [ ] On-device inference engine (e.g. `llama.rn` / `llama.cpp` bindings) running fully offline, no server, no API key, no telemetry
 - [ ] `src/core/ai/model-manager.ts`: download, verify checksum, store under app sandbox, delete/swap models
 - [ ] `src/core/ai/inference.ts`: prompt/response loop against the loaded model, streamed token output
-- [ ] Chat-style AI UI in the existing `ai-screen.tsx`: ask critical or general questions (first-aid, survival, navigation, general knowledge) when there is no network at all
+- [ ] Chat-style AI UI in a new `src/features/ai/ai-screen.tsx`: ask critical or general questions (first-aid, survival, navigation, general knowledge) when there is no network at all
 - [ ] Conversation history kept local-only (MMKV), never leaves the device
 - [ ] Clear on-screen indicator that the model is fully offline and no data is transmitted
 - [ ] Low-end device fallback: warn and block download if the device lacks the RAM/storage for the selected model
@@ -509,17 +509,17 @@ Everything under the Unlicense. Copy verbatim, no attribution required.
 
 ## 6. What Must Be Built from Scratch
 
-| Component                    | Why                                                            | Est. LOC                |
-| ---------------------------- | -------------------------------------------------------------- | ----------------------- |
-| `AirhopBLEModule.swift`      | No existing RN library supports dual-role GATT server + client | ~400                    |
-| `AirhopBLEModule.kt`         | Same                                                           | ~500                    |
-| `AirhopForegroundService.kt` | Android background keepalive requirement                       | ~150                    |
-| `noise-xx.ts`                | No maintained npm Noise XX package                             | ~300                    |
-| `noise-x.ts`                 | Same (needed for courier sealing)                              | ~150                    |
-| `double-ratchet.ts`          | No production-grade RN library (v0.8.0)                        | ~600                    |
-| `x3dh.ts`                    | Same                                                           | ~300                    |
-| `gcs-filter.ts`              | No JS implementation with bitchat compat                       | ~150                    |
-| `packet-codec.ts`            | Custom binary format                                           | ~300                    |
-| **Total**                    |                                                                | ~3,050 TS + ~900 native |
+| Component                    | Why                                                            | Est. LOC                  |
+| ---------------------------- | -------------------------------------------------------------- | ------------------------- |
+| `AirhopBLEModule.swift`      | No existing RN library supports dual-role GATT server + client | ~920                      |
+| `AirhopBLEModule.kt`         | Same                                                           | ~1,500                    |
+| `AirhopForegroundService.kt` | Android background keepalive requirement                       | ~170                      |
+| `noise-xx.ts`                | No maintained npm Noise XX package                             | ~300                      |
+| `noise-x.ts`                 | Same (needed for courier sealing)                              | ~150                      |
+| `double-ratchet.ts`          | No production-grade RN library (v0.8.0)                        | ~600                      |
+| `x3dh.ts`                    | Not built - X3DH dropped, see v0.8.0                           | 0                         |
+| `gcs-filter.ts`              | No JS implementation with bitchat compat                       | ~150                      |
+| `packet-codec.ts`            | Custom binary format                                           | ~300                      |
+| **Total**                    |                                                                | ~2,750 TS + ~2,600 native |
 
 Everything else is a TypeScript port of existing bitchat code or an existing npm package.

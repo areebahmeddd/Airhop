@@ -86,7 +86,8 @@ export default function VerifyContactScanner({
     }
     // Guard 2: the peer ID must be the fingerprint of the card's own key.
     // addVerifiedContact returns false if it isn't (a forged or tampered card).
-    const accepted = getMeshService()?.addVerifiedContact(card) ?? false;
+    const accepted =
+      getMeshService()?.addVerifiedContact(card, { inPerson: true }) ?? false;
     if (!accepted) {
       setOutcome("tampered");
       return;

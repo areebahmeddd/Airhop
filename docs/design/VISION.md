@@ -28,7 +28,7 @@ These do not change under schedule pressure or feature requests.
 
 4. **No central server.** No infrastructure to seize. No company to subpoena. No service to shut down. If Airhop's servers were seized tomorrow, the app would still work.
 
-5. **Ephemerality by default.** No plaintext message content ever touches disk. Panic wipe (triple-tap logo) destroys all keys and data in under one second.
+5. **Ephemerality by default.** No plaintext message content ever touches disk. Panic wipe (the panic button on the Profile screen) destroys all keys and data in under one second.
 
 6. **bitchat wire compatibility.** Airhop nodes must communicate with bitchat nodes. The BLE packet wire format, service UUIDs, and peer ID derivation algorithm are fixed. Breaking this requires a protocol version bump and explicit compat testing.
 
@@ -48,17 +48,17 @@ What each feature is for, and when someone would actually reach for it.
 - Bulletin board. Signed notices that outlive a conversation, pinned to your mesh or your area for one to seven days, with an urgent flag. "Water station at the south entrance," left for whoever walks past an hour later.
 - Voice notes. Recorded audio sent as a file, faster than typing directions.
 - Video sharing. Recorded clips that play inline. There is no live video, because the two platforms' direct-WiFi stacks cannot talk to each other.
-- File transfer. Any format, up to 1 MB, which is bitchat's limit and takes about 45 seconds over Bluetooth. A photo of a road closure.
+- File transfer. Any format, up to 1 MB, which is bitchat's limit and takes about 45 seconds over Bluetooth. Photos and voice notes are capped tighter, at 512 KiB. A photo of a road closure.
 - Store-and-forward courier. When nothing can reach the recipient now, a nearby phone carries the sealed message and hands it over when they eventually meet. The carrier cannot read it.
 
 ### Identity
 
 - No account. Your identity is a key pair made on the phone. Nothing registers anywhere, so there is nothing to seize or subpoena.
 - Human-readable names. Derived from your public key rather than chosen, so nobody can take someone else's name.
-- QR contacts. Scanning a card carries public keys, not just a name, and the peer ID is verified against them before anything is trusted.
+- QR contacts. Scanning a card carries public keys, not just a name, and the peer ID is verified against them before anything is trusted. A card arriving through an `airhop://` link is recorded with source `"link"` and is not verified; only an in-person camera scan is.
 - End-to-end encryption. Live sessions use Noise XX. Nobody in the middle, including relaying phones, can read a private message.
 - Forward secrecy. Double Ratchet for live chats, and single-use prekeys for messages left for someone offline, so an old message stays protected even if a key leaks later.
-- Panic wipe. Triple-tap the logo and every key, message, group, notice and prekey is gone in under a second.
+- Panic wipe. The panic button on the Profile screen, triple-tapped to skip the confirmation, and every key, message, group, notice and prekey is gone in under a second.
 
 ### Networking
 

@@ -117,6 +117,86 @@ describe("group store", () => {
     expect(opened.content).toBe("wheels up");
   });
 
+  it("refuses to let a non-creator re-key a group at a higher epoch", () => {
+    // groupID and epoch ride in cleartext in every group message, so an
+    // attacker can read both off the air and mint a state for the same group at
+    // epoch+1, naming themselves as creator and signing it with their own key.
+    // Every check the ingest path makes passes: it is correctly signed, and it
+    // is signed by the creator it claims. Only comparing against the creator
+    // this group already has stops it. If it lands, members seal their next
+    // message under the attacker's key.
+    const creator = member("creator");
+    const mallory = member("mallory");
+    const me = member("me");
+    const groupID = newGroupID();
+    const realKey = newGroupKey();
+
+    useGroupStore.getState().upsertFromState(
+      signGroupState(
+        {
+          groupID,
+          name: "trip",
+          epoch: 3,
+          members: [creator.member, me.member],
+          creatorFingerprint: creator.member.fingerprint,
+        },
+        realKey,
+        creator.signPriv,
+      )!,
+    );
+
+    const hijack = signGroupState(
+      {
+        groupID, // same group
+        name: "trip", // same name, so nothing looks different
+        epoch: 4, // higher, so the epoch guard alone would accept it
+        members: [mallory.member, me.member],
+        creatorFingerprint: mallory.member.fingerprint,
+      },
+      newGroupKey(),
+      mallory.signPriv,
+    )!;
+    useGroupStore.getState().upsertFromState(hijack);
+
+    const rt = useGroupStore.getState().getByID(groupID)!;
+    expect(rt.creatorFingerprint).toBe(creator.member.fingerprint);
+    expect(rt.epoch).toBe(3);
+    expect([...rt.key]).toEqual([...realKey]);
+  });
+
+  it("still lets the real creator rotate the key at a higher epoch", () => {
+    // The other side of the boundary: pinning the creator must not freeze the
+    // group. A rekey from the same creator has to keep working, or removing a
+    // member would be impossible.
+    const creator = member("creator");
+    const me = member("me");
+    const groupID = newGroupID();
+    const rotated = newGroupKey();
+
+    for (const [epoch, key] of [
+      [3, newGroupKey()],
+      [4, rotated],
+    ] as const) {
+      useGroupStore.getState().upsertFromState(
+        signGroupState(
+          {
+            groupID,
+            name: "trip",
+            epoch,
+            members: [creator.member, me.member],
+            creatorFingerprint: creator.member.fingerprint,
+          },
+          key,
+          creator.signPriv,
+        )!,
+      );
+    }
+
+    const rt = useGroupStore.getState().getByID(groupID)!;
+    expect(rt.epoch).toBe(4);
+    expect([...rt.key]).toEqual([...rotated]);
+  });
+
   it("clears everything on wipe", () => {
     const creator = member("me");
     useGroupStore.getState().upsertLocal(

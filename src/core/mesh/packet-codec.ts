@@ -361,6 +361,15 @@ function decodeCore(raw: Uint8Array): Packet | null {
   let wirePayload: WirePayload;
   if (isCompressed) {
     if (payloadLen < lengthFieldBytes) return null;
+    // payloadLen is a claim made by the sender; this bounds the read against
+    // what actually arrived. Every other read in this function is guarded the
+    // same way, and this one was not: a 24-byte frame declaring COMPRESSED with
+    // payloadLength 4 left `off` exactly at the end of the buffer, and DataView
+    // THROWS on an out-of-range read rather than returning null like the rest of
+    // the failure paths here. decodePacket has no try/catch and neither does the
+    // caller, so the RangeError escaped into the native packetReceived listener.
+    // A malformed frame must decode to null, never throw.
+    if (off + lengthFieldBytes > raw.length) return null;
     const origSize =
       version === 2 ? view.getUint32(off, false) : view.getUint16(off, false);
     off += lengthFieldBytes;

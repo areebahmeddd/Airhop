@@ -117,6 +117,10 @@ export type WalletErrorCode =
   | "inexact"
   // No mint is configured, or the named mint is unknown.
   | "no-mint"
+  // An incoming payment named a mint this wallet does not hold. Distinct from
+  // "no-mint" because it is a REFUSAL, not a failure: retrying cannot fix it,
+  // and the caller should tell the user rather than quietly try again.
+  | "untrusted-mint"
   // The mint does not support a NUT this operation needs.
   | "unsupported"
   // The mint accepted the request and rejected it on its own terms.
@@ -2076,6 +2080,34 @@ async function redeemNutzapProofs(params: {
 
   assertMintNetworkAllowed();
   const url = normalizeMintUrl(params.mintUrl);
+
+  // Only redeem from a mint this wallet already trusts.
+  //
+  // The mint URL is read verbatim out of the incoming kind-9321 event, and the
+  // watcher runs unattended from launch against public relays, so this is one
+  // of the very few paths where a stranger's bytes reach the network stack with
+  // no user in the loop at all. NIP-61 says the mint must be one the recipient
+  // listed in their kind 10019, and core/payments/nutzap.ts states that same
+  // invariant in its header; it was simply never enforced on the receive side.
+  //
+  // What it costs to skip: a P2PK witness signs the proof's secret and nothing
+  // else - not the mint it is presented to - so a witness produced for a
+  // hostile mint is equally valid at the real one. Redeeming against an
+  // attacker's server hands them a signature they can replay to the genuine
+  // mint and take the funds, quite apart from confirming the user's IP and
+  // liveness and leaving their server persisted in the mint list.
+  //
+  // The user's own mint set is exactly the right allowlist: it is what
+  // publishOwnNutzapInfo advertises in the kind 10019, so anyone following the
+  // spec already sends to one of these.
+  if (useWalletStore.getState().mints[url] === undefined) {
+    throw new WalletError(
+      "untrusted-mint",
+      "That payment names a mint you do not use.",
+      "Add the mint yourself first if you trust it; nothing is redeemed from a mint you have not chosen.",
+    );
+  }
+
   const wallet = await getWallet(url, params.unit);
   const privkey = await getNutzapPrivKeyHex();
 
@@ -2441,9 +2473,32 @@ export function startNutzapWatcher(params: {
           comment: zap.comment,
         });
         if (amount > 0) params.onRedeemed?.(amount, zap.unit, zap.senderPubkey);
-      } catch {
-        // Mint unreachable, Tor-blocked, or the proofs were already claimed.
-        // Left unmarked so the next subscription retries.
+      } catch (err) {
+        // A refusal is not a failure, and the two need opposite handling.
+        //
+        // "untrusted-mint" means the zap named a mint this wallet does not
+        // hold, so we declined to talk to it at all. Retrying cannot change
+        // that, and silently retrying forever would leave the user wondering
+        // why a payment they were told about never arrived. Mark it seen so the
+        // subscription moves on, and write it into the wallet history the same
+        // way every other money event is recorded, so there is somewhere to
+        // look and an obvious next step (add the mint, if they trust it).
+        if (err instanceof WalletError && err.code === "untrusted-mint") {
+          store.markNutzapRedeemed(zap.eventId);
+          recordTx({
+            kind: "nutzap-in",
+            status: "failed",
+            amount: zap.proofs.reduce((s, p) => s + Number(p.amount), 0),
+            unit: zap.unit,
+            mintUrl: zap.mintUrl,
+            counterparty: zap.senderPubkey,
+            error: err.message,
+          });
+          return;
+        }
+        // Everything else is transient - mint unreachable, Tor-blocked, or the
+        // proofs already claimed. Left unmarked so the next subscription
+        // retries.
       }
     })();
   });

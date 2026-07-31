@@ -37,6 +37,41 @@ const ANNOUNCE_CONNECTED_MAX_MS = 30_000;
 // Exported so mesh-service can't drift out of sync with the value used here.
 export const ANNOUNCE_TTL = 7;
 
+// How far an ANNOUNCE's timestamp may sit from our own clock before we refuse
+// it. Without a bound, a captured announce can be rebroadcast forever: it stays
+// correctly signed and correctly key-bound, so every other check passes, and a
+// peer who left hours ago keeps reappearing in the room.
+//
+// Both upstreams bound this, but differently, so this is a choice rather than a
+// port. iOS uses 900s and only looks backwards (BLEPacketFreshnessPolicy:
+// `timestamp < now - maxAge`); Android uses 10 minutes and compares the
+// absolute difference (AnnouncementIdentityValidator MAX_CLOCK_SKEW_MS), which
+// also rejects timestamps from the future.
+//
+// We take 15 minutes AND make it symmetric, which is the union of what the two
+// accept: never tighter than either upstream in the direction it checks, so no
+// announce that a bitchat device would accept is refused here. The forward
+// bound is the cheap half - it costs nothing and stops a peer parking a
+// far-future timestamp, which is the obvious way to make a packet that never
+// goes stale.
+export const ANNOUNCE_MAX_SKEW_MS = 15 * 60 * 1000;
+
+// Whether an ANNOUNCE is close enough to our clock to act on.
+//
+// The `now < ANNOUNCE_MAX_SKEW_MS` guard accepts everything early in the epoch
+// rather than underflowing. iOS does the same thing for the same reason: a
+// device whose clock has not been set yet should still be able to join a mesh,
+// and unsigned subtraction on a near-zero clock is how that turns into silently
+// dropping every packet instead.
+export function isAnnounceFresh(
+  timestampMs: number,
+  nowMs: number,
+  maxSkewMs = ANNOUNCE_MAX_SKEW_MS,
+): boolean {
+  if (nowMs < maxSkewMs) return true;
+  return Math.abs(nowMs - timestampMs) <= maxSkewMs;
+}
+
 // ANNOUNCE TLV types. 0x01–0x06 are bitchat's (Packets.swift TLVType); we must
 // not reuse them. bitchat's 0x05 is a capabilities bitfield and 0x06 is a bridge
 // geohash. Reading either as our Nostr key (or vice versa) would corrupt both
