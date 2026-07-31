@@ -103,7 +103,10 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
           cp docs/dev/CHANGELOG.md "${RUNNER_TEMP}/CHANGELOG.md"
           git fetch origin main
-          git checkout -B main origin/main
+          # The generated changelog is already safe in RUNNER_TEMP, so discard the
+          # tag's working tree when switching to main. Without -f this aborts on any
+          # tag that sits behind main, which is what re-publishing an older tag does.
+          git checkout -f -B main origin/main
           cp "${RUNNER_TEMP}/CHANGELOG.md" docs/dev/CHANGELOG.md
           # Keep app.json and iOS MARKETING_VERSION in sync with the tag so version
           # reporting stays consistent. Android reads app.json at build time; iOS reads
