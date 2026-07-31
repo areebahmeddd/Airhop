@@ -146,6 +146,17 @@ export default function PrivacyPage() {
                 members of that group.
               </li>
               <li>
+                Live voice, if you turn it on. Holding the mic streams your voice to everyone in
+                Bluetooth range as you speak. A public burst is signed but not encrypted, the same
+                as an attachment. In a direct message it stays inside that peer&apos;s encrypted
+                session. Nothing is recorded on either device.
+              </li>
+              <li>
+                A screenshot notice. Taking a screenshot inside a conversation sends the other side
+                a message saying you did, under your display name. The screenshot itself is never
+                sent.
+              </li>
+              <li>
                 Approximate Bluetooth signal strength (radio metadata visible to any nearby
                 receiver).
               </li>
@@ -352,7 +363,9 @@ export default function PrivacyPage() {
               <strong>
                 No cryptographic protection prevents a recipient from copying, screenshotting, or
                 forwarding a message after reading it.
-              </strong>
+              </strong>{" "}
+              Airhop tells the other side when you screenshot a conversation, but that is a courtesy
+              notice, not a control.
             </p>
           </section>
 
@@ -406,7 +419,8 @@ export default function PrivacyPage() {
               <li>
                 <strong>System permissions.</strong> Bluetooth, location, microphone, camera, photo
                 library, and notification access can each be revoked in your device settings at any
-                time. Camera access is used only to scan a contact's QR code.
+                time. Camera access is used to scan QR codes and to take photos or videos you choose
+                to send.
               </li>
             </ul>
           </section>

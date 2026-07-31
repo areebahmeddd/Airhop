@@ -55,6 +55,8 @@ const SECTIONS: LegalSection[] = [
           "Public notices you post to the bulletin board, which stay readable until they expire.",
           "A batch of single-use public keys, so someone can leave you a protected message while you are offline. These contain no private information.",
           "Encrypted group traffic, which nearby devices relay but cannot read unless they are members of that group.",
+          "Live voice, if you turn it on. Holding the mic streams your voice to everyone in Bluetooth range as you speak. A public burst is signed but not encrypted, the same as an attachment. In a direct message it stays inside that peer's encrypted session. Nothing is recorded on either device.",
+          "A screenshot notice. Taking a screenshot inside a conversation sends the other side a message saying you did, under your display name. The screenshot itself is never sent.",
           "Approximate Bluetooth signal strength (radio metadata visible to any nearby receiver).",
         ],
       },
@@ -99,7 +101,7 @@ const SECTIONS: LegalSection[] = [
         bullets: [
           "**What a mint can see.** Your IP address, the amounts you deposit and withdraw, and when. Mints are third parties whose retention and privacy practices are outside this project's control.",
           "**What a mint cannot see.** Who you are, who you paid, or which coins you deposited became which coins you spent. Cashu signs tokens blindly, so that link is severed by the maths rather than by policy.",
-          "**Tor.** On Android, Orbot covers mint traffic along with everything else. On iOS, Tor only wraps Nostr connections, so **mint requests are blocked while Tor is on** unless you opt in under Privacy & Security. Mesh payments are unaffected either way.",
+          "**Tor.** On Android, Orbot covers mint traffic along with everything else. On iOS, Tor only wraps Nostr connections, so **mint requests are blocked while Tor is on** unless you opt in beside the Tor switch in Settings. Mesh payments are unaffected either way.",
           "**Nutzaps are public.** A NIP-61 nutzap is an unencrypted Nostr event. The ecash is locked to the recipient so nobody else can spend it, but relays and observers can see that one public key paid another, and the amount. The encrypted-message fallback does not have this property.",
           "**Recovery phrase.** Optional and off by default. It is stored only in your device's secure storage, is never transmitted, and is never shown to a mint. Anyone who obtains it can spend your balance.",
         ],
@@ -138,7 +140,7 @@ const SECTIONS: LegalSection[] = [
           "**Implementation.** All cryptographic operations use the [@noble](https://github.com/paulmillr/noble-curves) library suite, which has been independently audited by Cure53.",
         ],
       },
-      "**No cryptographic protection prevents a recipient from copying, screenshotting, or forwarding a message after reading it.**",
+      "**No cryptographic protection prevents a recipient from copying, screenshotting, or forwarding a message after reading it.** Airhop tells the other side when you screenshot a conversation, but that is a courtesy notice, not a control.",
     ],
   },
   {
@@ -164,7 +166,7 @@ const SECTIONS: LegalSection[] = [
           "**Panic wipe.** Instantly erase all local keys, messages, queued mail, and app data from the Profile screen.",
           "**Feature controls.** Tor routing, the internet gateway, and the mesh bridge can each be turned on or off in settings, and location channels left unjoined. Anything already published to a relay cannot be recalled.",
           "**Wallet.** Remove a mint at any time from the Wallet tab. Removing one deletes the coins held there from this device, so withdraw or send them first. A panic wipe destroys the wallet file and its encryption key together.",
-          "**System permissions.** Bluetooth, location, microphone, camera, photo library, and notification access can each be revoked in your device settings at any time. Camera access is used only to scan a contact's QR code.",
+          "**System permissions.** Bluetooth, location, microphone, camera, photo library, and notification access can each be revoked in your device settings at any time. Camera access is used to scan QR codes and to take photos or videos you choose to send.",
         ],
       },
     ],
@@ -184,7 +186,7 @@ const SECTIONS: LegalSection[] = [
   {
     heading: "Contact",
     paragraphs: [
-      "Questions or concerns can be sent to [hi@areeb.dev](mailto:hi@areeb.dev) or raised by opening an issue on [GitHub](https://github.com/areebahmeddd/Airhop/issues).",
+      "Questions about this policy can be sent to [hi@areeb.dev](mailto:hi@areeb.dev) or raised by opening an issue on [GitHub](https://github.com/areebahmeddd/Airhop/issues).",
     ],
   },
 ];

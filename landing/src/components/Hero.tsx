@@ -12,21 +12,19 @@ const RELEASE_BIRDS: Record<string, string> = {
   "1": "Albatross",
 };
 
-function formatRelease(tag: string, publishedAt: string | null): string {
-  const version = tag.replace(/^v/, "");
+function formatRelease(tag: string, publishedAt: string | null): string | null {
+  const version = tag.replace(/^v/, "").trim();
+  if (!version) return null;
+
+  const date = publishedAt ? new Date(publishedAt) : null;
+  if (!date || Number.isNaN(date.getTime())) return null;
+
   const parts = [`v${version}`];
 
   const bird = RELEASE_BIRDS[version.split(".")[0]];
   if (bird) parts.push(bird);
 
-  if (publishedAt) {
-    const date = new Date(publishedAt);
-    if (!Number.isNaN(date.getTime())) {
-      parts.push(
-        date.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }),
-      );
-    }
-  }
+  parts.push(date.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }));
 
   return parts.join(" · ");
 }
@@ -149,23 +147,23 @@ export default function Hero() {
 
   useEffect(() => {
     fetch("https://api.github.com/repos/areebahmeddd/Airhop")
-      .then((res) => res.json())
+      .then((res) => (res.ok ? res.json() : null))
       .then((data) => {
-        if (typeof data.stargazers_count === "number") {
+        if (data && typeof data.stargazers_count === "number") {
           setStars(data.stargazers_count);
         }
       })
       .catch(() => {});
 
     fetch("https://api.github.com/repos/areebahmeddd/Airhop/releases/latest")
-      .then((res) => res.json())
+      .then((res) => (res.ok ? res.json() : null))
       .then((data) => {
+        if (!data) return;
         const tag = data.tag_name || data.name;
-        if (typeof tag === "string" && tag) {
-          setLatestRelease(
-            formatRelease(tag, typeof data.published_at === "string" ? data.published_at : null),
-          );
-        }
+        if (typeof tag !== "string" || !tag) return;
+        setLatestRelease(
+          formatRelease(tag, typeof data.published_at === "string" ? data.published_at : null),
+        );
       })
       .catch(() => {});
   }, []);
@@ -189,12 +187,14 @@ export default function Hero() {
             during blackouts, protests, and disasters.
           </p>
 
-          <div className="inline-flex w-fit items-center space-x-2 border border-gray-200 bg-gray-100 px-3 py-1">
-            <span className="h-2 w-2 animate-pulse rounded-full bg-green-500" />
-            <span className="font-mono text-xs font-semibold tracking-widest text-gray-600 uppercase">
-              {latestRelease ?? "v1.0.0 · Albatross"}
-            </span>
-          </div>
+          {latestRelease ? (
+            <div className="inline-flex w-fit items-center space-x-2 border border-gray-200 bg-gray-100 px-3 py-1">
+              <span className="h-2 w-2 animate-pulse rounded-full bg-green-500" />
+              <span className="font-mono text-xs font-semibold tracking-widest text-gray-600 uppercase">
+                {latestRelease}
+              </span>
+            </div>
+          ) : null}
 
           <div className="flex flex-col gap-3 pt-2 sm:flex-row">
             <DownloadDropdown
