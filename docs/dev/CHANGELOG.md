@@ -3,6 +3,20 @@
 All notable changes are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## What's Changed in v0.9.9
+
+- feat(core): add live voice detection, mesh bridge, qr for cashu payments (by @areebahmeddd) [21f1865]
+- chore: trigger Cloudflare Pages deployment (by @areebahmeddd) [41a72d5]
+- feat: enhance token scanner and wallet screen functionality (by @areebahmeddd) [cd65ac5]
+- feat: add hooks for pull-to-refresh colors and reduced motion settings (by @areebahmeddd) [bae500d]
+- feat: implement permission primer for Bluetooth and Location requests (by @areebahmeddd) [24dd0ab]
+- feat: enforce timestamp freshness for ANNOUNCE packets to prevent replay attacks (by @areebahmeddd) [7434a86]
+- fix: minor fixes for apk signing and openssf score (by @areebahmeddd) [21a0568]
+- fix(ci): allow re-publishing a tag that sits behind main (by @areebahmeddd) [9c18802]
+- fix(landing): enhance privacy policy details and clarify features (by @areebahmeddd) [adc433f]
+
+**Full changelog:** [v0.9.8..v0.9.9](https://github.com/areebahmeddd/Airhop/compare/v0.9.8..v0.9.9)
+
 ## What's Changed in v0.9.8
 
 - refactor: rename "Your Channels" to "Your Rooms" for clarity and consistency (by @areebahmeddd) [837173d]
