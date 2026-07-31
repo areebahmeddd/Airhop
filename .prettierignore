@@ -1,5 +1,7 @@
 node_modules/
 bitchat/
+bitchat-ios/
+bitchat-android/
 android/
 ios/
 .expo/

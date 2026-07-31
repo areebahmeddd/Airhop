@@ -15,7 +15,10 @@ import {
   Text,
   View,
 } from "react-native";
-import { useMeshStateStore } from "../../store/mesh-state-store";
+import {
+  useMeshStateStore,
+  type BleBlocker,
+} from "../../store/mesh-state-store";
 import { type NearbyPeer } from "../../store/peer-store";
 import Avatar from "../../ui/components/avatar";
 import StatusDot from "../../ui/components/status-dot";
@@ -29,7 +32,59 @@ import {
   useThemeColors,
 } from "../../ui/theme";
 import { useReducedMotion } from "../../ui/use-reduced-motion";
+
 import { resolveDisplayName } from "../../utils/display-name";
+
+// What the dial says when there are no peers, per reason.
+//
+// The banner above the radar carries the button that fixes each of these; this
+// is the same fact restated where the user is actually looking. It must never
+// say "Scanning…" over a radio that is not scanning, which is what happened for
+// every blocker the old two-boolean version could not represent.
+function blockerHeadline(blocker: BleBlocker): string {
+  switch (blocker) {
+    case "none":
+      return "Scanning for nearby peers…";
+    case "starting":
+      return "Starting the mesh…";
+    case "unsupported":
+      return "No Bluetooth on this device";
+    case "adapter-off":
+      return "Bluetooth off · not scanning";
+    case "permission-denied":
+      return "Bluetooth permission needed";
+    case "permission-blocked":
+      return "Bluetooth blocked";
+    case "precise-location":
+      return "Precise location needed";
+    case "location-services-off":
+      return "Location off · not scanning";
+  }
+}
+
+function blockerHint(blocker: BleBlocker): string {
+  switch (blocker) {
+    case "none":
+      return "Rings show BLE signal strength, not distance";
+    case "starting":
+      return "Checking Bluetooth and permissions";
+    case "unsupported":
+      return "Messages still travel over the internet";
+    case "adapter-off":
+      return "Turn Bluetooth on to discover peers";
+    case "permission-denied":
+      return "Allow Bluetooth to discover peers";
+    case "permission-blocked":
+      return "Allow Bluetooth in Settings to discover peers";
+    // Naming the exact setting matters here: the user believes they already
+    // granted location, and they did - just not precisely enough for Android to
+    // release scan results.
+    case "precise-location":
+      return "Switch location from Approximate to Precise in Settings";
+    case "location-services-off":
+      return "Android needs location on to return Bluetooth scan results";
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Types
@@ -107,8 +162,10 @@ export default function RadarView({
   // "Away" stops the radios, so an empty radar then means paused, not scanning.
   // "Invisible" still scans (it only stops advertising), so it reads as normal.
   const away = useMeshStateStore((s) => s.presenceStatus === "away");
-  const adapterEnabled = useMeshStateStore((s) => s.adapterEnabled);
-  const permissionGranted = useMeshStateStore((s) => s.permissionGranted);
+  // One value, so the dial and its caption can never disagree about whether a
+  // scan is running - which they could when this was two booleans and the
+  // reasons the radios might be down numbered more than two.
+  const blocker = useMeshStateStore((s) => s.bleBlocker);
   // An endlessly expanding ring is the textbook vestibular trigger, and it
   // carries nothing the status line below the dial does not already say in
   // words. So under "reduce motion" the sweep does not run at all (WCAG 2.3.3)
@@ -117,7 +174,7 @@ export default function RadarView({
   // The sonar means "a scan is running". It sweeps when one is, and stops when
   // one is not, whichever of the three reasons applies. Anything else is the
   // screen claiming to look for peers while the radio sits idle.
-  const scanning = !away && adapterEnabled && permissionGranted;
+  const scanning = !away && blocker === "none";
 
   const [ring1] = useState(() => new Animated.Value(0));
   const [ring2] = useState(() => new Animated.Value(0));
@@ -486,11 +543,7 @@ export default function RadarView({
                 ? `${peers.length} peer${peers.length !== 1 ? "s" : ""} in range`
                 : away
                   ? "Mesh paused \u00b7 You're away"
-                  : !adapterEnabled
-                    ? "Bluetooth off \u00b7 not scanning"
-                    : !permissionGranted
-                      ? "Bluetooth permission needed"
-                      : "Scanning for nearby peers\u2026"}
+                  : blockerHeadline(blocker)}
             </Text>
             <Text style={styles.hintText}>
               {/* Signal strength, NOT distance. RSSI varies by tens of dB with
@@ -500,11 +553,7 @@ export default function RadarView({
                 ? "Ring position reflects signal strength, not distance"
                 : away
                   ? "Set your status to Online in Profile to discover peers"
-                  : !adapterEnabled
-                    ? "Turn Bluetooth on to discover peers"
-                    : !permissionGranted
-                      ? "Allow Bluetooth in Settings to discover peers"
-                      : "Rings show BLE signal strength, not distance"}
+                  : blockerHint(blocker)}
             </Text>
           </View>
         </>

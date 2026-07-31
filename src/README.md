@@ -36,26 +36,63 @@ Tests are co-located with their module in a `__tests__/` directory. All `src/cor
 
 ### Unit Test Coverage
 
-| Layer            | Suites | Tests   | Statements | Excluded                             |
-| ---------------- | ------ | ------- | ---------- | ------------------------------------ |
-| `core/crypto/`   | 5      | 53      | 93%        | -                                    |
-| `core/mesh/`     | 23     | 310     | 84%        | Live BLE I/O (native boundary)       |
-| `core/nostr/`    | 10     | 101     | 75%        | Network calls (`NostrClient` mocked) |
-| `core/payments/` | 3      | 88      | 74%        | Mint connectivity (network)          |
-| `core/router/`   | 1      | 38      | 80%        | BLE and WiFi transports (native)     |
-| `services/`      | 5      | 70      | 14%        | Mesh and mint I/O (native + network) |
-| `store/`         | 13     | 164     | 73%        | MMKV persistence (mocked)            |
-| `utils/`         | 12     | 116     | 67%        | -                                    |
-| **Total**        | **72** | **940** | **68%**    |                                      |
+| Layer            | Suites | Tests     | Excluded                             |
+| ---------------- | ------ | --------- | ------------------------------------ |
+| `core/crypto/`   | 5      | 56        | -                                    |
+| `core/mesh/`     | 23     | 330       | Live BLE I/O (native boundary)       |
+| `core/nostr/`    | 10     | 101       | Network calls (`NostrClient` mocked) |
+| `core/payments/` | 3      | 88        | Mint connectivity (network)          |
+| `core/router/`   | 1      | 38        | BLE and WiFi transports (native)     |
+| `services/`      | 19     | 179       | Native radios (modelled, see below)  |
+| `store/`         | 14     | 175       | MMKV persistence (mocked)            |
+| `utils/`         | 12     | 126       | -                                    |
+| **Total**        | **87** | **1,093** |                                      |
 
-`services/` is the outlier because it is the layer that owns sockets and HTTP:
-`mesh-service` needs a radio and `wallet-service` needs a live mint, so most of
-it is only reachable from a device. The rules those services enforce are tested
-where they live, in `core/` and `store/`.
+`services/` includes the lifecycle and multi-device suites, which is why it is no
+longer the thin layer it once was: the rules `mesh-service` enforces are now
+exercised against a modelled OS and radio rather than left to a device.
 
-### Integration Test Coverage
+### Multi-device simulation
 
-Not yet added. [Maestro](https://maestro.mobile.dev) is the planned tool for UI
-flow smoke tests.
+`services/__tests__/sim/` runs whole scenarios across several phones at once.
+Each simulated phone is a **fully isolated copy of the app** - its own
+`mesh-service`, stores, MMKV and event emitter, built with `jest.isolateModules`
 
-BLE mesh behavior cannot be emulated. Testing actual peer discovery, multi-hop routing, and Noise handshakes over a live connection requires two physical devices. This is covered by manual two-device testing before any release.
+- driven through a modelled Android/iOS OS, a modelled BLE medium, in-memory
+Nostr relays that speak real NIP-01, and a Cashu mint doing real BDHKE. Nothing
+above the wire is stubbed: the real flood router, real Noise XX, real Double
+Ratchet, real `SimplePool`, real proof selection.
+
+Scenarios assert **invariants** rather than scripted outcomes, because for
+twenty phones under random faults there is no single correct transcript. What
+must hold after any interleaving: everyone converges, nothing renders twice,
+nothing forged renders at all, delivery state never runs backwards, badges match
+their threads, and no sat is created or destroyed.
+
+Covered today: multi-hop delivery across a chain that cannot hear itself, a
+25-phone room, a live mixed Airhop/bitchat mesh, parallel attachment transfers,
+live push-to-talk sharing a radio with a file send, offline ecash and
+double-spend refusal, replay and Sybil floods, impersonation at both the message
+and the ANNOUNCE layer (the latter being the one that picks which key a claimed
+sender is checked against), panic wipe, crash recovery, a
+seeded soak of hundreds of random events, and the features that only mean
+anything with a third device present: private groups with an outsider in the
+room, a bulletin notice reaching someone who arrived later, store-and-forward
+where the carrier cannot read what it carries, the internet gateway, the mesh
+bridge, and Tor failing closed rather than falling back to the clear net.
+
+The internet gateway and the mesh bridge get their own file
+(`tier-gateway-bridge.test.ts`) and a location fabric, because both are defined
+by geohash cells: without a position fix the named location channels resolve to
+no cell, so there is nothing to uplink and nowhere for two islands to meet.
+
+`smoke.test.ts` contains the harness's own self-checks. If those go red, nothing
+else in that directory means anything.
+
+### What still needs hardware
+
+The simulation models the OS contract; it cannot prove the hardware honours it.
+Real BLE discovery timing, MTU negotiation, CoreBluetooth on real silicon, OEM
+battery managers and real Tor circuits still require two physical devices before
+a release. [Maestro](https://maestro.mobile.dev) remains the planned tool for
+on-device UI flow smoke tests.

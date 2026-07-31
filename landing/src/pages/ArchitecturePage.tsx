@@ -314,9 +314,10 @@ export default function ArchitecturePage() {
               </p>
               <p>
                 That constraint buys two things. The entire protocol is testable in CI without a
-                phone, which is why 900 tests can cover the wire format and the handshakes before a
-                radio is ever involved. And a bug fixed in gossip sync is fixed on both platforms at
-                once, because there is only one implementation of it.
+                phone, which is why over a thousand tests can cover the wire format, the handshakes
+                and whole multi-device scenarios before a radio is ever involved. And a bug fixed in
+                gossip sync is fixed on both platforms at once, because there is only one
+                implementation of it.
               </p>
 
               <Table
@@ -903,8 +904,11 @@ export default function ArchitecturePage() {
                 So a second layer sits on top:{" "}
                 <A href="https://signal.org/docs/specifications/doubleratchet/">Double Ratchet</A>,
                 the same algorithm Signal uses, ratcheting a new key for every message. Its root key
-                is seeded from the Noise static-static exchange, which is why Airhop does not need
-                X3DH: the key agreement has already happened.
+                is seeded from the completed handshake's transcript hash, which is why Airhop does
+                not need X3DH: the key agreement has already happened. The transcript matters rather
+                than the two static keys, because Noise XX mixes in ephemeral keys that are
+                destroyed when the handshake ends, so the root key cannot be recomputed later from
+                long-lived keys alone.
               </p>
 
               <Figure caption="Every message type and what actually protects it. The two no rows are real trade-offs, not oversights.">
@@ -1517,7 +1521,7 @@ export default function ArchitecturePage() {
                   ["GROUP_MESSAGE", "0x25", "Private group message under an epoch key"],
                   ["PING / PONG", "0x26 / 0x27", "Directed mesh echo, measures hop distance"],
                   ["NOSTR_CARRIER", "0x28", "Gateway-ferried Nostr event"],
-                  ["VOICE_FRAME", "0x29", "Live push-to-talk burst · Airhop extension"],
+                  ["VOICE_FRAME", "0x29", "Live push-to-talk burst"],
                   ["CHANNEL_ENC", "0x2a", "Private channel · Airhop extension"],
                 ]}
               />

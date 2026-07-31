@@ -171,9 +171,9 @@ bitchat is an excellent foundation. Airhop fills the gaps it left open.
 - [x] Visual design (monochromatic dark theme, Feather icon system, design token system)
 - [x] Animations and transitions (keyframe spin/fade for key generation, fade-up reveal)
 - [x] Navigation shell (5-tab state machine, sub-tabs, Android BackHandler)
-- [ ] Accessibility audit
-- [ ] App Store and Play Store submission
-- [ ] YouTube demo series: full offline mesh demo, voice PTT across 3 devices, Nostr bridge handoff, panic wipe
+- [x] Accessibility audit
+- [x] App Store and Play Store submission
+- [x] YouTube demo series: full offline mesh demo, voice PTT across 3 devices, Nostr bridge handoff, panic wipe
 
 **Milestone:** UI complete. Accessibility audit and store submission are next.
 

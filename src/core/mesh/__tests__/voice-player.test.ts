@@ -10,6 +10,25 @@ import {
 } from "../voice-capture";
 import { VoicePlayer, type AudioPlaybackBackend } from "../voice-player";
 
+// Every VoicePlayer a test builds is tracked and closed afterwards.
+//
+// A VoiceSession holds two live timers (the jitter-buffer flush and the session
+// timeout). Left open they outlive the test, which is what made Jest report
+// "a worker process has failed to exit gracefully" for this whole directory.
+// Closing them here is also the behaviour the app relies on: mesh-service
+// closes its player on shutdown for exactly the same reason.
+const openPlayers: { close: () => void }[] = [];
+
+function track<T extends { close: () => void }>(player: T): T {
+  openPlayers.push(player);
+  return player;
+}
+
+afterEach(() => {
+  for (const player of openPlayers) player.close();
+  openPlayers.length = 0;
+});
+
 // burstID seeded from a small integer for deterministic test sessions.
 function burstID(seed: number): Uint8Array {
   return new Uint8Array(8).fill(seed);
@@ -61,7 +80,7 @@ describe("VoicePlayer", () => {
   });
 
   it("creates a session on first (START) packet", () => {
-    const player = new VoicePlayer(backend);
+    const player = track(new VoicePlayer(backend));
     player.handlePacket(makeStartPacket(1), "peerA");
     expect(player.activeSessions).toHaveLength(1);
     expect(player.activeSessions[0].senderPeerID).toBe("peerA");
@@ -69,7 +88,7 @@ describe("VoicePlayer", () => {
   });
 
   it("creates separate sessions for different senders", () => {
-    const player = new VoicePlayer(backend);
+    const player = track(new VoicePlayer(backend));
     player.handlePacket(makeStartPacket(1), "peerA");
     player.handlePacket(makeStartPacket(2), "peerB");
     expect(player.activeSessions).toHaveLength(2);
@@ -83,14 +102,14 @@ describe("VoicePlayer", () => {
     // doubt (0x01 is the only value the format defines), so a burst can be
     // picked up from any DATA packet. Receive-side only: nothing on the wire
     // changes and a bitchat sender does nothing differently.
-    const player = new VoicePlayer(backend);
+    const player = track(new VoicePlayer(backend));
     player.handlePacket(makeDataPacket(1, 1), "peerA");
     expect(player.activeSessions).toHaveLength(1);
     player.close();
   });
 
   it("accepts DATA after START", () => {
-    const player = new VoicePlayer(backend);
+    const player = track(new VoicePlayer(backend));
     player.handlePacket(makeStartPacket(1), "peerA");
     expect(() =>
       player.handlePacket(makeDataPacket(1, 1), "peerA"),
@@ -99,7 +118,7 @@ describe("VoicePlayer", () => {
   });
 
   it("ignores packets with invalid payload", () => {
-    const player = new VoicePlayer(backend);
+    const player = track(new VoicePlayer(backend));
     const badPkt: Packet = {
       type: PacketType.VOICE_FRAME,
       ttl: 7,
@@ -116,7 +135,7 @@ describe("VoicePlayer", () => {
   });
 
   it("closes all sessions on player.close()", () => {
-    const player = new VoicePlayer(backend);
+    const player = track(new VoicePlayer(backend));
     player.handlePacket(makeStartPacket(1), "peerA");
     player.handlePacket(makeStartPacket(2), "peerB");
     expect(player.activeSessions).toHaveLength(2);
@@ -125,7 +144,7 @@ describe("VoicePlayer", () => {
   });
 
   it("does not create a new session for the same sender+burstID", () => {
-    const player = new VoicePlayer(backend);
+    const player = track(new VoicePlayer(backend));
     player.handlePacket(makeStartPacket(42), "peerA");
     player.handlePacket(makeDataPacket(42, 1), "peerA");
     player.handlePacket(makeDataPacket(42, 2), "peerA");
@@ -143,13 +162,15 @@ describe("VoicePlayer resource caps", () => {
   // talker without limit. Only one burst can be making sound anyway.
   it("evicts the oldest burst past the concurrency cap", () => {
     const played: string[] = [];
-    const player = new VoicePlayer({
-      playFrames: (burstIDHex) => {
-        played.push(burstIDHex);
-        return Promise.resolve();
-      },
-      endSession: () => undefined,
-    });
+    const player = track(
+      new VoicePlayer({
+        playFrames: (burstIDHex) => {
+          played.push(burstIDHex);
+          return Promise.resolve();
+        },
+        endSession: () => undefined,
+      }),
+    );
 
     for (let i = 0; i < 12; i++) {
       const burstID = new Uint8Array(8).fill(i + 1);
@@ -191,7 +212,7 @@ describe("VoicePlayer inbound burst caps", () => {
   }
 
   it("cuts off a burst that exceeds the per-second rate", () => {
-    const player = new VoicePlayer(makeBackend());
+    const player = track(new VoicePlayer(makeBackend()));
     player.handlePacket(makeStartPacket(1), "aabbccdd00112233");
     expect(player.activeSessions).toHaveLength(1);
 
@@ -209,7 +230,7 @@ describe("VoicePlayer inbound burst caps", () => {
   });
 
   it("keeps a burst arriving at a plausible speech rate", () => {
-    const player = new VoicePlayer(makeBackend());
+    const player = track(new VoicePlayer(makeBackend()));
     player.handlePacket(makeStartPacket(2), "aabbccdd00112233");
 
     // Real speech is ~2 KB/s; a few hundred bytes per packet is normal.
@@ -227,7 +248,7 @@ describe("VoicePlayer inbound burst caps", () => {
     // The flaw this guards: tearing the session down freed the slot, and the
     // NEXT packet of the same flood opened a replacement with its byte count
     // back at zero. A peer could then stream forever, one cap at a time.
-    const player = new VoicePlayer(makeBackend());
+    const player = track(new VoicePlayer(makeBackend()));
     player.handlePacket(makeStartPacket(3), "aabbccdd00112233");
     for (let seq = 1; seq <= 200; seq++) {
       player.handlePacket(

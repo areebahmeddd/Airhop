@@ -34,6 +34,7 @@ import {
   hasLocationPermission,
   requestLocationPermission,
 } from "../../../services/location-service";
+import { getMeshService } from "../../../services/mesh-service";
 import { useMeshStateStore } from "../../../store/mesh-state-store";
 import { HIT_SLOP } from "../../../ui/theme";
 import {
@@ -204,7 +205,19 @@ export default function PermissionsScreen({
       switch (key) {
         case "bluetooth": {
           const result = await ensureBlePermissions();
-          useMeshStateStore.getState().setPermissionGranted(result.granted);
+          // Whether the refusal is permanent is only knowable from the request
+          // itself, so it has to be recorded wherever a request happens - not
+          // only on the startup path. Missing it here would leave a stale
+          // "blocked" over a permission the user has since granted.
+          useMeshStateStore
+            .getState()
+            .setBlePermissionBlocked(result.blockedForever);
+          // Everything else is left to the radio controller. A grant is not the
+          // same as a working radio - Bluetooth may still be off, and on Android
+          // the stack honours a fresh grant a moment after the app can see it -
+          // and the controller is the one place that knows how to tell those
+          // apart.
+          getMeshService()?.retryRadios();
           break;
         }
         case "location": {

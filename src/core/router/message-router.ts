@@ -65,19 +65,70 @@ export interface PeerEntry {
 const CAPABILITY_GATEWAY = 1 << 2;
 const CAPABILITY_BRIDGE = 1 << 7;
 
+// Ceiling on how many peers the registry will remember.
+//
+// Entries here are created from ANNOUNCE packets, which are unauthenticated
+// input: anyone in radio range can mint an unlimited number of internally
+// consistent identities (real keypair, correctly derived peer ID, valid
+// self-signature) and announce them. Nothing about any individual one is
+// detectably wrong, which is what makes a Sybil flood a resource problem rather
+// than a signature problem.
+//
+// Reads were already TTL-bounded, so a flood never made a fake peer look
+// reachable - but the underlying map grew without limit and was never swept, so
+// the memory was held for the life of the process and every reachablePeers()
+// scan walked all of it. 200 matches prekey-store.ts, which caps the same class
+// of gossiped, attacker-supplied state the same way.
+const MAX_TRACKED_PEERS = 200;
+
+function sameKey(a: Uint8Array, b: Uint8Array): boolean {
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false;
+  return true;
+}
+
 // Live map of recently seen peers (keyed by peerID hex string).
 export class PeerRegistry {
   private readonly peers = new Map<string, PeerEntry>();
 
+  // `trusted` marks an out-of-band identity the user established in person (a
+  // scanned QR contact card), which outranks anything learned over the air and
+  // may therefore re-pin the keys below. Announces must never set it.
   update(
     entry: Omit<PeerEntry, "lastSeenMs" | "session" | "isDirect"> & {
       isDirect?: boolean;
       session?: NoiseSession;
+      trusted?: boolean;
     },
   ): void {
     const existing = this.peers.get(entry.peerID);
+
+    // TOFU key pinning. A valid packet signature only proves an announce is
+    // self-consistent: it is checked against the Ed25519 key carried inside
+    // that same announce. Since peerIDs derive from the Noise public key - and
+    // that key is broadcast in the clear in every announce - an attacker can
+    // replay a victim's peerID and Noise key while substituting their own
+    // signing key, then sign with it. Both the derivation check and the
+    // signature check in onAnnounce pass. Only refusing to *replace* a signing
+    // key already bound to this peer stops it, so the first key we see for a
+    // peer is the one that stands for as long as we remember them.
+    //
+    // Rejecting the whole update (rather than keeping the old key and taking
+    // the rest) is deliberate: the nickname and capabilities in a conflicting
+    // announce come from the same unverified source, so accepting any of it
+    // would still let an attacker rewrite how that peer is presented.
+    //
+    // Mirrors bitchat BLEAnnounceTrustPolicy .signingKeyMismatch / .keyMismatch.
+    if (existing !== undefined && entry.trusted !== true) {
+      if (!sameKey(existing.signingPubKey, entry.signingPubKey)) return;
+      if (!sameKey(existing.noisePubKey, entry.noisePubKey)) return;
+    }
+
+    // `trusted` is a caller-supplied hint about the source, not peer state, so
+    // it is dropped rather than stored.
+    const { trusted: _trusted, ...fields } = entry;
     this.peers.set(entry.peerID, {
-      ...entry,
+      ...fields,
       isDirect: entry.isDirect ?? existing?.isDirect ?? false,
       lastSeenMs: Date.now(),
       // Preserve the learned Nostr pubkey across BLE re-announces, which do
@@ -87,6 +138,26 @@ export class PeerRegistry {
       bridgeGeohash: entry.bridgeGeohash ?? existing?.bridgeGeohash,
       session: entry.session ?? existing?.session,
     });
+    if (existing === undefined) this.enforceCap();
+  }
+
+  // Drop the least recently seen peers once the registry is over its ceiling.
+  //
+  // Direct peers are never evicted. A direct peer is one we hold an actual BLE
+  // link to, which no amount of announcing can fake, so they are the entries
+  // most worth keeping and the ones an attacker most wants pushed out. Anything
+  // already past its TTL goes first, since it is dead weight either way.
+  private enforceCap(): void {
+    if (this.peers.size <= MAX_TRACKED_PEERS) return;
+    const evictable = [...this.peers.values()]
+      .filter((e) => !e.isDirect)
+      .sort((a, b) => a.lastSeenMs - b.lastSeenMs);
+    let over = this.peers.size - MAX_TRACKED_PEERS;
+    for (const entry of evictable) {
+      if (over <= 0) break;
+      this.peers.delete(entry.peerID);
+      over--;
+    }
   }
 
   // Mark a peer as directly BLE-connected. Called when the BLE native module

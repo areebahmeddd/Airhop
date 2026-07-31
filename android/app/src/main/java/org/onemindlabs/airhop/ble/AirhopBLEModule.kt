@@ -34,16 +34,22 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.app.Activity
 import android.content.pm.PackageManager
+import android.location.LocationManager
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
+import android.os.BatteryManager
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.os.ParcelUuid
+import android.provider.Settings
 import android.util.Base64
 import android.util.Log
 import androidx.core.content.ContextCompat
+import com.facebook.react.bridge.ActivityEventListener
+import com.facebook.react.bridge.BaseActivityEventListener
 import com.facebook.react.bridge.Promise
 import com.facebook.react.bridge.ReactApplicationContext
 import com.facebook.react.bridge.ReactContextBaseJavaModule
@@ -81,15 +87,124 @@ private const val EVT_MESH_STOP_REQUESTED = "AirhopBLE.meshStopRequested"
 private const val ORBOT_SOCKS5_PORT       = 9050
 private const val ORBOT_PROBE_TIMEOUT_MS  = 500
 
+// Request code for the system "turn Bluetooth on?" dialog, so the Mesh banner
+// can offer a button rather than instructions.
+private const val REQUEST_ENABLE_BT = 0xB1E
+
+// Ceiling on simultaneous central-role (GATT client) links.
+//
+// Matches bitchat-ios TransportConfig.bleMaxCentralLinks = 6. This is a
+// hardware limit dressed up as a policy: an Android controller typically
+// supports around seven concurrent GATT client connections, and connectGatt
+// past that fails with status 133. Without a cap, a phone in a crowded room
+// tries to dial every advertiser it sees, fails most of them, and retries on
+// every scan callback - which burns the radio, drains the battery and
+// destabilises the links that DID connect. Refusing the dial is strictly better
+// than making it and losing it.
+//
+// The mesh does not need every peer to be a direct neighbour: flood routing
+// with TTL 7 reaches the rest of the room through the six it has.
+private const val MAX_CENTRAL_LINKS = 6
+
+// How hard to run the radios.
+//
+// Mechanism only - the decision lives in TypeScript (services/power-policy.ts),
+// which is where "whether to run the radios at all" already lives and where it
+// can be unit tested. This enum is the vocabulary the two sides share, and the
+// numbers are the ones bitchat-android's PowerProfileResolver arrived at.
+//
+// The five knobs move together on purpose. A duty-cycled LOW_POWER scan next to
+// a LOW_LATENCY advertise at full TX power saves almost nothing: the advertiser
+// is transmitting continuously either way. Battery is only won by turning all of
+// them down at once.
+private enum class PowerMode(
+    val scanMode: Int,
+    val advertiseMode: Int,
+    val txPower: Int,
+    val rssiIntervalMs: Long,
+    // Zero means "scan continuously". Otherwise the scanner runs for scanOnMs
+    // and then sleeps for scanOffMs, which is where nearly all of the saving in
+    // the background comes from.
+    val scanOnMs: Long,
+    val scanOffMs: Long,
+) {
+    PERFORMANCE(
+        ScanSettings.SCAN_MODE_LOW_LATENCY,
+        AdvertiseSettings.ADVERTISE_MODE_LOW_LATENCY,
+        AdvertiseSettings.ADVERTISE_TX_POWER_HIGH,
+        5_000L, 0L, 0L,
+    ),
+    BALANCED(
+        ScanSettings.SCAN_MODE_BALANCED,
+        AdvertiseSettings.ADVERTISE_MODE_BALANCED,
+        AdvertiseSettings.ADVERTISE_TX_POWER_MEDIUM,
+        10_000L, 0L, 0L,
+    ),
+    POWER_SAVER(
+        ScanSettings.SCAN_MODE_LOW_POWER,
+        AdvertiseSettings.ADVERTISE_MODE_LOW_POWER,
+        AdvertiseSettings.ADVERTISE_TX_POWER_LOW,
+        30_000L, 2_000L, 28_000L,
+    ),
+    ULTRA_LOW_POWER(
+        ScanSettings.SCAN_MODE_LOW_POWER,
+        AdvertiseSettings.ADVERTISE_MODE_LOW_POWER,
+        AdvertiseSettings.ADVERTISE_TX_POWER_ULTRA_LOW,
+        60_000L, 1_000L, 29_000L,
+    );
+
+    companion object {
+        // Unknown names fall back to BALANCED rather than throwing. A bad string
+        // is a bug in the caller, and taking the mesh down over it would turn a
+        // typo into an outage.
+        fun fromName(name: String): PowerMode = when (name) {
+            "performance" -> PERFORMANCE
+            "balanced" -> BALANCED
+            "power-saver" -> POWER_SAVER
+            "ultra-low-power" -> ULTRA_LOW_POWER
+            else -> BALANCED
+        }
+    }
+}
+
+// How far the battery must move before it is worth telling JS about. Android
+// delivers ACTION_BATTERY_CHANGED on every 1% step; forwarding all of them would
+// be a bridge crossing per percent for a decision whose thresholds are ten
+// points apart.
+private const val BATTERY_REPORT_STEP = 5
+
+// The OS Bluetooth radio state, and now also the battery.
+private const val EVT_POWER_STATE = "AirhopBLE.powerStateChanged"
+
 class AirhopBLEModule(
     private val reactContext: ReactApplicationContext,
 ) : ReactContextBaseJavaModule(reactContext) {
 
     override fun getName(): String = "AirhopBLE"
 
-    private val bluetoothManager: BluetoothManager =
-        reactContext.getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager
-    private val adapter: BluetoothAdapter = bluetoothManager.adapter
+    // Both of these are nullable and both are resolved lazily.
+    //
+    // They used to be non-null `val`s initialised in the constructor. The module
+    // is built eagerly by AirhopBLEPackage.createNativeModules, i.e. during
+    // ReactHost construction, so on a device with no Bluetooth radio - or an
+    // adapter mid-reset - Kotlin's intrinsic null check threw there, before any
+    // Airhop code ran and with nothing above it to catch. The app did not fail
+    // to find peers; it failed to launch.
+    private val bluetoothManager: BluetoothManager? by lazy {
+        try {
+            reactContext.getSystemService(Context.BLUETOOTH_SERVICE) as? BluetoothManager
+        } catch (e: Exception) {
+            Log.w(TAG, "BluetoothManager unavailable: ${e.message}")
+            null
+        }
+    }
+
+    private val adapter: BluetoothAdapter?
+        get() = try {
+            bluetoothManager?.adapter
+        } catch (e: Exception) {
+            null
+        }
 
     // GATT server (peripheral role)
     private var gattServer: BluetoothGattServer? = null
@@ -121,25 +236,140 @@ class AirhopBLEModule(
 
     // Watches the OS Bluetooth toggle so the UI can report "Bluetooth off"
     // instead of silently showing an empty mesh forever.
+    // The last state we told JS about, so an unchanged report is never sent
+    // twice. On its own this is a small economy; combined with the reconciler in
+    // radio-controller.ts it is what makes an adapter event unable to trigger a
+    // restart that triggers another adapter event.
+    @Volatile
+    private var lastReportedEnabled: Boolean? = null
+
+    // Current radio effort. Starts BALANCED so a mesh that comes up before JS
+    // has said anything is already not running flat out.
+    @Volatile
+    private var powerMode: PowerMode = PowerMode.BALANCED
+
+    // Latest battery reading, and the last one we reported.
+    @Volatile
+    private var batteryPercent: Int = -1
+    @Volatile
+    private var charging: Boolean = false
+    @Volatile
+    private var lastReportedBattery: Int = -1
+    @Volatile
+    private var lastReportedCharging: Boolean? = null
+
+    private val batteryReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            if (intent?.action != Intent.ACTION_BATTERY_CHANGED) return
+            val level = intent.getIntExtra(BatteryManager.EXTRA_LEVEL, -1)
+            val scale = intent.getIntExtra(BatteryManager.EXTRA_SCALE, -1)
+            if (level < 0 || scale <= 0) return
+            val percent = (level * 100) / scale
+            val status = intent.getIntExtra(BatteryManager.EXTRA_STATUS, -1)
+            val isCharging = status == BatteryManager.BATTERY_STATUS_CHARGING ||
+                status == BatteryManager.BATTERY_STATUS_FULL
+
+            batteryPercent = percent
+            charging = isCharging
+
+            // Only speak up when the number has moved enough to possibly change
+            // a decision, or the charger went in or out. No policy here - the
+            // thresholds that matter live in TypeScript - only a filter on how
+            // chatty this gets.
+            val movedEnough =
+                lastReportedBattery < 0 ||
+                    kotlin.math.abs(percent - lastReportedBattery) >= BATTERY_REPORT_STEP
+            if (!movedEnough && lastReportedCharging == isCharging) return
+            lastReportedBattery = percent
+            lastReportedCharging = isCharging
+            emitEvent(EVT_POWER_STATE, WritableNativeMap().apply {
+                putInt("batteryPercent", percent)
+                putBoolean("charging", isCharging)
+            })
+        }
+    }
+
     private val adapterStateReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
             if (intent?.action != BluetoothAdapter.ACTION_STATE_CHANGED) return
             val state = intent.getIntExtra(
                 BluetoothAdapter.EXTRA_STATE, BluetoothAdapter.ERROR,
             )
-            // Only ON/OFF are reported; the TURNING_* transitions would make
-            // the banner flicker mid-toggle.
             when (state) {
                 BluetoothAdapter.STATE_ON -> emitAdapterState(true)
+                // Tear down on TURNING_OFF rather than waiting for OFF. By the
+                // time OFF arrives the stack has already invalidated every
+                // handle we hold, and any call we make in between is rejected
+                // as API misuse. Getting our own state retired first means JS
+                // stops addressing dead links immediately.
+                BluetoothAdapter.STATE_TURNING_OFF -> {
+                    releaseRadioState()
+                    emitAdapterState(false)
+                }
                 BluetoothAdapter.STATE_OFF -> {
                     releaseRadioState()
                     emitAdapterState(false)
                 }
+                // STATE_TURNING_ON is deliberately not reported: the radio
+                // cannot accept work yet, and saying "on" here would invite a
+                // scan the stack silently drops.
             }
         }
     }
 
-    init {
+    // Registered in initialize(), NOT in init{}.
+    //
+    // init{} runs inside createNativeModules, during ReactHost construction,
+    // before the JS bundle has loaded. A Bluetooth toggle in that window reached
+    // emitEvent() with no runtime to receive it, which threw
+    // IllegalStateException on the main thread - the thread a BroadcastReceiver
+    // is delivered on, with nothing above it to catch. That was a hard crash on
+    // the splash screen, and the same path fired again whenever Android
+    // destroyed the Activity while the foreground service kept the process.
+    //
+    // initialize() runs once the catalyst instance exists. The guards in
+    // emitEvent() cover the rest, because "a runtime exists" can stop being true
+    // between the check and the call.
+    override fun initialize() {
+        super.initialize()
+        registerAdapterReceiver()
+        reactContext.addActivityEventListener(activityEventListener)
+        live = this
+    }
+
+    // Outstanding requestEnableBluetooth() promise, resolved from the activity
+    // result below. Held under `synchronized(this)` because the promise is
+    // created on the native-modules thread and settled on the main thread.
+    private var pendingEnablePromise: Promise? = null
+
+    private val activityEventListener: ActivityEventListener =
+        object : BaseActivityEventListener() {
+            // `activity` is non-null in this overload: BaseActivityEventListener
+            // declares it that way, and the nullable-Activity variant is the
+            // deprecated two-arg form. Getting this wrong is a silent no-op at
+            // runtime rather than a crash - the method simply never overrides
+            // anything and is never called - so the compiler catching it is the
+            // only signal there would have been.
+            override fun onActivityResult(
+                activity: Activity,
+                requestCode: Int,
+                resultCode: Int,
+                data: Intent?,
+            ) {
+                if (requestCode != REQUEST_ENABLE_BT) return
+                // Trust the adapter, not the result code. Some OEM dialogs
+                // report RESULT_CANCELED while still enabling the radio, and a
+                // "no" that actually turned Bluetooth on would leave the banner
+                // telling the user to do something they have already done.
+                resolvePendingEnable(adapter?.isEnabled == true)
+            }
+        }
+
+    @Volatile
+    private var receiverRegistered = false
+
+    private fun registerAdapterReceiver() {
+        if (receiverRegistered) return
         try {
             // NOT_EXPORTED: this only ever listens to a protected system
             // broadcast, so nothing outside the app has any business reaching
@@ -151,10 +381,127 @@ class AirhopBLEModule(
                 IntentFilter(BluetoothAdapter.ACTION_STATE_CHANGED),
                 ContextCompat.RECEIVER_NOT_EXPORTED,
             )
+            // ACTION_BATTERY_CHANGED is a protected system broadcast and is
+            // sticky, so registering returns the current level immediately -
+            // no first-reading gap to work around.
+            ContextCompat.registerReceiver(
+                reactContext,
+                batteryReceiver,
+                IntentFilter(Intent.ACTION_BATTERY_CHANGED),
+                ContextCompat.RECEIVER_NOT_EXPORTED,
+            )
+            receiverRegistered = true
         } catch (e: Exception) {
             Log.e(TAG, "Could not register Bluetooth state receiver", e)
         }
-        live = this
+    }
+
+    // Apply a radio effort level. Restarts the scan, because ScanSettings are
+    // fixed for the life of a scan and there is no way to retune one in place.
+    // Only ever called on an actual change (PowerPolicy sees to that), so the
+    // restart is rare rather than per-battery-tick.
+    @ReactMethod
+    fun setPowerMode(mode: String, promise: Promise) {
+        val next = PowerMode.fromName(mode)
+        if (next == powerMode) {
+            promise.resolve(null)
+            return
+        }
+        powerMode = next
+        Log.d(TAG, "Power mode -> $next")
+        try {
+            // Re-advertise at the new rate/power, if we were advertising.
+            if (advertisingActive) {
+                adapter?.bluetoothLeAdvertiser?.stopAdvertising(advertiseCallback)
+                beginAdvertising()
+            }
+            // Re-scan under the new settings and duty cycle, if we were scanning.
+            if (scanningRequested) {
+                stopScanCycle()
+                beginScanCycle()
+            }
+            promise.resolve(null)
+        } catch (e: SecurityException) {
+            promise.reject("PERMISSION_DENIED", "Bluetooth permission missing", e)
+        } catch (e: Exception) {
+            promise.reject("BLE_ERROR", "Failed to apply power mode: ${e.message}", e)
+        }
+    }
+
+    // ---- Duty-cycled scanning -------------------------------------------------
+    //
+    // In the low-power modes the scanner runs in bursts instead of continuously:
+    // a couple of seconds on, half a minute off. That is where nearly all of the
+    // background saving comes from, and it is invisible above this line - JS
+    // asked for "scanning", and scanning is what it gets, at whatever rate the
+    // current mode affords.
+    //
+    // Deliberately NOT reported as a link or adapter change: a peer discovered
+    // in the next burst behaves exactly as one discovered a moment later under a
+    // continuous scan, and telling JS the radio stopped would have the
+    // reconciler try to "fix" a state that is working as intended.
+
+    @Volatile
+    private var scanningRequested = false
+    @Volatile
+    private var scanBurstActive = false
+
+    private val scanBurstToggle = object : Runnable {
+        override fun run() {
+            if (!scanningRequested) return
+            if (scanBurstActive) {
+                stopPlatformScan()
+                mainHandler.postDelayed(this, powerMode.scanOffMs)
+            } else {
+                startPlatformScan()
+                mainHandler.postDelayed(this, powerMode.scanOnMs)
+            }
+        }
+    }
+
+    private fun beginScanCycle() {
+        scanningRequested = true
+        startPlatformScan()
+        // Continuous modes never schedule a toggle, so there is no timer to pay
+        // for when the app is on screen.
+        if (powerMode.scanOnMs > 0L) {
+            mainHandler.postDelayed(scanBurstToggle, powerMode.scanOnMs)
+        }
+    }
+
+    private fun stopScanCycle() {
+        scanningRequested = false
+        mainHandler.removeCallbacks(scanBurstToggle)
+        stopPlatformScan()
+    }
+
+    private fun startPlatformScan() {
+        if (scanBurstActive) return
+        val scanner = adapter?.bluetoothLeScanner ?: return
+        try {
+            val filter = ScanFilter.Builder()
+                .setServiceUuid(ParcelUuid(SERVICE_UUID))
+                .build()
+            val settings = ScanSettings.Builder()
+                .setScanMode(powerMode.scanMode)
+                .build()
+            scanner.startScan(listOf(filter), settings, scanCallback)
+            scanBurstActive = true
+        } catch (e: SecurityException) {
+            Log.e(TAG, "BLUETOOTH_SCAN permission missing", e)
+        } catch (e: Exception) {
+            Log.w(TAG, "startScan failed: ${e.message}")
+        }
+    }
+
+    private fun stopPlatformScan() {
+        if (!scanBurstActive) return
+        scanBurstActive = false
+        try {
+            adapter?.bluetoothLeScanner?.stopScan(scanCallback)
+        } catch (e: Exception) {
+            // Adapter went away underneath us; the scan is gone either way.
+        }
     }
 
     // The JS runtime backing this module is going away (the app is being torn
@@ -164,21 +511,41 @@ class AirhopBLEModule(
     // them up burns battery and, worse, makes the app look wedged on reopen -
     // an ongoing notification over a mesh that can't answer.
     override fun invalidate() {
-        try {
-            reactContext.unregisterReceiver(adapterStateReceiver)
-        } catch (e: Exception) {
-            // Already unregistered, or context torn down first.
+        if (receiverRegistered) {
+            try {
+                reactContext.unregisterReceiver(adapterStateReceiver)
+            } catch (e: Exception) {
+                // Already unregistered, or context torn down first.
+            }
+            try {
+                reactContext.unregisterReceiver(batteryReceiver)
+            } catch (e: Exception) {
+                // Already unregistered, or context torn down first.
+            }
+            receiverRegistered = false
         }
-        stopRssiPolling()
         try {
-            adapter.bluetoothLeScanner?.stopScan(scanCallback)
-            adapter.bluetoothLeAdvertiser?.stopAdvertising(advertiseCallback)
+            reactContext.removeActivityEventListener(activityEventListener)
+        } catch (e: Exception) {
+            // Context already torn down.
+        }
+        // Anyone still waiting on the enable dialog will never hear back
+        // otherwise, and an unresolved promise is a UI stuck on a spinner.
+        resolvePendingEnable(false)
+        stopRssiPolling()
+        stopScanCycle()
+        advertisingActive = false
+        try {
+            adapter?.bluetoothLeScanner?.stopScan(scanCallback)
+            adapter?.bluetoothLeAdvertiser?.stopAdvertising(advertiseCallback)
             gattServer?.close()
             gattServer = null
+            characteristic = null
             AirhopForegroundService.stop(reactContext)
         } catch (e: Exception) {
             Log.w(TAG, "BLE teardown on invalidate failed: ${e.message}")
         }
+        lastReportedEnabled = null
         if (live === this) live = null
         super.invalidate()
     }
@@ -203,6 +570,11 @@ class AirhopBLEModule(
             })
         }
         stopRssiPolling()
+        // The adapter took the scan and the advertiser down with it, so the
+        // duty-cycle timer has nothing left to toggle. Cancelling it here is
+        // what stops a burst firing against a dead radio on the way out.
+        stopScanCycle()
+        advertisingActive = false
         for (gatt in centralLinks.values) {
             try {
                 gatt.close()
@@ -223,28 +595,205 @@ class AirhopBLEModule(
         characteristic = null
     }
 
+    // Only ever announce a CHANGE. Re-announcing the current state is what let a
+    // state callback become a restart become another state callback.
     private fun emitAdapterState(enabled: Boolean) {
+        if (lastReportedEnabled == enabled) return
+        lastReportedEnabled = enabled
         emitEvent(EVT_ADAPTER_STATE, WritableNativeMap().apply {
             putBoolean("enabled", enabled)
         })
     }
 
-    // Report the current radio state on demand, so JS has a value before the
-    // first ACTION_STATE_CHANGED broadcast ever fires.
+    // Everything the device will tell us about whether BLE can run right now.
+    //
+    // Replaces isAdapterEnabled(), which answered one quarter of the question.
+    // On Android the other three quarters are what actually bite: a granted
+    // BLUETOOTH_SCAN with the OS location toggle off, or with "Approximate"
+    // chosen instead of "Precise", produces a scan that starts cleanly, reports
+    // no error, and returns results to nobody. That was indistinguishable from
+    // "nobody is nearby" and had no banner, so the radar span forever.
     @ReactMethod
-    fun isAdapterEnabled(promise: Promise) {
+    fun getRadioState(promise: Promise) {
+        val result = WritableNativeMap()
+        val bt = adapter
+
+        result.putBoolean("supported", bt != null)
+        result.putBoolean(
+            "poweredOn",
+            try {
+                bt?.isEnabled == true
+            } catch (e: SecurityException) {
+                false
+            } catch (e: Exception) {
+                false
+            },
+        )
+        result.putString("authorization", currentAuthorization())
+        result.putBoolean("locationServicesEnabled", locationServicesEnabled())
+        result.putBoolean("preciseLocation", hasPermission(Manifest.permission.ACCESS_FINE_LOCATION))
+        result.putInt("batteryPercent", batteryPercent)
+        result.putBoolean("charging", charging)
+        promise.resolve(result)
+    }
+
+    private fun hasPermission(permission: String): Boolean =
+        ContextCompat.checkSelfPermission(reactContext, permission) ==
+            PackageManager.PERMISSION_GRANTED
+
+    // "granted" / "denied" only. We cannot distinguish "denied once" from
+    // "denied for good" without an Activity (shouldShowRequestPermissionRationale),
+    // so that split is made in JS where the request result is available, and
+    // reported back through the same BleBlocker the banner reads.
+    private fun currentAuthorization(): String {
+        // Below API 31 the BLUETOOTH_* permissions are install-time normal
+        // permissions and are always held.
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return "granted"
+        val needed = listOf(
+            Manifest.permission.BLUETOOTH_SCAN,
+            Manifest.permission.BLUETOOTH_ADVERTISE,
+            Manifest.permission.BLUETOOTH_CONNECT,
+        )
+        return if (needed.all(::hasPermission)) "granted" else "denied"
+    }
+
+    // The OS-wide location toggle, which is NOT the location permission.
+    //
+    // Airhop does not declare usesPermissionFlags="neverForLocation" on
+    // BLUETOOTH_SCAN (matching bitchat), so BLE scanning stays coupled to
+    // location and Android withholds every scan result while this is off. From
+    // API 28 there is a direct query; below that the provider list is the
+    // only signal.
+    private fun locationServicesEnabled(): Boolean =
         try {
-            promise.resolve(adapter.isEnabled)
+            val lm = reactContext.getSystemService(Context.LOCATION_SERVICE) as? LocationManager
+            when {
+                lm == null -> true
+                Build.VERSION.SDK_INT >= Build.VERSION_CODES.P -> lm.isLocationEnabled
+                else ->
+                    lm.isProviderEnabled(LocationManager.GPS_PROVIDER) ||
+                        lm.isProviderEnabled(LocationManager.NETWORK_PROVIDER)
+            }
         } catch (e: Exception) {
+            // Unreadable: assume it is on rather than accusing the user of a
+            // setting we could not check.
+            true
+        }
+
+    // Ask the OS to turn Bluetooth on, so the Mesh banner offers a button
+    // instead of instructions. Resolves true only once the adapter is actually
+    // on, so the caller never reports success over a radio the user declined to
+    // enable.
+    @ReactMethod
+    fun requestEnableBluetooth(promise: Promise) {
+        val bt = adapter
+        if (bt == null) {
             promise.resolve(false)
+            return
+        }
+        if (bt.isEnabled) {
+            promise.resolve(true)
+            return
+        }
+        // From API 31 the enable dialog itself requires BLUETOOTH_CONNECT.
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
+            !hasPermission(Manifest.permission.BLUETOOTH_CONNECT)
+        ) {
+            promise.resolve(false)
+            return
+        }
+        // Read through the context, not the module. `currentActivity` is a
+        // property of ReactContext; the module does not re-expose it. Null when
+        // the app has no Activity in front (backgrounded, or the Activity was
+        // destroyed while a foreground service kept the process), and there is
+        // nothing to show a dialog on top of in that case.
+        val activity = reactContext.currentActivity
+        if (activity == null) {
+            promise.resolve(false)
+            return
+        }
+        synchronized(this) {
+            if (pendingEnablePromise != null) {
+                // A dialog is already up; a second request would strand the
+                // first promise unresolved.
+                promise.resolve(false)
+                return
+            }
+            pendingEnablePromise = promise
+        }
+        try {
+            activity.startActivityForResult(
+                Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE),
+                REQUEST_ENABLE_BT,
+            )
+        } catch (e: Exception) {
+            Log.w(TAG, "Could not show the Bluetooth enable dialog: ${e.message}")
+            resolvePendingEnable(false)
+        }
+    }
+
+    private fun resolvePendingEnable(enabled: Boolean) {
+        val promise = synchronized(this) {
+            val p = pendingEnablePromise
+            pendingEnablePromise = null
+            p
+        }
+        try {
+            promise?.resolve(enabled)
+        } catch (e: Exception) {
+            // Already settled.
+        }
+    }
+
+    // Take the user to the OS location settings. The banner offering this is the
+    // only place the app can explain why an Android phone with Bluetooth on and
+    // every permission granted still finds nobody.
+    @ReactMethod
+    fun openLocationSettings(promise: Promise) {
+        try {
+            val intent = Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS).apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            reactContext.startActivity(intent)
+            promise.resolve(true)
+        } catch (e: Exception) {
+            Log.w(TAG, "Could not open location settings: ${e.message}")
+            promise.resolve(false)
+        }
+    }
+
+    // Hold the process up while the mesh is running.
+    //
+    // Split out of startAdvertising/stopAdvertising, which is where it used to
+    // live. Tying it to advertising meant "Invisible" - which stops advertising
+    // and keeps scanning and relaying - also ended background operation, and it
+    // meant a foreground notification reading "Airhop mesh active" was raised
+    // from a startAdvertising() call that had not actually started anything.
+    @ReactMethod
+    fun setBackgroundServiceEnabled(enabled: Boolean, promise: Promise) {
+        try {
+            if (enabled) {
+                AirhopForegroundService.start(reactContext)
+            } else {
+                AirhopForegroundService.stop(reactContext)
+            }
+            promise.resolve(null)
+        } catch (e: Exception) {
+            // Typically a background-start restriction on Android 12+. The mesh
+            // runs fine in the foreground either way; the reconciler retries on
+            // the next resume.
+            Log.w(TAG, "Foreground service ${if (enabled) "start" else "stop"} refused: ${e.message}")
+            promise.reject("FGS_REFUSED", e.message, e)
         }
     }
 
     // Periodic RSSI polling. onReadRemoteRssi only fires in response to an
     // explicit readRemoteRssi() call, so without this poller the rssiUpdated
     // event could never be emitted and signal strength stayed unavailable to
-    // the UI. 5s cadence matches the iOS module.
-    private val rssiIntervalMs = 5_000L
+    // the UI. The cadence comes from the current power mode: signal strength
+    // only feeds the radar's ring placement, so polling every link every five
+    // seconds on a pocketed phone was paying a radio round trip per peer for a
+    // screen nobody is looking at.
     private var rssiPollingActive = false
     private val rssiPoller = object : Runnable {
         override fun run() {
@@ -255,14 +804,14 @@ class AirhopBLEModule(
                     Log.e(TAG, "BLUETOOTH_CONNECT permission missing", e)
                 }
             }
-            if (rssiPollingActive) mainHandler.postDelayed(this, rssiIntervalMs)
+            if (rssiPollingActive) mainHandler.postDelayed(this, powerMode.rssiIntervalMs)
         }
     }
 
     private fun startRssiPolling() {
         if (rssiPollingActive) return
         rssiPollingActive = true
-        mainHandler.postDelayed(rssiPoller, rssiIntervalMs)
+        mainHandler.postDelayed(rssiPoller, powerMode.rssiIntervalMs)
     }
 
     private fun stopRssiPolling() {
@@ -278,50 +827,83 @@ class AirhopBLEModule(
     // lets scanners identify/de-dup us before connecting.
     @ReactMethod
     fun startAdvertising(serviceUUID: String, localName: String, promise: Promise) {
+        // Refuse loudly when we cannot actually advertise.
+        //
+        // The platform advertiser accepts startAdvertising() against an adapter
+        // that is off or a permission that has not settled, reports nothing, and
+        // does nothing. Resolving the promise there told the caller the mesh was
+        // up when it was not - and since the caller swallowed errors anyway,
+        // there was no state in which anyone noticed. The reconciler now retries
+        // on rejection, so an honest refusal is what makes recovery automatic.
+        val bt = adapter
+        if (bt == null) {
+            promise.reject("UNSUPPORTED", "This device has no Bluetooth adapter")
+            return
+        }
+        if (!bt.isEnabled) {
+            promise.reject("RADIO_OFF", "Bluetooth is switched off")
+            return
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
+            !hasPermission(Manifest.permission.BLUETOOTH_ADVERTISE)
+        ) {
+            promise.reject("PERMISSION_DENIED", "BLUETOOTH_ADVERTISE not granted yet")
+            return
+        }
+        if (bt.bluetoothLeAdvertiser == null) {
+            // Some devices support BLE central but not peripheral. Scanning still
+            // works, so this is a partial capability, not a dead mesh.
+            promise.reject("UNSUPPORTED", "This device cannot advertise over BLE")
+            return
+        }
         try {
             localPeerIDHex = localName
             setupGattServer()
-
-            val settings = AdvertiseSettings.Builder()
-                .setAdvertiseMode(AdvertiseSettings.ADVERTISE_MODE_LOW_LATENCY)
-                .setConnectable(true)
-                .setTimeout(0)
-                .setTxPowerLevel(AdvertiseSettings.ADVERTISE_TX_POWER_HIGH)
-                .build()
-
-            val data = AdvertiseData.Builder()
-                .setIncludeDeviceName(false)
-                .setIncludeTxPowerLevel(false)
-                .addServiceUuid(ParcelUuid(SERVICE_UUID))
-                .build()
-
-            val scanResponseBuilder = AdvertiseData.Builder()
-                .setIncludeDeviceName(false)
-                .setIncludeTxPowerLevel(false)
-            hexToPeerIDBytes(localName)?.let { peerIDBytes ->
-                scanResponseBuilder.addServiceData(ParcelUuid(SERVICE_UUID), peerIDBytes)
-            }
-            val scanResponse = scanResponseBuilder.build()
-
-            adapter.bluetoothLeAdvertiser?.startAdvertising(settings, data, scanResponse, advertiseCallback)
-            // Promote the process to a foreground service now that the mesh is
-            // up. Started while the app is in the foreground (mesh starts on
-            // launch), so it is allowed to run into the background, which is what
-            // keeps BLE scanning, the GATT server, and the Nostr socket alive
-            // and message notifications firing while the app is off screen.
-            // Guarded on its own: if the OS refuses the foreground start (e.g. a
-            // background-start restriction), advertising still succeeds.
-            try {
-                AirhopForegroundService.start(reactContext)
-            } catch (e: Exception) {
-                Log.w(TAG, "Foreground service start failed: ${e.message}")
-            }
+            beginAdvertising()
+            // The foreground service is NOT started here any more. It is tied to
+            // the mesh running, not to advertising, and is driven explicitly
+            // through setBackgroundServiceEnabled() - see the note there.
             promise.resolve(null)
         } catch (e: SecurityException) {
             promise.reject("PERMISSION_DENIED", "BLE advertising requires BLUETOOTH_ADVERTISE permission", e)
         } catch (e: Exception) {
             promise.reject("BLE_ERROR", "Failed to start advertising: ${e.message}", e)
         }
+    }
+
+    // Whether the platform advertiser is currently running, so a power-mode
+    // change knows whether there is anything to restart.
+    @Volatile
+    private var advertisingActive = false
+
+    // Start (or restart) advertising at the current power mode's rate and TX
+    // power. Split out of startAdvertising so setPowerMode can re-apply it
+    // without repeating the precondition checks, which have already passed.
+    private fun beginAdvertising() {
+        val advertiser = adapter?.bluetoothLeAdvertiser ?: return
+
+        val settings = AdvertiseSettings.Builder()
+            .setAdvertiseMode(powerMode.advertiseMode)
+            .setConnectable(true)
+            .setTimeout(0)
+            .setTxPowerLevel(powerMode.txPower)
+            .build()
+
+        val data = AdvertiseData.Builder()
+            .setIncludeDeviceName(false)
+            .setIncludeTxPowerLevel(false)
+            .addServiceUuid(ParcelUuid(SERVICE_UUID))
+            .build()
+
+        val scanResponseBuilder = AdvertiseData.Builder()
+            .setIncludeDeviceName(false)
+            .setIncludeTxPowerLevel(false)
+        hexToPeerIDBytes(localPeerIDHex)?.let { peerIDBytes ->
+            scanResponseBuilder.addServiceData(ParcelUuid(SERVICE_UUID), peerIDBytes)
+        }
+
+        advertiser.startAdvertising(settings, data, scanResponseBuilder.build(), advertiseCallback)
+        advertisingActive = true
     }
 
     // First 8 raw bytes of a 16-hex-char peerID, or null if malformed.
@@ -338,12 +920,15 @@ class AirhopBLEModule(
     @ReactMethod
     fun stopAdvertising(promise: Promise) {
         try {
-            adapter.bluetoothLeAdvertiser?.stopAdvertising(advertiseCallback)
+            advertisingActive = false
+            adapter?.bluetoothLeAdvertiser?.stopAdvertising(advertiseCallback)
             gattServer?.close()
             gattServer = null
-            // Mesh is down: drop the foreground service so we stop holding the
-            // process (and its persistent notification) in the background.
-            AirhopForegroundService.stop(reactContext)
+            characteristic = null
+            // Deliberately does NOT touch the foreground service. This is also
+            // the path "Invisible" takes, and that state still scans and relays,
+            // so tearing the service down here silently ended background
+            // operation for a mesh that was very much still working.
             promise.resolve(null)
         } catch (e: Exception) {
             promise.reject("BLE_ERROR", "Failed to stop advertising: ${e.message}", e)
@@ -354,16 +939,52 @@ class AirhopBLEModule(
 
     @ReactMethod
     fun startScanning(serviceUUIDs: ReadableArray, promise: Promise) {
+        // Every precondition the platform will not tell us about.
+        //
+        // startScan() succeeds and returns nothing when the OS location toggle
+        // is off, or when the user chose "Approximate" instead of "Precise" -
+        // Airhop does not declare neverForLocation on BLUETOOTH_SCAN, so
+        // scanning stays coupled to location on every API level. Both cases are
+        // indistinguishable from an empty room unless we check for them, and an
+        // empty room is what the radar showed, forever.
+        val bt = adapter
+        if (bt == null) {
+            promise.reject("UNSUPPORTED", "This device has no Bluetooth adapter")
+            return
+        }
+        if (!bt.isEnabled) {
+            promise.reject("RADIO_OFF", "Bluetooth is switched off")
+            return
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
+            !hasPermission(Manifest.permission.BLUETOOTH_SCAN)
+        ) {
+            promise.reject("PERMISSION_DENIED", "BLUETOOTH_SCAN not granted yet")
+            return
+        }
+        if (!hasPermission(Manifest.permission.ACCESS_FINE_LOCATION)) {
+            promise.reject(
+                "PERMISSION_DENIED",
+                "Precise location is required for BLE scan results",
+            )
+            return
+        }
+        if (!locationServicesEnabled()) {
+            promise.reject(
+                "LOCATION_SERVICES_OFF",
+                "Android withholds BLE scan results while location services are off",
+            )
+            return
+        }
+        val scanner = bt.bluetoothLeScanner
+        if (scanner == null) {
+            promise.reject("RADIO_OFF", "BLE scanner unavailable (adapter still coming up)")
+            return
+        }
         try {
-            val filter = ScanFilter.Builder()
-                .setServiceUuid(ParcelUuid(SERVICE_UUID))
-                .build()
-
-            val settings = ScanSettings.Builder()
-                .setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY)
-                .build()
-
-            adapter.bluetoothLeScanner?.startScan(listOf(filter), settings, scanCallback)
+            // Hands off to the duty cycle, which decides whether that means a
+            // continuous scan or bursts, per the current power mode.
+            beginScanCycle()
             startRssiPolling()
             promise.resolve(null)
         } catch (e: SecurityException) {
@@ -377,7 +998,7 @@ class AirhopBLEModule(
     fun stopScanning(promise: Promise) {
         try {
             stopRssiPolling()
-            adapter.bluetoothLeScanner?.stopScan(scanCallback)
+            stopScanCycle()
             promise.resolve(null)
         } catch (e: Exception) {
             promise.reject("BLE_ERROR", "Failed to stop scanning: ${e.message}", e)
@@ -471,13 +1092,40 @@ class AirhopBLEModule(
         // the process outlived its React context - and the caller then has to
         // clean up on its own rather than waiting for a reply that can't come.
         fun requestMeshStop(): Boolean {
-            val module = live ?: return false
+            val module = live
+            if (module == null || !module.reactContext.hasActiveReactInstance()) {
+                // No JS to ask. The notification is about to disappear either
+                // way, so the radios have to come down here or they keep
+                // scanning and advertising with nothing behind them - a
+                // "stopped" mesh that is still draining the battery, and no
+                // remaining UI anywhere that can stop it.
+                forceStopRadios()
+                return false
+            }
             return try {
                 module.emitEvent(EVT_MESH_STOP_REQUESTED, WritableNativeMap())
                 true
             } catch (e: Exception) {
                 Log.w(TAG, "Could not reach JS to stop the mesh: ${e.message}")
+                forceStopRadios()
                 false
+            }
+        }
+
+        // Last-resort teardown, straight against the adapter. Deliberately does
+        // not touch the link maps or emit anything: there is no JS to tell, and
+        // if a runtime does come back it re-reads the device from scratch.
+        private fun forceStopRadios() {
+            val module = live ?: return
+            try {
+                module.stopRssiPolling()
+                module.adapter?.bluetoothLeScanner?.stopScan(module.scanCallback)
+                module.adapter?.bluetoothLeAdvertiser?.stopAdvertising(module.advertiseCallback)
+                module.gattServer?.close()
+                module.gattServer = null
+                module.characteristic = null
+            } catch (e: Exception) {
+                Log.w(TAG, "Force stop failed: ${e.message}")
             }
         }
     }
@@ -559,6 +1207,10 @@ class AirhopBLEModule(
 
     private fun setupGattServer() {
         if (gattServer != null) return
+        // Nullable since the adapter became lazy: no Bluetooth service on this
+        // device means no GATT server, and the callers above have already
+        // rejected with UNSUPPORTED by the time we could get here.
+        val manager = bluetoothManager ?: return
 
         val char = BluetoothGattCharacteristic(
             CHARACTERISTIC_UUID,
@@ -580,16 +1232,42 @@ class AirhopBLEModule(
         val service = BluetoothGattService(SERVICE_UUID, BluetoothGattService.SERVICE_TYPE_PRIMARY)
         service.addCharacteristic(char)
 
-        gattServer = bluetoothManager.openGattServer(reactContext, gattServerCallback)
+        gattServer = manager.openGattServer(reactContext, gattServerCallback)
         gattServer?.addService(service)
     }
 
     // MARK: - Event emitter helpers
 
+    // Reaching JS from native, safely.
+    //
+    // This is the single most important guard in the file. Every caller below
+    // runs on a thread the OS owns and we do not: BroadcastReceiver.onReceive is
+    // the main thread, the GATT callbacks are binder threads, and none of them
+    // has an exception handler above it. An uncaught throw on any of them kills
+    // the process.
+    //
+    // Under bridgeless React Native (newArchEnabled=true) getJSModule throws
+    // IllegalStateException whenever no runtime is attached, and there are three
+    // ordinary windows where that is true: before the JS bundle has finished
+    // loading, after Android destroys the Activity while the foreground service
+    // keeps the process, and during a dev reload. Previously this method had
+    // neither a check nor a catch, so a Bluetooth toggle in any of those windows
+    // was a crash rather than a dropped event.
+    //
+    // Both a check AND a catch, deliberately: hasActiveReactInstance() can stop
+    // being true between the test and the call, so the check saves the common
+    // case and the catch covers the race. A dropped event is always the right
+    // outcome here - there is by definition nobody to deliver it to, and the
+    // reconciler re-reads the real state on the next resume.
     private fun emitEvent(name: String, body: WritableNativeMap) {
-        reactContext
-            .getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter::class.java)
-            .emit(name, body)
+        if (!reactContext.hasActiveReactInstance()) return
+        try {
+            reactContext
+                .getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter::class.java)
+                .emit(name, body)
+        } catch (e: Exception) {
+            Log.w(TAG, "Dropped $name: no JS runtime to receive it (${e.message})")
+        }
     }
 
     // MARK: - Callbacks
@@ -608,6 +1286,10 @@ class AirhopBLEModule(
             val device = result.device
             val linkID = "c:${device.address}"
             if (centralLinks.containsKey(linkID)) return
+
+            // At capacity: stay a peripheral to this one. It can still dial us,
+            // and we still hear it relayed through the neighbours we do have.
+            if (centralLinks.size >= MAX_CENTRAL_LINKS) return
 
             // Identify the remote by its advertised peerID (scan-response service
             // data) and skip if we already have a link to that peer. This dedups

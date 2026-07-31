@@ -16,7 +16,11 @@
 
 import React from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
-import type { BannerTone, MeshBanner } from "../../store/mesh-state-store";
+import type {
+  BannerAction,
+  BannerTone,
+  MeshBanner,
+} from "../../store/mesh-state-store";
 import {
   FontSize,
   FontWeight,
@@ -36,11 +40,16 @@ const RESUME_PILL_HEIGHT = 24;
 
 interface Props {
   banners: MeshBanner[];
-  // Turn the mesh back on. Shown only on the paused banner, because Away is the
-  // one state reachable from outside the app (the background notification's
-  // "Stop mesh"), and someone who arrives in it that way has no reason to know
-  // the way out lives under Profile → Status.
-  onResume?: () => void;
+  // Perform a banner's one-tap fix. Every blocker that a user can do something
+  // about carries one, because the alternative is a red bar describing a
+  // problem and leaving them to find the setting themselves - and the settings
+  // in question (the OS location toggle, the app's own permission page) are not
+  // somewhere people think to look when a chat app says it cannot see anyone.
+  onAction?: (kind: BannerAction) => void;
+  // Put an advisory away for good. Only banners marked dismissible offer this;
+  // a real blocker has no × , because hiding it would leave an empty radar with
+  // nothing explaining it.
+  onDismiss?: (key: string) => void;
 }
 
 // The dot color for each tone. This is the only place a banner shows its hue;
@@ -67,9 +76,28 @@ function dotColor(
   }
 }
 
+// What the button promises to do, for a screen reader. The visible label is
+// deliberately terse ("Turn on"), which reads as an unanswered question without
+// the surrounding banner text that a screen reader announces separately.
+function actionHint(kind: BannerAction): string {
+  switch (kind) {
+    case "resume":
+      return "Turns Bluetooth advertising and scanning back on";
+    case "enable-bluetooth":
+      return "Asks Android to switch Bluetooth on";
+    case "open-location-settings":
+      return "Opens the system location settings";
+    case "open-app-settings":
+      return "Opens Airhop's permissions in system settings";
+    case "open-background-limits":
+      return "Opens this phone's background activity settings";
+  }
+}
+
 export default function MeshStatusBar({
   banners,
-  onResume,
+  onAction,
+  onDismiss,
 }: Props): React.JSX.Element | null {
   const Colors = useThemeColors();
   if (banners.length === 0) return null;
@@ -108,22 +136,39 @@ export default function MeshStatusBar({
           >
             {banner.label}
           </Text>
-          {banner.key === "paused" && onResume && (
+          {banner.dismissible && onDismiss && (
+            <Pressable
+              style={styles.dismiss}
+              onPress={() => onDismiss(banner.key)}
+              hitSlop={hitSlopFor(RESUME_PILL_HEIGHT)}
+              accessibilityRole="button"
+              accessibilityLabel={`Dismiss: ${banner.label}`}
+              accessibilityHint="Hides this note for good"
+            >
+              <Text
+                style={[styles.dismissText, { color: Colors.textMuted }]}
+                maxFontSizeMultiplier={MaxFontScale.chrome}
+              >
+                {"×"}
+              </Text>
+            </Pressable>
+          )}
+          {banner.action && onAction && (
             <Pressable
               style={[styles.action, { borderColor: Colors.border }]}
-              onPress={onResume}
+              onPress={() => onAction(banner.action!.kind)}
               // The pill draws small so the banner stays slim; the slop is what
               // gets the target to the 44pt floor. It was 8, leaving it at 39.
               hitSlop={hitSlopFor(RESUME_PILL_HEIGHT)}
               accessibilityRole="button"
-              accessibilityLabel="Resume the mesh"
-              accessibilityHint="Turns Bluetooth advertising and scanning back on"
+              accessibilityLabel={`${banner.action.label}: ${banner.label}`}
+              accessibilityHint={actionHint(banner.action.kind)}
             >
               <Text
                 style={[styles.actionText, { color: Colors.textPrimary }]}
                 maxFontSizeMultiplier={MaxFontScale.chrome}
               >
-                Resume
+                {banner.action.label}
               </Text>
             </Pressable>
           )}
@@ -165,5 +210,17 @@ const styles = StyleSheet.create({
   actionText: {
     fontSize: FontSize.xs,
     fontWeight: FontWeight.semibold,
+  },
+  dismiss: {
+    // Drawn after the label and before the action pill, so the reading order is
+    // "what is wrong, put it away, or fix it" and the fix stays the rightmost
+    // (and most reachable) target.
+    paddingHorizontal: Spacing.xs,
+    flexShrink: 0,
+  },
+  dismissText: {
+    fontSize: FontSize.base,
+    fontWeight: FontWeight.medium,
+    lineHeight: FontSize.base + 2,
   },
 });

@@ -954,8 +954,28 @@ const SECTIONS: {
             Bluetooth Low Energy, which listens and announces in short bursts and lets the radio
             sleep in between, and it slows its own announcements down once it can hear other
             devices. Relaying for other people costs a little more.{" "}
+            <strong>It also works less hard when you are not watching:</strong> put your phone in
+            your pocket and Airhop drops to a short look around every half a minute instead of
+            listening continuously, and it turns down further as the battery gets low. Plug the
+            phone in and it goes back to full speed. That is where almost all of a day&apos;s saving
+            comes from, and none of it changes how the mesh works: messages still arrive, people are
+            still found, the radio just looks less often.{" "}
             <strong>If you want it to stop entirely, set your status to Away in Profile:</strong>{" "}
             that stops scanning and announcing, and nothing runs until you set it back.
+          </>
+        ),
+      },
+      {
+        q: "Why does the Mesh tab say Battery saver?",
+        a: (
+          <>
+            Because your battery is low and Airhop has turned the Bluetooth scan down to short
+            bursts rather than draining what is left. Nothing is broken: people nearby will still
+            appear, they can just take up to half a minute to show up instead of a few seconds. The
+            note exists only so that slowness is explainable, because a radar that takes a while to
+            fill looks identical to one that is not working.{" "}
+            <strong>Charging the phone clears it,</strong> and it disappears on its own once the
+            battery recovers. There is nothing to tap and nothing to fix.
           </>
         ),
       },

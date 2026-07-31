@@ -1046,6 +1046,27 @@ export async function quoteSend(params: {
     });
     const selected = matchStored(account.proofs, result.send);
     const spend = selected.reduce((s, p) => s + p.amount, 0);
+    // A selection is only a quote if it actually covers the amount.
+    //
+    // `matchStored` maps cashu-ts's chosen proofs back to ours BY SECRET and
+    // silently drops anything it cannot find. That is the right shape for the
+    // lookup and the wrong shape to trust blindly: if the mapping loses proofs
+    // for any reason, this returned `exact: true` with a short (or empty)
+    // proof list and a NEGATIVE fee, and `prepareSend` went on to reserve
+    // nothing, serialise an empty token, and open a pending send for the full
+    // amount. The user is told the payment went out; the recipient receives a
+    // token worth nothing. Nothing downstream could detect it, because every
+    // field said the send had succeeded.
+    //
+    // Throwing here falls into the catch below, which re-selects with our own
+    // selector and reports honestly - including refusing with "insufficient"
+    // when the balance genuinely cannot cover it. That is the same path a
+    // missing keyset cache already takes, so there is no new failure mode.
+    if (selected.length !== result.send.length || spend < amount) {
+      throw new Error(
+        `offline selection did not map back to stored proofs (matched ${String(selected.length)} of ${String(result.send.length)}, covering ${String(spend)} of ${String(amount)})`,
+      );
+    }
     return {
       mintUrl: account.mintUrl,
       unit,

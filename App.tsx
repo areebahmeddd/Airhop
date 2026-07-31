@@ -39,6 +39,7 @@ import {
   SafeAreaProvider,
   SafeAreaView,
 } from "react-native-safe-area-context";
+import AirhopBLE from "./src/bridge/NativeAirhopBLE";
 import type { Identity } from "./src/core/crypto/identity";
 import { loadIdentity } from "./src/core/crypto/identity";
 import { primeTorRoutingOnStartup } from "./src/core/nostr/tor-routing";
@@ -50,6 +51,7 @@ import NotificationCenter from "./src/features/chat/notification-center";
 import { StartNewSheet } from "./src/features/chat/start-new-sheet";
 import PeerList from "./src/features/discovery/peer-list";
 import IdentityScreen from "./src/features/onboarding/identity-screen";
+import PermissionPrimer from "./src/features/onboarding/permission-primer";
 import UsernameScreen from "./src/features/onboarding/username-screen";
 import WelcomeScreen from "./src/features/onboarding/welcome-screen";
 import ProfileScreen from "./src/features/settings/profile-screen";
@@ -75,6 +77,7 @@ import {
   setNotificationsActiveChannel,
   setNotificationsAppActive,
 } from "./src/services/notification-service";
+import { setNutzapWatcher } from "./src/services/nutzap-watcher-handle";
 import { applyPresence } from "./src/services/presence";
 import {
   initWalletService,
@@ -88,8 +91,15 @@ import { subscribeInboundMessages, useChatStore } from "./src/store/chat-store";
 import {
   useMeshBanners,
   useMeshStateStore,
+  type BannerAction,
 } from "./src/store/mesh-state-store";
 import { countReachablePeers, usePeerStore } from "./src/store/peer-store";
+import {
+  acknowledgePermissionPrimer,
+  showPermissionPrimer,
+  usePrimerStore,
+} from "./src/store/primer-store";
+import { useSettingsStore } from "./src/store/settings-store";
 import { useTransferStore } from "./src/store/transfer-store";
 import { useWalletStore } from "./src/store/wallet-store";
 import Avatar from "./src/ui/components/avatar";
@@ -108,6 +118,7 @@ import {
   useResolvedTheme,
   useThemeColors,
 } from "./src/ui/theme";
+import { getBatteryOptimizationSettingsURI } from "./src/utils/battery-optimization";
 import {
   ensureBlePermissions,
   hasBlePermissions,
@@ -141,11 +152,6 @@ interface MessageTarget {
 // Placeholder peer ID shown before identity is loaded from secure storage.
 const FALLBACK_PEER_ID = "0000000000000000";
 
-// Live NIP-61 subscription, kept at module scope so a re-onboard (panic wipe
-// then fresh identity) replaces it instead of leaving the old identity's
-// subscription running against the new wallet.
-let stopNutzapWatcher: (() => void) | null = null;
-
 // Request the BLE runtime permissions the OS requires, THEN start the mesh.
 // Without the grant, native startScanning/startAdvertising throw and are
 // swallowed: a silent, total discovery failure. On denial we surface a
@@ -155,26 +161,63 @@ async function startMeshWithPermissions(
   identity: Identity,
   nickname: string,
 ): Promise<void> {
-  const perm = await ensureBlePermissions();
-  // Record the grant so the Mesh tab can explain an empty peer list rather
-  // than spinning "Scanning…" forever with no route to a fix.
-  useMeshStateStore.getState().setPermissionGranted(perm.granted);
-  if (!perm.granted) {
-    if (perm.blockedForever) {
-      // The OS will not prompt again, so the only way out is Settings. Same
-      // deep-linked dialog the camera and photo flows use, rather than a
-      // dead-end box reciting a path to tap through.
-      showBlockedAlert({
-        label: "Bluetooth access",
-        purpose: "discover nearby devices over the mesh",
-      });
-    } else {
-      showAlert(
-        "Bluetooth permission needed",
-        "Airhop needs Bluetooth and Location permission to discover nearby devices over the mesh. Without it, only internet (Nostr) messaging will work.",
-      );
-    }
+  // Explain the ask before the OS makes it, once per install.
+  //
+  // Gated on the permission not already being held, so it never appears for a
+  // returning user whose grant is settled - and gated on the flag so a user who
+  // declined does not get the lecture again on every launch. It resolves however
+  // the sheet is dismissed, so nothing here can hang: a primer that failed to
+  // resolve would hold BLE startup behind it forever, which is a far worse bug
+  // than the one it exists to prevent.
+  //
+  // Android-only in practice, and correctly so: hasBlePermissions() resolves
+  // true on iOS, where CoreBluetooth prompts on first use and carries our own
+  // NSBluetoothAlwaysUsageDescription string. That prompt IS the primer there,
+  // and iOS has no location coupling to explain away. The sheet still renders
+  // correctly on iOS if it is ever shown; it simply is not needed.
+  const settings = useSettingsStore.getState();
+  if (!settings.permissionPrimerSeen && !(await hasBlePermissions())) {
+    settings.markPermissionPrimerSeen();
+    await showPermissionPrimer();
   }
+
+  const perm = await ensureBlePermissions();
+  // Record WHY the mesh cannot run, not merely that it cannot.
+  //
+  // A single "granted" boolean collapsed three situations that need three
+  // different responses: denied but re-askable, denied for good, and the
+  // Android 12+ case where the user picked "Approximate" so the app holds
+  // BLUETOOTH_SCAN and still gets no scan results. All three used to render as
+  // "Bluetooth permission needed", and only the first is fixed by granting
+  // Bluetooth. The controller re-reads the device on its first pass and will
+  // correct this either way; setting it here means the banner is right during
+  // the very first frames rather than after the first reconcile.
+  const blocker = useMeshStateStore.getState().setBleBlocker;
+  // Recorded separately, and BEFORE the mesh starts, so the controller's first
+  // reconcile refines the platform's coarse "denied" into the permanent form
+  // rather than offering a prompt that will never appear.
+  useMeshStateStore.getState().setBlePermissionBlocked(perm.blockedForever);
+  if (perm.granted) {
+    blocker("starting");
+  } else if (perm.blockedForever) {
+    blocker("permission-blocked");
+  } else if (perm.needsPreciseLocation) {
+    blocker("precise-location");
+  } else {
+    blocker("permission-denied");
+  }
+  if (!perm.granted && perm.blockedForever) {
+    // The OS will not prompt again, so the only way out is Settings. Same
+    // deep-linked dialog the camera and photo flows use, rather than a
+    // dead-end box reciting a path to tap through.
+    showBlockedAlert({
+      label: "Bluetooth access",
+      purpose: "discover nearby devices over the mesh",
+    });
+  }
+  // A denial that can still be re-asked gets no dialog. The Mesh banner already
+  // says what is wrong and carries the button that fixes it, and stacking a
+  // modal on top of that is two things to dismiss for one problem.
   // Apply the persisted Tor preference BEFORE the mesh starts, so the very first
   // relay pool is built on the Tor socket (never leaking the clear net for a Tor
   // user). No-op when Tor is off or unavailable.
@@ -213,17 +256,20 @@ async function startMeshWithPermissions(
       privKey,
       relays: client.activeRelays,
     });
-    stopNutzapWatcher?.();
-    stopNutzapWatcher = startNutzapWatcher({
-      myPubkey: pubKey,
-      client,
-      onRedeemed: (amount, unit, from) => {
-        showAlert(
-          `+${amount.toLocaleString()} ${unit}`,
-          `Nutzap received from ${from.slice(0, 12)}… and redeemed into your wallet.`,
-        );
-      },
-    });
+    // Installed through the shared handle rather than a local, so a panic wipe
+    // can stop it too - see nutzap-watcher-handle.ts.
+    setNutzapWatcher(
+      startNutzapWatcher({
+        myPubkey: pubKey,
+        client,
+        onRedeemed: (amount, unit, from) => {
+          showAlert(
+            `+${amount.toLocaleString()} ${unit}`,
+            `Nutzap received from ${from.slice(0, 12)}… and redeemed into your wallet.`,
+          );
+        },
+      }),
+    );
   })();
   // The mesh always starts Online (advertising + scanning), so keep the chosen
   // presence in step, in case a prior session left it Away/Invisible.
@@ -247,6 +293,78 @@ async function startMeshWithPermissions(
     if (granted) getMeshService()?.refreshGeoChannels();
     await requestNotificationPermission();
   })();
+}
+
+// Carry out the fix a Mesh banner offers.
+//
+// The banner names an intent; this turns it into the platform call. Keeping the
+// two apart means the store stays free of native imports and Linking, and the
+// copy for a blocker lives next to the logic that decides the blocker applies.
+//
+// Every branch ends by re-reading the device rather than assuming the fix
+// worked: the user may cancel the Bluetooth dialog, or wander out of Settings
+// without changing anything, and a banner that clears itself optimistically is
+// how you end up with a green UI over a dead radio.
+async function handleBannerAction(
+  kind: BannerAction,
+  nickname: string,
+): Promise<void> {
+  switch (kind) {
+    case "resume":
+      applyPresence("online", nickname);
+      return;
+
+    case "enable-bluetooth": {
+      // Android can show the system enable dialog in place. iOS cannot - Apple
+      // provides no API to turn the radio on from inside an app - so it
+      // resolves false and we fall back to Settings rather than offering a
+      // button that does nothing.
+      const enabled = await AirhopBLE.requestEnableBluetooth().catch(
+        () => false,
+      );
+      if (!enabled) await Linking.openSettings().catch(() => undefined);
+      break;
+    }
+
+    case "open-location-settings": {
+      const opened = await AirhopBLE.openLocationSettings().catch(() => false);
+      if (!opened) await Linking.openSettings().catch(() => undefined);
+      break;
+    }
+
+    case "open-app-settings":
+      await Linking.openSettings().catch(() => undefined);
+      break;
+
+    case "open-background-limits": {
+      // Deep-link straight into the OEM's own background/autostart screen -
+      // Xiaomi's autostart list, Samsung's sleeping-apps list, and so on. There
+      // is no common Android surface for this, which is exactly why describing
+      // where to tap does not work: the path differs on every skin.
+      //
+      // Acknowledged either way. The whitelist itself is not readable back, so
+      // "did it work" is unanswerable; taking the user to the right screen is
+      // the whole of what the app can do, and repeating the advice afterwards
+      // would be nagging someone who has already acted on it.
+      useSettingsStore.getState().markBackgroundLimitsAcknowledged();
+      const uri = getBatteryOptimizationSettingsURI();
+      if (uri !== null) {
+        const opened = await Linking.openURL(uri).then(
+          () => true,
+          () => false,
+        );
+        // OEM deep links are undocumented and disappear between skin versions.
+        // The app's own settings page always exists, and battery controls are
+        // reachable from it, so it is a landing place rather than a dead end.
+        if (!opened) await Linking.openSettings().catch(() => undefined);
+      } else {
+        await Linking.openSettings().catch(() => undefined);
+      }
+      // Nothing about the radios changed, so there is nothing to re-read.
+      return;
+    }
+  }
+  getMeshService()?.retryRadios();
 }
 
 // ---------------------------------------------------------------------------
@@ -313,6 +431,7 @@ export default function App(): React.JSX.Element {
     setLastThread,
   } = useChatStore();
   const meshBanners = useMeshBanners();
+  const primerVisible = usePrimerStore((s) => s.visible);
 
   // On mount: check for an existing persisted identity. If found, skip
   // onboarding and start the BLE mesh service immediately.
@@ -444,20 +563,26 @@ export default function App(): React.JSX.Element {
       void hasLocationPermission().then((granted) =>
         useMeshStateStore.getState().setLocationGranted(granted),
       );
-      void hasBlePermissions().then((granted) => {
-        const state = useMeshStateStore.getState();
-        if (granted === state.permissionGranted) return;
-        state.setPermissionGranted(granted);
-        // Granted while we were away: the radios never started (or were denied
-        // mid-session), so the mesh is sitting there doing nothing behind a
-        // banner the user has already acted on. Bring it up now instead of
-        // making them restart the app to be believed.
-        if (granted) getMeshService()?.retryRadios();
-      });
+      // Re-check the radios unconditionally.
+      //
+      // This used to compare the BLE permission against the last known value
+      // and only act when it had changed, which meant every blocker that is not
+      // a permission - Bluetooth switched off, location services switched off,
+      // a grant that had not yet reached the Bluetooth stack - came back to a
+      // mesh that had decided nothing needed doing. The controller is a
+      // reconciler: it reads the device itself and issues only the calls that
+      // change something, so calling it on every resume is both correct and
+      // free.
+      getMeshService()?.retryRadios();
     };
     syncPermissions();
+    // Tell the mesh which side of the screen we are on, for both states: the
+    // radio controller turns the scan rate down when backgrounded, and needs
+    // the leaving edge as much as the returning one.
+    getMeshService()?.setAppForeground(AppState.currentState === "active");
     const sub = AppState.addEventListener("change", (next) => {
       setNotificationsAppActive(next === "active");
+      getMeshService()?.setAppForeground(next === "active");
       if (next === "active") {
         syncPermissions();
         // The Mesh tab is a tap away now, so a "someone nearby" from earlier is
@@ -744,6 +869,14 @@ export default function App(): React.JSX.Element {
           <NavigationBar style={resolvedTheme === "dark" ? "dark" : "light"} />
         )}
         <CustomAlert />
+        {/* Mounted beside the alert, not inside the onboarding flow: the primer
+            is shown on the first launch that actually needs a permission, which
+            for someone who killed the app mid-onboarding is a launch that skips
+            onboarding entirely. */}
+        <PermissionPrimer
+          visible={primerVisible}
+          onAcknowledge={acknowledgePermissionPrimer}
+        />
         <NotificationCenter
           visible={showActivity}
           onClose={() => setShowActivity(false)}
@@ -1239,13 +1372,20 @@ export default function App(): React.JSX.Element {
                 </View>
               )}
 
-              {/* Transport banner. Shown on Mesh and Chats, the two places an
-                  empty screen would otherwise be unexplainable. Renders nothing
-                  while peers are connected or a scan is in progress. */}
+              {/* Transport banner. Mesh tab only: that is where an empty screen
+                  needs explaining, and it is where the buttons that fix each
+                  blocker belong. Renders nothing when nothing is wrong. */}
               {!isInThread && tab === "mesh" && (
                 <MeshStatusBar
                   banners={meshBanners}
-                  onResume={() => applyPresence("online", username)}
+                  onAction={(kind) => void handleBannerAction(kind, username)}
+                  onDismiss={(key) => {
+                    if (key === "background-limits") {
+                      useSettingsStore
+                        .getState()
+                        .markBackgroundLimitsAcknowledged();
+                    }
+                  }}
                 />
               )}
 

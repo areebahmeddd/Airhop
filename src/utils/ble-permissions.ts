@@ -28,6 +28,17 @@ export interface BlePermissionResult {
   // a re-request will silently no-op and the caller should send them to
   // Settings instead of asking again.
   blockedForever: boolean;
+  // Android 12+ only: the user chose "Approximate" in the location dialog, so
+  // COARSE is granted and FINE is not.
+  //
+  // This deserves its own flag because it is the one denial that re-prompting
+  // cannot fix - the system dialog does not re-offer Precise once Approximate
+  // has been chosen, so "allow the permission" is advice that leads nowhere.
+  // The only route is the app's own settings page, and the copy has to say
+  // which setting to change once the user is there. Treated as a denial for the
+  // gate, because BLE scan results really are withheld without it: Airhop does
+  // not declare neverForLocation on BLUETOOTH_SCAN, matching bitchat.
+  needsPreciseLocation: boolean;
 }
 
 // The permissions the BLE mesh cannot run without, for this API level.
@@ -68,7 +79,12 @@ export async function hasBlePermissions(): Promise<boolean> {
 // once all required permissions are granted.
 export async function ensureBlePermissions(): Promise<BlePermissionResult> {
   if (Platform.OS !== "android") {
-    return { granted: true, denied: [], blockedForever: false };
+    return {
+      granted: true,
+      denied: [],
+      blockedForever: false,
+      needsPreciseLocation: false,
+    };
   }
 
   const required = requiredBlePermissions();
@@ -96,7 +112,12 @@ export async function ensureBlePermissions(): Promise<BlePermissionResult> {
     required.map((p) => PermissionsAndroid.check(p)),
   );
   if (alreadyGranted.every(Boolean)) {
-    return { granted: true, denied: [], blockedForever: false };
+    return {
+      granted: true,
+      denied: [],
+      blockedForever: false,
+      needsPreciseLocation: false,
+    };
   }
 
   const result = await PermissionsAndroid.requestMultiple([
@@ -116,5 +137,21 @@ export async function ensureBlePermissions(): Promise<BlePermissionResult> {
     }
   }
 
-  return { granted: denied.length === 0, denied, blockedForever };
+  // Fine denied while coarse came back granted is the "Approximate" choice, not
+  // a flat refusal of location. Reported separately so the banner can name the
+  // one setting that needs changing rather than asking for a permission the
+  // user believes they already gave.
+  const coarseGranted = await PermissionsAndroid.check(
+    PermissionsAndroid.PERMISSIONS.ACCESS_COARSE_LOCATION,
+  );
+  const needsPreciseLocation =
+    coarseGranted &&
+    denied.includes(PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION);
+
+  return {
+    granted: denied.length === 0,
+    denied,
+    blockedForever,
+    needsPreciseLocation,
+  };
 }

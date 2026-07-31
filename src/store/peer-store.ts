@@ -9,6 +9,11 @@ export interface NearbyPeer {
   lastSeenMs: number;
   noisePubKeyHex: string; // hex of 32-byte X25519 pub
   rssi?: number; // dBm, populated once BLE service is wired in v0.7+
+  // Whether this peer's ANNOUNCE arrived over a BLE link we hold, rather than
+  // relayed through the mesh. A direct peer cannot be invented: it requires an
+  // actual GATT connection. That makes it the one thing worth protecting when
+  // the list has to be trimmed.
+  isDirect?: boolean;
 }
 
 interface PeerState {
@@ -18,6 +23,10 @@ interface PeerState {
   // Record a fresh RSSI reading for an already-known peer. No-op for unknown
   // peers: a signal reading alone doesn't tell us their identity.
   updateRssi: (peerID: string, rssi: number) => void;
+  // Bind or release a peer's direct-neighbour standing from the LINK lifecycle
+  // rather than from announce contents. A link is physical: it cannot be
+  // claimed, only held.
+  setDirect: (peerID: string, isDirect: boolean) => void;
   removePeer: (peerID: string) => void;
   evictStale: (ttlMs?: number) => void;
   getPeer: (peerID: string) => NearbyPeer | undefined;
@@ -28,6 +37,16 @@ interface PeerState {
 // A peer is "reachable" if seen within the last 60 seconds (matches
 // the PeerRegistry TTL in message-router.ts).
 const REACHABLE_TTL_MS = 60_000;
+
+// Ceiling on how many peers the radar will hold.
+//
+// Peers arrive here from ANNOUNCE packets, which anyone in range can mint in
+// unlimited numbers with correctly derived IDs and valid self-signatures. The
+// stale sweep runs on a timer, so between sweeps a flood could put thousands of
+// invented devices into the list this screen renders. Matches the ceiling in
+// PeerRegistry (message-router.ts), which bounds the same input for the same
+// reason.
+const MAX_TRACKED_PEERS = 200;
 
 // How many of a peer map's entries are still reachable. Exported because the
 // map outlives reachability: a peer who walks out of range without a LEAVE (or
@@ -55,6 +74,22 @@ export const usePeerStore = create<PeerState>()((set, get) => ({
       // updates carry no `rssi`, so a plain replace wiped the signal reading
       // every 30s: it would flicker between a real value and undefined.
       next.set(peer.peerID, { ...existing, ...peer, lastSeenMs: Date.now() });
+      // Bound the list on insert.
+      //
+      // Directly connected peers are never trimmed: holding a GATT link to
+      // someone is proof they exist, and they are exactly who an attacker would
+      // want pushed off the radar. Everything else goes oldest-seen first.
+      if (existing === undefined && next.size > MAX_TRACKED_PEERS) {
+        const evictable = [...next.values()]
+          .filter((p) => p.isDirect !== true)
+          .sort((a, b) => a.lastSeenMs - b.lastSeenMs);
+        let over = next.size - MAX_TRACKED_PEERS;
+        for (const stale of evictable) {
+          if (over <= 0) break;
+          next.delete(stale.peerID);
+          over--;
+        }
+      }
       return { peers: next };
     });
   },
@@ -69,6 +104,17 @@ export const usePeerStore = create<PeerState>()((set, get) => ({
       // seen" forever even after their ANNOUNCE timer died, a ghost peer that
       // evictStale could never remove. Reachability stays driven by ANNOUNCEs.
       next.set(peerID, { ...existing, rssi });
+      return { peers: next };
+    });
+  },
+
+  setDirect(peerID: string, isDirect: boolean) {
+    set((state) => {
+      const existing = state.peers.get(peerID);
+      if (existing === undefined || existing.isDirect === isDirect)
+        return state;
+      const next = new Map(state.peers);
+      next.set(peerID, { ...existing, isDirect });
       return { peers: next };
     });
   },

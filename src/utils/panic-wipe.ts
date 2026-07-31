@@ -16,6 +16,7 @@
 import { createMMKV, deleteMMKV } from "react-native-mmkv";
 import { panicWipe as clearKeys } from "../core/crypto/identity";
 import { clearAttachmentCache } from "../services/file-transfer-service";
+import { stopNutzapWatcher } from "../services/nutzap-watcher-handle";
 import { resetWalletService } from "../services/wallet-service";
 import { useActivityStore } from "../store/activity-store";
 import { useBlockedStore } from "../store/blocked-store";
@@ -24,6 +25,7 @@ import { useChatStore } from "../store/chat-store";
 import { useContactsStore } from "../store/contacts-store";
 import { useGeohashBookmarksStore } from "../store/geohash-bookmarks-store";
 import { useGroupStore } from "../store/group-store";
+import { useMeshStateStore } from "../store/mesh-state-store";
 import { useNoticesStore } from "../store/notices-store";
 import { useOutboxStore } from "../store/outbox-store";
 import { usePeerStore } from "../store/peer-store";
@@ -81,6 +83,12 @@ export const MMKV_STORE_IDS = [
 const WALLET_STORE_IDS = [WALLET_STORAGE_ID] as const;
 
 export async function panicWipe(): Promise<void> {
+  // 0. Stop the live NIP-61 nutzap subscription. It holds this identity's Nostr
+  //    private key in a closure and a relay subscription under its pubkey, so
+  //    leaving it running would keep the two things a wipe most needs gone
+  //    alive for the rest of the process.
+  stopNutzapWatcher();
+
   // 1. Destroy all private keys from the OS secure enclave. This also removes
   //    the wallet store's AES key, making step 2's ciphertext unrecoverable.
   await clearKeys();
@@ -113,6 +121,23 @@ export async function panicWipe(): Promise<void> {
   usePlaceNamesStore.getState().clearAll();
   useSettingsStore.getState().reset();
   useBlockedStore.setState({ blockedPeerIDs: [] });
+  // Transport health is live device state, not user data, but a wipe is meant
+  // to leave a clean first-run state and the mesh is gone by this point. Left
+  // as-is, the Mesh tab would keep showing the last identity's presence.
+  useMeshStateStore.setState({
+    bleBlocker: "starting",
+    blePermissionBlocked: false,
+    presenceStatus: "online",
+    nostrConnected: false,
+    // Tor is reset because it is a privacy *claim*, not just cosmetic state.
+    // The wipe tears the transport down, but this flag drives the "Tor on ·
+    // internet traffic routed" banner, so leaving it set meant the UI kept
+    // promising onion routing that was no longer running. A security indicator
+    // that over-claims is worse than none.
+    torActive: false,
+    bridgeActive: false,
+    bridgePeopleAcross: 0,
+  });
 
   // Drop the cached Cashu Wallet instances too: they hold the previous
   // identity's loaded keysets and a handle on the now-deleted store.

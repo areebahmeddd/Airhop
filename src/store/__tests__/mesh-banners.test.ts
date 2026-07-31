@@ -3,8 +3,7 @@ import { computeMeshBanners, type MeshBannerInputs } from "../mesh-state-store";
 // A healthy, fully-online baseline. Individual tests override one field.
 const HEALTHY: MeshBannerInputs = {
   presenceStatus: "online",
-  adapterEnabled: true,
-  permissionGranted: true,
+  bleBlocker: "none",
   locationGranted: true,
   nostrConnected: false,
   torActive: false,
@@ -24,13 +23,18 @@ describe("computeMeshBanners", () => {
     const banners = computeMeshBanners({
       ...HEALTHY,
       presenceStatus: "away",
-      adapterEnabled: false, // would otherwise raise a Bluetooth banner
+      bleBlocker: "adapter-off", // would otherwise raise a Bluetooth banner
       locationGranted: false,
       torActive: true,
       peerCount: 0,
     });
     expect(banners).toEqual([
-      { key: "paused", label: "Mesh paused · You're away", tone: "neutral" },
+      {
+        key: "paused",
+        label: "Mesh paused · You're away",
+        tone: "neutral",
+        action: { label: "Resume", kind: "resume" },
+      },
     ]);
   });
 
@@ -45,22 +49,55 @@ describe("computeMeshBanners", () => {
   it("stacks Bluetooth-off and location-off, severity first", () => {
     const banners = computeMeshBanners({
       ...HEALTHY,
-      adapterEnabled: false,
+      bleBlocker: "adapter-off",
       locationGranted: false,
       peerCount: 0,
     });
-    expect(banners.map((b) => b.key)).toEqual(["bluetooth", "location"]);
+    expect(banners.map((b) => b.key)).toEqual(["ble-adapter-off", "location"]);
     expect(banners[0].tone).toBe("danger");
     expect(banners[1].tone).toBe("caution");
   });
 
-  it("distinguishes adapter-off from permission-denied", () => {
+  // Each blocker has to be nameable on its own, because each sends the user
+  // somewhere different. Collapsing them into one boolean pair is what produced
+  // "Bluetooth permission needed" over a granted permission.
+  it("gives every blocker its own banner and its own way out", () => {
+    const cases: [
+      MeshBannerInputs["bleBlocker"],
+      string,
+      string | undefined,
+    ][] = [
+      ["adapter-off", "ble-adapter-off", "enable-bluetooth"],
+      ["permission-denied", "ble-permission", "open-app-settings"],
+      ["permission-blocked", "ble-permission-blocked", "open-app-settings"],
+      ["precise-location", "ble-precise-location", "open-app-settings"],
+      [
+        "location-services-off",
+        "ble-location-services",
+        "open-location-settings",
+      ],
+      ["unsupported", "ble-unsupported", undefined],
+      ["starting", "ble-starting", undefined],
+    ];
+    for (const [blocker, key, action] of cases) {
+      const banner = computeMeshBanners({ ...HEALTHY, bleBlocker: blocker })[0];
+      expect(banner.key).toBe(key);
+      expect(banner.action?.kind).toBe(action);
+    }
+  });
+
+  it("shows no blocker banner when nothing is in the way", () => {
     expect(
-      computeMeshBanners({ ...HEALTHY, adapterEnabled: false })[0].key,
-    ).toBe("bluetooth");
-    expect(
-      computeMeshBanners({ ...HEALTHY, permissionGranted: false })[0].key,
-    ).toBe("ble-permission");
+      computeMeshBanners({ ...HEALTHY, bleBlocker: "none", peerCount: 0 }).map(
+        (b) => b.key,
+      ),
+    ).not.toContain("ble-adapter-off");
+  });
+
+  it("offers a way back from the paused state", () => {
+    const paused = computeMeshBanners({ ...HEALTHY, presenceStatus: "away" });
+    expect(paused[0].key).toBe("paused");
+    expect(paused[0].action?.kind).toBe("resume");
   });
 
   it("shows the Nostr relay note only with no peers and a live relay", () => {
@@ -131,9 +168,12 @@ describe("computeMeshBanners", () => {
     const banners = computeMeshBanners({
       ...HEALTHY,
       internetEnabled: false,
-      adapterEnabled: false,
+      bleBlocker: "adapter-off",
     });
-    expect(banners.map((b) => b.key)).toEqual(["bluetooth", "internet-off"]);
+    expect(banners.map((b) => b.key)).toEqual([
+      "ble-adapter-off",
+      "internet-off",
+    ]);
   });
 
   it("does not show the bridge note when inactive even if people are cached", () => {
@@ -154,5 +194,137 @@ describe("computeMeshBanners", () => {
       torActive: true,
     });
     expect(banners.map((b) => b.key)).toEqual(["location", "nostr", "tor"]);
+  });
+
+  // Aggressive OEM background management is advice, not a blocker: the mesh is
+  // running fine right now, it just may not survive being backgrounded. So it
+  // is a caution, it is dismissible, and it never suppresses anything else.
+  it("shows the background-limits advisory only when a brand is supplied", () => {
+    expect(computeMeshBanners(HEALTHY).map((b) => b.key)).not.toContain(
+      "background-limits",
+    );
+    const withBrand = computeMeshBanners({
+      ...HEALTHY,
+      backgroundLimitsBrand: "Xiaomi",
+    });
+    const advisory = withBrand.find((b) => b.key === "background-limits");
+    expect(advisory).toBeDefined();
+    expect(advisory?.tone).toBe("caution");
+    expect(advisory?.dismissible).toBe(true);
+    expect(advisory?.action?.kind).toBe("open-background-limits");
+    // Named, because "your phone" is not something a user can act on and the
+    // OEM screen they need is brand-specific.
+    expect(advisory?.label).toContain("Xiaomi");
+  });
+
+  it("treats an empty brand as nothing to say", () => {
+    expect(
+      computeMeshBanners({ ...HEALTHY, backgroundLimitsBrand: "" }).map(
+        (b) => b.key,
+      ),
+    ).not.toContain("background-limits");
+  });
+
+  it("ranks the background advisory above the location note", () => {
+    const banners = computeMeshBanners({
+      ...HEALTHY,
+      backgroundLimitsBrand: "Samsung",
+      locationGranted: false,
+      peerCount: 0,
+    });
+    const keys = banners.map((b) => b.key);
+    expect(keys.indexOf("background-limits")).toBeLessThan(
+      keys.indexOf("location"),
+    );
+  });
+
+  it("stays silent about background limits while Away", () => {
+    // Away short-circuits everything: the mesh is stopped on purpose, so how it
+    // would behave in the background is not a useful thing to say.
+    expect(
+      computeMeshBanners({
+        ...HEALTHY,
+        presenceStatus: "away",
+        backgroundLimitsBrand: "Oppo",
+      }).map((b) => b.key),
+    ).toEqual(["paused"]);
+  });
+
+  // Blockers must never be dismissible: hiding "Bluetooth is off" would leave
+  // an empty radar with nothing explaining it, which is the exact state this
+  // whole system exists to eliminate.
+  it("never lets a hard blocker be dismissed away", () => {
+    for (const blocker of [
+      "adapter-off",
+      "permission-denied",
+      "permission-blocked",
+      "precise-location",
+      "location-services-off",
+      "unsupported",
+    ] as const) {
+      const banner = computeMeshBanners({ ...HEALTHY, bleBlocker: blocker })[0];
+      expect(banner.dismissible).toBeUndefined();
+    }
+  });
+
+  // The battery-saver note is informational, not a fault: the mesh is working,
+  // just looking around less often. It exists because the visible symptom - a
+  // peer taking half a minute to appear - is otherwise indistinguishable from
+  // the app being broken.
+  it("explains a reduced scan the user would otherwise read as broken", () => {
+    const banners = computeMeshBanners({ ...HEALTHY, powerSaving: true });
+    const note = banners.find((b) => b.key === "power-saving");
+    expect(note).toBeDefined();
+    // Muted, not amber: nothing is wrong.
+    expect(note?.tone).toBe("neutral");
+    // No button - charging the phone is the fix, and it clears itself.
+    expect(note?.action).toBeUndefined();
+    // Not dismissible either: it is transient, so hiding it would only mean
+    // hiding it again next time.
+    expect(note?.dismissible).toBeUndefined();
+  });
+
+  it("says nothing about power when the scan is running normally", () => {
+    expect(computeMeshBanners(HEALTHY).map((b) => b.key)).not.toContain(
+      "power-saving",
+    );
+    expect(
+      computeMeshBanners({ ...HEALTHY, powerSaving: false }).map((b) => b.key),
+    ).not.toContain("power-saving");
+  });
+
+  it("still explains the reduced scan when the internet is switched off", () => {
+    // Internet-off short-circuits the relay/Tor/gateway notes because none of
+    // them can apply. Battery is not an internet concern, so it must survive.
+    const keys = computeMeshBanners({
+      ...HEALTHY,
+      internetEnabled: false,
+      powerSaving: true,
+    }).map((b) => b.key);
+    expect(keys).toContain("power-saving");
+    expect(keys).toContain("internet-off");
+  });
+
+  it("stays quiet about power while Away", () => {
+    // Away stopped the radios on purpose. How hard they would have scanned is
+    // not a useful thing to say about a mesh that is not running.
+    expect(
+      computeMeshBanners({
+        ...HEALTHY,
+        presenceStatus: "away",
+        powerSaving: true,
+      }).map((b) => b.key),
+    ).toEqual(["paused"]);
+  });
+
+  it("ranks below the blockers, which are the reason to act", () => {
+    const keys = computeMeshBanners({
+      ...HEALTHY,
+      bleBlocker: "adapter-off",
+      powerSaving: true,
+    }).map((b) => b.key);
+    expect(keys.indexOf("ble-adapter-off")).toBeLessThan(
+      keys.indexOf("power-saving"),
+    );
   });
 });

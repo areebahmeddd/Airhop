@@ -78,6 +78,17 @@ interface SettingsState {
   // How long (seconds) a sent message is held with an "undo" pill before it
   // transmits. 0 means no hold: messages send immediately. Default 2.
   undoSendSeconds: number;
+  // Whether the one-time screen explaining WHY a chat app needs Bluetooth and
+  // Location has been shown. Not a preference, but it belongs here because it
+  // has to survive relaunch and be cleared by the panic wipe: after a wipe the
+  // app is a first-run install again, and the next person deserves the same
+  // explanation before the OS asks them for anything.
+  permissionPrimerSeen: boolean;
+  // Whether the user has dealt with (or dismissed) the note about aggressive
+  // OEM background limits. One-time advice, not a setting, and never shown again
+  // once acknowledged - the alternative is a banner that nags forever, because
+  // there is no reliable way to detect an OEM autostart whitelist.
+  backgroundLimitsAcknowledged: boolean;
   setTheme: (theme: ThemePreference) => void;
   setAutoDownloadMedia: (enabled: boolean) => void;
   setLiveVoiceEnabled: (enabled: boolean) => void;
@@ -93,6 +104,8 @@ interface SettingsState {
   setAllowMintOverClearnet: (allowed: boolean) => void;
   setMonoFont: (font: MonoFont) => void;
   setUndoSendSeconds: (seconds: number) => void;
+  markPermissionPrimerSeen: () => void;
+  markBackgroundLimitsAcknowledged: () => void;
   // Restore first-run defaults. Used by the panic wipe.
   reset: () => void;
 }
@@ -118,6 +131,8 @@ const DEFAULTS = {
   // familiar. JetBrains Mono is offered as an opt-in choice under Appearance.
   monoFont: "system",
   undoSendSeconds: 2,
+  permissionPrimerSeen: false,
+  backgroundLimitsAcknowledged: false,
 } satisfies Partial<SettingsState>;
 
 const storage = createMMKV({ id: "settings-store" });
@@ -191,6 +206,12 @@ export const useSettingsStore = create<SettingsState>()(
       },
       setMonoFont(font) {
         set({ monoFont: font });
+      },
+      markPermissionPrimerSeen() {
+        set({ permissionPrimerSeen: true });
+      },
+      markBackgroundLimitsAcknowledged() {
+        set({ backgroundLimitsAcknowledged: true });
       },
       reset() {
         set({ ...DEFAULTS });

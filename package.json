@@ -104,6 +104,9 @@
   "jest": {
     "preset": "jest-expo",
     "testEnvironment": "node",
+    "testMatch": [
+      "**/*.test.[jt]s?(x)"
+    ],
     "transformIgnorePatterns": [
       "node_modules/(?!(@noble|@scure|nostr-tools|@cashu|react-native|@react-native|expo|@expo|@unimodules|unimodules|react-native-reanimated))"
     ],

@@ -28,7 +28,26 @@ RCT_EXTERN_METHOD(startScanning:(NSArray<NSString *> *)serviceUUIDs
 RCT_EXTERN_METHOD(stopScanning:(RCTPromiseResolveBlock)resolve
                   rejecter:(RCTPromiseRejectBlock)reject)
 
-RCT_EXTERN_METHOD(isAdapterEnabled:(RCTPromiseResolveBlock)resolve
+// Replaces isAdapterEnabled. Reports the radio, the authorization, and (for
+// parity with Android) the two location facts that gate scanning there.
+RCT_EXTERN_METHOD(getRadioState:(RCTPromiseResolveBlock)resolve
+                  rejecter:(RCTPromiseRejectBlock)reject)
+
+RCT_EXTERN_METHOD(requestEnableBluetooth:(RCTPromiseResolveBlock)resolve
+                  rejecter:(RCTPromiseRejectBlock)reject)
+
+RCT_EXTERN_METHOD(openLocationSettings:(RCTPromiseResolveBlock)resolve
+                  rejecter:(RCTPromiseRejectBlock)reject)
+
+// Both no-ops on iOS: background BLE comes from UIBackgroundModes, and
+// CoreBluetooth has no scan-rate control. Declared so the shared reconciler has
+// one code path across both platforms.
+RCT_EXTERN_METHOD(setPowerMode:(NSString *)mode
+                  resolver:(RCTPromiseResolveBlock)resolve
+                  rejecter:(RCTPromiseRejectBlock)reject)
+
+RCT_EXTERN_METHOD(setBackgroundServiceEnabled:(BOOL)enabled
+                  resolver:(RCTPromiseResolveBlock)resolve
                   rejecter:(RCTPromiseRejectBlock)reject)
 
 RCT_EXTERN_METHOD(writeToLink:(NSString *)linkID

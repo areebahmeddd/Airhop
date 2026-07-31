@@ -5,6 +5,8 @@
 // Imports come first in source; Babel hoists jest.mock() calls above them.
 import { panicWipe as identityPanicWipe } from "../../core/crypto/identity";
 import { clearAttachmentCache } from "../../services/file-transfer-service";
+import { setNutzapWatcher } from "../../services/nutzap-watcher-handle";
+import { useMeshStateStore } from "../../store/mesh-state-store";
 import { WALLET_STORAGE_ID } from "../../store/wallet-store";
 import { MMKV_STORE_IDS, panicWipe } from "../panic-wipe";
 
@@ -135,5 +137,31 @@ describe("panicWipe", () => {
     // It must never appear in the plain clearAll list, or the wipe would depend
     // on being able to decrypt what it is trying to destroy.
     expect(MMKV_STORE_IDS).not.toContain(WALLET_STORAGE_ID);
+  });
+
+  test("stops the live nutzap subscription", async () => {
+    // It holds this identity's Nostr private key in a closure and a relay
+    // subscription under its pubkey. Both outlive the wipe unless it is
+    // stopped explicitly - the stores and the keychain are cleared around it,
+    // and neither touches a running subscription.
+    const stop = jest.fn();
+    setNutzapWatcher(stop);
+    await panicWipe();
+    expect(stop).toHaveBeenCalled();
+  });
+
+  test("resets transport health so the Mesh tab shows a first-run state", async () => {
+    useMeshStateStore.setState({
+      bleBlocker: "adapter-off",
+      blePermissionBlocked: true,
+      presenceStatus: "away",
+      nostrConnected: true,
+    });
+    await panicWipe();
+    const s = useMeshStateStore.getState();
+    expect(s.bleBlocker).toBe("starting");
+    expect(s.blePermissionBlocked).toBe(false);
+    expect(s.presenceStatus).toBe("online");
+    expect(s.nostrConnected).toBe(false);
   });
 });

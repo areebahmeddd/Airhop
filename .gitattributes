@@ -36,7 +36,10 @@
 *.strings text eol=lf
 *.xcstrings text eol=lf
 *.entitlements text eol=lf
-*.pbxproj text eol=lf merge=union
+# Intentionally not using merge=union. Unlike plain lists, pbxproj is a
+# structured, UUID-linked format, so union merges can silently produce invalid
+# projects. A visible conflict is safer than subtle Xcode corruption.
+*.pbxproj text eol=lf
 
 # Ruby / CocoaPods
 Podfile text eol=lf
@@ -77,6 +80,7 @@ Gemfile text eol=lf
 *.tar binary
 
 # Compiled and packaged files
+*.a binary
 *.aar binary
 *.jar binary
 *.keystore binary

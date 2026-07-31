@@ -70,7 +70,7 @@ handshakes and the routing while the radios stay unproven until a field test.
 | Video sharing             | Yes, as a file           | No                  | Recorded and played inline. Live streaming is not possible across platforms                    |
 | File transfer             | Yes, per-type caps       | No                  | 512 KiB photos and voice, 1 MiB otherwise. Enforced by bitchat's decoder, so not ours to raise |
 | Store-and-forward courier | Yes, sealed envelope     | Yes, parked drop    | 24 hour life, as bitchat carriers enforce. Sealed to a one-time prekey for forward secrecy     |
-| Live push-to-talk         | No                       | No                  | `0x29` reserved, never sent. Needs a streaming-mic native module                               |
+| Live push-to-talk         | Yes, `0x29` bursts       | No                  | AAC-LC 16 kHz mono, 350 ms jitter buffer. Also shipped by bitchat, so it works between the two |
 | Payments (Cashu)          | Yes, token in a message  | Yes, NIP-61 Nutzap  | Transfer works offline, redemption needs internet                                              |
 | Contact verification      | Yes, QR exchange         | n/a                 | The card carries public keys, and the peer ID is checked against its noise key                 |
 | Panic wipe                | Yes                      | Yes                 | Triple-tap. Destroys keys, messages, groups, board, prekeys                                    |
@@ -205,6 +205,76 @@ Identical to bitchat's proven design:
 - **Tor-proxied by default** on iOS (Arti); optional via Orbot on Android
 - **No single relay dependency**: `SimplePool` connects to 3–5 relays simultaneously; first ACK wins
 
+### Radio Power Policy (Android)
+
+BLE scanning is the single largest battery cost in the app. A continuous
+`SCAN_MODE_LOW_LATENCY` scan is roughly an order of magnitude more expensive
+than `SCAN_MODE_LOW_POWER`, and Airhop's whole purpose is to run in a pocket all
+day. So the radios do not run at one fixed effort: they scale with what the
+device can afford.
+
+**Policy lives in TypeScript, mechanism lives in Kotlin.** `services/power-policy.ts`
+is a pure function of four facts; the native module observes the battery, reports
+it, and applies whichever mode it is told. Nothing decides anything on the native
+side. This keeps the decision unit-testable without a device, and puts "how hard
+to run the radios" next to "whether to run them at all", which
+`services/radio-controller.ts` already owns.
+
+**Battery bands** match bitchat-android's `AppConstants.Power`: critical at
+`≤10%`, low at `≤20%`.
+
+| Mode              | Scan          | Advertise     | TX power    | RSSI poll | Duty cycle      |
+| ----------------- | ------------- | ------------- | ----------- | --------- | --------------- |
+| `performance`     | `LOW_LATENCY` | `LOW_LATENCY` | `HIGH`      | 5s        | continuous      |
+| `balanced`        | `BALANCED`    | `BALANCED`    | `MEDIUM`    | 10s       | continuous      |
+| `power-saver`     | `LOW_POWER`   | `LOW_POWER`   | `LOW`       | 30s       | 2s on / 28s off |
+| `ultra-low-power` | `LOW_POWER`   | `LOW_POWER`   | `ULTRA_LOW` | 60s       | 1s on / 29s off |
+
+**Selection order** is identical to bitchat's `PowerProfileResolver`, and the
+order _is_ the policy:
+
+1. **Backgrounded** → `power-saver`, or `ultra-low-power` on a critical battery.
+   Off screen nobody is waiting on discovery latency, and this is where a phone
+   spends nearly all of its day.
+2. **Charging** (foreground) → `performance`. The cost is someone else's.
+3. Otherwise the **battery band** decides: critical → `ultra-low-power`,
+   low → `power-saver`, else → `balanced`.
+
+Foreground on battery is `balanced` rather than `performance` on purpose: a
+balanced scan still finds peers in seconds, and reserving the most expensive
+setting for "plugged in" is what keeps the app from being the reason a phone dies.
+
+> [!NOTE]
+> The five knobs move together deliberately. A duty-cycled `LOW_POWER` scan
+> beside a `LOW_LATENCY` advertise at full TX power saves almost nothing, because
+> the advertiser is transmitting continuously either way.
+
+**Hysteresis** is Airhop's addition. bitchat re-resolves on every
+`ACTION_BATTERY_CHANGED`, which fires per 1%; a phone hovering at a threshold
+would flip modes repeatedly, and every flip restarts the scanner. Dropping into a
+lower band is immediate (running hard on a nearly flat phone is the failure that
+matters); climbing back out needs `+3%`.
+
+**The duty cycle is invisible above the native boundary.** JS asks for
+"scanning" and keeps getting it; native decides the rate. A burst ending is
+never reported as an adapter or link change, because the reconciler would
+otherwise try to "fix" a state that is working as intended.
+
+**UI.** When the app is in the foreground on a low battery, peers can take up to
+half a minute to appear. That is indistinguishable from a broken mesh unless it
+is said out loud, so the Mesh tab shows a muted `Battery saver · scanning less
+often` note. No button (charging is the fix) and not dismissible (it clears
+itself). It is deliberately silent while backgrounded: a slower scan nobody is
+waiting on is not worth a banner.
+
+> [!IMPORTANT]
+> iOS is a declared no-op. CoreBluetooth exposes no scan-rate control and
+> already throttles background BLE aggressively on the app's behalf. The
+> `setPowerMode` method exists on both platforms so the shared reconciler has one
+> code path rather than a platform branch, and `getRadioState` reports
+> `batteryPercent: -1` there, which the policy reads as "unknown" and leaves the
+> mode alone.
+
 ## 5. Encryption Architecture
 
 ### Session Encryption: Noise XX
@@ -225,14 +295,16 @@ The XX handshake produces two symmetric keys (`send`, `recv`). Messages are then
 
 ```
 Algorithm: Signal Double Ratchet (same as Signal/WhatsApp)
-Root key seeded from: the Noise XX static-static ECDH, no extra round trips
+Root key seeded from: the completed Noise XX transcript hash, no extra round trips
 ```
 
 Used for all DMs stored in the courier / offline outbox:
 
 - **Per-message forward secrecy**: compromise of message N does not expose messages N-1 or N+1
 - **Break-in recovery**: if an attacker learns current keys, future messages are still protected after a few ratchet steps
-- Prekey bundles: one-time public prekeys are signed and gossiped over the mesh as `0x24`, never published to Nostr. A sender seals courier mail to one of them, so an undelivered message stays protected even if the recipient's long-lived key leaks later. X3DH is not used: the Noise static-static ECDH already seeds the ratchet, which made a separate key agreement redundant
+- Prekey bundles: one-time public prekeys are signed and gossiped over the mesh as `0x24`, never published to Nostr. A sender seals courier mail to one of them, so an undelivered message stays protected even if the recipient's long-lived key leaks later. X3DH is not used: the Noise handshake already seeds the ratchet, which made a separate key agreement redundant.
+
+  The seed is the handshake's **transcript hash**, not a static-static ECDH. Both sides already hold the identical hash, so it still costs no extra round trips, but Noise XX mixes both parties' ephemeral keys into it and those private keys are destroyed when the handshake splits. A static-static seed was derivable forever from long-term keys alone: anyone who later obtained one side's static private key could recompute the root key, read the initiator's first ratchet public key straight off the DR header, and decrypt every message sent before the first reply. Seeding from the transcript closes that
 
 ### Packet Signing: [Ed25519](https://ed25519.cr.yp.to/)
 
