@@ -3,6 +3,7 @@ import { Route, Routes, useLocation } from "react-router-dom";
 import Footer from "./components/Footer";
 import Navbar from "./components/Navbar";
 import BlogsPage from "./pages/BlogsPage";
+import BrandPage from "./pages/BrandPage";
 import FAQPage from "./pages/FAQPage";
 import HomePage from "./pages/HomePage";
 import NotFoundPage from "./pages/NotFoundPage";
@@ -26,6 +27,7 @@ export default function App() {
     "/architecture",
     "/faq",
     "/blogs",
+    "/brand",
     "/privacy-policy",
     "/terms-of-service",
   ];
@@ -53,6 +55,7 @@ export default function App() {
         />
         <Route path="/faq" element={<FAQPage />} />
         <Route path="/blogs" element={<BlogsPage />} />
+        <Route path="/brand" element={<BrandPage />} />
         <Route path="/privacy-policy" element={<PrivacyPage />} />
         <Route path="/terms-of-service" element={<TermsPage />} />
         <Route path="*" element={<NotFoundPage />} />

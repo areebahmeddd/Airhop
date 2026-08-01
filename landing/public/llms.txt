@@ -17,12 +17,13 @@ Airhop is free, MIT-licensed, and has no accounts, no ads, no telemetry, and no 
 
 ## Pages
 
-- / - Home
-- /architecture - Full technical breakdown in 17 sections: a concepts glossary covering Bluetooth LE, the Noise protocol family, Nostr and Cashu; identity derivation from one Ed25519 root; transport selection (direct link, then Nostr, then courier); BLE mesh internals (TTL 7, 10-220ms jitter, 1000-entry dedup LRU, 469-byte fragments, live push-to-talk bursts, GCS gossip sync, courier store-and-forward); presence states and background lifecycle; Noise XX and Double Ratchet encryption; the four room types; the Nostr bridge and NIP-17 gift wrap; Tor on both platforms; the Cashu wallet; the on-device AI assistant; opt-in Bluesky and Mastodon bridges; module layering; and the bitchat-compatible v2 wire format
-- /faq - Frequently asked questions
-- /blogs - Blog (coming soon)
-- /privacy-policy - Privacy policy
-- /terms-of-service - Terms of service
+- / - What Airhop is, the feature list, how it works, and a live map of Nostr relay locations
+- /architecture - Technical breakdown in 17 sections: identity derivation, transport selection, BLE mesh internals (TTL 7, fragments, gossip sync, courier store-and-forward), Noise XX and Double Ratchet, the four room types, the Nostr bridge, Tor, the Cashu wallet, and the bitchat-compatible v2 wire format
+- /faq - Common questions on the mesh, messaging, privacy, payments and the AI assistant
+- /blogs - Writing on mesh networking, privacy and offline-first software
+- /brand - Brand kit: the mark and wordmark, colour and type tokens, downloadable assets, press facts and boilerplate
+- /privacy-policy - What stays on the device, what each optional feature exposes, and how long anything is kept
+- /terms-of-service - Acceptable use, content, payments, warranty, and the MIT licence
 
 ## Links
 

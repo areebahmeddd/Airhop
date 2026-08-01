@@ -76,6 +76,9 @@ bitchat/
 landing/node_modules/
 landing/dist/
 
+# Press renderer testing
+press/.build/
+
 # macOS
 .DS_Store
 .AppleDouble

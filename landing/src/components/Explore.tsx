@@ -61,9 +61,10 @@ const sections: {
         internal: true,
       },
       {
-        title: "Contributing",
-        desc: "Read CONTRIBUTING.md before opening your first pull request.",
-        href: "https://github.com/areebahmeddd/Airhop/blob/main/CONTRIBUTING.md",
+        title: "Brand Kit",
+        desc: "The mark, colour and type tokens, press assets and boilerplate.",
+        href: "/brand",
+        internal: true,
       },
     ],
   },

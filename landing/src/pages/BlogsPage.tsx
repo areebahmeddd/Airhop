@@ -3,9 +3,8 @@ import { useSEO } from "../hooks/useSEO";
 export default function BlogsPage() {
   useSEO({
     title: "Blog - Airhop",
-    description: "Writing on mesh networking, privacy, and offline-first software. Coming soon.",
+    description: "Writing on mesh networking, privacy, and offline-first software.",
     path: "/blogs",
-    noIndex: true,
   });
 
   return (
