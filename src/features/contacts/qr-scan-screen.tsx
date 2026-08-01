@@ -364,9 +364,7 @@ export default function QrScanScreen({
 
             <View style={styles.scanFrameWrap} pointerEvents="none">
               <View style={styles.scanFrame} />
-              <Text style={styles.scanHint}>
-                Point your camera at their QR code
-              </Text>
+              <Text style={styles.scanHint}>{T("contacts.qr.aim")}</Text>
             </View>
 
             <View style={styles.scanBottomBar} />
@@ -384,7 +382,7 @@ export default function QrScanScreen({
             <View style={styles.sheetHead}>
               <Text style={styles.sheetTitle}>{T("contacts.qr.add")}</Text>
               <Text style={styles.sheetSubtitle}>
-                Reach someone who isn&apos;t nearby on the mesh.
+                {T("contacts.qr.add_desc")}
               </Text>
             </View>
 
@@ -406,7 +404,7 @@ export default function QrScanScreen({
                 selectionColor={Colors.accent}
               />
               <Text style={styles.fieldHint}>
-                16 characters, or an airhop://peer link.
+                {T("contacts.qr.peer_id_hint")}
               </Text>
               {error ? <Text style={styles.errorText}>{error}</Text> : null}
             </View>
@@ -424,12 +422,12 @@ export default function QrScanScreen({
 
             <View style={styles.dividerRow}>
               <View style={styles.dividerLine} />
-              <Text style={styles.dividerText}>or scan their QR</Text>
+              <Text style={styles.dividerText}>{T("contacts.qr.or_scan")}</Text>
               <View style={styles.dividerLine} />
             </View>
 
             {/* One grouped card with a hairline divider, matching the
-                T("contacts.qr.start_new") chooser so the two sheets read alike. */}
+                "Start something new" chooser so the two sheets read alike. */}
             <View style={styles.optionGroup}>
               <Pressable
                 style={styles.optionRow}
@@ -474,10 +472,7 @@ export default function QrScanScreen({
 
             <View style={styles.noteRow}>
               <Feather name="shield" size={14} color={Colors.verified} />
-              <Text style={styles.noteText}>
-                Scanning a QR verifies their public key. A typed ID stays
-                unverified until you meet on the mesh.
-              </Text>
+              <Text style={styles.noteText}>{T("contacts.qr.trust_note")}</Text>
             </View>
           </>
         )}

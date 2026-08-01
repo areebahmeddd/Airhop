@@ -105,7 +105,9 @@ export default function ContactInfoSheet({
       key: "since",
       icon: "clock",
       iconColor: Colors.textSecondary,
-      label: `Chatting since ${formatDate(firstMessage.timestampMs)}`,
+      label: T("chat.contact.chatting_since", {
+        date: formatDate(firstMessage.timestampMs),
+      }),
     });
   }
   infoRows.push(
@@ -123,7 +125,9 @@ export default function ContactInfoSheet({
             icon: "shield",
             iconColor: Colors.verified,
             label: contact
-              ? `Verified since ${formatDate(contact.addedAtMs)}`
+              ? T("chat.contact.verified_since", {
+                  date: formatDate(contact.addedAtMs),
+                })
               : T("chat.contact.verified"),
             sub: T("chat.contact.verified_desc"),
           }

@@ -6,6 +6,7 @@ on:
   schedule:
     # Weekly on Sunday at 04:00 UTC
     - cron: "0 4 * * 0"
+  workflow_dispatch:
 
 permissions: read-all
 

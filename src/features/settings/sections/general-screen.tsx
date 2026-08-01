@@ -181,7 +181,7 @@ export default function GeneralScreen({ onBack }: Props): React.JSX.Element {
       >
         {/* Features. Wallet has shipped, so it leads the group with a switch
             locked on: the Wallet tab is part of what Airhop is, not something
-            to switch off. The rest aren't built yet and carry a T("settings.coming_soon")
+            to switch off. The rest aren't built yet and carry a "Coming soon"
             tag in the same row shape.
 
             This sat on the settings hub, above the nav list, where it was the
@@ -350,8 +350,7 @@ export default function GeneralScreen({ onBack }: Props): React.JSX.Element {
       >
         <Text style={styles.sheetTitle}>{T("settings.general.quality")}</Text>
         <Text style={styles.sheetSubtitle}>
-          Applies to photos sent from your camera or library. Every photo is
-          fitted to the mesh either way.
+          {T("settings.general.quality_desc")}
         </Text>
         <View style={styles.optionGroup}>
           {QUALITY_ORDER.map((key, i) => {

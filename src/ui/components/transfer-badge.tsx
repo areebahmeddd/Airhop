@@ -8,6 +8,7 @@
 import { Feather } from "@expo/vector-icons";
 import React, { useMemo } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
+import { t } from "../../i18n";
 import { useTransferStore } from "../../store/transfer-store";
 import {
   FontSize,
@@ -48,15 +49,20 @@ export default function TransferBadge({
     active.length > 1
       ? `${String(active.length)} transfers`
       : stalled
-        ? `Waiting · ${primary.name}`
-        : `${primary.direction === "send" ? "Sending" : "Receiving"} ${primary.name}`;
+        ? t("transfer.badge.waiting", { name: primary.name })
+        : t(
+            primary.direction === "send"
+              ? "transfer.badge.sending"
+              : "transfer.badge.receiving",
+            { name: primary.name },
+          );
 
   return (
     <Pressable
       style={styles.pill}
       onPress={() => onOpen(primary.channel)}
       accessibilityRole="button"
-      accessibilityLabel={`${label}, ${String(pct)} percent. Open conversation.`}
+      accessibilityLabel={t("transfer.badge.a11y", { label, percent: pct })}
     >
       <Feather
         name={

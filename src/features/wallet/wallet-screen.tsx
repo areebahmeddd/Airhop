@@ -529,8 +529,10 @@ export default function WalletScreen({
       if (result.outcome === "swapped") {
         showAlert(
           `+${result.amount.toLocaleString()} ${result.unit}`,
-          `Redeemed at ${where}. These proofs are now yours alone: the sender's copy no longer works.` +
-            (result.memo ? `\n\n"${result.memo}"` : ""),
+          t("wallet.receive.redeemed_here", { mint: where }) +
+            (result.memo
+              ? t("wallet.receive.memo_quoted", { memo: result.memo })
+              : ""),
         );
       } else {
         showAlert(
@@ -625,11 +627,18 @@ export default function WalletScreen({
       if (!quote.exact) {
         showAlert(
           t("wallet.err.exact_amount"),
-          `Your proofs can't make exactly ${amount.toLocaleString()} ${quote.unit} offline. The smallest token you can build is ${quote.spend.toLocaleString()} ${quote.unit}, and offline there is no change: the extra ${(quote.spend - amount).toLocaleString()} ${quote.unit} goes to the recipient.\n\nRefreshing at the mint while online would split your proofs into denominations that make this exact.`,
+          t("wallet.send.inexact_body", {
+            amount: amount.toLocaleString(),
+            unit: quote.unit,
+            spend: quote.spend.toLocaleString(),
+            extra: (quote.spend - amount).toLocaleString(),
+          }),
           [
             { text: T("common.cancel"), style: "cancel" },
             {
-              text: `Send ${quote.spend.toLocaleString()}`,
+              text: t("wallet.send.send_amount", {
+                amount: quote.spend.toLocaleString(),
+              }),
               style: "destructive",
               onPress: () => void commit(true),
             },
@@ -659,7 +668,10 @@ export default function WalletScreen({
     const txId = "txId" in tx ? tx.txId : tx.id;
     showAlert(
       t("wallet.reclaim.title"),
-      `The ${tx.amount.toLocaleString()} ${tx.unit} goes back into your balance. Only do this if the token never reached anyone: if they already have the string, whoever redeems it at the mint first keeps the money, and that could be them.`,
+      t("wallet.reclaim.body", {
+        amount: tx.amount.toLocaleString(),
+        unit: tx.unit,
+      }),
       [
         { text: t("wallet.reclaim.keep"), style: "cancel" },
         {
@@ -710,8 +722,12 @@ export default function WalletScreen({
     setShowPeerPicker(false);
     setPending(null);
     showAlert(
-      `${amount.toLocaleString()} ${unit} sent to ${peerIDToUsername(peerID)}`,
-      `${describeRoute(route)} It stays reclaimable under Pending until you confirm they got it, or until the mint tells us the proofs were redeemed.`,
+      t("wallet.send.sent_to", {
+        amount: amount.toLocaleString(),
+        unit,
+        name: peerIDToUsername(peerID),
+      }),
+      t("wallet.send.sent_to_body", { route: describeRoute(route) }),
     );
   }
 
@@ -760,12 +776,19 @@ export default function WalletScreen({
       if (result.method === "nutzap") {
         showAlert(
           t("wallet.zap.sent"),
-          `${result.amount.toLocaleString()} ${result.unit} locked to their key and published. Only they can redeem it.`,
+          t("wallet.zap.sent_body", {
+            amount: result.amount.toLocaleString(),
+            unit: result.unit,
+          }),
         );
       } else if (result.method === "dm") {
         showAlert(
           t("wallet.zap.sent_encrypted"),
-          `${result.amount.toLocaleString()} ${result.unit} sent in a Nostr DM, because ${result.fallbackReason}.\n\nThis is a bearer token: once they decrypt the message, whoever holds that string can redeem it.`,
+          t("wallet.zap.sent_encrypted_body", {
+            amount: result.amount.toLocaleString(),
+            unit: result.unit,
+            reason: result.fallbackReason ?? "",
+          }),
         );
       } else {
         setPending({
@@ -781,7 +804,9 @@ export default function WalletScreen({
         });
         showAlert(
           t("wallet.zap.no_network"),
-          `${result.fallbackReason}. A token was built instead: share it however you like, or reclaim it under Pending.`,
+          t("wallet.zap.no_network_body", {
+            reason: result.fallbackReason ?? "",
+          }),
         );
       }
     } catch (err) {
@@ -802,8 +827,13 @@ export default function WalletScreen({
       setShowAddMint(false);
       setMintUrlInput("");
       showAlert(
-        mint.name ? `Added ${mint.name}` : t("wallet.mint.added"),
-        `${hostOf(mint.url)} issues ${units.join(", ")}. Its keys are cached on this device, so tokens from it can now be verified even with no internet.`,
+        mint.name
+          ? t("wallet.mint.added_named", { name: mint.name })
+          : t("wallet.mint.added"),
+        t("wallet.mint.added_body", {
+          mint: hostOf(mint.url),
+          units: units.join(", "),
+        }),
       );
     } catch (err) {
       reportError(err, t("wallet.mint.add_failed"));
@@ -852,7 +882,7 @@ export default function WalletScreen({
       } else {
         showAlert(
           t("wallet.refresh.partly"),
-          `Could not reach ${hosts.join(", ")}. Everything else is up to date.`,
+          t("wallet.refresh.unreachable", { mints: hosts.join(", ") }),
         );
       }
     } finally {
@@ -870,7 +900,10 @@ export default function WalletScreen({
       const parts: string[] = [];
       if (result.swapped > 0) {
         parts.push(
-          `${result.swapped.toLocaleString()} ${unit} confirmed and swapped for fresh proofs.`,
+          t("wallet.refresh.swapped", {
+            amount: result.swapped.toLocaleString(),
+            unit,
+          }),
         );
       }
       if (result.spentRemoved > 0) {
@@ -880,7 +913,10 @@ export default function WalletScreen({
       // outside the recovery phrase until the swap re-issued it.
       if (result.securedForBackup > 0) {
         parts.push(
-          `${result.securedForBackup.toLocaleString()} ${unit} is now covered by your recovery phrase.`,
+          t("wallet.refresh.secured", {
+            amount: result.securedForBackup.toLocaleString(),
+            unit,
+          }),
         );
       }
       showAlert(
@@ -906,7 +942,7 @@ export default function WalletScreen({
             balance: formatNumber(account.balance),
             unit: account.unit,
           })
-        : `Remove ${hostOf(account.mintUrl)} from your wallet? Its cached keys go too, so tokens from it can no longer be verified offline.`,
+        : t("wallet.mint.remove_plain", { mint: hostOf(account.mintUrl) }),
       [
         { text: T("common.cancel"), style: "cancel" },
         {
@@ -1042,7 +1078,9 @@ export default function WalletScreen({
       showAlert(
         t("wallet.backup.invalid_phrase"),
         unknown.length > 0
-          ? `These are not BIP-39 words: ${unknown.slice(0, 4).join(", ")}. Check the spelling.`
+          ? t("wallet.backup.not_bip39", {
+              words: unknown.slice(0, 4).join(", "),
+            })
           : t("wallet.backup.invalid_phrase_body"),
       );
       return;
@@ -1064,7 +1102,11 @@ export default function WalletScreen({
         unit: primary.unit,
         onProgress: (progress) =>
           setRestoreProgress(
-            `${hostOf(progress.mintUrl)} · keyset ${String(progress.step)} of ${String(progress.total)}`,
+            t("wallet.backup.restore_progress", {
+              mint: hostOf(progress.mintUrl),
+              step: progress.step,
+              total: progress.total,
+            }),
           ),
       });
       setRestoreResult(result);
@@ -1110,7 +1152,12 @@ export default function WalletScreen({
         moved > 0 ? t("wallet.mint.moved") : t("wallet.mint.nothing_moved"),
         [
           moved > 0
-            ? `${moved.toLocaleString()} ${primary.unit} now sits at ${hostOf(target)}, after ${fees.toLocaleString()} ${primary.unit} in Lightning routing fees.`
+            ? t("wallet.mint.moved_body", {
+                amount: moved.toLocaleString(),
+                unit: primary.unit,
+                mint: hostOf(target),
+                fees: fees.toLocaleString(),
+              })
             : null,
           failures.length > 0 ? failures.join("\n") : null,
         ]
@@ -1180,7 +1227,11 @@ export default function WalletScreen({
           setShowDeposit(false);
           showAlert(
             `+${minted.toLocaleString()} ${deposit.unit}`,
-            `Invoice paid and ${minted.toLocaleString()} ${deposit.unit} issued by ${hostOf(deposit.mintUrl)}. This balance is confirmed: you can spend it offline right away.`,
+            t("wallet.ln.deposit_credited", {
+              amount: minted.toLocaleString(),
+              unit: deposit.unit,
+              mint: hostOf(deposit.mintUrl),
+            }),
           );
         } catch {
           // Still unpaid, or the mint blinked. Keep polling.
@@ -1223,10 +1274,16 @@ export default function WalletScreen({
       setWithdrawInvoice("");
       showAlert(
         t("wallet.ln.paid"),
-        `${result.paid.toLocaleString()} sats paid over Lightning. The mint charged ${result.fee.toLocaleString()} sats in routing fees` +
-          (result.changeReturned > 0
-            ? `, and returned ${result.changeReturned.toLocaleString()} sats of the reserve to your balance.`
-            : "."),
+        t(
+          result.changeReturned > 0
+            ? "wallet.ln.withdrawn_with_change"
+            : "wallet.ln.withdrawn",
+          {
+            paid: result.paid.toLocaleString(),
+            fee: result.fee.toLocaleString(),
+            change: result.changeReturned.toLocaleString(),
+          },
+        ),
       );
     } catch (err) {
       reportError(err, t("wallet.ln.payment_failed"));
@@ -1253,11 +1310,7 @@ export default function WalletScreen({
       {locked && (
         <View style={[styles.banner, styles.bannerDanger]}>
           <Feather name="lock" size={16} color={Colors.danger} />
-          <Text style={styles.bannerText}>
-            Wallet storage is locked. Ecash proofs are kept in an encrypted file
-            whose key lives in the device keychain, and it could not be opened.
-            Unlock your device and reopen Airhop.
-          </Text>
+          <Text style={styles.bannerText}>{T("wallet.balance.locked")}</Text>
         </View>
       )}
 
@@ -1265,10 +1318,7 @@ export default function WalletScreen({
         <View style={[styles.banner, styles.bannerWarn]}>
           <Feather name="shield" size={16} color={Colors.textSecondary} />
           <Text style={styles.bannerText}>
-            Tor is on, so mint requests are blocked: they would go out over the
-            clear net and link your IP to your proofs. Sending and receiving
-            over the mesh still works. Allow mint traffic under Settings,
-            Security.
+            {T("wallet.balance.tor_blocked")}
           </Text>
         </View>
       )}
@@ -1287,7 +1337,10 @@ export default function WalletScreen({
             onPress={toggleBitcoinUnit}
             disabled={primary.unit !== "sat"}
             accessibilityRole="button"
-            accessibilityLabel={`Balance ${headline.value} ${headline.label}`}
+            accessibilityLabel={T("wallet.balance.a11y", {
+              value: headline.value,
+              unit: headline.label,
+            })}
             accessibilityHint={
               primary.unit === "sat" ? T("wallet.balance.unit_hint") : undefined
             }
@@ -1313,8 +1366,9 @@ export default function WalletScreen({
             <View style={styles.balanceNote}>
               <Feather name="clock" size={12} color={Colors.textMuted} />
               <Text style={styles.balanceNoteText}>
-                {showAmount(primary.unverified, primary.unit)} not yet confirmed
-                with the mint
+                {T("wallet.balance.unconfirmed_note", {
+                  amount: showAmount(primary.unverified, primary.unit),
+                })}
               </Text>
             </View>
           )}
@@ -1326,8 +1380,9 @@ export default function WalletScreen({
                 color={Colors.textMuted}
               />
               <Text style={styles.balanceNoteText}>
-                {showAmount(primary.reserved, primary.unit)} reserved for a send
-                in flight
+                {T("wallet.balance.reserved_note", {
+                  amount: showAmount(primary.reserved, primary.unit),
+                })}
               </Text>
             </View>
           )}
@@ -1336,14 +1391,15 @@ export default function WalletScreen({
             .filter((u) => u.unit !== primary.unit && u.balance > 0)
             .map((u) => (
               <Text key={u.unit} style={styles.balanceNoteText}>
-                {showAmount(u.balance, u.unit)} at a separate mint account
+                {T("wallet.balance.other_mint_note", {
+                  amount: showAmount(u.balance, u.unit),
+                })}
               </Text>
             ))}
 
           {holdsTestMoney && (
             <Text style={styles.testNote}>
-              Includes play money from a test mint. It is not bitcoin and cannot
-              be cashed out.
+              {T("wallet.balance.test_mint_note")}
             </Text>
           )}
 
@@ -1452,10 +1508,7 @@ export default function WalletScreen({
         {visibleAccounts.length === 0 ? (
           <View style={styles.emptyCard}>
             <Text style={styles.emptyTitle}>{T("wallet.mint.none")}</Text>
-            <Text style={styles.emptyBody}>
-              A mint issues and redeems your ecash. Add one to deposit over
-              Lightning, or just receive a token and its mint is added for you.
-            </Text>
+            <Text style={styles.emptyBody}>{T("wallet.mint.none_desc")}</Text>
             {/* The header has an Add mint icon, but an empty screen should
                 offer the next step rather than expect it to be found. */}
             <Pressable
@@ -1536,7 +1589,9 @@ export default function WalletScreen({
                       }
                       hitSlop={hitSlopFor(MINT_ICON_SIZE)}
                       accessibilityRole="button"
-                      accessibilityLabel={`Confirm proofs with ${hostOf(account.mintUrl)}`}
+                      accessibilityLabel={T("wallet.mint.confirm_with", {
+                        mint: hostOf(account.mintUrl),
+                      })}
                     >
                       {refreshingMint === account.mintUrl ? (
                         <ActivityIndicator
@@ -1556,7 +1611,9 @@ export default function WalletScreen({
                       onPress={() => handleRemoveMint(account)}
                       hitSlop={hitSlopFor(MINT_ICON_SIZE)}
                       accessibilityRole="button"
-                      accessibilityLabel={`Remove ${hostOf(account.mintUrl)}`}
+                      accessibilityLabel={T("wallet.mint.remove_a11y", {
+                        mint: hostOf(account.mintUrl),
+                      })}
                     >
                       <Feather
                         name="x"
@@ -1590,7 +1647,9 @@ export default function WalletScreen({
           >
             <Feather name="git-merge" size={15} color={Colors.accent} />
             <Text style={styles.inlineActionText}>
-              Balance split across {splitAccounts.length} mints. Move it to one
+              {T("wallet.mint.split_across", {
+                count: splitAccounts.length,
+              })}
             </Text>
           </Pressable>
         )}
@@ -1600,10 +1659,7 @@ export default function WalletScreen({
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>{T("wallet.ln.title")}</Text>
         <View style={styles.lightningCard}>
-          <Text style={styles.lightningBody}>
-            Turn Lightning sats into ecash you can spend offline, or cash ecash
-            back out to any Lightning invoice. Both need internet and a mint.
-          </Text>
+          <Text style={styles.lightningBody}>{T("wallet.ln.body")}</Text>
           <View style={styles.lightningActions}>
             <Pressable
               style={[
@@ -1713,8 +1769,7 @@ export default function WalletScreen({
           {backupEnabled ? (
             <>
               <Text style={styles.backupBody}>
-                Your balance can be rebuilt on a new device from your twelve
-                words.
+                {T("wallet.backup.on_body_short")}
               </Text>
               {/* A phrase that exists but was never copied out is the most
                   dangerous state of all: the card would otherwise read as
@@ -1728,9 +1783,7 @@ export default function WalletScreen({
                     color={Colors.danger}
                   />
                   <Text style={styles.backupWarnText}>
-                    You never confirmed a written copy. Right now the words
-                    exist only on this phone, which is the one thing a backup is
-                    supposed to survive. View the phrase and write it down.
+                    {T("wallet.backup.unconfirmed_body")}
                   </Text>
                 </View>
               )}
@@ -1742,27 +1795,22 @@ export default function WalletScreen({
                     color={Colors.textSecondary}
                   />
                   <Text style={styles.backupWarnText}>
-                    {unbackedBalance.toLocaleString()} {primary.unit} is not
-                    covered yet. Coins you were given carry the secrets of
-                    whoever sent them, so they only come under your phrase once
-                    they are swapped. Refresh a mint to secure them.
+                    {T("wallet.backup.not_covered", {
+                      amount: `${unbackedBalance.toLocaleString()} ${primary.unit}`,
+                    })}
                   </Text>
                 </View>
               )}
               {mintList.length > 0 && (
                 <Text style={styles.backupHint}>
-                  Recovery has to ask a mint which coins it signed, so keep this
-                  list with your words:{"\n"}
+                  {T("wallet.backup.mint_list_note")}
+                  {"\n"}
                   {mintList.map((m) => hostOf(m.url)).join("\n")}
                 </Text>
               )}
             </>
           ) : (
-            <Text style={styles.backupBody}>
-              Your ecash exists only on this phone. If you lose it, nobody can
-              recover the money, including you. A recovery phrase is twelve
-              words that can rebuild your balance anywhere.
-            </Text>
+            <Text style={styles.backupBody}>{T("wallet.backup.off_body")}</Text>
           )}
 
           <View style={styles.backupActions}>
@@ -1822,8 +1870,7 @@ export default function WalletScreen({
           <View style={styles.emptyCard}>
             <Text style={styles.emptyTitle}>{T("wallet.activity.none")}</Text>
             <Text style={styles.emptyBody}>
-              Payments you send and receive show up here, newest first, with the
-              mint and the fee for each one.
+              {T("wallet.activity.none_desc")}
             </Text>
           </View>
         ) : (
@@ -1874,13 +1921,19 @@ export default function WalletScreen({
                   accessibilityLabel={
                     showAllActivity
                       ? T("wallet.activity.show_fewer")
-                      : `Show ${String(recent.length - ACTIVITY_COLLAPSED_COUNT)} more payments`
+                      : TP(
+                          "wallet.activity.show_more_a11y",
+                          recent.length - ACTIVITY_COLLAPSED_COUNT,
+                        )
                   }
                 >
                   <Text style={styles.historyMoreText}>
                     {showAllActivity
                       ? T("wallet.activity.show_less")
-                      : `Show ${String(recent.length - ACTIVITY_COLLAPSED_COUNT)} more`}
+                      : TP(
+                          "wallet.activity.show_more",
+                          recent.length - ACTIVITY_COLLAPSED_COUNT,
+                        )}
                   </Text>
                   <Feather
                     name={showAllActivity ? "chevron-up" : "chevron-down"}
@@ -1956,10 +2009,7 @@ export default function WalletScreen({
         sheetStyle={styles.modalSheet}
       >
         <Text style={styles.modalTitle}>{T("wallet.receive.title")}</Text>
-        <Text style={styles.modalSubtitle}>
-          Paste a Cashu token. Online it is redeemed at the mint straight away;
-          offline it is stored and confirmed the next time you refresh.
-        </Text>
+        <Text style={styles.modalSubtitle}>{T("wallet.receive.body")}</Text>
         {myNpub !== null && (
           <Pressable
             style={styles.npubRow}
@@ -2021,15 +2071,12 @@ export default function WalletScreen({
         sheetStyle={styles.modalSheet}
       >
         <Text style={styles.modalTitle}>{T("wallet.send.title")}</Text>
-        <Text style={styles.modalSubtitle}>
-          Built offline from proofs you already hold. Nothing leaves your
-          balance for good until you confirm the token was delivered.
-        </Text>
+        <Text style={styles.modalSubtitle}>{T("wallet.send.body")}</Text>
         <TextInput
           style={styles.tokenInput}
           value={sendAmount}
           onChangeText={setSendAmount}
-          placeholder={`Amount in ${primary.unit}`}
+          placeholder={T("wallet.send.amount_in", { unit: primary.unit })}
           placeholderTextColor={Colors.textMuted}
           keyboardType="number-pad"
           returnKeyType="next"
@@ -2065,11 +2112,7 @@ export default function WalletScreen({
         sheetStyle={styles.modalSheet}
       >
         <Text style={styles.modalTitle}>{T("wallet.zap.title")}</Text>
-        <Text style={styles.modalSubtitle}>
-          If they publish NIP-61 nutzap info, the ecash is locked to their key
-          so nobody else can spend it. If not, it goes as an encrypted DM
-          instead and you will be told which happened.
-        </Text>
+        <Text style={styles.modalSubtitle}>{T("wallet.zap.body")}</Text>
         {zapContacts.length > 0 && (
           <View style={styles.zapContacts}>
             {zapContacts.map((contact) => {
@@ -2086,7 +2129,9 @@ export default function WalletScreen({
                   onPress={() => setZapNpub(selected ? "" : hex)}
                   accessibilityRole="button"
                   accessibilityState={{ selected }}
-                  accessibilityLabel={`Zap ${contact.nickname}`}
+                  accessibilityLabel={T("wallet.zap.contact", {
+                    name: contact.nickname,
+                  })}
                 >
                   <Text
                     style={[
@@ -2116,7 +2161,7 @@ export default function WalletScreen({
           style={[styles.tokenInput, styles.tokenInputCompact]}
           value={zapAmount}
           onChangeText={setZapAmount}
-          placeholder={`Amount in ${primary.unit}`}
+          placeholder={T("wallet.send.amount_in", { unit: primary.unit })}
           placeholderTextColor={Colors.textMuted}
           keyboardType="number-pad"
           selectionColor={Colors.accent}
@@ -2154,12 +2199,7 @@ export default function WalletScreen({
         sheetStyle={styles.modalSheet}
       >
         <Text style={styles.modalTitle}>{T("wallet.explain.add_mint")}</Text>
-        <Text style={styles.modalSubtitle}>
-          A mint holds the Bitcoin backing your ecash, so pick one you would
-          trust with the balance you keep there. The URL is checked before it is
-          saved. Run your own with Nutshell if you would rather not trust
-          anyone.
-        </Text>
+        <Text style={styles.modalSubtitle}>{T("wallet.mint.add_body")}</Text>
         <TextInput
           style={styles.tokenInput}
           value={mintUrlInput}
@@ -2205,9 +2245,11 @@ export default function WalletScreen({
           </Text>
           {pending && pending.fee > 0 && (
             <Text style={styles.generatedMint}>
-              {pending.spend.toLocaleString()} {pending.unit} leaves your
-              balance; the extra {pending.fee.toLocaleString()} covers the mint
-              fee they would otherwise pay
+              {T("wallet.send.fee_note", {
+                spend: pending.spend.toLocaleString(),
+                unit: pending.unit,
+                fee: pending.fee.toLocaleString(),
+              })}
             </Text>
           )}
         </View>
@@ -2238,15 +2280,11 @@ export default function WalletScreen({
               </Text>
             </View>
             <Text style={styles.generatedHint}>
-              This token is split across too many coins to fit in a QR code.
-              Share or copy it instead, or refresh at the mint to consolidate.
+              {T("wallet.send.qr_too_big")}
             </Text>
           </>
         )}
-        <Text style={styles.generatedHint}>
-          Whoever holds this string owns the money. The proofs are reserved, not
-          spent: if it never reaches anyone you can reclaim them under Pending.
-        </Text>
+        <Text style={styles.generatedHint}>{T("wallet.send.bearer_note")}</Text>
         <View style={styles.generatedActions}>
           <Pressable
             style={styles.generatedActionBtn}
@@ -2315,8 +2353,7 @@ export default function WalletScreen({
         {deposit === null ? (
           <>
             <Text style={styles.modalSubtitle}>
-              The mint gives you an invoice. Pay it from any Lightning wallet
-              and the sats come back as ecash you can spend offline.
+              {T("wallet.ln.deposit_body")}
             </Text>
             <TextInput
               style={styles.tokenInput}
@@ -2353,9 +2390,10 @@ export default function WalletScreen({
         ) : (
           <>
             <Text style={styles.modalSubtitle}>
-              Pay this invoice for {deposit.amount.toLocaleString()}{" "}
-              {deposit.unit}. The wallet is watching for the payment and will
-              issue your ecash automatically.
+              {T("wallet.ln.pay_invoice_for", {
+                amount: deposit.amount.toLocaleString(),
+                unit: deposit.unit,
+              })}
             </Text>
             {/* bolt11 is bech32, so the all-uppercase form is equivalent and
                 encodes in the QR alphanumeric mode: same invoice, denser code,
@@ -2415,8 +2453,7 @@ export default function WalletScreen({
               <View style={styles.waitingRow}>
                 <Feather name="clock" size={16} color={Colors.textMuted} />
                 <Text style={styles.waitingText}>
-                  This invoice expired. If you already paid it, the balance is
-                  credited automatically.
+                  {T("wallet.ln.expired_body")}
                 </Text>
               </View>
             ) : (
@@ -2425,9 +2462,11 @@ export default function WalletScreen({
                 <Text style={styles.waitingText}>
                   {depositExpiresAtMs === undefined
                     ? T("wallet.ln.waiting")
-                    : `Waiting for payment · expires in ${formatCountdown(
-                        depositExpiresAtMs - depositClock,
-                      )}`}
+                    : T("wallet.ln.waiting_expires", {
+                        countdown: formatCountdown(
+                          depositExpiresAtMs - depositClock,
+                        ),
+                      })}
                 </Text>
               </View>
             )}
@@ -2471,11 +2510,7 @@ export default function WalletScreen({
         sheetStyle={styles.modalSheet}
       >
         <Text style={styles.modalTitle}>{T("wallet.ln.withdraw_title")}</Text>
-        <Text style={styles.modalSubtitle}>
-          Paste a bolt11 invoice and the mint pays it from your ecash. You are
-          quoted the routing reserve first; whatever routing does not use comes
-          back to your balance.
-        </Text>
+        <Text style={styles.modalSubtitle}>{T("wallet.ln.withdraw_body")}</Text>
         <TextInput
           style={[styles.tokenInput, styles.tokenInputMono]}
           value={withdrawInvoice}
@@ -2528,12 +2563,18 @@ export default function WalletScreen({
             <QuoteRow
               styles={styles}
               label={T("wallet.ln.routing_reserve")}
-              value={`up to ${withdrawQuote.feeReserve.toLocaleString()} ${withdrawQuote.unit}`}
+              value={T("wallet.ln.up_to", {
+                amount: withdrawQuote.feeReserve.toLocaleString(),
+                unit: withdrawQuote.unit,
+              })}
             />
             <QuoteRow
               styles={styles}
               label={T("wallet.ln.reserved")}
-              value={`${withdrawQuote.total.toLocaleString()} ${withdrawQuote.unit}`}
+              value={T("wallet.ln.amount_unit", {
+                amount: withdrawQuote.total.toLocaleString(),
+                unit: withdrawQuote.unit,
+              })}
             />
           </View>
         )}
@@ -2543,7 +2584,10 @@ export default function WalletScreen({
             withdrawQuote
               ? busy === "withdrawPay"
                 ? T("wallet.ln.paying")
-                : `Pay ${withdrawQuote.amount.toLocaleString()} ${withdrawQuote.unit}`
+                : T("wallet.ln.pay_amount", {
+                    amount: withdrawQuote.amount.toLocaleString(),
+                    unit: withdrawQuote.unit,
+                  })
               : busy === "withdrawQuote"
                 ? T("wallet.mint.checking")
                 : T("wallet.ln.get_quote")
@@ -2573,7 +2617,7 @@ export default function WalletScreen({
               {T("wallet.backup.setup_title")}
             </Text>
             <Text style={styles.modalSubtitle}>
-              You are about to see twelve words. They are the money.
+              {T("wallet.backup.about_to_see")}
             </Text>
             {[
               T("wallet.backup.warn_secret"),
@@ -2608,8 +2652,7 @@ export default function WalletScreen({
                 : T("wallet.backup.write_down")}
             </Text>
             <Text style={styles.modalSubtitle}>
-              Twelve words, in this exact order. Anyone who has them has your
-              balance.
+              {T("wallet.backup.exact_order")}
             </Text>
             <View style={styles.phraseGrid}>
               {phrase.split(" ").map((word, index) => (
@@ -2655,12 +2698,13 @@ export default function WalletScreen({
               {T("wallet.backup.check_copy")}
             </Text>
             <Text style={styles.modalSubtitle}>
-              A phrase nobody wrote down is worse than no phrase, because it
-              looks like a safety net that is not there. Two words to confirm.
+              {T("wallet.backup.verify_body")}
             </Text>
             {verifyPositionList.map((position) => (
               <View key={position} style={styles.verifyRow}>
-                <Text style={styles.verifyLabel}>Word {position}</Text>
+                <Text style={styles.verifyLabel}>
+                  {T("wallet.backup.word_n", { position })}
+                </Text>
                 <TextInput
                   style={[styles.tokenInput, styles.tokenInputCompact]}
                   value={verifyAnswers[position] ?? ""}
@@ -2679,7 +2723,7 @@ export default function WalletScreen({
             ))}
             {verifyError && (
               <Text style={styles.verifyError}>
-                That does not match. Check your written copy.
+                {T("wallet.backup.verify_mismatch")}
               </Text>
             )}
             <SheetActions
@@ -2711,9 +2755,7 @@ export default function WalletScreen({
         {restoreResult === null ? (
           <>
             <Text style={styles.modalSubtitle}>
-              Enter the twelve words. Airhop re-derives your coins and asks each
-              mint which of them it signed, so the balance comes back from the
-              records the mint keeps.
+              {T("wallet.backup.restore_body")}
             </Text>
             <TextInput
               style={styles.tokenInput}
@@ -2731,7 +2773,9 @@ export default function WalletScreen({
             <Text style={styles.modalSubtitle}>
               {mintList.length === 0
                 ? T("wallet.backup.no_mints_yet")
-                : `Will scan: ${mintList.map((m) => hostOf(m.url)).join(", ")}. A mint you have not added is never asked, so its balance stays invisible.`}
+                : T("wallet.backup.will_scan", {
+                    mints: mintList.map((m) => hostOf(m.url)).join(", "),
+                  })}
             </Text>
             {restoreProgress !== null && (
               <View style={styles.waitingRow}>
@@ -2819,10 +2863,7 @@ export default function WalletScreen({
           {T("wallet.mint.consolidate_title")}
         </Text>
         <Text style={styles.modalSubtitle}>
-          A token can only ever name one mint, so a balance spread across
-          several cannot pay an amount larger than the biggest one holds. Airhop
-          can move it: each other mint pays a Lightning invoice issued by the
-          one you pick. Costs a small routing fee and needs internet.
+          {T("wallet.mint.consolidate_body")}
         </Text>
         {splitAccounts.map((account) => {
           const isTarget = account.mintUrl === consolidateTarget;
@@ -2833,7 +2874,9 @@ export default function WalletScreen({
               onPress={() => setConsolidateTarget(account.mintUrl)}
               accessibilityRole="radio"
               accessibilityState={{ selected: isTarget }}
-              accessibilityLabel={`Move everything to ${hostOf(account.mintUrl)}`}
+              accessibilityLabel={T("wallet.mint.move_everything_to", {
+                mint: hostOf(account.mintUrl),
+              })}
             >
               <Feather
                 name={isTarget ? "check-circle" : "circle"}
@@ -2883,10 +2926,7 @@ export default function WalletScreen({
             ? `${qrToken.amount.toLocaleString()} ${qrToken.unit}`
             : T("wallet.token")}
         </Text>
-        <Text style={styles.modalSubtitle}>
-          Have them scan this from their wallet. Still reclaimable until you
-          mark it delivered.
-        </Text>
+        <Text style={styles.modalSubtitle}>{T("wallet.send.scan_note")}</Text>
         {qrToken?.token !== undefined && canEncodeTokenQr(qrToken.token) ? (
           <View style={styles.qrFrame}>
             <QRCode
@@ -2899,8 +2939,7 @@ export default function WalletScreen({
           </View>
         ) : (
           <Text style={styles.modalSubtitle}>
-            This token is split across too many coins to fit in a QR code. Share
-            or copy it instead.
+            {T("wallet.send.qr_too_big_short")}
           </Text>
         )}
         <Pressable style={styles.modalCancel} onPress={() => setQrToken(null)}>
@@ -2915,16 +2954,12 @@ export default function WalletScreen({
         sheetStyle={styles.modalSheet}
       >
         <Text style={styles.modalTitle}>{T("wallet.send.to_peer_short")}</Text>
-        <Text style={styles.modalSubtitle}>
-          The token goes out as an encrypted DM over the mesh. No internet
-          needed.
-        </Text>
+        <Text style={styles.modalSubtitle}>{T("wallet.send.mesh_note")}</Text>
         {onlinePeers.length === 0 ? (
           <View style={styles.emptyCard}>
             <Text style={styles.emptyTitle}>{T("wallet.send.no_peers")}</Text>
             <Text style={styles.emptyBody}>
-              Open the Mesh tab to find nearby devices, or share the token
-              another way.
+              {T("wallet.send.no_peers_note")}
             </Text>
           </View>
         ) : (
@@ -2936,7 +2971,9 @@ export default function WalletScreen({
                 style={styles.peerPickerRow}
                 onPress={() => handleSendTokenToPeer(peer.peerID)}
                 accessibilityRole="button"
-                accessibilityLabel={`Send to ${username}`}
+                accessibilityLabel={T("wallet.send.send_to", {
+                  name: username,
+                })}
               >
                 <Avatar username={username} peerID={peer.peerID} size={40} />
                 <View style={styles.peerPickerInfo}>
@@ -3138,11 +3175,11 @@ function relativeTime(ms: number): string {
   const delta = Date.now() - ms;
   if (delta < 60_000) return t("wallet.activity.just_now");
   const minutes = Math.floor(delta / 60_000);
-  if (minutes < 60) return `${String(minutes)}m ago`;
+  if (minutes < 60) return t("format.minutes_ago", { count: minutes });
   const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${String(hours)}h ago`;
+  if (hours < 24) return t("format.hours_ago", { count: hours });
   const days = Math.floor(hours / 24);
-  if (days < 7) return `${String(days)}d ago`;
+  if (days < 7) return t("format.days_ago", { count: days });
   return new Date(ms).toLocaleDateString();
 }
 

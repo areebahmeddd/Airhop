@@ -7,7 +7,7 @@ description: >
   architectural violation.
 ---
 
-# BLE Native Boundary
+# Native Boundary
 
 ## The Rule
 

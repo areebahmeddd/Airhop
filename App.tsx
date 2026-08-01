@@ -647,7 +647,7 @@ export default function App(): React.JSX.Element {
       const chat = useChatStore.getState();
       const isMuted = chat.mutedChannels.includes(msg.channel);
       // Being @-mentioned overrides mute, the way every major chat app treats a
-      // mention: even a muted room pings and logs a bell entry when it is you
+      // mention: even a muted channel pings and logs a bell entry when it is you
       // being addressed by name.
       const mentionsMe = !msg.isSystem && mentionsNickname(msg.text, username);
       // A muted conversation otherwise stays silent: no system notification, no
@@ -987,9 +987,9 @@ export default function App(): React.JSX.Element {
                             accessibilityLabel={
                               channelsUnread > 0
                                 ? TP("a11y.unread_count", channelsUnread, {
-                                    label: T("chat.subtab.rooms"),
+                                    label: T("chat.subtab.channels"),
                                   })
-                                : T("chat.subtab.rooms")
+                                : T("chat.subtab.channels")
                             }
                             accessibilityState={{
                               selected: chatSubTab === "channels",
@@ -1014,7 +1014,7 @@ export default function App(): React.JSX.Element {
                               ]}
                               maxFontSizeMultiplier={MaxFontScale.chrome}
                             >
-                              Rooms
+                              {T("chat.subtab.channels")}
                             </Text>
                             {channelsUnread > 0 && (
                               <View
@@ -1068,7 +1068,7 @@ export default function App(): React.JSX.Element {
                               ]}
                               maxFontSizeMultiplier={MaxFontScale.chrome}
                             >
-                              Direct
+                              {T("chat.subtab.direct")}
                             </Text>
                             {dmsUnread > 0 && (
                               <View
@@ -1086,7 +1086,7 @@ export default function App(): React.JSX.Element {
                             )}
                           </Pressable>
                         </View>
-                        {/* Bell: notification history, shown on both the Rooms
+                        {/* Bell: notification history, shown on both the Channels
                             and Direct sub-tabs, badged with unseen activity.
                             Plain icon, no filled box (unlike the +), so the two
                             read as different weights of action. */}
@@ -1125,7 +1125,7 @@ export default function App(): React.JSX.Element {
                         </Pressable>
                         {/* Shown on both sub-tabs. What it opens is the same
                             chooser either way, so the header keeps its shape
-                            when you switch between Rooms and Direct. */}
+                            when you switch between Channels and Direct. */}
                         <Pressable
                           style={styles.newChannelPill}
                           onPress={() => setStartNewTrigger((c) => c + 1)}
@@ -1146,7 +1146,7 @@ export default function App(): React.JSX.Element {
                     // right. Radar is the default view.
                     <>
                       <Text style={styles.headerTitle} numberOfLines={1}>
-                        Mesh
+                        {T("nav.tab.mesh")}
                       </Text>
                       <View style={styles.headerControls}>
                         {/* Same reasoning as the Chats header: the track is the
@@ -1185,7 +1185,7 @@ export default function App(): React.JSX.Element {
                               ]}
                               maxFontSizeMultiplier={MaxFontScale.chrome}
                             >
-                              Radar
+                              {T("mesh.view.radar_short")}
                             </Text>
                           </Pressable>
                           <Pressable
@@ -1217,7 +1217,7 @@ export default function App(): React.JSX.Element {
                               ]}
                               maxFontSizeMultiplier={MaxFontScale.chrome}
                             >
-                              List
+                              {T("mesh.view.list_short")}
                             </Text>
                           </Pressable>
                         </View>
@@ -1242,19 +1242,14 @@ export default function App(): React.JSX.Element {
                     // here from a row inside the balance card.
                     <>
                       <Text style={styles.headerTitle} numberOfLines={1}>
-                        Wallet
+                        {T("nav.tab.wallet")}
                       </Text>
                       <View style={styles.headerControls}>
-                        {/* Send and Zap both spend, so they are dimmed with
-                            nothing to spend. Letting them open a sheet that can
-                            only end in T("wallet.action.no_balance") is the classic way
-                            to waste somebody's time. Receive and Add mint stay
-                            live, since those are how a new wallet gets started.
-
-                            A dim glyph alone does not say WHY, and this is the
-                            one header where two of four actions are routinely
-                            off, so the reason rides in the accessibility label
-                            rather than being left to be inferred. */}
+                        {/* Send and Zap spend, so they dim on an empty balance
+                            rather than opening a sheet that can only fail.
+                            Receive and Add mint stay live: that is how a new
+                            wallet starts. A dim glyph does not say why, so the
+                            reason rides in the accessibility label. */}
                         <Pressable
                           style={[
                             styles.newChannelPill,

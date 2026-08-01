@@ -96,8 +96,13 @@ export async function sendEcashToPeer(
       // cannot be undone once the recipient redeems.
       const confirmed = await confirm(
         t("wallet.err.exact_amount"),
-        `Your proofs can't make exactly ${amount.toLocaleString()} ${unit} offline. The smallest token you can build is ${quote.spend.toLocaleString()} ${unit}, and the extra ${(quote.spend - amount).toLocaleString()} ${unit} goes to them with no way to get it back.\n\nRefreshing at the mint while online splits your proofs into denominations that make this exact.`,
-        `Send ${quote.spend.toLocaleString()}`,
+        t("wallet.xfer.inexact_body", {
+          amount: amount.toLocaleString(),
+          unit,
+          spend: quote.spend.toLocaleString(),
+          extra: (quote.spend - amount).toLocaleString(),
+        }),
+        t("wallet.xfer.send_amount", { amount: quote.spend.toLocaleString() }),
       );
       if (!confirmed) return null;
     }

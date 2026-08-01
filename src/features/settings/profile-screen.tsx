@@ -19,7 +19,13 @@ import {
 } from "react-native";
 import QRCode from "react-native-qrcode-svg";
 import { encodeQRContent } from "../../core/crypto/contact-exchange";
-import { t, useT, type TranslationKey } from "../../i18n";
+import {
+  LANGUAGES,
+  PLANNED_LANGUAGES,
+  t,
+  useT,
+  type TranslationKey,
+} from "../../i18n";
 import {
   destroyMeshService,
   getMeshService,
@@ -340,7 +346,7 @@ export default function ProfileScreen({
   async function handleShareQR(): Promise<void> {
     // A tappable deep link that opens Airhop straight into a chat with me.
     await Share.share({
-      message: `Add me on Airhop - offline-first, private mesh messaging.\n\n${peerInviteLink(peerID)}`,
+      message: `${t("settings.qr.share_body")}\n\n${peerInviteLink(peerID)}`,
       title: t("settings.qr.share_message"),
     });
   }
@@ -447,7 +453,7 @@ export default function ProfileScreen({
           <View style={styles.sharePillInner}>
             <Feather name="share-2" size={13} color={Colors.textSecondary} />
             <Text style={styles.sharePillText} numberOfLines={1}>
-              Share ID
+              {T("settings.share_id_short")}
             </Text>
           </View>
         </Pressable>
@@ -460,7 +466,7 @@ export default function ProfileScreen({
           <View style={styles.sharePillInner}>
             <Feather name="eye" size={13} color={Colors.textSecondary} />
             <Text style={styles.sharePillText} numberOfLines={1}>
-              Show QR
+              {T("settings.qr.show_short")}
             </Text>
           </View>
         </Pressable>
@@ -542,9 +548,9 @@ export default function ProfileScreen({
       </View>
 
       {/* Moving to a new phone. Not built yet, so the row carries the same
-          T("settings.coming_soon") tag as the unshipped feature rows above and opens a
+          "Coming soon" tag as the unshipped feature rows above, and opens a
           sheet describing the move rather than starting one. It sits directly
-          above the danger zone because both answer T("settings.transfer.leaving"),
+          above the danger zone because both answer "I am leaving this device",
           and the safe answer should be the one you reach first. */}
       <View style={shared.section}>
         <View style={shared.settingsGroup}>
@@ -587,7 +593,7 @@ export default function ProfileScreen({
                   {T("settings.wipe.title")}
                 </Text>
                 <Text style={styles.dangerDescription}>
-                  Instantly destroy all keys, messages, and proofs
+                  {T("settings.wipe.desc")}
                 </Text>
               </View>
             </View>
@@ -647,9 +653,7 @@ export default function ProfileScreen({
         sheetStyle={shared.sheet}
       >
         <Text style={shared.sheetTitle}>{T("settings.status.title")}</Text>
-        <Text style={shared.sheetSubtitle}>
-          Choose how visible you are on the mesh.
-        </Text>
+        <Text style={shared.sheetSubtitle}>{T("settings.status.desc")}</Text>
         <View style={[shared.settingsGroup, styles.appearanceGroup]}>
           {STATUS_ORDER.map((key, i) => {
             const meta = STATUS_META[key];
@@ -693,114 +697,179 @@ export default function ProfileScreen({
         </View>
       </BottomSheet>
 
-      {/* Appearance modal: light / dark / system default */}
+      {/* Appearance modal: theme, mono font, and the language list. Three
+          groups outgrow a phone screen, so the body scrolls and the grab
+          handle keeps the drag. */}
       <BottomSheet
         visible={showThemeModal}
         onClose={() => setShowThemeModal(false)}
-        sheetStyle={shared.sheet}
+        sheetStyle={[shared.sheet, styles.appearanceSheet]}
+        scrollable
       >
         <Text style={shared.sheetTitle}>
           {T("settings.section.appearance")}
         </Text>
 
-        <Text style={styles.appearanceGroupLabel}>THEME</Text>
-        <View style={[shared.settingsGroup, styles.appearanceGroup]}>
-          {THEME_ORDER.map((key, i) => {
-            const meta = THEME_META[key];
-            const selected = key === theme;
-            return (
-              <React.Fragment key={key}>
-                {i > 0 && <View style={shared.groupDivider} />}
-                <Pressable
-                  style={[
-                    styles.optionRowGrouped,
-                    selected && styles.optionRowGroupedSelected,
-                  ]}
-                  onPress={() => {
-                    setTheme(key);
-                    setShowThemeModal(false);
-                  }}
-                  accessibilityRole="button"
-                  accessibilityLabel={T("settings.theme.set_a11y", {
-                    value: T(meta.labelKey),
-                  })}
-                >
-                  <View style={styles.optionIconGrouped}>
-                    <Feather
-                      name={meta.icon}
-                      size={18}
-                      color={Colors.textSecondary}
-                    />
-                  </View>
-                  <View style={shared.optionText}>
-                    <Text style={shared.optionLabel}>{T(meta.labelKey)}</Text>
-                    <Text style={shared.optionDescription}>
-                      {T(meta.descriptionKey)}
-                    </Text>
-                  </View>
-                  {selected && (
-                    <Feather
-                      name="check"
-                      size={18}
-                      color={Colors.textPrimary}
-                    />
-                  )}
-                </Pressable>
-              </React.Fragment>
-            );
-          })}
-        </View>
+        <ScrollView
+          style={styles.appearanceScroll}
+          contentContainerStyle={styles.appearanceScrollContent}
+          showsVerticalScrollIndicator={false}
+        >
+          <Text style={styles.appearanceGroupLabel}>
+            {T("settings.theme.group")}
+          </Text>
+          <View style={[shared.settingsGroup, styles.appearanceGroup]}>
+            {THEME_ORDER.map((key, i) => {
+              const meta = THEME_META[key];
+              const selected = key === theme;
+              return (
+                <React.Fragment key={key}>
+                  {i > 0 && <View style={shared.groupDivider} />}
+                  <Pressable
+                    style={[
+                      styles.optionRowGrouped,
+                      selected && styles.optionRowGroupedSelected,
+                    ]}
+                    onPress={() => {
+                      setTheme(key);
+                      setShowThemeModal(false);
+                    }}
+                    accessibilityRole="button"
+                    accessibilityLabel={T("settings.theme.set_a11y", {
+                      value: T(meta.labelKey),
+                    })}
+                  >
+                    <View style={styles.optionIconGrouped}>
+                      <Feather
+                        name={meta.icon}
+                        size={18}
+                        color={Colors.textSecondary}
+                      />
+                    </View>
+                    <View style={shared.optionText}>
+                      <Text style={shared.optionLabel}>{T(meta.labelKey)}</Text>
+                      <Text style={shared.optionDescription}>
+                        {T(meta.descriptionKey)}
+                      </Text>
+                    </View>
+                    {selected && (
+                      <Feather
+                        name="check"
+                        size={18}
+                        color={Colors.textPrimary}
+                      />
+                    )}
+                  </Pressable>
+                </React.Fragment>
+              );
+            })}
+          </View>
 
-        {/* Font: keep the sheet open on select so the change is visible live
+          {/* Font: keep the sheet open on select so the change is visible live
                 (the mono bits behind it update instantly) and easy to compare. */}
-        <Text style={styles.appearanceGroupLabel}>FONT</Text>
-        <View style={[shared.settingsGroup, styles.appearanceGroup]}>
-          {MONO_FONT_ORDER.map((key, i) => {
-            const meta = MONO_FONTS[key];
-            const selected = key === monoFont;
-            return (
-              <React.Fragment key={key}>
-                {i > 0 && <View style={shared.groupDivider} />}
-                <Pressable
-                  style={[
-                    styles.optionRowGrouped,
-                    selected && styles.optionRowGroupedSelected,
-                  ]}
-                  onPress={() => setMonoFont(key)}
-                  accessibilityRole="button"
-                  accessibilityLabel={T("settings.font.set_a11y", {
-                    value: T(meta.labelKey),
+          <Text style={styles.appearanceGroupLabel}>
+            {T("settings.font.group")}
+          </Text>
+          <View style={[shared.settingsGroup, styles.appearanceGroup]}>
+            {MONO_FONT_ORDER.map((key, i) => {
+              const meta = MONO_FONTS[key];
+              const selected = key === monoFont;
+              return (
+                <React.Fragment key={key}>
+                  {i > 0 && <View style={shared.groupDivider} />}
+                  <Pressable
+                    style={[
+                      styles.optionRowGrouped,
+                      selected && styles.optionRowGroupedSelected,
+                    ]}
+                    onPress={() => setMonoFont(key)}
+                    accessibilityRole="button"
+                    accessibilityLabel={T("settings.font.set_a11y", {
+                      value: T(meta.labelKey),
+                    })}
+                  >
+                    <View style={styles.optionIconGrouped}>
+                      <Feather
+                        name={meta.icon}
+                        size={18}
+                        color={Colors.textSecondary}
+                      />
+                    </View>
+                    <View style={shared.optionText}>
+                      <Text
+                        style={[
+                          shared.optionLabel,
+                          { fontFamily: meta.family },
+                        ]}
+                      >
+                        {T(meta.labelKey)}
+                      </Text>
+                      <Text style={shared.optionDescription}>
+                        {T(meta.descriptionKey)}
+                      </Text>
+                    </View>
+                    {selected && (
+                      <Feather
+                        name="check"
+                        size={18}
+                        color={Colors.textPrimary}
+                      />
+                    )}
+                  </Pressable>
+                </React.Fragment>
+              );
+            })}
+          </View>
+
+          {/* Language: English is the whole catalog today, so the other nine are
+            listed but not selectable. Naming them is the point. It answers
+            "is my language coming" without a picker that can only pick one
+            thing, and the rows become live the release their catalogs land. */}
+          <Text style={styles.appearanceGroupLabel}>
+            {T("settings.language.group")}
+          </Text>
+          <View style={[shared.settingsGroup, styles.appearanceGroup]}>
+            <View
+              style={[styles.optionRowGrouped, styles.optionRowGroupedSelected]}
+            >
+              <View style={styles.optionIconGrouped}>
+                <Text style={styles.languageCode}>EN</Text>
+              </View>
+              <View style={shared.optionText}>
+                <Text style={shared.optionLabel}>
+                  {T("settings.language.en")}
+                </Text>
+                <Text style={shared.optionDescription}>
+                  {LANGUAGES.en.endonym}
+                </Text>
+              </View>
+              <Feather name="check" size={18} color={Colors.textPrimary} />
+            </View>
+            {PLANNED_LANGUAGES.map((lang) => (
+              <React.Fragment key={lang.code}>
+                <View style={shared.groupDivider} />
+                <View
+                  style={[styles.optionRowGrouped, styles.languageRowSoon]}
+                  accessible
+                  accessibilityLabel={T("settings.language.soon_a11y", {
+                    value: T(lang.nameKey),
                   })}
                 >
                   <View style={styles.optionIconGrouped}>
-                    <Feather
-                      name={meta.icon}
-                      size={18}
-                      color={Colors.textSecondary}
-                    />
+                    <Text style={styles.languageCode}>{lang.shortCode}</Text>
                   </View>
                   <View style={shared.optionText}>
-                    <Text
-                      style={[shared.optionLabel, { fontFamily: meta.family }]}
-                    >
-                      {T(meta.labelKey)}
-                    </Text>
-                    <Text style={shared.optionDescription}>
-                      {T(meta.descriptionKey)}
-                    </Text>
+                    <Text style={shared.optionLabel}>{T(lang.nameKey)}</Text>
+                    <Text style={shared.optionDescription}>{lang.endonym}</Text>
                   </View>
-                  {selected && (
-                    <Feather
-                      name="check"
-                      size={18}
-                      color={Colors.textPrimary}
-                    />
-                  )}
-                </Pressable>
+                  <Text style={styles.languageSoon}>
+                    {T("settings.language.soon")}
+                  </Text>
+                </View>
               </React.Fragment>
-            );
-          })}
-        </View>
+            ))}
+          </View>
+        </ScrollView>
       </BottomSheet>
 
       {/* Transfer sheet: a preview, not a flow. It states what a move will
@@ -812,13 +881,8 @@ export default function ProfileScreen({
         onClose={() => setShowTransferModal(false)}
         sheetStyle={shared.sheet}
       >
-        <Text style={[shared.sheetTitle, styles.sheetTextLeft]}>
-          {T("settings.transfer.title")}
-        </Text>
-        <Text style={[shared.sheetSubtitle, styles.sheetTextLeft]}>
-          Hold both phones together and move everything across over Bluetooth.
-          Nothing passes through a server, so it works with no internet.
-        </Text>
+        <Text style={shared.sheetTitle}>{T("settings.transfer.title")}</Text>
+        <Text style={shared.sheetSubtitle}>{T("settings.transfer.body")}</Text>
         <View style={[shared.settingsGroup, styles.appearanceGroup]}>
           {TRANSFER_ITEMS.map((item, i) => (
             <React.Fragment key={item.labelKey}>
@@ -842,8 +906,7 @@ export default function ProfileScreen({
           ))}
         </View>
         <Text style={[styles.transferNote, styles.sheetTextLeft]}>
-          Coming in a future update. When it ships, the old phone clears itself
-          once the move finishes, so one identity only ever lives on one device.
+          {T("settings.transfer.note")}
         </Text>
         <View style={shared.sheetActions}>
           <Pressable
@@ -860,19 +923,14 @@ export default function ProfileScreen({
       </BottomSheet>
 
       {/* Panic wipe modal: confirm, then wipe and drop straight to onboarding
-          rather than making the user tap through a second T("settings.wipe.done") screen. */}
+          rather than making the user tap through a second "Wiped" screen. */}
       <BottomSheet
         visible={showWipeModal}
         onClose={() => setShowWipeModal(false)}
         sheetStyle={shared.sheet}
       >
-        <Text style={[shared.sheetTitle, styles.sheetTextLeft]}>
-          {T("settings.wipe.title")}
-        </Text>
-        <Text style={[shared.sheetSubtitle, styles.sheetTextLeft]}>
-          This will instantly destroy all your keys, messages, and wallet
-          proofs. This cannot be undone.
-        </Text>
+        <Text style={shared.sheetTitle}>{T("settings.wipe.title")}</Text>
+        <Text style={shared.sheetSubtitle}>{T("settings.wipe.body")}</Text>
         <View style={styles.wipeActions}>
           <Pressable
             style={styles.wipeConfirmBtn}
@@ -955,7 +1013,7 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
     appearanceGroup: {
       width: "100%",
     },
-    // Small group header inside the Appearance sheet ("THEME" / "FONT").
+    // Small group header inside the Appearance sheet (theme / font / language).
     appearanceGroupLabel: {
       alignSelf: "stretch",
       fontSize: FontSize.xs,
@@ -965,6 +1023,40 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       marginTop: Spacing.md,
       marginBottom: Spacing.xs,
       marginStart: Spacing.xs,
+    },
+    // Capped so the language list scrolls inside the sheet instead of pushing
+    // the sheet past the top of the screen, where it would clip rather than
+    // scroll (a sheet body is a plain View).
+    appearanceSheet: {
+      maxHeight: "85%",
+    },
+    appearanceScroll: {
+      alignSelf: "stretch",
+      // Shrink inside the capped sheet rather than pushing past it: without
+      // this the list keeps its full content height and clips at the top.
+      flexShrink: 1,
+    },
+    appearanceScrollContent: {
+      paddingBottom: Spacing.sm,
+    },
+    // Leading column of a language row: the code in mono, standing in for the
+    // icon the theme and font rows carry. A flag would be wrong (a language is
+    // not a country) and a globe on all ten would say nothing.
+    languageCode: {
+      fontFamily: FontFamily.mono,
+      fontSize: FontSize.xs,
+      fontWeight: FontWeight.semibold,
+      color: Colors.textMuted,
+    },
+    // The nine without a catalog yet: dimmed and inert, so the group reads as
+    // one list rather than as a selectable box with disabled strays in it.
+    languageRowSoon: {
+      opacity: 0.55,
+    },
+    languageSoon: {
+      fontSize: FontSize.xs,
+      color: Colors.textMuted,
+      flexShrink: 0,
     },
     // Footnote under the transfer list: quieter than sheetSubtitle, since it
     // qualifies what was just described rather than introducing it.

@@ -43,11 +43,11 @@ Tests are co-located with their module in a `__tests__/` directory. All `src/cor
 | `core/nostr/`    | 11     | 111       | Network calls (`NostrClient` mocked) |
 | `core/payments/` | 3      | 88        | Mint connectivity (network)          |
 | `core/router/`   | 1      | 38        | BLE and WiFi transports (native)     |
-| `i18n/`          | 2      | 15        | -                                    |
+| `i18n/`          | 2      | 16        | -                                    |
 | `services/`      | 19     | 176       | Native radios (modelled, see below)  |
 | `store/`         | 14     | 182       | MMKV persistence (mocked)            |
 | `utils/`         | 12     | 126       | -                                    |
-| **Total**        | **90** | **1,132** |                                      |
+| **Total**        | **90** | **1,133** |                                      |
 
 `services/` includes the lifecycle and multi-device suites, which is why it is no
 longer the thin layer it once was: the rules `mesh-service` enforces are now

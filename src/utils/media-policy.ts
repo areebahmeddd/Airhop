@@ -51,6 +51,10 @@ export function mediaBlockedReason(channel: string): string | null {
   if (isLocationChannel(channel)) {
     return t("media.blocked.location_channel");
   }
-  // Everything left is a private room: a `#name` channel or a `group:<id>`.
-  return `An attachment is signed but not encrypted, so sending one into a private ${channel.startsWith("group:") ? "group" : "channel"} would broadcast it in the clear while the text here stays encrypted.`;
+  // Everything left is private: a `#name` channel or a `group:<id>`.
+  return t(
+    channel.startsWith("group:")
+      ? "media.blocked.private_group"
+      : "media.blocked.private_channel",
+  );
 }

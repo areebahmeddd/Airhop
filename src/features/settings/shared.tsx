@@ -357,15 +357,20 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       justifyContent: "center",
       marginTop: Spacing.xs,
     },
+    // Title and subtitle sit flush left. The sheet body centres its children,
+    // so both have to stretch themselves back out to the full width.
     sheetTitle: {
+      alignSelf: "stretch",
+      textAlign: "left",
       fontSize: FontSize.md,
       fontWeight: FontWeight.bold,
       color: Colors.textPrimary,
     },
     sheetSubtitle: {
+      alignSelf: "stretch",
+      textAlign: "left",
       fontSize: FontSize.sm,
       color: Colors.textMuted,
-      textAlign: "center",
       lineHeight: FontSize.sm * 1.5,
     },
     // Stacked, full-width bounded pill buttons: the primary action solid on

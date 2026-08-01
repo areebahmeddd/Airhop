@@ -115,10 +115,10 @@ function ageLabel(ms: number, now: number): string {
   const s = Math.max(0, Math.floor((now - ms) / 1000));
   if (s < 60) return t("chat.notices.just_now");
   const m = Math.floor(s / 60);
-  if (m < 60) return `${m}m ago`;
+  if (m < 60) return t("format.minutes_ago", { count: m });
   const h = Math.floor(m / 60);
-  if (h < 24) return `${h}h ago`;
-  return `${Math.floor(h / 24)}d ago`;
+  if (h < 24) return t("format.hours_ago", { count: h });
+  return t("format.days_ago", { count: Math.floor(h / 24) });
 }
 
 function fadeLabel(
@@ -127,11 +127,11 @@ function fadeLabel(
 ): string | null {
   if (expiresAtMs === undefined) return null;
   const s = Math.max(0, Math.floor((expiresAtMs - now) / 1000));
-  if (s <= 0) return "fading";
+  if (s <= 0) return t("chat.notices.fading");
   const h = Math.floor(s / 3600);
   if (h < 1) return t("chat.notices.fades_soon");
-  if (h < 24) return `fades in ${h}h`;
-  return `fades in ${Math.floor(h / 24)}d`;
+  if (h < 24) return t("chat.notices.fades_in_hours", { count: h });
+  return t("chat.notices.fades_in_days", { count: Math.floor(h / 24) });
 }
 
 interface Props {
@@ -248,7 +248,7 @@ export function NoticesSheet({ visible, onClose, channel }: Props) {
         <Text style={styles.title}>{T("chat.notices.title")}</Text>
       </View>
 
-      {/* Scope tabs: only offer T("chat.notices.here") when a location cell is resolved. */}
+      {/* Scope tabs: only offer "Here" when a location cell is resolved. */}
       {geohash !== null && (
         <View style={styles.tabs}>
           <Pressable
@@ -266,7 +266,7 @@ export function NoticesSheet({ visible, onClose, channel }: Props) {
             <Text
               style={[styles.tabText, scope === "here" && styles.tabTextActive]}
             >
-              Geo
+              {T("chat.notices.scope_geo")}
             </Text>
           </Pressable>
           <Pressable
@@ -284,7 +284,7 @@ export function NoticesSheet({ visible, onClose, channel }: Props) {
             <Text
               style={[styles.tabText, scope === "mesh" && styles.tabTextActive]}
             >
-              Mesh
+              {T("chat.notices.scope_mesh")}
             </Text>
           </Pressable>
         </View>
@@ -315,7 +315,7 @@ export function NoticesSheet({ visible, onClose, channel }: Props) {
               accessibilityLabel={T("chat.notices.mark_urgent")}
             >
               <Text style={[styles.urgentText, urgent && styles.urgentTextOn]}>
-                Urgent
+                {T("chat.notices.urgent_short")}
               </Text>
             </Pressable>
           )}
@@ -357,9 +357,7 @@ export function NoticesSheet({ visible, onClose, channel }: Props) {
 
       {/* List */}
       {rows.length === 0 ? (
-        <Text style={styles.empty}>
-          No notices yet. Post one so it stays here for others.
-        </Text>
+        <Text style={styles.empty}>{T("chat.notices.none")}</Text>
       ) : (
         <ScrollView style={styles.list} showsVerticalScrollIndicator={false}>
           {rows.map((row) => {

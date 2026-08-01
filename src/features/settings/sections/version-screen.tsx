@@ -29,7 +29,7 @@ import {
   LICENSE_URL,
 } from "../../../data/app-info";
 import { birdForVersion } from "../../../data/releases";
-import { useT } from "../../../i18n";
+import { t, useT } from "../../../i18n";
 import { useSettingsStore } from "../../../store/settings-store";
 import PrimaryButton from "../../../ui/components/primary-button";
 import {
@@ -207,7 +207,9 @@ export default function VersionScreen({ onBack }: Props): React.JSX.Element {
           </Animated.View>
           <Text style={styles.wordmark}>airhop</Text>
           <View style={styles.versionBlock}>
-            <Text style={styles.version}>Version {APP_VERSION}</Text>
+            <Text style={styles.version}>
+              {T("settings.version.number", { version: APP_VERSION })}
+            </Text>
             {bird ? (
               <View style={styles.codenameRow}>
                 <Text style={styles.codenameLabel}>
@@ -223,7 +225,7 @@ export default function VersionScreen({ onBack }: Props): React.JSX.Element {
           <PrimaryButton
             label={
               update
-                ? `Download ${update.version}`
+                ? T("settings.version.download", { version: update.version })
                 : checking
                   ? T("settings.version.checking")
                   : T("settings.version.check")
@@ -234,7 +236,9 @@ export default function VersionScreen({ onBack }: Props): React.JSX.Element {
             disabled={checking}
             accessibilityLabel={
               update
-                ? `Download version ${update.version}`
+                ? T("settings.version.download_a11y", {
+                    version: update.version,
+                  })
                 : T("settings.version.check")
             }
           />
@@ -258,7 +262,7 @@ export default function VersionScreen({ onBack }: Props): React.JSX.Element {
             </Text>
           </View>
           <Text style={styles.creditText}>
-            Released under{" "}
+            {T("settings.version.released_under")}{" "}
             <Text
               style={styles.creditLink}
               onPress={() => void Linking.openURL(LICENSE_URL)}
@@ -316,7 +320,9 @@ function UpdateResult({
         style={styles.result}
         onPress={() => void Linking.openURL(check.url)}
         accessibilityRole="link"
-        accessibilityLabel={`View release notes for version ${check.version}`}
+        accessibilityLabel={t("settings.version.notes_a11y", {
+          version: check.version,
+        })}
       >
         <Feather name="arrow-up-circle" size={16} color={Colors.textPrimary} />
         <Text style={styles.resultText}>
@@ -333,8 +339,7 @@ function UpdateResult({
       <View style={styles.result}>
         <Feather name="shield" size={16} color={Colors.textMuted} />
         <Text style={styles.resultText}>
-          Update check is paused while Tor is on, so it cannot leak your IP.
-          Check the releases page in a browser.
+          {t("settings.version.tor_paused")}
         </Text>
       </View>
     );
@@ -345,7 +350,7 @@ function UpdateResult({
     <View style={styles.result}>
       <Feather name="wifi-off" size={16} color={Colors.textMuted} />
       <Text style={styles.resultText}>
-        Could not check for updates. Check your connection and try again.
+        {t("settings.version.check_failed")}
       </Text>
     </View>
   );

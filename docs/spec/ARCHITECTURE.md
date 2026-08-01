@@ -490,7 +490,7 @@ surface; `src/services/wallet-service.ts` owns everything above it.
 
 Airhop ships in English. Every user-facing string in the app is in one catalog,
 `src/i18n/locales/en.ts`, and a second language is a second file. Working
-reference: [`.github/skills/localization.md`](../../.github/skills/localization.md).
+reference: [`.github/skills/i18n.md`](../../.github/skills/i18n.md).
 
 ### Why it is a protocol concern and not a polish concern
 
@@ -509,7 +509,7 @@ touches screens, so that one touches none.
 
 | In this release                                                  | In v1.3.0                                                 |
 | ---------------------------------------------------------------- | --------------------------------------------------------- |
-| Every user-facing string in one catalog, 1,035 keys              | Nine more catalogs                                        |
+| Every user-facing string in one catalog, 1,297 keys              | Nine more catalogs                                        |
 | Zero hardcoded strings, enforced in CI (`i18n:audit -- --max 0`) | Locale store and in-app picker                            |
 | Plurals through `tPlural`, never concatenation                   | CLDR plural rules beyond English's one/other              |
 | Stylesheets on logical properties, so RTL is a catalog away      | Device language negotiation                               |
@@ -532,6 +532,7 @@ coverage threshold and no partial state to manage.
 | Keys named after bitchat's                                 | bitchat is public domain, ships 30 languages, and its catalog is vendored here. A key that matches theirs is a translation that can be lifted rather than commissioned. This is the single biggest lever on the cost of the whole effort                                                                  |
 | Counts go through `tPlural`, never concatenation           | `"item" + "s"` is untranslatable: no language outside English pluralises by appending to the stem, Russian needs four forms and Arabic six. Eight of these were found and fixed during extraction. The English one/other rule lives in the runtime, in one place, and is where CLDR selection replaces it |
 | Translation never happens at module load                   | A module constant holding `t("key")` type-checks, renders correctly, and freezes in whichever language the app started in. Constants hold `TranslationKey`s and the component translates on render. `npm run i18n:audit` fails the build on it; it found 25 on its first run                              |
+| Terminal punctuation is checked, not reviewed              | A string that starts a second sentence must finish it. A stop in the middle and none at the end reads as truncated, and a screen reader runs the two halves together. Translators copy English punctuation, so it is settled here before nine more catalogs inherit it                                    |
 
 ### What never gets translated
 

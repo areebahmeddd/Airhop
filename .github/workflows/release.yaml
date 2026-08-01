@@ -76,6 +76,22 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Append verification instructions
+        run: |
+          set -euo pipefail
+          cat >> RELEASE_NOTES.md <<EOF
+
+          ## Verify this download
+
+          The APK is signed with the Airhop release key and carries SLSA build provenance from this repository.
+
+          \`\`\`
+          gh attestation verify airhop.apk --repo ${GITHUB_REPOSITORY}
+          \`\`\`
+
+          The same provenance is attached as \`airhop.apk.intoto.jsonl\` for offline checks.
+          EOF
+
       - name: Compose release title
         id: title
         run: |
@@ -103,9 +119,7 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
           cp docs/dev/CHANGELOG.md "${RUNNER_TEMP}/CHANGELOG.md"
           git fetch origin main
-          # The generated changelog is already safe in RUNNER_TEMP, so discard the
-          # tag's working tree when switching to main. Without -f this aborts on any
-          # tag that sits behind main, which is what re-publishing an older tag does.
+          # Force-switch to main since the changelog is already saved in RUNNER_TEMP.
           git checkout -f -B main origin/main
           cp "${RUNNER_TEMP}/CHANGELOG.md" docs/dev/CHANGELOG.md
           # Keep app.json and iOS MARKETING_VERSION in sync with the tag so version
@@ -127,9 +141,11 @@ jobs:
     name: Build Android APK
     runs-on: ubuntu-24.04
     needs: release
-    # Attaches the built APK to the release.
+    # Attaches the built APK to the release and signs its build provenance.
     permissions:
       contents: write
+      id-token: write
+      attestations: write
 
     steps:
       - name: Checkout repository
@@ -155,7 +171,7 @@ jobs:
         run: npm ci
 
       - name: Set up JDK
-        uses: actions/setup-java@03ad4de0992f5dab5e18fcb136590ce7c4a0ac95 # v5.6.0
+        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5.7.0
         with:
           distribution: temurin
           java-version: "21"
@@ -190,22 +206,34 @@ jobs:
           chmod +x gradlew
           ./gradlew assembleRelease --no-daemon
 
-      - name: Rename APK
+      - name: Stage APK
         run: |
           set -euo pipefail
           mkdir -p dist
           mv android/app/build/outputs/apk/release/app-release.apk dist/airhop.apk
 
-      - name: Upload APK to release
+      - name: Attest APK build provenance
+        id: attest-apk
+        uses: actions/attest-build-provenance@0f67c3f4856b2e3261c31976d6725780e5e4c373 # v4.1.1
+        with:
+          subject-path: dist/airhop.apk
+
+      - name: Stage APK provenance
+        env:
+          BUNDLE_PATH: ${{ steps.attest-apk.outputs.bundle-path }}
+        run: |
+          set -euo pipefail
+          cp "${BUNDLE_PATH}" dist/airhop.apk.intoto.jsonl
+
+      - name: Upload APK and provenance to release
         uses: softprops/action-gh-release@3d0d9888cb7fd7b750713d6e236d1fcb99157228 # v3.0.2
         with:
           tag_name: ${{ needs.release.outputs.tag }}
-          files: dist/airhop.apk
+          files: |
+            dist/airhop.apk
+            dist/airhop.apk.intoto.jsonl
 
-      # Google Play needs an AAB, not an APK. It is signed with the same upload
-      # key and kept as a workflow artifact (not attached to the public release,
-      # since users cannot install an AAB) for you to download and upload to the
-      # Play Console.
+      # The signed AAB is stored as a workflow artifact for Play Console upload.
       - name: Build release AAB (Google Play upload bundle)
         working-directory: android
         env:
@@ -214,10 +242,57 @@ jobs:
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: ./gradlew bundleRelease --no-daemon
 
-      - name: Upload AAB as build artifact
+      - name: Stage AAB
+        run: |
+          set -euo pipefail
+          mv android/app/build/outputs/bundle/release/app-release.aab dist/airhop.aab
+
+      # Play re-signs the bundle on upload, so this covers the uploaded file only.
+      - name: Attest AAB build provenance
+        id: attest-aab
+        uses: actions/attest-build-provenance@0f67c3f4856b2e3261c31976d6725780e5e4c373 # v4.1.1
+        with:
+          subject-path: dist/airhop.aab
+
+      - name: Stage AAB provenance
+        env:
+          BUNDLE_PATH: ${{ steps.attest-aab.outputs.bundle-path }}
+        run: |
+          set -euo pipefail
+          cp "${BUNDLE_PATH}" dist/airhop.aab.intoto.jsonl
+
+      - name: Upload AAB and provenance as build artifact
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: airhop-playstore-aab
-          path: android/app/build/outputs/bundle/release/app-release.aab
+          path: |
+            dist/airhop.aab
+            dist/airhop.aab.intoto.jsonl
           if-no-files-found: error
           retention-days: 90
+
+  sbom:
+    name: Generate SBOM
+    runs-on: ubuntu-24.04
+    needs: release
+    # Attaches the SBOM to the release.
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.release.outputs.tag }}
+
+      - name: Generate SBOM
+        uses: anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610 # v0.24.0
+        with:
+          format: spdx-json
+          output-file: airhop.spdx.json
+
+      - name: Upload SBOM to release
+        uses: softprops/action-gh-release@3d0d9888cb7fd7b750713d6e236d1fcb99157228 # v3.0.2
+        with:
+          tag_name: ${{ needs.release.outputs.tag }}
+          files: airhop.spdx.json

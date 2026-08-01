@@ -4,7 +4,7 @@
 
 ## Current Version: v1.0.0
 
-**Status:** Feature work complete and green in CI (1,132 tests across 90 suites, 0 lint errors, TypeScript clean).
+**Status:** Feature work complete and green in CI (1,133 tests across 90 suites, 0 lint errors, TypeScript clean).
 
 **Verified by tests:** packet codec (v1 and v2 headers, padding, compression),
 fragment format and reassembly progress, Noise XX, Double Ratchet, courier
@@ -173,14 +173,16 @@ English ships. The other languages land in v1.3.0, and because the extraction is
 
 - [x] Translation runtime, no library (`src/i18n/index.ts`: `t` / `useT` / `tPlural`, named-placeholder interpolation)
 - [x] Completeness enforced by `tsc` (`src/i18n/locales/types.ts`: every locale is `Record<TranslationKey, string>` derived from `en.ts`, so a partial locale does not compile and no runtime fallback exists)
-- [x] Full extraction: 1,035 keys across 62 files, zero hardcoded user-facing strings
+- [x] Full extraction: 1,297 keys across 63 files, zero hardcoded user-facing strings
 - [x] Plurals through `tPlural`, never concatenation. Eight concatenated plurals found and fixed; the English one/other rule lives in one function, where CLDR selection replaces it
 - [x] Right-to-left groundwork (`src/i18n/layout.ts`: `textAlignEnd`, mirrored chevrons; logical properties app-wide; `radar-view.tsx` exempt as a polar plot of physical space)
 - [x] Layout direction pinned at startup, so a device set to Arabic does not mirror an English UI
 - [x] Formatting centralised in `src/utils/format.ts`, cached formatters, Latin numerals for machine data
-- [x] `scripts/i18n-audit.js`: hardcoded strings, unreferenced keys, and translations frozen at module load
+- [x] `scripts/i18n-audit.js`: hardcoded strings, unreferenced keys, and translations frozen at module load. Reads the TypeScript AST, so wrapped JSX text and template literals are in scope
 - [x] CI guards: hardcoded-string ceiling at zero, and module-load-time translations
-- [x] i18n tests (`src/i18n/__tests__/`: placeholder parity, plural shape, do-not-translate enforcement)
+- [x] i18n tests (`src/i18n/__tests__/`: placeholder parity, plural shape, do-not-translate enforcement, terminal punctuation)
+- [x] Terminal punctuation checked by `catalog.test.ts`: a string that starts a second sentence must finish it
+- [x] Catalog ordered by screen (shell, onboarding, chats, mesh, wallet, contacts, settings), so one screen's copy is one contiguous block
 
 ## v1.0.0: UI + App Store Release ✅
 

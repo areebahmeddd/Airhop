@@ -151,7 +151,9 @@ export default function MeshStatusBar({
               onPress={() => onDismiss(banner.key)}
               hitSlop={hitSlopFor(RESUME_PILL_HEIGHT)}
               accessibilityRole="button"
-              accessibilityLabel={`Dismiss: ${banner.label}`}
+              accessibilityLabel={t("mesh.banner.dismiss", {
+                label: banner.label,
+              })}
               accessibilityHint={t("mesh.banner.hint.dismiss")}
             >
               <Text

@@ -3039,12 +3039,12 @@ export class MeshService {
         channel,
         senderID: "",
         senderNickname: "",
-        text: `You were added to ${state.name}.`,
+        text: t("chat.group.you_were_added", { name: state.name }),
         timestampMs: nowMs,
         isMine: false,
         isSystem: true,
       });
-      // Ring the bell too, so the invite is discoverable without opening the room.
+      // Ring the bell too, so the invite is found without opening the channel.
       const creator = state.members.find(
         (m) => m.fingerprint === state.creatorFingerprint,
       );
@@ -3054,7 +3054,7 @@ export class MeshService {
         isDM: false,
         senderID: state.creatorFingerprint.slice(0, 16),
         senderNickname: creator?.nickname ?? state.name,
-        preview: `Added you to ${state.name}`,
+        preview: t("chat.group.added_you", { name: state.name }),
         timestampMs: nowMs,
       });
     }

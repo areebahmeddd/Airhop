@@ -278,14 +278,14 @@ export default function ChatSearchResults({
       ) : trimmed.length === 0 ? (
         // No query, no filter: leave the chips as the only affordance.
         <View style={styles.hintState}>
-          <Text style={styles.emptyText}>
-            Search messages and chats, or pick a filter above.
-          </Text>
+          <Text style={styles.emptyText}>{T("chat.search.hint")}</Text>
         </View>
       ) : sections.length === 0 ? (
         <View style={styles.emptyState}>
           <Feather name="search" size={26} color={Colors.textMuted} />
-          <Text style={styles.emptyText}>No results for “{trimmed}”</Text>
+          <Text style={styles.emptyText}>
+            {T("chat.search.no_results", { query: trimmed })}
+          </Text>
         </View>
       ) : (
         <SectionList<ResultRow, ResultSection>
@@ -350,7 +350,7 @@ function ChatResultRow({
       style={styles.row}
       onPress={() => onPress(hit.channel)}
       accessibilityRole="button"
-      accessibilityLabel={`Open ${hit.displayName}`}
+      accessibilityLabel={t("chat.search.open_chat", { name: hit.displayName })}
     >
       {isDM ? (
         <Avatar
@@ -390,9 +390,11 @@ function MessageResultRow({
       style={styles.row}
       onPress={() => onPress(hit.channel, hit.messageId)}
       accessibilityRole="button"
-      accessibilityLabel={`${chatDisplayName(hit.channel)}, message from ${
-        hit.isMine ? "you" : hit.senderNickname
-      }: ${hit.snippet}`}
+      accessibilityLabel={t("chat.search.message_a11y", {
+        chat: chatDisplayName(hit.channel),
+        sender: hit.isMine ? t("chat.search.you") : hit.senderNickname,
+        snippet: hit.snippet,
+      })}
     >
       <View style={styles.channelIcon}>
         <Feather
@@ -445,7 +447,11 @@ function NoticeResultRow({
       style={styles.row}
       onPress={() => onPress(hit.channel)}
       accessibilityRole="button"
-      accessibilityLabel={`Notice in ${chatDisplayName(hit.channel)} from ${hit.author}: ${hit.snippet}`}
+      accessibilityLabel={t("chat.search.notice_a11y", {
+        chat: chatDisplayName(hit.channel),
+        author: hit.author,
+        snippet: hit.snippet,
+      })}
     >
       <View style={styles.channelIcon}>
         <Feather

@@ -6,7 +6,7 @@ description: >
   but silently decrypt to garbage, with no thrown error.
 ---
 
-# Noise Session Lifecycle
+# Noise Sessions
 
 Airhop uses two Noise protocol patterns. Both are implemented in `src/core/crypto/`. Wire-compatible with `bitchat/ios/bitchat/Noise/NoiseProtocol.swift`.
 

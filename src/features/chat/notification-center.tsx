@@ -65,7 +65,7 @@ export default function NotificationCenter({
   function handleClearAll(): void {
     showAlert(
       t("chat.notif.clear"),
-      `Remove all ${String(entries.length)} notifications from this list? The messages themselves stay in their conversations.`,
+      t("chat.notif.clear_all_body", { count: entries.length }),
       [
         { text: T("common.cancel"), style: "cancel" },
         {
@@ -96,14 +96,16 @@ export default function NotificationCenter({
             <Feather name={chevronBack} size={24} color={Colors.textPrimary} />
           </Pressable>
           <Text style={styles.headerTitle} accessibilityRole="header">
-            Notifications
+            {T("chat.notif.title")}
           </Text>
           {entries.length > 0 ? (
             <Pressable
               style={styles.headerBtn}
               onPress={handleClearAll}
               accessibilityRole="button"
-              accessibilityLabel={`Clear all ${String(entries.length)} notifications`}
+              accessibilityLabel={t("chat.notif.clear_all_a11y", {
+                count: entries.length,
+              })}
               hitSlop={HIT_SLOP}
             >
               <Text style={styles.clearText}>
@@ -165,7 +167,11 @@ function Row({
   const a11y = [
     entry.seen ? null : T("chat.notif.new"),
     name,
-    entry.isDM ? null : entry.kind === "notice" ? `notice in ${room}` : room,
+    entry.isDM
+      ? null
+      : entry.kind === "notice"
+        ? t("chat.notif.notice_in", { channel: room })
+        : room,
     entry.preview,
     timeLabel,
   ]

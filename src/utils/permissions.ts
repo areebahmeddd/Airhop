@@ -39,13 +39,17 @@ interface Copy {
 // into Settings rather than describing where to tap is the difference between a
 // dead end and a two-tap fix.
 export function showBlockedAlert({ label, purpose }: Copy): void {
-  showAlert(`${label} is off`, `Turn it on in Settings to ${purpose}.`, [
-    {
-      text: t("permission.open_settings"),
-      onPress: () => void Linking.openSettings(),
-    },
-    { text: t("permission.not_now"), style: "cancel" },
-  ]);
+  showAlert(
+    t("permission.blocked_title", { label }),
+    t("permission.blocked_body", { purpose }),
+    [
+      {
+        text: t("permission.open_settings"),
+        onPress: () => void Linking.openSettings(),
+      },
+      { text: t("permission.not_now"), style: "cancel" },
+    ],
+  );
 }
 
 // Resolve a permission to a single yes/no, prompting or explaining as the state

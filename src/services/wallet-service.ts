@@ -1073,6 +1073,7 @@ export async function quoteSend(params: {
     // missing keyset cache already takes, so there is no new failure mode.
     if (selected.length !== result.send.length || spend < amount) {
       throw new Error(
+        // Not user-facing: this is an invariant breach aimed at a stack trace.
         `offline selection did not map back to stored proofs (matched ${String(selected.length)} of ${String(result.send.length)}, covering ${String(spend)} of ${String(amount)})`,
       );
     }
@@ -1097,7 +1098,7 @@ export async function quoteSend(params: {
     if (!selection) {
       throw new WalletError(
         "insufficient",
-        `Not enough balance at ${hostOf(account.mintUrl)}.`,
+        t("wallet.svc.insufficient_at_mint", { mint: hostOf(account.mintUrl) }),
       );
     }
     return {
@@ -1131,8 +1132,15 @@ export async function prepareSend(params: {
   if (!quote.exact && params.allowInexact !== true) {
     throw new WalletError(
       "inexact",
-      `Your proofs cannot make exactly ${String(params.amount)} ${quote.unit} offline.`,
-      `The smallest token you can send is ${String(quote.spend)} ${quote.unit}. Offline there is no change, so the extra ${String(quote.spend - quote.amount)} ${quote.unit} goes to the recipient.`,
+      t("wallet.svc.inexact_title", {
+        amount: params.amount,
+        unit: quote.unit,
+      }),
+      t("wallet.svc.inexact_detail", {
+        spend: quote.spend,
+        unit: quote.unit,
+        extra: quote.spend - quote.amount,
+      }),
     );
   }
 
@@ -1235,7 +1243,7 @@ function pickAccount(
     if (!hit || hit.balance < amount) {
       throw new WalletError(
         "insufficient",
-        `Not enough balance at ${hostOf(url)}.`,
+        t("wallet.svc.insufficient_at_mint", { mint: hostOf(url) }),
       );
     }
     return hit;
@@ -1249,12 +1257,12 @@ function pickAccount(
     throw new WalletError(
       "insufficient",
       t("wallet.svc.split_across_mints"),
-      `No single mint holds ${String(amount)} ${unit}. Ecash from different mints cannot be combined into one token: consolidate at one mint first, or send in separate amounts.`,
+      t("wallet.svc.no_single_mint", { amount, unit }),
     );
   }
   throw new WalletError(
     "insufficient",
-    `You have ${String(total)} ${unit}, and tried to send ${String(amount)}.`,
+    t("wallet.svc.have_tried_send", { total, unit, amount }),
   );
 }
 
@@ -1736,7 +1744,7 @@ export async function quoteLightningWithdrawal(params: {
   if (balance < total) {
     throw new WalletError(
       "insufficient",
-      `This invoice needs ${String(total)} ${unit} including the routing reserve, and you have ${String(balance)}.`,
+      t("wallet.svc.invoice_needs", { total, unit, balance }),
     );
   }
 
@@ -1867,7 +1875,7 @@ export async function payLightningInvoice(quote: MeltQuote): Promise<{
       // Ambiguous: the mint may have paid. The blanks stay on the transaction
       // so `reconcile` can recover the change once the quote's state is known.
       store.updateTx(txId, {
-        error: `${walletErr.message} Payment status unknown; checked again on next refresh.`,
+        error: `${walletErr.message} ${t("wallet.svc.payment_unknown")}`,
       });
     }
     throw walletErr;
@@ -1940,7 +1948,7 @@ export async function consolidateMints(params: {
   if (sourceBalance <= 0) {
     throw new WalletError(
       "insufficient",
-      `${hostOf(from)} has no ${unit} to move.`,
+      t("wallet.svc.nothing_to_move", { mint: hostOf(from), unit }),
     );
   }
 
@@ -1960,7 +1968,7 @@ export async function consolidateMints(params: {
       amount: target,
       mintUrl: to,
       unit,
-      description: `Consolidate from ${hostOf(from)}`,
+      description: t("wallet.svc.consolidate_memo", { mint: hostOf(from) }),
     });
 
     let quote: MeltQuote;
@@ -2010,7 +2018,7 @@ export async function consolidateMints(params: {
   throw new WalletError(
     "insufficient",
     t("wallet.svc.cannot_size"),
-    `After Lightning routing fees, ${hostOf(from)} cannot move a useful amount to ${hostOf(to)}. Try moving a specific smaller amount instead.`,
+    t("wallet.svc.cannot_size_detail", { from: hostOf(from), to: hostOf(to) }),
   );
 }
 
@@ -2032,8 +2040,8 @@ function requireNut(mintUrl: string, nut: number, what: string): void {
   if (nuts.includes(nut)) return;
   throw new WalletError(
     "unsupported",
-    `${hostOf(mintUrl)} cannot ${what}.`,
-    `The mint does not advertise NUT-${String(nut)}.`,
+    t("wallet.svc.mint_cannot", { mint: hostOf(mintUrl), action: what }),
+    t("wallet.svc.no_nut", { nut }),
   );
 }
 

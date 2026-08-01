@@ -118,9 +118,7 @@ export function NewGroupSheet({ visible, onClose, onBack, onCreated }: Props) {
             color={Colors.e2ee}
             style={styles.noteIcon}
           />
-          <Text style={styles.privacyNoteText}>
-            End-to-end encrypted. Only members can read the messages.
-          </Text>
+          <Text style={styles.privacyNoteText}>{T("chat.group.e2ee")}</Text>
         </View>
         <View style={styles.privacyNoteRow}>
           <Feather
@@ -129,10 +127,7 @@ export function NewGroupSheet({ visible, onClose, onBack, onCreated }: Props) {
             color={Colors.textMuted}
             style={styles.noteIcon}
           />
-          <Text style={styles.privacyNoteText}>
-            Up to 16 people, chosen by you. There is no invite link, so nobody
-            joins by being forwarded one.
-          </Text>
+          <Text style={styles.privacyNoteText}>{T("chat.group.cap")}</Text>
         </View>
         <View style={styles.privacyNoteRow}>
           <Feather
@@ -142,8 +137,7 @@ export function NewGroupSheet({ visible, onClose, onBack, onCreated }: Props) {
             style={styles.noteIcon}
           />
           <Text style={styles.privacyNoteText}>
-            Bluetooth only. Members out of range receive messages once they are
-            back.
+            {T("chat.group.bluetooth")}
           </Text>
         </View>
       </View>
@@ -162,14 +156,12 @@ export function NewGroupSheet({ visible, onClose, onBack, onCreated }: Props) {
               push the heading away from the thing it labels. */}
       <View style={styles.section}>
         <Text style={styles.sectionLabel}>
-          MEMBERS{selected.size > 0 ? ` · ${selected.size}` : ""}
+          {T("chat.group.members_label")}
+          {selected.size > 0 ? ` · ${String(selected.size)}` : ""}
         </Text>
 
         {reachable.length === 0 ? (
-          <Text style={styles.empty}>
-            No one is in range. Members must be nearby when you create the
-            group.
-          </Text>
+          <Text style={styles.empty}>{T("chat.group.none_in_range")}</Text>
         ) : (
           <ScrollView style={styles.list} showsVerticalScrollIndicator={false}>
             {reachable.map((peer) => {

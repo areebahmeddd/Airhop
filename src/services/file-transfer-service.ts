@@ -264,7 +264,11 @@ export class FileTransferService {
     const cap = maxBytesForType(meta.type);
     if (fileBytes.length > cap) {
       throw new AttachmentTooLargeError(
-        `${sizeLabel(meta.type)} is ${(fileBytes.length / 1024).toFixed(0)} KB, over the ${(cap / 1024).toFixed(0)} KB limit.`,
+        t("transfer.too_large", {
+          kind: sizeLabel(meta.type),
+          size: (fileBytes.length / 1024).toFixed(0),
+          cap: (cap / 1024).toFixed(0),
+        }),
       );
     }
 

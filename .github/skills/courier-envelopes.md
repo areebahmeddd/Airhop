@@ -6,7 +6,7 @@ description: >
   the message still delivers, it just stops being protected.
 ---
 
-# One-time Prekeys and Courier Mail
+# Courier Envelopes
 
 > Read before touching `prekey-bundle.ts`, `prekey-store.ts`, `courier-store.ts`, or any offline-delivery path.
 >

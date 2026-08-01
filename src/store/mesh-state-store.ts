@@ -340,7 +340,9 @@ export function computeMeshBanners(inputs: MeshBannerInputs): MeshBanner[] {
   ) {
     banners.push({
       key: "background-limits",
-      label: `${inputs.backgroundLimitsBrand} may pause the mesh in the background`,
+      label: t("mesh.banner.background_limits", {
+        brand: inputs.backgroundLimitsBrand,
+      }),
       tone: "caution",
       action: {
         label: t("mesh.banner.action.fix"),
@@ -423,7 +425,7 @@ export function computeMeshBanners(inputs: MeshBannerInputs): MeshBanner[] {
       key: "bridge",
       label:
         across > 0
-          ? `Mesh bridge on · ${across} across the bridge`
+          ? t("mesh.banner.bridge_across", { count: across })
           : t("mesh.banner.bridge"),
       tone: "bridge",
     });

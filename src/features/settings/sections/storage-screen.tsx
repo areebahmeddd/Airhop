@@ -104,7 +104,10 @@ export default function StorageScreen({ onBack }: Props): React.JSX.Element {
             <SettingRow
               icon="activity"
               label={T("settings.storage.network_usage")}
-              description={`This session · ${formatBytes(stats.network.sent)} sent, ${formatBytes(stats.network.received)} received`}
+              description={T("settings.storage.session_usage", {
+                sent: formatBytes(stats.network.sent),
+                received: formatBytes(stats.network.received),
+              })}
               control={
                 <Text style={styles.settingValue}>
                   {formatBytes(stats.network.sent + stats.network.received)}
@@ -126,7 +129,9 @@ export default function StorageScreen({ onBack }: Props): React.JSX.Element {
             <SettingLinkRow
               icon="trash-2"
               label={T("settings.storage.cache")}
-              description={`${formatBytes(stats.cacheBytes)} of received attachments`}
+              description={T("settings.storage.cache_desc", {
+                size: formatBytes(stats.cacheBytes),
+              })}
               onPress={handleClearCache}
               chevron={false}
               accessibilityLabel={T("settings.storage.clear_cache")}

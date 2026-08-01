@@ -114,7 +114,7 @@ function MessageBubble({
             accessibilityRole={onPressSender ? "button" : undefined}
             accessibilityLabel={
               onPressSender
-                ? `View ${item.senderNickname}'s profile`
+                ? T("chat.bubble.view_profile", { name: item.senderNickname })
                 : undefined
             }
           >
@@ -143,7 +143,7 @@ function MessageBubble({
             accessibilityRole={onPressSender ? "button" : undefined}
             accessibilityLabel={
               onPressSender
-                ? `View ${item.senderNickname}'s profile`
+                ? T("chat.bubble.view_profile", { name: item.senderNickname })
                 : undefined
             }
           >
@@ -166,9 +166,10 @@ function MessageBubble({
           onLongPress={handleLongPress}
           delayLongPress={320}
           accessibilityRole="button"
-          accessibilityLabel={`${item.isMine ? "You" : item.senderNickname}: ${
-            item.text || "attachment"
-          }. Long press for more options.`}
+          accessibilityLabel={T("chat.bubble.a11y", {
+            sender: item.isMine ? T("chat.you") : item.senderNickname,
+            body: item.text || T("chat.bubble.attachment"),
+          })}
         >
           <View
             style={[
@@ -197,7 +198,7 @@ function MessageBubble({
                     item.isMine && styles.forwardedTagTextMine,
                   ]}
                 >
-                  Forwarded
+                  {T("chat.bubble.forwarded")}
                 </Text>
               </View>
             )}

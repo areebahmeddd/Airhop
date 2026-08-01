@@ -48,7 +48,9 @@ export default function LicensesScreen({ onBack }: Props): React.JSX.Element {
                     android_ripple={{ color: Colors.surfacePressed }}
                     onPress={() => void Linking.openURL(entry.repo)}
                     accessibilityRole="link"
-                    accessibilityLabel={`Open the ${entry.name} repository`}
+                    accessibilityLabel={T("settings.about.open_repo", {
+                      name: entry.name,
+                    })}
                   >
                     <View style={styles.settingLabelGroup}>
                       <Text style={styles.settingLabel}>{entry.name}</Text>

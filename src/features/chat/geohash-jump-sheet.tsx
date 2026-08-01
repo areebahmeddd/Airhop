@@ -180,9 +180,7 @@ export function GeohashJumpSheet({
             color={Colors.textMuted}
             style={styles.noteIcon}
           />
-          <Text style={styles.privacyNoteText}>
-            Open a public location channel anywhere, even a place you are not.
-          </Text>
+          <Text style={styles.privacyNoteText}>{T("chat.jump.anywhere")}</Text>
         </View>
         <View style={styles.privacyNoteRow}>
           <Feather
@@ -192,8 +190,7 @@ export function GeohashJumpSheet({
             style={styles.noteIcon}
           />
           <Text style={styles.privacyNoteText}>
-            Enter its geohash. Everyone whose location falls in that cell shares
-            the channel.
+            {T("chat.jump.geohash_note")}
           </Text>
         </View>
         <View style={styles.privacyNoteRow}>
@@ -204,8 +201,7 @@ export function GeohashJumpSheet({
             style={styles.noteIcon}
           />
           <Text style={styles.privacyNoteText}>
-            You show as teleported, not nearby. It reaches over the internet
-            only.
+            {T("chat.jump.teleport_note")}
           </Text>
         </View>
       </View>
@@ -234,7 +230,7 @@ export function GeohashJumpSheet({
       {(localChannel !== null || level !== null) && (
         <Text style={styles.hint}>
           {localChannel !== null
-            ? `You are already here. Go opens your ${localChannel} channel.`
+            ? T("chat.jump.already_here", { name: localChannel })
             : // The name is appended, never substituted: the level is always
               // true, and the name is a best-effort lookup that is simply
               // absent offline or where the geocoder has nothing to say.
@@ -255,7 +251,9 @@ export function GeohashJumpSheet({
                 style={styles.nearbyChip}
                 onPress={() => openGeohash(n.geohash)}
                 accessibilityRole="button"
-                accessibilityLabel={`Open the cell to your ${n.direction}`}
+                accessibilityLabel={T("chat.jump.open_direction", {
+                  direction: n.direction,
+                })}
               >
                 <Text style={styles.nearbyDir}>{n.direction}</Text>
                 <Text style={styles.nearbyHash} numberOfLines={1}>
@@ -283,7 +281,9 @@ export function GeohashJumpSheet({
                   style={styles.savedRow}
                   onPress={() => openGeohash(gh)}
                   accessibilityRole="button"
-                  accessibilityLabel={`Open ${name ?? gh}`}
+                  accessibilityLabel={T("chat.jump.open_place", {
+                    name: name ?? gh,
+                  })}
                 >
                   <Feather name="map-pin" size={15} color={Colors.textMuted} />
                   <View style={styles.savedText}>
@@ -302,7 +302,9 @@ export function GeohashJumpSheet({
                     }
                     hitSlop={HIT_SLOP}
                     accessibilityRole="button"
-                    accessibilityLabel={`Remove ${name ?? gh} from saved places`}
+                    accessibilityLabel={T("chat.jump.remove_place", {
+                      name: name ?? gh,
+                    })}
                   >
                     <Feather name="x" size={15} color={Colors.textMuted} />
                   </Pressable>
@@ -328,7 +330,7 @@ export function GeohashJumpSheet({
           onPress={handleGo}
           disabled={!valid}
         >
-          <Text style={styles.confirmText}>Go</Text>
+          <Text style={styles.confirmText}>{T("chat.jump.go")}</Text>
         </Pressable>
       </View>
     </BottomSheet>

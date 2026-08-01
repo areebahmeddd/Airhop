@@ -1,12 +1,11 @@
 // Channel list screen.
-// Two sections: Default Channels (bitchat-compatible, cannot be left) and
-// Your Rooms (user-created channels and private groups, joinable / leaveable).
-// Tap a channel to open its message thread. Swipe left on any row for More:
-// chat info, and for Your Rooms also pin and delete.
+// Two sections: Default channels (bitchat-compatible, cannot be left) and
+// Your channels (user-created channels and private groups, joinable/leaveable).
+// Tap a channel to open its thread. Swipe left for More: channel info, and for
+// Your channels also pin and delete.
 //
-// Creating a room is not this screen's job: the header "+" is shown on both
-// Chats sub-tabs, so its chooser and forms live in start-new-sheet, mounted by
-// App.tsx. See that file for the flow.
+// Creating a channel lives in start-new-sheet, not here: the header "+" is on
+// both Chats sub-tabs, so App.tsx mounts the chooser alongside this list.
 
 import { Feather, MaterialCommunityIcons } from "@expo/vector-icons";
 import React, { useEffect, useMemo, useRef, useState } from "react";
@@ -20,7 +19,8 @@ import {
 } from "react-native";
 import { Swipeable } from "react-native-gesture-handler";
 import Animated, { FadeIn, LinearTransition } from "react-native-reanimated";
-import { t, type TranslationKey, useT } from "../../i18n";
+import { t, tPlural, type TranslationKey, useT, useTPlural } from "../../i18n";
+import { useRichText } from "../../i18n/rich-text";
 import {
   geohashLevelName,
   isGeoChannel,
@@ -85,20 +85,14 @@ const DEFAULT_CHANNEL_NAMES = new Set([
   "#region",
 ]);
 
-// Default Rooms is collapsed to this many rows until the user expands it.
+// Default channels is collapsed to this many rows until the user expands it.
 const DEFAULT_VISIBLE_COUNT = 3;
 
-// Whether the Default Rooms "Show more" section is expanded. Module-level, not
-// component state, on purpose: opening a room or switching tabs unmounts this
-// list, so a useState would reset to collapsed every time. Keeping it here lets
-// the expansion survive the remount when the user comes back to Chats.
+// Module-level, not component state: opening a channel or switching tabs
+// unmounts this list, so a useState would reset the expansion every time.
 let persistedShowAllDefault = false;
 
-// Which section headers ("Default Rooms" / "Your Rooms") are collapsed. Held at
-// module level for the same reason as persistedShowAllDefault: collapsing a
-// section then opening a room (or switching tabs) unmounts this list, so a plain
-// useState would snap every section back open on return. Persisting the choice
-// keeps a collapsed section collapsed across the remount.
+// Same reason as persistedShowAllDefault, for collapsed section headers.
 let persistedCollapsedSections = new Set<string>();
 
 // Single shared left/right inset used by BOTH the section headers and the
@@ -179,9 +173,15 @@ export default function ChannelList({
   onSelectChannel,
 }: Props): React.JSX.Element {
   const T = useT();
+  const TP = useTPlural();
   const Colors = useThemeColors();
   const styles = useMemo(() => createStyles(Colors), [Colors]);
   const pullRefreshColors = usePullRefreshColors();
+  // Here rather than in renderSectionFooter: useRichText is a hook, and that
+  // footer renders conditionally.
+  const ownEmptyHint = useRichText("chat.channels.none_hint", {
+    plus: <Text style={styles.ownEmptyAccent}>+</Text>,
+  });
   const {
     channels,
     messages,
@@ -259,7 +259,7 @@ export default function ChannelList({
     persistedShowAllDefault = showAllDefault;
   }, [showAllDefault]);
   const [refreshing, setRefreshing] = useState(false);
-  // Which "Your Rooms" row currently has its swipe-revealed More sheet open.
+  // Which "Your channels" row currently has its swipe-revealed More sheet open.
   const [moreOptionsChannel, setMoreOptionsChannel] = useState<string | null>(
     null,
   );
@@ -282,7 +282,7 @@ export default function ChannelList({
   const defaultChannels = publicChannels.filter((c) =>
     DEFAULT_CHANNEL_NAMES.has(c),
   );
-  // Your Rooms: user-created channels and private groups, pinned
+  // Your channels: user-created channels and private groups, pinned
   // first, then most recent activity first. Default channels keep their curated
   // protocol order (below) and are deliberately not reordered by activity.
   const ownChannels = sortConversationsByActivity(
@@ -311,20 +311,20 @@ export default function ChannelList({
 
   const sections: ChannelSection[] = [
     {
-      title: T("chat.rooms.default"),
+      title: T("chat.channels.default"),
       isDefault: true,
       unread: sectionUnread(defaultChannels),
-      data: collapsedSections.has(T("chat.rooms.default"))
+      data: collapsedSections.has(T("chat.channels.default"))
         ? []
         : showAllDefault
           ? defaultChannels
           : defaultChannels.slice(0, DEFAULT_VISIBLE_COUNT),
     },
     {
-      title: T("chat.rooms.yours"),
+      title: T("chat.channels.yours"),
       isDefault: false,
       unread: sectionUnread(ownChannels),
-      data: collapsedSections.has(T("chat.rooms.yours")) ? [] : ownChannels,
+      data: collapsedSections.has(T("chat.channels.yours")) ? [] : ownChannels,
     },
   ];
 
@@ -345,7 +345,7 @@ export default function ChannelList({
     });
   }
 
-  // ---- Your Rooms swipe / more-options actions -----------------------------
+  // ---- Your channels swipe / more-options actions -----------------------------
 
   function handleSwipeMore(channel: string): void {
     closeSwipeable(channel);
@@ -361,7 +361,7 @@ export default function ChannelList({
     setMoreOptionsChannel(null);
     showAlert(
       t("chat.clear_messages"),
-      `Delete all messages in ${channelLabel(channel)}? This can't be undone.`,
+      t("chat.channels.clear_body", { name: channelLabel(channel) }),
       [
         { text: T("common.cancel"), style: "cancel" },
         {
@@ -376,12 +376,12 @@ export default function ChannelList({
   function handleLeaveChannel(channel: string): void {
     setMoreOptionsChannel(null);
     showAlert(
-      t("chat.rooms.leave"),
-      `Leave ${channelLabel(channel)}? You will stop receiving its messages, and its history is removed from this device.`,
+      t("chat.channels.leave"),
+      t("chat.channels.leave_body", { name: channelLabel(channel) }),
       [
         { text: T("common.cancel"), style: "cancel" },
         {
-          text: t("chat.rooms.leave_confirm"),
+          text: t("chat.channels.leave_confirm"),
           style: "destructive",
           onPress: () => removeChannel(channel),
         },
@@ -404,7 +404,9 @@ export default function ChannelList({
     const isManualGeo = isManualGeoChannel(item);
     const manualGh = isManualGeo ? (manualGeohashOf(item) ?? "") : "";
     const scopeTag = isManualGeo
-      ? `${geohashLevelName(manualGh)}  ·  teleported`
+      ? t("chat.channels.teleported_tag", {
+          level: geohashLevelName(manualGh),
+        })
       : (() => {
           const scope = CHANNEL_SCOPE[item];
           return scope === undefined ? undefined : T(scope.tagKey);
@@ -442,16 +444,15 @@ export default function ChannelList({
       last === undefined ? null : formatListTimestamp(last.timestampMs);
 
     // Everything the row shows, as one sentence, in the order the eye takes it.
-    // The label was just "Open channel #city": the unread count, who spoke last,
-    // whether it is muted and how long ago were all on screen and none of them
-    // were spoken, which is precisely the information you scan a chat list for.
+    // The label was just "Open channel #city", so the unread count, last
+    // speaker, muted state and time were all on screen and none were spoken.
     const rowLabel = [
       isGroup
-        ? `Group ${groupName ?? t("chat.group_badge")}`
-        : `Room ${channelLabel(item)}`,
-      unread > 0 ? `${String(unread)} unread` : null,
-      isMuted ? "muted" : null,
-      isPinned ? "pinned" : null,
+        ? t("chat.a11y.group", { name: groupName ?? t("chat.group_badge") })
+        : t("chat.a11y.channel", { name: channelLabel(item) }),
+      unread > 0 ? tPlural("chat.a11y.unread", unread) : null,
+      isMuted ? t("chat.a11y.muted") : null,
+      isPinned ? t("chat.a11y.pinned") : null,
       last
         ? `${last.isMine ? t("chat.you") : last.senderNickname}: ${messagePreviewText(last)}`
         : t("chat.no_messages"),
@@ -539,7 +540,7 @@ export default function ChannelList({
       </Pressable>
     );
 
-    // Every row (Your Rooms and Default Channels alike) swipes left to
+    // Every row (Your channels and Default channels alike) swipes left to
     // reveal More, the single consistent way to reach chat info, so
     // there's no separate inline info icon anywhere.
     return (
@@ -559,7 +560,9 @@ export default function ChannelList({
                 style={styles.swipeAction}
                 onPress={() => handleSwipeMore(item)}
                 accessibilityRole="button"
-                accessibilityLabel={`More options for ${item}`}
+                accessibilityLabel={t("chat.channels.more_options", {
+                  name: item,
+                })}
               >
                 <Feather
                   name="more-horizontal"
@@ -596,14 +599,14 @@ export default function ChannelList({
               accessibilityRole="button"
               accessibilityLabel={
                 section.unread > 0
-                  ? `${section.title}, ${String(section.unread)} unread`
+                  ? TP("a11y.unread_count", section.unread, {
+                      label: section.title,
+                    })
                   : section.title
               }
               // `expanded` is what makes the chevron mean something to a screen
-              // reader. Naming the action in the label instead ("Collapse Your
-              // Rooms") stated the next tap but never the current state, so
-              // there was no way to tell an expanded section from a collapsed
-              // one without counting the rows underneath.
+              // reader. Naming the action instead ("Collapse Your channels")
+              // stated the next tap but never the current state.
               accessibilityState={{ expanded: !isCollapsed }}
             >
               <Text style={styles.sectionTitle}>{section.title}</Text>
@@ -645,14 +648,14 @@ export default function ChannelList({
                 accessibilityRole="button"
                 accessibilityLabel={
                   showAllDefault
-                    ? t("chat.rooms.show_fewer")
-                    : `Show ${hiddenCount} more default rooms`
+                    ? t("chat.channels.show_fewer")
+                    : TP("chat.channels.show_more_a11y", hiddenCount)
                 }
               >
                 <Text style={styles.showMoreText}>
                   {showAllDefault
-                    ? t("chat.rooms.show_less")
-                    : `Show ${hiddenCount} more`}
+                    ? t("chat.channels.show_less")
+                    : TP("chat.channels.show_more", hiddenCount)}
                 </Text>
                 <Feather
                   name={showAllDefault ? "chevron-up" : "chevron-down"}
@@ -668,14 +671,9 @@ export default function ChannelList({
             <EmptyState
               compact
               icon="hash"
-              title={t("chat.rooms.none")}
-              subtitle={
-                <Text style={styles.ownEmptyHint}>
-                  Tap <Text style={styles.ownEmptyAccent}>+</Text> above to join
-                  or create one
-                </Text>
-              }
-              accessibilityLabel={t("chat.rooms.none_desc")}
+              title={t("chat.channels.none")}
+              subtitle={<Text style={styles.ownEmptyHint}>{ownEmptyHint}</Text>}
+              accessibilityLabel={t("chat.channels.none_desc")}
             />
           );
         }}
@@ -691,7 +689,7 @@ export default function ChannelList({
         contentContainerStyle={styles.list}
       />
 
-      {/* Your Rooms: swipe T("chat.more") sheet with chat info, pin, clear, delete */}
+      {/* Your channels: swipe "More" sheet with info, pin, clear, delete */}
       <BottomSheet
         visible={moreOptionsChannel !== null}
         onClose={() => setMoreOptionsChannel(null)}
@@ -714,7 +712,9 @@ export default function ChannelList({
                 accessibilityRole="button"
               >
                 <Feather name="info" size={18} color={Colors.textSecondary} />
-                <Text style={styles.moreRowText}>{T("chat.rooms.info")}</Text>
+                <Text style={styles.moreRowText}>
+                  {T("chat.channels.info")}
+                </Text>
               </Pressable>
 
               {!DEFAULT_CHANNEL_NAMES.has(moreOptionsChannel) && (
@@ -739,8 +739,8 @@ export default function ChannelList({
                     />
                     <Text style={styles.moreRowText}>
                       {pinnedChannels.includes(moreOptionsChannel)
-                        ? T("chat.rooms.unpin")
-                        : T("chat.rooms.pin")}
+                        ? T("chat.channels.unpin")
+                        : T("chat.channels.pin")}
                     </Text>
                   </Pressable>
                 </>
@@ -763,8 +763,8 @@ export default function ChannelList({
                 />
                 <Text style={styles.moreRowText}>
                   {mutedChannels.includes(moreOptionsChannel)
-                    ? T("chat.rooms.unmute")
-                    : T("chat.rooms.mute")}
+                    ? T("chat.channels.unmute")
+                    : T("chat.channels.mute")}
                 </Text>
               </Pressable>
 
@@ -796,7 +796,7 @@ export default function ChannelList({
                 >
                   <Feather name="log-out" size={18} color={Colors.danger} />
                   <Text style={[styles.moreRowText, styles.moreRowTextDanger]}>
-                    Leave room
+                    {T("chat.channels.leave")}
                   </Text>
                 </Pressable>
               </View>
@@ -977,7 +977,7 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       backgroundColor: Colors.border,
     },
 
-    // ---- Your Rooms: swipe actions ------------------------------------------
+    // ---- Your channels: swipe actions ------------------------------------------
 
     swipeActions: {
       flexDirection: "row",
@@ -996,7 +996,7 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       fontWeight: FontWeight.medium,
     },
 
-    // ---- Your Rooms: "More" sheet --------------------------------------------
+    // ---- Your channels: "More" sheet --------------------------------------------
 
     // Tight, boxed group, not spread out with the sheet's default gap, which
     // reads as loose and disconnected for a same-purpose action list. Rows are
@@ -1040,7 +1040,7 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       color: Colors.danger,
     },
 
-    // ---- Default Channels show more/less -----------------------------------
+    // ---- Default channels show more/less -----------------------------------
 
     showMoreBtn: {
       flexDirection: "row",
@@ -1057,7 +1057,7 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       color: Colors.textMuted,
     },
 
-    // ---- Your Rooms empty state ---------------------------------------------
+    // ---- Your channels empty state ---------------------------------------------
 
     // The container, the icon and the title all moved to <EmptyState/>. Only the
     // hint survives locally, because it is the one empty state in the app whose

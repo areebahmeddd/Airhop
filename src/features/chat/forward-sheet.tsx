@@ -138,7 +138,9 @@ export default function ForwardSheet({
                         onPress={() => handlePick(item)}
                         disabled={sentTo !== null}
                         accessibilityRole="button"
-                        accessibilityLabel={`Forward to ${label}`}
+                        accessibilityLabel={T("chat.forward.to", {
+                          name: label,
+                        })}
                       >
                         {kind === "dm" ? (
                           <Avatar

@@ -26,4 +26,4 @@ commit_parsers = [
 ]
 tag_pattern = "v[0-9].*"
 topo_order = false
-sort_commits = "oldest"
+sort_commits = "newest"

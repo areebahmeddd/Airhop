@@ -13,6 +13,7 @@
 
 import React, { useMemo } from "react";
 import { Linking, ScrollView, StyleSheet, Text, View } from "react-native";
+import { t } from "../../../i18n";
 import {
   FontSize,
   FontWeight,
@@ -56,7 +57,9 @@ export default function LegalDocScreen({
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
       >
-        <Text style={styles.lastUpdated}>Last updated: {lastUpdated}</Text>
+        <Text style={styles.lastUpdated}>
+          {t("legal.last_updated", { date: lastUpdated })}
+        </Text>
         {sections.map((section) => (
           <View key={section.heading} style={styles.section}>
             <Text style={styles.heading}>{section.heading}</Text>

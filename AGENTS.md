@@ -54,7 +54,7 @@ Never suggest UI code for a feature whose `src/core/` service isn't tested.
 - English is the shipping language and `en.ts` is the whole catalog. Ten languages land in v1.3.0, which the extraction makes a set of new files rather than a sweep of every screen.
 - Placeholders are named (`{count}`), never positional. Plurals go through `tPlural`, never `count === 1` at a call site.
 - Layout uses logical properties (`marginStart`, `start`, `textAlignEnd`), never `marginLeft` / `left` / `textAlign: "right"`.
-- **Some strings must never be translated** because they cross the wire: the `username.ts` word lists, the transmitted `/hug` and `/slap` text (bitchat matches it as an English substring), slash command tokens, channel names. Read [`localization.md`](.github/skills/localization.md) before touching any of them.
+- **Some strings must never be translated** because they cross the wire: the `username.ts` word lists, the transmitted `/hug` and `/slap` text (bitchat matches it as an English substring), slash command tokens, channel names. Read [`i18n.md`](.github/skills/i18n.md) before touching any of them.
 
 ### Storage
 
@@ -94,16 +94,15 @@ Invoke these when needed (via VS Code Copilot chat):
 
 Skills are reference files in `.github/skills/`. Read the relevant one before working on a subsystem. They contain dense, accurate reference material cross-checked against the source code and the bitchat implementations.
 
-| Skill                                                                     | Read before working on                                                         |
-| ------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
-| [`bitchat-wire-format.md`](.github/skills/bitchat-wire-format.md)         | `packet-codec.ts`, BLE native modules, any packet encoding or decoding         |
-| [`noise-session-lifecycle.md`](.github/skills/noise-session-lifecycle.md) | `noise-xx.ts`, `noise-x.ts`, handshake logic, transport encryption             |
-| [`ble-native-boundary.md`](.github/skills/ble-native-boundary.md)         | `android/`, `ios/`, `src/bridge/`, TurboModule specs                           |
-| [`mesh-routing.md`](.github/skills/mesh-routing.md)                       | `flood-router.ts`, `deduplicator.ts`, `fragment-manager.ts`, `gossip-sync.ts`  |
-| [`nostr-gift-wrap.md`](.github/skills/nostr-gift-wrap.md)                 | `gift-wrap.ts`, `courier-relay.ts`, any Nostr DM or event handling             |
-| [`prekeys-and-courier.md`](.github/skills/prekeys-and-courier.md)         | `prekey-bundle.ts`, `prekey-store.ts`, `courier-store.ts`, offline mail        |
-| [`private-groups.md`](.github/skills/private-groups.md)                   | `group-protocol.ts`, `group-store.ts`, anything touching `0x25` or group state |
-| [`localization.md`](.github/skills/localization.md)                       | `src/i18n/`, any user-facing copy anywhere, right-to-left layout               |
+| Skill                                                             | Read before working on                                                        |
+| ----------------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| [`bitchat-wire-format.md`](.github/skills/bitchat-wire-format.md) | `packet-codec.ts`, BLE native modules, any packet encoding or decoding        |
+| [`noise-sessions.md`](.github/skills/noise-sessions.md)           | `noise-xx.ts`, `noise-x.ts`, handshake logic, transport encryption            |
+| [`native-boundary.md`](.github/skills/native-boundary.md)         | `android/`, `ios/`, `src/bridge/`, TurboModule specs                          |
+| [`mesh-routing.md`](.github/skills/mesh-routing.md)               | `flood-router.ts`, `deduplicator.ts`, `fragment-manager.ts`, `gossip-sync.ts` |
+| [`nostr-gift-wrap.md`](.github/skills/nostr-gift-wrap.md)         | `gift-wrap.ts`, `courier-relay.ts`, any Nostr DM or event handling            |
+| [`courier-envelopes.md`](.github/skills/courier-envelopes.md)     | `prekey-bundle.ts`, `prekey-store.ts`, `courier-store.ts`, offline mail       |
+| [`i18n.md`](.github/skills/i18n.md)                               | `src/i18n/`, any user-facing copy anywhere, right-to-left layout              |
 
 ## TypeScript Conventions
 

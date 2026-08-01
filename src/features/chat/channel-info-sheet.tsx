@@ -1,8 +1,8 @@
 // Shared channel detail bottom sheet.
 // Used by both channel-list (info icon tap) and message-thread (header tap).
 // Shows About, an at-a-glance facts card (privacy, reach, geohash), and Members.
-// Read-only: it describes what a room is and who is in it. Default channels add
-// a protocol lock notice; a location channel adds a bookmark toggle.
+// Read-only: it describes what a channel is and who is in it. Default channels
+// add a protocol lock notice; a location channel adds a bookmark toggle.
 
 import { Feather, MaterialCommunityIcons } from "@expo/vector-icons";
 import * as Clipboard from "expo-clipboard";
@@ -316,7 +316,7 @@ export default function ChannelInfoSheet({
   function handleRemoveMember(fingerprint: string, memberName: string): void {
     showAlert(
       t("chat.info.remove_member"),
-      `Remove ${memberName} from the group? The group key rotates so they can no longer read new messages.`,
+      t("chat.info.remove_member_body", { name: memberName }),
       [
         { text: T("common.cancel"), style: "cancel" },
         {
@@ -469,7 +469,9 @@ export default function ChannelInfoSheet({
             ? TP("chat.group_members", groupMembers.length)
             : ((scopeData === undefined ? undefined : T(scopeData.tagKey)) ??
               (isManualGeo
-                ? `${geohashLevelName(manualGh)}  ·  teleported`
+                ? T("chat.info.teleported_tag", {
+                    level: geohashLevelName(manualGh),
+                  })
                 : T("chat.info.custom_channel")))}
           {placeName !== undefined && `  ·  ~${placeName}`}
         </Text>
@@ -546,7 +548,7 @@ export default function ChannelInfoSheet({
 
         {/* Members: a group's signed roster, a geo cell's active
                 participants, or the nearby BLE peers — one layout for all three,
-                with a T("chat.you") row, a search toggle, and a chat action per member. */}
+                with a "You" row, a search toggle, and a chat action per member. */}
         <View style={styles.section}>
           <View style={styles.memberHeaderRow}>
             <Text style={styles.sectionLabel}>
@@ -585,7 +587,7 @@ export default function ChannelInfoSheet({
 
           <View style={styles.memberList}>
             {/* You: your own row, no chat action (you can't DM yourself);
-                    the right side reads T("chat.you"). */}
+                    the right side reads "You". */}
             {showYouRow && youMatches && (
               <View style={styles.memberRow}>
                 <Avatar
@@ -624,7 +626,9 @@ export default function ChannelInfoSheet({
                     onPress={m.onChat}
                     hitSlop={HIT_SLOP}
                     accessibilityRole="button"
-                    accessibilityLabel={`Message ${m.name}`}
+                    accessibilityLabel={T("chat.info.message_member", {
+                      name: m.name,
+                    })}
                   >
                     <Feather
                       name="message-circle"
@@ -638,7 +642,9 @@ export default function ChannelInfoSheet({
                     onPress={m.onRemove}
                     hitSlop={HIT_SLOP}
                     accessibilityRole="button"
-                    accessibilityLabel={`Remove ${m.name}`}
+                    accessibilityLabel={T("chat.info.remove_member_a11y", {
+                      name: m.name,
+                    })}
                   >
                     <Feather name="user-x" size={17} color={Colors.danger} />
                   </Pressable>
@@ -687,9 +693,7 @@ export default function ChannelInfoSheet({
           >
             <Text style={styles.addTitle}>{T("chat.info.add_members")}</Text>
             {addablePeers.length === 0 ? (
-              <Text style={styles.noMembers}>
-                No reachable peers to add. Members must be nearby.
-              </Text>
+              <Text style={styles.noMembers}>{T("chat.info.no_addable")}</Text>
             ) : (
               <ScrollView
                 style={styles.addList}
@@ -739,7 +743,7 @@ export default function ChannelInfoSheet({
             >
               <Text style={styles.addConfirmText}>
                 {addSelected.size > 0
-                  ? `Add ${addSelected.size}`
+                  ? T("chat.info.add_count", { count: addSelected.size })
                   : T("chat.info.add")}
               </Text>
             </Pressable>
@@ -772,8 +776,7 @@ export default function ChannelInfoSheet({
           <View style={styles.defaultNotice}>
             <Feather name="lock" size={13} color={Colors.textMuted} />
             <Text style={styles.defaultNoticeText}>
-              Default rooms cannot be left. They are part of the Airhop mesh
-              protocol.
+              {T("chat.info.default_notice")}
             </Text>
           </View>
         )}

@@ -185,8 +185,13 @@ export default function PeerList({
     // token did not go straight out.
     if (result.route !== "sent") {
       showAlert(
-        `${result.prepared.amount.toLocaleString()} ${result.prepared.unit} on its way`,
-        `${describeRoute(result.route)} It stays reclaimable from the Wallet tab until you confirm it arrived, so nothing is lost if it never lands.`,
+        t("wallet.xfer.on_its_way", {
+          amount: result.prepared.amount.toLocaleString(),
+          unit: result.prepared.unit,
+        }),
+        t("wallet.xfer.on_its_way_body", {
+          route: describeRoute(result.route),
+        }),
       );
     }
   }
@@ -231,7 +236,10 @@ export default function PeerList({
                 style={styles.row}
                 onPress={() => setSelectedPeer(item)}
                 accessibilityRole="button"
-                accessibilityLabel={`View peer ${username}${online ? ", online" : ""}`}
+                accessibilityLabel={t(
+                  online ? "mesh.peer.view_peer_online" : "mesh.peer.view_peer",
+                  { name: username },
+                )}
               >
                 <View style={styles.avatarWrapper}>
                   <Avatar username={username} peerID={item.peerID} size={46} />
@@ -329,7 +337,9 @@ export default function PeerList({
                 <Text style={styles.sheetStatusText}>
                   {isOnline(selectedPeer)
                     ? T("mesh.peer.in_range")
-                    : `Last seen ${formatLastSeen(selectedPeer.lastSeenMs)} ago`}
+                    : t("mesh.peer.last_seen", {
+                        ago: formatLastSeen(selectedPeer.lastSeenMs),
+                      })}
                 </Text>
               </View>
             </View>
@@ -391,7 +401,7 @@ export default function PeerList({
                     accessibilityLabel={
                       parsedSats === null
                         ? T("mesh.peer.amount_first")
-                        : `Send ${String(parsedSats)} sats`
+                        : t("mesh.peer.send_amount", { amount: parsedSats })
                     }
                     accessibilityState={{
                       disabled: parsedSats === null || sendingSats,

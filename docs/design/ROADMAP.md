@@ -11,37 +11,32 @@ bitchat is an excellent foundation. Airhop fills the gaps it left open.
 **bitchat problem:** iOS and Android are separate native codebases that drift. The Android v0.7 fragment size mismatch (500B vs 150B) broke iOS-Android compatibility for months with no one noticing.  
 **Airhop:** Single TypeScript protocol stack. A protocol bug surfaces on both platforms simultaneously, and fixes apply simultaneously.
 
-### Gap 2: Video Support
-
-**bitchat problem:** No video packet type, no mechanism, no MIME type for video.  
-**Airhop:** videos are shared as files over the mesh and play inline on any platform. Live video streaming was dropped: Android WiFi Aware and iOS MultipeerConnectivity are different protocols that cannot interoperate, so cross-platform video calling is not achievable with these stacks.
-
-### Gap 3: Live PTT Voice (from day 1)
-
-**bitchat status:** shipped, both phases of `PUSH-TO-TALK-DESIGN.md`. `NoisePayloadType.voiceFrame = 0x08` carries DM bursts and `MessageType.voiceFrame = 0x29` carries public mesh bursts.  
-**Airhop:** shipped, matching it. The burst format is byte-identical to `VoiceBurstPacket.swift`, both scopes work (broadcast and Noise-sealed DM), and audio is captured and played by a native module on each platform (`AudioRecord` + `MediaCodec` on Android, `AVAudioEngine` + `AVAudioConverter` on iOS). Holding the mic streams live where the mesh can carry it and records a voice note where it cannot, and every burst also lands in the chat as a note so people who were out of range still get it.
-
-### Gap 4: File Transfers
-
-**bitchat position:** Per-type caps in `FileTransferLimits`, enforced at the binary-protocol decode layer. 1 MiB is the ceiling for general files; photos and voice notes are capped at 512 KiB.  
-**Airhop:** Matches it. An earlier plan for 64 KB chunked streaming with no protocol cap was dropped: the cap is enforced when bitchat _decodes_ a packet, so anything larger is rejected outright and would have broken interop in both directions. Airhop sends one `BitchatFilePacket` per file (512 KiB photos and voice, 1 MiB otherwise, MIME allow-list, magic-byte validation) and lets the fragment layer split it for the radio. A larger Airhop-only path remains possible later, but it cannot be the default without losing bitchat compatibility.
-
-### Gap 5: Tor on iOS and Android
-
-**bitchat problem:** Tor was iOS-only (via Arti xcframework) when Airhop's design was set. bitchat-android has since added `ArtiTorManager.kt`, wired through `BitchatApplication` and `OkHttpProvider`, so both platforms now have it.  
-**Airhop:** iOS embeds `arti.xcframework` with a full `AirhopTorManager` (SOCKS5 on port 39050, bootstrap monitor, network path recovery). Android detects Orbot via a TCP probe on localhost:9050. Both platforms route Nostr traffic through the detected proxy.
-
-### Gap 6: Double Ratchet for Offline Mail
-
-**bitchat problem:** Courier envelopes use Noise X (one-way). Compromise of recipient's static key exposes all undelivered mail.  
-**Airhop:** Full Signal Double Ratchet (DR) for Airhop-to-Airhop DMs, plus bitchat-compatible one-time prekeys for offline mail. Prekey bundles are signed and gossiped over the mesh as `0x24` (not published to Nostr), and a courier envelope seals to a one-time prekey rather than the recipient's static key, so undelivered mail stays protected if that static key is later compromised.
-
-### Gap 7: WiFi Direct / WiFi Aware Transport
+### Gap 2: WiFi Direct / WiFi Aware Transport
 
 **bitchat problem:** BLE-only (~15 KB/s). Android WiFi Aware support exists but is experimental/unshipped.  
 **Airhop:** Android WiFi Aware and iOS MultipeerConnectivity, selected automatically when available with BLE as fallback. Important limitation: these two protocols cannot talk to each other, so this only accelerates Android-to-Android or iPhone-to-iPhone transfers. Every cross-platform path stays on Bluetooth or Nostr.
 
-### Gap 8: Non-Technical UX
+### Gap 3: Tor on iOS and Android
+
+**bitchat problem:** Tor was iOS-only (via Arti xcframework) when Airhop's design was set. bitchat-android has since added `ArtiTorManager.kt`, wired through `BitchatApplication` and `OkHttpProvider`, so both platforms now have it.  
+**Airhop:** iOS embeds `arti.xcframework` with a full `AirhopTorManager` (SOCKS5 on port 39050, bootstrap monitor, network path recovery). Android detects Orbot via a TCP probe on localhost:9050. Both platforms route Nostr traffic through the detected proxy.
+
+### Gap 4: Double Ratchet for Offline Mail
+
+**bitchat problem:** Courier envelopes use Noise X (one-way). Compromise of recipient's static key exposes all undelivered mail.  
+**Airhop:** Full Signal Double Ratchet (DR) for Airhop-to-Airhop DMs, plus bitchat-compatible one-time prekeys for offline mail. Prekey bundles are signed and gossiped over the mesh as `0x24` (not published to Nostr), and a courier envelope seals to a one-time prekey rather than the recipient's static key, so undelivered mail stays protected if that static key is later compromised.
+
+### Gap 5: File Transfers
+
+**bitchat position:** Per-type caps in `FileTransferLimits`, enforced at the binary-protocol decode layer. 1 MiB is the ceiling for general files; photos and voice notes are capped at 512 KiB.  
+**Airhop:** Matches it. An earlier plan for 64 KB chunked streaming with no protocol cap was dropped: the cap is enforced when bitchat _decodes_ a packet, so anything larger is rejected outright and would have broken interop in both directions. Airhop sends one `BitchatFilePacket` per file (512 KiB photos and voice, 1 MiB otherwise, MIME allow-list, magic-byte validation) and lets the fragment layer split it for the radio. A larger Airhop-only path remains possible later, but it cannot be the default without losing bitchat compatibility.
+
+### Gap 6: Video Support
+
+**bitchat problem:** No video packet type, no mechanism, no MIME type for video.  
+**Airhop:** videos are shared as files over the mesh and play inline on any platform. Live video streaming was dropped: Android WiFi Aware and iOS MultipeerConnectivity are different protocols that cannot interoperate, so cross-platform video calling is not achievable with these stacks.
+
+### Gap 7: Non-Technical UX
 
 **bitchat problem:** No onboarding. Users see raw hex peer IDs. Contact verification is manual fingerprint comparison.  
 **Airhop:** Human-readable usernames (Adjective + Noun + 4-digit suffix, deterministic from pubkey). QR bootstrap.
@@ -193,8 +188,9 @@ English ships. The other languages land in v1.3.0, and because the extraction is
 
 - [x] Translation runtime with no library (`src/i18n/`): `t` / `useT` / `tPlural`, named-placeholder interpolation
 - [x] Completeness enforced by `tsc`: every locale is a `Record<TranslationKey, string>` derived from `en.ts`, so a partial locale does not compile and there is no runtime fallback
-- [x] 1,035 keys across 62 files, zero hardcoded user-facing strings
+- [x] 1,297 keys across 63 files, zero hardcoded user-facing strings
 - [x] Plurals through `tPlural`, never concatenation
+- [x] Terminal punctuation checked by `catalog.test.ts`
 - [x] Right-to-left groundwork (`src/i18n/layout.ts`): logical properties app-wide, mirrored chevrons; `radar-view.tsx` exempt as a polar plot of physical space
 - [x] Layout direction pinned at startup, so a device set to Arabic does not mirror an English UI
 - [x] CI guards: a hardcoded-string ceiling of zero, and module-load-time translations

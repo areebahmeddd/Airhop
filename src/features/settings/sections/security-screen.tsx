@@ -101,7 +101,12 @@ export default function SecurityScreen({ onBack }: Props): React.JSX.Element {
                         onPress={() => confirmUnblock(peerID)}
                         hitSlop={HIT_SLOP}
                         accessibilityRole="button"
-                        accessibilityLabel={`Unblock ${resolveDisplayName(peerID)}`}
+                        accessibilityLabel={T(
+                          "settings.security.unblock_peer",
+                          {
+                            name: resolveDisplayName(peerID),
+                          },
+                        )}
                       >
                         <Text
                           style={[
@@ -109,7 +114,7 @@ export default function SecurityScreen({ onBack }: Props): React.JSX.Element {
                             { color: Colors.accent },
                           ]}
                         >
-                          Unblock
+                          {T("settings.security.unblock")}
                         </Text>
                       </Pressable>
                     }

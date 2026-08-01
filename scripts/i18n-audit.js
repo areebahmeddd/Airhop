@@ -127,6 +127,11 @@ const IGNORE = new Set([
   // translated variant stops the two apps understanding each other. See the
   // do-not-translate table in .github/skills/localization.md.
   "around a bit with a large trout",
+  // An invariant breach in the offline coin selector, thrown at a stack trace
+  // and never rendered. Same rule as the `src/core/` skip above: translating
+  // exception text makes a field report harder to read, not easier.
+  "offline selection did not map back to stored proofs (matched",
+  ", covering",
 ]);
 
 // JSX text, anchored on a closing tag. Without requiring the `</`, a generic
@@ -243,6 +248,47 @@ function collect(file) {
   return hits.map((h) => ({ ...h, file: rel }));
 }
 
+/**
+ * The two shapes the line scanner above cannot see, found on the AST instead.
+ *
+ *   1. JSX text that wraps. JSX_TEXT is applied per line and forbids a newline
+ *      inside the match, and prettier wraps at 80 columns, so any sentence long
+ *      enough to be worth translating is exactly the one that escapes it.
+ *   2. Template literals. The line scanner bails on any line containing `${`,
+ *      which is right for a continuation line and wrong for the literal itself.
+ *
+ * A node knows its own extent, so neither problem exists here. Additive:
+ * everything still passes looksLikeCopy and SKIP_FILES, and results are deduped
+ * against the line scanner.
+ */
+function collectAst(file) {
+  const rel = path.relative(ROOT, file);
+  if (shouldSkip(rel)) return [];
+  const src = fs.readFileSync(file, "utf8");
+  const sf = ts.createSourceFile(file, src, ts.ScriptTarget.Latest, true);
+  const hits = [];
+  const push = (node, text) => {
+    // JSX text carries its own indentation and line breaks; a translator gets
+    // one sentence, so compare and report the collapsed form.
+    const value = text.replace(/\s+/g, " ").trim();
+    if (!looksLikeCopy(value)) return;
+    const { line } = sf.getLineAndCharacterOfPosition(node.getStart(sf));
+    hits.push({ line: line + 1, value, file: rel });
+  };
+  (function visit(node) {
+    if (ts.isJsxText(node)) {
+      push(node, node.text);
+    } else if (ts.isTemplateExpression(node)) {
+      // The literal chunks either side of each ${...}. The expressions between
+      // them are code and are visited normally.
+      push(node, node.head.text);
+      for (const span of node.templateSpans) push(node, span.literal.text);
+    }
+    ts.forEachChild(node, visit);
+  })(sf);
+  return hits;
+}
+
 function walk(dir, out = []) {
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
     if (entry.isDirectory()) {
@@ -269,12 +315,36 @@ if (unusedOnly) {
   const keys = [...Object.keys(en.strings), ...Object.keys(en.plurals)];
   // The catalog files themselves obviously mention every key, so they are not
   // evidence of use.
-  const code = files
-    .filter((f) => !f.includes(path.join("i18n", "locales")))
-    .map((f) => fs.readFileSync(f, "utf8"))
-    .join("\n");
+  // A key is used when it appears as a string literal, not when a comment
+  // mentions it, so this walks the AST rather than scanning raw text.
+  //
+  // Not by stripping comments with a regex: one `/*` inside a line comment
+  // makes the block pattern run to the next `*/` anywhere later in the file,
+  // taking live code with it.
+  const used = new Set();
+  // Keys assembled at runtime (`theme.${mode}`) are matched by prefix, so a
+  // dynamic family is not reported as 30 dead keys.
+  const prefixes = [];
+  for (const file of files) {
+    if (file.includes(path.join("i18n", "locales"))) continue;
+    const sf = ts.createSourceFile(
+      file,
+      fs.readFileSync(file, "utf8"),
+      ts.ScriptTarget.Latest,
+      true,
+    );
+    (function visit(node) {
+      if (ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node))
+        used.add(node.text);
+      else if (ts.isTemplateExpression(node) && node.head.text.includes("."))
+        prefixes.push(node.head.text);
+      ts.forEachChild(node, visit);
+    })(sf);
+  }
 
-  const orphans = keys.filter((key) => !code.includes(`"${key}"`));
+  const orphans = keys.filter(
+    (key) => !used.has(key) && !prefixes.some((p) => key.startsWith(p)),
+  );
 
   console.log(`Catalog: ${String(keys.length)} keys.\n`);
   console.log(`Unreferenced (${String(orphans.length)}):`);
@@ -288,7 +358,16 @@ if (unusedOnly) {
   process.exit(0);
 }
 
-const all = files.flatMap(collect);
+// Deduped: a single-line JSX label or template is reachable by both passes.
+const seenHits = new Set();
+const all = [...files.flatMap(collect), ...files.flatMap(collectAst)].filter(
+  (hit) => {
+    const id = `${hit.file}:${String(hit.line)}:${hit.value}`;
+    if (seenHits.has(id)) return false;
+    seenHits.add(id);
+    return true;
+  },
+);
 
 const byFile = new Map();
 for (const hit of all) {

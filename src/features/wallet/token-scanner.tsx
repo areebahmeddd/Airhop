@@ -184,7 +184,7 @@ export default function TokenScanner({
               {target === "token"
                 ? T("wallet.scan.aim_token")
                 : T("wallet.scan.aim_invoice")}{" "}
-              It is read on this device; nothing is sent anywhere.
+              {T("wallet.scan.on_device")}
             </Text>
           </SafeAreaView>
         </View>

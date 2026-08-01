@@ -201,7 +201,9 @@ export default function NetworkScreen({ onBack }: Props): React.JSX.Element {
                         onPress={() => handleRemoveRelay(url)}
                         hitSlop={HIT_SLOP}
                         accessibilityRole="button"
-                        accessibilityLabel={`Remove ${url}`}
+                        accessibilityLabel={T("settings.network.remove_relay", {
+                          url,
+                        })}
                       >
                         <Feather name="x" size={18} color={Colors.danger} />
                       </Pressable>
@@ -242,7 +244,7 @@ export default function NetworkScreen({ onBack }: Props): React.JSX.Element {
                       <Text
                         style={[styles.settingValue, { color: Colors.accent }]}
                       >
-                        Add
+                        {T("settings.network.add_short")}
                       </Text>
                     </Pressable>
                   )}
@@ -258,8 +260,7 @@ export default function NetworkScreen({ onBack }: Props): React.JSX.Element {
                       },
                     ]}
                   >
-                    Enter a valid relay host, e.g. relay.example.com. IP
-                    addresses and local names are not allowed.
+                    {T("settings.network.relay_invalid")}
                   </Text>
                 )}
               </>

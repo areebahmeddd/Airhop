@@ -16,7 +16,7 @@ import {
 } from "react-native";
 import { Swipeable } from "react-native-gesture-handler";
 import Animated, { FadeIn, LinearTransition } from "react-native-reanimated";
-import { t, useT } from "../../i18n";
+import { t, tPlural, useT } from "../../i18n";
 import { getMeshService } from "../../services/mesh-service";
 import { showAlert } from "../../store/alert-store";
 import { useBlockedStore } from "../../store/blocked-store";
@@ -114,7 +114,9 @@ export default function DmList({ onSelectDM }: Props): React.JSX.Element {
     setMoreOptionsDM(null);
     showAlert(
       t("chat.dm.clear"),
-      `Delete all messages with ${resolveDisplayName(channel.slice(3))}? This can't be undone.`,
+      t("chat.dm.clear_body", {
+        name: resolveDisplayName(channel.slice(3)),
+      }),
       [
         { text: T("common.cancel"), style: "cancel" },
         {
@@ -134,7 +136,7 @@ export default function DmList({ onSelectDM }: Props): React.JSX.Element {
     const peerID = channel.slice(3);
     showAlert(
       t("chat.dm.remove_contact"),
-      `Remove ${resolveDisplayName(peerID)}? This deletes the conversation and forgets the contact. They can still reach you if they message again.`,
+      t("chat.dm.remove_contact_body", { name: resolveDisplayName(peerID) }),
       [
         { text: T("common.cancel"), style: "cancel" },
         {
@@ -158,7 +160,7 @@ export default function DmList({ onSelectDM }: Props): React.JSX.Element {
     const peerID = channel.slice(3);
     showAlert(
       t("chat.dm.block"),
-      `Block ${resolveDisplayName(peerID)}? You won't see them on the Mesh tab or receive messages from them, even if they're nearby.`,
+      t("chat.dm.block_body", { name: resolveDisplayName(peerID) }),
       [
         { text: T("common.cancel"), style: "cancel" },
         {
@@ -225,19 +227,17 @@ export default function DmList({ onSelectDM }: Props): React.JSX.Element {
           const timeLabel =
             last === undefined ? null : formatListTimestamp(last.timestampMs);
 
-          // The whole row as one sentence, matching the room list. Previously
-          // only the name and online state were spoken, so the unread count,
-          // last message and time (all on screen) were inaudible.
+          // The whole row as one sentence, matching the channel list.
           const rowLabel = [
             username,
             isOnline ? t("chat.dm.in_range") : null,
             (unreadCounts[item] ?? 0) > 0
-              ? `${String(unreadCounts[item] ?? 0)} unread`
+              ? tPlural("chat.a11y.unread", unreadCounts[item] ?? 0)
               : null,
-            isMuted ? "muted" : null,
-            isPinned ? "pinned" : null,
+            isMuted ? t("chat.a11y.muted") : null,
+            isPinned ? t("chat.a11y.pinned") : null,
             last
-              ? `${last.isMine ? "You: " : ""}${messagePreviewText(last)}`
+              ? `${last.isMine ? `${T("chat.dm.you_prefix")} ` : ""}${messagePreviewText(last)}`
               : T("chat.no_messages"),
             timeLabel,
           ]
@@ -342,7 +342,9 @@ export default function DmList({ onSelectDM }: Props): React.JSX.Element {
                       style={styles.swipeAction}
                       onPress={() => handleSwipeMore(item)}
                       accessibilityRole="button"
-                      accessibilityLabel={`More options for ${username}`}
+                      accessibilityLabel={t("chat.dm.more_options", {
+                        name: username,
+                      })}
                     >
                       <Feather
                         name="more-horizontal"
@@ -379,7 +381,7 @@ export default function DmList({ onSelectDM }: Props): React.JSX.Element {
         contentContainerStyle={styles.list}
       />
 
-      {/* Swipe T("chat.more") sheet: clear or delete a conversation */}
+      {/* Swipe "More" sheet: clear or delete a conversation */}
       <BottomSheet
         visible={moreOptionsDM !== null}
         onClose={() => setMoreOptionsDM(null)}
@@ -475,7 +477,7 @@ export default function DmList({ onSelectDM }: Props): React.JSX.Element {
               >
                 <Feather name="user-x" size={18} color={Colors.danger} />
                 <Text style={[styles.moreRowText, styles.moreRowTextDanger]}>
-                  Remove contact
+                  {T("chat.dm.remove_contact_short")}
                 </Text>
               </Pressable>
 
@@ -487,7 +489,7 @@ export default function DmList({ onSelectDM }: Props): React.JSX.Element {
               >
                 <Feather name="slash" size={18} color={Colors.danger} />
                 <Text style={[styles.moreRowText, styles.moreRowTextDanger]}>
-                  Block contact
+                  {T("chat.dm.block_short")}
                 </Text>
               </Pressable>
 
@@ -499,7 +501,7 @@ export default function DmList({ onSelectDM }: Props): React.JSX.Element {
               >
                 <Feather name="trash-2" size={18} color={Colors.danger} />
                 <Text style={[styles.moreRowText, styles.moreRowTextDanger]}>
-                  Delete chat
+                  {T("chat.dm.delete_short")}
                 </Text>
               </Pressable>
             </View>
@@ -660,7 +662,7 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       gap: Spacing.md,
       paddingVertical: Spacing.md,
       paddingHorizontal: Spacing.base,
-      // Same 44pt floor as the room list's sheet. Half the rows here are
+      // Same 44pt floor as the channel list's sheet. Half the rows here are
       // destructive, which is where an undersized target costs the most.
       minHeight: MIN_TOUCH,
     },

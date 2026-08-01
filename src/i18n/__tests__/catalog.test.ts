@@ -16,6 +16,9 @@
 //      "{peer}" on someone's lock screen.
 //   4. The do-not-translate list. Some strings cross the wire or derive an
 //      identity, and translating them breaks interop rather than the layout.
+//   5. Terminal punctuation on multi-sentence strings. A string that stops
+//      mid-thought reads as truncated text, and runs the two halves together
+//      on a screen reader.
 //
 // These are written against the catalog rather than against English, so they
 // keep their value when a second language lands: point CATALOGS at both and
@@ -84,6 +87,56 @@ describe.each(CODES)("%s", (code) => {
       }
     }
     expect(invented).toEqual([]);
+  });
+});
+
+describe("terminal punctuation", () => {
+  // The house rule:
+  //
+  //   Titles, buttons and labels take no full stop. A row subtitle that is one
+  //   fragment takes none either. Modal bodies, empty states, and any string
+  //   that runs to two or more sentences take one on every sentence, including
+  //   the last.
+  //
+  // Only the last clause is checked, deliberately. Whether a lone string is a
+  // fragment or a sentence is a judgment call, and a test that guessed would
+  // fire on every modal body and empty state, which are single sentences that
+  // correctly end in a stop. So this is one-directional: having started a
+  // second sentence, finish it.
+  //
+  // That shape is unambiguously wrong rather than merely inconsistent. A stop
+  // in the middle and none at the end reads as text that got cut off, and a
+  // screen reader runs the two halves together as one clause.
+  //
+  // Ellipsis counts as terminal ("Sending…"), and so does the question mark
+  // every confirm title ends with.
+  const SENTENCE_BREAK = /[.!?]["'”)]?\s/;
+  // A trailing placeholder is terminated by whatever fills it: "Private channel
+  // {name}. {reach}" ends in a stop once `reach` is substituted. Only the final
+  // position counts; a placeholder mid-string still needs real punctuation
+  // after it.
+  const TERMINATED = /([.!?…]["'”)]?|\{\w+\})$/;
+
+  it.each(CODES)("%s finishes every sentence it starts", (code) => {
+    const unfinished: string[] = [];
+    const strings: Record<string, string> = {
+      ...CATALOGS[code].strings,
+      // Plural forms are prose too, and `wallet.backup.already_spent` is the
+      // longest string in the catalog.
+      ...Object.fromEntries(
+        Object.entries(CATALOGS[code].plurals).flatMap(([key, forms]) =>
+          Object.entries(forms)
+            .filter((form): form is [string, string] => form[1] !== undefined)
+            .map(([category, value]) => [`${key}.${category}`, value]),
+        ),
+      ),
+    };
+    for (const [key, value] of Object.entries(strings)) {
+      if (SENTENCE_BREAK.test(value) && !TERMINATED.test(value)) {
+        unfinished.push(`${key}: "${value}"`);
+      }
+    }
+    expect(unfinished).toEqual([]);
   });
 });
 

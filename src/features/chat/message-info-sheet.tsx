@@ -7,7 +7,7 @@
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import React, { useMemo } from "react";
 import { StyleSheet, Text, View } from "react-native";
-import { useT } from "../../i18n";
+import { t, useT } from "../../i18n";
 import type { ChatMessage } from "../../store/chat-store";
 import BottomSheet from "../../ui/components/bottom-sheet";
 import {
@@ -119,7 +119,7 @@ export default function MessageInfoSheet({
                             ? Colors.textSecondary
                             : Colors.textMuted
                         }
-                        label={`Delivered to ${peerName}`}
+                        label={T("chat.info.delivered_to", { name: peerName })}
                         time={
                           message.deliveredAtMs !== undefined
                             ? formatDateTime(message.deliveredAtMs)
@@ -135,7 +135,7 @@ export default function MessageInfoSheet({
                             ? Colors.accent
                             : Colors.textMuted
                         }
-                        label={`Read by ${peerName}`}
+                        label={T("chat.info.read_by", { name: peerName })}
                         time={
                           message.readAtMs !== undefined
                             ? formatDateTime(message.readAtMs)
@@ -194,7 +194,7 @@ function formatDateTime(ms: number): string {
     d.getMonth() === now.getMonth() &&
     d.getFullYear() === now.getFullYear();
   const time = d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-  if (sameDay) return `Today ${time}`;
+  if (sameDay) return t("chat.info.today_at", { time });
   return `${d.toLocaleDateString([], { month: "short", day: "numeric" })} ${time}`;
 }
 

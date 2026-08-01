@@ -34,7 +34,7 @@ interface Props {
   // Increment this to open the chooser (from the App.tsx header + button).
   // Counter pattern avoids the boolean edge cases of an open/close flag.
   trigger: number;
-  // Open a room once it has been created or joined.
+  // Open a channel once it has been created or joined.
   onOpenChannel: (channel: string) => void;
 }
 
@@ -110,7 +110,7 @@ export function StartNewSheet({
     joinPrivateChannel(name, generateChannelKey(), newChannelOverNostr);
     // Created, so there is nothing to go back to.
     resetJoinModal();
-    // Land in the new room, like the group and geohash paths do. Without this a
+    // Land in the new channel, like the group and geohash paths do. Without it a
     // channel started from the Direct sub-tab would appear on the other one and
     // read as nothing having happened.
     onOpenChannel(name);
@@ -144,8 +144,7 @@ export function StartNewSheet({
                 {T("chat.new.channel_label")}
               </Text>
               <Text style={styles.chooserDesc}>
-                A room anyone with the link can join. Create one, or join with a
-                link you were sent.
+                {T("chat.new.channel_desc")}
               </Text>
             </View>
           </Pressable>
@@ -168,9 +167,7 @@ export function StartNewSheet({
               <Text style={styles.chooserTitle}>
                 {T("chat.new.group_label")}
               </Text>
-              <Text style={styles.chooserDesc}>
-                Pick specific people. Up to 16. Stays on Bluetooth.
-              </Text>
+              <Text style={styles.chooserDesc}>{T("chat.new.group_desc")}</Text>
             </View>
           </Pressable>
 
@@ -192,9 +189,7 @@ export function StartNewSheet({
               <Text style={styles.chooserTitle}>
                 {T("chat.new.place_label")}
               </Text>
-              <Text style={styles.chooserDesc}>
-                Open a location channel anywhere by its geohash.
-              </Text>
+              <Text style={styles.chooserDesc}>{T("chat.new.place_desc")}</Text>
             </View>
           </Pressable>
         </View>
@@ -219,15 +214,12 @@ export function StartNewSheet({
         <View style={styles.privacyNote}>
           <View style={styles.privacyNoteRow}>
             <Feather name="lock" size={14} color={Colors.e2ee} />
-            <Text style={styles.privacyNoteText}>
-              End-to-end encrypted. Only members can read the messages.
-            </Text>
+            <Text style={styles.privacyNoteText}>{T("chat.new.e2ee")}</Text>
           </View>
           <View style={styles.privacyNoteRow}>
             <Feather name="link" size={14} color={Colors.textMuted} />
             <Text style={styles.privacyNoteText}>
-              Invite only. Anyone you share the link with can join. It stays
-              hidden from everyone else, even peers nearby.
+              {T("chat.new.invite_only")}
             </Text>
           </View>
           <View style={styles.privacyNoteRow}>
@@ -261,15 +253,13 @@ export function StartNewSheet({
           />
           {nameAlreadyExists && (
             <Text style={styles.inputError} accessibilityLiveRegion="polite">
-              A channel with this name already exists.
+              {T("chat.new.name_exists")}
             </Text>
           )}
         </View>
 
-        {/* Reach. Encryption is always on (the removed T("chat.new.private")/"Nostr"
-            pickers only set unread labels); this choice actually changes the
-            send path: local mesh only, or also sealed and published over
-            Nostr for out-of-range members. */}
+        {/* Reach. Encryption is always on; this only picks the send path:
+            local mesh, or also sealed over Nostr for out-of-range members. */}
         <View style={styles.optionGroup}>
           <Text style={styles.optionLabel}>{T("chat.new.reach")}</Text>
           <View style={styles.optionRow}>
@@ -296,7 +286,7 @@ export function StartNewSheet({
                     : styles.optionChipTextActive
                 }
               >
-                Bluetooth only
+                {T("chat.new.reach_bluetooth_chip")}
               </Text>
             </Pressable>
             <Pressable
@@ -322,7 +312,7 @@ export function StartNewSheet({
                     : styles.optionChipText
                 }
               >
-                Bluetooth + Internet
+                {T("chat.new.reach_internet_chip")}
               </Text>
             </Pressable>
           </View>
@@ -348,9 +338,7 @@ export function StartNewSheet({
           accessibilityLabel={T("chat.new.join_link")}
         >
           <Feather name="link" size={14} color={Colors.accent} />
-          <Text style={styles.joinLinkText}>
-            Have an invite link? Join with it
-          </Text>
+          <Text style={styles.joinLinkText}>{T("chat.new.have_link")}</Text>
         </Pressable>
 
         <View style={styles.modalActions}>

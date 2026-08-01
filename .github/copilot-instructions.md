@@ -41,7 +41,7 @@ Apply these to every suggestion, every file, every PR:
 
 8. **Polyfill at entry point.** `import 'react-native-get-random-values'` must be the first import in `App.tsx` before any `@noble` import.
 
-9. **Never hardcode user-facing text.** Add a key to `src/i18n/locales/en.ts` and use `T("your.key")` (component) or `t("your.key")` (outside React). English is the shipping language and ten land in v1.3.0, so the catalog is both what keeps copy reviewable in one diff today and what makes that a new file rather than a sweep of every screen. CI fails on any hardcoded string. See [`localization.md`](.github/skills/localization.md).
+9. **Never hardcode user-facing text.** Add a key to `src/i18n/locales/en.ts` and use `T("your.key")` (component) or `t("your.key")` (outside React). English is the shipping language and ten land in v1.3.0, so the catalog is both what keeps copy reviewable in one diff today and what makes that a new file rather than a sweep of every screen. CI fails on any hardcoded string. See [`i18n.md`](.github/skills/i18n.md).
 
 10. **Never translate anything that crosses the wire.** The `username.ts` adjective/noun lists derive identity. The transmitted `/hug` and `/slap` text is matched as an **English substring** by bitchat on receipt. Slash command tokens, channel names (`#bluetooth`) and geohashes are protocol. Translate the hint that describes a command, never the command. Enforced by `src/i18n/__tests__/catalog.test.ts`.
 
@@ -114,11 +114,11 @@ Full constant table: [`docs/spec/PROTOCOLS.md`](docs/spec/PROTOCOLS.md)
 
 Skills are reference files in `.github/skills/`. Read the relevant one before working on a subsystem.
 
-| Skill                                                                     | Read before working on                                                        |
-| ------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
-| [`bitchat-wire-format.md`](.github/skills/bitchat-wire-format.md)         | `packet-codec.ts`, BLE native modules, any packet encoding or decoding        |
-| [`noise-session-lifecycle.md`](.github/skills/noise-session-lifecycle.md) | `noise-xx.ts`, `noise-x.ts`, handshake logic, transport encryption            |
-| [`ble-native-boundary.md`](.github/skills/ble-native-boundary.md)         | `android/`, `ios/`, `src/bridge/`, TurboModule specs                          |
-| [`mesh-routing.md`](.github/skills/mesh-routing.md)                       | `flood-router.ts`, `deduplicator.ts`, `fragment-manager.ts`, `gossip-sync.ts` |
-| [`nostr-gift-wrap.md`](.github/skills/nostr-gift-wrap.md)                 | `gift-wrap.ts`, `courier-relay.ts`, any Nostr DM or event handling            |
-| [`localization.md`](.github/skills/localization.md)                       | `src/i18n/`, any user-facing copy anywhere, right-to-left layout              |
+| Skill                                                             | Read before working on                                                        |
+| ----------------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| [`bitchat-wire-format.md`](.github/skills/bitchat-wire-format.md) | `packet-codec.ts`, BLE native modules, any packet encoding or decoding        |
+| [`noise-sessions.md`](.github/skills/noise-sessions.md)           | `noise-xx.ts`, `noise-x.ts`, handshake logic, transport encryption            |
+| [`native-boundary.md`](.github/skills/native-boundary.md)         | `android/`, `ios/`, `src/bridge/`, TurboModule specs                          |
+| [`mesh-routing.md`](.github/skills/mesh-routing.md)               | `flood-router.ts`, `deduplicator.ts`, `fragment-manager.ts`, `gossip-sync.ts` |
+| [`nostr-gift-wrap.md`](.github/skills/nostr-gift-wrap.md)         | `gift-wrap.ts`, `courier-relay.ts`, any Nostr DM or event handling            |
+| [`i18n.md`](.github/skills/i18n.md)                               | `src/i18n/`, any user-facing copy anywhere, right-to-left layout              |

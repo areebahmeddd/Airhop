@@ -156,7 +156,9 @@ export default function VerifyContactScanner({
             >
               <Feather name="x" size={22} color="#FFFFFF" />
             </Pressable>
-            <Text style={styles.title}>Verify {name}</Text>
+            <Text style={styles.title}>
+              {T("contacts.verify.title", { name })}
+            </Text>
             <View style={styles.iconBtn} />
           </View>
 
@@ -165,9 +167,7 @@ export default function VerifyContactScanner({
             <>
               <View style={styles.frameWrap} pointerEvents="none">
                 <View style={styles.frame} />
-                <Text style={styles.hint}>
-                  Point your camera at their QR code
-                </Text>
+                <Text style={styles.hint}>{T("contacts.verify.aim")}</Text>
               </View>
               <View style={styles.bottomBar} />
             </>
@@ -193,7 +193,7 @@ export default function VerifyContactScanner({
                 {T("contacts.verify.camera_off")}
               </Text>
               <Text style={styles.resultBody}>
-                Turn on camera access in Settings to verify by QR.
+                {T("contacts.verify.camera_off_body")}
               </Text>
               <Pressable
                 style={styles.primaryBtn}
@@ -221,7 +221,7 @@ export default function VerifyContactScanner({
                 {T("contacts.verify.verified")}
               </Text>
               <Text style={styles.resultBody}>
-                {name}&apos;s key matches. You can trust this contact.
+                {T("contacts.verify.match_body", { name })}
               </Text>
               <Pressable style={styles.primaryBtn} onPress={onClose}>
                 <Text style={styles.primaryBtnText}>
@@ -241,8 +241,7 @@ export default function VerifyContactScanner({
                 {T("contacts.verify.different")}
               </Text>
               <Text style={styles.resultBody}>
-                This QR belongs to someone else. Ask {name} to show their own
-                code.
+                {T("contacts.verify.different_body", { name })}
               </Text>
               <Pressable style={styles.primaryBtn} onPress={handleRetry}>
                 <Text style={styles.primaryBtnText}>
@@ -265,7 +264,7 @@ export default function VerifyContactScanner({
                 {T("contacts.verify.failed")}
               </Text>
               <Text style={styles.resultBody}>
-                This QR looks tampered with: its ID doesn&apos;t match its key.
+                {T("contacts.verify.tampered_body")}
               </Text>
               <Pressable style={styles.primaryBtn} onPress={handleRetry}>
                 <Text style={styles.primaryBtnText}>

@@ -18,14 +18,7 @@
 // lose by turning it off.
 
 import React, { useState } from "react";
-import {
-  Linking,
-  Platform,
-  Pressable,
-  StyleSheet,
-  Text,
-  View,
-} from "react-native";
+import { Linking, Platform, Pressable, Text, View } from "react-native";
 import { setTorRouting } from "../../core/nostr/tor-routing";
 import { useT, type TranslationKey } from "../../i18n";
 import { requestLocationPermission } from "../../services/location-service";
@@ -337,7 +330,7 @@ export default function ConnectivityGroup(): React.JSX.Element {
                   accessibilityLabel={T("settings.conn.grant_location")}
                 >
                   <Text style={[styles.settingValue, { color: Colors.accent }]}>
-                    Grant
+                    {T("settings.conn.grant_short")}
                   </Text>
                 </Pressable>
               }
@@ -374,14 +367,10 @@ export default function ConnectivityGroup(): React.JSX.Element {
         <BottomSheet
           visible={confirmVisible}
           onClose={() => setConfirmVisible(false)}
-          sheetStyle={[styles.sheet, localStyles.sheetLeft]}
+          sheetStyle={styles.sheet}
         >
-          <Text style={[styles.sheetTitle, localStyles.textLeft]}>
-            {copy.title}
-          </Text>
-          <Text style={[styles.sheetSubtitle, localStyles.textLeft]}>
-            {copy.body}
-          </Text>
+          <Text style={styles.sheetTitle}>{copy.title}</Text>
+          <Text style={styles.sheetSubtitle}>{copy.body}</Text>
           <View style={styles.sheetActions}>
             <Pressable
               style={styles.sheetBtnPrimary}
@@ -408,14 +397,11 @@ export default function ConnectivityGroup(): React.JSX.Element {
       <BottomSheet
         visible={showOrbotModal}
         onClose={() => setShowOrbotModal(false)}
-        sheetStyle={[styles.sheet, localStyles.sheetLeft]}
+        sheetStyle={styles.sheet}
       >
-        <Text style={[styles.sheetTitle, localStyles.textLeft]}>
-          Tor on Android
-        </Text>
-        <Text style={[styles.sheetSubtitle, localStyles.textLeft]}>
-          Airhop routes Tor traffic through Orbot. Install and enable Orbot from
-          the Play Store, then turn this on.
+        <Text style={styles.sheetTitle}>{T("settings.conn.orbot_title")}</Text>
+        <Text style={styles.sheetSubtitle}>
+          {T("settings.conn.orbot_body")}
         </Text>
         <View style={styles.sheetActions}>
           <Pressable
@@ -441,15 +427,3 @@ export default function ConnectivityGroup(): React.JSX.Element {
     </View>
   );
 }
-
-// The shared sheet body centers its children, which suits a QR code or a
-// one-line confirm. These sheets are a short explanation followed by an action,
-// so they read left-aligned like the app's other explain-then-act sheets.
-const localStyles = StyleSheet.create({
-  sheetLeft: {
-    alignItems: "stretch",
-  },
-  textLeft: {
-    textAlign: "auto",
-  },
-});

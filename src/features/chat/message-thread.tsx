@@ -301,7 +301,7 @@ function mediaHeightForAspect(aspect: number | null): number {
 }
 
 function screenshotNoticeText(nickname: string): string {
-  return `* ${nickname} took a screenshot *`;
+  return t("chat.screenshot.notice", { name: nickname });
 }
 
 // Drawn sizes for the compose row's three controls and the jump-to-latest pill.
@@ -545,7 +545,10 @@ function TransferProgressList({
                 .filter(Boolean)
                 .join(" · ")
             : t.status === "stalled"
-              ? `Waiting for ${t.peerLabel || "peer"} to return · ${pct}%`
+              ? T("chat.thread.waiting_for", {
+                  name: t.peerLabel || T("chat.thread.peer"),
+                  percent: pct,
+                })
               : formatBytes(t.totalBytes);
 
         return (
@@ -584,7 +587,9 @@ function TransferProgressList({
                       onPress={() => getMeshService()?.cancelTransfer(t.id)}
                       hitSlop={HIT_SLOP}
                       accessibilityRole="button"
-                      accessibilityLabel={`Cancel ${t.name}`}
+                      accessibilityLabel={T("chat.thread.cancel_transfer", {
+                        name: t.name,
+                      })}
                     >
                       <Feather name="x" size={16} color={Colors.textMuted} />
                     </Pressable>
@@ -615,7 +620,9 @@ function TransferProgressList({
         );
       })}
       {queued > 0 && (
-        <Text style={styles.queued}>{queued} more waiting to send</Text>
+        <Text style={styles.queued}>
+          {t("chat.thread.queued_more", { count: queued })}
+        </Text>
       )}
     </View>
   );
@@ -862,10 +869,8 @@ function VoiceNoteBubble({
           color={Colors.textPrimary}
         />
       </Pressable>
-      {/* The bars are decorative, not a real waveform (the file is not
-          analysed), but they carry the one thing that is real: how far in you
-          are. Bars behind the playhead are solid, the rest stay faded, so a
-          glance says both T("chat.media.playing") and T("chat.media.remaining"). */}
+      {/* Decorative bars, not a real waveform: the file is never analysed.
+          They carry position only. Solid behind the playhead, faded ahead. */}
       <Pressable
         style={styles.attachVoiceWave}
         onPress={handleSeek}
@@ -1074,8 +1079,8 @@ export default function MessageThread({
   if (channel === "#bluetooth" && bridgeActive) {
     channelSubtitleParts.push(
       bridgePeopleAcross > 0
-        ? `${bridgePeopleAcross} across bridge`
-        : "bridged",
+        ? t("chat.thread.across_bridge", { count: bridgePeopleAcross })
+        : t("chat.thread.bridged"),
     );
   }
   // Nothing live to report: name the kind rather than guess. A location channel
@@ -1533,8 +1538,12 @@ export default function MessageThread({
       showAlert(
         `+${result.amount.toLocaleString()} ${result.unit}`,
         result.outcome === "swapped"
-          ? `Redeemed at ${hostOf(result.mintUrl)}. It is provably yours now: the sender's copy of this token no longer works.`
-          : `Stored from ${hostOf(result.mintUrl)}, but the mint has not confirmed it is unspent yet${result.dleq === "valid" ? " (its signature does check out, so the token is genuine)" : ""}. Refresh from the Wallet tab once you are online.`,
+          ? t("wallet.receive.redeemed_at", { mint: hostOf(result.mintUrl) })
+          : t("wallet.receive.stored_pending", {
+              mint: hostOf(result.mintUrl),
+              dleq:
+                result.dleq === "valid" ? t("wallet.receive.dleq_inline") : "",
+            }),
       );
     } catch (err) {
       reportWalletError(err);
@@ -1597,7 +1606,9 @@ export default function MessageThread({
       showAlert(
         t("chat.screenshot.heads_up"),
         isDM
-          ? `${resolveDisplayName(channel.slice(3))} was notified that you took a screenshot of this conversation.`
+          ? t("chat.screenshot.notified_dm", {
+              name: resolveDisplayName(channel.slice(3)),
+            })
           : t("chat.screenshot.notified"),
       );
     });
@@ -1876,8 +1887,13 @@ export default function MessageThread({
     // thread and means something quite different.
     if (result.route !== "sent") {
       showAlert(
-        `${result.prepared.amount.toLocaleString()} ${result.prepared.unit} on its way`,
-        `${describeRoute(result.route)} It stays reclaimable from the Wallet tab until you confirm it arrived.`,
+        t("wallet.xfer.on_its_way", {
+          amount: result.prepared.amount.toLocaleString(),
+          unit: result.prepared.unit,
+        }),
+        t("wallet.xfer.on_its_way_short", {
+          route: describeRoute(result.route),
+        }),
       );
     }
   }
@@ -2455,7 +2471,7 @@ export default function MessageThread({
     const key = chat.channelKeys[channel];
     const overNostr = chat.channelReach[channel] === "ble+nostr";
     void Share.share({
-      message: `Join me in ${channel} on Airhop - offline-first, private mesh messaging.\n\n${channelInviteLink(channel, key, overNostr)}`,
+      message: `${t("chat.thread.invite_body", { channel })}\n\n${channelInviteLink(channel, key, overNostr)}`,
     });
   }
 
@@ -2497,7 +2513,7 @@ export default function MessageThread({
             >
               <Feather name="image" size={28} color={Colors.textMuted} />
               <Text style={styles.attachImagePlaceholderText}>
-                Tap to load photo
+                {t("chat.media.tap_load_photo")}
               </Text>
             </Pressable>
           );
@@ -2540,7 +2556,9 @@ export default function MessageThread({
             style={styles.attachDoc}
             onPress={() => void openAttachment(attachment)}
             accessibilityRole="button"
-            accessibilityLabel={`Open ${attachment.name ?? "document"}`}
+            accessibilityLabel={t("chat.media.open_document", {
+              name: attachment.name ?? t("chat.media.document"),
+            })}
           >
             <View style={styles.attachDocIcon}>
               <Feather
@@ -2596,7 +2614,7 @@ export default function MessageThread({
                 <Feather name="play" size={20} color={Colors.textPrimary} />
               </View>
               <Text style={styles.attachImagePlaceholderText}>
-                Tap to load video
+                {t("chat.media.tap_load_video")}
               </Text>
             </Pressable>
           );
@@ -2700,7 +2718,10 @@ export default function MessageThread({
               disabled={claimingToken !== null}
               onPress={() => void claimToken(token)}
               accessibilityRole="button"
-              accessibilityLabel={`Claim ${token.info.amount.toLocaleString()} ${token.info.unit}`}
+              accessibilityLabel={t("chat.ecash.claim_amount", {
+                amount: token.info.amount.toLocaleString(),
+                unit: token.info.unit,
+              })}
             >
               <Text style={styles.paymentCardClaimText}>
                 {claimingToken === token.raw
@@ -2764,7 +2785,7 @@ export default function MessageThread({
           accessibilityRole="button"
           accessibilityLabel={
             backUnreadCount > 0
-              ? `Go back, ${String(backUnreadCount)} unread`
+              ? t("chat.thread.go_back_unread", { count: backUnreadCount })
               : T("chat.thread.go_back")
           }
         >
@@ -2792,9 +2813,9 @@ export default function MessageThread({
             else setShowDMInfo(true);
           }}
           accessibilityRole="button"
-          accessibilityLabel={
-            isDM ? `View info for ${displayName}` : `View info for ${channel}`
-          }
+          accessibilityLabel={t("chat.thread.view_info", {
+            name: isDM ? displayName : channel,
+          })}
         >
           {isDM ? (
             // DM: avatar + name, left-aligned right after the back arrow.
@@ -2841,7 +2862,7 @@ export default function MessageThread({
               accessibilityRole="button"
               accessibilityLabel={
                 unseenNotices > 0
-                  ? `Notices for this channel, ${String(unseenNotices)} new`
+                  ? t("chat.thread.notices_new", { count: unseenNotices })
                   : T("chat.thread.notices")
               }
             >
@@ -3085,24 +3106,17 @@ export default function MessageThread({
               <Text style={styles.emptySubtitle}>
                 {isDM
                   ? T("chat.thread.empty_desc")
-                  : `Say something in ${channel}.`}
+                  : t("chat.thread.say_something", { channel })}
               </Text>
             </View>
           }
           contentContainerStyle={styles.list}
         />
 
-        {/* Jump to latest: only while the reader is away from the end, so it is
-            an offer rather than permanent chrome. This is the other half of not
-            auto-scrolling - without a way back, T("chat.teleport.stayed")
-            turns into T("chat.teleport.stranded").
-
-            Badged with how many messages have arrived since they scrolled away,
-            in the same shape as the back button's unread badge. Reading back in
-            a busy channel, the difference between T("chat.teleport.nothing") and "nine
-            people replied" is the whole reason to take the trip, and a bare
-            chevron makes you guess. Absent when the count is zero, so it says
-            T("chat.teleport.moved") rather than a misleading zero. */}
+        {/* Jump to latest, shown only while the reader is away from the end:
+            the other half of not auto-scrolling. Badged with what has arrived
+            since, because "nine people replied" is the reason to take the trip
+            and a bare chevron makes you guess. Hidden at zero. */}
         {showJumpToLatest && msgs.length > 0 && (
           <Pressable
             style={styles.jumpToLatest}
@@ -3111,7 +3125,7 @@ export default function MessageThread({
             accessibilityRole="button"
             accessibilityLabel={
               newWhileAway > 0
-                ? `Jump to latest message, ${String(newWhileAway)} new`
+                ? t("chat.thread.jump_latest_new", { count: newWhileAway })
                 : T("chat.thread.jump_latest")
             }
           >
@@ -3146,9 +3160,7 @@ export default function MessageThread({
       {!isDM && dmStatus === "no-reach" && (
         <View style={styles.dmStatusBar}>
           <Feather name="alert-circle" size={12} color={Colors.textMuted} />
-          <Text style={styles.dmStatusText}>
-            No peers nearby - nobody received this yet
-          </Text>
+          <Text style={styles.dmStatusText}>{t("chat.thread.no_reach")}</Text>
         </View>
       )}
 
@@ -3289,7 +3301,9 @@ export default function MessageThread({
                 style={styles.mentionRow}
                 onPress={() => setDraft(applyMention(draft, c.nickname))}
                 accessibilityRole="button"
-                accessibilityLabel={`Mention ${c.nickname}`}
+                accessibilityLabel={t("chat.thread.mention", {
+                  name: c.nickname,
+                })}
               >
                 <Avatar username={c.nickname} peerID={c.id} size={28} />
                 <Text style={styles.mentionName} numberOfLines={1}>
@@ -3419,25 +3433,27 @@ export default function MessageThread({
               accessibilityRole="button"
               accessibilityLabel={
                 liveTalker !== null
-                  ? `${liveAvailable ? T("chat.voice.hold_live") : T("chat.voice.hold_record")}. ${liveTalker} is talking`
+                  ? T("chat.thread.someone_talking", {
+                      hold: liveAvailable
+                        ? T("chat.voice.hold_live")
+                        : T("chat.voice.hold_record"),
+                      name: liveTalker,
+                    })
                   : liveAvailable
                     ? T("chat.voice.hold_live")
                     : T("chat.voice.hold_record")
               }
             >
-              {/* Always the mic: that is this app's icon for voice, and the
-                  radio glyph already means T("chat.voice.the_mesh") everywhere else (peer
-                  list, radar, network settings), so borrowing it here would
-                  say the wrong thing. State is carried by colour instead,
-                  which is how the rest of the app shows it:
+              {/* Always the mic. The radio glyph already means "the mesh"
+                  elsewhere (peer list, radar, network settings), so state is
+                  carried by colour instead:
 
                     muted  hold records a voice note
                     accent hold goes out live
                     danger you are live right now
 
-                  The busy ring is a separate property (the border), so
-                  T("chat.voice.live_available") and T("chat.voice.someone_talking") can be
-                  true at once and both remain readable. */}
+                  Busy is the border, a separate property, so "live available"
+                  and "someone else is talking" can both show at once. */}
               <Feather
                 name="mic"
                 size={16}
@@ -3571,8 +3587,7 @@ export default function MessageThread({
         <View style={styles.attachNote}>
           <Feather name="bluetooth" size={12} color={Colors.textMuted} />
           <Text style={styles.attachNoteText}>
-            Files send over Bluetooth range only. Text and payments reach
-            internet contacts; attachments do not.
+            {T("chat.thread.attach_note")}
           </Text>
         </View>
         <Pressable
@@ -3594,7 +3609,7 @@ export default function MessageThread({
         >
           <Text style={styles.ecashTitle}>{T("chat.ecash.title")}</Text>
           <Text style={styles.ecashSubtitle}>
-            Built offline from your wallet and sent as a token to {displayName}.
+            {T("chat.ecash.send_to", { name: displayName })}
           </Text>
           <TextInput
             style={styles.ecashInput}
@@ -3656,8 +3671,7 @@ export default function MessageThread({
       )}
 
       {/* DM peer info: opens when the user taps the DM header. The same shared
-          sheet the DM list's T("chat.thread.contact_info") action uses, so the two never
-          diverge. */}
+          sheet the DM list's contact-info action uses, so the two never diverge. */}
       {isDM && (
         <ContactInfoSheet
           channel={showDMInfo ? channel : null}
@@ -3789,7 +3803,9 @@ export default function MessageThread({
                   style={styles.senderInfoMessageBtn}
                   onPress={handleMessageSender}
                   accessibilityRole="button"
-                  accessibilityLabel={`Message ${resolveDisplayName(senderInfoTarget.peerID)}`}
+                  accessibilityLabel={t("chat.thread.message_peer", {
+                    name: resolveDisplayName(senderInfoTarget.peerID),
+                  })}
                 >
                   <Feather
                     name="message-circle"

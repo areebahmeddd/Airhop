@@ -82,22 +82,25 @@ export function JoinLinkSheet({
       if (link.key === undefined) {
         return {
           ok: true,
-          text: `Public channel ${link.channel}. Anyone nearby can read it.`,
+          text: t("chat.join.public_channel", { name: link.channel }),
         };
       }
       return {
         ok: true,
-        text: `Private channel ${link.channel}. ${
-          link.overNostr
+        text: t("chat.join.private_channel", {
+          name: link.channel,
+          reach: link.overNostr
             ? t("chat.join.reach_internet")
-            : t("chat.join.reach_mesh")
-        }`,
+            : t("chat.join.reach_mesh"),
+        }),
       };
     }
     if (link.kind === "peer") {
       return {
         ok: true,
-        text: `Direct message with ${resolveDisplayName(link.peerID)}.`,
+        text: t("chat.join.dm_with", {
+          name: resolveDisplayName(link.peerID),
+        }),
       };
     }
     return {
@@ -125,13 +128,13 @@ export function JoinLinkSheet({
       return;
     }
     // A private channel is identified by its key, not its name, so this invite
-    // may be a different room that happens to share a name with one already
-    // joined. It lands in its own room; say so, because the name in the list
+    // may be a different channel that happens to share a name with one already
+    // joined. It lands in its own channel; say so, because the name in the list
     // will not be the name in the link.
     if (link.kind === "channel" && channel !== link.channel) {
       showAlert(
-        `Joined as ${channel}`,
-        `You are already in a different ${link.channel}. Channel names are just labels, so this invite opened its own room and the one you were in is untouched. Rename either from its channel info.`,
+        t("chat.join.joined_as", { name: channel }),
+        t("chat.join.name_clash_body", { name: link.channel }),
       );
     }
     reset();
@@ -166,8 +169,7 @@ export function JoinLinkSheet({
             style={styles.noteIcon}
           />
           <Text style={styles.privacyNoteText}>
-            Paste an invite that starts with airhop://. Tapping one works too;
-            this is for a link you cannot tap.
+            {T("chat.join.paste_hint")}
           </Text>
         </View>
         <View style={styles.privacyNoteRow}>
@@ -177,10 +179,7 @@ export function JoinLinkSheet({
             color={Colors.e2ee}
             style={styles.noteIcon}
           />
-          <Text style={styles.privacyNoteText}>
-            A private channel invite carries the key, so joining is instant and
-            nothing is asked of anyone else.
-          </Text>
+          <Text style={styles.privacyNoteText}>{T("chat.join.key_note")}</Text>
         </View>
         <View style={styles.privacyNoteRow}>
           <Feather
@@ -190,8 +189,7 @@ export function JoinLinkSheet({
             style={styles.noteIcon}
           />
           <Text style={styles.privacyNoteText}>
-            Works offline. The link is read on this device, and the room reaches
-            however its creator set it up.
+            {T("chat.join.offline_note")}
           </Text>
         </View>
       </View>
