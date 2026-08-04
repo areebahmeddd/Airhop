@@ -80,14 +80,3 @@ export function resolveDisplayName(peerID: string): string {
 
   return peerIDToUsername(peerID);
 }
-
-// Hook form: re-renders when the contact or peer entry changes.
-export function useDisplayName(peerID: string): string {
-  const contactName = useContactsStore((s) => s.contacts[peerID]?.nickname);
-  const announced = usePeerStore((s) => s.peers.get(peerID)?.nickname);
-
-  if (isNostrId(peerID)) return nostrPseudonym(peerID);
-  if (contactName !== undefined && contactName.length > 0) return contactName;
-  if (announced !== undefined && announced.length > 0) return announced;
-  return peerIDToUsername(peerID);
-}

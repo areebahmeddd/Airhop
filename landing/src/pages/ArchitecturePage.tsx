@@ -1048,8 +1048,8 @@ export default function ArchitecturePage() {
               </p>
               <p>
                 Staying out of the fragment scheduler is the hard part, and it is solved with size.
-                A burst is capped at 210 bytes, comfortably under the 469-byte fragment limit, so
-                live audio is never split and never queues behind somebody&rsquo;s file transfer.
+                A burst is capped at 210 bytes, comfortably under the 467 bytes a fragment carries,
+                so live audio is never split and never queues behind somebody&rsquo;s file transfer.
               </p>
 
               <Figure caption="Live frames on top, the reliable copy underneath. Both rows carry the same audio; only the timing is different.">
@@ -1513,7 +1513,7 @@ export default function ArchitecturePage() {
                   ["NOISE_HANDSHAKE", "0x10", "Noise XX handshake message"],
                   ["NOISE_ENCRYPTED", "0x11", "Post-handshake encrypted payload"],
                   ["DR_ENCRYPTED", "0x12", "Double Ratchet DM · Airhop extension"],
-                  ["FRAGMENT", "0x20", "One 469-byte piece of a larger message"],
+                  ["FRAGMENT", "0x20", "One piece of a larger message, 467 bytes of data"],
                   ["REQUEST_SYNC", "0x21", "GCS gossip filter, never relayed"],
                   ["FILE_TRANSFER", "0x22", "File, image, voice note, 1 MiB cap"],
                   ["BOARD_POST", "0x23", "Signed bulletin post, 1 to 7 day expiry"],

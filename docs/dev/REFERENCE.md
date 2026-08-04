@@ -1,6 +1,6 @@
 # bitchat: Knowledge Transfer Document
 
-**Prepared:** July 2026  
+**Reviewed:** August 1, 2026, against bitchat-ios at v1.7.1 and bitchat-android at the same date  
 **Scope:** iOS (`bitchat-ios`), Android (`bitchat-android`), Georelays infrastructure  
 **Whitepaper version:** 2.0 (July 6, 2026)
 
@@ -215,9 +215,9 @@ Private messages use a 3-layer wrapping scheme:
 
 This means relays learn neither who is talking to whom nor what they are saying.
 
-### 4.4 Tor Integration (iOS)
+### 4.4 Tor Integration
 
-All Nostr and geodata traffic on iOS routes through a **Tor SOCKS5 proxy** by default (fail-closed):
+All Nostr and geodata traffic routes through a **Tor SOCKS5 proxy** by default (fail-closed). Both iOS and Android support it, with Android using `ArtiTorManager.kt` wired through `BitchatApplication` and `OkHttpProvider`.
 
 Uses **Arti** (Rust implementation of Tor) bundled as an xcframework.
 
@@ -467,7 +467,7 @@ Scopes, as designed and now shipped:
 - **No delivery acks, no retransmit** for individual frames (live audio; reliability is the fallback voice note).
 - Bandwidth math: BLE mesh moves ~15 KB/s per link; voice needs ~2 KB/s; fits with margin.
 
-VoiceRecorder and VoiceVisualizer cover the voice-note fallback. The live path runs on both platforms through `AirhopVoiceModule`, and interoperates with bitchat on both: `VOICE_FRAME` (`0x29`) is one of the types bitchat-android implements.
+`VoiceRecorder` and `VoiceVisualizer` cover the recorded voice-note fallback. Live push-to-talk ships on both bitchat platforms: `voiceFrame` (`0x29`) is one of the few types above `0x22` that the Android `MessageType` registry implements, so a live burst crosses between them.
 
 ### 8.5 Video Calling
 
@@ -486,7 +486,7 @@ There is no design document, no code, and no packet type for video calling. The 
 
 ### PTT (iOS, Shipped)
 
-The design is in `bitchat/ios/docs/PUSH-TO-TALK-DESIGN.md` and the code is in `bitchat-ios/bitchat/Features/voice/`. Key elements:
+The design is in bitchat's own `PUSH-TO-TALK-DESIGN.md` and the code is in `bitchat/Features/voice/`. Key elements:
 
 - `AVAudioEngine` input tap → `PTTInputResampler` → `PTTFrameEncoder` → packetizer → BLE.
 - Simultaneously writes to `.m4a` for finalized note delivery (no remux needed).
@@ -510,7 +510,7 @@ bitchat/ios/bitchat/
 ├── Nostr/             # NIP-17, GeoRelayDirectory, NostrIdentity, NostrRelayManager
 ├── Protocols/         # (shared protocol definitions)
 ├── Services/
-│   ├── BLE/           # ~45 files - the BLE mesh engine
+│   ├── BLE/           # the BLE mesh engine
 │   ├── Board/         # Bulletin board feature
 │   ├── Courier/       # CourierStore, MessageOutboxStore, StoreAndForwardMetrics
 │   ├── Gateway/       # BridgeService, GatewayService (mesh→Nostr bridge)
@@ -575,7 +575,7 @@ bitchat/android/app/src/main/java/com/bitchat/android/
 │   └── voice/                # VoiceRecorder.kt, VoiceVisualizer.kt, Waveform.kt
 ├── geohash/                  # Geohash utilities
 ├── identity/                 # Identity management
-├── mesh/                     # ~25 files - BLE mesh engine
+├── mesh/                     # BLE mesh engine
 │   ├── BluetoothMeshService.kt  # Main mesh coordinator
 │   ├── BluetoothConnectionManager.kt
 │   ├── BluetoothGattClientManager.kt
@@ -591,7 +591,7 @@ bitchat/android/app/src/main/java/com/bitchat/android/
 ├── model/                    # Data models (BitchatMessage, etc.)
 ├── net/                      # Network utilities
 ├── noise/                    # Noise protocol implementation
-├── nostr/                    # ~24 files - Nostr client
+├── nostr/                    # Nostr client
 │   ├── NostrClient.kt
 │   ├── NostrRelayManager.kt
 │   ├── NostrProtocol.kt      # NIP-17 implementation
@@ -751,7 +751,7 @@ When neither BLE nor Nostr is available, the courier system relies on **physical
 - ❌ **Cross-mesh DMs to non-nearby mutual favorites**: requires Nostr delivery.
 - ❌ **Courier drop on relays**: the internet bridge courier path.
 - ❌ **Relay discovery updates**: fetching fresh `nostr_relays.csv`.
-- ❌ **Tor bootstrapping** (iOS): requires initial internet to bootstrap Tor circuits.
+- ❌ **Tor bootstrapping**: requires initial internet to bootstrap Tor circuits.
 
 ### The Offline Story in Practice
 
@@ -770,7 +770,7 @@ This makes it valuable for **protests, disaster zones, events, and remote areas*
 - **Message content**: all private messages are E2E encrypted (Noise XX on mesh, NIP-17 on Nostr).
 - **Relay operators**: Nostr relays see only encrypted event blobs; the sender/recipient identities are hidden by the gift-wrap layer.
 - **Courier carriers**: couriers carry opaque ciphertext addressed by a daily-rotating tag; they learn nothing about sender, recipient, or content.
-- **Tor (iOS)**: all internet traffic is onion-routed, hiding IP address from relay operators.
+- **Tor**: all internet traffic is onion-routed, hiding IP address from relay operators. No bridges or pluggable transports on either platform, so the connection to the Tor network is itself visible to anyone inspecting traffic.
 
 ### What Is Observable
 
@@ -853,15 +853,15 @@ From the whitepaper's "Future Work" section and observed codebase state:
 
 ### In Progress / Designed
 
-1. **Architecture V2**: ongoing refactor to `AppRuntime` composition root, feature-scoped models.
-2. **Bluetooth architecture improvements**: `BLEOutboundWriteBuffer`, `BLEIngressLinkRegistry`, `BLEFanoutSelector` separation in progress.
+1. **Architecture V2**: landed. `AppRuntime` is the composition root and feature-scoped models read from `ConversationStore` directly.
+2. **BLE transport architecture V3**: landed. One engine domain with capability ports and feature-owned state, including `BLEEngineScheduler`, `BLERadioController` and `BLELinkAuthState`.
 
 ### Inferred from Codebase
 
-1. **Android Tor integration**: Android currently has no Tor; iOS has full Arti integration.
+1. **Android Tor integration**: shipped. `ArtiTorManager.kt` brought Android to parity with the iOS Arti integration.
 2. **Rust client compatibility**: changelog mentions Rust as a third platform target.
 3. **WiFi Aware transport (Android)**: `wifi-aware/` folder exists; higher bandwidth, longer range than BLE.
-4. **Board/bulletin board feature**: `BoardStore` in iOS codebase suggests an async public posting feature.
+4. **Board/bulletin board feature**: shipped on iOS as `BoardPackets.swift` (`0x23`). Not in the Android type registry.
 5. **Gateway / bridge mode**: partially implemented; BLE→Nostr bridge for mesh-only devices.
 
 ## 19. Technology Stack Summary

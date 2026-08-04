@@ -1,0 +1,43 @@
+{
+  "$schema": "https://unpkg.com/knip@5/schema.json",
+  "entry": [
+    "App.tsx",
+    "src/**/__tests__/**/*.{ts,tsx}",
+    "scripts/*.js",
+    "press/build.mjs",
+    "press/tools/*.mjs"
+  ],
+  "project": ["src/**/*.{ts,tsx}", "scripts/**/*.js", "press/**/*.mjs"],
+  "ignore": [
+    "cli/**",
+    "web/**",
+    "macos/**",
+    "windows/**",
+    "bitchat/**",
+    "metro.config.js"
+  ],
+  "ignoreDependencies": [
+    "expo",
+    "expo-updates",
+    "jest-expo",
+    "babel-preset-expo",
+    "@babel/core",
+    "tailwindcss",
+    "@fontsource/jetbrains-mono"
+  ],
+  "workspaces": {
+    ".": {
+      "entry": [
+        "App.tsx",
+        "src/**/__tests__/**/*.{ts,tsx}",
+        "scripts/*.js",
+        "press/build.mjs",
+        "press/tools/*.mjs"
+      ]
+    },
+    "landing": {
+      "entry": ["src/main.tsx", "vite.config.ts"],
+      "project": ["src/**/*.{ts,tsx}"]
+    }
+  }
+}

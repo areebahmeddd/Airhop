@@ -51,6 +51,11 @@ jobs:
       - name: Check no hardcoded strings
         run: npm run i18n:audit -- --max 0
 
+      # The vendored Arti xcframework is prebuilt, so binary changes require an
+      # explicit acknowledgement. See scripts/verify-vendored.js.
+      - name: Verify vendored binaries
+        run: npm run verify:vendored
+
   test:
     name: Unit Tests
     runs-on: ubuntu-24.04

@@ -50,6 +50,14 @@ Never suggest UI code for a feature whose `src/core/` service isn't tested.
 - Never change BLE Service UUID (`F47B5E2D...`) or Characteristic UUID (`A1B2C3D4...`).
 - Never change peer ID derivation (`hex(SHA-256(noiseStaticPubKey)).slice(0, 16)`).
 
+### Pinned Artifacts
+
+Two things in the tree are pinned by hash and checked in CI. Both fail the build
+rather than drifting quietly, so a change to either has to be deliberate.
+
+- **Vendored binaries** (`ios/Frameworks/`, the Arti xcframework). Prebuilt, not compiled here, and nobody reviews a binary diff. If you genuinely need to update one, re-record it in the same commit: `node scripts/verify-vendored.js --write`. CI runs `npm run verify:vendored`.
+- **Gradle dependencies** (`android/app/gradle.lockfile`). Adding or bumping an npm package with an Android side can change what Gradle resolves. Regenerate in the same commit: `./gradlew dependencies --write-locks` then `./gradlew :app:dependencies --write-locks`.
+
 ### User-Facing Copy
 
 - **Never hardcode a user-facing string.** Add a key to `src/i18n/locales/en.ts`, use `T("your.key")`. CI fails on any hardcoded string (`npm run i18n:audit`).
@@ -113,7 +121,7 @@ Skills are reference files in `.github/skills/`. Read the relevant one before wo
 - Named exports only in `src/core/` and `src/bridge/`
 - File naming: `kebab-case.ts`
 - Keep `src/core/` modules under ~400 lines: one protocol concern per file, each independently testable. This holds today and must keep holding.
-- `src/services/mesh-service.ts` and several `src/features/` screens are far past that (mesh-service is ~2,700 lines, `message-thread.tsx` ~3,400). They are known refactor targets, **not** precedent. Add a new packet type's logic as a focused module in `src/core/mesh/` and keep the mesh-service side to wiring.
+- `src/services/mesh-service.ts` and several `src/features/` screens are far past that. They are known refactor targets, **not** precedent. Add a new packet type's logic as a focused module in `src/core/mesh/` and keep the mesh-service side to wiring.
 
 ## Common Mistakes to Avoid
 

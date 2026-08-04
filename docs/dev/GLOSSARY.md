@@ -76,7 +76,7 @@
 
 ## Tools and Libraries
 
-**[DEFLATE (raw)](https://datatracker.ietf.org/doc/html/rfc1951)**: A lossless compression algorithm. Applied to BLE packet payloads before transmission to fit more content within the 469-byte fragment limit. `packet-compression.ts` uses pako's `deflateRaw` / `inflateRaw`, matching bitchat's headerless zlib stream.
+**[DEFLATE (raw)](https://datatracker.ietf.org/doc/html/rfc1951)**: A lossless compression algorithm. Applied to BLE packet payloads before transmission to fit more content within the 512-byte BLE write ceiling. `packet-compression.ts` uses pako's `deflateRaw` / `inflateRaw`, matching bitchat's headerless zlib stream.
 
 **[AAC (Advanced Audio Coding)](https://en.wikipedia.org/wiki/Advanced_Audio_Coding)**: A lossy audio compression format. Airhop encodes push-to-talk voice at 16 kHz mono using AAC before transmission as BLE `VOICE_FRAME` packets.
 

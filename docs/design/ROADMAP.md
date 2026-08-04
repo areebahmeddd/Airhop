@@ -72,8 +72,8 @@ bitchat is an excellent foundation. Airhop fills the gaps it left open.
 │             │ JSI TurboModule                                               │
 │  ┌──────────▼──────────────────────────────────────────────────────────┐    │
 │  │              AIRHOP NATIVE BLE MODULE                               │    │
-│  │  iOS: CBPeripheralManager + CBCentralManager (Swift ~920 lines)     │    │
-│  │  Android: BluetoothGattServer + BluetoothLeScanner (Kotlin ~1,500)  │    │
+│  │  iOS: CBPeripheralManager + CBCentralManager (Swift)                │    │
+│  │  Android: BluetoothGattServer + BluetoothLeScanner (Kotlin)         │    │
 │  └─────────────────────────────────────────────────────────────────────┘    │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
@@ -85,9 +85,9 @@ bitchat is an excellent foundation. Airhop fills the gaps it left open.
 **Goal:** Hello World BLE mesh between two phones.
 
 - [x] Set up Expo bare workflow with TypeScript strict
-- [x] `AirhopBLEModule` iOS (Swift, ~920 lines): dual-role GATT server + client
-- [x] `AirhopBLEModule` Android (Kotlin, ~1,500 lines): dual-role GATT
-- [x] `AirhopForegroundService.kt` (~170 lines): background keepalive (foreground service, `connectedDevice` type), started with the mesh from `AirhopBLEModule` so the process, BLE, and Nostr socket survive backgrounding
+- [x] `AirhopBLEModule` iOS (Swift): dual-role GATT server + client
+- [x] `AirhopBLEModule` Android (Kotlin): dual-role GATT
+- [x] `AirhopForegroundService.kt`: background keepalive (foreground service, `connectedDevice` type), started with the mesh from `AirhopBLEModule` so the process, BLE, and Nostr socket survive backgrounding
 - [x] Wire TurboModule to `src/bridge/NativeAirhopBLE.ts`
 - [x] `src/core/mesh/packet-codec.ts`: binary encode/decode matching bitchat v2 (`PROTOCOLS.md`, section 2)
 - [x] `src/core/mesh/flood-router.ts`: TTL flood, jitter 10-220ms, dedup
@@ -102,7 +102,7 @@ bitchat is an excellent foundation. Airhop fills the gaps it left open.
 
 - [x] `src/core/crypto/noise-xx.ts`: Noise XX handshake using `@noble` (transport session, replay window)
 - [x] `src/core/crypto/noise-x.ts`: one-way Noise X for courier sealing
-- [x] `src/core/mesh/fragment-manager.ts`: fragmentation / reassembly (469B chunks, 30s timeout)
+- [x] `src/core/mesh/fragment-manager.ts`: fragmentation / reassembly (467B of data per 512B frame, 30s timeout)
 - [x] `src/core/mesh/gossip-sync.ts`: GCS filter reconciliation (15s interval, Golomb-Rice encoding)
 - [x] `src/core/mesh/courier-store.ts`: sealed envelopes, trust tiers, spray-and-wait
 - [x] `src/core/router/message-router.ts`: BLE-only routing (broadcast + unicast + courier fallback)
@@ -502,17 +502,15 @@ Everything under the Unlicense. Copy verbatim, no attribution required.
 
 ## 6. What Must Be Built from Scratch
 
-| Component                    | Why                                                            | Est. LOC                  |
-| ---------------------------- | -------------------------------------------------------------- | ------------------------- |
-| `AirhopBLEModule.swift`      | No existing RN library supports dual-role GATT server + client | ~920                      |
-| `AirhopBLEModule.kt`         | Same                                                           | ~1,500                    |
-| `AirhopForegroundService.kt` | Android background keepalive requirement                       | ~170                      |
-| `noise-xx.ts`                | No maintained npm Noise XX package                             | ~300                      |
-| `noise-x.ts`                 | Same (needed for courier sealing)                              | ~150                      |
-| `double-ratchet.ts`          | No production-grade RN library (v0.8.0)                        | ~600                      |
-| `x3dh.ts`                    | Not built - X3DH dropped, see v0.8.0                           | 0                         |
-| `gcs-filter.ts`              | No JS implementation with bitchat compat                       | ~150                      |
-| `packet-codec.ts`            | Custom binary format                                           | ~300                      |
-| **Total**                    |                                                                | ~2,750 TS + ~2,600 native |
+| Component                    | Why                                                            |
+| ---------------------------- | -------------------------------------------------------------- |
+| `AirhopBLEModule.swift`      | No existing RN library supports dual-role GATT server + client |
+| `AirhopBLEModule.kt`         | Same                                                           |
+| `AirhopForegroundService.kt` | Android background keepalive requirement                       |
+| `noise-xx.ts`                | No maintained npm Noise XX package                             |
+| `noise-x.ts`                 | Same, needed for courier sealing                               |
+| `double-ratchet.ts`          | No production-grade RN library                                 |
+| `gcs-filter.ts`              | No JS implementation compatible with bitchat                   |
+| `packet-codec.ts`            | Custom binary format                                           |
 
 Everything else is a TypeScript port of existing bitchat code or an existing npm package.

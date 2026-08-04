@@ -68,7 +68,7 @@ These rules exist because a bug here breaks Airhop's interoperability with bitch
   3. Testing cross-protocol delivery: Airhop v3 node → bitchat node
 - **Never change the BLE Service UUID or Characteristic UUID.** They are fixed in `PROTOCOLS.md`, section 1. Changing them creates a network partition.
 - **Never change Peer ID derivation.** It is `hex(SHA-256(noiseStaticPubKey)).slice(0, 16)`. Changing it breaks gossip sync and DM addressing.
-- **Airhop extension packet types (`0x29`, `0x30`, `0x40`)** are safe to broadcast; bitchat drops unknown types silently. No compat concern.
+- **Airhop-only packet types are `0x12` (Double Ratchet DM) and `0x2a` (private channel).** Both are safe to broadcast: bitchat drops unknown types silently. Anything new must sit outside bitchat's registry for the same reason. `0x29` is not one of ours, despite the range: bitchat ships push-to-talk too, so it has to stay wire-identical.
 - Before any protocol change ships, run: Airhop node ↔ bitchat-ios node ↔ bitchat-android node message exchange test.
 
 ## 6. Testing Requirements

@@ -1,111 +1,165 @@
-# src
+# Source
 
-Application source code, organized by architectural layer. See [docs/spec/ARCHITECTURE.md](../docs/spec/ARCHITECTURE.md) for design decisions and layer boundaries.
+This directory contains the application source code, organized by
+architectural layer.
 
-## Modules
+## Directory layout
 
-| Folder           | Responsibility                                                          |
-| ---------------- | ----------------------------------------------------------------------- |
-| `bridge/`        | TurboModule TypeScript specs (Codegen input only, no business logic)    |
-| `core/crypto/`   | Identity, Noise XX/X, Double Ratchet, contact exchange                  |
-| `core/mesh/`     | Packet codec, flood router, fragments, gossip, announce, courier, media |
-| `core/nostr/`    | Nostr client, NIP-59 gift-wrap, geo-relay discovery, presence           |
-| `core/payments/` | Cashu tokens, DLEQ, proof selection, NIP-61 events, BIP-39 seed         |
-| `core/router/`   | Transport selection: `PeerRegistry` and `MessageRouter`                 |
-| `services/`      | Long-lived runtime wiring: mesh service, wallet service, transfers      |
-| `features/`      | Screen-level logic, wires core services to the UI                       |
-| `store/`         | Zustand state slices with MMKV persistence                              |
-| `ui/`            | Shared UI components                                                    |
-| `utils/`         | Stateless helpers: username, panic-wipe, battery optimization           |
+| Directory        | Responsibility                                                                        |
+| ---------------- | ------------------------------------------------------------------------------------- |
+| `bridge/`        | React Native TurboModule TypeScript specifications (Codegen input only)               |
+| `core/crypto/`   | Identity, Noise XX/X, Double Ratchet, and contact exchange                            |
+| `core/encoding/` | Binary and base64 encoding helpers shared across the protocol                         |
+| `core/mesh/`     | Packet codec, flood routing, fragmentation, gossip, announcements, courier, and media |
+| `core/nostr/`    | Nostr client, NIP-59 gift-wrap, geohash relay discovery, and presence                 |
+| `core/payments/` | Cashu tokens, DLEQ, proof selection, NIP-61 events, and BIP-39 seed handling          |
+| `core/router/`   | Transport selection through `PeerRegistry` and `MessageRouter`                        |
+| `services/`      | Runtime services including mesh, wallet, and transfer orchestration                   |
+| `features/`      | Screen-level logic that connects services to the UI                                   |
+| `store/`         | Zustand state slices with MMKV persistence                                            |
+| `ui/`            | Shared UI components                                                                  |
+| `data/`          | Static application data such as relay lists, licenses, and release notes              |
+| `i18n/`          | Translation catalog, locale loading, and right-to-left layout support                 |
+| `utils/`         | Stateless utilities such as username generation, panic wipe, and battery optimization |
 
-`core/` is pure and has no native or network dependencies, which is why the
-whole protocol is testable in CI. Anything that opens a socket or talks to a
-mint lives in `services/`.
+## Layer boundaries
 
-## Tests
+`core/` contains the protocol implementation and is intentionally free of
+platform, native, and network dependencies. That keeps the protocol
+deterministic and fully testable in CI without requiring a React Native
+runtime.
+
+Code that communicates with the outside world, such as BLE, Nostr relays, or
+Cashu mints, lives in `services/`, which wires the pure protocol into the
+runtime.
+
+## Testing
+
+### Running tests
 
 ```sh
 # Run all tests
 npx jest
 
-# Run with coverage report
+# Run with coverage
 npm run coverage
+
+# Run the packet codec benchmarks
+npm run benchmark
 ```
 
-Tests are co-located with their module in a `__tests__/` directory. All `src/core/` tests use `@jest-environment node`, so no React Native runtime is required.
+Tests live alongside the code they exercise in a `__tests__/` directory, and
+benchmarks live in `__benchmarks__/`.
 
-### What each layer covers
+All tests under `src/core/` run with `@jest-environment node`, so they execute
+without React Native.
 
-| Layer            | Covered                                                       | Excluded                             |
-| ---------------- | ------------------------------------------------------------- | ------------------------------------ |
-| `core/crypto/`   | Noise XX and X, Double Ratchet, contact binding               | -                                    |
-| `core/mesh/`     | Wire format, routing, gossip, fragments, voice, board         | Live BLE I/O (native boundary)       |
-| `core/nostr/`    | Gift-wrap, geohash identity, relay discovery, bitchat interop | Network calls (`NostrClient` mocked) |
-| `core/payments/` | Cashu BDHKE and DLEQ, proof selection, Nutzap, seed           | Mint connectivity (network)          |
-| `core/router/`   | Peer registry, transport selection                            | BLE and WiFi transports (native)     |
-| `i18n/`          | Catalog completeness and structure                            | -                                    |
-| `services/`      | Runtime wiring, app lifecycle, multi-device scenarios         | Native radios (modelled, see below)  |
-| `store/`         | State transitions and persistence shape                       | MMKV persistence (mocked)            |
-| `utils/`         | Stateless helpers                                             | -                                    |
+### Testing philosophy
 
-`npx jest` prints the current suite and test totals; they are deliberately not
-repeated here.
+The test suite follows four principles:
 
-`services/` carries the lifecycle and multi-device suites, which is why it is no
-longer the thin layer it once was: the rules `mesh-service` enforces are
-exercised against a modelled OS and radio rather than left to a device.
+- **Never depend on the system clock.** Tests run under fake timers, and
+  anything requiring a timestamp receives it from the harness. This avoids
+  failures that only appear on slower CI machines.
+- **Always seed randomness.** Every simulation scenario uses a deterministic
+  PRNG seed so failures can be reproduced exactly.
+- **Assert invariants instead of execution order.** Distributed systems rarely
+  have a single valid message sequence. Tests verify properties that must always
+  hold regardless of scheduling.
+- **Every bug fix gets a negative control.** Before trusting a new test, revert
+  the fix and confirm the test fails. A test that passes with and without the
+  change provides no confidence.
+
+### Test coverage
+
+| Layer            | Covered                                                                | Excluded                                  |
+| ---------------- | ---------------------------------------------------------------------- | ----------------------------------------- |
+| `core/crypto/`   | Noise XX/X, Double Ratchet, contact binding                            | None                                      |
+| `core/encoding/` | Base64 round-trips and malformed input                                 | None                                      |
+| `core/mesh/`     | Wire format, routing, gossip, fragments, voice, bulletin board         | Native BLE I/O                            |
+| `core/nostr/`    | Gift-wrap, geohash identity, relay discovery, bitchat interoperability | Live network calls (`NostrClient` mocked) |
+| `core/payments/` | Cashu BDHKE, DLEQ, proof selection, Nutzap, seed handling              | Mint connectivity                         |
+| `core/router/`   | Peer registry and transport selection                                  | Native transports                         |
+| `i18n/`          | Translation catalog completeness                                       | None                                      |
+| `services/`      | Runtime wiring, lifecycle, multi-device scenarios                      | Physical radios (simulated)               |
+| `store/`         | State transitions and persistence shape                                | MMKV persistence (mocked)                 |
+| `utils/`         | Stateless utilities                                                    | None                                      |
+
+`npx jest` reports the current suite and test totals, so they are not duplicated
+here.
+
+`services/` contains the runtime lifecycle and multi-device simulation suites.
+Although it began as a thin wiring layer, most of the application's behavioral
+tests now live here because they exercise the system as a whole rather than
+individual components.
 
 ### Multi-device simulation
 
-`services/__tests__/sim/` runs whole scenarios across several phones at once.
-Each simulated phone is a **fully isolated copy of the app**, with its own
-`mesh-service`, stores, MMKV and event emitter, built with `jest.isolateModules`
-and driven through a modelled Android/iOS OS, a modelled BLE medium, in-memory
-Nostr relays that speak real NIP-01, and a Cashu mint doing real BDHKE. Nothing
-above the wire is stubbed: the real flood router, real Noise XX, real Double
-Ratchet, real `SimplePool`, real proof selection.
+The simulator under `services/__tests__/sim/` runs complete scenarios across
+multiple virtual devices.
 
-Scenarios assert **invariants** rather than scripted outcomes, because for
-twenty phones under random faults there is no single correct transcript. What
-must hold after any interleaving: everyone converges, nothing renders twice,
-nothing forged renders at all, delivery state never runs backwards, badges match
-their threads, and no sat is created or destroyed.
+Each simulated phone is a fully isolated application instance with its own
+`mesh-service`, Zustand stores, MMKV storage, and event emitter. Isolation is
+provided through `jest.isolateModules()`.
 
-Covered today:
+The simulated environment models:
 
-- **Delivery.** Multi-hop across a chain that cannot hear itself, a 25-phone
-  room, gossip catch-up after a partition, a source route followed rather than
-  flooded.
-- **bitchat interop.** A live mixed mesh, Airhop-only types dropped as unknown
-  by a bitchat relay in the middle, and an Android-convention broadcast voice
-  burst reaching an Airhop speaker.
-- **Media.** Parallel attachment transfers, push-to-talk sharing a radio with a
-  file send, a private attachment refused by the relays that carried it.
-- **Attacks.** Replay and Sybil floods, a recorded voice burst replayed at
-  strangers hours later, a stale packet carrying a perfect signature, and
-  impersonation at the message, attachment and ANNOUNCE layers. The last is the
-  one that matters most: it decides which key a claimed sender is checked
-  against.
-- **Payments.** Offline ecash transfer and double-spend refusal.
-- **Recovery.** Panic wipe, crash recovery, a seeded soak of hundreds of random
-  events.
-- **Anything needing a third phone.** Private groups with an outsider in the
-  room, a bulletin reaching someone who arrived later, store-and-forward where
-  the carrier cannot read what it carries, the internet gateway, the mesh
-  bridge, and Tor failing closed rather than falling back to the clear net.
+- Android and iOS lifecycle behavior
+- BLE communication
+- In-memory Nostr relays implementing NIP-01
+- A Cashu mint performing real BDHKE operations
 
-The internet gateway and the mesh bridge get their own file
-(`tier-gateway-bridge.test.ts`) and a location fabric, because both are defined
-by geohash cells: without a position fix the named location channels resolve to
-no cell, so there is nothing to uplink and nowhere for two islands to meet.
+Above the transport boundary, production code is used throughout. The simulator
+runs the real flood router, Noise XX, Double Ratchet, `SimplePool`, proof
+selection, and protocol logic without stubbing.
 
-`smoke.test.ts` contains the harness's own self-checks. If those go red, nothing
-else in that directory means anything.
+Rather than asserting a fixed transcript, scenarios verify invariants that must
+hold regardless of scheduling. For example:
 
-### What still needs hardware
+- every participant eventually converges
+- messages never render twice
+- forged messages are rejected
+- delivery state never regresses
+- unread counts remain consistent
+- no value is created or destroyed during payments
 
-The simulation models the OS contract; it cannot prove the hardware honours it.
-Real BLE discovery timing, MTU negotiation, CoreBluetooth on real silicon, OEM
-battery managers and real Tor circuits still require two physical devices before
-a release. [Maestro](https://maestro.mobile.dev) remains the planned tool for
-on-device UI flow smoke tests.
+Current scenarios cover:
+
+- **Delivery:** multi-hop routing, large mesh rooms, network partitions, gossip
+  recovery, and source routing.
+- **bitchat interoperability:** mixed Airhop/bitchat meshes, unknown packet
+  handling, and cross-network voice delivery.
+- **Media:** concurrent attachment transfers, push-to-talk alongside file
+  transfers, and relay enforcement of private attachments.
+- **Security:** replay attacks, Sybil floods, stale signed packets, recorded
+  voice replay, and sender impersonation across messages, attachments, and
+  announcements.
+- **Payments:** offline Cashu transfers and double-spend prevention.
+- **Recovery:** panic wipe, crash recovery, and long-running seeded soak tests.
+- **Complex network behavior:** private groups, delayed bulletin delivery,
+  store-and-forward messaging, internet gateways, mesh bridges, and Tor
+  fail-closed behavior.
+
+Gateway and bridge behavior is tested separately in
+`tier-gateway-bridge.test.ts`. These scenarios depend on a location model,
+because both features operate on geohash cells. Without a location fix there is
+no shared cell to uplink or route between.
+
+`smoke.test.ts` validates the simulator itself. If those tests fail, the
+simulation harness cannot be trusted, making every other simulation result
+meaningless.
+
+### Hardware validation
+
+The simulator models the operating system contract, not the physical hardware.
+
+The following still require testing on real devices before a release:
+
+- BLE discovery timing
+- MTU negotiation
+- CoreBluetooth behavior on physical hardware
+- OEM battery management
+- Real Tor circuits
+
+On-device UI smoke tests are planned with
+[Maestro](https://maestro.mobile.dev).

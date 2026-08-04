@@ -62,11 +62,11 @@ checkable against the code rather than taken on trust.
 
 ### Native BLE module
 
-- [x] `ios/Airhop/AirhopBLEModule.swift`: CBPeripheralManager + CBCentralManager (~920 lines)
+- [x] `ios/Airhop/AirhopBLEModule.swift`: CBPeripheralManager + CBCentralManager
 - [x] `ios/Airhop/AirhopBLEModule.mm`: Obj-C++ bridge (RCT_EXTERN_MODULE)
-- [x] `android/app/src/main/java/org/onemindlabs/airhop/ble/AirhopBLEModule.kt`: BluetoothGattServer + BluetoothLeScanner (~1,500 lines)
+- [x] `android/app/src/main/java/org/onemindlabs/airhop/ble/AirhopBLEModule.kt`: BluetoothGattServer + BluetoothLeScanner
 - [x] `android/app/src/main/java/org/onemindlabs/airhop/ble/AirhopBLEPackage.kt`: module registration
-- [x] `android/app/src/main/java/org/onemindlabs/airhop/service/AirhopForegroundService.kt`: background keepalive (~170 lines)
+- [x] `android/app/src/main/java/org/onemindlabs/airhop/service/AirhopForegroundService.kt`: background keepalive
 - [x] iOS: `UIBackgroundModes: [bluetooth-central, bluetooth-peripheral]` in `app.json`
 - [x] Android: foreground service permission in AndroidManifest
 - [x] Foreground service is started with the mesh (`AirhopBLEModule.startAdvertising`), so the process, BLE, and the Nostr socket survive backgrounding
@@ -368,7 +368,7 @@ sources rather than assumed:
 
 Verified empirically by the conformance suite (a real bitchat actor exchanging
 traffic with an Airhop device in both directions) plus the packet-codec compat
-vectors: 58 tests, all green.
+vectors, all green.
 
 ## Known Issues
 

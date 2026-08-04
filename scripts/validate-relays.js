@@ -21,10 +21,32 @@ const MAX_BYTES = 1024 * 1024;
 const MAX_COUNT_DELTA = 0.2;
 const MIN_RETAINED = 0.7;
 
-// RFC 1123 host. Rejects schemes, paths, credentials, wildcards and non-ASCII.
+// RFC 1123 host. Rejects schemes, paths, credentials, wildcards and non-ASCII,
+// and requires at least one dot so a bare name like "localhost" cannot pass.
 const HOST =
   /^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$/i;
 const MAX_HOST_LENGTH = 253;
+// A single DNS label is capped at 63 octets (RFC 1035). The host pattern above
+// bounds the whole name but not the parts, so a 200-character label passes it.
+const MAX_LABEL_LENGTH = 63;
+
+// Dotted-quad IPv4, which the host pattern accepts because digits and dots are
+// legal in a hostname. A relay directory must carry names, not addresses: an
+// address cannot be TLS-verified by hostname, and the ones that would actually
+// hurt (127.0.0.1, 10.x, 192.168.x, 0.0.0.0) all match the pattern exactly.
+const IPV4 = /^\d{1,3}(\.\d{1,3}){3}$/;
+
+// Anything in the C0/C1 ranges plus DEL. NUL is already refused when the file is
+// read; these are the rest, which survive a UTF-8 decode and would be carried
+// into the generated module and shipped. Written as a scan rather than a regex
+// so the control characters stay out of the source file itself.
+function hasControlChars(value) {
+  for (const ch of value) {
+    const code = ch.codePointAt(0);
+    if (code <= 0x1f || (code >= 0x7f && code <= 0x9f)) return true;
+  }
+  return false;
+}
 
 function parseArgs(argv) {
   const args = {};
@@ -76,6 +98,19 @@ function validateRows(rows) {
   rows.forEach((line, i) => {
     // +2: lines are 1-based and the header is line 1.
     const at = `row ${i + 2}`;
+
+    if (hasControlChars(line)) {
+      reject(`${at}: contains control characters`);
+      return;
+    }
+    // Fields are split on a bare comma, which is only correct while no field is
+    // quoted. Refuse the quoted form rather than half-supporting it: a quoted
+    // field containing a comma would silently shift every value one place left.
+    if (line.includes('"')) {
+      reject(`${at}: quoted CSV fields are not supported`);
+      return;
+    }
+
     const fields = line.split(",");
 
     if (fields.length !== 3) {
@@ -88,6 +123,22 @@ function validateRows(rows) {
     const [host, port] = splitPort(rawHost);
     if (rawHost.length > MAX_HOST_LENGTH || !HOST.test(host)) {
       reject(`${at}: invalid relay host "${rawHost}"`);
+      return;
+    }
+    if (host.split(".").some((label) => label.length > MAX_LABEL_LENGTH)) {
+      reject(
+        `${at}: DNS label longer than ${MAX_LABEL_LENGTH} in "${rawHost}"`,
+      );
+      return;
+    }
+    // A dotted quad passes the hostname pattern, so it has to be refused by
+    // name. Loopback and private ranges are the ones that matter: a relay the
+    // app dials on every launch must not be able to point at the device itself
+    // or at something inside whoever's network compiled the directory.
+    if (IPV4.test(host)) {
+      reject(
+        `${at}: relay host must be a domain name, not an IP ("${rawHost}")`,
+      );
       return;
     }
     if (

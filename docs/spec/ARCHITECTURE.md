@@ -1,10 +1,8 @@
 # Airhop: Architecture
 
-## Full Stack: Every Layer, Every Decision
-
-**Date:** July 12, 2026  
-**Cross-referenced against:** [ROADMAP.md](../design/ROADMAP.md), bitchat/ios, bitchat/android, bitchat/georelays  
-**Security stance:** Security-first from day 0. No compromises. No exceptions.
+Every layer and the reasoning behind it. For what is being built and when, see
+[ROADMAP.md](../design/ROADMAP.md). For exact protocol constants, see
+[PROTOCOLS.md](PROTOCOLS.md).
 
 ## Table of Contents
 
@@ -180,12 +178,12 @@ than `SCAN_MODE_LOW_POWER`, and Airhop's whole purpose is to run in a pocket all
 day. So the radios do not run at one fixed effort: they scale with what the
 device can afford.
 
-**Policy lives in TypeScript, mechanism lives in Kotlin.** `services/power-policy.ts`
+**Policy lives in TypeScript, mechanism lives in Kotlin.** `src/services/power-policy.ts`
 is a pure function of four facts; the native module observes the battery, reports
 it, and applies whichever mode it is told. Nothing decides anything on the native
 side. This keeps the decision unit-testable without a device, and puts "how hard
 to run the radios" next to "whether to run them at all", which
-`services/radio-controller.ts` already owns.
+`src/services/radio-controller.ts` already owns.
 
 **Battery bands** match bitchat-android's `AppConstants.Power`: critical at
 `≤10%`, low at `≤20%`.

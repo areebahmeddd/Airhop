@@ -1,0 +1,47 @@
+Offline doesn't mean disconnected.
+
+Airhop lets nearby phones communicate directly over Bluetooth. Chat, share photos and videos, make offline payments, and talk with live push-to-talk, all without mobile data, Wi-Fi, or servers.
+
+No account. No phone number. No server. Just open the app and you're reachable.
+
+## Features
+
+- Public rooms for everyone nearby
+- End-to-end encrypted direct messages
+- Private groups and invite-only channels
+- Photo, video, and voice note sharing
+- Live push-to-talk, like a walkie-talkie
+- Bulletin boards for persistent local announcements
+- Send and receive Cashu ecash
+
+## Works with bitchat
+
+Airhop speaks the same protocol as bitchat. Airhop and bitchat users automatically discover each other over Bluetooth and can exchange messages without either side needing to know they're using different apps.
+
+## Optional internet mode
+
+When internet access is available, you can enable internet bridging so people outside Bluetooth range can still receive your messages.
+
+Tor routing is also available if you want it. Internet bridging and Tor are both optional and remain disabled unless you enable them.
+
+## Privacy and security
+
+- Open source under the MIT License
+- Every message is digitally signed to prevent impersonation
+- Attachments are automatically deleted after seven days
+- Notification previews are hidden by default
+- Panic wipe permanently deletes all messages and cryptographic keys stored on the device
+
+Every release includes source hashes and build provenance, allowing anyone to verify that the published source matches the released application.
+
+## What Airhop doesn't promise
+
+Public rooms are exactly that: public. Anyone within range can read messages sent there.
+
+Tor hides your IP address from relays, but it does not hide that you're using Tor. Bridge support is not yet available, and this limitation is documented.
+
+We prefer to document the limits clearly instead of implying guarantees we cannot make.
+
+## About
+
+Airhop is an independent project built on bitchat's public-domain protocol. It is not affiliated with or endorsed by permissionlesstech or the bitchat project.

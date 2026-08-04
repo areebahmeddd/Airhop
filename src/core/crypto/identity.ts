@@ -86,16 +86,6 @@ export async function loadIdentity(): Promise<Identity | null> {
   };
 }
 
-// Load existing identity or generate and persist a new one.
-export async function loadOrGenerateIdentity(): Promise<Identity> {
-  const existing = await loadIdentity();
-  if (existing) return existing;
-
-  const fresh = await generateIdentity();
-  await saveIdentity(fresh);
-  return fresh;
-}
-
 // Panic wipe: destroy all keys immediately.
 // Caller must also clear MMKV, delete app files, and terminate the process.
 export async function panicWipe(): Promise<void> {

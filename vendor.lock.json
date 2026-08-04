@@ -1,0 +1,11 @@
+{
+  "files": {
+    "ios/Frameworks/arti.xcframework/Info.plist": "cac99db408280bbef15cae8ce64c8ccdbf2e8863c205168d59f83fe8ab680f94",
+    "ios/Frameworks/arti.xcframework/ios-arm64/Headers/arti.h": "551655904834748c9dc36034fdbc9465e7533aef1e4a6514b4fcc75875b93058",
+    "ios/Frameworks/arti.xcframework/ios-arm64/libarti_bitchat.a": "5461a231a786812e91e7965290031ea3479fdc5c6459553e46988ecafbbc2a3d",
+    "ios/Frameworks/arti.xcframework/ios-arm64_x86_64-simulator/Headers/arti.h": "551655904834748c9dc36034fdbc9465e7533aef1e4a6514b4fcc75875b93058",
+    "ios/Frameworks/arti.xcframework/ios-arm64_x86_64-simulator/libarti_bitchat.a": "af8f5f636eb6affb309b3e44f13e48498eb2540c77af44ddcd7fdf9241b1e317",
+    "ios/Frameworks/arti.xcframework/macos-arm64_x86_64/Headers/arti.h": "551655904834748c9dc36034fdbc9465e7533aef1e4a6514b4fcc75875b93058",
+    "ios/Frameworks/arti.xcframework/macos-arm64_x86_64/libarti_bitchat.a": "7c9afe98227f1767567ddcd4e35d9dfffe70309c302c4dbc9a6c9d6aeefab007"
+  }
+}
