@@ -5,6 +5,7 @@ All notable changes are documented here. The format follows [Keep a Changelog](h
 
 ## What's Changed in v0.9.10
 
+- fix: minor failure in apk (by @areebahmeddd) [ef00b39]
 - fix: update repository references from "Airhop" to "airhop" across the project (by @areebahmeddd) [36031eb]
 - feat: add source manifest script and vendored verification (by @areebahmeddd) [e7f5de0]
 - fix(core): bug fixes after testing + sync with upstream bitchat (by @areebahmeddd) [87fadcb]
