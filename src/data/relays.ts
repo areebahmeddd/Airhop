@@ -1,7 +1,7 @@
 // Geo-located Nostr relay directory.
 //
 // Generated from assets/data/relays.csv, vendored in this repo:
-//   https://github.com/areebahmeddd/Airhop/blob/main/assets/data/relays.csv
+//   https://github.com/areebahmeddd/airhop/blob/main/assets/data/relays.csv
 // It lives here as a TypeScript module rather than being read from the CSV at
 // runtime because Metro does not bundle .csv as an asset, so the file was
 // unreachable from the app, which is why GeoRelayDirectory was never wired up.

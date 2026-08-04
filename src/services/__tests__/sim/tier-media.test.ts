@@ -836,6 +836,19 @@ test("M09 a private photo is sealed in the session, not signed in the open", asy
   );
   s.check("a session was established by the first message", talked);
 
+  // Then wait for the thing that actually authorises sealing, rather than
+  // treating "the text arrived" as a proxy for it. Bob receiving alice's
+  // message proves alice's session works; it does NOT prove alice has yet
+  // processed bob's 0x21 coming the other way, and that is what she needs.
+  // Sending in that window falls back to signed cleartext by design, which on
+  // a slower machine is what this scenario was accidentally measuring.
+  const sealable = await waitFor(
+    s.world,
+    () => alice.mesh?.canSealPrivateMedia(bob.peerID) === true,
+    30_000,
+  );
+  s.check("bob has proven he can read sealed media", sealable);
+
   // Watch every byte alice puts on the air from here on.
   const onAir: Packet[] = [];
   const stopTap = radio.tapWrites((who, _linkID, dataBase64) => {

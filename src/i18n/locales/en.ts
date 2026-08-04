@@ -724,6 +724,11 @@ export const strings = {
   "chat.notices.scope_geo": "Geo",
   "chat.notices.scope_mesh": "Mesh",
   "chat.notices.urgent_short": "Urgent",
+  // Shown only when the ∞ step is selected. Names what that step actually
+  // changes: it never fades, it is public against this place, and unlike every
+  // other notice there is no delete for it afterwards.
+  "chat.notices.permanent_warning":
+    "Never fades. Public and tied to this area, and you cannot take it back.",
   "chat.notices.none": "No notices yet. Post one so it stays here for others.",
 
   // ---- Chats: search results -----------------------------------------------------

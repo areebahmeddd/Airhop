@@ -29,11 +29,11 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/areebahmeddd/Airhop/releases"><img src="https://img.shields.io/github/v/release/areebahmeddd/Airhop?style=flat-square" alt="release" /></a>
+  <a href="https://github.com/areebahmeddd/airhop/releases"><img src="https://img.shields.io/github/v/release/areebahmeddd/airhop?style=flat-square" alt="release" /></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue?style=flat-square" alt="license" /></a>
-  <a href="https://github.com/areebahmeddd/Airhop/actions/workflows/ci.yaml"><img src="https://img.shields.io/github/actions/workflow/status/areebahmeddd/Airhop/ci.yaml?style=flat-square&label=CI" alt="CI" /></a>
-  <a href="https://codecov.io/gh/areebahmeddd/Airhop"><img src="https://img.shields.io/codecov/c/github/areebahmeddd/Airhop?style=flat-square" alt="coverage" /></a>
-  <a href="https://securityscorecards.dev/viewer/?uri=github.com/areebahmeddd/Airhop"><img src="https://api.securityscorecards.dev/projects/github.com/areebahmeddd/Airhop/badge?style=flat-square" alt="OpenSSF Scorecard" /></a>
+  <a href="https://github.com/areebahmeddd/airhop/actions/workflows/ci.yaml"><img src="https://img.shields.io/github/actions/workflow/status/areebahmeddd/airhop/ci.yaml?style=flat-square&label=CI" alt="CI" /></a>
+  <a href="https://codecov.io/gh/areebahmeddd/airhop"><img src="https://img.shields.io/codecov/c/github/areebahmeddd/airhop?style=flat-square" alt="coverage" /></a>
+  <a href="https://securityscorecards.dev/viewer/?uri=github.com/areebahmeddd/airhop"><img src="https://api.securityscorecards.dev/projects/github.com/areebahmeddd/airhop/badge?style=flat-square" alt="OpenSSF Scorecard" /></a>
 </p>
 
 <br />
@@ -158,11 +158,11 @@ Airhop belongs to the third category and extends it with a Nostr-based internet 
 | [Threema](https://threema.ch)              | Centralized servers           | NaCl + Ibex               | ❌            | ✅            | ⚠️          | iOS, Android, Desktop           |
 | [Session](https://getsession.org)          | Onion routing (service nodes) | Session protocol          | ❌            | ✅            | ✅          | iOS, Android, Desktop           |
 | [White Noise](https://www.whitenoise.chat) | Nostr relays                  | MLS (Marmot)              | ❌            | ✅            | ✅          | iOS, Android                    |
-| [Meshtastic](https://meshtastic.org)       | LoRa radio                    | AES-256                   | ✅            | ❌            | ✅          | iOS, Android, Web + hardware    |
-| [goTenna](https://gotenna.com)             | Proprietary sub-GHz radio     | Proprietary               | ✅            | ❌            | ❌          | iOS, Android + hardware         |
+| [Meshtastic](https://meshtastic.org)       | LoRa radio                    | AES-256 + Curve25519 PKI  | ✅            | ❌            | ✅          | iOS, Android, Web + hardware    |
+| [goTenna](https://gotenna.com)             | Proprietary sub-GHz radio     | AES-256 + ECC-384 PKI     | ✅            | ❌            | ❌          | iOS, Android + hardware         |
 | [Bridgefy](https://bridgefy.me)            | Bluetooth + WiFi              | Signal (libsignal)        | ✅            | ✅            | ❌          | iOS, Android                    |
 | [Briar](https://briarproject.org)          | Bluetooth + WiFi + Tor        | Bramble                   | ✅            | ✅            | ✅          | Android, Desktop                |
-| [Berty](https://berty.tech)                | Bluetooth + mDNS + Tor        | Noise                     | ✅            | ✅            | ✅          | iOS, Android                    |
+| [Berty](https://berty.tech)                | Bluetooth + mDNS              | Scuttlebutt + Ratchet     | ✅            | ✅            | ✅          | iOS, Android                    |
 | [bitchat](https://bitchat.free)            | Bluetooth + Nostr             | Noise XX                  | ✅            | ✅            | ✅          | iOS, Android                    |
 | [Airhop](https://airhop.1mindlabs.org)     | Bluetooth + WiFi + Nostr      | Noise XX + Double Ratchet | ✅            | ✅            | ✅          | iOS, Android, Desktop, Web, CLI |
 
@@ -241,7 +241,6 @@ Airhop would not exist without the work of the bitchat community. Thank you to e
 | ----------------------------------------------- | ------------------------------------------------------------------------------------------ |
 | [jackjackbits](https://github.com/jackjackbits) | Created bitchat iOS, designed the BLE mesh protocol and wire format that Airhop implements |
 | [callebtc](https://github.com/callebtc)         | Lead on bitchat-android, author of the Cashu ecash protocol                                |
-| [qalandarov](https://github.com/qalandarov)     | Major contributor to bitchat iOS                                                           |
 | [Nadim Kobeissi](https://github.com/mimoo)      | Noise Protocol implementation in bitchat iOS                                               |
 | [a1denvalu3](https://github.com/a1denvalu3)     | Built the georelays toolkit that produces `assets/data/relays.csv`                         |
 
@@ -249,10 +248,10 @@ Airhop would not exist without the work of the bitchat community. Thank you to e
 
 Help keep the project going by contributing through the app or website, sponsoring on GitHub, or simply giving this repository a star.
 
-<a href="https://www.star-history.com/?repos=areebahmeddd%2FAirhop&type=date&logscale=&legend=top-left">
+<a href="https://www.star-history.com/?repos=areebahmeddd%2Fairhop&type=date&logscale=&legend=top-left">
  <picture>
-   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=areebahmeddd/Airhop&type=date&theme=dark&logscale&legend=top-left&sealed_token=-WkVGqvQDeQazbrkJu_cQRz5cPPAO6r0amRCkxBz9TDWfy-pvo-a8Iwuc-JqmwgWoWIBOfDJcjvCf8BEJyd0vbq4heI9MeZJiAnMahoWYaYeFSVS7g5StAqbZFATBHow8IpRrAoT2L41KWJqTUKqlA2x0Ksf3PuBSpr5X_REc7lIyWLGqNv_8BG7wv44" />
-   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=areebahmeddd/Airhop&type=date&logscale&legend=top-left&sealed_token=-WkVGqvQDeQazbrkJu_cQRz5cPPAO6r0amRCkxBz9TDWfy-pvo-a8Iwuc-JqmwgWoWIBOfDJcjvCf8BEJyd0vbq4heI9MeZJiAnMahoWYaYeFSVS7g5StAqbZFATBHow8IpRrAoT2L41KWJqTUKqlA2x0Ksf3PuBSpr5X_REc7lIyWLGqNv_8BG7wv44" />
-   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=areebahmeddd/Airhop&type=date&logscale&legend=top-left&sealed_token=-WkVGqvQDeQazbrkJu_cQRz5cPPAO6r0amRCkxBz9TDWfy-pvo-a8Iwuc-JqmwgWoWIBOfDJcjvCf8BEJyd0vbq4heI9MeZJiAnMahoWYaYeFSVS7g5StAqbZFATBHow8IpRrAoT2L41KWJqTUKqlA2x0Ksf3PuBSpr5X_REc7lIyWLGqNv_8BG7wv44" />
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=areebahmeddd/airhop&type=date&theme=dark&logscale&legend=top-left&sealed_token=-WkVGqvQDeQazbrkJu_cQRz5cPPAO6r0amRCkxBz9TDWfy-pvo-a8Iwuc-JqmwgWoWIBOfDJcjvCf8BEJyd0vbq4heI9MeZJiAnMahoWYaYeFSVS7g5StAqbZFATBHow8IpRrAoT2L41KWJqTUKqlA2x0Ksf3PuBSpr5X_REc7lIyWLGqNv_8BG7wv44" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=areebahmeddd/airhop&type=date&logscale&legend=top-left&sealed_token=-WkVGqvQDeQazbrkJu_cQRz5cPPAO6r0amRCkxBz9TDWfy-pvo-a8Iwuc-JqmwgWoWIBOfDJcjvCf8BEJyd0vbq4heI9MeZJiAnMahoWYaYeFSVS7g5StAqbZFATBHow8IpRrAoT2L41KWJqTUKqlA2x0Ksf3PuBSpr5X_REc7lIyWLGqNv_8BG7wv44" />
+   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=areebahmeddd/airhop&type=date&logscale&legend=top-left&sealed_token=-WkVGqvQDeQazbrkJu_cQRz5cPPAO6r0amRCkxBz9TDWfy-pvo-a8Iwuc-JqmwgWoWIBOfDJcjvCf8BEJyd0vbq4heI9MeZJiAnMahoWYaYeFSVS7g5StAqbZFATBHow8IpRrAoT2L41KWJqTUKqlA2x0Ksf3PuBSpr5X_REc7lIyWLGqNv_8BG7wv44" />
  </picture>
 </a>

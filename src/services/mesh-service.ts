@@ -1817,6 +1817,19 @@ export class MeshService {
   // proofs off each other forever.
   private readonly peerStateEchoed = new Set<string>();
 
+  // Whether an attachment to this peer would be sealed rather than sent as
+  // signed cleartext, which is the precondition sealFileForPeer gates on below.
+  //
+  // The proof arrives in the peer's 0x21 state after the handshake, so this
+  // stays false for a short window at the start of a conversation even though
+  // the peer does support sealing.
+  canSealPrivateMedia(recipientPeerID: string): boolean {
+    return this.registry.hasAuthenticatedCapability(
+      recipientPeerID,
+      Capability.privateMedia,
+    );
+  }
+
   // Seal a whole file inside a peer's Noise session as payload 0x20.
   //
   // Returns null, meaning send it the cleartext way, unless a live session

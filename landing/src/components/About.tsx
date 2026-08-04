@@ -44,7 +44,7 @@ export default function About() {
                 </a>
                 , reusing its{" "}
                 <a
-                  href="https://github.com/areebahmeddd/Airhop/blob/main/docs/spec/PROTOCOLS.md"
+                  href="https://github.com/areebahmeddd/airhop/blob/main/docs/spec/PROTOCOLS.md"
                   target="_blank"
                   rel="noopener noreferrer"
                   className="text-gray-900 underline underline-offset-2 transition-colors hover:text-gray-600"

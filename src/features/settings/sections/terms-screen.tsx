@@ -56,7 +56,7 @@ const SECTIONS: LegalSection[] = [
   {
     heading: "Open source license",
     paragraphs: [
-      "The source code for Airhop is published under the MIT License on [GitHub](https://github.com/areebahmeddd/Airhop). The MIT License governs use, modification, and distribution of the code. These terms of service apply to use of the Airhop app, not to the source code itself.",
+      "The source code for Airhop is published under the MIT License on [GitHub](https://github.com/areebahmeddd/airhop). The MIT License governs use, modification, and distribution of the code. These terms of service apply to use of the Airhop app, not to the source code itself.",
     ],
   },
   {
@@ -68,7 +68,7 @@ const SECTIONS: LegalSection[] = [
   {
     heading: "Contact",
     paragraphs: [
-      "Questions about these terms can be sent to [hi@areeb.dev](mailto:hi@areeb.dev) or raised by opening an issue on [GitHub](https://github.com/areebahmeddd/Airhop/issues).",
+      "Questions about these terms can be sent to [hi@areeb.dev](mailto:hi@areeb.dev) or raised by opening an issue on [GitHub](https://github.com/areebahmeddd/airhop/issues).",
     ],
   },
 ];

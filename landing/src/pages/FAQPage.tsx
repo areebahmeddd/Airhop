@@ -30,7 +30,7 @@ const SECTIONS: {
           <>
             Yes. Airhop is completely free, open-source under the{" "}
             <a
-              href="https://github.com/areebahmeddd/Airhop/blob/main/LICENSE"
+              href="https://github.com/areebahmeddd/airhop/blob/main/LICENSE"
               target="_blank"
               rel="noopener noreferrer"
               className="text-gray-900 underline underline-offset-2 transition-colors hover:text-gray-600"
@@ -106,7 +106,7 @@ const SECTIONS: {
             Desktop, browser, and watch apps are not here yet, but those are planned rather than
             ruled out. The{" "}
             <a
-              href="https://github.com/areebahmeddd/Airhop/blob/main/docs/design/ROADMAP.md"
+              href="https://github.com/areebahmeddd/airhop/blob/main/docs/design/ROADMAP.md"
               target="_blank"
               rel="noopener noreferrer"
               className="text-gray-900 underline underline-offset-2 transition-colors hover:text-gray-600"
@@ -323,7 +323,7 @@ const SECTIONS: {
             configuration and no awareness that different software is running. The full wire format
             is documented in{" "}
             <a
-              href="https://github.com/areebahmeddd/Airhop/blob/main/docs/spec/PROTOCOLS.md"
+              href="https://github.com/areebahmeddd/airhop/blob/main/docs/spec/PROTOCOLS.md"
               target="_blank"
               rel="noopener noreferrer"
               className="text-gray-900 underline underline-offset-2 transition-colors hover:text-gray-600"
@@ -1453,7 +1453,7 @@ const SECTIONS: {
           <>
             Yes. The full source code is on{" "}
             <a
-              href="https://github.com/areebahmeddd/Airhop"
+              href="https://github.com/areebahmeddd/airhop"
               target="_blank"
               rel="noopener noreferrer"
               className="text-gray-900 underline underline-offset-2 transition-colors hover:text-gray-600"
@@ -1462,7 +1462,7 @@ const SECTIONS: {
             </a>{" "}
             under the{" "}
             <a
-              href="https://github.com/areebahmeddd/Airhop/blob/main/LICENSE"
+              href="https://github.com/areebahmeddd/airhop/blob/main/LICENSE"
               target="_blank"
               rel="noopener noreferrer"
               className="text-gray-900 underline underline-offset-2 transition-colors hover:text-gray-600"
@@ -1479,7 +1479,7 @@ const SECTIONS: {
           <>
             Yes. Open issues, submit pull requests, or start a discussion. Read the{" "}
             <a
-              href="https://github.com/areebahmeddd/Airhop/blob/main/CONTRIBUTING.md"
+              href="https://github.com/areebahmeddd/airhop/blob/main/CONTRIBUTING.md"
               target="_blank"
               rel="noopener noreferrer"
               className="text-gray-900 underline underline-offset-2 transition-colors hover:text-gray-600"
@@ -1586,7 +1586,7 @@ export default function FAQPage() {
             </a>{" "}
             or raised by opening a discussion on{" "}
             <a
-              href="https://github.com/areebahmeddd/Airhop/discussions"
+              href="https://github.com/areebahmeddd/airhop/discussions"
               target="_blank"
               rel="noopener noreferrer"
               className="text-gray-900 underline underline-offset-2 transition-colors hover:text-gray-600"

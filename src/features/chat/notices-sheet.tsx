@@ -344,6 +344,23 @@ export function NoticesSheet({ visible, onClose, channel }: Props) {
             ))}
           </View>
         </View>
+        {/* ∞ is the one step with no way back: every other note stops existing
+            on its own, this one is a standalone Nostr note that relays keep and
+            that stays tied to this cell. Say so at the moment it is picked,
+            rather than after the fact. */}
+        {effectiveExpiryDays === 0 && (
+          <View style={styles.permanentNote}>
+            <Feather
+              name="alert-triangle"
+              size={11}
+              color={Colors.textMuted}
+              style={styles.permanentNoteIcon}
+            />
+            <Text style={styles.permanentNoteText}>
+              {T("chat.notices.permanent_warning")}
+            </Text>
+          </View>
+        )}
         <Pressable
           style={[styles.postBtn, !canPost && styles.postBtnDisabled]}
           onPress={handlePost}
@@ -512,6 +529,26 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       color: Colors.textSecondary,
     },
     chipTextActive: { color: Colors.textInverse },
+    // Sits between the chips and Post, so it reads as a consequence of the ∞
+    // step rather than a property of the sheet. Muted, not danger: this is a
+    // deliberate option, not a mistake.
+    permanentNote: {
+      flexDirection: "row",
+      alignItems: "flex-start",
+      gap: Spacing.xs,
+      marginTop: Spacing.sm,
+    },
+    // Nudge the leading icon down so it optically centers on the first text
+    // line, since the copy wraps at this size.
+    permanentNoteIcon: {
+      marginTop: 2,
+    },
+    permanentNoteText: {
+      flex: 1,
+      fontSize: FontSize.xs,
+      color: Colors.textMuted,
+      lineHeight: 15,
+    },
     postBtn: {
       marginTop: Spacing.md,
       backgroundColor: Colors.accent,

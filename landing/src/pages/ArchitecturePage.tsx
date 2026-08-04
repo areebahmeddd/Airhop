@@ -348,7 +348,7 @@ export default function ArchitecturePage() {
                 caption={
                   <>
                     The three tiers in{" "}
-                    <A href="https://github.com/areebahmeddd/Airhop/blob/main/src/core/router/message-router.ts">
+                    <A href="https://github.com/areebahmeddd/airhop/blob/main/src/core/router/message-router.ts">
                       message-router.ts
                     </A>
                     , which holds the entire routing decision. Each tier is tried in order and the
@@ -1634,19 +1634,19 @@ export default function ArchitecturePage() {
               <p className="mt-3 text-sm leading-relaxed text-gray-600">
                 This page is the readable version. The specifications it is drawn from live in the
                 repository:{" "}
-                <A href="https://github.com/areebahmeddd/Airhop/blob/main/docs/spec/ARCHITECTURE.md">
+                <A href="https://github.com/areebahmeddd/airhop/blob/main/docs/spec/ARCHITECTURE.md">
                   ARCHITECTURE.md
                 </A>{" "}
                 for design decisions,{" "}
-                <A href="https://github.com/areebahmeddd/Airhop/blob/main/docs/spec/PROTOCOLS.md">
+                <A href="https://github.com/areebahmeddd/airhop/blob/main/docs/spec/PROTOCOLS.md">
                   PROTOCOLS.md
                 </A>{" "}
                 for exact byte layouts and constants,{" "}
-                <A href="https://github.com/areebahmeddd/Airhop/blob/main/docs/dev/GLOSSARY.md">
+                <A href="https://github.com/areebahmeddd/airhop/blob/main/docs/dev/GLOSSARY.md">
                   GLOSSARY.md
                 </A>{" "}
                 for terminology, and{" "}
-                <A href="https://github.com/areebahmeddd/Airhop/blob/main/docs/dev/PROGRESS.md">
+                <A href="https://github.com/areebahmeddd/airhop/blob/main/docs/dev/PROGRESS.md">
                   PROGRESS.md
                 </A>{" "}
                 for build status and milestones.

@@ -41,7 +41,7 @@ Measured with [Lighthouse](https://developer.chrome.com/docs/lighthouse) (mobile
 ### Installation
 
 ```bash
-git clone https://github.com/areebahmeddd/Airhop
+git clone https://github.com/areebahmeddd/airhop
 cd Airhop/landing
 npm install
 ```

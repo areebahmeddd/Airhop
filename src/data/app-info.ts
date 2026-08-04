@@ -10,7 +10,7 @@ import appConfig from "../../app.json";
 // the Version screen fetches separately to check for updates.
 export const APP_VERSION: string = appConfig.expo.version;
 
-const GITHUB_REPO = "areebahmeddd/Airhop";
+const GITHUB_REPO = "areebahmeddd/airhop";
 
 export const GITHUB_URL = `https://github.com/${GITHUB_REPO}`;
 

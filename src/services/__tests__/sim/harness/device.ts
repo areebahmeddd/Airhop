@@ -257,6 +257,7 @@ interface MeshLike {
   sendMeshPing: (peerID: string) => Promise<unknown>;
   getNostrPubKeyHex: () => string;
   getChannelGeohash: (channel: string) => string | null;
+  canSealPrivateMedia: (peerID: string) => boolean;
   applyInternetEnabled: (enabled: boolean) => void;
   [k: string]: unknown;
 }

@@ -28,6 +28,7 @@ Airhop is free, MIT-licensed, and has no accounts, no ads, no telemetry, and no 
 ## Links
 
 - Website: https://airhop.1mindlabs.org
-- GitHub: https://github.com/areebahmeddd/Airhop
+- GitHub: https://github.com/areebahmeddd/airhop
 - iOS: https://apps.apple.com/app/airhop/id000000000
 - Android: https://play.google.com/store/apps/details?id=org.onemindlabs.airhop
+- F-Droid: https://f-droid.org/en/packages/org.onemindlabs.airhop

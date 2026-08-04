@@ -22,7 +22,7 @@ const sections: {
       {
         title: "Build from Source",
         desc: "MIT licensed, no signing required for local builds. Setup takes a few minutes.",
-        href: "https://github.com/areebahmeddd/Airhop#getting-started",
+        href: "https://github.com/areebahmeddd/airhop#getting-started",
       },
     ],
   },
@@ -32,7 +32,7 @@ const sections: {
       {
         title: "Wire Format",
         desc: "Full BLE packet spec shared with bitchat. Airhop and bitchat nodes interoperate automatically.",
-        href: "https://github.com/areebahmeddd/Airhop/blob/main/docs/spec/PROTOCOLS.md",
+        href: "https://github.com/areebahmeddd/airhop/blob/main/docs/spec/PROTOCOLS.md",
       },
       {
         title: "Session Encryption",
@@ -52,7 +52,7 @@ const sections: {
       {
         title: "GitHub",
         desc: "All source code under MIT. Issues, pull requests, and discussions welcome.",
-        href: "https://github.com/areebahmeddd/Airhop",
+        href: "https://github.com/areebahmeddd/airhop",
       },
       {
         title: "Architecture",

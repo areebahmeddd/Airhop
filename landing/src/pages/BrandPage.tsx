@@ -71,7 +71,7 @@ const FACTS = [
   { k: "Licence", v: "MIT" },
   { k: "Maintainer", v: "Areeb Ahmed, independent" },
   { k: "Site", v: "airhop.1mindlabs.org" },
-  { k: "Source", v: "github.com/areebahmeddd/Airhop" },
+  { k: "Source", v: "github.com/areebahmeddd/airhop" },
   { k: "Press contact", v: "hi@areeb.dev" },
 ];
 
@@ -329,7 +329,7 @@ export default function BrandPage() {
             <p className="mt-4 text-xs leading-relaxed text-gray-500">
               Store screenshots, the feature graphic and the social banners are in{" "}
               <a
-                href="https://github.com/areebahmeddd/Airhop/tree/main/press/out"
+                href="https://github.com/areebahmeddd/airhop/tree/main/press/out"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="text-gray-900 underline underline-offset-2 transition-colors hover:text-gray-600"

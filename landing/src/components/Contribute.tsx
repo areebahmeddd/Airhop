@@ -41,7 +41,7 @@ export default function Contribute() {
                 Bug reports, feature proposals, and code contributions are all welcome.
               </p>
               <a
-                href="https://github.com/areebahmeddd/Airhop"
+                href="https://github.com/areebahmeddd/airhop"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="group/btn mt-2 inline-flex items-center gap-2 bg-black px-5 py-2.5 font-mono text-xs font-bold tracking-widest text-white transition-all hover:bg-black/90"

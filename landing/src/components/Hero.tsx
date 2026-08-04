@@ -146,7 +146,7 @@ export default function Hero() {
   const [latestRelease, setLatestRelease] = useState<string | null>(null);
 
   useEffect(() => {
-    fetch("https://api.github.com/repos/areebahmeddd/Airhop")
+    fetch("https://api.github.com/repos/areebahmeddd/airhop")
       .then((res) => (res.ok ? res.json() : null))
       .then((data) => {
         if (data && typeof data.stargazers_count === "number") {
@@ -155,7 +155,7 @@ export default function Hero() {
       })
       .catch(() => {});
 
-    fetch("https://api.github.com/repos/areebahmeddd/Airhop/releases/latest")
+    fetch("https://api.github.com/repos/areebahmeddd/airhop/releases/latest")
       .then((res) => (res.ok ? res.json() : null))
       .then((data) => {
         if (!data) return;
@@ -230,12 +230,12 @@ export default function Hero() {
                 {
                   label: "APK",
                   description: "Direct download, latest version",
-                  href: "https://github.com/areebahmeddd/Airhop/releases/latest/download/airhop.apk",
+                  href: "https://github.com/areebahmeddd/airhop/releases/latest/download/airhop.apk",
                 },
               ]}
             />
             <a
-              href="https://github.com/areebahmeddd/Airhop"
+              href="https://github.com/areebahmeddd/airhop"
               target="_blank"
               rel="noopener noreferrer"
               className="relative flex w-full items-center justify-center border border-black/20 bg-white px-6 py-3.5 text-sm font-bold tracking-widest text-black shadow-sm transition-all select-none hover:border-black hover:bg-gray-50 sm:w-auto sm:gap-2"

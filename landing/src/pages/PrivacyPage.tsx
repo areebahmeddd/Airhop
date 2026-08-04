@@ -40,7 +40,7 @@ export default function PrivacyPage() {
               <li>
                 All source code is{" "}
                 <a
-                  href="https://github.com/areebahmeddd/Airhop"
+                  href="https://github.com/areebahmeddd/airhop"
                   target="_blank"
                   rel="noopener noreferrer"
                   className="underline underline-offset-2 transition-colors hover:text-gray-900"
@@ -492,7 +492,7 @@ export default function PrivacyPage() {
               </a>{" "}
               or raised by opening an issue on{" "}
               <a
-                href="https://github.com/areebahmeddd/Airhop/issues"
+                href="https://github.com/areebahmeddd/airhop/issues"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="underline underline-offset-2 transition-colors hover:text-gray-900"

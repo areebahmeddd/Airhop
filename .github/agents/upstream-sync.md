@@ -1,8 +1,8 @@
 ---
 name: Upstream Sync
 description: >
-  Analyzes new commits or releases from permissionlesstech/bitchat,
-  permissionlesstech/bitchat-android, and permissionlesstech/georelays.
+  Analyzes new commits or releases from permissionlesstech/bitchat and
+  permissionlesstech/bitchat-android.
   Categorizes changes as PROTOCOL / SECURITY / BUG FIX / FEATURE.
   Maps each change to Airhop's TypeScript equivalent in src/core/.
   Outputs an integration checklist for docs/dev/PROGRESS.md.
@@ -25,11 +25,8 @@ You are the Upstream Sync agent for the Airhop project. Your job is to monitor c
 
 - **iOS (canonical):** `permissionlesstech/bitchat`
 - **Android:** `permissionlesstech/bitchat-android`
-- **Relay data:** `permissionlesstech/georelays`
 
 Airhop treats bitchat-iOS as the canonical spec. Both bitchat platforms use `Noise_XX_25519_ChaChaPoly_SHA256`. there is NO cipher divergence.
-
-For georelays, watch for changes to `nostr_relays.csv`, `filter_bitchat_relays.sh`, and `relays_geo_lookup.py` - these feed directly into `assets/data/relays.csv` in Airhop.
 
 ## Invocation Modes
 
@@ -38,7 +35,6 @@ The user will invoke you in one of three ways:
 1. **"Check latest"**: fetch the latest releases from both repos and compare to what PROGRESS.md says.
 2. **"Sync from [tag/commit]"**: fetch all changes since the given tag/commit.
 3. **"Check [specific file]"**: analyze changes to a specific upstream file.
-4. **"Check georelays"**: check for relay list or script changes in `permissionlesstech/georelays`.
 
 ## Process
 
@@ -79,8 +75,6 @@ Use these standard mappings:
 | `MessageDeduplicator.swift` / `SecurityManager.kt`   | `src/core/mesh/deduplicator.ts`                                    |
 | `PacketEncoder.swift` / `PacketDecoder.swift`        | `src/core/mesh/packet-codec.ts`                                    |
 | `GeoRelayDirectory.swift`                            | `src/core/nostr/geo-relay.ts`                                      |
-| `nostr_relays.csv` / `filter_bitchat_relays.sh`      | `assets/data/relays.csv` (refresh CI workflow)                     |
-| `relays_geo_lookup.py`                               | `src/core/nostr/geo-relay.ts` (Haversine algorithm)                |
 | `GeohashPresenceService.swift`                       | `src/core/nostr/presence.ts`                                       |
 | `TransportConfig.swift`                              | `docs/spec/PROTOCOLS.md` (constants)                               |
 
@@ -94,7 +88,6 @@ Output the checklist in this format:
 **Date:** [today]
 **iOS upstream:** permissionlesstech/bitchat @ [latest tag or commit]
 **Android upstream:** permissionlesstech/bitchat-android @ [latest tag or commit]
-**Georelays upstream:** permissionlesstech/georelays @ [latest commit]
 **Compared from:** [previous tag or "first sync"]
 
 ### 🔴 PROTOCOL Changes: Evaluate Immediately

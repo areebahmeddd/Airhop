@@ -20,7 +20,7 @@ const SECTIONS: LegalSection[] = [
           "No analytics, advertising, telemetry, or tracking of any kind.",
           "No sale of user data.",
           "Your identity is a cryptographic key pair that never leaves your device.",
-          "All source code is [open source](https://github.com/areebahmeddd/Airhop). The storage, networking, and cryptography described here can be verified in the code.",
+          "All source code is [open source](https://github.com/areebahmeddd/airhop). The storage, networking, and cryptography described here can be verified in the code.",
         ],
       },
     ],
@@ -186,7 +186,7 @@ const SECTIONS: LegalSection[] = [
   {
     heading: "Contact",
     paragraphs: [
-      "Questions about this policy can be sent to [hi@areeb.dev](mailto:hi@areeb.dev) or raised by opening an issue on [GitHub](https://github.com/areebahmeddd/Airhop/issues).",
+      "Questions about this policy can be sent to [hi@areeb.dev](mailto:hi@areeb.dev) or raised by opening an issue on [GitHub](https://github.com/areebahmeddd/airhop/issues).",
     ],
   },
 ];
