@@ -12,18 +12,15 @@ jest.mock("react-native/Libraries/EventEmitter/RCTDeviceEventEmitter", () =>
   // Every phone needs its own listener set. See harness/event-router.ts: this
   // is the only interception point that reliably catches every path by which
   // mesh-service and the native modules reach the emitter.
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
   (
     require("./harness/event-router") as { routerModule: () => unknown }
   ).routerModule(),
 );
 jest.mock("../../../bridge/NativeAirhopBLE", () => {
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
   const shim = require("../lifecycle/harness/bridge-shim");
   return { __esModule: true, default: shim.bleBridge };
 });
 jest.mock("../../../bridge/NativeAirhopWiFi", () => {
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
   const shim = require("../lifecycle/harness/bridge-shim");
   return { __esModule: true, default: shim.wifiBridge };
 });
@@ -229,7 +226,7 @@ test("C08 a forged ANNOUNCE cannot rebind a known peer's signing key", async () 
       noisePubKey: alice.identity.noiseStaticPubKey,
       signingPubKey: mallory.identity.signingPubKey,
       nickname: "alice",
-      timestamp: s.world.now,
+      timestamp: s.world.wallClock(),
     }),
   );
   await s.world.advance(2000);
@@ -246,7 +243,7 @@ test("C08 a forged ANNOUNCE cannot rebind a known peer's signing key", async () 
       noisePubKey: alice.identity.noiseStaticPubKey,
       signingPubKey: mallory.identity.signingPubKey,
       nickname: "alice",
-      timestamp: s.world.now,
+      timestamp: s.world.wallClock(),
       signWith: mallory.identity.signingPrivKey,
     }),
   );
@@ -262,7 +259,7 @@ test("C08 a forged ANNOUNCE cannot rebind a known peer's signing key", async () 
       noisePubKey: mallory.identity.noiseStaticPubKey,
       signingPubKey: mallory.identity.signingPubKey,
       nickname: "alice",
-      timestamp: s.world.now,
+      timestamp: s.world.wallClock(),
       signWith: mallory.identity.signingPrivKey,
     }),
   );
@@ -277,7 +274,7 @@ test("C08 a forged ANNOUNCE cannot rebind a known peer's signing key", async () 
       claimedPeerID: alice.peerID,
       channel,
       text: "alice says: send me your ecash",
-      timestamp: s.world.now,
+      timestamp: s.world.wallClock(),
       signWith: mallory.identity.signingPrivKey,
     }),
   );
@@ -361,7 +358,7 @@ test("C01 a message claiming a trusted peer's ID is refused unless it is signed 
       claimedPeerID: alice.peerID,
       channel,
       text: "alice says: send me your ecash",
-      timestamp: s.world.now,
+      timestamp: s.world.wallClock(),
     }),
   );
   await s.world.advance(2000);
@@ -379,7 +376,7 @@ test("C01 a message claiming a trusted peer's ID is refused unless it is signed 
       claimedPeerID: alice.peerID,
       channel,
       text: "alice says: meet me alone",
-      timestamp: s.world.now,
+      timestamp: s.world.wallClock(),
       signWith: mallory.identity.signingPrivKey,
     }),
   );
@@ -399,7 +396,7 @@ test("C01 a message claiming a trusted peer's ID is refused unless it is signed 
       claimedPeerID: "deadbeefdeadbeef",
       channel,
       text: "from nobody at all",
-      timestamp: s.world.now,
+      timestamp: s.world.wallClock(),
       signWith: mallory.identity.signingPrivKey,
     }),
   );
@@ -457,7 +454,7 @@ test("C02 the strict signature rule still lets genuine traffic through", async (
       claimedPeerID: alice.peerID,
       channel,
       text: "genuinely alice",
-      timestamp: s.world.now,
+      timestamp: s.world.wallClock(),
       signWith: alice.identity.signingPrivKey,
     }),
   );
@@ -470,4 +467,112 @@ test("C02 the strict signature rule still lets genuine traffic through", async (
   );
   s.expectNone("process health", noCrashes([alice, bob]));
   s.assert();
+});
+
+// A LEAVE says "this peer is gone" and costs nothing to forge for any peer ID
+// in earshot. Refusing to act on one is necessary but not sufficient: a relay
+// that forwards it anyway spends the room's airtime on a lie and hands the same
+// lie to every node downstream, including any that check less strictly.
+test("C09 a forged LEAVE is neither acted on nor passed along", async () => {
+  const s = (scenario = new Scenario({
+    id: "C09",
+    title: "forged departure stops at the first honest relay",
+    seed: 69,
+  }));
+  const radio = new RadioFabric(s.world);
+  const alice = SimDevice.create(s.world, {
+    id: "alice",
+    platform: "android",
+    seedByte: 11,
+  });
+  const bob = SimDevice.create(s.world, {
+    id: "bob",
+    platform: "android",
+    seedByte: 22,
+  });
+  const carol = SimDevice.create(s.world, {
+    id: "carol",
+    platform: "android",
+    seedByte: 33,
+  });
+  const mallory = SimDevice.create(s.world, {
+    id: "mallory",
+    platform: "android",
+    seedByte: 77,
+  });
+  const cast = [alice, bob, carol, mallory];
+  for (const d of cast) radio.add(d);
+  // A line, so anything reaching carol had to be relayed BY bob. Without the
+  // third hop there is no way to tell "bob ignored it" from "bob did not
+  // forward it", and forwarding is half of what this scenario is about.
+  radio.setTopology([
+    ["alice", "bob"],
+    ["bob", "carol"],
+    ["mallory", "bob"],
+  ]);
+  s.track(...cast);
+  for (const d of cast) d.launch();
+
+  const channel = "#bluetooth";
+  for (const d of cast) d.joinChannel(channel);
+  await waitFor(s.world, () => bob.peers().includes(alice.peerID), 30_000);
+  s.check(
+    "bob can see alice before the attack",
+    bob.peers().includes(alice.peerID),
+  );
+
+  const leaveFramesBefore = radio.countOfType(PacketType.LEAVE);
+
+  // Mallory claims alice's peer ID on a LEAVE signed with her own key. The
+  // packet is well-formed and self-consistent; it is only wrong about who sent
+  // it, which is exactly what the pinned signing key exists to detect.
+  const forged: Packet = {
+    type: PacketType.LEAVE,
+    ttl: 3,
+    flags: Flags.SIGNED,
+    senderID: peerIdToBytes(alice.peerID),
+    recipientID: new Uint8Array(8),
+    timestamp: s.world.wallClock(),
+    signature: new Uint8Array(64),
+    payload: new Uint8Array(0),
+  };
+  forged.signature = signPacket(forged, mallory.identity.signingPrivKey);
+  radio.injectTo(bob.id, mallory.id, toBase64(encodePacket(forged)));
+  await s.world.advance(5_000);
+
+  s.check(
+    "bob did not evict alice on a forged departure",
+    bob.peers().includes(alice.peerID),
+    `bob sees [${bob.peers().join(",")}]`,
+  );
+  s.check(
+    "and did not put the forgery back on the air",
+    radio.countOfType(PacketType.LEAVE) === leaveFramesBefore,
+    `LEAVE frames before=${leaveFramesBefore} after=${radio.countOfType(PacketType.LEAVE)}`,
+  );
+
+  // The other half: a real departure must still be honoured, or the rule above
+  // is just a way to break presence.
+  //
+  // Driven through the actual "user goes Away" path rather than an injected
+  // packet, because the goodbye has to survive its own shutdown to be worth
+  // anything. MeshService.stop() sends the LEAVE before taking the radios
+  // down; with those two the other way round the farewell was handed to a
+  // transport already told to shut, and a departing peer vanished by timeout
+  // instead of by announcement.
+  alice.mesh?.stop();
+  const noticed = await waitFor(
+    s.world,
+    () => !bob.peers().includes(alice.peerID),
+    20_000,
+  );
+  s.check(
+    "a genuine departure is announced, not waited out",
+    noticed,
+    `bob sees [${bob.peers().join(",")}]`,
+  );
+
+  s.expectNone("no forged senders", noForgedSenders([bob, carol]));
+  s.expectNone("process health", noCrashes([bob, carol]));
+  s.assert(true);
 });

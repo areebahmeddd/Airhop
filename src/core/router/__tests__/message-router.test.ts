@@ -650,3 +650,115 @@ describe("message ID (cross-transport dedupe)", () => {
     expect(decodeChannelMsgPayload(new Uint8Array([1, 35, 200]))).toBeNull();
   });
 });
+
+// ---------------------------------------------------------------------------
+// Session-authenticated identity (Noise payload 0x21).
+//
+// Announced state is a claim: an announce is signed with a key carried inside
+// the same announce, so anyone who reads a victim's public Noise key off the
+// air can self-sign a consistent announce under that peer ID. Trust-on-first-use
+// covers the steady state but loses the race - whoever announces first wins the
+// pin, and the real peer can then never correct it.
+//
+// State that arrives inside a completed Noise session is different in kind: a
+// session only completes when the remote static key hashes to the claimed peer
+// ID, so it proves possession of the private key. These tests pin the ordering
+// that follows: proven beats assumed, and assumed never overwrites proven.
+describe("PeerRegistry: authenticated peer state", () => {
+  const PEER = "aabbccdd00112233";
+  const ANNOUNCED_KEY = new Uint8Array(32).fill(0x11);
+  const PROVEN_KEY = new Uint8Array(32).fill(0x22);
+  const OTHER_KEY = new Uint8Array(32).fill(0x33);
+  const CAP_MEDIA = 1 << 8;
+
+  function withAnnouncedPeer(): PeerRegistry {
+    const r = new PeerRegistry();
+    r.update({
+      peerID: PEER,
+      noisePubKey: new Uint8Array(32),
+      signingPubKey: ANNOUNCED_KEY,
+      nickname: "alice",
+      capabilities: CAP_MEDIA,
+    });
+    return r;
+  }
+
+  test("an announced capability is never treated as authenticated", () => {
+    const r = withAnnouncedPeer();
+    expect(r.get(PEER)!.capabilities).toBe(CAP_MEDIA);
+    expect(r.hasAuthenticatedCapability(PEER, CAP_MEDIA)).toBe(false);
+  });
+
+  test("a proof inside the session authenticates the capability", () => {
+    const r = withAnnouncedPeer();
+    expect(r.setAuthenticatedState(PEER, PROVEN_KEY, CAP_MEDIA)).toBe(true);
+    expect(r.hasAuthenticatedCapability(PEER, CAP_MEDIA)).toBe(true);
+  });
+
+  // The heal. TOFU binds whoever announced first; a proof means possession of
+  // the real Noise private key, which no observer can fake.
+  test("a proof corrects a trust-on-first-use pin", () => {
+    const r = withAnnouncedPeer();
+    r.setAuthenticatedState(PEER, PROVEN_KEY, CAP_MEDIA);
+    expect(Array.from(r.get(PEER)!.signingPubKey)).toEqual(
+      Array.from(PROVEN_KEY),
+    );
+    expect(r.get(PEER)!.signingKeyAuthenticated).toBe(true);
+  });
+
+  // The reverse must never happen, or the next announce silently reduces a
+  // proof back to a claim.
+  test("a later announce cannot replace a proven key", () => {
+    const r = withAnnouncedPeer();
+    r.setAuthenticatedState(PEER, PROVEN_KEY, CAP_MEDIA);
+    r.update({
+      peerID: PEER,
+      noisePubKey: new Uint8Array(32),
+      signingPubKey: OTHER_KEY,
+      nickname: "alice",
+    });
+    expect(Array.from(r.get(PEER)!.signingPubKey)).toEqual(
+      Array.from(PROVEN_KEY),
+    );
+  });
+
+  test("a later announce cannot clear an authenticated capability", () => {
+    const r = withAnnouncedPeer();
+    r.setAuthenticatedState(PEER, PROVEN_KEY, CAP_MEDIA);
+    r.update({
+      peerID: PEER,
+      noisePubKey: new Uint8Array(32),
+      signingPubKey: PROVEN_KEY,
+      nickname: "alice",
+      capabilities: 0,
+    });
+    expect(r.hasAuthenticatedCapability(PEER, CAP_MEDIA)).toBe(true);
+    expect(r.get(PEER)!.signingKeyAuthenticated).toBe(true);
+  });
+
+  // Two different proven keys for one peer ID cannot both be real. The first
+  // stands, and the caller is told so it can stop trusting the second session.
+  test("a second, different proof is refused", () => {
+    const r = withAnnouncedPeer();
+    r.setAuthenticatedState(PEER, PROVEN_KEY, CAP_MEDIA);
+    expect(r.setAuthenticatedState(PEER, OTHER_KEY, CAP_MEDIA)).toBe(false);
+    expect(Array.from(r.get(PEER)!.signingPubKey)).toEqual(
+      Array.from(PROVEN_KEY),
+    );
+  });
+
+  test("repeating the same proof is accepted and updates capabilities", () => {
+    const r = withAnnouncedPeer();
+    r.setAuthenticatedState(PEER, PROVEN_KEY, 0);
+    expect(r.setAuthenticatedState(PEER, PROVEN_KEY, CAP_MEDIA)).toBe(true);
+    expect(r.hasAuthenticatedCapability(PEER, CAP_MEDIA)).toBe(true);
+  });
+
+  test("an unknown peer neither throws nor invents an entry", () => {
+    const r = new PeerRegistry();
+    expect(r.setAuthenticatedState("ffffffffffffffff", PROVEN_KEY, 0)).toBe(
+      true,
+    );
+    expect(r.get("ffffffffffffffff")).toBeUndefined();
+  });
+});

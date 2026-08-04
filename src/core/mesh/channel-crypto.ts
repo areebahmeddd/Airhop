@@ -22,6 +22,7 @@ import { hmac } from "@noble/hashes/hmac.js";
 import { sha256 } from "@noble/hashes/sha2.js";
 import { bytesToHex, randomBytes } from "@noble/hashes/utils.js";
 import { getPublicKey } from "nostr-tools";
+import { bytesToBase64Url, tryBase64UrlToBytes } from "../encoding/base64";
 
 const KEY_LEN = 32;
 const NONCE_LEN = 24;
@@ -41,37 +42,16 @@ export interface ChannelPlaintext {
   text: string;
 }
 
-// ---- base64url (URL-safe, no padding) so one string works in both the store
-// and the invite link ---------------------------------------------------------
-
-function bytesToB64url(bytes: Uint8Array): string {
-  let bin = "";
-  for (const b of bytes) bin += String.fromCharCode(b);
-  return btoa(bin).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
-}
-
-function b64urlToBytes(s: string): Uint8Array | null {
-  try {
-    const b64 = s.replace(/-/g, "+").replace(/_/g, "/");
-    const bin = atob(b64);
-    const out = new Uint8Array(bin.length);
-    for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
-    return out;
-  } catch {
-    return null;
-  }
-}
-
 // ---- key ---------------------------------------------------------------------
 
 // A fresh channel key, base64url-encoded for storage and links.
 export function generateChannelKey(): string {
-  return bytesToB64url(randomBytes(KEY_LEN));
+  return bytesToBase64Url(randomBytes(KEY_LEN));
 }
 
 // True if a string is a well-formed channel key (32 bytes once decoded).
 export function isValidChannelKey(keyB64: string): boolean {
-  const bytes = b64urlToBytes(keyB64);
+  const bytes = tryBase64UrlToBytes(keyB64);
   return bytes !== null && bytes.length === KEY_LEN;
 }
 
@@ -89,7 +69,7 @@ export interface ChannelNostrIdentity {
 export function deriveChannelNostrIdentity(
   keyB64: string,
 ): ChannelNostrIdentity | null {
-  const key = b64urlToBytes(keyB64);
+  const key = tryBase64UrlToBytes(keyB64);
   if (key === null || key.length !== KEY_LEN) return null;
   for (let i = 0; i < 10; i++) {
     const input = new Uint8Array(NOSTR_INFO.length + 4);
@@ -167,7 +147,7 @@ export function sealChannelMessage(
   keyB64: string,
   message: ChannelPlaintext,
 ): Uint8Array {
-  const key = b64urlToBytes(keyB64);
+  const key = tryBase64UrlToBytes(keyB64);
   if (key === null || key.length !== KEY_LEN) {
     throw new Error("invalid channel key");
   }
@@ -186,7 +166,7 @@ export function openChannelMessage(
   blob: Uint8Array,
 ): ChannelPlaintext | null {
   if (blob.length < NONCE_LEN + TAG_LEN) return null;
-  const key = b64urlToBytes(keyB64);
+  const key = tryBase64UrlToBytes(keyB64);
   if (key === null || key.length !== KEY_LEN) return null;
   const nonce = blob.slice(0, NONCE_LEN);
   const ct = blob.slice(NONCE_LEN);

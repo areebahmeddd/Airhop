@@ -338,6 +338,9 @@ export const strings = {
     "Enter its geohash. Everyone whose location falls in that cell shares the channel.",
   "chat.jump.teleport_note":
     "You show as teleported, not nearby. It reaches over the internet only.",
+  // Level of the cell a typed geohash resolves to. The place name, when there
+  // is one, is appended by the caller rather than substituted in.
+  "chat.jump.level_cell": "{level} cell",
   "chat.jump.already_here":
     "You are already here. Go opens your {name} channel.",
   "chat.jump.open_direction": "Open the cell to your {direction}",
@@ -350,9 +353,20 @@ export const strings = {
   // ---- Chats: private groups -----------------------------------------------------
   "chat.group.unreachable":
     "Could not reach every member. Try again while they're nearby.",
-  // System lines posted into a group when its creator adds you.
+  // System lines posted into a group when its creator adds you or removes you.
+  // Removal used to happen in silence, taking the whole thread with it.
   "chat.group.you_were_added": "You were added to {name}.",
   "chat.group.added_you": "Added you to {name}",
+  "chat.group.you_were_removed":
+    "You were removed from {name}. You can no longer read or send messages here.",
+  "chat.group.removed_you": "Removed you from {name}",
+  // Results of the creator-only roster actions, which used to be discarded.
+  "chat.group.add_failed": "Could not add them",
+  "chat.group.add_failed_body":
+    "Nothing changed. Either they are not reachable right now, the group is full at 16, or you are not its creator.",
+  "chat.group.remove_failed": "Could not remove them",
+  "chat.group.remove_failed_body":
+    "Nothing changed. Only the person who created the group can change who is in it.",
   "chat.group.e2ee":
     "End-to-end encrypted. Only members can read the messages.",
   "chat.group.cap":
@@ -440,6 +454,21 @@ export const strings = {
   "chat.thread.say_something": "Say something in {channel}.",
   "chat.thread.jump_latest_new": "Jump to latest message, {count} new",
   "chat.thread.no_reach": "No peers nearby - nobody received this yet",
+  // Location channels are carried over the internet. Shown while no relay is
+  // reachable, so an offline send is never a silent one. The second is for a
+  // teleported cell, which never goes out over Bluetooth at all.
+  "chat.thread.channel_needs_internet":
+    "Internet off - this channel only reaches people in Bluetooth range",
+  "chat.thread.cell_needs_internet":
+    "Internet off - this cell is reachable over the internet only",
+  "chat.thread.via_gateway":
+    "Internet off - a nearby device is carrying this online for you",
+  "chat.thread.group_queued":
+    "Nobody from this group is nearby yet. It will reach them when they are.",
+  "chat.thread.no_group_key":
+    "You are no longer in this group, so this cannot be sent",
+  "chat.thread.no_reach_offline":
+    "Internet off and no peers nearby - nobody received this yet",
   "chat.thread.mention": "Mention {name}",
   "chat.thread.someone_talking": "{hold}. {name} is talking.",
   "chat.thread.attach_note":
@@ -487,6 +516,8 @@ export const strings = {
   "chat.action.save_photos": "Save to photos",
   "chat.action.save_copy": "Save a copy",
   "chat.action.forward": "Forward",
+  "chat.action.select": "Select",
+  "chat.select.cancel": "Cancel selection",
 
   // ---- Chats: attachments and media ----------------------------------------------
   "chat.attach.camera": "Camera",
@@ -500,6 +531,14 @@ export const strings = {
   "chat.attach.ecash": "Send ecash",
   "chat.attach.ecash_desc": "Send Cashu sats from your wallet",
   "chat.attach.title": "Attach",
+  // Cautions before sending media a bitchat recipient handles differently.
+  "chat.attach.send_anyway": "Send anyway",
+  "chat.attach.bitchat_too_big": "This may not arrive",
+  "chat.attach.bitchat_too_big_body":
+    "{name} is on bitchat, which gives up on a large file part-way through. Under about 350 KB is reliable. Sending it to an Airhop contact has no such limit.",
+  "chat.attach.bitchat_unopenable": "They may not be able to open this",
+  "chat.attach.bitchat_unopenable_body":
+    "{name} is on bitchat, which shows photos and voice notes but lists anything else as a file it cannot open. It will arrive, they just may not be able to view it.",
   "chat.attach.file": "Attach a file",
   "chat.attach.unavailable": "Attachments not available here",
   "chat.attach.not_sent": "Attachment not sent",
@@ -509,6 +548,9 @@ export const strings = {
   "chat.attach.send": "Send attachment",
   "chat.attach.generic": "Attachment",
   "chat.media.view_full": "View photo full screen",
+  // Shown in place of a photo whose file the retention sweep has removed. Says
+  // what happened rather than leaving an empty frame that reads as a bug.
+  "chat.media.expired": "Photo expired",
   "chat.media.pause_voice": "Pause voice note",
   "chat.media.play_voice": "Play voice note",
   "chat.media.voice_position": "Voice note position",
@@ -574,6 +616,7 @@ export const strings = {
   "chat.ecash.memo": "Memo (optional)",
   "chat.ecash.send": "Send",
   "chat.ecash.claimed": "Claimed",
+  "chat.ecash.reclaimed": "Reclaimed",
   "chat.ecash.claiming": "Claiming…",
   "chat.ecash.claim": "Claim",
   "chat.ecash.claim_amount": "Claim {amount} {unit}",
@@ -586,6 +629,9 @@ export const strings = {
   // ---- Chats: channel info -------------------------------------------------------
   "chat.info.courier_desc": "Handed to the mesh for best-effort delivery",
   "chat.info.queued_desc": "Held on this phone until there is a route to them",
+  "chat.info.reclaimed": "Reclaimed",
+  "chat.info.reclaimed_desc":
+    "You took this payment back into your wallet, so it will not be delivered",
   "chat.info.about": "About",
   "chat.info.group_desc":
     "A private group. Only the members the creator added can read it, and it stays on Bluetooth.",
@@ -740,6 +786,8 @@ export const strings = {
   "mesh.banner.paused": "Mesh paused · You're away",
   "mesh.banner.location_off": "Location off · location channels unavailable",
   "mesh.banner.battery_saver": "Battery saver · scanning less often",
+  "mesh.banner.clock_skew":
+    "This phone’s clock is wrong · set the date and time to automatic",
   "mesh.banner.internet_off": "Internet off · Bluetooth only",
   "mesh.banner.relaying": "No local peers · relaying via Nostr",
   "mesh.banner.tor": "Tor on · internet traffic routed",
@@ -943,7 +991,7 @@ export const strings = {
   // `{reason}` is one of the wallet.svc fallback fragments, lowercase by
   // design, so it has to sit mid-sentence rather than lead.
   "wallet.zap.sent_encrypted_body":
-    "{amount} {unit} sent in a Nostr DM, because {reason}.\n\nThis is a bearer token: once they decrypt the message, whoever holds that string can redeem it.",
+    "{amount} {unit} sent in a Nostr DM, because {reason}.\n\nThis is a bearer token: once they decrypt the message, whoever holds that string can redeem it. It stays reclaimable under Pending until you confirm it arrived.",
   "wallet.zap.no_network": "Couldn't reach the network",
   "wallet.zap.no_network_body":
     "A token was built instead, because {reason}. Share it however you like, or reclaim it under Pending.",
@@ -984,6 +1032,8 @@ export const strings = {
   "wallet.mint.consolidate": "Move all balances to one mint",
   "wallet.mint.confirm_with": "Confirm proofs with {mint}",
   "wallet.mint.remove_a11y": "Remove {mint}",
+  // Shown against each mint when choosing which one pays.
+  "wallet.mint.available_amount": "{amount} {unit} available",
   "wallet.mint.split_across":
     "Balance split across {count} mints. Move it to one.",
   "wallet.mint.move_everything_to": "Move everything to {mint}",
@@ -1178,8 +1228,15 @@ export const strings = {
   "wallet.activity.show_less": "Show less",
   "wallet.activity.received_unconfirmed": "Received, unconfirmed",
   "wallet.activity.received": "Received",
-  "wallet.activity.send_reclaimed": "Send reclaimed",
+  "wallet.activity.reclaimed": "Reclaimed",
+  "wallet.activity.send_failed": "Send failed",
   "wallet.activity.sent": "Sent",
+  // Appended to a row's subtitle when the title does not already say it. Lower
+  // case on purpose: these read as a trailing note, not a heading.
+  "wallet.activity.status_pending": "pending",
+  "wallet.activity.status_failed": "failed",
+  "wallet.activity.status_reclaimed": "reclaimed",
+  "wallet.activity.status_expired": "expired",
   "wallet.activity.ln_deposit": "Lightning deposit",
   "wallet.activity.ln_withdrawal": "Lightning withdrawal",
   "wallet.activity.nutzap_received": "Nutzap received",
@@ -1519,6 +1576,11 @@ export const strings = {
     "Double Ratchet is always on for DMs",
   "settings.security.signed_packets": "Signed packets",
   "settings.security.signed_packets_desc": "Every packet is Ed25519-signed",
+  "settings.security.hide_previews": "Hide notification previews",
+  // Says what is withheld and where it is visible, because the reason is not
+  // obvious from the label alone. Two sentences, so both take a full stop.
+  "settings.security.hide_previews_desc":
+    "Keep the sender and message out of notifications. Your lock screen shows them without unlocking the phone.",
   "settings.security.no_blocked": "No blocked peers",
   "settings.security.no_blocked_desc":
     "Blocked peers can't message you or appear on the Mesh tab",
@@ -1547,6 +1609,7 @@ export const strings = {
     "Location channels and the mesh bridge will stop auto-selecting the nearest relays and use only the ones you added. This can reduce reach, and you may stop meeting bitchat users, who converge on the nearest relays.",
   "settings.network.custom": "Custom relays",
   "settings.network.custom_desc": "Add your own Nostr relays",
+  "settings.network.custom_added": "{count} added",
   "settings.network.add_relay": "Add relay",
   "settings.network.remove_relay": "Remove {url}",
   "settings.network.add_short": "Add",
@@ -1671,7 +1734,10 @@ export const strings = {
   "settings.storage.session_usage":
     "This session · {sent} sent, {received} received",
   "settings.storage.cache": "Cache",
-  "settings.storage.cache_desc": "{size} of received attachments",
+  // Says the retention window here because this is the one screen where someone
+  // thinks about stored media, and it explains why an old photo is gone.
+  "settings.storage.cache_desc":
+    "{size} of attachments. Anything older than 7 days is deleted automatically.",
   "settings.storage.clear_cache": "Clear attachment cache",
   "settings.storage.clear": "Clear",
   "settings.storage.clear_title": "Clear cached media?",
@@ -1787,7 +1853,7 @@ export const strings = {
   // "Card or UPI" names real payment rails. UPI is India-specific and keeps its
   // name everywhere; a translator should localise "Card" and leave "UPI".
   "settings.support.card": "Card or UPI",
-  "settings.support.card_desc": "Netbanking and wallets too, worldwide",
+  "settings.support.card_desc": "Netbanking and wallets, worldwide",
   "settings.support.card_a11y": "Support by card, UPI, netbanking, or wallet",
   "settings.support.sponsors": "GitHub Sponsors",
   "settings.support.sponsors_desc": "Monthly or one-time, no platform fee",
@@ -1831,6 +1897,7 @@ export const strings = {
   // `{size}` and `{cap}` are whole kilobytes; `{kind}` is one of transfer.this.*
   "transfer.too_large": "{kind} is {size} KB, over the {cap} KB limit.",
   "transfer.badge.waiting": "Waiting · {name}",
+  "transfer.badge.active_count": "{count} transfers",
   "transfer.badge.sending": "Sending {name}",
   "transfer.badge.receiving": "Receiving {name}",
   "transfer.badge.a11y": "{label}, {percent} percent. Open conversation.",
@@ -1870,6 +1937,12 @@ export const strings = {
   "notif.preview.voice": "🎤 Voice message",
   "notif.preview.video": "🎥 Video",
   "notif.preview.document": "📄 Document",
+  // Shown instead of the sender and the message when previews are hidden, which
+  // is the default. The lock screen is rendered without unlocking the phone, so
+  // these lines say that something arrived and nothing about what.
+  "notif.hidden.title": "Airhop",
+  "notif.hidden.dm": "New message",
+  "notif.hidden.channel": "New activity",
 } as const;
 
 // Plural forms live apart from the flat strings because plural categories are
@@ -1914,6 +1987,15 @@ export const plurals = {
   "chat.group_members": {
     one: "Private group  ·  {count} member",
     other: "Private group  ·  {count} members",
+  },
+  // Header count and the one action while selecting messages to forward.
+  "chat.select.count": {
+    one: "{count} selected",
+    other: "{count} selected",
+  },
+  "chat.select.forward": {
+    one: "Forward {count} message",
+    other: "Forward {count} messages",
   },
 
   // ---- Mesh: peer list -----------------------------------------------------------
@@ -1961,6 +2043,12 @@ export const plurals = {
   "wallet.activity.show_more_a11y": {
     one: "Show {count} more payment",
     other: "Show {count} more payments",
+  },
+  // Per-mint row: coins the mint has not confirmed yet, and what a mint has
+  // available when choosing which one pays.
+  "wallet.mint.unconfirmed_count": {
+    one: "{count} unconfirmed",
+    other: "{count} unconfirmed",
   },
   "wallet.proof_count": {
     one: "{count} proof",

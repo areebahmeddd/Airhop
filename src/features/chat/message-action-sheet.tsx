@@ -25,6 +25,9 @@ interface Props {
   // Get an attachment out of the app. Received files live in Airhop's private
   // cache, so without this a photo or a document dies with the cache.
   onSave: () => void;
+  // Enter selection mode with this message picked, for forwarding several at
+  // once. Same place WhatsApp and Signal put it: the long-press menu.
+  onSelect: () => void;
 }
 
 export default function MessageActionSheet({
@@ -34,6 +37,7 @@ export default function MessageActionSheet({
   onCopy,
   onInfo,
   onSave,
+  onSelect,
 }: Props): React.JSX.Element | null {
   const T = useT();
   const Colors = useThemeColors();
@@ -103,6 +107,13 @@ export default function MessageActionSheet({
             />
           </>
         )}
+        <View style={styles.divider} />
+        <ActionRow
+          icon="check-circle"
+          label={T("chat.action.select")}
+          onPress={() => act(onSelect)}
+          color={Colors.textPrimary}
+        />
       </View>
     </BottomSheet>
   );

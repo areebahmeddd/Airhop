@@ -48,7 +48,7 @@ What each feature is for, and when someone would actually reach for it.
 - Bulletin board. Signed notices that outlive a conversation, pinned to your mesh or your area for one to seven days, with an urgent flag. "Water station at the south entrance," left for whoever walks past an hour later.
 - Voice notes. Recorded audio sent as a file, faster than typing directions.
 - Video sharing. Recorded clips that play inline. There is no live video, because the two platforms' direct-WiFi stacks cannot talk to each other.
-- File transfer. Any format, up to 1 MB, which is bitchat's limit and takes about 45 seconds over Bluetooth. Photos and voice notes are capped tighter, at 512 KiB. A photo of a road closure.
+- File transfer. Any format, up to 1 MB, which is bitchat's limit and takes about 45 seconds over Bluetooth.
 - Store-and-forward courier. When nothing can reach the recipient now, a nearby phone carries the sealed message and hands it over when they eventually meet. The carrier cannot read it.
 
 ### Identity

@@ -6,6 +6,7 @@
 import { panicWipe as identityPanicWipe } from "../../core/crypto/identity";
 import { clearAttachmentCache } from "../../services/file-transfer-service";
 import { setNutzapWatcher } from "../../services/nutzap-watcher-handle";
+import { useChatStore } from "../../store/chat-store";
 import { useMeshStateStore } from "../../store/mesh-state-store";
 import { WALLET_STORAGE_ID } from "../../store/wallet-store";
 import { MMKV_STORE_IDS, panicWipe } from "../panic-wipe";
@@ -163,5 +164,48 @@ describe("panicWipe", () => {
     expect(s.blePermissionBlocked).toBe(false);
     expect(s.presenceStatus).toBe("online");
     expect(s.nostrConnected).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Chat persistence is throttled: a write sits in a 400ms window holding a
+// complete plaintext snapshot of every thread in memory, armed to put it back
+// on disk. A wipe that clears the store and the file but leaves that snapshot
+// armed is a wipe with a queued write of the data it just destroyed.
+describe("panic wipe and the persistence throttle", () => {
+  beforeEach(() => {
+    jest.useFakeTimers();
+  });
+  afterEach(() => {
+    jest.runOnlyPendingTimers();
+    jest.useRealTimers();
+  });
+
+  test("a pending chat write cannot land after the wipe", async () => {
+    useChatStore.getState().addChannel("#bluetooth");
+    useChatStore.getState().addMessage({
+      id: "m1",
+      channel: "#bluetooth",
+      senderID: "aabbccdd00112233",
+      senderNickname: "alice",
+      text: "the meeting is at four",
+      timestampMs: Date.now(),
+      isMine: false,
+    });
+
+    await panicWipe();
+
+    // Run every timer the throttle could possibly have left armed, then read
+    // the file back the way a forensic tool would.
+    jest.runOnlyPendingTimers();
+
+    const { createMMKV } = require("react-native-mmkv") as {
+      createMMKV: (o: { id: string }) => {
+        getString(k: string): string | undefined;
+      };
+    };
+    const raw = createMMKV({ id: "chat-store" }).getString("airhop-chat") ?? "";
+    expect(raw).not.toContain("the meeting is at four");
+    expect(useChatStore.getState().messages).toEqual({});
   });
 });

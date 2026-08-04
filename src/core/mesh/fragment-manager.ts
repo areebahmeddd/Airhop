@@ -1,4 +1,5 @@
-// Fragment manager: split large packets into 469-byte chunks and reassemble.
+// Fragment manager: split a packet too large for one BLE frame into frames that
+// fit, and reassemble them on the far side.
 //
 // Wire-compatible with bitchat iOS BLEFragmentHandler / BLEFragmentAssemblyBuffer.
 //
@@ -15,21 +16,44 @@
 import { hexToBytes } from "@noble/hashes/utils.js";
 import { MAX_FRAMED_FILE_BYTES } from "./bitchat-file-packet";
 import {
-  Flags,
   PacketType,
   decodePacket,
   encodePacket,
   type Packet,
 } from "./packet-codec";
 
-// BLE MTU limit used by bitchat (must match exactly for interop).
-export const FRAGMENT_SIZE = 469;
+// The Bluetooth ceiling on a single ATT attribute value, and therefore on every
+// frame we hand the radio.
+//
+// This has to be a FRAME budget, not a payload budget. It used to be spent as
+// the latter: 469 payload bytes plus a 16-byte header, an 8-byte senderID and a
+// 64-byte signature encoded to 557 bytes, 45 over the limit. Android writes
+// without response, so the stack truncated to MTU-3 and the far side's decoder
+// failed reading a signature whose last bytes never arrived; iOS falls back to a
+// long write, which cannot exceed 512 either. Every fragment of every attachment
+// was discarded before any handler saw it, with no error on either side. Live
+// voice was unaffected only because a burst is 210 bytes and never fragments.
+export const MAX_BLE_FRAME = 512;
 
 // Bytes consumed by the fragment header inside the payload.
 const FRAG_HEADER_LEN = 13; // 8 + 2 + 2 + 1
 
-// Maximum data bytes per fragment.
-export const FRAG_DATA_SIZE = FRAGMENT_SIZE - FRAG_HEADER_LEN; // 456 bytes
+// What the envelope costs around the fragment data, worst case:
+//   16  v2 packet header
+//    8  senderID
+//    8  recipientID, present on a DM fragment (a public one omits it)
+//   13  the fragment header above
+// Fragments are deliberately unsigned, so no 64-byte signature: authenticity is
+// carried by the inner packet, which is itself signed and re-verified after
+// reassembly. bitchat does the same (BLEOutboundFragmentPlanner sends
+// `signature: nil`), and neither side's fragment path inspects one.
+const FRAME_OVERHEAD = 16 + 8 + 8 + FRAG_HEADER_LEN; // 45
+
+// Maximum data bytes per fragment, derived so the encoded frame lands exactly on
+// the budget. bitchat computes 469 from the same budget with a smaller header;
+// being a couple of bytes under it costs nothing, because the chunk size is a
+// sender-side choice that the receiver never has to agree with.
+export const FRAG_DATA_SIZE = MAX_BLE_FRAME - FRAME_OVERHEAD; // 467 bytes
 
 // Max simultaneous reassembly slots. Matches bitchat.
 const MAX_CONCURRENT = 128;
@@ -69,21 +93,19 @@ export type FragmentProgressCallback = (info: FragmentProgress) => void;
 
 // ---- Fragmentation -----------------------------------------------------------
 
+// Only the peer ID: fragments are unsigned, so there is no key to hold.
 export interface FragmentIdentity {
   peerID: string; // 16 hex chars = 8 bytes
-  signingPrivKey: Uint8Array;
 }
 
 // Split `packet` (must be too large to fit in one BLE frame) into fragment
-// packets, each signed and ready to hand to the FloodRouter.
-// `sign` should be `signPacket` from packet-codec.
+// packets ready to hand to the FloodRouter.
 export function fragmentPacket(
   packet: Packet,
   identity: FragmentIdentity,
-  sign: (p: Packet, key: Uint8Array) => Uint8Array,
 ): Packet[] {
   const data = encodePacket(packet);
-  if (data.length <= FRAGMENT_SIZE) {
+  if (data.length <= MAX_BLE_FRAME) {
     throw new Error("fragmentPacket called on packet that fits in one frame");
   }
 
@@ -104,18 +126,23 @@ export function fragmentPacket(
       chunk,
     );
 
-    const frag: Packet = {
+    fragments.push({
       type: OUTER_TYPE,
       ttl: 7,
-      flags: Flags.SIGNED,
+      flags: 0,
       senderID: senderIDBytes,
-      recipientID: new Uint8Array(8), // broadcast
+      // Carry the parent's recipient. A DM's fragments used to go out addressed
+      // to nobody, which made bitchat classify them as public: it archived
+      // sealed private media in its gossip store and re-offered it to third
+      // parties, and relayed each fragment to every neighbour instead of down
+      // the directed path.
+      recipientID: packet.recipientID ?? new Uint8Array(8),
       timestamp: Date.now(),
+      // Zeros, not a signature: the SIGNED flag is clear, so the encoder omits
+      // the 64 bytes entirely.
       signature: new Uint8Array(64),
       payload,
-    };
-    frag.signature = sign(frag, identity.signingPrivKey);
-    fragments.push(frag);
+    });
   }
 
   return fragments;

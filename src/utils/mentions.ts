@@ -4,6 +4,14 @@
 // Mentions are by nickname (the display name), the only stable human-readable
 // identifier the mesh exposes. Matching is case-insensitive and token-bounded,
 // so "@ana" does not match a message addressed to "@anabelle".
+//
+// Both sides are normalized before comparison. Announced nicknames are already
+// canonical (announce-manager normalizes at decode), but message text is not:
+// it is whatever the sender's keyboard produced, and an iOS keyboard and an
+// Android one can emit the same accented name in different encodings. Comparing
+// raw strings meant a cross-platform mention silently never fired.
+
+import { normalizeNickname } from "../core/mesh/nickname";
 
 function escapeRegExp(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -30,10 +38,13 @@ export function applyMention(draft: string, nickname: string): string {
 // token must end at whitespace, punctuation, or end of string, so a mention of
 // a longer name does not count as a mention of a prefix of it.
 export function mentionsNickname(text: string, nickname: string): boolean {
-  if (nickname.trim().length === 0) return false;
+  const target = normalizeNickname(nickname);
+  if (target.length === 0) return false;
   const re = new RegExp(
-    `(?:^|\\s)@${escapeRegExp(nickname)}(?=$|[\\s.,!?;:])`,
+    `(?:^|\\s)@${escapeRegExp(target)}(?=$|[\\s.,!?;:])`,
     "i",
   );
-  return re.test(text);
+  // The text is normalized but NOT trimmed: only its encoding needs
+  // canonicalizing, and trimming a message body is not this function's business.
+  return re.test(text.normalize("NFC"));
 }

@@ -167,6 +167,15 @@ private enum class PowerMode(
     }
 }
 
+// The ATT MTU every BLE connection starts on, before negotiation. Only 20 bytes
+// of it are usable by an unacknowledged write, so before onMtuChanged answers
+// nothing but the smallest frames go out unacknowledged.
+private const val DEFAULT_ATT_MTU = 23
+
+// ATT write-command header: one byte opcode plus a two-byte handle. The usable
+// payload of a write without response is MTU minus this.
+private const val ATT_WRITE_OVERHEAD = 3
+
 // How far the battery must move before it is worth telling JS about. Android
 // delivers ACTION_BATTERY_CHANGED on every 1% step; forwarding all of them would
 // be a bridge crossing per percent for a decision whose thresholds are ten
@@ -215,6 +224,13 @@ class AirhopBLEModule(
     private val peripheralLinks = ConcurrentHashMap<String, BluetoothDevice>()
     // Central-role links are GATT clients we connected to as central.
     private val centralLinks    = ConcurrentHashMap<String, BluetoothGatt>()
+    // Negotiated ATT MTU per central link. A write without response cannot
+    // exceed MTU-3, and the stack truncates rather than refusing, so a frame
+    // over that budget used to leave the link silently mangling every fragment
+    // of a transfer. Recorded here so the write path can pick a type that can
+    // actually carry the frame. Absent means negotiation has not answered yet,
+    // in which case the BLE default applies.
+    private val centralMtu = ConcurrentHashMap<String, Int>()
 
     // Advertised peerIDs (hex) we already have (or are opening) a central link
     // to, so a repeated scan callback, or the same peer under a rotated MAC,
@@ -231,6 +247,168 @@ class AirhopBLEModule(
     // settle delay (a request issued synchronously inside onConnectionStateChange
     // is unreliable on many controllers).
     private val mainHandler = Handler(Looper.getMainLooper())
+
+    // ---- Device monitoring ---------------------------------------------------
+    //
+    // BLE connection slots are scarce: an Android controller manages roughly
+    // seven simultaneous GATT client connections and refuses the rest with
+    // status 133. A slot held by something that will not talk is a neighbour we
+    // cannot reach.
+    //
+    // Three failure modes from bitchat-android's DeviceMonitoringManager
+    // (docs/device_manager.md), each of which looks healthy to the adapter:
+    // a device that connects and never speaks, one that goes silent mid-session
+    // (BLE supervision timeouts are long), and one that disconnects with an
+    // error repeatedly.
+    //
+    // Lives in native rather than TypeScript because it is about connection
+    // lifetime and needs no knowledge of packets. "Did any byte arrive" is
+    // enough to tell a peer from a prober, so no protocol logic moves down
+    // here.
+
+    // Silence allowed after a link comes up before we conclude nothing is
+    // coming. A real peer announces within a few seconds (announce-manager's
+    // isolated interval is ~4s), so 15s is generous.
+    private val firstTrafficDeadlineMs = 15_000L
+
+    // Silence allowed mid-session. Matches the mesh's 60s reachability window:
+    // past it the peer is already considered gone upstairs, so the slot is held
+    // for a peer nobody believes in.
+    private val inactivityTimeoutMs = 60_000L
+
+    // Error disconnects, and the window they must fall inside, before a device
+    // is refused. Five in five minutes is not a flaky radio but a device that
+    // cannot hold a link, and each retry costs a slot.
+    private val errorLimit = 5
+    private val errorWindowMs = 5 * 60_000L
+    private val blockDurationMs = 15 * 60_000L
+
+    // linkID -> last moment we heard anything from that device. Seeded when the
+    // link opens, so silence is measured from connect rather than from a first
+    // byte that may never come.
+    private val lastHeardAt = ConcurrentHashMap<String, Long>()
+    // Links that have produced at least one inbound frame. The distinction
+    // matters: a device that has never spoken gets the short deadline, and one
+    // that spoke and then stopped gets the long one.
+    private val everSpoke = ConcurrentHashMap.newKeySet<String>()
+    // MAC -> timestamps of recent error disconnects, newest last.
+    private val errorHistory = ConcurrentHashMap<String, MutableList<Long>>()
+    // MAC -> when the block expires.
+    private val blockedUntil = ConcurrentHashMap<String, Long>()
+
+    private var monitorTask: Runnable? = null
+
+    private fun isBlocked(address: String): Boolean {
+        val until = blockedUntil[address] ?: return false
+        if (System.currentTimeMillis() >= until) {
+            // Blocks expire on their own. A device broken an hour ago may be
+            // fine now, and a permanent blocklist would shrink the mesh for
+            // reasons nobody can see.
+            blockedUntil.remove(address)
+            errorHistory.remove(address)
+            return false
+        }
+        return true
+    }
+
+    private fun noteTraffic(linkID: String) {
+        lastHeardAt[linkID] = System.currentTimeMillis()
+        everSpoke.add(linkID)
+    }
+
+    private fun noteLinkOpened(linkID: String) {
+        // Seeded at open so the first-traffic deadline is measured from the
+        // moment the link came up, not from the first byte that never arrives.
+        lastHeardAt[linkID] = System.currentTimeMillis()
+        everSpoke.remove(linkID)
+    }
+
+    private fun noteLinkClosed(linkID: String, status: Int) {
+        lastHeardAt.remove(linkID)
+        everSpoke.remove(linkID)
+        if (status == BluetoothGatt.GATT_SUCCESS) return
+        val address = linkID.substringAfter(':')
+        val now = System.currentTimeMillis()
+        val history = errorHistory.getOrPut(address) { mutableListOf() }
+        synchronized(history) {
+            history.removeAll { now - it > errorWindowMs }
+            history.add(now)
+            if (history.size >= errorLimit) {
+                blockedUntil[address] = now + blockDurationMs
+                history.clear()
+                Log.w(TAG, "Blocking $address: $errorLimit error disconnects in window")
+            }
+        }
+    }
+
+    // Drop links that have gone quiet. Runs on the main handler rather than a
+    // timer of its own so it stops with the module.
+    private fun startDeviceMonitor() {
+        if (monitorTask != null) return
+        val task = object : Runnable {
+            override fun run() {
+                val now = System.currentTimeMillis()
+                for ((linkID, heardAt) in lastHeardAt) {
+                    val silentFor = now - heardAt
+                    // A device that has never spoken is a prober and gets the
+                    // short window. One that spoke and then stopped is a peer
+                    // that walked away, and gets the 60s reachability window
+                    // before its slot is reclaimed.
+                    val limit =
+                        if (everSpoke.contains(linkID)) inactivityTimeoutMs
+                        else firstTrafficDeadlineMs
+                    if (silentFor > limit) {
+                        Log.d(TAG, "Reaping $linkID after ${silentFor}ms of silence")
+                        disconnectLink(linkID)
+                    }
+                }
+                mainHandler.postDelayed(this, 5_000L)
+            }
+        }
+        monitorTask = task
+        mainHandler.postDelayed(task, 5_000L)
+    }
+
+    private fun stopDeviceMonitor() {
+        monitorTask?.let { mainHandler.removeCallbacks(it) }
+        monitorTask = null
+        // Silence timers are meaningless with nothing watching them; the error
+        // history and blocklist are NOT cleared here, so a device that has been
+        // misbehaving does not get a clean slate from a scan restart.
+        lastHeardAt.clear()
+        everSpoke.clear()
+    }
+
+    private fun disconnectLink(linkID: String) {
+        lastHeardAt.remove(linkID)
+        // Or a device that spoke once, went quiet, was reaped, and reconnected
+        // would inherit the long deadline instead of proving itself again.
+        everSpoke.remove(linkID)
+        try {
+            centralLinks.remove(linkID)?.let {
+                it.disconnect()
+                it.close()
+            }
+            peripheralLinks.remove(linkID)?.let { device ->
+                gattServer?.cancelConnection(device)
+            }
+        } catch (e: SecurityException) {
+            Log.e(TAG, "BLUETOOTH_CONNECT permission missing", e)
+        }
+        linkToAdvertisedPeerID.remove(linkID)?.let { centralPeerIDs.remove(it) }
+        emitEvent(EVT_LINK_DISCONNECTED, WritableNativeMap().apply {
+            putString("linkID", linkID)
+        })
+    }
+
+    // Everything the monitor knows is per session. The panic wipe clears it
+    // along with the rest, so a blocked device is not remembered across one.
+    private fun resetDeviceMonitoring() {
+        lastHeardAt.clear()
+        everSpoke.clear()
+        errorHistory.clear()
+        blockedUntil.clear()
+    }
 
     private var listenerCount = 0
 
@@ -534,6 +712,10 @@ class AirhopBLEModule(
         resolvePendingEnable(false)
         stopRssiPolling()
         stopScanCycle()
+        // Blocklists and silence timers are per session. A module going away
+        // takes them with it, so a wiped or restarted app starts clean.
+        stopDeviceMonitor()
+        resetDeviceMonitoring()
         advertisingActive = false
         try {
             adapter?.bluetoothLeScanner?.stopScan(scanCallback)
@@ -986,6 +1168,8 @@ class AirhopBLEModule(
             // continuous scan or bursts, per the current power mode.
             beginScanCycle()
             startRssiPolling()
+            // Slots only need protecting once we are opening links.
+            startDeviceMonitor()
             promise.resolve(null)
         } catch (e: SecurityException) {
             promise.reject("PERMISSION_DENIED", "BLE scanning requires BLUETOOTH_SCAN permission", e)
@@ -999,6 +1183,7 @@ class AirhopBLEModule(
         try {
             stopRssiPolling()
             stopScanCycle()
+            stopDeviceMonitor()
             promise.resolve(null)
         } catch (e: Exception) {
             promise.reject("BLE_ERROR", "Failed to stop scanning: ${e.message}", e)
@@ -1029,12 +1214,25 @@ class AirhopBLEModule(
                 // stack rejects writes once its internal queue is full, and
                 // silently resolving there meant whole fragments vanished
                 // mid-transfer with the sender believing they went out.
+                // An unacknowledged write is capped at MTU-3 and the stack
+                // TRUNCATES past it rather than reporting an error, so anything
+                // that does not fit goes as a default (acknowledged) write, which
+                // the stack splits into a long write. Matches what the iOS module
+                // already does with maximumWriteValueLength.
+                val mtu = centralMtu[linkID] ?: DEFAULT_ATT_MTU
+                val fitsUnacked = data.size <= mtu - ATT_WRITE_OVERHEAD
+                val writeType =
+                    if (fitsUnacked) BluetoothGattCharacteristic.WRITE_TYPE_NO_RESPONSE
+                    else BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT
+
                 val accepted: Boolean
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                     accepted = gatt.writeCharacteristic(
-                        char, data, BluetoothGattCharacteristic.WRITE_TYPE_NO_RESPONSE,
+                        char, data, writeType,
                     ) == BluetoothStatusCodes.SUCCESS
                 } else {
+                    @Suppress("DEPRECATION")
+                    char.writeType = writeType
                     @Suppress("DEPRECATION")
                     char.value = data
                     @Suppress("DEPRECATION")
@@ -1287,6 +1485,11 @@ class AirhopBLEModule(
             val linkID = "c:${device.address}"
             if (centralLinks.containsKey(linkID)) return
 
+            // A device that repeatedly disconnects with an error is refused
+            // before we spend a connection slot on it. Every retry costs one of
+            // the six or seven this radio has.
+            if (isBlocked(device.address)) return
+
             // At capacity: stay a peripheral to this one. It can still dial us,
             // and we still hear it relayed through the neighbours we do have.
             if (centralLinks.size >= MAX_CENTRAL_LINKS) return
@@ -1325,12 +1528,24 @@ class AirhopBLEModule(
         override fun onConnectionStateChange(device: BluetoothDevice, status: Int, newState: Int) {
             val linkID = "p:${device.address}"
             if (newState == BluetoothProfile.STATE_CONNECTED) {
+                // Refused at the server as well as when we dial out, or it
+                // simply connects to us instead and keeps the slot it lost.
+                if (isBlocked(device.address)) {
+                    try {
+                        gattServer?.cancelConnection(device)
+                    } catch (e: SecurityException) {
+                        Log.e(TAG, "BLUETOOTH_CONNECT permission missing", e)
+                    }
+                    return
+                }
                 // Track the device but DON'T announce the link yet: the central
                 // hasn't enabled notifications, so anything we notify now is lost.
                 // linkConnected fires from onDescriptorWriteRequest (CCCD enable).
                 peripheralLinks[linkID] = device
+                noteLinkOpened(linkID)
             } else if (newState == BluetoothProfile.STATE_DISCONNECTED) {
                 peripheralLinks.remove(linkID)
+                noteLinkClosed(linkID, status)
                 emitEvent(EVT_LINK_DISCONNECTED, WritableNativeMap().apply {
                     putString("linkID", linkID)
                 })
@@ -1348,6 +1563,7 @@ class AirhopBLEModule(
         ) {
             if (characteristic.uuid != CHARACTERISTIC_UUID) return
             val linkID = "p:${device.address}"
+            noteTraffic(linkID)
             emitEvent(EVT_PACKET_RECEIVED, WritableNativeMap().apply {
                 putString("linkID", linkID)
                 putString("dataBase64", Base64.encodeToString(value, Base64.DEFAULT))
@@ -1388,6 +1604,7 @@ class AirhopBLEModule(
         override fun onConnectionStateChange(gatt: BluetoothGatt, status: Int, newState: Int) {
             val linkID = "c:${gatt.device.address}"
             if (newState == BluetoothProfile.STATE_CONNECTED) {
+                noteLinkOpened(linkID)
                 // Negotiate a larger MTU BEFORE service discovery or any I/O.
                 // At the default 23-byte MTU, ANNOUNCE/handshake writes silently
                 // truncate and nothing works. Service discovery is deferred to
@@ -1402,7 +1619,9 @@ class AirhopBLEModule(
                 }, 200)
             } else if (newState == BluetoothProfile.STATE_DISCONNECTED) {
                 centralLinks.remove(linkID)
+                centralMtu.remove(linkID)
                 linkToAdvertisedPeerID.remove(linkID)?.let { centralPeerIDs.remove(it) }
+                noteLinkClosed(linkID, status)
                 try { gatt.close() } catch (e: Exception) { /* already closed */ }
                 emitEvent(EVT_LINK_DISCONNECTED, WritableNativeMap().apply {
                     putString("linkID", linkID)
@@ -1411,6 +1630,12 @@ class AirhopBLEModule(
         }
 
         override fun onMtuChanged(gatt: BluetoothGatt, mtu: Int, status: Int) {
+            // Record what the controller actually granted, which is often less
+            // than the 517 we asked for. The write path needs it to choose
+            // between an unacknowledged write and a long write.
+            if (status == BluetoothGatt.GATT_SUCCESS && mtu > 0) {
+                centralMtu[linkID] = mtu
+            }
             // Proceed regardless of status: on a failed negotiation we keep the
             // default MTU rather than stranding the peer (there is no reconnect
             // state machine to fall back on).
@@ -1471,6 +1696,7 @@ class AirhopBLEModule(
         ) {
             if (characteristic.uuid != CHARACTERISTIC_UUID) return
             val linkID = "c:${gatt.device.address}"
+            noteTraffic(linkID)
             emitEvent(EVT_PACKET_RECEIVED, WritableNativeMap().apply {
                 putString("linkID", linkID)
                 putString("dataBase64", Base64.encodeToString(value, Base64.DEFAULT))
@@ -1487,6 +1713,7 @@ class AirhopBLEModule(
             if (characteristic.uuid != CHARACTERISTIC_UUID) return
             val value = characteristic.value ?: return
             val linkID = "c:${gatt.device.address}"
+            noteTraffic(linkID)
             emitEvent(EVT_PACKET_RECEIVED, WritableNativeMap().apply {
                 putString("linkID", linkID)
                 putString("dataBase64", Base64.encodeToString(value, Base64.DEFAULT))

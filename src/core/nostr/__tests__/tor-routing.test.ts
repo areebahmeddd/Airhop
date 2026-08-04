@@ -78,7 +78,7 @@ jest.mock("../../../store/settings-store", () => ({
 // Imported after the jest.mock calls on purpose: the module under test reads
 // Platform.OS and the bridge modules at import time, so the mocks have to be
 // registered first.
-// eslint-disable-next-line import/first
+
 import {
   isTorRoutingActive,
   primeTorRoutingOnStartup,

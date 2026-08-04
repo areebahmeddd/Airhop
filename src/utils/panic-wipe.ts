@@ -21,9 +21,10 @@ import { resetWalletService } from "../services/wallet-service";
 import { useActivityStore } from "../store/activity-store";
 import { useBlockedStore } from "../store/blocked-store";
 import { useBoardStore } from "../store/board-store";
-import { useChatStore } from "../store/chat-store";
+import { dropPendingChatPersistence, useChatStore } from "../store/chat-store";
 import { useContactsStore } from "../store/contacts-store";
 import { useGeohashBookmarksStore } from "../store/geohash-bookmarks-store";
+import { clearOwedGroupStates } from "../store/group-invite-outbox";
 import { useGroupStore } from "../store/group-store";
 import { useMeshStateStore } from "../store/mesh-state-store";
 import { useNoticesStore } from "../store/notices-store";
@@ -66,6 +67,9 @@ export const MMKV_STORE_IDS = [
   // group-store holds private-group epoch keys, which decrypt every group
   // message; destroy them on panic like any other conversation key material.
   "group-store",
+  // group-invite-outbox holds signed group states owed to members who were not
+  // reachable yet, each carrying the same epoch key. Same reasoning as above.
+  "group-invite-outbox",
   // geohash-bookmarks-store holds cells the user saved; a bookmark reveals a
   // place they care about, so it is erased with the rest of their data.
   "geohash-bookmarks-store",
@@ -88,6 +92,12 @@ export async function panicWipe(): Promise<void> {
   //    leaving it running would keep the two things a wipe most needs gone
   //    alive for the rest of the process.
   stopNutzapWatcher();
+
+  // 0b. Cancel any chat write still inside its throttle window, before
+  //     anything is cleared. A pending write holds a plaintext snapshot of
+  //     every thread and is armed to put it back on disk. Cancelled rather than
+  //     flushed: these bytes must not reach disk again.
+  dropPendingChatPersistence();
 
   // 1. Destroy all private keys from the OS secure enclave. This also removes
   //    the wallet store's AES key, making step 2's ciphertext unrecoverable.
@@ -116,6 +126,7 @@ export async function panicWipe(): Promise<void> {
   useActivityStore.getState().clearAll();
   useBoardStore.getState().clearAll();
   useGroupStore.getState().clearAll();
+  clearOwedGroupStates();
   useNoticesStore.getState().clearAll();
   useGeohashBookmarksStore.getState().clearAll();
   usePlaceNamesStore.getState().clearAll();
@@ -137,6 +148,10 @@ export async function panicWipe(): Promise<void> {
     torActive: false,
     bridgeActive: false,
     bridgePeopleAcross: 0,
+    // Also a claim rather than cosmetic state, drawn from traffic that no
+    // longer exists. A first-run state should not open by diagnosing a mesh the
+    // user has just destroyed.
+    clockSkewed: false,
   });
 
   // Drop the cached Cashu Wallet instances too: they hold the previous

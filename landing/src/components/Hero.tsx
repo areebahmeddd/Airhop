@@ -24,7 +24,7 @@ function formatRelease(tag: string, publishedAt: string | null): string | null {
   const bird = RELEASE_BIRDS[version.split(".")[0]];
   if (bird) parts.push(bird);
 
-  parts.push(date.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }));
+  parts.push(date.toLocaleDateString("en-US", { month: "short", day: "2-digit", year: "numeric" }));
 
   return parts.join(" · ");
 }

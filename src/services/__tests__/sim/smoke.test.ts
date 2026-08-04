@@ -9,7 +9,6 @@ jest.mock("expo-location", () => ({}));
 // Every phone needs its own event emitter. See harness/event-router.ts: this is
 // the only interception point that reliably catches every resolution path.
 jest.mock("react-native/Libraries/EventEmitter/RCTDeviceEventEmitter", () =>
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
   (
     require("./harness/event-router") as { routerModule: () => unknown }
   ).routerModule(),
@@ -19,12 +18,10 @@ jest.mock("react-native/Libraries/EventEmitter/RCTDeviceEventEmitter", () =>
 // already closed - so every phone would resolve the OUTER registry's shim and
 // share one native module. Resolving here binds each sandbox to its own.
 jest.mock("../../../bridge/NativeAirhopBLE", () => {
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
   const shim = require("../lifecycle/harness/bridge-shim");
   return { __esModule: true, default: shim.bleBridge };
 });
 jest.mock("../../../bridge/NativeAirhopWiFi", () => {
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
   const shim = require("../lifecycle/harness/bridge-shim");
   return { __esModule: true, default: shim.wifiBridge };
 });

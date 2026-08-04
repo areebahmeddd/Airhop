@@ -31,6 +31,19 @@ interface SettingsState {
   // exactly as it did before live voice existed, in both directions: no live
   // sending, and incoming bursts are ignored rather than played.
   liveVoiceEnabled: boolean;
+  // Whether a system notification withholds the sender and the message body.
+  //
+  // ON by default, which is the deliberate part. The lock screen is rendered by
+  // the OS without unlocking the phone, so a full preview narrates DMs to
+  // anyone who can see the screen: someone standing behind you, or a phone left
+  // face-up on a table. For the situations this app is built for the realistic
+  // compromise is a device taken and looked at, not traffic intercepted, and a
+  // notification is the one place plaintext leaves the app by design.
+  //
+  // Turning it off restores the sender and preview for anyone who would rather
+  // have them. Either way the routing payload is unaffected, so tapping a
+  // notification still opens the right thread.
+  hideNotificationPreviews: boolean;
   uploadQuality: UploadQuality;
   // Whether this device acts as an internet gateway: relaying mesh-only peers'
   // geohash events to Nostr (toGateway carriers) and, in future, rebroadcasting
@@ -92,6 +105,7 @@ interface SettingsState {
   setTheme: (theme: ThemePreference) => void;
   setAutoDownloadMedia: (enabled: boolean) => void;
   setLiveVoiceEnabled: (enabled: boolean) => void;
+  setHideNotificationPreviews: (hide: boolean) => void;
   setUploadQuality: (quality: UploadQuality) => void;
   setGatewayEnabled: (enabled: boolean) => void;
   setBridgeEnabled: (enabled: boolean) => void;
@@ -116,6 +130,8 @@ const DEFAULTS = {
   theme: "system",
   autoDownloadMedia: true,
   liveVoiceEnabled: true,
+  // Private by default; see the field comment above for why.
+  hideNotificationPreviews: true,
   uploadQuality: "high",
   gatewayEnabled: false,
   bridgeEnabled: false,
@@ -158,6 +174,9 @@ export const useSettingsStore = create<SettingsState>()(
       },
       setLiveVoiceEnabled(enabled) {
         set({ liveVoiceEnabled: enabled });
+      },
+      setHideNotificationPreviews(hide) {
+        set({ hideNotificationPreviews: hide });
       },
       setUploadQuality(quality) {
         set({ uploadQuality: quality });

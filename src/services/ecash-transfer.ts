@@ -23,11 +23,14 @@
 import { t } from "../i18n";
 import { showAlert, useAlertStore } from "../store/alert-store";
 import { useChatStore, type ChatMessage } from "../store/chat-store";
+import { useOutboxStore } from "../store/outbox-store";
+import { useWalletStore } from "../store/wallet-store";
 import { getMeshService, type MeshService } from "./mesh-service";
 import {
   failSend,
   prepareSend,
   quoteSend,
+  reclaimSend,
   WalletError,
   type PreparedSend,
 } from "./wallet-service";
@@ -165,6 +168,19 @@ export function deliverTokenToPeer(params: {
     params.prepared.txId,
   );
 
+  // Report the route on the bubble, the same mapping a text DM uses. Without
+  // this the token card sat on "sending" forever: a send that found no route has
+  // nothing to acknowledge it, so no receipt was ever coming.
+  chat.setMessageStatus(
+    channel,
+    params.prepared.txId,
+    route === "needs-courier"
+      ? "carried"
+      : route === "queued"
+        ? "queued"
+        : "sent",
+  );
+
   // Record the awkward routes on the transaction itself, so the Pending card in
   // the Wallet tab explains why a send is still sitting there instead of just
   // showing an unexplained pending entry days later.
@@ -172,6 +188,28 @@ export function deliverTokenToPeer(params: {
     failSend(params.prepared.txId, describeRoute(route));
   }
   return route;
+}
+
+// Reclaim a pending ecash send, cancelling every copy of it.
+//
+// `reclaimSend` on its own only moves proofs. A token send is also a message in
+// a DM thread and, when it found no route, an entry in the outbox. The outbox is
+// a promise to deliver: leaving the entry there put the proofs back in the
+// spendable balance while the mesh still held a copy to hand over, so the next
+// route to appear delivered a token the sender had already taken back.
+export function reclaimTokenSend(txId: string): boolean {
+  // Read the counterparty before reclaiming, since it names the DM thread. A
+  // token built by hand and never addressed to anyone has none, and no bubble to
+  // update.
+  const peerID = useWalletStore
+    .getState()
+    .history.find((tx) => tx.id === txId)?.counterparty;
+  if (!reclaimSend(txId)) return false;
+  useOutboxStore.getState().resolve(txId);
+  if (peerID !== undefined && peerID.length > 0) {
+    useChatStore.getState().setMessageStatus(`dm:${peerID}`, txId, "reclaimed");
+  }
+  return true;
 }
 
 // Map a WalletError onto the alert the user sees. Kept here rather than in each

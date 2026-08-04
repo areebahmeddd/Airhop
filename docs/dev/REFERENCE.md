@@ -8,13 +8,13 @@
 
 1. [Project Vision & Core Philosophy](#1-project-vision--core-philosophy)
 2. [High-Level Architecture](#2-high-level-architecture)
-3. [Transport Layer 1: Bluetooth LE Mesh](#3-transport-layer-1--bluetooth-le-mesh)
-4. [Transport Layer 2: Nostr (Internet)](#4-transport-layer-2--nostr-internet)
+3. [Transport Layer 1: Bluetooth LE Mesh](#3-transport-layer-1-bluetooth-le-mesh)
+4. [Transport Layer 2: Nostr (Internet)](#4-transport-layer-2-nostr-internet)
 5. [Identity & Cryptography](#5-identity--cryptography)
 6. [Store-and-Forward System](#6-store-and-forward-system)
 7. [Channel Types & Routing Logic](#7-channel-types--routing-logic)
-8. [Media Support: What Really Works](#8-media-support--what-really-works)
-9. [Voice: Current State & Push-to-Talk Design](#9-voice--current-state--push-to-talk-design)
+8. [Media Support: What Really Works](#8-media-support-what-really-works)
+9. [Voice: Current State & Push-to-Talk Design](#9-voice-current-state--push-to-talk-design)
 10. [iOS Codebase Walkthrough](#10-ios-codebase-walkthrough)
 11. [Android Codebase Walkthrough](#11-android-codebase-walkthrough)
 12. [Georelays Infrastructure](#12-georelays-infrastructure)
@@ -467,7 +467,7 @@ Scopes, as designed and now shipped:
 - **No delivery acks, no retransmit** for individual frames (live audio; reliability is the fallback voice note).
 - Bandwidth math: BLE mesh moves ~15 KB/s per link; voice needs ~2 KB/s; fits with margin.
 
-VoiceRecorder and VoiceVisualizer exist on both platforms for the voice-note fallback; the live path is iOS only.
+VoiceRecorder and VoiceVisualizer cover the voice-note fallback. The live path runs on both platforms through `AirhopVoiceModule`, and interoperates with bitchat on both: `VOICE_FRAME` (`0x29`) is one of the types bitchat-android implements.
 
 ### 8.5 Video Calling
 

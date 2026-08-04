@@ -13,7 +13,6 @@ jest.mock("react-native/Libraries/EventEmitter/RCTDeviceEventEmitter", () =>
   // Every phone needs its own listener set. See harness/event-router.ts: this
   // is the only interception point that reliably catches every path by which
   // mesh-service and the native modules reach the emitter.
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
   (
     require("./harness/event-router") as { routerModule: () => unknown }
   ).routerModule(),
@@ -22,12 +21,10 @@ jest.mock("react-native/Libraries/EventEmitter/RCTDeviceEventEmitter", () =>
 // closed, which would hand every sandboxed phone the same native module. See
 // harness/device.ts.
 jest.mock("../../../bridge/NativeAirhopBLE", () => {
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
   const shim = require("../lifecycle/harness/bridge-shim");
   return { __esModule: true, default: shim.bleBridge };
 });
 jest.mock("../../../bridge/NativeAirhopWiFi", () => {
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
   const shim = require("../lifecycle/harness/bridge-shim");
   return { __esModule: true, default: shim.wifiBridge };
 });

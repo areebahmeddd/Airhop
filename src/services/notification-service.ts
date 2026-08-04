@@ -17,6 +17,7 @@ import * as Notifications from "expo-notifications";
 import { Platform } from "react-native";
 import { t } from "../i18n";
 import type { ChatMessage } from "../store/chat-store";
+import { useSettingsStore } from "../store/settings-store";
 import { channelLabel } from "../utils/chat-display-name";
 import {
   NEARBY_COOLDOWN_MS,
@@ -196,6 +197,7 @@ export async function handleInboundMessage(
   const { title, body } = notificationContentFor(
     msg,
     channelLabel(msg.channel),
+    useSettingsStore.getState().hideNotificationPreviews,
   );
   try {
     await Notifications.scheduleNotificationAsync({

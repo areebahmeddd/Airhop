@@ -20,6 +20,7 @@
 // install base, so there is exactly one card format rather than a versioned pair.
 
 import { bytesToHex, hexToBytes } from "@noble/hashes/utils.js";
+import { base64UrlToBytes, bytesToBase64Url } from "../encoding/base64";
 
 // ---- Types ------------------------------------------------------------------
 
@@ -123,7 +124,7 @@ const QR_SCHEME = "airhop:v1/";
 
 export function encodeQRContent(card: ContactCard): string {
   const binary = encodeContactCard(card);
-  return QR_SCHEME + toBase64URL(binary);
+  return QR_SCHEME + bytesToBase64Url(binary);
 }
 
 // Parse a QR code content string. Returns null if it's not an Airhop contact QR.
@@ -132,7 +133,7 @@ export function decodeQRContent(qr: string): ContactCard | null {
   const b64 = qr.slice(QR_SCHEME.length);
   let binary: Uint8Array;
   try {
-    binary = fromBase64URL(b64);
+    binary = base64UrlToBytes(b64);
   } catch {
     return null;
   }
@@ -141,60 +142,4 @@ export function decodeQRContent(qr: string): ContactCard | null {
   } catch {
     return null;
   }
-}
-
-// ---- Base64-URL helpers (RFC 4648 §5, no padding) ---------------------------
-
-function toBase64URL(bytes: Uint8Array): string {
-  // Convert to standard base64 first, then adjust chars.
-  let b64 = "";
-  // Build string from bytes manually (no btoa in all React Native envs).
-  const chars =
-    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-  for (let i = 0; i < bytes.length; i += 3) {
-    const b0 = bytes[i];
-    const b1 = i + 1 < bytes.length ? bytes[i + 1] : 0;
-    const b2 = i + 2 < bytes.length ? bytes[i + 2] : 0;
-    b64 += chars[b0 >> 2];
-    b64 += chars[((b0 & 3) << 4) | (b1 >> 4)];
-    b64 += i + 1 < bytes.length ? chars[((b1 & 15) << 2) | (b2 >> 6)] : "";
-    b64 += i + 2 < bytes.length ? chars[b2 & 63] : "";
-  }
-  // Convert standard base64 to base64url (no padding).
-  return b64.replace(/\+/g, "-").replace(/\//g, "_");
-}
-
-function fromBase64URL(b64url: string): Uint8Array {
-  // Restore standard base64 with padding.
-  let b64 = b64url.replace(/-/g, "+").replace(/_/g, "/");
-  const pad = b64.length % 4;
-  if (pad === 2) b64 += "==";
-  else if (pad === 3) b64 += "=";
-  else if (pad === 1)
-    throw new Error("contact-exchange: invalid base64url length");
-
-  const chars =
-    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-  const charIndex = new Uint8Array(256).fill(255);
-  for (let i = 0; i < chars.length; i++) charIndex[chars.charCodeAt(i)] = i;
-
-  const byteCount =
-    Math.floor((b64.length * 3) / 4) -
-    (b64.endsWith("==") ? 2 : b64.endsWith("=") ? 1 : 0);
-  const out = new Uint8Array(byteCount);
-  let outIdx = 0;
-
-  for (let i = 0; i < b64.length; i += 4) {
-    const v0 = charIndex[b64.charCodeAt(i)];
-    const v1 = charIndex[b64.charCodeAt(i + 1)];
-    const v2 = charIndex[b64.charCodeAt(i + 2)];
-    const v3 = charIndex[b64.charCodeAt(i + 3)];
-    if (v0 === 255 || v1 === 255)
-      throw new Error("contact-exchange: invalid base64url char");
-    if (outIdx < byteCount) out[outIdx++] = (v0 << 2) | (v1 >> 4);
-    if (v2 !== 255 && outIdx < byteCount)
-      out[outIdx++] = ((v1 & 15) << 4) | (v2 >> 2);
-    if (v3 !== 255 && outIdx < byteCount) out[outIdx++] = ((v2 & 3) << 6) | v3;
-  }
-  return out;
 }

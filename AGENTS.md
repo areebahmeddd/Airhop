@@ -6,11 +6,13 @@
 
 This is **Airhop**, a React Native (Expo bare workflow) iOS + Android app for offline-first BLE mesh communication. Wire-compatible with bitchat (`permissionlesstech/bitchat`).
 
-The workspace contains the bitchat reference implementation alongside the Airhop project:
+The bitchat reference implementation sits alongside the Airhop project as a local checkout. It is **not part of this repository**: clone it into `bitchat/` yourself, which is where every path below expects it.
 
 - `bitchat/ios/`: Swift iOS implementation (public domain, copy freely)
 - `bitchat/android/`: Kotlin Android implementation (public domain, copy freely)
 - `bitchat/georelays/`: Nostr relay discovery
+
+Nothing under `bitchat/` is committed, so never cite one of those paths in a file that ships with the repo. Read them freely; write the conclusion, not the citation.
 
 ## Read Before You Write Code
 

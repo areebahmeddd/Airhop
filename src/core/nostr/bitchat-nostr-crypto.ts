@@ -23,6 +23,7 @@ import { secp256k1 } from "@noble/curves/secp256k1.js";
 import { bytesToNumberBE, numberToBytesBE } from "@noble/curves/utils.js";
 import { hkdf } from "@noble/hashes/hkdf.js";
 import { sha256 } from "@noble/hashes/sha2.js";
+import { base64UrlToBytes, bytesToBase64Url } from "../encoding/base64";
 
 const NIP44_INFO = new TextEncoder().encode("nip44-v2");
 const EMPTY = new Uint8Array(0);
@@ -77,7 +78,7 @@ export function bitchatNip44Encrypt(
   const combined = new Uint8Array(nonce.length + ctTag.length);
   combined.set(nonce, 0);
   combined.set(ctTag, nonce.length);
-  return "v2:" + toBase64Url(combined);
+  return "v2:" + bytesToBase64Url(combined);
 }
 
 // Decrypt a bitchat "v2:" ciphertext from a sender's x-only pubkey. Returns null
@@ -90,7 +91,7 @@ export function bitchatNip44Decrypt(
   if (!ciphertext.startsWith("v2:")) return null;
   let data: Uint8Array;
   try {
-    data = fromBase64Url(ciphertext.slice(3));
+    data = base64UrlToBytes(ciphertext.slice(3));
   } catch {
     return null;
   }
@@ -109,21 +110,4 @@ export function bitchatNip44Decrypt(
     }
   }
   return null;
-}
-
-// ---- base64url (no padding) -------------------------------------------------
-
-function toBase64Url(bytes: Uint8Array): string {
-  let bin = "";
-  for (const b of bytes) bin += String.fromCharCode(b);
-  return btoa(bin).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
-}
-
-function fromBase64Url(s: string): Uint8Array {
-  let b64 = s.replace(/-/g, "+").replace(/_/g, "/");
-  while (b64.length % 4 !== 0) b64 += "=";
-  const bin = atob(b64);
-  const out = new Uint8Array(bin.length);
-  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
-  return out;
 }

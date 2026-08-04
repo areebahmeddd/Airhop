@@ -3,7 +3,8 @@
 
 import { ed25519 } from "@noble/curves/ed25519.js";
 import { bytesToHex } from "@noble/hashes/utils.js";
-import type { Packet } from "../packet-codec";
+import { MAX_BLE_FRAME } from "../fragment-manager";
+import { encodePacket, type Packet } from "../packet-codec";
 import {
   BurstFlags,
   decodeBurstPacket,
@@ -202,6 +203,39 @@ describe("packetizer budget", () => {
 
     for (const packet of packets) {
       expect(packet.payload.length).toBeLessThanOrEqual(210);
+    }
+  });
+
+  // The budget only helps if it survives encoding, so this is the assertion
+  // that protects live voice.
+  //
+  // The 210-byte budget bounds the payload, but the radio carries the encoded
+  // frame: 16 header + 8 senderID + payload + 64 signature. Padding that
+  // ~309-byte frame rounds it up to the next block, which costs airtime on
+  // every packet of a call and, once a burst batches more frames, pushes it
+  // into the fragment scheduler. bitchat leaves voiceFrame unpadded for the
+  // same reason (BLEOutboundPacketPolicy).
+  //
+  // The padding check compares against the frame's own unpadded encoding rather
+  // than against a size limit. A limit is a moving target: when MAX_BLE_FRAME
+  // moved from 469 to 512 a padded voice frame landed on exactly 512 and a
+  // "fits in one frame" assertion started passing with the padding restored.
+  // Comparing a frame to itself cannot drift.
+  it("never emits a FRAME that would need fragmentation", async () => {
+    const { packets, session } = collect();
+    await session.startPtt();
+    for (let i = 0; i < 12; i++) {
+      (session as unknown as { feed: (f: Uint8Array) => void }).feed(
+        new Uint8Array(130).fill(i + 1),
+      );
+    }
+    await session.stopPtt();
+
+    expect(packets.length).toBeGreaterThan(2); // START + data + END
+    for (const packet of packets) {
+      const framed = encodePacket(packet);
+      expect(framed.length).toBe(encodePacket(packet, false).length);
+      expect(framed.length).toBeLessThanOrEqual(MAX_BLE_FRAME);
     }
   });
 

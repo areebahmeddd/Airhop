@@ -21,6 +21,10 @@ export const LICENSE_URL = `${GITHUB_URL}/blob/main/LICENSE`;
 // opens the current release notes without a network round trip of our own.
 export const LATEST_RELEASE_PAGE = `${GITHUB_URL}/releases/latest`;
 
+// New-issue form. The Help screen hardcoded this with a differently-cased slug;
+// deriving it keeps every GitHub link pointed at one repo.
+export const NEW_ISSUE_URL = `${GITHUB_URL}/issues/new`;
+
 // Returns the newest release as JSON (tag_name, html_url). Used only by the
 // manual "Check for updates" action.
 export const LATEST_RELEASE_API = `https://api.github.com/repos/${GITHUB_REPO}/releases/latest`;

@@ -5,6 +5,8 @@
 // existing chat store. Uses the in-memory MMKV mock: no native module required.
 
 import {
+  dropPendingChatPersistence,
+  flushChatPersistence,
   subscribeInboundMessages,
   useChatStore,
   type ChatMessage,
@@ -141,6 +143,30 @@ describe("setMessageStatus", () => {
     state().addMessage(makeMessage({ id: "m1", status: "sent" }));
     state().setMessageStatus("#test", "does-not-exist", "read");
     expect(state().messages["#test"][0].status).toBe("sent");
+  });
+
+  // An ecash send that never found a route sits at "sending"/"queued" until the
+  // user takes the money back, which is the one thing the sender can still do
+  // about it. That has to be reachable from the low ranks.
+  it("reclaimed can be set on a send that never left the device", () => {
+    state().addMessage(
+      makeMessage({ id: "m1", isMine: true, status: "sending" }),
+    );
+    state().setMessageStatus("#test", "m1", "reclaimed");
+    expect(state().messages["#test"][0].status).toBe("reclaimed");
+  });
+
+  // Terminal on purpose: the proofs are back in the sender's wallet, so a
+  // receipt that wanders in afterwards must not relabel the bubble "delivered"
+  // and imply the recipient was paid.
+  it("reclaimed is terminal: a later receipt cannot override it", () => {
+    state().addMessage(
+      makeMessage({ id: "m1", isMine: true, status: "reclaimed" }),
+    );
+    state().setMessageStatus("#test", "m1", "delivered", 9999);
+    state().setMessageStatus("#test", "m1", "read", 9999);
+    state().setMessageStatus("#test", "m1", "sent");
+    expect(state().messages["#test"][0].status).toBe("reclaimed");
   });
 });
 
@@ -391,5 +417,88 @@ describe("joinPrivateChannel key clashes", () => {
     const landed = state().joinPrivateChannel(long, KEY_B, false);
     expect(landed.length - 1).toBeLessThanOrEqual(30);
     expect(landed.endsWith("-2")).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Persistence throttling.
+//
+// Writes are coalesced because zustand/persist serialises the WHOLE store on
+// every set(), so one arriving message costs a full JSON encode of every
+// thread. The throttle makes that once per window instead of once per message.
+// What it introduces is a window in which a complete plaintext snapshot lives
+// in a module variable, armed to be written - so the two escape hatches below
+// are part of the feature, not extras.
+describe("chat persistence window", () => {
+  beforeEach(() => {
+    jest.useFakeTimers();
+    // Switching timer implementations orphans any handle armed under the old
+    // one, and an orphaned handle would make the throttle believe a write is
+    // already scheduled and silently drop every later one. Dropping the window
+    // first is the same primitive the panic wipe uses, and it is what makes
+    // these tests independent of whatever ran before them.
+    dropPendingChatPersistence();
+    useChatStore.getState().clearAll();
+    jest.runOnlyPendingTimers();
+  });
+  afterEach(() => {
+    dropPendingChatPersistence();
+    jest.useRealTimers();
+  });
+
+  function readFile(): string {
+    const { createMMKV } = require("react-native-mmkv") as {
+      createMMKV: (o: { id: string }) => {
+        getString(k: string): string | undefined;
+      };
+    };
+    return createMMKV({ id: "chat-store" }).getString("airhop-chat") ?? "";
+  }
+
+  function say(text: string): void {
+    useChatStore.getState().addMessage({
+      id: `m-${text}`,
+      channel: "#bluetooth",
+      senderID: "aabbccdd00112233",
+      senderNickname: "alice",
+      text,
+      timestampMs: Date.now(),
+      isMine: false,
+    });
+  }
+
+  test("a burst of messages produces one write, not one per message", () => {
+    for (let i = 0; i < 20; i++) say(`msg-${String(i)}`);
+    // Nothing on disk yet: the window is still open.
+    expect(readFile()).not.toContain("msg-19");
+    jest.advanceTimersByTime(500);
+    // And when it closes, the LAST state lands - not the first, and not each
+    // of the twenty in turn.
+    expect(readFile()).toContain("msg-19");
+    expect(readFile()).toContain("msg-0");
+  });
+
+  test("flush forces the window shut, for backgrounding", () => {
+    say("about to background");
+    expect(readFile()).not.toContain("about to background");
+    flushChatPersistence();
+    expect(readFile()).toContain("about to background");
+  });
+
+  // The panic-wipe primitive. Without it a wipe can complete while a write
+  // holding the wiped plaintext is still armed.
+  test("drop throws the window away without writing it", () => {
+    say("the meeting is at four");
+    dropPendingChatPersistence();
+    jest.advanceTimersByTime(5_000);
+    expect(readFile()).not.toContain("the meeting is at four");
+  });
+
+  test("dropping once does not stop later writes from persisting", () => {
+    say("discarded");
+    dropPendingChatPersistence();
+    say("kept");
+    jest.advanceTimersByTime(500);
+    expect(readFile()).toContain("kept");
   });
 });

@@ -24,6 +24,7 @@ jobs:
   lint:
     name: Code Quality Check
     runs-on: ubuntu-24.04
+    timeout-minutes: 15
 
     steps:
       - name: Checkout repository
@@ -53,6 +54,7 @@ jobs:
   test:
     name: Unit Tests
     runs-on: ubuntu-24.04
+    timeout-minutes: 15
     needs: lint
 
     steps:

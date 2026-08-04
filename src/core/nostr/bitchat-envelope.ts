@@ -7,6 +7,7 @@
 // prefix, so we must produce and parse it to interoperate. The packet is exactly
 // our BLE wire format, so this reuses packet-codec + noise-payload.
 
+import { base64UrlToBytes, bytesToBase64Url } from "../encoding/base64";
 import {
   decodeNoisePayload,
   decodePrivateMessagePacket,
@@ -55,7 +56,7 @@ function wrap(
     signature: new Uint8Array(64),
     payload: noisePayload,
   };
-  return PREFIX + toBase64Url(encodePacket(packet));
+  return PREFIX + bytesToBase64Url(encodePacket(packet));
 }
 
 // Build the "bitchat1:" content for a private message. Null when the content is
@@ -92,7 +93,7 @@ export function decodeBitchatEnvelope(s: string): BitchatDmContent | null {
   if (!s.startsWith(PREFIX)) return null;
   let bytes: Uint8Array;
   try {
-    bytes = fromBase64Url(s.slice(PREFIX.length));
+    bytes = base64UrlToBytes(s.slice(PREFIX.length));
   } catch {
     return null;
   }
@@ -118,21 +119,4 @@ export function decodeBitchatEnvelope(s: string): BitchatDmContent | null {
     };
   }
   return null;
-}
-
-// ---- base64url (no padding) -------------------------------------------------
-
-function toBase64Url(bytes: Uint8Array): string {
-  let bin = "";
-  for (const b of bytes) bin += String.fromCharCode(b);
-  return btoa(bin).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
-}
-
-function fromBase64Url(s: string): Uint8Array {
-  let b64 = s.replace(/-/g, "+").replace(/_/g, "/");
-  while (b64.length % 4 !== 0) b64 += "=";
-  const bin = atob(b64);
-  const out = new Uint8Array(bin.length);
-  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
-  return out;
 }

@@ -240,6 +240,19 @@ export default function ProfileScreen({
     return card ? encodeQRContent(card) : peerID;
   }, [peerID]);
 
+  // The sections below are early returns rather than an overlay, so opening one
+  // unmounts the hub's list and loses its scroll position. Remember it on the way
+  // out and restore it when the sub-screen pops. Restored from
+  // `onContentSizeChange` because the `contentOffset` prop is iOS-only.
+  const rootScrollRef = useRef<ScrollView>(null);
+  const rootScrollY = useRef(0);
+  const restoreRootScroll = useRef(false);
+
+  function openSection(next: SettingsView): void {
+    restoreRootScroll.current = rootScrollY.current > 0;
+    setView(next);
+  }
+
   // Android hardware/gesture back: leave a sub-screen instead of exiting.
   useEffect(() => {
     if (view === "root") return;
@@ -406,9 +419,22 @@ export default function ProfileScreen({
 
   return (
     <ScrollView
+      ref={rootScrollRef}
       style={styles.container}
       contentContainerStyle={styles.content}
       showsVerticalScrollIndicator={false}
+      scrollEventThrottle={16}
+      onScroll={(e) => {
+        rootScrollY.current = e.nativeEvent.contentOffset.y;
+      }}
+      onContentSizeChange={() => {
+        if (!restoreRootScroll.current) return;
+        restoreRootScroll.current = false;
+        rootScrollRef.current?.scrollTo({
+          y: rootScrollY.current,
+          animated: false,
+        });
+      }}
     >
       {/* Header: pencil edits presence status, top-right */}
       <View style={styles.header}>
@@ -486,35 +512,35 @@ export default function ProfileScreen({
             icon="settings"
             label={T("settings.section.general")}
             description={T("settings.section.general_desc")}
-            onPress={() => setView("general")}
+            onPress={() => openSection("general")}
           />
           <GroupDivider />
           <SettingLinkRow
             icon="lock"
             label={T("settings.section.privacy")}
             description={T("settings.section.privacy_desc")}
-            onPress={() => setView("security")}
+            onPress={() => openSection("security")}
           />
           <GroupDivider />
           <SettingLinkRow
             icon="radio"
             label={T("settings.section.network")}
             description={T("settings.section.network_desc")}
-            onPress={() => setView("network")}
+            onPress={() => openSection("network")}
           />
           <GroupDivider />
           <SettingLinkRow
             icon="key"
             label={T("settings.section.permissions")}
             description={T("settings.section.permissions_desc")}
-            onPress={() => setView("permissions")}
+            onPress={() => openSection("permissions")}
           />
           <GroupDivider />
           <SettingLinkRow
             icon="hard-drive"
             label={T("settings.section.storage")}
             description={T("settings.section.storage_desc")}
-            onPress={() => setView("storage")}
+            onPress={() => openSection("storage")}
           />
           <GroupDivider />
           <SettingLinkRow
@@ -528,21 +554,21 @@ export default function ProfileScreen({
             icon="help-circle"
             label={T("settings.section.help")}
             description={T("settings.section.help_desc")}
-            onPress={() => setView("help")}
+            onPress={() => openSection("help")}
           />
           <GroupDivider />
           <SettingLinkRow
             icon="heart"
             label={T("settings.section.support")}
             description={T("settings.section.support_desc")}
-            onPress={() => setView("support")}
+            onPress={() => openSection("support")}
           />
           <GroupDivider />
           <SettingLinkRow
             icon="info"
             label={T("settings.section.about")}
             description={T("settings.section.about_desc")}
-            onPress={() => setView("about")}
+            onPress={() => openSection("about")}
           />
         </View>
       </View>
@@ -607,7 +633,12 @@ export default function ProfileScreen({
         onClose={() => setShowQRModal(false)}
         sheetStyle={shared.sheet}
       >
-        <Text style={shared.sheetTitle}>{T("settings.qr.title")}</Text>
+        {/* The one settings sheet with a centered body (QR, peer ID, two
+            stacked buttons), so its title centers with them instead of sitting
+            flush left like the rest. */}
+        <Text style={[shared.sheetTitle, styles.qrSheetTitle]}>
+          {T("settings.qr.title")}
+        </Text>
         <View style={styles.qrLarge}>
           <QRCode
             value={qrValue}
@@ -1168,6 +1199,9 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       color: Colors.danger,
       opacity: 0.7,
       lineHeight: FontSize.xs * 1.5,
+    },
+    qrSheetTitle: {
+      textAlign: "center",
     },
     qrLarge: {
       padding: Spacing.xl,

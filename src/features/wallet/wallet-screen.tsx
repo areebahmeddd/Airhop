@@ -61,6 +61,7 @@ import { textAlignEnd } from "../../i18n/layout";
 import {
   deliverTokenToPeer,
   describeRoute,
+  reclaimTokenSend,
 } from "../../services/ecash-transfer";
 import { getMeshService } from "../../services/mesh-service";
 import {
@@ -79,7 +80,6 @@ import {
   quoteLightningWithdrawal,
   quoteSend,
   receiveToken,
-  reclaimSend,
   reconcile,
   refreshAccount,
   restoreFromRecoveryPhrase,
@@ -678,7 +678,7 @@ export default function WalletScreen({
           text: t("wallet.reclaim.confirm"),
           style: "destructive",
           onPress: () => {
-            reclaimSend(txId);
+            reclaimTokenSend(txId);
             setPending(null);
           },
         },
@@ -1556,7 +1556,10 @@ export default function WalletScreen({
                           : null,
                         TP("wallet.proof_count", account.proofCount),
                         account.unverified > 0
-                          ? `${account.unverified.toLocaleString()} unconfirmed`
+                          ? TP(
+                              "wallet.mint.unconfirmed_count",
+                              account.unverified,
+                            )
                           : null,
                       ]
                         .filter((part) => part !== null)
@@ -1895,16 +1898,22 @@ export default function WalletScreen({
                       {relativeTime(tx.createdAtMs)}
                       {" · "}
                       {hostOf(tx.mintUrl)}
-                      {tx.status !== "completed" ? ` · ${tx.status}` : ""}
+                      {txStatusNote(tx) !== undefined
+                        ? ` · ${txStatusNote(tx)}`
+                        : ""}
                     </Text>
                   </View>
                   <Text
                     style={[
                       styles.historyAmount,
-                      isCredit(tx) ? styles.historyCredit : styles.historyDebit,
+                      isVoided(tx)
+                        ? styles.historyVoid
+                        : isCredit(tx)
+                          ? styles.historyCredit
+                          : styles.historyDebit,
                     ]}
                   >
-                    {isCredit(tx) ? "+" : "−"}
+                    {isVoided(tx) ? "" : isCredit(tx) ? "+" : "−"}
                     {tx.amount.toLocaleString()}
                   </Text>
                 </View>
@@ -2543,7 +2552,10 @@ export default function WalletScreen({
           label={T("wallet.ln.paid_from")}
           options={splitAccounts.map((a) => ({
             mintUrl: a.mintUrl,
-            sub: `${a.balance.toLocaleString()} ${a.unit} available`,
+            sub: t("wallet.mint.available_amount", {
+              amount: a.balance.toLocaleString(),
+              unit: a.unit,
+            }),
           }))}
           selected={activeMint}
           onSelect={(url) => {
@@ -3128,6 +3140,18 @@ function isCredit(tx: WalletTx): boolean {
   return tx.kind === "receive" || tx.kind === "mint" || tx.kind === "nutzap-in";
 }
 
+// Rows where no money moved: a reclaimed send came back into the balance, an
+// expired mint quote never arrived, and a failed send never left. `isCredit`
+// keys off `kind` alone, so all three printed a red debit; a reclaim showed
+// "−500" for money that had just come back.
+//
+// A failed swap is the exception. It removes proofs the mint says are already
+// spent, which is a real reduction.
+function isVoided(tx: WalletTx): boolean {
+  if (tx.status === "reclaimed" || tx.status === "expired") return true;
+  return tx.status === "failed" && tx.kind !== "swap";
+}
+
 function txIcon(tx: WalletTx): React.ComponentProps<typeof Feather>["name"] {
   switch (tx.kind) {
     case "receive":
@@ -3153,9 +3177,11 @@ function txTitle(tx: WalletTx): string {
         ? t("wallet.activity.received_unconfirmed")
         : t("wallet.activity.received");
     case "send":
-      return tx.status === "reclaimed"
-        ? t("wallet.activity.send_reclaimed")
-        : t("wallet.activity.sent");
+      // Every other title here is a past-tense event ("Received", "Sent").
+      // "Send reclaimed" was a noun phrase, and a failed send read as "Sent".
+      if (tx.status === "reclaimed") return t("wallet.activity.reclaimed");
+      if (tx.status === "failed") return t("wallet.activity.send_failed");
+      return t("wallet.activity.sent");
     case "mint":
       return t("wallet.activity.ln_deposit");
     case "melt":
@@ -3168,6 +3194,28 @@ function txTitle(tx: WalletTx): string {
       return tx.status === "failed"
         ? t("wallet.activity.spent_removed")
         : t("wallet.activity.refreshed");
+  }
+}
+
+// State note appended to a row's subtitle. Undefined when the title already
+// carries it, so a reclaim no longer reads "Reclaimed · reclaimed". The raw enum
+// value used to be interpolated here, which no catalog covered.
+function txStatusNote(tx: WalletTx): string | undefined {
+  if (tx.status === "completed") return undefined;
+  if (
+    tx.kind === "send" &&
+    (tx.status === "reclaimed" || tx.status === "failed")
+  )
+    return undefined;
+  switch (tx.status) {
+    case "pending":
+      return t("wallet.activity.status_pending");
+    case "failed":
+      return t("wallet.activity.status_failed");
+    case "reclaimed":
+      return t("wallet.activity.status_reclaimed");
+    case "expired":
+      return t("wallet.activity.status_expired");
   }
 }
 
@@ -3834,9 +3882,15 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       color: Colors.online,
     },
     // Money leaving is worth reading at a glance, the same way money arriving
-    // already was. Failed and reclaimed sends never got here: nothing left.
+    // already was.
     historyDebit: {
       color: Colors.danger,
+    },
+    // Reclaimed, expired and failed rows: the amount is context, not a movement.
+    // Struck through and muted, since either sign would be wrong.
+    historyVoid: {
+      color: Colors.textMuted,
+      textDecorationLine: "line-through",
     },
     historyDivider: {
       height: StyleSheet.hairlineWidth,

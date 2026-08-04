@@ -6,11 +6,15 @@
 
 **Airhop** is a React Native (Expo SDK 57, RN 0.86+, bare workflow, New Architecture) cross-platform iOS + Android application for **offline-first, private peer-to-peer communication** over Bluetooth mesh networks, with Nostr internet bridging and Cashu ecash payments.
 
-It is **wire-protocol-compatible with bitchat** (`permissionlesstech/bitchat`, `permissionlesstech/bitchat-android`), both under the Unlicense (public domain). Airhop nodes and bitchat nodes communicate over BLE without configuration. The source code for both bitchat implementations is in this workspace as reference:
+It is **wire-protocol-compatible with bitchat** (`permissionlesstech/bitchat`, `permissionlesstech/bitchat-android`), both under the Unlicense (public domain). Airhop nodes and bitchat nodes communicate over BLE without configuration.
+
+Both bitchat implementations are used as a reference checkout. They are **not part of this repository**: clone them into `bitchat/` yourself, which is where every path below expects them.
 
 - `bitchat/ios/`: Swift iOS implementation (copy freely)
 - `bitchat/android/`: Kotlin Android implementation (copy freely)
 - `bitchat/georelays/`: relay discovery scripts and relay CSV
+
+Nothing under `bitchat/` is committed, so never cite one of those paths in a file that ships with the repo. Read them freely; write the conclusion, not the citation.
 
 ## Read These Docs First
 
@@ -83,7 +87,7 @@ docs/
 - **BLE Characteristic UUID:** `A1B2C3D4-E5F6-4A5B-8C9D-0E1F2A3B4C5D`
 - **Noise algorithm:** `Noise_XX_25519_ChaChaPoly_SHA256`
 - **TTL default:** 7 hops
-- **Fragment size:** 469 bytes
+- **Fragment frame budget:** 512 bytes encoded, giving 467 data bytes
 - **Peer ID:** `hex(SHA-256(noiseStaticPubKey)).slice(0, 16)`
 
 Full constant table: [`docs/spec/PROTOCOLS.md`](docs/spec/PROTOCOLS.md)

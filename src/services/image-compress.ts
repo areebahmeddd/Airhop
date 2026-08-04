@@ -23,7 +23,7 @@ import {
   type SaveOptions,
 } from "expo-image-manipulator";
 import {
-  MAX_IMAGE_BYTES,
+  MAX_SENT_IMAGE_BYTES,
   resolveMimeType,
 } from "../core/mesh/bitchat-file-packet";
 import { CACHE_FILE_PREFIX } from "./file-transfer-service";
@@ -138,7 +138,7 @@ export async function prepareImageForSend(
   if (
     carriedAsImage &&
     original.sizeBytes > 0 &&
-    original.sizeBytes <= MAX_IMAGE_BYTES
+    original.sizeBytes <= MAX_SENT_IMAGE_BYTES
   ) {
     return original;
   }
@@ -183,7 +183,7 @@ export async function prepareImageForSend(
         name: outputName,
         sizeBytes,
       };
-      if (sizeBytes <= MAX_IMAGE_BYTES) return candidate;
+      if (sizeBytes <= MAX_SENT_IMAGE_BYTES) return candidate;
       // Keep the smallest seen, so if a harsher rung fails outright we still
       // have something better than the original to fall back on.
       if (best === null || sizeBytes < best.sizeBytes) best = candidate;

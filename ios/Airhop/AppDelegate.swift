@@ -28,6 +28,12 @@ class AppDelegate: ExpoAppDelegate {
       launchOptions: launchOptions)
 #endif
 
+#if os(iOS)
+    // Installed before the first resign-active, so the app-switcher snapshot
+    // never captures an open conversation.
+    AirhopPrivacyScreen.shared.install()
+#endif
+
     return super.application(application, didFinishLaunchingWithOptions: launchOptions)
   }
 

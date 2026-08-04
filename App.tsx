@@ -63,6 +63,7 @@ import WalletScreen, {
 } from "./src/features/wallet/wallet-screen";
 import { initI18n, t, useT, useTPlural, type TranslationKey } from "./src/i18n";
 import { arrowBack } from "./src/i18n/layout";
+import { sweepExpiredAttachments } from "./src/services/file-transfer-service";
 import { applyAirhopLink } from "./src/services/link-router";
 import {
   hasLocationPermission,
@@ -88,11 +89,16 @@ import {
   initWalletService,
   publishOwnNutzapInfo,
   reconcile,
+  reconcileIfDue,
   startNutzapWatcher,
 } from "./src/services/wallet-service";
 import { useActivityStore } from "./src/store/activity-store";
 import { showAlert } from "./src/store/alert-store";
-import { subscribeInboundMessages, useChatStore } from "./src/store/chat-store";
+import {
+  flushChatPersistence,
+  subscribeInboundMessages,
+  useChatStore,
+} from "./src/store/chat-store";
 import {
   useMeshBanners,
   useMeshStateStore,
@@ -526,18 +532,44 @@ export default function App(): React.JSX.Element {
   // Android hardware/gesture back button: exit a message thread, or cancel
   // an in-progress search. Otherwise back would fall through to minimizing
   // the app while either is open.
+  // Reached through a ref, so the subscription depends only on whether it should
+  // exist rather than on a function identity that changes every render. Listing
+  // `handleCancelSearch` itself would tear down and re-register the OS back
+  // handler on each render; capturing render-zero's copy would eventually cancel
+  // a search using stale state.
+  const cancelSearchRef = useRef(handleCancelSearch);
+  useEffect(() => {
+    cancelSearchRef.current = handleCancelSearch;
+  });
   useEffect(() => {
     if (!isInThread && !isSearching) return;
     const sub = BackHandler.addEventListener("hardwareBackPress", () => {
       if (isInThread) {
         setChatView({ kind: "list" });
       } else {
-        handleCancelSearch();
+        cancelSearchRef.current();
       }
       return true; // prevent default (close app)
     });
     return () => sub.remove();
   }, [isInThread, isSearching]);
+
+  // Retire attachments past their retention window, once per launch.
+  //
+  // Runs unconditionally, before any identity check: expired media belongs to
+  // nobody, and a launch that ends at the onboarding screen is exactly the
+  // launch after a wipe, where leftover files matter most. Deliberately not on
+  // a timer, since nothing accumulates while the app is closed.
+  //
+  // Wrapped because the cache directory may be unreadable on a device with no
+  // storage left, and a failed sweep must not stop the app from opening.
+  useEffect(() => {
+    try {
+      sweepExpiredAttachments();
+    } catch {
+      // Unreadable cache directory. Retried next launch.
+    }
+  }, []);
 
   // Transfer watchdog: promote quiet transfers to "stalled", then "failed", on a
   // wall clock. This is what turns a bar frozen mid-progress (peer out of range)
@@ -603,6 +635,12 @@ export default function App(): React.JSX.Element {
     const sub = AppState.addEventListener("change", (next) => {
       setNotificationsAppActive(next === "active");
       getMeshService()?.setAppForeground(next === "active");
+      if (next !== "active") {
+        // Chat persistence is throttled, so leaving the foreground is the last
+        // safe moment to force whatever is still inside that window to disk.
+        // The OS can stop giving us cycles at any point after this.
+        flushChatPersistence();
+      }
       if (next === "active") {
         syncPermissions();
         // The Mesh tab is a tap away now, so a "someone nearby" from earlier is
@@ -612,6 +650,17 @@ export default function App(): React.JSX.Element {
         // when a "Tor on" claim is most likely to have gone stale. Cheap and
         // Android-only; iOS owns Arti and hears about it directly.
         void revalidateTorRouting();
+        // Leaving the app is also how a Lightning invoice gets paid: the user
+        // switches to their Lightning wallet, pays, and comes back. Until this,
+        // the deposit only landed if the deposit sheet happened to still be open
+        // (it polls) or the user thought to pull to refresh, so coming back to a
+        // balance that had not moved was the normal experience of paying.
+        //
+        // Throttled and deduplicated inside the service, and returns
+        // immediately: a pass is minutes of mint round trips and must never be
+        // awaited on the foreground path. Also settles a melt whose response was
+        // lost and a reserved send the recipient has since redeemed.
+        reconcileIfDue();
       }
     });
     return () => sub.remove();
@@ -744,8 +793,12 @@ export default function App(): React.JSX.Element {
     setChatSubTab(channel.startsWith("dm:") ? "dms" : "channels");
     setChatView({ kind: "thread", channel });
   }
-  // Keep the notification tap handler pointed at the latest openChannel.
-  openChannelRef.current = openChannel;
+  // Keep the notification tap handler pointed at the latest openChannel. In an
+  // effect, not during render: a render can be discarded or replayed, and the
+  // handler outlives both.
+  useEffect(() => {
+    openChannelRef.current = openChannel;
+  });
 
   // Open the bell screen and mark its backlog seen, so the badge clears the way
   // it does when you open any notifications list.
@@ -815,8 +868,11 @@ export default function App(): React.JSX.Element {
     },
     [],
   );
-  // Keep the notification tap handler pointed at the latest navigateToTab.
-  navigateToTabRef.current = navigateToTab;
+  // Keep the notification tap handler pointed at the latest navigateToTab, in an
+  // effect for the same reason as openChannelRef above.
+  useEffect(() => {
+    navigateToTabRef.current = navigateToTab;
+  });
 
   function openDMFromMesh(channel: string): void {
     setActiveChannel(channel);
@@ -1088,8 +1144,7 @@ export default function App(): React.JSX.Element {
                         </View>
                         {/* Bell: notification history, shown on both the Channels
                             and Direct sub-tabs, badged with unseen activity.
-                            Plain icon, no filled box (unlike the +), so the two
-                            read as different weights of action. */}
+                            Same filled circle as the + beside it. */}
                         <Pressable
                           style={styles.headerIconBtn}
                           onPress={openActivityCenter}
@@ -1749,13 +1804,14 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
     headerPillDisabled: {
       opacity: DISABLED_OPACITY,
     },
-    // Same tap target as the + pill but with no filled background, so the bell
-    // sits as a lighter-weight action beside it.
+    // Same circle as the + pill, so the two header actions read as one set.
     headerIconBtn: {
       width: HEADER_ICON_SIZE,
       height: HEADER_ICON_SIZE,
+      borderRadius: Radius.full,
       alignItems: "center",
       justifyContent: "center",
+      backgroundColor: Colors.surfaceRaised,
     },
     // Unseen-activity count over the bell, same visual language as the tab and
     // segment badges.

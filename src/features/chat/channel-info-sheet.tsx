@@ -234,6 +234,8 @@ export default function ChannelInfoSheet({
   // Only the creator can add or remove members (matching bitchat).
   const isGroupCreator =
     isGroup && getMeshService()?.isGroupCreator(groupIDHex) === true;
+  const canAddMembers =
+    isGroupCreator && groupMembers.length < GROUP_MAX_MEMBERS;
 
   // Location-channel state. The geohash was resolved above (channelGeohash),
   // preferring the fixed key of a teleported cell over the service's live map.
@@ -323,7 +325,17 @@ export default function ChannelInfoSheet({
           text: T("common.remove"),
           style: "destructive",
           onPress: () => {
-            getMeshService()?.removeGroupMember(groupIDHex, fingerprint);
+            // The result used to be discarded, so a refusal (not the creator,
+            // roster already changed) closed the sheet looking like a success.
+            const ok =
+              getMeshService()?.removeGroupMember(groupIDHex, fingerprint) ===
+              true;
+            if (!ok) {
+              showAlert(
+                t("chat.group.remove_failed"),
+                t("chat.group.remove_failed_body"),
+              );
+            }
           },
         },
       ],
@@ -342,9 +354,17 @@ export default function ChannelInfoSheet({
 
   function handleAddMembers(): void {
     if (addSelected.size === 0) return;
-    getMeshService()?.addGroupMembers(groupIDHex, [...addSelected]);
+    // Same as remove: this returns false when we are not the creator, when none
+    // of the picked peers has usable keys, or when the roster would pass 16, and
+    // all three used to look identical to success. Success needs nothing said:
+    // the roster below is a live subscription, so the new members appear in it.
+    const ok =
+      getMeshService()?.addGroupMembers(groupIDHex, [...addSelected]) === true;
     setAddSelected(new Set());
     setShowAddMembers(false);
+    if (!ok) {
+      showAlert(t("chat.group.add_failed"), t("chat.group.add_failed_body"));
+    }
   }
 
   // One unified member list for all channel kinds. A group's signed roster, a
@@ -660,104 +680,41 @@ export default function ChannelInfoSheet({
               </Text>
             )}
           </View>
-
-          {isGroupCreator && groupMembers.length < GROUP_MAX_MEMBERS && (
-            <Pressable
-              style={styles.addMembersBtn}
-              onPress={() => {
-                setAddSelected(new Set());
-                setShowAddMembers(true);
-              }}
-              accessibilityRole="button"
-              accessibilityLabel={T("chat.info.add_members")}
-            >
-              <Feather
-                name="user-plus"
-                size={16}
-                color={Colors.textSecondary}
-              />
-              <Text style={styles.addMembersText}>
-                {T("chat.info.add_members")}
-              </Text>
-            </Pressable>
-          )}
         </View>
-
-        {/* Creator-only add-members picker. */}
-        {showAddMembers && (
-          <BottomSheet
-            visible
-            onClose={() => setShowAddMembers(false)}
-            sheetStyle={styles.sheet}
-            scrollable
-          >
-            <Text style={styles.addTitle}>{T("chat.info.add_members")}</Text>
-            {addablePeers.length === 0 ? (
-              <Text style={styles.noMembers}>{T("chat.info.no_addable")}</Text>
-            ) : (
-              <ScrollView
-                style={styles.addList}
-                showsVerticalScrollIndicator={false}
-              >
-                {addablePeers.map((peer) => {
-                  const sel = addSelected.has(peer.peerID);
-                  return (
-                    <Pressable
-                      key={peer.peerID}
-                      style={styles.memberRow}
-                      onPress={() => toggleAddMember(peer.peerID)}
-                      accessibilityRole="checkbox"
-                      accessibilityState={{ checked: sel }}
-                    >
-                      <Avatar
-                        username={peer.nickname}
-                        peerID={peer.peerID}
-                        size={30}
-                      />
-                      <Text style={styles.memberName} numberOfLines={1}>
-                        {peer.nickname}
-                      </Text>
-                      <View style={[styles.addCheck, sel && styles.addCheckOn]}>
-                        {sel && (
-                          <Feather
-                            name="check"
-                            size={14}
-                            color={Colors.textInverse}
-                          />
-                        )}
-                      </View>
-                    </Pressable>
-                  );
-                })}
-              </ScrollView>
-            )}
-            <Pressable
-              style={[
-                styles.addConfirm,
-                addSelected.size === 0 && styles.addConfirmDisabled,
-              ]}
-              onPress={handleAddMembers}
-              disabled={addSelected.size === 0}
-              accessibilityRole="button"
-              accessibilityLabel={T("chat.info.add_selected")}
-            >
-              <Text style={styles.addConfirmText}>
-                {addSelected.size > 0
-                  ? T("chat.info.add_count", { count: addSelected.size })
-                  : T("chat.info.add")}
-              </Text>
-            </Pressable>
-          </BottomSheet>
-        )}
 
         {/* Share */}
         {/* (removed: channel name visible in every screen header) */}
 
-        {/* Actions: leave */}
+        {/* Actions: add members (creator only), then leave. Both full-width
+            pills in one stack, so a group's two management actions read as a
+            pair instead of one sitting under the roster and one below it. */}
         {!isDefault ? (
           <View style={styles.actions}>
+            {canAddMembers && (
+              <Pressable
+                style={styles.actionBtn}
+                onPress={() => {
+                  setAddSelected(new Set());
+                  setShowAddMembers(true);
+                }}
+                accessibilityRole="button"
+                accessibilityLabel={T("chat.info.add_members")}
+              >
+                <Feather
+                  name="user-plus"
+                  size={15}
+                  color={Colors.textSecondary}
+                />
+                <Text style={styles.addMembersText}>
+                  {T("chat.info.add_members")}
+                </Text>
+              </Pressable>
+            )}
             <Pressable
-              style={styles.leaveBtn}
+              style={[
+                styles.actionBtn,
+                canAddMembers && styles.actionBtnStacked,
+              ]}
               onPress={handleLeave}
               accessibilityRole="button"
               accessibilityLabel={
@@ -781,6 +738,75 @@ export default function ChannelInfoSheet({
           </View>
         )}
       </ScrollView>
+
+      {/* Creator-only add-members picker. A sibling of the body rather than a
+          child, since a zero-height sheet host inside the body's flex column
+          still claimed one of its `gap` slots. */}
+      {showAddMembers && (
+        <BottomSheet
+          visible
+          onClose={() => setShowAddMembers(false)}
+          sheetStyle={styles.addSheet}
+          scrollable
+        >
+          <Text style={styles.addTitle}>{T("chat.info.add_members")}</Text>
+          {addablePeers.length === 0 ? (
+            <Text style={styles.noMembers}>{T("chat.info.no_addable")}</Text>
+          ) : (
+            <ScrollView
+              style={styles.addList}
+              showsVerticalScrollIndicator={false}
+            >
+              {addablePeers.map((peer) => {
+                const sel = addSelected.has(peer.peerID);
+                return (
+                  <Pressable
+                    key={peer.peerID}
+                    style={styles.addRow}
+                    onPress={() => toggleAddMember(peer.peerID)}
+                    accessibilityRole="checkbox"
+                    accessibilityState={{ checked: sel }}
+                  >
+                    <Avatar
+                      username={peer.nickname}
+                      peerID={peer.peerID}
+                      size={36}
+                    />
+                    <Text style={styles.memberName} numberOfLines={1}>
+                      {peer.nickname}
+                    </Text>
+                    <View style={[styles.addCheck, sel && styles.addCheckOn]}>
+                      {sel && (
+                        <Feather
+                          name="check"
+                          size={14}
+                          color={Colors.textInverse}
+                        />
+                      )}
+                    </View>
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
+          )}
+          <Pressable
+            style={[
+              styles.addConfirm,
+              addSelected.size === 0 && styles.addConfirmDisabled,
+            ]}
+            onPress={handleAddMembers}
+            disabled={addSelected.size === 0}
+            accessibilityRole="button"
+            accessibilityLabel={T("chat.info.add_selected")}
+          >
+            <Text style={styles.addConfirmText}>
+              {addSelected.size > 0
+                ? T("chat.info.add_count", { count: addSelected.size })
+                : T("chat.info.add")}
+            </Text>
+          </Pressable>
+        </BottomSheet>
+      )}
     </BottomSheet>
   );
 }
@@ -961,31 +987,33 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       fontStyle: "italic",
     },
     // ---- Add members (creator only) --------------------------------------------
-    addMembersBtn: {
-      flexDirection: "row",
-      alignItems: "center",
-      justifyContent: "center",
-      gap: Spacing.sm,
-      marginTop: Spacing.sm,
-      paddingVertical: Spacing.sm,
-      borderRadius: Radius.full,
-      borderWidth: 1,
-      borderColor: Colors.border,
-      backgroundColor: Colors.surfaceRaised,
-    },
     addMembersText: {
       fontSize: FontSize.sm,
       fontWeight: FontWeight.medium,
       color: Colors.textSecondary,
     },
+    // The picker needs its own sheet style. It used to share `sheet`, which is
+    // only a height cap: the info sheet pads its inner scroll body instead, and
+    // this sheet has no inner body to pad, so its content sat flush to the edges.
+    addSheet: {
+      paddingHorizontal: Spacing.xl,
+      paddingBottom: Spacing.xl,
+      gap: Spacing.md,
+      maxHeight: "85%",
+    },
     addTitle: {
-      fontSize: FontSize.lg,
-      fontWeight: FontWeight.bold,
+      fontSize: FontSize.md,
+      fontWeight: FontWeight.semibold,
       color: Colors.textPrimary,
-      marginBottom: Spacing.sm,
     },
     addList: {
       maxHeight: 320,
+    },
+    addRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: Spacing.md,
+      paddingVertical: Spacing.sm,
     },
     addCheck: {
       width: 24,
@@ -1001,7 +1029,7 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       borderColor: Colors.accent,
     },
     addConfirm: {
-      marginTop: Spacing.md,
+      width: "100%",
       minHeight: 50,
       borderRadius: Radius.full,
       backgroundColor: Colors.accent,
@@ -1017,10 +1045,13 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       color: Colors.textInverse,
     },
     // ---- Actions ---------------------------------------------------------------
+    // One stack of identical full-width pills, a single marginTop apart. Same
+    // pattern as the Wipe now / Cancel pair in the profile screen.
     actions: {
+      width: "100%",
       marginTop: Spacing.sm,
     },
-    leaveBtn: {
+    actionBtn: {
       width: "100%",
       minHeight: 50,
       flexDirection: "row",
@@ -1030,6 +1061,9 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       paddingVertical: Spacing.md,
       borderRadius: Radius.full,
       backgroundColor: Colors.surfaceRaised,
+    },
+    actionBtnStacked: {
+      marginTop: Spacing.sm,
     },
     leaveBtnText: {
       fontSize: FontSize.sm,

@@ -73,6 +73,12 @@ interface Props {
   // bubbles. A border ring (not a background wash) so it reads the same way
   // on both the light "theirs" bubble and the near-black "mine" bubble.
   highlighted?: boolean;
+  // Selection mode, for forwarding several messages at once. When `selecting`
+  // is true a plain tap toggles this row instead of doing nothing, and the
+  // sender/avatar taps are suppressed so the whole row is one target.
+  selecting?: boolean;
+  selected?: boolean;
+  onToggleSelect?: (item: ChatMessage) => void;
 }
 
 function MessageBubble({
@@ -88,6 +94,9 @@ function MessageBubble({
   onRetry,
   onPressSender,
   highlighted,
+  selecting,
+  selected,
+  onToggleSelect,
 }: Props): React.JSX.Element {
   const T = useT();
   const Colors = useThemeColors();
@@ -95,25 +104,62 @@ function MessageBubble({
 
   function handleLongPress(): void {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+    // In selection mode a long press is the same as a tap: holding again to
+    // reopen the menu that started the selection would be a dead end.
+    if (selecting === true) {
+      onToggleSelect?.(item);
+      return;
+    }
     onLongPress(item);
   }
+
+  function handleToggle(): void {
+    onToggleSelect?.(item);
+  }
+
+  // While selecting, the row itself is the target: the avatar and the sender
+  // name stop opening a profile so a tap anywhere reads the same way.
+  const senderPress =
+    selecting === true || onPressSender === undefined
+      ? undefined
+      : () => onPressSender(item);
 
   return (
     <View
       style={[
         styles.messageRow,
         item.isMine ? styles.messageRowMine : styles.messageRowTheirs,
+        selected === true && styles.messageRowSelected,
       ]}
     >
+      {/* Leading check, only while selecting. Outside the bubble so it reads as
+          a row control rather than part of the message, and on the same side for
+          everyone so a mixed thread has one column of checks. */}
+      {selecting === true && (
+        <View
+          style={[
+            styles.selectCheck,
+            // Own rows pack to the end, so the check needs the free space on its
+            // trailing side to stay in the same column as the one on a received
+            // row. Without it the check hugged the bubble and the column zigzagged.
+            item.isMine && styles.selectCheckLeading,
+            selected === true && styles.selectCheckOn,
+          ]}
+        >
+          {selected === true && (
+            <Feather name="check" size={13} color={Colors.textInverse} />
+          )}
+        </View>
+      )}
       {showAvatar ? (
         isFirstFromSender ? (
           <Pressable
-            onPress={onPressSender ? () => onPressSender(item) : undefined}
-            disabled={!onPressSender}
+            onPress={senderPress}
+            disabled={senderPress === undefined}
             hitSlop={hitSlopFor(AVATAR_TAP_SIZE)}
-            accessibilityRole={onPressSender ? "button" : undefined}
+            accessibilityRole={senderPress ? "button" : undefined}
             accessibilityLabel={
-              onPressSender
+              senderPress
                 ? T("chat.bubble.view_profile", { name: item.senderNickname })
                 : undefined
             }
@@ -137,12 +183,12 @@ function MessageBubble({
       >
         {showAvatar && isFirstFromSender && (
           <Pressable
-            onPress={onPressSender ? () => onPressSender(item) : undefined}
-            disabled={!onPressSender}
+            onPress={senderPress}
+            disabled={senderPress === undefined}
             hitSlop={hitSlopFor(AVATAR_TAP_SIZE)}
-            accessibilityRole={onPressSender ? "button" : undefined}
+            accessibilityRole={senderPress ? "button" : undefined}
             accessibilityLabel={
-              onPressSender
+              senderPress
                 ? T("chat.bubble.view_profile", { name: item.senderNickname })
                 : undefined
             }
@@ -163,9 +209,13 @@ function MessageBubble({
         )}
 
         <Pressable
+          onPress={selecting === true ? handleToggle : undefined}
           onLongPress={handleLongPress}
           delayLongPress={320}
-          accessibilityRole="button"
+          accessibilityRole={selecting === true ? "checkbox" : "button"}
+          accessibilityState={
+            selecting === true ? { checked: selected === true } : undefined
+          }
           accessibilityLabel={T("chat.bubble.a11y", {
             sender: item.isMine ? T("chat.you") : item.senderNickname,
             body: item.text || T("chat.bubble.attachment"),
@@ -402,6 +452,17 @@ function StatusTick({
           color={Colors.danger}
         />
       );
+    case "reclaimed":
+      // An ecash payment the sender pulled back. An undo arrow rather than a
+      // tick: no tick would be true of a payment that was taken back.
+      return (
+        <MaterialCommunityIcons
+          name="undo-variant"
+          size={SIZE}
+          color={Colors.textInverse}
+          style={dim}
+        />
+      );
   }
 }
 
@@ -414,6 +475,27 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       gap: Spacing.sm,
     },
     messageRowMine: { justifyContent: "flex-end" },
+    // A wash rather than a border: the row already carries a bubble with its own
+    // edges, and a second outline next to the search highlight's ring would be
+    // two different meanings drawn the same way.
+    messageRowSelected: { backgroundColor: Colors.accentGhost },
+    selectCheck: {
+      width: 22,
+      height: 22,
+      borderRadius: Radius.full,
+      borderWidth: 1.5,
+      borderColor: Colors.borderStrong,
+      alignItems: "center",
+      justifyContent: "center",
+      flexShrink: 0,
+    },
+    selectCheckLeading: {
+      marginEnd: "auto",
+    },
+    selectCheckOn: {
+      backgroundColor: Colors.accent,
+      borderColor: Colors.accent,
+    },
     messageRowTheirs: { justifyContent: "flex-start" },
     avatarSpacer: { width: 32, flexShrink: 0 },
     bubbleWrapper: { maxWidth: "75%", gap: 2 },
@@ -514,5 +596,7 @@ export default React.memo(
     prev.showAvatar === next.showAvatar &&
     prev.isFirstFromSender === next.isFirstFromSender &&
     prev.isPureToken === next.isPureToken &&
-    prev.highlighted === next.highlighted,
+    prev.highlighted === next.highlighted &&
+    prev.selecting === next.selecting &&
+    prev.selected === next.selected,
 );

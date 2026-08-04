@@ -68,7 +68,7 @@ export default function AboutScreen({
             <SettingLinkRow
               icon="github"
               label={T("settings.about.source")}
-              description="areebahmeddd/Airhop"
+              description="areebahmeddd/airhop"
               onPress={() => void Linking.openURL(GITHUB_URL)}
               accessibilityLabel={T("settings.about.source_a11y")}
               external

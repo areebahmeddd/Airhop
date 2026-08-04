@@ -188,7 +188,7 @@ English ships. The other languages land in v1.3.0, and because the extraction is
 
 - [x] Translation runtime with no library (`src/i18n/`): `t` / `useT` / `tPlural`, named-placeholder interpolation
 - [x] Completeness enforced by `tsc`: every locale is a `Record<TranslationKey, string>` derived from `en.ts`, so a partial locale does not compile and there is no runtime fallback
-- [x] 1,297 keys across 63 files, zero hardcoded user-facing strings
+- [x] Every user-facing string in the catalog, zero hardcoded, enforced in CI
 - [x] Plurals through `tPlural`, never concatenation
 - [x] Terminal punctuation checked by `catalog.test.ts`
 - [x] Right-to-left groundwork (`src/i18n/layout.ts`): logical properties app-wide, mirrored chevrons; `radar-view.tsx` exempt as a polar plot of physical space
@@ -423,8 +423,6 @@ Private communication should be understandable, not merely trusted. v2.0.0 redes
 - [ ] YouTube deep dives: how the BLE mesh works, how Noise XX is implemented, how Double Ratchet gives forward secrecy, how Cashu tokens move offline
 
 **Milestone:** The redesigned UI ships across iOS, Android, macOS, and web, WCAG 2.1 AA verified, with audit reports and documentation public.
-
-_Personal goal: I hope this thing takes off and I become a millionaire_
 
 ## 4. Risk Register
 

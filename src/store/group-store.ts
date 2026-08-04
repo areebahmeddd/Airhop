@@ -123,11 +123,6 @@ export const useGroupStore = create<GroupState>((set, get) => {
       //
       // Pinning here rather than at the call site because this is the last
       // point every path goes through, local and remote alike.
-      //
-      // bitchat's ChatGroupCoordinator.applyGroupState has the same gap (it
-      // checks sender-is-creator, signature, self-membership and epoch, but
-      // never against the stored creator), so this is deliberately stricter
-      // than upstream rather than a divergence from it.
       if (
         existing !== undefined &&
         entry.creatorFingerprint !== existing.creatorFingerprint

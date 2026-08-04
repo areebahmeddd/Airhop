@@ -96,11 +96,25 @@ export default function MessageInfoSheet({
               />
             )}
 
+            {/* The sender took an ecash payment back. Terminal, so it replaces
+                the Sent/Delivered/Read lines below rather than adding to them:
+                those would describe a payment that no longer exists. */}
+            {status === "reclaimed" && (
+              <InfoLine
+                styles={styles}
+                icon="undo-variant"
+                color={Colors.textSecondary}
+                label={T("chat.info.reclaimed")}
+                sub={T("chat.info.reclaimed_desc")}
+              />
+            )}
+
             {status !== undefined &&
               status !== "sending" &&
               status !== "failed" &&
               status !== "carried" &&
-              status !== "queued" && (
+              status !== "queued" &&
+              status !== "reclaimed" && (
                 <>
                   <InfoLine
                     styles={styles}

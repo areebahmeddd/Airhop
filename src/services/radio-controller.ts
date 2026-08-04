@@ -157,11 +157,27 @@ export class RadioController {
     void this.reconcile();
   }
 
+  // Record that the mesh is stopping, without touching the radios yet.
+  //
+  // Splitting this out is what lets a caller say goodbye on links that are
+  // still open. `stop()` reaches the native "stop scanning, stop advertising"
+  // call before it returns, so anything sent afterwards is handed to a
+  // transport already told to shut down. Suspending first takes the decision
+  // out of reach of any later event, then the caller applies the teardown when
+  // its farewells are on the wire.
+  //
+  // Safe to leave suspended: nothing restarts the radios while `running` is
+  // false, so the only cost of a delayed `stop()` is the radios staying up for
+  // that long.
+  suspend(): void {
+    this.desired.running = false;
+    this.clearTimers();
+  }
+
   // Bring everything down and stop trying. Distinct from a blocker: this is the
   // user choosing to be offline, and nothing should quietly undo it.
   stop(): void {
-    this.desired.running = false;
-    this.clearTimers();
+    this.suspend();
     void this.reconcile();
   }
 

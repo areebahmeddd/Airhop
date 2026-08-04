@@ -22,6 +22,7 @@ jobs:
   release:
     name: Create Release
     runs-on: ubuntu-24.04
+    timeout-minutes: 30
     # Pushes the version/changelog commit to main and creates the release.
     permissions:
       contents: write
@@ -140,6 +141,7 @@ jobs:
   build-apk:
     name: Build Android APK
     runs-on: ubuntu-24.04
+    timeout-minutes: 30
     needs: release
     # Attaches the built APK to the release and signs its build provenance.
     permissions:
@@ -274,6 +276,7 @@ jobs:
   sbom:
     name: Generate SBOM
     runs-on: ubuntu-24.04
+    timeout-minutes: 30
     needs: release
     # Attaches the SBOM to the release.
     permissions:

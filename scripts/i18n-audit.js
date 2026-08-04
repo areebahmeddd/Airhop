@@ -112,6 +112,11 @@ const SKIP_DIRS = ["__tests__", "__mocks__", "node_modules"];
 
 // Literals that look like copy but are not.
 const IGNORE = new Set([
+  // Byte-size unit symbols. Not words: they are the same in every locale the
+  // app ships, and format.ts already localises the digits and the decimal
+  // separator around them, which is the part that actually varies.
+  "KB",
+  "MB",
   "Ed25519 + X25519",
   "AES-256",
   "GitHub",
@@ -267,11 +272,18 @@ function collectAst(file) {
   const src = fs.readFileSync(file, "utf8");
   const sf = ts.createSourceFile(file, src, ts.ScriptTarget.Latest, true);
   const hits = [];
-  const push = (node, text) => {
+  const push = (node, text, { spaced = false } = {}) => {
     // JSX text carries its own indentation and line breaks; a translator gets
     // one sentence, so compare and report the collapsed form.
     const value = text.replace(/\s+/g, " ").trim();
-    if (!looksLikeCopy(value)) return;
+    // The exemption list wins over every rule below, including `spaced`.
+    if (IGNORE.has(value)) return;
+    // `spaced` means the raw chunk had whitespace against a word, which inside a
+    // template literal only happens when prose is being concatenated with an
+    // interpolated value. Without it a one-word chunk like " unconfirmed" is
+    // discarded by looksLikeCopy's identifier rule, which is what let
+    // `${n} unconfirmed`, `${n} added` and `${n} transfers` ship untranslated.
+    if (!(spaced && /[A-Za-z]{2}/.test(value)) && !looksLikeCopy(value)) return;
     const { line } = sf.getLineAndCharacterOfPosition(node.getStart(sf));
     hits.push({ line: line + 1, value, file: rel });
   };
@@ -279,14 +291,48 @@ function collectAst(file) {
     if (ts.isJsxText(node)) {
       push(node, node.text);
     } else if (ts.isTemplateExpression(node)) {
+      // A message built for a stack trace is not copy. `t()` is for users,
+      // `Error` is for whoever reads the crash, and an invariant breach has no
+      // translation worth writing. Only checked here because the template case
+      // is the shape these take; a one-line Error string is caught by the line
+      // scanner and belongs in IGNORE if it is ever deliberate.
+      if (isDeveloperMessage(node)) {
+        ts.forEachChild(node, visit);
+        return;
+      }
       // The literal chunks either side of each ${...}. The expressions between
       // them are code and are visited normally.
-      push(node, node.head.text);
-      for (const span of node.templateSpans) push(node, span.literal.text);
+      push(node, node.head.text, { spaced: isSpacedChunk(node.head.text) });
+      for (const span of node.templateSpans) {
+        push(node, span.literal.text, {
+          spaced: isSpacedChunk(span.literal.text),
+        });
+      }
     }
     ts.forEachChild(node, visit);
   })(sf);
   return hits;
+}
+
+// Whether this node sits inside `new Error(...)`, i.e. it is aimed at a
+// developer reading a stack trace rather than at a user reading a screen.
+function isDeveloperMessage(node) {
+  for (let p = node.parent; p; p = p.parent) {
+    if (ts.isNewExpression(p) && ts.isIdentifier(p.expression)) {
+      if (/Error$/.test(p.expression.text)) return true;
+    }
+    // Stop at the enclosing statement: anything further up is unrelated.
+    if (ts.isStatement(p)) return false;
+  }
+  return false;
+}
+
+// Whether a template chunk is prose glued to an interpolated value rather than
+// part of an identifier, a path or a key. A word with whitespace on either side
+// of it is the tell: `"dm:"` in `dm:${id}` has none, `" unconfirmed"` in
+// `${n} unconfirmed` does.
+function isSpacedChunk(text) {
+  return /(^|\s)[A-Za-z]{2,}(\s|$)/.test(text) && /^\s|\s$/.test(text);
 }
 
 function walk(dir, out = []) {

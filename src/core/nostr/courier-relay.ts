@@ -16,6 +16,7 @@
 
 import { bytesToHex, hexToBytes } from "@noble/hashes/utils.js";
 import { finalizeEvent, type Event } from "nostr-tools";
+import { base64ToBytes, bytesToBase64 } from "../encoding/base64";
 import {
   encodeEnvelopePayload,
   type SealedEnvelope,
@@ -42,7 +43,7 @@ export async function publishCourierDrop(
 
   // Encode the full envelope payload (TLV) to base64 for the event content.
   const payload = encodeEnvelopePayload(envelope);
-  const content = uint8ToBase64(payload);
+  const content = bytesToBase64(payload);
 
   const event = finalizeEvent(
     {
@@ -130,7 +131,7 @@ function parseCourierDropEvent(event: Event): SealedEnvelope | null {
 
   let ciphertext: Uint8Array;
   try {
-    ciphertext = base64ToUint8(event.content);
+    ciphertext = base64ToBytes(event.content);
   } catch {
     return null;
   }
@@ -146,17 +147,4 @@ function parseCourierDropEvent(event: Event): SealedEnvelope | null {
   if (ciphertext.length === 0) return null;
 
   return { recipientTag, expiryMs, copies: 1, ciphertext };
-}
-
-function uint8ToBase64(bytes: Uint8Array): string {
-  let binary = "";
-  for (const b of bytes) binary += String.fromCharCode(b);
-  return btoa(binary);
-}
-
-function base64ToUint8(b64: string): Uint8Array {
-  const binary = atob(b64);
-  const bytes = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-  return bytes;
 }

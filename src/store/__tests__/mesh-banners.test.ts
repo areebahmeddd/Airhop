@@ -328,3 +328,58 @@ describe("computeMeshBanners", () => {
     );
   });
 });
+
+// A wrong clock is the one failure the freshness window can cause, and it is
+// completely silent from inside the app: every packet is held to a two-minute
+// window, so a drifted phone rejects everyone and is rejected by everyone. The
+// radio is fine, the links are up, and the room is empty - which reads as
+// "nobody is here" rather than "your clock is wrong".
+describe("clock skew banner", () => {
+  it("says what is wrong and what to do about it", () => {
+    const banners = computeMeshBanners({ ...HEALTHY, clockSkewed: true });
+    expect(banners).toHaveLength(1);
+    expect(banners[0].key).toBe("clock-skew");
+    expect(banners[0].tone).toBe("caution");
+    // No action button: nothing in the app can set the system clock, and a
+    // button that cannot fix the thing it names is worse than prose.
+    expect(banners[0].action).toBeUndefined();
+  });
+
+  it("ranks above the informational notes, since none of them can be trusted", () => {
+    const banners = computeMeshBanners({
+      ...HEALTHY,
+      clockSkewed: true,
+      locationGranted: false,
+      powerSaving: true,
+    });
+    expect(banners[0].key).toBe("clock-skew");
+  });
+
+  // A hard blocker still outranks it: if Bluetooth is off there is no mesh to
+  // be out of time with, and telling someone their clock is wrong while their
+  // radio is off sends them to the wrong settings screen.
+  it("stays below a hard Bluetooth blocker", () => {
+    const banners = computeMeshBanners({
+      ...HEALTHY,
+      clockSkewed: true,
+      bleBlocker: "adapter-off",
+    });
+    expect(banners[0].key).not.toBe("clock-skew");
+    expect(banners.some((b) => b.key === "clock-skew")).toBe(true);
+  });
+
+  it("is absent by default, so a caller with no evidence says nothing", () => {
+    expect(computeMeshBanners(HEALTHY)).toEqual([]);
+    expect(computeMeshBanners({ ...HEALTHY, clockSkewed: false })).toEqual([]);
+  });
+
+  // Going Away stops the whole mesh, so nothing else is worth saying.
+  it("is suppressed while the user has deliberately paused", () => {
+    const banners = computeMeshBanners({
+      ...HEALTHY,
+      clockSkewed: true,
+      presenceStatus: "away",
+    });
+    expect(banners.map((b) => b.key)).toEqual(["paused"]);
+  });
+});

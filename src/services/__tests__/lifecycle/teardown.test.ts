@@ -510,4 +510,43 @@ describe("teardown, replacement and races", () => {
     v.check("process survived", os.crashed === null, os.crashed ?? undefined);
     v.assert();
   });
+
+  test("S31 Away then Online inside the goodbye grace keeps the radios up", async () => {
+    // stop() holds the radios open for a moment so the LEAVE reaches the wire,
+    // then tears them down on a timer. That timer is a decision taken 150ms
+    // before it acts, and a user who taps Away and changes their mind lands
+    // squarely inside it. Firing it blindly would take down radios the user has
+    // just asked for, leaving the mesh dark with the UI saying Online: a state
+    // nothing else would correct, because no further event is coming.
+    const os = new DeviceOS({ platform: "android", apiLevel: 34 });
+    const v = new Verdict(
+      "S31",
+      "the goodbye grace is not a stale decision",
+      os,
+    );
+    const native = androidDevice(os);
+
+    app = new AppShell({ os });
+    app.bootJsRuntime();
+    await app.startMeshWithPermissions();
+    await os.advance(500);
+    v.check("radios are up to begin with", native.scanning);
+
+    // Away, then Online again before the grace elapses.
+    applyPresence("away", "tester");
+    await os.advance(50);
+    applyPresence("online", "tester");
+
+    // Well past the grace: if the stale teardown fires, this is where it lands.
+    await os.advance(5000);
+
+    v.check(
+      "scanning survived the cancelled stop",
+      native.scanning,
+      "the teardown scheduled by the earlier Away fired after the user came back",
+    );
+    v.check("advertising survived too", native.advertising);
+    v.check("process survived", os.crashed === null, os.crashed ?? undefined);
+    v.assert();
+  });
 });

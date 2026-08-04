@@ -1,8 +1,6 @@
 // Support sub-screen, ordered by how most people will actually pay: Dodo
 // Payments first (a hosted checkout covering cards, UPI, netbanking and wallets
-// worldwide), then GitHub Sponsors (no platform fee). The checkout says
-// "coming soon" until the account clears review rather than being hidden, so
-// the page reads as the whole plan rather than a shorter one.
+// worldwide), then GitHub Sponsors (no platform fee).
 
 import React, { useMemo } from "react";
 import { Linking, ScrollView, StyleSheet, Text, View } from "react-native";
@@ -11,7 +9,6 @@ import { FontSize, Radius, Spacing, useThemeColors } from "../../../ui/theme";
 import {
   GroupDivider,
   SettingLinkRow,
-  SettingRow,
   SubHeader,
   useSharedStyles,
 } from "../shared";
@@ -20,19 +17,16 @@ interface Props {
   onBack: () => void;
 }
 
-// Product id copied from the Dodo dashboard. Empty until the account clears
-// review, and the checkout row renders as "coming soon" while it is, so a
-// half-configured build can never open a dead checkout.
-const DODO_PRODUCT_ID = "";
+// Pay-what-you-want product id from the Dodo dashboard.
+const DODO_PRODUCT_ID = "pdt_0NkbLWhlAvN1028Lzqwed";
 
 // Dodo serves static payment links at /buy/<product_id>. redirect_url is where
 // the browser lands once payment completes.
-const DODO_CHECKOUT_URL = DODO_PRODUCT_ID
-  ? `https://checkout.dodopayments.com/buy/${DODO_PRODUCT_ID}` +
-    `?quantity=1&redirect_url=${encodeURIComponent(
-      "https://airhop.1mindlabs.org/#support",
-    )}`
-  : null;
+const DODO_CHECKOUT_URL =
+  `https://checkout.dodopayments.com/buy/${DODO_PRODUCT_ID}` +
+  `?quantity=1&redirect_url=${encodeURIComponent(
+    "https://airhop.1mindlabs.org/#support",
+  )}`;
 
 const GITHUB_SPONSORS_URL = "https://github.com/sponsors/areebahmeddd";
 
@@ -50,26 +44,14 @@ export default function SupportScreen({ onBack }: Props): React.JSX.Element {
       >
         <View style={styles.section}>
           <View style={styles.settingsGroup}>
-            {DODO_CHECKOUT_URL ? (
-              <SettingLinkRow
-                icon="credit-card"
-                label={T("settings.support.card")}
-                description={T("settings.support.card_desc")}
-                onPress={() => void Linking.openURL(DODO_CHECKOUT_URL)}
-                accessibilityLabel={T("settings.support.card_a11y")}
-                external
-              />
-            ) : (
-              <SettingRow
-                icon="credit-card"
-                label={T("settings.support.card")}
-                control={
-                  <Text style={styles.comingSoon}>
-                    {T("settings.coming_soon")}
-                  </Text>
-                }
-              />
-            )}
+            <SettingLinkRow
+              icon="credit-card"
+              label={T("settings.support.card")}
+              description={T("settings.support.card_desc")}
+              onPress={() => void Linking.openURL(DODO_CHECKOUT_URL)}
+              accessibilityLabel={T("settings.support.card_a11y")}
+              external
+            />
             <GroupDivider />
             <SettingLinkRow
               icon="github"

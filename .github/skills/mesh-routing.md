@@ -57,7 +57,13 @@ Oldest entry is evicted when the cache is full. A packet seen again within the e
 
 ## Fragment Reassembly
 
-Large packets that exceed the BLE MTU are split into 469-byte fragments. The fragment manager reassembles them transparently.
+Large packets are split into fragments. The fragment manager reassembles them
+transparently.
+
+**The budget is the whole encoded frame, not the payload.** 512 bytes is the
+Bluetooth ATT ceiling for one attribute write: past it Android truncates and iOS
+refuses, and a truncated frame fails to decode with nothing reported at either
+end. Size the frame, then spend what is left on data.
 
 ### Fragment Payload Layout
 
@@ -66,17 +72,20 @@ Large packets that exceed the BLE MTU are split into 469-byte fragments. The fra
 [2 bytes: fragment index (u16 BE, 0-based)]
 [2 bytes: total fragment count (u16 BE)]
 [1 byte:  original packet type]
-[up to 456 bytes: fragment data]
+[up to 467 bytes: fragment data]
 ```
 
-Header is 13 bytes. Data per fragment is 456 bytes (469 - 13).
+The 512-byte frame decomposes as: 16 v2 header + 8 senderID + 8 recipientID +
+13 fragment header + 467 data. Fragments are unsigned, so no signature is
+included; authenticity belongs to the inner packet, which is verified after
+reassembly.
 
 ### Assembly Parameters
 
 | Parameter                 | Value      |
 | ------------------------- | ---------- |
-| Fragment size             | 469 bytes  |
-| Data per fragment         | 456 bytes  |
+| Frame budget              | 512 bytes  |
+| Data per fragment         | 467 bytes  |
 | Max concurrent assemblies | 128        |
 | Reassembly timeout        | 30 seconds |
 | Max reassembled size      | 1 MiB      |

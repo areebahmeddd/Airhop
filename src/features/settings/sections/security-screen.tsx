@@ -9,6 +9,7 @@ import React from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import { showAlert } from "../../../store/alert-store";
 import { useBlockedStore } from "../../../store/blocked-store";
+import { useSettingsStore } from "../../../store/settings-store";
 import { HIT_SLOP, useThemeColors } from "../../../ui/theme";
 import { resolveDisplayName } from "../../../utils/display-name";
 import {
@@ -31,6 +32,9 @@ export default function SecurityScreen({ onBack }: Props): React.JSX.Element {
   // Subscribe to the array itself (not the isBlocked function, whose identity
   // never changes) so the list re-renders when a block is added or removed.
   const blockedPeerIDs = useBlockedStore((s) => s.blockedPeerIDs);
+  const hideNotificationPreviews = useSettingsStore(
+    (s) => s.hideNotificationPreviews,
+  );
 
   function confirmUnblock(peerID: string): void {
     showAlert(
@@ -72,6 +76,27 @@ export default function SecurityScreen({ onBack }: Props): React.JSX.Element {
               label={T("settings.security.signed_packets")}
               description={T("settings.security.signed_packets_desc")}
               control={<SettingSwitch value={true} disabled />}
+            />
+          </View>
+        </View>
+
+        {/* The one privacy choice on this screen that is actually a choice.
+            Sits below the guarantees because those describe what is true;
+            this asks the user something. */}
+        <View style={styles.section}>
+          <View style={styles.settingsGroup}>
+            <SettingRow
+              icon="eye-off"
+              label={T("settings.security.hide_previews")}
+              description={T("settings.security.hide_previews_desc")}
+              control={
+                <SettingSwitch
+                  value={hideNotificationPreviews}
+                  onValueChange={(v) =>
+                    useSettingsStore.getState().setHideNotificationPreviews(v)
+                  }
+                />
+              }
             />
           </View>
         </View>

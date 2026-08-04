@@ -1,1 +1,6 @@
-<resources/>
+<resources>
+  <!-- Dark counterparts of the privacy cover colours in values/colors.xml:
+       DarkColors.bg and DarkColors.textPrimary in src/ui/theme.ts. -->
+  <color name="airhop_privacy_background">#0B0B0B</color>
+  <color name="airhop_privacy_ink">#F5F5F5</color>
+</resources>

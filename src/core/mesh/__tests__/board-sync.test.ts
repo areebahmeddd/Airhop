@@ -15,6 +15,9 @@ const TYPE_BIT_ANNOUNCE = 0;
 const TYPE_BIT_MESSAGE = 1;
 const TYPE_BIT_BOARD = 8;
 
+// Timestamps are relative to now: sync candidates are age-bounded per type
+// (announce 60s, message 15min, board 7 days), so a fixed literal would put
+// every fixture outside its window and quietly test nothing.
 function packet(type: PacketType, seed: number): Packet {
   const senderID = new Uint8Array(8).fill(seed & 0xff);
   return {
@@ -23,7 +26,7 @@ function packet(type: PacketType, seed: number): Packet {
     flags: Flags.SIGNED,
     senderID,
     recipientID: new Uint8Array(8),
-    timestamp: 1_700_000_000_000 + seed,
+    timestamp: Date.now() - seed,
     signature: new Uint8Array(64),
     payload: new Uint8Array([seed, seed + 1, seed + 2, 0xaa, 0xbb]),
   };
@@ -40,11 +43,11 @@ function emptyFilterRequest(types: number): Packet {
   const priv = ed25519.utils.randomSecretKey();
   const pkt: Packet = {
     type: PacketType.REQUEST_SYNC,
-    ttl: 2,
+    ttl: 0, // link-local: a sync request is a question for one link's far end
     flags: Flags.SIGNED,
     senderID: new Uint8Array(8).fill(0x99),
     recipientID: new Uint8Array(8),
-    timestamp: 1_700_000_000_000,
+    timestamp: Date.now(),
     signature: new Uint8Array(64),
     payload,
   };

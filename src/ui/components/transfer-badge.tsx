@@ -47,7 +47,7 @@ export default function TransferBadge({
 
   const label =
     active.length > 1
-      ? `${String(active.length)} transfers`
+      ? t("transfer.badge.active_count", { count: active.length })
       : stalled
         ? t("transfer.badge.waiting", { name: primary.name })
         : t(

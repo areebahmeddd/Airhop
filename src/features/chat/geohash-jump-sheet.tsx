@@ -234,7 +234,9 @@ export function GeohashJumpSheet({
             : // The name is appended, never substituted: the level is always
               // true, and the name is a best-effort lookup that is simply
               // absent offline or where the geocoder has nothing to say.
-              `${level} cell${typedName !== undefined ? ` · ~${typedName}` : ""}`}
+              `${t("chat.jump.level_cell", { level: level ?? "" })}${
+                typedName !== undefined ? ` · ~${typedName}` : ""
+              }`}
         </Text>
       )}
       {error !== null && <Text style={styles.error}>{error}</Text>}

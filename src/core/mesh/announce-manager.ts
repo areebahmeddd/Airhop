@@ -15,6 +15,7 @@
 // Broadcast interval: 30 seconds.
 import { hexToBytes } from "@noble/hashes/utils.js";
 import type { Identity } from "../crypto/identity";
+import { normalizeNickname } from "./nickname";
 import {
   Flags,
   PacketType,
@@ -95,6 +96,19 @@ export const Capability = {
   vouch: 1 << 5,
   meshDiagnostics: 1 << 6,
   bridge: 1 << 7,
+  // Finalized direct-message media encrypted as Noise payload 0x20 before
+  // outer BLE fragmentation. A peer without this bit needs the signed directed
+  // raw-file path, which is not confidential and is being retired.
+  //
+  // A discovery hint only: enough to start a handshake, never enough to select
+  // encrypted sending or create a pin. Anyone can copy a victim's public Noise
+  // key and self-sign an announce carrying whatever bits they like, so only the
+  // same bit inside an authenticated 0x21 decides anything. Same rule bitchat
+  // applies to its own private-media migration.
+  privateMedia: 1 << 8,
+  // Stable private-media IDs are durably deduplicated by the receiver, so a
+  // sender may safely retry. Does not replace bit 8; it only adds retry.
+  privateMediaReceipts: 1 << 9,
 } as const;
 
 // Minimal little-endian encoding with trailing zero bytes dropped, always at
@@ -134,6 +148,27 @@ function writeTlv(buf: number[], type: number, value: Uint8Array): void {
   buf.push(type, value.length, ...value);
 }
 
+// The nickname TLV budget, in BYTES of UTF-8 (see the layout note at the top).
+const NICKNAME_MAX_BYTES = 32;
+
+// Fit a nickname into the TLV, canonicalized first.
+//
+// Truncation counts UTF-8 bytes and drops whole code points. Slicing the string
+// instead would count UTF-16 units, which is the wrong unit twice over: a name
+// of 32 emoji is 128 bytes, four times the budget, and a slice can land in the
+// middle of a surrogate pair and emit a lone half that decodes to a replacement
+// character on the far side.
+function fitNickname(nickname: string): Uint8Array {
+  const encoder = new TextEncoder();
+  const codePoints = [...normalizeNickname(nickname)];
+  let bytes = encoder.encode(codePoints.join(""));
+  while (bytes.length > NICKNAME_MAX_BYTES) {
+    codePoints.pop();
+    bytes = encoder.encode(codePoints.join(""));
+  }
+  return bytes;
+}
+
 export function encodeAnnouncePayload(
   identity: Identity,
   nickname: string,
@@ -142,7 +177,7 @@ export function encodeAnnouncePayload(
   capabilities = 0,
   bridgeGeohash?: string,
 ): Uint8Array {
-  const nicknameBytes = new TextEncoder().encode(nickname.slice(0, 32));
+  const nicknameBytes = fitNickname(nickname);
   const buf: number[] = [];
 
   writeTlv(buf, TLV_NICKNAME, nicknameBytes);
@@ -203,7 +238,10 @@ export function decodeAnnouncePayload(
 
     switch (type) {
       case TLV_NICKNAME:
-        nickname = new TextDecoder().decode(value);
+        // Canonicalized at the point it enters the app, so everything
+        // downstream (registry, peer store, mentions, autocomplete) compares
+        // one form. See nickname.ts for why the two encodings exist.
+        nickname = normalizeNickname(new TextDecoder().decode(value));
         break;
       case TLV_NOISE_PUB:
         if (value.length === 32) noisePubKey = value;

@@ -3,13 +3,19 @@
  */
 import { ed25519 } from "@noble/curves/ed25519.js";
 import {
-  FRAGMENT_SIZE,
   FRAG_DATA_SIZE,
   FragmentManager,
+  MAX_BLE_FRAME,
   decodeFragmentPayload,
   fragmentPacket,
 } from "../fragment-manager";
-import { Flags, PacketType, signPacket, type Packet } from "../packet-codec";
+import {
+  Flags,
+  PacketType,
+  encodePacket,
+  signPacket,
+  type Packet,
+} from "../packet-codec";
 
 function makeIdentity() {
   const signingPrivKey = ed25519.utils.randomSecretKey();
@@ -65,29 +71,51 @@ describe("fragmentPacket", () => {
       signature: new Uint8Array(64),
       payload: new Uint8Array(10),
     };
-    expect(() => fragmentPacket(small, identity, signPacket)).toThrow(
-      "fits in one frame",
-    );
+    expect(() => fragmentPacket(small, identity)).toThrow("fits in one frame");
   });
 
   test("fragments a large packet into the correct count", () => {
     // Payload big enough to require 3 fragments
     const packet = makeLargePacket(FRAG_DATA_SIZE * 2 + 10, identity);
-    const frags = fragmentPacket(packet, identity, signPacket);
+    const frags = fragmentPacket(packet, identity);
     expect(frags.length).toBe(3);
   });
 
-  test("each fragment is within FRAGMENT_SIZE", () => {
+  // The regression that matters. Asserting the payload size was what let a
+  // 557-byte frame ship: the payload was 469 and correct by that measure, while
+  // the header, senderID and a 64-byte signature pushed the encoded frame 45
+  // bytes past what any BLE link can carry. Measure what goes on the wire.
+  test("every encoded fragment frame fits one BLE write", () => {
     const packet = makeLargePacket(FRAG_DATA_SIZE * 3, identity);
-    const frags = fragmentPacket(packet, identity, signPacket);
+    const frags = fragmentPacket(packet, identity);
     for (const f of frags) {
-      expect(f.payload.length).toBeLessThanOrEqual(FRAGMENT_SIZE);
+      expect(encodePacket(f).length).toBeLessThanOrEqual(MAX_BLE_FRAME);
     }
+  });
+
+  // A DM's fragments must stay addressed, or bitchat treats sealed private media
+  // as a public packet: it archives it for gossip sync and floods every hop.
+  test("fragments carry the parent packet's recipient", () => {
+    const packet = makeLargePacket(FRAG_DATA_SIZE * 2, identity);
+    packet.recipientID = new Uint8Array(8).fill(0xab);
+    const frags = fragmentPacket(packet, identity);
+    for (const f of frags) {
+      expect(Array.from(f.recipientID)).toEqual(Array.from(packet.recipientID));
+      expect(encodePacket(f).length).toBeLessThanOrEqual(MAX_BLE_FRAME);
+    }
+  });
+
+  // bitchat sends `signature: nil` on fragments and neither side's fragment path
+  // inspects one; the inner packet is signed and re-verified after reassembly.
+  test("fragments are unsigned", () => {
+    const packet = makeLargePacket(FRAG_DATA_SIZE * 2, identity);
+    const frags = fragmentPacket(packet, identity);
+    for (const f of frags) expect(f.flags & Flags.SIGNED).toBe(0);
   });
 
   test("all fragments share the same stream ID", () => {
     const packet = makeLargePacket(FRAG_DATA_SIZE * 2 + 1, identity);
-    const frags = fragmentPacket(packet, identity, signPacket);
+    const frags = fragmentPacket(packet, identity);
     const headers = frags.map((f) => decodeFragmentPayload(f.payload)!);
     const streamIds = headers.map((h) => h.streamU64);
     expect(streamIds.every((s) => s === streamIds[0])).toBe(true);
@@ -95,7 +123,7 @@ describe("fragmentPacket", () => {
 
   test("index and total are set correctly", () => {
     const packet = makeLargePacket(FRAG_DATA_SIZE * 2 + 1, identity);
-    const frags = fragmentPacket(packet, identity, signPacket);
+    const frags = fragmentPacket(packet, identity);
     const headers = frags.map((f) => decodeFragmentPayload(f.payload)!);
     expect(headers.map((h) => h.index)).toEqual([0, 1, 2]);
     expect(headers.every((h) => h.total === 3)).toBe(true);
@@ -103,7 +131,7 @@ describe("fragmentPacket", () => {
 
   test("original packet type is encoded in each fragment header", () => {
     const packet = makeLargePacket(FRAG_DATA_SIZE + 1, identity);
-    const frags = fragmentPacket(packet, identity, signPacket);
+    const frags = fragmentPacket(packet, identity);
     const headers = frags.map((f) => decodeFragmentPayload(f.payload)!);
     expect(
       headers.every((h) => h.originalType === PacketType.CHANNEL_MSG),
@@ -137,7 +165,7 @@ describe("FragmentManager", () => {
 
   test("reassembles in-order fragments", () => {
     const packet = makeLargePacket(FRAG_DATA_SIZE * 2 + 1, identity);
-    const frags = fragmentPacket(packet, identity, signPacket);
+    const frags = fragmentPacket(packet, identity);
     const manager = new FragmentManager();
     const senderID = frags[0].senderID;
     let reassembled: Packet | null = null;
@@ -154,7 +182,7 @@ describe("FragmentManager", () => {
 
   test("reassembles out-of-order fragments", () => {
     const packet = makeLargePacket(FRAG_DATA_SIZE * 3, identity);
-    const frags = fragmentPacket(packet, identity, signPacket);
+    const frags = fragmentPacket(packet, identity);
     const manager = new FragmentManager();
     const senderID = frags[0].senderID;
     let reassembled: Packet | null = null;
@@ -171,7 +199,7 @@ describe("FragmentManager", () => {
 
   test("duplicate fragments do not corrupt reassembly", () => {
     const packet = makeLargePacket(FRAG_DATA_SIZE + 1, identity);
-    const frags = fragmentPacket(packet, identity, signPacket);
+    const frags = fragmentPacket(packet, identity);
     const manager = new FragmentManager();
     const senderID = frags[0].senderID;
     let callCount = 0;
@@ -195,7 +223,7 @@ describe("FragmentManager", () => {
     const manager = new FragmentManager();
     // Feed a partial assembly (one fragment of a two-fragment stream)
     const packet = makeLargePacket(FRAG_DATA_SIZE + 1, identity);
-    const frags = fragmentPacket(packet, identity, signPacket);
+    const frags = fragmentPacket(packet, identity);
     manager.receive(frags[0].senderID, frags[0].payload, () => {});
     expect(manager.size).toBe(1);
     // Simulate time passing by calling the JS timer override isn't needed;
@@ -208,7 +236,7 @@ describe("FragmentManager", () => {
   test("reset clears all assemblies", () => {
     const manager = new FragmentManager();
     const packet = makeLargePacket(FRAG_DATA_SIZE + 1, identity);
-    const frags = fragmentPacket(packet, identity, signPacket);
+    const frags = fragmentPacket(packet, identity);
     manager.receive(frags[0].senderID, frags[0].payload, () => {});
     expect(manager.size).toBe(1);
     manager.reset();
@@ -221,7 +249,7 @@ describe("FragmentManager", () => {
     const base = makeLargePacket(FRAG_DATA_SIZE * 4, identity2);
     const packet: Packet = { ...base, type: PacketType.FILE_TRANSFER };
     packet.signature = signPacket(packet, identity2.signingPrivKey);
-    const frags = fragmentPacket(packet, identity2, signPacket);
+    const frags = fragmentPacket(packet, identity2);
     expect(frags.length).toBeGreaterThan(1);
 
     const manager = new FragmentManager();
@@ -273,7 +301,7 @@ describe("FragmentManager reassembly timeout", () => {
     jest.setSystemTime(new Date("2026-01-01T00:00:00Z"));
 
     const packet = makeLargePacket(FRAG_DATA_SIZE * 8, identity);
-    const frags = fragmentPacket(packet, identity, signPacket);
+    const frags = fragmentPacket(packet, identity);
     const manager = new FragmentManager();
     const senderID = frags[0].senderID;
     let reassembled: Packet | null = null;
@@ -296,7 +324,7 @@ describe("FragmentManager reassembly timeout", () => {
     jest.setSystemTime(new Date("2026-01-01T00:00:00Z"));
 
     const packet = makeLargePacket(FRAG_DATA_SIZE * 4, identity);
-    const frags = fragmentPacket(packet, identity, signPacket);
+    const frags = fragmentPacket(packet, identity);
     const manager = new FragmentManager();
     const senderID = frags[0].senderID;
     let reassembled: Packet | null = null;

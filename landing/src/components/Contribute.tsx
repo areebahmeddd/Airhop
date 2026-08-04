@@ -1,17 +1,13 @@
 import { ArrowUpRight } from "lucide-react";
 import { motion } from "motion/react";
 
-// Product id copied from the Dodo dashboard. Empty until the account clears
-// review; the donate button stays disabled while it is, so the live site can
-// never link to a dead checkout.
-const DODO_PRODUCT_ID = "";
+const DODO_PRODUCT_ID = "pdt_0NkbLWhlAvN1028Lzqwed";
 
-// Dodo serves static payment links at /buy/<product_id>. redirect_url is where
-// the browser lands once payment completes.
-const DODO_CHECKOUT_URL = DODO_PRODUCT_ID
-  ? `https://checkout.dodopayments.com/buy/${DODO_PRODUCT_ID}` +
-    `?quantity=1&redirect_url=${encodeURIComponent("https://airhop.1mindlabs.org/#support")}`
-  : null;
+const DODO_CHECKOUT_URL =
+  `https://checkout.dodopayments.com/buy/${DODO_PRODUCT_ID}` +
+  `?quantity=1&redirect_url=${encodeURIComponent("https://airhop.1mindlabs.org/#support")}`;
+
+const GITHUB_SPONSORS_URL = "https://github.com/sponsors/areebahmeddd";
 
 export default function Contribute() {
   return (
@@ -75,28 +71,30 @@ export default function Contribute() {
                 feature stays free either way.
               </p>
               <div className="mt-2 flex flex-wrap items-center gap-3">
-                {DODO_CHECKOUT_URL ? (
-                  <a
-                    href={DODO_CHECKOUT_URL}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="group/btn inline-flex items-center gap-2 bg-black px-5 py-2.5 font-mono text-xs font-bold tracking-widest text-white transition-all hover:bg-black/90"
-                  >
-                    DONATE
-                    <ArrowUpRight
-                      size={13}
-                      className="transition-transform group-hover/btn:translate-x-0.5 group-hover/btn:-translate-y-0.5"
-                    />
-                  </a>
-                ) : (
-                  <span
-                    aria-disabled="true"
-                    title="Checkout opens once the payment account clears review"
-                    className="inline-flex cursor-not-allowed items-center gap-2 border border-gray-200 px-5 py-2.5 font-mono text-xs font-bold tracking-widest text-gray-400"
-                  >
-                    DONATE
-                  </span>
-                )}
+                <a
+                  href={DODO_CHECKOUT_URL}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="group/btn inline-flex items-center gap-2 border border-black bg-black px-5 py-2.5 font-mono text-xs font-bold tracking-widest text-white transition-all hover:bg-black/90"
+                >
+                  DONATE ONCE
+                  <ArrowUpRight
+                    size={13}
+                    className="transition-transform group-hover/btn:translate-x-0.5 group-hover/btn:-translate-y-0.5"
+                  />
+                </a>
+                <a
+                  href={GITHUB_SPONSORS_URL}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="group/btn inline-flex items-center gap-2 border border-black px-5 py-2.5 font-mono text-xs font-bold tracking-widest text-black transition-all hover:bg-black hover:text-white"
+                >
+                  SPONSOR AIRHOP
+                  <ArrowUpRight
+                    size={13}
+                    className="transition-transform group-hover/btn:translate-x-0.5 group-hover/btn:-translate-y-0.5"
+                  />
+                </a>
               </div>
             </div>
           </motion.div>

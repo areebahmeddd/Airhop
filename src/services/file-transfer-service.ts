@@ -2,12 +2,13 @@
 //
 // Wire model (bitchat-compatible): a whole file is ONE FILE_TRANSFER (0x22)
 // packet whose payload is a BitchatFilePacket TLV. The fragment layer splits it
-// into 469-byte BLE fragments and reassembles it on the far side, so there is no
+// into BLE fragments that each fit one write and reassembles it on the far side,
+// so there is no
 // app-level chunking here. Airhop adds two TLV tags (channel, duration) that
 // bitchat skips.
 //
 //   Send:    file bytes → BitchatFilePacket TLV → one FILE_TRANSFER packet
-//            → fragmentPacket → paced 469-byte FRAGMENT writes
+//            → fragmentPacket → paced FRAGMENT writes, one BLE frame each
 //   Receive: FRAGMENT packets → FragmentManager reassembles the FILE_TRANSFER
 //            packet → decode TLV → validate MIME → cache file → ChatMessage
 
@@ -22,7 +23,7 @@ import {
   resolveMimeType,
   typeFromMime,
 } from "../core/mesh/bitchat-file-packet";
-import { FRAGMENT_SIZE, fragmentPacket } from "../core/mesh/fragment-manager";
+import { fragmentPacket, MAX_BLE_FRAME } from "../core/mesh/fragment-manager";
 import {
   BROADCAST_ID,
   encodePacket,
@@ -95,6 +96,73 @@ export function getAttachmentCacheBytes(): number {
     .reduce((sum, file) => sum + file.size, 0);
 }
 
+// How long a received or sent attachment stays on disk.
+//
+// Seven days, matching bitchat's media retention sweep. The panic wipe was the
+// only thing that ever removed an attachment, so a photo from a protest months
+// ago was still on the device: the one piece of user content that outlived the
+// conversation it belonged to. Files sit in the OS cache directory, which the
+// system may reclaim under storage pressure, but that is an optimisation the OS
+// makes for its own reasons and not a retention guarantee anyone should rely on.
+//
+// Seven days is long enough that a thread stays browsable across a week away
+// from signal, and short enough that a seized phone is not an archive.
+export const MEDIA_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
+
+// Delete attachments older than MEDIA_MAX_AGE_MS. Returns the bytes freed.
+//
+// Covers outgoing as well as incoming: both are written under the same prefix,
+// and a photo you sent is exactly as sensitive as one you received. Called at
+// launch rather than on a timer, because a device that is never opened is also
+// never accumulating anything new.
+//
+// A file whose age cannot be read is kept. The alternative is deleting user
+// content on the strength of a missing timestamp, and on Android
+// `creationTime` is genuinely absent below API 26, so an unreadable age is an
+// expected state rather than a corrupt one.
+// Most files removed in one pass.
+//
+// Each delete is a synchronous native call, and this runs at launch, so an
+// unbounded sweep over a very large cache would show up as a slow start. The
+// bound is safe rather than a silent truncation: the sweep is idempotent and
+// runs every launch, so a backlog drains over the next few starts and the
+// oldest files still go first in wall-clock terms because nothing older is
+// being created behind them.
+const MAX_SWEEP_DELETIONS = 200;
+
+export function sweepExpiredAttachments(
+  now: number = Date.now(),
+  maxAgeMs: number = MEDIA_MAX_AGE_MS,
+): number {
+  const dir = new FileSystem.Directory(FileSystem.Paths.cache);
+  if (!dir.exists) return 0;
+  let freed = 0;
+  let deleted = 0;
+  for (const entry of dir.list()) {
+    if (deleted >= MAX_SWEEP_DELETIONS) break;
+    if (
+      !(entry instanceof FileSystem.File) ||
+      !entry.name.startsWith(CACHE_FILE_PREFIX)
+    ) {
+      continue;
+    }
+    const writtenAt = entry.modificationTime ?? entry.creationTime;
+    if (writtenAt === null || writtenAt === undefined) continue;
+    // A timestamp in the future is a clock that moved, not a fresh file. Left
+    // alone: deleting on a bad clock is the worse failure of the two.
+    if (now - writtenAt <= maxAgeMs) continue;
+    const size = entry.size;
+    try {
+      entry.delete();
+      freed += size;
+      deleted++;
+    } catch {
+      // Mid-write, locked, or already gone. It will be caught next launch.
+    }
+  }
+  return freed;
+}
+
 export function clearAttachmentCache(): number {
   const dir = new FileSystem.Directory(FileSystem.Paths.cache);
   if (!dir.exists) return 0;
@@ -131,6 +199,18 @@ export type UnicastFn = (
 // can settle on "sent" or fall back to the red tap-to-retry mark instead of
 // claiming a send the radio refused.
 export type SendOutcome = (delivered: boolean) => void;
+
+// Seal a file TLV inside the peer's Noise session as payload 0x20, returning
+// the NOISE_ENCRYPTED packet ready to fragment. Returns null when the peer has
+// not proven it can read one (no session, or no authenticated bit 8), and the
+// caller then falls back to the signed cleartext form.
+//
+// Injected rather than reached for, so this service keeps knowing nothing about
+// sessions, capabilities or the registry.
+export type SealFileFn = (
+  recipientPeerID: string,
+  fileTlv: Uint8Array,
+) => Packet | null;
 
 function defaultAttachmentName(type: ChatAttachment["type"]): string {
   switch (type) {
@@ -210,22 +290,50 @@ export class FileTransferService {
   // Monotonic, so back-to-back sends cannot collide on a transfer id.
   private transferSeq = 0;
 
+  private readonly sealFile?: SealFileFn;
+
   constructor(
     identity: ServiceIdentity,
     broadcast: BroadcastFn,
     unicast: UnicastFn,
     resolveNickname?: (peerID: string) => string | undefined,
+    sealFile?: SealFileFn,
   ) {
     this.identity = identity;
     this.broadcast = broadcast;
     this.unicast = unicast;
     this.resolveNickname = resolveNickname;
+    this.sealFile = sealFile;
   }
 
   // Receive a fully reassembled FILE_TRANSFER packet from the fragment layer.
   onFileTransfer(packet: Packet): void {
     if (bytesToHex(packet.senderID) === this.identity.peerID) return;
     void this.handleIncoming(packet);
+  }
+
+  // Receive a file that arrived sealed inside a Noise session (payload 0x20).
+  //
+  // Confidentiality and authenticity both come from the session it arrived in:
+  // the packet decrypted under a session whose remote static key hashes to this
+  // peer ID, which says more about the sender than a signature carried beside
+  // the file would. So there is no separate signature to check here, as with a
+  // DM voice burst.
+  onSealedFile(senderPeerID: string, fileTlv: Uint8Array): void {
+    if (senderPeerID === this.identity.peerID) return;
+    void this.handleIncoming(
+      {
+        type: PacketType.FILE_TRANSFER,
+        ttl: 0,
+        flags: Flags.HAS_RECIPIENT,
+        senderID: hexToBytes(senderPeerID),
+        recipientID: hexToBytes(this.identity.peerID),
+        timestamp: Date.now(),
+        signature: new Uint8Array(64),
+        payload: fileTlv,
+      },
+      true,
+    );
   }
 
   // Cancel an outgoing transfer by its UI id (incoming files reassemble in the
@@ -291,24 +399,46 @@ export class FileTransferService {
     });
     if (tlv === null) return;
 
-    const pkt: Packet = {
-      type: PacketType.FILE_TRANSFER,
-      ttl: 7,
-      flags: isDM ? Flags.HAS_RECIPIENT | Flags.SIGNED : Flags.SIGNED,
-      senderID: hexToBytes(this.identity.peerID),
-      recipientID: isDM
-        ? hexToBytes(recipientPeerID)
-        : new Uint8Array(BROADCAST_ID),
-      timestamp: Date.now(),
-      signature: new Uint8Array(64),
-      payload: tlv,
-    };
-    pkt.signature = signPacket(pkt, this.identity.signingPrivKey);
+    // A private file goes inside the Noise session when the recipient has
+    // proven it can read one.
+    //
+    // The cleartext form below is signed, so a relay cannot forge its sender or
+    // contents, but it is not confidential and every node the file crosses sees
+    // all of it. bitchat classifies that form as the legacy migration fallback
+    // and has scheduled its removal.
+    //
+    // The gate is the authenticated capability, never the announced one. An
+    // announce is self-signed with a key it carries, so anyone who reads a
+    // victim's public Noise key off the air can announce any bits under that
+    // peer ID. Gating on it would let anyone in range clear bit 8 for a peer
+    // and force every attachment into the clear.
+    const sealed = isDM
+      ? (this.sealFile?.(recipientPeerID, tlv) ?? null)
+      : null;
+
+    const pkt: Packet =
+      sealed ??
+      (() => {
+        const raw: Packet = {
+          type: PacketType.FILE_TRANSFER,
+          ttl: 7,
+          flags: isDM ? Flags.HAS_RECIPIENT | Flags.SIGNED : Flags.SIGNED,
+          senderID: hexToBytes(this.identity.peerID),
+          recipientID: isDM
+            ? hexToBytes(recipientPeerID)
+            : new Uint8Array(BROADCAST_ID),
+          timestamp: Date.now(),
+          signature: new Uint8Array(64),
+          payload: tlv,
+        };
+        raw.signature = signPacket(raw, this.identity.signingPrivKey);
+        return raw;
+      })();
 
     // One packet becomes many BLE fragments; a small file may fit in one frame.
     const items: Packet[] =
-      encodePacket(pkt).length > FRAGMENT_SIZE
-        ? fragmentPacket(pkt, this.identity, signPacket)
+      encodePacket(pkt).length > MAX_BLE_FRAME
+        ? fragmentPacket(pkt, this.identity)
         : [pkt];
 
     // A counter, not just the clock: two attachments queued in the same
@@ -456,7 +586,11 @@ export class FileTransferService {
   }
 
   // Decode, validate, cache, and render an incoming file.
-  private async handleIncoming(packet: Packet): Promise<void> {
+  // `sealed` says the bytes arrived inside a Noise session rather than in the
+  // open. It is set only by onSealedFile, where the session has already proven
+  // the sender and the addressee, so the two wire-level checks below (is this
+  // for me, and is the claimed sender real) are already answered.
+  private async handleIncoming(packet: Packet, sealed = false): Promise<void> {
     const fp = decodeFilePacket(packet.payload);
     if (fp === null) return;
     // Reject a disallowed or mislabeled type before writing anything to disk.
@@ -485,6 +619,7 @@ export class FileTransferService {
     // point, so forwarding for other people still works. Only the decision to
     // DELIVER is narrowed.
     if (
+      !sealed &&
       !isBroadcast(packet) &&
       !isForMe(packet, hexToBytes(this.identity.peerID))
     ) {

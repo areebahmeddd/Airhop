@@ -49,6 +49,11 @@ import Animated, {
   useSharedValue,
   withTiming,
 } from "react-native-reanimated";
+import {
+  MAX_BITCHAT_TRANSFER_BYTES,
+  wireMediaName,
+} from "../../core/mesh/bitchat-file-packet";
+import { nicknameKey, normalizeNickname } from "../../core/mesh/nickname";
 import { MAX_BURST_MS } from "../../core/mesh/voice-capture";
 import {
   findTokensInText,
@@ -105,6 +110,7 @@ import {
   HIT_SLOP,
   hitSlopFor,
   MaxFontScale,
+  MIN_TOUCH,
   Radius,
   Shadow,
   Spacing,
@@ -747,6 +753,11 @@ function ImageAttachment({
   const Colors = useThemeColors();
   const styles = useMemo(() => createStyles(Colors), [Colors]);
   const [aspect, setAspect] = useState<number | null>(null);
+  // The uri that failed to load, rather than a boolean. A new uri makes the
+  // stored one stale on its own, so nothing has to reset state in the effect
+  // body and trigger a second render on every image.
+  const [failedUri, setFailedUri] = useState<string | null>(null);
+  const gone = failedUri === uri;
 
   useEffect(() => {
     let alive = true;
@@ -756,14 +767,29 @@ function ImageAttachment({
         if (alive && h > 0) setAspect(w / h);
       },
       () => {
-        // Unreadable file: the default shape below still renders the frame, and
-        // the Image itself shows its own failure state.
+        // The file is not readable. Overwhelmingly this means the retention
+        // sweep removed it: attachments are deleted after seven days, so every
+        // thread eventually scrolls back into this state. Rendering the frame
+        // anyway left a blank grey box with nothing to explain it, which reads
+        // as the app being broken rather than as the photo having expired.
+        if (alive) setFailedUri(uri);
       },
     );
     return () => {
       alive = false;
     };
   }, [uri]);
+
+  if (gone) {
+    return (
+      <View style={styles.attachImagePlaceholder}>
+        <Feather name="clock" size={20} color={Colors.textMuted} />
+        <Text style={styles.attachImagePlaceholderText}>
+          {T("chat.media.expired")}
+        </Text>
+      </View>
+    );
+  }
 
   return (
     <Pressable
@@ -1052,6 +1078,12 @@ export default function MessageThread({
 
   const bridgeActive = useMeshStateStore((s) => s.bridgeActive);
   const bridgePeopleAcross = useMeshStateStore((s) => s.bridgePeopleAcross);
+  const nostrConnected = useMeshStateStore((s) => s.nostrConnected);
+  // A location channel is a Nostr cell, so with no relay up it reaches only the
+  // people in Bluetooth range. A teleported cell is a place nobody nearby is in
+  // and never goes out over Bluetooth, so it reaches nobody at all. Both are
+  // worth saying before the user types, not after a message goes quiet.
+  const needsInternet = isGeo && !nostrConnected;
 
   // Header subtitle for a channel (not a group/DM): what kind of room this is,
   // then its place name and/or live count.
@@ -1136,14 +1168,19 @@ export default function MessageThread({
   const mentionQuery = activeMentionQuery(draft);
   const mentionMatches = useMemo(() => {
     if (mentionQuery === null) return [];
-    const q = mentionQuery.toLowerCase();
+    // Matching, de-duplication and the self-check all run on the normalized
+    // key. A group roster and a geohash participant list carry nicknames that
+    // never passed through the announce decoder, so they can still arrive in
+    // either Unicode encoding; comparing raw strings showed one person twice.
+    const q = nicknameKey(mentionQuery);
+    const self = nicknameKey(localNickname);
     const seen = new Set<string>();
     const out: { id: string; nickname: string }[] = [];
     for (const c of mentionCandidates) {
-      const nick = c.nickname.trim();
-      if (nick.length === 0 || nick === localNickname) continue;
-      if (!nick.toLowerCase().includes(q)) continue;
-      const key = nick.toLowerCase();
+      const nick = normalizeNickname(c.nickname);
+      const key = nicknameKey(nick);
+      if (nick.length === 0 || key === self) continue;
+      if (!key.includes(q)) continue;
       if (seen.has(key)) continue;
       seen.add(key);
       out.push({ id: c.id, nickname: nick });
@@ -1233,7 +1270,9 @@ export default function MessageThread({
   const [captionDraft, setCaptionDraft] = useState("");
   // Brief delivery status hint shown below the compose bar for DMs.
   // "queued" = no route available; cleared after 4 seconds.
-  const [dmStatus, setDmStatus] = useState<"queued" | "no-reach" | null>(null);
+  const [dmStatus, setDmStatus] = useState<
+    "queued" | "no-reach" | "gateway" | "no-group-key" | "group-queued" | null
+  >(null);
   // Brief confirmation pill. Separate from dmStatus: that strip explains why a
   // message has not arrived and belongs above the compose bar; this confirms
   // something the user just did and has to show up wherever they did it,
@@ -1260,6 +1299,11 @@ export default function MessageThread({
   // bridge (radio-only), even while bridging is on. Reset after each send.
   const [nearbyOnly, setNearbyOnly] = useState(false);
   const [forwardSource, setForwardSource] = useState<ChatMessage | null>(null);
+  // Selection mode: the ids picked for a bulk forward, entered from the
+  // long-press menu. Empty set means not selecting, so there is one source of
+  // truth rather than a flag that can disagree with the set.
+  const [pickedIds, setPickedIds] = useState<Set<string>>(new Set());
+  const [showBulkForward, setShowBulkForward] = useState(false);
   // Set right after scrolling to a search result, cleared after a brief
   // flash. Not persisted (unlike isStarred), purely a transient UI cue.
   const [highlightedMessageId, setHighlightedMessageId] = useState<
@@ -1279,6 +1323,17 @@ export default function MessageThread({
 
   const msgs = useMemo(() => messages[channel] ?? [], [messages, channel]);
   const isDM = channel.startsWith("dm:");
+
+  // The live selection, narrowed to messages actually in this thread. Derived
+  // rather than reset on navigation: this component is reused across
+  // conversations, so picks from the previous chat would otherwise keep the
+  // selection bar up over messages that are no longer on screen. An empty set
+  // means not selecting, so there is no separate flag to disagree with it.
+  const selectedIds = useMemo(
+    () => new Set(msgs.filter((m) => pickedIds.has(m.id)).map((m) => m.id)),
+    [msgs, pickedIds],
+  );
+  const selecting = selectedIds.size > 0;
 
   // Read receipts for this DM. Best-effort, and a no-op for channels (there is
   // no per-recipient receipt for a broadcast).
@@ -1553,7 +1608,9 @@ export default function MessageThread({
   }
 
   // Show a brief status hint, then auto-clear after 4 seconds.
-  function showStatus(kind: "queued" | "no-reach"): void {
+  function showStatus(
+    kind: "queued" | "no-reach" | "gateway" | "no-group-key" | "group-queued",
+  ): void {
     if (dmStatusTimerRef.current) clearTimeout(dmStatusTimerRef.current);
     setDmStatus(kind);
     dmStatusTimerRef.current = setTimeout(() => {
@@ -1656,20 +1713,61 @@ export default function MessageThread({
       }
     } else if (msgChannel.startsWith("group:")) {
       // Private group: seal under the epoch key and broadcast (0x25).
-      const ok = service.sendGroupMessage(
+      //
+      // A group is Bluetooth-only, so reach is the same question a channel
+      // broadcast faces, and it gets the same three answers. The status used to
+      // be "sent" whenever the packet was merely sealed, which is why a message
+      // to a group nobody was in range of still showed a tick. Groups have no
+      // delivery receipts on either client, so this tick is all the user gets and
+      // it has to be true.
+      const sent = service.sendGroupMessage(
         msgChannel.slice("group:".length),
         msg.text,
         msg.id,
       );
-      setStatus(msgChannel, msg.id, ok ? "sent" : "failed");
-      if (!ok) showNoReachStatus();
+      if (!sent.sealed) {
+        // We no longer hold the group's key, so the creator removed us. Terminal:
+        // unlike every other failure here, walking around does not fix it.
+        setStatus(msgChannel, msg.id, "failed");
+        showStatus("no-group-key");
+      } else if (sent.bleLinks > 0) {
+        setStatus(msgChannel, msg.id, "sent");
+      } else {
+        // Sealed but nobody in range. NOT a failure: the packet is now a gossip
+        // candidate for fifteen minutes, so the first member to come into range
+        // and ask for a sync gets it. "queued" is exactly that, and it is the
+        // common case for a group, whose members are specific people who are
+        // usually not all nearby. Marking it failed would paint most group
+        // messages red for something that is about to work.
+        setStatus(msgChannel, msg.id, "queued");
+        showStatus("group-queued");
+      }
     } else {
-      // A channel broadcast that reaches no link and no Nostr cell reaches no
-      // one; say so rather than rendering a confident sent bubble.
+      // Three outcomes: it reached a link or a live relay ("sent"), a gateway
+      // peer took it to publish for us ("carried"), or it went nowhere. The
+      // middle two used to collapse into the first, because the old result flag
+      // meant "this channel can use the internet" rather than "the internet was
+      // there", so a location channel on Bluetooth alone showed a sent tick.
       const sent = service.sendChannelMessage(msgChannel, msg.text, nearbyOnly);
-      const reached = sent.bleLinks > 0 || sent.nostr;
-      setStatus(msgChannel, msg.id, reached ? "sent" : "failed");
-      if (!reached) showNoReachStatus();
+      if (sent.bleLinks > 0 || sent.nostr) {
+        setStatus(msgChannel, msg.id, "sent");
+      } else if (sent.gateway) {
+        setStatus(msgChannel, msg.id, "carried");
+        showStatus("gateway");
+      } else if (isGeo) {
+        // A location cell's audience is everyone in it, reached over the
+        // internet. A Bluetooth neighbour arriving later will sync the packet,
+        // but the cell itself never sees it, so this is as far as it goes.
+        setStatus(msgChannel, msg.id, "failed");
+        showNoReachStatus();
+      } else {
+        // A mesh channel's audience IS whoever is in range, and the packet stays
+        // a gossip candidate for fifteen minutes, so the next neighbour to turn
+        // up gets it. Same reasoning as the group branch above: this is waiting,
+        // not broken, and painting it red would be the harsher of two lies.
+        setStatus(msgChannel, msg.id, "queued");
+        showNoReachStatus();
+      }
     }
   }
 
@@ -1746,12 +1844,19 @@ export default function MessageThread({
     // Fun IRC-style emotes, matching bitchat: /hug and /slap become an action
     // message both sides see. In a DM the target defaults to the peer; in a
     // channel it comes from a trailing @name.
+    //
+    // A DM uses the second person, matching bitchat: its handleEmote sends
+    // "slaps you around a bit with a large trout" on the private-chat branch,
+    // and its reader matches that literal string. We sent the recipient's
+    // nickname instead, which read as a third-person line about them in their
+    // own DM. English, never translated: this text crosses the wire and bitchat
+    // matches it as a substring.
     const emote = /^\/(hug|slap)(?:\s+(.*))?$/i.exec(text);
     if (emote) {
       const kind = emote[1].toLowerCase();
-      const target =
-        (emote[2] ?? "").trim().replace(/^@/, "") ||
-        (isDM ? resolveDisplayName(channel.slice(3)) : "");
+      // A DM has exactly one recipient, so a trailing @name cannot redirect it
+      // and is ignored: the target is always "you".
+      const target = isDM ? "you" : (emote[2] ?? "").trim().replace(/^@/, "");
       if (target.length === 0) return; // a channel emote needs a @name
       const emoji = kind === "hug" ? "🫂" : "🐟";
       const action = kind === "hug" ? "hugs" : "slaps";
@@ -2057,6 +2162,34 @@ export default function MessageThread({
     }
   }
 
+  // Bulk forward. Sent oldest-first so the target thread reads in the same order
+  // the reader saw them here, and one at a time through the same single-message
+  // path, so an attachment forwards exactly as it does on its own.
+  function forwardSelected(targetChannel: string): void {
+    const picked = msgs
+      .filter((m) => selectedIds.has(m.id))
+      .sort((a, b) => a.timestampMs - b.timestampMs);
+    for (const m of picked) forwardMessage(m, targetChannel);
+    // Only the picks: the sheet closes itself after its confirmation tick, and
+    // pulling it out from under that would drop the one bit of feedback the
+    // forward gives.
+    setPickedIds(new Set());
+  }
+
+  function clearSelection(): void {
+    setPickedIds(new Set());
+    setShowBulkForward(false);
+  }
+
+  function toggleSelected(item: ChatMessage): void {
+    setPickedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(item.id)) next.delete(item.id);
+      else next.add(item.id);
+      return next;
+    });
+  }
+
   function handleLongPressMessage(item: ChatMessage): void {
     setActionSheet(item);
   }
@@ -2109,7 +2242,13 @@ export default function MessageThread({
     setPendingAttachment({
       type,
       uri: asset.uri,
-      name: asset.fileName ?? (type === "video" ? "video.mp4" : "photo.jpg"),
+      // An image goes out under bitchat's stable-ID name so the far side can
+      // dedup it and acknowledge it; video has no such shape and keeps the
+      // picker's name.
+      name:
+        type === "video"
+          ? (asset.fileName ?? "video.mp4")
+          : wireMediaName("image", "jpg"),
       mimeType: asset.mimeType,
     });
   }
@@ -2137,7 +2276,13 @@ export default function MessageThread({
     setPendingAttachment({
       type,
       uri: asset.uri,
-      name: asset.fileName ?? (type === "video" ? "video.mp4" : "photo.jpg"),
+      // An image goes out under bitchat's stable-ID name so the far side can
+      // dedup it and acknowledge it; video has no such shape and keeps the
+      // picker's name.
+      name:
+        type === "video"
+          ? (asset.fileName ?? "video.mp4")
+          : wireMediaName("image", "jpg"),
       mimeType: asset.mimeType,
     });
   }
@@ -2163,6 +2308,46 @@ export default function MessageThread({
   // composer. The caption rides the file packet, so media + caption arrive as
   // one message.
   //
+  // What to warn about before sending this to the peer in this DM, or null when
+  // there is nothing to say.
+  //
+  // Two separate problems, both only with a bitchat recipient:
+  //
+  //   size  bitchat expires a half-built file 30 seconds after the FIRST piece
+  //         arrives, not the last, so anything past that window is dropped on
+  //         arrival however well the transfer went.
+  //   kind  bitchat accepts a video or a document and stores the bytes, but only
+  //         knows how to display images and voice notes, so it shows an
+  //         unopenable "[file] name.ext" line.
+  //
+  // Channels and groups are skipped: they have many recipients of unknown kinds,
+  // so a warning there would fire almost always and mean almost nothing.
+  function bitchatMediaCaution(
+    type: ChatAttachment["type"],
+    sizeBytes: number | undefined,
+  ): { title: string; body: string } | null {
+    if (!isDM) return null;
+    if (getMeshService()?.peerRunsAirhop(channel.slice(3)) !== false)
+      return null;
+    if (sizeBytes !== undefined && sizeBytes > MAX_BITCHAT_TRANSFER_BYTES) {
+      return {
+        title: t("chat.attach.bitchat_too_big"),
+        body: t("chat.attach.bitchat_too_big_body", {
+          name: resolveDisplayName(channel.slice(3)),
+        }),
+      };
+    }
+    if (type === "video" || type === "document") {
+      return {
+        title: t("chat.attach.bitchat_unopenable"),
+        body: t("chat.attach.bitchat_unopenable_body", {
+          name: resolveDisplayName(channel.slice(3)),
+        }),
+      };
+    }
+    return null;
+  }
+
   // A photo is resized first. A camera file is measured in megabytes and the
   // mesh takes 512 KiB, so without this step the common case (open camera, take
   // a picture, send it) could not work at all. The sheet closes straight away
@@ -2177,6 +2362,31 @@ export default function MessageThread({
     setCaptionDraft("");
 
     if (p.type !== "image") {
+      // A bitchat recipient handles a video or a document very differently from
+      // an Airhop one, and neither difference is visible from this screen, so say
+      // it before the send rather than leaving the user with a sent tick and a
+      // confused friend. Images never get here: they are always resized under the
+      // send budget, and bitchat renders them.
+      const caution = bitchatMediaCaution(p.type, p.sizeBytes);
+      if (caution !== null) {
+        showAlert(caution.title, caution.body, [
+          { text: T("common.cancel"), style: "cancel" },
+          {
+            text: T("chat.attach.send_anyway"),
+            onPress: () => {
+              sendAttachmentMessage(
+                p.type,
+                p.uri,
+                p.name,
+                p.mimeType,
+                undefined,
+                { sizeBytes: p.sizeBytes, caption },
+              );
+            },
+          },
+        ]);
+        return;
+      }
       sendAttachmentMessage(p.type, p.uri, p.name, p.mimeType, undefined, {
         sizeBytes: p.sizeBytes,
         caption,
@@ -2440,7 +2650,7 @@ export default function MessageThread({
       sendAttachmentMessage(
         "voice",
         uri,
-        "voice.m4a",
+        wireMediaName("voice", "m4a"),
         "audio/mp4",
         duration * 1000,
       );
@@ -2684,6 +2894,7 @@ export default function MessageThread({
   function renderTokenCard(
     token: EmbeddedToken,
     isMine: boolean,
+    reclaimed: boolean,
   ): React.JSX.Element {
     return (
       <View style={styles.paymentCard}>
@@ -2699,6 +2910,17 @@ export default function MessageThread({
         {token.info.memo ? (
           <Text style={styles.paymentCardMemo}>{token.info.memo}</Text>
         ) : null}
+        {/* A send the user pulled back. On the card, not just in the message
+            info: the amount is printed right above, so without this the card
+            still reads as money the recipient can take. */}
+        {isMine && reclaimed && (
+          <View style={styles.paymentCardVoid}>
+            <Feather name="rotate-ccw" size={13} color={Colors.textMuted} />
+            <Text style={styles.paymentCardVoidText}>
+              {T("chat.ecash.reclaimed")}
+            </Text>
+          </View>
+        )}
         {/* Nothing to claim on a token you sent: your copy of those proofs is
             already reserved against the pending send. */}
         {!isMine &&
@@ -2779,18 +3001,24 @@ export default function MessageThread({
       {/* Header */}
       <View style={styles.header}>
         <Pressable
-          onPress={onBack}
+          onPress={selecting ? clearSelection : onBack}
           style={styles.backButton}
           hitSlop={HIT_SLOP}
           accessibilityRole="button"
           accessibilityLabel={
-            backUnreadCount > 0
-              ? t("chat.thread.go_back_unread", { count: backUnreadCount })
-              : T("chat.thread.go_back")
+            selecting
+              ? T("chat.select.cancel")
+              : backUnreadCount > 0
+                ? t("chat.thread.go_back_unread", { count: backUnreadCount })
+                : T("chat.thread.go_back")
           }
         >
-          <Feather name={chevronBack} size={24} color={Colors.textPrimary} />
-          {backUnreadCount > 0 && (
+          <Feather
+            name={selecting ? "x" : chevronBack}
+            size={24}
+            color={Colors.textPrimary}
+          />
+          {!selecting && backUnreadCount > 0 && (
             <View
               style={styles.backBadge}
               importantForAccessibility="no-hide-descendants"
@@ -2806,46 +3034,57 @@ export default function MessageThread({
           )}
         </Pressable>
 
-        <Pressable
-          style={styles.headerCenter}
-          onPress={() => {
-            if (!isDM) setShowChannelInfo(true);
-            else setShowDMInfo(true);
-          }}
-          accessibilityRole="button"
-          accessibilityLabel={t("chat.thread.view_info", {
-            name: isDM ? displayName : channel,
-          })}
-        >
-          {isDM ? (
-            // DM: avatar + name, left-aligned right after the back arrow.
-            <View style={styles.headerDmId}>
-              <Avatar
-                username={resolveDisplayName(channel.slice(3))}
-                peerID={channel.slice(3)}
-                size={28}
-                presence={isDMPeerOnline ? "online" : "offline"}
-              />
-              <Text style={styles.channelTitle} numberOfLines={1}>
-                {displayName}
-              </Text>
-            </View>
-          ) : (
-            <>
-              <Text style={styles.channelTitle} numberOfLines={1}>
-                {isGroup ? displayName : channelLabel}
-              </Text>
-              {/* A group is always sealed under its epoch key, so it is named
+        {/* While selecting, the header states the count instead of the chat's
+            identity: the title is the one place with room for it, and opening
+            the info sheet mid-selection would lose the picks. */}
+        {selecting ? (
+          <View style={styles.headerCenter}>
+            <Text style={styles.channelTitle} numberOfLines={1}>
+              {TP("chat.select.count", selectedIds.size)}
+            </Text>
+          </View>
+        ) : (
+          <Pressable
+            style={styles.headerCenter}
+            onPress={() => {
+              if (!isDM) setShowChannelInfo(true);
+              else setShowDMInfo(true);
+            }}
+            accessibilityRole="button"
+            accessibilityLabel={t("chat.thread.view_info", {
+              name: isDM ? displayName : channel,
+            })}
+          >
+            {isDM ? (
+              // DM: avatar + name, left-aligned right after the back arrow.
+              <View style={styles.headerDmId}>
+                <Avatar
+                  username={resolveDisplayName(channel.slice(3))}
+                  peerID={channel.slice(3)}
+                  size={28}
+                  presence={isDMPeerOnline ? "online" : "offline"}
+                />
+                <Text style={styles.channelTitle} numberOfLines={1}>
+                  {displayName}
+                </Text>
+              </View>
+            ) : (
+              <>
+                <Text style={styles.channelTitle} numberOfLines={1}>
+                  {isGroup ? displayName : channelLabel}
+                </Text>
+                {/* A group is always sealed under its epoch key, so it is named
                   the same way and in the same words as the info sheet's scope
                   tag: a bare member count said nothing about who can read it. */}
-              <Text style={styles.headerSubtitle} numberOfLines={1}>
-                {isGroup
-                  ? TP("chat.group_members", memberCount)
-                  : channelSubtitle}
-              </Text>
-            </>
-          )}
-        </Pressable>
+                <Text style={styles.headerSubtitle} numberOfLines={1}>
+                  {isGroup
+                    ? TP("chat.group_members", memberCount)
+                    : channelSubtitle}
+                </Text>
+              </>
+            )}
+          </Pressable>
+        )}
 
         {/* Channel actions, on one track: the same pill the notice composer's
             expiry steps sit in, so a row of icon buttons is spaced and shaped
@@ -2853,7 +3092,7 @@ export default function MessageThread({
             channels have these, so the pill is absent (not empty) elsewhere.
             Notices apply to every channel; inviting does not, so a public or
             location channel shows the pill with the one button in it. */}
-        {!isDM && !isGroup && (
+        {!isDM && !isGroup && !selecting && (
           <View style={styles.headerActions}>
             <Pressable
               style={styles.headerAction}
@@ -3022,12 +3261,21 @@ export default function MessageThread({
                   isFirstFromSender={isFirstFromSender}
                   tokens={tokens}
                   isPureToken={isPureToken}
-                  renderToken={(token) => renderTokenCard(token, item.isMine)}
+                  renderToken={(token) =>
+                    renderTokenCard(
+                      token,
+                      item.isMine,
+                      item.status === "reclaimed",
+                    )
+                  }
                   renderAttachment={(attachment) =>
                     renderAttachmentBubble(attachment, item.id, item.isMine)
                   }
                   formatTime={formatClockTime}
                   onLongPress={handleLongPressMessage}
+                  selecting={selecting}
+                  selected={selectedIds.has(item.id)}
+                  onToggleSelect={toggleSelected}
                   onRetry={handleRetryMessage}
                   onPressSender={isDM ? undefined : handlePressSender}
                   highlighted={item.id === highlightedMessageId}
@@ -3106,7 +3354,12 @@ export default function MessageThread({
               <Text style={styles.emptySubtitle}>
                 {isDM
                   ? T("chat.thread.empty_desc")
-                  : t("chat.thread.say_something", { channel })}
+                  : t("chat.thread.say_something", {
+                      // Never the raw store key: a group's key is
+                      // "group:<id>", which read as "Say something in
+                      // group:7920…". Same label the header shows.
+                      channel: isGroup ? displayName : channelLabel,
+                    })}
               </Text>
             </View>
           }
@@ -3148,19 +3401,66 @@ export default function MessageThread({
         )}
       </View>
 
-      {/* Delivery hints. "queued" means a DM is held for later retry; "no-reach"
-          means a channel broadcast found no peers and no internet cell, so it
-          genuinely went nowhere. */}
+      {/* Standing notice rather than a per-send one, so the limit is clear
+          before anything is typed. Hidden while a per-send hint is up, so the
+          two never stack. */}
+      {needsInternet && dmStatus === null && !selecting && (
+        <View style={styles.dmStatusBar}>
+          <Feather name="wifi-off" size={12} color={Colors.textMuted} />
+          <Text style={styles.dmStatusText}>
+            {isManualGeo
+              ? T("chat.thread.cell_needs_internet")
+              : T("chat.thread.channel_needs_internet")}
+          </Text>
+        </View>
+      )}
+
+      {/* Per-send hints. "queued": a DM is held for later retry. "gateway": a
+          nearby peer is taking a channel post to the internet for us.
+          "no-reach": no peers, no live cell and no gateway, so it went
+          nowhere. */}
       {isDM && dmStatus === "queued" && (
         <View style={styles.dmStatusBar}>
           <Feather name="clock" size={12} color={Colors.textMuted} />
           <Text style={styles.dmStatusText}>{T("chat.thread.no_route")}</Text>
         </View>
       )}
+      {!isDM && dmStatus === "gateway" && (
+        <View style={styles.dmStatusBar}>
+          <Feather name="radio" size={12} color={Colors.textMuted} />
+          <Text style={styles.dmStatusText}>
+            {T("chat.thread.via_gateway")}
+          </Text>
+        </View>
+      )}
+      {/* Sealed, held, and waiting for a member to come into range. */}
+      {!isDM && dmStatus === "group-queued" && (
+        <View style={styles.dmStatusBar}>
+          <Feather name="clock" size={12} color={Colors.textMuted} />
+          <Text style={styles.dmStatusText}>
+            {T("chat.thread.group_queued")}
+          </Text>
+        </View>
+      )}
+
+      {/* We no longer hold this group's key, so nothing can be sent or read.
+          Distinct from "nobody nearby": walking around will not fix it. */}
+      {!isDM && dmStatus === "no-group-key" && (
+        <View style={styles.dmStatusBar}>
+          <Feather name="lock" size={12} color={Colors.textMuted} />
+          <Text style={styles.dmStatusText}>
+            {T("chat.thread.no_group_key")}
+          </Text>
+        </View>
+      )}
       {!isDM && dmStatus === "no-reach" && (
         <View style={styles.dmStatusBar}>
           <Feather name="alert-circle" size={12} color={Colors.textMuted} />
-          <Text style={styles.dmStatusText}>{t("chat.thread.no_reach")}</Text>
+          <Text style={styles.dmStatusText}>
+            {needsInternet
+              ? T("chat.thread.no_reach_offline")
+              : T("chat.thread.no_reach")}
+          </Text>
         </View>
       )}
 
@@ -3258,7 +3558,7 @@ export default function MessageThread({
       {/* "/" command picker: appears while typing a slash command, tap to
           insert it (with a trailing space, so a DM can send straight away and a
           channel is ready for the @name). Same shell as the @-mention picker. */}
-      {slashMatches.length > 0 && (
+      {!selecting && slashMatches.length > 0 && (
         <View style={styles.mentionBar}>
           <ScrollView
             style={styles.mentionList}
@@ -3317,7 +3617,7 @@ export default function MessageThread({
 
       {/* Nearby-only control: only on the bridged public channel while bridging.
           Lets the user keep a single message radio-only. */}
-      {channel === "#bluetooth" && bridgeEnabled && (
+      {channel === "#bluetooth" && bridgeEnabled && !selecting && (
         <Pressable
           style={styles.nearbyOnlyRow}
           onPress={() => setNearbyOnly((v) => !v)}
@@ -3343,108 +3643,136 @@ export default function MessageThread({
         </Pressable>
       )}
 
-      {/* Compose bar */}
-      <View style={styles.composeBar}>
-        {/* Attach. Always present, greyed where media cannot be delivered, so
-            the bar keeps its shape and the reason is one tap away. */}
-        <Pressable
-          style={[styles.attachButton, !mediaAllowed && styles.composeDisabled]}
-          onPress={mediaAllowed ? handleAttach : explainMediaBlocked}
-          hitSlop={hitSlopFor(COMPOSE_ATTACH_SIZE)}
-          accessibilityRole="button"
-          accessibilityLabel={
-            mediaAllowed ? T("chat.attach.file") : T("chat.attach.unavailable")
-          }
-          accessibilityState={{ disabled: !mediaAllowed }}
-        >
-          <Feather name="plus" size={20} color={Colors.textMuted} />
-        </Pressable>
-        <TextInput
-          style={styles.input}
-          value={draft}
-          onChangeText={setDraft}
-          placeholder={T("chat.thread.message_placeholder")}
-          placeholderTextColor={Colors.textMuted}
-          multiline
-          maxLength={2000}
-          returnKeyType="send"
-          blurOnSubmit
-          onSubmitEditing={handleSend}
-          selectionColor={Colors.accent}
-          // The placeholder is the only thing naming this field, and it vanishes
-          // the moment there is a draft.
-          accessibilityLabel={T("chat.thread.message")}
-        />
+      {/* Selection bar, in place of the compose bar. Bottom of the screen so
+          Forward is under the thumb, the same reach the send button has. */}
+      {selecting && (
+        <View style={styles.selectBar}>
+          <Pressable
+            style={styles.selectForward}
+            onPress={() => setShowBulkForward(true)}
+            accessibilityRole="button"
+            accessibilityLabel={TP("chat.select.forward", selectedIds.size)}
+          >
+            <Feather
+              name="corner-up-right"
+              size={17}
+              color={Colors.textInverse}
+            />
+            <Text style={styles.selectForwardText}>
+              {TP("chat.select.forward", selectedIds.size)}
+            </Text>
+          </Pressable>
+        </View>
+      )}
 
-        {draft.trim().length > 0 ? (
-          // Send button: shown when there is text
+      {/* Compose bar */}
+      {!selecting && (
+        <View style={styles.composeBar}>
+          {/* Attach. Always present, greyed where media cannot be delivered, so
+            the bar keeps its shape and the reason is one tap away. */}
           <Pressable
-            style={styles.sendButton}
-            onPress={handleSend}
-            hitSlop={hitSlopFor(COMPOSE_BUTTON_SIZE)}
+            style={[
+              styles.attachButton,
+              !mediaAllowed && styles.composeDisabled,
+            ]}
+            onPress={mediaAllowed ? handleAttach : explainMediaBlocked}
+            hitSlop={hitSlopFor(COMPOSE_ATTACH_SIZE)}
             accessibilityRole="button"
-            accessibilityLabel={T("chat.thread.send")}
+            accessibilityLabel={
+              mediaAllowed
+                ? T("chat.attach.file")
+                : T("chat.attach.unavailable")
+            }
+            accessibilityState={{ disabled: !mediaAllowed }}
           >
-            <Feather name="arrow-up" size={18} color={Colors.textInverse} />
+            <Feather name="plus" size={20} color={Colors.textMuted} />
           </Pressable>
-        ) : !mediaAllowed ? (
-          // Voice is media, so it is off wherever attachments are, and it says
-          // so the same way rather than leaving a gap in the bar.
-          <Pressable
-            style={[styles.pttButton, styles.composeDisabled]}
-            onPress={explainMediaBlocked}
-            hitSlop={hitSlopFor(COMPOSE_BUTTON_SIZE)}
-            accessibilityRole="button"
-            accessibilityLabel={T("chat.voice.unavailable")}
-            accessibilityState={{ disabled: true }}
-          >
-            <Feather name="mic" size={16} color={Colors.textMuted} />
-          </Pressable>
-        ) : (
-          // PTT button: hold to talk.
-          mediaAllowed && (
+          <TextInput
+            style={styles.input}
+            value={draft}
+            onChangeText={setDraft}
+            placeholder={T("chat.thread.message_placeholder")}
+            placeholderTextColor={Colors.textMuted}
+            multiline
+            maxLength={2000}
+            returnKeyType="send"
+            blurOnSubmit
+            onSubmitEditing={handleSend}
+            selectionColor={Colors.accent}
+            // The placeholder is the only thing naming this field, and it vanishes
+            // the moment there is a draft.
+            accessibilityLabel={T("chat.thread.message")}
+          />
+
+          {draft.trim().length > 0 ? (
+            // Send button: shown when there is text
             <Pressable
-              style={[
-                styles.pttButton,
-                isPTTActive && styles.pttButtonActive,
-                // Somebody else has the floor. The button still works: a mesh
-                // has no floor arbiter, and refusing to send would desync the
-                // moment the network partitions. It just says so first.
-                liveTalker !== null && !isPTTActive && styles.pttButtonBusy,
-              ]}
-              onPressIn={() => {
-                // Push-to-talk is the one control in the app used without
-                // looking at it: you hold the phone up and speak. A haptic on
-                // open and on close is how every walkie-talkie app confirms the
-                // channel without asking for your eyes. Medium on start (the
-                // mic is live now), light on release (it closed cleanly).
-                void Haptics.impactAsync(
-                  Haptics.ImpactFeedbackStyle.Medium,
-                ).catch(() => {});
-                void handleTalkStart();
-              }}
-              onPressOut={() => {
-                void Haptics.impactAsync(
-                  Haptics.ImpactFeedbackStyle.Light,
-                ).catch(() => {});
-                void handleTalkEnd();
-              }}
+              style={styles.sendButton}
+              onPress={handleSend}
               hitSlop={hitSlopFor(COMPOSE_BUTTON_SIZE)}
               accessibilityRole="button"
-              accessibilityLabel={
-                liveTalker !== null
-                  ? T("chat.thread.someone_talking", {
-                      hold: liveAvailable
-                        ? T("chat.voice.hold_live")
-                        : T("chat.voice.hold_record"),
-                      name: liveTalker,
-                    })
-                  : liveAvailable
-                    ? T("chat.voice.hold_live")
-                    : T("chat.voice.hold_record")
-              }
+              accessibilityLabel={T("chat.thread.send")}
             >
-              {/* Always the mic. The radio glyph already means "the mesh"
+              <Feather name="arrow-up" size={18} color={Colors.textInverse} />
+            </Pressable>
+          ) : !mediaAllowed ? (
+            // Voice is media, so it is off wherever attachments are, and it says
+            // so the same way rather than leaving a gap in the bar.
+            <Pressable
+              style={[styles.pttButton, styles.composeDisabled]}
+              onPress={explainMediaBlocked}
+              hitSlop={hitSlopFor(COMPOSE_BUTTON_SIZE)}
+              accessibilityRole="button"
+              accessibilityLabel={T("chat.voice.unavailable")}
+              accessibilityState={{ disabled: true }}
+            >
+              <Feather name="mic" size={16} color={Colors.textMuted} />
+            </Pressable>
+          ) : (
+            // PTT button: hold to talk.
+            mediaAllowed && (
+              <Pressable
+                style={[
+                  styles.pttButton,
+                  isPTTActive && styles.pttButtonActive,
+                  // Somebody else has the floor. The button still works: a mesh
+                  // has no floor arbiter, and refusing to send would desync the
+                  // moment the network partitions. It just says so first.
+                  liveTalker !== null && !isPTTActive && styles.pttButtonBusy,
+                ]}
+                onPressIn={() => {
+                  // Push-to-talk is the one control in the app used without
+                  // looking at it: you hold the phone up and speak. A haptic on
+                  // open and on close is how every walkie-talkie app confirms the
+                  // channel without asking for your eyes. Medium on start (the
+                  // mic is live now), light on release (it closed cleanly).
+                  void Haptics.impactAsync(
+                    Haptics.ImpactFeedbackStyle.Medium,
+                  ).catch(() => {});
+                  void handleTalkStart();
+                }}
+                onPressOut={() => {
+                  void Haptics.impactAsync(
+                    Haptics.ImpactFeedbackStyle.Light,
+                  ).catch(() => {});
+                  void handleTalkEnd();
+                }}
+                hitSlop={hitSlopFor(COMPOSE_BUTTON_SIZE)}
+                accessibilityRole="button"
+                accessibilityLabel={
+                  liveTalker !== null
+                    ? T("chat.thread.someone_talking", {
+                        hold: liveAvailable
+                          ? T("chat.voice.hold_live")
+                          : T("chat.voice.hold_record"),
+                        name: liveTalker,
+                      })
+                    : liveAvailable
+                      ? T("chat.voice.hold_live")
+                      : T("chat.voice.hold_record")
+                }
+              >
+                {/* Always the mic. The radio glyph already means "the mesh"
                   elsewhere (peer list, radar, network settings), so state is
                   carried by colour instead:
 
@@ -3454,21 +3782,22 @@ export default function MessageThread({
 
                   Busy is the border, a separate property, so "live available"
                   and "someone else is talking" can both show at once. */}
-              <Feather
-                name="mic"
-                size={16}
-                color={
-                  isPTTActive
-                    ? Colors.danger
-                    : liveAvailable
-                      ? Colors.accent
-                      : Colors.textMuted
-                }
-              />
-            </Pressable>
-          )
-        )}
-      </View>
+                <Feather
+                  name="mic"
+                  size={16}
+                  color={
+                    isPTTActive
+                      ? Colors.danger
+                      : liveAvailable
+                        ? Colors.accent
+                        : Colors.textMuted
+                  }
+                />
+              </Pressable>
+            )
+          )}
+        </View>
+      )}
 
       {/* In-compose voice recording bar: replaces compose row while recording */}
       {(isRecording || isTalkingLive) && (
@@ -3847,6 +4176,10 @@ export default function MessageThread({
           const attachment = actionSheet?.attachment;
           if (attachment) void saveAttachmentToDevice(attachment);
         }}
+        onSelect={() => {
+          const target = actionSheet;
+          if (target) setPickedIds(new Set([target.id]));
+        }}
       />
 
       <MessageInfoSheet
@@ -3864,6 +4197,19 @@ export default function MessageThread({
             forwardMessage(forwardSource, target);
             onNavigateToChannel(target);
           }
+        }}
+      />
+
+      {/* Same picker for a bulk forward. A separate instance rather than a
+          shared one, so its own close animation is not tangled with the
+          single-message path's. */}
+      <ForwardSheet
+        visible={showBulkForward}
+        excludeChannel={channel}
+        onClose={() => setShowBulkForward(false)}
+        onForward={(target) => {
+          forwardSelected(target);
+          onNavigateToChannel(target);
         }}
       />
     </View>
@@ -4160,6 +4506,29 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
     slashHint: {
       fontSize: FontSize.xs,
       color: Colors.textMuted,
+    },
+    // Selection bar: one full-width action in the compose bar's slot, so the
+    // row keeps the same height and border as the bar it stands in for.
+    selectBar: {
+      borderTopWidth: StyleSheet.hairlineWidth,
+      borderTopColor: Colors.border,
+      paddingHorizontal: Spacing.base,
+      paddingVertical: Spacing.sm,
+      backgroundColor: Colors.bg,
+    },
+    selectForward: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: Spacing.sm,
+      minHeight: MIN_TOUCH,
+      borderRadius: Radius.full,
+      backgroundColor: Colors.accent,
+    },
+    selectForwardText: {
+      fontSize: FontSize.base,
+      fontWeight: FontWeight.semibold,
+      color: Colors.textInverse,
     },
     composeBar: {
       flexDirection: "row",
@@ -4868,6 +5237,20 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
     paymentCardClaimedText: {
       fontSize: FontSize.xs,
       color: Colors.online,
+      fontWeight: FontWeight.semibold,
+    },
+    // Same row as "Claimed", muted rather than green: the absence of a payment
+    // rather than the completion of one.
+    paymentCardVoid: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: Spacing.xs,
+      alignSelf: "flex-start",
+      marginTop: Spacing.xs,
+    },
+    paymentCardVoidText: {
+      fontSize: FontSize.xs,
+      color: Colors.textMuted,
       fontWeight: FontWeight.semibold,
     },
     paymentCardClaimText: {

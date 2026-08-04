@@ -2,10 +2,12 @@
  * @jest-environment node
  */
 // Tests for raw-DEFLATE payload compression (bitchat CompressionUtil parity).
+import { deflateRaw } from "pako";
 import {
   compress,
   COMPRESSION_THRESHOLD,
   decompress,
+  MAX_PAYLOAD_BYTES,
   shouldCompress,
 } from "../packet-compression";
 
@@ -147,5 +149,124 @@ describe("packet-compression", () => {
         expect(Array.from(back!)).toEqual(Array.from(input));
       },
     );
+  });
+});
+
+// `originalSize` is a number the sender puts on the wire, so decompress treats
+// it as a claim and caps the output at it while inflating. Without that cap a
+// packet declaring 100 bytes can carry a stream that expands to a gigabyte, and
+// any unauthenticated peer in radio range can crash the app with one.
+//
+// Both bitchat clients bound the output the same way: iOS inflates into a buffer
+// allocated at exactly originalSize, Android does the same and then probes for
+// one byte more.
+describe("decompress bounds a lying size claim", () => {
+  // Highly compressible, so a small stream expands a long way. 4 MiB of zeros
+  // deflates to a few KB and is enough to show the cap working without making
+  // the test slow.
+  const BOMB_SIZE = 4 * 1024 * 1024;
+  const bomb = compress(new Uint8Array(BOMB_SIZE))!;
+
+  it("the fixture really is a compression bomb", () => {
+    expect(bomb).not.toBeNull();
+    // Tiny on the wire, enormous when expanded.
+    expect(bomb.length).toBeLessThan(64 * 1024);
+    expect(BOMB_SIZE / bomb.length).toBeGreaterThan(100);
+  });
+
+  it("refuses a stream that expands past its declared size", () => {
+    expect(decompress(bomb, 100)).toBeNull();
+  });
+
+  it("refuses it whatever small size is declared", () => {
+    for (const declared of [1, 64, 1024, 65_536]) {
+      expect(decompress(bomb, declared)).toBeNull();
+    }
+  });
+
+  // The other half of the boundary: capping must not break the honest case.
+  it("still accepts the same stream at its true size", () => {
+    const out = decompress(bomb, BOMB_SIZE);
+    expect(out).not.toBeNull();
+    expect(out!.length).toBe(BOMB_SIZE);
+    expect(out!.every((b) => b === 0)).toBe(true);
+  });
+
+  it("refuses a size claim larger than the real output", () => {
+    // Not an overflow, but still a mismatch: the packet is malformed either way.
+    expect(decompress(bomb, BOMB_SIZE + 1)).toBeNull();
+  });
+});
+
+describe("decompress input validation", () => {
+  const valid = compress(new Uint8Array(512).fill(7))!;
+
+  it("refuses an empty compressed payload", () => {
+    expect(decompress(new Uint8Array(0), 10)).toBeNull();
+  });
+
+  it("refuses a non-positive declared size", () => {
+    expect(decompress(valid, 0)).toBeNull();
+    expect(decompress(valid, -1)).toBeNull();
+  });
+
+  it("refuses a declared size beyond the payload ceiling", () => {
+    expect(decompress(valid, MAX_PAYLOAD_BYTES + 1)).toBeNull();
+  });
+
+  it("refuses a corrupt stream", () => {
+    const corrupt = Uint8Array.from(valid);
+    corrupt[corrupt.length >> 1] ^= 0xff;
+    expect(decompress(corrupt, 512)).toBeNull();
+  });
+
+  it("refuses a truncated stream rather than returning partial output", () => {
+    expect(decompress(valid.slice(0, valid.length - 2), 512)).toBeNull();
+  });
+
+  it("never throws, whatever it is handed", () => {
+    const junk = new Uint8Array([0xff, 0x00, 0x13, 0x37, 0xab]);
+    expect(() => decompress(junk, 512)).not.toThrow();
+    expect(() => decompress(valid, 1)).not.toThrow();
+  });
+});
+
+describe("payload ceiling", () => {
+  // Matches bitchat's AppConstants.Protocol.MAX_PAYLOAD_LENGTH. One number
+  // bounds the declared wire length in packet-codec and the decompressed output
+  // here, so neither can be raised without the other.
+  it("is 10 MiB, matching bitchat", () => {
+    expect(MAX_PAYLOAD_BYTES).toBe(10 * 1024 * 1024);
+  });
+});
+
+// The bound is a resource limit, not a behaviour change: an unbounded inflate
+// reaches the same verdict, it just pays for the whole expansion first. No
+// correctness assertion can tell the two apart, so this measures the cost.
+//
+// Written like a perf floor rather than a tight timing test. A 64 KiB stream
+// that expands to 64 MiB takes roughly 150ms to inflate whole and roughly 2ms
+// to refuse at the bound, so the threshold sits clear of both: about 17x above
+// what the bounded path needs on a loaded runner, and about 3x below what the
+// unbounded path costs. It catches the bound being removed, never noise.
+describe("decompress refuses a bomb without expanding it", () => {
+  const EXPANDED = 64 * 1024 * 1024;
+  const REFUSAL_BUDGET_MS = 50;
+
+  it("refuses a 64 MiB expansion far faster than inflating it would take", () => {
+    // Built with pako directly at the cheapest level: this is a fixture, not
+    // wire output, so it does not need the level-6 parity compress() enforces,
+    // and level 1 makes it several times faster to construct.
+    const bomb = deflateRaw(new Uint8Array(EXPANDED), { level: 1 });
+    // Comfortably inside the ~1.1 MiB the fragment reassembler admits, so an
+    // attacker really can deliver this. The size is realistic, not contrived.
+    expect(bomb.length).toBeLessThan(512 * 1024);
+
+    const started = performance.now();
+    const out = decompress(bomb, 100);
+    const elapsed = performance.now() - started;
+
+    expect(out).toBeNull();
+    expect(elapsed).toBeLessThan(REFUSAL_BUDGET_MS);
   });
 });

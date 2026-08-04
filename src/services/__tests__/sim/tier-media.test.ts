@@ -4,8 +4,8 @@
 // Attachments and voice: the two features whose bugs only show up when
 // something else is happening at the same moment.
 //
-// A photo is one FILE_TRANSFER packet split into 469-byte fragments and paced
-// onto the radio 20ms apart. A live voice burst is a stream of small packets
+// A photo is one FILE_TRANSFER packet split into fragments that each fit a single
+// BLE write, paced onto the radio 20ms apart. A live voice burst is a stream of small packets
 // that must NOT enter the fragment scheduler. Both share one radio. Every
 // scenario here is about what happens when they share it badly.
 
@@ -14,29 +14,24 @@ jest.mock("react-native/Libraries/EventEmitter/RCTDeviceEventEmitter", () =>
   // Every phone needs its own listener set. See harness/event-router.ts: this
   // is the only interception point that reliably catches every path by which
   // mesh-service and the native modules reach the emitter.
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
   (
     require("./harness/event-router") as { routerModule: () => unknown }
   ).routerModule(),
 );
 jest.mock("../../../bridge/NativeAirhopBLE", () => {
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
   const shim = require("../lifecycle/harness/bridge-shim");
   return { __esModule: true, default: shim.bleBridge };
 });
 jest.mock("../../../bridge/NativeAirhopWiFi", () => {
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
   const shim = require("../lifecycle/harness/bridge-shim");
   return { __esModule: true, default: shim.wifiBridge };
 });
 // Each of these factories re-runs inside every sandboxed phone's module
 // registry, so each phone gets its own disk and its own microphone.
 jest.mock("expo-file-system", () =>
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
   require("./harness/media-fabric").createExpoFileSystemMock(),
 );
 jest.mock("../../../bridge/NativeAirhopVoice", () => {
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
   const { createNativeVoiceMock } = require("./harness/media-fabric");
   const built = createNativeVoiceMock();
   const mod = built.module as Record<string, unknown>;
@@ -44,16 +39,26 @@ jest.mock("../../../bridge/NativeAirhopVoice", () => {
   return { __esModule: true, default: mod };
 });
 
-import { encodeFilePacket } from "../../../core/mesh/bitchat-file-packet";
 import {
+  encodeFilePacket,
+  MAX_SENT_IMAGE_BYTES,
+} from "../../../core/mesh/bitchat-file-packet";
+import {
+  decodePacket,
   encodePacket,
   Flags,
   PacketType,
   signPacket,
   type Packet,
 } from "../../../core/mesh/packet-codec";
+import { BitchatActor } from "./harness/bitchat-actor";
 import { SimDevice, type DeviceSpec } from "./harness/device";
-import { exactlyOnce, noCrashes, noForgedSenders } from "./harness/invariants";
+import {
+  exactlyOnce,
+  noCrashes,
+  noForgedSenders,
+  noOversizedFrames,
+} from "./harness/invariants";
 import { media, sameBytes } from "./harness/media-fabric";
 import { RadioFabric } from "./harness/radio-fabric";
 import { Scenario, waitFor } from "./harness/scenario";
@@ -164,7 +169,10 @@ test("M01 a photo arrives byte-exact and is readable from its bubble", async () 
     title: "40KB JPEG over BLE: fragment, reassemble, cache, render",
     seed: 3,
   }));
-  const { devices } = room(s, [android("alice", 11), android("bob", 22)]);
+  const { radio, devices } = room(s, [
+    android("alice", 11),
+    android("bob", 22),
+  ]);
   const [alice, bob] = devices;
   await waitFor(s.world, () => alice.peers().includes(bob.peerID), 20_000);
 
@@ -214,6 +222,63 @@ test("M01 a photo arrives byte-exact and is readable from its bubble", async () 
       : `${stored.length} bytes cached vs ${photo.length} sent`,
   );
   s.expectNone("exactly once", exactlyOnce(devices));
+  s.expectNone("every frame fits a BLE write", noOversizedFrames(radio));
+  s.expectNone("process health", noCrashes(devices));
+  s.assert(true);
+});
+
+test("M10 a photo at the send budget arrives, every frame legal", async () => {
+  const s = (scenario = new Scenario({
+    id: "M10",
+    title: "256KiB JPEG: the largest photo Airhop will put on the air",
+    seed: 31,
+  }));
+  const { radio, devices } = room(s, [
+    android("alice", 11),
+    android("bob", 22),
+  ]);
+  const [alice, bob] = devices;
+  await waitFor(s.world, () => alice.peers().includes(bob.peerID), 20_000);
+
+  const channel = "#bluetooth";
+  for (const d of devices) d.joinChannel(channel);
+
+  // The whole media tier used to top out at 40 KB, which is 88 fragments. Nothing
+  // exercised the hundreds-of-fragments path where a sizing mistake or a stalled
+  // assembly actually shows up.
+  const photo = media.jpeg(MAX_SENT_IMAGE_BYTES);
+  const accepted = alice.sendAttachment(channel, photo, {
+    type: "image",
+    name: "big.jpg",
+    mimeType: "image/jpeg",
+  });
+  s.check("the send was accepted by a transport", accepted);
+
+  const arrived = await waitFor(
+    s.world,
+    () => bob.attachments(channel).length > 0,
+    120_000,
+  );
+  s.check(
+    "a photo at the send budget still arrives whole",
+    arrived,
+    `bob has ${bob.attachments(channel).length} attachment(s)`,
+  );
+
+  const bubble = bob.attachments(channel)[0];
+  const stored = bubble?.attachment?.uri
+    ? bob.readAttachment(bubble.attachment.uri)
+    : null;
+  s.check(
+    "byte-identical after several hundred fragments",
+    stored !== null && sameBytes(stored, photo),
+    stored === null
+      ? "nothing at the bubble's uri"
+      : `${stored.length} bytes cached vs ${photo.length} sent`,
+  );
+
+  s.expectNone("exactly once", exactlyOnce(devices));
+  s.expectNone("every frame fits a BLE write", noOversizedFrames(radio));
   s.expectNone("process health", noCrashes(devices));
   s.assert(true);
 });
@@ -224,7 +289,7 @@ test("M02 three phones sending photos to one receiver at the same time", async (
     title: "parallel inbound transfers contend for one radio",
     seed: 17,
   }));
-  const { devices } = room(s, [
+  const { radio, devices } = room(s, [
     android("hub", 11),
     android("a", 22),
     android("b", 33),
@@ -282,6 +347,7 @@ test("M02 three phones sending photos to one receiver at the same time", async (
   }
   s.expectNone("exactly once", exactlyOnce(devices));
   s.expectNone("no forged senders", noForgedSenders(devices));
+  s.expectNone("every frame fits a BLE write", noOversizedFrames(radio));
   s.expectNone("process health", noCrashes(devices));
   s.assert(true);
 });
@@ -292,7 +358,10 @@ test("M03 a file that lies about its type is refused", async () => {
     title: "declared image/jpeg, actually a PDF",
     seed: 21,
   }));
-  const { devices } = room(s, [android("alice", 11), android("bob", 22)]);
+  const { radio, devices } = room(s, [
+    android("alice", 11),
+    android("bob", 22),
+  ]);
   const [alice, bob] = devices;
   await waitFor(s.world, () => alice.peers().includes(bob.peerID), 20_000);
   const channel = "#bluetooth";
@@ -332,6 +401,7 @@ test("M03 a file that lies about its type is refused", async () => {
       .map((m) => String(m.attachment?.name))
       .join(", ")}`,
   );
+  s.expectNone("every frame fits a BLE write", noOversizedFrames(radio));
   s.expectNone("process health", noCrashes(devices));
   s.assert(true);
 });
@@ -342,7 +412,10 @@ test("M04 a voice note is delivered as a playable file", async () => {
     title: "recorded AAC sent as a file, with its duration",
     seed: 23,
   }));
-  const { devices } = room(s, [android("alice", 11), android("bob", 22)]);
+  const { radio, devices } = room(s, [
+    android("alice", 11),
+    android("bob", 22),
+  ]);
   const [alice, bob] = devices;
   await waitFor(s.world, () => alice.peers().includes(bob.peerID), 20_000);
   const channel = "#bluetooth";
@@ -383,6 +456,7 @@ test("M04 a voice note is delivered as a playable file", async () => {
     stored !== null && sameBytes(stored, note),
     stored === null ? "no bytes at the uri" : `${stored.length} bytes`,
   );
+  s.expectNone("every frame fits a BLE write", noOversizedFrames(radio));
   s.expectNone("process health", noCrashes(devices));
   s.assert(true);
 });
@@ -419,7 +493,7 @@ test("M08 an attachment cannot be forged, misrouted, or aimed at a room you neve
       recipientPeerID: bob.peerID,
       content: media.jpeg(2_000),
       caption: "unsigned, claiming alice",
-      timestamp: s.world.now,
+      timestamp: s.world.wallClock(),
     }),
   );
   await s.world.advance(2_000);
@@ -438,7 +512,7 @@ test("M08 an attachment cannot be forged, misrouted, or aimed at a room you neve
       recipientPeerID: bob.peerID,
       content: media.jpeg(2_000),
       caption: "signed by the wrong key",
-      timestamp: s.world.now,
+      timestamp: s.world.wallClock(),
       signWith: mallory.identity.signingPrivKey,
     }),
   );
@@ -461,7 +535,7 @@ test("M08 an attachment cannot be forged, misrouted, or aimed at a room you neve
       recipientPeerID: alice.peerID,
       content: media.jpeg(2_000),
       caption: "addressed to alice, not bob",
-      timestamp: s.world.now,
+      timestamp: s.world.wallClock(),
       signWith: mallory.identity.signingPrivKey,
     }),
   );
@@ -487,7 +561,7 @@ test("M08 an attachment cannot be forged, misrouted, or aimed at a room you neve
       channel: "#never-joined",
       content: media.jpeg(2_000),
       caption: "into a room you never joined",
-      timestamp: s.world.now,
+      timestamp: s.world.wallClock(),
       signWith: mallory.identity.signingPrivKey,
     }),
   );
@@ -514,6 +588,9 @@ test("M08 an attachment cannot be forged, misrouted, or aimed at a room you neve
   s.check("a genuine attachment from alice still arrives", arrived);
 
   s.expectNone("no forged senders", noForgedSenders(devices));
+  // No frame-size check here. This scenario deliberately injects packets far
+  // past the link limit, and bob relaying one is the app under test behaving
+  // correctly rather than a sender sizing a frame wrong.
   s.expectNone("process health", noCrashes(devices));
   s.assert();
 });
@@ -582,6 +659,7 @@ test("M07 a recorded voice burst cannot be replayed later at someone else", asyn
     `before=${String(bobBefore)} after=${String(bob.voice?.framesPlayed.length)}`,
   );
   s.expectNone("no forged senders", noForgedSenders(devices));
+  s.expectNone("every frame fits a BLE write", noOversizedFrames(radio));
   s.expectNone("process health", noCrashes(devices));
   s.assert();
 });
@@ -640,6 +718,7 @@ test("M05 live push-to-talk reaches the other phone's speaker", async () => {
     radio.countOfType(0x20) === 0,
     `FRAGMENT packets seen: ${radio.countOfType(0x20)}`,
   );
+  s.expectNone("every frame fits a BLE write", noOversizedFrames(radio));
   s.expectNone("process health", noCrashes(devices));
   s.assert(true);
 });
@@ -703,6 +782,287 @@ test("M06 talking while a file is in flight starves neither", async () => {
     radio.countOfType(0x29) > 0 && radio.countOfType(0x20) > 0,
     radio.airtimeReport(),
   );
+  s.expectNone("every frame fits a BLE write", noOversizedFrames(radio));
   s.expectNone("process health", noCrashes(devices));
+  s.assert(true);
+});
+
+test("M09 a private photo is sealed in the session, not signed in the open", async () => {
+  // What this is really about: a DM attachment used to cross the mesh as a
+  // signed FILE_TRANSFER. Signed means a relay cannot forge it - it does NOT
+  // mean a relay cannot read it, and a private photo used to be legible to
+  // every node it passed through. bitchat now classifies that wire form as the
+  // legacy migration fallback and has scheduled its removal.
+  //
+  // The seal is gated on the recipient having proven capability bit 8 inside a
+  // Noise session (payload 0x21), never on the bit it announced - an announce
+  // is self-signed with a key it carries itself, so gating on that would let
+  // anyone in radio range clear the bit for a peer and force every attachment
+  // back into the clear.
+  const s = (scenario = new Scenario({
+    id: "M09",
+    title: "a DM attachment never appears in cleartext on the air",
+    seed: 21,
+  }));
+  const { radio, devices } = room(s, [
+    android("alice", 11),
+    android("bob", 22),
+    android("relay", 33),
+  ]);
+  const [alice, bob] = devices;
+  // A DM attachment needs a DIRECT link, not merely a known peer: a file is far
+  // too large to flood, so mesh-service refuses the send outright without one.
+  const direct = await waitFor(
+    s.world,
+    () => alice.isDirectPeer(bob.peerID) && bob.isDirectPeer(alice.peerID),
+    30_000,
+  );
+  s.check("alice and bob hold a direct link", direct);
+
+  // Each side keys the thread by the OTHER peer.
+  const aliceThread = `dm:${bob.peerID}`;
+  const bobThread = `dm:${alice.peerID}`;
+  alice.openThread(aliceThread);
+  bob.openThread(bobThread);
+
+  // A DM has to happen first: the Noise session, and therefore the 0x21 proof
+  // that authorises sealing, is established by talking. This is the real
+  // sequence a person goes through, not a shortcut around it.
+  alice.send(aliceThread, "sending you the photo");
+  const talked = await waitFor(
+    s.world,
+    () => bob.texts(bobThread).includes("sending you the photo"),
+    30_000,
+  );
+  s.check("a session was established by the first message", talked);
+
+  // Watch every byte alice puts on the air from here on.
+  const onAir: Packet[] = [];
+  const stopTap = radio.tapWrites((who, _linkID, dataBase64) => {
+    if (who !== alice.id) return;
+    const bin = globalThis.atob(dataBase64);
+    const raw = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) raw[i] = bin.charCodeAt(i);
+    const p = decodePacket(raw);
+    if (p !== null) onAir.push(p);
+  });
+
+  const photo = media.jpeg(20_000);
+  const accepted = alice.sendAttachment(aliceThread, photo, {
+    type: "image",
+    name: "private.jpg",
+    mimeType: "image/jpeg",
+  });
+  s.check("the send was accepted by a transport", accepted);
+
+  const arrived = await waitFor(
+    s.world,
+    () => bob.attachments(bobThread).length > 0,
+    60_000,
+  );
+  stopTap();
+
+  s.check(
+    "the photo still arrives",
+    arrived,
+    `bob has ${bob.attachments(bobThread).length} attachment(s)`,
+  );
+  const uri = bob.attachments(bobThread)[0]?.attachment?.uri;
+  const stored = uri !== undefined ? bob.readAttachment(uri) : null;
+  s.check(
+    "and it decrypts to the exact bytes alice picked",
+    stored !== null && sameBytes(stored, photo),
+    stored === null
+      ? "nothing at the bubble's uri"
+      : `${stored.length} bytes cached vs ${photo.length} sent`,
+  );
+
+  const fragments = onAir.filter((p) => p.type === PacketType.FRAGMENT);
+  s.check(
+    "the file went out fragmented, as any file does",
+    fragments.length > 0,
+    `saw ${String(fragments.length)} fragments`,
+  );
+
+  // The load-bearing assertion. Checking only for a whole FILE_TRANSFER packet
+  // would be worthless: a 20KB file is always split, so no whole file packet is
+  // transmitted either way, and that check passes just as happily when the
+  // photo crosses the mesh in the clear. The fragment header names the inner
+  // type it carries (byte 12), which is what distinguishes the two wire forms.
+  const innerTypes = new Set(
+    fragments.map((f) => (f.payload.length > 12 ? f.payload[12] : -1)),
+  );
+  s.check(
+    "every fragment carries a Noise-encrypted packet, not a file packet",
+    fragments.length > 0 && !innerTypes.has(PacketType.FILE_TRANSFER),
+    `inner types seen: [${[...innerTypes].join(",")}] (${String(PacketType.FILE_TRANSFER)} would be cleartext)`,
+  );
+  s.check(
+    "and no whole cleartext file packet was transmitted either",
+    onAir.every((p) => p.type !== PacketType.FILE_TRANSFER),
+  );
+
+  s.expectNone("every frame fits a BLE write", noOversizedFrames(radio));
+  s.expectNone("process health", noCrashes(devices));
+  s.assert(true);
+});
+
+test("M12 a photo Airhop sends is reassembled by a bitchat phone", async () => {
+  // The one claim nothing tested. Byte fixtures prove our file TLV matches
+  // bitchat's layout, and the radio's link limit proves each frame is legal, but
+  // neither says a node playing by bitchat's rules can put the fragments back
+  // together and get the original photo out. That is exactly what was false in
+  // the field: every frame was 45 bytes over the ATT ceiling, so bitchat's
+  // decoder rejected each one and no photo ever arrived, silently, in both
+  // directions.
+  //
+  // Sent at the real send budget, so this also stands as the guard on it: 256KiB
+  // is about eleven seconds of paced fragments, and bitchat abandons a stream
+  // thirty seconds after its FIRST fragment. Raise the budget far enough and this
+  // scenario reports an expired assembly instead of a photo.
+  const s = (scenario = new Scenario({
+    id: "M12",
+    title: "Airhop photo, reassembled and decoded by bitchat's rules",
+    seed: 41,
+  }));
+  const radio = new RadioFabric(s.world);
+  const alice = SimDevice.create(s.world, android("alice", 11));
+  const droid = new BitchatActor(s.world, {
+    id: "droid",
+    platform: "android",
+    seedByte: 231,
+    channels: ["#bluetooth"],
+  });
+  radio.add(alice);
+  radio.add(droid);
+  s.track(alice);
+  alice.launch();
+  droid.launch();
+
+  const channel = "#bluetooth";
+  alice.joinChannel(channel);
+
+  // An unverifiable file packet is dropped, and the signing key travels in the
+  // ANNOUNCE, so there is nothing to test until the two have met.
+  const met = await waitFor(
+    s.world,
+    () => droid.seen.knownPeers.has(alice.peerID),
+    30_000,
+  );
+  s.check("the bitchat phone learned alice and her signing key", met);
+
+  const photo = media.jpeg(MAX_SENT_IMAGE_BYTES);
+  const accepted = alice.sendAttachment(channel, photo, {
+    type: "image",
+    name: "img_9f8e7d6c-5b4a-4938-8271-6f5e4d3c2b1a.jpg",
+    mimeType: "image/jpeg",
+  });
+  s.check("the send was accepted by a transport", accepted);
+
+  const arrived = await waitFor(
+    s.world,
+    () => droid.seen.filesReceived.length > 0,
+    120_000,
+  );
+  s.check(
+    "bitchat reassembled the fragments into a file",
+    arrived,
+    `filesReceived=${droid.seen.filesReceived.length} expired=${droid.seen.expiredAssemblies}`,
+  );
+
+  const file = droid.seen.filesReceived[0];
+  s.check(
+    "the photo is byte-identical to what alice sent",
+    file !== undefined && sameBytes(file.content, photo),
+    file === undefined
+      ? "nothing decoded"
+      : `${file.content.length}B decoded vs ${photo.length}B sent`,
+  );
+  s.check(
+    "the name and MIME survived the TLV",
+    file?.mime === "image/jpeg" && (file?.name ?? "").startsWith("img_"),
+    `name=${String(file?.name)} mime=${String(file?.mime)}`,
+  );
+  // The window is measured from the first fragment, so a transfer that is too
+  // large or paced too slowly shows up here rather than as a missing photo.
+  s.check(
+    "no stream was abandoned inside bitchat's assembly window",
+    droid.seen.expiredAssemblies === 0,
+    `${droid.seen.expiredAssemblies} expired`,
+  );
+  s.check(
+    "it went as fragmented FILE_TRANSFER, the path bitchat understands",
+    radio.countOfType(0x20) > 0,
+    `airtime: ${radio.airtimeReport()}`,
+  );
+
+  s.expectNone("every frame fits a BLE write", noOversizedFrames(radio));
+  s.expectNone("process health", noCrashes([alice]));
+  s.assert(true);
+});
+
+test("M11 a bitchat-Android voice burst reaches an Airhop speaker", async () => {
+  // Broadcast has two encodings on the wire and both mean the same thing.
+  // bitchat-iOS and Airhop leave the recipient field out; bitchat-Android
+  // writes eight 0xFF bytes with HAS_RECIPIENT set. Live voice is refused
+  // unless the packet is addressed to everyone, so a receiver that knows only
+  // the first encoding drops every Android burst, silently and completely: no
+  // error, no bubble, just a person talking and nobody hearing it.
+  const s = (scenario = new Scenario({
+    id: "M11",
+    title: "the all-0xFF broadcast sentinel is accepted",
+    seed: 37,
+  }));
+  const radio = new RadioFabric(s.world);
+  const bob = SimDevice.create(s.world, android("bob", 22));
+  const droid = new BitchatActor(s.world, {
+    id: "droid",
+    platform: "android",
+    seedByte: 230,
+  });
+  radio.add(bob);
+  radio.add(droid);
+  s.track(bob);
+  bob.launch();
+  droid.launch();
+
+  const channel = "#bluetooth";
+  bob.joinChannel(channel);
+  bob.listenTo(channel);
+
+  // The signing key travels in the ANNOUNCE, and an unverifiable voice frame is
+  // dropped, so there is nothing to test until bob has one.
+  const met = await waitFor(
+    s.world,
+    () => bob.peers().includes(droid.peerID),
+    30_000,
+  );
+  s.check("bob learned the bitchat peer and its signing key", met);
+
+  droid.sendVoiceBurst();
+  // Past the 350ms jitter buffer, so the player has released what it holds.
+  await s.world.advance(2_000);
+
+  s.check(
+    "bob's speaker played the burst",
+    (bob.voice?.framesPlayed.length ?? 0) > 0,
+    `${String(bob.voice?.framesPlayed.length ?? 0)} frames played`,
+  );
+  // The frames that came out of the speaker are the ones the bitchat node put
+  // in, not something the player synthesised to cover a gap.
+  s.check(
+    "the audio is what was spoken, byte for byte",
+    (bob.voice?.framesPlayed ?? []).some(
+      (f) => f.length === 60 && f.every((b) => b === 0x5a),
+    ),
+    `frame sizes: [${(bob.voice?.framesPlayed ?? []).map((f) => f.length).join(",")}]`,
+  );
+  s.check(
+    "it arrived as VOICE_FRAME (0x29), not through the fragment scheduler",
+    radio.countOfType(0x29) > 0 && radio.countOfType(0x20) === 0,
+    `airtime: ${radio.airtimeReport()}`,
+  );
+  s.expectNone("every frame fits a BLE write", noOversizedFrames(radio));
+  s.expectNone("process health", noCrashes([bob]));
   s.assert(true);
 });

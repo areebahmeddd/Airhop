@@ -25,27 +25,24 @@ jest.mock("react-native/Libraries/EventEmitter/RCTDeviceEventEmitter", () =>
   // Every phone needs its own listener set. See harness/event-router.ts: this
   // is the only interception point that reliably catches every path by which
   // mesh-service and the native modules reach the emitter.
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
   (
     require("./harness/event-router") as { routerModule: () => unknown }
   ).routerModule(),
 );
 jest.mock("../../../bridge/NativeAirhopBLE", () => {
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
   const shim = require("../lifecycle/harness/bridge-shim") as {
     bleBridge: unknown;
   };
   return { __esModule: true, default: shim.bleBridge };
 });
 jest.mock("../../../bridge/NativeAirhopWiFi", () => {
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
   const shim = require("../lifecycle/harness/bridge-shim") as {
     wifiBridge: unknown;
   };
   return { __esModule: true, default: shim.wifiBridge };
 });
 
-import { FRAGMENT_SIZE } from "../../../core/mesh/fragment-manager";
+import { MAX_BLE_FRAME } from "../../../core/mesh/fragment-manager";
 import { PacketType } from "../../../core/mesh/packet-codec";
 import { BitchatActor } from "./harness/bitchat-actor";
 import { SimDevice } from "./harness/device";
@@ -356,12 +353,13 @@ test("X03 Airhop's constants still match the vendored bitchat sources", () => {
     );
   }
 
-  // The fragment size is the one constant where a mismatch means silent,
-  // total failure of every attachment between the two apps.
+  // The frame budget is the one constant where being wrong means silent, total
+  // failure of every attachment between the two apps: an oversized frame is
+  // truncated by the radio and the far side's decoder rejects it.
   s.check(
-    "fragment size is still 469 bytes",
-    FRAGMENT_SIZE === 469,
-    `FRAGMENT_SIZE=${FRAGMENT_SIZE}`,
+    "fragment frame budget is the 512-byte ATT ceiling",
+    MAX_BLE_FRAME === 512,
+    `MAX_BLE_FRAME=${MAX_BLE_FRAME}`,
   );
 
   // Packet type registry: every value Airhop defines below 0x29 is bitchat's,

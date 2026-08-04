@@ -123,6 +123,61 @@ describe("notificationContentFor", () => {
   });
 });
 
+// The lock screen renders these without the phone being unlocked, so with
+// previews hidden nothing identifying may appear in either field.
+describe("notificationContentFor with previews hidden", () => {
+  it("a DM names neither the sender nor the message", () => {
+    const content = notificationContentFor(
+      msg({ senderNickname: "alice", text: "meet at the north gate" }),
+      undefined,
+      true,
+    );
+    expect(content.title).not.toContain("alice");
+    expect(content.body).not.toContain("alice");
+    expect(content.body).not.toContain("north gate");
+  });
+
+  it("a DM still says something arrived", () => {
+    const content = notificationContentFor(
+      msg({ text: "yo" }),
+      undefined,
+      true,
+    );
+    expect(content.title.length).toBeGreaterThan(0);
+    expect(content.body.length).toBeGreaterThan(0);
+  });
+
+  it("a channel keeps its name but drops the sender and the message", () => {
+    const content = notificationContentFor(
+      msg({ channel: "group:abc123", senderNickname: "alice", text: "hi all" }),
+      "Weekend Crew",
+      true,
+    );
+    // The room is worth keeping: without it no notification is worth tapping.
+    expect(content.title).toBe("Weekend Crew");
+    expect(content.body).not.toContain("alice");
+    expect(content.body).not.toContain("hi all");
+  });
+
+  it("an attachment is not summarised either", () => {
+    // A "📷 Photo" body still discloses that a photo arrived, and from whom
+    // once combined with the title.
+    const content = notificationContentFor(
+      msg({ text: "", attachment: { type: "image", uri: "x" } }),
+      undefined,
+      true,
+    );
+    expect(content.body).not.toBe("📷 Photo");
+  });
+
+  it("hiding is off unless asked for, so the default call is unchanged", () => {
+    expect(notificationContentFor(msg({ text: "yo" }))).toEqual({
+      title: "alice",
+      body: "yo",
+    });
+  });
+});
+
 describe("attachment previews", () => {
   it("labels each media type the way a chat app does", () => {
     expect(attachmentSummary({ type: "image", uri: "x" })).toBe("📷 Photo");

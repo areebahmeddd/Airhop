@@ -309,6 +309,23 @@ export function badgeMatchesThreads(devices: SimDevice[]): Finding[] {
   return findings;
 }
 
+// Nothing was offered to a link that a link cannot carry. A frame past the
+// 512-byte ATT ceiling is truncated by Android and refused by iOS, so it never
+// decodes on the far side and the transfer dies with no error anywhere. This is
+// the invariant that was missing when every attachment fragment shipped at 557
+// bytes: the fabric had no limit, so nothing noticed.
+export function noOversizedFrames(radio: {
+  framesOversized: number;
+}): Finding[] {
+  if (radio.framesOversized === 0) return [];
+  return [
+    {
+      invariant: "no-oversized-frames",
+      detail: `${String(radio.framesOversized)} frame(s) exceeded the BLE link limit and were dropped`,
+    },
+  ];
+}
+
 // ---- process health ---------------------------------------------------------
 
 // No device died. An uncaught exception on a thread the OS owns is process

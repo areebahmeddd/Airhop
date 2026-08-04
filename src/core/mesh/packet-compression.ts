@@ -19,10 +19,18 @@
 // That option still defaults to true on 2.x for backwards compatibility, so we
 // set it explicitly. pako 3 makes false the default.
 
-import { deflateRaw, inflateRaw } from "pako";
+import { deflateRaw, Inflate } from "pako";
 
 // Don't compress below this size (bitchat Constants.compressionThresholdBytes).
 export const COMPRESSION_THRESHOLD = 100;
+
+// Largest payload we will accept, either declared on the wire or produced by
+// decompressing. Matches bitchat's AppConstants.Protocol.MAX_PAYLOAD_LENGTH
+// (10 MiB); the decoder imports it so one number bounds both.
+//
+// It lives here rather than in packet-codec because decompress() has to enforce
+// it too, and packet-codec already imports this module.
+export const MAX_PAYLOAD_BYTES = 10 * 1024 * 1024;
 
 // zlib DEFAULT_COMPRESSION, the level Android passes and iOS's COMPRESSION_ZLIB
 // matches. Do not change: it would break signature parity with bitchat.
@@ -65,16 +73,63 @@ export function compress(data: Uint8Array): Uint8Array | null {
   }
 }
 
-// Decompress raw DEFLATE. Returns null on failure or size mismatch.
+// Decompress raw DEFLATE. Returns null on failure, overflow or size mismatch.
+//
+// `originalSize` is a number the SENDER put on the wire, so it is a claim, not a
+// fact. The output is therefore capped at that claim while inflating rather than
+// measured afterwards: a packet can declare 100 bytes and carry a stream that
+// expands to a gigabyte, and inflating it whole before noticing is an
+// out-of-memory crash that any unauthenticated peer in radio range can trigger.
+//
+// Both bitchat clients bound the output the same way. iOS inflates into a buffer
+// allocated at exactly `originalSize`, so the decoder physically cannot write
+// past it. Android does the same and then asks the inflater for one more byte;
+// producing one proves the declared size was a lie. Streaming and stopping at
+// the first byte over the limit is that check, applied continuously.
+//
+// Nothing legitimate is affected. A valid stream inflates to exactly
+// `originalSize`, and anything else was already refused by the size comparison
+// this replaces. The only change is that the refusal now happens before the
+// memory is spent instead of after.
 export function decompress(
   compressed: Uint8Array,
   originalSize: number,
 ): Uint8Array | null {
+  if (compressed.length === 0) return null;
+  if (originalSize <= 0 || originalSize > MAX_PAYLOAD_BYTES) return null;
+
+  const inflator = new Inflate({ raw: true });
+  const parts: Uint8Array[] = [];
+  let produced = 0;
+
+  // pako hands each output chunk here and does not guard the call, so throwing
+  // aborts the inflate loop instead of letting it run the bomb to completion.
+  // Every throw is caught below and reported as a refusal, which keeps this
+  // function's "never throws" contract.
+  inflator.onData = (chunk: unknown): void => {
+    const bytes = chunk as Uint8Array;
+    produced += bytes.length;
+    if (produced > originalSize) throw new Error("decompress: overflow");
+    parts.push(bytes);
+  };
+
   try {
-    const out = inflateRaw(compressed);
-    if (out.length !== originalSize) return null;
-    return out;
+    inflator.push(compressed, true);
   } catch {
     return null;
   }
+
+  // err covers a corrupt stream and a truncated one (pako reports a stream that
+  // ends before its terminating marker as Z_BUF_ERROR rather than succeeding
+  // with partial output).
+  if (inflator.err) return null;
+  if (produced !== originalSize) return null;
+
+  const out = new Uint8Array(originalSize);
+  let off = 0;
+  for (const part of parts) {
+    out.set(part, off);
+    off += part.length;
+  }
+  return out;
 }

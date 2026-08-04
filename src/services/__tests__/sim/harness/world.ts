@@ -52,6 +52,16 @@ export class World {
   // model never counts its own milliseconds.
   readonly clock = (): number => this.nowMs;
 
+  // Epoch milliseconds, which is what a packet timestamp field carries.
+  //
+  // Distinct from `now`, which is elapsed simulated time and starts at 0. A
+  // hand-forged packet stamped with `now` looks decades stale to the receiver's
+  // freshness window, so it is dropped for being old rather than for whatever
+  // the scenario was testing, and the test passes for the wrong reason.
+  // Anything building a packet by hand stamps it with this; app code already
+  // does, via Date.now() under the same fake timers.
+  readonly wallClock = (): number => Date.now();
+
   record(who: string, event: TraceEvent): void {
     this.events.push({ ...event, who });
   }

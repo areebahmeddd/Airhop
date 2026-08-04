@@ -66,7 +66,7 @@ const DOWNLOADS = [
 const FACTS = [
   { k: "Name", v: "Airhop" },
   { k: "Category", v: "Messaging" },
-  { k: "Platforms", v: "iOS 16 and later, Android 8.0 and later" },
+  { k: "Platforms", v: "iOS 16.0 and later, Android 8.0 and later" },
   { k: "Price", v: "Free. No ads, no subscriptions, no in-app purchases" },
   { k: "Licence", v: "MIT" },
   { k: "Maintainer", v: "Areeb Ahmed, independent" },
@@ -179,7 +179,7 @@ export default function BrandPage() {
             </div>
             <p className="mt-4 text-sm leading-relaxed text-gray-600">
               A bird on an eleven by six pixel grid. The only mark Airhop has. Black on light, white
-              on dark, nothing in between.
+              on dark.
             </p>
             <div className="mt-6 grid gap-3 sm:grid-cols-2">
               <div className="border border-gray-200 p-4">
@@ -218,9 +218,8 @@ export default function BrandPage() {
 
           <Section title="Colour">
             <p className="text-sm leading-relaxed text-gray-600">
-              Monochrome. A colour that carries no information should not exist. Each semantic hue
-              means one thing and is never decorative, which is what lets a green padlock always
-              read as encrypted. Every value is contrast-checked against its surface.
+              Monochrome. Every colour carries meaning. Semantic hues are never decorative, and
+              every value is contrast-checked against its surface.
             </p>
             <div className="mt-6 space-y-8">
               <div>

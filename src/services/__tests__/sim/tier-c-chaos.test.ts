@@ -18,20 +18,17 @@ jest.mock("react-native/Libraries/EventEmitter/RCTDeviceEventEmitter", () =>
   // Every phone needs its own listener set. See harness/event-router.ts: this
   // is the only interception point that reliably catches every path by which
   // mesh-service and the native modules reach the emitter.
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
   (
     require("./harness/event-router") as { routerModule: () => unknown }
   ).routerModule(),
 );
 jest.mock("../../../bridge/NativeAirhopBLE", () => {
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
   const shim = require("../lifecycle/harness/bridge-shim") as {
     bleBridge: unknown;
   };
   return { __esModule: true, default: shim.bleBridge };
 });
 jest.mock("../../../bridge/NativeAirhopWiFi", () => {
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
   const shim = require("../lifecycle/harness/bridge-shim") as {
     wifiBridge: unknown;
   };
@@ -258,7 +255,7 @@ test("C04 a Sybil flood of fake peers does not evict the real ones", async () =>
       flags: Flags.SIGNED,
       senderID,
       recipientID: new Uint8Array(8),
-      timestamp: s.world.now,
+      timestamp: s.world.wallClock(),
       signature: new Uint8Array(64),
       payload,
     };

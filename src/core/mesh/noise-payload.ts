@@ -20,6 +20,20 @@ export const NoisePayloadType = {
   // same bytes a public burst carries in a VOICE_FRAME packet, so one wire
   // format serves both scopes and only the envelope differs.
   VOICE_FRAME: 0x08,
+  // A whole file, encrypted inside the session rather than signed in the open.
+  // Body is a BitchatFilePacket TLV - the same bytes a public FILE_TRANSFER
+  // carries, so one encoder serves both and only the envelope differs.
+  //
+  // 0x20 is the value already deployed by bitchat-android and required of new
+  // senders. bitchat-iOS also accepts 0x09 from its own prerelease builds and
+  // canonicalizes it on receive; it never emits it, and neither do we. We
+  // accept it for the same reason iOS does: those builds exist in the wild.
+  PRIVATE_FILE: 0x20,
+  PRIVATE_FILE_LEGACY_ALIAS: 0x09,
+  // Capabilities and signing key, proven inside the session instead of
+  // asserted in an announce. See peer-state-packet.ts for why that difference
+  // is the whole point. Permanently assigned; not part of the media migration.
+  AUTHENTICATED_PEER_STATE: 0x21,
 } as const;
 export type NoisePayloadTypeValue =
   (typeof NoisePayloadType)[keyof typeof NoisePayloadType];

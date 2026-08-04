@@ -145,7 +145,7 @@ Identical to bitchat's proven design:
 - **TTL**: 7 hops default; packet copy count decrements each relay
 - **Jitter**: 10–220ms random delay before relay (prevents cascade storms)
 - **Dedup**: 1000-entry LRU seen-set, 5-minute expiry on nonce
-- **Fragment size**: 469 bytes (bitchat-compatible)
+- **Fragment size**: 467 data bytes, inside a 512-byte encoded frame (the BLE write ceiling)
 - **Max concurrent assemblies**: 128
 - **Range per hop**: ~30–50m; 7 hops = ~350m max mesh range
 
@@ -248,7 +248,7 @@ waiting on is not worth a banner.
 
 Airhop is **100% wire-compatible with bitchat**. Airhop nodes appear as normal peers to bitchat devices on the mesh. Unknown packet types (Airhop extensions) are silently dropped by bitchat. No disruption.
 
-> **See [`docs/spec/PROTOCOLS.md`](../spec/PROTOCOLS.md) for the complete byte layout (section 2), packet type registry (section 3), routing constants (section 4), and all other protocol constants.**
+> **See [`PROTOCOLS.md`](PROTOCOLS.md) for the complete [byte layout](PROTOCOLS.md#2-packet-frame-layout), [packet type registry](PROTOCOLS.md#3-packet-type-registry), [routing constants](PROTOCOLS.md#4-routing-constants), and all other protocol constants.**
 
 ### Routing logic
 
@@ -509,7 +509,7 @@ touches screens, so that one touches none.
 
 | In this release                                                  | In v1.3.0                                                 |
 | ---------------------------------------------------------------- | --------------------------------------------------------- |
-| Every user-facing string in one catalog, 1,297 keys              | Nine more catalogs                                        |
+| Every user-facing string in one catalog                          | Nine more catalogs                                        |
 | Zero hardcoded strings, enforced in CI (`i18n:audit -- --max 0`) | Locale store and in-app picker                            |
 | Plurals through `tPlural`, never concatenation                   | CLDR plural rules beyond English's one/other              |
 | Stylesheets on logical properties, so RTL is a catalog away      | Device language negotiation                               |
@@ -585,6 +585,13 @@ what is done about it:
 
 Tor is used exclusively for **Nostr relay connections**. BLE traffic is radio-local and cannot be routed through Tor.
 
+**What Tor does and does not cover here.** It hides your IP from the relay and
+hides DM metadata from the relay operator. It does not conceal that Tor is being
+used at all, because the first hop is a direct connection to the Tor network on
+both platforms. That is why Tor is **off by default**: the default is a safety
+decision, not only a convenience one. Tracked in
+[PROGRESS.md](../dev/PROGRESS.md#known-issues).
+
 ### Panic Wipe
 
 Triggered by the panic button on the Profile screen
@@ -610,33 +617,40 @@ resistance. Everything below is written against that attacker.
 
 ### Threats and countermeasures
 
-| Threat                                 | Countermeasure                                                                                                                                            |
-| -------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Message forgery**                    | Ed25519 signature verified against the key bound to the claimed sender. A missing key or a missing SIGNED flag is a FAILED check, never a skipped one     |
-| **Identity impersonation**             | `peerID == SHA-256(noiseStaticPubKey)[0:16]`, enforced on announces and on completed Noise sessions, so a peer ID cannot be claimed without its key       |
-| **Signing-key substitution**           | TOFU pinning: once a signing key is bound to a peer ID it is never replaced over the air. Only an in-person QR scan may re-pin                            |
-| **Replay attack**                      | Content-derived packet IDs plus a deduplicator, and freshness windows where staleness itself is the attack: ANNOUNCE 15 min, live voice 30 s              |
-| **Man-in-the-middle (session)**        | Noise XX mutual authentication, with the authenticated static key required to derive the peer ID it claims                                                |
-| **Traffic analysis (Nostr)**           | NIP-17 gift-wrap hides sender, recipient and content from the relay; Tor hides the IP; per-cell ephemeral identities for geohash channels                 |
-| **Traffic analysis (BLE)**             | Payloads are encrypted and padded to fixed buckets, so an observer sees uniform random bytes                                                              |
-| **Relay censorship**                   | Several relays queried in parallel; any single relay failure is transparent                                                                               |
-| **Sybil flooding the mesh**            | TTL bounds propagation; the registry and radar are capped with oldest-first eviction that never drops a peer holding a real BLE link                      |
-| **Key compromise (session)**           | Noise XX forward secrecy: past sessions stay safe if a static key later leaks                                                                             |
-| **Key compromise (DM history)**        | Double Ratchet per-message keys, seeded from the Noise **exporter secret** (never the public transcript hash), so the chain is not derivable by observers |
-| **Malicious relay injecting messages** | A relay cannot produce the sender's signature, and forwarding is separate from delivery                                                                   |
-| **Confused-deputy delivery**           | Directed packets are relayed but only rendered by the addressee, so a relay never surfaces someone else's private content                                 |
-| **Group takeover**                     | A group keeps the creator it was created with; a state naming a different creator is refused even at a higher epoch                                       |
-| **Hostile payment source**             | Ecash is only redeemed from a mint the user already added; incoming proofs are DLEQ-verified before anything is stored                                    |
-| **Cashu double-spend**                 | Mint enforces with blind-signature tracking; the receiver redeems promptly                                                                                |
-| **Physical device seizure**            | Panic wipe (triple-tap); keys in Keychain/Keystore (hardware-backed on modern devices)                                                                    |
-| **Screen surveillance**                | App background blurs sensitive content (standard iOS/Android API)                                                                                         |
+| Threat                                 | Countermeasure                                                                                                                                                                                                                                                                                                                                                             |
+| -------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Message forgery**                    | Ed25519 signature verified against the key bound to the claimed sender. A missing key or a missing SIGNED flag is a FAILED check, never a skipped one                                                                                                                                                                                                                      |
+| **Identity impersonation**             | `peerID == SHA-256(noiseStaticPubKey)[0:16]`, enforced on announces and on completed Noise sessions, so a peer ID cannot be claimed without its key                                                                                                                                                                                                                        |
+| **Signing-key substitution**           | Two tiers. An announce is self-signed, so TOFU pinning holds the first key seen and never replaces it over the air. A key **proven inside a Noise session** (payload `0x21`) outranks that and may correct a pin an attacker won the race for; no announce can overwrite a proven key. Only an in-person QR scan may re-pin otherwise                                      |
+| **Capability downgrade**               | Announced bits are a discovery hint and never authorise a change in how we send. Encrypted private media is selected only on an **authenticated** capability, so nobody in radio range can force an attachment back into the clear by announcing the bit off                                                                                                               |
+| **Replay attack**                      | Content-derived packet IDs, a deduplicator, and a **±2 minute freshness window on every packet** at ingress, so stale packets are neither relayed nor acted on. Solicited sync responses are exempt only when tagged `IS_RSR` **and** attributable to a request we made in the last 30 s. Tighter windows where staleness is itself the attack: live voice 30 s            |
+| **Sync amplification**                 | `REQUEST_SYNC` and every packet answering one ride ttl 0, so a rejoining peer's catch-up cannot re-flood the mesh. Responses to one peer are capped at 8 per 30 s                                                                                                                                                                                                          |
+| **Man-in-the-middle (session)**        | Noise XX mutual authentication, with the authenticated static key required to derive the peer ID it claims                                                                                                                                                                                                                                                                 |
+| **Traffic analysis (Nostr)**           | NIP-17 gift-wrap hides sender, recipient and content from the relay; Tor hides the IP; per-cell ephemeral identities for geohash channels                                                                                                                                                                                                                                  |
+| **Traffic analysis (BLE)**             | Payloads are encrypted and padded to fixed buckets, so an observer sees uniform random bytes                                                                                                                                                                                                                                                                               |
+| **Relay censorship**                   | Several relays queried in parallel; any single relay failure is transparent                                                                                                                                                                                                                                                                                                |
+| **Forged departure**                   | A LEAVE is checked against the pinned signing key **before** the relay decision, so an unverifiable one is neither acted on nor passed to nodes that may check less strictly. See [PROTOCOLS.md section 3.6](PROTOCOLS.md#36-leave-is-verified-before-it-is-relayed)                                                                                                       |
+| **Sybil flooding the mesh**            | TTL bounds propagation; the registry and radar are capped with oldest-first eviction that never drops a peer holding a real BLE link                                                                                                                                                                                                                                       |
+| **Key compromise (session)**           | Noise XX forward secrecy: past sessions stay safe if a static key later leaks                                                                                                                                                                                                                                                                                              |
+| **Key compromise (DM history)**        | Double Ratchet per-message keys, seeded from the Noise **exporter secret** (never the public transcript hash), so the chain is not derivable by observers                                                                                                                                                                                                                  |
+| **Malicious relay injecting messages** | A relay cannot produce the sender's signature, and forwarding is separate from delivery                                                                                                                                                                                                                                                                                    |
+| **Confused-deputy delivery**           | Directed packets are relayed but only rendered by the addressee, so a relay never surfaces someone else's private content                                                                                                                                                                                                                                                  |
+| **Group takeover**                     | A group keeps the creator it was created with; a state naming a different creator is refused even at a higher epoch. Enforced in two places, because a group state can either update a group or delete it: the store pins it for every write, and `groupStateAction` pins it **before** the removal branch, which never reaches the store                                  |
+| **Group eviction by a stranger**       | A group ID travels in the clear on every group message so relays can carry it. Without the ordering above, anyone who had seen one could craft a self-signed state naming themselves creator with a roster omitting the victim, and the victim's client would destroy its own key and drop the room. The creator pin is checked first, so such a state is refused outright |
+| **Hostile payment source**             | Ecash is only redeemed from a mint the user already added; incoming proofs are DLEQ-verified before anything is stored                                                                                                                                                                                                                                                     |
+| **Cashu double-spend**                 | Mint enforces with blind-signature tracking; the receiver redeems promptly                                                                                                                                                                                                                                                                                                 |
+| **Physical device seizure**            | Panic wipe (triple-tap); keys in Keychain/Keystore (hardware-backed on modern devices). Attachments are swept at seven days, so a stored photo does not outlive the conversation it belonged to                                                                                                                                                                            |
+| **Screen surveillance**                | App background blurs sensitive content (standard iOS/Android API). Notification previews are withheld by default, since the system renders them on the lock screen without the phone being unlocked                                                                                                                                                                        |
 
 ### What Airhop does NOT protect against
 
 - **Physical proximity**: BLE mesh reveals you are geographically near certain peers
 - **A stable peer ID**: it derives from your long-term Noise key and does NOT rotate, so the same device is linkable across sessions until the identity is regenerated. Only the per-cell geohash identities are ephemeral
-- **Attachment confidentiality**: photos, files and voice notes are signed but NOT encrypted, to stay wire-compatible with bitchat. They are therefore restricted to `#bluetooth` and mesh DMs, and never bridged
+- **Attachment confidentiality in a PUBLIC room**: a photo posted to `#bluetooth` is signed but not encrypted, exactly like the text beside it. That is the point of a public room. A **private** attachment is sealed inside the recipient's Noise session (payload `0x20`) whenever they have proven they can read one; the signed cleartext form survives only for peers that have not, which is the wire form bitchat is retiring. Media stays restricted to `#bluetooth` and mesh DMs, and is never bridged
+- **The fact that you are using Tor**: there are no bridges or pluggable transports on either platform, so the first hop is a direct connection to the Tor network and any deep packet inspection sees it. Tor hides your IP from the relay; it does not hide Tor itself from whoever carries your traffic. Off by default for this reason. See [section 9](#9-privacy--tor-integration)
 - **Traffic timing correlation**: an observer watching multiple BLE radios could infer communication patterns
+- **Courier mail linkability**: the courier recipient tag is keyed on the recipient's _public_ Noise key, which every announce broadcasts, so anyone in radio range can compute a peer's tags for any day and follow their mail across days. Inherited from bitchat, which documents the same flaw in its own implementation; fixing it needs a coordinated v2 tag. See [PROTOCOLS.md section 6](PROTOCOLS.md#6-store-and-forward-courier-constants)
+- **Who authored a public message, some of the time**: origin TTL for public messages is drawn from 5–7 rather than fixed at the maximum, which removes the deterministic "this radio authored it" marker but not the top of the range
 - **Who you are talking to on the mesh**: packet headers carry sender and recipient IDs in the clear, as bitchat's do
 - **Compromised OS**: if the device OS is compromised, all guarantees are void
 - **Mint trust**: Cashu requires trusting the mint to honour redemption; choose reputable mints
@@ -682,7 +696,7 @@ handshakes and the routing while the radios stay unproven until a field test.
 - EAS Build (Expo's CI) runs both builds in parallel on cloud VMs
 - Google Play and Apple App Store treat the result as a fully native app. They don't know or care that TypeScript orchestrates the native layers
 
-**Consistency guarantee for ALL features on BOTH platforms:** Every feature lives in `src/core/` TypeScript. The ~2,400 lines of native BLE code expose an _identical_ TypeScript interface on both platforms. A bug fix in gossip sync fixes both iOS and Android at once. Protocol upgrades ship simultaneously. No drift.
+**Consistency guarantee for ALL features on BOTH platforms:** Every feature lives in `src/core/` TypeScript. The native BLE code is thin and exposes an _identical_ TypeScript interface on both platforms. A bug fix in gossip sync fixes both iOS and Android at once. Protocol upgrades ship simultaneously. No drift.
 
 ## 12. Native Module Architecture
 

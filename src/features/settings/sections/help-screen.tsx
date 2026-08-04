@@ -9,6 +9,7 @@ import {
   useSharedStyles,
 } from "../shared";
 
+import { NEW_ISSUE_URL } from "../../../data/app-info";
 import { useT } from "../../../i18n";
 
 const CONTACT_EMAIL = "hi@areeb.dev";
@@ -50,11 +51,7 @@ export default function HelpScreen({
               icon="alert-circle"
               label={T("settings.help.bug")}
               description={T("settings.help.bug_desc")}
-              onPress={() =>
-                void Linking.openURL(
-                  "https://github.com/areebahmeddd/airhop/issues/new",
-                )
-              }
+              onPress={() => void Linking.openURL(NEW_ISSUE_URL)}
               accessibilityLabel={T("settings.help.bug_a11y")}
               external
             />

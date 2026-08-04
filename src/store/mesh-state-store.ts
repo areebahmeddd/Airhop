@@ -139,10 +139,22 @@ interface MeshStateStore {
   // header react as participants come and go (see bridge-service.ts).
   bridgeActive: boolean;
   bridgePeopleAcross: number;
+  // Whether this device's clock looks wrong to the mesh.
+  //
+  // Every packet is held to a +/-2 minute freshness window, which stops a
+  // recorded packet being replayed at someone who never heard the original. The
+  // cost is that a drifted phone rejects everything it hears and has everything
+  // it sends rejected, going mute while showing a healthy radio and an empty
+  // room. That is indistinguishable from nobody being around.
+  //
+  // Set only when several different peers look out of time, since one peer
+  // sending stale packets is that peer's problem rather than our clock.
+  clockSkewed: boolean;
   // Chosen presence. Session-level: the mesh starts Online on every launch, so
   // this resets to match rather than being restored from disk.
   presenceStatus: PresenceStatus;
 
+  setClockSkewed: (skewed: boolean) => void;
   setBleBlocker: (blocker: BleBlocker) => void;
   setBlePermissionBlocked: (blocked: boolean) => void;
   setPowerSaving: (saving: boolean) => void;
@@ -162,8 +174,12 @@ export const useMeshStateStore = create<MeshStateStore>()((set) => ({
   torActive: false,
   bridgeActive: false,
   bridgePeopleAcross: 0,
+  clockSkewed: false,
   presenceStatus: "online",
 
+  setClockSkewed(skewed) {
+    set({ clockSkewed: skewed });
+  },
   setBleBlocker(blocker) {
     set({ bleBlocker: blocker });
   },
@@ -207,6 +223,10 @@ export interface MeshBannerInputs {
   // the user is watching. Optional so existing callers keep compiling and get no
   // note, which is the right default for a device whose battery we cannot read.
   powerSaving?: boolean;
+  // This device's clock looks wrong to the mesh. Optional so existing callers
+  // keep compiling and get no banner, which is the right default for a caller
+  // with no evidence either way.
+  clockSkewed?: boolean;
   nostrConnected: boolean;
   torActive: boolean;
   gatewayEnabled: boolean;
@@ -328,6 +348,19 @@ export function computeMeshBanners(inputs: MeshBannerInputs): MeshBanner[] {
   // bleBlocker is one value.
   const blocked = bleBlockerBanner(inputs.bleBlocker);
   if (blocked !== null) banners.push(blocked);
+
+  // A wrong clock is a hard blocker, so it ranks with them rather than with the
+  // informational notes below. A drifted phone is refused by every peer and
+  // refuses every peer, a silent outage that looks like an empty room, and none
+  // of the notes below can be trusted while it holds. No action button: nothing
+  // in the app can set the system clock, so it says what to do instead.
+  if (inputs.clockSkewed === true) {
+    banners.push({
+      key: "clock-skew",
+      label: t("mesh.banner.clock_skew"),
+      tone: "caution",
+    });
+  }
 
   // Aggressive OEM background management is the last remaining way the mesh can
   // stop relaying without anything announcing it: the foreground service is
@@ -459,6 +492,7 @@ export function useMeshBanners(): MeshBanner[] {
     (s) => s.backgroundLimitsAcknowledged,
   );
   const powerSaving = useMeshStateStore((s) => s.powerSaving);
+  const clockSkewed = useMeshStateStore((s) => s.clockSkewed);
   const backgroundLimitsBrand =
     !backgroundLimitsAcknowledged && needsBatteryOptimizationPrompt()
       ? getDeviceBrand()
@@ -469,6 +503,7 @@ export function useMeshBanners(): MeshBanner[] {
     locationGranted,
     backgroundLimitsBrand,
     powerSaving,
+    clockSkewed,
     nostrConnected,
     torActive,
     gatewayEnabled,

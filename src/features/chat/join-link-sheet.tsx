@@ -163,6 +163,15 @@ export function JoinLinkSheet({
       <View style={styles.privacyNote}>
         <View style={styles.privacyNoteRow}>
           <Feather
+            name="lock"
+            size={14}
+            color={Colors.e2ee}
+            style={styles.noteIcon}
+          />
+          <Text style={styles.privacyNoteText}>{T("chat.join.key_note")}</Text>
+        </View>
+        <View style={styles.privacyNoteRow}>
+          <Feather
             name="link"
             size={14}
             color={Colors.textMuted}
@@ -171,15 +180,6 @@ export function JoinLinkSheet({
           <Text style={styles.privacyNoteText}>
             {T("chat.join.paste_hint")}
           </Text>
-        </View>
-        <View style={styles.privacyNoteRow}>
-          <Feather
-            name="lock"
-            size={14}
-            color={Colors.e2ee}
-            style={styles.noteIcon}
-          />
-          <Text style={styles.privacyNoteText}>{T("chat.join.key_note")}</Text>
         </View>
         <View style={styles.privacyNoteRow}>
           <Feather

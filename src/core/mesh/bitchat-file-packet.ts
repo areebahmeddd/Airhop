@@ -2,8 +2,8 @@
 // (BitchatFilePacket.swift / MimeType.swift / FileTransferLimits.swift).
 //
 // bitchat sends a whole file as ONE FILE_TRANSFER (0x22) packet whose payload is
-// a TLV blob; the fragment layer (which we already match) splits it into 469-byte
-// BLE fragments. There is no app-level chunking or JSON metadata. The canonical
+// a TLV blob; the fragment layer (which we already match) splits it into frames
+// that fit one BLE write. There is no app-level chunking or JSON metadata. The canonical
 // tags are fileName(0x01), fileSize(0x02), mimeType(0x03), content(0x04); we
 // append two Airhop-only tags (channel 0x05, duration 0x06) that bitchat skips as
 // unknown, so our multi-channel routing and voice-note durations survive without
@@ -15,6 +15,31 @@ export const MAX_FILE_BYTES = 1 * 1024 * 1024; // 1 MiB, absolute ceiling
 export const MAX_VOICE_BYTES = 512 * 1024; // 512 KiB
 export const MAX_IMAGE_BYTES = 512 * 1024; // 512 KiB
 
+// What Airhop puts on the air for a photo, as opposed to the ceiling above,
+// which is what it will ACCEPT. The two differ because of a receiver-side limit
+// on the other client.
+//
+// bitchat expires a half-built assembly 30 seconds after the FIRST fragment
+// arrives, not 30 seconds after the last: BLEFragmentAssemblyBuffer stamps its
+// `timestamp` once at startAssemblyIfNeeded and never refreshes it. At the ~20ms
+// pacing both clients use, 512 KiB is around 1,120 frames and 22 seconds, so a
+// photo at the ceiling only landed if the link never made us retry a single
+// frame. 256 KiB is about 11 seconds, which leaves room for the backoff a busy
+// link forces. bitchat's own photos are 45 KB at a 448px edge, so this stays
+// generous by comparison, and Airhop-to-Airhop is unaffected either way: our own
+// reassembly times out on idle, not on total duration.
+export const MAX_SENT_IMAGE_BYTES = 256 * 1024; // 256 KiB
+
+// The largest transfer that reliably completes inside bitchat's 30-second
+// assembly window, with room for the retries a busy link forces. At the ~20ms
+// pacing both clients use and 467 data bytes per frame, this is about 15 seconds.
+//
+// Not a cap: Airhop-to-Airhop happily carries the full MAX_FILE_BYTES, because
+// our own reassembly times out on idle rather than on total duration. It is the
+// line past which sending to a BITCHAT peer is worth warning about, since above
+// it the file is dropped on arrival and we would otherwise show a sent tick.
+export const MAX_BITCHAT_TRANSFER_BYTES = 350 * 1024; // 350 KiB
+
 // Worst-case reassembled frame: the 1 MiB payload plus the TLV metadata (max
 // fileName + mimeType) and the binary packet envelope. Mirrors bitchat's
 // FileTransferLimits.maxFramedFileBytes so the fragment reassembler and packet
@@ -22,11 +47,44 @@ export const MAX_IMAGE_BYTES = 512 * 1024; // 512 KiB
 export const MAX_FRAMED_FILE_BYTES =
   MAX_FILE_BYTES + 0xffff * 2 + 18 + (16 + 8 + 8 + 64);
 
+// ---- Wire file names --------------------------------------------------------
+
+// bitchat derives a stable message ID for private media from the file name, and
+// only for two exact shapes: `img_<UUID>.jpg` and `voice_<UUID>.m4a` (it also
+// accepts a 16-hex-digit voice token). Anything else, including the plain
+// "photo.jpg" Airhop used to send, makes BitchatFilePacket.stableID return nil,
+// which drops the whole transfer onto bitchat's legacy path: no delivery
+// receipt, no arrival dedup, and repeat arrivals stacking up as "name (1)",
+// "name (2)". The name is not what a person reads for a photo or a voice note
+// (both render as media, never as a file row), so matching bitchat's shape costs
+// nothing and buys the receipts.
+export function wireMediaName(
+  kind: "image" | "voice",
+  extension: "jpg" | "m4a",
+): string {
+  return `${kind === "image" ? "img" : "voice"}_${uuidV4()}.${extension}`;
+}
+
+// RFC 4122 version 4, from the platform CSPRNG. `Math.random` is banned in this
+// codebase and would be wrong here anyway: two photos naming the same id would
+// collide in bitchat's dedup and the second would be discarded as a duplicate.
+function uuidV4(): string {
+  const b = crypto.getRandomValues(new Uint8Array(16));
+  b[6] = (b[6] & 0x0f) | 0x40; // version 4
+  b[8] = (b[8] & 0x3f) | 0x80; // RFC 4122 variant
+  const hex = Array.from(b, (x) => x.toString(16).padStart(2, "0")).join("");
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+}
+
 // ---- MIME allow-list (bitchat MimeType.allowed, plus video for Airhop) ------
 
-// bitchat rejects video; Airhop supports it as an add-on. Video only renders
-// Airhop-to-Airhop (a bitchat peer will drop a video MIME), which is acceptable
-// since bitchat has no video feature to break.
+// bitchat accepts every one of these, including video, but only renders images
+// and voice notes: MimeType resolves an unrecognised type through
+// application/octet-stream (whose UTType is public.data, which everything
+// conforms to), and BitchatMessage.mediaKind only surfaces .image and .voice.
+// So a video or a document reaches a bitchat peer and lands as a plain
+// "[file] name.ext" line it cannot open. Airhop renders both properly, and there
+// is no bitchat feature to break either way.
 const BITCHAT_ALLOWED_MIME = new Set([
   "image/jpeg",
   "image/jpg",

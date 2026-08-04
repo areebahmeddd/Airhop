@@ -538,3 +538,54 @@ export function newGroupID(): Uint8Array {
 export function newGroupKey(): Uint8Array {
   return crypto.getRandomValues(new Uint8Array(GROUP_KEY_LENGTH));
 }
+
+// ---- Applying an inbound group state ----------------------------------------
+
+// What to do with a creator-signed group state that has already passed
+// signature verification and the sender-is-creator check.
+//
+// Pure, because the bug it prevents is one of ordering rather than of any
+// single check, and the ordering is what the tests pin.
+export type GroupStateAction = "reject" | "remove" | "apply";
+
+export interface GroupStateContext {
+  // The creator fingerprint of the group we already hold under this ID, or
+  // undefined when this is the first time we have seen it.
+  heldCreatorFingerprint?: string;
+  // Our own group fingerprint, to find ourselves in the roster.
+  myFingerprint: string;
+}
+
+// Decide what an inbound state means for us. The order is the security
+// property:
+//
+//   1. Creator first. Everything the caller checked is satisfied by an attacker
+//      who names themselves creator: verifyGroupState looks the signing key up
+//      inside the roster it is verifying, and the sender-is-creator test then
+//      passes because they are the peer they named. Neither says anything about
+//      the group we hold.
+//   2. Then removal. A roster that omits us is the creator dropping us.
+//   3. Then apply.
+//
+// Reversing 1 and 2 gives a silent eviction primitive. A group ID rides in the
+// clear on every group message so relays can carry group traffic, so anyone who
+// has seen one could craft a state naming themselves creator with a roster that
+// omits the victim, and the victim's client would destroy its own key and drop
+// the room. bitchat had the same ordering gap, upstream PR #1587.
+export function groupStateAction(
+  state: Pick<GroupStatePayload, "creatorFingerprint" | "members">,
+  ctx: GroupStateContext,
+): GroupStateAction {
+  if (
+    ctx.heldCreatorFingerprint !== undefined &&
+    ctx.heldCreatorFingerprint !== state.creatorFingerprint
+  ) {
+    return "reject";
+  }
+  if (!state.members.some((m) => m.fingerprint === ctx.myFingerprint)) {
+    // Only a group we actually hold can be removed; a roster that never
+    // included us is not an eviction, it is simply not our business.
+    return ctx.heldCreatorFingerprint === undefined ? "reject" : "remove";
+  }
+  return "apply";
+}

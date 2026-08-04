@@ -69,9 +69,6 @@ android/captures/
 *.sublime-project
 *.sublime-workspace
 
-# Reference implementations (local only)
-bitchat/
-
 # Landing page generated artifacts
 landing/node_modules/
 landing/dist/

@@ -19,10 +19,18 @@ export type MessageStatus =
   | "queued" // held locally, retried over the mesh/internet when a route returns
   | "delivered"
   | "read"
-  | "failed";
+  | "failed"
+  // The sender pulled an ecash payment back into their wallet before it landed.
+  // Set only on a token message, and only by the wallet's reclaim.
+  | "reclaimed";
 
 // Progression rank, so a status only ever moves forward (a late "delivered"
 // never downgrades a message that is already "read").
+//
+// "reclaimed" outranks everything deliberately. It is terminal, and it describes
+// the money rather than the packet: once the proofs are back in the sender's
+// balance, a late receipt must not relabel the bubble "delivered" and imply the
+// recipient was paid.
 const STATUS_RANK: Record<MessageStatus, number> = {
   sending: 0,
   failed: 1,
@@ -31,6 +39,7 @@ const STATUS_RANK: Record<MessageStatus, number> = {
   queued: 2,
   delivered: 3,
   read: 4,
+  reclaimed: 5,
 };
 
 // Metadata for a file attached to a chat message.
@@ -225,13 +234,87 @@ export function freeChannelLabel(
 
 const storage = createMMKV({ id: "chat-store" });
 
+// How long a burst of writes is allowed to collapse into one. See below.
+const PERSIST_THROTTLE_MS = 400;
+
 const mmkvStorage = {
   getItem: (name: string): string | null => storage.getString(name) ?? null,
   setItem: (name: string, value: string): void => storage.set(name, value),
   removeItem: (name: string): void => {
     storage.remove(name);
+    pendingWrite = null;
+    if (writeTimer !== null) {
+      clearTimeout(writeTimer);
+      writeTimer = null;
+    }
   },
 };
+
+// Coalesce persistence: a write costs the size of the whole store, not the size
+// of what changed.
+//
+// zustand/persist serialises the entire persisted slice on every set(), which
+// here is every channel and thread, up to 200 messages each, JSON-stringified
+// and handed to MMKV synchronously on the JS thread. One arriving message pays
+// for the room's entire history.
+//
+// Survivable at conversational speed, and not survivable in the case this app
+// exists for: a phone rejoining a busy mesh takes its missed history in a
+// burst, and every packet in that burst re-serialises everything received so
+// far. Same quadratic append bitchat's conversation-store work removed.
+//
+// Trailing-edge throttle: at most one write per window, and the last value in
+// the window is what lands. Dropping intermediate snapshots is safe because
+// each is a complete picture rather than a delta.
+let writeTimer: ReturnType<typeof setTimeout> | null = null;
+let pendingWrite: { name: string; value: string } | null = null;
+
+const throttledMmkvStorage = {
+  getItem: mmkvStorage.getItem,
+  removeItem: mmkvStorage.removeItem,
+  setItem: (name: string, value: string): void => {
+    pendingWrite = { name, value };
+    if (writeTimer !== null) return;
+    writeTimer = setTimeout(() => {
+      writeTimer = null;
+      const write = pendingWrite;
+      pendingWrite = null;
+      if (write !== null) storage.set(write.name, write.value);
+    }, PERSIST_THROTTLE_MS);
+  },
+};
+
+// Force anything still in the window to disk. Called when the app is about to
+// stop being able to write - backgrounding, or a deliberate shutdown - because
+// a throttle that loses the last 400ms of a conversation on the way out is a
+// worse bug than the one it fixes.
+export function flushChatPersistence(): void {
+  if (writeTimer !== null) {
+    clearTimeout(writeTimer);
+    writeTimer = null;
+  }
+  const write = pendingWrite;
+  pendingWrite = null;
+  if (write !== null) storage.set(write.name, write.value);
+}
+
+// Discard anything still in the window without writing it, and drop the
+// snapshot from memory.
+//
+// For the panic wipe. A throttled write holds a complete plaintext snapshot of
+// every thread in a module variable until its timer fires, so a wipe that
+// leaves it armed is a wipe with a queued write of the data it destroyed.
+//
+// The current call order happens to be safe, since clearing the store replaces
+// the snapshot before any timer can run. Cancelling first makes it true by
+// construction instead of by accident.
+export function dropPendingChatPersistence(): void {
+  if (writeTimer !== null) {
+    clearTimeout(writeTimer);
+    writeTimer = null;
+  }
+  pendingWrite = null;
+}
 
 export const useChatStore = create<ChatState>()(
   persist(
@@ -339,7 +422,10 @@ export const useChatStore = create<ChatState>()(
             // The one exception is an explicit reset to "sending": that is only
             // ever set locally by a retry (never by a late receipt), and it must
             // be allowed to pull a "failed" bubble back so the retry shows its
-            // in-progress state instead of staying red.
+            // in-progress state instead of staying red. "reclaimed" is exempt
+            // from that too: the proofs are back in the sender's wallet, so
+            // there is nothing left to retry.
+            if (m.status === "reclaimed") return m;
             if (
               m.status !== undefined &&
               status !== "sending" &&
@@ -605,7 +691,21 @@ export const useChatStore = create<ChatState>()(
     }),
     {
       name: "airhop-chat",
-      storage: createJSONStorage(() => mmkvStorage),
+      storage: createJSONStorage(() => throttledMmkvStorage),
+      // Only what is worth surviving a restart. `activeChannel` is deliberately
+      // excluded: it is where the user is looking right now, not history, and
+      // persisting it means every thread switch rewrites the entire store.
+      partialize: (state) => ({
+        channels: state.channels,
+        messages: state.messages,
+        lastThread: state.lastThread,
+        unreadCounts: state.unreadCounts,
+        channelDescriptions: state.channelDescriptions,
+        pinnedChannels: state.pinnedChannels,
+        mutedChannels: state.mutedChannels,
+        channelKeys: state.channelKeys,
+        channelReach: state.channelReach,
+      }),
     },
   ),
 );

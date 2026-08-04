@@ -25,6 +25,7 @@
 import { ed25519, x25519 } from "@noble/curves/ed25519.js";
 import { sha256 } from "@noble/hashes/sha2.js";
 import { bytesToHex } from "@noble/hashes/utils.js";
+import { decodeFilePacket } from "../../../../core/mesh/bitchat-file-packet";
 import {
   computePacketId,
   decodePacket,
@@ -35,6 +36,12 @@ import {
   verifyPacket,
   type Packet,
 } from "../../../../core/mesh/packet-codec";
+import {
+  encodeBurstData,
+  encodeBurstEnd,
+  encodeBurstStart,
+  VoiceCodec,
+} from "../../../../core/mesh/voice-capture";
 import {
   decodeChannelMsgPayload,
   encodeChannelMsgPayload,
@@ -64,6 +71,19 @@ const BITCHAT_KNOWN_TYPES = new Set<number>([
   PacketType.NOSTR_CARRIER,
   PacketType.VOICE_FRAME,
 ]);
+
+// BLEFragmentAssemblyBuffer.swift. The header is 8 + 2 + 2 + 1; a total above
+// 10,000 or an index past it is refused; 128 streams may be open at once.
+const FRAG_HEADER_LEN = 13;
+const FRAG_MAX_TOTAL = 10_000;
+const FRAG_MAX_CONCURRENT = 128;
+
+// bleFragmentLifetimeSeconds. Counted from the FIRST fragment of a stream, not
+// the last, because `timestamp` is stamped once in startAssemblyIfNeeded and
+// never refreshed. Airhop's own reassembler times out on idle instead, which is
+// the better policy and precisely why this has to be modelled here: our
+// behaviour cannot stand in for theirs.
+const FRAG_LIFETIME_MS = 30_000;
 
 // CourierStore.swift: maxLifetimeSeconds plus one hour of clock-skew slack.
 const COURIER_MAX_LIFETIME_MS = 24 * 60 * 60 * 1000;
@@ -120,8 +140,18 @@ export interface BitchatObservations {
   refusedCourierEnvelopes: number;
   // Packets whose signature did not verify against the claimed sender.
   rejectedSignatures: number;
-  // Files it decoded successfully.
-  filesReceived: { name: string; bytes: number; mime: string }[];
+  // Files it reassembled and decoded successfully, with the bytes that actually
+  // arrived so a scenario can compare them against what was sent.
+  filesReceived: {
+    name: string;
+    bytes: number;
+    mime: string;
+    content: Uint8Array;
+  }[];
+  // Fragment streams abandoned because they did not complete inside bitchat's
+  // assembly window. The window runs from the FIRST fragment, so this is what a
+  // sender that paces too slowly, or sends too much, looks like from here.
+  expiredAssemblies: number;
   relayed: number;
 }
 
@@ -154,6 +184,7 @@ export class BitchatActor implements RadioNode {
     refusedCourierEnvelopes: 0,
     rejectedSignatures: 0,
     filesReceived: [],
+    expiredAssemblies: 0,
     relayed: 0,
   };
 
@@ -163,6 +194,21 @@ export class BitchatActor implements RadioNode {
   // Signing keys learned from verified announces, which is the only thing that
   // binds a peerID to an identity.
   private readonly peerKeys = new Map<string, Uint8Array>();
+  // In-progress fragment reassembly, keyed by sender and stream. Modelled on
+  // BLEFragmentAssemblyBuffer.swift, including the detail that matters most:
+  // `startedAtMs` is stamped once and never refreshed, so the window is measured
+  // from the first fragment rather than the last. That is bitchat's real
+  // behaviour and the reason a large Airhop transfer used to be dropped on
+  // arrival however well the radio was doing.
+  private readonly assemblies = new Map<
+    string,
+    {
+      chunks: Map<number, Uint8Array>;
+      total: number;
+      innerType: number;
+      startedAtMs: number;
+    }
+  >();
   private announceTimer: ReturnType<typeof setInterval> | null = null;
 
   constructor(
@@ -326,6 +372,42 @@ export class BitchatActor implements RadioNode {
     );
   }
 
+  // Hold the push-to-talk button, the way a bitchat user does: START, a run of
+  // DATA packets, then END. Sent as one burst rather than paced over real time,
+  // because what this exercises is acceptance, not the jitter buffer.
+  //
+  // Every frame goes out with the all-0xFF recipient sentinel that
+  // bitchat-Android writes with HAS_RECIPIENT set, which is the encoding a
+  // receiver has to recognise as broadcast on top of the omitted-field form
+  // that bitchat-iOS and Airhop emit.
+  sendVoiceBurst(dataPackets = 3): void {
+    const burstID = new Uint8Array(8).fill(0xa0 + (dataPackets & 0x0f));
+    const frame = new Uint8Array(60).fill(0x5a);
+    const payloads = [encodeBurstStart(burstID, VoiceCodec.AAC_LC_16KHZ_MONO)];
+    for (let seq = 1; seq <= dataPackets; seq++) {
+      payloads.push(encodeBurstData(burstID, seq, [frame]));
+    }
+    payloads.push(
+      encodeBurstEnd(burstID, dataPackets + 1, dataPackets, dataPackets * 100),
+    );
+
+    this.world.say("BITCHAT_SEND", `${this.id}: voice burst`);
+    for (const payload of payloads) {
+      this.broadcast(
+        this.sign({
+          type: PacketType.VOICE_FRAME,
+          ttl: 3,
+          flags: Flags.SIGNED,
+          senderID: this.peerIDBytes(),
+          recipientID: new Uint8Array(8).fill(0xff),
+          timestamp: Date.now(),
+          signature: new Uint8Array(64),
+          payload,
+        }),
+      );
+    }
+  }
+
   // ---- receiving ------------------------------------------------------------
 
   private onPacket(linkID: string, dataBase64: string): void {
@@ -370,6 +452,13 @@ export class BitchatActor implements RadioNode {
           break;
         case PacketType.COURIER_ENV:
           this.onCourierEnvelope(packet);
+          break;
+        case PacketType.FRAGMENT:
+          this.onFragment(packet, senderID);
+          break;
+        case PacketType.FILE_TRANSFER:
+          // Small enough to have needed no fragmenting.
+          this.onFileTransfer(packet);
           break;
         default:
           break;
@@ -437,6 +526,100 @@ export class BitchatActor implements RadioNode {
     this.world.say("BITCHAT_RECEIVED", `${this.id}: ${text}`);
   }
 
+  // Reassembly, to bitchat's rules rather than Airhop's.
+  //
+  // BLEFragmentAssemblyBuffer.swift:
+  //   [0..8)   stream ID
+  //   [8..10)  index, u16 big-endian
+  //   [10..12) total, u16 big-endian
+  //   [12]     the inner packet's type
+  // and it rejects a payload shorter than the header, a total above 10,000, and
+  // an index at or past the total.
+  //
+  // The frame SIZE rule is not enforced here: the radio fabric drops an
+  // oversized frame before it reaches any node, which is what a real link does.
+  // So a sender that frames too large shows up as a stream that never completes,
+  // exactly as it did in the field.
+  private onFragment(packet: Packet, senderID: string): void {
+    const p = packet.payload;
+    if (p.length <= FRAG_HEADER_LEN) return;
+    const index = (p[8] << 8) | p[9];
+    const total = (p[10] << 8) | p[11];
+    if (total === 0 || total > FRAG_MAX_TOTAL || index >= total) return;
+
+    const key = `${senderID}:${bytesToHex(p.subarray(0, 8))}`;
+    this.expireStaleAssemblies();
+
+    let entry = this.assemblies.get(key);
+    if (entry === undefined) {
+      if (this.assemblies.size >= FRAG_MAX_CONCURRENT) return;
+      entry = {
+        chunks: new Map(),
+        total,
+        innerType: p[12],
+        startedAtMs: this.world.now,
+      };
+      this.assemblies.set(key, entry);
+    }
+    entry.chunks.set(index, p.subarray(FRAG_HEADER_LEN));
+    if (entry.chunks.size < entry.total) return;
+
+    this.assemblies.delete(key);
+    const parts: Uint8Array[] = [];
+    for (let i = 0; i < entry.total; i++) {
+      const chunk = entry.chunks.get(i);
+      if (chunk === undefined) return; // cannot happen; a gap means no delivery
+      parts.push(chunk);
+    }
+    const joined = joinChunks(parts);
+    let inner: Packet | null;
+    try {
+      inner = decodePacket(joined);
+    } catch {
+      return;
+    }
+    if (inner === null) return;
+    this.world.say(
+      "BITCHAT_REASSEMBLED",
+      `${this.id} rebuilt ${String(entry.total)} fragments into type 0x${inner.type.toString(16)}`,
+    );
+    if (inner.type === PacketType.FILE_TRANSFER) this.onFileTransfer(inner);
+  }
+
+  // Drop any stream that has been open longer than the window. Measured from the
+  // first fragment, per the comment on `assemblies`.
+  private expireStaleAssemblies(): void {
+    for (const [key, entry] of this.assemblies) {
+      if (this.world.now - entry.startedAtMs <= FRAG_LIFETIME_MS) continue;
+      this.assemblies.delete(key);
+      this.seen.expiredAssemblies++;
+      this.world.say(
+        "BITCHAT_ASSEMBLY_EXPIRED",
+        `${this.id} gave up on a stream after ${String(FRAG_LIFETIME_MS / 1000)}s with ${String(entry.chunks.size)}/${String(entry.total)} fragments`,
+      );
+    }
+  }
+
+  // A whole file packet, reassembled or small enough to have arrived intact.
+  // The TLV parse is Airhop's, deliberately: the layout is the thing both
+  // projects agreed on, so reusing it is the same reasoning that has this file
+  // reuse packet-codec. What is written by hand above is bitchat's POLICY, which
+  // is where the two actually diverge.
+  private onFileTransfer(packet: Packet): void {
+    const file = decodeFilePacket(packet.payload);
+    if (file === null) return;
+    this.seen.filesReceived.push({
+      name: file.fileName ?? "",
+      bytes: file.content.length,
+      mime: file.mimeType ?? "",
+      content: file.content,
+    });
+    this.world.say(
+      "BITCHAT_FILE",
+      `${this.id} decoded ${file.fileName ?? "(unnamed)"} (${String(file.content.length)}B ${file.mimeType ?? "?"})`,
+    );
+  }
+
   private onCourierEnvelope(packet: Packet): void {
     // CourierStore.swift refuses anything stamped beyond its own ceiling rather
     // than clamping it: a sender that asks for longer carriage gets none. The
@@ -454,6 +637,18 @@ export class BitchatActor implements RadioNode {
       );
     }
   }
+}
+
+function joinChunks(parts: Uint8Array[]): Uint8Array {
+  let total = 0;
+  for (const part of parts) total += part.length;
+  const out = new Uint8Array(total);
+  let offset = 0;
+  for (const part of parts) {
+    out.set(part, offset);
+    offset += part.length;
+  }
+  return out;
 }
 
 // The courier envelope TLV carries an expiry as a u64 millisecond timestamp

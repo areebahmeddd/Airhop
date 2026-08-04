@@ -33,7 +33,12 @@ import { ed25519 } from "@noble/curves/ed25519.js";
 import { sha256 } from "@noble/hashes/sha2.js";
 import { concatBytes } from "@noble/hashes/utils.js";
 import { optimalBlockSize, pad, unpad } from "./message-padding";
-import { compress, decompress, shouldCompress } from "./packet-compression";
+import {
+  compress,
+  decompress,
+  MAX_PAYLOAD_BYTES,
+  shouldCompress,
+} from "./packet-compression";
 
 // Packet type registry per PROTOCOLS.md section 3.
 // All values match bitchat MessageType.swift / MessageType.kt (public domain).
@@ -84,12 +89,13 @@ export const Flags = {
 // The encoder omits the recipientID field (and clears HAS_RECIPIENT) when it
 // detects an all-zeros recipient. Decoders set recipientID to BROADCAST_ID when
 // HAS_RECIPIENT is not set, preserving the isBroadcast() helper contract.
+// Other implementations use an all-0xFF sentinel instead; see isBroadcast().
 export const BROADCAST_ID = new Uint8Array(8);
 
 // Fixed header sizes.
 export const V1_HEADER_SIZE = 14; // 2-byte payload length
 export const V2_HEADER_SIZE = 16; // 4-byte payload length (+ optional route)
-const SENDER_ID_SIZE = 8;
+export const SENDER_ID_SIZE = 8;
 const RECIPIENT_ID_SIZE = 8;
 const SIGNATURE_SIZE = 64;
 // Shortest decodable frame: the smaller (v1) header plus a senderID.
@@ -165,9 +171,8 @@ function readU64BE(view: DataView, offset: number): number {
   return hi * 0x100000000 + lo;
 }
 
-// Maximum decodable payload length, matching bitchat's FileTransferLimits guard
-// against absurd length fields (defends the decompressor and allocator).
-const MAX_PAYLOAD_BYTES = 20 * 1024 * 1024;
+// Maximum decodable payload length. Defined in packet-compression so the same
+// number bounds the declared length here and the decompressed output there.
 
 function headerSizeFor(version: number): number | null {
   if (version === 1) return V1_HEADER_SIZE;
@@ -175,9 +180,52 @@ function headerSizeFor(version: number): number | null {
   return null;
 }
 
-// Encode a packet to bitchat's binary wire format. `padding` defaults to true
-// (the on-wire form and the signing preimage are both padded).
-export function encodePacket(p: Packet, padding = true): Uint8Array {
+// Whether a packet of this type is padded to a fixed block on the wire.
+//
+// Two separate things are called padding here, and conflating them breaks the
+// protocol in opposite directions:
+//
+//   * The signing preimage is padded for every type, always. bitchat's
+//     toBinaryDataForSigning() encodes with padding on, so pad bytes are inside
+//     the signed material of every signed packet. signingBytes() forces it and
+//     this function has no part in that case.
+//   * The outbound frame is padded only where its length would leak something.
+//     That is what this decides, mirroring bitchat's
+//     BLEOutboundPacketPolicy.padsBLEFrame.
+//
+// Padding is a privacy tool for ciphertext whose length reveals the plaintext
+// length. On a type whose size is already public it buys nothing and costs
+// airtime on a ~15 KB/s radio: a 30-byte PING becomes 256 bytes, and a
+// ~309-byte voice burst becomes 512, right on the fragment frame budget and past
+// most negotiated MTUs. bitchat leaves voiceFrame unpadded for that reason, and
+// it is the one type where the cost is a broken feature rather than wasted
+// bytes: the 210-byte burst budget exists to keep voice out of the fragment
+// scheduler.
+export function padsBLEFrame(type: PacketType): boolean {
+  switch (type) {
+    // Noise transport and handshake frames: ciphertext length is message
+    // length. These are the two bitchat pads, and the set has to match.
+    case PacketType.NOISE_ENCRYPTED:
+    case PacketType.NOISE_HANDSHAKE:
+    // Airhop-only private types in the same class. bitchat drops both as
+    // unknown, so padding them costs no compatibility.
+    case PacketType.DR_ENCRYPTED:
+    case PacketType.CHANNEL_ENC:
+      return true;
+    default:
+      // Everything else is public, already length-bounded, or time-critical.
+      return false;
+  }
+}
+
+// Encode a packet to bitchat's binary wire format.
+//
+// `padding` defaults to the per-type wire policy above. Callers that need the
+// padded form regardless - only signingBytes() - pass true explicitly.
+export function encodePacket(
+  p: Packet,
+  padding = padsBLEFrame(p.type),
+): Uint8Array {
   const version = p.version ?? 2;
   const lengthFieldBytes = version === 2 ? 4 : 2;
   const headerSize = version === 2 ? V2_HEADER_SIZE : V1_HEADER_SIZE;
@@ -417,14 +465,22 @@ function decodeCore(raw: Uint8Array): Packet | null {
 // This means relay TTL decrements and solicited-response tagging never
 // invalidate the original signature.
 function signingBytes(p: Packet): Uint8Array {
-  return encodePacket({
-    ...p,
-    ttl: 0,
-    isRSR: false,
-    // Clear SIGNED so the signature field is excluded from the signed bytes.
-    flags: p.flags & ~Flags.SIGNED,
-    signature: new Uint8Array(SIGNATURE_SIZE),
-  });
+  return encodePacket(
+    {
+      ...p,
+      ttl: 0,
+      isRSR: false,
+      // Clear SIGNED so the signature field is excluded from the signed bytes.
+      flags: p.flags & ~Flags.SIGNED,
+      signature: new Uint8Array(SIGNATURE_SIZE),
+    },
+    // Always padded, for every type, regardless of the wire policy. bitchat's
+    // toBinaryDataForSigning() encodes with padding on, so pad bytes are part
+    // of the signed material for every signed packet. Using the per-type
+    // default here would re-sign announces, messages, board posts and files
+    // over a different preimage, and no bitchat node would verify them.
+    true,
+  );
 }
 
 // Sign a packet. flags must include Flags.SIGNED before calling.
@@ -468,9 +524,19 @@ export function isForMe(p: Packet, myPeerIDBytes: Uint8Array): boolean {
   return true;
 }
 
-// Check whether the packet is a broadcast (recipientID all-zeros, or
-// HAS_RECIPIENT flag not set: both mean "no specific recipient").
+// Check whether the packet is addressed to everyone rather than to one peer.
+//
+// Three encodings mean the same thing on the wire, and all three are accepted:
+//   - HAS_RECIPIENT clear, recipientID field absent. What we and bitchat-iOS
+//     emit, and what BROADCAST_ID stands in for after decoding.
+//   - recipientID all-zeros, the decoded form of the case above.
+//   - recipientID all-0xFF, the broadcast sentinel bitchat-Android writes with
+//     HAS_RECIPIENT set. Dropping these would silently lose Android live voice
+//     and public file transfers.
 export function isBroadcast(p: Packet): boolean {
   if (!(p.flags & Flags.HAS_RECIPIENT)) return true;
-  return p.recipientID.every((b) => b === 0);
+  return (
+    p.recipientID.every((b) => b === 0) ||
+    p.recipientID.every((b) => b === 0xff)
+  );
 }

@@ -5,7 +5,7 @@ import Feather from "@expo/vector-icons/Feather";
 import React, { useState } from "react";
 import { Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { validateRelayUrl } from "../../../core/nostr/geo-relay";
-import { useT } from "../../../i18n";
+import { t, useT } from "../../../i18n";
 import { getMeshService } from "../../../services/mesh-service";
 import { showAlert } from "../../../store/alert-store";
 import { useSettingsStore } from "../../../store/settings-store";
@@ -173,7 +173,9 @@ export default function NetworkScreen({ onBack }: Props): React.JSX.Element {
                 <Text style={styles.settingDescription}>
                   {customRelays.length === 0
                     ? T("settings.network.custom_desc")
-                    : `${customRelays.length} added`}
+                    : t("settings.network.custom_added", {
+                        count: customRelays.length,
+                      })}
                 </Text>
               </View>
               <Feather

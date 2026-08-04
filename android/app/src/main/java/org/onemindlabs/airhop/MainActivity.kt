@@ -19,6 +19,19 @@ class MainActivity : ReactActivity() {
     super.onCreate(null)
   }
 
+  // Cover the window while it is not frontmost, so the recents thumbnail shows
+  // the Airhop mark instead of an open conversation. See AirhopPrivacyScreen for
+  // why this is an overlay attached here rather than a flag.
+  override fun onPause() {
+    AirhopPrivacyScreen.show(this)
+    super.onPause()
+  }
+
+  override fun onResume() {
+    super.onResume()
+    AirhopPrivacyScreen.hide()
+  }
+
   /**
    * Returns the name of the main component registered from JavaScript. This is used to schedule
    * rendering of the component.

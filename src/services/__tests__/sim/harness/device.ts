@@ -215,7 +215,12 @@ interface MeshLike {
     channel: string,
     text: string,
     nearbyOnly?: boolean,
-  ) => { bleLinks: number; nostr: boolean; [k: string]: unknown };
+  ) => {
+    bleLinks: number;
+    nostr: boolean;
+    gateway: boolean;
+    [k: string]: unknown;
+  };
   sendDm: (
     recipientPeerID: string,
     text: string,
@@ -537,15 +542,23 @@ export class SimDevice {
             ? "queued"
             : "sent";
     } else if (channel.startsWith("group:")) {
-      const ok = service.sendGroupMessage(
+      // Mirrors message-thread.tsx: sealing the packet is not reaching anyone.
+      const sent = service.sendGroupMessage(
         channel.slice("group:".length),
         text,
         id,
-      );
-      status = ok === true ? "sent" : "failed";
+      ) as { sealed: boolean; bleLinks: number } | undefined;
+      status = sent?.sealed === true && sent.bleLinks > 0 ? "sent" : "failed";
     } else {
       const sent = service.sendChannelMessage(channel, text, nearbyOnly);
-      status = sent.bleLinks > 0 || sent.nostr ? "sent" : "failed";
+      // Mirrors message-thread.tsx: a location channel with no live relay but a
+      // reachable gateway peer is "carried", not "failed".
+      status =
+        sent.bleLinks > 0 || sent.nostr
+          ? "sent"
+          : sent.gateway
+            ? "carried"
+            : "failed";
     }
     call(this.inner.stores.chatStore, "setMessageStatus", channel, id, status);
     return status;
@@ -557,7 +570,7 @@ export class SimDevice {
     channel: string,
     text: string,
     nearbyOnly = false,
-  ): { bleLinks: number; nostr: boolean } | undefined {
+  ): { bleLinks: number; nostr: boolean; gateway: boolean } | undefined {
     this.log("SEND_CHANNEL", `${channel}: ${text}`);
     return this.mesh?.sendChannelMessage(channel, text, nearbyOnly);
   }
@@ -1005,7 +1018,6 @@ function buildSandbox(
   jest.resetModules();
 
   jest.isolateModules(() => {
-    /* eslint-disable @typescript-eslint/no-require-imports */
     // Give this phone its own DeviceEventEmitter, explicitly.
     //
     // This is the single most important line in the file, and it exists because
@@ -1187,7 +1199,6 @@ function buildSandbox(
 
     const identity = appShell.makeIdentity(spec.seedByte ?? 7);
     const mesh = require(P.mesh) as Inner["mesh"];
-    /* eslint-enable @typescript-eslint/no-require-imports */
 
     inner = {
       os,

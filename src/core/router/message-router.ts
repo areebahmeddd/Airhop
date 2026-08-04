@@ -26,6 +26,40 @@ import {
   type Packet,
 } from "../mesh/packet-codec";
 
+// Origin TTL for a PUBLIC channel message, drawn from a small range instead of
+// the fixed maximum.
+//
+// A relay decrements TTL, so a packet still carrying the protocol maximum was
+// authored by whoever just transmitted it. To a passive listener that separates
+// "this phone is nearby" from "this phone is talking". bitchat lists
+// randomizing origin TTL alongside dropping the neighbour list as a cheap
+// unilateral improvement (PEER-ID-ROTATION.md section 9).
+//
+// Scope, and what it does not buy:
+//
+//   * Public messages only. The reach cost is real, since a message starting at
+//     5 crosses five hops rather than seven, and public messages are the one
+//     type where that is self-healing: a peer beyond the horizon picks it up
+//     from a neighbour on the next gossip round.
+//   * Not announces. The direct-peer rule in mesh-service identifies a
+//     directly-heard announce by `packet.ttl === ANNOUNCE_TTL`, and that rule
+//     is what stops one hostile peer inventing hundreds of "directly connected"
+//     identities immune to eviction. Randomizing announce TTL would disable it
+//     silently, so any change here has to replace that check first.
+//   * It weakens the signal rather than removing it. The top of the range is
+//     still unambiguous, so roughly a third of public messages stay
+//     attributable. Removing it entirely needs relays that sometimes decline to
+//     decrement, which is a coordinated protocol change.
+const ORIGIN_TTL_MIN = 5;
+const ORIGIN_TTL_MAX = 7;
+
+function originPublicTtl(): number {
+  return (
+    ORIGIN_TTL_MIN +
+    Math.floor(Math.random() * (ORIGIN_TTL_MAX - ORIGIN_TTL_MIN + 1))
+  );
+}
+
 // Timeout for a peer directly connected over BLE (no ANNOUNCE heard within
 // this window means the radio link is gone). Matches bitchat's 15-second
 // direct-link timeout in BLEMaintenancePolicy.
@@ -52,7 +86,22 @@ export interface PeerEntry {
   nostrPubkey?: string;
   // bitchat capability bits announced by this peer (ANNOUNCE TLV 0x05), if any.
   // 0/undefined means the peer advertised none (old client or no TLV).
+  //
+  // A hint. An announce is self-signed with a key carried in the same announce,
+  // so anyone can claim any bits under any peer ID whose Noise key they read off
+  // the air. Never gate a downgrade-sensitive decision on this; use
+  // authenticatedCapabilities.
   capabilities?: number;
+  // Capabilities proven inside a completed Noise session (payload 0x21).
+  // Undefined until such a packet arrives. Unlike `capabilities`, holding a bit
+  // here means the peer demonstrated possession of the Noise private key its
+  // peer ID derives from.
+  authenticatedCapabilities?: number;
+  // Whether `signingPubKey` was learned from an authenticated 0x21 rather than
+  // trusted on first use from an announce. Once true, no announce may change
+  // the key - and an authenticated key MAY correct a TOFU pin, which is what
+  // heals the case where an attacker announced before the real peer did.
+  signingKeyAuthenticated?: boolean;
   // Rendezvous geohash cell a bridge peer advertises (ANNOUNCE TLV 0x06), so a
   // mesh-only peer knows which cell to deposit into. Undefined for non-bridges.
   bridgeGeohash?: string;
@@ -124,6 +173,13 @@ export class PeerRegistry {
       if (!sameKey(existing.noisePubKey, entry.noisePubKey)) return;
     }
 
+    // Session-authenticated state outranks anything an announce carries, and is
+    // never lowered by one. `update()` is the announce path; capabilities that
+    // arrived proven (0x21) stay proven, and a signing key that arrived proven
+    // stays flagged as such. Without this the next announce would quietly
+    // reduce a proof back to a claim, the downgrade bitchat calls out: a public
+    // announce with the bit off must not overwrite session-authenticated state.
+
     // `trusted` is a caller-supplied hint about the source, not peer state, so
     // it is dropped rather than stored.
     const { trusted: _trusted, ...fields } = entry;
@@ -135,10 +191,56 @@ export class PeerRegistry {
       // not carry a nostrPubkey field. Same pattern as session.
       nostrPubkey: entry.nostrPubkey ?? existing?.nostrPubkey,
       capabilities: entry.capabilities ?? existing?.capabilities,
+      authenticatedCapabilities: existing?.authenticatedCapabilities,
+      signingKeyAuthenticated: existing?.signingKeyAuthenticated,
       bridgeGeohash: entry.bridgeGeohash ?? existing?.bridgeGeohash,
       session: entry.session ?? existing?.session,
     });
     if (existing === undefined) this.enforceCap();
+  }
+
+  // Record what a peer PROVED inside a completed Noise session (payload 0x21).
+  //
+  // Returns false when the claim conflicts with a key this peer has already
+  // proven, which is the only case a caller has to act on: two different
+  // authenticated keys for one peer ID cannot both be real, and the first one
+  // stands. Everything else - unknown peer, first proof, repeat of the same
+  // proof - returns true.
+  //
+  // A proof MAY replace a trust-on-first-use pin. That is the point rather than
+  // a loophole: TOFU binds whoever announced first, and an attacker can win
+  // that race by announcing a victim's peer ID with their own signing key. A
+  // session only completes when the remote static key hashes to the claimed
+  // peer ID, so a proof means possession of the real Noise private key, which
+  // no observer can fake. Proven beats assumed; the reverse never happens,
+  // because `update()` above cannot clear these fields.
+  setAuthenticatedState(
+    peerID: string,
+    signingPubKey: Uint8Array,
+    capabilities: number,
+  ): boolean {
+    const e = this.peers.get(peerID);
+    if (e === undefined) return true;
+    if (
+      e.signingKeyAuthenticated === true &&
+      !sameKey(e.signingPubKey, signingPubKey)
+    ) {
+      return false;
+    }
+    e.signingPubKey = signingPubKey;
+    e.signingKeyAuthenticated = true;
+    e.authenticatedCapabilities = capabilities;
+    e.lastSeenMs = Date.now();
+    return true;
+  }
+
+  // Whether a peer has proven this capability inside a Noise session. Announced
+  // bits deliberately do not count: they are a hint that a peer might support
+  // something, never authority to change how we send to them.
+  hasAuthenticatedCapability(peerID: string, bit: number): boolean {
+    const e = this.get(peerID);
+    if (e?.authenticatedCapabilities === undefined) return false;
+    return (e.authenticatedCapabilities & bit) !== 0;
   }
 
   // Drop the least recently seen peers once the registry is over its ceiling.
@@ -182,6 +284,17 @@ export class PeerRegistry {
     if (e) e.session = session;
   }
 
+  // Drop the Noise session while keeping the peer's pinned keys.
+  //
+  // For a peer who announced a deliberate departure: the next message to them
+  // has to re-handshake rather than seal under a session the far side has
+  // already torn down. The identity stays pinned, so a return is still held to
+  // the same signing key it was the first time.
+  clearSession(peerID: string): void {
+    const e = this.peers.get(peerID);
+    if (e) e.session = undefined;
+  }
+
   setNostrPubkey(peerID: string, nostrPubkey: string): void {
     const e = this.peers.get(peerID);
     if (e) e.nostrPubkey = nostrPubkey;
@@ -197,6 +310,21 @@ export class PeerRegistry {
 
   isReachable(peerID: string): boolean {
     return this.get(peerID) !== undefined;
+  }
+
+  // The signing key pinned to this peer, ignoring reachability.
+  //
+  // `get()` hides an entry once it is past its TTL, which is the right answer
+  // to "can I route to them" and the wrong one to "do I know who they are".
+  // Identity pinning has no expiry by design: the first key seen for a peer
+  // stands for as long as they are remembered, so a packet that arrives after
+  // their presence has aged out is still checkable against it.
+  //
+  // Used for LEAVE, where the two questions come apart completely. A departure
+  // is precisely the packet that arrives when a peer has gone quiet, so
+  // resolving its key through the reachability window drops the genuine ones.
+  pinnedSigningKey(peerID: string): Uint8Array | undefined {
+    return this.peers.get(peerID)?.signingPubKey;
   }
 
   reachablePeers(): PeerEntry[] {
@@ -401,7 +529,7 @@ export class MessageRouter {
 
     const packet: Packet = {
       type: PacketType.CHANNEL_MSG,
-      ttl: 7,
+      ttl: originPublicTtl(),
       flags: Flags.SIGNED,
       senderID: senderIDBytes,
       recipientID: new Uint8Array(8), // broadcast
@@ -508,14 +636,31 @@ export class MessageRouter {
     type: number,
     body: Uint8Array,
   ): boolean {
-    const peer = this.registry.get(recipientPeerID);
-    if (peer?.session === undefined) return false;
-    const payload = peer.session.encrypt(encodeNoisePayload(type, body));
-    this.unicast(
-      recipientPeerID,
-      this.makeNoisePacket(recipientPeerID, payload),
-    );
+    const packet = this.buildNoisePayloadPacket(recipientPeerID, type, body);
+    if (packet === null) return false;
+    this.unicast(recipientPeerID, packet);
     return true;
+  }
+
+  // Same as sendNoisePayload, but hands the packet back instead of writing it.
+  //
+  // A payload that is small enough to write straight out is the common case and
+  // sendNoisePayload above is the right shape for it. A whole file is not: one
+  // Noise ciphertext of a few hundred kilobytes still has to be split into
+  // single-write frames and paced onto the radio, and that scheduler lives in
+  // file-transfer-service. Returning the packet lets the sealing decision stay
+  // here (it needs the session) while fragmentation stays there.
+  //
+  // Returns null when no session exists, so the caller can fall back or wait.
+  buildNoisePayloadPacket(
+    recipientPeerID: string,
+    type: number,
+    body: Uint8Array,
+  ): Packet | null {
+    const peer = this.registry.get(recipientPeerID);
+    if (peer?.session === undefined) return null;
+    const payload = peer.session.encrypt(encodeNoisePayload(type, body));
+    return this.makeNoisePacket(recipientPeerID, payload);
   }
 
   // Build and sign a NOISE_ENCRYPTED unicast packet around an already-encrypted

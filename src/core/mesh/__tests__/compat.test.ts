@@ -16,7 +16,7 @@ import {
   decodeAnnouncePayload,
   encodeAnnouncePayload,
 } from "../announce-manager";
-import { FRAG_DATA_SIZE, FRAGMENT_SIZE } from "../fragment-manager";
+import { FRAG_DATA_SIZE, MAX_BLE_FRAME } from "../fragment-manager";
 import {
   BROADCAST_ID,
   computePacketId,
@@ -137,9 +137,18 @@ describe("Packet header byte layout (v2)", () => {
   test("bytes[35–98] are signature (64 bytes)", () =>
     expect(buf.slice(35, 99).every((b) => b === 0x5a)).toBe(true));
   // Core is 16 header + 8 senderID + 8 recipientID + 3 payload + 64 sig = 99,
-  // then PKCS#7-padded up to the 256 block (bitchat MessagePadding).
-  test("frame is PKCS#7-padded to a block size", () =>
-    expect(buf.length).toBe(256));
+  // and an ANNOUNCE goes out at exactly that: bitchat pads only Noise frames on
+  // the wire (BLEOutboundPacketPolicy.padsBLEFrame), because an announce's
+  // length reveals nothing its cleartext TLVs do not already publish. The
+  // signing preimage is padded for every type, which is a separate thing and is
+  // covered in packet-codec.test.ts.
+  test("an announce frame goes out unpadded", () =>
+    expect(buf.length).toBe(99));
+
+  test("a Noise frame IS padded to a block size", () => {
+    const noise = encodePacket({ ...packet, type: PacketType.NOISE_ENCRYPTED });
+    expect(noise.length).toBe(256);
+  });
 
   // Broadcast: no recipientID field on the wire, so payload sits right after the
   // senderID at offset 24 (16 header + 8 senderID).
@@ -558,19 +567,22 @@ describe("ANNOUNCE TLV encoding", () => {
 });
 
 // ---- Fragment Constants -------------------------------------------------------
-// PROTOCOLS.md: fragment size = 469 bytes total; header = 13 bytes.
+// PROTOCOLS.md: the FRAME is the budget, and the fragment header is 13 bytes.
+//
+// The old assertion here read "FRAGMENT_SIZE is exactly 469 bytes (BLE MTU
+// limit)" while the constant was spent as the PAYLOAD budget, so the test name
+// stated the requirement and the value contradicted it. That is what let a
+// 557-byte frame ship. The budget is now the frame, and the chunk is derived
+// from it; fragment-manager.test.ts asserts the encoded frame directly.
 
 describe("Fragment wire constants", () => {
-  test("FRAGMENT_SIZE is exactly 469 bytes (BLE MTU limit)", () => {
-    expect(FRAGMENT_SIZE).toBe(469);
+  test("the frame budget is the 512-byte ATT attribute ceiling", () => {
+    expect(MAX_BLE_FRAME).toBe(512);
   });
 
-  test("FRAG_DATA_SIZE is FRAGMENT_SIZE minus 13-byte fragment header", () => {
-    expect(FRAG_DATA_SIZE).toBe(469 - 13);
-  });
-
-  test("fragment header is 8+2+2+1 = 13 bytes", () => {
-    expect(469 - FRAG_DATA_SIZE).toBe(13);
+  test("the data chunk leaves room for the whole envelope", () => {
+    // 16 header + 8 senderID + 8 recipientID + 13 fragment header = 45.
+    expect(FRAG_DATA_SIZE).toBe(MAX_BLE_FRAME - 45);
   });
 });
 

@@ -16,6 +16,7 @@
 import { bytesToHex } from "@noble/hashes/utils.js";
 import { createMMKV } from "react-native-mmkv";
 import { create } from "zustand";
+import { base64ToBytes, bytesToBase64 } from "../core/encoding/base64";
 import {
   BoardWireConstants,
   decodeBoardWire,
@@ -71,21 +72,6 @@ interface PersistedEntry {
   r: number | null; // tombstone retainUntil, null for posts
 }
 
-// atob/btoa are part of the Hermes global scope in React Native, and global in
-// the Node test runtime, so no base64 dependency is needed.
-function toBase64(bytes: Uint8Array): string {
-  let bin = "";
-  for (const b of bytes) bin += String.fromCharCode(b);
-  return btoa(bin);
-}
-
-function fromBase64(b64: string): Uint8Array {
-  const bin = atob(b64);
-  const out = new Uint8Array(bin.length);
-  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
-  return out;
-}
-
 function keyEq(a: Uint8Array, b: Uint8Array): boolean {
   return bytesToHex(a) === bytesToHex(b);
 }
@@ -100,11 +86,11 @@ export const useBoardStore = create<BoardState>((set, get) => {
     const { posts, tombstones } = get();
     const entries: PersistedEntry[] = [
       ...posts.map((post) => ({
-        w: toBase64(encodeBoardWire({ kind: "post", post })),
+        w: bytesToBase64(encodeBoardWire({ kind: "post", post })),
         r: null,
       })),
       ...tombstones.map((t) => ({
-        w: toBase64(
+        w: bytesToBase64(
           encodeBoardWire({ kind: "tombstone", tombstone: t.tombstone }),
         ),
         r: t.retainUntil,
@@ -376,7 +362,7 @@ export const useBoardStore = create<BoardState>((set, get) => {
   for (const entry of entries) {
     let wire: BoardWire | null;
     try {
-      wire = decodeBoardWire(fromBase64(entry.w));
+      wire = decodeBoardWire(base64ToBytes(entry.w));
     } catch {
       continue;
     }

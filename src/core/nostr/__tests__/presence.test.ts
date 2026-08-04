@@ -1,7 +1,13 @@
 // Tests for geohash encoding/decoding in presence.ts.
 // presence.ts has no native or network dependencies; fully testable in CI.
 
-import { decodeGeohash, encodeGeohash } from "../presence";
+import {
+  decodeGeohash,
+  decorrelationDelayMs,
+  encodeGeohash,
+  mayBroadcastPresence,
+  nextHeartbeatDelayMs,
+} from "../presence";
 
 describe("presence", () => {
   describe("encodeGeohash", () => {
@@ -63,5 +69,67 @@ describe("presence", () => {
       expect(decoded.lat).toBeDefined();
       expect(decoded.lng).toBeDefined();
     });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Heartbeat policy.
+//
+// Presence is the one thing in this app that publishes location on purpose, so
+// what it refuses to publish is as much the feature as what it publishes. Each
+// rule below comes from the cross-platform GeohashPresenceSpec, which both
+// bitchat clients implement identically.
+describe("presence broadcast policy", () => {
+  test("coarse cells may broadcast: region, province, city", () => {
+    expect(mayBroadcastPresence(2)).toBe(true); // region
+    expect(mayBroadcastPresence(4)).toBe(true); // province
+    expect(mayBroadcastPresence(5)).toBe(true); // city
+  });
+
+  // At these precisions a cell is a neighbourhood, a block, a building. A
+  // heartbeat there is a statement about where a person is standing, and the
+  // spec's answer is that the count is simply not knowable: the UI shows
+  // "? people" rather than an undercount presented as fact.
+  test("fine cells never broadcast: neighbourhood, block, building", () => {
+    expect(mayBroadcastPresence(6)).toBe(false); // neighbourhood
+    expect(mayBroadcastPresence(7)).toBe(false); // block
+    expect(mayBroadcastPresence(8)).toBe(false); // building
+    expect(mayBroadcastPresence(9)).toBe(false);
+  });
+
+  test("an unknown precision is refused rather than allowed", () => {
+    expect(mayBroadcastPresence(99)).toBe(false);
+    expect(mayBroadcastPresence(0)).toBe(false);
+  });
+});
+
+describe("heartbeat timing", () => {
+  // 40-80s, averaging 60. A fixed cadence would itself be a fingerprint; the
+  // average is what keeps a peer inside everyone else's five-minute online
+  // window with room to miss a round.
+  test("the round interval stays within the 40-80s window", () => {
+    expect(nextHeartbeatDelayMs(() => 0)).toBe(40_000);
+    expect(nextHeartbeatDelayMs(() => 0.999999)).toBeLessThanOrEqual(80_000);
+    expect(nextHeartbeatDelayMs(() => 0.5)).toBe(60_000);
+  });
+
+  // Each cell is signed by a different derived key, so publishing them together
+  // still leaks: three unfamiliar pubkeys arriving in the same instant, round
+  // after round, group into one device by timing alone.
+  test("cells inside a round are spaced 2-5s apart", () => {
+    expect(decorrelationDelayMs(() => 0)).toBe(2_000);
+    expect(decorrelationDelayMs(() => 0.999999)).toBeLessThanOrEqual(5_000);
+  });
+
+  test("both delays stay inside their window for any random value", () => {
+    for (let i = 0; i <= 100; i++) {
+      const r = i / 100;
+      const beat = nextHeartbeatDelayMs(() => r);
+      expect(beat).toBeGreaterThanOrEqual(40_000);
+      expect(beat).toBeLessThanOrEqual(80_000);
+      const gap = decorrelationDelayMs(() => r);
+      expect(gap).toBeGreaterThanOrEqual(2_000);
+      expect(gap).toBeLessThanOrEqual(5_000);
+    }
   });
 });

@@ -419,6 +419,12 @@ function persistMintSnapshot(
 // never reuses another identity's loaded keysets.
 export function resetWalletService(): void {
   wallets.clear();
+  // A pass in flight is walking transactions the wipe is about to delete. It
+  // cannot be cancelled mid-round-trip, but clearing the handle stops a later
+  // caller joining it and stops the throttle carrying across the reset.
+  reconcileInFlight = null;
+  lastReconcileAtMs = 0;
+  walletEpoch += 1;
   // The recovery phrase went with the keychain the wipe just cleared, so the
   // in-memory seed has to go too. Leaving it would keep deriving proofs from a
   // phrase the user can no longer see or write down.
@@ -1448,15 +1454,69 @@ export async function refreshAccount(
 
 // Re-check every pending transaction. Safe to call on app resume and whenever
 // connectivity returns; it never spends and never credits without the mint.
+// One pass at a time. A pass is a serial walk of every pending deposit, melt and
+// reserved send, one mint round trip each, so on a bad network it runs for
+// minutes. Two overlapping passes would ask the same mint the same questions and
+// double every round trip for nothing.
+//
+// Callers join the pass in flight rather than starting a second one, so an
+// explicit refresh during an automatic pass still awaits a real answer.
+let reconcileInFlight: Promise<void> | null = null;
+let lastReconcileAtMs = 0;
+
+// Bumped by resetWalletService. A pass holds mint round trips open for minutes,
+// so a panic wipe can land in the middle of one, and `recoverMeltChange` credits
+// proofs: without this the tail of an orphaned pass could put money back into a
+// wallet the user had just erased. The pass re-checks between steps and stops.
+let walletEpoch = 0;
+
+// Floor between AUTOMATIC passes only. Foregrounding is a frequent event and a
+// pass is expensive; a user who explicitly pulls to refresh is never throttled.
+const RECONCILE_MIN_INTERVAL_MS = 60_000;
+
+// Settle whatever a previous session or a lost response left hanging: deposits
+// whose invoice was paid while we were away, melts whose result never arrived,
+// and reserved sends the recipient has since redeemed.
+//
+// Never throws: every step is individually best-effort, because one unreachable
+// mint must not stop the others being settled.
 export async function reconcile(): Promise<void> {
+  if (reconcileInFlight !== null) return reconcileInFlight;
+  const epoch = walletEpoch;
+  reconcileInFlight = runReconcilePass().finally(() => {
+    reconcileInFlight = null;
+    // Only if a wipe did not happen underneath us. An orphaned pass finishing
+    // after a reset would otherwise re-arm the throttle the reset had just
+    // cleared, delaying the first pass of the new wallet for no reason.
+    if (walletEpoch === epoch) lastReconcileAtMs = Date.now();
+  });
+  return reconcileInFlight;
+}
+
+// Automatic trigger: fire and forget, throttled, and safe to call from anywhere
+// including an AppState handler. Deliberately synchronous and void-returning so
+// a caller on the foreground path cannot accidentally await minutes of mint
+// round trips.
+export function reconcileIfDue(): void {
+  if (reconcileInFlight !== null) return;
+  if (Date.now() - lastReconcileAtMs < RECONCILE_MIN_INTERVAL_MS) return;
+  void reconcile().catch(() => {
+    // Offline, or a mint is down. The next trigger tries again.
+  });
+}
+
+async function runReconcilePass(): Promise<void> {
   if (!isWalletStorageReady()) return;
   if (isMintNetworkBlocked()) return;
 
+  const epoch = walletEpoch;
+  const wiped = (): boolean => walletEpoch !== epoch;
   const state = useWalletStore.getState();
 
   // Lightning deposits whose invoice may have been paid while the app was shut.
   for (const tx of state.history) {
     if (tx.kind !== "mint" || tx.status !== "pending" || !tx.quoteId) continue;
+    if (wiped()) return;
     try {
       await claimLightningDeposit(tx.mintUrl, tx.unit, tx.quoteId);
     } catch {
@@ -1470,6 +1530,7 @@ export async function reconcile(): Promise<void> {
   for (const tx of state.history) {
     if (tx.kind !== "melt" || tx.status !== "pending") continue;
     if (!tx.quoteId || tx.meltOutputs === undefined) continue;
+    if (wiped()) return;
     try {
       await recoverMeltChange(tx);
     } catch {
@@ -1483,6 +1544,7 @@ export async function reconcile(): Promise<void> {
   for (const [txId, entry] of Object.entries(state.reserved)) {
     const tx = state.history.find((t) => t.id === txId);
     if (!tx || tx.status !== "pending") continue;
+    if (wiped()) return;
     try {
       const wallet = await getWallet(tx.mintUrl, tx.unit);
       const grouped = await wallet.groupProofsByState(
@@ -2330,7 +2392,18 @@ export async function sendNutzap(params: {
       params.recipientPubkey,
     );
     await params.client.publish(event);
-    confirmSend(prepared.txId);
+    // Left pending, and therefore reclaimable, deliberately.
+    //
+    // This tier sends an ORDINARY bearer token, not a P2PK-locked one: the
+    // proofs are still spendable by us, and if the recipient never opens the
+    // message, reclaim is the only way the money comes back. It used to be
+    // confirmed here the moment the relay accepted the event, which made it the
+    // one tier of three that could not be reclaimed, and made the same act
+    // (hand a bearer token to a channel) final over Nostr and reversible over
+    // the mesh. Publishing is not redeeming.
+    //
+    // The nutzap tier above is genuinely different and stays final: those proofs
+    // are locked to the recipient's key and are not ours to take back.
     return {
       method: "dm",
       amount: prepared.amount,

@@ -89,10 +89,12 @@ describe("packet-codec", () => {
       expect(encoded[11]).toBe(0);
     });
 
-    it("pads the frame to a PKCS#7 block size", () => {
-      // A tiny broadcast (16+8+4 = 28 bytes) pads up to the 256 block.
+    it("pads a Noise frame to a PKCS#7 block size", () => {
+      // Noise ciphertext length is the message length, so it is padded on the
+      // wire. A tiny frame (16+8+4 = 28 bytes) goes up to the 256 block.
       const encoded = encodePacket(
         makePacket({
+          type: PacketType.NOISE_ENCRYPTED,
           payload: new Uint8Array([0xde, 0xad, 0xbe, 0xef]),
           flags: 0,
         }),
@@ -105,6 +107,22 @@ describe("packet-codec", () => {
       expect(new TextDecoder().decode(decodePacket(encoded)!.payload)).toBe(
         new TextDecoder().decode(new Uint8Array([0xde, 0xad, 0xbe, 0xef])),
       );
+    });
+
+    it("does not pad a public frame", () => {
+      // A public message's length reveals nothing its content does not, so
+      // padding it would buy nothing and cost 228 bytes of airtime.
+      const encoded = encodePacket(
+        makePacket({
+          type: PacketType.CHANNEL_MSG,
+          payload: new Uint8Array([0xde, 0xad, 0xbe, 0xef]),
+          flags: 0,
+        }),
+      );
+      expect(encoded.length).toBe(28);
+      expect(Array.from(decodePacket(encoded)!.payload)).toEqual([
+        0xde, 0xad, 0xbe, 0xef,
+      ]);
     });
 
     it("a large u64 (ms) timestamp survives the round-trip", () => {
@@ -225,11 +243,19 @@ describe("packet-codec", () => {
     // going through encodePacket. Building the fixture with our own encoder
     // would be circular: it would re-compress and the frame would stop being
     // foreign, so the tests would pass even with the fix removed.
+    // `padded` separates the two senses of padding that the protocol keeps
+    // apart. The SIGNING PREIMAGE is padded for every type on every
+    // implementation (toBinaryDataForSigning encodes with padding on), so a
+    // preimage is always built with padded=true. The wire frame follows the
+    // per-type policy, and ANNOUNCE - what this fixture builds - is one of the
+    // types bitchat does not pad. Getting these the same way round is the whole
+    // point of the fixture.
     function buildFrame(
       ttl: number,
       compressedPayload: Uint8Array,
       originalSize: number,
       signature: Uint8Array | null,
+      padded = false,
     ): Uint8Array {
       const isSigned = signature !== null;
       const payloadDataSize = compressedPayload.length + 4; // + originalSize field
@@ -253,7 +279,7 @@ describe("packet-codec", () => {
       buf.set(compressedPayload, off);
       off += compressedPayload.length;
       if (signature !== null) buf.set(signature, off);
-      return pad(buf, optimalBlockSize(buf.length));
+      return padded ? pad(buf, optimalBlockSize(buf.length)) : buf;
     }
 
     // A frame exactly as another implementation would have put it on the wire:
@@ -264,8 +290,8 @@ describe("packet-codec", () => {
       const priv = ed25519.utils.randomSecretKey();
       const pub = ed25519.getPublicKey(priv);
       // Signing preimage: same frame with ttl=0 and no signature (bitchat
-      // toBinaryDataForSigning), padded.
-      const preimage = buildFrame(0, foreignBytes, payload.length, null);
+      // toBinaryDataForSigning), always padded whatever the wire form is.
+      const preimage = buildFrame(0, foreignBytes, payload.length, null, true);
       const signature = ed25519.sign(preimage, priv);
       const frame = buildFrame(ttl, foreignBytes, payload.length, signature);
       return { frame, payload, foreignBytes, pub };
@@ -302,6 +328,37 @@ describe("packet-codec", () => {
       const { frame } = foreignFrame();
       const decoded = decodePacket(frame)!;
       expect(Array.from(encodePacket(decoded))).toEqual(Array.from(frame));
+    });
+
+    // Decoder tolerance is not optional. bitchat's own padding notes leave
+    // "does the other platform's decoder tolerate trailing bytes" as an open
+    // question, and an implementation that pads a type we do not must still be
+    // readable here - otherwise a peer upgrading its padding policy silently
+    // becomes unreachable rather than noisily incompatible.
+    it("decodes and verifies a foreign frame that WAS padded", () => {
+      const payload = new TextEncoder().encode(TEXT);
+      const foreignBytes = deflateRaw(payload, LEGACY_ENCODER);
+      const priv = ed25519.utils.randomSecretKey();
+      const pub = ed25519.getPublicKey(priv);
+      const preimage = buildFrame(0, foreignBytes, payload.length, null, true);
+      const signature = ed25519.sign(preimage, priv);
+      const padded = buildFrame(
+        7,
+        foreignBytes,
+        payload.length,
+        signature,
+        true,
+      );
+
+      const decoded = decodePacket(padded)!;
+      expect(decoded).not.toBeNull();
+      expect(Array.from(decoded.payload)).toEqual(Array.from(payload));
+      expect(verifyPacket(decoded, pub)).toBe(true);
+      // We relay it on in OUR wire form (unpadded for this type) and it still
+      // verifies for every node downstream, because the signature covers the
+      // padded preimage rather than the frame as transmitted.
+      const relayed = decodePacket(encodePacket({ ...decoded, ttl: 6 }))!;
+      expect(verifyPacket(relayed, pub)).toBe(true);
     });
 
     it("relaying preserves the originator's compressed bytes and signature", () => {
@@ -372,6 +429,37 @@ describe("packet-codec", () => {
   describe("broadcast and unicast helpers", () => {
     it("isBroadcast is true for an all-zero recipient", () => {
       expect(isBroadcast(makePacket())).toBe(true);
+    });
+
+    // The two broadcast sentinels in use on the wire. bitchat-iOS omits the
+    // recipient field; bitchat-Android writes eight 0xFF bytes with
+    // HAS_RECIPIENT set. Both mean "everyone", and both must survive a decode.
+    it("isBroadcast accepts a decoded packet with the field omitted", () => {
+      const decoded = decodePacket(encodePacket(makePacket()));
+      expect(decoded).not.toBeNull();
+      expect(decoded!.flags & Flags.HAS_RECIPIENT).toBe(0);
+      expect(isBroadcast(decoded!)).toBe(true);
+    });
+
+    it("isBroadcast accepts the all-0xFF recipient sentinel", () => {
+      const packet = makePacket({ recipientID: new Uint8Array(8).fill(0xff) });
+      const decoded = decodePacket(encodePacket(packet));
+      expect(decoded).not.toBeNull();
+      expect(decoded!.flags & Flags.HAS_RECIPIENT).toBe(Flags.HAS_RECIPIENT);
+      expect(decoded!.recipientID).toEqual(new Uint8Array(8).fill(0xff));
+      expect(isBroadcast(decoded!)).toBe(true);
+    });
+
+    // A partial run of 0xFF is a peer id, not the sentinel. Accepting it would
+    // hand every packet addressed to 0xFF..00 to every listener on the mesh.
+    it("isBroadcast is false for a recipient that is only partly 0xFF", () => {
+      const nearly = new Uint8Array(8).fill(0xff);
+      nearly[7] = 0x00;
+      const decoded = decodePacket(
+        encodePacket(makePacket({ recipientID: nearly })),
+      );
+      expect(decoded).not.toBeNull();
+      expect(isBroadcast(decoded!)).toBe(false);
     });
 
     it("isForMe matches a recipient id", () => {

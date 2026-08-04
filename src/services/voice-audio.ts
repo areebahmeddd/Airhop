@@ -15,6 +15,7 @@
 
 import { NativeEventEmitter, type EmitterSubscription } from "react-native";
 import NativeAirhopVoice from "../bridge/NativeAirhopVoice";
+import { base64ToBytes, bytesToBase64 } from "../core/encoding/base64";
 import type {
   AudioCaptureBackend,
   VoiceCodecId,
@@ -29,20 +30,6 @@ const EVT_CAPTURE_ERROR = "AirhopVoice.captureError";
 // the UI never promises something the device cannot do.
 export function isLiveVoiceAvailable(): boolean {
   return NativeAirhopVoice !== null && NativeAirhopVoice !== undefined;
-}
-
-function base64ToBytes(base64: string): Uint8Array {
-  // `global.atob` is provided by the RN runtime; Buffer is not always present.
-  const binary = globalThis.atob(base64);
-  const out = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i++) out[i] = binary.charCodeAt(i);
-  return out;
-}
-
-function bytesToBase64(bytes: Uint8Array): string {
-  let binary = "";
-  for (const byte of bytes) binary += String.fromCharCode(byte);
-  return globalThis.btoa(binary);
 }
 
 // ---- Capture ----------------------------------------------------------------

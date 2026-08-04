@@ -26,10 +26,11 @@ export const DmPayloadType = {
   DELIVERED: 0x03,
 } as const;
 
-export type DmPayloadType = (typeof DmPayloadType)[keyof typeof DmPayloadType];
+export type DmPayloadTypeValue =
+  (typeof DmPayloadType)[keyof typeof DmPayloadType];
 
 export interface DmPayload {
-  type: DmPayloadType;
+  type: DmPayloadTypeValue;
   // Message id this payload is about: the message's own id (MESSAGE) or the id
   // being acknowledged (receipts). Empty string only for a legacy message with
   // no id on the wire.
@@ -55,7 +56,7 @@ export function encodeDmReceipt(
 }
 
 function encodeEnvelope(
-  type: DmPayloadType,
+  type: DmPayloadTypeValue,
   messageId: string,
   text: string,
 ): Uint8Array {

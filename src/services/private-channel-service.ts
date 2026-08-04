@@ -20,6 +20,7 @@
 
 import type { Event } from "nostr-tools";
 import { finalizeEvent } from "nostr-tools";
+import { bytesToBase64, tryBase64ToBytes } from "../core/encoding/base64";
 import {
   deriveChannelNostrIdentity,
   openChannelMessage,
@@ -38,23 +39,6 @@ const KIND_PRIVATE_CHANNEL = 20002;
 // burst. Mirrors the geohash channel lookback.
 const LOOKBACK_SECONDS = 3600;
 const INITIAL_LIMIT = 200;
-
-function bytesToBase64(bytes: Uint8Array): string {
-  let bin = "";
-  for (const b of bytes) bin += String.fromCharCode(b);
-  return btoa(bin);
-}
-
-function base64ToBytes(s: string): Uint8Array | null {
-  try {
-    const bin = atob(s);
-    const out = new Uint8Array(bin.length);
-    for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
-    return out;
-  } catch {
-    return null;
-  }
-}
 
 export class PrivateChannelService {
   private readonly client: NostrClient;
@@ -150,7 +134,7 @@ export class PrivateChannelService {
     };
 
     const closer = this.client.subscribe([filter], (event: Event) => {
-      const blob = base64ToBytes(event.content);
+      const blob = tryBase64ToBytes(event.content);
       if (blob === null) return;
       const opened = openChannelMessage(keyB64, blob);
       if (opened === null) return;

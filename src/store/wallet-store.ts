@@ -51,6 +51,7 @@ import EncryptedStorage from "react-native-encrypted-storage";
 import { createMMKV } from "react-native-mmkv";
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
+import { bytesToBase64 } from "../core/encoding/base64";
 
 // ---- Constants --------------------------------------------------------------
 
@@ -343,11 +344,10 @@ let instance: MMKVLike | null = null;
 let ready: Promise<MMKVLike> | null = null;
 
 function randomKey(): string {
-  const bytes = crypto.getRandomValues(new Uint8Array(ENCRYPTION_KEY_BYTES));
-  let binary = "";
-  for (const b of bytes) binary += String.fromCharCode(b);
-  // btoa is present in Hermes and in Node 16+; base64 of 24 bytes is 32 chars.
-  return globalThis.btoa(binary);
+  // Base64 of 24 bytes is 32 characters.
+  return bytesToBase64(
+    crypto.getRandomValues(new Uint8Array(ENCRYPTION_KEY_BYTES)),
+  );
 }
 
 async function loadOrCreateEncryptionKey(): Promise<string> {

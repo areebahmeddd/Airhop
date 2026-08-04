@@ -138,10 +138,20 @@ export interface PeerPresence {
   timestamp: number; // Unix seconds
 }
 
+// Whether presence may be broadcast into a cell of this precision.
+//
+// A heartbeat is a public statement that you are inside a cell. At precision 6
+// and finer that cell is a neighbourhood, a block, a building; region, province
+// and city are coarse enough that "someone is here" says little about who.
+//
+// The spec states the UI consequence: a fine-grained channel showing "0 people"
+// would be wrong, since nobody announces themselves there, so it shows
+// "? people" instead.
+export function mayBroadcastPresence(precision: number): boolean {
+  return ALLOWED_PRECISIONS.has(precision);
+}
+
 export class GeohashPresence {
-  private timer: ReturnType<typeof setTimeout> | null = null;
-  private currentLat: number | null = null;
-  private currentLng: number | null = null;
   private readonly privKey: Uint8Array;
   private readonly client: NostrClient;
 
@@ -150,23 +160,19 @@ export class GeohashPresence {
     this.client = client;
   }
 
-  // Update the current GPS position and broadcast immediately, then restart
-  // the heartbeat timer.
-  updateLocation(lat: number, lng: number): void {
-    this.currentLat = lat;
-    this.currentLng = lng;
-    this.broadcastNow();
-    this.scheduleNext();
+  // Announce that we are in this cell, signed with this cell's key.
+  //
+  // One cell per call. Publishing every allowed precision from one object put
+  // the same key in the region, province and city cells at once, which a relay
+  // can stitch into one person's location. Cadence and cell selection belong to
+  // the caller, which knows which channels the user is in.
+  async publishHeartbeat(geohash: string): Promise<void> {
+    await this.publishPresence(geohash);
   }
 
-  // Stop broadcasting presence heartbeats.
+  // Nothing to tear down: the schedule lives with the caller.
   stop(): void {
-    if (this.timer !== null) {
-      clearTimeout(this.timer);
-      this.timer = null;
-    }
-    this.currentLat = null;
-    this.currentLng = null;
+    // Kept so callers can treat every presence object the same way.
   }
 
   // Subscribe to presence heartbeats in all geohash cells that cover (lat, lng).
@@ -278,20 +284,6 @@ export class GeohashPresence {
 
   // ---- Private ---------------------------------------------------------------
 
-  private broadcastNow(): void {
-    if (this.currentLat === null || this.currentLng === null) return;
-    const lat = this.currentLat;
-    const lng = this.currentLng;
-
-    // Broadcast at each allowed precision level.
-    for (const precision of ALLOWED_PRECISIONS) {
-      const geohash = encodeGeohash(lat, lng, precision);
-      this.publishPresence(geohash).catch(() => {
-        // Best-effort: ignore relay errors for ephemeral presence
-      });
-    }
-  }
-
   private async publishPresence(geohash: string): Promise<void> {
     const event = finalizeEvent(
       {
@@ -308,16 +300,27 @@ export class GeohashPresence {
     );
     await this.client.publish(event);
   }
+}
 
-  private scheduleNext(): void {
-    if (this.timer !== null) clearTimeout(this.timer);
-    const interval =
-      HEARTBEAT_MIN_MS + Math.random() * (HEARTBEAT_MAX_MS - HEARTBEAT_MIN_MS);
-    this.timer = setTimeout(() => {
-      this.broadcastNow();
-      this.scheduleNext();
-    }, interval);
-  }
+// How long to wait before the next round of heartbeats. Randomised 40-80s per
+// the spec: a fixed cadence is itself a fingerprint, and the average of 60s is
+// what keeps a peer inside everyone else's five-minute online window with room
+// for a missed round.
+export function nextHeartbeatDelayMs(
+  random: () => number = Math.random,
+): number {
+  return HEARTBEAT_MIN_MS + random() * (HEARTBEAT_MAX_MS - HEARTBEAT_MIN_MS);
+}
+
+// Gap between two cells' heartbeats inside one round, 2-5s per the spec.
+//
+// Each cell uses a different derived key, but publishing them together still
+// leaks: three unfamiliar pubkeys arriving in the same instant, round after
+// round, group into one device by timing alone.
+export function decorrelationDelayMs(
+  random: () => number = Math.random,
+): number {
+  return 2_000 + random() * 3_000;
 }
 
 // ---- Helpers ----------------------------------------------------------------

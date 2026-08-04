@@ -24,6 +24,7 @@
 //     otherwise, because asymmetric range is a rabbit hole and the bugs we are
 //     hunting do not need it.
 
+import { MAX_BLE_FRAME } from "../../../../core/mesh/fragment-manager";
 import type { RadioPort } from "../../lifecycle/harness/android-native";
 import type { Platform } from "../../lifecycle/harness/os";
 import type { Prng } from "./prng";
@@ -104,6 +105,14 @@ interface Link {
   bLastDeliveryAt: number;
 }
 
+// Exact decoded length of a base64 string. `ceil(len * 3 / 4)` over-reports by
+// up to two bytes, because it ignores the "=" padding, and a frame sitting
+// exactly on the 512-byte limit was reported as 513 and dropped.
+function base64ByteLength(b64: string): number {
+  const pad = b64.endsWith("==") ? 2 : b64.endsWith("=") ? 1 : 0;
+  return (b64.length / 4) * 3 - pad;
+}
+
 function pairKey(a: string, b: string): string {
   return a < b ? `${a}|${b}` : `${b}|${a}`;
 }
@@ -137,6 +146,8 @@ export class RadioFabric {
   packetsCorrupted = 0;
   packetsDuplicated = 0;
   bytesOnAir = 0;
+  // Frames a sender offered that no BLE link could carry whole.
+  framesOversized = 0;
   // Airtime by packet type. The medium does not decode packets - it reads byte
   // [1] of the frame, which is the type, and nothing else. That is enough to
   // answer "what is this room actually spending its radio on", which is the
@@ -461,9 +472,26 @@ export class RadioFabric {
     for (const tap of this.taps) tap(fromID, linkID, dataBase64);
 
     const cond = this.conditionsFor(fromID, toID);
-    const bytes = Math.ceil((dataBase64.length * 3) / 4);
+    const bytes = base64ByteLength(dataBase64);
     this.bytesOnAir += bytes;
     this.countType(dataBase64);
+
+    // A real link cannot carry a frame past the ATT attribute ceiling. Android
+    // truncates the write to MTU-3 and the far side's decoder rejects what is
+    // left; iOS refuses it outright. Either way nothing arrives, so the fabric
+    // drops it and counts it.
+    //
+    // The fabric used to accept any size, which is why a 557-byte fragment
+    // passed every simulation while every attachment vanished on real hardware.
+    // `framesOversized` exists so a scenario can assert it never happened.
+    if (bytes > MAX_BLE_FRAME) {
+      this.framesOversized++;
+      this.world.say(
+        "FRAME_OVERSIZED",
+        `${fromID} -> ${toID} ${String(bytes)}B exceeds the ${String(MAX_BLE_FRAME)}B link limit, dropped`,
+      );
+      return;
+    }
 
     if (this.rng.chance(cond.loss)) {
       this.packetsDropped++;

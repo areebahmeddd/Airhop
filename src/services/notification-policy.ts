@@ -50,24 +50,43 @@ export function messagePreview(msg: ChatMessage): string {
 // display name for the channel (group name, "#<geohash>", "#city"); the caller
 // passes it because resolving it needs store access, and this file stays pure.
 // It falls back to the raw channel key so the title is never blank.
+//
+// `hidePreviews` redacts both the sender and the body, saying only that
+// something arrived. The system renders a notification on the lock screen
+// without the phone being unlocked, so a full preview is readable by anyone who
+// can see the screen. It is a caller-supplied argument rather than a store read
+// so this file stays pure and each case is directly testable.
+//
+// Redaction never touches the routing data the caller attaches separately, so a
+// hidden notification still opens the right thread when tapped.
 export function notificationContentFor(
   msg: ChatMessage,
   channelLabel?: string,
+  hidePreviews = false,
 ): {
   title: string;
   body: string;
 } {
-  const preview = messagePreview(msg);
   if (isDirectMessage(msg.channel)) {
-    return { title: msg.senderNickname, body: preview };
+    if (hidePreviews) {
+      return { title: t("notif.hidden.title"), body: t("notif.hidden.dm") };
+    }
+    return { title: msg.senderNickname, body: messagePreview(msg) };
+  }
+  // A redacted channel notification keeps the room name. The channel a person
+  // is in is not the secret the body is, and without it every notification
+  // would be identical and none would be worth tapping.
+  const title = channelLabel ?? msg.channel;
+  if (hidePreviews) {
+    return { title, body: t("notif.hidden.channel") };
   }
   return {
-    title: channelLabel ?? msg.channel,
+    title,
     // The sender's nickname is user content and stays exactly as they set it;
     // only the punctuation joining it to the preview is translated.
     body: t("notif.channel_message", {
       sender: msg.senderNickname,
-      preview,
+      preview: messagePreview(msg),
     }),
   };
 }

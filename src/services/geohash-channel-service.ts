@@ -43,9 +43,12 @@ import { unwrapDm, wrapDm } from "../core/nostr/gift-wrap";
 import type { NostrClient } from "../core/nostr/nostr-client";
 import {
   decodeGeohash,
+  decorrelationDelayMs,
   encodeGeohash,
   GeohashPresence,
   KIND_PRESENCE,
+  mayBroadcastPresence,
+  nextHeartbeatDelayMs,
   TAG_MESSAGE_ID,
 } from "../core/nostr/presence";
 import { t } from "../i18n";
@@ -308,6 +311,13 @@ export class GeohashChannelService {
       this.channelGeohash.set(channel, geohash);
       this.subscribeChannel(channel, geohash);
     }
+
+    // Decided here, once, from the state that actually exists - rather than
+    // started as a side effect of a cell changing. Leaving every location
+    // channel would otherwise leave a heartbeat timer running forever with
+    // nothing to announce into.
+    if (this.broadcastableCells().length > 0) this.startPresenceHeartbeat();
+    else this.stopPresenceHeartbeat();
   }
 
   // The geohash a joined channel should subscribe to right now. Teleported
@@ -438,7 +448,81 @@ export class GeohashChannelService {
       });
   }
 
+  // ---- Presence heartbeat ---------------------------------------------------
+
+  // Tell the cells we are in that somebody is here.
+  //
+  // Without this an Airhop user reads the participant count and never appears
+  // in anyone else's, on Airhop or bitchat. A room that says "2 people" when
+  // five are reading it is worse than no count, because people act on it.
+  //
+  // Three rules from the cross-platform spec:
+  //
+  //   * Coarse cells only (precision <= 5), enforced in presence.ts.
+  //   * Each cell signs with its own derived key, so being in the city cell and
+  //     the region cell cannot be linked to one person.
+  //   * Cells within a round are spaced 2-5s apart. Distinct keys arriving in
+  //     the same instant, round after round, group by timing alone.
+  private heartbeatTimer: ReturnType<typeof setTimeout> | null = null;
+
+  // Spacing inside a round. A plain promise timer rather than a scheduler,
+  // because the round is a sequence rather than a set of independent jobs.
+  private static wait(ms: number): Promise<void> {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+  }
+
+  private startPresenceHeartbeat(): void {
+    if (this.heartbeatTimer !== null) return;
+    const tick = (): void => {
+      void this.broadcastPresenceRound();
+      this.heartbeatTimer = setTimeout(tick, nextHeartbeatDelayMs());
+    };
+    this.heartbeatTimer = setTimeout(tick, nextHeartbeatDelayMs());
+  }
+
+  private stopPresenceHeartbeat(): void {
+    if (this.heartbeatTimer !== null) {
+      clearTimeout(this.heartbeatTimer);
+      this.heartbeatTimer = null;
+    }
+  }
+
+  // The cells we may announce presence into right now.
+  //
+  // A teleported cell is somewhere the user is NOT. Announcing presence there
+  // would be a false statement about their location, which is worse than an
+  // undercount - and the `t=teleport` marker on messages exists precisely
+  // because the two are different things. Fine-grained cells are excluded by
+  // mayBroadcastPresence; see presence.ts for why that restriction is the
+  // feature rather than a limitation.
+  private broadcastableCells(): string[] {
+    const cells = [...this.channelGeohash.entries()]
+      .filter(([channel]) => !isManualGeoChannel(channel))
+      .filter(([channel]) =>
+        mayBroadcastPresence(GEO_CHANNEL_PRECISION[channel] ?? 99),
+      )
+      .map(([, geohash]) => geohash);
+    return [...new Set(cells)];
+  }
+
+  // One round: a heartbeat into every cell we may announce into.
+  private async broadcastPresenceRound(): Promise<void> {
+    const unique = this.broadcastableCells();
+    for (let i = 0; i < unique.length; i++) {
+      if (i > 0) await GeohashChannelService.wait(decorrelationDelayMs());
+      // The timer may have been cancelled while we were spacing the round out.
+      if (this.heartbeatTimer === null) return;
+      await this.presenceFor(unique[i])
+        .publishHeartbeat(unique[i])
+        .catch(() => {
+          // Best-effort. Presence is a hint, and a relay that refuses one
+          // heartbeat must not stop the next cell in the round.
+        });
+    }
+  }
+
   stop(): void {
+    this.stopPresenceHeartbeat();
     this.teardownAll();
     for (const p of this.presenceByGeohash.values()) p.stop();
     this.presenceByGeohash.clear();
