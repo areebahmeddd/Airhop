@@ -3,6 +3,15 @@
 All notable changes are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## What's Changed in v0.9.10
+
+- fix: update repository references from "Airhop" to "airhop" across the project (by @areebahmeddd) [36031eb]
+- feat: add source manifest script and vendored verification (by @areebahmeddd) [e7f5de0]
+- fix(core): bug fixes after testing + sync with upstream bitchat (by @areebahmeddd) [87fadcb]
+- feat(landing): add new graphics and screenshots for dark and light themes, and implement world generation tool (by @areebahmeddd) [817fbba]
+
+**Full changelog:** [v0.9.9..v0.9.10](https://github.com/areebahmeddd/airhop/compare/v0.9.9..v0.9.10)
+
 ## What's Changed in v0.9.9
 
 - feat(settings): add language options and complete string extraction (by @areebahmeddd) [8d9ca99]
@@ -16,7 +25,7 @@ All notable changes are documented here. The format follows [Keep a Changelog](h
 - chore: trigger Cloudflare Pages deployment (by @areebahmeddd) [41a72d5]
 - feat(core): add live voice detection, mesh bridge, qr for cashu payments (by @areebahmeddd) [21f1865]
 
-**Full changelog:** [v0.9.8..v0.9.9](https://github.com/areebahmeddd/Airhop/compare/v0.9.8..v0.9.9)
+**Full changelog:** [v0.9.8..v0.9.9](https://github.com/areebahmeddd/airhop/compare/v0.9.8..v0.9.9)
 
 ## What's Changed in v0.9.8
 
@@ -31,7 +40,7 @@ All notable changes are documented here. The format follows [Keep a Changelog](h
 - feat(app/core): geohash support, ui fixes, docs update, updated tests and feature wiring (by @areebahmeddd) [f0dc507]
 - refactor: rename "Your Channels" to "Your Rooms" for clarity and consistency (by @areebahmeddd) [837173d]
 
-**Full changelog:** [v0.9.7..v0.9.8](https://github.com/areebahmeddd/Airhop/compare/v0.9.7..v0.9.8)
+**Full changelog:** [v0.9.7..v0.9.8](https://github.com/areebahmeddd/airhop/compare/v0.9.7..v0.9.8)
 
 ## What's Changed in v0.9.7
 
@@ -57,7 +66,7 @@ All notable changes are documented here. The format follows [Keep a Changelog](h
 - feat(landing): dockerize the frontend (by @areebahmeddd) [b9874a2]
 - feat: update footer with new links and add PixelHeart animation (by @areebahmeddd) [6c79d4b]
 
-**Full changelog:** [v0.9.6..v0.9.7](https://github.com/areebahmeddd/Airhop/compare/v0.9.6..v0.9.7)
+**Full changelog:** [v0.9.6..v0.9.7](https://github.com/areebahmeddd/airhop/compare/v0.9.6..v0.9.7)
 
 ## What's Changed in v0.9.6
 
@@ -111,7 +120,7 @@ All notable changes are documented here. The format follows [Keep a Changelog](h
 - refactor(android): rename package from tech.permissionless to org.onemindlabs (by @areebahmeddd) [d7ef1a4]
 - chore(changelog): minor fixes (by @areebahmeddd) [1c2f4b9]
 
-**Full changelog:** [v0.9.5..v0.9.6](https://github.com/areebahmeddd/Airhop/compare/v0.9.5..v0.9.6)
+**Full changelog:** [v0.9.5..v0.9.6](https://github.com/areebahmeddd/airhop/compare/v0.9.5..v0.9.6)
 
 ## What's Changed in v0.9.5
 
@@ -134,7 +143,7 @@ All notable changes are documented here. The format follows [Keep a Changelog](h
 - chore: revise CHANGELOG format (by @areebahmeddd) [bc3e71b]
 - chore: update changelog format for better clarity (by @areebahmeddd) [ecb0a37]
 
-**Full changelog:** [v0.9.0..v0.9.5](https://github.com/areebahmeddd/Airhop/compare/v0.9.0..v0.9.5)
+**Full changelog:** [v0.9.0..v0.9.5](https://github.com/areebahmeddd/airhop/compare/v0.9.0..v0.9.5)
 
 ## What's Changed in v0.9.0
 
@@ -142,7 +151,7 @@ All notable changes are documented here. The format follows [Keep a Changelog](h
 - chore: scaffold future platform directories (by @areebahmeddd) [1570204]
 - refactor: naming conventions, known gap fixes, docs, and agent skills (v0.9) (by @areebahmeddd) [502be8a]
 
-**Full changelog:** [v0.8.0..v0.9.0](https://github.com/areebahmeddd/Airhop/compare/v0.8.0..v0.9.0)
+**Full changelog:** [v0.8.0..v0.9.0](https://github.com/areebahmeddd/airhop/compare/v0.8.0..v0.9.0)
 
 ## What's Changed in v0.8.0
 
@@ -156,7 +165,7 @@ All notable changes are documented here. The format follows [Keep a Changelog](h
 - feat(crypto): implement Signal Double Ratchet (double-ratchet.ts) (by @areebahmeddd) [1211db0]
 - docs: some clarity for ai agents (by @areebahmeddd) [092d192]
 
-**Full changelog:** [v0.7.0..v0.8.0](https://github.com/areebahmeddd/Airhop/compare/v0.7.0..v0.8.0)
+**Full changelog:** [v0.7.0..v0.8.0](https://github.com/areebahmeddd/airhop/compare/v0.7.0..v0.8.0)
 
 ## What's Changed in v0.7.0
 
@@ -175,7 +184,7 @@ All notable changes are documented here. The format follows [Keep a Changelog](h
 - feat(nostr): add Nostr client with SimplePool, auto-reconnect, and Tor proxy config (by @areebahmeddd) [6d8f3bb]
 - docs: update links, version targets (by @areebahmeddd) [9be8399]
 
-**Full changelog:** [v0.6.0..v0.7.0](https://github.com/areebahmeddd/Airhop/compare/v0.6.0..v0.7.0)
+**Full changelog:** [v0.6.0..v0.7.0](https://github.com/areebahmeddd/airhop/compare/v0.6.0..v0.7.0)
 
 ## What's Changed in v0.6.0
 
@@ -190,7 +199,7 @@ All notable changes are documented here. The format follows [Keep a Changelog](h
 - feat(crypto): Noise XX handshake+transport and Noise X one-way sealing (by @areebahmeddd) [9d7d0cf]
 - docs: fix wording + star history graph (by @areebahmeddd) [f9f3c36]
 
-**Full changelog:** [v0.5.0..v0.6.0](https://github.com/areebahmeddd/Airhop/compare/v0.5.0..v0.6.0)
+**Full changelog:** [v0.5.0..v0.6.0](https://github.com/areebahmeddd/airhop/compare/v0.5.0..v0.6.0)
 
 ## What's Changed in v0.5.0
 
