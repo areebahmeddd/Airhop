@@ -20,9 +20,8 @@ Airhop speaks the same protocol as bitchat. Airhop and bitchat users automatical
 
 ## Optional internet mode
 
-When internet access is available, you can enable internet bridging so people outside Bluetooth range can still receive your messages.
-
-Tor routing is also available if you want it. Internet bridging and Tor are both optional and remain disabled unless you enable them.
+- Enable internet bridging to reach people outside Bluetooth range when internet access is available.
+- Tor routing is also supported for users who want to route internet traffic through Tor.
 
 ## Privacy and security
 
@@ -36,11 +35,9 @@ Every release includes source hashes and build provenance, allowing anyone to ve
 
 ## What Airhop doesn't promise
 
-Public rooms are exactly that: public. Anyone within range can read messages sent there.
-
-Tor hides your IP address from relays, but it does not hide that you're using Tor. Bridge support is not yet available, and this limitation is documented.
-
-We prefer to document the limits clearly instead of implying guarantees we cannot make.
+- Public rooms are exactly that: public. Anyone within Bluetooth range can read messages sent there.
+- Tor hides your IP address from relays, but it does not hide that you're using Tor. Bridge support is not yet available.
+- We document the system's limits instead of implying guarantees we cannot make.
 
 ## About
 

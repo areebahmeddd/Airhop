@@ -1630,6 +1630,7 @@ class AirhopBLEModule(
         }
 
         override fun onMtuChanged(gatt: BluetoothGatt, mtu: Int, status: Int) {
+            val linkID = "c:${gatt.device.address}"
             // Record what the controller actually granted, which is often less
             // than the 517 we asked for. The write path needs it to choose
             // between an unacknowledged write and a long write.
