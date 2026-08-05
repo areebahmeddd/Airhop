@@ -44,20 +44,20 @@ import { getCoarseLocation } from "./location-service";
 
 // Geohash precision of the rendezvous cell (~1.2 km neighborhood), matching
 // bitchat BridgeService.Limits.cellPrecision.
-const CELL_PRECISION = 6;
+export const CELL_PRECISION = 6;
 // Relays to publish/subscribe per cell.
 const RELAY_COUNT = 5;
 // Reject rendezvous events outside this clock skew (matches the gateway path).
-const MAX_EVENT_AGE_SECONDS = 15 * 60;
+export const MAX_EVENT_AGE_SECONDS = 15 * 60;
 // A rendezvous participant counts toward "across the bridge" for this long.
-const PARTICIPANT_TTL_MS = 10 * 60 * 1000;
+export const PARTICIPANT_TTL_MS = 10 * 60 * 1000;
 // Airtime budget for downlink rebroadcasts (per rolling minute).
-const DOWNLINK_EVENTS_PER_MINUTE = 20;
+export const DOWNLINK_EVENTS_PER_MINUTE = 20;
 // Uplink deposits accepted per depositor per rolling minute.
-const UPLINK_EVENTS_PER_MINUTE_PER_DEPOSITOR = 10;
+export const UPLINK_EVENTS_PER_MINUTE_PER_DEPOSITOR = 10;
 // Minimum spacing between our own presence heartbeats.
 const PRESENCE_MIN_INTERVAL_MS = 30_000;
-const ID_SET_CAP = 512;
+export const ID_SET_CAP = 512;
 
 // A remote-island message to render into the local #bluetooth timeline.
 export interface BridgeInboundMessage {

@@ -29,6 +29,7 @@ import type {
   AndroidBleModule,
   RadioPort,
 } from "../../lifecycle/harness/android-native";
+import type { WifiNativeModule } from "../../lifecycle/harness/bridge-shim";
 import type { IosBleModule } from "../../lifecycle/harness/ios-native";
 import type {
   AndroidPermission,
@@ -38,6 +39,7 @@ import type {
 import { eventRouter } from "./event-router";
 import type { VoiceRecord } from "./media-fabric";
 import type { RelayFabric } from "./relay-fabric";
+import type { WifiPort } from "./wifi-fabric";
 import type { World } from "./world";
 
 // Paths are resolved from THIS file, and re-resolved inside each sandbox.
@@ -147,6 +149,10 @@ interface Inner {
   // The payment ladder every screen calls. Held so a scenario can pay the way
   // the app pays, rather than reaching past it into the wallet primitives.
   pay: PayLike;
+  // Installs a WiFi native module into THIS sandbox's copy of the bridge shim.
+  // Captured inside the registry for the same reason everything else here is:
+  // the shim holds a module-scope singleton, and each phone has its own copy.
+  installWifi: (m: WifiNativeModule | null) => void;
   // The event emitter this phone's native module and mesh-service share. Held
   // ONLY so the harness can prove, in a test, that two phones do not share one.
   // If they ever did, every scenario in this directory would be meaningless:
@@ -354,6 +360,35 @@ export class SimDevice {
 
   get isRunning(): boolean {
     return this.launched && this.mesh !== null;
+  }
+
+  // Wire this phone into a WiFi fabric.
+  //
+  // Writes go out through the shim's installed module; inbound events are
+  // raised on THIS device's own emitter, which is what mesh-service subscribed
+  // to. Going through the emitter rather than calling mesh-service directly is
+  // the point: it exercises the same listener wiring production uses.
+  attachWifiPort(port: WifiPort): void {
+    const emitter = this.inner.emitter as {
+      emit: (event: string, body: Record<string, unknown>) => void;
+    };
+    // Inside this phone's frame. The router files subscriptions under whichever
+    // device is executing and delivers only to it, so an emission raised outside
+    // a device context reaches nobody at all (see harness/event-router.ts).
+    port.emit = (event, body) => {
+      eventRouter().runAs(this.id, () => {
+        emitter.emit(event, body);
+      });
+    };
+    this.inner.installWifi({
+      startWiFi: async () => undefined,
+      stopWiFi: async () => undefined,
+      writeToWiFiLink: async (linkID: string, dataBase64: string) => {
+        port.write(linkID, dataBase64);
+      },
+      addListener: () => undefined,
+      removeListeners: () => undefined,
+    });
   }
 
   attachRadioPort(port: RadioPort): void {
@@ -1410,6 +1445,13 @@ function buildSandbox(
       native = new mod.IosBleModule(os);
     }
     shim.installNativeBle(native);
+    const installWifi = (m: WifiNativeModule | null): void => {
+      (
+        shim as unknown as {
+          installNativeWifi: (x: WifiNativeModule | null) => void;
+        }
+      ).installNativeWifi(m);
+    };
 
     const stores: Record<string, StoreLike> = {
       chatStore: require(P.chatStore).useChatStore,
@@ -1535,6 +1577,7 @@ function buildSandbox(
       voice,
       wallet,
       pay,
+      installWifi,
       selectAccounts,
       emitter,
     };

@@ -57,6 +57,7 @@ import {
 } from "./harness/invariants";
 import { RadioFabric } from "./harness/radio-fabric";
 import { Scenario, waitFor, waitForCoarse } from "./harness/scenario";
+import { WifiFabric } from "./harness/wifi-fabric";
 
 jest.setTimeout(180_000);
 
@@ -444,6 +445,16 @@ test("C07 seeded soak: eight phones, hundreds of random events", async () => {
     s,
     Array.from({ length: 8 }, (_, i) => android(`p${String(i)}`, 5 + i * 7)),
   );
+  // WiFi runs alongside Bluetooth for the whole soak.
+  //
+  // Every scenario in tier-wifi is deterministic and small: two or three phones,
+  // a link brought up or torn down at a moment the test chose. None of that
+  // answers what happens when WiFi flaps in a crowded room while people
+  // background their phones and the Bluetooth radio is already degraded. The
+  // phones here are all Android, so any pair can link.
+  const wifi = new WifiFabric(s.world);
+  for (const d of devices) wifi.add(d);
+
   const rng = s.world.rng.fork("soak");
   const watcher = new StatusWatcher(devices);
   const channel = "#bluetooth";
@@ -522,6 +533,22 @@ test("C07 seeded soak: eight phones, hundreds of random events", async () => {
         d.relaunch();
       },
     },
+    {
+      name: "two phones find each other over WiFi",
+      run: () => {
+        const a = rng.pick(devices);
+        const b = rng.pick(devices.filter((d) => d.id !== a.id));
+        wifi.link(a.id, b.id);
+      },
+    },
+    {
+      name: "a WiFi link drops",
+      run: () => {
+        const a = rng.pick(devices);
+        const b = rng.pick(devices.filter((d) => d.id !== a.id));
+        wifi.unlink(a.id, b.id);
+      },
+    },
   ];
 
   const ROUNDS = 300;
@@ -572,6 +599,14 @@ test("C07 seeded soak: eight phones, hundreds of random events", async () => {
     "the radio saw real load",
     radio.packetsDelivered > 100,
     `${radio.packetsDelivered} packets, ${radio.packetsDropped} dropped, ${radio.packetsCorrupted} corrupted`,
+  );
+  // Without this, the two WiFi actions could be silently doing nothing and the
+  // soak would still pass every invariant, which is the failure mode where a
+  // test reports coverage it does not have.
+  s.check(
+    "WiFi was genuinely part of the churn, not a no-op action",
+    wifi.framesCarried > 0,
+    `${wifi.framesCarried} frames, ${wifi.bytesCarried} bytes, ${wifi.linkCount()} links still up`,
   );
   s.assert(true);
 });

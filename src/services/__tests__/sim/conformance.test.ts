@@ -51,6 +51,21 @@ import {
 } from "../../../core/mesh/bitchat-file-packet";
 import { MAX_BLE_FRAME } from "../../../core/mesh/fragment-manager";
 import { PacketType } from "../../../core/mesh/packet-codec";
+import {
+  CELL_PRECISION as BRIDGE_CELL_PRECISION,
+  DOWNLINK_EVENTS_PER_MINUTE as BRIDGE_DOWNLINK_PER_MINUTE,
+  ID_SET_CAP as BRIDGE_ID_SET_CAP,
+  MAX_EVENT_AGE_SECONDS as BRIDGE_MAX_EVENT_AGE_SECONDS,
+  PARTICIPANT_TTL_MS as BRIDGE_PARTICIPANT_TTL_MS,
+  UPLINK_EVENTS_PER_MINUTE_PER_DEPOSITOR as BRIDGE_UPLINK_PER_DEPOSITOR,
+} from "../../bridge-service";
+import {
+  DOWNLINK_EVENTS_PER_MINUTE as GATEWAY_DOWNLINK_PER_MINUTE,
+  CARRIER_MAX_EVENT_AGE_SECONDS as GATEWAY_MAX_EVENT_AGE_SECONDS,
+  MAX_QUEUED_UPLINKS as GATEWAY_MAX_QUEUED,
+  MAX_QUEUED_UPLINKS_PER_DEPOSITOR as GATEWAY_MAX_QUEUED_PER_DEPOSITOR,
+  UPLINK_EVENTS_PER_MINUTE_PER_DEPOSITOR as GATEWAY_UPLINK_PER_DEPOSITOR,
+} from "../../mesh-service";
 import { BitchatActor } from "./harness/bitchat-actor";
 import { SimDevice } from "./harness/device";
 import { noCrashes } from "./harness/invariants";
@@ -436,6 +451,114 @@ test("X03 Airhop's constants still match the vendored bitchat sources", () => {
     "live voice freshness window matches bitchat-ios",
     pttMaxAge === 30,
     `bitchat=${String(pttMaxAge)}s airhop=30s`,
+  );
+
+  // Bridge and gateway quotas. These are airtime and abuse budgets shared
+  // between two implementations of the same rendezvous: if bitchat tightens a
+  // downlink budget and Airhop does not, an Airhop gateway floods a room that
+  // bitchat gateways are politely rationing, and nothing in either app reports
+  // it. Read from their two Limits enums rather than from our own header.
+  const bridgeSwift = bitchatSource(
+    "bitchat/Services/Gateway/BridgeService.swift",
+  );
+  const gatewaySwift = bitchatSource(
+    "bitchat/Services/Gateway/GatewayService.swift",
+  );
+
+  const quotaCases: {
+    name: string;
+    source: string;
+    swift: string;
+    ours: number;
+  }[] = [
+    // Bridge
+    {
+      name: "bridge rendezvous cell precision",
+      source: bridgeSwift,
+      swift: "cellPrecision",
+      ours: BRIDGE_CELL_PRECISION,
+    },
+    {
+      name: "bridge downlink budget per minute",
+      source: bridgeSwift,
+      swift: "downlinkEventsPerMinute",
+      ours: BRIDGE_DOWNLINK_PER_MINUTE,
+    },
+    {
+      name: "bridge uplink budget per depositor per minute",
+      source: bridgeSwift,
+      swift: "uplinkEventsPerMinutePerDepositor",
+      ours: BRIDGE_UPLINK_PER_DEPOSITOR,
+    },
+    {
+      name: "bridge loop-cache capacity",
+      source: bridgeSwift,
+      swift: "maxTrackedEventIDs",
+      ours: BRIDGE_ID_SET_CAP,
+    },
+    // Gateway
+    {
+      name: "gateway downlink budget per minute",
+      source: gatewaySwift,
+      swift: "downlinkEventsPerMinute",
+      ours: GATEWAY_DOWNLINK_PER_MINUTE,
+    },
+    {
+      name: "gateway uplink budget per depositor per minute",
+      source: gatewaySwift,
+      swift: "uplinkEventsPerMinutePerDepositor",
+      ours: GATEWAY_UPLINK_PER_DEPOSITOR,
+    },
+    // The bag a gateway holds while its relays are down. Bounded twice, and
+    // both bounds matter: the total stops a busy island exhausting memory, the
+    // per-depositor share stops one peer crowding everyone else out of it.
+    {
+      name: "gateway queued uplinks, total",
+      source: gatewaySwift,
+      swift: "maxQueuedUplinks",
+      ours: GATEWAY_MAX_QUEUED,
+    },
+    {
+      name: "gateway queued uplinks, per depositor",
+      source: gatewaySwift,
+      swift: "maxQueuedUplinksPerDepositor",
+      ours: GATEWAY_MAX_QUEUED_PER_DEPOSITOR,
+    },
+  ];
+  for (const c of quotaCases) {
+    const upstream = swiftConstantExpr(c.source, c.swift);
+    s.check(
+      `${c.name} matches bitchat-ios`,
+      upstream !== null && upstream === c.ours,
+      upstream === null
+        ? `Limits.${c.swift} not found upstream`
+        : `bitchat=${upstream} airhop=${c.ours}`,
+    );
+  }
+
+  // Clock skew, stated in seconds upstream and shared by both carriers.
+  for (const [name, source, ours] of [
+    ["bridge", bridgeSwift, BRIDGE_MAX_EVENT_AGE_SECONDS],
+    ["gateway", gatewaySwift, GATEWAY_MAX_EVENT_AGE_SECONDS],
+  ] as const) {
+    const upstream = swiftConstantExpr(source, "maxEventAgeSeconds");
+    s.check(
+      `${name} accepted clock skew matches bitchat-ios`,
+      upstream !== null && upstream === ours,
+      `bitchat=${String(upstream)}s airhop=${String(ours)}s`,
+    );
+  }
+
+  // Participant freshness drives the "people across the bridge" count, so a
+  // mismatch makes the two apps disagree about who is present in one room.
+  const freshness = swiftConstantExpr(
+    bridgeSwift,
+    "participantFreshnessSeconds",
+  );
+  s.check(
+    "bridge participant freshness matches bitchat-ios",
+    freshness !== null && freshness * 1000 === BRIDGE_PARTICIPANT_TTL_MS,
+    `bitchat=${String(freshness)}s airhop=${String(BRIDGE_PARTICIPANT_TTL_MS / 1000)}s`,
   );
 
   // The frame budget is the one constant where being wrong means silent, total

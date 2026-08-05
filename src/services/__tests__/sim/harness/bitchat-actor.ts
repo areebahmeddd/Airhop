@@ -27,6 +27,11 @@ import { sha256 } from "@noble/hashes/sha2.js";
 import { bytesToHex } from "@noble/hashes/utils.js";
 import { decodeFilePacket } from "../../../../core/mesh/bitchat-file-packet";
 import {
+  CarrierDirection,
+  decodeNostrCarrier,
+  encodeNostrCarrier,
+} from "../../../../core/mesh/nostr-carrier";
+import {
   computePacketId,
   decodePacket,
   encodePacket,
@@ -153,6 +158,10 @@ export interface BitchatObservations {
   // sender that paces too slowly, or sends too much, looks like from here.
   expiredAssemblies: number;
   relayed: number;
+  // Gateway downlinks it accepted: a `fromGateway` carrier broadcast by an
+  // Airhop gateway, decoded and verified the way bitchat's GatewayService does
+  // before handing the event to its geohash timeline.
+  gatewayDownlinks: { geohash: string; eventID: string }[];
 }
 
 export interface BitchatActorOptions {
@@ -186,6 +195,7 @@ export class BitchatActor implements RadioNode {
     filesReceived: [],
     expiredAssemblies: 0,
     relayed: 0,
+    gatewayDownlinks: [],
   };
 
   private readonly channels: Set<string>;
@@ -296,11 +306,7 @@ export class BitchatActor implements RadioNode {
   }
 
   private peerIDBytes(): Uint8Array {
-    const out = new Uint8Array(8);
-    for (let i = 0; i < 8; i++) {
-      out[i] = parseInt(this.peerID.slice(i * 2, i * 2 + 2), 16);
-    }
-    return out;
+    return peerIDToBytes(this.peerID);
   }
 
   private sign(packet: Packet): Packet {
@@ -456,6 +462,9 @@ export class BitchatActor implements RadioNode {
         case PacketType.FRAGMENT:
           this.onFragment(packet, senderID);
           break;
+        case PacketType.NOSTR_CARRIER:
+          this.onNostrCarrier(packet);
+          break;
         case PacketType.FILE_TRANSFER:
           // Small enough to have needed no fragmenting.
           this.onFileTransfer(packet);
@@ -471,6 +480,74 @@ export class BitchatActor implements RadioNode {
       this.seen.relayed++;
       this.broadcast({ ...packet, ttl: packet.ttl - 1 }, linkID);
     }
+  }
+
+  // Deposit a signed geohash event with a gateway, as a mesh-only bitchat phone
+  // does when it has no internet of its own.
+  //
+  // Directed at the gateway, carrying a `toGateway` carrier. The event is
+  // Schnorr-signed by the caller (the scenario supplies it), because a gateway
+  // that published unsigned events on a neighbour's say-so would be an open
+  // proxy: bitchat verifies before publishing and so must Airhop.
+  depositWithGateway(
+    gatewayPeerID: string,
+    geohash: string,
+    eventJSON: string,
+  ): void {
+    const payload = encodeNostrCarrier({
+      direction: CarrierDirection.TO_GATEWAY,
+      geohash,
+      eventJSON: new TextEncoder().encode(eventJSON),
+    });
+    if (payload === null) return;
+    this.world.say(
+      "BITCHAT_UPLINK",
+      `${this.id} -> ${gatewayPeerID.slice(0, 8)}`,
+    );
+    this.broadcast(
+      this.sign({
+        type: PacketType.NOSTR_CARRIER,
+        ttl: 7,
+        flags: Flags.SIGNED | Flags.HAS_RECIPIENT,
+        senderID: this.peerIDBytes(),
+        recipientID: peerIDToBytes(gatewayPeerID),
+        timestamp: Date.now(),
+        payload,
+        signature: new Uint8Array(64),
+      }),
+    );
+  }
+
+  // A carrier arrived. bitchat's GatewayService switches on direction and
+  // requires the packet shape to match: `toGateway` must be directed, and
+  // `fromGateway` must be a broadcast. A mismatch is malformed and dropped.
+  private onNostrCarrier(packet: Packet): void {
+    const carrier = decodeNostrCarrier(packet.payload);
+    if (carrier === null) return;
+    const directed = (packet.flags & Flags.HAS_RECIPIENT) !== 0;
+
+    if (carrier.direction === CarrierDirection.FROM_GATEWAY) {
+      if (directed) return; // a directed downlink is malformed
+      // Receivers verify the carried event themselves rather than trusting the
+      // gateway that ferried it, which is the whole reason the carrier adds no
+      // encryption: a gateway can drop but never forge.
+      let parsed: { id?: unknown } | null = null;
+      try {
+        parsed = JSON.parse(new TextDecoder().decode(carrier.eventJSON)) as {
+          id?: unknown;
+        };
+      } catch {
+        return;
+      }
+      if (typeof parsed?.id !== "string") return;
+      this.seen.gatewayDownlinks.push({
+        geohash: carrier.geohash,
+        eventID: parsed.id,
+      });
+      return;
+    }
+    // toGateway/toBridge deposits are for a gateway to act on. This node runs
+    // no gateway, so it does nothing beyond the relay every node performs.
   }
 
   private onAnnounce(packet: Packet, senderID: string): void {
@@ -670,4 +747,13 @@ function readCourierExpiryMs(payload: Uint8Array): number | null {
     o += 3 + len;
   }
   return null;
+}
+
+// A 16-hex peer ID as the 8 bytes a packet header carries.
+function peerIDToBytes(peerID: string): Uint8Array {
+  const out = new Uint8Array(8);
+  for (let i = 0; i < 8; i++) {
+    out[i] = parseInt(peerID.slice(i * 2, i * 2 + 2), 16);
+  }
+  return out;
 }

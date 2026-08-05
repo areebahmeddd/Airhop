@@ -19,10 +19,15 @@
 import { useWebSocketImplementation } from "nostr-tools/pool";
 import { Platform } from "react-native";
 import NativeAirhopBLE from "../../bridge/NativeAirhopBLE";
-import NativeAirhopTor from "../../bridge/NativeAirhopTor";
+import NativeAirhopTor, {
+  subscribeTorStatus,
+} from "../../bridge/NativeAirhopTor";
 import { isTorSocketNativeAvailable } from "../../bridge/NativeAirhopTorSocket";
 import { getMeshService } from "../../services/mesh-service";
-import { useMeshStateStore } from "../../store/mesh-state-store";
+import {
+  useMeshStateStore,
+  type TorBootstrapPhase,
+} from "../../store/mesh-state-store";
 import { useSettingsStore } from "../../store/settings-store";
 import { TorWebSocket } from "./tor-websocket";
 
@@ -103,6 +108,59 @@ function setTorActive(active: boolean): void {
   useMeshStateStore.getState().setTorActive(active);
 }
 
+function setTorBootstrap(phase: TorBootstrapPhase): void {
+  useMeshStateStore.getState().setTorBootstrap(phase);
+}
+
+// Live bootstrap reporting for iOS, where Airhop embeds Arti and therefore owns
+// the only signal about whether a circuit is forming, formed, or never coming.
+//
+// Without this, a bootstrap that never lands is silent: `primeTorRoutingOnStartup`
+// installs the Tor socket and returns, every relay socket then fails closed
+// behind a circuit that does not exist, and the user sees an app whose internet
+// half quietly does nothing. `revalidateTorRouting` catches it at the next
+// foreground; this catches it at the moment it happens, which is what makes the
+// difference between "Airhop is broken" and "this network blocks Tor".
+//
+// Mirrors bitchat/ios `ChatViewModel+Tor`, which posts starting, started and
+// blocked as system messages. Airhop's equivalent surface is the Mesh banner,
+// and the wording keeps their most important point: the mesh still works.
+let statusSubscription: { remove: () => void } | null = null;
+
+function watchTorBootstrap(): void {
+  if (statusSubscription !== null) return;
+  statusSubscription = subscribeTorStatus((status) => {
+    if (status.isReady) {
+      setTorBootstrap("idle");
+      // A circuit that comes up after `primeTorRoutingOnStartup` handed over,
+      // or after a stall that resolved itself, is the moment the privacy claim
+      // becomes true. Only claim it while the user still wants Tor.
+      if (useSettingsStore.getState().torEnabled) setTorActive(true);
+      return;
+    }
+    if (status.isStarting) {
+      setTorBootstrap("starting");
+      return;
+    }
+    // Neither ready nor starting, with the preference on, is the terminal
+    // shape: Arti gave up. Stand the claim down and say why. The socket
+    // factory stays on Tor, because falling back to a direct one would put
+    // traffic on the clear net that the user never agreed to.
+    if (useSettingsStore.getState().torEnabled) {
+      setTorActive(false);
+      setTorBootstrap("blocked");
+    } else {
+      setTorBootstrap("idle");
+    }
+  });
+}
+
+function stopWatchingTorBootstrap(): void {
+  statusSubscription?.remove();
+  statusSubscription = null;
+  setTorBootstrap("idle");
+}
+
 // Whether this platform can route Nostr WebSockets through the in-app Tor (Arti)
 // SOCKS proxy. iOS only; Android relies on Orbot's transparent VPN instead.
 export function canRouteNostrThroughTor(): boolean {
@@ -158,14 +216,20 @@ async function enableTorRouting(): Promise<TorRoutingResult> {
   }
 
   try {
+    // Watch first: the bootstrap we are about to await is exactly the window
+    // the banner exists to explain.
+    watchTorBootstrap();
+    setTorBootstrap("starting");
     await NativeAirhopTor.startTor();
     const ready = await NativeAirhopTor.awaitTorReady(TOR_READY_TIMEOUT_S);
     if (!ready) {
       await NativeAirhopTor.stopTor().catch(() => {});
+      stopWatchingTorBootstrap();
       return { ok: false, reason: "timeout" };
     }
     installTorSocket();
     setTorActive(true);
+    setTorBootstrap("idle");
     useSettingsStore.getState().setTorEnabled(true);
     getMeshService()?.restartNostr();
     return { ok: true };
@@ -173,12 +237,14 @@ async function enableTorRouting(): Promise<TorRoutingResult> {
     await NativeAirhopTor.stopTor().catch(() => {});
     installDirectSocket();
     setTorActive(false);
+    stopWatchingTorBootstrap();
     return { ok: false, reason: "error" };
   }
 }
 
 async function disableTorRouting(): Promise<void> {
   if (Platform.OS === "ios") {
+    stopWatchingTorBootstrap();
     installDirectSocket();
     await NativeAirhopTor?.stopTor().catch(() => {});
   }
@@ -225,6 +291,10 @@ export function primeTorRoutingOnStartup(): void {
 
   installTorSocket();
   setTorActive(true);
+  // Watch the bootstrap this cannot await. Until now nothing did, so a circuit
+  // that never came up left the app claiming Tor forever with no explanation.
+  watchTorBootstrap();
+  setTorBootstrap("starting");
   // Start Arti in the background; relays retry over Tor until it is ready.
   void NativeAirhopTor.startTor().catch(() => {});
 }
@@ -243,11 +313,54 @@ export function primeTorRoutingOnStartup(): void {
 // reconnect would only open fresh clear-net sockets we did not have to open.
 // The honest and minimal action is to stop claiming Tor is on.
 //
-// No-ops on iOS, where Airhop owns Arti and its status arrives over
-// TorStatusChanged rather than by probing, and no-ops when Tor is already off.
+// iOS needs the same check for a different reason. `enableTorRouting` awaits
+// `awaitTorReady` before claiming anything, so a toggle is honest. But
+// `primeTorRoutingOnStartup` cannot wait: it runs before the mesh exists, so it
+// installs the Tor socket, claims active, and lets Arti bootstrap behind it.
+// That is fail-closed and correct for traffic, since every relay socket goes
+// through Arti's SOCKS and simply fails until the circuit is up rather than
+// falling back to clear net. What it is not is honest for a bootstrap that
+// never completes: the banner reads "Tor on" over a Nostr layer that silently
+// never connects, and nothing ever corrected it.
+//
+// This file's comment used to say iOS status arrives over `TorStatusChanged`.
+// Nothing subscribes to that event, so on iOS the claim was simply never
+// revisited. Rather than add an event subscription and its lifecycle, this uses
+// the status snapshot the native module already exposes, on the same foreground
+// trigger Android uses.
+//
+// `isStarting` is treated as still-fine: a bootstrap in progress is the normal
+// state for the first seconds after launch, and standing the flag down there
+// would flicker the banner on every cold start.
+//
+// No-ops when Tor is already off.
 export async function revalidateTorRouting(): Promise<void> {
-  if (Platform.OS !== "android") return;
   if (!torActive) return;
+
+  if (Platform.OS === "ios") {
+    if (NativeAirhopTor == null) return;
+    try {
+      const status = await NativeAirhopTor.getTorStatus();
+      if (status.isReady || status.isStarting) return;
+    } catch {
+      // The module answered with an error rather than a status. Treat that the
+      // same as "not routing": the point of this path is to stop overstating.
+    }
+    // The socket factory is deliberately left alone, for the same reason as
+    // Android below: swapping back to a direct socket here would put traffic on
+    // the clear net that a user who asked for Tor never agreed to. Failing
+    // closed and stopping the claim is the honest pair.
+    //
+    // The persisted preference also stays on, which is where iOS and Android
+    // differ. Arti is ours and a failed bootstrap is usually transient (no
+    // signal yet), so the next launch should retry rather than making the user
+    // re-enable Tor by hand. Orbot is not ours: if it has gone, only the user
+    // can bring it back, so Android clears the preference to match.
+    setTorActive(false);
+    return;
+  }
+
+  if (Platform.OS !== "android") return;
 
   const { routing } = await probeAndroidTorProxy();
   if (routing) return;

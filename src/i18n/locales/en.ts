@@ -790,6 +790,12 @@ export const strings = {
   "mesh.banner.internet_off": "Internet off · Bluetooth only",
   "mesh.banner.relaying": "No local peers · relaying via Nostr",
   "mesh.banner.tor": "Tor on · internet traffic routed",
+  // iOS only, where Airhop embeds Arti. Deliberately not the purple "Tor on"
+  // claim: a circuit still forming is not yet onion routing anything.
+  "mesh.banner.tor_starting": "Starting Tor · connecting",
+  // The terminal state on a network that filters Tor. Naming the mesh is the
+  // point: everything local still works, and only the internet half is paused.
+  "mesh.banner.tor_blocked": "Tor could not connect · mesh still works",
   "mesh.banner.gateway": "Internet gateway on · relaying nearby peers",
   "mesh.banner.bridge": "Mesh bridge on · public chat linked",
   // `{brand}` is the phone maker, read off the device.

@@ -71,13 +71,13 @@ Built on the foundation of [bitchat](https://bitchat.free), using the same [BLE 
 |                   | Forward secrecy           | Double Ratchet protects past messages even if keys are later compromised                                                                       |
 |                   | Panic wipe                | Triple-tap instantly erases keys and local messages (nuke your account)                                                                        |
 | 🕸️ **Networking** | Bluetooth mesh            | Communicate with nearby devices without internet                                                                                               |
+|                   | Mesh bridge               | Link this area's public #bluetooth chat with another out-of-range Bluetooth crowd over the internet. Off by default                            |
 |                   | Multi-hop routing         | Messages automatically relay across nearby devices (up to 7 hops)                                                                              |
 |                   | WiFi high-bandwidth mode  | Faster file transfers between two Android devices, or two iPhones. Not across platforms                                                        |
 |                   | bitchat compatibility     | Airhop nodes communicate directly with bitchat on iOS and Android                                                                              |
 | 🌐 **Internet**   | Internet fallback         | DMs and channels keep flowing over Nostr relays when a user moves out of Bluetooth range                                                       |
 |                   | Geo-relay discovery       | Discover location-based channels across 350+ distributed Nostr relays                                                                          |
 |                   | Internet gateway          | Lend your connection to a nearby offline phone so it can still reach the location (geohash) channels. Off by default                           |
-|                   | Mesh bridge               | Link this area's public #bluetooth chat with another out-of-range Bluetooth crowd over the internet. Off by default                            |
 |                   | Tor integration           | Route Nostr traffic through Tor (Arti on iOS, Orbot on Android)                                                                                |
 
 **TL;DR: No internet required. No central servers. No accounts. No tracking.**

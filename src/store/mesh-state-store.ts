@@ -41,6 +41,9 @@ export type PresenceStatus = "online" | "away" | "invisible";
 export type BannerTone =
   "danger" | "caution" | "relay" | "tor" | "gateway" | "bridge" | "neutral";
 
+// How far along Airhop's own Tor bootstrap is. iOS only; see `torBootstrap`.
+export type TorBootstrapPhase = "idle" | "starting" | "blocked";
+
 // The single reason the BLE mesh cannot run right now, or "none".
 //
 // This replaces the three independent booleans (adapterEnabled,
@@ -134,6 +137,20 @@ interface MeshStateStore {
   // Whether Nostr traffic is currently routed through Tor (see tor-routing.ts).
   // Mirrored here so the Mesh banner reacts the moment Tor is toggled.
   torActive: boolean;
+  // iOS only, where Airhop embeds Arti and therefore owns its bootstrap. On
+  // Android, Orbot is a separate app and this stays "idle": there is no
+  // bootstrap of ours to report on.
+  //
+  //   idle      nothing to say (Tor off, or Android)
+  //   starting  Arti is building a circuit; the normal first seconds
+  //   blocked   the bootstrap ran out its deadline, which is what a network
+  //             that blocks Tor looks like
+  //
+  // Separate from `torActive` on purpose. That flag is a privacy claim and must
+  // stay false while a circuit is only forming; this is the explanation for WHY
+  // the claim is not yet true, which is the difference between a user who
+  // thinks the app is broken and one who knows to wait or move network.
+  torBootstrap: TorBootstrapPhase;
   // Whether the mesh bridge is active (bridging with a known rendezvous cell)
   // and how many people are reachable across it. Mirrored here so the banner and
   // header react as participants come and go (see bridge-service.ts).
@@ -161,6 +178,7 @@ interface MeshStateStore {
   setLocationGranted: (granted: boolean) => void;
   setNostrConnected: (connected: boolean) => void;
   setTorActive: (active: boolean) => void;
+  setTorBootstrap: (phase: TorBootstrapPhase) => void;
   setBridgeState: (active: boolean, peopleAcross: number) => void;
   setPresenceStatus: (status: PresenceStatus) => void;
 }
@@ -172,6 +190,7 @@ export const useMeshStateStore = create<MeshStateStore>()((set) => ({
   locationGranted: true,
   nostrConnected: false,
   torActive: false,
+  torBootstrap: "idle",
   bridgeActive: false,
   bridgePeopleAcross: 0,
   clockSkewed: false,
@@ -197,6 +216,9 @@ export const useMeshStateStore = create<MeshStateStore>()((set) => ({
   },
   setTorActive(active) {
     set({ torActive: active });
+  },
+  setTorBootstrap(phase) {
+    set({ torBootstrap: phase });
   },
   setBridgeState(active, peopleAcross) {
     set({ bridgeActive: active, bridgePeopleAcross: peopleAcross });
@@ -229,6 +251,8 @@ export interface MeshBannerInputs {
   clockSkewed?: boolean;
   nostrConnected: boolean;
   torActive: boolean;
+  // Optional so existing callers keep compiling; absent reads as "idle".
+  torBootstrap?: TorBootstrapPhase;
   gatewayEnabled: boolean;
   bridgeActive: boolean;
   bridgePeopleAcross: number;
@@ -438,6 +462,23 @@ export function computeMeshBanners(inputs: MeshBannerInputs): MeshBanner[] {
       label: t("mesh.banner.tor"),
       tone: "tor",
     });
+  } else if (inputs.torBootstrap === "starting") {
+    // Not the purple claim: a circuit still forming is not onion routing yet,
+    // and saying so would be the overstatement the whole Tor path avoids.
+    banners.push({
+      key: "tor-starting",
+      label: t("mesh.banner.tor_starting"),
+      tone: "caution",
+    });
+  } else if (inputs.torBootstrap === "blocked") {
+    // The terminal state on a network that filters Tor. Naming the mesh keeps
+    // it from reading as "the app is broken": everything local still works, and
+    // only the internet half is paused.
+    banners.push({
+      key: "tor-blocked",
+      label: t("mesh.banner.tor_blocked"),
+      tone: "caution",
+    });
   }
 
   // Gateway indicator: this device is spending its data/battery relaying nearby
@@ -481,6 +522,7 @@ export function useMeshBanners(): MeshBanner[] {
   const locationGranted = useMeshStateStore((s) => s.locationGranted);
   const nostrConnected = useMeshStateStore((s) => s.nostrConnected);
   const torActive = useMeshStateStore((s) => s.torActive);
+  const torBootstrap = useMeshStateStore((s) => s.torBootstrap);
   const gatewayEnabled = useSettingsStore((s) => s.gatewayEnabled);
   const bridgeActive = useMeshStateStore((s) => s.bridgeActive);
   const bridgePeopleAcross = useMeshStateStore((s) => s.bridgePeopleAcross);
@@ -506,6 +548,7 @@ export function useMeshBanners(): MeshBanner[] {
     clockSkewed,
     nostrConnected,
     torActive,
+    torBootstrap,
     gatewayEnabled,
     bridgeActive,
     bridgePeopleAcross,

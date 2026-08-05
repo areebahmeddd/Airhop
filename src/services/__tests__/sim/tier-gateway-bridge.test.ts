@@ -40,6 +40,8 @@ jest.mock("../../../bridge/NativeAirhopWiFi", () => {
   return { __esModule: true, default: shim.wifiBridge };
 });
 
+import { finalizeEvent, generateSecretKey } from "nostr-tools";
+import { BitchatActor } from "./harness/bitchat-actor";
 import { SimDevice, type DeviceSpec } from "./harness/device";
 import {
   badgeMatchesThreads,
@@ -64,6 +66,25 @@ const NOSTR_CARRIER = 0x28;
 const KIND_GEOHASH_MESSAGE = 20000;
 
 const CELL_CHANNEL = "#city";
+// The public Bluetooth room, which is what the bridge stitches across islands.
+const MESH_CHANNEL = "#bluetooth";
+
+// A signed geohash-channel note, composed the way any client does: kind 20000
+// with a `g` tag naming its cell. Signed with a throwaway key, because what the
+// gateway checks is that the signature is valid and the tag matches, never who
+// the author is.
+function signedGeohashNote(geohash: string, content: string): string {
+  const event = finalizeEvent(
+    {
+      kind: 20000,
+      created_at: Math.floor(Date.now() / 1000),
+      tags: [["g", geohash]],
+      content,
+    },
+    generateSecretKey(),
+  );
+  return JSON.stringify(event);
+}
 const BRIDGE_CHANNEL = "#bluetooth";
 
 let scenario: Scenario | null = null;
@@ -949,5 +970,341 @@ test("N09 both features under a hostile network and a moving crowd", async () =>
     radio.packetsDelivered > 200,
     `${radio.packetsDelivered} packets, ${relay.allEvents().length} relay events, airtime: ${radio.airtimeReport()}`,
   );
+  s.assert(true);
+});
+
+// ---------------------------------------------------------------------------
+// Mixed room: bitchat carrying Airhop's gateway and bridge traffic
+// ---------------------------------------------------------------------------
+
+test("N10 a bitchat phone relays gateway traffic it is not part of", async () => {
+  const s = (scenario = new Scenario({
+    id: "N10",
+    title: "NOSTR_CARRIER survives a bitchat relay hop",
+    seed: 710,
+  }));
+  const radio = new RadioFabric(s.world);
+  const relay = new RelayFabric(s.world);
+
+  // gateway <-> bitchat <-> stranded. The only path out for the stranded phone
+  // runs through a node that has no idea what a gateway is.
+  //
+  // This is the property the whole gateway story rests on in a mixed room, and
+  // it is not something Airhop can verify against itself: `0x28` is a type
+  // bitchat DEFINES but does not have to act on, so the question is whether it
+  // relays the packet or drops it. A drop here would strand every mesh-only
+  // phone whose nearest gateway happens to be two hops away past an iPhone.
+  const gateway = SimDevice.create(
+    s.world,
+    { ...android("gateway", 11), gatewayEnabled: true },
+    relay,
+  );
+  const stranded = SimDevice.create(s.world, android("stranded", 22), relay);
+  const middle = new BitchatActor(s.world, {
+    id: "middle",
+    platform: "ios",
+    seedByte: 211,
+  });
+  const airhops = [gateway, stranded];
+  for (const d of airhops) {
+    radio.add(d);
+    locations().place(d.id, PLACES.bengaluru);
+  }
+  radio.add(middle);
+  radio.setChain(["gateway", "middle", "stranded"]);
+  s.track(...airhops);
+
+  relay.setOffline("stranded", true);
+  for (const d of airhops) d.launch();
+  middle.launch();
+
+  // Two hops, so discovery has to cross the bitchat node before anything else
+  // can be asserted.
+  const discovered = await waitForCoarse(
+    s.world,
+    () => stranded.peers().includes(gateway.peerID),
+    60_000,
+  );
+  s.check(
+    "the stranded phone learned of the gateway through the bitchat relay",
+    discovered,
+    `peers=${stranded.peers().length} bitchat relayed ${middle.seen.relayed}`,
+  );
+
+  for (const d of airhops) d.joinChannel(CELL_CHANNEL);
+  const resolved = await cellsResolved(s, airhops, CELL_CHANNEL);
+  s.check("both Airhop phones resolved the cell", resolved);
+
+  s.check(
+    "and only the gateway has a connection",
+    relay.connectionCount("gateway") > 0 &&
+      relay.connectionCount("stranded") === 0,
+    `gateway=${relay.connectionCount("gateway")} stranded=${relay.connectionCount("stranded")}`,
+  );
+
+  const before = middle.seen.relayed;
+  stranded.send(CELL_CHANNEL, "sent from behind an iPhone");
+
+  const published = await waitForCoarse(
+    s.world,
+    () => relay.publishCount > 0,
+    60_000,
+  );
+  s.check(
+    "the message reached the relays, carried out by the gateway",
+    published,
+    `published=${relay.publishCount}`,
+  );
+  s.check(
+    "the bitchat node relayed rather than dropped the carrier",
+    middle.seen.relayed > before,
+    `relayed ${before} -> ${middle.seen.relayed}`,
+  );
+  // The compatibility claim in both directions: nothing Airhop sent looked
+  // like an unknown type to it. A gateway carrier is 0x28, which bitchat
+  // defines, so a drop here would be a registry divergence rather than a
+  // policy choice.
+  s.check(
+    "and dropped none of it as an unknown type",
+    middle.seen.droppedUnknownTypes.get(0x28) === undefined,
+    `dropped=${JSON.stringify([...middle.seen.droppedUnknownTypes])}`,
+  );
+  s.expectNone("process health", noCrashes(airhops));
+  s.assert(true);
+});
+
+test("N11 a bitchat phone in a bridged room neither breaks nor is broken by it", async () => {
+  const s = (scenario = new Scenario({
+    id: "N11",
+    title: "bridge rendezvous carriers across a mixed island",
+    seed: 711,
+  }));
+  const radio = new RadioFabric(s.world);
+  const relay = new RelayFabric(s.world);
+
+  // One island: an Airhop bridge with internet, an Airhop phone without, and a
+  // bitchat phone sharing the same radio room.
+  const bridge = SimDevice.create(
+    s.world,
+    { ...android("bridge", 11), bridgeEnabled: true, gatewayEnabled: true },
+    relay,
+  );
+  const local = SimDevice.create(s.world, android("local", 22), relay);
+  const guest = new BitchatActor(s.world, {
+    id: "guest",
+    platform: "ios",
+    seedByte: 212,
+  });
+  const airhops = [bridge, local];
+  for (const d of airhops) {
+    radio.add(d);
+    locations().place(d.id, PLACES.bengaluru);
+  }
+  radio.add(guest);
+  s.track(...airhops);
+
+  relay.setOffline("local", true);
+  for (const d of airhops) d.launch();
+  guest.launch();
+  // No join: a bitchat node records every public message it verifies, which is
+  // exactly the behaviour under test.
+
+  const met = await waitForCoarse(
+    s.world,
+    () => local.peers().includes(bridge.peerID),
+    30_000,
+  );
+  s.check("the island formed", met, `peers=${local.peers().length}`);
+  for (const d of airhops) d.joinChannel(MESH_CHANNEL);
+
+  // A bitchat phone speaks into the shared room. It knows nothing about the
+  // bridge, so this is an ordinary signed public message.
+  guest.sendPublicMessage(MESH_CHANNEL, "hello from bitchat");
+  const heard = await waitForCoarse(
+    s.world,
+    () => bridge.texts(MESH_CHANNEL).includes("hello from bitchat"),
+    30_000,
+  );
+  s.check("the Airhop bridge rendered the bitchat message", heard);
+
+  // And the reverse: Airhop's own room traffic still reaches it while the
+  // bridge is running. A bridge that broke plain mesh delivery for a bitchat
+  // neighbour would be worse than no bridge.
+  bridge.send(MESH_CHANNEL, "hello from airhop");
+  const echoed = await waitForCoarse(
+    s.world,
+    () => guest.seen.publicMessages.some((m) => m.text === "hello from airhop"),
+    30_000,
+  );
+  s.check(
+    "and the bitchat phone rendered Airhop's",
+    echoed,
+    `bitchat saw ${guest.seen.publicMessages.length} public messages`,
+  );
+
+  // The bridge's own rendezvous machinery is Airhop-only. Whatever it puts on
+  // the radio must cost the bitchat node nothing: either a type it defines and
+  // relays, or nothing at all. What it must never do is get counted as junk.
+  s.check(
+    "nothing the bridge emitted was junk to bitchat",
+    guest.seen.droppedUnknownTypes.get(0x28) === undefined,
+    `dropped=${JSON.stringify([...guest.seen.droppedUnknownTypes])}`,
+  );
+  s.check(
+    "and no signature it saw failed to verify",
+    guest.seen.rejectedSignatures === 0,
+    `rejected=${guest.seen.rejectedSignatures}`,
+  );
+  s.expectNone("process health", noCrashes(airhops));
+  s.assert(true);
+});
+
+// N12 was here: it set the gateway's relays offline, sent from a stranded
+// phone, and expected the deposit to be held and flushed. It passed about two
+// runs in three, because it was racing the app rather than testing it.
+//
+// A gateway that loses its connection stops advertising the gateway capability,
+// so a mesh-only peer correctly stops depositing with it. Whether the send
+// became a deposit at all depended on which arrived first: the send, or the
+// withdrawn advertisement. Both outcomes are correct behaviour, which is why
+// the scenario could not assert either.
+//
+// The queue itself is real and kept: it catches exactly the window between a
+// connection dropping and that withdrawal reaching the neighbours, where a
+// directed deposit is already in flight and nobody else holds a copy. It has no
+// deterministic scenario, and a flaky one would only teach people to re-run.
+
+test("N13 an Airhop gateway carries a bitchat phone's message to the internet", async () => {
+  const s = (scenario = new Scenario({
+    id: "N13",
+    title: "cross-app uplink: bitchat deposits, Airhop publishes",
+    seed: 713,
+  }));
+  const radio = new RadioFabric(s.world);
+  const relay = new RelayFabric(s.world);
+
+  // The mixed-room case that matters most for the gateway promise: the phone
+  // with no signal is running bitchat, and the only carrier in range is
+  // running Airhop. Nothing about this works unless the carrier wire format,
+  // the directed-packet convention and the structural gate all agree.
+  const gateway = SimDevice.create(
+    s.world,
+    { ...android("gateway", 11), gatewayEnabled: true },
+    relay,
+  );
+  radio.add(gateway);
+  locations().place(gateway.id, PLACES.bengaluru);
+  const phone = new BitchatActor(s.world, {
+    id: "phone",
+    platform: "ios",
+    seedByte: 213,
+  });
+  radio.add(phone);
+  s.track(gateway);
+  gateway.launch();
+  phone.launch();
+  gateway.joinChannel(CELL_CHANNEL);
+
+  const cellReady = await waitForCoarse(
+    s.world,
+    () => gateway.channelGeohash(CELL_CHANNEL) !== null,
+    60_000,
+  );
+  s.check("the Airhop gateway resolved its cell", cellReady);
+  const cell = gateway.channelGeohash(CELL_CHANNEL) ?? "";
+
+  // The gateway has to know who the bitchat phone is before it will act on a
+  // deposit: the rate limit keys to an authenticated identity, so an unheard
+  // depositor is refused. That is bitchat's rule too.
+  const known = await waitForCoarse(
+    s.world,
+    () => gateway.peers().includes(phone.peerID),
+    30_000,
+  );
+  s.check("the gateway heard the bitchat phone's announce", known);
+
+  const before = relay.publishCount;
+  // A signed geohash note, exactly as a bitchat phone composes one: kind 20000
+  // with a `g` tag naming the cell it is destined for. The gateway's structural
+  // gate checks both before publishing anything on a stranger's behalf.
+  phone.depositWithGateway(
+    gateway.peerID,
+    cell,
+    signedGeohashNote(cell, "posted from bitchat with no signal"),
+  );
+
+  const published = await waitForCoarse(
+    s.world,
+    () => relay.publishCount > before,
+    60_000,
+  );
+  s.check(
+    "the Airhop gateway published it on the bitchat phone's behalf",
+    published,
+    `published=${relay.publishCount} before=${before}`,
+  );
+  s.expectNone("process health", noCrashes([gateway]));
+  s.assert(true);
+});
+
+test("N14 an Airhop gateway will not publish a deposit aimed at another cell", async () => {
+  const s = (scenario = new Scenario({
+    id: "N14",
+    title: "the structural gate holds against a cross-app deposit",
+    seed: 714,
+  }));
+  const radio = new RadioFabric(s.world);
+  const relay = new RelayFabric(s.world);
+
+  const gateway = SimDevice.create(
+    s.world,
+    { ...android("gateway", 11), gatewayEnabled: true },
+    relay,
+  );
+  radio.add(gateway);
+  locations().place(gateway.id, PLACES.bengaluru);
+  const phone = new BitchatActor(s.world, {
+    id: "phone",
+    platform: "ios",
+    seedByte: 214,
+  });
+  radio.add(phone);
+  s.track(gateway);
+  gateway.launch();
+  phone.launch();
+  gateway.joinChannel(CELL_CHANNEL);
+
+  s.check(
+    "the gateway resolved its cell",
+    await waitForCoarse(
+      s.world,
+      () => gateway.channelGeohash(CELL_CHANNEL) !== null,
+      60_000,
+    ),
+  );
+  const cell = gateway.channelGeohash(CELL_CHANNEL) ?? "";
+  await waitForCoarse(
+    s.world,
+    () => gateway.peers().includes(phone.peerID),
+    30_000,
+  );
+
+  const before = relay.publishCount;
+  // The carrier says one cell; the signed event inside says another. Without
+  // the `g`-tag check a gateway is an open proxy: anyone in radio range could
+  // have it publish to any cell in the world on their say-so.
+  phone.depositWithGateway(
+    gateway.peerID,
+    cell,
+    signedGeohashNote("zzzzzz", "aimed somewhere else entirely"),
+  );
+  await waitForCoarse(s.world, () => false, 5_000).catch(() => undefined);
+
+  s.check(
+    "the gateway refused it rather than acting as an open proxy",
+    relay.publishCount === before,
+    `published=${relay.publishCount} before=${before}`,
+  );
+  s.expectNone("process health", noCrashes([gateway]));
   s.assert(true);
 });

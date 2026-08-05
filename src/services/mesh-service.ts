@@ -303,12 +303,18 @@ interface PendingHandshake {
 // older than the freshness window are dropped (receivers drop them too); and no
 // more than N ferries ride the mesh in any rolling minute (BLE airtime is scarce).
 const GEOHASH_CHANNEL_KIND = 20000;
-const CARRIER_MAX_EVENT_AGE_SECONDS = 15 * 60;
-const DOWNLINK_EVENTS_PER_MINUTE = 30;
+export const CARRIER_MAX_EVENT_AGE_SECONDS = 15 * 60;
+export const DOWNLINK_EVENTS_PER_MINUTE = 30;
 // Uplink deposits accepted per depositor per rolling minute, matching bitchat
 // GatewayService.Limits.uplinkEventsPerMinutePerDepositor. Bounds how much a
 // single mesh peer can make our gateway publish to relays on its behalf.
-const UPLINK_EVENTS_PER_MINUTE_PER_DEPOSITOR = 10;
+export const UPLINK_EVENTS_PER_MINUTE_PER_DEPOSITOR = 10;
+// Deposits held while relays are unreachable, matching bitchat
+// GatewayService.Limits. Bounded twice: in total, so a busy island cannot make
+// the gateway hold unbounded memory, and per depositor, so one peer cannot fill
+// the bag and crowd everyone else out.
+export const MAX_QUEUED_UPLINKS = 20;
+export const MAX_QUEUED_UPLINKS_PER_DEPOSITOR = 5;
 
 // Trim a nickname to the board's 64-byte cap (bitchat BoardWireConstants), by
 // UTF-8 length rather than character count so multibyte names cannot overflow.
@@ -371,6 +377,15 @@ export class MeshService {
   //                        mesh peer's behalf; never rebroadcast their relay echo.
   //   rebroadcastEventIDs - relay events we already ferried to the mesh; ferry once.
   private readonly publishedEventIDs = new Set<string>();
+  // Deposits accepted while the relays were down, waiting for a connection.
+  // Without this a mesh-only peer that hands its message to a gateway during a
+  // momentary outage loses it silently: the deposit is directed, so no other
+  // peer ever saw it, and the sender has no way to know it went nowhere.
+  private queuedUplinks: {
+    depositor: string;
+    geohash: string;
+    event: NostrEvent;
+  }[] = [];
   private readonly rebroadcastEventIDs = new Set<string>();
   // Sliding 60s window of downlink-rebroadcast timestamps, bounding BLE airtime.
   private downlinkSendTimes: number[] = [];
@@ -535,8 +550,16 @@ export class MeshService {
       // be able to catch up on messages we originated, not just relayed ones.
       this.gossip.track(packet);
       const b64 = bytesToBase64(encodePacket(packet));
-      const results = await Promise.all(
-        [...this.connectedLinks].map((linkID) =>
+      // Every open link, both radios.
+      //
+      // This iterated `connectedLinks` alone, so a broadcast reached Bluetooth
+      // peers and nobody on the WiFi fast path, while `unicastFn` just below
+      // correctly preferred WiFi. Two phones joined only over WiFi Aware or
+      // MultipeerConnectivity discovered each other (announces are unicast on
+      // link-up) and then never saw one another's public messages, board posts
+      // or group traffic. The transport looked connected and carried nothing.
+      const results = await Promise.all([
+        ...[...this.connectedLinks].map((linkID) =>
           this.sendBle(linkID, b64).then(
             () => true,
             () => {
@@ -548,7 +571,13 @@ export class MeshService {
             },
           ),
         ),
-      );
+        ...[...this.wifiConnectedLinks].map((linkID) =>
+          this.sendWifi(linkID, b64).then(
+            () => true,
+            () => false,
+          ),
+        ),
+      ]);
       return results.some(Boolean);
     };
     this.broadcastPacket = broadcastFn;
@@ -3782,14 +3811,76 @@ export class MeshService {
     if (depositorKey === undefined || !verifyPacket(packet, depositorKey))
       return;
 
+    // Absorb a repeat of something already handled, before the rate limit
+    // spends a token on it. bitchat guards the same cases in
+    // GatewayService.handleUplinkDeposit: already published by us, or already
+    // waiting in the bag.
+    //
+    // Deliberately NOT `seenCarrierEventIDs`. That set is bitchat's
+    // `meshBroadcastEventIDs` only in spirit: theirs holds events learned from a
+    // `fromGateway` BROADCAST, ours is added to at ingress for every carried
+    // event in either direction, including the deposit being handled right now.
+    // Checking it here rejected every uplink as a duplicate of itself and took
+    // the whole gateway offline, silently, for anyone relying on it.
+    if (
+      this.publishedEventIDs.has(event.id) ||
+      this.queuedUplinks.some((q) => q.event.id === event.id)
+    ) {
+      return;
+    }
+
     // Per-depositor rate limit so one peer cannot make us flood relays.
     if (!this.allowUplinkDeposit(depositor)) return;
+
+    // No connection right now: hold it rather than dropping it. The deposit was
+    // directed at us, so nobody else is carrying a copy.
+    if (!this.relaysConnected) {
+      this.enqueueUplink(depositor, carrier.geohash, event);
+      return;
+    }
 
     // Record it as ours before publishing: when our own relay subscription
     // echoes it back, the downlink rebroadcaster must not push it onto the mesh
     // again (the originating peer and its neighbours already hold the BLE copy).
     this.rememberEventID(this.publishedEventIDs, event.id);
     this.geoChannels?.publishCarriedEvent(event, carrier.geohash);
+  }
+
+  // Hold a deposit for a gateway whose relays are down, within both bounds.
+  // Drop-oldest rather than refuse-newest: the freshest message is the one most
+  // likely to still matter when the connection returns.
+  private enqueueUplink(
+    depositor: string,
+    geohash: string,
+    event: NostrEvent,
+  ): void {
+    const mine = this.queuedUplinks.filter((q) => q.depositor === depositor);
+    if (mine.length >= MAX_QUEUED_UPLINKS_PER_DEPOSITOR) {
+      const oldest = this.queuedUplinks.findIndex(
+        (q) => q.depositor === depositor,
+      );
+      if (oldest >= 0) this.queuedUplinks.splice(oldest, 1);
+    }
+    if (this.queuedUplinks.length >= MAX_QUEUED_UPLINKS) {
+      this.queuedUplinks.shift();
+    }
+    this.queuedUplinks.push({ depositor, geohash, event });
+  }
+
+  // Publish everything held while the relays were unreachable. Called when the
+  // pool reports a connection, matching bitchat's `flushQueuedUplinks` on the
+  // same trigger. Events that went out by another route in the meantime are
+  // skipped rather than published twice.
+  flushQueuedUplinks(): void {
+    if (!useSettingsStore.getState().gatewayEnabled) return;
+    if (!this.relaysConnected || this.queuedUplinks.length === 0) return;
+    const queued = this.queuedUplinks;
+    this.queuedUplinks = [];
+    for (const item of queued) {
+      if (this.publishedEventIDs.has(item.event.id)) continue;
+      this.rememberEventID(this.publishedEventIDs, item.event.id);
+      this.geoChannels?.publishCarriedEvent(item.event, item.geohash);
+    }
   }
 
   // Consume a per-depositor token from a 60s sliding window. Returns false when
@@ -4661,10 +4752,15 @@ export class MeshService {
       // instead of implying nothing is reachable.
       onConnectionChange: (connected) => {
         useMeshStateStore.getState().setNostrConnected(connected);
+        if (!connected) return;
+        // Anything a mesh-only peer handed us while we were offline goes out
+        // now. Same trigger bitchat uses (ChatViewModelBootstrapper watches
+        // NostrRelayManager.isConnected and flushes both services).
+        this.flushQueuedUplinks();
         // Relays coming up while bridging turns us into a serving bridge (we can
         // now publish + advertise a cell): refresh presence/subscription and push
         // a fresh announce so mesh-only peers discover us.
-        if (connected && this.bridgeService !== null) {
+        if (this.bridgeService !== null) {
           void this.bridgeService.refresh();
           this.announceManager.announceNow();
         }

@@ -42,3 +42,20 @@ updates:
     commit-message:
       prefix: "chore(deps/landing)"
       include: "scope"
+
+  # Gradle - Android native build
+  # iOS is intentionally omitted because Dependabot does not support CocoaPods.
+  - package-ecosystem: "gradle"
+    directories:
+      - "/android"
+      - "/android/app"
+    schedule:
+      interval: "monthly"
+    open-pull-requests-limit: 1
+    groups:
+      all-dependencies:
+        patterns:
+          - "*"
+    commit-message:
+      prefix: "chore(deps/android)"
+      include: "scope"

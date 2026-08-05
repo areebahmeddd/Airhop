@@ -10,8 +10,12 @@
 // AirhopBLEModule.getTorAvailability() (Orbot installed + a VPN transport up).
 // This module is iOS-only.
 
-import type { TurboModule } from "react-native";
-import { TurboModuleRegistry } from "react-native";
+import type { EmitterSubscription, TurboModule } from "react-native";
+import {
+  NativeEventEmitter,
+  NativeModules,
+  TurboModuleRegistry,
+} from "react-native";
 
 // ---- Types ------------------------------------------------------------------
 
@@ -60,6 +64,27 @@ export interface Spec extends TurboModule {
 
 /** Payload of the `TorStatusChanged` native event. */
 export type TorStatusChangedEvent = TorStatus;
+
+// ---- Events -----------------------------------------------------------------
+
+let emitter: NativeEventEmitter | null = null;
+
+// Subscribe to Arti's bootstrap status. iOS only; returns null when the module
+// is absent, which is every Android build and any iOS build without Arti.
+//
+// The Spec above has declared `addListener`/`removeListeners` since the module
+// was written, but nothing consumed the event: the routing layer's comment said
+// iOS status "arrives over TorStatusChanged" while no subscriber existed, so a
+// bootstrap that stalled was never reported to anyone.
+export function subscribeTorStatus(
+  listener: (status: TorStatusChangedEvent) => void,
+): EmitterSubscription | null {
+  const native = NativeModules.AirhopTorModule as
+    ConstructorParameters<typeof NativeEventEmitter>[0] | undefined;
+  if (native == null) return null;
+  emitter ??= new NativeEventEmitter(native);
+  return emitter.addListener("TorStatusChanged", listener);
+}
 
 // ---- Registry ---------------------------------------------------------------
 

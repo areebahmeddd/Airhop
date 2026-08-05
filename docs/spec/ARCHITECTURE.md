@@ -151,12 +151,28 @@ The interface is the same whichever radio carries the message.
 ```
 MessageRouter.ts - transport selection
 
-Priority order:
-1. WiFi Aware/Direct - both parties have it active and are in range (~30m, 250Mbps)
-2. BLE Mesh          - recipient is nearby, confirmed by announce
-3. Nostr Relay       - internet available, recipient confirmed offline
-4. Courier           - everything else failed (spray-and-wait through mesh peers)
+Local radios, used together:
+  WiFi Aware/Direct - both parties have it active and are in range (~30m, 250Mbps)
+  BLE Mesh          - recipient is nearby, confirmed by announce
+
+Ordered fallbacks, tried when no local radio reaches the recipient:
+1. Nostr Relay       - internet available, recipient confirmed offline
+2. Courier           - everything else failed (spray-and-wait through mesh peers)
 ```
+
+The two local radios are not a priority ladder. A message addressed to a peer is
+TTL bounded and flooded on every link the device has, because no node knows the
+mesh topology and the recipient may be several hops away. WiFi and BLE therefore
+carry the same packet at the same time, and a packet that enters on one radio is
+relayed out on the other. Duplicates are collapsed by the seen set and by a
+sender generated message ID, so a message is displayed once however many radios
+delivered it.
+
+The one place a radio is chosen rather than used alongside the other is the
+direct link shortcut. Once a peer has been mapped to a specific link, a packet
+addressed to it goes over WiFi if that mapping is a WiFi link, since the point of
+the fast path is to move an attachment that BLE would have to fragment into
+hundreds of writes. This is an optimization, not the delivery guarantee.
 
 ### BLE mesh
 
