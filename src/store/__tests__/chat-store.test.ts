@@ -502,3 +502,55 @@ describe("chat persistence window", () => {
     expect(readFile()).toContain("kept");
   });
 });
+
+// The store's whole unread rule is `!isMine && channel !== activeChannel`, so
+// `activeChannel` means "the conversation the user is reading" and nothing else.
+// App.tsx owns that distinction and clears it when the app leaves the
+// foreground: a thread still on screen behind a locked phone is not being read.
+//
+// Getting this wrong is invisible in the store and loud to a user. The OS
+// notification is gated on foreground alone, so it fires; if the store still
+// counted the thread as active it would file the message as already read, and
+// the user would tap the notification to find no unread badge and no app icon
+// count. These pin both halves of the rule.
+describe("unread while the app is away", () => {
+  it("counts a message that arrives with no conversation being read", () => {
+    const s = useChatStore.getState();
+    s.addChannel("#a");
+    s.setActiveChannel(""); // what App.tsx does on background
+    s.addMessage(makeMessage({ channel: "#a", isMine: false, id: "m-away" }));
+    expect(useChatStore.getState().unreadCounts["#a"]).toBe(1);
+  });
+
+  it("does not count one that arrives in the conversation on screen", () => {
+    const s = useChatStore.getState();
+    s.addChannel("#a");
+    s.setActiveChannel("#a");
+    s.addMessage(
+      makeMessage({ channel: "#a", isMine: false, id: "m-reading" }),
+    );
+    expect(useChatStore.getState().unreadCounts["#a"] ?? 0).toBe(0);
+  });
+
+  it("never counts the user's own message", () => {
+    const s = useChatStore.getState();
+    s.addChannel("#a");
+    s.setActiveChannel("");
+    s.addMessage(makeMessage({ channel: "#a", isMine: true, id: "m-mine" }));
+    expect(useChatStore.getState().unreadCounts["#a"] ?? 0).toBe(0);
+  });
+
+  it("clears the backlog when the conversation is opened again", () => {
+    const s = useChatStore.getState();
+    s.addChannel("#a");
+    s.setActiveChannel("");
+    s.addMessage(makeMessage({ channel: "#a", isMine: false, id: "m-1" }));
+    s.addMessage(makeMessage({ channel: "#a", isMine: false, id: "m-2" }));
+    expect(useChatStore.getState().unreadCounts["#a"]).toBe(2);
+
+    // Returning to the foreground on that thread is the same act as opening it.
+    s.setActiveChannel("#a");
+    s.markChannelRead("#a");
+    expect(useChatStore.getState().unreadCounts["#a"]).toBe(0);
+  });
+});

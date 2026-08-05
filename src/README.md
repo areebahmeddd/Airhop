@@ -85,9 +85,6 @@ The test suite follows four principles:
 | `store/`         | State transitions and persistence shape                                | MMKV persistence (mocked)                 |
 | `utils/`         | Stateless utilities                                                    | None                                      |
 
-`npx jest` reports the current suite and test totals, so they are not duplicated
-here.
-
 `services/` contains the runtime lifecycle and multi-device simulation suites.
 Although it began as a thin wiring layer, most of the application's behavioral
 tests now live here because they exercise the system as a whole rather than

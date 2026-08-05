@@ -21,12 +21,14 @@ import {
   View,
 } from "react-native";
 import {
+  APP_STORE_URL,
   APP_VERSION,
   AUTHOR_NAME,
   AUTHOR_URL,
   LATEST_RELEASE_API,
   LATEST_RELEASE_PAGE,
   LICENSE_URL,
+  PLAY_STORE_URL,
 } from "../../../data/app-info";
 import { birdForVersion } from "../../../data/releases";
 import { t, useT } from "../../../i18n";
@@ -45,6 +47,12 @@ import { SubHeader, useSharedStyles } from "../shared";
 interface Props {
   onBack: () => void;
 }
+
+// Neither store allows an app to install its own update: the closest thing
+// to "automatic" that Apple/Google policy permits is handing off to the
+// platform store's own one-tap Update button, rather than a GitHub page the
+// user has to find an asset on and sideload by hand.
+const STORE_URL = Platform.OS === "ios" ? APP_STORE_URL : PLAY_STORE_URL;
 
 // The outcome of a check. "idle" is the resting state before the first tap.
 type CheckState =
@@ -225,18 +233,18 @@ export default function VersionScreen({ onBack }: Props): React.JSX.Element {
           <PrimaryButton
             label={
               update
-                ? T("settings.version.download", { version: update.version })
+                ? T("settings.version.update_to", { version: update.version })
                 : checking
                   ? T("settings.version.checking")
                   : T("settings.version.check")
             }
             onPress={() =>
-              update ? void Linking.openURL(update.url) : void checkForUpdates()
+              update ? void Linking.openURL(STORE_URL) : void checkForUpdates()
             }
             disabled={checking}
             accessibilityLabel={
               update
-                ? T("settings.version.download_a11y", {
+                ? T("settings.version.update_to_a11y", {
                     version: update.version,
                   })
                 : T("settings.version.check")

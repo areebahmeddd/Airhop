@@ -1,6 +1,6 @@
 // Message router: decides which transport carries each message.
 //
-// Priority order (per ARCHITECTURE.md section 3, Adaptive Transport Stack):
+// Priority order (per ARCHITECTURE.md section 3, Transport Stack):
 //   1. WiFi Aware / MultipeerConnectivity direct (high-bandwidth, same Noise session)
 //   2. BLE mesh direct (Noise session established)
 //   3. Nostr gift-wrap DM (if recipient's Nostr pubkey is known)

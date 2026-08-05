@@ -25,7 +25,7 @@ import * as ImagePicker from "expo-image-picker";
 import React, { useMemo, useRef, useState } from "react";
 import { Modal, Pressable, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { bareToken } from "../../core/payments/cashu";
+import { readScan, type ScanTarget } from "../../core/payments/scan";
 import { t, useT } from "../../i18n";
 import {
   FontSize,
@@ -39,8 +39,9 @@ import { ensurePermission } from "../../utils/permissions";
 
 // What the camera is being pointed at. The mechanics are identical; only the
 // validator and the wording change, so one screen serves both rather than two
-// near-copies drifting apart.
-export type ScanTarget = "token" | "invoice";
+// near-copies drifting apart. The type and its acceptance rules live in
+// core/payments/scan.ts; re-exported here so callers keep importing one thing.
+export type { ScanTarget };
 
 interface Props {
   visible: boolean;
@@ -235,27 +236,6 @@ export default function TokenScanner({
       )}
     </Modal>
   );
-}
-
-// A scanned string is only accepted if it really is what we asked for.
-function readScan(raw: string | undefined, target: ScanTarget): string | null {
-  if (typeof raw !== "string" || raw.length === 0) return null;
-  // `bareToken` also strips a `cashu:` scheme, so a QR from a wallet that adds
-  // one still reads.
-  if (target === "token") return bareToken(raw);
-  return bareInvoice(raw);
-}
-
-// bolt11 is bech32, so wallets legitimately encode it in either case, and many
-// prefix a `lightning:` scheme. Normalise to the lowercase bare form the mint
-// expects. Only the human-readable prefix is checked here; the mint is the one
-// that validates the invoice properly, and duplicating that badly would only
-// reject invoices that are actually fine.
-function bareInvoice(raw: string): string | null {
-  const trimmed = raw.trim().replace(/^lightning:/i, "");
-  return /^ln(bc|tb|bcrt|tbs)[0-9]/i.test(trimmed)
-    ? trimmed.toLowerCase()
-    : null;
 }
 
 function createStyles(Colors: ReturnType<typeof useThemeColors>) {

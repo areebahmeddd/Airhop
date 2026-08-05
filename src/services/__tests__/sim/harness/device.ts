@@ -65,6 +65,7 @@ const P = {
   fileSystem: "expo-file-system",
   location: "expo-location",
   walletService: "../../../wallet-service",
+  ecashTransfer: "../../../ecash-transfer",
   voiceBridge: "../../../../bridge/NativeAirhopVoice",
 } as const;
 
@@ -143,6 +144,9 @@ interface Inner {
   // What its microphone and speaker actually did.
   voice: VoiceRecord | null;
   wallet: WalletServiceLike;
+  // The payment ladder every screen calls. Held so a scenario can pay the way
+  // the app pays, rather than reaching past it into the wallet primitives.
+  pay: PayLike;
   // The event emitter this phone's native module and mesh-service share. Held
   // ONLY so the harness can prove, in a test, that two phones do not share one.
   // If they ever did, every scenario in this directory would be meaningless:
@@ -187,6 +191,27 @@ interface WalletServiceLike {
     opts?: { preferOffline?: boolean },
   ) => Promise<{ amount: number; outcome: string }>;
   refreshAccount: (...args: unknown[]) => Promise<unknown>;
+  [k: string]: unknown;
+}
+
+// `payPerson` and friends, structurally. See the note on WalletServiceLike.
+interface PayLike {
+  payPerson: (params: {
+    peerID?: string;
+    nostrPubkey?: string;
+    amount: number;
+    memo?: string;
+    unit?: string;
+    senderNickname?: string;
+  }) => Promise<{
+    rail: string;
+    amount: number;
+    unit: string;
+    txId: string;
+    token?: string;
+    final: boolean;
+    fallbackReason?: string;
+  } | null>;
   [k: string]: unknown;
 }
 
@@ -256,6 +281,8 @@ interface MeshLike {
   ) => boolean;
   sendMeshPing: (peerID: string) => Promise<unknown>;
   getNostrPubKeyHex: () => string;
+  getNostrClient: () => { activeRelays: string[] } | null;
+  getNostrPrivKey: () => Uint8Array;
   getChannelGeohash: (channel: string) => string | null;
   canSealPrivateMedia: (peerID: string) => boolean;
   applyInternetEnabled: (enabled: boolean) => void;
@@ -443,6 +470,10 @@ export class SimDevice {
 
   teardown(): void {
     eventRouter().forget(this.id);
+    // Before the mesh goes, or the subscription outlives the relay it was
+    // opened on and the world cannot close cleanly.
+    this.stopNutzapWatcher?.();
+    this.stopNutzapWatcher = null;
     try {
       this.inner.mesh.destroyMeshService();
     } catch {
@@ -834,6 +865,8 @@ export class SimDevice {
   // The last send this device prepared, so a scenario can reclaim it the way
   // the Wallet screen does when a sheet is dismissed.
   private lastTxId: string | null = null;
+  // Torn down with the device, so a watcher never outlives the phone it ran on.
+  private stopNutzapWatcher: (() => void) | null = null;
 
   async walletReady(): Promise<boolean> {
     return this.world.resolve(this.inner.wallet.initWalletService());
@@ -886,6 +919,11 @@ export class SimDevice {
       this.log("PREPARE_SEND_FAILED", String(e));
       return null;
     }
+  }
+
+  // The transaction the last prepareSend opened, for asserting on its fate.
+  lastSendTxId(): string | null {
+    return this.lastTxId;
   }
 
   reclaimLastSend(): boolean {
@@ -980,6 +1018,289 @@ export class SimDevice {
     return this.balance() + this.reservedBalance();
   }
 
+  // ---- Lightning out (melt) -------------------------------------------------
+
+  // Withdraw to a bolt11 invoice: quote it, then pay it.
+  //
+  // Two calls rather than one because that is how the sheet works, and because
+  // the interesting failures live between them. Returns null when either half
+  // failed, having logged which.
+  async withdraw(invoice: string): Promise<{
+    paid: number;
+    fee: number;
+    changeReturned: number;
+  } | null> {
+    const mintUrl = this.firstMintUrl();
+    if (mintUrl === null) return null;
+    const wallet = this.inner.wallet as unknown as {
+      quoteLightningWithdrawal: (p: {
+        invoice: string;
+        mintUrl: string;
+        unit?: string;
+      }) => Promise<{ amount: number; feeReserve: number; total: number }>;
+      payLightningInvoice: (q: unknown) => Promise<{
+        paid: number;
+        fee: number;
+        changeReturned: number;
+      }>;
+    };
+    let quote;
+    try {
+      quote = await this.world.resolve(
+        wallet.quoteLightningWithdrawal({ invoice, mintUrl }),
+      );
+    } catch (e) {
+      this.log("WITHDRAW_QUOTE_FAILED", String(e));
+      return null;
+    }
+    this.log(
+      "WITHDRAW_QUOTE",
+      `pay ${String(quote.amount)} reserve ${String(quote.feeReserve)} total ${String(quote.total)}`,
+    );
+    try {
+      const result = await this.world.resolve(
+        wallet.payLightningInvoice(quote),
+      );
+      this.log(
+        "WITHDRAW",
+        `paid ${String(result.paid)} fee ${String(result.fee)} change ${String(result.changeReturned)}`,
+      );
+      return result;
+    } catch (e) {
+      this.log("WITHDRAW_FAILED", String(e));
+      return null;
+    }
+  }
+
+  // What the melt quote would cost, without paying it.
+  async withdrawQuote(
+    invoice: string,
+  ): Promise<{ amount: number; feeReserve: number; total: number } | null> {
+    const mintUrl = this.firstMintUrl();
+    if (mintUrl === null) return null;
+    const wallet = this.inner.wallet as unknown as {
+      quoteLightningWithdrawal: (p: {
+        invoice: string;
+        mintUrl: string;
+      }) => Promise<{ amount: number; feeReserve: number; total: number }>;
+    };
+    try {
+      return await this.world.resolve(
+        wallet.quoteLightningWithdrawal({ invoice, mintUrl }),
+      );
+    } catch (e) {
+      this.log("WITHDRAW_QUOTE_FAILED", String(e));
+      return null;
+    }
+  }
+
+  // Move a balance from one mint to another over Lightning. A token names
+  // exactly one mint, so this is the only way to combine a split balance.
+  async consolidate(
+    fromMintUrl: string,
+    toMintUrl: string,
+  ): Promise<{ spent: number; received: number; fee: number } | null> {
+    const wallet = this.inner.wallet as unknown as {
+      consolidateMints: (p: {
+        fromMintUrl: string;
+        toMintUrl: string;
+      }) => Promise<{ spent: number; received: number; fee: number }>;
+    };
+    try {
+      const result = await this.world.resolve(
+        wallet.consolidateMints({ fromMintUrl, toMintUrl }),
+      );
+      this.log(
+        "CONSOLIDATE",
+        `spent ${String(result.spent)} received ${String(result.received)} fee ${String(result.fee)}`,
+      );
+      return result;
+    } catch (e) {
+      this.log("CONSOLIDATE_FAILED", String(e));
+      return null;
+    }
+  }
+
+  // Balance held at one specific mint, for asserting that value actually moved
+  // between them rather than merely summing to the right total.
+  balanceAt(mintUrl: string, unit = "sat"): number {
+    const proofs = (
+      this.inner.stores.walletStore.getState().proofs as Record<
+        string,
+        { amount: number }[]
+      >
+    )[`${mintUrl}|${unit}`];
+    return (proofs ?? []).reduce((sum, p) => sum + p.amount, 0);
+  }
+
+  // ---- Tor -----------------------------------------------------------------
+
+  // Whether the wallet would currently refuse a mint call. On iOS with Tor up,
+  // it must: Arti wraps WebSockets, not fetch, so a mint request would leave
+  // the device in the clear while the user believes everything is routed.
+  mintNetworkBlocked(): boolean {
+    const wallet = this.inner.wallet as unknown as {
+      isMintNetworkBlocked?: () => boolean;
+    };
+    return wallet.isMintNetworkBlocked?.() ?? false;
+  }
+
+  // Raise or drop Tor, as the Tor service does when Orbot or Arti reports in.
+  setTorActive(active: boolean): void {
+    call(this.inner.stores.meshStateStore, "setTorActive", active);
+  }
+
+  // ---- backup and recovery --------------------------------------------------
+
+  // Turn on the recovery phrase. Every coin minted or swapped after this uses
+  // deterministic secrets derived from it (NUT-13), which is the only reason a
+  // restore can find anything at all.
+  async enableBackup(): Promise<string | null> {
+    const wallet = this.inner.wallet as unknown as {
+      enableWalletBackup: () => Promise<{ phrase: string; existed: boolean }>;
+      markBackupVerified: () => void;
+    };
+    try {
+      const setup = await this.world.resolve(wallet.enableWalletBackup());
+      wallet.markBackupVerified();
+      this.log("BACKUP_ON", setup.existed ? "existing phrase" : "new phrase");
+      return setup.phrase;
+    } catch (e) {
+      this.log("BACKUP_FAILED", String(e));
+      return null;
+    }
+  }
+
+  // Restore from a phrase on this device: the new-phone path.
+  async restoreFrom(
+    phrase: string,
+    mintUrls: string[],
+  ): Promise<{ recovered: number; proofCount: number } | null> {
+    const wallet = this.inner.wallet as unknown as {
+      restoreFromRecoveryPhrase: (p: {
+        phrase: string;
+        mintUrls: string[];
+      }) => Promise<{
+        recovered: Record<string, number>;
+        proofCount: number;
+        alreadySpent: number;
+      }>;
+    };
+    try {
+      const result = await this.world.resolve(
+        wallet.restoreFromRecoveryPhrase({ phrase, mintUrls }),
+      );
+      const recovered = Object.values(result.recovered).reduce(
+        (a, b) => a + b,
+        0,
+      );
+      this.log(
+        "RESTORE",
+        `${String(recovered)} sat across ${String(result.proofCount)} proofs, ${String(result.alreadySpent)} already spent`,
+      );
+      return { recovered, proofCount: result.proofCount };
+    } catch (e) {
+      this.log("RESTORE_FAILED", String(e));
+      return null;
+    }
+  }
+
+  // ---- payments -------------------------------------------------------------
+
+  // Pay someone the way every screen in the app pays them: through the one
+  // ladder, so a scenario exercises the rail choice rather than a primitive the
+  // UI never calls.
+  async pay(params: {
+    peerID?: string;
+    nostrPubkey?: string;
+    amount: number;
+    memo?: string;
+  }): Promise<{ rail: string; amount: number; final: boolean } | null> {
+    try {
+      const result = await this.world.resolve(this.inner.pay.payPerson(params));
+      this.log(
+        "PAY",
+        result === null ? "refused" : `${result.rail} ${String(result.amount)}`,
+      );
+      return result;
+    } catch (e) {
+      this.log("PAY_FAILED", String(e));
+      return null;
+    }
+  }
+
+  // Announce how to nutzap us (kind 10019) and start redeeming what arrives.
+  //
+  // App.tsx does both of these on launch; the harness does not run App.tsx, so
+  // a scenario that wants the receive half has to ask for it. Returns false when
+  // there is no Nostr client, which is the honest answer for an offline device.
+  async startNutzapReceiving(): Promise<boolean> {
+    const mesh = this.inner.mesh.getMeshService();
+    if (mesh === null) return false;
+    const client = mesh.getNostrClient?.();
+    const privKey = mesh.getNostrPrivKey?.();
+    const pubKey = mesh.getNostrPubKeyHex?.();
+    if (!client || !privKey || !pubKey) return false;
+    const wallet = this.inner.wallet as unknown as {
+      publishOwnNutzapInfo: (p: {
+        client: unknown;
+        privKey: Uint8Array;
+        relays: string[];
+      }) => Promise<boolean>;
+      startNutzapWatcher: (p: {
+        myPubkey: string;
+        client: unknown;
+        onRedeemed?: (amount: number, unit: string, from: string) => void;
+      }) => () => void;
+    };
+    const published = await this.world.resolve(
+      wallet.publishOwnNutzapInfo({
+        client,
+        privKey,
+        relays: (client as { activeRelays: string[] }).activeRelays,
+      }),
+    );
+    this.stopNutzapWatcher = wallet.startNutzapWatcher({
+      myPubkey: pubKey,
+      client,
+      onRedeemed: (amount, unit, from) => {
+        this.log(
+          "NUTZAP_IN",
+          `${String(amount)} ${unit} from ${from.slice(0, 8)}`,
+        );
+      },
+    });
+    this.log("NUTZAP_READY", `10019 published=${String(published)}`);
+    return published;
+  }
+
+  // Settle whatever the mint can now confirm: paid deposit quotes, reserved
+  // sends the recipient has redeemed, and locked nutzaps that reached their
+  // owner by some route other than the relay.
+  async reconcile(): Promise<void> {
+    const fn = this.inner.wallet.reconcile as (() => Promise<void>) | undefined;
+    if (typeof fn !== "function") return;
+    try {
+      await this.world.resolve(fn());
+    } catch (e) {
+      this.log("RECONCILE_FAILED", String(e));
+    }
+  }
+
+  // One transaction's current status, for asserting that something settled.
+  txStatus(txId: string): string | undefined {
+    const history = this.inner.stores.walletStore.getState().history as
+      { id: string; status: string }[] | undefined;
+    return (history ?? []).find((tx) => tx.id === txId)?.status;
+  }
+
+  // Rewrite a transaction. For putting the wallet into a state a scenario needs
+  // to START from, where building up to it honestly would mean driving a relay
+  // failure the fabric cannot stage.
+  updateTx(txId: string, patch: Record<string, unknown>): void {
+    call(this.inner.stores.walletStore, "updateTx", txId, patch);
+  }
+
   // ---- storage / wipe -------------------------------------------------------
 
   // Triple-tap the logo. The real wipe also clears the Keychain, which is
@@ -988,6 +1309,8 @@ export class SimDevice {
   // nothing survives into the next launch.
   panicWipe(): void {
     this.log("PANIC_WIPE");
+    this.stopNutzapWatcher?.();
+    this.stopNutzapWatcher = null;
     this.inner.mesh.destroyMeshService();
     for (const name of Object.keys(this.inner.stores)) {
       call(this.inner.stores[name], "clearAll");
@@ -1185,6 +1508,7 @@ function buildSandbox(
     }
 
     const wallet = require(P.walletService) as WalletServiceLike;
+    const pay = require(P.ecashTransfer) as PayLike;
     const emitter = (require("react-native") as { DeviceEventEmitter: object })
       .DeviceEventEmitter;
     const selectAccounts =
@@ -1210,6 +1534,7 @@ function buildSandbox(
       fs,
       voice,
       wallet,
+      pay,
       selectAccounts,
       emitter,
     };

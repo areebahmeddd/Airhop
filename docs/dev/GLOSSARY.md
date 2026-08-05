@@ -46,7 +46,7 @@
 
 **[NIP-17](https://github.com/nostr-protocol/nips/blob/master/17.md)**: The Nostr private direct message standard. Wraps messages using gift-wrap (NIP-59) so relay operators see neither sender, recipient, nor content.
 
-**[NIP-29](https://github.com/nostr-protocol/nips/blob/master/29.md)**: Nostr relay-managed groups. Considered and rejected for Airhop: it puts membership enforcement on a relay. See ARCHITECTURE.md section 6, Groups & Channels.
+**[NIP-29](https://github.com/nostr-protocol/nips/blob/master/29.md)**: Nostr relay-managed groups. Considered and rejected for Airhop: it puts membership enforcement on a relay. See ARCHITECTURE.md section 6, Channels and Groups.
 
 **[NIP-44](https://github.com/nostr-protocol/nips/blob/master/44.md)**: The Nostr encryption standard using XChaCha20-Poly1305 with versioning. Used inside NIP-17 gift-wrap envelopes.
 

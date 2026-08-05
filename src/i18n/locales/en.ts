@@ -576,7 +576,7 @@ export const strings = {
   "chat.media.open_failed":
     "The file could not be opened. It may have been cleared from the cache.",
   "media.blocked.nostr_only":
-    "You only know this person through a relay, and photos, files and voice notes travel over Bluetooth. Text reaches them anywhere, media needs them nearby.",
+    "You only know this person through a relay. Only text is available. Photos, files, and voice notes require Bluetooth.",
   // The channel kind is named inline so the sentence reads naturally either
   // way; a language that inflects around it can reorder both halves.
   "media.blocked.private_channel":
@@ -611,17 +611,11 @@ export const strings = {
     "Could not start recording. Check microphone permissions.",
 
   // ---- Chats: ecash in a thread --------------------------------------------------
-  "chat.ecash.title": "Send ecash",
-  "chat.ecash.amount": "Amount in sats",
-  "chat.ecash.memo": "Memo (optional)",
-  "chat.ecash.send": "Send",
   "chat.ecash.claimed": "Claimed",
   "chat.ecash.reclaimed": "Reclaimed",
   "chat.ecash.claiming": "Claiming…",
   "chat.ecash.claim": "Claim",
   "chat.ecash.claim_amount": "Claim {amount} {unit}",
-  "chat.ecash.send_to":
-    "Built offline from your wallet and sent as a token to {name}.",
   "chat.ecash.already_claimed": "Already claimed",
   "chat.ecash.already_claimed_body":
     "Every proof in this token is already in your wallet, so nothing was added.",
@@ -861,10 +855,14 @@ export const strings = {
   "mesh.peer.in_range": "In range",
   "mesh.peer.send_dm": "Send a direct message",
   "mesh.peer.message": "Message",
-  "mesh.peer.send_sats": "Send sats",
+  // "Send ecash", not "Send sats", to match the DM attach menu, the contact
+  // sheet and the shared sheet's own title. The action is identical from all
+  // four doors, so a user who learns it in one place should recognise it in the
+  // rest rather than wondering whether "sats" means something different.
+  "mesh.peer.send_sats": "Send ecash",
   "mesh.peer.amount_placeholder": "Amount in sats",
-  "mesh.peer.amount_first": "Send sats, enter an amount first",
-  "mesh.peer.cancel_send": "Cancel send sats",
+  "mesh.peer.amount_first": "Send ecash, enter an amount first",
+  "mesh.peer.cancel_send": "Cancel send ecash",
   "mesh.peer.view_peer": "View peer {name}",
   "mesh.peer.view_peer_online": "View peer {name}, online",
   "mesh.peer.last_seen": "Last seen {ago} ago",
@@ -989,23 +987,14 @@ export const strings = {
   "wallet.zap.invalid_pubkey": "Invalid pubkey",
   "wallet.zap.invalid_pubkey_body":
     "Enter an npub1… or a 64-character hex Nostr pubkey.",
+  // Kept as the Activity row label for an outgoing nutzap. The confirmation
+  // copy lives under wallet.pay.*, shared by every door that pays someone.
   "wallet.zap.sent": "Nutzap sent",
-  "wallet.zap.sent_body":
-    "{amount} {unit} locked to their key and published. Only they can redeem it.",
-  "wallet.zap.sent_encrypted": "Sent as an encrypted token",
-  // `{reason}` is one of the wallet.svc fallback fragments, lowercase by
-  // design, so it has to sit mid-sentence rather than lead.
-  "wallet.zap.sent_encrypted_body":
-    "{amount} {unit} sent in a Nostr DM, because {reason}.\n\nThis is a bearer token: once they decrypt the message, whoever holds that string can redeem it. It stays reclaimable under Pending until you confirm it arrived.",
-  "wallet.zap.no_network": "Couldn't reach the network",
-  "wallet.zap.no_network_body":
-    "A token was built instead, because {reason}. Share it however you like, or reclaim it under Pending.",
   "wallet.zap.failed": "Zap failed",
   "wallet.zap.body":
-    "If they publish NIP-61 nutzap info, the ecash is locked to their key so nobody else can spend it. If not, it goes as an encrypted DM instead and you will be told which happened.",
+    "If they publish NIP-61 nutzap info, the ecash is locked to their key so nobody else can spend it, and cannot be taken back. If not, it goes as a reclaimable token instead. You will be told which happened.",
   "wallet.zap.contact": "Zap {name}",
   "wallet.zap.pubkey_placeholder": "npub1… or 64-char hex",
-  "wallet.zap.note": "Note (optional, public)",
   "wallet.zap.sending": "Sending…",
   "wallet.nostr.copied_body":
     "Give this to someone and they can zap you from Airhop or any other Nostr wallet, with no Bluetooth needed.",
@@ -1263,16 +1252,42 @@ export const strings = {
   "wallet.xfer.mesh_offline_body":
     "The mesh service is not running, so there is no way to hand the token over. Nothing has been deducted.",
   "wallet.xfer.could_not_send": "Could not send",
-  "wallet.xfer.on_its_way": "{amount} {unit} on its way",
-  // `{route}` is one of the wallet.xfer.route_* sentences above.
-  "wallet.xfer.on_its_way_short":
-    "{route} It stays reclaimable from the Wallet tab until you confirm it arrived.",
-  "wallet.xfer.on_its_way_body":
-    "{route} It stays reclaimable from the Wallet tab until you confirm it arrived, so nothing is lost if it never lands.",
   "wallet.xfer.inexact_body":
     "Your proofs can't make exactly {amount} {unit} offline. The smallest token you can build is {spend} {unit}, and the extra {extra} {unit} goes to them with no way to get it back.\n\nRefreshing at the mint while online splits your proofs into denominations that make this exact.",
   "wallet.xfer.send_amount": "Send {amount}",
   "wallet.xfer.mesh_offline": "Mesh offline",
+
+  // ---- Wallet: paying a person ---------------------------------------------------
+  // One sentence per rail, always followed by one of the two finality lines
+  // below. Between them they answer the only two questions the payer has: where
+  // the money went, and whether they can still stop it.
+  "wallet.pay.rail_nutzap":
+    "Locked to their key and published to Nostr. It is theirs whether or not they are online.",
+  "wallet.pay.rail_nutzap_dm":
+    "Locked to their key. The relay would not take it, so it went to them as a message instead.",
+  "wallet.pay.rail_nutzap_undelivered":
+    "Locked to their key, but nothing could carry it yet. It is queued, and the token is under Pending.",
+  "wallet.pay.final":
+    "Locked payments cannot be reclaimed: only their key can spend these coins now.",
+  "wallet.pay.reclaimable":
+    "It stays reclaimable from the Wallet tab until you confirm it arrived.",
+  // `{reason}` is one of the wallet.svc fragments, lowercase by design.
+  "wallet.pay.why": "Sent this way because {reason}.",
+  "wallet.pay.sent_title": "{amount} {unit} to {name}",
+  // Local-only note in the thread a nutzap was sent from. Nothing was
+  // transmitted here, so it is deliberately a notice and not a bubble.
+  "wallet.pay.thread_receipt": "You sent {amount} {unit}, locked to their key.",
+  "wallet.pay.title": "Send ecash",
+  "wallet.pay.to": "To {name}",
+  "wallet.pay.amount": "Amount in sats",
+  // "public", flatly. On a nutzap this note is the content of a public relay
+  // event, and the user cannot tell in advance which rail they will get. Hedging
+  // with "may be public" makes them read the label twice and still not know, so
+  // it states the worse case as the case.
+  "wallet.pay.memo": "Note (optional, public)",
+  "wallet.pay.send": "Send",
+  "wallet.pay.sending": "Sending…",
+  "wallet.pay.action": "Send ecash",
 
   // ---- Wallet: QR scanner --------------------------------------------------------
   "wallet.scan.camera_label": "Camera access",
@@ -1889,8 +1904,8 @@ export const strings = {
   "settings.version.release_notes": "View release notes",
   "settings.version.made_with": "Made with",
   "settings.version.number": "Version {version}",
-  "settings.version.download": "Download {version}",
-  "settings.version.download_a11y": "Download version {version}",
+  "settings.version.update_to": "Update to {version}",
+  "settings.version.update_to_a11y": "Update to version {version}",
   "settings.version.released_under": "Released under",
   "settings.version.notes_a11y": "View release notes for version {version}",
   "settings.version.tor_paused":

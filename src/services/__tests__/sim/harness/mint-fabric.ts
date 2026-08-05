@@ -32,7 +32,18 @@ const DENOMINATIONS = [
 
 // NUT-00 hash_to_curve, domain-separated exactly as the spec requires. Getting
 // this wrong would make every signature verify against nothing.
-const DOMAIN = new TextEncoder().encode("Secp256k1_HashToCurvePoint_Cashu_");
+//
+// The separator is `Secp256k1_HashToCurve_Cashu_`, verified against the NUT-00
+// test vectors in mint-fabric.test.ts. This read `HashToCurvePoint_` for a long
+// time and nothing caught it, because the only consumer was `yFor`, which
+// compares the fabric's own Y against the fabric's own Y: a double-spend was
+// still refused, so W03 passed on a hash the rest of the world disagreed with.
+// What it silently broke was NUT-07 `checkstate`, where the CLIENT computes Y
+// with cashu-ts. Every proof therefore came back UNSPENT no matter what, so any
+// scenario relying on the mint reporting a spent proof - reconcile settling a
+// send, refreshAccount dropping spent proofs - could not have failed if it were
+// wrong, and could not have passed if it were right.
+const DOMAIN = new TextEncoder().encode("Secp256k1_HashToCurve_Cashu_");
 
 function hashToCurve(
   secretBytes: Uint8Array,
@@ -63,6 +74,24 @@ export interface MintConditions {
   // returning the outputs. The nastiest real failure: value has moved and the
   // client does not know where.
   swapVanishes: boolean;
+  // Routing reserve quoted on a melt, in sats. A real mint cannot know the
+  // Lightning fee in advance, so it over-reserves and returns the unused part
+  // as change (NUT-08). Zero means "quote exactly", which is the easy case and
+  // not the one that loses money.
+  meltFeeReserve: number;
+  // Of that reserve, what the route actually cost. The difference comes back as
+  // change. Only meaningful when meltFeeReserve > 0.
+  meltActualFee: number;
+  // The Lightning payment fails. The inputs MUST survive: a mint that burns
+  // them on a failed payment has eaten the sender's money.
+  meltFails: boolean;
+  // The mint pays the invoice, marks the inputs spent, and then the response
+  // never reaches the wallet. The worst melt failure and the realistic one: a
+  // dropped connection at exactly the wrong moment. The wallet cannot know
+  // whether it paid, so it must not guess in either direction - releasing the
+  // proofs would double-count money that is gone, dropping them would throw away
+  // the unused routing reserve the mint is holding for it.
+  meltVanishes: boolean;
 }
 
 const DEFAULT_CONDITIONS: MintConditions = {
@@ -70,6 +99,10 @@ const DEFAULT_CONDITIONS: MintConditions = {
   serverError: false,
   latencyMs: 20,
   swapVanishes: false,
+  meltFeeReserve: 0,
+  meltActualFee: 0,
+  meltFails: false,
+  meltVanishes: false,
 };
 
 interface Keyset {
@@ -92,7 +125,26 @@ export class MintFabric {
   private conditions: MintConditions = { ...DEFAULT_CONDITIONS };
   private readonly quotes = new Map<
     string,
-    { amount: number; unit: string; paid: boolean; issued: boolean }
+    {
+      amount: number;
+      unit: string;
+      paid: boolean;
+      issued: boolean;
+      // The bolt11 string. NUT-05 echoes it back as `request` on every melt
+      // quote and melt response, and cashu-ts refuses a response without it.
+      request?: string;
+      // Change signed against the wallet's blank outputs. Held on the quote so
+      // a later `checkMeltQuote` can return it, which is the ONLY way a wallet
+      // recovers its unused routing reserve after a melt response goes missing.
+      change?: { id: string; amount: number; C_: string }[];
+    }
+  >();
+  // Every blinded message the mint has ever signed, keyed by B_. NUT-09 restore
+  // is exactly a lookup in this table: the wallet re-derives its blinded
+  // messages from the seed and asks "which of these do you recognise".
+  private readonly signedByB = new Map<
+    string,
+    { id: string; amount: number; C_: string }
   >();
   private previousFetch: typeof globalThis.fetch | undefined;
 
@@ -175,8 +227,14 @@ export class MintFabric {
 
   private async handle(input: unknown, init?: unknown): Promise<Response> {
     const url = typeof input === "string" ? input : String(input);
-    // Anything not addressed to this mint is not ours to answer.
+    // Anything not addressed to this mint goes to whoever was installed before
+    // us. That chaining is what lets two mints exist at once, which a
+    // consolidate scenario needs: without it the second `install()` would
+    // shadow the first and every call to mint A would 404.
     if (!url.startsWith(this.url)) {
+      if (this.previousFetch !== undefined) {
+        return this.previousFetch(input as RequestInfo, init as RequestInit);
+      }
       return this.json({ detail: "not found" }, 404);
     }
     if (this.conditions.offline) {
@@ -195,6 +253,7 @@ export class MintFabric {
     if (path.startsWith("/v1/keysets")) return this.keysets();
     if (path.startsWith("/v1/keys")) return this.keys();
     if (path.startsWith("/v1/checkstate")) return this.checkState(body);
+    if (path.startsWith("/v1/restore")) return this.restore(body);
     if (path.startsWith("/v1/swap")) return this.swap(body);
     if (path.startsWith("/v1/mint/quote")) return this.mintQuote(path, body);
     if (path.startsWith("/v1/mint")) return this.mint(body);
@@ -244,10 +303,18 @@ export class MintFabric {
       ),
       version: "sim/1.0",
       nuts: {
-        "4": { methods: [{ method: "bolt11", unit: "sat" }], disabled: false },
+        // `description: true` is what lets a mint quote carry a memo. Moving a
+        // balance between mints needs it: the destination invoice is labelled
+        // so the transfer is identifiable in history, and cashu-ts refuses to
+        // send a description to a mint that has not advertised support.
+        "4": {
+          methods: [{ method: "bolt11", unit: "sat", description: true }],
+          disabled: false,
+        },
         "5": { methods: [{ method: "bolt11", unit: "sat" }] },
         "7": { supported: true },
         "9": { supported: true },
+        "11": { supported: true },
         "12": { supported: true },
       },
     });
@@ -400,10 +467,12 @@ export class MintFabric {
         quote: maybeId,
         amount: existing.amount,
         unit: existing.unit,
-        fee_reserve: 0,
-        state: "UNPAID",
+        request: existing.request ?? "",
+        fee_reserve: this.conditions.meltFeeReserve,
+        state: existing.paid ? "PAID" : "UNPAID",
         expiry: Math.floor(Date.now() / 1000) + 3600,
-        payment_preimage: null,
+        payment_preimage: existing.paid ? "sim-preimage" : null,
+        change: existing.change ?? [],
       });
     }
     // The simulation's invoices encode their amount as lnbc<amount>sim.
@@ -411,16 +480,52 @@ export class MintFabric {
       typeof body.request === "string" ? body.request : "lnbc0sim";
     const amount = Number(/lnbc(\d+)/.exec(request)?.[1] ?? 0);
     const id = `melt-${String(this.quotes.size + 1)}`;
-    this.quotes.set(id, { amount, unit: "sat", paid: false, issued: false });
+    this.quotes.set(id, {
+      amount,
+      unit: "sat",
+      paid: false,
+      issued: false,
+      request,
+    });
     return this.json({
       quote: id,
       amount,
       unit: "sat",
-      fee_reserve: 0,
+      request,
+      fee_reserve: this.conditions.meltFeeReserve,
       state: "UNPAID",
       expiry: Math.floor(Date.now() / 1000) + 3600,
       payment_preimage: null,
     });
+  }
+
+  // NUT-09 restore. The wallet re-derives blinded messages from its seed and
+  // asks which the mint already signed; the mint answers with the matching
+  // subset, in the SAME order it received them, paired with their signatures.
+  //
+  // Deliberately says nothing about whether a returned proof is still unspent.
+  // That is NUT-07's job, and the wallet does that separately: a restore that
+  // silently dropped spent proofs would hide exactly the case where a user
+  // restores an old phrase and thinks they are richer than they are.
+  private restore(body: Record<string, unknown>): Response {
+    const outputs = (body.outputs ?? []) as {
+      B_: string;
+      amount?: number;
+      id?: string;
+    }[];
+    const matchedOutputs: unknown[] = [];
+    const signatures: { id: string; amount: number; C_: string }[] = [];
+    for (const output of outputs) {
+      const known = this.signedByB.get(output.B_);
+      if (known === undefined) continue;
+      matchedOutputs.push({
+        B_: output.B_,
+        amount: known.amount,
+        id: known.id,
+      });
+      signatures.push(known);
+    }
+    return this.json({ outputs: matchedOutputs, signatures });
   }
 
   private melt(body: Record<string, unknown>): Response {
@@ -432,18 +537,83 @@ export class MintFabric {
         return this.json({ detail: "Token already spent.", code: 11001 }, 400);
       }
     }
+
+    // A failed Lightning payment must leave the inputs alone. The mint has paid
+    // nobody, so burning them would be the mint eating the sender's money, and
+    // the wallet's whole recovery story for a failed melt depends on the proofs
+    // still being valid when it releases the reservation.
+    if (this.conditions.meltFails) {
+      this.world.say("MINT_MELT_FAILED", "route not found, inputs untouched");
+      return this.json({ detail: "Payment failed.", code: 20000 }, 400);
+    }
+
     for (const input of inputs) this.spentYs.add(this.yFor(input.secret));
     const quoteId = typeof body.quote === "string" ? body.quote : "";
     const quote = this.quotes.get(quoteId);
     if (quote !== undefined) quote.paid = true;
+
+    // NUT-08: the wallet sent blank outputs to receive its change. The mint
+    // decides the amounts and signs a prefix of them; the wallet unblinds in
+    // order using the blinding factors it kept.
+    //
+    // Change is everything the mint was given and did not need:
+    //
+    //   inputs - invoice amount - what the route actually cost
+    //
+    // NOT merely the unused reserve. Those differ whenever the wallet could not
+    // assemble inputs summing exactly to amount + reserve, which is the normal
+    // case for a balance made of powers of two. Getting this wrong made the
+    // fabric quietly pocket the difference, and a wallet losing money to
+    // over-payment would have looked like a passing test.
+    const reserve = this.conditions.meltFeeReserve;
+    const inputSum = inputs.reduce((a, b) => a + b.amount, 0);
+    const unused = Math.max(
+      0,
+      inputSum - (quote?.amount ?? 0) - this.conditions.meltActualFee,
+    );
+    const blanks = (body.outputs ?? []) as {
+      B_: string;
+      amount: number;
+      id: string;
+    }[];
+    const change: { id: string; amount: number; C_: string }[] = [];
+    let remaining = unused;
+    for (const blank of blanks) {
+      if (remaining <= 0) break;
+      // Largest denomination that still fits, so the change comes back in as
+      // few coins as the blanks allow.
+      const denom = DENOMINATIONS.filter((d) => d <= remaining).pop();
+      if (denom === undefined) break;
+      change.push(this.blindSign({ ...blank, amount: denom }));
+      remaining -= denom;
+    }
+    if (change.length > 0) {
+      this.world.say(
+        "MINT_MELT_CHANGE",
+        `${String(unused - remaining)} sat of ${String(reserve)} reserve returned`,
+      );
+    }
+    // Kept on the quote either way. A wallet that never saw this response comes
+    // back later and asks the quote for it, which is the whole recovery path.
+    if (quote !== undefined) quote.change = change;
+
+    if (this.conditions.meltVanishes) {
+      // Paid, inputs burned, change signed - and the wallet hears nothing. It
+      // must not guess. Only the quote can tell it what happened.
+      this.world.say("MINT_MELT_VANISHED", "paid, but the answer never landed");
+      throw new TypeError("Network request failed");
+    }
+
     return this.json({
       quote: quoteId,
       amount: quote?.amount ?? 0,
       unit: "sat",
-      fee_reserve: 0,
+      request: quote?.request ?? "",
+      fee_reserve: reserve,
       state: "PAID",
+      expiry: Math.floor(Date.now() / 1000) + 3600,
       payment_preimage: "sim-preimage",
-      change: [],
+      change,
     });
   }
 
@@ -466,7 +636,13 @@ export class MintFabric {
     const B = secp256k1.Point.fromHex(output.B_);
     const C = B.multiply(BigInt(`0x${bytesToHex(priv)}`));
     this.totalIssued += output.amount;
-    return { id: this.keyset.id, amount: output.amount, C_: C.toHex(true) };
+    const signature = {
+      id: this.keyset.id,
+      amount: output.amount,
+      C_: C.toHex(true),
+    };
+    this.signedByB.set(output.B_, signature);
+    return signature;
   }
 
   // Test affordance: mark a proof spent behind the wallet's back, which is what

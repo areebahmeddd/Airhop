@@ -45,6 +45,7 @@ import {
   type SearchableNotice,
 } from "../../utils/chat-search";
 import { formatListTimestamp } from "../../utils/format";
+import { BRIDGE_CHANNEL } from "../../utils/media-policy";
 
 // The filter chips shown above search, one per content kind Airhop supports.
 // Keys, not text: evaluated once at import, so translated strings here would
@@ -117,7 +118,7 @@ export default function ChatSearchResults({
     const mesh = getMeshService();
     const roomFor = (gh: string): string =>
       gh === ""
-        ? "#bluetooth"
+        ? BRIDGE_CHANNEL
         : (mesh?.localGeoChannelFor(gh) ?? geohashChannel(gh));
     const seen = new Set<string>();
     const out: SearchableNotice[] = [];

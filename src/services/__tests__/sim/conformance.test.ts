@@ -42,6 +42,13 @@ jest.mock("../../../bridge/NativeAirhopWiFi", () => {
   return { __esModule: true, default: shim.wifiBridge };
 });
 
+import {
+  MAX_BITCHAT_TRANSFER_BYTES,
+  MAX_FILE_BYTES,
+  MAX_IMAGE_BYTES,
+  MAX_SENT_IMAGE_BYTES,
+  MAX_VOICE_BYTES,
+} from "../../../core/mesh/bitchat-file-packet";
 import { MAX_BLE_FRAME } from "../../../core/mesh/fragment-manager";
 import { PacketType } from "../../../core/mesh/packet-codec";
 import { BitchatActor } from "./harness/bitchat-actor";
@@ -83,7 +90,19 @@ interface NodePath {
 const fs = require("fs") as NodeFs;
 const path = require("path") as NodePath;
 
-const BITCHAT_IOS = path.join(__dirname, "..", "..", "..", "..", "bitchat-ios");
+// The vendored checkout lives at <repo>/bitchat/ios. This read `bitchat-ios`
+// for a while, which no longer exists, so `bitchatAvailable()` was always false
+// and every differential check below took the skip branch and asserted true. A
+// green test that cannot fail is worse than no test, because it is counted.
+const BITCHAT_IOS = path.join(
+  __dirname,
+  "..",
+  "..",
+  "..",
+  "..",
+  "bitchat",
+  "ios",
+);
 
 function bitchatSource(relative: string): string {
   return fs.readFileSync(path.join(BITCHAT_IOS, relative), "utf8");
@@ -95,6 +114,21 @@ function bitchatAvailable(): boolean {
   return fs.existsSync(
     path.join(BITCHAT_IOS, "bitchat", "Services", "TransportConfig.swift"),
   );
+}
+
+// Pull a `static let name: Type = <arithmetic>` out of Swift, evaluating simple
+// products like `512 * 1024`. FileTransferLimits states its ceilings that way
+// rather than as literals.
+function swiftConstantExpr(source: string, name: string): number | null {
+  const match = new RegExp(`static let ${name}\s*:?[^=]*=\s*([0-9_ *]+)`).exec(
+    source,
+  );
+  if (match === null) return null;
+  const parts = match[1]
+    .split("*")
+    .map((p) => Number(p.replace(/_/g, "").trim()));
+  if (parts.some((n) => !Number.isFinite(n))) return null;
+  return parts.reduce((a, b) => a * b, 1);
 }
 
 // Pull `static let name: Type = value` out of Swift.
@@ -352,6 +386,57 @@ test("X03 Airhop's constants still match the vendored bitchat sources", () => {
         : `bitchat=${upstream} airhop=${c.ours} — ${c.note}`,
     );
   }
+
+  // Attachment ceilings, read out of BitFoundation rather than TransportConfig.
+  // Every one of these is a silent failure if it drifts: bitchat refuses an
+  // oversized payload in its decoder, so the sender pages out the whole file,
+  // marks the bubble sent, and is never told it was dropped.
+  const limits = bitchatSource(
+    "localPackages/BitFoundation/Sources/BitFoundation/FileTransferLimits.swift",
+  );
+  const limitCases: { name: string; swift: string; ours: number }[] = [
+    { name: "max payload", swift: "maxPayloadBytes", ours: MAX_FILE_BYTES },
+    {
+      name: "max voice note",
+      swift: "maxVoiceNoteBytes",
+      ours: MAX_VOICE_BYTES,
+    },
+    { name: "max image", swift: "maxImageBytes", ours: MAX_IMAGE_BYTES },
+  ];
+  for (const c of limitCases) {
+    const upstream = swiftConstantExpr(limits, c.swift);
+    s.check(
+      `${c.name} matches bitchat-ios`,
+      upstream !== null && upstream === c.ours,
+      upstream === null
+        ? `FileTransferLimits.${c.swift} not found upstream`
+        : `bitchat=${upstream} airhop=${c.ours}`,
+    );
+  }
+
+  // Airhop sends photos well under the image ceiling because bitchat expires a
+  // half-built file this many seconds after its FIRST fragment, not its last.
+  // If upstream ever refreshes that stamp or lengthens the window, our send
+  // budget is leaving usable headroom on the table and should be revisited.
+  const fragmentLifetime = swiftConstant(
+    transport,
+    "bleFragmentLifetimeSeconds",
+  );
+  s.check(
+    "bitchat's fragment assembly window is still 30s from the first fragment",
+    fragmentLifetime === 30,
+    `bitchat=${String(fragmentLifetime)}s drives MAX_SENT_IMAGE_BYTES=${String(MAX_SENT_IMAGE_BYTES / 1024)}KiB and the ${String(MAX_BITCHAT_TRANSFER_BYTES / 1024)}KiB warning`,
+  );
+
+  // Live voice replay window. Airhop drops a burst older than this before it
+  // reaches a speaker, and the two have to agree or one side plays audio the
+  // other considers stale.
+  const pttMaxAge = swiftConstant(transport, "pttPublicFrameMaxAgeSeconds");
+  s.check(
+    "live voice freshness window matches bitchat-ios",
+    pttMaxAge === 30,
+    `bitchat=${String(pttMaxAge)}s airhop=30s`,
+  );
 
   // The frame budget is the one constant where being wrong means silent, total
   // failure of every attachment between the two apps: an oversized frame is

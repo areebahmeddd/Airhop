@@ -173,7 +173,7 @@ import { usePeerStore } from "../store/peer-store";
 import { useSettingsStore } from "../store/settings-store";
 import { useTransferStore } from "../store/transfer-store";
 import { channelDisplayName, resolveDisplayName } from "../utils/display-name";
-import { canSendMedia } from "../utils/media-policy";
+import { BRIDGE_CHANNEL, canSendMedia } from "../utils/media-policy";
 import { BridgeService } from "./bridge-service";
 import {
   FileTransferService,
@@ -305,9 +305,6 @@ interface PendingHandshake {
 const GEOHASH_CHANNEL_KIND = 20000;
 const CARRIER_MAX_EVENT_AGE_SECONDS = 15 * 60;
 const DOWNLINK_EVENTS_PER_MINUTE = 30;
-// The public BLE broadcast channel the mesh bridge ferries across islands. The
-// direct analogue of bitchat's single public "#mesh" channel.
-const BRIDGE_CHANNEL = "#bluetooth";
 // Uplink deposits accepted per depositor per rolling minute, matching bitchat
 // GatewayService.Limits.uplinkEventsPerMinutePerDepositor. Bounds how much a
 // single mesh peer can make our gateway publish to relays on its behalf.
@@ -2678,8 +2675,10 @@ export class MeshService {
   // key is a FAILED check, not a skipped one - and drops anything that neither
   // verifies against the registry nor against a persisted identity, logging
   // "Dropping public message with missing/invalid signature for claimed sender".
-  // ARCHITECTURE.md section 2 (Identity) says the same thing: "Receivers verify signatures
-  // before relaying or displaying any message."
+  // ARCHITECTURE.md section 2 (Identity) says the same thing: "Receivers verify
+  // signatures before displaying or acting on a message" and "unsigned and
+  // invalid-signature packets are dropped before display". Relaying is the
+  // separate case: a node forwards bytes it may not yet be able to check.
   //
   // The cost is that a public message can arrive before its author's ANNOUNCE
   // and be dropped. That is bitchat's tradeoff too, it is bounded (announces
@@ -2969,7 +2968,7 @@ export class MeshService {
   // (empty geohash) lives on #bluetooth; a cell maps to its named channel if the
   // user has one, else the teleport channel form.
   private channelForNoticeGeohash(geohash: string): string {
-    if (geohash.length === 0) return "#bluetooth";
+    if (geohash.length === 0) return BRIDGE_CHANNEL;
     return (
       this.geoChannels?.namedChannelForGeohash(geohash) ??
       geohashChannel(geohash)
@@ -4371,6 +4370,19 @@ export class MeshService {
   // or undefined if the peer has not announced one.
   getPeerNostrPubkey(peerID: string): string | undefined {
     return this.registry.get(peerID)?.nostrPubkey;
+  }
+
+  // Whether a radio link to this peer exists right now.
+  //
+  // Deliberately the strict test (`peerToLink`/`wifiPeerToLink`), not the looser
+  // `canReachMesh` that `trySendDm` uses to decide whether flooding is worth
+  // attempting. A flood is a hope; a direct link is a route. The payment layer
+  // uses this to decide whether the person is near enough that the radio is
+  // plainly the right rail, so guessing in either direction is worse than the
+  // narrow answer: a false positive would route money at a peer we cannot
+  // actually reach, and a false negative only costs a mint round trip.
+  hasDirectLink(peerID: string): boolean {
+    return this.peerToLink.has(peerID) || this.wifiPeerToLink.has(peerID);
   }
 
   // The local identity as a shareable contact card, for QR exchange.

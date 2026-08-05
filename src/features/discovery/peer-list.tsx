@@ -20,7 +20,7 @@ import {
 } from "react-native";
 import { t, useT } from "../../i18n";
 import { arrowForward } from "../../i18n/layout";
-import { describeRoute, sendEcashToPeer } from "../../services/ecash-transfer";
+import { describePayResult, payPerson } from "../../services/ecash-transfer";
 import { showAlert } from "../../store/alert-store";
 import { useBlockedStore } from "../../store/blocked-store";
 import { useChatStore } from "../../store/chat-store";
@@ -171,7 +171,7 @@ export default function PeerList({
     setSendingSats(true);
     let result;
     try {
-      result = await sendEcashToPeer({ peerID: peer.peerID, amount });
+      result = await payPerson({ peerID: peer.peerID, amount });
     } finally {
       setSendingSats(false);
     }
@@ -182,16 +182,16 @@ export default function PeerList({
     closeSheet();
     onOpenDM?.(`dm:${peer.peerID}`);
     // The thread we just opened shows the bubble, so only speak up when the
-    // token did not go straight out.
-    if (result.route !== "sent") {
+    // token did not go straight out. A peer standing next to you normally takes
+    // the radio rail, which needs no explanation.
+    if (result.rail !== "mesh") {
       showAlert(
-        t("wallet.xfer.on_its_way", {
-          amount: result.prepared.amount.toLocaleString(),
-          unit: result.prepared.unit,
+        t("wallet.pay.sent_title", {
+          amount: result.amount.toLocaleString(),
+          unit: result.unit,
+          name: peer.nickname,
         }),
-        t("wallet.xfer.on_its_way_body", {
-          route: describeRoute(result.route),
-        }),
+        describePayResult(result),
       );
     }
   }

@@ -600,9 +600,17 @@ export default function App(): React.JSX.Element {
   // to land on Mesh.
   const navigateToTabRef = useRef<(tab: MainTab) => void>(() => undefined);
 
+  // Whether the app is on screen. Read by the "what is being read" effect
+  // below, because a thread the user has walked away from is not being read.
+  const [appActive, setAppActive] = useState(
+    AppState.currentState === "active",
+  );
+
   // Foreground/background tracking, so a banner is only raised when the user is
   // not already looking at the app.
   useEffect(() => {
+    // No setAppActive here: the useState initialiser above already read
+    // AppState, and the listener below carries every change after it.
     setNotificationsAppActive(AppState.currentState === "active");
     // Re-read the permissions whenever we come to the foreground: the user may
     // have changed either in system Settings while we were backgrounded, and
@@ -633,6 +641,7 @@ export default function App(): React.JSX.Element {
     // the leaving edge as much as the returning one.
     getMeshService()?.setAppForeground(AppState.currentState === "active");
     const sub = AppState.addEventListener("change", (next) => {
+      setAppActive(next === "active");
       setNotificationsAppActive(next === "active");
       getMeshService()?.setAppForeground(next === "active");
       if (next !== "active") {
@@ -744,13 +753,30 @@ export default function App(): React.JSX.Element {
     };
   }, [appReady, onboardingStep, username]);
 
-  // Tell the notifier which conversation is open, so it suppresses that chat's
-  // banner and clears its delivered notification once the user reads it.
+  // The single answer to "which conversation is the user reading right now".
+  //
+  // Every consumer of that fact reads it from here: the chat store decides
+  // whether an arriving message counts as unread, and the notifier decides
+  // whether to buzz and which delivered notification to clear.
+  //
+  // Backgrounded counts as NOT reading, even with a thread still on screen.
+  // Without that the app contradicts itself: the OS notification fires (it is
+  // gated on foreground alone, correctly), while the chat store sees the thread
+  // as active and files the message as already read, so the user taps the
+  // notification and finds no unread badge and no app icon count. Every
+  // mainstream messenger treats leaving the app as leaving the conversation.
+  //
+  // Coming back marks it read again, which is the same rule as opening it.
   useEffect(() => {
-    const channel = chatView.kind === "thread" ? chatView.channel : "";
-    setNotificationsActiveChannel(channel);
-    if (channel) void dismissNotificationsFor(channel);
-  }, [chatView]);
+    const open = chatView.kind === "thread" ? chatView.channel : "";
+    const reading = appActive ? open : "";
+    setActiveChannel(reading);
+    setNotificationsActiveChannel(reading);
+    if (reading) {
+      markChannelRead(reading);
+      void dismissNotificationsFor(reading);
+    }
+  }, [chatView, appActive, setActiveChannel, markChannelRead]);
 
   // Keep the app icon badge in step with total unread across channels and DMs.
   useEffect(() => {
@@ -784,9 +810,7 @@ export default function App(): React.JSX.Element {
   }
 
   function openChannel(channel: string): void {
-    setActiveChannel(channel);
     setLastThread(channel);
-    markChannelRead(channel);
     // So returning to list view lands on whichever sub-tab this channel
     // actually belongs to. That matters when opened from search, which spans
     // both; a no-op when opened from the list itself (already the right tab).
@@ -845,9 +869,6 @@ export default function App(): React.JSX.Element {
   }
 
   function closeThread(): void {
-    // Clear the active channel so messages arriving after the user leaves the
-    // thread are correctly counted as unread in the list view.
-    setActiveChannel("");
     setLastThread("");
     setChatView({ kind: "list" });
   }
@@ -875,9 +896,7 @@ export default function App(): React.JSX.Element {
   });
 
   function openDMFromMesh(channel: string): void {
-    setActiveChannel(channel);
     setLastThread(channel);
-    markChannelRead(channel);
     setChatSubTab("dms");
     navigateToTab("chats", false);
     setChatView({ kind: "thread", channel });
@@ -885,9 +904,7 @@ export default function App(): React.JSX.Element {
 
   // Jump to the conversation a transfer belongs to (from the global badge).
   function openTransferChannel(channel: string): void {
-    setActiveChannel(channel);
     setLastThread(channel);
-    markChannelRead(channel);
     setChatSubTab(channel.startsWith("dm:") ? "dms" : "channels");
     navigateToTab("chats", false);
     setChatView({ kind: "thread", channel });
@@ -1679,7 +1696,7 @@ const HEADER_TITLES: Record<MainTab, TranslationKey> = {
 };
 
 const TABS: { id: MainTab; labelKey: TranslationKey; icon: string }[] = [
-  { id: "chats", labelKey: "nav.tab.chats", icon: "message-square" },
+  { id: "chats", labelKey: "nav.tab.chats", icon: "message-circle" },
   { id: "mesh", labelKey: "nav.tab.mesh", icon: "radio" },
   { id: "wallet", labelKey: "nav.tab.wallet", icon: "credit-card" },
   { id: "profile", labelKey: "nav.tab.profile", icon: "user" },

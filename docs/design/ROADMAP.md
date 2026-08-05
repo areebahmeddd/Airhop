@@ -169,7 +169,7 @@ Cashu is the primary rail because its tokens are plain strings, so value moves d
 - [x] `src/core/payments/wallet-seed.ts`: BIP-39 recovery phrase, kept in the keychain
 - [x] `src/store/wallet-store.ts`: AES-256 encrypted proof storage, per (mint, unit) accounts, reserved bucket, transaction history, NUT-13 counters
 - [x] `src/services/wallet-service.ts`: the only module that talks to a mint. Reservations, Tor guard, Lightning, restore, consolidate
-- [x] `src/services/ecash-transfer.ts`: one send-to-peer flow shared by the Wallet, Mesh and Chat entry points
+- [x] `src/services/ecash-transfer.ts`: `payPerson`, one payment ladder (radio, nutzap, token, manual) shared by all four entry points: DM attach, contact sheet, Mesh peer sheet and Wallet Zap
 - [x] Send that reserves rather than deletes, so an undelivered token is always reclaimable
 - [x] Lightning deposit and withdrawal (NUT-04 / NUT-05) with quoted routing reserve
 - [x] Opt-in recovery phrase (NUT-13 / NUT-09), off by default, with uncovered balance shown rather than hidden

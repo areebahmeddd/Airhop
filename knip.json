@@ -3,6 +3,7 @@
   "entry": [
     "App.tsx",
     "src/**/__tests__/**/*.{ts,tsx}",
+    "src/**/__benchmarks__/**/*.bench.ts",
     "scripts/*.js",
     "press/build.mjs",
     "press/tools/*.mjs"
@@ -30,6 +31,7 @@
       "entry": [
         "App.tsx",
         "src/**/__tests__/**/*.{ts,tsx}",
+        "src/**/__benchmarks__/**/*.bench.ts",
         "scripts/*.js",
         "press/build.mjs",
         "press/tools/*.mjs"

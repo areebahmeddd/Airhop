@@ -30,6 +30,16 @@ export const MAX_IMAGE_BYTES = 512 * 1024; // 512 KiB
 // reassembly times out on idle, not on total duration.
 export const MAX_SENT_IMAGE_BYTES = 256 * 1024; // 256 KiB
 
+// Longest video the camera will record, in seconds.
+//
+// A recording is sent exactly as it comes off the camera: `quality` in
+// expo-image-picker applies to stills, and there is no transcoder in the app, so
+// length is the only lever on size. At the 1 MiB ceiling a longer clip would be
+// refused after the user had already shot it, which is the worst moment to say
+// no. A picked video is still checked against the ceiling at pick time, since
+// nothing bounds what is already in the library.
+export const MAX_VIDEO_SECONDS = 15;
+
 // The largest transfer that reliably completes inside bitchat's 30-second
 // assembly window, with room for the retries a busy link forces. At the ~20ms
 // pacing both clients use and 467 data bytes per frame, this is about 15 seconds.

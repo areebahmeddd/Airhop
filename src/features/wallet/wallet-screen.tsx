@@ -60,7 +60,9 @@ import { t, tPlural, useT, useTPlural } from "../../i18n";
 import { textAlignEnd } from "../../i18n/layout";
 import {
   deliverTokenToPeer,
+  describePayResult,
   describeRoute,
+  payPerson,
   reclaimTokenSend,
 } from "../../services/ecash-transfer";
 import { getMeshService } from "../../services/mesh-service";
@@ -83,7 +85,6 @@ import {
   reconcile,
   refreshAccount,
   restoreFromRecoveryPhrase,
-  sendNutzap,
   WalletError,
   type LightningDeposit,
   type MeltQuote,
@@ -118,7 +119,7 @@ import {
 } from "../../ui/theme";
 import { usePullRefreshColors } from "../../ui/use-pull-refresh";
 import { formatNumber } from "../../utils/format";
-import { peerIDToUsername } from "../../utils/username";
+import { nostrShortLabel, peerIDToUsername } from "../../utils/username";
 import TokenScanner, { type ScanTarget } from "./token-scanner";
 
 // The four quick actions triggered from the App-level header.
@@ -733,6 +734,17 @@ export default function WalletScreen({
 
   // ---- Zap ----
 
+  // Name the person in the confirmation. A pubkey the user picked from their
+  // contacts has a nickname worth showing; anything typed by hand only has its
+  // key, so it gets the same npub…tail the rest of the app uses rather than 63
+  // characters of hex in an alert title.
+  function zapRecipientLabel(pubkeyHex: string): string {
+    const known = Object.values(contacts).find(
+      (c) => c.nostrPubkeyHex === pubkeyHex,
+    );
+    return known?.nickname ?? nostrShortLabel(pubkeyHex);
+  }
+
   async function handleZap(): Promise<void> {
     const npubRaw = zapNpub.trim();
     const amount = Number.parseInt(zapAmount, 10);
@@ -760,40 +772,28 @@ export default function WalletScreen({
     setBusy("zap");
     setShowZap(false);
     try {
-      const service = getMeshService();
-      const result = await sendNutzap({
-        recipientPubkey,
+      // The same ladder every other door uses. This screen only knows a public
+      // key, so `payPerson` matches it against contacts first: paying someone
+      // you already have a thread with should land in that thread, not open a
+      // second conversation with the same person under their npub.
+      const result = await payPerson({
+        nostrPubkey: recipientPubkey,
         amount,
-        comment: zapNote.trim() || undefined,
-        client: service?.getNostrClient() ?? null,
-        senderPrivKey: service?.getNostrPrivKey() ?? null,
+        memo: zapNote.trim() || undefined,
         unit: primary.unit,
       });
+      if (!result) return;
       setZapNpub("");
       setZapAmount("");
       setZapNote("");
 
-      if (result.method === "nutzap") {
-        showAlert(
-          t("wallet.zap.sent"),
-          t("wallet.zap.sent_body", {
-            amount: result.amount.toLocaleString(),
-            unit: result.unit,
-          }),
-        );
-      } else if (result.method === "dm") {
-        showAlert(
-          t("wallet.zap.sent_encrypted"),
-          t("wallet.zap.sent_encrypted_body", {
-            amount: result.amount.toLocaleString(),
-            unit: result.unit,
-            reason: result.fallbackReason ?? "",
-          }),
-        );
-      } else {
+      // Nothing carried it. Hand the token back so it can be shared by hand,
+      // exactly as the Send flow does, rather than leaving the user with a
+      // pending entry and no way to act on it.
+      if (result.token !== undefined) {
         setPending({
           txId: result.txId,
-          token: result.token ?? "",
+          token: result.token,
           amount: result.amount,
           spend: result.amount,
           fee: 0,
@@ -802,13 +802,15 @@ export default function WalletScreen({
           mintUrl: result.mintUrl,
           proofs: [],
         });
-        showAlert(
-          t("wallet.zap.no_network"),
-          t("wallet.zap.no_network_body", {
-            reason: result.fallbackReason ?? "",
-          }),
-        );
       }
+      showAlert(
+        t("wallet.pay.sent_title", {
+          amount: result.amount.toLocaleString(),
+          unit: result.unit,
+          name: zapRecipientLabel(recipientPubkey),
+        }),
+        describePayResult(result),
+      );
     } catch (err) {
       reportError(err, t("wallet.zap.failed"));
     } finally {
@@ -2179,7 +2181,7 @@ export default function WalletScreen({
           style={[styles.tokenInput, styles.tokenInputCompact]}
           value={zapNote}
           onChangeText={setZapNote}
-          placeholder={T("wallet.zap.note")}
+          placeholder={T("wallet.pay.memo")}
           placeholderTextColor={Colors.textMuted}
           autoCapitalize="sentences"
           selectionColor={Colors.accent}

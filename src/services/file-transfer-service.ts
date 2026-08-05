@@ -37,7 +37,7 @@ import {
 import { t } from "../i18n";
 import { useChatStore, type ChatAttachment } from "../store/chat-store";
 import { useTransferStore } from "../store/transfer-store";
-import { canSendMedia } from "../utils/media-policy";
+import { BRIDGE_CHANNEL, canSendMedia } from "../utils/media-policy";
 
 // ---- Types ------------------------------------------------------------------
 
@@ -237,7 +237,9 @@ export class AttachmentTooLargeError extends Error {
 }
 
 // How an over-size attachment refers to itself in the error the sender reads.
-function sizeLabel(type: ChatAttachment["type"]): string {
+// Exported so the composer can refuse an oversized file at pick time with the
+// same wording the transfer layer uses when it catches one late.
+export function sizeLabel(type: ChatAttachment["type"]): string {
   switch (type) {
     case "image":
       return t("transfer.this.photo");
@@ -655,7 +657,8 @@ export class FileTransferService {
     // Route: the Airhop channel tag if present, else a DM to us by sender, else
     // the public mesh room.
     const channel =
-      fp.channel ?? (isBroadcast(packet) ? "#bluetooth" : `dm:${senderPeerID}`);
+      fp.channel ??
+      (isBroadcast(packet) ? BRIDGE_CHANNEL : `dm:${senderPeerID}`);
     const type = typeFromMime(fp.mimeType);
 
     const safeName = (fp.fileName || "file")

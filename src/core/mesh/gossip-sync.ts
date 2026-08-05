@@ -98,6 +98,21 @@ const TYPE_BIT_BOARD = 8; // bit 8 (board posts persist and sync until expiry)
 const TYPE_BIT_GROUP = 10;
 
 // Map a packet type to its SyncTypeFlags bit, or null when it is not gossiped.
+//
+// FILE_TRANSFER is bit 7 in bitchat and is deliberately absent here, which is
+// the one place this table diverges from theirs. An attachment is up to 1 MiB,
+// so serving one from sync is ten to forty-five seconds of exclusive radio time
+// per asking peer, against a GCS filter sized at 400 bytes for items that are
+// small and numerous. bitchat's own reassembly also expires 30 seconds after the
+// first fragment, so a re-flooded file frequently fails on arrival anyway and
+// the airtime buys nothing.
+//
+// The interop cost is bounded and symmetric: a bitchat peer may ask for bit 7
+// and we answer with nothing, and we never ask for it ourselves. Neither side
+// errors, because an unmatched bit maps to no type. What it means for a user is
+// that a channel attachment missed while out of range is not backfilled, where
+// text, board posts and group messages are. Media on the mesh is best-effort at
+// the moment it is sent.
 function syncBitForType(type: PacketType): number | null {
   switch (type) {
     case PacketType.ANNOUNCE:

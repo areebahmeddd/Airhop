@@ -860,8 +860,17 @@ export async function receiveToken(
       // `requireDleq` makes cashu-ts reject a proof whose witness does not
       // verify against the freshly loaded keys, closing the window where our
       // cached keys were missing and the offline check came back "unchecked".
+      //
+      // `privkey` is our NIP-61 P2PK key, and it is what makes a locked token
+      // claimable at all. Most tokens are ordinary bearer proofs and ignore it,
+      // but a nutzap whose relay publish failed is delivered to the recipient as
+      // a token in a DM, and those proofs are locked to this key: without a
+      // witness the mint refuses the swap, so the money could be neither claimed
+      // by them nor reclaimed by the sender. Passing it costs nothing on every
+      // other path.
       const fresh = await wallet.receive(info.token, {
         requireDleq: info.hasDleq,
+        privkey: await getNutzapPrivKeyHex(),
       });
       creditProofs(url, info.unit, fresh, { verified: true });
       markClaimed(info);
@@ -1555,6 +1564,34 @@ async function runReconcilePass(): Promise<void> {
       // Unreachable mint: leave the reservation alone.
     }
   }
+
+  // Locked nutzaps that never found a route.
+  //
+  // These have no reservation, so the loop above cannot see them: their proofs
+  // are P2PK-locked to the recipient and left the wallet the moment the mint
+  // swapped them. When the relay refused the kind 9321 AND no transport carried
+  // the token either, the transaction is parked as pending with an explanation
+  // and is deliberately not reclaimable. Something still has to close it, or the
+  // outbox delivers the token days later, the recipient redeems it, and the
+  // sender's Pending list keeps showing a payment that already landed.
+  for (const tx of state.history) {
+    if (tx.kind !== "nutzap-out" || tx.status !== "pending") continue;
+    if (tx.token === undefined || state.reserved[tx.id] !== undefined) continue;
+    if (wiped()) return;
+    try {
+      const info = decodeToken(tx.token);
+      if (!info) continue;
+      const wallet = await getWallet(tx.mintUrl, tx.unit);
+      const grouped = await wallet.groupProofsByState(info.token.proofs);
+      if (grouped.spent.length === info.token.proofs.length) {
+        useWalletStore
+          .getState()
+          .updateTx(tx.id, { status: "completed", error: undefined });
+      }
+    } catch {
+      // Unreachable mint, or a token we can no longer parse. Try again later.
+    }
+  }
 }
 
 // ---- Lightning: deposit (mint) ----------------------------------------------
@@ -2064,16 +2101,25 @@ export async function consolidateMints(params: {
     }
 
     // Committed from here. The source pays; the destination issues on claim.
-    await payLightningInvoice(quote);
+    const melt = await payLightningInvoice(quote);
     const received = await claimLightningDeposit(to, unit, deposit.quoteId);
+
+    // Report what the move actually cost, not what it might have.
+    //
+    // `quote.total` is the worst case: the invoice plus the whole routing
+    // reserve. The mint returns the unused part of that reserve as change, so
+    // using the quote here told the user a move cost eight sats when it cost
+    // one, and made the arithmetic on screen disagree with their own balance.
+    // `melt.fee` is what the route really charged.
+    const spent = quote.amount + melt.fee;
 
     return {
       fromMintUrl: from,
       toMintUrl: to,
       unit,
-      spent: quote.total,
+      spent,
       received,
-      fee: quote.total - received,
+      fee: spent - received,
     };
   }
 
@@ -2270,201 +2316,101 @@ export async function lockProofsForNutzap(params: {
 
 // ---- Nutzap send ------------------------------------------------------------
 
-export interface NutzapSendResult {
-  // "nutzap"  full NIP-61: proofs locked to their key, published as kind 9321
-  // "dm"      they publish no nutzap info, so an unlocked token went out as an
-  //           encrypted DM instead. Works, but the token is a bearer
-  //           instrument the moment they decrypt it.
-  // "token"   nothing could be published; a token string is returned for the
-  //           user to deliver by hand.
-  method: "nutzap" | "dm" | "token";
-  amount: number;
-  unit: string;
+// Everything from here down is money, not delivery.
+//
+// These used to be one `sendNutzap` that also published the DMs. Putting
+// delivery inside the module that has no business knowing what a chat thread is
+// cost exactly what you would expect: the DM it published never appeared in the
+// conversation, was never retried when a relay dropped it, and on a publish
+// timeout it fell through to a path that reserved a SECOND set of proofs for the
+// same payment. Delivery now lives in services/ecash-transfer.ts, the one module
+// allowed to import both the mesh and the wallet.
+
+export interface NutzapTarget {
+  // Where to lock: a mint they listed that we also hold enough value at.
   mintUrl: string;
-  // Present when method is "token": the string the caller must show or share.
-  token?: string;
-  txId: string;
-  // Why we fell back, for an honest message in the UI.
-  fallbackReason?: string;
+  // Their 33-byte compressed P2PK key, from the kind 10019.
+  p2pkPubkey: string;
+  // The relays they watch for nutzaps, also from the kind 10019. Carried all the
+  // way to `publishNutzap`, because publishing to our own relays instead is the
+  // difference between a payment they receive and one that sits somewhere they
+  // never subscribe to.
+  relays: string[];
 }
 
-// Pay a Nostr identity.
+export type NutzapLookup =
+  { ok: true; target: NutzapTarget } | { ok: false; reason: string };
+
+// Can this person be paid the NIP-61 way, and where?
 //
-// Three tiers, best first. The distinction matters to the user because it
-// changes who can spend the money: a nutzap is locked to the recipient, a DM
-// token is readable by whoever gets the plaintext, and a manual token is
-// whoever the user hands it to. The old implementation collapsed all three into
-// one "Zap" button that silently downgraded, and reported success either way.
-export async function sendNutzap(params: {
+// Spends nothing and never throws. Every failure here means "not this rail",
+// which the caller answers with a different one, so a thrown error would only
+// turn a routine fallback into a dead end. The `reason` is user-facing copy,
+// because the person who just paid deserves to know why they got the lesser
+// instrument.
+export async function findNutzapTarget(params: {
   recipientPubkey: string;
   amount: number;
-  comment?: string;
-  client: NostrClient | null;
-  senderPrivKey: Uint8Array | null;
-  unit?: string;
-}): Promise<NutzapSendResult> {
-  assertUnlocked();
-  const unit = params.unit ?? "sat";
-
-  // No relays, or Tor is blocking mint calls: nothing can be published, so go
-  // straight to a manual token, which needs neither.
-  if (!params.client || !params.senderPrivKey) {
-    return sendAsManualToken(params, unit, t("wallet.svc.no_relay"));
-  }
-
+  unit: string;
+  client: NostrClient;
+}): Promise<NutzapLookup> {
   let info: NutzapInfo | null = null;
   try {
     info = await fetchNutzapInfo(params.recipientPubkey, params.client);
   } catch {
     info = null;
   }
+  if (!info) return { ok: false, reason: t("wallet.svc.no_nutzap_info") };
 
-  // Full NIP-61 needs three things at once: their nutzap info, a mint we both
-  // hold value at, and a reachable mint to do the P2PK lock. Missing any one of
-  // them means falling back, not failing.
-  if (info) {
-    const state = useWalletStore.getState();
-    const shared = info.mintUrls
-      .map(normalizeMintUrl)
-      .find(
-        (url) =>
-          (state.proofs[accountKey(url, unit)] ?? []).reduce(
-            (s, p) => s + p.amount,
-            0,
-          ) >= params.amount,
-      );
-    if (shared) {
-      // Locking and publishing fail very differently, so they cannot share a
-      // catch. A failed lock spends nothing, because the mint's swap is atomic.
-      // A failed publish means the value is already committed to the
-      // recipient's key: unspendable by us, and invisible to them until it is
-      // delivered somehow. Falling through in that case would send a second
-      // payment and strand the first forever.
-      let locked: Proof[] | null = null;
-      let txId = "";
-      try {
-        const result = await lockProofsForNutzap({
-          amount: params.amount,
-          mintUrl: shared,
-          unit,
-          recipientPubkey: info.p2pkPubkey,
-        });
-        locked = result.locked;
-        txId = result.txId;
-      } catch {
-        // Nothing left the wallet. Safe to try the tiers below.
-        locked = null;
-      }
-
-      if (locked !== null) {
-        return deliverLockedNutzap({
-          locked,
-          txId,
-          mintUrl: shared,
-          unit,
-          amount: params.amount,
-          recipientPubkey: params.recipientPubkey,
-          senderPrivKey: params.senderPrivKey,
-          client: params.client,
-          comment: params.comment,
-        });
-      }
-    }
-  }
-
-  const reason = info
-    ? t("wallet.svc.no_shared_mint")
-    : t("wallet.svc.no_nutzap_info");
-
-  // Second tier: an ordinary offline token, delivered inside an encrypted DM.
-  // Reserved, not spent, so a publish failure is recoverable.
-  try {
-    const prepared = await prepareSend({
-      amount: params.amount,
-      unit,
-      memo: params.comment,
-      counterparty: params.recipientPubkey,
-    });
-    const { wrapDm } = await import("../core/nostr/gift-wrap");
-    const { event } = await wrapDm(
-      prepared.token,
-      params.senderPrivKey,
-      params.recipientPubkey,
+  // A token names exactly one mint, so the lock has to happen at a mint that is
+  // both on their list and already funded on our side. Reading the store rather
+  // than asserting unlocked is deliberate: a locked wallet reads as zero
+  // balance, so it lands on "no shared mint" and the caller's next rail raises
+  // the real "wallet is locked" error with the wording the user needs.
+  const state = useWalletStore.getState();
+  const shared = info.mintUrls
+    .map(normalizeMintUrl)
+    .find(
+      (url) =>
+        (state.proofs[accountKey(url, params.unit)] ?? []).reduce(
+          (s, p) => s + p.amount,
+          0,
+        ) >= params.amount,
     );
-    await params.client.publish(event);
-    // Left pending, and therefore reclaimable, deliberately.
-    //
-    // This tier sends an ORDINARY bearer token, not a P2PK-locked one: the
-    // proofs are still spendable by us, and if the recipient never opens the
-    // message, reclaim is the only way the money comes back. It used to be
-    // confirmed here the moment the relay accepted the event, which made it the
-    // one tier of three that could not be reclaimed, and made the same act
-    // (hand a bearer token to a channel) final over Nostr and reversible over
-    // the mesh. Publishing is not redeeming.
-    //
-    // The nutzap tier above is genuinely different and stays final: those proofs
-    // are locked to the recipient's key and are not ours to take back.
-    return {
-      method: "dm",
-      amount: prepared.amount,
-      unit,
-      mintUrl: prepared.mintUrl,
-      txId: prepared.txId,
-      fallbackReason: reason,
-    };
-  } catch (err) {
-    if (err instanceof WalletError && err.code !== "offline") throw err;
-    return sendAsManualToken(params, unit, reason);
+  if (shared === undefined) {
+    return { ok: false, reason: t("wallet.svc.no_shared_mint") };
   }
+  return {
+    ok: true,
+    target: {
+      mintUrl: shared,
+      p2pkPubkey: info.p2pkPubkey,
+      relays: info.relays,
+    },
+  };
 }
 
-// Get already-locked proofs to their owner, once the value has been committed.
+// Publish proofs that are already locked to the recipient (kind 9321).
 //
-// The proofs are P2PK-locked to the recipient, which changes what is safe: the
-// token string is worthless to anybody else, so it can travel over any channel
-// without the bearer risk an ordinary token carries. That gives two fallbacks
-// after a failed relay publish, neither of which spends anything further.
-//
-// Re-spending is never an option here. The value has already left the wallet
-// and cannot be recovered, so every path below is about delivery, not payment.
-async function deliverLockedNutzap(params: {
+// Returns whether a relay took it, and always returns the token string for
+// those locked proofs. The value is committed either way: the proofs are
+// spendable only by the recipient's key and are not ours to take back, so a
+// failed publish is a delivery problem, never a reason to pay again. The token
+// is written onto the transaction before this returns so a crash still leaves
+// something the user can hand over by hand.
+export async function publishLockedNutzap(params: {
   locked: Proof[];
   txId: string;
   mintUrl: string;
   unit: string;
-  amount: number;
   recipientPubkey: string;
   senderPrivKey: Uint8Array;
   client: NostrClient;
   comment?: string;
-}): Promise<NutzapSendResult> {
+  // Their kind 10019 relay list. See NutzapTarget.
+  relays?: string[];
+}): Promise<{ published: boolean; token: string }> {
   const store = useWalletStore.getState();
-  const base = {
-    amount: params.amount,
-    unit: params.unit,
-    mintUrl: params.mintUrl,
-    txId: params.txId,
-  };
-
-  // Preferred: the NIP-61 event, which is what other wallets watch for.
-  try {
-    await publishNutzap({
-      proofs: params.locked,
-      mintUrl: params.mintUrl,
-      recipientPubkey: params.recipientPubkey,
-      senderPrivKey: params.senderPrivKey,
-      client: params.client,
-      comment: params.comment,
-    });
-    store.updateTx(params.txId, { status: "completed" });
-    return { method: "nutzap", ...base };
-  } catch {
-    // Relay refused or unreachable. The money is still theirs; only the
-    // notification failed.
-  }
-
-  // Keep the locked token on the transaction before trying anything else, so a
-  // crash from here on still leaves something the user can hand over by hand.
   const token = buildToken(
     params.mintUrl,
     params.locked.map((p) => toStoredProof(p, { verified: true })),
@@ -2473,59 +2419,34 @@ async function deliverLockedNutzap(params: {
   );
   store.updateTx(params.txId, { token });
 
-  // Second: an encrypted DM carrying the same locked token.
   try {
-    const { wrapDm } = await import("../core/nostr/gift-wrap");
-    const { event } = await wrapDm(
-      token,
-      params.senderPrivKey,
-      params.recipientPubkey,
-    );
-    await params.client.publish(event);
+    await publishNutzap({
+      proofs: params.locked,
+      mintUrl: params.mintUrl,
+      recipientPubkey: params.recipientPubkey,
+      senderPrivKey: params.senderPrivKey,
+      client: params.client,
+      comment: params.comment,
+      ...(params.relays !== undefined ? { relays: params.relays } : {}),
+    });
     store.updateTx(params.txId, { status: "completed" });
-    return {
-      method: "dm",
-      ...base,
-      fallbackReason: t("wallet.svc.relay_publish_failed"),
-    };
+    return { published: true, token };
   } catch {
-    // Nothing reached the network at all.
+    // Relay refused or unreachable. The money is already theirs; only the
+    // notification failed, so the caller delivers the token another way.
+    return { published: false, token };
   }
-
-  store.updateTx(params.txId, {
-    error: t("wallet.svc.locked_undelivered"),
-  });
-  return {
-    method: "token",
-    ...base,
-    token,
-    fallbackReason: t("wallet.svc.locked_unpublished"),
-  };
 }
 
-// Last tier: build the token and hand it back. Stays reserved and pending until
-// the user confirms they delivered it, so an abandoned share sheet does not
-// destroy the value.
-async function sendAsManualToken(
-  params: { amount: number; comment?: string; recipientPubkey: string },
-  unit: string,
-  reason: string,
-): Promise<NutzapSendResult> {
-  const prepared = await prepareSend({
-    amount: params.amount,
-    unit,
-    memo: params.comment,
-    counterparty: params.recipientPubkey,
-  });
-  return {
-    method: "token",
-    amount: prepared.amount,
-    unit,
-    mintUrl: prepared.mintUrl,
-    token: prepared.token,
-    txId: prepared.txId,
-    fallbackReason: reason,
-  };
+// Mark a locked nutzap as delivered by some route other than the relay.
+export function settleNutzap(txId: string): void {
+  useWalletStore.getState().updateTx(txId, { status: "completed" });
+}
+
+// Record that locked proofs reached nobody. Not reclaimable by design: they are
+// the recipient's, whatever happens next.
+export function failNutzapDelivery(txId: string, reason: string): void {
+  useWalletStore.getState().updateTx(txId, { error: reason });
 }
 
 // ---- Nutzap receive ---------------------------------------------------------

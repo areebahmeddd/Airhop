@@ -51,6 +51,8 @@ import Animated, {
 } from "react-native-reanimated";
 import {
   MAX_BITCHAT_TRANSFER_BYTES,
+  MAX_VIDEO_SECONDS,
+  maxBytesForType,
   wireMediaName,
 } from "../../core/mesh/bitchat-file-packet";
 import { nicknameKey, normalizeNickname } from "../../core/mesh/nickname";
@@ -62,12 +64,11 @@ import {
 } from "../../core/payments/cashu";
 import { t, useT, useTPlural, type TranslationKey } from "../../i18n";
 import { chevronBack, textAlignEnd } from "../../i18n/layout";
+import { reportWalletError } from "../../services/ecash-transfer";
 import {
-  describeRoute,
-  reportWalletError,
-  sendEcashToPeer,
-} from "../../services/ecash-transfer";
-import { AttachmentTooLargeError } from "../../services/file-transfer-service";
+  AttachmentTooLargeError,
+  sizeLabel,
+} from "../../services/file-transfer-service";
 import {
   isGeoChannel,
   isManualGeoChannel,
@@ -125,7 +126,11 @@ import {
   formatDateSeparator,
   formatDuration,
 } from "../../utils/format";
-import { canSendMedia, mediaBlockedReason } from "../../utils/media-policy";
+import {
+  BRIDGE_CHANNEL,
+  canSendMedia,
+  mediaBlockedReason,
+} from "../../utils/media-policy";
 import { activeMentionQuery, applyMention } from "../../utils/mentions";
 import { ensurePermission } from "../../utils/permissions";
 import {
@@ -137,6 +142,7 @@ import {
   NOSTR_ID_PREFIX,
   peerIDToUsername,
 } from "../../utils/username";
+import SendEcashSheet from "../wallet/send-ecash-sheet";
 import ChannelInfoSheet from "./channel-info-sheet";
 import ContactInfoSheet from "./contact-info-sheet";
 import ForwardSheet from "./forward-sheet";
@@ -1108,7 +1114,7 @@ export default function MessageThread({
   // On the public mesh channel, show that it is bridged (and how many are
   // reachable across the bridge) so people in the thread know their messages
   // are reaching beyond Bluetooth, not just the Mesh-tab banner.
-  if (channel === "#bluetooth" && bridgeActive) {
+  if (channel === BRIDGE_CHANNEL && bridgeActive) {
     channelSubtitleParts.push(
       bridgePeopleAcross > 0
         ? t("chat.thread.across_bridge", { count: bridgePeopleAcross })
@@ -1238,14 +1244,11 @@ export default function MessageThread({
   const undoSendSeconds = useSettingsStore((s) => s.undoSendSeconds);
   const [showAttachMenu, setShowAttachMenu] = useState(false);
   const [showSendEcash, setShowSendEcash] = useState(false);
-  const [sendingEcash, setSendingEcash] = useState(false);
   // Raw string of the token currently being claimed, so its button can show
   // progress and a double tap cannot start two swaps for the same proofs.
   const [claimingToken, setClaimingToken] = useState<string | null>(null);
   // Tokens already taken into the wallet, so their cards read "Claimed".
   const claimedTokens = useWalletStore((s) => s.claimedTokens);
-  const [ecashAmount, setEcashAmount] = useState("");
-  const [ecashMemo, setEcashMemo] = useState("");
   const [showChannelInfo, setShowChannelInfo] = useState(false);
   const [showDMInfo, setShowDMInfo] = useState(false);
   // Channel-message sender profile sheet: tap a message's avatar/name to
@@ -1259,6 +1262,16 @@ export default function MessageThread({
     // that returns to the list (still open behind it) instead of dismissing.
     fromMembers?: boolean;
   } | null>(null);
+  // Copy affordance for the sender profile sheet's Nostr key, same tap-to-copy
+  // behavior as the contact-info sheet.
+  const [senderKeyCopied, setSenderKeyCopied] = useState(false);
+  function handleCopySenderKey(peerID: string): void {
+    void Clipboard.setStringAsync(peerID.slice(NOSTR_ID_PREFIX.length)).catch(
+      () => {},
+    );
+    setSenderKeyCopied(true);
+    setTimeout(() => setSenderKeyCopied(false), 1500);
+  }
   // Channel members list: currently-reachable peers, tap one to open the
   // same profile sheet as tapping their avatar on a message.
   // Notices (bulletin board) sheet for this channel.
@@ -1888,7 +1901,7 @@ export default function MessageThread({
 
     // Capture nearby-only at send time (only meaningful on the bridged public
     // channel), then reset the composer flag for the next message.
-    const nearby = nearbyOnly && channel === "#bluetooth";
+    const nearby = nearbyOnly && channel === BRIDGE_CHANNEL;
     if (nearbyOnly) setNearbyOnly(false);
 
     // Undo send is a preference (General settings). When it is off, there is no
@@ -1956,50 +1969,6 @@ export default function MessageThread({
       case "ecash":
         setShowSendEcash(true);
         break;
-    }
-  }
-
-  // Send a Cashu token to this DM peer. Identical to the Wallet tab's send and
-  // the Mesh tab's peer sheet, because all three call the same transfer
-  // service: proof selection, mint fees, and the reservation that makes an
-  // undelivered token reclaimable all live there rather than being re-derived
-  // per screen.
-  async function handleSendEcash(): Promise<void> {
-    const amount = parseInt(ecashAmount, 10);
-    if (!amount || amount <= 0 || !dmPeerID || sendingEcash) return;
-
-    // Quoting awaits the mint, so a double tap would otherwise start two sends.
-    setSendingEcash(true);
-    let result;
-    try {
-      result = await sendEcashToPeer({
-        peerID: dmPeerID,
-        amount,
-        memo: ecashMemo.trim() || undefined,
-        senderNickname: localNickname,
-      });
-    } finally {
-      setSendingEcash(false);
-    }
-    if (!result) return;
-
-    setShowSendEcash(false);
-    setEcashAmount("");
-    setEcashMemo("");
-    // The bubble and its delivery status are already on screen, so the happy
-    // path needs no modal. Only the routes that are not immediate delivery are
-    // worth interrupting for, because "queued" looks identical to "sent" in the
-    // thread and means something quite different.
-    if (result.route !== "sent") {
-      showAlert(
-        t("wallet.xfer.on_its_way", {
-          amount: result.prepared.amount.toLocaleString(),
-          unit: result.prepared.unit,
-        }),
-        t("wallet.xfer.on_its_way_short", {
-          route: describeRoute(result.route),
-        }),
-      );
     }
   }
 
@@ -2092,6 +2061,10 @@ export default function MessageThread({
                 msg.id,
                 delivered ? "sent" : "failed",
               );
+            // After the file, not before: the caption should land under the
+            // photo it belongs to, and a transfer that never left should not
+            // leave a stray line of commentary about a photo that never came.
+            if (delivered) sendCaptionForBitchat(targetChannel, caption);
           },
         );
         // No route right now: mark it failed so the bubble shows the same red,
@@ -2219,6 +2192,36 @@ export default function MessageThread({
     onNavigateToChannel(dmChannel);
   }
 
+  // Refuse an attachment the mesh cannot carry, at the moment it is picked.
+  //
+  // Only video and documents: those go out as they are, so the cap is final
+  // here. A photo does not, because `prepareImageForSend` resizes it under the
+  // budget, and a 6 MB camera shot is the ordinary case rather than an error.
+  //
+  // Without this the file was accepted, a caption sheet opened, a bubble
+  // appeared, and only then did reading the bytes throw, leaving a failed
+  // message for something that was never sendable. `fileSize` is absent on some
+  // platforms, in which case this waves it through and the read-time check in
+  // `sendBytes` still catches it.
+  function rejectIfTooLarge(
+    type: ChatAttachment["type"],
+    sizeBytes: number | undefined,
+  ): boolean {
+    if (sizeBytes === undefined) return false;
+    if (type !== "video" && type !== "document") return false;
+    const cap = maxBytesForType(type);
+    if (sizeBytes <= cap) return false;
+    showAlert(
+      t("chat.attach.not_sent"),
+      t("transfer.too_large", {
+        kind: sizeLabel(type),
+        size: (sizeBytes / 1024).toFixed(0),
+        cap: (cap / 1024).toFixed(0),
+      }),
+    );
+    return true;
+  }
+
   async function handleCameraAttach(): Promise<void> {
     const granted = await ensurePermission(
       () => ImagePicker.getCameraPermissionsAsync(),
@@ -2231,6 +2234,11 @@ export default function MessageThread({
     if (!granted) return;
     const result = await ImagePicker.launchCameraAsync({
       mediaTypes: ["images", "videos"],
+      // `quality` applies to stills only. A recording is sent as it comes off
+      // the camera, and the mesh takes 1 MiB, so the length is the only lever
+      // there is: 15 seconds keeps a low-resolution clip in range, and a longer
+      // one would be refused after the user had already shot it.
+      videoMaxDuration: MAX_VIDEO_SECONDS,
       quality: UPLOAD_QUALITY_VALUES[useSettingsStore.getState().uploadQuality],
       allowsEditing: false,
     });
@@ -2238,10 +2246,12 @@ export default function MessageThread({
     const asset = result.assets[0];
     const type: ChatAttachment["type"] =
       asset.type === "video" ? "video" : "image";
+    if (rejectIfTooLarge(type, asset.fileSize)) return;
     setCaptionDraft("");
     setPendingAttachment({
       type,
       uri: asset.uri,
+      sizeBytes: asset.fileSize,
       // An image goes out under bitchat's stable-ID name so the far side can
       // dedup it and acknowledge it; video has no such shape and keeps the
       // picker's name.
@@ -2272,10 +2282,12 @@ export default function MessageThread({
     const asset = result.assets[0];
     const type: ChatAttachment["type"] =
       asset.type === "video" ? "video" : "image";
+    if (rejectIfTooLarge(type, asset.fileSize)) return;
     setCaptionDraft("");
     setPendingAttachment({
       type,
       uri: asset.uri,
+      sizeBytes: asset.fileSize,
       // An image goes out under bitchat's stable-ID name so the far side can
       // dedup it and acknowledge it; video has no such shape and keeps the
       // picker's name.
@@ -2294,6 +2306,7 @@ export default function MessageThread({
     });
     if (result.canceled || !result.assets?.[0]) return;
     const asset = result.assets[0];
+    if (rejectIfTooLarge("document", asset.size ?? undefined)) return;
     setCaptionDraft("");
     setPendingAttachment({
       type: "document",
@@ -2346,6 +2359,29 @@ export default function MessageThread({
       };
     }
     return null;
+  }
+
+  // A caption rides the file packet as an Airhop TLV (0x07) that bitchat skips
+  // as an unknown tag, so a bitchat recipient gets the photo and none of the
+  // words. Rather than warn about it, send the caption after the file as an
+  // ordinary DM: bitchat renders that natively, so the intent survives even
+  // though the representation cannot.
+  //
+  // No local echo. The caption is already on the attachment bubble, and a
+  // second bubble would show the sender their own words twice for a difference
+  // that is not theirs to care about.
+  //
+  // DMs only, and only to a peer we KNOW is bitchat. `peerRunsAirhop` returns
+  // undefined for a peer we have not identified, and a channel has recipients
+  // of both kinds: sending there would double the caption for every Airhop
+  // reader to fix it for some bitchat ones.
+  function sendCaptionForBitchat(targetChannel: string, caption: string): void {
+    if (caption.length === 0) return;
+    if (!targetChannel.startsWith("dm:")) return;
+    const service = getMeshService();
+    const peerID = targetChannel.slice(3);
+    if (service?.peerRunsAirhop(peerID) !== false) return;
+    service.sendDm(peerID, caption);
   }
 
   // A photo is resized first. A camera file is measured in megabytes and the
@@ -3617,7 +3653,7 @@ export default function MessageThread({
 
       {/* Nearby-only control: only on the bridged public channel while bridging.
           Lets the user keep a single message radio-only. */}
-      {channel === "#bluetooth" && bridgeEnabled && !selecting && (
+      {channel === BRIDGE_CHANNEL && bridgeEnabled && !selecting && (
         <Pressable
           style={styles.nearbyOnlyRow}
           onPress={() => setNearbyOnly((v) => !v)}
@@ -3928,63 +3964,20 @@ export default function MessageThread({
         </Pressable>
       </BottomSheet>
 
-      {/* Send ecash: DM-only attach option, builds an offline Cashu token
-          from the wallet and sends it straight to this peer. */}
-      {isDM && (
-        <BottomSheet
+      {/* Send ecash: DM-only attach option. The sheet is shared with the
+          contact sheet, the Mesh tab and the Wallet tab, so the rail chosen and
+          the words used to describe it are the same wherever you start from. */}
+      {isDM && dmPeerID !== null && (
+        <SendEcashSheet
           visible={showSendEcash}
           onClose={() => setShowSendEcash(false)}
-          sheetStyle={styles.ecashSheet}
-        >
-          <Text style={styles.ecashTitle}>{T("chat.ecash.title")}</Text>
-          <Text style={styles.ecashSubtitle}>
-            {T("chat.ecash.send_to", { name: displayName })}
-          </Text>
-          <TextInput
-            style={styles.ecashInput}
-            value={ecashAmount}
-            onChangeText={setEcashAmount}
-            placeholder={T("chat.ecash.amount")}
-            placeholderTextColor={Colors.textMuted}
-            keyboardType="number-pad"
-            returnKeyType="next"
-            selectionColor={Colors.accent}
-          />
-          <TextInput
-            style={[styles.ecashInput, styles.ecashInputCompact]}
-            value={ecashMemo}
-            onChangeText={setEcashMemo}
-            placeholder={T("chat.ecash.memo")}
-            placeholderTextColor={Colors.textMuted}
-            autoCapitalize="sentences"
-            selectionColor={Colors.accent}
-          />
-          <View style={styles.ecashActions}>
-            <Pressable
-              style={[
-                styles.ecashConfirm,
-                (!ecashAmount.trim() || sendingEcash) &&
-                  styles.ecashConfirmDisabled,
-              ]}
-              onPress={() => void handleSendEcash()}
-              disabled={!ecashAmount.trim() || sendingEcash}
-            >
-              <Text style={styles.ecashConfirmText}>
-                {T("chat.ecash.send")}
-              </Text>
-            </Pressable>
-            <Pressable
-              style={styles.ecashCancel}
-              onPress={() => {
-                setShowSendEcash(false);
-                setEcashAmount("");
-                setEcashMemo("");
-              }}
-            >
-              <Text style={styles.ecashCancelText}>{T("common.cancel")}</Text>
-            </Pressable>
-          </View>
-        </BottomSheet>
+          peerID={dmPeerID}
+          {...(dmContactNostr !== undefined
+            ? { nostrPubkey: dmContactNostr }
+            : {})}
+          displayName={displayName}
+          senderNickname={localNickname}
+        />
       )}
 
       {/* Channel info sheet: opens when user taps the header center */}
@@ -4103,14 +4096,28 @@ export default function MessageThread({
                   {resolveDisplayName(senderInfoTarget.peerID)}
                 </Text>
                 {isNostrId(senderInfoTarget.peerID) ? (
-                  <View style={styles.keyBox}>
+                  <Pressable
+                    style={styles.keyBox}
+                    onPress={() => handleCopySenderKey(senderInfoTarget.peerID)}
+                    accessibilityRole="button"
+                    accessibilityLabel={T("chat.contact.copy_nostr")}
+                  >
                     <Text style={styles.keyBoxLabel}>
                       {T("chat.thread.nostr_key")}
                     </Text>
-                    <Text style={styles.keyBoxValue} selectable>
-                      {senderInfoTarget.peerID.slice(NOSTR_ID_PREFIX.length)}
-                    </Text>
-                  </View>
+                    <View style={styles.keyBoxRow}>
+                      <Text style={styles.keyBoxValue}>
+                        {senderInfoTarget.peerID.slice(NOSTR_ID_PREFIX.length)}
+                      </Text>
+                      <Feather
+                        name={senderKeyCopied ? "check" : "copy"}
+                        size={15}
+                        color={
+                          senderKeyCopied ? Colors.online : Colors.textMuted
+                        }
+                      />
+                    </View>
+                  </Pressable>
                 ) : (
                   <Text style={styles.dmInfoPeerID}>
                     {senderInfoTarget.peerID}
@@ -4724,74 +4731,6 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       color: Colors.textPrimary,
       fontWeight: FontWeight.semibold,
     },
-    // Send ecash modal (DM-only attach option)
-    ecashSheet: {
-      paddingHorizontal: Spacing.xl,
-      paddingBottom: Spacing.xl,
-      gap: Spacing.base,
-    },
-    ecashTitle: {
-      fontSize: FontSize.md,
-      fontWeight: FontWeight.bold,
-      color: Colors.textPrimary,
-    },
-    ecashSubtitle: {
-      fontSize: FontSize.sm,
-      color: Colors.textMuted,
-      lineHeight: FontSize.sm * 1.5,
-    },
-    ecashInput: {
-      backgroundColor: Colors.surfaceRaised,
-      borderRadius: Radius.xl,
-      borderWidth: 1,
-      borderColor: Colors.border,
-      paddingHorizontal: Spacing.base,
-      paddingVertical: Spacing.md,
-      color: Colors.textPrimary,
-      fontSize: FontSize.base,
-    },
-    ecashInputCompact: {
-      marginTop: -Spacing.xs,
-    },
-    ecashActions: {
-      width: "100%",
-      marginTop: Spacing.xs,
-    },
-    ecashConfirm: {
-      width: "100%",
-      minHeight: 50,
-      backgroundColor: Colors.accent,
-      borderRadius: Radius.full,
-      alignItems: "center",
-      justifyContent: "center",
-    },
-    ecashConfirmDisabled: {
-      opacity: 0.4,
-    },
-    ecashConfirmText: {
-      fontSize: FontSize.base,
-      fontWeight: FontWeight.bold,
-      color: Colors.textInverse,
-    },
-    ecashCancel: {
-      width: "100%",
-      minHeight: 50,
-      marginTop: Spacing.sm,
-      backgroundColor: Colors.surfaceRaised,
-      borderWidth: 1,
-      borderColor: Colors.border,
-      borderRadius: Radius.full,
-      alignItems: "center",
-      justifyContent: "center",
-    },
-    // Dismiss actions read at full contrast, matching the wallet sheets,
-    // the scanner and the alert buttons: a muted label on a filled pill
-    // reads as disabled rather than as the quieter of two choices.
-    ecashCancelText: {
-      fontSize: FontSize.base,
-      color: Colors.textPrimary,
-      fontWeight: FontWeight.semibold,
-    },
     // Voice recording bar (shown when isRecording = true)
     recordingBar: {
       flexDirection: "row",
@@ -5067,7 +5006,15 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       textTransform: "uppercase",
       letterSpacing: 0.6,
     },
+    // The key wraps to two lines, so the glyph centers against the block
+    // rather than sitting on the first line.
+    keyBoxRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: Spacing.sm,
+    },
     keyBoxValue: {
+      flex: 1,
       fontSize: FontSize.xs,
       fontFamily: FontFamily.mono,
       color: Colors.textSecondary,

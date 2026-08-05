@@ -18,9 +18,19 @@ import { t } from "../i18n";
 // This mirrors bitchat's `canSendMediaInCurrentContext` (media only in `.mesh`
 // and mesh peer DMs), so the two apps behave the same about what a channel can
 // carry.
+// The public BLE broadcast channel: bitchat's single mesh room, which its UI
+// labels "bluetooth" rather than naming as a channel.
+//
+// Lives here, in a util with no service dependencies, because both the mesh
+// service and the chat screens need it and neither may import the other
+// (mesh-service already imports file-transfer-service). It decides where an
+// untagged broadcast attachment lands, whether media and live voice are
+// allowed, and which room shows the bridge toggle.
+export const BRIDGE_CHANNEL = "#bluetooth";
+
 export function canSendMedia(channel: string): boolean {
   if (channel.startsWith("dm:")) return !channel.startsWith("dm:nostr_");
-  return channel === "#bluetooth";
+  return channel === BRIDGE_CHANNEL;
 }
 
 // The location-scoped channels, listed here rather than imported so this stays

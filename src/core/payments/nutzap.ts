@@ -191,6 +191,13 @@ export async function publishNutzap(params: {
   client: NostrClient;
   comment?: string;
   targetEventId?: string;
+  // The relays THEY listed in their kind 10019. NIP-61 is explicit that a
+  // nutzap goes to the recipient's relays, and it matters: the recipient
+  // subscribes to their own set, so publishing to ours instead puts the payment
+  // somewhere they never look. That is invisible between two Airhop users, who
+  // share a default pool, and completely broken against any other NIP-61 wallet.
+  // Empty falls back to our own pool, for a kind 10019 with no relay tags.
+  relays?: string[];
 }): Promise<Event> {
   if (params.proofs.length === 0) throw new Error("nutzap needs proofs");
   if (params.proofs.length > MAX_PROOFS_PER_NUTZAP) {
@@ -227,7 +234,7 @@ export async function publishNutzap(params: {
     params.senderPrivKey,
   );
 
-  await params.client.publish(event);
+  await params.client.publish(event, params.relays);
   return event;
 }
 

@@ -125,12 +125,18 @@ function MessageBubble({
       : () => onPressSender(item);
 
   return (
-    <View
+    <Pressable
       style={[
         styles.messageRow,
         item.isMine ? styles.messageRowMine : styles.messageRowTheirs,
         selected === true && styles.messageRowSelected,
       ]}
+      onPress={selecting === true ? handleToggle : undefined}
+      disabled={selecting !== true}
+      accessibilityRole={selecting === true ? "checkbox" : undefined}
+      accessibilityState={
+        selecting === true ? { checked: selected === true } : undefined
+      }
     >
       {/* Leading check, only while selecting. Outside the bubble so it reads as
           a row control rather than part of the message, and on the same side for
@@ -309,7 +315,7 @@ function MessageBubble({
           </View>
         </Pressable>
       </View>
-    </View>
+    </Pressable>
   );
 }
 

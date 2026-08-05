@@ -11,6 +11,7 @@ import * as Clipboard from "expo-clipboard";
 import React, { useMemo, useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { useT } from "../../i18n";
+import { getMeshService } from "../../services/mesh-service";
 import { useChatStore } from "../../store/chat-store";
 import { useContactsStore } from "../../store/contacts-store";
 import { usePeerStore } from "../../store/peer-store";
@@ -26,8 +27,13 @@ import {
   useThemeColors,
 } from "../../ui/theme";
 import { resolveDisplayName } from "../../utils/display-name";
-import { isNostrId, NOSTR_ID_PREFIX } from "../../utils/username";
+import {
+  isNostrId,
+  NOSTR_ID_PREFIX,
+  peerIDToUsername,
+} from "../../utils/username";
 import VerifyContactScanner from "../contacts/verify-contact-scanner";
+import SendEcashSheet from "../wallet/send-ecash-sheet";
 
 interface Props {
   // "dm:<peerID>" of the conversation, or null when closed.
@@ -58,6 +64,17 @@ export default function ContactInfoSheet({
   // Snapshot on open, so the reachability line is honest without a live timer.
   const [nowMs] = useState(() => Date.now());
   const [verifying, setVerifying] = useState(false);
+  const [paying, setPaying] = useState(false);
+
+  // Our own name, for the echo in the thread. Derived the same way the thread
+  // derives it, so a payment started here and one started from the composer put
+  // an identically labelled bubble in the same conversation.
+  const localNickname = useMemo(() => {
+    const id = getMeshService()?.getPeerID();
+    return id !== undefined && id.length >= 4
+      ? peerIDToUsername(id)
+      : undefined;
+  }, []);
 
   const name = peerID ? resolveDisplayName(peerID) : "";
   const isOnline = peer !== undefined && nowMs - peer.lastSeenMs < 60_000;
@@ -91,8 +108,8 @@ export default function ContactInfoSheet({
     setCopied(true);
     setTimeout(() => setCopied(false), 1500);
   }
-  // The info card's rows, top to bottom. Relationship leads, then verification
-  // (the trust signal), then the always-on encryption guarantee.
+  // The info card's rows, top to bottom. Relationship leads, then the
+  // always-on encryption guarantee, then verification (the trust signal).
   const infoRows: {
     key: string;
     icon: React.ComponentProps<typeof Feather>["name"];
@@ -110,6 +127,15 @@ export default function ContactInfoSheet({
       }),
     });
   }
+  infoRows.push({
+    key: "enc",
+    icon: "lock",
+    iconColor: Colors.e2ee,
+    label: T("chat.contact.e2ee"),
+    sub: isAnonymous
+      ? T("chat.contact.e2ee_nostr")
+      : T("chat.contact.e2ee_mesh"),
+  });
   infoRows.push(
     isAnonymous
       ? {
@@ -139,22 +165,6 @@ export default function ContactInfoSheet({
             sub: T("chat.contact.not_verified_desc"),
           },
   );
-  // The guarantee is the same either way, but the mechanism is not, and naming
-  // the wrong one is the kind of small inaccuracy that costs trust in the
-  // things around it. A relay-only contact has no mesh identity to run a Noise
-  // handshake against, so their messages are NIP-17 gift-wrapped instead. On
-  // the mesh it is Noise XX, and Double Ratchet on top of it when both ends are
-  // Airhop; a bitchat peer gets Noise alone, which is why that half is stated
-  // as a condition rather than a promise.
-  infoRows.push({
-    key: "enc",
-    icon: "lock",
-    iconColor: Colors.e2ee,
-    label: T("chat.contact.e2ee"),
-    sub: isAnonymous
-      ? T("chat.contact.e2ee_nostr")
-      : T("chat.contact.e2ee_mesh"),
-  });
 
   return (
     <>
@@ -233,8 +243,11 @@ export default function ContactInfoSheet({
               </View>
             </View>
 
-            {canVerify && (
-              <View style={styles.actions}>
+            <View style={styles.actions}>
+              {/* Paying is the one thing you can do with any correspondent,
+                  mesh or Nostr, near or far: the rail is chosen for you. It
+                  sits below verification because trust comes before money. */}
+              {canVerify && (
                 <Pressable
                   style={styles.verifyBtn}
                   onPress={() => setVerifying(true)}
@@ -246,8 +259,17 @@ export default function ContactInfoSheet({
                     {T("chat.contact.verify")}
                   </Text>
                 </Pressable>
-              </View>
-            )}
+              )}
+              <Pressable
+                style={styles.payBtn}
+                onPress={() => setPaying(true)}
+                accessibilityRole="button"
+                accessibilityLabel={T("wallet.pay.action")}
+              >
+                <Feather name="zap" size={16} color={Colors.textPrimary} />
+                <Text style={styles.payText}>{T("wallet.pay.action")}</Text>
+              </Pressable>
+            </View>
           </>
         )}
       </BottomSheet>
@@ -257,6 +279,20 @@ export default function ContactInfoSheet({
           peerID={peerID}
           name={name}
           onClose={() => setVerifying(false)}
+        />
+      )}
+      {peerID && (
+        <SendEcashSheet
+          visible={paying}
+          onClose={() => setPaying(false)}
+          peerID={peerID}
+          {...(contact?.nostrPubkeyHex !== undefined
+            ? { nostrPubkey: contact.nostrPubkeyHex }
+            : {})}
+          displayName={name}
+          {...(localNickname !== undefined
+            ? { senderNickname: localNickname }
+            : {})}
         />
       )}
     </>
@@ -391,6 +427,25 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       fontSize: FontSize.base,
       fontWeight: FontWeight.bold,
       color: Colors.textInverse,
+    },
+    // Secondary to Verify: an outlined pill, so the two never read as equally
+    // urgent when both are on screen.
+    payBtn: {
+      minHeight: 50,
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: Spacing.sm,
+      paddingVertical: Spacing.md,
+      borderRadius: Radius.full,
+      backgroundColor: Colors.surfaceRaised,
+      borderWidth: 1,
+      borderColor: Colors.border,
+    },
+    payText: {
+      fontSize: FontSize.base,
+      fontWeight: FontWeight.semibold,
+      color: Colors.textPrimary,
     },
   });
 }
