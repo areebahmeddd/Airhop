@@ -3,11 +3,6 @@
 All notable changes are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
-## What's Changed in v0.9.11
-
-
-**Full changelog:** [v0.9.10..v0.9.11](https://github.com/areebahmeddd/airhop/compare/v0.9.10..v0.9.11)
-
 ## What's Changed in v0.9.10
 
 - fix: update AndroidManifest and iOS list (by @areebahmeddd) [95e012c]
