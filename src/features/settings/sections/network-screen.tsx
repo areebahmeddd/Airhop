@@ -4,8 +4,13 @@
 import Feather from "@expo/vector-icons/Feather";
 import React, { useState } from "react";
 import { Pressable, ScrollView, Text, TextInput, View } from "react-native";
-import { validateRelayUrl } from "../../../core/nostr/geo-relay";
-import { t, useT } from "../../../i18n";
+import {
+  DEFAULT_DM_RELAYS,
+  MAX_CUSTOM_RELAYS,
+  relayDisplayHost,
+  validateRelayUrl,
+} from "../../../core/nostr/geo-relay";
+import { useT } from "../../../i18n";
 import { getMeshService } from "../../../services/mesh-service";
 import { showAlert } from "../../../store/alert-store";
 import { useSettingsStore } from "../../../store/settings-store";
@@ -35,8 +40,15 @@ export default function NetworkScreen({ onBack }: Props): React.JSX.Element {
   const removeCustomRelay = useSettingsStore((s) => s.removeCustomRelay);
 
   const [relaysExpanded, setRelaysExpanded] = useState(false);
+  const [dmRelaysExpanded, setDmRelaysExpanded] = useState(false);
+  // Read the live pool where there is one, so this cannot quietly drift from
+  // what the client actually opened; fall back to the constant it is built from
+  // when the transport is down, which is still what messages would use.
+  const dmRelays = getMeshService()?.getNostrClient()?.activeRelays ?? [
+    ...DEFAULT_DM_RELAYS,
+  ];
   const [relayInput, setRelayInput] = useState("");
-  const [relayError, setRelayError] = useState(false);
+  const [relayError, setRelayError] = useState<"invalid" | "full" | null>(null);
 
   // Master internet switch: persist the preference AND build/tear down the Nostr
   // transport immediately so the change takes effect without a restart. Turning
@@ -69,12 +81,21 @@ export default function NetworkScreen({ onBack }: Props): React.JSX.Element {
   function handleAddRelay(): void {
     const normalized = validateRelayUrl(relayInput);
     if (normalized === null) {
-      setRelayError(true);
+      setRelayError("invalid");
+      return;
+    }
+    // The store caps the list. Say so, because otherwise the add is a no-op that
+    // clears the field and reads as success.
+    if (
+      customRelays.length >= MAX_CUSTOM_RELAYS &&
+      !customRelays.includes(normalized)
+    ) {
+      setRelayError("full");
       return;
     }
     addCustomRelay(normalized);
     setRelayInput("");
-    setRelayError(false);
+    setRelayError(null);
   }
 
   // Turning geo-relay discovery OFF only makes sense with at least one custom
@@ -110,11 +131,22 @@ export default function NetworkScreen({ onBack }: Props): React.JSX.Element {
   }
 
   // Removing the last custom relay while discovery is off would leave no relays,
-  // so re-enable discovery to keep location channels working.
+  // so re-enable discovery to keep location channels working. Say so: the user
+  // deliberately turned that switch off, and flipping it back silently means
+  // they watch a control they set change itself with no explanation. The toggle
+  // path already explains this invariant before blocking, so the removal path
+  // explaining it after the fact keeps the two consistent.
   function handleRemoveRelay(url: string): void {
     removeCustomRelay(url);
+    // A "list full" error is stale the moment a slot frees up.
+    setRelayError(null);
     if (!geoRelayDiscovery && customRelays.length <= 1) {
       setGeoRelayDiscovery(true);
+      showAlert(
+        T("settings.network.discovery_back_on"),
+        T("settings.network.discovery_back_on_body"),
+        [{ text: T("common.ok"), style: "cancel" }],
+      );
     }
   }
 
@@ -173,8 +205,9 @@ export default function NetworkScreen({ onBack }: Props): React.JSX.Element {
                 <Text style={styles.settingDescription}>
                   {customRelays.length === 0
                     ? T("settings.network.custom_desc")
-                    : t("settings.network.custom_added", {
+                    : T("settings.network.custom_added", {
                         count: customRelays.length,
+                        max: MAX_CUSTOM_RELAYS,
                       })}
                 </Text>
               </View>
@@ -184,27 +217,38 @@ export default function NetworkScreen({ onBack }: Props): React.JSX.Element {
                 color={internetEnabled ? Colors.textMuted : Colors.borderStrong}
               />
             </Pressable>
+            {/* Kept in the order the user added them, not sorted. This is their
+                own list, and re-ordering someone's entries under them is
+                surprising in a way that re-ordering a built-in set is not. */}
             {relaysExpanded && internetEnabled && (
               <>
                 {customRelays.map((url) => (
                   <React.Fragment key={url}>
                     <GroupDivider />
                     <View style={styles.settingRow}>
+                      {/* Muted, not a green check. Colors.online means "is
+                          reachable", and nothing here has contacted this relay:
+                          it is configured, not verified. The palette is
+                          monochrome outside real status for that reason. */}
                       <View style={styles.settingIcon}>
-                        <Feather name="check" size={16} color={Colors.online} />
+                        <Feather
+                          name="server"
+                          size={16}
+                          color={Colors.textMuted}
+                        />
                       </View>
                       <Text
                         style={[styles.settingLabel, { flex: 1 }]}
                         numberOfLines={1}
                       >
-                        {url}
+                        {relayDisplayHost(url)}
                       </Text>
                       <Pressable
                         onPress={() => handleRemoveRelay(url)}
                         hitSlop={HIT_SLOP}
                         accessibilityRole="button"
                         accessibilityLabel={T("settings.network.remove_relay", {
-                          url,
+                          url: relayDisplayHost(url),
                         })}
                       >
                         <Feather name="x" size={18} color={Colors.danger} />
@@ -223,9 +267,9 @@ export default function NetworkScreen({ onBack }: Props): React.JSX.Element {
                       { flex: 1, paddingVertical: 0 },
                     ]}
                     value={relayInput}
-                    onChangeText={(t) => {
-                      setRelayInput(t);
-                      if (relayError) setRelayError(false);
+                    onChangeText={(text) => {
+                      setRelayInput(text);
+                      if (relayError !== null) setRelayError(null);
                     }}
                     placeholder="relay.example.com"
                     placeholderTextColor={Colors.textMuted}
@@ -251,7 +295,7 @@ export default function NetworkScreen({ onBack }: Props): React.JSX.Element {
                     </Pressable>
                   )}
                 </View>
-                {relayError && (
+                {relayError !== null && (
                   <Text
                     style={[
                       styles.settingDescription,
@@ -262,9 +306,68 @@ export default function NetworkScreen({ onBack }: Props): React.JSX.Element {
                       },
                     ]}
                   >
-                    {T("settings.network.relay_invalid")}
+                    {relayError === "full"
+                      ? T("settings.network.relay_limit", {
+                          count: MAX_CUSTOM_RELAYS,
+                        })
+                      : T("settings.network.relay_invalid")}
                   </Text>
                 )}
+              </>
+            )}
+            <GroupDivider />
+            {/* Message relays: read-only, and deliberately sitting right below
+                custom relays. That adjacency is the explanation. Custom relays
+                say "location channels and the mesh bridge", these say "direct
+                messages", and seeing them together is what stops someone
+                pinning a relay and expecting their DMs to follow. */}
+            <Pressable
+              style={styles.settingRow}
+              onPress={() => setDmRelaysExpanded((v) => !v)}
+              disabled={!internetEnabled}
+              accessibilityRole="button"
+              accessibilityState={{ expanded: dmRelaysExpanded }}
+              accessibilityLabel={T("settings.network.dm_relays")}
+            >
+              <View style={styles.settingIcon}>
+                <Feather name="mail" size={18} color={Colors.textSecondary} />
+              </View>
+              <View style={styles.settingLabelGroup}>
+                <Text style={styles.settingLabel}>
+                  {T("settings.network.dm_relays")}
+                </Text>
+                <Text style={styles.settingDescription}>
+                  {T("settings.network.dm_relays_desc")}
+                </Text>
+              </View>
+              <Feather
+                name={dmRelaysExpanded ? "chevron-up" : "chevron-down"}
+                size={18}
+                color={internetEnabled ? Colors.textMuted : Colors.borderStrong}
+              />
+            </Pressable>
+            {dmRelaysExpanded && internetEnabled && (
+              <>
+                {dmRelays.map((url) => (
+                  <React.Fragment key={url}>
+                    <GroupDivider />
+                    <View style={styles.settingRow}>
+                      <View style={styles.settingIcon}>
+                        <Feather
+                          name="lock"
+                          size={16}
+                          color={Colors.textMuted}
+                        />
+                      </View>
+                      <Text
+                        style={[styles.settingLabel, { flex: 1 }]}
+                        numberOfLines={1}
+                      >
+                        {relayDisplayHost(url)}
+                      </Text>
+                    </View>
+                  </React.Fragment>
+                ))}
               </>
             )}
             <GroupDivider />

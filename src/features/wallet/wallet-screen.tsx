@@ -2312,7 +2312,7 @@ export default function WalletScreen({
             accessibilityRole="button"
             accessibilityLabel={T("wallet.send.share_token")}
           >
-            <Feather name="share-2" size={18} color={Colors.accent} />
+            <Feather name="share" size={18} color={Colors.accent} />
             <Text style={styles.generatedActionText}>{T("common.share")}</Text>
           </Pressable>
           <Pressable

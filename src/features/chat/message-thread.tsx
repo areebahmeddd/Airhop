@@ -3555,7 +3555,7 @@ export default function MessageThread({
                 accessibilityRole="button"
                 accessibilityLabel={T("chat.media.share_photo")}
               >
-                <Feather name="share-2" size={22} color="#FFFFFF" />
+                <Feather name="share" size={22} color="#FFFFFF" />
               </Pressable>
             </View>
           )}

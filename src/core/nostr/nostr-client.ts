@@ -20,19 +20,27 @@ import type { Event } from "nostr-tools";
 import type { Filter } from "nostr-tools/filter";
 import type { SubCloser } from "nostr-tools/pool";
 import { SimplePool } from "nostr-tools/pool";
+import {
+  DEFAULT_DM_RELAYS,
+  GEO_RELAY_COUNT,
+  MAX_CUSTOM_RELAYS,
+} from "./geo-relay";
 
 // ---- Constants --------------------------------------------------------------
 
-// These relays reliably carry NIP-59 gift-wraps (kind 1059).
-const DEFAULT_DM_RELAYS = [
-  "wss://relay.damus.io",
-  "wss://nos.lol",
-  "wss://relay.primal.net",
-  "wss://offchain.pub",
-];
-
-// Maximum relays open simultaneously.
+// Maximum relays in the default pool (DM / gift-wrap traffic).
 const MAX_RELAY_COUNT = 5;
+
+// Ceiling for an explicit per-call relay set, deliberately higher than
+// MAX_RELAY_COUNT.
+//
+// A geohash cell's set is the 5 nearest relays (the interop rendezvous, which
+// must stay intact) PLUS the user's custom relays, appended last by
+// mergeGeoRelays. Capping that back to MAX_RELAY_COUNT would trim from the tail
+// and so drop exactly the custom entries, silently undoing the setting for
+// anyone who left geo-relay discovery on: the UI would report the relay added
+// and it would never be contacted. Sized to hold both halves.
+const MAX_OVERRIDE_RELAY_COUNT = GEO_RELAY_COUNT + MAX_CUSTOM_RELAYS;
 
 // How long to wait for a publish ACK from at least one relay.
 const PUBLISH_TIMEOUT_MS = 8_000;
@@ -132,7 +140,7 @@ export class NostrClient {
       .map(normalizeRelayUrl)
       .filter(Boolean) as string[];
     return normalized.length > 0
-      ? [...new Set(normalized)].slice(0, MAX_RELAY_COUNT)
+      ? [...new Set(normalized)].slice(0, MAX_OVERRIDE_RELAY_COUNT)
       : this.relays;
   }
 

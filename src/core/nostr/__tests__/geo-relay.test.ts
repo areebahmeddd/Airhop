@@ -2,10 +2,12 @@
 // geo-relay.ts has no native or network dependencies; fully testable in CI.
 
 import {
+  DEFAULT_DM_RELAYS,
   GeoRelayDirectory,
   haversineKm,
   mergeGeoRelays,
   parseRelaysCsv,
+  relayDisplayHost,
   validateRelayUrl,
 } from "../geo-relay";
 
@@ -102,6 +104,47 @@ describe("mergeGeoRelays", () => {
       "wss://n1",
       "wss://n2",
     ]);
+  });
+});
+
+describe("relayDisplayHost", () => {
+  test("drops the scheme, which is identical on every relay", () => {
+    expect(relayDisplayHost("wss://relay.damus.io")).toBe("relay.damus.io");
+  });
+
+  test("leaves a bare host alone", () => {
+    expect(relayDisplayHost("relay.damus.io")).toBe("relay.damus.io");
+  });
+
+  test("keeps a port, which is what distinguishes two relays on one host", () => {
+    expect(relayDisplayHost("wss://relay.example.com:8443")).toBe(
+      "relay.example.com:8443",
+    );
+  });
+});
+
+describe("DEFAULT_DM_RELAYS", () => {
+  // The DM pool and the geo fallback are two roles over one list. They used to
+  // be two hand-maintained literals of the same four hosts in two files, so an
+  // edit could land on one and leave the other behind with nothing to catch it.
+  test("is the set the directory itself falls back on", () => {
+    const empty = new GeoRelayDirectory();
+    const fallback = empty.nearestRelays(0, 0, DEFAULT_DM_RELAYS.length);
+    expect([...fallback].sort()).toEqual([...DEFAULT_DM_RELAYS].sort());
+  });
+
+  test("every entry passes the bar custom relays are held to", () => {
+    for (const url of DEFAULT_DM_RELAYS) {
+      expect(validateRelayUrl(url)).toBe(url);
+    }
+  });
+
+  // The Settings list renders this array as-is rather than sorting a copy, so
+  // the order here IS the order on screen. Sorting in the UI instead would hide
+  // an out-of-order addition; failing here points at the line that caused it.
+  test("stays alphabetical by host, since none of this is a ranking", () => {
+    const hosts = DEFAULT_DM_RELAYS.map(relayDisplayHost);
+    expect(hosts).toEqual([...hosts].sort());
   });
 });
 

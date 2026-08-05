@@ -153,7 +153,7 @@ bitchat is an excellent foundation. Airhop fills the gaps it left open.
 - [x] Human-readable usernames (`src/utils/username.ts`: deterministic `adjective-noun-XXXX` from peer ID)
 - [x] Panic wipe (`src/utils/panic-wipe.ts`: clears EncryptedStorage keys + all MMKV partitions; < 1s)
 - [x] Battery optimization flow (`src/utils/battery-optimization.ts`: OEM deep links for 10 skins + standard Android fallback)
-- [x] Georelays in-app relay map (`GeoRelayDirectory.nearestRelaysWithDistance()` returns `{url, km}[]`)
+- [x] Georelay visibility: the channel info sheet lists the relays carrying a cell and marks the ones the user added (`GeoRelayDirectory.closestRelaysToGeohash()` via `MeshService.getGeohashRelays()`)
 - [x] Full cross-platform compat test (`src/core/mesh/__tests__/compat.test.ts`: peer ID, byte offsets, relay TTL compat, ANNOUNCE TLV, fragment constants, BLE UUIDs)
 
 **Milestone:** Feature-complete. Every core service has passing tests. No known protocol bugs.

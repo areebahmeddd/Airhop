@@ -477,7 +477,7 @@ export default function ProfileScreen({
           accessibilityLabel={T("settings.share_peer_id")}
         >
           <View style={styles.sharePillInner}>
-            <Feather name="share-2" size={13} color={Colors.textSecondary} />
+            <Feather name="share" size={13} color={Colors.textSecondary} />
             <Text style={styles.sharePillText} numberOfLines={1}>
               {T("settings.share_id_short")}
             </Text>
@@ -658,7 +658,7 @@ export default function ProfileScreen({
             accessibilityRole="button"
             accessibilityLabel={T("settings.qr.share")}
           >
-            <Feather name="share-2" size={16} color={Colors.textInverse} />
+            <Feather name="share" size={16} color={Colors.textInverse} />
             <Text style={styles.qrShareText}>
               {T("settings.qr.share_short")}
             </Text>

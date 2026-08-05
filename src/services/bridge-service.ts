@@ -29,7 +29,11 @@ import {
   createBridgePresenceEvent,
   parseBridgeEvent,
 } from "../core/nostr/bridge-event";
-import { GeoRelayDirectory, mergeGeoRelays } from "../core/nostr/geo-relay";
+import {
+  GEO_RELAY_COUNT,
+  GeoRelayDirectory,
+  mergeGeoRelays,
+} from "../core/nostr/geo-relay";
 import { loadGeoRelays } from "../core/nostr/geo-relay-source";
 import {
   deriveGeohashIdentity,
@@ -45,8 +49,9 @@ import { getCoarseLocation } from "./location-service";
 // Geohash precision of the rendezvous cell (~1.2 km neighborhood), matching
 // bitchat BridgeService.Limits.cellPrecision.
 export const CELL_PRECISION = 6;
-// Relays to publish/subscribe per cell.
-const RELAY_COUNT = 5;
+// Relays to publish/subscribe per cell. Shared with the geohash channels so
+// both converge on the same rendezvous set.
+const RELAY_COUNT = GEO_RELAY_COUNT;
 // Reject rendezvous events outside this clock skew (matches the gateway path).
 export const MAX_EVENT_AGE_SECONDS = 15 * 60;
 // A rendezvous participant counts toward "across the bridge" for this long.

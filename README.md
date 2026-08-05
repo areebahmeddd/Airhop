@@ -237,12 +237,12 @@ npx expo prebuild
 
 Airhop would not exist without the work of the bitchat community. Thank you to everyone who built the foundation this project stands on. Their work is released into the public domain under the [Unlicense](https://github.com/permissionlesstech/bitchat/blob/main/LICENSE).
 
-| Person                                          | Contribution                                                                               |
-| ----------------------------------------------- | ------------------------------------------------------------------------------------------ |
-| [jackjackbits](https://github.com/jackjackbits) | Created bitchat iOS, designed the BLE mesh protocol and wire format that Airhop implements |
-| [callebtc](https://github.com/callebtc)         | Lead on bitchat-android, author of the Cashu ecash protocol                                |
-| [Nadim Kobeissi](https://github.com/mimoo)      | Noise Protocol implementation in bitchat iOS                                               |
-| [a1denvalu3](https://github.com/a1denvalu3)     | Built the georelays toolkit that produces `assets/data/relays.csv`                         |
+| Person                                          | Contribution                                                        |
+| ----------------------------------------------- | ------------------------------------------------------------------- |
+| [jackjackbits](https://github.com/jackjackbits) | Created bitchat-ios, designed the BLE mesh protocol and wire format |
+| [callebtc](https://github.com/callebtc)         | Lead on bitchat-android, author of the Cashu ecash protocol         |
+| [Nadim Kobeissi](https://github.com/mimoo)      | Noise Protocol implementation in bitchat                            |
+| [a1denvalu3](https://github.com/a1denvalu3)     | Built the georelays toolkit that produces `assets/data/relays.csv`  |
 
 ## Support
 

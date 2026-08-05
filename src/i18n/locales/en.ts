@@ -662,6 +662,16 @@ export const strings = {
   "chat.info.custom_channel": "Custom channel",
   "chat.info.geohash": "Geohash",
   "chat.info.copy_geohash": "Copy geohash",
+  "chat.info.relays": "Relays",
+  "chat.info.show_relays": "Show the relays carrying this channel",
+  // Marks a relay the user added in Settings, so "did my relay get used" is
+  // answerable by looking rather than by trusting. Says "custom" rather than
+  // "pinned" or "yours" so it names the setting it came from.
+  "chat.info.relay_custom": "custom",
+  // Deliberately does not name a cause. Internet being off is the usual one,
+  // but the transport is also briefly absent at startup, and a message that
+  // blames a setting the user did not touch is worse than one that does not.
+  "chat.info.relays_none": "None. This cell is Bluetooth only right now.",
   "chat.info.search_members": "Search members",
   "chat.info.search_members_placeholder": "Search members…",
   "chat.info.teleported": "Teleported",
@@ -1634,11 +1644,28 @@ export const strings = {
   "settings.network.custom_only_body":
     "Location channels and the mesh bridge will stop auto-selecting the nearest relays and use only the ones you added. This can reduce reach, and you may stop meeting bitchat users, who converge on the nearest relays.",
   "settings.network.custom": "Custom relays",
-  "settings.network.custom_desc": "Add your own Nostr relays",
-  "settings.network.custom_added": "{count} added",
+  // Scope matters here: these relays carry location channels and the mesh
+  // bridge, not direct messages. "Add your own Nostr relays" read as all Nostr
+  // traffic and set up the wrong expectation.
+  "settings.network.custom_desc":
+    "Add your own relays for location channels and the mesh bridge",
+  "settings.network.custom_added": "{count} of {max} added",
+  // The other half of the relay story. Custom relays scope to location channels
+  // and the mesh bridge, so without this the user has no way to learn what
+  // carries their direct messages, or why adding a relay did not change it.
+  // Read-only, which the lock icon and the absent Add row already say, so the
+  // copy spends its words on scope instead of repeating that.
+  "settings.network.dm_relays": "Message relays",
+  "settings.network.dm_relays_desc":
+    "Direct messages and private channels always use these. Custom relays do not change them.",
+  "settings.network.discovery_back_on": "Geo-relay discovery back on",
+  "settings.network.discovery_back_on_body":
+    "That was your last custom relay. Location channels need somewhere to publish, so Airhop is auto-selecting the nearest relays again.",
   "settings.network.add_relay": "Add relay",
   "settings.network.remove_relay": "Remove {url}",
   "settings.network.add_short": "Add",
+  "settings.network.relay_limit":
+    "You can add {count} relays. Remove one to add another.",
   // "relay.example.com" is a placeholder hostname, not copy: keep it as it is.
   "settings.network.relay_invalid":
     "Enter a valid relay host, e.g. relay.example.com. IP addresses and local names are not allowed.",

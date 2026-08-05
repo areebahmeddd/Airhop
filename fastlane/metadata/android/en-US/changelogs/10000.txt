@@ -1,9 +1,9 @@
 First stable release.
 
-• Bluetooth mesh messaging with no accounts, servers, or tracking
-• DMs, public channels, private groups, invite-only rooms, bulletin boards
-• Photos, video, voice notes, and live push-to-talk over the mesh
-• bitchat compatible, relaying across up to 7 hops
-• Optional Nostr bridging beyond Bluetooth range, with Tor routing
-• Offline Cashu ecash transfers, no internet needed on either phone
-• Panic wipe erases keys and messages with a triple tap
+- Bluetooth mesh messaging with no accounts, servers, or tracking
+- DMs, public channels, private groups, invite-only rooms, bulletin boards
+- Photos, video, voice notes, and live push-to-talk over the mesh
+- bitchat compatible, relaying across up to 7 hops
+- Optional Nostr bridging beyond Bluetooth range, with Tor routing
+- Offline Cashu ecash transfers, no internet needed on either phone
+- Panic wipe erases keys and messages with a triple tap

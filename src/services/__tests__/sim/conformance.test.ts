@@ -135,9 +135,9 @@ function bitchatAvailable(): boolean {
 // products like `512 * 1024`. FileTransferLimits states its ceilings that way
 // rather than as literals.
 function swiftConstantExpr(source: string, name: string): number | null {
-  const match = new RegExp(`static let ${name}\s*:?[^=]*=\s*([0-9_ *]+)`).exec(
-    source,
-  );
+  const match = new RegExp(
+    `static let ${name}\\s*:?[^=]*=\\s*([0-9_ *]+)`,
+  ).exec(source);
   if (match === null) return null;
   const parts = match[1]
     .split("*")

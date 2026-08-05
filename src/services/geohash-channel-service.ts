@@ -31,7 +31,11 @@ import {
   encodeBitchatAckEnvelope,
   encodeBitchatDmEnvelope,
 } from "../core/nostr/bitchat-envelope";
-import { GeoRelayDirectory, mergeGeoRelays } from "../core/nostr/geo-relay";
+import {
+  GEO_RELAY_COUNT,
+  GeoRelayDirectory,
+  mergeGeoRelays,
+} from "../core/nostr/geo-relay";
 import { loadGeoRelays } from "../core/nostr/geo-relay-source";
 import {
   deriveGeohashIdentity,
@@ -141,10 +145,6 @@ export function geohashLevelName(gh: string): string {
   if (n === 7) return t("mesh.level.block");
   return t("mesh.level.building");
 }
-
-// Relays to publish/subscribe per geohash cell. Matches bitchat's
-// TransportConfig.nostrGeoRelayCount so both clients converge on the same set.
-const GEO_RELAY_COUNT = 5;
 
 // How far back a per-cell DM inbox looks on (re)subscribe. Matches bitchat's
 // TransportConfig.nostrDMSubscribeLookbackSeconds (24 h).
@@ -340,7 +340,19 @@ export class GeohashChannelService {
   // selects relays exactly this way (GeoRelayDirectory.closestRelays), so
   // routing our geohash traffic through these relays instead of the default DM
   // pool is what makes the public location channels actually interoperate.
-  private relaysForGeohash(geohash: string): string[] {
+  // Public because the channel info sheet shows the user which relays carry the
+  // cell they are in. Keyed on the geohash rather than the channel name because
+  // every caller already holds one, and the sheet's is available earlier: it
+  // reads a teleported cell straight off the channel name via manualGeohashOf,
+  // which answers before refresh() has populated channelGeohash. Going back
+  // through the channel would make the list depend on a lookup the caller had
+  // no need for.
+  //
+  // Returns GEO_RELAY_COUNT relays plus any custom ones, so up to
+  // GEO_RELAY_COUNT + MAX_CUSTOM_RELAYS. That total is exactly NostrClient's
+  // per-call ceiling, which is what keeps the count shown in the info sheet
+  // equal to the count actually contacted.
+  relaysForGeohash(geohash: string): string[] {
     const nearest = this.relayDirectory.closestRelaysToGeohash(
       geohash,
       decodeGeohash,
@@ -353,20 +365,6 @@ export class GeohashChannelService {
       geoRelayDiscovery,
       GEO_RELAY_COUNT,
     );
-  }
-
-  // The relays carrying a given cell. Chosen from the cell's CENTRE so every
-  // participant converges on the same set. See closestRelaysToGeohash.
-  relaysForChannel(channel: string, count = GEO_RELAY_COUNT): string[] {
-    const geohash = this.channelGeohash.get(channel);
-    if (geohash === undefined) return [];
-    const nearest = this.relayDirectory.closestRelaysToGeohash(
-      geohash,
-      decodeGeohash,
-      count,
-    );
-    const { geoRelayDiscovery, customRelays } = useSettingsStore.getState();
-    return mergeGeoRelays(nearest, customRelays, geoRelayDiscovery, count);
   }
 
   // The geohash this channel currently resolves to, or null when location is

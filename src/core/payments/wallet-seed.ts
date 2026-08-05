@@ -136,9 +136,15 @@ export async function storePhrase(raw: string): Promise<void> {
 //
 // Positions are 1-based, because that is how they are labelled on screen.
 export function pickVerificationPositions(count = 2): number[] {
+  // A byte runs 0..255, which is not a whole number of twelves, so a plain
+  // `% 12` would land on the first four positions slightly more often than on
+  // the rest. Discarding the short tail leaves a range that divides evenly and
+  // keeps every position equally likely.
+  const unbiasedLimit = 256 - (256 % RECOVERY_WORD_COUNT);
   const positions = new Set<number>();
   while (positions.size < Math.min(count, RECOVERY_WORD_COUNT)) {
     const bytes = crypto.getRandomValues(new Uint8Array(1));
+    if (bytes[0] >= unbiasedLimit) continue;
     positions.add((bytes[0] % RECOVERY_WORD_COUNT) + 1);
   }
   return [...positions].sort((a, b) => a - b);

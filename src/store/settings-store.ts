@@ -6,7 +6,7 @@
 import { createMMKV } from "react-native-mmkv";
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
-import { validateRelayUrl } from "../core/nostr/geo-relay";
+import { MAX_CUSTOM_RELAYS, validateRelayUrl } from "../core/nostr/geo-relay";
 import type { BitcoinUnit } from "../core/payments/cashu";
 
 export type ThemePreference = "light" | "dark" | "system";
@@ -79,7 +79,9 @@ interface SettingsState {
   // power-user choice); with neither, location channels have no relays.
   geoRelayDiscovery: boolean;
   // User-added relay URLs (wss://...), always tried for location channels in
-  // addition to discovery, and the sole source when discovery is off.
+  // addition to discovery, and the sole source when discovery is off. Capped at
+  // MAX_CUSTOM_RELAYS: each one is a socket held open on top of the cell's
+  // discovered set, and NostrClient's per-call ceiling is sized to fit both.
   customRelays: string[];
   // Whether balances read in satoshis or in bitcoin. A display choice only:
   // one bitcoin is exactly 100,000,000 satoshis, so this is a rename rather
@@ -201,7 +203,8 @@ export const useSettingsStore = create<SettingsState>()(
         const normalized = validateRelayUrl(url);
         if (normalized === null) return;
         set((s) =>
-          s.customRelays.includes(normalized)
+          s.customRelays.includes(normalized) ||
+          s.customRelays.length >= MAX_CUSTOM_RELAYS
             ? s
             : { customRelays: [...s.customRelays, normalized] },
         );

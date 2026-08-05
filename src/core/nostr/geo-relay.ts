@@ -9,6 +9,19 @@
 
 // ---- Types ------------------------------------------------------------------
 
+// Relays to publish/subscribe per geohash cell. Matches bitchat's
+// TransportConfig.nostrGeoRelayCount so both clients converge on the same set.
+// Canonical here rather than in each service, because NostrClient sizes its
+// per-call relay ceiling from it: if the two drift apart the extra relays get
+// trimmed away again.
+export const GEO_RELAY_COUNT = 5;
+
+// How many relays a user may add by hand. A ceiling rather than a preference:
+// every custom relay is an extra socket held open alongside the cell's
+// auto-discovered set, and NostrClient sizes its per-call relay ceiling around
+// this number so a custom relay is never silently dropped.
+export const MAX_CUSTOM_RELAYS = 5;
+
 export interface RelayEntry {
   url: string; // wss://… or ws://…
   lat: number; // decimal degrees
@@ -68,13 +81,39 @@ export function parseRelaysCsv(csv: string): RelayEntry[] {
 
 // ---- GeoRelayDirectory ------------------------------------------------------
 
-// Fallback relay set used when CSV has no nearby entries or GPS is unavailable.
-const FALLBACK_RELAYS: RelayEntry[] = [
-  { url: "wss://relay.damus.io", lat: 37.7749, lng: -122.4194 },
+// The relays Airhop falls back on when it cannot pick something better.
+//
+// These serve two roles that want the same hosts for the same reason (widely
+// reachable, and reliably carrying NIP-59 gift-wraps): the geo fallback below,
+// and NostrClient's default DM pool. Declared once because they used to be two
+// hand-maintained literals of the same four hosts in two files, with nothing to
+// catch an edit landing on only one of them.
+//
+// Coordinates matter only to the geo role. The DM role reads the URLs.
+//
+// Ordered alphabetically by host, which is also the order the Message relays
+// list shows them in. Deliberately NOT ordered by distance: in the geo role
+// nearestRelays re-sorts by distance from the query point anyway, so the
+// literal's order cannot matter there, and in the DM role every client opens
+// all of these at once no matter where it is, so a distance order would dress a
+// fixed global set up as a ranking it does not have. Alphabetical is stable,
+// obviously not a preference, and keeps additions easy to place.
+const WELL_KNOWN_RELAYS: RelayEntry[] = [
   { url: "wss://nos.lol", lat: 40.7128, lng: -74.006 },
-  { url: "wss://relay.primal.net", lat: 40.7128, lng: -74.006 },
   { url: "wss://offchain.pub", lat: 51.5074, lng: -0.1278 },
+  { url: "wss://relay.damus.io", lat: 37.7749, lng: -122.4194 },
+  { url: "wss://relay.primal.net", lat: 40.7128, lng: -74.006 },
 ];
+
+// Geo role: used when the directory has no nearby entries or GPS is unavailable.
+const FALLBACK_RELAYS: RelayEntry[] = WELL_KNOWN_RELAYS;
+
+// DM role: NostrClient's default pool. Carries gift-wrapped DMs, private
+// channels and wallet lookups, and is deliberately NOT affected by the user's
+// custom relays, which scope to location channels and the mesh bridge.
+export const DEFAULT_DM_RELAYS: readonly string[] = WELL_KNOWN_RELAYS.map(
+  (r) => r.url,
+);
 
 export class GeoRelayDirectory {
   private entries: RelayEntry[] = [];
@@ -131,25 +170,6 @@ export class GeoRelayDirectory {
   ): string[] {
     const center = decodeCenter(geohash);
     return this.nearestRelays(center.lat, center.lng, count);
-  }
-
-  // Return the N nearest relays with their distance in kilometres.
-  // Useful for the in-app relay map that labels each pin with a distance.
-  nearestRelaysWithDistance(
-    lat: number,
-    lng: number,
-    count: number = 5,
-  ): { url: string; km: number }[] {
-    const pool = this.entries.length > 0 ? this.entries : FALLBACK_RELAYS;
-    return pool
-      .map((e) => ({ url: e.url, km: haversineKm(lat, lng, e.lat, e.lng) }))
-      .sort((a, b) => a.km - b.km)
-      .slice(0, count);
-  }
-
-  // Return all relay entries (for diagnostics / UI relay browser).
-  allRelays(): RelayEntry[] {
-    return [...this.entries];
   }
 
   get size(): number {
@@ -249,6 +269,15 @@ export function validateRelayUrl(raw: string): string | null {
   const hostPort =
     port !== undefined && port !== 443 ? `${host}:${port}` : host;
   return `wss://${hostPort}`;
+}
+
+// The host to show a user for a relay URL. Every relay reaching the UI is
+// wss:// (validateRelayUrl normalizes to it, and the directory is wss-only), so
+// the scheme is the same noise on every row. Shared by both screens that list
+// relays so they never diverge on how a relay looks. Display only: the full URL
+// stays the identity everywhere else, including as the key for removal.
+export function relayDisplayHost(url: string): string {
+  return url.replace(/^wss:\/\//, "");
 }
 
 // ---- Helpers ----------------------------------------------------------------

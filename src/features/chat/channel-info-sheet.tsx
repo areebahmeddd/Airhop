@@ -16,6 +16,7 @@ import {
   View,
 } from "react-native";
 import { GROUP_MAX_MEMBERS } from "../../core/mesh/group-protocol";
+import { relayDisplayHost } from "../../core/nostr/geo-relay";
 import { t, useT, useTPlural, type TranslationKey } from "../../i18n";
 import {
   geohashLevelName,
@@ -34,6 +35,7 @@ import {
   placeNameKey,
   usePlaceNamesStore,
 } from "../../store/place-names-store";
+import { useSettingsStore } from "../../store/settings-store";
 import Avatar from "../../ui/components/avatar";
 import BottomSheet from "../../ui/components/bottom-sheet";
 import {
@@ -192,6 +194,32 @@ export default function ChannelInfoSheet({
       usePlaceNamesStore.getState().resolve(channelGeohash);
     }
   }, [channelGeohash]);
+
+  // Which relays carry this cell, and which of them the user added in
+  // Settings. Listed nearest-first, which is how the directory returns them:
+  // unlike the fixed Message relays list, distance is what actually chose these,
+  // so the order carries real information and is left alone.
+  //
+  // Collapsed by default: the count answers "is this reaching the
+  // internet at all", and the list answers "did my own relay get used", which
+  // is the question the Network screen cannot answer on its own because the set
+  // is chosen per cell rather than once.
+  const [relaysExpanded, setRelaysExpanded] = useState(false);
+  const customRelays = useSettingsStore((s) => s.customRelays);
+  const geoRelayDiscovery = useSettingsStore((s) => s.geoRelayDiscovery);
+  const cellRelays = useMemo(
+    () =>
+      channelGeohash === null
+        ? []
+        : (getMeshService()?.getGeohashRelays(channelGeohash) ?? []),
+    // The service reads both relay settings out of the store rather than taking
+    // them as arguments, so they are real inputs here even though this closure
+    // does not name them: without them the list would keep showing the relays
+    // from before the user edited the setting.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [channelGeohash, customRelays, geoRelayDiscovery],
+  );
+  const customRelaySet = useMemo(() => new Set(customRelays), [customRelays]);
 
   // For a location channel, "members" are the people active in its cell over
   // the internet, not the nearby BLE peers. Polled off a Nostr subscription,
@@ -560,6 +588,52 @@ export default function ChannelInfoSheet({
                     />
                   </Pressable>
                 </View>
+                {/* Relays carrying this cell. Same disclosure idiom as Custom
+                    relays in Settings > Network, so the two screens that talk
+                    about relays behave the same way. */}
+                <View style={styles.factDivider} />
+                <Pressable
+                  style={styles.factRow}
+                  onPress={() => setRelaysExpanded((v) => !v)}
+                  accessibilityRole="button"
+                  accessibilityState={{ expanded: relaysExpanded }}
+                  accessibilityLabel={T("chat.info.show_relays")}
+                >
+                  <Feather
+                    name="server"
+                    size={16}
+                    color={Colors.textSecondary}
+                  />
+                  <Text style={styles.factValue}>{T("chat.info.relays")}</Text>
+                  <Text style={styles.factCount}>{cellRelays.length}</Text>
+                  <Feather
+                    name={relaysExpanded ? "chevron-up" : "chevron-down"}
+                    size={15}
+                    color={Colors.textMuted}
+                  />
+                </Pressable>
+                {relaysExpanded && (
+                  <View style={styles.relayList}>
+                    {cellRelays.length === 0 ? (
+                      <Text style={styles.relayEmpty}>
+                        {T("chat.info.relays_none")}
+                      </Text>
+                    ) : (
+                      cellRelays.map((url) => (
+                        <View key={url} style={styles.relayRow}>
+                          <Text style={styles.relayHost} numberOfLines={1}>
+                            {relayDisplayHost(url)}
+                          </Text>
+                          {customRelaySet.has(url) && (
+                            <Text style={styles.relayTag}>
+                              {T("chat.info.relay_custom")}
+                            </Text>
+                          )}
+                        </View>
+                      ))
+                    )}
+                  </View>
+                )}
               </>
             )}
           </View>
@@ -919,6 +993,44 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       color: Colors.textPrimary,
       fontFamily: FontFamily.mono,
       letterSpacing: 1,
+    },
+    // Relay count on the disclosure row, muted so the label leads.
+    factCount: {
+      fontSize: FontSize.base,
+      fontWeight: FontWeight.medium,
+      color: Colors.textMuted,
+    },
+    // Relay hosts sit inside the facts card, indented to start under the row's
+    // label rather than its icon: a fact row is a 16px icon plus a Spacing.md
+    // gap, so the hosts hang off the same left edge as "Relays" above them.
+    relayList: {
+      paddingBottom: Spacing.md,
+      paddingLeft: 16 + Spacing.md,
+      gap: 6,
+    },
+    relayRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: Spacing.sm,
+    },
+    // Mono, matching how the geohash above is treated: both are technical
+    // identifiers the user may want to read character by character.
+    relayHost: {
+      flex: 1,
+      fontSize: FontSize.sm,
+      color: Colors.textSecondary,
+      fontFamily: FontFamily.mono,
+    },
+    // "custom" marker, same weight as the member row's "teleported" tag.
+    relayTag: {
+      fontSize: FontSize.xs,
+      lineHeight: 16,
+      color: Colors.textMuted,
+    },
+    relayEmpty: {
+      fontSize: FontSize.sm,
+      color: Colors.textMuted,
+      lineHeight: 18,
     },
     copyBtn: {
       width: 30,

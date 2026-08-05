@@ -78,7 +78,7 @@ export default function MessageActionSheet({
           <>
             {canShowInfo && <View style={styles.divider} />}
             <ActionRow
-              icon={isGallery ? "download" : "share-2"}
+              icon={isGallery ? "download" : "share"}
               label={
                 isGallery
                   ? T("chat.action.save_photos")

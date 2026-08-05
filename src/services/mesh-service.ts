@@ -2969,6 +2969,13 @@ export class MeshService {
     return this.geoChannels?.geohashFor(channel) ?? null;
   }
 
+  // The relays carrying a cell, for the channel info sheet. Empty when the
+  // Nostr transport is down (internet off), which is the honest answer: nothing
+  // is carrying the cell over the internet at that point.
+  getGeohashRelays(geohash: string): string[] {
+    return this.geoChannels?.relaysForGeohash(geohash) ?? [];
+  }
+
   // ---- Bulletin board -------------------------------------------------------
 
   // Our Ed25519 signing public key: the author key stamped on board posts, so

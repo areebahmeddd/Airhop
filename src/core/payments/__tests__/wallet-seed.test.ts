@@ -177,6 +177,29 @@ describe("verification", () => {
     }
   });
 
+  // A byte is not a whole number of twelves, so folding the leftovers back with
+  // `%` would make positions 1-4 come up more often than 5-12. Bytes 252-255
+  // are exactly those leftovers and every one of them has to be discarded.
+  // Scripting the source keeps this deterministic rather than statistical.
+  it("discards the bytes that would bias the choice", () => {
+    const scripted = [252, 253, 254, 255, 0, 11];
+    let drawn = 0;
+    const source = jest
+      .spyOn(crypto, "getRandomValues")
+      .mockImplementation((array) => {
+        (array as Uint8Array)[0] = scripted[drawn];
+        drawn += 1;
+        return array;
+      });
+    try {
+      // Folding would have read 252 and 253 and answered [1, 2].
+      expect(pickVerificationPositions(2)).toEqual([1, 12]);
+      expect(drawn).toBe(scripted.length);
+    } finally {
+      source.mockRestore();
+    }
+  });
+
   it("accepts the right words", () => {
     // KNOWN: 1=legal 2=winner ... 12=yellow
     expect(verifyPositions(KNOWN, { 1: "legal", 12: "yellow" })).toBe(true);
