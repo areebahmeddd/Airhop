@@ -1,6 +1,7 @@
 // NativeAirhopTor.ts
 //
-// TurboModule spec for the Arti-based Tor native module (iOS only).
+// The native contract for the Arti-based Tor native module (iOS only).
+// Hand-maintained, not Codegen input - see NativeAirhopBLE.ts.
 // Source: ios/Airhop/AirhopTorModule.swift + AirhopTorModule.mm
 // Binary: ios/Frameworks/arti.xcframework (bundled)
 //

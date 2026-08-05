@@ -23,19 +23,19 @@
         "expo-image-picker",
         {
           "photosPermission": "Airhop accesses your photo library to share images and videos over the mesh.",
-          "cameraPermission": "Airhop uses the camera to capture photos and videos to share with nearby peers."
+          "cameraPermission": "Airhop uses the camera to scan a contact's QR code, and to capture photos and videos to share with nearby peers."
         }
       ],
       [
         "expo-camera",
         {
-          "cameraPermission": "Airhop uses the camera to scan a contact's QR code to add them."
+          "cameraPermission": "Airhop uses the camera to scan a contact's QR code, and to capture photos and videos to share with nearby peers."
         }
       ],
       [
         "expo-audio",
         {
-          "microphonePermission": "Airhop uses the microphone to record voice notes for peer-to-peer messaging."
+          "microphonePermission": "Airhop uses the microphone to record voice notes and to carry live voice to nearby peers."
         }
       ],
       [
@@ -60,13 +60,18 @@
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "org.onemindlabs.airhop",
+      "config": {
+        "usesNonExemptEncryption": false
+      },
       "infoPlist": {
         "NSBluetoothAlwaysUsageDescription": "Airhop uses Bluetooth to communicate with nearby devices on the mesh.",
         "NSBluetoothPeripheralUsageDescription": "Airhop uses Bluetooth to advertise your presence to nearby peers.",
         "NSLocalNetworkUsageDescription": "Airhop uses the local network to connect directly to nearby devices for high-bandwidth transfers (video, large files).",
-        "NSCameraUsageDescription": "Airhop uses the camera to capture photos and videos to share with nearby peers.",
-        "NSMicrophoneUsageDescription": "Airhop uses the microphone to record voice notes for peer-to-peer messaging.",
+        "NSLocationWhenInUseUsageDescription": "Airhop uses your approximate location to place you in nearby area channels (block, city, region). Your exact position never leaves your device.",
+        "NSCameraUsageDescription": "Airhop uses the camera to scan a contact's QR code, and to capture photos and videos to share with nearby peers.",
+        "NSMicrophoneUsageDescription": "Airhop uses the microphone to record voice notes and to carry live voice to nearby peers.",
         "NSPhotoLibraryUsageDescription": "Airhop accesses your photo library to share images and videos over the mesh.",
+        "NSPhotoLibraryAddUsageDescription": "Airhop saves photos and videos to your photo library when you choose to save one, and when you download your QR code.",
         "NSBonjourServices": ["_airhop-mesh._tcp"],
         "UIBackgroundModes": ["bluetooth-central", "bluetooth-peripheral"]
       }

@@ -1,4 +1,5 @@
-// Codegen input: TurboModule spec for live push-to-talk audio.
+// The native contract for live push-to-talk audio. Hand-maintained, not Codegen
+// input - see NativeAirhopBLE.ts for why nothing here is generated.
 //
 // This is the one piece of PTT that cannot live in TypeScript. The wire format,
 // the jitter buffer, and the routing are all already in JS (voice-capture.ts,

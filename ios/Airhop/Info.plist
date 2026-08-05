@@ -34,6 +34,30 @@
 	</array>
 	<key>CFBundleVersion</key>
 	<string>$(CURRENT_PROJECT_VERSION)</string>
+	<!-- Export compliance. Apple ships every app from the United States, so US
+	     export rules attach to it whoever wrote it and wherever they live.
+
+	     Read the key name carefully: it asks about NON-EXEMPT encryption, not
+	     about encryption. Airhop plainly uses encryption, but under the EAR that
+	     is only "non-standard cryptography" when the algorithm is proprietary or
+	     unpublished. Every primitive here is a published standard - X25519
+	     (RFC 7748), Ed25519 (RFC 8032), ChaCha20-Poly1305 (RFC 8439), SHA-256,
+	     HKDF (RFC 5869), secp256k1 Schnorr (BIP-340) - composed by published
+	     specifications: the Noise Protocol Framework, Signal's Double Ratchet,
+	     and NIP-44. Nothing is invented here.
+
+	     Publicly available encryption source code performing standard
+	     cryptography is not subject to the EAR, and since a 2021 BIS rule it
+	     carries no notification requirement either; that survives only for
+	     non-standard cryptography. The repository being public under MIT is what
+	     satisfies it, so there is nothing to file and nothing to renew.
+
+	     What this does depend on is the source staying public. If Airhop is ever
+	     closed, forked privately, or ships a binary whose source is not
+	     published, this answer stops being true and has to be revisited. -->
+
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
 	<key>LSMinimumSystemVersion</key>
 	<string>12.0</string>
 	<key>LSRequiresIPhoneOS</key>
@@ -49,15 +73,14 @@
 	<string>Airhop uses Bluetooth to communicate with nearby devices on the mesh.</string>
 	<key>NSBluetoothPeripheralUsageDescription</key>
 	<string>Airhop uses Bluetooth to advertise your presence to nearby peers.</string>
-	<!-- Coarse location resolves which geohash cell the location channels
-	     (#block, #city, #region, etc.) belong to. Raw coordinates never leave
-	     the device; only the truncated geohash is published. -->
-	<!-- Camera, microphone and photo library. These are declared in app.json's
-	     ios.infoPlist and by the expo-camera / expo-audio / expo-image-picker
-	     plugins, but this Info.plist is hand-maintained (see docs/dev/IOS-BUILD.md)
-	     rather than regenerated, so they have to be kept in step here.
-	     Without them iOS does not deny the request - it terminates the process
-	     the moment AVCaptureDevice or AVAudioSession is touched. -->
+	<!-- Camera, microphone, photo library and location. Every usage string below
+	     is also declared in app.json. This file is hand-maintained rather than
+	     regenerated, so adding a permission to app.json alone changes nothing
+	     here: add it in both places.
+
+	     These are not optional. Without them iOS does not deny the request - it
+	     terminates the process the moment AVCaptureDevice or AVAudioSession is
+	     touched. -->
 	<key>NSCameraUsageDescription</key>
 	<string>Airhop uses the camera to scan a contact's QR code, and to capture photos and videos to share with nearby peers.</string>
 	<key>NSMicrophoneUsageDescription</key>
@@ -65,7 +88,10 @@
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>Airhop accesses your photo library to share images and videos over the mesh.</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>
-	<string>Airhop saves photos and videos to your library when you choose to save one, and when you download your QR code.</string>
+	<string>Airhop saves photos and videos to your photo library when you choose to save one, and when you download your QR code.</string>
+	<!-- Location resolves which geohash cell the location channels (#block,
+	     #city, #region, and so on) belong to. Raw coordinates never leave the
+	     device; only the truncated geohash is published. -->
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>Airhop uses your approximate location to place you in nearby area channels (block, city, region). Your exact position never leaves your device.</string>
 	<!-- Required for MultipeerConnectivity on iOS 14+. Without this the system
@@ -94,10 +120,13 @@
 	<false/>
 	<key>UIStatusBarStyle</key>
 	<string>UIStatusBarStyleDefault</string>
+	<!-- Portrait only, matching app.json's orientation and the Android
+	     activity's screenOrientation. Upside-down came from the template; most
+	     iPhones refuse it anyway, so allowing it only meant the two platforms
+	     disagreed on paper. -->
 	<key>UISupportedInterfaceOrientations</key>
 	<array>
 		<string>UIInterfaceOrientationPortrait</string>
-		<string>UIInterfaceOrientationPortraitUpsideDown</string>
 	</array>
 	<key>UIUserInterfaceStyle</key>
 	<string>Automatic</string>

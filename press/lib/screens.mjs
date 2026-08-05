@@ -293,7 +293,7 @@ function chatsScreen(platform) {
   </div>`;
 
   const body = `<div class="list">
-    <div class="search">${icon("search", 16, "var(--textMuted)")}<span>Search chats</span></div>
+    <div class="search">${icon("search", 16, "var(--textMuted)")}<span>Search chats…</span></div>
     <div class="sec-head"><span>Default channels</span></div>
     ${channelRow({
       name: "bluetooth",

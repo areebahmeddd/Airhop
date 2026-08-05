@@ -1,5 +1,14 @@
-// Codegen input: this file is the TurboModule spec that feeds React Native's
-// code generation pipeline to auto-produce the native bridge headers.
+// The native contract for the BLE mesh radios. Hand-maintained, NOT Codegen
+// input: there is no `codegenConfig` in package.json, so nothing is generated
+// from this file. Both native modules are legacy bridge modules
+// (RCT_EXTERN_REMAP_MODULE on iOS, ReactContextBaseJavaModule on Android),
+// resolved through the New Architecture's interop layer - which is what
+// TurboModuleRegistry hands back below.
+//
+// The spec shape is kept deliberately: it is what a Codegen migration would
+// start from, and it is what keeps the two platforms honest about exposing the
+// same surface.
+//
 // Do not add protocol logic here - only the raw I/O contract with native.
 import type { TurboModule } from "react-native";
 import { TurboModuleRegistry } from "react-native";

@@ -64,7 +64,7 @@ export const strings = {
   // screen reader; the pill has the Channels pill beside it for context.
   "chat.subtab.direct": "Direct",
   "chat.subtab.dms": "Direct messages",
-  "chat.search.placeholder": "Search chats",
+  "chat.search.placeholder": "Search chats…",
   // The placeholder disappears the moment there is a query, so the field needs
   // a label of its own for a screen reader landing on a half-typed search.
   "chat.search.a11y": "Search chats and messages",

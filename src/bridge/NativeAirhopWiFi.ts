@@ -1,4 +1,5 @@
-// Codegen input: TurboModule spec for the high-bandwidth WiFi transport.
+// The native contract for the high-bandwidth WiFi transport. Hand-maintained,
+// not Codegen input - see NativeAirhopBLE.ts for why nothing here is generated.
 //
 // On Android: backed by AirhopWiFiModule.kt (WiFi Aware / NAN, API 26+).
 // On iOS:     backed by AirhopMCModule.swift (MultipeerConnectivity).

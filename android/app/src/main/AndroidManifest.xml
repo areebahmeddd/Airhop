@@ -28,9 +28,34 @@
   <uses-permission android:name="android.permission.READ_MEDIA_VIDEO"/>
   <uses-permission android:name="android.permission.READ_MEDIA_VISUAL_USER_SELECTED"/>
   <uses-permission android:name="android.permission.RECORD_AUDIO"/>
-  <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW"/>
   <uses-permission android:name="android.permission.VIBRATE"/>
   <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="32" tools:replace="android:maxSdkVersion"/>
+  <!-- Hardware Airhop needs, stated explicitly.
+
+       Google Play hides an app from devices that lack a feature declared
+       required="true", and it INFERS required features from permissions unless
+       we say otherwise. Left alone, that inference is backwards for this app:
+       CAMERA implies a rear autofocus camera and RECORD_AUDIO implies a
+       microphone, so Play was filtering out hardware the mesh runs fine on,
+       while nothing implied Bluetooth LE - the one thing Airhop cannot work
+       without. Every line below either corrects that or makes an existing
+       implication explicit. bitchat/android declares the same set.
+
+       Bluetooth LE is the mesh. Without it the app has no offline transport at
+       all, so an install on such a device is a broken install. BLUETOOTH and
+       BLUETOOTH_ADMIN above already imply android.hardware.bluetooth; it is
+       repeated here so the requirement is readable rather than inferred. -->
+  <uses-feature android:name="android.hardware.bluetooth" android:required="true"/>
+  <uses-feature android:name="android.hardware.bluetooth_le" android:required="true"/>
+  <!-- The camera scans contact QR codes and captures attachments. Both are
+       optional paths: a contact can be added from a link or by hand, and
+       attachments can be picked from the library. Autofocus is implied by the
+       CAMERA permission and is not needed at all, so both are released. -->
+  <uses-feature android:name="android.hardware.camera" android:required="false"/>
+  <uses-feature android:name="android.hardware.camera.autofocus" android:required="false"/>
+  <!-- The microphone records voice notes and push-to-talk. Messaging works
+       without either, so a device with no microphone should still install. -->
+  <uses-feature android:name="android.hardware.microphone" android:required="false"/>
   <!-- WiFi Aware powers the optional same-platform (Android-to-Android) fast
        path. required="false" so phones without WiFi Aware hardware, and iPhones,
        still install and run on the BLE mesh. -->
