@@ -40,6 +40,29 @@ function makeIdentity(): Identity {
 //   prekeys 1<<0 | groups 1<<3 | vouch 1<<5 = 0x01 | 0x08 | 0x20 = 0x29
 const BITCHAT_LOCAL_SUPPORTED = 0x29;
 
+// Walk the announce payload and return the value of one TLV, or null if that
+// type is absent.
+//
+// Asking the structure rather than searching the hex dump. `makeIdentity`
+// generates fresh random keys on every run, so a payload carries 64 bytes of
+// noise that any short hex needle will eventually appear inside. A "0501" found
+// two thirds of the way through a public key says nothing about whether a
+// capabilities TLV was written, and a test that reads it that way fails roughly
+// once in every few hundred CI runs for no reason.
+function readTlv(payload: Uint8Array, wantType: number): Uint8Array | null {
+  let off = 0;
+  while (off + 2 <= payload.length) {
+    const type = payload[off];
+    const len = payload[off + 1];
+    if (off + 2 + len > payload.length) return null;
+    if (type === wantType) return payload.slice(off + 2, off + 2 + len);
+    off += 2 + len;
+  }
+  return null;
+}
+
+const TLV_CAPABILITIES = 0x05;
+
 describe("isAnnounceFresh", () => {
   // Well past the guard window so the real comparison is what is being tested.
   const NOW = 10 * ANNOUNCE_MAX_SKEW_MS;
@@ -129,8 +152,11 @@ describe("ANNOUNCE capabilities TLV", () => {
       undefined,
       Capability.gateway,
     );
-    const hex = bytesToHex(payload);
-    expect(hex).toContain("050104");
+    // Type 0x05, length 1, value 0x04, read as a TLV rather than matched as
+    // text, so a chance collision inside a key cannot answer for it.
+    expect(readTlv(payload, TLV_CAPABILITIES)).toEqual(
+      new Uint8Array([Capability.gateway]),
+    );
   });
 
   test("gateway-off announce omits the capabilities TLV", () => {
@@ -138,8 +164,9 @@ describe("ANNOUNCE capabilities TLV", () => {
     const withCap = encodeAnnouncePayload(id, "alice", [], undefined, 0);
     const decoded = decodeAnnouncePayload(withCap, new Uint8Array(8));
     expect(decoded?.capabilities).toBe(0);
-    // No 05-01 TLV header present at all (old-client shape).
-    expect(bytesToHex(withCap)).not.toContain("0501");
+    // Absent entirely, not merely decoding to zero: a peer with no bits has to
+    // look like an old client on the wire (old-client shape).
+    expect(readTlv(withCap, TLV_CAPABILITIES)).toBeNull();
   });
 
   test("round-trips the gateway capability through decode", () => {
