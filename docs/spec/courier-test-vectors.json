@@ -1,0 +1,102 @@
+{
+  "_comment": [
+    "Golden vectors for the store-and-forward (courier) wire format.",
+    "",
+    "Byte-compatible with bitchat-iOS CourierEnvelope. Published so a second",
+    "implementation can be written without reading the TypeScript, and asserted",
+    "by src/core/mesh/__tests__/courier-vectors.test.ts against the running code,",
+    "so this file cannot go stale while the suite is green.",
+    "",
+    "The format earns vectors because three ways of getting it wrong fail",
+    "SILENTLY: the envelope is accepted, carried, then dropped at deposit with",
+    "nothing logged at either end.",
+    "",
+    "  1. expiry is MILLISECONDS. Seconds is ~1000x too small, so every envelope",
+    "     reads as long expired.",
+    "  2. the copies TLV is OMITTED at 1, not written as 1. A decoder that",
+    "     requires it rejects every carry-only envelope.",
+    "  3. the recipient tag is keyed on the recipient's PUBLIC Noise key and",
+    "     rotates daily. Wrong epoch-day arithmetic produces a tag no carrier",
+    "     matches, so mail is never delivered.",
+    "",
+    "Upstream is drafting an equivalent in permissionlesstech/bitchat#1472. Diff",
+    "the two when it lands rather than merging: agreement is the interop",
+    "property, and a difference is a finding."
+  ],
+
+  "recipientTag": {
+    "_comment": [
+      "HMAC-SHA256(key = recipient's 32-byte public Noise static key,",
+      "msg = 'bitchat-courier-tag-v1' || epochDay as u32 BE)[0:16].",
+      "epochDay = floor(unixMillis / 86400000).",
+      "",
+      "NOT unlinkable, inherited rather than chosen. The HMAC key is the",
+      "recipient's PUBLIC key, which every announce broadcasts, so anyone who has",
+      "heard one announce can compute that peer's tags for any day and follow",
+      "their mail. bitchat documents the same flaw. Changing it unilaterally",
+      "breaks courier interop for no gain: every carrier on both sides would have",
+      "to change together."
+    ],
+    "label": "bitchat-courier-tag-v1",
+    "recipientNoisePublicKeyHex": "1111111111111111111111111111111111111111111111111111111111111111",
+    "cases": [
+      {
+        "nowMillis": 0,
+        "epochDay": 0,
+        "tagHex": "ecf22c7df02c77ef5f35dd44847d8029"
+      },
+      {
+        "_comment": "20000 days after the epoch, i.e. 2024-10-04.",
+        "nowMillis": 1728000000000,
+        "epochDay": 20000,
+        "tagHex": "173d54ec4ce3de7b45d355eea6500dde"
+      }
+    ]
+  },
+
+  "envelopeTLV": {
+    "_comment": [
+      "Type-length-value, u16 big-endian lengths, in this exact order:",
+      "  0x01 recipientTag  16 bytes",
+      "  0x02 expiry         8 bytes, u64 BE, UNIX MILLISECONDS",
+      "  0x03 ciphertext     variable, the Noise X output",
+      "  0x04 copies         1 byte, OMITTED entirely when copies == 1",
+      "  0x05 prekeyID       optional; present only on forward-secret v2",
+      "                      envelopes, where the ciphertext is sealed to a",
+      "                      one-time prekey rather than the static key. A v1",
+      "                      decoder skips it as an unknown type and still",
+      "                      carries the envelope opaquely."
+    ],
+    "recipientTagHex": "173d54ec4ce3de7b45d355eea6500dde",
+    "expiryMillis": 1800000000000,
+    "ciphertextHex": "aabbccdd",
+    "cases": [
+      {
+        "_comment": "Sprayable: copies > 1, so the 0x04 TLV is present.",
+        "copies": 4,
+        "encodedHex": "010010173d54ec4ce3de7b45d355eea6500dde020008000001a3185c5000030004aabbccdd04000104"
+      },
+      {
+        "_comment": [
+          "Carry-only: copies == 1, so the 0x04 TLV is absent rather than",
+          "written as 1. This is the case a fresh implementation gets wrong, and",
+          "the resulting rejection is invisible on both sides."
+        ],
+        "copies": 1,
+        "encodedHex": "010010173d54ec4ce3de7b45d355eea6500dde020008000001a3185c5000030004aabbccdd"
+      }
+    ]
+  },
+
+  "limits": {
+    "_comment": [
+      "A carrier judges an envelope by its own limits, not the sender's. An",
+      "expiry beyond ttl + slack is refused outright rather than clamped, so a",
+      "sender that stamps longer does not get longer carriage, it gets none."
+    ],
+    "envelopeTtlMillis": 86400000,
+    "expirySlackMillis": 3600000,
+    "maxEnvelopeBytes": 16384,
+    "initialCopies": 4
+  }
+}

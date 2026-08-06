@@ -38,7 +38,12 @@ import {
   signPacket,
   type Packet,
 } from "../../../core/mesh/packet-codec";
-import { encodeChannelMsgPayload } from "../../../core/router/message-router";
+import {
+  channelPacketType,
+  encodeAirhopChannelPayload,
+  encodeMeshPublicPayload,
+  MESH_PUBLIC_CHANNEL,
+} from "../../../core/router/message-router";
 import { SimDevice } from "./harness/device";
 import { noCrashes, noForgedSenders } from "./harness/invariants";
 import { RadioFabric } from "./harness/radio-fabric";
@@ -103,18 +108,23 @@ function forgePublicMessage(opts: {
   signWith?: Uint8Array;
 }): string {
   const packet: Packet = {
-    type: PacketType.CHANNEL_MSG,
+    // The mesh room and a named channel travel under different types, so a
+    // forgery aimed at either has to use the right one to be worth testing.
+    type: channelPacketType(opts.channel),
     ttl: 7,
     flags: opts.signWith !== undefined ? Flags.SIGNED : 0,
     senderID: peerIdToBytes(opts.claimedPeerID),
     recipientID: new Uint8Array(8),
     timestamp: opts.timestamp,
     signature: new Uint8Array(64),
-    payload: encodeChannelMsgPayload(
-      opts.channel,
-      opts.text,
-      `forged-${String(opts.timestamp)}`,
-    ),
+    payload:
+      opts.channel === MESH_PUBLIC_CHANNEL
+        ? encodeMeshPublicPayload(opts.text)
+        : encodeAirhopChannelPayload(
+            opts.channel,
+            opts.text,
+            `forged-${String(opts.timestamp)}`,
+          ),
   };
   if (opts.signWith !== undefined) {
     packet.signature = signPacket(packet, opts.signWith);

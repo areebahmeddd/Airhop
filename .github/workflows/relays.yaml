@@ -2,7 +2,7 @@ name: Sync Relay Directory
 
 on:
   schedule:
-    # Updated when bitchat merges its weekly relay review.
+    # Daily at 07:00 UTC
     - cron: "0 7 * * *"
   workflow_dispatch:
 
@@ -14,11 +14,12 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  # bitchat's reviewed relay list (instead of georelays directly): georelays' daily output
-  # swings ~6% on probe timeouts, while sharing this file keeps relay picks interoperable per geohash cell.
-  SOURCE_REPOSITORY: https://github.com/permissionlesstech/bitchat.git
-  SOURCE_PATH: relays/online_relays_gps.csv
-  STALE_AFTER_DAYS: 30
+  # georelays is the upstream probe feed we read directly.
+  # Rows are canonicalized to match scripts/relay-url.js for interoperability.
+  SOURCE_REPOSITORY: https://github.com/permissionlesstech/georelays.git
+  SOURCE_OWNER_REPO: permissionlesstech/georelays
+  SOURCE_PATH: nostr_relays.csv
+  STALE_AFTER_DAYS: 7
 
 jobs:
   sync:
@@ -51,7 +52,7 @@ jobs:
             exit 1
           fi
 
-          source_url="https://raw.githubusercontent.com/permissionlesstech/bitchat/$source_commit/$SOURCE_PATH"
+          source_url="https://raw.githubusercontent.com/$SOURCE_OWNER_REPO/$source_commit/$SOURCE_PATH"
           effective_url=$(curl --fail --show-error --silent --location \
             --proto "=https" --proto-redir "=https" --tlsv1.2 \
             --max-time 60 --retry 3 --retry-all-errors \
@@ -71,11 +72,11 @@ jobs:
         run: |
           node scripts/validate-relays.js \
             --input "$RUNNER_TEMP/relays-candidate.csv" \
-            --baseline assets/data/relays.csv \
+            --baseline assets/data/nostr_relays.csv \
             --github-output "$GITHUB_OUTPUT"
 
       - name: Adopt candidate
-        run: cp "$RUNNER_TEMP/relays-candidate.csv" assets/data/relays.csv
+        run: cp "$RUNNER_TEMP/relays-candidate.csv" assets/data/nostr_relays.csv
 
       - name: Regenerate relay modules
         run: node scripts/generate-relays.js
@@ -84,7 +85,7 @@ jobs:
         id: changes
         run: |
           set -euo pipefail
-          git add assets/data/relays.csv src/data/relays.ts landing/src/data/relays.ts
+          git add assets/data/nostr_relays.csv src/data/relays.ts landing/src/data/relays.ts
           if git diff --cached --quiet; then
             echo "changed=false" >> "$GITHUB_OUTPUT"
             echo "Relay directory already up to date." >> "$GITHUB_STEP_SUMMARY"
@@ -109,6 +110,7 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git commit -m "chore(relays): sync relay directory from upstream" \
+            -m "Upstream: $SOURCE_OWNER_REPO/$SOURCE_PATH" \
             -m "Upstream-commit: $SOURCE_COMMIT" \
             -m "Relays: $UNIQUE_RELAYS (+$ADDED / -$REMOVED)" \
             -m "SHA-256: $DATA_SHA256"
@@ -126,7 +128,7 @@ jobs:
         run: |
           set -euo pipefail
 
-          last=$(gh api "repos/${GITHUB_REPOSITORY}/commits?path=assets/data/relays.csv&per_page=1" \
+          last=$(gh api "repos/${GITHUB_REPOSITORY}/commits?path=assets/data/nostr_relays.csv&per_page=1" \
             --jq '.[0].commit.committer.date // empty')
           if [[ -z "$last" ]]; then
             echo "No commit history for the relay directory yet."
@@ -137,5 +139,5 @@ jobs:
           echo "Relay directory last changed $age_days day(s) ago ($last)."
 
           if (( age_days > STALE_AFTER_DAYS )); then
-            echo "::warning::Relay directory unchanged for $age_days days. Check for an unmerged automation PR: https://github.com/permissionlesstech/bitchat/pulls"
+            echo "::warning::Relay directory has not changed for $age_days days. Check https://github.com/$SOURCE_OWNER_REPO/commits/main/$SOURCE_PATH"
           fi

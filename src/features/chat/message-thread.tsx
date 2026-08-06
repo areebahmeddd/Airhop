@@ -5,7 +5,6 @@ import { Feather, MaterialCommunityIcons } from "@expo/vector-icons";
 import {
   AudioModule,
   RecordingPresets,
-  setAudioModeAsync,
   useAudioPlayer,
   useAudioPlayerStatus,
   useAudioRecorder,
@@ -56,6 +55,7 @@ import {
   wireMediaName,
 } from "../../core/mesh/bitchat-file-packet";
 import { nicknameKey, normalizeNickname } from "../../core/mesh/nickname";
+import { PRIVATE_MESSAGE_MAX_CONTENT_BYTES } from "../../core/mesh/noise-payload";
 import { MAX_BURST_MS } from "../../core/mesh/voice-capture";
 import {
   findTokensInText,
@@ -64,6 +64,10 @@ import {
 } from "../../core/payments/cashu";
 import { t, useT, useTPlural, type TranslationKey } from "../../i18n";
 import { chevronBack, textAlignEnd } from "../../i18n/layout";
+import {
+  setAudioForPlayback,
+  setAudioForRecording,
+} from "../../services/audio-session";
 import { reportWalletError } from "../../services/ecash-transfer";
 import {
   AttachmentTooLargeError,
@@ -81,6 +85,7 @@ import { getMeshService } from "../../services/mesh-service";
 import { hostOf, receiveToken } from "../../services/wallet-service";
 import { useActivityStore } from "../../store/activity-store";
 import { showAlert } from "../../store/alert-store";
+import { useChannelMembersStore } from "../../store/channel-members-store";
 import {
   useChatStore,
   type ChatAttachment,
@@ -103,6 +108,7 @@ import {
 import { useWalletStore } from "../../store/wallet-store";
 import Avatar from "../../ui/components/avatar";
 import BottomSheet from "../../ui/components/bottom-sheet";
+import PrivacyCover from "../../ui/components/privacy-cover";
 import Toast from "../../ui/components/toast";
 import {
   FontFamily,
@@ -130,6 +136,7 @@ import {
   BRIDGE_CHANNEL,
   canSendMedia,
   mediaBlockedReason,
+  notifiesOnScreenshot,
 } from "../../utils/media-policy";
 import { activeMentionQuery, applyMention } from "../../utils/mentions";
 import { ensurePermission } from "../../utils/permissions";
@@ -142,6 +149,7 @@ import {
   NOSTR_ID_PREFIX,
   peerIDToUsername,
 } from "../../utils/username";
+import { truncateToUtf8Bytes, utf8ByteLength } from "../../utils/utf8-budget";
 import SendEcashSheet from "../wallet/send-ecash-sheet";
 import ChannelInfoSheet from "./channel-info-sheet";
 import ContactInfoSheet from "./contact-info-sheet";
@@ -360,6 +368,16 @@ function activeSlashQuery(draft: string): string | null {
 // the render, so the playhead maths below has one length to divide by.
 const VOICE_WAVE_BARS = [6, 12, 8, 16, 10, 14, 8, 6, 12, 10, 8, 14];
 
+// What to call the attachment inside a resend request. Its own map rather than
+// the transfer labels, which are capitalised for a progress card; this is a
+// word mid-sentence.
+const RESEND_KIND_KEY: Record<ChatAttachment["type"], TranslationKey> = {
+  image: "chat.media.kind_photo",
+  video: "chat.media.kind_video",
+  voice: "chat.media.kind_voice",
+  document: "chat.media.kind_file",
+};
+
 interface VoiceNoteBubbleProps {
   uri: string;
   durationMs: number;
@@ -367,18 +385,30 @@ interface VoiceNoteBubbleProps {
   isMine: boolean;
   onToggle: () => void;
   onFinished: () => void;
+  onAskResend?: () => void;
 }
 
 // Inline video player for a received (or sent) video attachment.
 //
 // This replaced a static film-icon placeholder: the bytes arrived and
 // reassembled correctly, but there was no way to actually watch the video.
-function VideoAttachment({ uri }: { uri: string }): React.JSX.Element {
+function VideoAttachment({
+  uri,
+  onAskResend,
+}: {
+  uri: string;
+  onAskResend?: () => void;
+}): React.JSX.Element {
+  const present = useAttachmentPresent(uri);
   const player = useVideoPlayer(uri, (p) => {
     // Don't autoplay: a thread can hold several videos and they would all
     // start at once when the list renders.
     p.loop = false;
   });
+
+  if (!present) {
+    return <AttachmentUnavailable kind="video" onAskResend={onAskResend} />;
+  }
 
   return (
     <VideoView
@@ -743,6 +773,186 @@ function createTransferStyles(Colors: ReturnType<typeof useThemeColors>) {
   });
 }
 
+// Whether an attachment's bytes are still on this device.
+//
+// They go for two ordinary reasons: the seven-day retention sweep, or the user
+// clearing the cache. The message row survives either way, and nothing on the
+// wire brings the file back, since neither Airhop nor bitchat has a resend
+// request. So the bubble says so and offers to ask the sender in words.
+//
+// Answered during render rather than in an effect: `exists` is a synchronous
+// stat, and an effect would render one frame of a working bubble first. Only
+// the bubbles on screen are mounted, and the answer is memoised per file.
+function useAttachmentPresent(uri: string): boolean {
+  return useMemo(() => {
+    try {
+      return new FileSystem.File(uri).exists;
+    } catch {
+      // An unreadable path is a missing file to anyone looking at it.
+      return false;
+    }
+  }, [uri]);
+}
+
+// The one way the app says a file is no longer here. Shared by every kind, so a
+// lost photo, voice note, video and document all read the same.
+function AttachmentUnavailable({
+  kind,
+  onAskResend,
+}: {
+  kind: ChatAttachment["type"];
+  onAskResend?: () => void;
+}): React.JSX.Element {
+  const T = useT();
+  const Colors = useThemeColors();
+  const styles = useMemo(() => createStyles(Colors), [Colors]);
+  const label =
+    kind === "image"
+      ? T("chat.media.gone_photo")
+      : kind === "video"
+        ? T("chat.media.gone_video")
+        : kind === "voice"
+          ? T("chat.media.gone_voice")
+          : T("chat.media.gone_file");
+  return (
+    <View style={styles.attachGone}>
+      <Feather name="clock" size={18} color={Colors.textMuted} />
+      <View style={styles.attachGoneBody}>
+        <Text style={styles.attachGoneTitle}>{label}</Text>
+        <Text style={styles.attachGoneNote}>{T("chat.media.gone_note")}</Text>
+      </View>
+      {onAskResend && (
+        <Pressable
+          style={styles.attachGoneAction}
+          onPress={onAskResend}
+          hitSlop={HIT_SLOP}
+          accessibilityRole="button"
+          accessibilityLabel={T("chat.media.ask_resend")}
+        >
+          <Text style={styles.attachGoneActionText}>
+            {T("chat.media.ask_resend")}
+          </Text>
+        </Pressable>
+      )}
+    </View>
+  );
+}
+
+// A document row. Tapping opens the OS share/open sheet. The presence check is
+// what keeps a missing file from opening an OS error sheet naming a path.
+function DocumentAttachment({
+  attachment,
+  isMine,
+  onOpen,
+  onAskResend,
+}: {
+  attachment: ChatAttachment;
+  isMine: boolean;
+  onOpen: () => void;
+  onAskResend?: () => void;
+}): React.JSX.Element {
+  const Colors = useThemeColors();
+  const styles = useMemo(() => createStyles(Colors), [Colors]);
+  const present = useAttachmentPresent(attachment.uri);
+  const subtitle = docSubtitle(attachment);
+
+  if (!present) {
+    return <AttachmentUnavailable kind="document" onAskResend={onAskResend} />;
+  }
+
+  return (
+    <Pressable
+      style={styles.attachDoc}
+      onPress={onOpen}
+      accessibilityRole="button"
+      accessibilityLabel={t("chat.media.open_document", {
+        name: attachment.name ?? t("chat.media.document"),
+      })}
+    >
+      <View style={styles.attachDocIcon}>
+        <Feather name="file-text" size={20} color={Colors.textSecondary} />
+      </View>
+      <View style={styles.attachDocInfo}>
+        <Text
+          style={[
+            styles.attachDocName,
+            isMine ? styles.textOnMyBubble : styles.textOnTheirBubble,
+          ]}
+          numberOfLines={2}
+        >
+          {attachment.name ?? t("chat.attach.document")}
+        </Text>
+        {subtitle !== null && (
+          <Text
+            style={[
+              styles.attachDocMeta,
+              isMine ? styles.textOnMyBubble : styles.textOnTheirBubble,
+            ]}
+            numberOfLines={1}
+          >
+            {subtitle}
+          </Text>
+        )}
+      </View>
+      <Feather name="external-link" size={14} color={Colors.textMuted} />
+    </Pressable>
+  );
+}
+
+// The collapsed state of a received photo or video, before it is tapped open.
+// Checks the file is still there rather than waiting to be tapped: "tap to
+// load" on something that cannot load reads as a failed download.
+function CollapsedMediaPlaceholder({
+  uri,
+  kind,
+  onReveal,
+  onAskResend,
+}: {
+  uri: string;
+  kind: "image" | "video";
+  onReveal: () => void;
+  onAskResend?: () => void;
+}): React.JSX.Element {
+  const T = useT();
+  const Colors = useThemeColors();
+  const styles = useMemo(() => createStyles(Colors), [Colors]);
+  const present = useAttachmentPresent(uri);
+
+  if (!present) {
+    return <AttachmentUnavailable kind={kind} onAskResend={onAskResend} />;
+  }
+  if (kind === "video") {
+    return (
+      <Pressable
+        style={styles.attachVideoPoster}
+        onPress={onReveal}
+        accessibilityRole="button"
+        accessibilityLabel={T("chat.media.tap_load_video")}
+      >
+        <View style={styles.attachVideoPlayBadge}>
+          <Feather name="play" size={20} color={Colors.textPrimary} />
+        </View>
+        <Text style={styles.attachImagePlaceholderText}>
+          {T("chat.media.tap_load_video")}
+        </Text>
+      </Pressable>
+    );
+  }
+  return (
+    <Pressable
+      style={styles.attachImagePlaceholder}
+      onPress={onReveal}
+      accessibilityRole="button"
+      accessibilityLabel={T("chat.media.tap_load_photo")}
+    >
+      <Feather name="image" size={28} color={Colors.textMuted} />
+      <Text style={styles.attachImagePlaceholderText}>
+        {T("chat.media.tap_load_photo")}
+      </Text>
+    </Pressable>
+  );
+}
+
 // A photo in a bubble, sized to its own shape.
 //
 // The dimensions are read off the file rather than carried in the attachment:
@@ -751,9 +961,11 @@ function createTransferStyles(Colors: ReturnType<typeof useThemeColors>) {
 function ImageAttachment({
   uri,
   onPress,
+  onAskResend,
 }: {
   uri: string;
   onPress: () => void;
+  onAskResend?: () => void;
 }): React.JSX.Element {
   const T = useT();
   const Colors = useThemeColors();
@@ -787,14 +999,7 @@ function ImageAttachment({
   }, [uri]);
 
   if (gone) {
-    return (
-      <View style={styles.attachImagePlaceholder}>
-        <Feather name="clock" size={20} color={Colors.textMuted} />
-        <Text style={styles.attachImagePlaceholderText}>
-          {T("chat.media.expired")}
-        </Text>
-      </View>
-    );
+    return <AttachmentUnavailable kind="image" onAskResend={onAskResend} />;
   }
 
   return (
@@ -819,21 +1024,24 @@ function VoiceNoteBubble({
   isMine,
   onToggle,
   onFinished,
+  onAskResend,
 }: VoiceNoteBubbleProps): React.JSX.Element {
   const T = useT();
   const Colors = useThemeColors();
   const styles = useMemo(() => createStyles(Colors), [Colors]);
+  const present = useAttachmentPresent(uri);
   const player = useAudioPlayer(uri);
   const status = useAudioPlayerStatus(player);
 
   useEffect(() => {
-    if (isPlaying) {
+    // A file that is gone cannot play; asking anyway just toggles the button.
+    if (isPlaying && present) {
       player.play();
       return;
     }
 
     player.pause();
-  }, [isPlaying, player]);
+  }, [isPlaying, present, player]);
 
   useEffect(() => {
     if (status.didJustFinish && isPlaying) {
@@ -884,6 +1092,10 @@ function VoiceNoteBubble({
   // message text next to them does.
   const barColor = isMine ? styles.barOnMyBubble : styles.barOnTheirBubble;
   const textColor = isMine ? styles.textOnMyBubble : styles.textOnTheirBubble;
+
+  if (!present) {
+    return <AttachmentUnavailable kind="voice" onAskResend={onAskResend} />;
+  }
 
   return (
     <View style={styles.attachVoice}>
@@ -1034,16 +1246,24 @@ export default function MessageThread({
     return () => clearInterval(timer);
   }, [isGeo, channel]);
 
-  // Member count and roster resolve by transport: a geohash channel counts
-  // people active in its cell over the internet; every other channel counts
-  // nearby BLE peers.
+  // Membership means something different per room: a geohash channel counts
+  // people active in its cell, a private channel counts proven key-holders, and
+  // `#bluetooth` counts nearby peers, since radio range is what that room is.
+  // Must stay in step with the roster in channel-info-sheet.
+  const privateMemberCount = useChannelMembersStore(
+    (s) => (s.byChannel[channel] ?? []).length,
+  );
+  // Every kind counts yourself, so the subtitle, the chat-list row and the
+  // member sheet report the same number. A group's roster already lists you; the
+  // others are others-only lists, so they add one, matching the "You" row the
+  // sheet renders.
   const memberCount = isGroup
     ? (getMeshService()?.groupMemberCount(channel.slice("group:".length)) ?? 0)
     : isGeo
-      ? // Count yourself: you are an active participant in the cell too, and the
-        // member list shows a "You" row, so the pill/subtitle must match it.
-        geoMembers.length + 1
-      : peerCount;
+      ? geoMembers.length + 1
+      : isPrivate
+        ? privateMemberCount + 1
+        : peerCount + 1;
 
   // Reverse-geocoded name for a location channel's cell, shown in the header
   // subtitle as "~Kumaraswamy Layout". Present once the cell has a geohash
@@ -1109,7 +1329,9 @@ export default function MessageThread({
     channelSubtitleParts.push(`~${geoPlaceName}`);
   }
   if (memberCount > 0) {
-    channelSubtitleParts.push(`${memberCount} ${isGeo ? "active" : "nearby"}`);
+    channelSubtitleParts.push(
+      TP(isGeo ? "chat.presence.active" : "chat.presence.nearby", memberCount),
+    );
   }
   // On the public mesh channel, show that it is bridged (and how many are
   // reachable across the bridge) so people in the thread know their messages
@@ -1149,6 +1371,9 @@ export default function MessageThread({
     (dmPeerID.startsWith("nostr_") ||
       (dmContactNostr !== undefined && dmContactNostr.length > 0));
   const [draft, setDraft] = useState("");
+  // Focused when something else drafts into the composer, so the text is not
+  // left behind a closed keyboard.
+  const composerRef = useRef<TextInput>(null);
 
   // @-mention suggestions. Who can be tagged depends on the thread: a group's
   // roster, a location cell's active participants, or a channel's nearby peers.
@@ -1212,9 +1437,13 @@ export default function MessageThread({
   // Whether this hold is streaming live or recording a note to send on
   // release. Decided per press, not per app: see handleTalkStart.
   const [isTalkingLive, setIsTalkingLive] = useState(false);
-  // Display name of whoever is talking right now, or null. Drives the floor
-  // courtesy hint on the mic button.
-  const [liveTalker, setLiveTalker] = useState<string | null>(null);
+  // Display names of whoever is talking right now, newest floor first. Drives
+  // the receiving pill and the ring on the mic button.
+  const [liveTalkers, setLiveTalkers] = useState<string[]>([]);
+  const liveTalker = liveTalkers[0] ?? null;
+  // Whether anyone held the floor at the last report, so the view follows the
+  // start of a burst rather than every packet in it.
+  const liveTalkingRef = useRef(false);
   // Which press of the mic button we are on, and whether that press went live.
   // Refs rather than state because the gesture handlers are async and read
   // these after awaits, where a render-old closure would lie to them.
@@ -1242,6 +1471,7 @@ export default function MessageThread({
   const autoDownloadMedia = useSettingsStore((s) => s.autoDownloadMedia);
   const bridgeEnabled = useSettingsStore((s) => s.bridgeEnabled);
   const undoSendSeconds = useSettingsStore((s) => s.undoSendSeconds);
+  const keyboardLearning = useSettingsStore((s) => s.keyboardLearning);
   const [showAttachMenu, setShowAttachMenu] = useState(false);
   const [showSendEcash, setShowSendEcash] = useState(false);
   // Raw string of the token currently being claimed, so its button can show
@@ -1347,6 +1577,14 @@ export default function MessageThread({
     [msgs, pickedIds],
   );
   const selecting = selectedIds.size > 0;
+  // One attachment anywhere in the selection blocks every room that refuses
+  // media. Blocking the whole target rather than dropping the odd message is
+  // the point: a partial forward is worse than none, because the recipient gets
+  // a conversation with a hole in it and nobody is told.
+  const selectedCarriesMedia = useMemo(
+    () => msgs.some((m) => selectedIds.has(m.id) && m.attachment !== undefined),
+    [msgs, selectedIds],
+  );
 
   // Read receipts for this DM. Best-effort, and a no-op for channels (there is
   // no per-recipient receipt for a broadcast).
@@ -1484,12 +1722,18 @@ export default function MessageThread({
     [],
   );
 
-  function jumpToLatest(): void {
+  // Take the reader to the end and treat them as being there from now on.
+  //
+  // Three callers, and they are the whole of the rule: the jump-to-latest pill
+  // (they asked), keying up (see handleTalkStart), and someone else taking the
+  // floor (see the PTT activity listener). Only refs and setters, so its
+  // identity is stable and the listener below subscribes once.
+  const jumpToLatest = useCallback((): void => {
     atBottomRef.current = true;
     setShowJumpToLatest(false);
     setAwayAtCount(null);
     listRef.current?.scrollToEnd({ animated: true });
-  }
+  }, []);
 
   // Open a second bottom sheet once the first has finished sliding out. One
   // pending handoff at a time, and cancelled when the thread goes away: two of
@@ -1635,31 +1879,59 @@ export default function MessageThread({
     showStatus("queued");
   }
 
+  // ---- Composer length budget -------------------------------------------------
+  //
+  // A DM rides a TLV with a one-byte length field, so its budget is 255 UTF-8
+  // bytes and belongs to the wire. Channel and group messages carry text as the
+  // rest of the payload with no such field, so they keep the 2000-character
+  // composer. The budget is per-conversation, not global.
+  //
+  // Enforced while typing rather than on send. A send-time refusal is the wrong
+  // shape for a hard protocol limit: the text is already written, and the only
+  // thing left to say is "delete some of that". This is what `maxLength` would
+  // do if it could count bytes.
+  const draftBudget = isDM ? PRIVATE_MESSAGE_MAX_CONTENT_BYTES : null;
+  const draftBytesLeft =
+    draftBudget === null ? null : draftBudget - utf8ByteLength(draft);
+
+  // Only near the end. An always-on counter turns a one-line reply into a
+  // metered exercise; this explains the stop before it happens, then leaves.
+  const DRAFT_COUNTER_FROM = 40;
+  const showDraftCounter =
+    draftBytesLeft !== null && draftBytesLeft <= DRAFT_COUNTER_FROM;
+
+  function handleDraftChange(next: string): void {
+    setDraft(
+      draftBudget === null ? next : truncateToUtf8Bytes(next, draftBudget),
+    );
+  }
+
   // A channel broadcast that reached no transport at all.
   function showNoReachStatus(): void {
     showStatus("no-reach");
   }
 
-  // Screenshot detection: notify the other side of this conversation (like
-  // bitchat) so nobody can silently capture a DM or channel. The notice is a
-  // real chat message so it survives even if the recipient is offline right
-  // now; our own copy is a local-only system row, never re-broadcast.
+  // Screenshot detection. Who gets told, and why, lives in `media-policy` beside
+  // the other per-channel capability rules; the short version is that a notice
+  // goes out only where it is encrypted to a bounded set, never onto a public
+  // room or a location cell that would publish it to relays.
+  const tellsPeersOnScreenshot = notifiesOnScreenshot(channel, isPrivate);
   useEffect(() => {
     const subscription = ScreenCapture.addScreenshotListener(() => {
       const text = screenshotNoticeText(localNickname);
       const service = getMeshService();
-      if (service) {
+      if (service && tellsPeersOnScreenshot) {
         if (isDM) {
           service.sendDm(channel.slice(3), text);
         } else if (isGroup) {
-          // Seal the notice under the group key rather than leaking it as a
-          // plaintext channel broadcast to everyone in range.
           service.sendGroupMessage(
             channel.slice("group:".length),
             text,
             `${localPeerID}-${Date.now()}`,
           );
         } else {
+          // Private channel: sealed under the channel key, so this reaches
+          // holders of the invite link and nobody else in radio range.
           service.sendChannelMessage(channel, text);
         }
       }
@@ -1668,7 +1940,11 @@ export default function MessageThread({
         channel,
         senderID: localPeerID,
         senderNickname: localNickname,
-        text: t("chat.screenshot.you_took"),
+        // Say which of the two happened. Claiming the room was told when it was
+        // not is the same class of mistake as the broadcast itself.
+        text: tellsPeersOnScreenshot
+          ? t("chat.screenshot.you_took")
+          : t("chat.screenshot.you_took_private"),
         timestampMs: Date.now(),
         isMine: true,
         isSystem: true,
@@ -1679,11 +1955,21 @@ export default function MessageThread({
           ? t("chat.screenshot.notified_dm", {
               name: resolveDisplayName(channel.slice(3)),
             })
-          : t("chat.screenshot.notified"),
+          : tellsPeersOnScreenshot
+            ? t("chat.screenshot.notified")
+            : t("chat.screenshot.not_notified"),
       );
     });
     return () => subscription.remove();
-  }, [channel, isDM, isGroup, localNickname, localPeerID, addMessage]);
+  }, [
+    channel,
+    isDM,
+    isGroup,
+    tellsPeersOnScreenshot,
+    localNickname,
+    localPeerID,
+    addMessage,
+  ]);
 
   // The real transmission, run when the hold window elapses or is committed.
   // Reads everything from the message and from live getters, so it is safe to
@@ -1875,6 +2161,11 @@ export default function MessageThread({
       const action = kind === "hug" ? "hugs" : "slaps";
       const suffix = kind === "slap" ? " around a bit with a large trout" : "";
       text = `* ${emoji} ${localNickname} ${action} ${target}${suffix} *`;
+      // An emote expands a short command into a whole sentence, so it is the
+      // one way text can pass the composer budget and still overrun it. Clamp
+      // again rather than refuse: the emote is decoration, and a trimmed trout
+      // beats a message that encodes to null and vanishes.
+      if (draftBudget !== null) text = truncateToUtf8Bytes(text, draftBudget);
     }
     // At most one message is ever held: commit the previous one first.
     commitHeld();
@@ -1989,6 +2280,13 @@ export default function MessageThread({
     },
   ): void {
     const targetChannel = options?.targetChannel ?? channel;
+    // Media only travels where canSendMedia allows, and the receiver enforces
+    // that too (file-transfer-service drops a packet tagged for a room that
+    // refuses media). Sending anyway would leave a bubble here that reaches
+    // nobody, so refuse at the source. The composer disables its attach button
+    // and the forward sheet greys the target, both with the reason; this is the
+    // backstop that keeps any future caller from reopening the hole.
+    if (!canSendMedia(targetChannel)) return;
     const caption = options?.caption?.trim() ?? "";
     const msg: ChatMessage = {
       id: `${localPeerID}-${Date.now()}-${Math.random().toString(36).slice(2)}`,
@@ -2533,6 +2831,11 @@ export default function MessageThread({
     if (live) {
       liveHoldRef.current = true;
       setIsTalkingLive(true);
+      // Live is not composing: the words are leaving the phone as they are
+      // spoken, so the view goes to the end now rather than when the burst
+      // finalizes into a voice note. A recorded note is composing and follows
+      // the same rule as text, moving the view only on send.
+      jumpToLatest();
       setRecordingSecs(0);
       recordingTimerRef.current = setInterval(() => {
         setRecordingSecs((s) => s + 1);
@@ -2564,6 +2867,9 @@ export default function MessageThread({
     }
     setRecordingSecs(0);
     const finalized = await getMeshService()?.stopVoiceBurst();
+    // Live voice opens the microphone through the native module, so
+    // expo-audio's idea of the session is stale by the time this returns.
+    await setAudioForPlayback().catch(() => {});
     // The same audio, now as an ordinary voice note. People in range heard it
     // live; this is what reaches anyone who was not, and what stays in the
     // thread afterwards. It rides the existing attachment path, so it is a
@@ -2575,16 +2881,33 @@ export default function MessageThread({
     }
   }
 
-  // Who is talking right now, for the floor-courtesy hint. Resolved to a
-  // display name here so the button can say it.
+  // Who is talking right now, resolved to display names for the receiving pill
+  // and the mic button ring. The whole list, not just the first: a mesh has no
+  // floor arbiter, so two people keying up at once is ordinary.
+  //
+  // Only fires for the thread on screen. A burst is audible only in the channel
+  // it belongs to (mesh-service gates both the broadcast and the DM path on
+  // audibleChannel), and the report follows the audio.
   useEffect(() => {
     const service = getMeshService();
     if (!service) return;
     return service.setPttActivityListener((talkers) => {
-      const first = talkers[0];
-      setLiveTalker(first === undefined ? null : resolveDisplayName(first));
+      const names = talkers.map(resolveDisplayName);
+      setLiveTalkers((prev) =>
+        prev.length === names.length && prev.every((n, i) => n === names[i])
+          ? prev
+          : names,
+      );
+      // Someone taking the floor moves the view, where an arriving message does
+      // not. Their audio is already playing out of this phone, so the
+      // interruption has happened either way; following it puts the voice note
+      // it finalizes into, and the mic to answer with, where they belong.
+      // Only on the transition into talking, not once per burst packet.
+      const talking = names.length > 0;
+      if (talking && !liveTalkingRef.current) jumpToLatest();
+      liveTalkingRef.current = talking;
     });
-  }, []);
+  }, [jumpToLatest]);
 
   // Whether the next hold will go live, so the button can show which it is.
   // Re-checked as peers come and go: in a DM it depends on that peer having a
@@ -2648,10 +2971,7 @@ export default function MessageThread({
       },
     );
     if (!granted) return;
-    await setAudioModeAsync({
-      allowsRecording: true,
-      playsInSilentMode: true,
-    });
+    await setAudioForRecording();
     try {
       await audioRecorder.prepareToRecordAsync();
       audioRecorder.record();
@@ -2664,7 +2984,7 @@ export default function MessageThread({
       // keeps iOS in play-and-record, which routes playback to the earpiece:
       // one failed recording and every voice note afterwards sounds broken,
       // with nothing on screen to explain why.
-      await setAudioModeAsync({ allowsRecording: false }).catch(() => {});
+      await setAudioForPlayback().catch(() => {});
       showAlert(T("chat.thread.error"), t("chat.perm.record_failed"));
     }
   }
@@ -2695,7 +3015,7 @@ export default function MessageThread({
     } finally {
       // Always, even if stop() threw: an audio session left in record mode
       // sends every later playback to the earpiece instead of the speaker.
-      await setAudioModeAsync({ allowsRecording: false }).catch(() => {});
+      await setAudioForPlayback().catch(() => {});
     }
   }
 
@@ -2706,7 +3026,7 @@ export default function MessageThread({
     }
     setRecordingSecs(0);
     await audioRecorder.stop().catch(() => {});
-    await setAudioModeAsync({ allowsRecording: false }).catch(() => {});
+    await setAudioForPlayback().catch(() => {});
   }
 
   function handleInvite(): void {
@@ -2721,11 +3041,29 @@ export default function MessageThread({
     });
   }
 
+  // Offered on a lost attachment somebody else sent. Drafts a message rather
+  // than sending one, since a silent send in a room is a surprise everybody
+  // sees. Plain text, so a bitchat peer can act on it too.
+  function askResendFor(attachment: ChatAttachment, isMine: boolean) {
+    if (isMine) return undefined;
+    return () => {
+      setDraft((current) =>
+        current.trim().length > 0
+          ? current
+          : t("chat.media.resend_draft", {
+              kind: t(RESEND_KIND_KEY[attachment.type]),
+            }),
+      );
+      composerRef.current?.focus();
+    };
+  }
+
   function renderAttachmentBubble(
     attachment: ChatAttachment,
     messageId: string,
     isMine: boolean,
   ): React.JSX.Element {
+    const onAskResend = askResendFor(attachment, isMine);
     switch (attachment.type) {
       case "image": {
         if (!attachment.uri) {
@@ -2745,23 +3083,14 @@ export default function MessageThread({
           isMine || autoDownloadMedia || revealedAttachments.has(messageId);
         if (!revealed) {
           return (
-            <Pressable
-              style={styles.attachImagePlaceholder}
-              onPress={() =>
-                setRevealedAttachments((prev) => {
-                  const next = new Set(prev);
-                  next.add(messageId);
-                  return next;
-                })
+            <CollapsedMediaPlaceholder
+              uri={attachment.uri}
+              kind="image"
+              onReveal={() =>
+                setRevealedAttachments((prev) => new Set(prev).add(messageId))
               }
-              accessibilityRole="button"
-              accessibilityLabel={t("chat.media.tap_load_photo")}
-            >
-              <Feather name="image" size={28} color={Colors.textMuted} />
-              <Text style={styles.attachImagePlaceholderText}>
-                {t("chat.media.tap_load_photo")}
-              </Text>
-            </Pressable>
+              onAskResend={onAskResend}
+            />
           );
         }
         // Tap a loaded photo to view it full-screen, the standard gesture in
@@ -2770,6 +3099,7 @@ export default function MessageThread({
           <ImageAttachment
             uri={attachment.uri}
             onPress={() => setFullscreenImage(attachment.uri)}
+            onAskResend={onAskResend}
           />
         );
       }
@@ -2790,6 +3120,7 @@ export default function MessageThread({
               )
             }
             onFinished={() => setPlayingMessageId(null)}
+            onAskResend={onAskResend}
           />
         );
       }
@@ -2798,45 +3129,12 @@ export default function MessageThread({
         // document was a dead label: the bytes arrived and there was no way
         // to reach them.
         return (
-          <Pressable
-            style={styles.attachDoc}
-            onPress={() => void openAttachment(attachment)}
-            accessibilityRole="button"
-            accessibilityLabel={t("chat.media.open_document", {
-              name: attachment.name ?? t("chat.media.document"),
-            })}
-          >
-            <View style={styles.attachDocIcon}>
-              <Feather
-                name="file-text"
-                size={20}
-                color={Colors.textSecondary}
-              />
-            </View>
-            <View style={styles.attachDocInfo}>
-              <Text
-                style={[
-                  styles.attachDocName,
-                  isMine ? styles.textOnMyBubble : styles.textOnTheirBubble,
-                ]}
-                numberOfLines={2}
-              >
-                {attachment.name ?? t("chat.attach.document")}
-              </Text>
-              {docSubtitle(attachment) !== null && (
-                <Text
-                  style={[
-                    styles.attachDocMeta,
-                    isMine ? styles.textOnMyBubble : styles.textOnTheirBubble,
-                  ]}
-                  numberOfLines={1}
-                >
-                  {docSubtitle(attachment)}
-                </Text>
-              )}
-            </View>
-            <Feather name="external-link" size={14} color={Colors.textMuted} />
-          </Pressable>
+          <DocumentAttachment
+            attachment={attachment}
+            isMine={isMine}
+            onOpen={() => void openAttachment(attachment)}
+            onAskResend={onAskResend}
+          />
         );
       case "video": {
         // Same reveal pattern as images: a received video shows a poster with a
@@ -2848,24 +3146,19 @@ export default function MessageThread({
           isMine || autoDownloadMedia || revealedAttachments.has(messageId);
         if (!videoRevealed) {
           return (
-            <Pressable
-              style={styles.attachVideoPoster}
-              onPress={() =>
+            <CollapsedMediaPlaceholder
+              uri={attachment.uri}
+              kind="video"
+              onReveal={() =>
                 setRevealedAttachments((prev) => new Set(prev).add(messageId))
               }
-              accessibilityRole="button"
-              accessibilityLabel={t("chat.media.tap_load_video")}
-            >
-              <View style={styles.attachVideoPlayBadge}>
-                <Feather name="play" size={20} color={Colors.textPrimary} />
-              </View>
-              <Text style={styles.attachImagePlaceholderText}>
-                {t("chat.media.tap_load_video")}
-              </Text>
-            </Pressable>
+              onAskResend={onAskResend}
+            />
           );
         }
-        return <VideoAttachment uri={attachment.uri} />;
+        return (
+          <VideoAttachment uri={attachment.uri} onAskResend={onAskResend} />
+        );
       }
     }
   }
@@ -2884,12 +3177,25 @@ export default function MessageThread({
   // Photos and videos go to the system gallery, which is where someone looks
   // for them. Everything else has no gallery to go to, so it gets the share
   // sheet, which can hand it to Files, a mail app, or anything else installed.
+  //
+  // `insideViewer`: the photo viewer is a Modal and every dialog is a
+  // BottomSheet, which is another Modal at the app root. Two cannot present at
+  // once (iOS shows neither, Android puts the second behind), so anything
+  // needing buttons closes the viewer first, before the ask rather than after.
+  // The toast is exempt: a copy of it is mounted inside the viewer.
   async function saveAttachmentToDevice(
     attachment: ChatAttachment,
+    insideViewer = false,
   ): Promise<void> {
     if (attachment.type !== "image" && attachment.type !== "video") {
       await openAttachment(attachment);
       return;
+    }
+    if (
+      insideViewer &&
+      !(await MediaLibrary.getPermissionsAsync(true)).granted
+    ) {
+      setFullscreenImage(null);
     }
     const granted = await ensurePermission(
       () => MediaLibrary.getPermissionsAsync(true),
@@ -2908,14 +3214,28 @@ export default function MessageThread({
           : t("chat.media.saved_photos"),
       );
     } catch {
-      showAlert(t("chat.media.not_saved"), t("chat.media.not_saved_body"));
+      // A toast reaches the user in both places; the adjacent share button is
+      // the way out either way.
+      setToast(t("chat.media.not_saved"));
     }
   }
 
-  async function openAttachment(attachment: ChatAttachment): Promise<void> {
+  // `insideViewer`: as saveAttachmentToDevice. The native share sheet presents
+  // fine over the viewer; only our own failure dialog cannot.
+  async function openAttachment(
+    attachment: ChatAttachment,
+    insideViewer = false,
+  ): Promise<void> {
+    function fail(body: TranslationKey): void {
+      if (insideViewer) {
+        setToast(t("chat.media.cant_open"));
+        return;
+      }
+      showAlert(t("chat.media.cant_open"), t(body));
+    }
     try {
       if (!(await Sharing.isAvailableAsync())) {
-        showAlert(t("chat.media.cant_open"), t("chat.media.no_app"));
+        fail("chat.media.no_app");
         return;
       }
       await Sharing.shareAsync(attachment.uri, {
@@ -2923,7 +3243,7 @@ export default function MessageThread({
         dialogTitle: attachment.name ?? t("chat.attach.generic"),
       });
     } catch {
-      showAlert(t("chat.media.cant_open"), t("chat.media.open_failed"));
+      fail("chat.media.open_failed");
     }
   }
 
@@ -3208,6 +3528,16 @@ export default function MessageThread({
           maxToRenderPerBatch={12}
           windowSize={11}
           updateCellsBatchingPeriod={50}
+          // Hold the reader's place when rows are removed above them. A thread
+          // keeps 200 messages (chat-store MAX_PER_CHANNEL) and trims the
+          // oldest, so in a busy room someone reading back has the ground move
+          // under them every time a message arrives. Pinning the first visible
+          // row is React Native's own answer for chat lists.
+          //
+          // `autoscrollToTopThreshold` is deliberately unset: that is the part
+          // that scrolls on its own, and where the view goes is decided by
+          // resolveThreadScroll. This prop only stops content shifting.
+          maintainVisibleContentPosition={{ minIndexForVisible: 1 }}
           renderItem={({ item, index }) => {
             const showAvatar = !item.isMine;
             const isFirstFromSender =
@@ -3437,19 +3767,37 @@ export default function MessageThread({
         )}
       </View>
 
-      {/* Standing notice rather than a per-send one, so the limit is clear
-          before anything is typed. Hidden while a per-send hint is up, so the
-          two never stack. */}
-      {needsInternet && dmStatus === null && !selecting && (
+      {/* Remaining room in a DM, shown only once the end is in sight. Sits in
+          the same strip as the other composer notices so nothing new appears in
+          the layout, and outranks them while it is up: a stop the reader is
+          about to hit is more urgent than why the last message queued. */}
+      {showDraftCounter && !selecting && (
         <View style={styles.dmStatusBar}>
-          <Feather name="wifi-off" size={12} color={Colors.textMuted} />
+          <Feather name="edit-3" size={12} color={Colors.textMuted} />
           <Text style={styles.dmStatusText}>
-            {isManualGeo
-              ? T("chat.thread.cell_needs_internet")
-              : T("chat.thread.channel_needs_internet")}
+            {draftBytesLeft! > 0
+              ? TP("chat.thread.length_left", draftBytesLeft!)
+              : T("chat.thread.length_full")}
           </Text>
         </View>
       )}
+
+      {/* Standing notice rather than a per-send one, so the limit is clear
+          before anything is typed. Hidden while a per-send hint is up, so the
+          two never stack. */}
+      {needsInternet &&
+        dmStatus === null &&
+        !showDraftCounter &&
+        !selecting && (
+          <View style={styles.dmStatusBar}>
+            <Feather name="wifi-off" size={12} color={Colors.textMuted} />
+            <Text style={styles.dmStatusText}>
+              {isManualGeo
+                ? T("chat.thread.cell_needs_internet")
+                : T("chat.thread.channel_needs_internet")}
+            </Text>
+          </View>
+        )}
 
       {/* Per-send hints. "queued": a DM is held for later retry. "gateway": a
           nearby peer is taking a channel post to the internet for us.
@@ -3535,10 +3883,10 @@ export default function MessageThread({
               <Pressable
                 style={styles.fullscreenAction}
                 onPress={() =>
-                  void saveAttachmentToDevice({
-                    type: "image",
-                    uri: fullscreenImage,
-                  })
+                  void saveAttachmentToDevice(
+                    { type: "image", uri: fullscreenImage },
+                    true,
+                  )
                 }
                 hitSlop={hitSlopFor(20)}
                 accessibilityRole="button"
@@ -3549,7 +3897,10 @@ export default function MessageThread({
               <Pressable
                 style={styles.fullscreenAction}
                 onPress={() =>
-                  void openAttachment({ type: "image", uri: fullscreenImage })
+                  void openAttachment(
+                    { type: "image", uri: fullscreenImage },
+                    true,
+                  )
                 }
                 hitSlop={hitSlopFor(20)}
                 accessibilityRole="button"
@@ -3567,6 +3918,10 @@ export default function MessageThread({
             onHide={() => setToast(null)}
             bottomOffset={112}
           />
+          {/* Its own window, so the app-root cover does not reach it. A photo
+              at full screen is the last thing that should survive into the app
+              switcher. */}
+          <PrivacyCover />
         </Pressable>
       </Modal>
 
@@ -3701,6 +4056,41 @@ export default function MessageThread({
         </View>
       )}
 
+      {/* Someone else has the floor. The same pill transmitting uses, in the
+          same strip the recording bar occupies, so both halves of a
+          conversation read alike and the two states never both appear. Accent
+          rather than danger: red is for the irreversible half, a burst already
+          playing on the other phone. */}
+      {!selecting &&
+        liveTalker !== null &&
+        !isPTTActive &&
+        !isRecording &&
+        !isTalkingLive && (
+          <View
+            style={styles.liveIncomingRow}
+            accessibilityRole="alert"
+            accessibilityLabel={
+              liveTalkers.length > 1
+                ? TP("chat.voice.live_speaking_count", liveTalkers.length)
+                : T("chat.voice.live_speaking", { name: liveTalker })
+            }
+          >
+            <View style={[styles.liveBadge, styles.liveIncomingBadge]}>
+              <View style={[styles.liveDot, styles.liveIncomingDot]} />
+              {/* Untranslated, like the transmitting badge: a broadcast marker
+                  read the same everywhere. */}
+              <Text style={[styles.liveBadgeText, styles.liveIncomingText]}>
+                LIVE
+              </Text>
+            </View>
+            <Text style={styles.liveIncomingName} numberOfLines={1}>
+              {liveTalkers.length > 1
+                ? TP("chat.voice.live_speaking_count", liveTalkers.length)
+                : T("chat.voice.live_speaking", { name: liveTalker })}
+            </Text>
+          </View>
+        )}
+
       {/* Compose bar */}
       {!selecting && (
         <View style={styles.composeBar}>
@@ -3724,13 +4114,28 @@ export default function MessageThread({
             <Feather name="plus" size={20} color={Colors.textMuted} />
           </Pressable>
           <TextInput
+            ref={composerRef}
             style={styles.input}
             value={draft}
-            onChangeText={setDraft}
+            onChangeText={handleDraftChange}
             placeholder={T("chat.thread.message_placeholder")}
             placeholderTextColor={Colors.textMuted}
             multiline
+            // A character ceiling over every conversation, on top of the byte
+            // budget that additionally clamps DMs in handleDraftChange. Kept so
+            // a runaway paste cannot build a packet nothing will carry.
             maxLength={2000}
+            // All three traits follow one setting (Privacy, Keyboard
+            // suggestions, on by default): predictions and the dictionary they
+            // feed are the same feature from two sides, so splitting them would
+            // offer a choice nobody can reason about.
+            //
+            // Worth knowing what this cannot promise: the learned dictionary
+            // belongs to the OS, so turning it off stops future learning in this
+            // field rather than unlearning anything already absorbed.
+            autoCorrect={keyboardLearning}
+            spellCheck={keyboardLearning}
+            autoCapitalize={keyboardLearning ? "sentences" : "none"}
             returnKeyType="send"
             blurOnSubmit
             onSubmitEditing={handleSend}
@@ -3844,7 +4249,10 @@ export default function MessageThread({
               if (isTalkingLive) {
                 setIsTalkingLive(false);
                 setIsPTTActive(false);
+                liveHoldRef.current = false;
                 void getMeshService()?.cancelVoiceBurst();
+                // Give the session back, as at the end of a burst.
+                void setAudioForPlayback().catch(() => {});
                 return;
               }
               void cancelRecording();
@@ -4191,6 +4599,7 @@ export default function MessageThread({
 
       <MessageInfoSheet
         message={msgs.find((m) => m.id === infoMessageId) ?? null}
+        localPeerID={localPeerID}
         onClose={() => setInfoMessageId(null)}
       />
 
@@ -4198,6 +4607,7 @@ export default function MessageThread({
       <ForwardSheet
         visible={forwardSource !== null}
         excludeChannel={channel}
+        carriesMedia={forwardSource?.attachment !== undefined}
         onClose={() => setForwardSource(null)}
         onForward={(target) => {
           if (forwardSource) {
@@ -4213,6 +4623,7 @@ export default function MessageThread({
       <ForwardSheet
         visible={showBulkForward}
         excludeChannel={channel}
+        carriesMedia={selectedCarriesMedia}
         onClose={() => setShowBulkForward(false)}
         onForward={(target) => {
           forwardSelected(target);
@@ -4649,6 +5060,33 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       backgroundColor: Colors.dangerDim,
       borderColor: Colors.danger,
     },
+    // Receiving live audio. Sits above the compose bar, in the strip the
+    // recording bar takes over when this device is the one talking.
+    liveIncomingRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: Spacing.sm,
+      paddingHorizontal: Spacing.base,
+      paddingVertical: Spacing.xs,
+      borderTopWidth: StyleSheet.hairlineWidth,
+      borderTopColor: Colors.border,
+      backgroundColor: Colors.bg,
+    },
+    // The transmitting badge shape, in accent rather than red.
+    liveIncomingBadge: {
+      backgroundColor: Colors.accentGhost,
+    },
+    liveIncomingDot: {
+      backgroundColor: Colors.accent,
+    },
+    liveIncomingText: {
+      color: Colors.accent,
+    },
+    liveIncomingName: {
+      flexShrink: 1,
+      fontSize: FontSize.xs,
+      color: Colors.textSecondary,
+    },
     // Attachment picker sheet
     attachSheet: {
       width: "100%",
@@ -4820,6 +5258,41 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
     },
     // Video poster shown before the player is mounted: a neutral surface with a
     // centered play badge, matching the image "tap to load" gate.
+    // A file no longer on the device: one shape for every attachment kind.
+    attachGone: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: Spacing.sm,
+      paddingVertical: Spacing.sm,
+      paddingHorizontal: Spacing.sm,
+      borderRadius: Radius.md,
+      backgroundColor: Colors.surface,
+      minWidth: 200,
+      maxWidth: 260,
+    },
+    attachGoneBody: {
+      flexShrink: 1,
+      gap: 1,
+    },
+    attachGoneTitle: {
+      fontSize: FontSize.sm,
+      fontWeight: FontWeight.medium,
+      color: Colors.textSecondary,
+    },
+    attachGoneNote: {
+      fontSize: FontSize.xs,
+      color: Colors.textMuted,
+    },
+    attachGoneAction: {
+      marginStart: "auto",
+      paddingVertical: Spacing.xs,
+      paddingHorizontal: Spacing.sm,
+    },
+    attachGoneActionText: {
+      fontSize: FontSize.xs,
+      fontWeight: FontWeight.medium,
+      color: Colors.accent,
+    },
     attachVideoPoster: {
       width: MEDIA_BUBBLE_WIDTH,
       height: mediaHeightForAspect(MEDIA_DEFAULT_ASPECT),

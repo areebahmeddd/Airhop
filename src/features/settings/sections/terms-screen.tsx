@@ -1,5 +1,10 @@
-// Terms of Service, rendered in-app. Mirrors the content published at
-// airhop.1mindlabs.org/terms-of-service.
+// Terms of Service, rendered in-app. Mirrors the content AND structure
+// published at airhop.1mindlabs.org/terms-of-service, with the same sections,
+// order, and bold emphasis.
+//
+// The web copy also governs the site, so where it says "this website or the
+// Airhop app" this says just the app, and the scraping paragraph under
+// "Acceptable use" is dropped. Everything else stays word-for-word.
 
 import React from "react";
 import LegalDocScreen, { type LegalSection } from "./legal-doc-screen";

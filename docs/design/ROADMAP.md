@@ -66,7 +66,7 @@ bitchat is an excellent foundation. Airhop fills the gaps it left open.
 │  ┌──────────▼──────────────────┐     ┌────────────▼───────────────────┐     │
 │  │   BLE MESH ENGINE (TS)      │     │   NOSTR TRANSPORT (TS)         │     │
 │  │  PacketCodec, TTL flood     │     │  nostr-tools NIP-17/59         │     │
-│  │  GossipSync (GCS filter)    │     │  SimplePool → 350+ relays      │     │
+│  │  GossipSync (GCS filter)    │     │  SimplePool → 300+ relays      │     │
 │  │  CourierStore, Fragments    │     │  GeoRelayDirectory, Tor proxy  │     │
 │  └──────────┬──────────────────┘     └────────────────────────────────┘     │
 │             │ JSI TurboModule                                               │
@@ -494,11 +494,11 @@ Everything under the Unlicense. Copy verbatim, no attribution required.
 
 ### From bitchat/georelays
 
-| Component                        | Reuse Strategy                                                    |
-| -------------------------------- | ----------------------------------------------------------------- |
-| `nostr_relays.csv`               | Bundle in `assets/data/relays.csv`; CI-refresh via GitHub Actions |
-| `filter_bitchat_relays.sh`       | Run as GH Actions workflow to refresh bundled CSV                 |
-| `relays_geo_lookup.py` algorithm | Reimplement in TypeScript for in-app Haversine lookup             |
+| Component                        | Reuse Strategy                                                          |
+| -------------------------------- | ----------------------------------------------------------------------- |
+| `nostr_relays.csv`               | Bundle in `assets/data/nostr_relays.csv`; CI-refresh via GitHub Actions |
+| `filter_bitchat_relays.sh`       | Run as GH Actions workflow to refresh bundled CSV                       |
+| `relays_geo_lookup.py` algorithm | Reimplement in TypeScript for in-app Haversine lookup                   |
 
 ## 6. What Must Be Built from Scratch
 

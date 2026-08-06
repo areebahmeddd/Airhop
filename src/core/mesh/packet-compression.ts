@@ -16,8 +16,8 @@
 // Deflate output is not canonical: any conforming encoder produces a valid
 // stream, but not the same bytes. pako's original hash does NOT match reference
 // zlib. pako 2.2.0 added the ANZAC++ hash, which does, behind `legacyHash`.
-// That option still defaults to true on 2.x for backwards compatibility, so we
-// set it explicitly. pako 3 makes false the default.
+// pako 3 defaults that option to false, which is what we want, but we set it
+// explicitly so parity does not ride on a default.
 
 import { deflateRaw, Inflate } from "pako";
 
@@ -36,16 +36,9 @@ export const MAX_PAYLOAD_BYTES = 10 * 1024 * 1024;
 // matches. Do not change: it would break signature parity with bitchat.
 const COMPRESSION_LEVEL = 6;
 
-// pako 2.2.0 added `legacyHash`, but @types/pako 2.0.4 predates it, so it is
-// not in DeflateFunctionOptions yet. Derive the type from deflateRaw rather
-// than casting, so the rest of the options stay checked.
-type DeflateOptions = NonNullable<Parameters<typeof deflateRaw>[1]> & {
-  legacyHash: boolean;
-};
-
 // legacyHash: false selects the zlib-compatible hash. Do not change: it is what
 // makes our output byte-identical to bitchat's, and signatures depend on it.
-const DEFLATE_OPTIONS: DeflateOptions = {
+const DEFLATE_OPTIONS: NonNullable<Parameters<typeof deflateRaw>[1]> = {
   level: COMPRESSION_LEVEL,
   legacyHash: false,
 };

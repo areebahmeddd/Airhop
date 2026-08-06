@@ -9,12 +9,14 @@
 import { Feather } from "@expo/vector-icons";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
-import { useT, type TranslationKey } from "../../i18n";
+import { t, useT, type TranslationKey } from "../../i18n";
 import { isManualGeoChannel } from "../../services/geohash-channel-service";
+import { showAlert } from "../../store/alert-store";
 import { useChatStore } from "../../store/chat-store";
 import Avatar from "../../ui/components/avatar";
 import BottomSheet from "../../ui/components/bottom-sheet";
 import {
+  DISABLED_OPACITY,
   FontSize,
   FontWeight,
   Radius,
@@ -23,12 +25,22 @@ import {
 } from "../../ui/theme";
 import { channelLabel } from "../../utils/chat-display-name";
 import { resolveDisplayName } from "../../utils/display-name";
+import { mediaBlockedReason } from "../../utils/media-policy";
 
 interface Props {
   visible: boolean;
   excludeChannel: string;
   onClose: () => void;
   onForward: (targetChannel: string) => void;
+  // Whether the selection carries an attachment. Media only travels where
+  // canSendMedia allows, so a room that refuses it cannot be a target: the
+  // send would leave a bubble here and reach nobody, and in a mixed selection
+  // the text would arrive without it.
+  //
+  // Blocked rooms stay on screen, greyed, and say why when tapped. Same rule
+  // as the composer's attach button: a target that vanishes leaves people
+  // wondering whether they are in the wrong place.
+  carriesMedia?: boolean;
 }
 
 type ForwardKind = "channel" | "group" | "location" | "dm";
@@ -63,6 +75,7 @@ export default function ForwardSheet({
   excludeChannel,
   onClose,
   onForward,
+  carriesMedia = false,
 }: Props): React.JSX.Element {
   const T = useT();
   const Colors = useThemeColors();
@@ -91,8 +104,18 @@ export default function ForwardSheet({
     [],
   );
 
+  // Why this room cannot take the selection, or null when it can.
+  function blockedReason(channel: string): string | null {
+    return carriesMedia ? mediaBlockedReason(channel) : null;
+  }
+
   function handlePick(channel: string): void {
     if (closeTimer.current) return; // Already confirming; ignore a double tap.
+    const blocked = blockedReason(channel);
+    if (blocked !== null) {
+      showAlert(t("chat.forward.cant_send_here"), blocked);
+      return;
+    }
     onForward(channel);
     setSentTo(channel);
     closeTimer.current = setTimeout(() => {
@@ -130,17 +153,21 @@ export default function ForwardSheet({
                       ? resolveDisplayName(item.slice(3))
                       : channelLabel(item);
                   const justSent = sentTo === item;
+                  const blocked = blockedReason(item) !== null;
                   return (
                     <React.Fragment key={item}>
                       {i > 0 && <View style={styles.divider} />}
                       <Pressable
-                        style={styles.row}
+                        style={[styles.row, blocked && styles.rowBlocked]}
                         onPress={() => handlePick(item)}
                         disabled={sentTo !== null}
                         accessibilityRole="button"
-                        accessibilityLabel={T("chat.forward.to", {
-                          name: label,
-                        })}
+                        accessibilityState={{ disabled: blocked }}
+                        accessibilityLabel={
+                          blocked
+                            ? t("chat.forward.cant_send_to", { name: label })
+                            : T("chat.forward.to", { name: label })
+                        }
                       >
                         {kind === "dm" ? (
                           <Avatar
@@ -229,6 +256,11 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       gap: Spacing.md,
       paddingVertical: Spacing.sm + 2,
       paddingHorizontal: Spacing.sm + 2,
+    },
+    // A room that cannot take this selection. Still tappable, so the tap can
+    // explain; the same treatment the composer's attach button gets.
+    rowBlocked: {
+      opacity: DISABLED_OPACITY,
     },
     channelIcon: {
       width: 36,

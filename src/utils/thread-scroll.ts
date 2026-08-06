@@ -1,5 +1,18 @@
 // What a message list should do when its content size changes.
 //
+// The whole scroll policy, of which this function is the larger half:
+//
+//   the view follows        anything live, and anything the reader sends
+//   the view does not       anything a peer sends, and anything being composed
+//
+// Live means audio playing right now, in either direction: keying up, and a
+// peer taking the floor. Both are handled in message-thread by calling
+// jumpToLatest directly, because a burst adds no message and so produces no
+// content-size change for this function to see. Everything else arrives here.
+//
+// A peer's message never moves the reader. The jump-to-latest pill offers the
+// trip with a count of what has arrived, and the choice stays theirs.
+//
 // A chat list is told "your content is now this tall" for two very different
 // reasons, and it cannot tell them apart from the event alone:
 //

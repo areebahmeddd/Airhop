@@ -43,6 +43,12 @@ interface ActivityState {
   entries: ActivityEntry[];
   record: (entry: Omit<ActivityEntry, "seen">) => void;
   markAllSeen: () => void;
+  // Mark every entry for one conversation as seen. Reading a thread is seeing
+  // its notifications, and the OS notification is dismissed at the same moment.
+  markChannelSeen: (channel: string) => void;
+  // Follow a thread folded into another (chat-store mergeChannel), so a row
+  // still opens the conversation rather than a name nothing answers to.
+  repointChannel: (from: string, to: string) => void;
   // Mark every notice for one board (geohash, "" = mesh) as seen. Called when
   // the user opens that room's notices sheet, so its board-icon badge clears.
   markNoticesSeen: (geohash: string) => void;
@@ -81,6 +87,31 @@ export const useActivityStore = create<ActivityState>()(
         set((state) => {
           if (state.entries.every((e) => e.seen)) return state;
           return { entries: state.entries.map((e) => ({ ...e, seen: true })) };
+        });
+      },
+
+      markChannelSeen(channel) {
+        set((state) => {
+          let changed = false;
+          const entries = state.entries.map((e) => {
+            if (e.channel !== channel || e.seen) return e;
+            changed = true;
+            return { ...e, seen: true };
+          });
+          return changed ? { entries } : state;
+        });
+      },
+
+      repointChannel(from, to) {
+        if (from === to) return;
+        set((state) => {
+          let changed = false;
+          const entries = state.entries.map((e) => {
+            if (e.channel !== from) return e;
+            changed = true;
+            return { ...e, channel: to };
+          });
+          return changed ? { entries } : state;
         });
       },
 

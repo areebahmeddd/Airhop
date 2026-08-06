@@ -57,10 +57,31 @@ import {
 } from "../core/nostr/presence";
 import { t } from "../i18n";
 import { useActivityStore } from "../store/activity-store";
+import { useBlockedStore } from "../store/blocked-store";
 import { useChatStore } from "../store/chat-store";
 import { useNoticesStore } from "../store/notices-store";
 import { useSettingsStore } from "../store/settings-store";
 import { getCoarseLocation, type Coords } from "./location-service";
+
+// Blocking, on the Nostr side. The mesh enforces it at one chokepoint in
+// `routePacket`; nothing did here, so a blocked person kept posting in location
+// channels, kept counting toward the participant total, and could still open a
+// geo DM.
+//
+// A geohash identity is a per-cell secp256k1 pubkey addressed everywhere as
+// `nostr_<pubkey>`: the `senderID` these events carry into chat-store, and the
+// key the DM list passes to `blockPeer`. One lookup therefore covers channel
+// messages, presence and geo DMs.
+//
+// Relaying is deliberately out of scope. The gateway hands every inbound event
+// to the mesh before this runs, matching `routePacket`, which keeps relaying for
+// a blocked sender. A block says what you read, not who the mesh serves.
+//
+// Not a shield either: cells key on a fresh identity, so someone determined
+// reappears under a new pubkey. This stops the ordinary case.
+function isBlockedPubkey(pubkey: string): boolean {
+  return useBlockedStore.getState().isBlocked(`nostr_${pubkey}`);
+}
 
 // Channel name → geohash precision.
 //
@@ -437,7 +458,7 @@ export class GeohashChannelService {
     if (map === undefined) return [];
     const cutoff = Date.now() - PARTICIPANT_TTL_MS;
     return [...map.values()]
-      .filter((p) => p.lastSeenMs >= cutoff)
+      .filter((p) => p.lastSeenMs >= cutoff && !isBlockedPubkey(p.pubkey))
       .sort((a, b) => {
         // People physically here first, teleported below them, matching
         // bitchat's list ordering; within each group, most recent first.
@@ -630,6 +651,7 @@ export class GeohashChannelService {
     }
     if (channel === undefined) return;
     if (event.pubkey === this.identityFor(geohash).pubKeyHex) return; // own echo
+    if (isBlockedPubkey(event.pubkey)) return;
     if (event.kind === KIND_PRESENCE || event.content.length === 0) return;
 
     const rawNick = event.tags.find(([t]) => t === TAG_NICKNAME)?.[1];
@@ -733,6 +755,10 @@ export class GeohashChannelService {
     } catch {
       return;
     }
+    // Before the peer binding and before the delivery ack: a blocked person
+    // must not learn we are here, and must not be able to reopen a thread the
+    // block closed.
+    if (isBlockedPubkey(dm.senderPubkey)) return;
     const env = decodeBitchatEnvelope(dm.content);
     if (env === null) return;
 
@@ -800,6 +826,9 @@ export class GeohashChannelService {
         if (event.pubkey === selfPubkey) return;
         // Only surface traffic for channels the user is still in.
         if (!useChatStore.getState().channels.includes(channel)) return;
+        // Below the gateway hand-off above on purpose: we stop reading them,
+        // we do not stop carrying their traffic for the rest of the cell.
+        if (isBlockedPubkey(event.pubkey)) return;
 
         const rawNick = event.tags.find(([t]) => t === TAG_NICKNAME)?.[1];
         const nickname = geohashDisplayName(event.pubkey, rawNick);
@@ -864,13 +893,42 @@ export class GeohashChannelService {
 
     // Location-note feed: kind-1 notes tagged to this cell (standalone notes
     // and bitchat board posts bridged to Nostr) surface in the notices sheet.
+    //
+    // Kind-5 rides the same subscription. A NIP-09 deletion is a request and a
+    // relay is not obliged to honour it, so a retracted note keeps being served
+    // until we apply the deletion ourselves. Deletions carry no `#g` tag, so
+    // they are matched by author.
     const notesClose = this.client.subscribe(
-      [{ kinds: [KIND_TEXT_NOTE], "#g": [geohash], limit: 200 }],
-      (event) => this.handleLocationNote(event, geohash, identity.pubKeyHex),
+      [
+        { kinds: [KIND_TEXT_NOTE], "#g": [geohash], limit: 200 },
+        { kinds: [KIND_DELETION], limit: 200 },
+      ],
+      (event) => {
+        if (event.kind === KIND_DELETION) {
+          this.handleNoteDeletion(event);
+          return;
+        }
+        this.handleLocationNote(event, geohash, identity.pubKeyHex);
+      },
       undefined,
       this.relaysForGeohash(geohash),
     );
     this.noteSubscriptions.set(channel, () => notesClose.close());
+  }
+
+  // Apply a NIP-09 deletion to the notes on screen. The authorship check is the
+  // whole mechanism: `e` tags are free to write, so a deletion only counts for
+  // events signed by the same key that signed the note.
+  private handleNoteDeletion(event: NostrEvent): void {
+    const notices = useNoticesStore.getState();
+    for (const [tag, value] of event.tags) {
+      if (tag !== "e" || value === undefined) continue;
+      const target = Object.values(notices.notesByGeohash)
+        .flat()
+        .find((n) => n.id === value);
+      if (target === undefined || target.pubkey !== event.pubkey) continue;
+      notices.removeNote(value);
+    }
   }
 
   // Parse a kind-1 location note into the notices store. Our own bridged copy

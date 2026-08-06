@@ -6,6 +6,7 @@
 
 import type { ChatMessage } from "../../store/chat-store";
 import {
+  messageMatchesFilter,
   searchableMessageText,
   searchMessages,
   searchNotices,
@@ -127,5 +128,80 @@ describe("searchNotices", () => {
 
   it("returns nothing for an unrelated query", () => {
     expect(searchNotices("spaceship", notices)).toHaveLength(0);
+  });
+});
+
+// The media/content filters above search. Each answers one question about a
+// message, and the answer must not depend on anything else about it.
+describe("messageMatchesFilter", () => {
+  const kinds = [
+    ["photos", "image"],
+    ["videos", "video"],
+    ["audio", "voice"],
+    ["documents", "document"],
+  ] as const;
+
+  for (const [filter, type] of kinds) {
+    it(`${filter} matches only its own attachment kind`, () => {
+      expect(
+        messageMatchesFilter(
+          msg({ attachment: { type, uri: "file:///a" } }),
+          filter,
+        ),
+      ).toBe(true);
+      for (const [, other] of kinds) {
+        if (other === type) continue;
+        expect(
+          messageMatchesFilter(
+            msg({ attachment: { type: other, uri: "file:///a" } }),
+            filter,
+          ),
+        ).toBe(false);
+      }
+    });
+  }
+
+  // A caption lives on the message text, so a photo with a link in its caption
+  // is genuinely both.
+  it("finds a link in a photo's caption", () => {
+    const photo = msg({
+      text: "see https://example.com/gallery",
+      attachment: { type: "image", uri: "file:///a" },
+    });
+    expect(messageMatchesFilter(photo, "photos")).toBe(true);
+    expect(messageMatchesFilter(photo, "links")).toBe(true);
+  });
+
+  describe("links", () => {
+    for (const text of [
+      "https://example.com",
+      "http://example.com/x?y=1",
+      "www.example.com",
+      "read example.com/posts/1 later",
+    ]) {
+      it(`matches ${text}`, () => {
+        expect(messageMatchesFilter(msg({ text }), "links")).toBe(true);
+      });
+    }
+
+    // A bare host is indistinguishable from a filename, and matching it would
+    // fill the filter with attachments.
+    for (const text of ["photo.jpg", "voice_a1.m4a", "just some words"]) {
+      it(`does not match ${text}`, () => {
+        expect(messageMatchesFilter(msg({ text }), "links")).toBe(false);
+      });
+    }
+  });
+
+  it("matches a message carrying an ecash token", () => {
+    expect(
+      messageMatchesFilter(
+        msg({ text: "here you go cashuAeyJ0b2tlbiI" }),
+        "ecash",
+      ),
+    ).toBe(true);
+    expect(messageMatchesFilter(msg({ text: "no money here" }), "ecash")).toBe(
+      false,
+    );
   });
 });

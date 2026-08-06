@@ -59,7 +59,7 @@ The tagline: _"the side-groupchat."_
  │  BLE Mesh        │             │  Nostr Transport   │
  │  (Transport 1)   │             │  (Transport 2)     │
  │  - GATT Central  │             │  - NIP-17 gift-wrap│
- │  - GATT Periph.  │             │  - 350+ relays     │
+ │  - GATT Periph.  │             │  - 300+ relays     │
  │  - TTL=7 flood   │             │  - Tor by default  │
  │  - Noise XX E2E  │             │  - Geohash channels│
  └──────────────────┘             └────────────────────┘
@@ -229,7 +229,7 @@ Uses **Arti** (Rust implementation of Tor) bundled as an xcframework.
 
 ### 4.5 Relay Network
 
-- **350+ relays** worldwide (as of mid-2026).
+- **300+ relays** worldwide (as of mid-2026).
 - The `georelays` repository tracks and geolocates all bitchat-capable relays.
 - The iOS app bundles a `nostr_relays.csv` fallback and fetches live updates from `georelays`.
 - The `GeoRelayDirectory` selects the closest relay(s) to a geohash coordinate for location channels.
@@ -667,7 +667,7 @@ The iOS `GeoRelayDirectory` class:
 
 ### Scale
 
-- ~350+ total Nostr relays worldwide.
+- ~300+ total Nostr relays worldwide.
 - Subset support kind 20000 (bitchat-specific).
 - Coverage maps and heatmaps tracked in `georelays/assets/`.
 - IPv4-only geolocation (IPv6-only relays are skipped).
@@ -828,7 +828,7 @@ No forensic recovery is possible after panic wipe without the Keychain, which is
 | **Push notifications**           | Local message notifications fire when the app process is alive (Android keeps it alive with the mesh foreground service; iOS whenever the OS has the app awake). Waking a fully killed app needs a push server Airhop does not run, so a force stopped iOS app stays silent until reopened |
 | **Large file transfers**         | 1 MiB cap; no chunked streaming or resumable transfers                                                                                                                                                                                                                                     |
 | **No read receipts on Nostr**    | Read receipts work on BLE but not reliably over Nostr                                                                                                                                                                                                                                      |
-| **Relay quality variance**       | Not all 350+ relays reliably accept kind 20000; `filter_bitchat_relays.sh` filters but results change over time                                                                                                                                                                            |
+| **Relay quality variance**       | Not all 300+ relays reliably accept kind 20000; `filter_bitchat_relays.sh` filters but results change over time                                                                                                                                                                            |
 | **Android battery optimization** | Many Android OEMs aggressively kill background apps, disrupting BLE mesh                                                                                                                                                                                                                   |
 
 ### Protocol Gaps

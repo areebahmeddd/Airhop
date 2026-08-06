@@ -7,7 +7,13 @@ import Feather from "@expo/vector-icons/Feather";
 import * as FileSystem from "expo-file-system";
 import * as Haptics from "expo-haptics";
 import * as MediaLibrary from "expo-media-library";
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
   BackHandler,
   Pressable,
@@ -202,12 +208,21 @@ interface Props {
   peerID: string;
   username: string;
   onWipe?: () => void;
+  // This screen owns a navigation stack the shell cannot see: its sections are
+  // early returns, not routes. The shell needs its depth so a horizontal swipe
+  // inside a section goes back rather than stepping to the next tab.
+  onCanGoBackChange?: (canGoBack: boolean) => void;
+  // Bumped by the shell to pop one level. A counter rather than a boolean, so
+  // repeated pops each register.
+  popSignal?: number;
 }
 
 export default function ProfileScreen({
   peerID,
   username,
   onWipe,
+  onCanGoBackChange,
+  popSignal = 0,
 }: Props): React.JSX.Element {
   const Colors = useThemeColors();
   const T = useT();
@@ -253,15 +268,38 @@ export default function ProfileScreen({
     setView(next);
   }
 
+  // One way back out of a sub-screen, used by three things: the header chevron,
+  // the Android back button, and the shell's back-swipe.
+  const goBack = useCallback(() => {
+    setView((current) =>
+      current === "root" ? current : (SETTINGS_PARENT_VIEW[current] ?? "root"),
+    );
+  }, []);
+
   // Android hardware/gesture back: leave a sub-screen instead of exiting.
   useEffect(() => {
     if (view === "root") return;
     const sub = BackHandler.addEventListener("hardwareBackPress", () => {
-      setView(SETTINGS_PARENT_VIEW[view] ?? "root");
+      goBack();
       return true;
     });
     return () => sub.remove();
-  }, [view]);
+  }, [view, goBack]);
+
+  // Tell the shell whether there is anywhere to go back to, so it can turn its
+  // tab-stepping swipe into a back-swipe while we are inside a section.
+  useEffect(() => {
+    onCanGoBackChange?.(view !== "root");
+  }, [view, onCanGoBackChange]);
+
+  // Skipped on mount: `popSignal` starts at whatever the shell's counter is,
+  // and acting on that would close a section as it opened.
+  const lastPopSignal = useRef(popSignal);
+  useEffect(() => {
+    if (popSignal === lastPopSignal.current) return;
+    lastPopSignal.current = popSignal;
+    goBack();
+  }, [popSignal, goBack]);
 
   async function handleConfirmWipe(): Promise<void> {
     // Order matters. The mesh comes down FIRST: it is a live process with radios
@@ -936,9 +974,6 @@ export default function ProfileScreen({
             </React.Fragment>
           ))}
         </View>
-        <Text style={[styles.transferNote, styles.sheetTextLeft]}>
-          {T("settings.transfer.note")}
-        </Text>
         <View style={shared.sheetActions}>
           <Pressable
             style={shared.sheetBtnPrimary}
@@ -1088,19 +1123,6 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       fontSize: FontSize.xs,
       color: Colors.textMuted,
       flexShrink: 0,
-    },
-    // Footnote under the transfer list: quieter than sheetSubtitle, since it
-    // qualifies what was just described rather than introducing it.
-    transferNote: {
-      fontSize: FontSize.xs,
-      color: Colors.textMuted,
-      lineHeight: FontSize.xs * 1.5,
-    },
-    // The shared sheet centres its children; the transfer and wipe sheets read
-    // as a block of prose, so their text stretches full width and reads left.
-    sheetTextLeft: {
-      alignSelf: "stretch",
-      textAlign: "left",
     },
     // One row inside the Appearance box (no per-row border; the box + dividers
     // group them, matching the settings and room-actions sheets).

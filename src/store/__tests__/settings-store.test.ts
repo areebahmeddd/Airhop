@@ -8,7 +8,10 @@
 // already in flight lives in mesh-service.
 
 import { MAX_CUSTOM_RELAYS } from "../../core/nostr/geo-relay";
-import { useSettingsStore } from "../settings-store";
+import {
+  MEDIA_RETENTION_DAY_OPTIONS,
+  useSettingsStore,
+} from "../settings-store";
 
 function state() {
   return useSettingsStore.getState();
@@ -79,5 +82,64 @@ describe("customRelays", () => {
     state().addCustomRelay("late.example.com");
     expect(state().customRelays).toContain("wss://late.example.com");
     expect(state().customRelays).toHaveLength(MAX_CUSTOM_RELAYS);
+  });
+});
+
+// Two settings whose defaults are the load-bearing part. Both are the kind of
+// choice where the wrong default silently harms the person least likely to go
+// looking for it, so the defaults are pinned rather than left to be noticed.
+describe("media retention", () => {
+  it("defaults to seven days, matching bitchat's sweep", () => {
+    useSettingsStore.getState().reset();
+    expect(state().mediaRetentionDays).toBe(7);
+  });
+
+  it("offers only bounded windows, never keep-forever", () => {
+    // The threat model says an attachment must not outlive its conversation.
+    // An unbounded option would retire that quietly for whoever picked it.
+    expect([...MEDIA_RETENTION_DAY_OPTIONS]).toEqual([7, 14, 30]);
+    for (const days of MEDIA_RETENTION_DAY_OPTIONS) {
+      expect(Number.isFinite(days)).toBe(true);
+      expect(days).toBeGreaterThan(0);
+    }
+  });
+
+  it("keeps a chosen window across other changes", () => {
+    useSettingsStore.getState().setMediaRetentionDays(30);
+    useSettingsStore.getState().setKeyboardLearning(false);
+    expect(state().mediaRetentionDays).toBe(30);
+  });
+
+  it("returns to seven days on a panic wipe", () => {
+    // A wipe leaves a first-run device. Inheriting the previous person's
+    // 30-day window would leave the next one holding media longer than the
+    // default promises, without ever having chosen it.
+    useSettingsStore.getState().setMediaRetentionDays(30);
+    useSettingsStore.getState().reset();
+    expect(state().mediaRetentionDays).toBe(7);
+  });
+});
+
+describe("keyboard suggestions", () => {
+  it("defaults on, because an app that is painful to type in goes unused", () => {
+    useSettingsStore.getState().reset();
+    expect(state().keyboardLearning).toBe(true);
+  });
+
+  it("can be turned off and stays off", () => {
+    useSettingsStore.getState().setKeyboardLearning(false);
+    expect(state().keyboardLearning).toBe(false);
+  });
+
+  it("is independent of the notification-preview toggle", () => {
+    useSettingsStore.getState().setKeyboardLearning(false);
+    useSettingsStore.getState().setHideNotificationPreviews(false);
+    expect(state().keyboardLearning).toBe(false);
+  });
+
+  it("returns to on after a panic wipe", () => {
+    useSettingsStore.getState().setKeyboardLearning(false);
+    useSettingsStore.getState().reset();
+    expect(state().keyboardLearning).toBe(true);
   });
 });

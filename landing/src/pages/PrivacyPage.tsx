@@ -93,8 +93,10 @@ export default function PrivacyPage() {
               </li>
               <li>
                 <strong>Media attachments.</strong> Photos, videos, and voice notes you send or
-                receive are written to the app's cache so they stay viewable. They are deleted by
-                panic wipe, by clearing the cache in settings, or by removing the app.
+                receive are written to the app's cache so they stay viewable. They are deleted
+                automatically once they pass the retention window set in Privacy (seven days by
+                default), and also by panic wipe, by clearing the cache in settings, or by removing
+                the app.
               </li>
               <li>
                 <strong>Queued outgoing messages.</strong> A private message that has not yet been
@@ -152,9 +154,11 @@ export default function PrivacyPage() {
                 session. Nothing is recorded on either device.
               </li>
               <li>
-                A screenshot notice. Taking a screenshot inside a conversation sends the other side
-                a message saying you did, under your display name. The screenshot itself is never
-                sent.
+                A screenshot notice, in private conversations only. Taking a screenshot in a direct
+                message, private group, or private channel tells the people in it that you did,
+                under your display name. In the public mesh room and location channels nothing is
+                sent, because announcing it there would record that you were present. The screenshot
+                itself is never sent.
               </li>
               <li>
                 Approximate Bluetooth signal strength (radio metadata visible to any nearby
@@ -285,13 +289,12 @@ export default function PrivacyPage() {
           </section>
 
           <section className="space-y-3">
-            <h2 className="text-base font-semibold text-gray-900">Internet gateway (optional)</h2>
+            <h2 className="text-base font-semibold text-gray-900">Tor routing (optional)</h2>
             <p className="text-sm leading-relaxed">
-              A device with the gateway setting enabled relays location-channel messages on behalf
-              of nearby devices that have no internet connection. The relayed messages are already
-              public to that channel and are signed by their original author, so a gateway cannot
-              read private content or alter what it carries. Enabling it uses your own data
-              connection and battery. Internet gateway is off by default.
+              Airhop supports routing Nostr traffic through Tor using Arti on iOS or Orbot on
+              Android. When enabled,{" "}
+              <strong>relay operators cannot observe your IP address.</strong> Tor is off by
+              default.
             </p>
           </section>
 
@@ -309,12 +312,13 @@ export default function PrivacyPage() {
           </section>
 
           <section className="space-y-3">
-            <h2 className="text-base font-semibold text-gray-900">Tor routing (optional)</h2>
+            <h2 className="text-base font-semibold text-gray-900">Internet gateway (optional)</h2>
             <p className="text-sm leading-relaxed">
-              Airhop supports routing Nostr traffic through Tor using Arti on iOS or Orbot on
-              Android. When enabled,{" "}
-              <strong>relay operators cannot observe your IP address.</strong> Tor is off by
-              default.
+              A device with the gateway setting enabled relays location-channel messages on behalf
+              of nearby devices that have no internet connection. The relayed messages are already
+              public to that channel and are signed by their original author, so a gateway cannot
+              read private content or alter what it carries. Enabling it uses your own data
+              connection and battery. Internet gateway is off by default.
             </p>
           </section>
 
@@ -342,6 +346,11 @@ export default function PrivacyPage() {
                 sealed using key agreement, HKDF-SHA256, and XChaCha20-Poly1305.
               </li>
               <li>
+                <strong>Ecash.</strong> Cashu blind signatures, which stop a mint linking issuance
+                to redemption, plus DLEQ proofs that let your device verify a token was genuinely
+                signed by its mint with no network connection.
+              </li>
+              <li>
                 <strong>Implementation.</strong> All cryptographic operations use the{" "}
                 <a
                   href="https://github.com/paulmillr/noble-curves"
@@ -353,19 +362,14 @@ export default function PrivacyPage() {
                 </a>{" "}
                 library suite, which has been independently audited by Cure53.
               </li>
-              <li>
-                <strong>Ecash.</strong> Cashu blind signatures, which stop a mint linking issuance
-                to redemption, plus DLEQ proofs that let your device verify a token was genuinely
-                signed by its mint with no network connection.
-              </li>
             </ul>
             <p className="text-sm leading-relaxed">
               <strong>
                 No cryptographic protection prevents a recipient from copying, screenshotting, or
                 forwarding a message after reading it.
               </strong>{" "}
-              Airhop tells the other side when you screenshot a conversation, but that is a courtesy
-              notice, not a control.
+              Airhop tells the other side when you screenshot a private conversation, but that is a
+              courtesy notice, not a control.
             </p>
           </section>
 
@@ -385,8 +389,13 @@ export default function PrivacyPage() {
                 most seven days.
               </li>
               <li>
-                <strong>Conversations, groups, contacts, keys, and media:</strong> until you delete
-                them, run a panic wipe, or remove the app.
+                <strong>Media attachments:</strong> deleted automatically after the window you
+                choose in Privacy (7 days by default, or 14 or 30). There is no keep-forever option.
+                Also removed by clearing the cache, a panic wipe, or removing the app.
+              </li>
+              <li>
+                <strong>Conversations, groups, contacts, and keys:</strong> until you delete them,
+                run a panic wipe, or remove the app.
               </li>
               <li>
                 <strong>Wallet transaction history:</strong> the most recent 500 entries, until you
@@ -407,8 +416,8 @@ export default function PrivacyPage() {
                 and app data from the Profile screen.
               </li>
               <li>
-                <strong>Feature controls.</strong> Tor routing, the internet gateway, and the mesh
-                bridge can each be turned on or off in settings, and location channels left
+                <strong>Feature controls.</strong> Tor routing, the mesh bridge, and the internet
+                gateway can each be turned on or off in settings, and location channels left
                 unjoined. Anything already published to a relay cannot be recalled.
               </li>
               <li>

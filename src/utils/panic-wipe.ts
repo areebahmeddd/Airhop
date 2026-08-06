@@ -21,6 +21,7 @@ import { resetWalletService } from "../services/wallet-service";
 import { useActivityStore } from "../store/activity-store";
 import { useBlockedStore } from "../store/blocked-store";
 import { useBoardStore } from "../store/board-store";
+import { useChannelMembersStore } from "../store/channel-members-store";
 import { dropPendingChatPersistence, useChatStore } from "../store/chat-store";
 import { useContactsStore } from "../store/contacts-store";
 import { useGeohashBookmarksStore } from "../store/geohash-bookmarks-store";
@@ -128,6 +129,7 @@ export async function panicWipe(): Promise<void> {
   useGroupStore.getState().clearAll();
   clearOwedGroupStates();
   useNoticesStore.getState().clearAll();
+  useChannelMembersStore.getState().clearAll();
   useGeohashBookmarksStore.getState().clearAll();
   usePlaceNamesStore.getState().clearAll();
   useSettingsStore.getState().reset();

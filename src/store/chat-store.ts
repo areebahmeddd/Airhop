@@ -5,6 +5,8 @@ import { createMMKV } from "react-native-mmkv";
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 import { MAX_CHANNEL_NAME } from "../utils/deep-link";
+import { useActivityStore } from "./activity-store";
+import { useChannelMembersStore } from "./channel-members-store";
 
 export type AttachmentType = "image" | "voice" | "document" | "video";
 
@@ -110,8 +112,17 @@ interface ChatState {
   // stable channel tag visible to relays). Chosen at creation, carried in the
   // invite so every member subscribes the same way.
   channelReach: Record<string, "ble" | "ble+nostr">;
+  // Threads folded into another one, `from` to `to`. A DM is keyed
+  // `dm:nostr_<pubkey>` until the sender's announce identifies them, then
+  // `dm:<peerID>`; mergeChannel folds the first into the second. Anything still
+  // holding the old name resolves through here: the open thread, the
+  // last-thread restore, a tapped notification, a bell row.
+  channelRedirects: Record<string, string>;
 
   addChannel: (channel: string) => void;
+  // Follow a merged-away channel to the thread it now lives in. Identity for
+  // anything never merged, so it is safe to call on any channel.
+  resolveChannel: (channel: string) => string;
   // Join (or create) a private channel with its E2E key and reach. Used when
   // you create a channel, when you tap someone's invite link, and when you
   // paste one into the app.
@@ -332,12 +343,17 @@ export const useChatStore = create<ChatState>()(
       mutedChannels: DEFAULT_MUTED_CHANNELS,
       channelKeys: {},
       channelReach: {},
+      channelRedirects: {},
 
       addChannel(channel: string) {
         set((state) => {
           if (state.channels.includes(channel)) return state;
           return { channels: [...state.channels, channel] };
         });
+      },
+
+      resolveChannel(channel: string) {
+        return get().channelRedirects[channel] ?? channel;
       },
 
       joinPrivateChannel(
@@ -465,6 +481,9 @@ export const useChatStore = create<ChatState>()(
       },
 
       removeChannel(channel: string) {
+        // Leaving takes the key, so who else held it is no longer ours to
+        // keep. Rejoining rebuilds the roster from live traffic.
+        useChannelMembersStore.getState().clearChannel(channel);
         set((state) => {
           const channels = state.channels.filter((c) => c !== channel);
           const messages = { ...state.messages };
@@ -609,20 +628,52 @@ export const useChatStore = create<ChatState>()(
         });
       },
 
+      // Fold one thread into another when an announce ties two channel keys to
+      // the same person.
+      //
+      // `from` may be the thread the user has open: a conversation carried over
+      // Nostr before this peer was seen on Bluetooth is merged the moment they
+      // walk into range. So the pointers move with the messages, or the open
+      // thread renders a channel that no longer exists.
       mergeChannel(from: string, to: string) {
         if (from === to) return;
+        // Reading either name means reading the merged conversation, so nothing
+        // folded in is unread. Same rule addMessage applies per message.
+        const readingTarget =
+          get().activeChannel === from || get().activeChannel === to;
+        // Chained merges collapse, so a thread merged twice resolves in one hop
+        // rather than pointing at another alias.
+        function redirectsAfterMerge(
+          existing: Record<string, string>,
+        ): Record<string, string> {
+          const next: Record<string, string> = {};
+          for (const [alias, target] of Object.entries(existing)) {
+            if (alias === to) continue; // `to` is live again; it is not an alias
+            next[alias] = target === from ? to : target;
+          }
+          next[from] = to;
+          return next;
+        }
+        useActivityStore.getState().repointChannel(from, to);
         set((state) => {
+          const followed = {
+            channelRedirects: redirectsAfterMerge(state.channelRedirects),
+            activeChannel:
+              state.activeChannel === from ? to : state.activeChannel,
+            lastThread: state.lastThread === from ? to : state.lastThread,
+          };
           const source = state.messages[from];
           if (source === undefined || source.length === 0) {
             // Nothing to move, but still drop the empty source channel.
             if (!(from in state.messages) && !state.channels.includes(from)) {
-              return state;
+              return followed;
             }
             const messages = { ...state.messages };
             delete messages[from];
             const unreadCounts = { ...state.unreadCounts };
             delete unreadCounts[from];
             return {
+              ...followed,
               messages,
               unreadCounts,
               channels: state.channels.filter((c) => c !== from),
@@ -642,12 +693,14 @@ export const useChatStore = create<ChatState>()(
           delete messages[from];
 
           const unreadCounts = { ...state.unreadCounts };
-          unreadCounts[to] =
-            (unreadCounts[to] ?? 0) + (unreadCounts[from] ?? 0);
+          unreadCounts[to] = readingTarget
+            ? 0
+            : (unreadCounts[to] ?? 0) + (unreadCounts[from] ?? 0);
           delete unreadCounts[from];
 
           const channels = state.channels.filter((c) => c !== from);
           return {
+            ...followed,
             messages,
             unreadCounts,
             channels: channels.includes(to) ? channels : [...channels, to],
@@ -655,7 +708,11 @@ export const useChatStore = create<ChatState>()(
         });
       },
 
+      // Opening a conversation clears both records of it: the unread count on
+      // its row and its rows in the bell. The OS notification for the channel
+      // is dismissed at the same moment (dismissNotificationsFor).
       markChannelRead(channel: string) {
+        useActivityStore.getState().markChannelSeen(channel);
         set((state) => ({
           unreadCounts: { ...state.unreadCounts, [channel]: 0 },
         }));
@@ -686,6 +743,7 @@ export const useChatStore = create<ChatState>()(
           mutedChannels: DEFAULT_MUTED_CHANNELS,
           channelKeys: {},
           channelReach: {},
+          channelRedirects: {},
         });
       },
     }),
@@ -705,6 +763,9 @@ export const useChatStore = create<ChatState>()(
         mutedChannels: state.mutedChannels,
         channelKeys: state.channelKeys,
         channelReach: state.channelReach,
+        // Persisted: a notification in the shade, the last-thread restore and
+        // an old bell row all outlive the session holding a stale name.
+        channelRedirects: state.channelRedirects,
       }),
     },
   ),

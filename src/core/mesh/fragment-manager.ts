@@ -208,7 +208,17 @@ export function decodeFragmentPayload(
 type AssemblyKey = string; // `${senderHex}_${streamHex}`
 
 interface Assembly {
+  // Pinned from the first fragment accepted for this stream, never re-read from
+  // a later header. Fragments are unsigned and skip the deduplicator, so both
+  // halves of the assembly key are attacker-choosable: anyone in range can emit
+  // a fragment claiming any stream. Trusting each arriving header would let one
+  // injected packet declare `total = 3` on a ten-fragment stream and hand the
+  // receive path a truncated payload as the whole message.
+  //
+  // A conformant sender restates the same values on every fragment, so holding
+  // later headers to these refuses nothing legitimate.
   total: number;
+  originalType: PacketType;
   fragments: Map<number, Uint8Array>;
   // When the last fragment landed. Drives the idle timeout; see TIMEOUT_MS.
   updatedAt: number;
@@ -233,6 +243,16 @@ export class FragmentManager {
     const key = buildKey(fromSenderID, header.streamU64);
     this.evictExpired();
 
+    // Refuse a fragment too large to ever be stored before touching the table.
+    // Starting an assembly evicts the oldest in-flight stream, so without this
+    // a fragment that is about to be rejected anyway is still a one-packet
+    // eviction primitive against a full table.
+    //
+    // One fragment reaches this size despite the 512-byte frame budget because
+    // the outer packet may be DEFLATE-compressed and the decoder inflates up to
+    // the sender-declared size: ~25 bytes on the wire, megabytes after.
+    if (header.data.length > MAX_REASSEMBLED_BYTES) return;
+
     let asm = this.assemblies.get(key);
     if (asm === undefined) {
       if (this.assemblies.size >= MAX_CONCURRENT) {
@@ -242,17 +262,32 @@ export class FragmentManager {
       }
       asm = {
         total: header.total,
+        originalType: header.originalType,
         fragments: new Map(),
         updatedAt: Date.now(),
         byteCount: 0,
       };
       this.assemblies.set(key, asm);
+    } else if (
+      header.total !== asm.total ||
+      header.originalType !== asm.originalType
+    ) {
+      // Disagrees with the stream it claims to belong to. Drop the fragment and
+      // leave the assembly untouched: the honest sender is still transmitting,
+      // and the reply to a forgery is to ignore it, not to destroy what the
+      // forgery was aimed at.
+      return;
     }
 
     if (asm.fragments.has(header.index)) return; // duplicate
 
     if (asm.byteCount + header.data.length > MAX_REASSEMBLED_BYTES) {
-      this.assemblies.delete(key);
+      // Refuse the fragment, keep the assembly. Deleting the stream here made
+      // one cheap packet a remote kill switch for somebody else's transfer:
+      // inflate past the ceiling, aim it at any (sender, streamID) observable
+      // on the air, and a 90%-complete photo is gone with no error at either
+      // end. A genuinely oversized stream still cannot complete and ages out on
+      // the idle timeout like any stalled one.
       return;
     }
 
@@ -264,7 +299,9 @@ export class FragmentManager {
 
     onProgress?.({
       key,
-      originalType: header.originalType,
+      // The pinned type, not this fragment's claim, so an injected packet
+      // cannot relabel a transfer mid-flight in the UI.
+      originalType: asm.originalType,
       received: asm.fragments.size,
       total: asm.total,
       receivedBytes: asm.byteCount,

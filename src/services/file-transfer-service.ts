@@ -17,11 +17,13 @@ import * as FileSystem from "expo-file-system";
 import {
   decodeFilePacket,
   encodeFilePacket,
+  ensureFileExtension,
   isAllowedMime,
   maxBytesForType,
   mimeMatchesMagic,
   resolveMimeType,
   typeFromMime,
+  wireFileName,
 } from "../core/mesh/bitchat-file-packet";
 import { fragmentPacket, MAX_BLE_FRAME } from "../core/mesh/fragment-manager";
 import {
@@ -37,6 +39,11 @@ import {
 import { t } from "../i18n";
 import { useChatStore, type ChatAttachment } from "../store/chat-store";
 import { useTransferStore } from "../store/transfer-store";
+import {
+  attachmentFailureMessage,
+  AttachmentFailureNotifier,
+  type AttachmentFailure,
+} from "../utils/attachment-failure";
 import { BRIDGE_CHANNEL, canSendMedia } from "../utils/media-policy";
 
 // ---- Types ------------------------------------------------------------------
@@ -212,18 +219,10 @@ export type SealFileFn = (
   fileTlv: Uint8Array,
 ) => Packet | null;
 
-function defaultAttachmentName(type: ChatAttachment["type"]): string {
-  switch (type) {
-    case "image":
-      return t("transfer.kind.photo");
-    case "video":
-      return t("transfer.kind.video");
-    case "voice":
-      return t("transfer.kind.voice");
-    default:
-      return t("transfer.kind.file");
-  }
-}
+// NOTE: naming lives in wireFileName(), which owns the extension and bitchat's
+// stable-ID shape together. Nothing here may put localized UI copy on the wire:
+// a display word is not a file name, and one without an extension arrives as a
+// file the OS cannot open.
 
 // The one send failure worth repeating to the sender verbatim: it names a
 // limit they can do something about. Everything else that can go wrong in here
@@ -293,6 +292,9 @@ export class FileTransferService {
   private transferSeq = 0;
 
   private readonly sealFile?: SealFileFn;
+
+  // Throttles the "that attachment didn't arrive" line, per sender.
+  private readonly failureNotifier = new AttachmentFailureNotifier();
 
   constructor(
     identity: ServiceIdentity,
@@ -384,13 +386,15 @@ export class FileTransferService {
 
     const isDM = channel.startsWith("dm:");
     const recipientPeerID = isDM ? channel.slice(3) : "";
-    const fileName = meta.name || defaultAttachmentName(meta.type);
+    // Type first, then name: both sides read the type off the extension once
+    // the file is on disk, so the name follows the MIME. Never the picker's raw
+    // value, since an empty or unrecognised type is dropped on arrival.
+    const mimeType = resolveMimeType(meta.mimeType, meta.name || undefined);
+    const fileName = wireFileName(meta.type, meta.name, mimeType);
 
     const tlv = encodeFilePacket({
       fileName,
-      // Never the picker's raw value: an empty or unrecognised type is dropped
-      // on arrival, which looked exactly like a successful send from here.
-      mimeType: resolveMimeType(meta.mimeType, fileName),
+      mimeType,
       content: fileBytes,
       // A DM is routed by the packet's recipient ID (bitchat-compatible), so we
       // omit the channel tag; a channel attachment carries it for Airhop routing.
@@ -587,19 +591,70 @@ export class FileTransferService {
     return this.outQueue.length;
   }
 
+  // Record a refused attachment, and tell the reader when it is theirs to know.
+  //
+  // Silent everywhere except an existing direct-message thread:
+  //
+  //   - A broadcast failure is nobody's in particular, and anyone in range can
+  //     put a malformed packet on the air.
+  //   - The thread must already exist, or a stranger could conjure a
+  //     conversation in someone's list out of pure garbage. Same shape as the
+  //     channel-tag check above.
+  //   - Throttled per sender even then, since a directed packet can be sent
+  //     repeatedly by anyone in range.
+  private noteRejected(
+    senderPeerID: string,
+    directedToMe: boolean,
+    reason: AttachmentFailure,
+  ): void {
+    if (!directedToMe) return;
+    const channel = `dm:${senderPeerID}`;
+    const chat = useChatStore.getState();
+    if (!chat.channels.includes(channel)) return;
+    if (!this.failureNotifier.shouldNotify(senderPeerID, Date.now())) return;
+
+    chat.addMessage({
+      id: `ft-fail-${senderPeerID}-${Date.now()}`,
+      channel,
+      senderID: senderPeerID,
+      senderNickname:
+        this.resolveNickname?.(senderPeerID) ?? senderPeerID.slice(0, 8),
+      text: attachmentFailureMessage(reason),
+      timestampMs: Date.now(),
+      isMine: false,
+      isSystem: true,
+    });
+  }
+
   // Decode, validate, cache, and render an incoming file.
   // `sealed` says the bytes arrived inside a Noise session rather than in the
   // open. It is set only by onSealedFile, where the session has already proven
   // the sender and the addressee, so the two wire-level checks below (is this
   // for me, and is the claimed sender real) are already answered.
   private async handleIncoming(packet: Packet, sealed = false): Promise<void> {
-    const fp = decodeFilePacket(packet.payload);
-    if (fp === null) return;
-    // Reject a disallowed or mislabeled type before writing anything to disk.
-    if (!isAllowedMime(fp.mimeType)) return;
-    if (!mimeMatchesMagic(fp.mimeType, fp.content)) return;
-
     const senderPeerID = bytesToHex(packet.senderID);
+
+    // Resolved from the header alone, before the payload is touched, so a
+    // packet that fails to decode can still be told apart from one that was
+    // simply passing through on its way to somebody else. Relayed traffic must
+    // stay silent: it is not our failure and not our business.
+    const directedToMe =
+      sealed || isForMe(packet, hexToBytes(this.identity.peerID));
+
+    const fp = decodeFilePacket(packet.payload);
+    if (fp === null) {
+      this.noteRejected(senderPeerID, directedToMe, "malformed");
+      return;
+    }
+    // Reject a disallowed or mislabeled type before writing anything to disk.
+    if (!isAllowedMime(fp.mimeType)) {
+      this.noteRejected(senderPeerID, directedToMe, "unsupported-type");
+      return;
+    }
+    if (!mimeMatchesMagic(fp.mimeType, fp.content)) {
+      this.noteRejected(senderPeerID, directedToMe, "type-mismatch");
+      return;
+    }
 
     // A directed attachment is for its addressee, not for whoever relays it.
     //
@@ -620,11 +675,7 @@ export class FileTransferService {
     // Relaying is unaffected: that already happened in handleRaw before this
     // point, so forwarding for other people still works. Only the decision to
     // DELIVER is narrowed.
-    if (
-      !sealed &&
-      !isBroadcast(packet) &&
-      !isForMe(packet, hexToBytes(this.identity.peerID))
-    ) {
+    if (!sealed && !isBroadcast(packet) && !directedToMe) {
       return;
     }
 
@@ -661,9 +712,13 @@ export class FileTransferService {
       (isBroadcast(packet) ? BRIDGE_CHANNEL : `dm:${senderPeerID}`);
     const type = typeFromMime(fp.mimeType);
 
-    const safeName = (fp.fileName || "file")
-      .replace(/[^a-zA-Z0-9._-]/g, "_")
-      .slice(0, 64);
+    // Repair the extension from the MIME before writing: the photo library and
+    // the audio player read the type off it and ignore the MIME. Truncate
+    // first, so a long name loses its middle rather than its extension.
+    const safeName = ensureFileExtension(
+      (fp.fileName || "file").replace(/[^a-zA-Z0-9._-]/g, "_").slice(0, 64),
+      fp.mimeType ?? "",
+    );
     const file = new FileSystem.File(
       FileSystem.Paths.cache,
       `airhop_${String(Date.now())}_${safeName}`,
@@ -672,6 +727,10 @@ export class FileTransferService {
       file.create({ overwrite: true, intermediates: true });
       file.write(fp.content);
     } catch {
+      // Decoded and validated, then the disk refused it. Worth saying out loud:
+      // unlike the checks above, this one is the receiver's problem to fix
+      // (free space, permissions) rather than the sender's to resend around.
+      this.noteRejected(senderPeerID, directedToMe, "storage");
       return;
     }
 

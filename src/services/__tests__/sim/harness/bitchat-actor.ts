@@ -6,11 +6,12 @@
 // sides share the bug. So this node is written to bitchat's rules rather than
 // to Airhop's, and its whole job is to disagree when Airhop is wrong:
 //
-//   * It accepts only the packet types bitchat defines (0x01-0x29). Airhop's
-//     own extensions - DR_ENCRYPTED (0x12) and CHANNEL_ENC (0x2a) - are
-//     DROPPED, exactly as an unknown type is dropped on a real bitchat build.
-//     That is the property the compatibility promise rests on: Airhop's extras
-//     must cost bitchat nothing, not merely be understood by Airhop.
+//   * It interprets only the packet types bitchat defines. Airhop's own
+//     extensions - DR_ENCRYPTED (0x12), CHANNEL_ENC (0x50), CHANNEL_MSG_AIRHOP
+//     (0x51) - reach no handler, while still being RELAYED like any other
+//     packet (BLEService's type switch logs `case .none` and falls through to
+//     scheduleRelayIfNeeded). Both halves matter: Airhop's extras must cost
+//     bitchat nothing AND must still cross a mesh made of bitchat phones.
 //   * It refuses a courier envelope whose expiry is beyond 24h + 1h slack,
 //     which is what bitchat's CourierStore does and what silently ate every
 //     Airhop envelope before that constant was corrected.
@@ -47,18 +48,23 @@ import {
   encodeBurstStart,
   VoiceCodec,
 } from "../../../../core/mesh/voice-capture";
-import {
-  decodeChannelMsgPayload,
-  encodeChannelMsgPayload,
-} from "../../../../core/router/message-router";
 import type { RadioPort } from "../../lifecycle/harness/android-native";
 import type { Platform } from "../../lifecycle/harness/os";
 import type { RadioNode } from "./radio-fabric";
 import type { World } from "./world";
 
-// MessageType.swift / MessageType.kt. Anything outside this set is unknown to
-// bitchat and dropped without ceremony.
+// MessageType.swift / MessageType.kt. Anything outside this set reaches no
+// handler on a real bitchat build.
+//
+// The three values past voiceFrame are listed as raw numbers because Airhop has
+// no constant for them: 0x2A and 0x2B are reserved upstream for courier
+// spray-ack, and 0x2C is announceV2. They are here so this actor claims the
+// range bitchat actually claims, which is what makes a future Airhop type
+// landing on one of them fail a scenario instead of passing quietly.
 const BITCHAT_KNOWN_TYPES = new Set<number>([
+  0x2a,
+  0x2b,
+  0x2c,
   PacketType.ANNOUNCE,
   PacketType.CHANNEL_MSG,
   PacketType.LEAVE,
@@ -95,6 +101,10 @@ const COURIER_MAX_LIFETIME_MS = 24 * 60 * 60 * 1000;
 const COURIER_EXPIRY_SLACK_MS = 60 * 60 * 1000;
 
 const DEDUP_LIMIT = 1000;
+
+// bitchat's mesh has one public room and no channel field to name a second.
+// Airhop calls that room `#bluetooth`.
+const BITCHAT_MESH_ROOM = "#bluetooth";
 
 function base64Encode(bytes: Uint8Array): string {
   const A = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
@@ -145,6 +155,8 @@ export interface BitchatObservations {
   refusedCourierEnvelopes: number;
   // Packets whose signature did not verify against the claimed sender.
   rejectedSignatures: number;
+  // Public messages whose payload was not valid UTF-8, which bitchat-iOS drops.
+  rejectedPayloads: number;
   // Files it reassembled and decoded successfully, with the bytes that actually
   // arrived so a scenario can compare them against what was sent.
   filesReceived: {
@@ -192,6 +204,7 @@ export class BitchatActor implements RadioNode {
     droppedUnknownTypes: new Map(),
     refusedCourierEnvelopes: 0,
     rejectedSignatures: 0,
+    rejectedPayloads: 0,
     filesReceived: [],
     expiredAssemblies: 0,
     relayed: 0,
@@ -346,23 +359,24 @@ export class BitchatActor implements RadioNode {
     else this.broadcast(packet);
   }
 
-  // Say something on a public channel, the way a bitchat user does.
+  // Say something in the public room, the way a bitchat user does.
   //
-  // The CHANNEL_MSG payload shape is the one place this actor SHARES code with
-  // Airhop rather than re-deriving it, and that is deliberate: PROTOCOLS.md
-  // section 3 specifies the packet frame and the type registry, but says only
-  // "channel name embedded in payload" about this body. There is no independent
-  // specification to re-derive from, so hand-rolling a second encoder here
-  // would test my reading of the source, not the protocol. What this actor DOES
-  // re-derive independently - the frame layout, the peer ID, the type registry,
-  // the signature policy, the courier ceiling - is exactly what PROTOCOLS.md
-  // pins down.
+  // Derived from bitchat's own source, never from Airhop's encoder: an actor
+  // that encodes with the code under test agrees with it by construction.
+  //
+  //   BLEService.sendMessage        payload: Data(content.utf8)
+  //   BLEPublicMessageHandler       String(data: packet.payload, encoding: .utf8)
+  //
+  // The text and nothing else. `channel` is taken so call sites read like
+  // Airhop's, but it never reaches the wire, and any other channel is something
+  // this actor cannot send.
   sendPublicMessage(channel: string, text: string): void {
-    const payload = encodeChannelMsgPayload(
-      channel,
-      text,
-      `bc-${this.id}-${String(this.world.now)}`,
-    );
+    if (channel !== BITCHAT_MESH_ROOM) {
+      throw new Error(
+        `bitchat has no channel "${channel}": its mesh has one public room`,
+      );
+    }
+    const payload = new TextEncoder().encode(text);
     this.world.say("BITCHAT_SEND", `${this.id}: ${text}`);
     this.broadcast(
       this.sign({
@@ -433,22 +447,29 @@ export class BitchatActor implements RadioNode {
       if (oldest !== undefined) this.dedup.delete(oldest);
     }
 
-    // The property under test: a type bitchat does not define is dropped, and
-    // dropping it must cost nothing.
-    if (!BITCHAT_KNOWN_TYPES.has(packet.type)) {
+    // The property under test: a type bitchat does not define is never
+    // interpreted, and not interpreting it costs nothing.
+    //
+    // It is not dropped from the mesh. BLEService.handleReceivedPacket runs its
+    // type switch, whose `case .none` only logs, then falls through to
+    // scheduleRelayIfNeeded like every other packet; RelayController.decide
+    // receives the type as booleans that are all false for an unknown one, so
+    // it takes the ordinary broadcast relay path. Forwarding bytes a node
+    // cannot read is what lets a mesh carry types not every node implements.
+    const unknownType = !BITCHAT_KNOWN_TYPES.has(packet.type);
+    if (unknownType) {
       this.seen.droppedUnknownTypes.set(
         packet.type,
         (this.seen.droppedUnknownTypes.get(packet.type) ?? 0) + 1,
       );
       this.world.say(
         "BITCHAT_DROPPED_UNKNOWN",
-        `${this.id} dropped type 0x${packet.type.toString(16)}`,
+        `${this.id} did not interpret type 0x${packet.type.toString(16)}`,
       );
-      return;
     }
 
     const senderID = bytesToHex(packet.senderID);
-    if (senderID !== this.peerID) {
+    if (!unknownType && senderID !== this.peerID) {
       switch (packet.type) {
         case PacketType.ANNOUNCE:
           this.onAnnounce(packet, senderID);
@@ -595,9 +616,17 @@ export class BitchatActor implements RadioNode {
       this.seen.rejectedSignatures++;
       return;
     }
-    const decoded = decodeChannelMsgPayload(packet.payload);
-    if (decoded === null) return;
-    const { channel, text } = decoded;
+    // The whole payload is the message, and it belongs to the one public room.
+    // Decoded the way bitchat-iOS decodes it: a payload that is not valid UTF-8
+    // is dropped rather than shown ("Failed to decode message payload as UTF-8").
+    let text: string;
+    try {
+      text = new TextDecoder("utf-8", { fatal: true }).decode(packet.payload);
+    } catch {
+      this.seen.rejectedPayloads++;
+      return;
+    }
+    const channel = BITCHAT_MESH_ROOM;
     if (!this.channels.has(channel)) return;
     this.seen.publicMessages.push({ senderID, text, channel });
     this.world.say("BITCHAT_RECEIVED", `${this.id}: ${text}`);

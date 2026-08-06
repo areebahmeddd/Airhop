@@ -1,14 +1,15 @@
 #!/usr/bin/env node
-// Validates a candidate relay directory CSV before it replaces the vendored copy at
-// assets/data/relays.csv. The directory is compiled into the app bundle, so a bad row
-// ships to every user. Fails closed.
+// Validates a candidate relay directory CSV before it replaces the vendored
+// copy at assets/data/nostr_relays.csv. The directory is compiled into the app
+// bundle, so a bad row ships to every user. Fails closed.
 //
 //   node scripts/validate-relays.js --input <candidate.csv>
-//                                   [--baseline assets/data/relays.csv]
+//                                   [--baseline assets/data/nostr_relays.csv]
 //                                   [--github-output $GITHUB_OUTPUT]
 
 const crypto = require("crypto");
 const fs = require("fs");
+const { canonicalRelayUrl } = require("./relay-url.js");
 
 const HEADER = "Relay URL,Latitude,Longitude";
 
@@ -165,7 +166,9 @@ function validateRows(rows) {
       return;
     }
 
-    const key = rawHost.toLowerCase();
+    // Canonical key, so "host" and "host:443" count as one relay. Counting raw
+    // rows would measure the churn thresholds below against ~25% duplicates.
+    const key = canonicalRelayUrl(rawHost) ?? rawHost.toLowerCase();
     const seen = coords.get(key);
     if (seen === undefined) {
       coords.set(key, `${lat},${lng}`);
@@ -226,8 +229,12 @@ function main() {
       "baseline",
     );
     if (baselineRows !== null && baselineRows.length > 0) {
+      // Same key as the candidate, or the deltas compare different things.
       const before = new Set(
-        baselineRows.map((line) => line.split(",")[0].trim().toLowerCase()),
+        baselineRows.map((line) => {
+          const rawHost = line.split(",")[0].trim();
+          return canonicalRelayUrl(rawHost) ?? rawHost.toLowerCase();
+        }),
       );
 
       const delta = Math.abs(hosts.size - before.size) / before.size;

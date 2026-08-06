@@ -27,6 +27,7 @@ import {
   type BoardTombstone,
   type BoardWire,
 } from "../core/mesh/board-packet";
+import { noticeAuthor, useNoticesStore } from "./notices-store";
 
 export type BoardIngestResult = "accepted" | "duplicate" | "rejected";
 
@@ -214,6 +215,18 @@ export const useBoardStore = create<BoardState>((set, get) => {
       retainUntil = target.expiresAt;
       isOrphan = false;
       nextPosts = posts.filter((p) => !idEq(p.postID, tombstone.postID));
+      // A geohash post is also bridged to Nostr as a kind-1 note, and the
+      // notices sheet hides that note only while this post exists. Removing the
+      // post without saying so un-hides the copy. Mesh-board posts (empty
+      // geohash) are never bridged and have none.
+      if (target.geohash.length > 0) {
+        useNoticesStore.getState().suppressBridged({
+          geohash: target.geohash,
+          content: target.content,
+          nickname: noticeAuthor(target.authorNickname),
+          createdAtMs: target.createdAt,
+        });
+      }
     } else {
       // Post unknown (tombstone raced ahead); keep it so a late post is
       // suppressed if it arrives later.

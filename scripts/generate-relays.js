@@ -1,32 +1,34 @@
 #!/usr/bin/env node
 // Regenerates src/data/relays.ts and landing/src/data/relays.ts from
-// assets/data/relays.csv.
+// assets/data/nostr_relays.csv.
 //
 // The relay directory ships as a TypeScript module rather than being parsed
 // from the CSV at runtime: Metro does not bundle .csv as an asset, so the file
 // was simply unreachable from the app. That is why GeoRelayDirectory sat unused
 // despite being fully implemented and tested.
 //
-// The CSV is vendored in this repo at assets/data/relays.csv and is the single
-// source of truth at runtime. Airhop does NOT fetch a relay list at runtime from
-// any third-party URL. Bundling it means no network dependency on first launch,
-// no third party learning who is asking for relays, and no fetch to fail offline
-// (which is exactly when this app matters most).
+// The CSV is vendored in this repo at assets/data/nostr_relays.csv and is the
+// single source of truth at runtime. Airhop does NOT fetch a relay list at
+// runtime from any third-party URL. Bundling it means no network dependency on
+// first launch, no third party learning who is asking for relays, and no fetch
+// to fail offline (which is exactly when this app matters most).
 //
-// Upstream: .github/workflows/relays.yaml polls daily and refreshes the
-// vendored CSV from bitchat's REVIEWED relay list
-// (https://raw.githubusercontent.com/permissionlesstech/bitchat/main/relays/online_relays_gps.csv),
-// so our closest-relay picks stay aligned with bitchat's for geohash interop.
-// That list itself only moves when a human merges bitchat's weekly review PR,
-// which is why the poll is daily but the data changes at most weekly.
+// Upstream: .github/workflows/relays.yaml refreshes the vendored CSV daily from
+// permissionlesstech/georelays.
+//
+// Rows are canonicalized, not copied: the feed lists many hosts twice, bare and
+// with an explicit :443, and those are one relay. The CSV stays byte-identical
+// to upstream so it can be diffed against the source; this module is the form
+// the app loads.
 //
 // Run after updating that CSV:
 //   node scripts/generate-relays.js
 
 const fs = require("fs");
 const path = require("path");
+const { canonicalRelayUrl } = require("./relay-url.js");
 
-const CSV = path.join(__dirname, "..", "assets", "data", "relays.csv");
+const CSV = path.join(__dirname, "..", "assets", "data", "nostr_relays.csv");
 const OUT = path.join(__dirname, "..", "src", "data", "relays.ts");
 const LANDING_OUT = path.join(
   __dirname,
@@ -45,14 +47,24 @@ const lines = fs
 
 const seen = new Set();
 const relays = [];
+let dropped = 0;
+let collapsed = 0;
 for (const line of lines) {
   const [url, lat, lng] = line.split(",");
   if (!url || !lat || !lng) continue;
   const la = parseFloat(lat);
   const ln = parseFloat(lng);
   if (!Number.isFinite(la) || !Number.isFinite(ln)) continue;
-  const u = url.trim();
-  if (seen.has(u)) continue; // the CSV contains duplicate hosts
+  // Canonical form, so "host" and "host:443" collapse to one entry.
+  const u = canonicalRelayUrl(url);
+  if (u === null) {
+    dropped += 1;
+    continue;
+  }
+  if (seen.has(u)) {
+    collapsed += 1;
+    continue;
+  }
   seen.add(u);
   relays.push({ url: u, lat: la, lng: ln });
 }
@@ -75,8 +87,8 @@ fs.writeFileSync(
   OUT,
   `// Geo-located Nostr relay directory.
 //
-// Generated from assets/data/relays.csv, vendored in this repo:
-//   https://github.com/areebahmeddd/airhop/blob/main/assets/data/relays.csv
+// Generated from assets/data/nostr_relays.csv, vendored in this repo:
+//   https://github.com/areebahmeddd/airhop/blob/main/assets/data/nostr_relays.csv
 // It lives here as a TypeScript module rather than being read from the CSV at
 // runtime because Metro does not bundle .csv as an asset, so the file was
 // unreachable from the app, which is why GeoRelayDirectory was never wired up.
@@ -97,7 +109,10 @@ ${body}
 `,
 );
 
-console.log(`Wrote ${relays.length} relays to src/data/relays.ts`);
+console.log(
+  `Wrote ${relays.length} relays to src/data/relays.ts ` +
+    `(from ${lines.length} rows: ${collapsed} collapsed as duplicates, ${dropped} rejected)`,
+);
 
 // The landing page plots the same directory on a world map. It only needs one
 // entry per physical location, so relays sharing a site are collapsed into a
@@ -123,20 +138,13 @@ for (const r of relays) {
 // choice deterministic when upstream reorders rows.
 const HOSTS_PER_SITE = 2;
 
-// Many relays appear twice, once bare and once with an explicit :443. Those are
-// the same machine, so showing both would waste the readout on a near-duplicate
-// instead of naming a second operator. The relay count still counts both.
+// Every entry is wss://, so the scheme is noise on the map readout. Dropped for
+// display, as relayDisplayHost does in the app.
 function displayHosts(hosts) {
-  const seen = new Set();
-  const picked = [];
-  for (const host of [...hosts].sort()) {
-    const bare = host.replace(/:\d+$/, "");
-    if (seen.has(bare)) continue;
-    seen.add(bare);
-    picked.push(host);
-    if (picked.length === HOSTS_PER_SITE) break;
-  }
-  return picked;
+  return [...hosts]
+    .sort()
+    .slice(0, HOSTS_PER_SITE)
+    .map((host) => host.replace(/^wss:\/\//, ""));
 }
 
 // Stable order so the generated file only changes when the data does.

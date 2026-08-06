@@ -1,8 +1,9 @@
 /**
  * @jest-environment node
  */
-// Byte fixtures for the PAYLOAD structures that cross to bitchat: the file
-// packet, the fragment header, the voice burst, and the group state.
+// Byte fixtures for the PAYLOAD structures that cross to bitchat: the public
+// channel message, the file packet, the fragment header, the voice burst, and
+// the group state.
 //
 // Sibling of compat.test.ts, which pins the packet envelope itself (header
 // layout, flags, signature coverage, packet ID). Between them they cover the two
@@ -19,12 +20,22 @@
 // regenerated from our own output they stop being worth anything, so don't.
 //
 // Vendored source for each, under bitchat/ios:
+//   public message bitchat/Services/BLE/BLEService.swift, sendMessage(), and
+//                  bitchat/Services/BLE/BLEPublicMessageHandler.swift, handle()
 //   file packet    bitchat/Protocols/BitchatFilePacket.swift, encode()
 //   fragment       bitchat/Services/BLE/BLEFragmentAssemblyBuffer.swift, header
 //   voice burst    bitchat/Protocols/VoiceBurstPacket.swift, encode()
 //   group state    bitchat/Services/Groups/GroupProtocol.swift, encode()
 
 import { bytesToHex } from "@noble/hashes/utils.js";
+import {
+  channelPacketType,
+  decodeAirhopChannelPayload,
+  decodeMeshPublicPayload,
+  encodeAirhopChannelPayload,
+  encodeMeshPublicPayload,
+  MESH_PUBLIC_CHANNEL,
+} from "../../router/message-router";
 import { encodeFilePacket } from "../bitchat-file-packet";
 import {
   decodeFragmentPayload,
@@ -260,5 +271,80 @@ describe("bitchat vector: group state TLV", () => {
     })!;
     const epochAt = encoded.indexOf(0x04, 16 + 3);
     expect(hex(encoded.slice(epochAt + 3, epochAt + 7))).toBe("00000102");
+  });
+});
+
+// ---- Public channel message --------------------------------------------------
+
+// bitchat's public message payload is the message text as UTF-8 and nothing
+// else. BLEService.sendMessage builds the packet with
+// `payload: Data(content.utf8)`, and BLEPublicMessageHandler decodes it with
+// `String(data: packet.payload, encoding: .utf8)`, treating the whole payload
+// as the body. There is no channel field and no message ID: the mesh has one
+// public room, and the ID is derived by MeshMessageIdentity.stableID.
+//
+// The round-trip tests in core/router cannot stand in for this. They prove the
+// codec agrees with itself, which is not the claim.
+
+describe("bitchat vector: public channel message payload", () => {
+  test("the mesh room's payload is the text, byte for byte", () => {
+    // "hello", and not one byte more.
+    expect(hex(encodeMeshPublicPayload("hello"))).toBe("68656c6c6f");
+  });
+
+  test("a bare-UTF-8 payload from bitchat decodes to the message", () => {
+    const fromBitchat = new TextEncoder().encode("hey everyone");
+    expect(decodeMeshPublicPayload(fromBitchat)).toBe("hey everyone");
+  });
+
+  // A framed decoder reads the first byte as a channel-name length, so "hi"
+  // (0x68) claims a 104-byte name and the message is dropped.
+  test("a short bitchat message is not read as a length prefix", () => {
+    expect(decodeMeshPublicPayload(new TextEncoder().encode("hi"))).toBe("hi");
+  });
+
+  test("emoji and non-Latin text survive unframed", () => {
+    for (const text of ["नमस्ते", "🛰️ mesh up", "ça va"]) {
+      const encoded = encodeMeshPublicPayload(text);
+      expect(encoded).toEqual(new TextEncoder().encode(text));
+      expect(decodeMeshPublicPayload(encoded)).toBe(text);
+    }
+  });
+
+  // bitchat-iOS drops a payload it cannot read as UTF-8 rather than showing
+  // replacement characters. So does Airhop, on the type they share.
+  test("undecodable bytes are dropped, not rendered", () => {
+    // 0xC3 opens a two-byte sequence that never arrives.
+    expect(decodeMeshPublicPayload(new Uint8Array([0x68, 0xc3]))).toBeNull();
+  });
+
+  // The other half of the promise: what bitchat must NOT see. Its mesh has one
+  // public room and no channel field, so a named Airhop channel sent as 0x02
+  // would be posted into that room, addressed to people its author never chose.
+  test("a named channel never travels under bitchat's type", () => {
+    expect(channelPacketType(MESH_PUBLIC_CHANNEL)).toBe(PacketType.CHANNEL_MSG);
+    for (const channel of [
+      "#block",
+      "#neighborhood",
+      "#city",
+      "geohash:tdr1w",
+    ]) {
+      expect(channelPacketType(channel)).toBe(PacketType.CHANNEL_MSG_AIRHOP);
+    }
+  });
+
+  // Clear of bitchat's frontier, which is at 0x2C and moves forward. The
+  // margin itself is checked against bitchat's own enum in conformance.test.ts;
+  // this only pins the value so a change here is deliberate.
+  test("the Airhop channel type sits in the Airhop range", () => {
+    expect(PacketType.CHANNEL_MSG_AIRHOP).toBe(0x51);
+  });
+
+  test("an Airhop frame round-trips with its channel and id intact", () => {
+    const encoded = encodeAirhopChannelPayload("#neighborhood", "hi", "abc123");
+    const decoded = decodeAirhopChannelPayload(encoded);
+    expect(decoded!.channel).toBe("#neighborhood");
+    expect(decoded!.text).toBe("hi");
+    expect(decoded!.msgId).toBe("abc123");
   });
 });

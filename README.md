@@ -76,7 +76,7 @@ Built on the foundation of [bitchat](https://bitchat.free), using the same [BLE 
 |                   | WiFi high-bandwidth mode  | Faster file transfers between two Android devices, or two iPhones. Not across platforms                                                        |
 |                   | bitchat compatibility     | Airhop nodes communicate directly with bitchat on iOS and Android                                                                              |
 | 🌐 **Internet**   | Internet fallback         | DMs and channels keep flowing over Nostr relays when a user moves out of Bluetooth range                                                       |
-|                   | Geo-relay discovery       | Discover location-based channels across 350+ distributed Nostr relays                                                                          |
+|                   | Geo-relay discovery       | Discover location-based channels across 300+ distributed Nostr relays                                                                          |
 |                   | Internet gateway          | Lend your connection to a nearby offline phone so it can still reach the location (geohash) channels. Off by default                           |
 |                   | Tor integration           | Route Nostr traffic through Tor (Arti on iOS, Orbot on Android)                                                                                |
 
@@ -176,8 +176,10 @@ Signal and Threema are here as the benchmark rather than as alternatives. Both a
 git clone https://github.com/areebahmeddd/airhop
 cd airhop
 npm install
-npx expo prebuild
 ```
+
+> [!CAUTION]
+> Never run `npx expo prebuild`. The `ios/` and `android/` directories are checked in and hand-modified, and prebuild overwrites them.
 
 <details>
 <summary><strong>Xcode setup</strong></summary>
@@ -186,14 +188,22 @@ npx expo prebuild
 2. Open Xcode at least once and let it install any additional required components when prompted
 3. Go to **Xcode** then **Settings** then **Locations**, and select the most recent version in the **Command Line Tools** dropdown
 4. Go to **Xcode** then **Settings** then **Platforms**, click the **+** icon, and add an **iOS** runtime if one is not already installed
-5. Install [CocoaPods](https://cocoapods.org) if it is not already present, then run `npx pod-install` from the project root to install the iOS native dependencies. `npx expo prebuild` already does this once, so only re-run it after changing native dependencies
+5. Install [CocoaPods](https://cocoapods.org) if it is not already present, then run `npx pod-install` from the project root to install the iOS native dependencies.
 6. Launch a simulator from the device dropdown, then run `npm run ios`
 
 > The first `npm run ios` builds the native app from scratch and can take several minutes. Later runs are much faster.
 
-> A physical iPhone is required to test the BLE mesh, since the iOS Simulator does not support Bluetooth.
+> Requires a physical iPhone for BLE mesh testing (the iOS Simulator does not support Bluetooth) and supports iOS 16.0 or later.
 
-> Supports iOS 16.0 or later.
+> Changing a native dependency also changes `ios/Podfile.lock`, which pins exact pod versions. Regenerate it with `npx pod-install` in the same commit.
+
+If a build fails after a dependency change, clear what Xcode and CocoaPods keep between runs:
+
+```bash
+rm -rf ios/Pods ios/build ~/Library/Developer/Xcode/DerivedData/Airhop-*
+npx pod-install
+npm run ios
+```
 
 </details>
 
@@ -212,9 +222,19 @@ npx expo prebuild
 
 > The first `npm run android` builds the native app from scratch and can take several minutes. Later runs are much faster.
 
-> A physical Android device is required to test the BLE mesh, since the Android Emulator does not support Bluetooth.
+> Requires a physical Android device for BLE mesh testing (the Android Emulator does not support Bluetooth) and supports Android 8.0 (API 26) or later.
 
-> Supports Android 8.0 (API 26) or later.
+> Changing a native dependency also changes `android/app/gradle.lockfile`, which pins exact versions. Regenerate it in the same commit.
+
+If a build fails after a dependency change, clear what Gradle keeps between runs:
+
+```bash
+cd android && ./gradlew --stop
+rm -rf ../node_modules/expo-modules-core/expo-module-gradle-plugin/{build,.gradle}
+./gradlew app:dependencies --write-locks
+./gradlew app:assembleDebug -Pkotlin.incremental=false
+cd .. && npm run android
+```
 
 </details>
 

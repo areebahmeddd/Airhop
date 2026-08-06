@@ -47,20 +47,37 @@ export interface NoisePayload {
 const TLV_MESSAGE_ID = 0x00;
 const TLV_CONTENT = 0x01;
 
+// How much text one DM can carry, in BYTES of UTF-8 rather than characters.
+//
+// bitchat's number, not a product decision: `PrivateMessagePacket` in
+// Packets.swift writes one byte of length per field, and both clients refuse
+// anything longer. Raising it needs a versioned or negotiated format agreed
+// across iOS and Android (their #784 has been held on that for months);
+// reinterpreting the existing length byte in place corrupts a legitimate
+// 255-byte DM from every deployed client.
+//
+// Exported so the composer enforces the same budget the wire does. Letting the
+// UI guess is what produced the bug this prevents: a 2000-character composer
+// over a 255-byte envelope, so a long DM encoded to null and went nowhere on
+// every transport, reported as sent.
+export const PRIVATE_MESSAGE_MAX_CONTENT_BYTES = 255;
+
 function utf8(s: string): Uint8Array {
   return new TextEncoder().encode(s);
 }
 
 // Encode a PrivateMessagePacket: [0x00,len,messageID][0x01,len,content].
-// Returns null when either field exceeds 255 bytes (bitchat uses a single-byte
-// length, so it caps here too; the caller must not send longer content).
+// Returns null when either field exceeds its single-byte length; see
+// PRIVATE_MESSAGE_MAX_CONTENT_BYTES.
 export function encodePrivateMessagePacket(
   messageID: string,
   content: string,
 ): Uint8Array | null {
   const id = utf8(messageID);
   const c = utf8(content);
-  if (id.length > 255 || c.length > 255) return null;
+  if (id.length > 255 || c.length > PRIVATE_MESSAGE_MAX_CONTENT_BYTES) {
+    return null;
+  }
   const out = new Uint8Array(2 + id.length + 2 + c.length);
   let o = 0;
   out[o++] = TLV_MESSAGE_ID;

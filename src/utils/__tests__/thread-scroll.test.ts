@@ -142,6 +142,50 @@ describe("resolveThreadScroll", () => {
       }
     });
   });
+
+  // Every kind of message a peer can send is the same case: the reader stays
+  // where they are and the pill offers the trip. Nothing about the payload
+  // changes that, and the list cannot see the payload anyway.
+  describe("whatever a peer sends, while reading further up", () => {
+    for (const kind of ["text", "photo", "voice note", "video", "document"]) {
+      it(`does not move the reader for an incoming ${kind}`, () => {
+        expect(
+          resolveThreadScroll({
+            landing: false,
+            atBottom: false,
+            countChanged: true,
+            ownMessage: false,
+          }),
+        ).toBe("none");
+      });
+    }
+
+    it("still follows when the reader is already at the end", () => {
+      expect(
+        resolveThreadScroll({
+          landing: false,
+          atBottom: true,
+          countChanged: true,
+          ownMessage: false,
+        }),
+      ).toBe("animated");
+    });
+  });
+
+  // Undo Send and history trimming both shorten the list. Neither is an
+  // arrival, so neither may pull a reader off the point they are reading.
+  describe("a message leaving the thread", () => {
+    it("does not move a reader who is further up", () => {
+      expect(
+        resolveThreadScroll({
+          landing: false,
+          atBottom: false,
+          countChanged: true,
+          ownMessage: false,
+        }),
+      ).toBe("none");
+    });
+  });
 });
 
 describe("resolveLandingSettle", () => {

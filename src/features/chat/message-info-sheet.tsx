@@ -1,14 +1,24 @@
 // Message info: the delivery timeline for one of your own outgoing messages,
 // the "i" / "Message info" action from the long-press menu. Mirrors WhatsApp's
 // info screen: a preview of the message, then when it was sent, delivered and
-// read. Delivered/read only apply to DMs (a public channel has no roster to
-// confirm against), so a channel message shows just "Sent".
+// read.
+//
+// What each scope can honestly say differs, so each gets its own answer:
+//
+//   DM      sent, delivered, read. One recipient, so "who saw it" is a name.
+//   Group   sent, plus how much of the roster is reachable. No read receipts
+//           (see utils/group-reach.ts for why they are not coming).
+//   Channel sent, and nothing more. A public room has no roster to count
+//           against and no membership to confirm anything with.
 
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import React, { useMemo } from "react";
 import { StyleSheet, Text, View } from "react-native";
-import { t, useT } from "../../i18n";
+import { t, useT, useTPlural } from "../../i18n";
+import { useBlockedStore } from "../../store/blocked-store";
 import type { ChatMessage } from "../../store/chat-store";
+import { useGroupStore } from "../../store/group-store";
+import { reachablePeerIDs, usePeerStore } from "../../store/peer-store";
 import BottomSheet from "../../ui/components/bottom-sheet";
 import {
   FontSize,
@@ -18,26 +28,52 @@ import {
   useThemeColors,
 } from "../../ui/theme";
 import { resolveDisplayName } from "../../utils/display-name";
+import { groupReach, type GroupReach } from "../../utils/group-reach";
 import { messagePreviewText } from "../../utils/message-preview";
 
 interface Props {
   message: ChatMessage | null;
+  // This device's peer ID, so it can be excluded from the group roster count.
+  localPeerID: string;
   onClose: () => void;
 }
 
 export default function MessageInfoSheet({
   message,
+  localPeerID,
   onClose,
 }: Props): React.JSX.Element {
   const T = useT();
+  const TP = useTPlural();
   const Colors = useThemeColors();
   const styles = useMemo(() => createStyles(Colors), [Colors]);
 
   const isDM = message?.channel.startsWith("dm:") ?? false;
+  const isGroup = message?.channel.startsWith("group:") ?? false;
   const status = message?.status;
   // In a DM there is exactly one recipient, so "who saw it" is simply them.
   const peerName =
     message && isDM ? resolveDisplayName(message.channel.slice(3)) : "";
+
+  // Live rather than sampled at send time: people walk in and out of range, and
+  // the sheet is opened to ask the question now. All three stores are
+  // subscribed, so an open sheet updates as the mesh changes.
+  const groupRoster = useGroupStore((s) => {
+    const c = message?.channel ?? "";
+    if (!c.startsWith("group:")) return undefined;
+    return s.groups.find((g) => g.groupID === c.slice("group:".length));
+  });
+  const peers = usePeerStore((s) => s.peers);
+  const blockedPeerIDs = useBlockedStore((s) => s.blockedPeerIDs);
+  const reach = useMemo<GroupReach | null>(() => {
+    if (groupRoster === undefined) return null;
+    return groupReach(
+      groupRoster.members.map((m) => m.fingerprint),
+      localPeerID,
+      reachablePeerIDs(peers),
+      new Set(blockedPeerIDs),
+    );
+  }, [groupRoster, localPeerID, blockedPeerIDs, peers]);
 
   return (
     <BottomSheet
@@ -158,6 +194,33 @@ export default function MessageInfoSheet({
                         pending={message.readAtMs === undefined}
                       />
                     </>
+                  )}
+                  {/* A group can say how much of its roster is within reach,
+                      which is the question that matters on a mesh: not "did
+                      they read it" but "did it get out". Deliberately not
+                      dressed up as delivery, since nothing confirmed it. */}
+                  {isGroup && reach !== null && (
+                    <InfoLine
+                      styles={styles}
+                      icon="account-group"
+                      color={
+                        reach.reachable > 0
+                          ? Colors.textSecondary
+                          : Colors.textMuted
+                      }
+                      label={
+                        reach.total === 0
+                          ? T("chat.info.group_alone")
+                          : TP("chat.info.group_reach", reach.total, {
+                              reachable: reach.reachable,
+                            })
+                      }
+                      sub={
+                        reach.total === 0
+                          ? undefined
+                          : T("chat.info.group_reach_desc")
+                      }
+                    />
                   )}
                 </>
               )}

@@ -96,6 +96,20 @@ const TYPE_BIT_BOARD = 8; // bit 8 (board posts persist and sync until expiry)
 // and we never answered its requests. The payload stays sealed under the epoch
 // key either way, so a relay learns nothing by carrying it.
 const TYPE_BIT_GROUP = 10;
+// Airhop's named public channels (CHANNEL_MSG_AIRHOP). Without a bit of their
+// own these messages would have no catch-up at all, since they no longer ride
+// bit 1 with the mesh room.
+//
+// Airhop-only, and safe in both directions: bitchat's SyncTypeFlags masks off
+// bits that map to no known type, so a request carrying this one is answered
+// with the types bitchat does know, and bitchat never sets it.
+//
+// Bit 24, not 11. bitchat's table ends at 10 and it allocates forward, so 11 is
+// the next value it would reach for. 24 leaves it thirteen and stays under 31,
+// which the encoder needs: `1 << 31` is negative in JavaScript and `v & 0xff`
+// in encodeTypeFlags coerces to a 32-bit int, so a higher bit would silently
+// fold onto a lower one.
+const TYPE_BIT_AIRHOP_CHANNEL = 24;
 
 // Map a packet type to its SyncTypeFlags bit, or null when it is not gossiped.
 //
@@ -119,6 +133,8 @@ function syncBitForType(type: PacketType): number | null {
       return TYPE_BIT_ANNOUNCE;
     case PacketType.CHANNEL_MSG:
       return TYPE_BIT_MESSAGE;
+    case PacketType.CHANNEL_MSG_AIRHOP:
+      return TYPE_BIT_AIRHOP_CHANNEL;
     case PacketType.BOARD_POST:
       return TYPE_BIT_BOARD;
     case PacketType.GROUP_MESSAGE:
@@ -135,6 +151,7 @@ function maxAgeForType(type: PacketType): number | null {
     case PacketType.ANNOUNCE:
       return MAX_AGE_ANNOUNCE_MS;
     case PacketType.CHANNEL_MSG:
+    case PacketType.CHANNEL_MSG_AIRHOP:
       return MAX_AGE_MESSAGE_MS;
     case PacketType.BOARD_POST:
       return MAX_AGE_BOARD_MS;
@@ -647,7 +664,8 @@ export class GossipSync {
       (1 << TYPE_BIT_ANNOUNCE) |
       (1 << TYPE_BIT_MESSAGE) |
       (1 << TYPE_BIT_BOARD) |
-      (1 << TYPE_BIT_GROUP);
+      (1 << TYPE_BIT_GROUP) |
+      (1 << TYPE_BIT_AIRHOP_CHANNEL);
 
     // The cursor goes out only when the filter could not cover everything we
     // hold. It means "my filter was truncated and reaches back this far", not

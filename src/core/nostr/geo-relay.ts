@@ -1,8 +1,8 @@
 // Geographic relay directory: picks the nearest Nostr relays from the bundled
-// CSV and the optional cached remote copy.
+// directory. Nothing is fetched at runtime; see geo-relay-source.ts.
 //
-// Relay list source: assets/data/relays.csv (bundled at build time, rows are:
-//   Relay URL,Latitude,Longitude
+// Relay list source: assets/data/nostr_relays.csv, bundled at build time.
+// Rows: Relay URL,Latitude,Longitude
 //
 // Nearest-relay selection uses the Haversine great-circle formula. The caller
 // provides GPS coordinates; this module returns the N nearest relay URLs.
@@ -23,7 +23,7 @@ export const GEO_RELAY_COUNT = 5;
 export const MAX_CUSTOM_RELAYS = 5;
 
 export interface RelayEntry {
-  url: string; // wss://… or ws://…
+  url: string; // wss://host[:port], as returned by validateRelayUrl
   lat: number; // decimal degrees
   lng: number; // decimal degrees
 }
@@ -52,7 +52,7 @@ function toRad(deg: number): number {
 
 // ---- CSV parsing ------------------------------------------------------------
 
-// Parse the relays.csv format: "Relay URL,Latitude,Longitude" with a header row.
+// Parse the CSV format: "Relay URL,Latitude,Longitude" with a header row.
 // Invalid rows are silently skipped (attacker-controlled relay content).
 export function parseRelaysCsv(csv: string): RelayEntry[] {
   const entries: RelayEntry[] = [];
@@ -71,7 +71,7 @@ export function parseRelaysCsv(csv: string): RelayEntry[] {
     if (!isFinite(lat) || !isFinite(lng)) continue;
     if (lat < -90 || lat > 90 || lng < -180 || lng > 180) continue;
 
-    const url = normalizeRelayUrl(rawUrl);
+    const url = validateRelayUrl(rawUrl);
     if (!url) continue;
 
     entries.push({ url, lat, lng });
@@ -118,8 +118,9 @@ export const DEFAULT_DM_RELAYS: readonly string[] = WELL_KNOWN_RELAYS.map(
 export class GeoRelayDirectory {
   private entries: RelayEntry[] = [];
 
-  // Load from CSV string (typically from require('../../../assets/data/relays.csv')
-  // which Metro bundles as a static asset). Call once at startup.
+  // Load from CSV string (typically from
+  // require('../../../assets/data/nostr_relays.csv'), which Metro bundles as a
+  // static asset). Call once at startup.
   load(csv: string): void {
     this.loadEntries(parseRelaysCsv(csv));
   }
@@ -128,11 +129,15 @@ export class GeoRelayDirectory {
   // the relay table ships as a generated TypeScript module (src/data/relays.ts)
   // because Metro does not bundle .csv, so there is no CSV string to parse at
   // runtime. The CSV path above remains for tests and for regeneration.
+  //
+  // validateRelayUrl canonicalizes, so "host" and "host:443" collapse to one
+  // relay. nearestRelays returns a fixed count, so a surviving duplicate would
+  // take a slot and push out the relay bitchat picks last, splitting the cell.
   loadEntries(entries: readonly RelayEntry[]): void {
     const seen = new Set<string>();
     this.entries = [];
     for (const e of entries) {
-      const url = normalizeRelayUrl(e.url);
+      const url = validateRelayUrl(e.url);
       if (url === null || seen.has(url)) continue;
       seen.add(url);
       this.entries.push({ url, lat: e.lat, lng: e.lng });
@@ -278,14 +283,4 @@ export function validateRelayUrl(raw: string): string | null {
 // stays the identity everywhere else, including as the key for removal.
 export function relayDisplayHost(url: string): string {
   return url.replace(/^wss:\/\//, "");
-}
-
-// ---- Helpers ----------------------------------------------------------------
-
-function normalizeRelayUrl(raw: string): string | null {
-  const url = raw.trim().replace(/\/$/, "");
-  if (url.startsWith("wss://") || url.startsWith("ws://")) return url;
-  // Bare hostname: assume wss
-  if (!url.includes("://") && url.length > 0) return `wss://${url}`;
-  return null;
 }

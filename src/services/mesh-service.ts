@@ -120,6 +120,7 @@ import {
   encodePacket,
   Flags,
   isBroadcast,
+  isForMe,
   PacketType,
   signPacket,
   verifyPacket,
@@ -148,7 +149,8 @@ import { bridgeStableID } from "../core/nostr/bridge-event";
 import { deriveNostrPrivKey, unwrapDm, wrapDm } from "../core/nostr/gift-wrap";
 import { NostrClient } from "../core/nostr/nostr-client";
 import {
-  decodeChannelMsgPayload,
+  decodeAirhopChannelPayload,
+  decodeMeshPublicPayload,
   MessageRouter,
   newMessageId,
   PeerRegistry,
@@ -159,6 +161,7 @@ import { t } from "../i18n";
 import { useActivityStore } from "../store/activity-store";
 import { useBlockedStore } from "../store/blocked-store";
 import { useBoardStore } from "../store/board-store";
+import { useChannelMembersStore } from "../store/channel-members-store";
 import { useChatStore } from "../store/chat-store";
 import { useContactsStore } from "../store/contacts-store";
 import {
@@ -1141,10 +1144,29 @@ export class MeshService {
     // then fed into the assembler. When all fragments arrive the reassembled
     // inner packet is routed through routePacket without another flood cycle.
     if (packet.type === PacketType.FRAGMENT) {
+      // A fragment addressed to us has nowhere further to go, so relaying it is
+      // pure cost, and for a file that cost is the whole file.
+      //
+      // Fragments carry their parent's recipientID, so a DM attachment is
+      // directed at exactly one device. Relaying anyway meant the RECEIVER
+      // re-fragmented every byte it had just been handed and pushed it back out
+      // over its other links: a photo takes the WiFi link one way and is then
+      // echoed over Bluetooth at ~22 KB/s, spending seconds of radio time and
+      // both devices' battery on a copy for the sender. Scenario W-F09 measures
+      // each radio rather than assuming the faster one was chosen.
+      //
+      // Narrow on purpose: only the addressee stops, so middle nodes still relay
+      // and multi-hop is untouched; broadcasts still flood; only FRAGMENT is
+      // affected. Nothing on the wire changes.
+      const addressedToUs =
+        !isBroadcast(packet) &&
+        isForMe(packet, hexToBytes(this.identity.peerID));
+
       // Fragments inherit the parent packet's version and route, so a routed
       // file crosses the mesh on the same path its parent planned rather than
       // falling back to flooding the moment it is split.
       this.floodRouter.receive(packet, (relay) => {
+        if (addressedToUs) return;
         this.relayPacket(relay, linkID);
       });
       this.fragmentManager.receive(
@@ -1218,6 +1240,9 @@ export class MeshService {
         break;
       case PacketType.CHANNEL_MSG:
         this.onChannelMsg(packet);
+        break;
+      case PacketType.CHANNEL_MSG_AIRHOP:
+        this.onAirhopChannelMsg(packet);
         break;
       case PacketType.CHANNEL_ENC:
         this.onChannelEnc(packet);
@@ -2720,24 +2745,49 @@ export class MeshService {
     return verifyPacket(packet, signingPubKey);
   }
 
+  // A message in the public mesh room (0x02). The payload is the text; the room
+  // is not on the wire because there is only one.
   private onChannelMsg(packet: Packet): void {
+    const text = decodeMeshPublicPayload(packet.payload);
+    if (text === null) return;
+    // Key the row on the content-stable ID (bitchat's MeshMessageIdentity
+    // .stableID over the same fields) so a radio copy and a bridged copy
+    // collapse to one bubble in either arrival order, and tell the bridge the
+    // message is already on the radio so it never re-bridges it (loop rule 3).
+    this.acceptPublicMessage(packet, BRIDGE_CHANNEL, text, (senderID) => {
+      this.bridgeService?.noteRadioMessage(senderID, packet.timestamp, text);
+      return `mesh-${bridgeStableID(senderID, packet.timestamp, text)}`;
+    });
+  }
+
+  // A message in a named Airhop channel (0x51), i.e. a location cell.
+  private onAirhopChannelMsg(packet: Packet): void {
+    const decoded = decodeAirhopChannelPayload(packet.payload);
+    if (decoded === null) return;
+    const { channel, text, msgId } = decoded;
+    // The mesh room never travels under this type. Accepting it would give a
+    // peer two ways into the same room, only one of which bitchat can see.
+    if (channel === BRIDGE_CHANNEL) return;
+    this.acceptPublicMessage(packet, channel, text, (senderID) =>
+      msgId.length > 0
+        ? `ch-${msgId}`
+        : `${senderID}-${String(packet.timestamp)}-${channel}`,
+    );
+  }
+
+  // Shared tail of both public-message paths: authenticate, check the room is
+  // joined, file it.
+  private acceptPublicMessage(
+    packet: Packet,
+    channel: string,
+    text: string,
+    rowID: (senderID: string) => string,
+  ): void {
     const senderID = bytesToHex(packet.senderID);
 
     // Drop our own messages echoed back (shouldn't happen, but guard anyway).
     if (senderID === this.identity.peerID) return;
-
     if (!this.senderIsAuthentic(packet, senderID)) return;
-    const peer = this.registry.get(senderID);
-
-    const decoded = decodeChannelMsgPayload(packet.payload);
-    if (!decoded) return;
-
-    const { channel, text, msgId } = decoded;
-    // Public channels are open to anyone in range, so a nickname there is
-    // self-asserted and two peers can claim the same one. Suffixing with the
-    // peer ID makes impersonation visible, and matches how names are rendered
-    // in geohash channels so one person looks the same on both transports.
-    const nickname = channelDisplayName(senderID, peer?.nickname);
 
     // Only accept traffic for channels the user has actually joined.
     //
@@ -2748,25 +2798,20 @@ export class MeshService {
     // join a channel by name), so a message for an unknown channel is dropped.
     if (!useChatStore.getState().channels.includes(channel)) return;
 
-    // On the bridged public channel, key the row on the content-stable ID so a
-    // radio copy and a bridged copy of the same message collapse to one bubble in
-    // either arrival order, and tell the bridge this message is present on the
-    // radio so it never re-bridges a local-origin message (loop rule 3).
-    const isBridgeChannel = channel === BRIDGE_CHANNEL;
-    if (isBridgeChannel) {
-      this.bridgeService?.noteRadioMessage(senderID, packet.timestamp, text);
-    }
+    // Public channels are open to anyone in range, so a nickname there is
+    // self-asserted and two peers can claim the same one. Suffixing with the
+    // peer ID makes impersonation visible, and matches how names are rendered
+    // in geohash channels so one person looks the same on both transports.
+    const nickname = channelDisplayName(
+      senderID,
+      this.registry.get(senderID)?.nickname,
+    );
 
     useChatStore.getState().addMessage({
-      // The sender's own ID, shared across BLE and Nostr. Two copies of one
-      // message arriving over different transports collapse to a single bubble
-      // via the chat store's id dedupe. Falls back to the old scheme for a
-      // peer running a build that predates message IDs.
-      id: isBridgeChannel
-        ? `mesh-${bridgeStableID(senderID, packet.timestamp, text)}`
-        : msgId.length > 0
-          ? `ch-${msgId}`
-          : `${senderID}-${String(packet.timestamp)}-${channel}`,
+      // Shared across BLE and Nostr, so two copies of one message arriving over
+      // different transports collapse to a single bubble via the chat store's
+      // id dedupe.
+      id: rowID(senderID),
       channel,
       senderID,
       senderNickname: nickname,
@@ -2795,6 +2840,10 @@ export class MeshService {
       const opened = openChannelMessage(keyB64, packet.payload);
       if (opened === null) continue;
       const nickname = channelDisplayName(senderID, peer?.nickname);
+      // The decrypt succeeding IS the membership proof, and this is the only
+      // place it exists: a private channel has no roster on the wire, so who is
+      // in the room can only be learned from who can open its messages.
+      useChannelMembersStore.getState().noteMember(channel, senderID, nickname);
       useChatStore.getState().addMessage({
         id:
           opened.msgId.length > 0

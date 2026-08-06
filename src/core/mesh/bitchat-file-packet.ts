@@ -75,6 +75,83 @@ export function wireMediaName(
   return `${kind === "image" ? "img" : "voice"}_${uuidV4()}.${extension}`;
 }
 
+// The wire name for an attachment.
+//
+// The name is not cosmetic: the receiver writes it to disk, and the photo
+// library and the audio player both read the type off the extension rather than
+// the MIME that travelled beside it. iOS rejects a save outright when there is
+// none (expo-media-library EmptyFileExtensionException).
+//
+// A supplied name is kept and only gains an extension if it had none. A missing
+// one is generated, in bitchat's stable-ID shape for photos and voice notes,
+// which costs nothing because neither is shown by name.
+//
+// The extension follows the MIME type, never the reverse. A live-voice burst
+// finalizes as ADTS AAC rather than an MP4 container, so it is `.aac` and gets
+// no bitchat stable ID (that shape requires `.m4a`); naming it `.m4a` would
+// promise a container that is not there.
+export function wireFileName(
+  kind: AttachmentKind,
+  provided: string | undefined,
+  mimeType: string,
+): string {
+  const named = provided?.trim();
+  if (named !== undefined && named.length > 0) {
+    return ensureFileExtension(named, mimeType);
+  }
+  const extension = extensionForMime(mimeType);
+  if (kind === "image" && extension === "jpg") {
+    return wireMediaName("image", "jpg");
+  }
+  if (kind === "voice" && extension === "m4a") {
+    return wireMediaName("voice", "m4a");
+  }
+  const stem =
+    kind === "image"
+      ? "img"
+      : kind === "voice"
+        ? "voice"
+        : kind === "video"
+          ? "vid"
+          : "file";
+  return `${stem}_${uuidV4()}.${extension}`;
+}
+
+// Give a name an extension when it has none, from the MIME beside it. Applied
+// on send (a picker can return a bare name) and on receive (the sender may not
+// have set one).
+export function ensureFileExtension(name: string, mimeType: string): string {
+  const leaf = name.slice(name.lastIndexOf("/") + 1);
+  const dot = leaf.lastIndexOf(".");
+  // A leading dot is a hidden file, not an extension; nor is a trailing one.
+  const hasExtension = dot > 0 && dot < leaf.length - 1;
+  return hasExtension ? leaf : `${leaf}.${extensionForMime(mimeType)}`;
+}
+
+// One preferred spelling per MIME type, the inverse of MIME_BY_EXTENSION.
+// `bin` for anything unrecognised: an extension the OS does not know still
+// beats none, which is the case that fails hard.
+const EXTENSION_BY_MIME: Record<string, string> = {
+  "image/jpeg": "jpg",
+  "image/jpg": "jpg",
+  "image/png": "png",
+  "image/gif": "gif",
+  "image/webp": "webp",
+  "audio/mp4": "m4a",
+  "audio/m4a": "m4a",
+  "audio/aac": "aac",
+  "audio/mpeg": "mp3",
+  "audio/wav": "wav",
+  "audio/ogg": "ogg",
+  "application/pdf": "pdf",
+  "video/mp4": "mp4",
+  "video/quicktime": "mov",
+};
+
+export function extensionForMime(mimeType: string): string {
+  return EXTENSION_BY_MIME[mimeType.trim().toLowerCase()] ?? "bin";
+}
+
 // RFC 4122 version 4, from the platform CSPRNG. `Math.random` is banned in this
 // codebase and would be wrong here anyway: two photos naming the same id would
 // collide in bitchat's dedup and the second would be discarded as a duplicate.

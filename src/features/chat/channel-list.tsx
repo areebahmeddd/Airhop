@@ -432,10 +432,18 @@ export default function ChannelList({
     const groupName = isGroup
       ? useGroupStore.getState().nameForChannel(item)
       : undefined;
-    // Count yourself for a geo cell (you are an active participant too), so the
-    // row matches the thread header and member sheet, which also count self.
-    const presenceCount = isGeo ? (geoCounts[item] ?? 0) + 1 : peerCount;
-    const presenceLabel = isGeo ? "active" : "nearby";
+    // Count yourself. A member count answers "who is in this room", and you are
+    // one of them, which is how the member sheet has always counted (it renders
+    // a You row) and how every messenger counts a participant list. Applied to
+    // both kinds so the row, the thread header and the sheet agree.
+    //
+    // Not the same question the Mesh tab answers: "peers in range" is a count
+    // of other devices this radio can reach, and it stays exclusive.
+    const presenceCount = (isGeo ? (geoCounts[item] ?? 0) : peerCount) + 1;
+    const presenceText = TP(
+      isGeo ? "chat.presence.active" : "chat.presence.nearby",
+      presenceCount,
+    );
 
     // Formatted once and used by both the visible timestamp and the label
     // below. Calling the formatter twice per row meant building three Date
@@ -509,8 +517,7 @@ export default function ChannelList({
             <Text style={styles.channelScope} numberOfLines={1}>
               {scopeTag}
               {placeName !== undefined && `  ·  ~${placeName}`}
-              {(isDefault || isManualGeo) &&
-                `  ·  ${presenceCount} ${presenceLabel}`}
+              {(isDefault || isManualGeo) && `  ·  ${presenceText}`}
             </Text>
           )}
 

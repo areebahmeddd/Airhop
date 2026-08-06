@@ -62,7 +62,8 @@ import WalletScreen, {
   type WalletAction,
 } from "./src/features/wallet/wallet-screen";
 import { initI18n, t, useT, useTPlural, type TranslationKey } from "./src/i18n";
-import { arrowBack } from "./src/i18n/layout";
+import { arrowBack, isRTLLayout } from "./src/i18n/layout";
+import { setAudioForPlayback } from "./src/services/audio-session";
 import { sweepExpiredAttachments } from "./src/services/file-transfer-service";
 import { applyAirhopLink } from "./src/services/link-router";
 import {
@@ -116,6 +117,7 @@ import { useWalletStore } from "./src/store/wallet-store";
 import Avatar from "./src/ui/components/avatar";
 import CustomAlert from "./src/ui/components/custom-alert";
 import MeshStatusBar from "./src/ui/components/mesh-status-bar";
+import PrivacyCover from "./src/ui/components/privacy-cover";
 import TransferBadge from "./src/ui/components/transfer-badge";
 import {
   DISABLED_OPACITY,
@@ -421,6 +423,11 @@ export default function App(): React.JSX.Element {
   // sub-screen (About, Version, ...) pops ProfileScreen back to its root, the
   // same way tapping Chats returns to the conversation list.
   const [profileResetSignal, setProfileResetSignal] = useState(0);
+  // Profile owns its own settings stack (sections are early returns, not
+  // routes), so the shell learns its depth from the screen and pops it by
+  // bumping a counter. See ProfileScreen onCanGoBackChange / popSignal.
+  const [profileCanGoBack, setProfileCanGoBack] = useState(false);
+  const [profilePopSignal, setProfilePopSignal] = useState(0);
   const [chatSubTab, setChatSubTab] = useState<ChatSubTab>("channels");
   const [chatView, setChatView] = useState<ChatView>({ kind: "list" });
   const [searchQuery, setSearchQuery] = useState("");
@@ -525,6 +532,15 @@ export default function App(): React.JSX.Element {
   // Derived state computed before any early return so hook call order is stable.
   const isInThread =
     onboardingStep === null && tab === "chats" && chatView.kind === "thread";
+  // The thread on screen, which is not always the one that was asked for: a DM
+  // keyed by a Nostr pubkey is folded into its peer-ID thread when that peer's
+  // announce arrives, which can happen while it is open. Derived rather than
+  // synced into state, so no frame renders a channel that is already gone.
+  const channelRedirects = useChatStore((s) => s.channelRedirects);
+  const openThread =
+    chatView.kind === "thread"
+      ? (channelRedirects[chatView.channel] ?? chatView.channel)
+      : "";
   const isSearching =
     onboardingStep === null && tab === "chats" && chatView.kind === "search";
   const username = peerIDToUsername(generatedPeerID);
@@ -538,8 +554,10 @@ export default function App(): React.JSX.Element {
   // handler on each render; capturing render-zero's copy would eventually cancel
   // a search using stale state.
   const cancelSearchRef = useRef(handleCancelSearch);
+  const closeThreadRef = useRef(closeThread);
   useEffect(() => {
     cancelSearchRef.current = handleCancelSearch;
+    closeThreadRef.current = closeThread;
   });
   useEffect(() => {
     if (!isInThread && !isSearching) return;
@@ -563,12 +581,27 @@ export default function App(): React.JSX.Element {
   //
   // Wrapped because the cache directory may be unreadable on a device with no
   // storage left, and a failed sweep must not stop the app from opening.
+  //
+  // Read once at launch rather than subscribed to: shortening the window takes
+  // effect on the next start, which is when the sweep runs anyway. Lengthening
+  // it cannot bring anything back, since the files are already gone.
   useEffect(() => {
     try {
-      sweepExpiredAttachments();
+      const days = useSettingsStore.getState().mediaRetentionDays;
+      sweepExpiredAttachments(Date.now(), days * 24 * 60 * 60 * 1000);
     } catch {
       // Unreadable cache directory. Retried next launch.
     }
+  }, []);
+
+  // Claim an audible audio session once. Otherwise it is the OS default, which
+  // on iOS is a category the ring/silent switch mutes, so a voice note played
+  // before anything has been recorded is silent. Recording borrows the session
+  // and hands it back. See services/audio-session.
+  useEffect(() => {
+    void setAudioForPlayback().catch(() => {
+      // No audio hardware, or a call holds the session. Nothing to say here.
+    });
   }, []);
 
   // Transfer watchdog: promote quiet transfers to "stalled", then "failed", on a
@@ -768,15 +801,14 @@ export default function App(): React.JSX.Element {
   //
   // Coming back marks it read again, which is the same rule as opening it.
   useEffect(() => {
-    const open = chatView.kind === "thread" ? chatView.channel : "";
-    const reading = appActive ? open : "";
+    const reading = appActive ? openThread : "";
     setActiveChannel(reading);
     setNotificationsActiveChannel(reading);
     if (reading) {
       markChannelRead(reading);
       void dismissNotificationsFor(reading);
     }
-  }, [chatView, appActive, setActiveChannel, markChannelRead]);
+  }, [openThread, appActive, setActiveChannel, markChannelRead]);
 
   // Keep the app icon badge in step with total unread across channels and DMs.
   useEffect(() => {
@@ -809,7 +841,10 @@ export default function App(): React.JSX.Element {
     setWalletActionTrigger((c) => c + 1);
   }
 
-  function openChannel(channel: string): void {
+  function openChannel(requested: string): void {
+    // A notification, a bell row or a restored last-thread can name a DM by
+    // the key it had before its owner was identified, so resolve it first.
+    const channel = useChatStore.getState().resolveChannel(requested);
     setLastThread(channel);
     // So returning to list view lands on whichever sub-tab this channel
     // actually belongs to. That matters when opened from search, which spans
@@ -910,32 +945,66 @@ export default function App(): React.JSX.Element {
     setChatView({ kind: "thread", channel });
   }
 
-  // Swipe left/right across the content area to step through tabs in the
-  // same order the tab bar shows them. activeOffsetX/failOffsetY keep this
-  // from hijacking vertical list scrolling: it only activates once the
-  // gesture is clearly more horizontal than vertical, and per-row
-  // Swipeable actions (channel/DM list) still win since they activate on a
-  // much smaller offset than the 60px threshold below.
-  const swipeGesture = useMemo(
-    () =>
-      Gesture.Pan()
-        .enabled(!isInThread)
-        .activeOffsetX([-20, 20])
-        .failOffsetY([-15, 15])
-        .onEnd((event) => {
-          const passedThreshold =
-            Math.abs(event.translationX) > 60 ||
-            Math.abs(event.velocityX) > 600;
-          if (!passedThreshold) return;
-          const currentIndex = TABS.findIndex((t) => t.id === tab);
-          const target =
-            event.translationX < 0
-              ? TABS[currentIndex + 1]
-              : TABS[currentIndex - 1];
-          if (target) runOnJS(navigateToTab)(target.id, true);
-        }),
-    [tab, isInThread, navigateToTab],
-  );
+  // Somewhere to go back to within the current tab, and how to get there.
+  // Chats holds threads and search, Profile holds its settings sections; from
+  // inside one of those, stepping to the next tab loses the reader's place.
+  const canGoBackInTab =
+    isInThread || isSearching || (tab === "profile" && profileCanGoBack);
+  const goBackInTab = useCallback((): void => {
+    if (isInThread) {
+      closeThreadRef.current();
+      return;
+    }
+    if (isSearching) {
+      cancelSearchRef.current();
+      return;
+    }
+    setProfilePopSignal((n) => n + 1);
+  }, [isInThread, isSearching]);
+
+  // Swipe across the content area. Two behaviours, decided by where you are:
+  //
+  //   at a tab's root   step through tabs, in the order the tab bar shows them
+  //   inside a section  go back to its parent, and never change tab
+  //
+  // The back swipe is confined to a leading-edge strip, the width iOS gives its
+  // interactive pop. `hitSlop` keeps the gesture from ever seeing a mid-screen
+  // drag: a thread carries its own horizontal scrollers (the mention picker),
+  // and a full-width pan would take those touches and do nothing with them.
+  //
+  // activeOffsetX/failOffsetY keep this from hijacking vertical list scrolling:
+  // it only activates once the gesture is clearly more horizontal than vertical,
+  // and per-row Swipeable actions (channel/DM list) still win since they
+  // activate on a much smaller offset than the 60px threshold below.
+  const swipeGesture = useMemo(() => {
+    const pan = Gesture.Pan()
+      .activeOffsetX([-20, 20])
+      .failOffsetY([-15, 15])
+      .onEnd((event) => {
+        const passedThreshold =
+          Math.abs(event.translationX) > 60 || Math.abs(event.velocityX) > 600;
+        if (!passedThreshold) return;
+        // Forward in reading order, so the gesture matches RTL layouts.
+        const forward = isRTLLayout
+          ? event.translationX > 0
+          : event.translationX < 0;
+        if (canGoBackInTab) {
+          if (!forward) runOnJS(goBackInTab)();
+          return;
+        }
+        const currentIndex = TABS.findIndex((t) => t.id === tab);
+        const target = forward
+          ? TABS[currentIndex + 1]
+          : TABS[currentIndex - 1];
+        if (target) runOnJS(navigateToTab)(target.id, true);
+      });
+    if (!canGoBackInTab) return pan;
+    return pan.hitSlop(
+      isRTLLayout
+        ? { right: 0, width: EDGE_BACK_ZONE }
+        : { left: 0, width: EDGE_BACK_ZONE },
+    );
+  }, [tab, canGoBackInTab, goBackInTab, navigateToTab]);
 
   // ---- Render ------------------------------------------------------------
 
@@ -979,6 +1048,9 @@ export default function App(): React.JSX.Element {
           onClose={() => setShowActivity(false)}
           onOpenChannel={openChannelFromActivity}
         />
+        {/* Last in the tree, so it paints over the tab bar and every screen
+            under it. Modals render in their own window and mount their own. */}
+        <PrivacyCover />
 
         <View style={styles.flexFill}>
           {/* Onboarding flow */}
@@ -1497,18 +1569,18 @@ export default function App(): React.JSX.Element {
                     // chat reappeared in the next, and a "queued for delivery"
                     // banner from the old chat rendered over the new one.
                     <MessageThread
-                      key={chatView.channel}
-                      channel={chatView.channel}
+                      key={openThread}
+                      channel={openThread}
                       localNickname={username}
                       localPeerID={generatedPeerID}
                       onBack={closeThread}
                       targetMessageId={
-                        messageTarget?.channel === chatView.channel
+                        messageTarget?.channel === openThread
                           ? messageTarget.messageId
                           : undefined
                       }
                       targetMessageTrigger={
-                        messageTarget?.channel === chatView.channel
+                        messageTarget?.channel === openThread
                           ? messageTarget.trigger
                           : undefined
                       }
@@ -1518,7 +1590,7 @@ export default function App(): React.JSX.Element {
                       // screen it returns to. Same split the Channels/Direct
                       // segments use, from the same source.
                       backUnreadCount={
-                        chatView.channel.startsWith("dm:")
+                        openThread.startsWith("dm:")
                           ? dmsUnread
                           : channelsUnread
                       }
@@ -1549,6 +1621,8 @@ export default function App(): React.JSX.Element {
                       key={`profile-${profileResetSignal}`}
                       peerID={generatedPeerID}
                       username={username}
+                      onCanGoBackChange={setProfileCanGoBack}
+                      popSignal={profilePopSignal}
                       onWipe={() => {
                         // The mesh is already down and its keys released: the
                         // wipe does that first, before it clears anything.
@@ -1701,6 +1775,10 @@ const TABS: { id: MainTab; labelKey: TranslationKey; icon: string }[] = [
   { id: "wallet", labelKey: "nav.tab.wallet", icon: "credit-card" },
   { id: "profile", labelKey: "nav.tab.profile", icon: "user" },
 ];
+
+// How near the leading edge a back-swipe has to start. Matches the width iOS
+// uses for its interactive pop.
+const EDGE_BACK_ZONE = 44;
 
 // The drawn size of a header icon button. Deliberately smaller than MIN_TOUCH so
 // the header stays light; hitSlopFor() makes up the difference for the thumb.

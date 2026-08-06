@@ -63,6 +63,22 @@ export function countReachablePeers(
   return count;
 }
 
+// The same reachable set, as IDs, for a caller that has to intersect it with a
+// roster rather than just size it. Takes the map for the same reason as above,
+// so a component can derive it from the value it already subscribes to instead
+// of reaching back into the store and losing its reactivity.
+export function reachablePeerIDs(
+  peers: Map<string, NearbyPeer>,
+  nowMs: number = Date.now(),
+): Set<string> {
+  const cutoff = nowMs - REACHABLE_TTL_MS;
+  const ids = new Set<string>();
+  for (const peer of peers.values()) {
+    if (peer.lastSeenMs >= cutoff) ids.add(peer.peerID);
+  }
+  return ids;
+}
+
 export const usePeerStore = create<PeerState>()((set, get) => ({
   peers: new Map(),
 

@@ -11,8 +11,12 @@ import {
 } from "../../mesh/noise-payload";
 import { Flags, PacketType, type Packet } from "../../mesh/packet-codec";
 import {
-  decodeChannelMsgPayload,
-  encodeChannelMsgPayload,
+  channelPacketType,
+  decodeAirhopChannelPayload,
+  decodeMeshPublicPayload,
+  encodeAirhopChannelPayload,
+  encodeMeshPublicPayload,
+  MESH_PUBLIC_CHANNEL,
   MessageRouter,
   newMessageId,
   PeerRegistry,
@@ -43,32 +47,46 @@ function makePeerNoiseSession() {
   return { sessionI: initiator.split(), sessionR: responder.split() };
 }
 
-describe("encodeChannelMsgPayload / decodeChannelMsgPayload", () => {
-  test("round-trips channel and text", () => {
-    const encoded = encodeChannelMsgPayload(
+describe("public message payloads", () => {
+  test("the mesh room goes out under bitchat's type, everything else under ours", () => {
+    expect(channelPacketType(MESH_PUBLIC_CHANNEL)).toBe(PacketType.CHANNEL_MSG);
+    expect(channelPacketType("#neighborhood")).toBe(
+      PacketType.CHANNEL_MSG_AIRHOP,
+    );
+  });
+
+  test("the mesh room's payload is the text and nothing else", () => {
+    const encoded = encodeMeshPublicPayload("hello world");
+    expect(encoded).toEqual(new TextEncoder().encode("hello world"));
+    expect(decodeMeshPublicPayload(encoded)).toBe("hello world");
+  });
+
+  test("a named channel round-trips its channel, text and id", () => {
+    const encoded = encodeAirhopChannelPayload(
       "#general",
       "hello world",
       "abc123",
     );
-    const decoded = decodeChannelMsgPayload(encoded);
+    const decoded = decodeAirhopChannelPayload(encoded);
     expect(decoded).not.toBeNull();
     expect(decoded!.channel).toBe("#general");
     expect(decoded!.text).toBe("hello world");
     expect(decoded!.msgId).toBe("abc123");
   });
 
-  test("returns null for empty payload", () => {
-    expect(decodeChannelMsgPayload(new Uint8Array(0))).toBeNull();
+  test("both decoders return null for an empty payload", () => {
+    expect(decodeMeshPublicPayload(new Uint8Array(0))).toBeNull();
+    expect(decodeAirhopChannelPayload(new Uint8Array(0))).toBeNull();
   });
 
   test("returns null when channel length exceeds payload", () => {
-    const buf = new Uint8Array([100]); // chLen=100 but no data follows
-    expect(decodeChannelMsgPayload(buf)).toBeNull();
+    // chLen=100 with no data following.
+    expect(decodeAirhopChannelPayload(new Uint8Array([100]))).toBeNull();
   });
 
   test("empty channel and text round-trips", () => {
-    const encoded = encodeChannelMsgPayload("", "", "");
-    const decoded = decodeChannelMsgPayload(encoded);
+    const encoded = encodeAirhopChannelPayload("", "", "");
+    const decoded = decodeAirhopChannelPayload(encoded);
     expect(decoded!.channel).toBe("");
     expect(decoded!.text).toBe("");
   });
@@ -275,10 +293,10 @@ describe("MessageRouter", () => {
     router.sendChannelMessage("#test", "hi there", "msg-1");
 
     expect(broadcasts.length).toBe(1);
-    expect(broadcasts[0].type).toBe(PacketType.CHANNEL_MSG);
+    expect(broadcasts[0].type).toBe(PacketType.CHANNEL_MSG_AIRHOP);
     expect(broadcasts[0].flags & Flags.SIGNED).toBeTruthy();
 
-    const decoded = decodeChannelMsgPayload(broadcasts[0].payload);
+    const decoded = decodeAirhopChannelPayload(broadcasts[0].payload);
     expect(decoded!.channel).toBe("#test");
     expect(decoded!.text).toBe("hi there");
   });
@@ -612,8 +630,12 @@ describe("MessageRouter", () => {
 // transports is what collapses them into one bubble.
 describe("message ID (cross-transport dedupe)", () => {
   test("round-trips the message id alongside channel and text", () => {
-    const encoded = encodeChannelMsgPayload("#city", "hello", "deadbeef1234");
-    const decoded = decodeChannelMsgPayload(encoded);
+    const encoded = encodeAirhopChannelPayload(
+      "#city",
+      "hello",
+      "deadbeef1234",
+    );
+    const decoded = decodeAirhopChannelPayload(encoded);
     expect(decoded!.msgId).toBe("deadbeef1234");
     expect(decoded!.channel).toBe("#city");
     expect(decoded!.text).toBe("hello");
@@ -631,23 +653,32 @@ describe("message ID (cross-transport dedupe)", () => {
   test("distinguishes two identical messages sent in the same second", () => {
     // Packet-level dedupe hashes the payload, so without a per-message id the
     // second "ok" would be swallowed as a duplicate packet.
-    const a = encodeChannelMsgPayload("#general", "ok", newMessageId());
-    const b = encodeChannelMsgPayload("#general", "ok", newMessageId());
-    expect(decodeChannelMsgPayload(a)!.msgId).not.toBe(
-      decodeChannelMsgPayload(b)!.msgId,
+    const a = encodeAirhopChannelPayload("#general", "ok", newMessageId());
+    const b = encodeAirhopChannelPayload("#general", "ok", newMessageId());
+    expect(decodeAirhopChannelPayload(a)!.msgId).not.toBe(
+      decodeAirhopChannelPayload(b)!.msgId,
     );
   });
 
   test("text containing spaces survives the length-prefixed framing", () => {
-    const encoded = encodeChannelMsgPayload("#a", "x y z", "id1");
-    const decoded = decodeChannelMsgPayload(encoded);
+    const encoded = encodeAirhopChannelPayload("#a", "x y z", "id1");
+    const decoded = decodeAirhopChannelPayload(encoded);
     expect(decoded!.text).toBe("x y z");
     expect(decoded!.msgId).toBe("id1");
   });
 
   test("returns null when the id length overruns the payload", () => {
     // chLen=1, channel="#", idLen=200 with no data following.
-    expect(decodeChannelMsgPayload(new Uint8Array([1, 35, 200]))).toBeNull();
+    expect(decodeAirhopChannelPayload(new Uint8Array([1, 35, 200]))).toBeNull();
+  });
+
+  // #bluetooth is bitchat's mesh room. It carries no ID on the wire because
+  // bitchat has nowhere to put one; both implementations derive the same
+  // content-stable one instead, which is what onChannelMsg keys it on.
+  test("the mesh room carries no framing at all", () => {
+    const encoded = encodeMeshPublicPayload("hello");
+    expect(encoded.length).toBe(5);
+    expect(decodeMeshPublicPayload(encoded)).toBe("hello");
   });
 });
 

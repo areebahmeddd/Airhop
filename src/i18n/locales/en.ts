@@ -439,6 +439,10 @@ export const strings = {
   "chat.thread.in_ble_range": "In BLE range",
   "chat.thread.message": "Message",
   "chat.thread.message_placeholder": "Message…",
+  // Shown when a direct message is within sight of its length budget. "Room"
+  // rather than "characters" on purpose: the budget is UTF-8 bytes, so an emoji
+  // spends four and a character count would be a lie the moment anyone used one.
+  "chat.thread.length_full": "Message is full",
   "chat.thread.waiting_for": "Waiting for {name} to return · {percent}%",
   "chat.thread.peer": "peer",
   "chat.thread.cancel_transfer": "Cancel {name}",
@@ -482,6 +486,10 @@ export const strings = {
   "chat.bridge.bridging_label":
     "Bridging to nearby areas · tap for nearby only",
   "chat.screenshot.you_took": "You took a screenshot",
+  // The public-surface variant. A screenshot in a public room or a location
+  // cell tells nobody, so the local row has to say so rather than leaving the
+  // reader to assume the same notice went out as in a DM.
+  "chat.screenshot.you_took_private": "You took a screenshot · nobody was told",
   "chat.screenshot.heads_up": "Heads up",
   // The system line posted into the thread. Asterisks are the mesh's
   // convention for an action line and read the same everywhere.
@@ -490,6 +498,10 @@ export const strings = {
     "{name} was notified that you took a screenshot of this conversation.",
   "chat.screenshot.notified":
     "Everyone in this channel was notified that you took a screenshot.",
+  // Public channels and location cells. Says what the app did not do, and why
+  // that is the safer default, without implying the screenshot itself is safe.
+  "chat.screenshot.not_notified":
+    "Nobody was notified. This channel is public, so announcing a screenshot would record that you were here.",
   "chat.thread.error": "Error",
   "chat.thread.go_back": "Go back",
   "chat.bubble.via_bridge": "via the mesh bridge",
@@ -504,6 +516,11 @@ export const strings = {
   "chat.info.title": "Message info",
   "chat.info.delivered_to": "Delivered to {name}",
   "chat.info.read_by": "Read by {name}",
+  // Group scope. Says who could receive it, never who did: a group carries no
+  // read receipts, so claiming delivery here would be inventing a fact.
+  "chat.info.group_reach_desc": "Reachable now, not a delivery confirmation",
+  // Every other member is blocked, or you are the only one left on the roster.
+  "chat.info.group_alone": "No other members",
   // `{time}` is already localised by Intl; only the word is here.
   "chat.info.today_at": "Today {time}",
   "chat.info.sending": "Sending…",
@@ -550,7 +567,20 @@ export const strings = {
   "chat.media.view_full": "View photo full screen",
   // Shown in place of a photo whose file the retention sweep has removed. Says
   // what happened rather than leaving an empty frame that reads as a bug.
-  "chat.media.expired": "Photo expired",
+  // An attachment whose bytes are gone: the retention sweep or a cleared cache.
+  // "Not on this device" rather than "expired", since the sender still has it.
+  "chat.media.gone_photo": "Photo not on this device",
+  "chat.media.gone_video": "Video not on this device",
+  "chat.media.gone_voice": "Voice note not on this device",
+  "chat.media.gone_file": "File not on this device",
+  "chat.media.gone_note": "Removed after 7 days or when the cache was cleared",
+  "chat.media.ask_resend": "Ask again",
+  // Drafted into the composer, never sent on its own.
+  "chat.media.resend_draft": "Could you send that {kind} again?",
+  "chat.media.kind_photo": "photo",
+  "chat.media.kind_video": "video",
+  "chat.media.kind_voice": "voice note",
+  "chat.media.kind_file": "file",
   "chat.media.pause_voice": "Pause voice note",
   "chat.media.play_voice": "Play voice note",
   "chat.media.voice_position": "Voice note position",
@@ -568,8 +598,6 @@ export const strings = {
   "chat.media.saved_videos": "Saved to your videos",
   "chat.media.saved_photos": "Saved to your photos",
   "chat.media.not_saved": "Not saved",
-  "chat.media.not_saved_body":
-    "The file could not be saved. It may have been cleared from the cache.",
   "chat.media.cant_open": "Can't open file",
   "chat.media.no_app":
     "This device has no app available to open or share this file.",
@@ -594,6 +622,9 @@ export const strings = {
   "chat.voice.cancel_recording": "Cancel recording",
   "chat.voice.limit_reached": "Two minute limit reached, release to send",
   "chat.voice.stop_send": "Stop recording and send",
+  // Someone else has the floor. Present tense: it shows only while their audio
+  // is playing.
+  "chat.voice.live_speaking": "{name} speaking",
   "voice.unavailable": "Live voice not available",
   "voice.recording_stopped": "Recording stopped",
 
@@ -762,8 +793,11 @@ export const strings = {
 
   // ---- Chats: notification centre ------------------------------------------------
   "chat.notif.clear": "Clear notifications",
-  "chat.notif.clear_all_body":
-    "Remove all {count} notifications from this list? The messages themselves stay in their conversations.",
+  // States what each choice does to the count on a conversation's row.
+  "chat.notif.actions_body":
+    "{count} in this list. Clearing removes them from here only, and the messages stay unread in their conversations. Marking all read clears both.",
+  "chat.notif.mark_all_read": "Mark all read",
+  "chat.notif.clear_list": "Clear list",
   "chat.notif.clear_all_a11y": "Clear all {count} notifications",
   "chat.notif.title": "Notifications",
   "chat.notif.clear_short": "Clear",
@@ -777,6 +811,10 @@ export const strings = {
   // ---- Chats: forward ------------------------------------------------------------
   "chat.forward.title": "Forward to…",
   "chat.forward.to": "Forward to {name}",
+  // A room that cannot carry what is being forwarded. The body is the same
+  // reason the composer gives when its attach button is greyed there.
+  "chat.forward.cant_send_here": "Can't forward here",
+  "chat.forward.cant_send_to": "Can't forward to {name}",
   "chat.forward.channels": "Channels",
   "chat.forward.groups": "Groups",
   "chat.forward.locations": "Locations",
@@ -1617,6 +1655,24 @@ export const strings = {
   // obvious from the label alone. Two sentences, so both take a full stop.
   "settings.security.hide_previews_desc":
     "Keep the sender and message out of notifications. Your lock screen shows them without unlocking the phone.",
+  // The autocorrect is what you see; the dictionary it builds is what outlives
+  // the message, so the description answers where that dictionary lives.
+  "settings.security.keyboard_learning": "Keyboard suggestions",
+  "settings.security.keyboard_learning_desc":
+    "Allow keyboard suggestions and autocorrect while typing. Your dictionary stays on your device.",
+  "settings.security.media_retention": "Keep media for",
+  "settings.security.media_retention_desc":
+    "Photos, videos and voice notes are deleted after the selected time",
+  // Sheet subtitle. States the choice, then the one thing people assume
+  // wrongly: this is not a backup.
+  "settings.security.media_retention_sheet":
+    "Choose how long media stays on this device. Deleted media can't be recovered.",
+  "settings.security.retention_7_desc":
+    "Least left behind. Best if the phone itself is the risk.",
+  "settings.security.retention_14_desc":
+    "A middle ground for a week or two away from signal.",
+  "settings.security.retention_30_desc":
+    "Keeps threads readable longest, and keeps the most on disk.",
   "settings.security.no_blocked": "No blocked peers",
   "settings.security.no_blocked_desc":
     "Blocked peers can't message you or appear on the Mesh tab",
@@ -1636,7 +1692,7 @@ export const strings = {
   "settings.network.turn_off": "Turn off",
   "settings.network.discovery": "Geo-relay discovery",
   "settings.network.discovery_desc":
-    "Auto-select the nearest relays for a location cell from 350+ distributed relays",
+    "Auto-select the nearest relays for a location cell from 300+ distributed relays",
   "settings.network.discovery_needs_relay": "Add a custom relay first",
   "settings.network.discovery_needs_relay_body":
     "Auto-discovery is what points Airhop at the nearest relays. Turning it off only makes sense once you have pinned your own relays below, so add at least one first.",
@@ -1732,7 +1788,7 @@ export const strings = {
     "Airhop routes Tor traffic through Orbot. Install and enable Orbot from the Play Store, then turn this on.",
   "settings.conn.internet_off": "Internet is off",
   "settings.conn.internet_off_desc":
-    "Tor, the gateway, and the bridge all use the internet. Turn on Internet fallback under Network to use them.",
+    "Tor, the bridge, and the gateway all use the internet. Turn on Internet fallback under Network to use them.",
   "settings.conn.turn_on": "Turn on",
   "settings.conn.turn_off": "Turn off",
   // "Tor" and "Orbot" are product names and stay as they are in every
@@ -1794,8 +1850,10 @@ export const strings = {
   "settings.storage.clear_cache": "Clear attachment cache",
   "settings.storage.clear": "Clear",
   "settings.storage.clear_title": "Clear cached media?",
+  // There is no way to fetch an attachment again: neither Airhop nor bitchat
+  // has a request-that-file protocol. The copy must not imply otherwise.
   "settings.storage.clear_body":
-    "Received photos, videos, and voice notes will be removed from this device and may need re-downloading. Messages and wallet are untouched.",
+    "Photos, videos, voice notes and files are removed from this device, sent and received alike. They cannot be downloaded again: their bubbles will say so, and you can ask the sender to resend. Messages and wallet are untouched.",
   "settings.storage.cleared": "Cache cleared",
   "settings.storage.freed": "Freed {size}.",
 
@@ -1859,8 +1917,6 @@ export const strings = {
   "settings.transfer.coming_soon_a11y": "Transfer to a new phone, coming soon",
   "settings.transfer.body":
     "Hold both phones together and move everything across over Bluetooth. Nothing passes through a server, so it works with no internet.",
-  "settings.transfer.note":
-    "Coming in a future update. When it ships, the old phone clears itself once the move finishes, so one identity only ever lives on one device.",
   "settings.qr.permission_label": "Photo access",
   "settings.qr.permission_purpose": "save your QR code",
   "settings.qr.saved": "Saved",
@@ -1949,6 +2005,18 @@ export const strings = {
   // ---- Transfers: attachment kinds and the floating badge ------------------------
   // `{size}` and `{cap}` are whole kilobytes; `{kind}` is one of transfer.this.*
   "transfer.too_large": "{kind} is {size} KB, over the {cap} KB limit.",
+  // System lines for an attachment that arrived and was refused. Each names the
+  // fault plainly and, where the sender can do something about it, says so.
+  // These used to be silent drops, which read to both people as a file that was
+  // never sent.
+  "transfer.failed.malformed":
+    "An attachment arrived damaged and could not be opened. Ask them to send it again.",
+  "transfer.failed.unsupported_type":
+    "An attachment arrived in a format this app cannot open.",
+  "transfer.failed.type_mismatch":
+    "An attachment was refused: its contents do not match the file type it claimed.",
+  "transfer.failed.storage":
+    "An attachment arrived but could not be saved. Check your free space.",
   "transfer.badge.waiting": "Waiting · {name}",
   "transfer.badge.active_count": "{count} transfers",
   "transfer.badge.sending": "Sending {name}",
@@ -2033,6 +2101,23 @@ export const plurals = {
     one: "{count} unread",
     other: "{count} unread",
   },
+  // Room left in a direct message, counted in UTF-8 bytes because that is what
+  // the wire budget is. Deliberately not "characters": one emoji spends four.
+  "chat.thread.length_left": {
+    one: "{count} left",
+    other: "{count} left",
+  },
+  // How long attachments are kept. A count of days, so it pluralises.
+  "settings.security.retention_days": {
+    one: "{count} day",
+    other: "{count} days",
+  },
+  // Group members within reach right now. `count` is the roster excluding you
+  // and anyone blocked, so a two-person group reads "1 of 1 member reachable".
+  "chat.info.group_reach": {
+    one: "{reachable} of {count} member reachable",
+    other: "{reachable} of {count} members reachable",
+  },
   // Counts that used to be built by appending an English suffix to the stem
   // ("member" + "s", "proof" + "s were"). That shape cannot be translated at
   // all: no other language pluralises that way, and Russian needs four forms
@@ -2050,11 +2135,28 @@ export const plurals = {
     one: "Forward {count} message",
     other: "Forward {count} messages",
   },
+  // More than one person keyed up at once. A mesh has no floor arbiter, so this
+  // is ordinary; counting beats naming one of several.
+  "chat.voice.live_speaking_count": {
+    one: "{count} speaking",
+    other: "{count} speaking",
+  },
 
   // ---- Mesh: peer list -----------------------------------------------------------
   "mesh.peers_in_range": {
     one: "{count} peer in range",
     other: "{count} peers in range",
+  },
+  // How many people are in a room, counting you. The number and the word are
+  // one key so a translator can inflect them together; several languages agree
+  // the adjective with the count.
+  "chat.presence.active": {
+    one: "{count} active",
+    other: "{count} active",
+  },
+  "chat.presence.nearby": {
+    one: "{count} nearby",
+    other: "{count} nearby",
   },
 
   // ---- Wallet: mints -------------------------------------------------------------

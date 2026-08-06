@@ -951,7 +951,7 @@ export default function ArchitecturePage() {
                 <strong className="text-gray-900">Private channels</strong> put the key inside the
                 invite link. There is no roster and no member cap, which sounds careless until you
                 consider the use case: a link has to spread faster than anyone could add people by
-                hand. Messages are sealed with XChaCha20-Poly1305 and broadcast as type <C>0x2a</C>,
+                hand. Messages are sealed with XChaCha20-Poly1305 and broadcast as type <C>0x50</C>,
                 and nothing on the wire names the channel, so an outsider cannot even tell which
                 channel a message belongs to.
               </p>
@@ -1498,9 +1498,11 @@ export default function ArchitecturePage() {
 
               <h3 className="pt-2 text-base font-bold text-gray-900">Packet types</h3>
               <p>
-                Types <C>0x01</C> to <C>0x28</C> are bitchat-defined. <C>0x29</C> and above are
-                Airhop extensions, which bitchat silently drops as unknown, so the two apps coexist
-                without either breaking.
+                Everything up to <C>0x29</C> is bitchat-defined and shared. bitchat allocates
+                forward and has reached <C>0x2c</C>, so Airhop&rsquo;s own types start at{" "}
+                <C>0x50</C>, well clear of the values bitchat is still handing out. A type one side
+                does not recognise is relayed rather than read, so an Airhop extension crosses a
+                mesh of bitchat phones without ever being shown to their users.
               </p>
 
               <Table
@@ -1522,7 +1524,12 @@ export default function ArchitecturePage() {
                   ["PING / PONG", "0x26 / 0x27", "Directed mesh echo, measures hop distance"],
                   ["NOSTR_CARRIER", "0x28", "Gateway-ferried Nostr event"],
                   ["VOICE_FRAME", "0x29", "Live push-to-talk burst"],
-                  ["CHANNEL_ENC", "0x2a", "Private channel · Airhop extension"],
+                  ["CHANNEL_ENC", "0x50", "Private channel · Airhop extension"],
+                  [
+                    "CHANNEL_MSG_AIRHOP",
+                    "0x51",
+                    "Named location channel over Bluetooth · Airhop extension",
+                  ],
                 ]}
               />
 

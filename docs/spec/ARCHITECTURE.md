@@ -27,7 +27,7 @@ Every layer and the reasoning behind it. For what is being built and when, see
 | ------------------------- | ------------------------ | ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
 | Peer discovery            | Yes, announce broadcasts | Yes, kind 20001     | Peers show on the mesh radar and in the location cell                                                                                          |
 | Public channels           | Yes, TTL flood           | Yes, kind 20000     | `#bluetooth` stays local; `#block` to `#region` also bridge                                                                                    |
-| Private channels          | Yes, sealed `0x2a`       | Optional, same blob | Airhop only. Key rides an invite link, no member cap                                                                                           |
+| Private channels          | Yes, sealed `0x50`       | Optional, same blob | Airhop only. Key rides an invite link, no member cap                                                                                           |
 | Private groups            | Yes, sealed `0x25`       | No                  | bitchat compatible. Creator-signed roster, max 16, Bluetooth only                                                                              |
 | Private DMs               | Yes, Noise XX (+DR)      | Yes, NIP-17 wrap    | Receipts on every path. DR only between Airhop peers                                                                                           |
 | Bulletin board            | Yes, signed `0x23`       | Yes, kind 1 mirror  | Public and signed, 1 to 7 day expiry, gossip catch-up                                                                                          |
@@ -203,9 +203,9 @@ Identical to bitchat's design:
 
 ### Nostr
 
-- 350+ public relays from the georelays dataset, bundled as `assets/data/relays.csv`
+- 300+ public relays from the georelays dataset, bundled as `assets/data/nostr_relays.csv`
 - Relays selected by [Haversine](https://en.wikipedia.org/wiki/Haversine_formula) distance from the device, for lowest latency
-- NIP-17 gift-wrap for private DMs, so no message content or metadata reaches relays
+- NIP-17-shaped gift-wrap for private DMs, so no message content or metadata reaches relays. The layering is NIP-17's; the encryption inside each layer is bitchat's `nip44-v2` rather than the published NIP-44, and has to be, since the event signature covers the ciphertext and interop is byte-for-byte. See [PROTOCOLS.md section 7.1](PROTOCOLS.md#71-the-nostr-dm-construction-is-not-the-published-nip-44)
 - Kinds 20000 and 20001 for geohash channels and presence heartbeats
 - `SimplePool` connects to 3 to 5 relays at once and takes the first ACK, so no single relay is load-bearing
 - Tor off by default on both platforms, behind one toggle
@@ -345,7 +345,7 @@ static-static ECDH, which would stay derivable from long-term keys forever.
 | Stored DM        | Double Ratchet: forward secrecy per message                                |
 | Public channel   | Plaintext plus Ed25519 signature, readable by every peer                   |
 | Courier envelope | Noise X one-way seal to the recipient's static key, wrapping DR ciphertext |
-| Nostr DM         | NIP-44 (XChaCha20-Poly1305, versioned) inside a NIP-17 gift-wrap           |
+| Nostr DM         | bitchat's `nip44-v2` inside a NIP-17-shaped gift-wrap. See below           |
 
 ## 6. Channels and Groups
 
@@ -365,9 +365,9 @@ An invite-only room. A symmetric key is generated at creation and travels inside
 the invite link, so anyone holding the link can read. There is no roster and no
 member cap, so the link can spread faster than anyone could add people by hand.
 
-- Sealed with XChaCha20-Poly1305 and broadcast as `0x2a`
+- Sealed with XChaCha20-Poly1305 and broadcast as `0x50`
 - Reach is the creator's choice: Bluetooth only, or Bluetooth plus Nostr, where the same sealed blob is published so out-of-range members receive it
-- bitchat drops `0x2a` as an unknown type, so the two coexist
+- bitchat relays `0x50` without interpreting it, so the two coexist
 
 ### Private groups (bitchat compatible)
 
@@ -609,7 +609,7 @@ cannot break Ed25519, X25519, ChaCha20-Poly1305, or SHA-256 preimage resistance.
 | Group eviction by a stranger       | A group ID travels in the clear on every group message so relays can carry it. Without the ordering above, anyone who saw one could craft a self-signed state naming themselves creator with a roster omitting the victim, and the victim's client would destroy its own key and drop the room. The creator pin is checked first      |
 | Hostile payment source             | Ecash is redeemed only from a mint the user already added, and incoming proofs are DLEQ-verified before anything is stored                                                                                                                                                                                                            |
 | Cashu double-spend                 | The mint enforces this with blind-signature tracking; the receiver redeems promptly                                                                                                                                                                                                                                                   |
-| Physical device seizure            | Panic wipe by triple-tap, with keys in the keychain, hardware-backed on modern devices. Attachments are swept at seven days, so a stored photo does not outlive its conversation                                                                                                                                                      |
+| Physical device seizure            | Panic wipe by triple-tap, with keys in the keychain, hardware-backed on modern devices. Attachments are swept on a schedule (Privacy → Keep media for: 7 days by default, 14 or 30 by choice, with no unbounded option), so a stored photo does not outlive its conversation                                                          |
 | Screen surveillance                | Backgrounding blurs sensitive content through the standard OS API. Notification previews are withheld by default, since the system renders them on the lock screen                                                                                                                                                                    |
 
 ### Out of scope
@@ -803,7 +803,7 @@ service keeps it advertising normally.
 | XMPP            | Rejected     | Also requires an always-on server, with a complex extension ecosystem and a limited offline story                                                 |
 | Signal Protocol | Rejected     | Signal owns the relay infrastructure and requires a phone number, so it is not permissionless                                                     |
 | SimpleX         | Close second | No persistent identifiers and privacy-first, but no BLE mesh story, a smaller ecosystem and fewer relays                                          |
-| Nostr           | Chosen       | Permissionless keypair identity, 350+ independent relays, NIP-17 gift-wrap for DMs, NIP-61 for payments, and bitchat already validated the choice |
+| Nostr           | Chosen       | Permissionless keypair identity, 300+ independent relays, NIP-17 gift-wrap for DMs, NIP-61 for payments, and bitchat already validated the choice |
 
 ### Noise XX over TLS or X3DH
 

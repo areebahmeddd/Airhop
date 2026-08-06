@@ -36,7 +36,7 @@ const SECTIONS: LegalSection[] = [
           "**Message history.** Conversations are stored locally on your device and are never sent to us. They are protected by the operating system's app sandbox and whole-device encryption, not by a separate app-level cipher, so a person with access to an unlocked device can read them. Delete a conversation at any time, or wipe everything instantly with panic wipe.",
           "**Private group state.** Group names, member lists, and the current group key are stored locally so you can keep reading the group. They are removed by panic wipe or by removing the app.",
           "**Bulletin board notices.** Signed public notices, and the deletion markers that retract them, persist until the author's chosen expiry, at most seven days. These are public to the mesh or area they were posted to, not private messages.",
-          "**Media attachments.** Photos, videos, and voice notes you send or receive are written to the app's cache so they stay viewable. They are deleted by panic wipe, by clearing the cache in settings, or by removing the app.",
+          "**Media attachments.** Photos, videos, and voice notes you send or receive are written to the app's cache so they stay viewable. They are deleted automatically once they pass the retention window set in Privacy (seven days by default), and also by panic wipe, by clearing the cache in settings, or by removing the app.",
           "**Queued outgoing messages.** A private message that has not yet been delivered may remain in an encrypted local queue. It is **dropped after 24 hours** if unacknowledged.",
           "**Courier envelopes.** If your device acts as a mesh courier for another user, it may hold an opaque end-to-end encrypted envelope for up to 24 hours. **The courier cannot read the contents.**",
           "**Ecash wallet.** Cashu tokens are bearer instruments, so they are kept in a separate file encrypted with AES-256 under a key held in your device's secure storage. The same file holds the mints you added, their public keys, and your transaction history (amounts, timestamps, and the mint involved). If a recovery phrase is set up, the twelve words live in secure storage alongside your identity keys, never in the wallet file. **No payment backend is involved and none of this is transmitted to us.**",
@@ -56,7 +56,7 @@ const SECTIONS: LegalSection[] = [
           "A batch of single-use public keys, so someone can leave you a protected message while you are offline. These contain no private information.",
           "Encrypted group traffic, which nearby devices relay but cannot read unless they are members of that group.",
           "Live voice, if you turn it on. Holding the mic streams your voice to everyone in Bluetooth range as you speak. A public burst is signed but not encrypted, the same as an attachment. In a direct message it stays inside that peer's encrypted session. Nothing is recorded on either device.",
-          "A screenshot notice. Taking a screenshot inside a conversation sends the other side a message saying you did, under your display name. The screenshot itself is never sent.",
+          "A screenshot notice, in private conversations only. Taking a screenshot in a direct message, private group, or private channel tells the people in it that you did, under your display name. In the public mesh room and location channels nothing is sent, because announcing it there would record that you were present. The screenshot itself is never sent.",
           "Approximate Bluetooth signal strength (radio metadata visible to any nearby receiver).",
         ],
       },
@@ -109,9 +109,9 @@ const SECTIONS: LegalSection[] = [
     ],
   },
   {
-    heading: "Internet gateway (optional)",
+    heading: "Tor routing (optional)",
     paragraphs: [
-      "A device with the gateway setting enabled relays location-channel messages on behalf of nearby devices that have no internet connection. The relayed messages are already public to that channel and are signed by their original author, so a gateway cannot read private content or alter what it carries. Enabling it uses your own data connection and battery. Internet gateway is off by default.",
+      "Airhop supports routing Nostr traffic through Tor using Arti on iOS or Orbot on Android. When enabled, **relay operators cannot observe your IP address.** Tor is off by default.",
     ],
   },
   {
@@ -121,9 +121,9 @@ const SECTIONS: LegalSection[] = [
     ],
   },
   {
-    heading: "Tor routing (optional)",
+    heading: "Internet gateway (optional)",
     paragraphs: [
-      "Airhop supports routing Nostr traffic through Tor using Arti on iOS or Orbot on Android. When enabled, **relay operators cannot observe your IP address.** Tor is off by default.",
+      "A device with the gateway setting enabled relays location-channel messages on behalf of nearby devices that have no internet connection. The relayed messages are already public to that channel and are signed by their original author, so a gateway cannot read private content or alter what it carries. Enabling it uses your own data connection and battery. Internet gateway is off by default.",
     ],
   },
   {
@@ -140,7 +140,7 @@ const SECTIONS: LegalSection[] = [
           "**Implementation.** All cryptographic operations use the [@noble](https://github.com/paulmillr/noble-curves) library suite, which has been independently audited by Cure53.",
         ],
       },
-      "**No cryptographic protection prevents a recipient from copying, screenshotting, or forwarding a message after reading it.** Airhop tells the other side when you screenshot a conversation, but that is a courtesy notice, not a control.",
+      "**No cryptographic protection prevents a recipient from copying, screenshotting, or forwarding a message after reading it.** Airhop tells the other side when you screenshot a private conversation, but that is a courtesy notice, not a control.",
     ],
   },
   {
@@ -151,7 +151,8 @@ const SECTIONS: LegalSection[] = [
           "**Undelivered private messages:** until acknowledged, or 24 hours, whichever comes first.",
           "**Courier envelopes carried for others:** until handed over, or 24 hours.",
           "**Public bulletin-board notices:** until the author's chosen expiry, at most seven days.",
-          "**Conversations, groups, contacts, keys, and media:** until you delete them, run a panic wipe, or remove the app.",
+          "**Media attachments:** deleted automatically after the window you choose in Privacy (7 days by default, or 14 or 30). There is no keep-forever option. Also removed by clearing the cache, a panic wipe, or removing the app.",
+          "**Conversations, groups, contacts, and keys:** until you delete them, run a panic wipe, or remove the app.",
           "**Wallet transaction history:** the most recent 500 entries, until you run a panic wipe or remove the app.",
           "**Anything sent to a Nostr relay:** according to that relay operator's own policy, which is outside our control.",
         ],
@@ -164,7 +165,7 @@ const SECTIONS: LegalSection[] = [
       {
         bullets: [
           "**Panic wipe.** Instantly erase all local keys, messages, queued mail, and app data from the Profile screen.",
-          "**Feature controls.** Tor routing, the internet gateway, and the mesh bridge can each be turned on or off in settings, and location channels left unjoined. Anything already published to a relay cannot be recalled.",
+          "**Feature controls.** Tor routing, the mesh bridge, and the internet gateway can each be turned on or off in settings, and location channels left unjoined. Anything already published to a relay cannot be recalled.",
           "**Wallet.** Remove a mint at any time from the Wallet tab. Removing one deletes the coins held there from this device, so withdraw or send them first. A panic wipe destroys the wallet file and its encryption key together.",
           "**System permissions.** Bluetooth, location, microphone, camera, photo library, and notification access can each be revoked in your device settings at any time. Camera access is used to scan QR codes and to take photos or videos you choose to send.",
         ],

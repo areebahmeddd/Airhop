@@ -25,8 +25,10 @@ import {
   type ActivityEntry,
 } from "../../store/activity-store";
 import { showAlert } from "../../store/alert-store";
+import { useChatStore } from "../../store/chat-store";
 import Avatar from "../../ui/components/avatar";
 import EmptyState from "../../ui/components/empty-state";
+import PrivacyCover from "../../ui/components/privacy-cover";
 import {
   Duration,
   FontSize,
@@ -58,21 +60,32 @@ export default function NotificationCenter({
   const entries = useActivityStore((s) => s.entries);
   const clearAll = useActivityStore((s) => s.clearAll);
 
-  // Clearing wiped the entire history on a single tap of a small text button in
-  // the corner, with nothing to undo it. Every other irreversible action in this
-  // app asks first (leave a room, clear a chat, remove a contact, panic wipe),
-  // through this same alert. This was the one that did not.
+  // Two things a person can mean by "deal with these", offered together.
+  //
+  // Clearing empties this list and nothing else, as a notification shade does:
+  // the messages stay unread and their rows keep a count. Marking read is the
+  // action that clears both, kept separate so Clear never silently discards
+  // track of something nobody looked at. Clearing sits behind a confirm, like
+  // every other irreversible action here.
+  function markAllRead(): void {
+    const chat = useChatStore.getState();
+    for (const channel of new Set(entries.map((e) => e.channel))) {
+      chat.markChannelRead(channel);
+    }
+  }
+
   function handleClearAll(): void {
     showAlert(
-      t("chat.notif.clear"),
-      t("chat.notif.clear_all_body", { count: entries.length }),
+      t("chat.notif.title"),
+      t("chat.notif.actions_body", { count: entries.length }),
       [
-        { text: T("common.cancel"), style: "cancel" },
+        { text: t("chat.notif.mark_all_read"), onPress: markAllRead },
         {
-          text: t("chat.notif.clear_short"),
+          text: t("chat.notif.clear_list"),
           style: "destructive",
           onPress: clearAll,
         },
+        { text: T("common.cancel"), style: "cancel" },
       ],
     );
   }
@@ -138,6 +151,8 @@ export default function NotificationCenter({
           }
         />
       </SafeAreaView>
+      {/* Its own window, and it is message previews. */}
+      <PrivacyCover />
     </Modal>
   );
 }

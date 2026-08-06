@@ -45,6 +45,7 @@ jest.mock("../../../bridge/NativeAirhopWiFi", () => {
 import {
   MAX_BITCHAT_TRANSFER_BYTES,
   MAX_FILE_BYTES,
+  MAX_FRAMED_FILE_BYTES,
   MAX_IMAGE_BYTES,
   MAX_SENT_IMAGE_BYTES,
   MAX_VOICE_BYTES,
@@ -244,7 +245,7 @@ test("X01 an Airhop phone and a bitchat phone talk to each other", async () => {
 test("X02 Airhop's private extensions cost a bitchat node nothing", async () => {
   const s = (scenario = new Scenario({
     id: "X02",
-    title: "0x12 and 0x2a are dropped as unknown, and the mesh carries on",
+    title: "Airhop-only types reach no handler, and the mesh carries on",
     seed: 401,
   }));
   const radio = new RadioFabric(s.world);
@@ -282,7 +283,7 @@ test("X02 Airhop's private extensions cost a bitchat node nothing", async () => 
   for (const d of [a, b]) d.joinChannel(publicChannel);
   await waitFor(s.world, () => radio.linkCount() === 2, 30_000);
 
-  // A private channel is an Airhop-only construct sealed as 0x2a. Both Airhop
+  // A private channel is an Airhop-only construct sealed as 0x50. Both Airhop
   // phones join it; the bitchat node in the middle must relay without
   // understanding, and must not choke.
   const privateChannel = "#secret";
@@ -306,8 +307,14 @@ test("X02 Airhop's private extensions cost a bitchat node nothing", async () => 
     `airhopB peers=[${b.peers().join(",")}], airhopA is ${a.peerID}`,
   );
 
+  // A named Airhop channel. Both Airhop phones join it; the bitchat node has no
+  // such room and no field on the wire to name one, so it must not see it.
+  const namedChannel = "#neighborhood";
+  for (const d of [a, b]) d.joinChannel(namedChannel);
+
   a.send(publicChannel, "public, everyone hears this");
   a.send(privateChannel, "private, bitchat cannot read this");
+  a.send(namedChannel, "neighborhood, not bitchat's room");
 
   await s.world.settle(30_000);
 
@@ -333,12 +340,42 @@ test("X02 Airhop's private extensions cost a bitchat node nothing", async () => 
     ),
     `bitchat heard [${bitchat.seen.publicMessages.map((m) => m.text).join(" | ")}]`,
   );
+  // The message must reach the far Airhop phone THROUGH the bitchat relay while
+  // staying invisible to the relay's own user.
+  s.check(
+    "the named channel crossed the bitchat node to the far Airhop phone",
+    b.texts(namedChannel).includes("neighborhood, not bitchat's room"),
+    `airhopB ${namedChannel} = [${b.texts(namedChannel).join(" | ")}]`,
+  );
+  s.check(
+    "bitchat did NOT see the named channel in its public room",
+    !bitchat.seen.publicMessages.some((m) =>
+      m.text.includes("not bitchat's room"),
+    ),
+    `bitchat heard [${bitchat.seen.publicMessages.map((m) => m.text).join(" | ")}]`,
+  );
+  // Nor as mojibake: bitchat-android decodes public payloads leniently and
+  // substitutes U+FFFD, so a framed payload under 0x02 would show as a junk
+  // line. Under its own type there is nothing to decode.
+  s.check(
+    "and did not render it as replacement characters either",
+    !bitchat.seen.publicMessages.some((m) => m.text.includes("�")),
+    `bitchat heard [${bitchat.seen.publicMessages.map((m) => m.text).join(" | ")}]`,
+  );
   const droppedTypes = [...bitchat.seen.droppedUnknownTypes.keys()];
   s.check(
-    "it dropped the Airhop-only type as unknown rather than mishandling it",
+    "it dropped every Airhop-only type as unknown rather than mishandling it",
     droppedTypes.every(
-      (t) => t === PacketType.CHANNEL_ENC || t === PacketType.DR_ENCRYPTED,
+      (t) =>
+        t === PacketType.CHANNEL_ENC ||
+        t === PacketType.DR_ENCRYPTED ||
+        t === PacketType.CHANNEL_MSG_AIRHOP,
     ),
+    `dropped types: ${droppedTypes.map((t) => `0x${t.toString(16)}`).join(", ")}`,
+  );
+  s.check(
+    "including the named-channel type, which it saw and refused",
+    droppedTypes.includes(PacketType.CHANNEL_MSG_AIRHOP),
     `dropped types: ${droppedTypes.map((t) => `0x${t.toString(16)}`).join(", ")}`,
   );
   s.check(
@@ -570,13 +607,106 @@ test("X03 Airhop's constants still match the vendored bitchat sources", () => {
     `MAX_BLE_FRAME=${MAX_BLE_FRAME}`,
   );
 
-  // Packet type registry: every value Airhop defines below 0x29 is bitchat's,
-  // and Airhop's own extensions must sit outside that range so bitchat drops
-  // them rather than misreading them.
+  // The file ceiling, read from bitchat-ios rather than copied.
+  //
+  // Three numbers, two of which agree. bitchat-ios refuses a packet whose
+  // declared expanded size passes `maxFramedFileBytes` (~1.13 MiB); Android and
+  // Airhop both bound decompression at 10 MiB. Airhop sits on both sides
+  // deliberately: `MAX_PAYLOAD_BYTES` takes Android's number because bounding
+  // the inflate as it runs is the safer design (#1634 argues the same upstream),
+  // while `MAX_FRAMED_FILE_BYTES` uses the iOS formula verbatim because a file
+  // is the only payload that approaches it.
+  //
+  // This guards the day someone raises `MAX_FILE_BYTES`. Nothing in the app
+  // would complain: sending works, Android receives, and every attachment to an
+  // iPhone silently stops arriving. Upstream needed a line-by-line read of the
+  // decoder to find that (#1618); failing the build while both numbers live in
+  // one repository is the cheap defence.
+  const iosLimits = bitchatAvailable()
+    ? bitchatSource(
+        "localPackages/BitFoundation/Sources/BitFoundation/FileTransferLimits.swift",
+      )
+    : "";
+  const iosMaxPayload = bitchatAvailable()
+    ? swiftConstantExpr(iosLimits, "maxPayloadBytes")
+    : null;
+  // Their `maxFramedFileBytes` is a computed closure rather than a literal, so
+  // it is rebuilt here from the same terms: payload + TLV envelope + binary
+  // envelope. Reading `maxPayloadBytes` from source is what keeps it honest; the
+  // overheads are fixed by the wire format and cannot drift without the frame
+  // layout itself changing, which the checks above already cover.
+  const iosFramedCeiling =
+    iosMaxPayload === null ? null : iosMaxPayload + 0xffff * 2 + 18 + 96;
   s.check(
-    "Airhop's private types sit outside bitchat's registry",
-    PacketType.DR_ENCRYPTED === 0x12 && PacketType.CHANNEL_ENC === 0x2a,
-    `DR_ENCRYPTED=0x${PacketType.DR_ENCRYPTED.toString(16)} CHANNEL_ENC=0x${PacketType.CHANNEL_ENC.toString(16)}`,
+    "bitchat-ios file limits were read, not assumed",
+    !bitchatAvailable() || iosMaxPayload !== null,
+    `maxPayloadBytes=${String(iosMaxPayload)}`,
+  );
+  s.check(
+    "our framed file ceiling matches the one bitchat-ios enforces",
+    iosFramedCeiling === null || MAX_FRAMED_FILE_BYTES === iosFramedCeiling,
+    `bitchat=${String(iosFramedCeiling)} airhop=${MAX_FRAMED_FILE_BYTES}`,
+  );
+  // The per-type caps are what a person actually runs into, and each has to
+  // leave room for the envelope underneath it.
+  s.check(
+    "every per-type cap still fits inside that ceiling",
+    iosFramedCeiling === null ||
+      [MAX_FILE_BYTES, MAX_IMAGE_BYTES, MAX_VOICE_BYTES].every(
+        (cap) => cap + 0xffff * 2 + 18 + 96 <= iosFramedCeiling,
+      ),
+    `file=${MAX_FILE_BYTES} image=${MAX_IMAGE_BYTES} voice=${MAX_VOICE_BYTES} ceiling=${String(iosFramedCeiling)}`,
+  );
+
+  // Packet type registry, read from bitchat's own enum rather than from a
+  // constant of ours.
+  //
+  // Airhop's extensions have to sit clear of bitchat's allocation frontier.
+  // bitchat assigns forward, so "the next free value" is the one place an
+  // extension must never go: both projects reach for it, and then each side's
+  // parser depends on the other's validation to not misread the payload.
+  // Airhop sat on 0x2A/0x2B until upstream reserved them for courier spray-ack.
+  //
+  // The margin is what makes this a warning rather than a post-mortem. It fails
+  // while bitchat is still approaching, leaving room to move before any build
+  // ships on a contested value.
+  const bitchatTypes = bitchatAvailable()
+    ? [
+        ...bitchatSource(
+          "localPackages/BitFoundation/Sources/BitFoundation/MessageType.swift",
+        ).matchAll(/case\s+\w+\s*=\s*0x([0-9a-fA-F]{2})/g),
+      ].map((m) => parseInt(m[1], 16))
+    : [];
+  const bitchatMax = Math.max(0, ...bitchatTypes);
+  const airhopOnly = [
+    PacketType.DR_ENCRYPTED,
+    PacketType.CHANNEL_ENC,
+    PacketType.CHANNEL_MSG_AIRHOP,
+  ];
+  const HEADROOM = 0x10;
+  s.check(
+    "bitchat's registry was read, not assumed",
+    !bitchatAvailable() || bitchatTypes.length > 10,
+    `parsed ${bitchatTypes.length} types, max 0x${bitchatMax.toString(16)}`,
+  );
+  // DR_ENCRYPTED is the one exception: 0x12 sits inside bitchat's range but on
+  // a value it has never assigned, and it predates this rule. Left alone
+  // because moving a shipped type costs a migration; it is listed here so the
+  // exemption is visible rather than forgotten.
+  s.check(
+    "Airhop's extensions clear bitchat's frontier by a safe margin",
+    !bitchatAvailable() ||
+      airhopOnly
+        .filter((t) => t !== PacketType.DR_ENCRYPTED)
+        .every((t) => t > bitchatMax + HEADROOM),
+    `bitchat max=0x${bitchatMax.toString(16)}, airhop=[${airhopOnly
+      .map((t) => `0x${t.toString(16)}`)
+      .join(", ")}]`,
+  );
+  s.check(
+    "and none of them collides with a value bitchat has assigned",
+    airhopOnly.every((t) => !bitchatTypes.includes(t)),
+    `bitchat=[${bitchatTypes.map((t) => `0x${t.toString(16)}`).join(", ")}]`,
   );
   s.assert();
 });

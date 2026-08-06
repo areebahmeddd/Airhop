@@ -422,23 +422,56 @@ export type NostrSendFn = (
 // The router only decides WHICH tier to use (direct / Nostr / courier); how a
 // direct packet reaches the peer is the transport layer's business.
 
-// Encodes the CHANNEL_MSG payload:
-//   [channel_utf8_len (u8)][channel_utf8][msg_id_len (u8)][msg_id][text_utf8]
+// bitchat's mesh has one public room, which its UI labels "bluetooth". Airhop
+// names it as a channel so it lists beside the location cells. Source of truth
+// for the name; utils/media-policy's BRIDGE_CHANNEL re-exports it.
+export const MESH_PUBLIC_CHANNEL = "#bluetooth";
+
+// Public messages take one of two packet types, and the type decides the
+// payload. No marker byte, no heuristic: 0x02 is bare text, 0x51 is framed.
 //
-// The message ID is a sender-generated identifier carried on EVERY transport
-// that message takes. It exists for two reasons:
+//   0x02  the mesh room. Payload is the message text as UTF-8 and nothing
+//         else, matching bitchat (BLEService.sendMessage,
+//         BLEPublicMessageHandler). bitchat renders the whole payload, so
+//         anything wrapped around the text is displayed as part of it.
+//   0x51  a named Airhop channel, i.e. a location cell. bitchat has the same
+//         location channels but publishes them to Nostr, never over Bluetooth,
+//         so its BLE mesh has one public room and a peer already receives the
+//         Nostr copy. Under 0x02 this would land in that room as well,
+//         addressed to an audience its author never chose. As an unknown type
+//         both bitchat clients relay it without reading it.
 //
-//  1. Deduplication across transports. A location channel goes out over both
-//     BLE and Nostr, and the sender signs the Nostr copy with a per-geohash
-//     key, so to a receiver the two copies look like two different people
-//     saying the same thing. Correlating on a shared ID collapses them.
-//  2. Distinguishing genuine repeats. Packet-level dedup hashes the payload,
-//     so sending "ok" twice in one second used to be silently swallowed as a
-//     duplicate packet. A per-message ID makes the second one distinct.
-//
-// bitchat's message payload carries an `id` field for the same reason, so this
-// also moves the format toward wire compatibility rather than away from it.
-export function encodeChannelMsgPayload(
+// The mesh room carries no message ID because both implementations derive the
+// same content-stable one from sender, timestamp and content (`bridgeStableID`
+// here, `MeshMessageIdentity.stableID` there). Named channels carry one for two
+// reasons: a location cell goes out over BLE and Nostr signed by different
+// keys, so a shared ID is what collapses the copies; and packet dedup hashes
+// the payload, so an ID is what distinguishes "ok" sent twice in one second.
+
+// Which packet type carries a message to this channel.
+export function channelPacketType(channel: string): PacketType {
+  return channel === MESH_PUBLIC_CHANNEL
+    ? PacketType.CHANNEL_MSG
+    : PacketType.CHANNEL_MSG_AIRHOP;
+}
+
+export function encodeMeshPublicPayload(text: string): Uint8Array {
+  return new TextEncoder().encode(text);
+}
+
+// Decoded strictly, the way bitchat-iOS decodes it, so a malformed or non-text
+// payload is dropped rather than rendered as a row of replacement characters.
+export function decodeMeshPublicPayload(payload: Uint8Array): string | null {
+  if (payload.length < 1) return null;
+  try {
+    return new TextDecoder("utf-8", { fatal: true }).decode(payload);
+  } catch {
+    return null;
+  }
+}
+
+// [channel_len u8][channel][msg_id_len u8][msg_id][text], all UTF-8.
+export function encodeAirhopChannelPayload(
   channel: string,
   text: string,
   msgId: string,
@@ -460,7 +493,7 @@ export function encodeChannelMsgPayload(
   return buf;
 }
 
-export function decodeChannelMsgPayload(
+export function decodeAirhopChannelPayload(
   payload: Uint8Array,
 ): { channel: string; text: string; msgId: string } | null {
   if (payload.length < 1) return null;
@@ -524,11 +557,15 @@ export class MessageRouter {
     msgId: string,
     timestampMs: number = Date.now(),
   ): void {
-    const payload = encodeChannelMsgPayload(channel, text, msgId);
+    const type = channelPacketType(channel);
+    const payload =
+      type === PacketType.CHANNEL_MSG
+        ? encodeMeshPublicPayload(text)
+        : encodeAirhopChannelPayload(channel, text, msgId);
     const senderIDBytes = hexToBytes(this.identity.peerID);
 
     const packet: Packet = {
-      type: PacketType.CHANNEL_MSG,
+      type,
       ttl: originPublicTtl(),
       flags: Flags.SIGNED,
       senderID: senderIDBytes,

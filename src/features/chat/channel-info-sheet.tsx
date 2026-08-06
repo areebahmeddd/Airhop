@@ -27,6 +27,7 @@ import {
 } from "../../services/geohash-channel-service";
 import { getMeshService } from "../../services/mesh-service";
 import { showAlert } from "../../store/alert-store";
+import { useChannelMembersStore } from "../../store/channel-members-store";
 import { useChatStore } from "../../store/chat-store";
 import { useGeohashBookmarksStore } from "../../store/geohash-bookmarks-store";
 import { useGroupStore } from "../../store/group-store";
@@ -135,6 +136,11 @@ export default function ChannelInfoSheet({
     useChatStore();
   const { peers } = usePeerStore();
   const peerList = [...peers.values()];
+  // Proven key-holders, for a private channel's roster. A store rather than a
+  // polled subscription, so it updates the moment a member's message decrypts.
+  const privateMembersByChannel = useChannelMembersStore((s) => s.byChannel);
+  const privateMembers =
+    channel !== null ? (privateMembersByChannel[channel] ?? []) : [];
 
   const [copied, setCopied] = useState(false);
   // Member-list search, revealed by the search icon next to the section label.
@@ -396,11 +402,16 @@ export default function ChannelInfoSheet({
   }
 
   // One unified member list for all channel kinds. A group's signed roster, a
-  // geo cell's active participants, or the nearby BLE peers all normalise to the
-  // same shape and render identically (You row, chat action, search). Self is
-  // counted the way bitchat counts it — included in the total. A group roster
-  // already lists you, so it is not re-added; geo/BLE lists are others-only, so
-  // you appear as a "You" row and add one to the count.
+  // geo cell's active participants, a private channel's proven key-holders, or
+  // the nearby BLE peers all normalise to the same shape and render identically
+  // (You row, chat action, search). Self is counted the way bitchat counts it —
+  // included in the total. A group roster already lists you, so it is not
+  // re-added; the other lists are others-only, so you appear as a "You" row and
+  // add one to the count.
+  //
+  // The nearby-peers fallback is right for `#bluetooth`, where radio range is
+  // the room, and wrong for anything invite-only, where membership is
+  // possession of the key. See channel-members-store.
   type MemberItem = {
     id: string;
     name: string;
@@ -408,6 +419,11 @@ export default function ChannelInfoSheet({
     onChat?: () => void;
     onRemove?: () => void;
   };
+  function openDmWith(peerID: string): void {
+    addChannel(`dm:${peerID}`);
+    onNavigateToChannel?.(`dm:${peerID}`);
+    onClose();
+  }
   const members: MemberItem[] = isGroup
     ? groupMembers.map((m) => ({
         id: m.fingerprint,
@@ -430,16 +446,19 @@ export default function ChannelInfoSheet({
             onClose();
           },
         }))
-      : peerList.map((peer) => ({
-          id: peer.peerID,
-          name: peer.nickname || peerIDToUsername(peer.peerID),
-          teleported: false,
-          onChat: () => {
-            addChannel(`dm:${peer.peerID}`);
-            onNavigateToChannel?.(`dm:${peer.peerID}`);
-            onClose();
-          },
-        }));
+      : isPrivate
+        ? privateMembers.map((m) => ({
+            id: m.peerID,
+            name: m.nickname || peerIDToUsername(m.peerID),
+            teleported: false,
+            onChat: () => openDmWith(m.peerID),
+          }))
+        : peerList.map((peer) => ({
+            id: peer.peerID,
+            name: peer.nickname || peerIDToUsername(peer.peerID),
+            teleported: false,
+            onChat: () => openDmWith(peer.peerID),
+          }));
   const memberSectionTitle = isGeo
     ? T("chat.info.active")
     : T("chat.info.members");

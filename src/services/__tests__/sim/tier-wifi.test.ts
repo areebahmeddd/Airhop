@@ -566,3 +566,114 @@ test("W-F08 losing WiFi mid-conversation falls back to Bluetooth", async () => {
   s.expectNone("process health", noCrashes([a, b]));
   s.assert(true);
 });
+
+// The scenario that answers "is the fast path actually used", as opposed to
+// "does it work when it is the only thing available".
+//
+// W-F04 proves a photo crosses WiFi with the BLE topology deliberately empty.
+// That is a real property, but it is not the configuration anybody is ever in:
+// two phones close enough to hold a WiFi link are close enough to be Bluetooth
+// neighbours too, so the shipped case has BOTH radios up and the interesting
+// question is which one the file takes.
+//
+// The risk being guarded is specific and has a precedent. bitchat shipped its
+// own WiFi bulk path and later found it had never fired once in production: an
+// unrelated image-compression change put every real photo below the size that
+// triggers the transport, so the feature was live, tested, and dead. A radio
+// that only carries traffic in a configuration nobody is in is decorative, and
+// nothing about the app's behaviour would say so.
+//
+// Airhop has no size threshold, so it cannot fail that exact way. What it has
+// instead is the direct-link shortcut: an addressed packet goes to the WiFi
+// link when the recipient has been mapped to one, which is the whole reason the
+// mapping exists (ARCHITECTURE.md, "Transport Stack"). If that mapping never
+// populates in practice, or the BLE path wins the race, every attachment
+// quietly fragments over Bluetooth at ~22 KB/s while a 250 Mbps radio sits idle
+// beside it. The symptom is "photos are slow", which is indistinguishable from
+// the way they have always been.
+test("W-F09 with both radios up, a DM attachment still takes the fast path", async () => {
+  const s = (scenario = new Scenario({
+    id: "W-F09",
+    title: "the fast path is used in the configuration people are actually in",
+    seed: 907,
+  }));
+  const radio = new RadioFabric(s.world);
+  const wifi = new WifiFabric(s.world);
+  const a = SimDevice.create(s.world, android("a", 11));
+  const b = SimDevice.create(s.world, android("b", 22));
+  for (const d of [a, b]) {
+    radio.add(d);
+    wifi.add(d);
+  }
+  // Both radios reach: BLE neighbours AND a WiFi link. This is the shipped
+  // configuration, and the one no other scenario in this file covers.
+  radio.setTopology([["a", "b"]]);
+  s.track(a, b);
+  a.launch();
+  b.launch();
+  await waitFor(s.world, () => a.peers().includes(b.peerID), 30_000);
+  wifi.link("a", "b");
+  const bothUp = await waitFor(
+    s.world,
+    () => wifi.isLinked("a", "b") && a.bleLinkCount() > 0,
+    10_000,
+  );
+  s.check(
+    "both radios really are up between them",
+    bothUp,
+    `wifi=${wifi.isLinked("a", "b")} ble links=${a.bleLinkCount()}`,
+  );
+
+  // Measure from here, so presence traffic that has already flowed over
+  // Bluetooth is not counted against the file.
+  const bleBefore = radio.bytesOnAir;
+  const wifiBefore = wifi.bytesCarried;
+
+  const dm = `dm:${b.peerID}`;
+  const bytes = media.jpeg(64 * 1024);
+  s.check(
+    "the send was accepted",
+    a.sendAttachment(dm, bytes, {
+      type: "image",
+      name: "both-radios.jpg",
+      mimeType: "image/jpeg",
+      durationMs: 0,
+    }),
+  );
+
+  const arrived = await waitFor(
+    s.world,
+    () => b.attachments(`dm:${a.peerID}`).length > 0,
+    120_000,
+  );
+  s.check("the photo arrived", arrived);
+
+  const bleSpent = radio.bytesOnAir - bleBefore;
+  const wifiSpent = wifi.bytesCarried - wifiBefore;
+
+  // The file is 64 KiB, so whichever radio carried it spent at least that much.
+  // Naming the file size rather than comparing the two totals is what makes
+  // this fail loudly if the shortcut regresses: a BLE-only send would show
+  // wifiSpent near zero while bleSpent cleared the file size, and a
+  // both-radios flood would show both above it.
+  s.check(
+    "WiFi carried the file",
+    wifiSpent > bytes.length,
+    `wifi=${wifiSpent} file=${bytes.length}`,
+  );
+  s.check(
+    "and Bluetooth was not made to fragment it as well",
+    bleSpent < bytes.length,
+    `ble=${bleSpent} file=${bytes.length}`,
+  );
+
+  const uri = b.attachments(`dm:${a.peerID}`)[0]?.attachment?.uri;
+  const landed = uri !== undefined ? b.readAttachment(uri) : null;
+  s.check(
+    "and what landed is what was sent",
+    landed !== null && sameBytes(landed, bytes),
+    `bytes=${landed?.length ?? 0}`,
+  );
+  s.expectNone("process health", noCrashes([a, b]));
+  s.assert(true);
+});

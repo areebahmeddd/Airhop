@@ -74,7 +74,12 @@ export interface NoticeHit {
 export type MediaFilter =
   "photos" | "videos" | "audio" | "documents" | "links" | "ecash";
 
-const URL_RE = /https?:\/\/[^\s]+/i;
+// What counts as a link for the filter: a scheme, a `www.` host, or a bare host
+// with a path. A bare `example.com` is deliberately excluded, because it cannot
+// be told apart from a filename like `photo.jpg` and the filter would fill with
+// attachments.
+const URL_RE =
+  /\b(?:https?:\/\/\S+|www\.\S+|[a-z0-9][a-z0-9-]*(?:\.[a-z0-9-]+)+\/\S*)/i;
 
 export function messageMatchesFilter(
   message: ChatMessage,

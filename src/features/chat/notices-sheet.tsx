@@ -28,7 +28,12 @@ import { isUrgent, type BoardPost } from "../../core/mesh/board-packet";
 import { t, useT, type TranslationKey } from "../../i18n";
 import { getMeshService } from "../../services/mesh-service";
 import { useBoardStore } from "../../store/board-store";
-import { useNoticesStore, type LocationNote } from "../../store/notices-store";
+import {
+  matchesBridged,
+  noticeAuthor,
+  useNoticesStore,
+  type LocationNote,
+} from "../../store/notices-store";
 import BottomSheet from "../../ui/components/bottom-sheet";
 import {
   FontSize,
@@ -50,10 +55,6 @@ const EXPIRY_OPTIONS: { labelKey: TranslationKey | null; days: number }[] = [
   { labelKey: null, days: 0 },
 ];
 
-// A board post's Nostr bridge arrives as a same-content note signed by an
-// unlinkable key; match heuristically within this window and drop the copy.
-const BRIDGE_DEDUPE_MS = 15 * 60 * 1000;
-
 interface NoticeRow {
   id: string;
   author: string;
@@ -65,17 +66,16 @@ interface NoticeRow {
   post?: BoardPost;
 }
 
-function boardAuthor(nickname: string): string {
-  const n = nickname.trim();
-  return n.length > 0 ? n : "anon";
-}
-
 // Merge board posts and location notes for one cell. A note that looks like the
-// bridged copy of a board post is dropped; the board copy wins.
+// bridged copy of a board post is dropped; the board copy wins, because it
+// carries urgency and can be deleted.
+//
+// The match runs through the shared `matchesBridged`. The board store applies
+// the same predicate when a tombstone arrives, so the two must not drift.
 function mergeNotices(posts: BoardPost[], notes: LocationNote[]): NoticeRow[] {
   const rows: NoticeRow[] = posts.map((post) => ({
     id: bytesToHex(post.postID),
-    author: boardAuthor(post.authorNickname),
+    author: noticeAuthor(post.authorNickname),
     content: post.content,
     createdAtMs: post.createdAt,
     urgent: isUrgent(post),
@@ -85,18 +85,21 @@ function mergeNotices(posts: BoardPost[], notes: LocationNote[]): NoticeRow[] {
   }));
 
   for (const note of notes) {
-    const noteNick = (note.nickname ?? "").trim() || "anon";
-    const isBridged = posts.some(
-      (post) =>
-        post.geohash === note.geohash &&
-        post.content === note.content &&
-        boardAuthor(post.authorNickname) === noteNick &&
-        Math.abs(post.createdAt - note.createdAtMs) <= BRIDGE_DEDUPE_MS,
+    const isBridged = posts.some((post) =>
+      matchesBridged(
+        {
+          geohash: post.geohash,
+          content: post.content,
+          nickname: noticeAuthor(post.authorNickname),
+          createdAtMs: post.createdAt,
+        },
+        note,
+      ),
     );
     if (isBridged) continue;
     rows.push({
       id: note.id,
-      author: noteNick,
+      author: noticeAuthor(note.nickname),
       content: note.content,
       createdAtMs: note.createdAtMs,
       urgent: note.isUrgent,

@@ -10,6 +10,14 @@
 // To add a package: drop it in the right group below with its license and
 // repo. Its version is picked up automatically. When you change a dependency,
 // re-check its license field (node_modules/<pkg>/package.json).
+//
+// Vendored native binaries (the Arti xcframework) set `version` by hand, since
+// npm does not install them.
+//
+// A package's declared license is the default answer, not the final one: what
+// matters is the license of the code that ships in the binary. Where a thin npm
+// wrapper links a differently-licensed native library, both are named (see
+// react-native-mmkv).
 
 import pkg from "../../package.json";
 
@@ -43,7 +51,13 @@ function versionOf(name: string): string {
 const CATALOG: {
   category: string;
   description: string;
-  packages: { name: string; license: string; repo: string }[];
+  packages: {
+    name: string;
+    license: string;
+    repo: string;
+    // Only for entries npm does not install; everything else is looked up.
+    version?: string;
+  }[];
 }[] = [
   {
     category: "Core",
@@ -270,8 +284,10 @@ const CATALOG: {
         repo: "https://github.com/LinusU/react-native-get-random-values",
       },
       {
+        // Wrapper is MIT; it links Tencent's MMKV (BSD-3-Clause), which ships
+        // in the binary.
         name: "react-native-mmkv",
-        license: "MIT",
+        license: "MIT AND BSD-3-Clause",
         repo: "https://github.com/mrousavy/react-native-mmkv",
       },
       {
@@ -286,6 +302,22 @@ const CATALOG: {
       },
     ],
   },
+  {
+    category: "Binaries & frameworks",
+    description:
+      "Prebuilt native code committed to this repo and shipped in the app, not installed from npm.",
+    packages: [
+      {
+        // ios/Frameworks/arti.xcframework. iOS only: on Android, Tor goes
+        // through Orbot, a separate app. Version read from the crate strings in
+        // the binary; re-check when it is re-recorded (verify-vendored.js).
+        name: "arti",
+        version: "0.38.0",
+        license: "MIT OR Apache-2.0",
+        repo: "https://gitlab.torproject.org/tpo/core/arti",
+      },
+    ],
+  },
 ];
 
 export const THIRD_PARTY_LICENSES: LicenseGroup[] = CATALOG.map((group) => ({
@@ -293,7 +325,7 @@ export const THIRD_PARTY_LICENSES: LicenseGroup[] = CATALOG.map((group) => ({
   description: group.description,
   entries: group.packages.map((p) => ({
     name: p.name,
-    version: versionOf(p.name),
+    version: p.version ?? versionOf(p.name),
     license: p.license,
     repo: p.repo,
   })),

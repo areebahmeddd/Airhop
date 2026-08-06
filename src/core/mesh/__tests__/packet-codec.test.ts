@@ -221,12 +221,10 @@ describe("packet-codec", () => {
   // emits a VALID but different DEFLATE stream for the same input, which is
   // exactly the shape of the cross-implementation difference.
   describe("foreign-encoder compatibility", () => {
-    // Same derivation as packet-compression: @types/pako 2.0.4 predates the
-    // legacyHash option, so take the type from the function itself.
-    type DeflateOpts = NonNullable<Parameters<typeof deflateRaw>[1]> & {
-      legacyHash: boolean;
+    const LEGACY_ENCODER: NonNullable<Parameters<typeof deflateRaw>[1]> = {
+      level: 6,
+      legacyHash: true,
     };
-    const LEGACY_ENCODER: DeflateOpts = { level: 6, legacyHash: true };
 
     // Verified to encode differently under the two hashes.
     const TEXT =

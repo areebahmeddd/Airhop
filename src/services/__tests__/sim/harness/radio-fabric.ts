@@ -640,7 +640,7 @@ export class RadioFabric {
       0x27: "PONG",
       0x28: "NOSTR_CARRIER",
       0x29: "VOICE_FRAME",
-      0x2a: "CHANNEL_ENC",
+      0x50: "CHANNEL_ENC",
     };
     return [...this.typeCounts.entries()]
       .sort((a, b) => b[1] - a[1])

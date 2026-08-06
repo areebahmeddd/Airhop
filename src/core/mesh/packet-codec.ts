@@ -41,8 +41,11 @@ import {
 } from "./packet-compression";
 
 // Packet type registry per PROTOCOLS.md section 3.
-// All values match bitchat MessageType.swift / MessageType.kt (public domain).
-// 0x01–0x28 are bitchat-defined; 0x29+ are Airhop extensions.
+//
+// Everything up to VOICE_FRAME matches bitchat MessageType.swift /
+// MessageType.kt (public domain). bitchat allocates forward and has reached
+// 0x2C, so the values just past it are theirs to take, not ours. Airhop's own
+// types live at 0x50 and up; see the note there before adding one.
 export const enum PacketType {
   ANNOUNCE = 0x01, // "I'm here" with nickname
   CHANNEL_MSG = 0x02, // Public channel message
@@ -61,7 +64,26 @@ export const enum PacketType {
   PONG = 0x27, // Directed mesh echo reply (echoed nonce + origin TTL)
   NOSTR_CARRIER = 0x28, // Gateway-ferried signed Nostr event
   VOICE_FRAME = 0x29, // PTT audio burst (matches bitchat-iOS voiceFrame)
-  CHANNEL_ENC = 0x2a, // Airhop private channel: XChaCha20-Poly1305 sealed msg
+
+  // ---- Airhop extensions ----------------------------------------------------
+  //
+  // Allocated at 0x50, well clear of bitchat's frontier. bitchat assigns
+  // forward and has reached 0x2C (announceV2), with 0x2A and 0x2B reserved
+  // upstream for courier spray-ack. Anything just past their last shipped value
+  // is contested ground: two projects giving one byte two meanings makes each
+  // side's parser depend on the other's validation to not misfire.
+  //
+  // 0x50 leaves bitchat 36 values of room. conformance.test.ts (scenario X03,
+  // which parses their MessageType.swift rather than a copy) fails if they get
+  // within 16 of us, so the next collision is caught in CI rather than in the
+  // field.
+  CHANNEL_ENC = 0x50, // Airhop private channel: XChaCha20-Poly1305 sealed msg
+  // Public message in a named Airhop channel (a location cell). Not 0x02:
+  // bitchat carries location channels over Nostr and its BLE mesh has one
+  // public room, so these would be rendered in that room, addressed to an
+  // audience their author never chose, on top of the Nostr copy bitchat
+  // already receives. `#bluetooth` is that room and keeps 0x02.
+  CHANNEL_MSG_AIRHOP = 0x51,
 }
 
 // Removed types, recorded so they aren't reintroduced by accident:

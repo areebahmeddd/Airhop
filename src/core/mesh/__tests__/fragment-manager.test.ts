@@ -2,6 +2,7 @@
  * @jest-environment node
  */
 import { ed25519 } from "@noble/curves/ed25519.js";
+import { MAX_FRAMED_FILE_BYTES } from "../bitchat-file-packet";
 import {
   FRAG_DATA_SIZE,
   FragmentManager,
@@ -342,5 +343,197 @@ describe("FragmentManager reassembly timeout", () => {
     }
 
     expect(reassembled).toBeNull();
+  });
+});
+
+// ---- Adversarial reassembly ---------------------------------------------------
+//
+// Fragments are unsigned and skip the deduplicator, so both halves of the
+// assembly key (sender ID and stream ID) are attacker-choosable: anyone in
+// radio range can emit a fragment addressed to a stream they do not own. What
+// the buffer must guarantee is that doing so cannot corrupt or destroy an
+// honest transfer in progress.
+describe("a spoofed fragment cannot damage somebody else's transfer", () => {
+  // Craft a fragment payload by hand rather than through fragmentPacket, so a
+  // test can state header fields no honest sender would ever emit. Layout is
+  // the 13-byte header from the top of this file: stream 8, index 2, total 2,
+  // inner type 1.
+  function spoofFragment(
+    streamID: Uint8Array,
+    index: number,
+    total: number,
+    originalType: number,
+    data: Uint8Array,
+  ): Uint8Array {
+    const out = new Uint8Array(13 + data.length);
+    out.set(streamID.slice(0, 8), 0);
+    new DataView(out.buffer).setUint16(8, index, false);
+    new DataView(out.buffer).setUint16(10, total, false);
+    out[12] = originalType;
+    out.set(data, 13);
+    return out;
+  }
+
+  const streamIDOf = (payload: Uint8Array): Uint8Array => payload.slice(0, 8);
+
+  test("a smaller declared total cannot truncate an in-flight assembly", () => {
+    // The attack: a stream holding indices 0-2 of ten receives one injected
+    // fragment claiming total = 3. If completion read the arriving header
+    // instead of the pinned one, the buffer would declare the message complete
+    // and hand a third of a file to the receive path as though it were whole.
+    const identity = makeIdentity();
+    const packet = makeLargePacket(FRAG_DATA_SIZE * 10, identity);
+    const frags = fragmentPacket(packet, identity);
+    const manager = new FragmentManager();
+    const senderID = frags[0].senderID;
+    const stream = streamIDOf(frags[0].payload);
+
+    let reassembled: Packet | null = null;
+    const deliver = (payload: Uint8Array): void => {
+      manager.receive(senderID, payload, (p) => {
+        reassembled = p;
+      });
+    };
+
+    for (const f of frags.slice(0, 3)) deliver(f.payload);
+    deliver(
+      spoofFragment(stream, 2, 3, PacketType.CHANNEL_MSG, new Uint8Array(8)),
+    );
+
+    // Nothing was handed up early.
+    expect(reassembled).toBeNull();
+
+    // And the honest transfer still finishes intact: the injected fragment did
+    // not overwrite index 2 either, so the payload is the original one.
+    for (const f of frags.slice(3)) deliver(f.payload);
+    expect(reassembled).not.toBeNull();
+    expect(reassembled!.payload).toEqual(packet.payload);
+  });
+
+  test("an oversized fragment does not destroy the assembly it targets", () => {
+    // A fragment is capped at 467 bytes on the wire, but the outer packet may
+    // be compressed and the decoder inflates up to the sender-declared size, so
+    // one small packet can present a huge `data`. This used to delete the whole
+    // assembly: a remote kill switch for any transfer whose stream ID was
+    // observable on the air, with no error at either end.
+    const identity = makeIdentity();
+    const packet = makeLargePacket(FRAG_DATA_SIZE * 4, identity);
+    const frags = fragmentPacket(packet, identity);
+    const manager = new FragmentManager();
+    const senderID = frags[0].senderID;
+    const stream = streamIDOf(frags[0].payload);
+
+    let reassembled: Packet | null = null;
+    const deliver = (payload: Uint8Array): void => {
+      manager.receive(senderID, payload, (p) => {
+        reassembled = p;
+      });
+    };
+
+    deliver(frags[0].payload);
+    deliver(
+      spoofFragment(
+        stream,
+        1,
+        frags.length,
+        PacketType.CHANNEL_MSG,
+        new Uint8Array(MAX_FRAMED_FILE_BYTES + 1),
+      ),
+    );
+
+    // The rest of the honest transfer arrives and still completes.
+    for (const f of frags.slice(1)) deliver(f.payload);
+    expect(reassembled).not.toBeNull();
+    expect(reassembled!.payload).toEqual(packet.payload);
+  });
+
+  test("an oversized first fragment cannot evict a stream from a full table", () => {
+    // Starting an assembly evicts the oldest slot to make room. A fragment that
+    // can never be stored must therefore be refused before the table is
+    // touched, or rejecting it is still one packet that costs a stranger their
+    // transfer.
+    const identity = makeIdentity();
+    const packet = makeLargePacket(FRAG_DATA_SIZE * 3, identity);
+    const frags = fragmentPacket(packet, identity);
+    const manager = new FragmentManager();
+    const senderID = frags[0].senderID;
+
+    // The victim's stream goes in first, so it is the oldest slot.
+    let reassembled: Packet | null = null;
+    const deliver = (from: Uint8Array, payload: Uint8Array): void => {
+      manager.receive(from, payload, (p) => {
+        reassembled = p;
+      });
+    };
+    deliver(senderID, frags[0].payload);
+
+    // Fill the rest of the table with other senders' streams.
+    for (let i = 1; i < 128; i++) {
+      const other = new Uint8Array(8);
+      other[0] = i & 0xff;
+      other[1] = (i >> 8) & 0xff;
+      deliver(
+        other,
+        spoofFragment(other, 0, 4, PacketType.CHANNEL_MSG, new Uint8Array(4)),
+      );
+    }
+    expect(manager.size).toBe(128);
+
+    // Now the unstorable fragment, from a sender with no slot of its own.
+    const attacker = new Uint8Array(8).fill(0xee);
+    deliver(
+      attacker,
+      spoofFragment(
+        attacker,
+        0,
+        2,
+        PacketType.CHANNEL_MSG,
+        new Uint8Array(MAX_FRAMED_FILE_BYTES + 1),
+      ),
+    );
+
+    // Nothing was admitted, and the victim's stream still completes.
+    expect(manager.size).toBe(128);
+    for (const f of frags.slice(1)) deliver(senderID, f.payload);
+    expect(reassembled).not.toBeNull();
+    expect(reassembled!.payload).toEqual(packet.payload);
+  });
+
+  test("progress reports the pinned type, not a later fragment's claim", () => {
+    // The progress callback drives the incoming-file card. Reading the type off
+    // each arriving fragment would let an injected packet relabel a photo as a
+    // voice note mid-transfer.
+    const identity = makeIdentity();
+    const packet = makeLargePacket(FRAG_DATA_SIZE * 3, identity);
+    const frags = fragmentPacket(packet, identity);
+    const manager = new FragmentManager();
+    const senderID = frags[0].senderID;
+    const stream = streamIDOf(frags[0].payload);
+    const seen: number[] = [];
+
+    const deliver = (payload: Uint8Array): void => {
+      manager.receive(
+        senderID,
+        payload,
+        () => undefined,
+        (info) => seen.push(info.originalType),
+      );
+    };
+
+    deliver(frags[0].payload);
+    deliver(
+      spoofFragment(
+        stream,
+        1,
+        frags.length,
+        PacketType.VOICE_FRAME,
+        new Uint8Array(8),
+      ),
+    );
+    deliver(frags[1].payload);
+
+    // The mismatched fragment was refused outright, so only the honest two
+    // reported progress, both under the pinned type.
+    expect(seen).toEqual([PacketType.CHANNEL_MSG, PacketType.CHANNEL_MSG]);
   });
 });

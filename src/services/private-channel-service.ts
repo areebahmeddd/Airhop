@@ -28,6 +28,7 @@ import {
 } from "../core/mesh/channel-crypto";
 import type { NostrClient } from "../core/nostr/nostr-client";
 import { TAG_MESSAGE_ID } from "../core/nostr/presence";
+import { useChannelMembersStore } from "../store/channel-members-store";
 import { useChatStore } from "../store/chat-store";
 import { channelDisplayName } from "../utils/display-name";
 
@@ -142,15 +143,23 @@ export class PrivateChannelService {
       if (opened.senderID === this.localPeerID) return;
       if (!useChatStore.getState().channels.includes(channel)) return;
 
+      const senderNickname = channelDisplayName(
+        opened.senderID,
+        opened.senderNickname,
+      );
+      // Opening the sealed event proves the sender holds the channel key,
+      // which is what membership means here. Same record the BLE path writes
+      // (mesh-service onChannelEnc), so both transports feed one roster.
+      useChannelMembersStore
+        .getState()
+        .noteMember(channel, opened.senderID, senderNickname);
+
       useChatStore.getState().addMessage({
         // Shared id with the BLE copy so both transports collapse to one bubble.
         id: `ch-${opened.msgId}`,
         channel,
         senderID: opened.senderID,
-        senderNickname: channelDisplayName(
-          opened.senderID,
-          opened.senderNickname,
-        ),
+        senderNickname,
         text: opened.text,
         timestampMs: event.created_at * 1000,
         isMine: false,

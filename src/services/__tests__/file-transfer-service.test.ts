@@ -12,6 +12,7 @@
 
 import { decodeFilePacket } from "../../core/mesh/bitchat-file-packet";
 import { PacketType, type Packet } from "../../core/mesh/packet-codec";
+import { useChatStore } from "../../store/chat-store";
 import { useTransferStore } from "../../store/transfer-store";
 import { FileTransferService } from "../file-transfer-service";
 
@@ -298,5 +299,109 @@ describe("wire format (BitchatFilePacket)", () => {
 
     const pkt = broadcast.mock.calls[0][0] as Packet;
     expect(decodeFilePacket(pkt.payload)!.channel).toBe("#region");
+  });
+});
+
+// ---- Refused attachments ------------------------------------------------------
+//
+// The receive path drops a bad attachment in four places, all of them silently.
+// From the outside that is identical to the file never being sent, which is the
+// hardest kind of bug to get a report about. These pin where the resulting
+// system line may and may not appear, because the line is a surface anyone in
+// radio range can reach and the "may not" half is the security-relevant one.
+describe("an attachment that cannot be read", () => {
+  const SENDER = "1122334455667788";
+  const SENDER_BYTES = new Uint8Array([
+    0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88,
+  ]);
+  const ME_BYTES = new Uint8Array([
+    0xaa, 0xbb, 0xcc, 0xdd, 0x00, 0x11, 0x22, 0x33,
+  ]);
+  const DM = `dm:${SENDER}`;
+
+  // Garbage in place of a BitchatFilePacket TLV, so decodeFilePacket refuses it.
+  const JUNK = new Uint8Array([0xff, 0xff, 0xff, 0xff, 0xff, 0xff]);
+
+  function packet(recipientID: Uint8Array, hasRecipient: boolean): Packet {
+    return {
+      type: PacketType.FILE_TRANSFER,
+      ttl: 7,
+      flags: hasRecipient ? 0x01 : 0x00,
+      senderID: SENDER_BYTES,
+      recipientID,
+      timestamp: Date.now(),
+      signature: new Uint8Array(64),
+      payload: JUNK,
+    };
+  }
+
+  function systemLines(): string[] {
+    return (useChatStore.getState().messages[DM] ?? [])
+      .filter((m) => m.isSystem)
+      .map((m) => m.text);
+  }
+
+  beforeEach(() => {
+    useChatStore.getState().clearAll();
+  });
+
+  it("says so in a direct message thread that already exists", async () => {
+    const { service } = makeService();
+    useChatStore.getState().addChannel(DM);
+
+    service.onFileTransfer(packet(ME_BYTES, true));
+    await Promise.resolve();
+
+    expect(systemLines()).toHaveLength(1);
+  });
+
+  it("stays silent for a packet merely passing through us", async () => {
+    // FILE_TRANSFER floods, so a DM attachment between two other people crosses
+    // this device. Their failure is not ours to report, and reporting it would
+    // leak that we can see their traffic.
+    const { service } = makeService();
+    useChatStore.getState().addChannel(DM);
+
+    const someoneElse = new Uint8Array(8).fill(0x99);
+    service.onFileTransfer(packet(someoneElse, true));
+    await Promise.resolve();
+
+    expect(systemLines()).toEqual([]);
+  });
+
+  it("stays silent on a broadcast attachment", async () => {
+    // Anyone in range can put a malformed broadcast on the air. A line per bad
+    // packet would be a spam channel wearing a helpful face.
+    const { service } = makeService();
+    useChatStore.getState().addChannel(DM);
+
+    service.onFileTransfer(packet(new Uint8Array(8), false));
+    await Promise.resolve();
+
+    expect(systemLines()).toEqual([]);
+  });
+
+  it("never conjures a thread that does not exist yet", async () => {
+    // Otherwise a stranger creates a conversation in someone's list out of pure
+    // garbage: the same "attacker creates UI state" shape the channel-tag check
+    // exists to close.
+    const { service } = makeService();
+
+    service.onFileTransfer(packet(ME_BYTES, true));
+    await Promise.resolve();
+
+    expect(useChatStore.getState().channels).not.toContain(DM);
+  });
+
+  it("posts one line for a burst, not one per packet", async () => {
+    const { service } = makeService();
+    useChatStore.getState().addChannel(DM);
+
+    for (let i = 0; i < 10; i++) {
+      service.onFileTransfer(packet(ME_BYTES, true));
+      await Promise.resolve();
+    }
+
+    expect(systemLines()).toHaveLength(1);
   });
 });

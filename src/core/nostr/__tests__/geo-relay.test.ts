@@ -265,5 +265,62 @@ describe("geo-relay", () => {
       dir.load(dupCsv);
       expect(dir.size).toBe(1);
     });
+
+    // The upstream feed lists ~100 hosts twice, bare and with :443. One machine.
+    it("treats host and host:443 as the same relay", () => {
+      const dupCsv = [
+        "Relay URL,Latitude,Longitude",
+        "relay.test.com,10,20",
+        "relay.test.com:443,10,20",
+      ].join("\n");
+      const dir = new GeoRelayDirectory();
+      dir.load(dupCsv);
+      expect(dir.size).toBe(1);
+      expect(dir.nearestRelays(10, 20, 5)).toEqual(["wss://relay.test.com"]);
+    });
+
+    // A duplicate must not take a selection slot and push out a distinct relay,
+    // which is how two clients in one cell end up on different relays.
+    it("does not let a :443 twin displace a distinct relay from the top N", () => {
+      const csvWithTwin = [
+        "Relay URL,Latitude,Longitude",
+        "a.test.com,10,20",
+        "b.test.com,10.1,20",
+        "b.test.com:443,10.1,20",
+        "c.test.com,10.2,20",
+      ].join("\n");
+      const dir = new GeoRelayDirectory();
+      dir.load(csvWithTwin);
+
+      expect(dir.nearestRelays(10, 20, 3)).toEqual([
+        "wss://a.test.com",
+        "wss://b.test.com",
+        "wss://c.test.com",
+      ]);
+    });
+
+    // A non-standard port is a different endpoint.
+    it("keeps a relay on a non-standard port distinct from the bare host", () => {
+      const csvWithPort = [
+        "Relay URL,Latitude,Longitude",
+        "relay.test.com,10,20",
+        "relay.test.com:444,10,20",
+      ].join("\n");
+      const dir = new GeoRelayDirectory();
+      dir.load(csvWithPort);
+      expect(dir.size).toBe(2);
+    });
+
+    it("rejects plaintext ws:// directory rows", () => {
+      const csv = [
+        "Relay URL,Latitude,Longitude",
+        "ws://insecure.test.com,10,20",
+        "relay.test.com,10,20",
+      ].join("\n");
+      const dir = new GeoRelayDirectory();
+      dir.load(csv);
+      expect(dir.size).toBe(1);
+      expect(dir.nearestRelays(10, 20, 5)).toEqual(["wss://relay.test.com"]);
+    });
   });
 });

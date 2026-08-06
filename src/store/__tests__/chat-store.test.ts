@@ -4,6 +4,7 @@
 // Focused tests for the message-action primitives (star) added on top of the
 // existing chat store. Uses the in-memory MMKV mock: no native module required.
 
+import { useActivityStore } from "../activity-store";
 import {
   dropPendingChatPersistence,
   flushChatPersistence,
@@ -552,5 +553,161 @@ describe("unread while the app is away", () => {
     s.setActiveChannel("#a");
     s.markChannelRead("#a");
     expect(useChatStore.getState().unreadCounts["#a"]).toBe(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Merging two threads for the same person.
+//
+// A DM is reachable under two keys: `dm:nostr_<pubkey>` before the sender is
+// identified, and `dm:<peerID>` after their announce. onAnnounce folds the
+// first into the second, and it fires when they walk into Bluetooth range,
+// which can be while the user is reading the thread being folded. So the merge
+// moves the pointers with the messages: the open thread, activeChannel,
+// lastThread and the bell rows all name the surviving channel.
+describe("mergeChannel", () => {
+  const NOSTR = `dm:nostr_${"ab".repeat(32)}`;
+  const MESH = "dm:aabbccdd00112233";
+
+  function inbound(id: string, channel: string, at: number): ChatMessage {
+    return {
+      id,
+      channel,
+      senderID: "aabbccdd00112233",
+      senderNickname: "sam",
+      text: id,
+      timestampMs: at,
+      isMine: false,
+    };
+  }
+
+  beforeEach(() => {
+    useChatStore.getState().clearAll();
+    useActivityStore.getState().clearAll();
+  });
+
+  it("carries the messages across", () => {
+    const s = useChatStore.getState();
+    s.addChannel(NOSTR);
+    s.addMessage(inbound("m0", NOSTR, 1));
+    s.mergeChannel(NOSTR, MESH);
+
+    const st = useChatStore.getState();
+    expect(st.messages[NOSTR]).toBeUndefined();
+    expect(st.messages[MESH]?.map((m) => m.id)).toEqual(["m0"]);
+    expect(st.channels).not.toContain(NOSTR);
+  });
+
+  it("moves the open thread with it", () => {
+    const s = useChatStore.getState();
+    s.addChannel(NOSTR);
+    s.addMessage(inbound("m0", NOSTR, 1));
+    s.setActiveChannel(NOSTR);
+    s.setLastThread(NOSTR);
+    s.mergeChannel(NOSTR, MESH);
+
+    const st = useChatStore.getState();
+    expect(st.activeChannel).toBe(MESH);
+    expect(st.lastThread).toBe(MESH);
+    expect(st.resolveChannel(NOSTR)).toBe(MESH);
+  });
+
+  // The reported bug: the count climbing in a conversation being read.
+  it("does not make the thread you are reading unread", () => {
+    const s = useChatStore.getState();
+    s.addChannel(NOSTR);
+    s.addMessage(inbound("m0", NOSTR, 1));
+    s.setActiveChannel(NOSTR);
+    s.markChannelRead(NOSTR);
+    s.mergeChannel(NOSTR, MESH);
+    // Their next message arrives over the mesh, under the peer-ID key.
+    useChatStore.getState().addMessage(inbound("m1", MESH, 2));
+
+    expect(useChatStore.getState().unreadCounts[MESH] ?? 0).toBe(0);
+  });
+
+  it("still counts unread when you are reading something else", () => {
+    const s = useChatStore.getState();
+    s.addChannel(NOSTR);
+    s.addMessage(inbound("m0", NOSTR, 1));
+    s.setActiveChannel("#bluetooth");
+    s.mergeChannel(NOSTR, MESH);
+
+    expect(useChatStore.getState().unreadCounts[MESH]).toBe(1);
+  });
+
+  it("re-points a bell row at the surviving thread", () => {
+    useActivityStore.getState().record({
+      id: "m0",
+      channel: NOSTR,
+      isDM: true,
+      senderID: "x",
+      senderNickname: "sam",
+      preview: "hey",
+      timestampMs: 1,
+    });
+    useChatStore.getState().mergeChannel(NOSTR, MESH);
+    expect(useActivityStore.getState().entries[0].channel).toBe(MESH);
+  });
+
+  // Two merges in a row must not leave an alias pointing at another alias.
+  it("collapses a chained merge to one hop", () => {
+    const s = useChatStore.getState();
+    s.mergeChannel(NOSTR, MESH);
+    s.mergeChannel(MESH, "dm:1122334455667788");
+    const st = useChatStore.getState();
+    expect(st.resolveChannel(NOSTR)).toBe("dm:1122334455667788");
+    expect(st.resolveChannel(MESH)).toBe("dm:1122334455667788");
+  });
+});
+
+// Reading a conversation is seeing its notifications, so one fact does not
+// carry two numbers that disagree.
+describe("markChannelRead", () => {
+  beforeEach(() => {
+    useChatStore.getState().clearAll();
+    useActivityStore.getState().clearAll();
+  });
+
+  it("clears the unread count and the bell rows together", () => {
+    useActivityStore.getState().record({
+      id: "m1",
+      channel: "#bluetooth",
+      isDM: false,
+      senderID: "x",
+      senderNickname: "sam",
+      preview: "hey",
+      timestampMs: 1,
+    });
+    useChatStore.getState().addMessage({
+      id: "m1",
+      channel: "#bluetooth",
+      senderID: "x",
+      senderNickname: "sam",
+      text: "hey",
+      timestampMs: 1,
+      isMine: false,
+    });
+    expect(useChatStore.getState().unreadCounts["#bluetooth"]).toBe(1);
+    expect(useActivityStore.getState().unseenCount()).toBe(1);
+
+    useChatStore.getState().markChannelRead("#bluetooth");
+
+    expect(useChatStore.getState().unreadCounts["#bluetooth"]).toBe(0);
+    expect(useActivityStore.getState().unseenCount()).toBe(0);
+  });
+
+  it("leaves another conversation's rows alone", () => {
+    useActivityStore.getState().record({
+      id: "m2",
+      channel: "#block",
+      isDM: false,
+      senderID: "x",
+      senderNickname: "sam",
+      preview: "hey",
+      timestampMs: 1,
+    });
+    useChatStore.getState().markChannelRead("#bluetooth");
+    expect(useActivityStore.getState().unseenCount()).toBe(1);
   });
 });

@@ -37,7 +37,12 @@ import {
   signPacket,
   type Packet,
 } from "../../../core/mesh/packet-codec";
-import { encodeChannelMsgPayload } from "../../../core/router/message-router";
+import {
+  channelPacketType,
+  encodeAirhopChannelPayload,
+  encodeMeshPublicPayload,
+  MESH_PUBLIC_CHANNEL,
+} from "../../../core/router/message-router";
 import { SimDevice } from "./harness/device";
 import { noCrashes } from "./harness/invariants";
 import { RadioFabric } from "./harness/radio-fabric";
@@ -111,14 +116,17 @@ function signedPublicMessage(
     senderID[i] = parseInt(author.peerID.slice(i * 2, i * 2 + 2), 16);
   }
   const packet: Packet = {
-    type: PacketType.CHANNEL_MSG,
+    type: channelPacketType(channel),
     ttl: 7,
     flags: Flags.SIGNED,
     senderID,
     recipientID: new Uint8Array(8),
     timestamp,
     signature: new Uint8Array(64),
-    payload: encodeChannelMsgPayload(channel, text, messageID),
+    payload:
+      channel === MESH_PUBLIC_CHANNEL
+        ? encodeMeshPublicPayload(text)
+        : encodeAirhopChannelPayload(channel, text, messageID),
     ...(isRSR ? { isRSR: true } : {}),
   };
   packet.signature = signPacket(packet, author.identity.signingPrivKey);
