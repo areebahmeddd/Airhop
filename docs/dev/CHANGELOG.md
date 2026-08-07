@@ -5,6 +5,7 @@ All notable changes are documented here. The format follows [Keep a Changelog](h
 
 ## What's New
 
+- refactor: improve fragment pacing logic and update related comments for clarity (by @areebahmeddd) [d1bd03e]
 - fix(router): stop dropping DMs from a direct peer between announces (by @areebahmeddd) [c1fbe19]
 - refactor: update metadata handling and improve code consistency across components (by @areebahmeddd) [f9b067f]
 - chore: update changelog format and release notes (by @areebahmeddd) [cedc3fe]
