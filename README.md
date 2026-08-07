@@ -197,7 +197,7 @@ npm install
 
 > Changing a native dependency also changes `ios/Podfile.lock`, which pins exact pod versions. Regenerate it with `npx pod-install` in the same commit.
 
-If a build fails after a dependency change, clear what Xcode and CocoaPods keep between runs:
+If a build fails after changing dependencies, clear the Xcode and CocoaPods caches before trying again:
 
 ```bash
 rm -rf ios/Pods ios/build ~/Library/Developer/Xcode/DerivedData/Airhop-*
@@ -226,7 +226,7 @@ npm run ios
 
 > Changing a native dependency also changes `android/app/gradle.lockfile`, which pins exact versions. Regenerate it in the same commit.
 
-If a build fails after a dependency change, clear what Gradle keeps between runs:
+If a build fails after changing dependencies, clear the Gradle caches before trying again:
 
 ```bash
 cd android && ./gradlew --stop

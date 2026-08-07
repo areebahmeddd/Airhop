@@ -6,7 +6,7 @@ All notable changes are documented here. The format follows [Keep a Changelog](h
 
 """
 body = """
-## What's Changed in {{ version }}{% if version and version is starting_with("v1.") %} · Albatross{% endif %}
+## What's New
 
 {% for commit in commits %}{% if commit.author.name is not containing("[bot]") %}- {{ commit.message | split(pat="\n") | first | trim }} (by @{{ commit.author.name }}){% if commit.github.pr_number %} (#{{ commit.github.pr_number }}){% endif %} [{{ commit.id | truncate(length=7, end="") }}]
 {% endif %}{% endfor %}

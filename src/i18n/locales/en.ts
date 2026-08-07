@@ -86,7 +86,7 @@ export const strings = {
   // ---- Onboarding: welcome -------------------------------------------------------
   // The wordmark itself ("airhop") is never translated or transliterated: it is
   // the product name, and it is drawn as part of the brand mark.
-  "onboarding.welcome.tagline": "Private mesh communication.",
+  "onboarding.welcome.tagline": "Private mesh communication",
   "onboarding.welcome.cta": "Get started",
   // Read out when focus lands on a disabled button. A dimmed control with no
   // stated reason is a dead end for a screen-reader user.

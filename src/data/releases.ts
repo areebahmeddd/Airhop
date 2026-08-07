@@ -5,9 +5,9 @@
 // launch and carried by every release in that major line, so the Version
 // screen always shows the current era's bird.
 //
-// This is the app-side source of truth, read by the Version screen. The
-// changelog tooling keeps a matching branch in cliff.toml; when you open a new
-// era, add it in both places in the same change.
+// This is the source of truth, read by the Version screen and by the release
+// workflow, which appends the bird to the GitHub release title. Opening a new
+// era is a one-line change here.
 
 export const RELEASE_BIRDS: Record<string, string> = {
   "1": "Albatross",
