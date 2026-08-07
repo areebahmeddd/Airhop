@@ -321,7 +321,10 @@ Two details make that safe rather than merely strict:
 - **The key is the pinned one, not the reachable one.** A departure arrives
   precisely when a peer has stopped announcing, so resolving its signing key
   through the reachability window would refuse the genuine ones. Identity
-  pinning has no expiry; reachability does. They are different questions.
+  pinning has no expiry; reachability does. They are different questions. The
+  same split governs inbound decryption: a `NOISE_ENCRYPTED` packet resolves its
+  session directly rather than through that window, because the packet having
+  arrived is the presence the window only estimates.
 - **A saved contact's key is the fallback.** After a restart the live registry
   is empty until the next announce, and without this a departure from someone
   already in the address book would be unverifiable for that window.

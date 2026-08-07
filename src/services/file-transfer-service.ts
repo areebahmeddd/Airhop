@@ -48,19 +48,31 @@ import { BRIDGE_CHANNEL, canSendMedia } from "../utils/media-policy";
 
 // ---- Types ------------------------------------------------------------------
 
-// Delay between consecutive outbound fragments. Matches bitchat's
-// FragmentingPacketSender.interFragmentDelayMs. Without it the radio drops
+// Delay between consecutive outbound fragments. Without it the radio drops
 // fragments and the transfer never completes on the far side.
-const INTER_FRAGMENT_MS = 20;
+//
+// Two values, because the cost of a fragment is not the same on both paths: a
+// directed one is a single write, a broadcast one is a write per connected link,
+// so the same timer costs N times the airtime in a room of N peers. Matches
+// bitchat's bleFragmentSpacingDirectedMs / bleFragmentSpacingMs
+// (TransportConfig.swift), chosen the same way it chooses them in
+// BLEOutboundFragmentPlanner.spacingMs: addressed packets get the shorter one.
+//
+// These were a single 20ms taken from bitchat's bleExpectedWritePerFragmentMs,
+// which is not a spacing at all - it estimates how long a write takes, and is
+// used to size a timeout. bitchat's own note on the real constants: "Aggressive
+// pacing causes packet loss; needs 25-30ms between fragments for reliable
+// delivery."
+const FRAGMENT_SPACING_DIRECTED_MS = 25;
+const FRAGMENT_SPACING_MS = 30;
 
 // How long to wait after the radio REFUSES a fragment before offering it again.
 //
-// 20ms of pacing assumes the link can always take the next write, and one-way
-// that is roughly true: 467 data bytes every 20ms is ~23 KB/s, at the top of
-// what BLE carries. It stops being true the moment the same link is also carrying a
-// transfer in the other direction, which is what two people sending a photo at
-// the same time does. The stack's write queue fills, it starts refusing, and
-// backing off is the only thing that lets it drain.
+// The spacing above assumes the link can always take the next write, and one-way
+// that is roughly true. It stops being true the moment the same link is also
+// carrying a transfer in the other direction, which is what two people sending a
+// photo at the same time does. The stack's write queue fills, it starts
+// refusing, and backing off is the only thing that lets it drain.
 const REFUSED_BACKOFF_MS = 60;
 
 // How many consecutive refusals a single transfer tolerates before it is
@@ -497,7 +509,12 @@ export class FileTransferService {
     this.scheduleDrain();
   }
 
-  private scheduleDrain(delayMs: number = INTER_FRAGMENT_MS): void {
+  // Spacing owed after handing over a fragment, by how many links it cost.
+  private static spacingFor(isDM: boolean): number {
+    return isDM ? FRAGMENT_SPACING_DIRECTED_MS : FRAGMENT_SPACING_MS;
+  }
+
+  private scheduleDrain(delayMs: number = FRAGMENT_SPACING_DIRECTED_MS): void {
     if (this.drainTimer !== null) return;
     this.drainTimer = setTimeout(() => {
       this.drainTimer = null;
@@ -554,7 +571,11 @@ export class FileTransferService {
     }
 
     if (this.outQueue.length > 0) {
-      this.scheduleDrain(accepted ? INTER_FRAGMENT_MS : REFUSED_BACKOFF_MS);
+      this.scheduleDrain(
+        accepted
+          ? FileTransferService.spacingFor(next.isDM)
+          : REFUSED_BACKOFF_MS,
+      );
     }
   }
 

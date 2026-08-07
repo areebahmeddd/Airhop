@@ -48,7 +48,11 @@ function makeService(accepted = true) {
 
 // Fire the pacer's timer, then let the awaited transport answer settle so the
 // next tick is scheduled. Advancing fake timers alone only does the first half.
-async function tick(times = 1, ms = 20): Promise<void> {
+//
+// The default clears the widest fragment spacing (30ms, the broadcast one), so
+// it fires whichever of the two the service scheduled. Callers waiting on a
+// refusal pass the longer backoff explicitly.
+async function tick(times = 1, ms = 30): Promise<void> {
   for (let i = 0; i < times; i++) {
     jest.advanceTimersByTime(ms);
     await Promise.resolve();
@@ -164,8 +168,8 @@ describe("outbound pacing", () => {
 });
 
 // The bug these guard: two phones sending a photo to each other at the same
-// time. 20ms pacing already sits at what BLE carries one-way, so the second
-// direction fills the stack's write queue and it starts refusing. A refusal
+// time. The fragment spacing already sits at what BLE carries one-way, so the
+// second direction fills the stack's write queue and it starts refusing. A refusal
 // that is dropped is a fragment the receiver can never ask for, so its stream
 // stalls at a couple of percent and dies on the idle timeout, while the sender
 // marches to 100% and reports "sent". Nothing on this wire acknowledges a
