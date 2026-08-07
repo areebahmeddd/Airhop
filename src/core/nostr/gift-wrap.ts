@@ -25,7 +25,7 @@
 
 import { hkdf } from "@noble/hashes/hkdf.js";
 import { sha256 } from "@noble/hashes/sha2.js";
-import { bytesToHex, hexToBytes } from "@noble/hashes/utils.js";
+import { hexToBytes } from "@noble/hashes/utils.js";
 import {
   finalizeEvent,
   generateSecretKey,
@@ -193,14 +193,4 @@ export function unwrapDm(
 export function deriveNostrPrivKey(ed25519PrivKey: Uint8Array): Uint8Array {
   const info = new TextEncoder().encode("airhop-nostr-key-v1");
   return hkdf(sha256, ed25519PrivKey, undefined, info, 32);
-}
-
-// Encode a Uint8Array private key to hex for nostr-tools APIs.
-export function privKeyToHex(privKey: Uint8Array): string {
-  return bytesToHex(privKey);
-}
-
-// Decode a hex private key from storage.
-export function hexToPrivKey(hex: string): Uint8Array {
-  return hexToBytes(hex);
 }

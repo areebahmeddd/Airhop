@@ -11,7 +11,12 @@
 // The router does not know about encryption, signatures, or message types.
 // Callers are responsible for verifying signatures before passing a packet in.
 import { Deduplicator } from "./deduplicator";
-import { computePacketId, PacketType, type Packet } from "./packet-codec";
+import {
+  computePacketId,
+  PacketType,
+  type Packet,
+  type SendFn,
+} from "./packet-codec";
 
 const DEFAULT_TTL = 7;
 
@@ -85,8 +90,6 @@ function relayDelayMs(packet: Packet, degree: number): number {
   const span = TIME_CRITICAL_MAX_DELAY_MS - TIME_CRITICAL_MIN_DELAY_MS;
   return TIME_CRITICAL_MIN_DELAY_MS + Math.floor(Math.random() * (span + 1));
 }
-
-export type SendFn = (packet: Packet) => void;
 
 export class FloodRouter {
   private readonly dedup = new Deduplicator();

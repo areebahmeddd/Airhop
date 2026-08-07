@@ -25,7 +25,11 @@ import { showAlert } from "../../store/alert-store";
 import { useBlockedStore } from "../../store/blocked-store";
 import { useChatStore } from "../../store/chat-store";
 import { useContactsStore } from "../../store/contacts-store";
-import { usePeerStore, type NearbyPeer } from "../../store/peer-store";
+import {
+  type NearbyPeer,
+  REACHABLE_TTL_MS,
+  usePeerStore,
+} from "../../store/peer-store";
 import Avatar from "../../ui/components/avatar";
 import BottomSheet from "../../ui/components/bottom-sheet";
 import EmptyState from "../../ui/components/empty-state";
@@ -138,7 +142,7 @@ export default function PeerList({
   }
 
   function isOnline(peer: NearbyPeer): boolean {
-    return now - peer.lastSeenMs < 60_000;
+    return now - peer.lastSeenMs < REACHABLE_TTL_MS;
   }
 
   function handleSendDM(peer: NearbyPeer): void {

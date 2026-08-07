@@ -29,7 +29,7 @@ import { en } from "./locales/en";
 import type { Locale, PluralKey, TranslationKey } from "./locales/types";
 
 export type { LanguageCode } from "./languages";
-export type { PluralKey, TranslationKey } from "./locales/types";
+export type { TranslationKey } from "./locales/types";
 
 // The active catalog and language. Constants rather than store state while
 // there is one of each; the accessors below exist so that call sites already
@@ -157,10 +157,8 @@ export function initI18n(): void {
   applyLayoutDirection(language);
 }
 
-export {
-  DEFAULT_LANGUAGE,
-  isRTL,
-  LANGUAGE_ORDER,
-  LANGUAGES,
-  PLANNED_LANGUAGES,
-} from "./languages";
+// The language picker's data, re-exported so a screen imports it from the same
+// place it imports `useT`. `DEFAULT_LANGUAGE`, `isRTL` and `LANGUAGE_ORDER` are
+// deliberately not here: they are language-model details rather than screen
+// input, and their callers import them from ./languages directly.
+export { LANGUAGES, PLANNED_LANGUAGES } from "./languages";

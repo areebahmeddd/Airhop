@@ -20,6 +20,11 @@ import { bytesToHex } from "@noble/hashes/utils.js";
 import { DeviceEventEmitter } from "react-native";
 import type { Identity } from "../../../../core/crypto/identity";
 import { useMeshStateStore } from "../../../../store/mesh-state-store";
+// The real result type, not a copy. The annotation below is only a guard against
+// drift if it points at production: this file used to redeclare the interface and
+// annotate against its own copy, which is how the literal kept a
+// `needsPreciseLocation` field for a while after the real one dropped it.
+import type { BlePermissionResult } from "../../../../utils/ble-permissions";
 import {
   destroyMeshService,
   getMeshService,
@@ -66,14 +71,6 @@ export function hasBlePermissions(os: DeviceOS): boolean {
   return requiredBlePermissions(os).every(
     (p) => os.checkPermission(p) === "granted",
   );
-}
-
-export interface BlePermissionResult {
-  granted: boolean;
-  denied: string[];
-  blockedForever: boolean;
-  // API <=30, where the mesh waits on location rather than Bluetooth.
-  locationRequired: boolean;
 }
 
 // ble-permissions.ts:69-120. `answer` stands in for the user tapping through

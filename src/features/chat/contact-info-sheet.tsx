@@ -14,7 +14,7 @@ import { useT } from "../../i18n";
 import { getMeshService } from "../../services/mesh-service";
 import { useChatStore } from "../../store/chat-store";
 import { useContactsStore } from "../../store/contacts-store";
-import { usePeerStore } from "../../store/peer-store";
+import { REACHABLE_TTL_MS, usePeerStore } from "../../store/peer-store";
 import Avatar from "../../ui/components/avatar";
 import BottomSheet from "../../ui/components/bottom-sheet";
 import {
@@ -27,6 +27,7 @@ import {
   useThemeColors,
 } from "../../ui/theme";
 import { resolveDisplayName } from "../../utils/display-name";
+import { formatLongDate } from "../../utils/format";
 import {
   isNostrId,
   NOSTR_ID_PREFIX,
@@ -77,7 +78,8 @@ export default function ContactInfoSheet({
   }, []);
 
   const name = peerID ? resolveDisplayName(peerID) : "";
-  const isOnline = peer !== undefined && nowMs - peer.lastSeenMs < 60_000;
+  const isOnline =
+    peer !== undefined && nowMs - peer.lastSeenMs < REACHABLE_TTL_MS;
   const firstMessage =
     messages && messages.length > 0 ? messages[0] : undefined;
   const verified = contact?.source === "qr";
@@ -123,7 +125,7 @@ export default function ContactInfoSheet({
       icon: "clock",
       iconColor: Colors.textSecondary,
       label: T("chat.contact.chatting_since", {
-        date: formatDate(firstMessage.timestampMs),
+        date: formatLongDate(firstMessage.timestampMs),
       }),
     });
   }
@@ -152,7 +154,7 @@ export default function ContactInfoSheet({
             iconColor: Colors.verified,
             label: contact
               ? T("chat.contact.verified_since", {
-                  date: formatDate(contact.addedAtMs),
+                  date: formatLongDate(contact.addedAtMs),
                 })
               : T("chat.contact.verified"),
             sub: T("chat.contact.verified_desc"),
@@ -297,14 +299,6 @@ export default function ContactInfoSheet({
       )}
     </>
   );
-}
-
-function formatDate(ms: number): string {
-  return new Date(ms).toLocaleDateString([], {
-    year: "numeric",
-    month: "long",
-    day: "numeric",
-  });
 }
 
 function createStyles(Colors: ReturnType<typeof useThemeColors>) {

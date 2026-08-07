@@ -1,13 +1,15 @@
 # Store metadata
 
-This directory contains the app store listing used for both Google Play and F-Droid.
+This directory contains the app store listing used for App Store, Google Play, and F-Droid.
 
 Keeping the metadata in the repository makes changes reviewable, versioned, and
 keeps both store listings in sync.
 
-- **F-Droid** reads these files directly when generating its listing.
+- **App Store** does not. When publishing a release, copy the contents of
+  these files into the App Store Connect instead of editing the listing manually.
 - **Google Play** does not. When publishing a release, copy the contents of
   these files into the Play Console instead of editing the listing manually.
+- **F-Droid** reads these files directly when generating its listing.
 
 ## Directory layout
 

@@ -93,7 +93,7 @@ import {
 } from "../../services/wallet-service";
 import { showAlert, useAlertStore } from "../../store/alert-store";
 import { useContactsStore } from "../../store/contacts-store";
-import { usePeerStore } from "../../store/peer-store";
+import { REACHABLE_TTL_MS, usePeerStore } from "../../store/peer-store";
 import { useSettingsStore } from "../../store/settings-store";
 import {
   isWalletStorageReady,
@@ -118,7 +118,7 @@ import {
   useThemeColors,
 } from "../../ui/theme";
 import { usePullRefreshColors } from "../../ui/use-pull-refresh";
-import { formatNumber } from "../../utils/format";
+import { formatListTimestamp, formatNumber } from "../../utils/format";
 import { nostrShortLabel, peerIDToUsername } from "../../utils/username";
 import TokenScanner, { type ScanTarget } from "./token-scanner";
 
@@ -131,9 +131,6 @@ const SHEET_EXIT_MS = 260;
 
 // How often to poll a pending Lightning deposit while its sheet is open.
 const DEPOSIT_POLL_MS = 3000;
-
-// A peer counts as reachable for a hand-off if it was heard from this recently.
-const PEER_ONLINE_WINDOW_MS = 60_000;
 
 // Activity rows shown before the list has to be asked for. Three is enough to
 // answer "did that go through", which is the only question this section gets
@@ -198,7 +195,7 @@ export default function WalletScreen({
     return () => clearInterval(timer);
   }, []);
   const onlinePeers = useMemo(() => {
-    const cutoff = peerClock - PEER_ONLINE_WINDOW_MS;
+    const cutoff = peerClock - REACHABLE_TTL_MS;
     return [...peers.values()].filter((peer) => peer.lastSeenMs >= cutoff);
   }, [peerClock, peers]);
 
@@ -3230,7 +3227,11 @@ function relativeTime(ms: number): string {
   if (hours < 24) return t("format.hours_ago", { count: hours });
   const days = Math.floor(hours / 24);
   if (days < 7) return t("format.days_ago", { count: days });
-  return new Date(ms).toLocaleDateString();
+  // Past a week "N days ago" stops being readable, so it falls through to the
+  // same dated form every other list row in the app uses ("4 Mar", or "4 Mar
+  // 2025" once the year is ambiguous). Only the older branches are reachable
+  // here; the ladder above owns everything inside a week.
+  return formatListTimestamp(ms);
 }
 
 // Whole seconds under a minute, m:ss above it. Never negative: the expired

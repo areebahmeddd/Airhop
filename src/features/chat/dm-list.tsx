@@ -22,7 +22,7 @@ import { showAlert } from "../../store/alert-store";
 import { useBlockedStore } from "../../store/blocked-store";
 import { useChatStore } from "../../store/chat-store";
 import { useContactsStore } from "../../store/contacts-store";
-import { usePeerStore } from "../../store/peer-store";
+import { REACHABLE_TTL_MS, usePeerStore } from "../../store/peer-store";
 import Avatar from "../../ui/components/avatar";
 import BottomSheet from "../../ui/components/bottom-sheet";
 import EmptyState from "../../ui/components/empty-state";
@@ -219,7 +219,8 @@ export default function DmList({ onSelectDM }: Props): React.JSX.Element {
           const last = msgs[msgs.length - 1];
           const peerEntry = peerMap.get(peerID);
           const isOnline =
-            peerEntry !== undefined && nowMs - peerEntry.lastSeenMs < 60_000;
+            peerEntry !== undefined &&
+            nowMs - peerEntry.lastSeenMs < REACHABLE_TTL_MS;
           const isPinned = pinnedChannels.includes(item);
           const isMuted = mutedChannels.includes(item);
 

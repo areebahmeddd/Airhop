@@ -541,15 +541,6 @@ export function selectUnits(
   return [...units].sort();
 }
 
-// Reserved (in-flight) sends that the user can still reclaim or re-share.
-export function selectPendingSends(
-  state: Pick<WalletData, "history" | "reserved">,
-): WalletTx[] {
-  return state.history.filter(
-    (tx) => tx.status === "pending" && state.reserved[tx.id] !== undefined,
-  );
-}
-
 export function selectSecrets(
   state: Pick<WalletData, "proofs">,
   key: string,

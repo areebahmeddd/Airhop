@@ -19,7 +19,7 @@ import {
   useMeshStateStore,
   type BleBlocker,
 } from "../../store/mesh-state-store";
-import { type NearbyPeer } from "../../store/peer-store";
+import { REACHABLE_TTL_MS, type NearbyPeer } from "../../store/peer-store";
 import Avatar from "../../ui/components/avatar";
 import StatusDot from "../../ui/components/status-dot";
 import {
@@ -590,9 +590,11 @@ interface PeerNodeProps {
   onPress: () => void;
 }
 
-// Matches peer-list's threshold so the same peer can't read "online" here and
-// "offline" there. Previously this dot was hardcoded green for everyone.
-const ONLINE_WINDOW_MS = 30_000;
+// Presence comes from peer-store's REACHABLE_TTL_MS so the same peer cannot read
+// "online" here and "offline" in the peer list. Previously this dot was
+// hardcoded green for everyone, then pinned to its own 30s literal, which is
+// half the store's window: a peer heard from 45s ago went grey on the dial while
+// the list beside it still showed green.
 
 function PeerNode({
   peer,
@@ -605,7 +607,7 @@ function PeerNode({
   const Colors = useThemeColors();
   const styles = useMemo(() => createStyles(Colors), [Colors]);
   const username = resolveDisplayName(peer.peerID);
-  const isOnline = now - peer.lastSeenMs < ONLINE_WINDOW_MS;
+  const isOnline = now - peer.lastSeenMs < REACHABLE_TTL_MS;
   return (
     <Pressable
       style={[styles.peerNode, { top, left }]}

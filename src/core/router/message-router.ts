@@ -382,18 +382,6 @@ export class PeerRegistry {
   }
 }
 
-// ---- Message types ----------------------------------------------------------
-
-export interface ChannelMessage {
-  channel: string; // e.g. "#general"
-  text: string;
-  replyToId?: string;
-}
-
-export interface DirectMessage {
-  text: string;
-}
-
 // ---- MessageRouter ----------------------------------------------------------
 
 export interface RouterIdentity {

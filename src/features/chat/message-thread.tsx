@@ -94,7 +94,7 @@ import {
 import { useContactsStore } from "../../store/contacts-store";
 import { useGroupStore } from "../../store/group-store";
 import { useMeshStateStore } from "../../store/mesh-state-store";
-import { usePeerStore } from "../../store/peer-store";
+import { REACHABLE_TTL_MS, usePeerStore } from "../../store/peer-store";
 import { usePlaceNamesStore } from "../../store/place-names-store";
 import {
   UPLOAD_QUALITY_VALUES,
@@ -1170,7 +1170,7 @@ export default function MessageThread({
     return () => clearInterval(timer);
   }, []);
   const onlinePeers = useMemo(() => {
-    const cutoff = peerClock - 60_000;
+    const cutoff = peerClock - REACHABLE_TTL_MS;
     return [...peers.values()].filter((peer) => peer.lastSeenMs >= cutoff);
   }, [peerClock, peers]);
   const peerCount = onlinePeers.length;

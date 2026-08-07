@@ -109,12 +109,7 @@ export function formatListTimestamp(ms: number): string {
   if (days <= 0) return formatClockTime(ms);
   if (days === 1) return t("format.yesterday");
   if (days < 7) return formatter({ weekday: "short" }).format(then);
-  if (then.getFullYear() === now.getFullYear()) {
-    return formatter({
-      month: "short",
-      day: "numeric",
-    }).format(then);
-  }
+  if (then.getFullYear() === now.getFullYear()) return formatShortDate(ms);
   return formatter({
     year: "numeric",
     month: "short",
@@ -147,6 +142,18 @@ export function formatDateSeparator(ms: number): string {
     month: "short",
     day: "numeric",
   }).format(then);
+}
+
+/**
+ * Day and month with no year, e.g. "4 Mar". For a timestamp that already sits
+ * beside a clock time or inside a screen scoped to one conversation, where the
+ * year is either obvious or not worth the glyphs.
+ */
+export function formatShortDate(ms: number): string {
+  return formatter({
+    month: "short",
+    day: "numeric",
+  }).format(ms);
 }
 
 /** A full date for a record rather than a list row, e.g. "4 March 2026". */

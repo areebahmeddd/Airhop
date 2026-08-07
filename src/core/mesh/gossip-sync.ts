@@ -41,6 +41,7 @@ import {
   PacketType,
   signPacket,
   type Packet,
+  type SendFn,
 } from "./packet-codec";
 
 // Constants per PROTOCOLS.md section 5.
@@ -535,7 +536,6 @@ class SyncResponseRateLimiter {
 
 // ---- GossipSync class -------------------------------------------------------
 
-export type SendFn = (packet: Packet) => void;
 export type SendToPeerFn = (peerID: string, packet: Packet) => void;
 
 export interface GossipSyncIdentity {

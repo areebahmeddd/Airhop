@@ -35,9 +35,6 @@ const HEARTBEAT_MAX_MS = 80_000;
 const CHANNEL_LOOKBACK_SECONDS = 3600;
 const CHANNEL_INITIAL_LIMIT = 200;
 
-// A pubkey counts as present if seen (via either kind) within this window.
-export const PARTICIPANT_ONLINE_MS = 5 * 60 * 1000;
-
 // Tag carrying the sender's cross-transport message ID, used to collapse the
 // BLE and Nostr copies of one message into a single bubble.
 export const TAG_MESSAGE_ID = "mid";

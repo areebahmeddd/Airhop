@@ -196,8 +196,15 @@ export function clearAttachmentCache(): number {
 // one yet", which is the difference between pacing and losing a file: a refused
 // fragment that is not offered again is a stream the far side can never
 // complete, and it has no way to ask for it.
-export type BroadcastFn = (packet: Packet) => Promise<boolean>;
-export type UnicastFn = (
+//
+// "Paced" is in the names because the boolean is load-bearing and TypeScript
+// will not defend it. These used to be called BroadcastFn/UnicastFn, the same
+// names message-router uses for its fire-and-forget `=> void` pair, and a
+// `Promise<boolean>` function is silently assignable to a `void` return. So the
+// two could be crossed with no type error and no warning, and the only symptom
+// would be dropped fragments on a busy radio. Different contract, different name.
+export type PacedBroadcastFn = (packet: Packet) => Promise<boolean>;
+export type PacedUnicastFn = (
   recipientPeerID: string,
   packet: Packet,
 ) => Promise<boolean>;
@@ -260,8 +267,8 @@ interface ServiceIdentity {
 
 export class FileTransferService {
   private readonly identity: ServiceIdentity;
-  private readonly broadcast: BroadcastFn;
-  private readonly unicast: UnicastFn;
+  private readonly broadcast: PacedBroadcastFn;
+  private readonly unicast: PacedUnicastFn;
   private readonly resolveNickname?: (peerID: string) => string | undefined;
 
   // Send-side progress accounting, keyed by the UI transfer id.
@@ -298,8 +305,8 @@ export class FileTransferService {
 
   constructor(
     identity: ServiceIdentity,
-    broadcast: BroadcastFn,
-    unicast: UnicastFn,
+    broadcast: PacedBroadcastFn,
+    unicast: PacedUnicastFn,
     resolveNickname?: (peerID: string) => string | undefined,
     sealFile?: SealFileFn,
   ) {

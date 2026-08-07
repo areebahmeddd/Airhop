@@ -28,6 +28,7 @@ import {
   useThemeColors,
 } from "../../ui/theme";
 import { resolveDisplayName } from "../../utils/display-name";
+import { formatClockTime, formatShortDate } from "../../utils/format";
 import { groupReach, type GroupReach } from "../../utils/group-reach";
 import { messagePreviewText } from "../../utils/message-preview";
 
@@ -263,6 +264,11 @@ function InfoLine({
   );
 }
 
+// Every line on this sheet is an event on one message, so the time is the point
+// and the date only has to disambiguate. Formatted through utils/format so these
+// follow the app's language like every other timestamp; they used to call
+// `toLocale*String([])`, which asks the device instead and reads as a different
+// language from the sentence around it.
 function formatDateTime(ms: number): string {
   const d = new Date(ms);
   const now = new Date();
@@ -270,9 +276,9 @@ function formatDateTime(ms: number): string {
     d.getDate() === now.getDate() &&
     d.getMonth() === now.getMonth() &&
     d.getFullYear() === now.getFullYear();
-  const time = d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  const time = formatClockTime(ms);
   if (sameDay) return t("chat.info.today_at", { time });
-  return `${d.toLocaleDateString([], { month: "short", day: "numeric" })} ${time}`;
+  return `${formatShortDate(ms)} ${time}`;
 }
 
 function createStyles(Colors: ReturnType<typeof useThemeColors>) {
