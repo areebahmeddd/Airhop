@@ -3,14 +3,20 @@
 All notable changes are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
-## What's Changed in v0.9.11
+## What's New
+
+- chore: update changelog format and release notes (by @areebahmeddd) [cedc3fe]
+
+**Full changelog:** [v0.9.11..v0.9.12](https://github.com/areebahmeddd/airhop/compare/v0.9.11..v0.9.12)
+
+## What's New
 
 - fix: sync with bitchat codebase + patch for bugs found during field testing (by @areebahmeddd) [b84be44]
 - feat: enhance NostrClient relay handling and settings (by @areebahmeddd) [e1f2e62]
 
 **Full changelog:** [v0.9.10..v0.9.11](https://github.com/areebahmeddd/airhop/compare/v0.9.10..v0.9.11)
 
-## What's Changed in v0.9.10
+## What's New
 
 - fix: update AndroidManifest and iOS list (by @areebahmeddd) [95e012c]
 - fix: minor failure in apk (by @areebahmeddd) [ef00b39]
@@ -21,7 +27,7 @@ All notable changes are documented here. The format follows [Keep a Changelog](h
 
 **Full changelog:** [v0.9.9..v0.9.10](https://github.com/areebahmeddd/airhop/compare/v0.9.9..v0.9.10)
 
-## What's Changed in v0.9.9
+## What's New
 
 - feat(settings): add language options and complete string extraction (by @areebahmeddd) [8d9ca99]
 - fix(landing): enhance privacy policy details and clarify features (by @areebahmeddd) [adc433f]
@@ -36,7 +42,7 @@ All notable changes are documented here. The format follows [Keep a Changelog](h
 
 **Full changelog:** [v0.9.8..v0.9.9](https://github.com/areebahmeddd/airhop/compare/v0.9.8..v0.9.9)
 
-## What's Changed in v0.9.8
+## What's New
 
 - feat(landing): add architecture diagrams for airhop (by @areebahmeddd) [f323a58]
 - feat(wallet): rebuild Cashu ecash end to end, with Lightning and recovery (#7) (by @Areeb Ahmed) [aaaa15a]
@@ -51,7 +57,7 @@ All notable changes are documented here. The format follows [Keep a Changelog](h
 
 **Full changelog:** [v0.9.7..v0.9.8](https://github.com/areebahmeddd/airhop/compare/v0.9.7..v0.9.8)
 
-## What's Changed in v0.9.7
+## What's New
 
 - feat(project): run claude fable 5 to make it compatible with bitchat (potentially) (by @areebahmeddd) [2c4ae56]
 - feat(settings): version screen with update check and release codenames (by @areebahmeddd) [8aa8c54]
@@ -77,7 +83,7 @@ All notable changes are documented here. The format follows [Keep a Changelog](h
 
 **Full changelog:** [v0.9.6..v0.9.7](https://github.com/areebahmeddd/airhop/compare/v0.9.6..v0.9.7)
 
-## What's Changed in v0.9.6
+## What's New
 
 - feat(docs): update README and ROADMAP with new links and feature milestones (by @areebahmeddd) [1650379]
 - style(landing): improve text contrast and clean up focus/comments in nav, footer, explore, contribute (by @areebahmeddd) [17acd74]
@@ -131,7 +137,7 @@ All notable changes are documented here. The format follows [Keep a Changelog](h
 
 **Full changelog:** [v0.9.5..v0.9.6](https://github.com/areebahmeddd/airhop/compare/v0.9.5..v0.9.6)
 
-## What's Changed in v0.9.5
+## What's New
 
 - chore(ci): update Codecov action configuration for coverage reporting (by @areebahmeddd) [433e137]
 - feat(landing): add Airhop landing page source (by @areebahmeddd) [d5c9f2b]
@@ -154,7 +160,7 @@ All notable changes are documented here. The format follows [Keep a Changelog](h
 
 **Full changelog:** [v0.9.0..v0.9.5](https://github.com/areebahmeddd/airhop/compare/v0.9.0..v0.9.5)
 
-## What's Changed in v0.9.0
+## What's New
 
 - chore: add release automation, git-cliff changelog, and fix eslint config (by @areebahmeddd) [93c8134]
 - chore: scaffold future platform directories (by @areebahmeddd) [1570204]
@@ -162,7 +168,7 @@ All notable changes are documented here. The format follows [Keep a Changelog](h
 
 **Full changelog:** [v0.8.0..v0.9.0](https://github.com/areebahmeddd/airhop/compare/v0.8.0..v0.9.0)
 
-## What's Changed in v0.8.0
+## What's New
 
 - docs: mark v0.8.0 complete (by @areebahmeddd) [a43c8fa]
 - feat(mesh): add VIDEO_FRAME capture and jitter-buffer player (video-capture/player.ts) (by @areebahmeddd) [569469c]
@@ -176,7 +182,7 @@ All notable changes are documented here. The format follows [Keep a Changelog](h
 
 **Full changelog:** [v0.7.0..v0.8.0](https://github.com/areebahmeddd/airhop/compare/v0.7.0..v0.8.0)
 
-## What's Changed in v0.7.0
+## What's New
 
 - docs: mark v0.7.0 complete (by @areebahmeddd) [0e7fcb0]
 - feat(android): add Orbot SOCKS5 proxy detection via TCP probe (by @areebahmeddd) [ad770b9]
@@ -195,7 +201,7 @@ All notable changes are documented here. The format follows [Keep a Changelog](h
 
 **Full changelog:** [v0.6.0..v0.7.0](https://github.com/areebahmeddd/airhop/compare/v0.6.0..v0.7.0)
 
-## What's Changed in v0.6.0
+## What's New
 
 - docs: correct protocol constants (GCS, courier, packet types); mark v0.6.0 complete (by @areebahmeddd) [609b648]
 - feat(ui): channel list, message thread, and peer list screens (by @areebahmeddd) [0b30310]
@@ -210,7 +216,7 @@ All notable changes are documented here. The format follows [Keep a Changelog](h
 
 **Full changelog:** [v0.5.0..v0.6.0](https://github.com/areebahmeddd/airhop/compare/v0.5.0..v0.6.0)
 
-## What's Changed in v0.5.0
+## What's New
 
 - docs: mark v0.5.0 complete (by @areebahmeddd) [ef1c14f]
 - feat(android): AirhopBLEModule Kotlin dual-role GATT, AirhopForegroundService, package registration (by @areebahmeddd) [65df2bf]
