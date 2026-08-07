@@ -56,8 +56,8 @@ const INTER_FRAGMENT_MS = 20;
 // How long to wait after the radio REFUSES a fragment before offering it again.
 //
 // 20ms of pacing assumes the link can always take the next write, and one-way
-// that is roughly true: 456 data bytes every 20ms is ~22 KB/s, right at what BLE
-// carries. It stops being true the moment the same link is also carrying a
+// that is roughly true: 467 data bytes every 20ms is ~23 KB/s, at the top of
+// what BLE carries. It stops being true the moment the same link is also carrying a
 // transfer in the other direction, which is what two people sending a photo at
 // the same time does. The stack's write queue fills, it starts refusing, and
 // backing off is the only thing that lets it drain.
@@ -197,12 +197,11 @@ export function clearAttachmentCache(): number {
 // fragment that is not offered again is a stream the far side can never
 // complete, and it has no way to ask for it.
 //
-// "Paced" is in the names because the boolean is load-bearing and TypeScript
-// will not defend it. These used to be called BroadcastFn/UnicastFn, the same
-// names message-router uses for its fire-and-forget `=> void` pair, and a
-// `Promise<boolean>` function is silently assignable to a `void` return. So the
-// two could be crossed with no type error and no warning, and the only symptom
-// would be dropped fragments on a busy radio. Different contract, different name.
+// "Paced" is in the names because TypeScript will not defend that boolean.
+// These were BroadcastFn/UnicastFn, the names message-router uses for its
+// fire-and-forget `=> void` pair, and a `Promise<boolean>` is silently
+// assignable to a `void` return: crossing the two type-checks, and the only
+// symptom is dropped fragments on a busy radio.
 export type PacedBroadcastFn = (packet: Packet) => Promise<boolean>;
 export type PacedUnicastFn = (
   recipientPeerID: string,

@@ -1202,10 +1202,11 @@ export class MeshService {
     //
     // Dropping the relay costs a legitimate LEAVE that reaches us from a peer
     // we cannot verify. That is bounded: LEAVE rides ttl 3 while announces
-    // flood at ttl 7 on a 10-second cycle and on every link-up, so a peer close
-    // enough for their LEAVE to arrive is a peer whose announce almost
-    // certainly already did. Worst case their row lingers until it ages out,
-    // which is what happens for an ungraceful departure anyway.
+    // flood at ttl 7 every 15-30s once connected (4s while isolated) and on
+    // every link-up, so a peer close enough for their LEAVE to arrive is a peer
+    // whose announce almost certainly already did. Worst case their row lingers
+    // until it ages out, which is what happens for an ungraceful departure
+    // anyway.
     if (packet.type === PacketType.LEAVE && !this.leaveIsAuthentic(packet)) {
       return;
     }

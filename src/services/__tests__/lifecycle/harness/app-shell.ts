@@ -20,10 +20,10 @@ import { bytesToHex } from "@noble/hashes/utils.js";
 import { DeviceEventEmitter } from "react-native";
 import type { Identity } from "../../../../core/crypto/identity";
 import { useMeshStateStore } from "../../../../store/mesh-state-store";
-// The real result type, not a copy. The annotation below is only a guard against
-// drift if it points at production: this file used to redeclare the interface and
-// annotate against its own copy, which is how the literal kept a
-// `needsPreciseLocation` field for a while after the real one dropped it.
+// The real type, not a copy: the annotation below only guards against drift if
+// it points at production. This file redeclared the interface and annotated
+// against its own copy, which is how the literal kept a `needsPreciseLocation`
+// field after the real one dropped it.
 import type { BlePermissionResult } from "../../../../utils/ble-permissions";
 import {
   destroyMeshService,

@@ -11,6 +11,7 @@
 // construction time so the router stays testable without a live transport.
 
 import { type NoiseSession } from "../crypto/noise-xx";
+import { ANNOUNCE_CONNECTED_MAX_MS } from "../mesh/announce-manager";
 import {
   decodeNoisePayload,
   encodeNoisePayload,
@@ -60,10 +61,15 @@ function originPublicTtl(): number {
   );
 }
 
-// Timeout for a peer directly connected over BLE (no ANNOUNCE heard within
-// this window means the radio link is gone). Matches bitchat's 15-second
-// direct-link timeout in BLEMaintenancePolicy.
-const DIRECT_PEER_TTL_MS = 15_000;
+// Timeout for a peer directly connected over BLE (no ANNOUNCE heard within this
+// window means the radio link is gone). A backstop only: a real drop fires
+// linkDisconnected, which calls markIndirect.
+//
+// Derived rather than a literal, because ANNOUNCE is the only thing that
+// refreshes lastSeenMs: a window narrower than one announce interval expires
+// peers that are still there. Matches bitchat's 45-60s reachability retention
+// (TransportConfig.bleReachabilityRetention*Seconds).
+const DIRECT_PEER_TTL_MS = ANNOUNCE_CONNECTED_MAX_MS * 1.5;
 
 // Timeout for mesh peers learned via relayed ANNOUNCEs (not directly connected).
 // Longer because relayed packets can take several hops and arrive late.
@@ -79,7 +85,7 @@ export interface PeerEntry {
   nickname: string;
   lastSeenMs: number;
   // Whether this peer is directly connected over BLE (link event received).
-  // Direct peers use a shorter TTL (15s); mesh peers use 60s.
+  // Direct peers use the shorter DIRECT_PEER_TTL_MS; mesh peers use 60s.
   isDirect: boolean;
   // Nostr public key (secp256k1 hex) announced by this peer, if known.
   // Used as priority-3 transport when direct transports are unavailable.
@@ -325,6 +331,27 @@ export class PeerRegistry {
   // resolving its key through the reachability window drops the genuine ones.
   pinnedSigningKey(peerID: string): Uint8Array | undefined {
     return this.peers.get(peerID)?.signingPubKey;
+  }
+
+  // The Noise session held with this peer, ignoring reachability.
+  //
+  // Same split as `pinnedSigningKey` above: a session exists on both sides or it
+  // does not, and silence from a peer does not change whether their next packet
+  // decrypts. Used for inbound decryption and the receipts that answer it.
+  // Sending new traffic still goes through `get()`, where the TTL belongs.
+  sessionFor(peerID: string): NoiseSession | undefined {
+    return this.peers.get(peerID)?.session;
+  }
+
+  // Record liveness proven by something other than an ANNOUNCE.
+  //
+  // A packet that decrypts under the peer's Noise session cannot be replayed
+  // (nonce counter) or forged, so it is stronger evidence than the announce it
+  // stands in for. Remote proof only, unlike the locally-polled RSSI that
+  // peer-store deliberately refuses to treat as liveness.
+  noteHeard(peerID: string): void {
+    const e = this.peers.get(peerID);
+    if (e) e.lastSeenMs = Date.now();
   }
 
   reachablePeers(): PeerEntry[] {
@@ -637,15 +664,19 @@ export class MessageRouter {
   // ([type] + utf8(messageID)). Used for peers reachable only over plain Noise
   // (bitchat, or an Airhop peer without a Double Ratchet). Returns false when no
   // session exists, so the caller knows the receipt did not go out.
+  //
+  // Session-resolved rather than reachability-gated, like decryptDm below: a
+  // receipt answers a message that just arrived, so the peer has already proven
+  // they are there.
   sendNoiseReceipt(
     recipientPeerID: string,
     type:
       typeof NoisePayloadType.DELIVERED | typeof NoisePayloadType.READ_RECEIPT,
     messageID: string,
   ): boolean {
-    const peer = this.registry.get(recipientPeerID);
-    if (peer?.session === undefined) return false;
-    const payload = peer.session.encrypt(encodeNoiseReceipt(type, messageID));
+    const session = this.registry.sessionFor(recipientPeerID);
+    if (session === undefined) return false;
+    const payload = session.encrypt(encodeNoiseReceipt(type, messageID));
     this.unicast(
       recipientPeerID,
       this.makeNoisePacket(recipientPeerID, payload),
@@ -710,11 +741,20 @@ export class MessageRouter {
 
   // Decrypt an incoming NOISE_ENCRYPTED payload into its typed NoisePayload
   // (private message, delivery, or read receipt). Null on any failure.
+  //
+  // Resolved through `sessionFor`, never `get()`: the packet is already here, so
+  // the peer's reachability window has no bearing on whether it can be read.
+  // Gating it on the TTL dropped DMs from a direct peer whose announce had aged
+  // out, while the sender's sendDm reported "sent" and the outbox never queued a
+  // retry.
   decryptDm(packet: Packet, senderPeerID: string): NoisePayload | null {
-    const peer = this.registry.get(senderPeerID);
-    if (peer?.session === undefined) return null;
+    const session = this.registry.sessionFor(senderPeerID);
+    if (session === undefined) return null;
     try {
-      return decodeNoisePayload(peer.session.decrypt(packet.payload));
+      const payload = decodeNoisePayload(session.decrypt(packet.payload));
+      // On success only: a decrypted packet is proof the peer is here.
+      if (payload !== null) this.registry.noteHeard(senderPeerID);
+      return payload;
     } catch {
       return null;
     }

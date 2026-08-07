@@ -30,7 +30,10 @@ import {
 // steady-state traffic (and battery) low.
 const ANNOUNCE_ISOLATED_MS = 4_000;
 const ANNOUNCE_CONNECTED_MIN_MS = 15_000;
-const ANNOUNCE_CONNECTED_MAX_MS = 30_000;
+// Exported because ANNOUNCE is the only thing that refreshes a peer's
+// lastSeenMs, so every downstream expiry window has to be wider than this.
+// message-router derives DIRECT_PEER_TTL_MS from it instead of restating it.
+export const ANNOUNCE_CONNECTED_MAX_MS = 30_000;
 
 // TTL stamped on every outgoing ANNOUNCE. Receivers use this to tell a direct
 // announce from a relayed one: FloodRouter decrements TTL on each hop, so a

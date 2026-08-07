@@ -424,6 +424,183 @@ describe("MessageRouter", () => {
     expect(router.decryptDm(packet, "unknown000000000")).toBeNull();
   });
 
+  // lastSeenMs is refreshed only by ANNOUNCE, which arrives on a 15-30s jitter.
+  // DIRECT_PEER_TTL_MS was 15s, so a peer on a live link spent a third of every
+  // cycle hidden by `get()` - and the DM path resolved its session through
+  // `get()`. Inbound messages were dropped with no error and no retry, since
+  // sendDm had already returned "sent" and the outbox never queued them.
+  describe("a direct peer idling between announces", () => {
+    const GAP_MS = 30_000; // the announce ceiling, ANNOUNCE_CONNECTED_MAX_MS
+
+    beforeEach(() => jest.useFakeTimers());
+    afterEach(() => jest.useRealTimers());
+
+    function directPeerWithSession(peerID: string) {
+      const registry = new PeerRegistry();
+      registry.update({
+        peerID,
+        noisePubKey: new Uint8Array(32),
+        signingPubKey: new Uint8Array(32),
+        nickname: "alice",
+        isDirect: true,
+      });
+      registry.markDirect(peerID);
+      return registry;
+    }
+
+    test("stays reachable across a full announce interval", () => {
+      const peerID = "aabbccdd00112233";
+      const registry = directPeerWithSession(peerID);
+
+      jest.advanceTimersByTime(GAP_MS);
+
+      expect(registry.isReachable(peerID)).toBe(true);
+      expect(registry.reachablePeers().map((p) => p.peerID)).toEqual([peerID]);
+    });
+
+    test("still decrypts an inbound DM once its announce has aged out", () => {
+      const senderPeerID = "0011223344556677";
+      const registry = directPeerWithSession(senderPeerID);
+      const { sessionI, sessionR } = makePeerNoiseSession();
+      registry.setSession(senderPeerID, sessionR);
+
+      const router = new MessageRouter(
+        makeIdentity(),
+        registry,
+        () => {},
+        () => {},
+      );
+
+      // Well past even the relaxed TTL, so this holds however it is tuned.
+      jest.advanceTimersByTime(GAP_MS * 10);
+      expect(registry.isReachable(senderPeerID)).toBe(false);
+
+      const packet: Packet = {
+        type: PacketType.NOISE_ENCRYPTED,
+        ttl: 7,
+        flags: Flags.SIGNED,
+        senderID: new Uint8Array(8),
+        recipientID: new Uint8Array(8),
+        timestamp: Date.now(),
+        signature: new Uint8Array(64),
+        payload: sessionI.encrypt(
+          encodeNoisePrivateMessage("m1", "still here")!,
+        ),
+      };
+
+      const np = router.decryptDm(packet, senderPeerID);
+      expect(np).not.toBeNull();
+      expect(decodePrivateMessagePacket(np!.body)!.content).toBe("still here");
+    });
+
+    test("a decrypted packet counts as liveness, so the conversation stays fresh", () => {
+      const senderPeerID = "0011223344556677";
+      const registry = directPeerWithSession(senderPeerID);
+      const { sessionI, sessionR } = makePeerNoiseSession();
+      registry.setSession(senderPeerID, sessionR);
+
+      const router = new MessageRouter(
+        makeIdentity(),
+        registry,
+        () => {},
+        () => {},
+      );
+
+      jest.advanceTimersByTime(GAP_MS * 10);
+      expect(registry.isReachable(senderPeerID)).toBe(false);
+
+      router.decryptDm(
+        {
+          type: PacketType.NOISE_ENCRYPTED,
+          ttl: 7,
+          flags: Flags.SIGNED,
+          senderID: new Uint8Array(8),
+          recipientID: new Uint8Array(8),
+          timestamp: Date.now(),
+          signature: new Uint8Array(64),
+          payload: sessionI.encrypt(encodeNoisePrivateMessage("m1", "hi")!),
+        },
+        senderPeerID,
+      );
+
+      expect(registry.isReachable(senderPeerID)).toBe(true);
+    });
+
+    test("a garbled packet does not count as liveness", () => {
+      const senderPeerID = "0011223344556677";
+      const registry = directPeerWithSession(senderPeerID);
+      const { sessionR } = makePeerNoiseSession();
+      registry.setSession(senderPeerID, sessionR);
+
+      const router = new MessageRouter(
+        makeIdentity(),
+        registry,
+        () => {},
+        () => {},
+      );
+
+      jest.advanceTimersByTime(GAP_MS * 10);
+
+      expect(
+        router.decryptDm(
+          {
+            type: PacketType.NOISE_ENCRYPTED,
+            ttl: 7,
+            flags: Flags.SIGNED,
+            senderID: new Uint8Array(8),
+            recipientID: new Uint8Array(8),
+            timestamp: Date.now(),
+            signature: new Uint8Array(64),
+            payload: new Uint8Array([1, 2, 3, 4]),
+          },
+          senderPeerID,
+        ),
+      ).toBeNull();
+      expect(registry.isReachable(senderPeerID)).toBe(false);
+    });
+
+    test("still acks a message it just accepted", () => {
+      const peerID = "aabbccdd00112233";
+      const registry = directPeerWithSession(peerID);
+      const { sessionI } = makePeerNoiseSession();
+      registry.setSession(peerID, sessionI);
+
+      const unicasts: { peerID: string; packet: Packet }[] = [];
+      const router = new MessageRouter(
+        makeIdentity(),
+        registry,
+        () => {},
+        (pid, p) => unicasts.push({ peerID: pid, packet: p }),
+      );
+
+      jest.advanceTimersByTime(GAP_MS * 10);
+      expect(registry.isReachable(peerID)).toBe(false);
+
+      expect(
+        router.sendNoiseReceipt(peerID, NoisePayloadType.DELIVERED, "m1"),
+      ).toBe(true);
+      expect(unicasts.length).toBe(1);
+    });
+
+    test("an unknown peer is still refused", () => {
+      const registry = new PeerRegistry();
+      const router = new MessageRouter(
+        makeIdentity(),
+        registry,
+        () => {},
+        () => {},
+      );
+      expect(registry.sessionFor("unknown000000000")).toBeUndefined();
+      expect(
+        router.sendNoiseReceipt(
+          "unknown000000000",
+          NoisePayloadType.DELIVERED,
+          "m1",
+        ),
+      ).toBe(false);
+    });
+  });
+
   test("sendDm returns sent-nostr when Nostr pubkey is known and no BLE session", () => {
     const identity = makeIdentity();
     const registry = new PeerRegistry();

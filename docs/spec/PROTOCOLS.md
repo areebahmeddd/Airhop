@@ -327,10 +327,11 @@ Two details make that safe rather than merely strict:
   already in the address book would be unverifiable for that window.
 
 The cost is a legitimate leave from a peer whose key we hold in neither place.
-That is bounded: `LEAVE` rides `ttl 3` while announces flood at `ttl 7` on a
-10-second cycle and on every link-up, so a peer close enough for their leave to
-arrive is one whose announce almost certainly already did. Worst case their row
-lingers until it ages out, which is what an ungraceful departure does anyway.
+That is bounded: `LEAVE` rides `ttl 3` while announces flood at `ttl 7` every
+15-30 s once connected (4 s while isolated) and on every link-up, so a peer close
+enough for their leave to arrive is one whose announce almost certainly already
+did. Worst case their row lingers until it ages out, which is what an ungraceful
+departure does anyway.
 
 **Sending one has an ordering rule of its own.** Stopping the mesh sends the
 leave, then holds the radios up for a short grace (150 ms) before tearing them

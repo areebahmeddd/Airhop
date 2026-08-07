@@ -264,11 +264,9 @@ function InfoLine({
   );
 }
 
-// Every line on this sheet is an event on one message, so the time is the point
-// and the date only has to disambiguate. Formatted through utils/format so these
-// follow the app's language like every other timestamp; they used to call
-// `toLocale*String([])`, which asks the device instead and reads as a different
-// language from the sentence around it.
+// Every line here is an event on one message, so the time is the point and the
+// date only disambiguates. Formatted through utils/format so it follows the
+// app's language; this called `toLocale*String([])`, which asks the device.
 function formatDateTime(ms: number): string {
   const d = new Date(ms);
   const now = new Date();

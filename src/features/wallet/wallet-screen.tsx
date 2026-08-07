@@ -3227,10 +3227,9 @@ function relativeTime(ms: number): string {
   if (hours < 24) return t("format.hours_ago", { count: hours });
   const days = Math.floor(hours / 24);
   if (days < 7) return t("format.days_ago", { count: days });
-  // Past a week "N days ago" stops being readable, so it falls through to the
-  // same dated form every other list row in the app uses ("4 Mar", or "4 Mar
-  // 2025" once the year is ambiguous). Only the older branches are reachable
-  // here; the ladder above owns everything inside a week.
+  // Past a week, the same dated form every other list row uses ("4 Mar", or
+  // "4 Mar 2025" once the year is ambiguous). Only its older branches are
+  // reachable; the ladder above owns everything inside a week.
   return formatListTimestamp(ms);
 }
 

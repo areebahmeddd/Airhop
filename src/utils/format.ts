@@ -145,9 +145,8 @@ export function formatDateSeparator(ms: number): string {
 }
 
 /**
- * Day and month with no year, e.g. "4 Mar". For a timestamp that already sits
- * beside a clock time or inside a screen scoped to one conversation, where the
- * year is either obvious or not worth the glyphs.
+ * Day and month with no year, e.g. "4 Mar". For a timestamp that sits beside a
+ * clock time, where the year is obvious or not worth the glyphs.
  */
 export function formatShortDate(ms: number): string {
   return formatter({

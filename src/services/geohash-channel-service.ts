@@ -175,11 +175,9 @@ const GEO_DM_LOOKBACK_SECONDS = 24 * 60 * 60;
 // Matches bitchat's GeohashParticipantTracker activity cutoff (5 minutes) so
 // both apps show the same "who is here now" count.
 //
-// Paired with the presence heartbeat, which fires every 40-80s
-// (nextHeartbeatDelayMs in core/nostr/presence.ts): five minutes is roughly four
-// missed rounds of slack, so a peer on a slow relay does not blink out of the
-// list. Shortening this without shortening the heartbeat is what would make it
-// flicker.
+// Paired with the 40-80s presence heartbeat (nextHeartbeatDelayMs in
+// core/nostr/presence.ts), so five minutes is about four missed rounds of slack.
+// Shortening one without the other makes the list flicker.
 const PARTICIPANT_TTL_MS = 5 * 60 * 1000;
 
 // A bridged note only counts as "new" for the notification bell if it arrived

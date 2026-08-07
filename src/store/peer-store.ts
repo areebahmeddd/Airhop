@@ -38,13 +38,10 @@ interface PeerState {
 // PEER_REACHABLE_TTL_MS in message-router.ts).
 //
 // Exported because this is also what the UI's green dot means. Every screen
-// that renders presence reads this rather than its own literal: the radar and
-// the peer list are two views of this same map, so a peer heard from 45s ago
-// reading "online" in one and "offline" in the other is a bug the user can see.
-// 60s is one missed ANNOUNCE of slack, since a connected peer re-announces on a
-// 15-30s jitter (announce-manager.ts); a shorter window makes a healthy peer at
-// the slow end of that range flicker. It is also the eviction cutoff below, so
-// a shorter window would grey out peers the store still considers present.
+// that renders presence reads it rather than its own literal, so the radar and
+// the peer list cannot disagree about the same peer. 60s is one missed ANNOUNCE
+// of slack against the 15-30s jitter in announce-manager, and it is the eviction
+// cutoff below, so anything shorter greys out peers the store still holds.
 export const REACHABLE_TTL_MS = 60_000;
 
 // Ceiling on how many peers the radar will hold.

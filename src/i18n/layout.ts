@@ -73,10 +73,9 @@ export const arrowForward: "arrow-left" | "arrow-right" = isRTLLayout
  * a translateX in an animation, where there is no `start`/`end` form and the
  * sign is the direction.
  *
- * @public No call site yet: every current animation had a logical form. This is
- * the escape hatch for the first one that does not, and it is the counterpart to
- * the constants above, which are consumed. Tagged so the dead-code sweep does
- * not keep proposing it, since deleting it only means rewriting it later.
+ * @public No call site yet: every current animation had a logical form. Kept as
+ * the escape hatch for the first one that does not, and tagged so the dead-code
+ * sweep stops proposing it.
  */
 export function mirrorX(value: number): number {
   return isRTLLayout ? -value : value;

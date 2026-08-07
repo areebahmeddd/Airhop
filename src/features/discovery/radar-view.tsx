@@ -591,10 +591,9 @@ interface PeerNodeProps {
 }
 
 // Presence comes from peer-store's REACHABLE_TTL_MS so the same peer cannot read
-// "online" here and "offline" in the peer list. Previously this dot was
-// hardcoded green for everyone, then pinned to its own 30s literal, which is
-// half the store's window: a peer heard from 45s ago went grey on the dial while
-// the list beside it still showed green.
+// "online" here and "offline" in the peer list. This dot had its own 30s
+// literal, half the store's window, so a peer heard from 45s ago went grey on
+// the dial while the list still showed green.
 
 function PeerNode({
   peer,

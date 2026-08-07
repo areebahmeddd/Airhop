@@ -178,12 +178,10 @@ export interface Packet {
 
 // Hand a packet to the transport, fire and forget.
 //
-// Lives beside `Packet` rather than in either caller because flood-router and
-// gossip-sync both needed it and each had declared its own identical copy, which
-// left two unrelated names for one contract. Deliberately returns void: these
-// are mesh-wide floods with no per-packet outcome to report. A transport that
-// can refuse a write needs a type that says so, which is what
-// file-transfer-service's Paced* pair is for.
+// Lives beside `Packet` because flood-router and gossip-sync each had their own
+// identical copy. Returns void deliberately: these are floods with no per-packet
+// outcome. A transport that can refuse a write needs a type that says so, which
+// is file-transfer-service's Paced* pair.
 export type SendFn = (packet: Packet) => void;
 
 // Encode a u64 into big-endian at `offset` in a DataView.

@@ -157,8 +157,7 @@ export function initI18n(): void {
   applyLayoutDirection(language);
 }
 
-// The language picker's data, re-exported so a screen imports it from the same
-// place it imports `useT`. `DEFAULT_LANGUAGE`, `isRTL` and `LANGUAGE_ORDER` are
-// deliberately not here: they are language-model details rather than screen
-// input, and their callers import them from ./languages directly.
+// The language picker's data, re-exported so a screen imports it alongside
+// `useT`. DEFAULT_LANGUAGE, isRTL and LANGUAGE_ORDER are not: they are model
+// details, and their callers import them from ./languages directly.
 export { LANGUAGES, PLANNED_LANGUAGES } from "./languages";

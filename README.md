@@ -119,13 +119,13 @@ Airhop chooses a transport per message. Bluetooth is the only one that needs no 
 | Works iPhone to Android | Yes                                                                | No                                       | Yes                              |
 | Range                   | ~10-30 m indoors, up to ~100 m line of sight, extended by relaying | ~30 m                                    | Global                           |
 | Max hops                | 7                                                                  | 1                                        | 1                                |
-| Speed                   | ~22 KB/s                                                           | ~22 KB/s (shared with Bluetooth for now) | Not used for files               |
+| Speed                   | ~23 KB/s                                                           | ~23 KB/s (shared with Bluetooth for now) | Not used for files               |
 | Latency per hop         | 10-220 ms (randomised to avoid collisions)                         | n/a                                      | Relay round trip; more over Tor  |
 
 Notes on the numbers:
 
 - Text messages (channel and DM) are tiny and effectively instant on any transport. Throughput only matters for files.
-- The **~22 KB/s** figure is 456 bytes per fragment sent one every 20 ms. The delay is required: without it the radio drops fragments and the transfer never completes.
+- The **~23 KB/s** figure is 467 bytes per fragment sent one every 20 ms. The delay is required: without it the radio drops fragments and the transfer never completes.
 - WiFi currently shares that same paced queue, so it runs at the same speed as Bluetooth for now. _Lifting the cap on the WiFi path is planned_.
 - A 1 MB file (the per-file cap) takes about 45 seconds over Bluetooth. Attachments are capped at 1 MB for bitchat compatibility and to keep transfers short. _Increasing the cap is planned_.
 - Android WiFi Aware and iOS MultipeerConnectivity are different protocols and cannot connect to each other, so the WiFi path only works Android to Android or iPhone to iPhone.
@@ -137,7 +137,7 @@ Timing intervals:
 | -------------------------- | ------------------- | ------------------------------------------------------------------- |
 | Presence broadcast         | 4 s alone, 15-30 s  | Fast while alone so devices meet quickly, then backs off            |
 | Gossip sync                | 15 s                | Lets a peer returning from out of range catch up on missed messages |
-| Direct peer timeout        | 15 s                | A directly linked peer that goes quiet is demoted quickly           |
+| Direct peer timeout        | 45 s                | Handles unreported link drops beyond broadcast                      |
 | Mesh peer timeout          | 60 s                | Relayed peers get longer, since multi-hop packets arrive late       |
 | Geohash presence heartbeat | 40-80 s, randomised | Randomised so devices in one cell do not announce in lockstep       |
 | Geohash participant window | 5 min               | How long a pubkey stays listed as present after its last event      |
