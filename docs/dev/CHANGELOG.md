@@ -5,6 +5,8 @@ All notable changes are documented here. The format follows [Keep a Changelog](h
 
 ## What's New
 
+- fix(router): stop dropping DMs from a direct peer between announces (by @areebahmeddd) [c1fbe19]
+- refactor: update metadata handling and improve code consistency across components (by @areebahmeddd) [f9b067f]
 - chore: update changelog format and release notes (by @areebahmeddd) [cedc3fe]
 
 **Full changelog:** [v0.9.11..v0.9.12](https://github.com/areebahmeddd/airhop/compare/v0.9.11..v0.9.12)
