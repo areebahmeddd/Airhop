@@ -10,11 +10,11 @@ permissions:
   contents: read
 
 concurrency:
-  group: relays
+  group: ${{ github.workflow }}
   cancel-in-progress: false
 
 env:
-  # georelays is the upstream probe feed we read directly.
+  # Upstream relay directory and sync settings.
   # Rows are canonicalized to match scripts/relay-url.js for interoperability.
   SOURCE_REPOSITORY: https://github.com/permissionlesstech/georelays.git
   SOURCE_OWNER_REPO: permissionlesstech/georelays

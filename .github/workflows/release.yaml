@@ -15,15 +15,15 @@ permissions:
   contents: read
 
 concurrency:
-  group: release-${{ inputs.tag || github.ref_name }}
+  group: ${{ github.workflow }}-${{ inputs.tag || github.ref_name }}
   cancel-in-progress: false
 
 jobs:
   release:
     name: Create Release
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
-    # Pushes the version/changelog commit to main and creates the release.
+    timeout-minutes: 10
+    # Create the GitHub release and update the tracked project version.
     permissions:
       contents: write
     outputs:
@@ -137,7 +137,7 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
           cp docs/dev/CHANGELOG.md "${RUNNER_TEMP}/CHANGELOG.md"
           git fetch origin main
-          # Force-switch to main since the changelog is already saved in RUNNER_TEMP.
+          # Restore the generated changelog after switching to main.
           git checkout -f -B main origin/main
           cp "${RUNNER_TEMP}/CHANGELOG.md" docs/dev/CHANGELOG.md
           # Keep app.json and iOS MARKETING_VERSION in sync with the tag so version
@@ -147,20 +147,28 @@ jobs:
           grep -q "\"version\": \"${VERSION}\"" app.json
           sed -i -E "s/(MARKETING_VERSION = )[^;]*(;)/\1${VERSION}\2/" ios/Airhop.xcodeproj/project.pbxproj
           grep -q "MARKETING_VERSION = ${VERSION};" ios/Airhop.xcodeproj/project.pbxproj
+          # Keep iOS CFBundleVersion monotonic for App Store Connect.
+          # Matches the versioning scheme used by Android versionCode.
+          IOS_BUILD=$(( ${VERSION%%.*} * 10000
+            + $(echo "${VERSION}" | cut -d. -f2) * 100
+            + $(echo "${VERSION}" | cut -d. -f3) ))
+          sed -i -E "s/(CURRENT_PROJECT_VERSION = )[^;]*(;)/\1${IOS_BUILD}\2/" ios/Airhop.xcodeproj/project.pbxproj
+          grep -q "CURRENT_PROJECT_VERSION = ${IOS_BUILD};" ios/Airhop.xcodeproj/project.pbxproj
+          echo "iOS CFBundleVersion set to ${IOS_BUILD}"
           git add docs/dev/CHANGELOG.md app.json ios/Airhop.xcodeproj/project.pbxproj
           if git diff --staged --quiet; then
             echo "Version and changelog unchanged."
           else
-            git commit -m "chore(release): set version and changelog for ${{ steps.resolve.outputs.tag }}"
+            git commit -m "chore(release): set version and changelog for ${{ steps.resolve.outputs.tag }} [skip ci]"
             git push origin main
           fi
 
-  build-apk:
-    name: Build Android APK
+  android-release:
+    name: Release Android APK
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    timeout-minutes: 45
     needs: release
-    # Attaches the built APK to the release and signs its build provenance.
+    # Build, attest, and publish the Android release artifacts.
     permissions:
       contents: write
       id-token: write
@@ -180,27 +188,11 @@ jobs:
           sed -i -E "s/(\"version\": \")[^\"]*(\")/\1${VERSION}\2/" app.json
           grep -q "\"version\": \"${VERSION}\"" app.json
 
-      - name: Set up Node.js
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        with:
-          node-version: "22"
-          cache: "npm"
+      - name: Set up JavaScript toolchain
+        uses: ./.github/actions/setup-js
 
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Set up JDK
-        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5.7.0
-        with:
-          distribution: temurin
-          java-version: "21"
-
-      - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6.3.0
-
-      # Must match ndkVersion in android/build.gradle.
-      - name: Install pinned Android NDK
-        run: ${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager --install "ndk;27.1.12297006"
+      - name: Set up Android toolchain
+        uses: ./.github/actions/setup-android
 
       - name: Decode release keystore
         env:
@@ -223,7 +215,9 @@ jobs:
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
           chmod +x gradlew
-          ./gradlew assembleRelease --no-daemon
+          # abiFilters are merged, so build types can't narrow them.
+          # gradle.properties keeps x86_64 for emulators; shipped builds include only the two ARM ABIs.
+          ./gradlew assembleRelease --no-daemon -PreactNativeArchitectures=arm64-v8a,armeabi-v7a
 
       - name: Stage APK
         run: |
@@ -233,7 +227,7 @@ jobs:
 
       - name: Attest APK build provenance
         id: attest-apk
-        uses: actions/attest-build-provenance@0f67c3f4856b2e3261c31976d6725780e5e4c373 # v4.1.1
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
         with:
           subject-path: dist/airhop.apk
 
@@ -252,24 +246,25 @@ jobs:
             dist/airhop.apk
             dist/airhop.apk.intoto.jsonl
 
-      # The signed AAB is stored as a workflow artifact for Play Console upload.
+      # Build the Play Store upload bundle.
       - name: Build release AAB (Google Play upload bundle)
         working-directory: android
         env:
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
-        run: ./gradlew bundleRelease --no-daemon
+        run: |
+          ./gradlew bundleRelease --no-daemon -PreactNativeArchitectures=arm64-v8a,armeabi-v7a
 
       - name: Stage AAB
         run: |
           set -euo pipefail
           mv android/app/build/outputs/bundle/release/app-release.aab dist/airhop.aab
 
-      # Play re-signs the bundle on upload, so this covers the uploaded file only.
+      # Attest the uploaded AAB before Play re-signs it.
       - name: Attest AAB build provenance
         id: attest-aab
-        uses: actions/attest-build-provenance@0f67c3f4856b2e3261c31976d6725780e5e4c373 # v4.1.1
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
         with:
           subject-path: dist/airhop.aab
 
@@ -290,12 +285,85 @@ jobs:
           if-no-files-found: error
           retention-days: 90
 
+  # Placeholder for the future iOS release pipeline.
+  # Requires macos-26, fastlane, and Apple signing credentials.
+  #
+  # fastlane manages signing, archiving, and TestFlight upload.
+  # setup_ci provisions an ephemeral CI keychain for code signing.
+  #
+  # Remaining setup:
+  # - Add the repository secrets listed below.
+  # - Add the fastlane configuration (Fastfile, Appfile, and Gemfile).
+  # - Register the app in App Store Connect.
+  #
+  # Secrets:
+  #   APPLE_TEAM_ID
+  #   APPLE_CERT_P12_BASE64
+  #   APPLE_CERT_PASSWORD
+  #   APPLE_PROVISIONING_PROFILE
+  #   APPSTORE_ISSUER_ID
+  #   APPSTORE_KEY_ID
+  #   APPSTORE_PRIVATE_KEY
+  #
+  # ios-release:
+  #   name: iOS Release
+  #   runs-on: macos-26
+  #   timeout-minutes: 45
+  #   needs: release
+  #
+  #   steps:
+  #     - name: Checkout repository
+  #       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+  #       with:
+  #         ref: ${{ needs.release.outputs.tag }}
+  #
+  #     - name: Update app version from tag
+  #       env:
+  #         VERSION: ${{ needs.release.outputs.version }}
+  #       run: |
+  #         set -euo pipefail
+  #         IOS_BUILD=$(( ${VERSION%%.*} * 10000 \
+  #           + $(echo "${VERSION}" | cut -d. -f2) * 100 \
+  #           + $(echo "${VERSION}" | cut -d. -f3) ))
+  #         sed -i '' -E "s/(MARKETING_VERSION = )[^;]*(;)/\1${VERSION}\2/" ios/Airhop.xcodeproj/project.pbxproj
+  #         sed -i '' -E "s/(CURRENT_PROJECT_VERSION = )[^;]*(;)/\1${IOS_BUILD}\2/" ios/Airhop.xcodeproj/project.pbxproj
+  #         grep -q "MARKETING_VERSION = ${VERSION};" ios/Airhop.xcodeproj/project.pbxproj
+  #         grep -q "CURRENT_PROJECT_VERSION = ${IOS_BUILD};" ios/Airhop.xcodeproj/project.pbxproj
+  #
+  #     - name: Set up JavaScript toolchain
+  #       uses: ./.github/actions/setup-js
+  #
+  #     - name: Install CocoaPods dependencies
+  #       run: npx pod-install
+  #
+  #     - name: Install fastlane
+  #       run: bundle install
+  #
+  #     - name: Build and upload to TestFlight
+  #       env:
+  #         APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+  #         APPLE_CERT_P12_BASE64: ${{ secrets.APPLE_CERT_P12_BASE64 }}
+  #         APPLE_CERT_PASSWORD: ${{ secrets.APPLE_CERT_PASSWORD }}
+  #         APPLE_PROVISIONING_PROFILE: ${{ secrets.APPLE_PROVISIONING_PROFILE }}
+  #         APPSTORE_ISSUER_ID: ${{ secrets.APPSTORE_ISSUER_ID }}
+  #         APPSTORE_KEY_ID: ${{ secrets.APPSTORE_KEY_ID }}
+  #         APPSTORE_PRIVATE_KEY: ${{ secrets.APPSTORE_PRIVATE_KEY }}
+  #       run: bundle exec fastlane ios release
+  #
+  #     - name: Upload IPA as build artifact
+  #       uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+  #       with:
+  #         name: airhop-testflight-ipa
+  #         path: ios/build/Airhop.ipa
+  #         if-no-files-found: error
+  #         retention-days: 90
+
   sbom:
     name: Generate SBOM
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    timeout-minutes: 10
     needs: release
-    # Attaches the SBOM to the release.
+    # Publish the release software bill of materials.
     permissions:
       contents: write
 
@@ -320,7 +388,7 @@ jobs:
   source-manifest:
     name: Publish Source Manifest
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    timeout-minutes: 10
     needs: release
     # Publishes SHA-256 hashes of tracked source files to verify source integrity.
     # Complements the SBOM by proving the source matches this release.
@@ -345,7 +413,7 @@ jobs:
             --tag "${TAG}"
 
       - name: Attest source manifest
-        uses: actions/attest-build-provenance@0f67c3f4856b2e3261c31976d6725780e5e4c373 # v4.1.1
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
         with:
           subject-path: airhop-${{ needs.release.outputs.tag }}-sources.sha256
 

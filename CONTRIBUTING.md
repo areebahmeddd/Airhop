@@ -91,10 +91,12 @@ Run tests: `npm test -- --testPathPattern=src/core`
 
 Before opening any pull request:
 
-- [ ] `npm run test` passes with zero failures
 - [ ] `npm run format` run (no uncommitted format changes)
 - [ ] `npm run lint` passes with zero errors
 - [ ] `npm run typecheck` passes with zero errors
+- [ ] `npm run i18n:audit -- --max 0` passes (no hardcoded user-facing strings)
+- [ ] `npm run verify:vendored` passes (only if you changed a vendored binary)
+- [ ] `npm run coverage` passes with zero failures
 - [ ] `docs/dev/PROGRESS.md` updated if a milestone was completed or a decision was made
 - [ ] `docs/design/ROADMAP.md` updated if a feature was added, removed, or reprioritized
 - [ ] If touching `src/core/` or `android/` or `ios/`: invoke `@architect` agent for review

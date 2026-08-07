@@ -33,5 +33,11 @@
 	<array/>
 	<key>NSPrivacyTracking</key>
 	<false/>
+	<!-- Empty, and stated rather than omitted. Apple treats an absent key as
+	     unanswered; an empty array is the positive claim that this app contacts
+	     no tracking domain, which is the same thing the Privacy screen tells the
+	     user. bitchat declares it the same way. -->
+	<key>NSPrivacyTrackingDomains</key>
+	<array/>
 </dict>
 </plist>

@@ -54,6 +54,7 @@ import Animated, {
   withSpring,
   withTiming,
 } from "react-native-reanimated";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useT } from "../../i18n";
 import { Duration, Radius, Spacing, useThemeColors } from "../theme";
 import { useKeyboardHeight } from "../use-keyboard";
@@ -110,6 +111,10 @@ export default function BottomSheet({
   const styles = useMemo(() => createStyles(Colors), [Colors]);
   const { height: screenHeight } = useWindowDimensions();
   const keyboardHeight = useKeyboardHeight();
+  // Read here rather than relied on from a SafeAreaView: the sheet renders
+  // inside a Modal, which is a separate view hierarchy that inherits none of
+  // the root provider's padding. See the note where this is applied.
+  const insets = useSafeAreaInsets();
 
   // Kept mounted across the slide-out so the exit animation can play even when
   // the parent flips `visible` to false.
@@ -263,8 +268,22 @@ export default function BottomSheet({
         {/* Lifting the whole stack by the keyboard height keeps each sheet's own
             layout intact - it just has less room to lay out in - which is what
             makes a text field inside a sheet stay visible with no per-sheet
-            plumbing. */}
-        <View style={[styles.root, { paddingBottom: keyboardHeight }]}>
+            plumbing.
+
+            The bottom inset is the same idea for the navigation bar. A Modal is
+            its own view hierarchy and inherits none of the root
+            SafeAreaProvider padding. Gesture navigation hid this; on
+            three-button navigation the 48dp bar covered the author-note sheet's
+            OK button, where the system consumes the touch.
+
+            max, not sum: the keyboard covers the navigation bar, so adding the
+            two would leave a nav-bar-high gap above the keyboard. */}
+        <View
+          style={[
+            styles.root,
+            { paddingBottom: Math.max(keyboardHeight, insets.bottom) },
+          ]}
+        >
           <Animated.View
             style={[
               StyleSheet.absoluteFill,

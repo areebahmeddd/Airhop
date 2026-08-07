@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Notification small icon: the Airhop mark, 24dp.
+
+     Generated from landing/public/brand/airhop-icon.svg, which is a pure grid of
+     56px cells on a 1024px canvas. Because the mark is axis-aligned pixels and
+     nothing else, it survives as a vector drawable exactly: one 1x1 cell per
+     rect, scaled to the viewport below. No raster densities to keep in step and
+     nothing to re-export when a density is added.
+
+     To regenerate: read the rects out of that SVG, normalise them against the
+     mark's bounding box (11 cells wide by 6 tall), and emit one
+     "M<x>,<y>h<c>v<c>h-<c>z" per cell.
+-->
+<!--
+     Android renders a notification small icon as a MASK: every non-transparent
+     pixel is painted in the accent colour and the colours in the drawable are
+     discarded. That is why this is a white silhouette on transparency, and why
+     an app icon used here comes out as the grey blob this replaces.
+
+     The mark is 11 cells by 6, so at 2dp per cell it is 22x12 inside the 24dp
+     square, with the 1dp inset the platform expects and the remainder as
+     vertical letterboxing.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+  <path
+      android:fillColor="#FFFFFFFF"
+      android:pathData="M1,6h2v2h-2zM3,6h2v2h-2zM19,6h2v2h-2zM21,6h2v2h-2zM3,8h2v2h-2zM5,8h2v2h-2zM17,8h2v2h-2zM19,8h2v2h-2zM5,10h2v2h-2zM7,10h2v2h-2zM11,10h2v2h-2zM15,10h2v2h-2zM17,10h2v2h-2zM7,12h2v2h-2zM9,12h2v2h-2zM11,12h2v2h-2zM13,12h2v2h-2zM15,12h2v2h-2zM9,14h2v2h-2zM11,14h2v2h-2zM13,14h2v2h-2zM11,16h2v2h-2z"/>
+</vector>

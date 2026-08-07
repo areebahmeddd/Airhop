@@ -103,6 +103,9 @@ export interface DeviceOptions {
   permissionSettleMs?: number;
   // Whether the device has a Bluetooth adapter at all.
   hasBluetooth?: boolean;
+  // Some chipsets at the API 26 floor have a working central role and no
+  // peripheral one, so they scan and relay but can never be discovered.
+  canAdvertise?: boolean;
   hasWifiAware?: boolean;
   // Multi-device simulation only. A device in a world does not own the clock:
   // the world advances one set of fake timers for everybody, so each device has
@@ -125,6 +128,7 @@ export class DeviceOS {
   readonly platform: Platform;
   readonly apiLevel: number;
   readonly hasBluetooth: boolean;
+  readonly canAdvertise: boolean;
   readonly hasWifiAware: boolean;
   readonly permissionSettleMs: number;
 
@@ -160,6 +164,7 @@ export class DeviceOS {
     this.platform = opts.platform;
     this.apiLevel = opts.apiLevel ?? 34;
     this.hasBluetooth = opts.hasBluetooth ?? true;
+    this.canAdvertise = opts.canAdvertise ?? true;
     this.hasWifiAware = opts.hasWifiAware ?? false;
     this.permissionSettleMs = opts.permissionSettleMs ?? 0;
     this.adapter = opts.adapter ?? "on";

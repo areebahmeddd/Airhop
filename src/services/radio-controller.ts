@@ -55,13 +55,14 @@ export interface RadioFacts {
   // Whether the app may use Bluetooth. "unknown" is the honest answer before
   // the platform has told us, and is treated as "keep trying", not as denial.
   authorization: "granted" | "denied" | "blocked" | "unknown";
-  // Android: the OS-wide location toggle. BLE scan results are withheld without
-  // it however healthy everything else looks. Always true on iOS.
+  // Android: whether a BLE scan on this device counts as a location access.
+  // True only below API 31, where usesPermissionFlags="neverForLocation" does
+  // not exist on BLUETOOTH_SCAN. Always false on iOS.
+  locationRequiredForScan: boolean;
+  // Android: the OS-wide location toggle, as the device reports it. Scan
+  // results are withheld without it however healthy everything else looks -
+  // but only while locationRequiredForScan is true. Always true on iOS.
   locationServicesEnabled: boolean;
-  // Android 12+: ACCESS_FINE_LOCATION specifically. Choosing "Approximate" in
-  // the system dialog grants coarse only, and scan results are withheld.
-  // Always true on iOS.
-  preciseLocation: boolean;
   // 0-100, or null when unknown (iOS always, Android before the first battery
   // broadcast). Drives how hard the radios run - see power-policy.ts.
   batteryPercent: number | null;
@@ -77,6 +78,15 @@ const BACKOFF_MS = [200, 400, 800, 1600, 3200, 5000] as const;
 // broadcasts STATE_ON as the stack comes up, not once it can accept work, and a
 // scan issued in that window is accepted and silently does nothing.
 const ADAPTER_SETTLE_MS = 400;
+
+// ScanCallback.SCAN_FAILED_SCANNING_TOO_FREQUENTLY. Android allows roughly five
+// scan starts per 30 second window per app and silently refuses the rest.
+const SCAN_FAILED_SCANNING_TOO_FREQUENTLY = 6;
+
+// How long to stand down after that particular refusal. Retrying on the usual
+// ladder would spend the whole window being refused again, and each refusal
+// costs another start against the next window's budget.
+const SCAN_THROTTLE_BACKOFF_MS = 30_000;
 
 export const BLE_SERVICE_UUID = "F47B5E2D-4A9E-4C5A-9B3F-8E1D2C3A4B5C";
 
@@ -94,6 +104,11 @@ export function blockerFor(
   if (!facts.supported) return "unsupported";
   if (facts.authorization === "blocked") return "permission-blocked";
   if (facts.authorization === "denied") {
+    // Below API 31 the permission the mesh waits on is location, and the app
+    // settings page has no Bluetooth row to point at. Checked before the
+    // denied/blocked split because both resolve to the same action, so only a
+    // label nuance is lost and the label is what this case exists to correct.
+    if (facts.locationRequiredForScan) return "location-permission";
     return permissionBlocked ? "permission-blocked" : "permission-denied";
   }
   // "unknown" means the platform has not reported yet - which means it has not
@@ -106,8 +121,12 @@ export function blockerFor(
   // and telling someone their location settings are wrong while Bluetooth is
   // off sends them to fix the wrong thing.
   if (!facts.poweredOn) return "adapter-off";
-  if (!facts.preciseLocation) return "precise-location";
-  if (!facts.locationServicesEnabled) return "location-services-off";
+  // Android 11 and below only: from API 31 neverForLocation stops the toggle
+  // gating the scanner. Read as a fact rather than a Platform.Version test so
+  // the decision stays in this one pure function.
+  if (facts.locationRequiredForScan && !facts.locationServicesEnabled) {
+    return "location-services-off";
+  }
   return "none";
 }
 
@@ -254,10 +273,16 @@ export class RadioController {
     useMeshStateStore.getState().setBleBlocker(blocker);
   }
 
-  private scheduleRetry(): void {
+  // `minDelayMs` is for the refusals whose own recovery window is longer than
+  // anything on the ladder. It raises this one retry rather than the schedule,
+  // so an ordinary permission-settling retry stays as quick as it was.
+  private scheduleRetry(minDelayMs = 0): void {
     if (this.disposed || !this.desired.running) return;
     if (this.retryTimer !== null) return;
-    const delay = BACKOFF_MS[Math.min(this.attempt, BACKOFF_MS.length - 1)];
+    const delay = Math.max(
+      BACKOFF_MS[Math.min(this.attempt, BACKOFF_MS.length - 1)],
+      minDelayMs,
+    );
     this.attempt++;
     this.retryTimer = setTimeout(() => {
       this.retryTimer = null;
@@ -286,7 +311,15 @@ export class RadioController {
     // Shutting down needs no facts: stop whatever is up and let the background
     // service go with it.
     if (!this.desired.running) {
-      await this.applyRadios({ scanning: false, advertising: false });
+      // Forced, not reconciled: `actual` is what JS believes, and both native
+      // modules keep an intent latch this side cannot see. On any drift - a
+      // restored process, a radio that came back on its own - the delta sends
+      // nothing while the latch survives, and native can advertise a device
+      // whose owner chose Away. Stopping is idempotent, so forcing is cheap.
+      await this.applyRadios(
+        { scanning: false, advertising: false },
+        /* force */ true,
+      );
       await this.setBackgroundService(false);
       // Native keeps whatever mode it was last given, and a stopped radio has
       // no mode worth remembering. Forgetting ours means the next start sends
@@ -409,6 +442,25 @@ export class RadioController {
     void this.reconcile();
   }
 
+  // The platform refused a scan after accepting the call to start one. The one
+  // failure the reconciler cannot observe for itself: startScan() resolved, so
+  // `actual.scanning` is true and every later pass sees nothing to close.
+  // Android only; CoreBluetooth reports refusals as an adapter change.
+  onScanFailed(errorCode: number): void {
+    this.actual.scanning = false;
+    // scheduleRetry keeps the first timer it is given, so a pending 200ms
+    // attempt would pre-empt the stand-down below and be refused too.
+    if (this.retryTimer !== null) {
+      clearTimeout(this.retryTimer);
+      this.retryTimer = null;
+    }
+    this.scheduleRetry(
+      errorCode === SCAN_FAILED_SCANNING_TOO_FREQUENTLY
+        ? SCAN_THROTTLE_BACKOFF_MS
+        : 0,
+    );
+  }
+
   // Read what the device says about itself, tolerating an older native module
   // that does not implement the call yet.
   private async readFacts(): Promise<RadioFacts> {
@@ -418,8 +470,8 @@ export class RadioController {
         supported: state.supported,
         poweredOn: state.poweredOn,
         authorization: state.authorization,
+        locationRequiredForScan: state.locationRequiredForScan,
         locationServicesEnabled: state.locationServicesEnabled,
-        preciseLocation: state.preciseLocation,
         // Native reports -1 when it has nothing to say (iOS, or Android before
         // the first battery broadcast). Normalised to null here so the policy
         // has one "unknown" to reason about instead of a magic number.
@@ -433,8 +485,8 @@ export class RadioController {
         supported: true,
         poweredOn: false,
         authorization: "unknown",
+        locationRequiredForScan: false,
         locationServicesEnabled: true,
-        preciseLocation: true,
         batteryPercent: null,
         charging: false,
       };
@@ -442,13 +494,19 @@ export class RadioController {
   }
 
   // Issue only the calls that close the gap. Returns false if any refused.
-  private async applyRadios(target: {
-    scanning: boolean;
-    advertising: boolean;
-  }): Promise<boolean> {
+  //
+  // `force` sends both calls regardless, for the shutdown path where native may
+  // hold intent this side cannot see. Nothing else should need it.
+  private async applyRadios(
+    target: {
+      scanning: boolean;
+      advertising: boolean;
+    },
+    force = false,
+  ): Promise<boolean> {
     let ok = true;
 
-    if (target.scanning !== this.actual.scanning) {
+    if (force || target.scanning !== this.actual.scanning) {
       try {
         if (target.scanning) {
           await AirhopBLE.startScanning([BLE_SERVICE_UUID]);
@@ -461,21 +519,48 @@ export class RadioController {
       }
     }
 
-    if (target.advertising !== this.actual.advertising) {
+    // A device with no BLE peripheral role never gets asked again.
+    //
+    // Some chipsets at the API 26 floor report a null bluetoothLeAdvertiser, and
+    // native answers UNSUPPORTED. That is not a transient refusal, but it used
+    // to be treated as one: applyRadios returned false, reconcileOnce scheduled
+    // a retry, the backoff capped at five seconds, and the app called
+    // startAdvertising every five seconds for as long as the mesh ran. Battery
+    // and logcat spend, forever, on a question whose answer cannot change.
+    //
+    // Scanning and relaying are untouched, so the mesh still works from this
+    // phone's side. What it loses is being discovered, which is why the store is
+    // told: the Mesh tab says so once rather than leaving someone to wonder why
+    // they can see everyone and nobody answers.
+    const wantAdvertise = target.advertising && !this.advertisingUnsupported;
+    if (force || wantAdvertise !== this.actual.advertising) {
       try {
-        if (target.advertising) {
+        if (wantAdvertise) {
           await AirhopBLE.startAdvertising(BLE_SERVICE_UUID, this.peerID);
         } else {
           await AirhopBLE.stopAdvertising();
         }
-        this.actual.advertising = target.advertising;
-      } catch {
-        ok = false;
+        this.actual.advertising = wantAdvertise;
+      } catch (e) {
+        if ((e as { code?: string } | undefined)?.code === "UNSUPPORTED") {
+          this.advertisingUnsupported = true;
+          this.actual.advertising = false;
+          useMeshStateStore.getState().setBleAdvertisingUnsupported(true);
+          // Deliberately NOT a failure. Returning false here would schedule the
+          // retry this whole branch exists to stop.
+        } else {
+          ok = false;
+        }
       }
     }
 
     return ok;
   }
+
+  // Latched once native answers UNSUPPORTED to startAdvertising: this chipset
+  // has no peripheral role and never will. Never cleared, because nothing about
+  // a device changes that. See applyRadios.
+  private advertisingUnsupported = false;
 
   // null means "we do not know", which forces the next reconcile to re-assert.
   private backgroundServiceOn: boolean | null = false;

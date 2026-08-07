@@ -27,6 +27,7 @@ import {
 } from "../../../store/mesh-state-store";
 import { usePeerStore } from "../../../store/peer-store";
 import { useSettingsStore } from "../../../store/settings-store";
+import { applyPresence } from "../../presence";
 import { AndroidBleModule } from "./harness/android-native";
 import { AppShell } from "./harness/app-shell";
 import { installNativeBle } from "./harness/bridge-shim";
@@ -221,35 +222,42 @@ describe("cold start and permissions", () => {
 
   // ---------------------------------------------------------------------------
 
-  test("S04 Android 12+ user picks Approximate instead of Precise location", async () => {
-    const os = new DeviceOS({ platform: "android", apiLevel: 34 });
+  // This used to assert the opposite: that picking "Approximate" stopped the
+  // mesh. True while BLUETOOTH_SCAN carried no neverForLocation flag, and the
+  // worst first-run the app had. The manifest now asserts it, so from API 31
+  // the scanner is outside location's reach and this is what must hold.
+  test("S04 Android 12+ with location refused and the OS toggle off - the mesh is unaffected", async () => {
+    const os = new DeviceOS({
+      platform: "android",
+      apiLevel: 34,
+      locationServicesEnabled: false,
+    });
     const v = new Verdict(
       "S04",
-      "location downgraded to coarse — scanning cannot work, and the app must say exactly why",
+      "location refused on API 31+ - BLUETOOTH_SCAN asserts neverForLocation, so nothing about the mesh depends on it",
       os,
     );
-    androidDevice(os);
+    const native = androidDevice(os);
 
-    app = new AppShell({
-      os,
-      answer: (p) =>
-        p === "android.permission.ACCESS_FINE_LOCATION" ? "denied" : "granted",
-    });
-    // The coarse grant the dialog actually produced.
-    os.setPermission("android.permission.ACCESS_COARSE_LOCATION", "granted");
+    app = new AppShell({ os });
+    // Both halves of the old coupling, refused at once: no location permission
+    // of any accuracy, and the OS-wide toggle off (set above).
+    os.setPermission("android.permission.ACCESS_FINE_LOCATION", "denied");
+    os.setPermission("android.permission.ACCESS_COARSE_LOCATION", "denied");
     app.bootJsRuntime();
     await app.startMeshWithPermissions();
     await os.advance(2000);
 
     v.check("process survived", os.crashed === null, os.crashed ?? undefined);
     v.check(
-      "the banner names PRECISE location specifically, not 'Bluetooth permission'",
-      currentBlockerBanner()?.key === "ble-precise-location",
+      "no banner: location is not a mesh prerequisite on this API level",
+      currentBlockerBanner() === null,
       `banner: ${JSON.stringify(currentBlockerBanner())}`,
     );
+    v.check("both radios came up", native.scanning && native.advertising);
     v.check(
-      "and sends the user to Settings, since re-prompting cannot re-offer Precise",
-      currentBlockerBanner()?.action === "open-app-settings",
+      "and the background service is holding the process up",
+      os.foregroundServiceRunning,
     );
     v.assert();
   });
@@ -372,10 +380,14 @@ describe("cold start and permissions", () => {
 
   // ---------------------------------------------------------------------------
 
-  test("S08 location SERVICES off while the location permission is granted", async () => {
+  // API 30 on purpose: neverForLocation does not exist below 31, so this is the
+  // highest level where the OS toggle still withholds scan results. minSdk is
+  // 26, so these devices are supported. S04 covers the same settings on API 34,
+  // where they must change nothing.
+  test("S08 location SERVICES off on API 30, where a scan is still a location access", async () => {
     const os = new DeviceOS({
       platform: "android",
-      apiLevel: 34,
+      apiLevel: 30,
       locationServicesEnabled: false,
     });
     const v = new Verdict(
@@ -494,6 +506,100 @@ describe("cold start and permissions", () => {
   });
 
   // ---------------------------------------------------------------------------
+
+  test("S11 the platform refuses a scan after accepting it", async () => {
+    const os = new DeviceOS({ platform: "android", apiLevel: 34 });
+    const v = new Verdict(
+      "S11",
+      "onScanFailed arrives long after startScan resolved — the only radio failure the reconciler cannot see for itself",
+      os,
+    );
+    const native = androidDevice(os);
+
+    app = new AppShell({ os });
+    app.bootJsRuntime();
+    await app.startMeshWithPermissions();
+    await os.advance(500);
+    v.check("scanning to begin with", native.scanning);
+
+    // Android allows about five scan starts per 30 second window and silently
+    // refuses the rest. The duty cycle plus a couple of power-mode changes can
+    // reach that, and before this event the app went blind with the radar
+    // still spinning.
+    native.simulateScanFailure(6);
+    await os.advance(1000);
+
+    v.check("process survived", os.crashed === null, os.crashed ?? undefined);
+    v.check(
+      "the app does not keep hammering the throttle window",
+      !native.scanning,
+      "a retry inside the window is refused again and costs another start",
+    );
+
+    // Past the 30 second stand-down, the reconciler tries again.
+    await os.advance(31_000);
+    v.check(
+      "and recovers on its own once the window has passed",
+      native.scanning,
+    );
+    v.assert();
+  });
+
+  // ---------------------------------------------------------------------------
+
+  // A chipset that can scan but never advertise must be asked exactly once.
+  //
+  // Native answers UNSUPPORTED when bluetoothLeAdvertiser is null, and that used
+  // to be treated as a transient refusal: applyRadios returned false,
+  // reconcileOnce scheduled a retry, the backoff capped at five seconds, and the
+  // app asked again every five seconds for as long as the mesh ran. The answer
+  // cannot change, so the only thing that loop produced was battery and log
+  // spend, plus a user who could see everyone and had no idea why nobody
+  // answered.
+  test("S13 a device that cannot advertise is asked once, and told so", async () => {
+    const os = new DeviceOS({
+      platform: "android",
+      apiLevel: 34,
+      canAdvertise: false,
+    });
+    const v = new Verdict(
+      "S13",
+      "no BLE peripheral role: scan and relay still work, advertising is abandoned",
+      os,
+    );
+    const native = androidDevice(os);
+
+    app = new AppShell({ os });
+    app.bootJsRuntime();
+    await app.startMeshWithPermissions();
+    // Far longer than the 5s backoff cap, so a retry loop would be obvious.
+    await os.advance(60_000);
+
+    v.check("process survived", os.crashed === null, os.crashed ?? undefined);
+    v.check(
+      "scanning runs regardless: this half of the radio works",
+      native.scanning,
+    );
+    v.check("advertising is not running", !native.advertising);
+    v.check(
+      "and was attempted at most twice, not on a five-second loop",
+      native.advertiseAttempts <= 2,
+      `startAdvertising called ${String(native.advertiseAttempts)} times in 60s`,
+    );
+    v.check(
+      "the Mesh tab says the phone cannot be discovered",
+      useMeshStateStore.getState().bleAdvertisingUnsupported,
+      "otherwise the user sees peers, gets no answers, and has nothing to read",
+    );
+    v.check(
+      "no hard blocker: the mesh is working, one half is simply unavailable",
+      currentBlockerBanner() === null,
+      `banner: ${JSON.stringify(currentBlockerBanner())}`,
+    );
+    v.assert();
+  });
+
+  // ---------------------------------------------------------------------------
   // iOS variants of the launch path.
 
   test("S07i iOS cold launch with a perfectly healthy radio", async () => {
@@ -540,6 +646,58 @@ describe("cold start and permissions", () => {
       "the banner reports a denied permission, not an absent radio",
       currentBlockerBanner()?.key === "ble-permission-blocked",
       `banner: ${JSON.stringify(currentBlockerBanner())} — iOS never re-prompts once denied, so Settings is the only route and the copy has to say so`,
+    );
+    v.assert();
+  });
+
+  // ---------------------------------------------------------------------------
+
+  // Away must mean invisible, and stay that way across a power cycle.
+  //
+  // Guards the invariant only. It does NOT reproduce the native intent-latch
+  // race behind the forced stops in the shutdown path, and passes with or
+  // without them: reaching that latch needs blockerFor to say "none" while the
+  // native start rejects, and with the adapter off the blocker branch returns
+  // before applyRadios is called at all.
+  test("S12i iOS stays invisible after Away, even when the start was refused", async () => {
+    const os = new DeviceOS({ platform: "ios", adapter: "off" });
+    const v = new Verdict(
+      "S12i",
+      "start refused with the radio off, then Away, then the radio returns",
+      os,
+    );
+    const native = new IosBleModule(os);
+    installNativeBle(native);
+
+    app = new AppShell({ os });
+    app.bootJsRuntime();
+    await app.startMeshWithPermissions();
+    await os.advance(2000);
+
+    v.check(
+      "nothing is advertising with the radio off",
+      !native.advertising,
+      "precondition",
+    );
+
+    // The user gives up and goes Away while the radio is still off.
+    applyPresence("away", "tester");
+    await os.advance(2000);
+
+    // Later, Bluetooth comes back on. Nobody asked for the mesh again.
+    os.setBluetooth(true);
+    await os.advance(3000);
+
+    v.check("process survived", os.crashed === null, os.crashed ?? undefined);
+    v.check(
+      "the radio returning does NOT resurrect advertising",
+      !native.advertising,
+      "Away means invisible; a stale native intent latch must not announce this device",
+    );
+    v.check(
+      "and does not resurrect scanning either",
+      !native.scanning,
+      "the same latch exists for the central role",
     );
     v.assert();
   });

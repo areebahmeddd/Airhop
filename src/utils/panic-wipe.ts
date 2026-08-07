@@ -16,6 +16,7 @@
 import { createMMKV, deleteMMKV } from "react-native-mmkv";
 import { panicWipe as clearKeys } from "../core/crypto/identity";
 import { clearAttachmentCache } from "../services/file-transfer-service";
+import { clearLocationCache } from "../services/location-service";
 import { stopNutzapWatcher } from "../services/nutzap-watcher-handle";
 import { resetWalletService } from "../services/wallet-service";
 import { useActivityStore } from "../store/activity-store";
@@ -35,6 +36,7 @@ import { usePlaceNamesStore } from "../store/place-names-store";
 import { useSettingsStore } from "../store/settings-store";
 import { useTransferStore } from "../store/transfer-store";
 import { WALLET_STORAGE_ID, useWalletStore } from "../store/wallet-store";
+import { bumpWipeGeneration } from "./wipe-generation";
 
 // The IDs used by all MMKV storage instances in src/store/ and src/core/.
 // peer-store is intentionally absent: it uses in-memory Zustand with no MMKV
@@ -88,13 +90,18 @@ export const MMKV_STORE_IDS = [
 const WALLET_STORE_IDS = [WALLET_STORAGE_ID] as const;
 
 export async function panicWipe(): Promise<void> {
-  // 0. Stop the live NIP-61 nutzap subscription. It holds this identity's Nostr
-  //    private key in a closure and a relay subscription under its pubkey, so
-  //    leaving it running would keep the two things a wipe most needs gone
-  //    alive for the rest of the process.
+  // 0a. Invalidate startup work still in flight. Stopping the watcher below
+  //     only reaches one already installed; a startup mid-relay-publish would
+  //     install its replacement afterwards. See wipe-generation.ts.
+  bumpWipeGeneration();
+
+  // 0b. Stop the live NIP-61 nutzap subscription. It holds this identity's
+  //     Nostr private key in a closure and a relay subscription under its
+  //     pubkey, so leaving it running would keep the two things a wipe most
+  //     needs gone alive for the rest of the process.
   stopNutzapWatcher();
 
-  // 0b. Cancel any chat write still inside its throttle window, before
+  // 0c. Cancel any chat write still inside its throttle window, before
   //     anything is cleared. A pending write holds a plaintext snapshot of
   //     every thread and is armed to put it back on disk. Cancelled rather than
   //     flushed: these bytes must not reach disk again.
@@ -159,6 +166,11 @@ export async function panicWipe(): Promise<void> {
   // Drop the cached Cashu Wallet instances too: they hold the previous
   // identity's loaded keysets and a handle on the now-deleted store.
   resetWalletService();
+
+  // Module state with a 5-minute TTL, and the wipe does not restart the
+  // process: the next geohash channel would otherwise resolve from the position
+  // the old identity observed.
+  clearLocationCache();
 
   // 4. Delete received media files from disk. Best-effort: a failure here must
   //    not abort the wipe, the keys and stores are already gone.

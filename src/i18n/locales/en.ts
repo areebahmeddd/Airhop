@@ -161,11 +161,16 @@ export const strings = {
   "onboarding.primer.bluetooth.body":
     "Finds nearby devices and relays messages between them. This creates the mesh and works without an internet connection.",
   "onboarding.primer.location.title": "Location",
-  // "Precise" is load-bearing: geohash channels publish a coarse cell to
-  // relays, so dropping it makes the sentence false. Keep "never tracks you"
-  // equally direct in translation.
+  // This used to say Android requires location to detect Bluetooth devices,
+  // which was true until the manifest asserted neverForLocation on
+  // BLUETOOTH_SCAN. It is not true now, and telling someone a permission is
+  // mandatory when it is optional is the worst version of this screen to get
+  // wrong. "Precise" is still load-bearing in the last sentence: geohash
+  // channels publish a coarse cell to relays, so dropping it makes the promise
+  // wider than the code keeps. Keep "never tracks you" equally direct in
+  // translation.
   "onboarding.primer.location.body":
-    "Android requires location permission to detect nearby Bluetooth devices. Airhop never tracks you or sends your precise location off your device.",
+    "Places you in nearby area channels, from a block to a region. Airhop never tracks you or sends your precise location off your device.",
   "onboarding.primer.notifications.title": "Notifications",
   // "Created locally" is literal: notifications are raised on-device when a
   // message lands, with no push server in the path.
@@ -188,6 +193,28 @@ export const strings = {
   // "Turn it on in Settings to take a photo to send."
   "permission.blocked_title": "{label} is off",
   "permission.blocked_body": "Turn it on in Settings to {purpose}.",
+
+  // ---- The screen after an unhandled error ---------------------------------------
+  // Shown by ui/components/error-boundary.tsx when the interface throws. Two
+  // things this copy must get right, because a user reading it is already
+  // worried:
+  //
+  //   It must not imply data loss. Nothing has been lost - keys are in the
+  //   keychain and messages are in MMKV, neither of which the UI crashing
+  //   touches.
+  //   It must say the mesh is still running, because it is. The radios and the
+  //   relay pool live outside the React tree and keep carrying other people's
+  //   messages while this screen is up, and on a phone being used during a
+  //   blackout that is the single most reassuring fact available.
+  //
+  // No error text, no stack, no "report this". There is nowhere to report it to
+  // and a code the user cannot act on is noise.
+  "error.boundary.title": "Something went wrong",
+  "error.boundary.body":
+    "Airhop hit an unexpected problem and had to stop what it was showing. Your messages, contacts and keys are untouched.",
+  "error.boundary.retry": "Try again",
+  "error.boundary.note":
+    "The mesh is still running in the background, so nearby messages are still being relayed.",
 
   // ---- Chats: channel list -------------------------------------------------------
   // Section headers. The style uppercases them, so sentence case here: a script
@@ -827,7 +854,15 @@ export const strings = {
   "mesh.banner.bluetooth_off": "Bluetooth off · mesh unavailable",
   "mesh.banner.permission_needed": "Bluetooth permission needed",
   "mesh.banner.blocked": "Bluetooth blocked · allow it in Settings",
-  "mesh.banner.precise_location": "Precise location needed to find peers",
+  // Android 11 and below only. Names LOCATION, not Bluetooth: those versions
+  // have no Bluetooth runtime permission for the app's settings page to show,
+  // so naming Bluetooth sent people looking for a row that does not exist.
+  "mesh.banner.location_permission": "Location needed to find peers",
+  // A hardware fact, not a fault. Some chipsets have no BLE peripheral role, so
+  // the phone can see everyone and nobody can see it. No action, because there
+  // is nothing to tap; dismissible, because it will be true forever.
+  "mesh.banner.advertising_unsupported":
+    "This phone can see others but cannot be discovered",
   "mesh.banner.location_off_android":
     "Location off · Android needs it to find peers",
   "mesh.banner.paused": "Mesh paused · You're away",
@@ -871,7 +906,7 @@ export const strings = {
   "mesh.radar.bluetooth_off": "Bluetooth off · not scanning",
   "mesh.radar.permission_needed": "Bluetooth permission needed",
   "mesh.radar.blocked": "Bluetooth blocked",
-  "mesh.radar.precise_location": "Precise location needed",
+  "mesh.radar.location_permission": "Location permission needed",
   "mesh.radar.location_off": "Location off · not scanning",
   "mesh.radar.hint_rings": "Rings show BLE signal strength, not distance",
   "mesh.radar.hint_checking": "Checking Bluetooth and permissions",
@@ -880,8 +915,10 @@ export const strings = {
   "mesh.radar.hint_allow": "Allow Bluetooth to discover peers",
   "mesh.radar.hint_allow_settings":
     "Allow Bluetooth in Settings to discover peers",
-  "mesh.radar.hint_precise":
-    "Switch location from Approximate to Precise in Settings",
+  // Says WHY, because on these versions the request looks unrelated to the
+  // feature: the user asked for Bluetooth chat and the phone asked for location.
+  "mesh.radar.hint_location_permission":
+    "Android 11 and older need location to scan over Bluetooth",
   "mesh.radar.hint_android_location":
     "Android needs location on to return Bluetooth scan results",
   "mesh.radar.signal_strong": "Strong",
@@ -1810,9 +1847,11 @@ export const strings = {
     "Finds nearby devices and relays messages between them. Without it, the mesh cannot work.",
   "settings.permissions.location": "Location",
   // "Precise" is load-bearing: geohash channels publish a coarse cell to
-  // relays, so dropping it makes the sentence false.
+  // relays, so dropping it makes the sentence false. The Bluetooth clause is
+  // deliberately absent - location stopped gating the scanner when the manifest
+  // asserted neverForLocation, and this row must not imply otherwise.
   "settings.permissions.location_desc":
-    "Opens nearby channels so Bluetooth can find devices. Without it, those channels stay closed. Your precise location never leaves your device.",
+    "Opens nearby area channels. Without it, those channels stay closed and the Bluetooth mesh carries on as normal. Your precise location never leaves your device.",
   "settings.permissions.notifications": "Notifications",
   "settings.permissions.notifications_desc":
     "Receive alerts for new messages even when the app is closed. Without it, you only see them when you open Airhop.",

@@ -32,6 +32,7 @@ const EVT_ADAPTER_STATE = "AirhopBLE.adapterStateChanged";
 const EVT_MESH_STOP_REQUESTED = "AirhopBLE.meshStopRequested";
 const EVT_PACKET_RECEIVED = "AirhopBLE.packetReceived";
 const EVT_RSSI_UPDATED = "AirhopBLE.rssiUpdated";
+const EVT_SCAN_FAILED = "AirhopBLE.scanFailed";
 
 // How a device is wired into a shared radio medium (see sim/harness/radio-fabric).
 // Without one installed the module behaves exactly as it did for the
@@ -60,8 +61,9 @@ export interface RadioStateReport {
   supported: boolean;
   poweredOn: boolean;
   authorization: "granted" | "denied" | "blocked" | "unknown";
+  // Whether a scan on this device counts as a location access. API <=30 only.
+  locationRequiredForScan: boolean;
   locationServicesEnabled: boolean;
-  preciseLocation: boolean;
   // -1 when the platform has nothing to say. Drives the power policy.
   batteryPercent: number;
   charging: boolean;
@@ -203,10 +205,8 @@ export class AndroidBleModule implements BleNativeModule {
       supported,
       poweredOn: supported && this.os.adapter === "on",
       authorization: this.currentAuthorization(),
+      locationRequiredForScan: this.os.apiLevel < 31,
       locationServicesEnabled: this.os.locationServicesEnabled,
-      preciseLocation:
-        this.os.checkPermission("android.permission.ACCESS_FINE_LOCATION") ===
-        "granted",
       batteryPercent: this.batteryPercent,
       charging: this.charging,
     };
@@ -233,7 +233,15 @@ export class AndroidBleModule implements BleNativeModule {
 
   // Kotlin :360-:372
   private currentAuthorization(): "granted" | "denied" {
-    if (this.os.apiLevel < 31) return "granted";
+    // Answers for whatever the mesh needs at this API level, matching
+    // requiredBlePermissions() on both sides of the boundary.
+    if (this.os.apiLevel < 31) {
+      return this.os.checkPermission(
+        "android.permission.ACCESS_FINE_LOCATION",
+      ) === "granted"
+        ? "granted"
+        : "denied";
+    }
     const needed = [
       "android.permission.BLUETOOTH_SCAN",
       "android.permission.BLUETOOTH_ADVERTISE",
@@ -289,15 +297,26 @@ export class AndroidBleModule implements BleNativeModule {
   }
 
   // Kotlin :508-:582 — every precondition the platform will not report.
+  // How many times JS has asked. A device that can never advertise must be
+  // asked once, not on a five-second loop for the life of the process.
+  advertiseAttempts = 0;
+
   async startAdvertising(
     _serviceUUID: string,
     _localName: string,
   ): Promise<void> {
+    this.advertiseAttempts++;
     if (!this.os.hasBluetooth) {
       return rejectWith("UNSUPPORTED", "This device has no Bluetooth adapter");
     }
     if (this.os.adapter !== "on") {
       return rejectWith("RADIO_OFF", "Bluetooth is switched off");
+    }
+    // Kotlin :1035 — bluetoothLeAdvertiser is null on a chipset with no
+    // peripheral role. Central still works, so this is a partial capability
+    // rather than a dead radio, and it can never change.
+    if (!this.os.canAdvertise) {
+      return rejectWith("UNSUPPORTED", "This device cannot advertise over BLE");
     }
     if (
       this.os.apiLevel >= 31 &&
@@ -342,26 +361,34 @@ export class AndroidBleModule implements BleNativeModule {
     if (this.os.adapter !== "on") {
       return rejectWith("RADIO_OFF", "Bluetooth is switched off");
     }
-    if (
-      this.os.apiLevel >= 31 &&
-      this.os.checkPermission("android.permission.BLUETOOTH_SCAN") !== "granted"
-    ) {
-      return rejectWith("PERMISSION_DENIED", "BLUETOOTH_SCAN not granted yet");
-    }
-    if (
-      this.os.checkPermission("android.permission.ACCESS_FINE_LOCATION") !==
-      "granted"
-    ) {
-      return rejectWith(
-        "PERMISSION_DENIED",
-        "Precise location is required for BLE scan results",
-      );
-    }
-    if (!this.os.locationServicesEnabled) {
-      return rejectWith(
-        "LOCATION_SERVICES_OFF",
-        "Android withholds BLE scan results while location services are off",
-      );
+    if (this.os.apiLevel >= 31) {
+      if (
+        this.os.checkPermission("android.permission.BLUETOOTH_SCAN") !==
+        "granted"
+      ) {
+        return rejectWith(
+          "PERMISSION_DENIED",
+          "BLUETOOTH_SCAN not granted yet",
+        );
+      }
+    } else {
+      // Only below API 31. From there neverForLocation on BLUETOOTH_SCAN takes
+      // the scanner out of location's reach entirely.
+      if (
+        this.os.checkPermission("android.permission.ACCESS_FINE_LOCATION") !==
+        "granted"
+      ) {
+        return rejectWith(
+          "PERMISSION_DENIED",
+          "Location permission is required for BLE scan results below API 31",
+        );
+      }
+      if (!this.os.locationServicesEnabled) {
+        return rejectWith(
+          "LOCATION_SERVICES_OFF",
+          "Android withholds BLE scan results while location services are off",
+        );
+      }
     }
     try {
       this.os.requirePermission("android.permission.BLUETOOTH_SCAN");
@@ -496,9 +523,24 @@ export class AndroidBleModule implements BleNativeModule {
 
   // ---- test affordances ----------------------------------------------------
 
+  // The platform refusing a scan after accepting the request to start one.
+  // ScanCallback.onScanFailed arrives on a binder thread, long after
+  // startScan() resolved, which is what makes this the one radio failure the
+  // reconciler cannot see for itself. 6 is SCAN_FAILED_SCANNING_TOO_FREQUENTLY,
+  // the refusal a duty-cycled scanner is most likely to hit.
+  simulateScanFailure(errorCode = 6): void {
+    this.scanning = false;
+    this.os.log("native", "SCAN_FAILED", String(errorCode));
+    this.os.runOnThread("binder", () => {
+      this.emitEvent(EVT_SCAN_FAILED, { errorCode });
+    });
+  }
+
   simulatePeerConnect(linkID: string): void {
     if (!this.scanning || this.os.adapter !== "on") return;
-    if (!this.os.locationServicesEnabled) return;
+    // The OS withholds scan results with location off, but only while a scan
+    // still counts as a location access - which is API <=30 now.
+    if (this.os.apiLevel < 31 && !this.os.locationServicesEnabled) return;
     this.centralLinks.set(linkID, { generation: this.os.gattGeneration });
     this.os.runOnThread("binder", () => {
       this.emitEvent(EVT_LINK_CONNECTED, {

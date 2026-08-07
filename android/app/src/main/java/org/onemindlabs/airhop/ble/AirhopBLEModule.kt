@@ -78,6 +78,9 @@ private const val EVT_RSSI_UPDATED      = "AirhopBLE.rssiUpdated"
 // tell "Bluetooth is off" apart from "nobody is nearby". Both look like an
 // empty peer list, which is impossible for a user to diagnose.
 private const val EVT_ADAPTER_STATE     = "AirhopBLE.adapterStateChanged"
+// The platform refused a scan after startScan() returned cleanly. Without it
+// the reconciler believes it is scanning and never retries.
+private const val EVT_SCAN_FAILED       = "AirhopBLE.scanFailed"
 // The user tapped "Stop mesh" on the background notification. Handled in JS so
 // the shutdown is the same one the Status picker performs.
 private const val EVT_MESH_STOP_REQUESTED = "AirhopBLE.meshStopRequested"
@@ -176,6 +179,11 @@ private const val DEFAULT_ATT_MTU = 23
 // payload of a write without response is MTU minus this.
 private const val ATT_WRITE_OVERHEAD = 3
 
+// The largest frame this app puts on the radio, mirroring MAX_BLE_FRAME in
+// core/mesh/fragment-manager.ts. Ceiling on long-write reassembly: a peer that
+// keeps preparing chunks past this must not grow the buffer to meet it.
+private const val MAX_BLE_FRAME = 512
+
 // How far the battery must move before it is worth telling JS about. Android
 // delivers ACTION_BATTERY_CHANGED on every 1% step; forwarding all of them would
 // be a bridge crossing per percent for a decision whose thresholds are ten
@@ -238,6 +246,18 @@ class AirhopBLEModule(
     // dedup (BluetoothGattClientManager.handleScanResult).
     private val centralPeerIDs = ConcurrentHashMap.newKeySet<String>()
     private val linkToAdvertisedPeerID = ConcurrentHashMap<String, String>()
+
+    // In-flight ATT long writes, one per peripheral-role link. Only the EXECUTE
+    // turns the accumulated bytes into a packet.
+    private val preparedWrites = ConcurrentHashMap<String, PreparedWrite>()
+
+    private class PreparedWrite {
+        val buffer = java.io.ByteArrayOutputStream(MAX_BLE_FRAME)
+        // Sticky: once a chunk is refused the reassembly is unusable and the
+        // EXECUTE must not commit a frame with a hole in it.
+        var failed = false
+        val length: Int get() = buffer.size()
+    }
 
     // Our own peerID hex (16 chars), advertised as 8-byte scan-response service
     // data so remote scanners can identify and de-dup us before connecting.
@@ -384,6 +404,7 @@ class AirhopBLEModule(
         // Or a device that spoke once, went quiet, was reaped, and reconnected
         // would inherit the long deadline instead of proving itself again.
         everSpoke.remove(linkID)
+        preparedWrites.remove(linkID)
         try {
             centralLinks.remove(linkID)?.let {
                 it.disconnect()
@@ -638,6 +659,10 @@ class AirhopBLEModule(
     }
 
     private fun beginScanCycle() {
+        // Idempotent: the same Runnable can sit in the queue twice, and two
+        // toggles run the scanner at double rate, which is the fastest way to
+        // reach the platform scan-start throttle.
+        mainHandler.removeCallbacks(scanBurstToggle)
         scanningRequested = true
         startPlatformScan()
         // Continuous modes never schedule a toggle, so there is no timer to pay
@@ -716,6 +741,7 @@ class AirhopBLEModule(
         // takes them with it, so a wiped or restarted app starts clean.
         stopDeviceMonitor()
         resetDeviceMonitoring()
+        preparedWrites.clear()
         advertisingActive = false
         try {
             adapter?.bluetoothLeScanner?.stopScan(scanCallback)
@@ -768,6 +794,7 @@ class AirhopBLEModule(
         peripheralLinks.clear()
         centralPeerIDs.clear()
         linkToAdvertisedPeerID.clear()
+        preparedWrites.clear()
         try {
             gattServer?.close()
         } catch (e: Exception) {
@@ -790,15 +817,16 @@ class AirhopBLEModule(
     // Everything the device will tell us about whether BLE can run right now.
     //
     // Replaces isAdapterEnabled(), which answered one quarter of the question.
-    // On Android the other three quarters are what actually bite: a granted
-    // BLUETOOTH_SCAN with the OS location toggle off, or with "Approximate"
-    // chosen instead of "Precise", produces a scan that starts cleanly, reports
-    // no error, and returns results to nobody. That was indistinguishable from
-    // "nobody is nearby" and had no banner, so the radar span forever.
+    // On Android the rest is what actually bites: on API <=30 a granted scan
+    // permission with the OS location toggle off produces a scan that starts
+    // cleanly, reports no error, and returns results to nobody. That was
+    // indistinguishable from "nobody is nearby" and had no banner, so the radar
+    // span forever.
     @ReactMethod
     fun getRadioState(promise: Promise) {
         val result = WritableNativeMap()
         val bt = adapter
+        val locationGates = locationRequiredForScan()
 
         result.putBoolean("supported", bt != null)
         result.putBoolean(
@@ -812,8 +840,11 @@ class AirhopBLEModule(
             },
         )
         result.putString("authorization", currentAuthorization())
+        // Both reported literally. Whether the toggle matters is a separate
+        // fact, so blockerFor decides rather than receiving a decision. Same
+        // split as the power policy, and for the same reason.
+        result.putBoolean("locationRequiredForScan", locationGates)
         result.putBoolean("locationServicesEnabled", locationServicesEnabled())
-        result.putBoolean("preciseLocation", hasPermission(Manifest.permission.ACCESS_FINE_LOCATION))
         result.putInt("batteryPercent", batteryPercent)
         result.putBoolean("charging", charging)
         promise.resolve(result)
@@ -827,25 +858,43 @@ class AirhopBLEModule(
     // "denied for good" without an Activity (shouldShowRequestPermissionRationale),
     // so that split is made in JS where the request result is available, and
     // reported back through the same BleBlocker the banner reads.
+    //
+    // Answers for what the mesh needs at this API level, which is the same list
+    // utils/ble-permissions.ts requests. The two must stay in step.
     private fun currentAuthorization(): String {
-        // Below API 31 the BLUETOOTH_* permissions are install-time normal
-        // permissions and are always held.
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return "granted"
-        val needed = listOf(
-            Manifest.permission.BLUETOOTH_SCAN,
-            Manifest.permission.BLUETOOTH_ADVERTISE,
-            Manifest.permission.BLUETOOTH_CONNECT,
-        )
-        return if (needed.all(::hasPermission)) "granted" else "denied"
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            // neverForLocation means location is not part of this from API 31:
+            // the three Bluetooth runtime permissions are the requirement.
+            val needed = listOf(
+                Manifest.permission.BLUETOOTH_SCAN,
+                Manifest.permission.BLUETOOTH_ADVERTISE,
+                Manifest.permission.BLUETOOTH_CONNECT,
+            )
+            return if (needed.all(::hasPermission)) "granted" else "denied"
+        }
+        // API <=30: BLUETOOTH and BLUETOOTH_ADMIN are install-time normal
+        // permissions and are always held, but a scan is a location access with
+        // no way to say otherwise, so ACCESS_FINE_LOCATION is the runtime
+        // permission the mesh is really waiting on.
+        return if (hasPermission(Manifest.permission.ACCESS_FINE_LOCATION)) "granted"
+        else "denied"
     }
 
-    // The OS-wide location toggle, which is NOT the location permission.
+    // Whether a BLE scan on this device counts as a location access.
     //
-    // Airhop does not declare usesPermissionFlags="neverForLocation" on
-    // BLUETOOTH_SCAN (matching bitchat), so BLE scanning stays coupled to
-    // location and Android withholds every scan result while this is off. From
-    // API 28 there is a direct query; below that the provider list is the
-    // only signal.
+    // The manifest declares neverForLocation on BLUETOOTH_SCAN, which from API
+    // 31 releases scanning from both the location permission and the OS toggle.
+    // Neither the flag nor BLUETOOTH_SCAN exists below that, so on API <=30 a
+    // scan is a location access and results are withheld without both.
+    //
+    // Reported to JS rather than acted on here, so services/radio-controller.ts
+    // keeps deciding what blocks the mesh and stays testable without a device.
+    private fun locationRequiredForScan(): Boolean =
+        Build.VERSION.SDK_INT < Build.VERSION_CODES.S
+
+    // The OS-wide location toggle, which is NOT the location permission. Only
+    // load-bearing while locationRequiredForScan() is true. From API 28 there is
+    // a direct query; below that the provider list is the only signal.
     private fun locationServicesEnabled(): Boolean =
         try {
             val lm = reactContext.getSystemService(Context.LOCATION_SERVICE) as? LocationManager
@@ -1107,6 +1156,9 @@ class AirhopBLEModule(
             gattServer?.close()
             gattServer = null
             characteristic = null
+            // Closing the server may not run the per-link disconnect callback,
+            // so half-written long writes are dropped here.
+            preparedWrites.clear()
             // Deliberately does NOT touch the foreground service. This is also
             // the path "Invisible" takes, and that state still scans and relays,
             // so tearing the service down here silently ended background
@@ -1121,14 +1173,10 @@ class AirhopBLEModule(
 
     @ReactMethod
     fun startScanning(serviceUUIDs: ReadableArray, promise: Promise) {
-        // Every precondition the platform will not tell us about.
-        //
-        // startScan() succeeds and returns nothing when the OS location toggle
-        // is off, or when the user chose "Approximate" instead of "Precise" -
-        // Airhop does not declare neverForLocation on BLUETOOTH_SCAN, so
-        // scanning stays coupled to location on every API level. Both cases are
-        // indistinguishable from an empty room unless we check for them, and an
-        // empty room is what the radar showed, forever.
+        // Every precondition the platform will not report. startScan() succeeds
+        // and returns nothing when a location prerequisite is missing, which is
+        // indistinguishable from an empty room. Those prerequisites exist only
+        // below API 31. See locationRequiredForScan().
         val bt = adapter
         if (bt == null) {
             promise.reject("UNSUPPORTED", "This device has no Bluetooth adapter")
@@ -1138,25 +1186,26 @@ class AirhopBLEModule(
             promise.reject("RADIO_OFF", "Bluetooth is switched off")
             return
         }
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
-            !hasPermission(Manifest.permission.BLUETOOTH_SCAN)
-        ) {
-            promise.reject("PERMISSION_DENIED", "BLUETOOTH_SCAN not granted yet")
-            return
-        }
-        if (!hasPermission(Manifest.permission.ACCESS_FINE_LOCATION)) {
-            promise.reject(
-                "PERMISSION_DENIED",
-                "Precise location is required for BLE scan results",
-            )
-            return
-        }
-        if (!locationServicesEnabled()) {
-            promise.reject(
-                "LOCATION_SERVICES_OFF",
-                "Android withholds BLE scan results while location services are off",
-            )
-            return
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            if (!hasPermission(Manifest.permission.BLUETOOTH_SCAN)) {
+                promise.reject("PERMISSION_DENIED", "BLUETOOTH_SCAN not granted yet")
+                return
+            }
+        } else {
+            if (!hasPermission(Manifest.permission.ACCESS_FINE_LOCATION)) {
+                promise.reject(
+                    "PERMISSION_DENIED",
+                    "Location permission is required for BLE scan results below API 31",
+                )
+                return
+            }
+            if (!locationServicesEnabled()) {
+                promise.reject(
+                    "LOCATION_SERVICES_OFF",
+                    "Android withholds BLE scan results while location services are off",
+                )
+                return
+            }
         }
         val scanner = bt.bluetoothLeScanner
         if (scanner == null) {
@@ -1257,15 +1306,27 @@ class AirhopBLEModule(
                 return
             }
             try {
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                    gattServer?.notifyCharacteristicChanged(device, char, false, data)
+                // Report a refused notify instead of resolving regardless, for
+                // the same reason the central path above does: the stack rejects
+                // a notification when its queue is full, and swallowing that
+                // meant whole fragments vanished mid-transfer with the sender
+                // believing they had gone out. WRITE_BUSY is the same code the
+                // central path returns, so the caller needs no second branch.
+                val accepted =
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                        gattServer?.notifyCharacteristicChanged(device, char, false, data) ==
+                            BluetoothStatusCodes.SUCCESS
+                    } else {
+                        @Suppress("DEPRECATION")
+                        char.value = data
+                        @Suppress("DEPRECATION")
+                        gattServer?.notifyCharacteristicChanged(device, char, false) == true
+                    }
+                if (accepted) {
+                    promise.resolve(null)
                 } else {
-                    @Suppress("DEPRECATION")
-                    char.value = data
-                    @Suppress("DEPRECATION")
-                    gattServer?.notifyCharacteristicChanged(device, char, false)
+                    promise.reject("WRITE_BUSY", "GATT notify queue full for link $linkID")
                 }
-                promise.resolve(null)
             } catch (e: SecurityException) {
                 promise.reject("PERMISSION_DENIED", "BLUETOOTH_CONNECT required", e)
             }
@@ -1317,11 +1378,20 @@ class AirhopBLEModule(
             val module = live ?: return
             try {
                 module.stopRssiPolling()
-                module.adapter?.bluetoothLeScanner?.stopScan(module.scanCallback)
+                // stopScanCycle(), not a bare stopScan: the latter leaves
+                // scanningRequested true with the duty-cycle toggle queued, and
+                // restarts the scanner seconds later with the notification gone
+                // and no UI left to stop it. Called from onStartCommand, so
+                // removeCallbacks is on the main thread as required.
+                module.stopScanCycle()
+                // No timer on the advertiser, but the flag must come down too or
+                // a later setPowerMode restarts it.
+                module.advertisingActive = false
                 module.adapter?.bluetoothLeAdvertiser?.stopAdvertising(module.advertiseCallback)
                 module.gattServer?.close()
                 module.gattServer = null
                 module.characteristic = null
+                module.preparedWrites.clear()
             } catch (e: Exception) {
                 Log.w(TAG, "Force stop failed: ${e.message}")
             }
@@ -1521,6 +1591,16 @@ class AirhopBLEModule(
 
         override fun onScanFailed(errorCode: Int) {
             Log.e(TAG, "Scan failed: $errorCode")
+            // Stand down rather than note the burst died. The duty-cycle toggle
+            // is still queued and would restart the scan within seconds, which
+            // against SCAN_FAILED_SCANNING_TOO_FREQUENTLY spends the next window
+            // being refused again while JS holds a backoff it believes it is
+            // enforcing. The restart belongs to the reconciler.
+            scanBurstActive = false
+            stopScanCycle()
+            emitEvent(EVT_SCAN_FAILED, WritableNativeMap().apply {
+                putInt("errorCode", errorCode)
+            })
         }
     }
 
@@ -1545,6 +1625,9 @@ class AirhopBLEModule(
                 noteLinkOpened(linkID)
             } else if (newState == BluetoothProfile.STATE_DISCONNECTED) {
                 peripheralLinks.remove(linkID)
+                // A long write abandoned mid-transaction. Dropped, or the next
+                // connection from the same MAC resumes into a half-written frame.
+                preparedWrites.remove(linkID)
                 noteLinkClosed(linkID, status)
                 emitEvent(EVT_LINK_DISCONNECTED, WritableNativeMap().apply {
                     putString("linkID", linkID)
@@ -1552,6 +1635,12 @@ class AirhopBLEModule(
             }
         }
 
+        // Handles both shapes of inbound write. A frame over MTU-3 cannot go
+        // unacknowledged, so the sender falls back to an acknowledged write and
+        // the stack turns that into the ATT long-write procedure: PREPARE
+        // requests at successive offsets, then one EXECUTE. iOS does the same.
+        // Treating each PREPARE as a whole packet corrupted every attachment
+        // fragment on any controller granting under a 515-byte MTU.
         override fun onCharacteristicWriteRequest(
             device: BluetoothDevice,
             requestId: Int,
@@ -1563,14 +1652,80 @@ class AirhopBLEModule(
         ) {
             if (characteristic.uuid != CHARACTERISTIC_UUID) return
             val linkID = "p:${device.address}"
+
+            if (preparedWrite) {
+                // computeIfAbsent, not getOrPut: the extension is get-then-put,
+                // so two chunks on different binder threads would each build a
+                // buffer and one would be discarded.
+                val state = preparedWrites.computeIfAbsent(linkID) { PreparedWrite() }
+                val status = synchronized(state) {
+                    when {
+                        // A gap means the reassembly cannot be trusted. Refusing
+                        // makes the client abort the transaction, which is a
+                        // retry; accepting delivers a corrupt frame as valid.
+                        offset != state.length -> {
+                            state.failed = true
+                            BluetoothGatt.GATT_INVALID_OFFSET
+                        }
+                        state.length + value.size > MAX_BLE_FRAME -> {
+                            state.failed = true
+                            BluetoothGatt.GATT_INVALID_ATTRIBUTE_LENGTH
+                        }
+                        else -> {
+                            state.buffer.write(value)
+                            BluetoothGatt.GATT_SUCCESS
+                        }
+                    }
+                }
+                // A prepare response echoes offset and bytes verbatim; the
+                // client compares and aborts on mismatch, so the previous
+                // (0, null) reply failed every long write on its own.
+                if (responseNeeded) {
+                    gattServer?.sendResponse(device, requestId, status, offset, value)
+                }
+                return
+            }
+
+            // A plain write. Offset is always 0 for one of these; anything else
+            // is a client doing something we have no way to reassemble.
+            if (offset != 0) {
+                if (responseNeeded) {
+                    gattServer?.sendResponse(
+                        device, requestId, BluetoothGatt.GATT_INVALID_OFFSET, offset, null,
+                    )
+                }
+                return
+            }
             noteTraffic(linkID)
             emitEvent(EVT_PACKET_RECEIVED, WritableNativeMap().apply {
                 putString("linkID", linkID)
-                putString("dataBase64", Base64.encodeToString(value, Base64.DEFAULT))
+                putString("dataBase64", Base64.encodeToString(value, Base64.NO_WRAP))
             })
             if (responseNeeded) {
                 gattServer?.sendResponse(device, requestId, BluetoothGatt.GATT_SUCCESS, 0, null)
             }
+        }
+
+        // The commit half of a long write. Only here is the reassembled frame a
+        // packet; `execute` false is the client abandoning the transaction,
+        // which discards it.
+        override fun onExecuteWrite(device: BluetoothDevice, requestId: Int, execute: Boolean) {
+            val linkID = "p:${device.address}"
+            val state = preparedWrites.remove(linkID)
+            // Read under the same lock the chunks were written under: these
+            // callbacks arrive on a binder pool and the EXECUTE need not land on
+            // the thread that wrote the last PREPARE.
+            val data = if (state == null) null else synchronized(state) {
+                if (state.failed) null else state.buffer.toByteArray()
+            }
+            if (execute && data != null && data.isNotEmpty()) {
+                noteTraffic(linkID)
+                emitEvent(EVT_PACKET_RECEIVED, WritableNativeMap().apply {
+                    putString("linkID", linkID)
+                    putString("dataBase64", Base64.encodeToString(data, Base64.NO_WRAP))
+                })
+            }
+            gattServer?.sendResponse(device, requestId, BluetoothGatt.GATT_SUCCESS, 0, null)
         }
 
         override fun onDescriptorWriteRequest(
@@ -1700,7 +1855,7 @@ class AirhopBLEModule(
             noteTraffic(linkID)
             emitEvent(EVT_PACKET_RECEIVED, WritableNativeMap().apply {
                 putString("linkID", linkID)
-                putString("dataBase64", Base64.encodeToString(value, Base64.DEFAULT))
+                putString("dataBase64", Base64.encodeToString(value, Base64.NO_WRAP))
             })
         }
 
@@ -1717,7 +1872,7 @@ class AirhopBLEModule(
             noteTraffic(linkID)
             emitEvent(EVT_PACKET_RECEIVED, WritableNativeMap().apply {
                 putString("linkID", linkID)
-                putString("dataBase64", Base64.encodeToString(value, Base64.DEFAULT))
+                putString("dataBase64", Base64.encodeToString(value, Base64.NO_WRAP))
             })
         }
 

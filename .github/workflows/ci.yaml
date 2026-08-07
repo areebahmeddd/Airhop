@@ -3,14 +3,28 @@ name: Code Quality and Testing
 on:
   pull_request:
     branches: [main]
+    paths-ignore:
+      - "**/*.md"
+      - "LICENSE"
+      - "cliff.toml"
+      - "docs/design/**"
+      - "docs/dev/**"
+      - "assets/data/**"
+      - "fastlane/**"
+      - "press/out/**"
+      - "landing/**"
   push:
     branches: [main]
     paths-ignore:
-      - "assets/data/**"
-      - "cliff.toml"
-      - "docs/**"
-      - "landing/**"
       - "**/*.md"
+      - "LICENSE"
+      - "cliff.toml"
+      - "docs/design/**"
+      - "docs/dev/**"
+      - "assets/data/**"
+      - "fastlane/**"
+      - "press/out/**"
+      - "landing/**"
   workflow_dispatch:
 
 permissions:
@@ -24,26 +38,18 @@ jobs:
   lint:
     name: Code Quality Check
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    timeout-minutes: 10
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      # Verify the committed gradle-wrapper.jar against Gradle's published
-      # checksums. Unlike the vendored binary check below, this confirms the
-      # wrapper matches the official upstream release.
+      # Verify the committed Gradle wrapper matches the official release.
       - name: Validate Gradle wrapper
         uses: gradle/actions/wrapper-validation@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6.3.0
 
-      - name: Set up Node.js
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        with:
-          node-version: "22"
-          cache: "npm"
-
-      - name: Install dependencies
-        run: npm ci
+      - name: Set up JavaScript toolchain
+        uses: ./.github/actions/setup-js
 
       - name: Check formatting
         run: npm run format:check
@@ -57,32 +63,25 @@ jobs:
       - name: Check no hardcoded strings
         run: npm run i18n:audit -- --max 0
 
-      # The vendored Arti xcframework is prebuilt, so binary changes require an
-      # explicit acknowledgement. See scripts/verify-vendored.js.
+      # Require explicit acknowledgement for changes to vendored binaries.
       - name: Verify vendored binaries
         run: npm run verify:vendored
 
   test:
     name: Unit Tests
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    timeout-minutes: 10
     needs: lint
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - name: Set up Node.js
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        with:
-          node-version: "22"
-          cache: "npm"
-
-      - name: Install dependencies
-        run: npm ci
+      - name: Set up JavaScript toolchain
+        uses: ./.github/actions/setup-js
 
       - name: Run tests with coverage
-        run: npx jest --passWithNoTests --coverage
+        run: npm run coverage
 
       - name: Upload coverage
         uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0
@@ -90,3 +89,126 @@ jobs:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: ./coverage/lcov.info
           fail_ci_if_error: true
+
+  # Build the production release on every change to catch release-only
+  # issues before they reach a tagged release.
+  android-build:
+    name: Android Build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    needs: lint
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up JavaScript toolchain
+        uses: ./.github/actions/setup-js
+
+      - name: Set up Android toolchain
+        uses: ./.github/actions/setup-android
+
+      # Build the same release artifacts and ABI set shipped in production.
+      - name: Build release APK and AAB
+        working-directory: android
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleRelease bundleRelease --no-daemon -PreactNativeArchitectures=arm64-v8a,armeabi-v7a
+
+      # Verify native libraries meet Android 15's 16 KB page alignment
+      # requirement to avoid Play Store upload failures.
+      - name: Check 16 KB page alignment
+        run: |
+          set -euo pipefail
+          APK=android/app/build/outputs/apk/release/app-release.apk
+          BUILD_TOOLS="$(ls -d "${ANDROID_HOME}"/build-tools/* | sort -V | tail -1)"
+          echo "Using ${BUILD_TOOLS}"
+
+          "${BUILD_TOOLS}/zipalign" -c -P 16 -v 4 "${APK}" > /dev/null
+
+          # Verify both ZIP and ELF alignment; either can fail independently.
+          READELF="$(ls "${ANDROID_HOME}"/ndk/*/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-readelf | head -1)"
+          WORK="$(mktemp -d)"
+          unzip -q -o "${APK}" 'lib/*' -d "${WORK}"
+          FAILED=0
+          CHECKED=0
+
+          # Only 64-bit ABIs require 16 KB page alignment.
+          for ABI in arm64-v8a x86_64; do
+            [ -d "${WORK}/lib/${ABI}" ] || continue
+            for SO in "${WORK}/lib/${ABI}"/*.so; do
+              [ -e "${SO}" ] || continue
+              CHECKED=$((CHECKED + 1))
+              BAD=0
+              while read -r ALIGN; do
+                # Bash arithmetic avoids awk-specific extensions.
+                [ "$((ALIGN))" -lt 16384 ] && BAD=1
+              done < <("${READELF}" -l -W "${SO}" | awk '$1 == "LOAD" { print $NF }')
+
+              if [ "${BAD}" -eq 0 ]; then
+                echo "  ok    ${ABI}/$(basename "${SO}")"
+              else
+                echo "  FAIL  ${ABI}/$(basename "${SO}") has a LOAD segment aligned below 16 KB"
+                FAILED=1
+              fi
+            done
+          done
+
+          if [ "${CHECKED}" -eq 0 ]; then
+            echo "::error::No 64-bit native libraries found to check. The ABI filters in app/build.gradle have changed."
+            exit 1
+          fi
+
+          if [ "${FAILED}" -ne 0 ]; then
+            echo "::error::One or more native libraries are not 16 KB aligned. Google Play will reject this bundle."
+            exit 1
+          fi
+
+          echo "All ${CHECKED} 64-bit native libraries are 16 KB aligned."
+
+  # Build the production iOS app on every change to catch native and
+  # release-only build issues before a tagged release.
+  ios-build:
+    name: iOS Build
+    runs-on: macos-26
+    timeout-minutes: 45
+    needs: lint
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up JavaScript toolchain
+        uses: ./.github/actions/setup-js
+
+      # Record the Xcode and iOS SDK versions used for the build.
+      - name: Report toolchain
+        run: |
+          xcodebuild -version
+          xcrun --sdk iphoneos --show-sdk-version
+
+      # Install the pinned CocoaPods dependencies.
+      - name: Install CocoaPods dependencies
+        run: npx pod-install
+
+      # Build the unsigned Release app to verify the production iOS build.
+      - name: Build (unsigned)
+        run: |
+          set -euo pipefail
+
+          # Use xcbeautify when available; otherwise fall back to plain output.
+          if command -v xcbeautify >/dev/null 2>&1; then
+            FORMAT=(xcbeautify --renderer github-actions)
+          else
+            FORMAT=(cat)
+          fi
+
+          xcodebuild build \
+            -workspace ios/Airhop.xcworkspace \
+            -scheme Airhop \
+            -configuration Release \
+            -destination 'generic/platform=iOS' \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            | "${FORMAT[@]}"

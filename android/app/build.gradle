@@ -142,15 +142,34 @@ android {
             // installable APK. The debug fallback never ships: the release job
             // always has the secret.
             signingConfig System.getenv("ANDROID_KEYSTORE_FILE") ? signingConfigs.release : signingConfigs.debug
-            // The distributed release APK carries only arm64-v8a, the architecture
-            // of every real Android phone. Dropping the x86_64 copy of every native
-            // library roughly halves the native payload. This is scoped to the
-            // release build alone: debug still builds both ABIs (see
-            // reactNativeArchitectures in gradle.properties), so x86_64 emulators
-            // keep working for development.
-            ndk {
-                abiFilters "arm64-v8a"
-            }
+            // NOTE: there is deliberately no `ndk { abiFilters ... }` here, and
+            // the ABIs of a release build are NOT set in this file.
+            //
+            // There used to be a filter here, set to arm64-v8a alone and
+            // commented as halving the native payload, and it did nothing at
+            // all. The React Native Gradle plugin puts `reactNativeArchitectures`
+            // into defaultConfig.ndk.abiFilters (NdkConfiguratorUtils.kt), AGP
+            // MERGES defaultConfig and buildType filters rather than letting the
+            // more specific one win, and a union can only ever add. Every
+            // release APK built since carried the x86_64 copy of all 26 native
+            // libraries the comment claimed had been dropped, which is 28 MB of
+            // an 90 MB download.
+            //
+            // A per-variant `packaging.jniLibs.excludes` rule was tried next and
+            // is not the answer either: it removes 20 of the 26 and leaves the
+            // prebuilt React Native core (libreactnative, libhermesvm, libjsi,
+            // libfbjni, libhermestooling, libc++_shared) behind, because those
+            // arrive by a different route.
+            //
+            // The one control that works is the property the plugin actually
+            // reads. gradle.properties carries the development value, which
+            // includes x86_64 so emulators keep working, and both release paths
+            // pass the shipping set explicitly:
+            //
+            //   ./gradlew assembleRelease -PreactNativeArchitectures=arm64-v8a,armeabi-v7a
+            //
+            // See .github/workflows/release.yaml and ci.yaml. A release built
+            // locally without that flag is correct, just larger.
             def enableShrinkResources = findProperty('android.enableShrinkResourcesInReleaseBuilds') ?: 'false'
             shrinkResources enableShrinkResources.toBoolean()
             minifyEnabled enableMinifyInReleaseBuilds

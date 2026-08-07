@@ -70,7 +70,7 @@ describe("computeMeshBanners", () => {
       ["adapter-off", "ble-adapter-off", "enable-bluetooth"],
       ["permission-denied", "ble-permission", "open-app-settings"],
       ["permission-blocked", "ble-permission-blocked", "open-app-settings"],
-      ["precise-location", "ble-precise-location", "open-app-settings"],
+      ["location-permission", "ble-location-permission", "open-app-settings"],
       [
         "location-services-off",
         "ble-location-services",
@@ -258,7 +258,7 @@ describe("computeMeshBanners", () => {
       "adapter-off",
       "permission-denied",
       "permission-blocked",
-      "precise-location",
+      "location-permission",
       "location-services-off",
       "unsupported",
     ] as const) {

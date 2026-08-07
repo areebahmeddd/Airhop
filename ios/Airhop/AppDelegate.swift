@@ -32,6 +32,20 @@ class AppDelegate: ExpoAppDelegate {
     // Installed before the first resign-active, so the app-switcher snapshot
     // never captures an open conversation.
     AirhopPrivacyScreen.shared.install()
+
+    // Bluetooth state restoration, only on a restoration launch.
+    //
+    // iOS expects the manager with the matching restore identifier to exist
+    // before this method returns, which React Native cannot do: the BLE module
+    // is built by the bridge and its managers later still. Creating them here
+    // unconditionally would raise the Bluetooth prompt on the splash screen, so
+    // this is gated on the launch keys, which are present only when iOS is
+    // waking us for BLE and therefore only when the permission already exists.
+    // See AirhopBLERestoration in AirhopBLEModule.swift.
+    if launchOptions?[.bluetoothCentrals] != nil
+        || launchOptions?[.bluetoothPeripherals] != nil {
+      AirhopBLERestoration.shared.prepare()
+    }
 #endif
 
     return super.application(application, didFinishLaunchingWithOptions: launchOptions)

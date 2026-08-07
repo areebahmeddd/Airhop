@@ -54,11 +54,11 @@ const SEMANTIC_COLORS = [
 ];
 
 const DOWNLOADS = [
-  { label: "Mark", detail: "SVG, black", href: "/brand/airhop-mark.svg" },
   { label: "Mark", detail: "SVG, white", href: "/brand/airhop-mark-inverse.svg" },
+  { label: "Mark", detail: "SVG, black", href: "/brand/airhop-mark.svg" },
   { label: "Mark", detail: "PNG, 512px", href: "/brand/airhop-mark-512.png" },
-  { label: "Lockup", detail: "SVG, black", href: "/brand/airhop-lockup.svg" },
   { label: "Lockup", detail: "SVG, white", href: "/brand/airhop-lockup-inverse.svg" },
+  { label: "Lockup", detail: "SVG, black", href: "/brand/airhop-lockup.svg" },
   { label: "App icon", detail: "SVG, 1024px", href: "/brand/airhop-icon.svg" },
   { label: "Social card", detail: "PNG, 1200x630", href: "/brand/airhop-og.png" },
 ];
@@ -383,7 +383,7 @@ export default function BrandPage() {
               or the bitchat project.
             </p>
             <p className="mt-4 text-sm leading-relaxed text-gray-600">
-              Anything not covered here, or a missing asset, goes to{" "}
+              For anything not covered here, or if you need an asset that isn't included, contact{" "}
               <a
                 href="mailto:hi@areeb.dev"
                 className="text-gray-900 underline underline-offset-2 transition-colors hover:text-gray-600"

@@ -57,21 +57,29 @@ export type TorBootstrapPhase = "idle" | "starting" | "blocked";
 //   unsupported            no BLE hardware. Nothing will ever fix this.
 //   permission-blocked     denied for good; only the Settings app can undo it.
 //   permission-denied      denied, but the OS will still ask again.
-//   precise-location       Android 12+: "Approximate" chosen, so scan results
-//                          are withheld. Re-prompting does NOT re-offer Precise.
+//   location-permission    Android 11 and below: the permission waited on is
+//                          LOCATION, since BLUETOOTH_SCAN does not exist there.
+//                          Distinct from the two above because those versions
+//                          list no Bluetooth entry in app settings at all.
 //   adapter-off            the radio is switched off.
-//   location-services-off  Android: the OS location toggle is off, so the
-//                          scanner returns nothing however healthy it looks.
+//   location-services-off  Android 11 and below: the OS location toggle is off,
+//                          so the scanner returns nothing however healthy it
+//                          looks. Cannot occur from API 31, where the manifest
+//                          asserts neverForLocation on BLUETOOTH_SCAN.
 //   starting               permissions just landed and the stack has not
 //                          honoured them yet. Transient by definition.
 //   none                   nothing is in the way.
+//
+// A `precise-location` member covered the Android 12+ "Approximate" case. It
+// went with the location coupling: the mesh no longer asks for location on API
+// 31+, so the state cannot arise.
 export type BleBlocker =
   | "none"
   | "starting"
   | "unsupported"
   | "permission-denied"
   | "permission-blocked"
-  | "precise-location"
+  | "location-permission"
   | "adapter-off"
   | "location-services-off";
 
@@ -112,6 +120,11 @@ interface MeshStateStore {
   // a silent dead radio on first install. "starting" is honest and renders as a
   // calm note rather than an alarm.
   bleBlocker: BleBlocker;
+  // This device's Bluetooth chipset has no peripheral role, so it can scan and
+  // relay but can never advertise. Distinct from every BleBlocker: the mesh is
+  // working, one half of it is simply unavailable on this hardware and always
+  // will be. Set once by the radio controller, off a native UNSUPPORTED refusal.
+  bleAdvertisingUnsupported: boolean;
   // Whether a Bluetooth permission refusal is permanent ("Don't allow" twice on
   // Android, any denial on iOS).
   //
@@ -173,6 +186,7 @@ interface MeshStateStore {
 
   setClockSkewed: (skewed: boolean) => void;
   setBleBlocker: (blocker: BleBlocker) => void;
+  setBleAdvertisingUnsupported: (unsupported: boolean) => void;
   setBlePermissionBlocked: (blocked: boolean) => void;
   setPowerSaving: (saving: boolean) => void;
   setLocationGranted: (granted: boolean) => void;
@@ -185,6 +199,7 @@ interface MeshStateStore {
 
 export const useMeshStateStore = create<MeshStateStore>()((set) => ({
   bleBlocker: "starting",
+  bleAdvertisingUnsupported: false,
   blePermissionBlocked: false,
   powerSaving: false,
   locationGranted: true,
@@ -201,6 +216,9 @@ export const useMeshStateStore = create<MeshStateStore>()((set) => ({
   },
   setBleBlocker(blocker) {
     set({ bleBlocker: blocker });
+  },
+  setBleAdvertisingUnsupported(unsupported) {
+    set({ bleAdvertisingUnsupported: unsupported });
   },
   setBlePermissionBlocked(blocked) {
     set({ blePermissionBlocked: blocked });
@@ -249,6 +267,9 @@ export interface MeshBannerInputs {
   // keep compiling and get no banner, which is the right default for a caller
   // with no evidence either way.
   clockSkewed?: boolean;
+  // This chipset has no BLE peripheral role, so the device can scan and relay
+  // but can never be discovered. Optional, defaulting to the capable case.
+  advertisingUnsupported?: boolean;
   nostrConnected: boolean;
   torActive: boolean;
   // Optional so existing callers keep compiling; absent reads as "idle".
@@ -319,19 +340,20 @@ function bleBlockerBanner(blocker: BleBlocker): MeshBanner | null {
         action: { label: t("common.settings"), kind: "open-app-settings" },
       };
 
-    // Android 12+ only. Re-requesting will not re-offer Precise, so Settings is
-    // the only route and the copy has to say what to change once there.
-    case "precise-location":
+    // Android 11 and below. Same action as the two above, since Settings is the
+    // only route either way; only the noun changes.
+    case "location-permission":
       return {
-        key: "ble-precise-location",
-        label: t("mesh.banner.precise_location"),
+        key: "ble-location-permission",
+        label: t("mesh.banner.location_permission"),
         tone: "danger",
         action: { label: t("common.settings"), kind: "open-app-settings" },
       };
 
-    // The permission is granted and the radio is on; the OS-wide location
-    // toggle is off, and Android withholds scan results without it. Nothing
-    // about the app looks wrong, which is why this has to be said out loud.
+    // Android 11 and below. The permission is granted and the radio is on; the
+    // OS-wide location toggle is off, and Android withholds scan results
+    // without it. Nothing about the app looks wrong, which is why this has to
+    // be said out loud.
     case "location-services-off":
       return {
         key: "ble-location-services",
@@ -391,6 +413,20 @@ export function computeMeshBanners(inputs: MeshBannerInputs): MeshBanner[] {
   // reaped, no callback fires, and the app only finds out because it comes back
   // to a stopped mesh. It ranks above the location note because it affects the
   // mesh itself rather than one feature that rides on it.
+  // A permanent property of the hardware, not a fault and not actionable: some
+  // chipsets at the API 26 floor ship no BLE peripheral role, so the phone can
+  // see everyone and nobody can see it. Said once, then dismissible, because it
+  // will be true for as long as the user owns the phone and there is no button
+  // that changes it. Ranked below the hard blockers: the mesh IS working.
+  if (inputs.advertisingUnsupported === true) {
+    banners.push({
+      key: "ble-advertising-unsupported",
+      label: t("mesh.banner.advertising_unsupported"),
+      tone: "caution",
+      dismissible: true,
+    });
+  }
+
   if (
     inputs.backgroundLimitsBrand !== undefined &&
     inputs.backgroundLimitsBrand.length > 0
@@ -533,6 +569,9 @@ export function useMeshBanners(): MeshBanner[] {
   const backgroundLimitsAcknowledged = useSettingsStore(
     (s) => s.backgroundLimitsAcknowledged,
   );
+  const advertisingUnsupported = useMeshStateStore(
+    (s) => s.bleAdvertisingUnsupported,
+  );
   const powerSaving = useMeshStateStore((s) => s.powerSaving);
   const clockSkewed = useMeshStateStore((s) => s.clockSkewed);
   const backgroundLimitsBrand =
@@ -543,6 +582,7 @@ export function useMeshBanners(): MeshBanner[] {
     presenceStatus,
     bleBlocker,
     locationGranted,
+    advertisingUnsupported,
     backgroundLimitsBrand,
     powerSaving,
     clockSkewed,

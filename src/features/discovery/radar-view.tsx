@@ -56,8 +56,8 @@ function blockerHeadline(blocker: BleBlocker): string {
       return t("mesh.radar.permission_needed");
     case "permission-blocked":
       return t("mesh.radar.blocked");
-    case "precise-location":
-      return t("mesh.radar.precise_location");
+    case "location-permission":
+      return t("mesh.radar.location_permission");
     case "location-services-off":
       return t("mesh.radar.location_off");
   }
@@ -77,11 +77,8 @@ function blockerHint(blocker: BleBlocker): string {
       return t("mesh.radar.hint_allow");
     case "permission-blocked":
       return t("mesh.radar.hint_allow_settings");
-    // Naming the exact setting matters here: the user believes they already
-    // granted location, and they did - just not precisely enough for Android to
-    // release scan results.
-    case "precise-location":
-      return t("mesh.radar.hint_precise");
+    case "location-permission":
+      return t("mesh.radar.hint_location_permission");
     case "location-services-off":
       return t("mesh.radar.hint_android_location");
   }
@@ -149,6 +146,14 @@ const SELF_SIZE = 42;
 // completely blank Mesh tab. Flooring it means the dial stays legible and the
 // screen keeps saying something.
 const MIN_CANVAS = 180;
+
+// And a ceiling, for the opposite failure. Android 16 stopped honouring an
+// orientation lock above 600dp and Android 17 removed the opt-out, so a
+// foldable inner screen hands this view ~850dp. Sized to the shorter axis the
+// dial grew to ~640dp and pushed the caption behind the tab bar. A phone gives
+// ~390dp, so the cap is inert there. Caught on a Pixel 10 Pro Fold; large
+// screens want a real adaptive layout, and this is the floor until then.
+const MAX_CANVAS = 420;
 
 // Consecutive taps within this window count toward the easter egg.
 const TAP_WINDOW_MS = 2500;
@@ -380,7 +385,9 @@ export default function RadarView({
       style={styles.container}
       onLayout={(e) => {
         const { width, height } = e.nativeEvent.layout;
-        setCanvasSize(Math.max(MIN_CANVAS, Math.min(width - 24, height - 60)));
+        setCanvasSize(
+          Math.max(MIN_CANVAS, Math.min(width - 24, height - 60, MAX_CANVAS)),
+        );
       }}
     >
       {canvasSize > 0 && (

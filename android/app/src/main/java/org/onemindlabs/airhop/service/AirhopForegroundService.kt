@@ -23,7 +23,9 @@ import android.os.IBinder
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
+import androidx.core.content.ContextCompat
 import org.onemindlabs.airhop.MainActivity
+import org.onemindlabs.airhop.R
 import org.onemindlabs.airhop.ble.AirhopBLEModule
 
 private const val TAG = "AirhopForegroundService"
@@ -144,7 +146,14 @@ class AirhopForegroundService : Service() {
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle("Airhop mesh active")
             .setContentText("Discovering and relaying nearby messages")
-            .setSmallIcon(android.R.drawable.ic_menu_share) // replaced by app icon at build time
+            // The Airhop mark, and the same drawable expo-notifications is
+            // pointed at from the manifest, so the notice that sits in the shade
+            // all day and a notice about a message are recognisably one app.
+            // This was android.R.drawable.ic_menu_share behind a comment
+            // claiming the build replaced it; nothing did, and the persistent
+            // notification shipped with the stock Android share glyph.
+            .setSmallIcon(R.drawable.notification_icon)
+            .setColor(ContextCompat.getColor(this, R.color.notification_icon_color))
             .setOngoing(true)
             .setSilent(true)
             .setContentIntent(pendingIntent)

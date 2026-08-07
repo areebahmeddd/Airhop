@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Themed-icon layer: the Airhop mark, 108dp adaptive-icon canvas.
+
+     Generated from landing/public/brand/airhop-icon.svg, which is a pure grid of
+     56px cells on a 1024px canvas. Because the mark is axis-aligned pixels and
+     nothing else, it survives as a vector drawable exactly: one 1x1 cell per
+     rect, scaled to the viewport below. No raster densities to keep in step and
+     nothing to re-export when a density is added.
+
+     To regenerate: read the rects out of that SVG, normalise them against the
+     mark's bounding box (11 cells wide by 6 tall), and emit one
+     "M<x>,<y>h<c>v<c>h-<c>z" per cell.
+-->
+<!--
+     The monochrome layer Android 13+ uses when the user turns on themed icons.
+     The system tints it from the wallpaper palette and reads only the alpha, so
+     the fill colour here is arbitrary.
+
+     6dp per cell puts the mark at 66x36, which fits the 66dp safe zone of the
+     108dp canvas exactly. Anything outside that zone is cropped by the launcher
+     mask on some devices and not others.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+  <path
+      android:fillColor="#FFFFFFFF"
+      android:pathData="M21,36h6v6h-6zM27,36h6v6h-6zM75,36h6v6h-6zM81,36h6v6h-6zM27,42h6v6h-6zM33,42h6v6h-6zM69,42h6v6h-6zM75,42h6v6h-6zM33,48h6v6h-6zM39,48h6v6h-6zM51,48h6v6h-6zM63,48h6v6h-6zM69,48h6v6h-6zM39,54h6v6h-6zM45,54h6v6h-6zM51,54h6v6h-6zM57,54h6v6h-6zM63,54h6v6h-6zM45,60h6v6h-6zM51,60h6v6h-6zM57,60h6v6h-6zM51,66h6v6h-6z"/>
+</vector>

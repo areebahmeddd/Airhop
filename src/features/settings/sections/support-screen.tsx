@@ -1,6 +1,22 @@
-// Support sub-screen, ordered by how most people will actually pay: Dodo
-// Payments first (a hosted checkout covering cards, UPI, netbanking and wallets
-// worldwide), then GitHub Sponsors (no platform fee).
+// Support sub-screen. Two links, both of which leave the app.
+//
+// Neither goes straight to a checkout, and that is the point. App Store Review
+// Guideline 3.1.1 treats an in-app path to a payment sheet as a purchase that
+// has to go through in-app purchase, and the carve-outs (registered nonprofits,
+// person-to-person gifts) do not cover supporting an individual developer. An
+// app that opens a hosted checkout from a "Support" row is the exact shape that
+// gets rejected. Sending people to the website instead is what every project in
+// this position does, it is explicitly permitted, and it costs one tap.
+//
+// The card option therefore points at the Support section of the site, which
+// carries the same two choices - Dodo Payments for cards, UPI, netbanking and
+// wallets, and GitHub Sponsors - and owns the checkout itself. GitHub Sponsors
+// stays a direct link because it is a third-party page the user already has an
+// account relationship with, not a checkout this app is presenting.
+//
+// Kept identical on both platforms deliberately. A payment path that differs by
+// OS is two flows to reason about and two to keep compliant, for no benefit to
+// anyone using it.
 
 import React, { useMemo } from "react";
 import { Linking, ScrollView, StyleSheet, Text, View } from "react-native";
@@ -17,16 +33,11 @@ interface Props {
   onBack: () => void;
 }
 
-// Pay-what-you-want product id from the Dodo dashboard.
-const DODO_PRODUCT_ID = "pdt_0NkbLWhlAvN1028Lzqwed";
-
-// Dodo serves static payment links at /buy/<product_id>. redirect_url is where
-// the browser lands once payment completes.
-const DODO_CHECKOUT_URL =
-  `https://checkout.dodopayments.com/buy/${DODO_PRODUCT_ID}` +
-  `?quantity=1&redirect_url=${encodeURIComponent(
-    "https://airhop.1mindlabs.org/#support",
-  )}`;
+// The Support section of the website, which owns the Dodo Payments checkout
+// (cards, UPI, netbanking and wallets) and repeats the GitHub Sponsors link.
+// See the note at the top of this file for why the app does not open the
+// checkout itself.
+const SUPPORT_URL = "https://airhop.1mindlabs.org/#support";
 
 const GITHUB_SPONSORS_URL = "https://github.com/sponsors/areebahmeddd";
 
@@ -48,7 +59,7 @@ export default function SupportScreen({ onBack }: Props): React.JSX.Element {
               icon="credit-card"
               label={T("settings.support.card")}
               description={T("settings.support.card_desc")}
-              onPress={() => void Linking.openURL(DODO_CHECKOUT_URL)}
+              onPress={() => void Linking.openURL(SUPPORT_URL)}
               accessibilityLabel={T("settings.support.card_a11y")}
               external
             />

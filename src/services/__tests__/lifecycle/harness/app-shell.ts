@@ -47,17 +47,17 @@ export function makeIdentity(seedByte = 7): Identity {
 
 // ble-permissions.ts:34-52
 function requiredBlePermissions(os: DeviceOS): AndroidPermission[] {
-  const required: AndroidPermission[] = [
-    "android.permission.ACCESS_FINE_LOCATION",
-  ];
+  // API 31+ asks for Bluetooth and nothing else: the manifest asserts
+  // neverForLocation on BLUETOOTH_SCAN. Below that the flag does not exist and
+  // a scan really is a location access.
   if (os.apiLevel >= 31) {
-    required.push(
+    return [
       "android.permission.BLUETOOTH_SCAN",
       "android.permission.BLUETOOTH_ADVERTISE",
       "android.permission.BLUETOOTH_CONNECT",
-    );
+    ];
   }
-  return required;
+  return ["android.permission.ACCESS_FINE_LOCATION"];
 }
 
 // ble-permissions.ts:58-64 — a check, never a prompt.
@@ -72,7 +72,8 @@ export interface BlePermissionResult {
   granted: boolean;
   denied: string[];
   blockedForever: boolean;
-  needsPreciseLocation: boolean;
+  // API <=30, where the mesh waits on location rather than Bluetooth.
+  locationRequired: boolean;
 }
 
 // ble-permissions.ts:69-120. `answer` stands in for the user tapping through
@@ -81,11 +82,16 @@ export function ensureBlePermissions(
   os: DeviceOS,
   answer: (p: AndroidPermission) => "granted" | "denied" | "blocked",
 ): BlePermissionResult {
-  const clean = {
+  // Annotated, so a field that stops existing on the real type is a compile
+  // error here rather than a stale property nothing reads. This object carried
+  // `needsPreciseLocation` for a while after the real one dropped it, precisely
+  // because an unannotated literal gets no excess-property check.
+  const locationRequired = os.platform === "android" && os.apiLevel < 31;
+  const clean: BlePermissionResult = {
     granted: true,
     denied: [],
     blockedForever: false,
-    needsPreciseLocation: false,
+    locationRequired,
   };
   if (os.platform !== "android") return clean;
   const required = requiredBlePermissions(os);
@@ -114,17 +120,11 @@ export function ensureBlePermissions(
     "PERMISSION_RESULT",
     denied.length === 0 ? "all granted" : `denied: ${denied.length}`,
   );
-  // ble-permissions.ts:120 — fine denied while coarse is granted is the
-  // "Approximate" choice, which re-prompting cannot fix.
-  const needsPreciseLocation =
-    os.checkPermission("android.permission.ACCESS_COARSE_LOCATION") ===
-      "granted" && denied.includes("android.permission.ACCESS_FINE_LOCATION");
-
   return {
     granted: denied.length === 0,
     denied,
     blockedForever,
-    needsPreciseLocation,
+    locationRequired,
   };
 }
 
@@ -185,8 +185,8 @@ export class AppShell {
     const setBlocker = useMeshStateStore.getState().setBleBlocker;
     useMeshStateStore.getState().setBlePermissionBlocked(perm.blockedForever);
     if (perm.granted) setBlocker("starting");
+    else if (perm.locationRequired) setBlocker("location-permission");
     else if (perm.blockedForever) setBlocker("permission-blocked");
-    else if (perm.needsPreciseLocation) setBlocker("precise-location");
     else setBlocker("permission-denied");
     if (!perm.granted && perm.blockedForever) {
       this.alerts.push({ title: "Bluetooth access is off", kind: "blocked" });

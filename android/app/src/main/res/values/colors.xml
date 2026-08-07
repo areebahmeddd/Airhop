@@ -8,4 +8,13 @@
        pair and the mark is never a black bird on a black card. -->
   <color name="airhop_privacy_background">#F8F8F8</color>
   <color name="airhop_privacy_ink">#111111</color>
+  <!-- Accent for the notification shade: the tint of the small icon and of the
+       app name beside it. Read by expo-notifications through the meta-data in
+       AndroidManifest, and by AirhopForegroundService for the mesh notice.
+
+       Split light/dark like the privacy cover above, because the shade follows
+       the SYSTEM theme rather than the app's, and a single value has to be
+       legible on both. Airhop's ink on a light shade; its background colour on a
+       dark one. -->
+  <color name="notification_icon_color">#111111</color>
 </resources>

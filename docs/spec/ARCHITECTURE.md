@@ -196,7 +196,7 @@ Identical to bitchat's design:
 > shipped a standards-based Wi-Fi Aware framework in iOS 26 which could close
 > the gap, at the cost of making the feature iOS 26+ only.
 
-- Android: [`WifiAwareManager`](https://developer.android.com/develop/connectivity/wifi/wifi-aware) (API 26+), 250 Mbps, no internet or router
+- Android: [`WifiAwareManager`](https://developer.android.com/develop/connectivity/wifi/wifi-aware), 250 Mbps, no internet or router. Discovery is API 26, but the data path needs API 29: the peer's address is a link-local IPv6 delivered in `WifiAwareNetworkInfo`, which does not exist before then, so below API 29 the transport reports itself unavailable and BLE carries everything. Android 17 additionally gates the socket behind `ACCESS_LOCAL_NETWORK`, declared already
 - iOS: [`MultipeerConnectivity`](https://developer.apple.com/documentation/multipeerconnectivity), 30 to 100 Mbps between nearby iOS devices
 - Same `Transport` interface as BLE, so the mesh engine does not know which radio it has
 - Carries what BLE cannot: live video, large files, high-quality voice
@@ -732,9 +732,23 @@ Because every feature lives in `src/core/` and the native layer exposes an
 identical TypeScript interface on both platforms, a fix in gossip sync fixes iOS
 and Android at once and protocol changes ship together.
 
-Gradle builds `android/` into an `.aab` and Xcode builds `ios/` into an `.ipa`.
-EAS Build runs both in parallel, and the stores treat the result as a fully
-native app.
+Gradle builds `android/` into an `.aab` and Xcode builds `ios/` into an `.ipa`,
+and the stores treat the result as a fully native app.
+
+Android is automated end to end. `ci.yaml` builds a full R8-minified release on
+every change, so a broken keep rule or a dependency that stops being 16 KB
+aligned fails a pull request rather than a tagged release, and `release.yaml`
+builds and signs the shipped APK and AAB.
+
+iOS is automated up to signing. `ci.yaml` compiles an unsigned Release build on a
+macOS runner, so native and release-only breakage fails the same pull request
+Android does. Distribution credentials do not exist yet, so the `ios-release` job
+in `release.yaml` is a placeholder and the shipped `.ipa` is still produced by
+hand from Xcode.
+
+Neither platform uses EAS. There is no EAS configuration here and there is
+unlikely to be: its main draws are prebuild and managed credentials, and this
+project does not run prebuild.
 
 ## 12. Native Modules
 
@@ -777,13 +791,31 @@ design exists to prevent.
 
 ### Background execution
 
-| Platform       | Mechanism                                           | Result                                   |
-| -------------- | --------------------------------------------------- | ---------------------------------------- |
-| iOS Central    | `UIBackgroundModes: bluetooth-central`              | Receives BLE data in background          |
-| iOS Peripheral | `UIBackgroundModes: bluetooth-peripheral`           | Keeps advertising, with the caveat below |
-| iOS Suspended  | `CBCentralManagerOptionRestoreIdentifierKey`        | iOS restarts the app on a BLE event      |
-| Android        | `AirhopForegroundService` (persistent notification) | Survives Doze and battery optimization   |
-| Android        | `FOREGROUND_SERVICE_CONNECTED_DEVICE` permission    | Required on Android 14+                  |
+| Platform | Mechanism                                           | Result                                             |
+| -------- | --------------------------------------------------- | -------------------------------------------------- |
+| iOS      | `UIBackgroundModes: bluetooth-central`              | Receives BLE data while backgrounded               |
+| iOS      | `UIBackgroundModes: bluetooth-peripheral`           | Keeps advertising, though not visibly to Android   |
+| iOS      | `CBCentralManagerOptionRestoreIdentifierKey`        | Relaunches the app on a BLE event after suspension |
+| Android  | `AirhopForegroundService` (persistent notification) | Survives Doze and battery optimization             |
+| Android  | `FOREGROUND_SERVICE_CONNECTED_DEVICE`               | Required for that service on Android 14+           |
+| Android  | `neverForLocation` on `BLUETOOTH_SCAN`              | Delivers scan results without a location grant     |
+
+The scan flag is what makes the rest deliver. Android treats a BLE scan as a
+location access unless the manifest says otherwise, and an app counts as
+foreground for location only with a visible activity or a `location`-typed
+foreground service. A `connectedDevice` service does not qualify, so a
+backgrounded Airhop held its process up, kept a notification reading
+"Discovering and relaying nearby messages", and was handed no scan results.
+
+bitchat solves this with `ACCESS_BACKGROUND_LOCATION` and a `location` service
+type. Airhop asserts `neverForLocation` instead, which is accurate here: a scan
+result is read for its service UUID, its 8-byte peer ID and its RSSI, none of
+which is a position. From API 31 that removes the coupling entirely. API 26 to 30
+keeps it, since the flag does not exist there; `getRadioState` reports which
+regime applies through `locationRequiredForScan`, read only by `blockerFor`.
+
+Location is still requested, but only for geohash channels, and only when the
+user opens one.
 
 A backgrounded iPhone is not discoverable from Android. Once the app leaves the
 foreground, CoreBluetooth moves the service UUID into the advertisement's
@@ -879,12 +911,12 @@ tokens in `src/ui/`, with no Tailwind or NativeWind.
 
 ### Build toolchain
 
-| Tool                               | Version  | Purpose                                        |
-| ---------------------------------- | -------- | ---------------------------------------------- |
-| `expo`                             | `SDK 57` | Bare workflow, EAS Build, config plugins       |
-| `react`                            | `^19.2`  | Required by React Native 0.86 (peer dep)       |
-| `react-native`                     | `^0.86`  | New Architecture (default since 0.76)          |
-| `typescript`                       | `~6.0.3` | Strict mode, no `baseUrl`, `./`-prefixed paths |
-| `jest`                             | `^29`    | Unit tests for all of `src/core/`              |
-| `prettier`                         | `^3.9`   | Formatting                                     |
-| `prettier-plugin-organize-imports` | `^4.3`   | Auto-sort import blocks                        |
+| Tool                               | Version  | Purpose                                         |
+| ---------------------------------- | -------- | ----------------------------------------------- |
+| `expo`                             | `SDK 57` | Bare workflow and config plugins. Not EAS Build |
+| `react`                            | `^19.2`  | Required by React Native 0.86 (peer dep)        |
+| `react-native`                     | `^0.86`  | New Architecture (default since 0.76)           |
+| `typescript`                       | `~6.0.3` | Strict mode, no `baseUrl`, `./`-prefixed paths  |
+| `jest`                             | `^29`    | Unit tests for all of `src/core/`               |
+| `prettier`                         | `^3.9`   | Formatting                                      |
+| `prettier-plugin-organize-imports` | `^4.3`   | Auto-sort import blocks                         |

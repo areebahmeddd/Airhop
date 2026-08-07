@@ -116,6 +116,10 @@ import { useTransferStore } from "./src/store/transfer-store";
 import { useWalletStore } from "./src/store/wallet-store";
 import Avatar from "./src/ui/components/avatar";
 import CustomAlert from "./src/ui/components/custom-alert";
+import {
+  ErrorBoundary,
+  installGlobalErrorHandler,
+} from "./src/ui/components/error-boundary";
 import MeshStatusBar from "./src/ui/components/mesh-status-bar";
 import PrivacyCover from "./src/ui/components/privacy-cover";
 import TransferBadge from "./src/ui/components/transfer-badge";
@@ -143,6 +147,10 @@ import { messagePreviewText } from "./src/utils/message-preview";
 import { showBlockedAlert } from "./src/utils/permissions";
 import { sumUnread } from "./src/utils/unread";
 import { peerIDToUsername } from "./src/utils/username";
+import {
+  currentWipeGeneration,
+  isCurrentWipeGeneration,
+} from "./src/utils/wipe-generation";
 
 // Layout direction is a native flag that React Native reads once, at startup,
 // before anything mounts. Setting it here, at module scope, is the only place
@@ -203,12 +211,10 @@ async function startMeshWithPermissions(
   const perm = await ensureBlePermissions();
   // Record WHY the mesh cannot run, not merely that it cannot.
   //
-  // A single "granted" boolean collapsed three situations that need three
-  // different responses: denied but re-askable, denied for good, and the
-  // Android 12+ case where the user picked "Approximate" so the app holds
-  // BLUETOOTH_SCAN and still gets no scan results. All three used to render as
-  // "Bluetooth permission needed", and only the first is fixed by granting
-  // Bluetooth. The controller re-reads the device on its first pass and will
+  // A single "granted" boolean collapsed two situations that need different
+  // responses: denied but re-askable, and denied for good. Only the first is
+  // fixed by asking again, and both used to render as "Bluetooth permission
+  // needed". The controller re-reads the device on its first pass and will
   // correct this either way; setting it here means the banner is right during
   // the very first frames rather than after the first reconcile.
   const blocker = useMeshStateStore.getState().setBleBlocker;
@@ -218,10 +224,14 @@ async function startMeshWithPermissions(
   useMeshStateStore.getState().setBlePermissionBlocked(perm.blockedForever);
   if (perm.granted) {
     blocker("starting");
+  } else if (perm.locationRequired) {
+    // Android 11 and below, where what the user was just shown was a location
+    // dialog. Checked before the blocked/denied split because both of those
+    // resolve to the same action, so naming the right permission matters more
+    // than distinguishing them. See BleBlocker in the mesh state store.
+    blocker("location-permission");
   } else if (perm.blockedForever) {
     blocker("permission-blocked");
-  } else if (perm.needsPreciseLocation) {
-    blocker("precise-location");
   } else {
     blocker("permission-denied");
   }
@@ -252,8 +262,12 @@ async function startMeshWithPermissions(
   // deposits whose invoice was paid after the app was closed, and reserved
   // sends whose recipient has since redeemed them.
   void (async () => {
+    // A panic wipe can land in any await gap below. Re-checked after each one so
+    // startup cannot resurrect the identity it destroyed. See wipe-generation.ts.
+    const generation = currentWipeGeneration();
+
     const unlocked = await initWalletService();
-    if (!unlocked) return;
+    if (!unlocked || !isCurrentWipeGeneration(generation)) return;
 
     // Settling leftovers is a background chore, not a prerequisite. It walks
     // every pending deposit and reserved send, one mint round trip at a time,
@@ -275,6 +289,7 @@ async function startMeshWithPermissions(
       privKey,
       relays: client.activeRelays,
     });
+    if (!isCurrentWipeGeneration(generation)) return;
     // Installed through the shared handle rather than a local, so a panic wipe
     // can stop it too - see nutzap-watcher-handle.ts.
     setNutzapWatcher(
@@ -393,7 +408,38 @@ async function handleBannerAction(
 // Root component
 // ---------------------------------------------------------------------------
 
+// The root, and nothing else: everything the app does lives in AppContent
+// below.
+//
+// The boundary has to be OUTSIDE that component rather than somewhere inside
+// its tree, because the failures worth surviving are the ones that take the
+// shell down with them - a throw while rendering the tab bar, or from a decoder
+// running off a packet that arrived a moment ago. A boundary mounted under the
+// thing that broke catches nothing.
+//
+// It sits outside the providers too. GestureHandlerRootView and
+// SafeAreaProvider are ordinary components that can themselves fail to mount,
+// and the fallback screen is deliberately built to need neither of them.
 export default function App(): React.JSX.Element {
+  const boundary = useRef<ErrorBoundary>(null);
+
+  // React catches what it renders. Everything else - a rejected promise nobody
+  // awaited, a throw inside a native event listener, a setTimeout callback -
+  // goes to ErrorUtils instead, and in a release build the default handler
+  // there ends the process. Routed onto the same screen so both kinds of
+  // failure look the same to the person holding the phone.
+  useEffect(() => {
+    installGlobalErrorHandler((error) => boundary.current?.showError(error));
+  }, []);
+
+  return (
+    <ErrorBoundary ref={boundary}>
+      <AppContent />
+    </ErrorBoundary>
+  );
+}
+
+function AppContent(): React.JSX.Element {
   const Colors = useThemeColors();
   const styles = useMemo(() => createStyles(Colors), [Colors]);
   const resolvedTheme = useResolvedTheme();

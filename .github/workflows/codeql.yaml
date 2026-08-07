@@ -3,14 +3,26 @@ name: Static Analysis
 on:
   pull_request:
     branches: [main]
+    paths-ignore:
+      - "**/*.md"
+      - "LICENSE"
+      - "cliff.toml"
+      - "docs/design/**"
+      - "docs/dev/**"
+      - "assets/data/**"
+      - "fastlane/**"
+      - "press/out/**"
   push:
     branches: [main]
     paths-ignore:
-      - "assets/data/**"
-      - "cliff.toml"
-      - "docs/**"
-      - "landing/**"
       - "**/*.md"
+      - "LICENSE"
+      - "cliff.toml"
+      - "docs/design/**"
+      - "docs/dev/**"
+      - "assets/data/**"
+      - "fastlane/**"
+      - "press/out/**"
   schedule:
     # Weekly on Sunday at 03:00 UTC
     - cron: "0 3 * * 0"
@@ -27,6 +39,7 @@ jobs:
   analyze:
     name: CodeQL Analysis
     runs-on: ubuntu-24.04
+    timeout-minutes: 15
     permissions:
       security-events: write
 

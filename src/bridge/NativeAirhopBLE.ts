@@ -34,21 +34,27 @@ export interface Spec extends TurboModule {
   // Everything the device will tell us about whether BLE can run right now.
   //
   // Needed at startup because adapterStateChanged only fires on a CHANGE, and
-  // needed as a whole because the four facts are not independent: "permission
-  // granted" does not imply "scan will return results" on Android, where the
-  // OS-wide location toggle and the precise/approximate choice both gate it.
-  // Answered honestly before any manager exists - the previous iOS
-  // implementation read a manager that startScanning had not constructed yet,
-  // so a healthy iPhone reported Bluetooth off on every cold launch.
+  // needed as a whole because the facts are not independent: on Android 11 and
+  // below "permission granted" does not imply "scan will return results", since
+  // the OS-wide location toggle gates it separately. Answered honestly before
+  // any manager exists - the previous iOS implementation read a manager that
+  // startScanning had not constructed yet, so a healthy iPhone reported
+  // Bluetooth off on every cold launch.
   getRadioState(): Promise<{
     supported: boolean;
     poweredOn: boolean;
     // "unknown" means the platform has not said yet. It is not a denial.
+    // Android answers for whatever the mesh needs at this API level: the three
+    // Bluetooth runtime permissions from API 31, ACCESS_FINE_LOCATION below it.
     authorization: "granted" | "denied" | "blocked" | "unknown";
-    // Android: the OS location toggle. Always true on iOS.
+    // Android: whether a BLE scan on this device counts as a location access,
+    // and therefore whether the toggle below is load-bearing. True only below
+    // API 31, where usesPermissionFlags="neverForLocation" does not exist.
+    // Always false on iOS, which has no such coupling.
+    locationRequiredForScan: boolean;
+    // Android: the OS location toggle, reported literally. Only decides
+    // anything while locationRequiredForScan is true. Always true on iOS.
     locationServicesEnabled: boolean;
-    // Android 12+: ACCESS_FINE_LOCATION. Always true on iOS.
-    preciseLocation: boolean;
     // 0-100, or -1 when the platform has not reported yet. Feeds the power
     // policy (services/power-policy.ts), which decides how hard to scan.
     // -1 on iOS: CoreBluetooth exposes no scan-rate control, so there is
@@ -132,6 +138,15 @@ export interface Spec extends TurboModule {
 //   the mesh read as a radio change, which restarted the radios, which
 //   constructed a new CBManager, which fired another state callback - fourteen
 //   central and fourteen peripheral managers in ten seconds on an idle phone.
+//
+// 'AirhopBLE.scanFailed'
+//   { errorCode: number }
+//   Android only. ScanCallback.onScanFailed, i.e. the platform refused a scan
+//   AFTER startScan() returned cleanly. It is the one radio failure the
+//   reconciler cannot observe on its own - it already believes it is scanning -
+//   so without this event `actual.scanning` stays true forever and nothing
+//   retries. errorCode 6 is SCAN_FAILED_SCANNING_TOO_FREQUENTLY, which needs a
+//   longer stand-down than the usual backoff ladder.
 //
 // 'AirhopBLE.powerStateChanged'
 //   { batteryPercent: number, charging: boolean }

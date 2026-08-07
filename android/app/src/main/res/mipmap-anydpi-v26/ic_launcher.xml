@@ -2,4 +2,8 @@
 <adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
     <background android:drawable="@color/iconBackground"/>
     <foreground android:drawable="@mipmap/ic_launcher_foreground"/>
+    <!-- Android 13+ themed icons. Without this layer the launcher leaves Airhop
+         as the only full-colour icon on a themed home screen, which reads as an
+         app that has not been updated. -->
+    <monochrome android:drawable="@drawable/ic_launcher_monochrome"/>
 </adaptive-icon>

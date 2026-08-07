@@ -30,6 +30,11 @@ private enum BLEConst {
     static let rssiIntervalSec: TimeInterval = 5.0
 }
 
+// The one queue every CoreBluetooth callback in this process arrives on.
+enum AirhopBLEQueue {
+    static let shared = DispatchQueue(label: "airhop.ble", qos: .userInitiated)
+}
+
 // MARK: - Events
 
 private enum BLEEvent {
@@ -79,8 +84,6 @@ final class AirhopBLEModule: RCTEventEmitter {
     // every fragment dropped under load would silently vanish mid-transfer.
     private var pendingNotifies: [(data: Data, central: CBCentral)] = []
 
-    private var advertisingLocalName: String = "bitchat-airhop"
-
     // What the app WANTS, kept apart from what CoreBluetooth is currently doing.
     //
     // These used to be a single pair of "isAdvertising"/"isScanning" flags that
@@ -108,7 +111,10 @@ final class AirhopBLEModule: RCTEventEmitter {
     // seconds on an idle phone, each reusing the same restore identifier.
     private var lastReportedEnabled: Bool?
 
-    private let queue = DispatchQueue(label: "airhop.ble", qos: .userInitiated)
+    // Shared, not per-instance: AirhopBLERestoration may create the managers
+    // before this module exists, and both must deliver onto the same serial
+    // queue or the handover is a data race.
+    private let queue = AirhopBLEQueue.shared
 
     // MARK: RCTEventEmitter
 
@@ -135,6 +141,19 @@ final class AirhopBLEModule: RCTEventEmitter {
     // error, and abandoned the old one mid-connection.
     private func ensureCentralManager() -> CBCentralManager {
         if let existing = centralManager { return existing }
+        // Adopt the manager the app delegate built on a restoration launch
+        // rather than constructing a second against the same restore identifier.
+        if let restored = AirhopBLERestoration.shared.takeCentral() {
+            restored.delegate = self
+            centralManager = restored
+            // Must be retained: CoreBluetooth abandons a connection whose
+            // CBPeripheral is deallocated.
+            for peripheral in AirhopBLERestoration.shared.takeRestoredPeripherals() {
+                peripheral.delegate = self
+                centralLinks[centralLinkID(for: peripheral)] = peripheral
+            }
+            return restored
+        }
         let manager = CBCentralManager(
             delegate: self,
             queue: queue,
@@ -146,6 +165,17 @@ final class AirhopBLEModule: RCTEventEmitter {
 
     private func ensurePeripheralManager() -> CBPeripheralManager {
         if let existing = peripheralManager { return existing }
+        if let restored = AirhopBLERestoration.shared.takePeripheral() {
+            restored.delegate = self
+            peripheralManager = restored
+            // Already registered by iOS, so adopting it stops applyState()
+            // adding a duplicate.
+            if let char = AirhopBLERestoration.shared.takeRestoredCharacteristic() {
+                characteristic = char
+                serviceRegistered = true
+            }
+            return restored
+        }
         let manager = CBPeripheralManager(
             delegate: self,
             queue: queue,
@@ -221,9 +251,26 @@ final class AirhopBLEModule: RCTEventEmitter {
 
     private func startAdvertisingNow() {
         guard let manager = peripheralManager, manager.state == .poweredOn else { return }
+        // Service UUID only. The local name is deliberately NOT advertised.
+        //
+        // It used to carry this device's peer ID, and nothing ever read it:
+        // the iOS central here dedups on the CBPeripheral identifier, and the
+        // Android central reads the 8-byte peer ID out of scan-response service
+        // data and never looks at the name. So it was a stable identifier
+        // broadcast to every passive scanner in radio range, in exchange for
+        // nothing.
+        //
+        // bitchat-ios reaches the same conclusion in BLERadioController
+        // .advertisementData(), whose entire body is the service UUID under the
+        // comment "No Local Name for privacy." Matching it costs the ability to
+        // dedup an iPhone before connecting to it, which is a cost bitchat
+        // already accepts and which the link reaper covers: a duplicate under a
+        // rotated address is reclaimed by the 15s first-traffic deadline.
+        //
+        // The localName parameter stays on the bridge method. Android still
+        // uses it, and the two platforms keep one signature.
         manager.startAdvertising([
-            CBAdvertisementDataServiceUUIDsKey: [BLEConst.serviceUUID],
-            CBAdvertisementDataLocalNameKey:    advertisingLocalName,
+            CBAdvertisementDataServiceUUIDsKey: [BLEConst.serviceUUID]
         ])
         actuallyAdvertising = true
     }
@@ -235,28 +282,39 @@ final class AirhopBLEModule: RCTEventEmitter {
                           rejecter reject: @escaping RCTPromiseRejectBlock) {
         queue.async { [weak self] in
             guard let self else { return }
-            self.advertisingLocalName = localName
-            self.wantAdvertising = true
+            // Accepted for signature parity with Android, unused here: this
+            // platform advertises the service UUID alone. See startAdvertisingNow.
+            _ = localName
             let manager = self.ensurePeripheralManager()
 
-            // Refuse rather than resolve when we cannot actually advertise, so
-            // the caller retries instead of believing the mesh is up. A .unknown
-            // state means CoreBluetooth has not reported yet - also a refusal,
-            // because nothing has started, and applyState() will pick it up the
-            // moment the state lands.
+            // Refuse rather than resolve when we cannot advertise, so the caller
+            // retries instead of believing the mesh is up.
+            //
+            // The latch is set per branch, not up front: applyState() runs on
+            // every state change, so one left behind by a REFUSED start would
+            // advertise once the radio returned with nothing having asked for
+            // it. The transient states keep it because .unknown is the normal
+            // cold-start answer. A mesh already running latched on .poweredOn,
+            // so autonomous resume after a power cycle is unaffected.
             switch manager.state {
             case .poweredOn:
+                self.wantAdvertising = true
                 self.applyState()
                 resolve(nil)
+            case .resetting, .unknown:
+                self.wantAdvertising = true
+                reject("RADIO_OFF", "Bluetooth is not ready yet", nil)
             case .unauthorized:
+                self.wantAdvertising = false
                 reject("PERMISSION_DENIED", "Bluetooth permission was denied", nil)
             case .unsupported:
+                self.wantAdvertising = false
                 reject("UNSUPPORTED", "This device does not support Bluetooth LE", nil)
             case .poweredOff:
+                self.wantAdvertising = false
                 reject("RADIO_OFF", "Bluetooth is switched off", nil)
-            case .resetting, .unknown:
-                reject("RADIO_OFF", "Bluetooth is not ready yet", nil)
             @unknown default:
+                self.wantAdvertising = false
                 reject("RADIO_OFF", "Bluetooth is not ready yet", nil)
             }
         }
@@ -281,22 +339,28 @@ final class AirhopBLEModule: RCTEventEmitter {
                        rejecter reject: @escaping RCTPromiseRejectBlock) {
         queue.async { [weak self] in
             guard let self else { return }
-            self.wantScanning = true
             let manager = self.ensureCentralManager()
 
+            // Latched per branch, for the reason given in startAdvertising.
             switch manager.state {
             case .poweredOn:
+                self.wantScanning = true
                 self.applyState()
                 resolve(nil)
+            case .resetting, .unknown:
+                self.wantScanning = true
+                reject("RADIO_OFF", "Bluetooth is not ready yet", nil)
             case .unauthorized:
+                self.wantScanning = false
                 reject("PERMISSION_DENIED", "Bluetooth permission was denied", nil)
             case .unsupported:
+                self.wantScanning = false
                 reject("UNSUPPORTED", "This device does not support Bluetooth LE", nil)
             case .poweredOff:
+                self.wantScanning = false
                 reject("RADIO_OFF", "Bluetooth is switched off", nil)
-            case .resetting, .unknown:
-                reject("RADIO_OFF", "Bluetooth is not ready yet", nil)
             @unknown default:
+                self.wantScanning = false
                 reject("RADIO_OFF", "Bluetooth is not ready yet", nil)
             }
         }
@@ -337,8 +401,13 @@ final class AirhopBLEModule: RCTEventEmitter {
                     "supported": false,
                     "poweredOn": false,
                     "authorization": "unknown",
+                    "locationRequiredForScan": false,
                     "locationServicesEnabled": true,
-                    "preciseLocation": true,
+                    // Present here as well as in the full answer below: the
+                    // reconciler reads every field, and a missing one arrives in
+                    // JS as undefined rather than as an error anyone would see.
+                    "batteryPercent": -1,
+                    "charging": false,
                 ])
                 return
             }
@@ -362,11 +431,18 @@ final class AirhopBLEModule: RCTEventEmitter {
                 "supported": manager.state != .unsupported,
                 "poweredOn": manager.state == .poweredOn,
                 "authorization": authorization,
-                // Both are Android concerns. iOS does not gate BLE scanning on
-                // location, so reporting true keeps the shared blocker logic
-                // honest rather than inventing a blocker that cannot apply.
+                // Both are Android concerns. CoreBluetooth has no location
+                // coupling to assert away, so there is nothing here for the
+                // shared blocker logic to weigh: `locationRequiredForScan` false
+                // is what stops it inventing a blocker that cannot apply on this
+                // platform, and the toggle beside it is then never read.
+                //
+                // `preciseLocation` used to sit here too and is gone from the
+                // contract: Android stopped needing it once BLUETOOTH_SCAN
+                // asserted neverForLocation, and a fact only one platform ever
+                // produced a meaningful value for is a fact worth deleting.
+                "locationRequiredForScan": false,
                 "locationServicesEnabled": true,
-                "preciseLocation": true,
                 // Android-only inputs to the power policy. CoreBluetooth
                 // exposes no scan-rate control, so a battery reading here would
                 // have nothing to drive; -1 tells the policy to leave the mode
@@ -919,6 +995,134 @@ extension AirhopBLEModule: CBPeripheralManagerDelegate {
                     }
                 }
             }
+        }
+    }
+}
+
+// MARK: - Launch-time state restoration
+
+// Holds the CoreBluetooth managers between process start and this module
+// existing.
+//
+// iOS relaunches a terminated app when a restorable BLE session sees an event,
+// and expects the manager with the matching restore identifier to be recreated
+// inside application(_:didFinishLaunchingWithOptions:). React Native cannot:
+// the module is built by the bridge and its managers later still, on the first
+// call from JS, by which point the restoration callback has been delivered to
+// nobody.
+//
+// Constructing them at launch unconditionally is not an option either, since
+// allocating a CBCentralManager raises the iOS Bluetooth prompt and every new
+// user would meet it on the splash screen. So the app delegate calls prepare()
+// only when launchOptions carries a Bluetooth restoration key, which happens
+// only for an app that already had a live session and therefore already has the
+// permission. First run never takes the branch.
+//
+// Everything here runs on AirhopBLEQueue.shared, so the handover needs no
+// locking: prepare() is enqueued from didFinishLaunching and the take* calls
+// later, and a serial queue preserves that order.
+final class AirhopBLERestoration: NSObject {
+    static let shared = AirhopBLERestoration()
+
+    private var central: CBCentralManager?
+    private var peripheral: CBPeripheralManager?
+    private var restoredPeripherals: [CBPeripheral] = []
+    private var restoredCharacteristic: CBMutableCharacteristic?
+
+    // Deliberately no private init: NSObject is required for the CoreBluetooth
+    // delegate protocols, and narrowing an inherited initializer's access is
+    // not portable across Swift versions. Nothing else constructs this type.
+
+    // Called from the app delegate, only on a restoration launch.
+    func prepare() {
+        AirhopBLEQueue.shared.async {
+            if self.central == nil {
+                self.central = CBCentralManager(
+                    delegate: self,
+                    queue: AirhopBLEQueue.shared,
+                    options: [
+                        CBCentralManagerOptionRestoreIdentifierKey:
+                            BLEConst.centralRestorationKey
+                    ]
+                )
+            }
+            if self.peripheral == nil {
+                self.peripheral = CBPeripheralManager(
+                    delegate: self,
+                    queue: AirhopBLEQueue.shared,
+                    options: [
+                        CBPeripheralManagerOptionRestoreIdentifierKey:
+                            BLEConst.peripheralRestorationKey
+                    ]
+                )
+            }
+        }
+    }
+
+    // Hand ownership to the module and clear it here, so a second module (a dev
+    // reload) builds its own rather than adopting ones whose delegate points at
+    // a dead instance. Must be called on AirhopBLEQueue.shared.
+
+    func takeCentral() -> CBCentralManager? {
+        defer { central = nil }
+        return central
+    }
+
+    func takePeripheral() -> CBPeripheralManager? {
+        defer { peripheral = nil }
+        return peripheral
+    }
+
+    func takeRestoredPeripherals() -> [CBPeripheral] {
+        defer { restoredPeripherals = [] }
+        return restoredPeripherals
+    }
+
+    func takeRestoredCharacteristic() -> CBMutableCharacteristic? {
+        defer { restoredCharacteristic = nil }
+        return restoredCharacteristic
+    }
+}
+
+// Both delegates receive one callback each and buffer what it carries. The
+// state callbacks are required by the protocols and do nothing: this type holds
+// what arrived before anyone was listening, and answers nothing.
+extension AirhopBLERestoration: CBCentralManagerDelegate {
+    func centralManagerDidUpdateState(_ central: CBCentralManager) {}
+
+    func centralManager(
+        _ central: CBCentralManager,
+        willRestoreState dict: [String: Any]
+    ) {
+        guard
+            let peripherals = dict[CBCentralManagerRestoredStatePeripheralsKey]
+                as? [CBPeripheral]
+        else { return }
+        // Appended, not assigned: iOS may restore more than once before the
+        // module attaches, and replacing would drop a live connection.
+        restoredPeripherals.append(contentsOf: peripherals)
+    }
+}
+
+extension AirhopBLERestoration: CBPeripheralManagerDelegate {
+    func peripheralManagerDidUpdateState(_ peripheral: CBPeripheralManager) {}
+
+    func peripheralManager(
+        _ peripheral: CBPeripheralManager,
+        willRestoreState dict: [String: Any]
+    ) {
+        guard
+            let services = dict[CBPeripheralManagerRestoredStateServicesKey]
+                as? [CBMutableService]
+        else { return }
+        for service in services where service.uuid == BLEConst.serviceUUID {
+            service.characteristics?
+                .compactMap { $0 as? CBMutableCharacteristic }
+                .forEach { char in
+                    if char.uuid == BLEConst.characteristicUUID {
+                        restoredCharacteristic = char
+                    }
+                }
         }
     }
 }

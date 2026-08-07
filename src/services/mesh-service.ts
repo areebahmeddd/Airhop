@@ -956,6 +956,15 @@ export class MeshService {
         this.radio.onPowerStateChanged();
       }),
 
+      // The platform refused a scan after accepting the request. Handed to the
+      // reconciler, which owns both the belief and the retry that corrects it.
+      DeviceEventEmitter.addListener(
+        "AirhopBLE.scanFailed",
+        ({ errorCode }: { errorCode: number }) => {
+          this.radio.onScanFailed(errorCode);
+        },
+      ),
+
       // Signal strength for the Mesh tab. Native emits this per link, so it has
       // to be mapped back to a peerID, which is only known once that peer's
       // ANNOUNCE has arrived, hence the silent drop for unmapped links.
@@ -4282,7 +4291,15 @@ export class MeshService {
     // direct link (unicast) or, lacking one, by flooding through a neighbour who
     // relays it on (multi-hop, bitchat-style). With no direct link AND no
     // neighbour to relay through, the mesh cannot help, so we fall to Nostr.
-    const canReachMesh = hasDirectLink || this.connectedLinks.size > 0;
+    // Both radios. This counted the BLE set alone, so a phone whose only
+    // neighbours were on the WiFi fast path skipped all three mesh priorities:
+    // priority 3 spent the internet on a hop it could make itself, and priority
+    // 2 never started a Noise handshake, so a first-contact DM to a WiFi-only
+    // neighbour could not establish a session. Same shape as the bug recorded in
+    // broadcastFn; every other link test in this file sums the two.
+    const canReachMesh =
+      hasDirectLink ||
+      this.connectedLinks.size + this.wifiConnectedLinks.size > 0;
     // Same gate as the receipt path: a ratchet that has not yet been given a
     // sending chain cannot encrypt, and the Noise transport below is a fully
     // valid route in the meantime. Falling through costs this one message its
@@ -5172,6 +5189,15 @@ export class MeshService {
     // through the one path that also cancels retries and releases the background
     // service. Calling the native stops again here would race that.
     NativeAirhopWiFi?.stopWiFi().catch(() => {});
+    // And forget the links it just closed. Unlike a BLE central link, which
+    // survives a stopped scan, a WiFi link is a socket stopWiFi() destroys, and
+    // link IDs are never reissued. The native disconnect events cannot clean up
+    // either: the subscriptions were removed a few lines earlier. Left
+    // populated, `wifiPeerToLink` routed a peer down a dead socket after Away
+    // and back, and DMs failed silently until their next ANNOUNCE re-mapped it.
+    this.wifiConnectedLinks.clear();
+    this.wifiPeerToLink.clear();
+    this.wifiLinkToPeer.clear();
     // A burst cannot outlive the radios carrying it: close the mic and the
     // speaker before the links go, so nothing is left recording into a mesh
     // that is no longer there.

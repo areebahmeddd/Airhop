@@ -1,0 +1,33 @@
+name: Set up Android toolchain
+description: Install the JDK, Gradle, and the pinned Android NDK shared by every Android build.
+
+inputs:
+  java-version:
+    description: Temurin JDK version to install.
+    required: false
+    default: "21"
+  ndk-version:
+    description: >-
+      Android NDK version pinned for this repository; it must match React
+      Native's `ndkVersion`. Update it only when a React Native upgrade changes
+      `node_modules/react-native/gradle/libs.versions.toml`.
+    required: false
+    default: "27.1.12297006"
+
+runs:
+  using: composite
+  steps:
+    - name: Set up JDK
+      uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5.7.0
+      with:
+        distribution: temurin
+        java-version: ${{ inputs.java-version }}
+
+    - name: Set up Gradle
+      uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6.3.0
+
+    - name: Install pinned Android NDK
+      shell: bash
+      env:
+        NDK_VERSION: ${{ inputs.ndk-version }}
+      run: ${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager --install "ndk;${NDK_VERSION}"

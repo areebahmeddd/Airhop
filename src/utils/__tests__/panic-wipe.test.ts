@@ -10,6 +10,10 @@ import { useChatStore } from "../../store/chat-store";
 import { useMeshStateStore } from "../../store/mesh-state-store";
 import { WALLET_STORAGE_ID } from "../../store/wallet-store";
 import { MMKV_STORE_IDS, panicWipe } from "../panic-wipe";
+import {
+  currentWipeGeneration,
+  isCurrentWipeGeneration,
+} from "../wipe-generation";
 
 // identity.panicWipe wipes the Keychain/Keystore; mock it out in tests.
 jest.mock("../../core/crypto/identity", () => ({
@@ -149,6 +153,16 @@ describe("panicWipe", () => {
     setNutzapWatcher(stop);
     await panicWipe();
     expect(stop).toHaveBeenCalled();
+  });
+
+  test("invalidates startup work that was already in flight", async () => {
+    // Stopping the watcher only reaches one already installed. A wipe during
+    // the wallet unlock or relay publish is followed by the in-flight startup
+    // installing a subscription on the identity just destroyed.
+    const captured = currentWipeGeneration();
+    expect(isCurrentWipeGeneration(captured)).toBe(true);
+    await panicWipe();
+    expect(isCurrentWipeGeneration(captured)).toBe(false);
   });
 
   test("resets transport health so the Mesh tab shows a first-run state", async () => {

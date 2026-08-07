@@ -490,6 +490,13 @@ stamps longer does not get longer carriage, it gets no carriage at all.
 | ------------------------ | --------------------------------------------------------------------------------------- | ----------------------------------------- |
 | Recipient tag derivation | HMAC-SHA256(key=noiseStaticKey, msg=`"bitchat-courier-tag-v1"` \|\| epochDay_BE4)[0:16] | epochDay = floor(unixSec/86400) as u32 BE |
 
+Every constant above is pinned in machine-readable form in
+[`courier-test-vectors.json`](courier-test-vectors.json), so a second
+implementation can be written against this section without reading Airhop's
+source. The vectors are not decoration: `courier-vectors.test.ts` reads its
+expected values out of that file, so a drift between the two fails CI rather
+than shipping a spec that quietly disagrees with the code.
+
 > **The courier tag is NOT unlinkable, and this is inherited from bitchat rather than chosen.**
 > The HMAC key is the recipient's **public** Noise static key, which every announce broadcasts in the clear. Anyone who has heard one announce can therefore compute that peer's tags for any day, past or future, and follow their mail across days. bitchat documents the same flaw in its own implementation, and notes that its whitepaper's claim that couriers cannot link mail across days does not hold.
 >

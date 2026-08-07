@@ -58,8 +58,13 @@
 
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
-	<key>LSMinimumSystemVersion</key>
-	<string>12.0</string>
+	<!-- The App Store category, matching bitchat's. Set here as well as in App
+	     Store Connect so the bundle is self-describing and the two cannot
+	     disagree. LSMinimumSystemVersion used to sit next to this at 12.0; it is
+	     a macOS key that iOS ignores, it came from the template, and the real
+	     floor is IPHONEOS_DEPLOYMENT_TARGET in the Xcode project. -->
+	<key>LSApplicationCategoryType</key>
+	<string>public.app-category.social-networking</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>NSAppTransportSecurity</key>

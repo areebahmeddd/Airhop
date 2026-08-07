@@ -233,9 +233,10 @@ export class IosBleModule implements BleNativeModule {
       supported: manager.state !== "unsupported" && this.os.hasBluetooth,
       poweredOn: manager.state === "poweredOn",
       authorization,
-      // Never gates BLE on iOS.
+      // Never gates BLE on iOS: CoreBluetooth has no location coupling to
+      // assert away, so there is nothing for the blocker to consider.
+      locationRequiredForScan: false,
       locationServicesEnabled: true,
-      preciseLocation: true,
       // CoreBluetooth exposes no scan-rate control, so a battery reading would
       // have nothing to drive.
       batteryPercent: -1,
