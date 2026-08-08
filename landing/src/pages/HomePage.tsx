@@ -1,25 +1,27 @@
-import About from "../components/About";
-import Contribute from "../components/Contribute";
-import Explore from "../components/Explore";
-import Features from "../components/Features";
-import Hero from "../components/Hero";
-import HowItWorks from "../components/HowItWorks";
-import { useSEO } from "../hooks/useSEO";
+import About from "@/components/sections/About";
+import AppShowcase from "@/components/sections/AppShowcase";
+import Compare from "@/components/sections/Compare";
+import Contribute from "@/components/sections/Contribute";
+import Explore from "@/components/sections/Explore";
+import Features from "@/components/sections/Features";
+import Hero from "@/components/sections/Hero";
+import HowItWorks from "@/components/sections/HowItWorks";
+import Situations from "@/components/sections/Situations";
+import { useSEO } from "@/hooks/useSEO";
+import { SEO } from "@/lib/seo";
 
 export default function HomePage() {
-  useSEO({
-    title: "Airhop - Private, offline-first messenger",
-    description:
-      "Private peer-to-peer messaging for iOS and Android. No internet, no servers, no accounts. Communicate over Bluetooth mesh anywhere.",
-    path: "/",
-  });
+  useSEO(SEO["/"]);
 
   return (
     <main id="main-content">
       <Hero />
       <About />
-      <Features />
+      <Situations />
+      <AppShowcase />
       <HowItWorks />
+      <Features />
+      <Compare />
       <Explore />
       <Contribute />
     </main>

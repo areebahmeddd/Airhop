@@ -1,6 +1,9 @@
-import { ArrowLeft } from "lucide-react";
+import PageHeader from "@/components/ui/PageHeader";
+import TextLink from "@/components/ui/TextLink";
+import { useSEO } from "@/hooks/useSEO";
+import { REPO_LINKS } from "@/lib/links";
+import { SEO } from "@/lib/seo";
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
 import {
   FloodPropagation,
   Fragmentation,
@@ -19,13 +22,11 @@ import {
   SystemOverview,
   VoiceBurst,
   WalletStates,
-} from "../components/ArchitectureDiagrams";
-import { useSEO } from "../hooks/useSEO";
+} from "./diagrams";
 
 const LAST_UPDATED = "August 01, 2026";
 
-const LINK = "text-gray-900 underline underline-offset-2 transition-colors hover:text-gray-600";
-const CODE = "rounded bg-gray-100 px-1 py-0.5 text-[0.85em] text-gray-900";
+const CODE = "rounded-[6px] bg-inner px-1 py-0.5 text-[0.85em] text-ink";
 
 const TOC = [
   {
@@ -100,24 +101,18 @@ function useActiveSection(): string {
   return active;
 }
 
-function A({ href, children }: { href: string; children: React.ReactNode }) {
-  return (
-    <a href={href} target="_blank" rel="noopener noreferrer" className={LINK}>
-      {children}
-    </a>
-  );
-}
-
 function C({ children }: { children: React.ReactNode }) {
   return <code className={CODE}>{children}</code>;
 }
 
 function NUT({ n }: { n: string }) {
-  return <A href={`https://github.com/cashubtc/nuts/blob/main/${n}.md`}>NUT-{n}</A>;
+  return <TextLink href={`https://github.com/cashubtc/nuts/blob/main/${n}.md`}>NUT-{n}</TextLink>;
 }
 
 function NIP({ n }: { n: string }) {
-  return <A href={`https://github.com/nostr-protocol/nips/blob/master/${n}.md`}>NIP-{n}</A>;
+  return (
+    <TextLink href={`https://github.com/nostr-protocol/nips/blob/master/${n}.md`}>NIP-{n}</TextLink>
+  );
 }
 
 function Section({
@@ -136,14 +131,14 @@ function Section({
   return (
     <section
       id={id}
-      className="scroll-mt-24 border-t border-gray-100 pt-12 first:border-t-0 first:pt-0"
+      className="border-line scroll-mt-24 border-t pt-12 first:border-t-0 first:pt-0"
     >
-      <div className="font-mono text-[10px] font-semibold tracking-[0.25em] text-gray-400 uppercase">
+      <div className="text-mute font-mono text-[10px] font-semibold tracking-[0.25em] uppercase">
         {eyebrow}
       </div>
-      <h2 className="mt-3 text-xl font-extrabold tracking-tight text-black sm:text-2xl">{title}</h2>
-      {lede && <p className="mt-3 text-sm leading-relaxed text-gray-700">{lede}</p>}
-      <div className="mt-6 space-y-5 text-sm leading-relaxed text-gray-600">{children}</div>
+      <h2 className="text-ink mt-3 text-xl font-semibold tracking-tight sm:text-2xl">{title}</h2>
+      {lede && <p className="text-secondary mt-3 text-sm leading-relaxed">{lede}</p>}
+      <div className="text-secondary mt-6 space-y-5 text-sm leading-relaxed">{children}</div>
     </section>
   );
 }
@@ -151,12 +146,12 @@ function Section({
 function Figure({ caption, children }: { caption: React.ReactNode; children: React.ReactNode }) {
   return (
     <figure className="my-7">
-      <div className="rounded-xl border border-gray-200 bg-gray-50/50 p-4">
-        <div className="overflow-x-auto">
+      <div className="border-line bg-card-subtle rounded-2xl border p-4">
+        <div className="overflow-x-auto [contain:layout]">
           <div className="min-w-[680px]">{children}</div>
         </div>
       </div>
-      <figcaption className="mt-2 font-mono text-[11px] leading-relaxed text-gray-500">
+      <figcaption className="text-mute mt-2 font-mono text-[11px] leading-relaxed">
         {caption}
       </figcaption>
     </figure>
@@ -165,14 +160,14 @@ function Figure({ caption, children }: { caption: React.ReactNode; children: Rea
 
 function Table({ head, rows }: { head: string[]; rows: React.ReactNode[][] }) {
   return (
-    <div className="my-6 overflow-x-auto rounded-xl border border-gray-200">
+    <div className="border-line bg-card my-6 overflow-x-auto rounded-2xl border [contain:layout]">
       <table className="w-full min-w-[560px] border-collapse text-left">
         <thead>
-          <tr className="border-b border-gray-200 bg-gray-50">
+          <tr className="border-line bg-card-subtle border-b">
             {head.map((h) => (
               <th
                 key={h}
-                className="px-4 py-3 font-mono text-[10px] font-semibold tracking-[0.14em] text-gray-500 uppercase"
+                className="text-secondary px-4 py-3 font-mono text-[10px] font-semibold tracking-[0.14em] uppercase"
               >
                 {h}
               </th>
@@ -181,12 +176,12 @@ function Table({ head, rows }: { head: string[]; rows: React.ReactNode[][] }) {
         </thead>
         <tbody>
           {rows.map((r, i) => (
-            <tr key={i} className="border-b border-gray-100 last:border-b-0">
+            <tr key={i} className="border-line border-b last:border-b-0">
               {r.map((cell, j) => (
                 <td
                   key={j}
                   className={`px-4 py-3 align-top text-[13px] leading-relaxed ${
-                    j === 0 ? "font-medium text-gray-900" : "text-gray-600"
+                    j === 0 ? "text-ink font-medium" : "text-secondary"
                   }`}
                 >
                   {cell}
@@ -202,11 +197,11 @@ function Table({ head, rows }: { head: string[]; rows: React.ReactNode[][] }) {
 
 function Note({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div className="my-6 border-l-2 border-gray-900 bg-gray-50 py-4 pr-4 pl-5">
-      <div className="font-mono text-[10px] font-semibold tracking-[0.18em] text-gray-500 uppercase">
+    <div className="border-ink bg-card-subtle my-6 rounded-r-2xl border-l-2 py-4 pr-4 pl-5">
+      <div className="text-mute font-mono text-[10px] font-semibold tracking-[0.18em] uppercase">
         {label}
       </div>
-      <div className="mt-2 text-[13px] leading-relaxed text-gray-700">{children}</div>
+      <div className="text-secondary mt-2 text-[13px] leading-relaxed">{children}</div>
     </div>
   );
 }
@@ -225,61 +220,46 @@ const SCHEMA = {
 export default function ArchitecturePage() {
   const active = useActiveSection();
 
-  useSEO({
-    title: "Architecture - Airhop",
-    description:
-      "How Airhop works, top to bottom: identity, transport selection, the Bluetooth mesh, encryption, the internet layer, Tor, offline ecash, on-device AI, and the bitchat-compatible wire format.",
-    path: "/architecture",
-  });
+  useSEO(SEO["/architecture"]);
 
   return (
-    <main id="main-content" className="min-h-screen bg-white font-sans antialiased">
+    <main id="main-content">
       <script
         type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(SCHEMA) }}
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(SCHEMA).replace(/</g, "\\u003c") }}
       />
 
       <div className="mx-auto max-w-6xl px-6 py-16 md:px-10">
-        <Link
-          to="/"
-          className="group inline-flex items-center gap-1.5 text-sm text-gray-500 transition-colors hover:text-gray-700"
-        >
-          <ArrowLeft
-            className="h-3.5 w-3.5 transition-transform duration-200 group-hover:-translate-x-0.5"
-            aria-hidden="true"
-          />
-          Back to home
-        </Link>
-
-        <header className="mt-10 max-w-3xl">
-          <h1 className="text-3xl font-semibold tracking-tight text-gray-900">Architecture</h1>
-          <p className="mt-2 text-sm text-gray-500">Last updated: {LAST_UPDATED}</p>
-        </header>
+        <PageHeader
+          eyebrow="Documentation"
+          title="Architecture"
+          meta={`Last updated: ${LAST_UPDATED}`}
+        />
 
         <div className="mt-14 lg:grid lg:grid-cols-[176px_1fr] lg:gap-14">
           <nav aria-label="On this page" className="mb-12 lg:mb-0">
-            <div className="lg:sticky lg:top-24 lg:max-h-[calc(100vh-7rem)] lg:overflow-y-auto">
-              <div className="font-mono text-[10px] font-semibold tracking-[0.18em] text-gray-400 uppercase">
+            <div className="-mx-1 px-1 lg:sticky lg:top-24 lg:max-h-[calc(100vh-7rem)] lg:overflow-y-auto">
+              <div className="text-mute font-mono text-[10px] font-semibold tracking-[0.18em] uppercase">
                 On this page
               </div>
-              <ul className="mt-4 space-y-5">
+              <ul className="mt-3 space-y-3.5">
                 {TOC.map((group) => (
                   <li key={group.act}>
-                    <div className="font-mono text-[10px] font-semibold tracking-[0.14em] text-gray-900 uppercase">
+                    <div className="text-ink font-mono text-[10px] font-semibold tracking-[0.14em] uppercase">
                       {group.act}
                     </div>
-                    <ul className="mt-2 space-y-px">
+                    <ul className="border-line mt-1.5 border-l">
                       {group.items.map((item) => {
                         const isActive = item.id === active;
                         return (
-                          <li key={item.id}>
+                          <li key={item.id} className="-ml-px">
                             <a
                               href={`#${item.id}`}
                               aria-current={isActive ? "true" : undefined}
-                              className={`-ml-px block border-l py-1 pl-3 text-[13px] transition-colors ${
+                              className={`block border-l py-1.5 pl-3 text-[13px] leading-4 transition-colors ${
                                 isActive
-                                  ? "border-gray-900 font-medium text-gray-900"
-                                  : "border-gray-200 text-gray-500 hover:border-gray-400 hover:text-gray-900"
+                                  ? "border-ink text-ink font-medium"
+                                  : "text-secondary hover:border-line-strong hover:text-ink border-transparent"
                               }`}
                             >
                               {item.label}
@@ -310,7 +290,7 @@ export default function ArchitecturePage() {
                 handshake, every routing decision, lives in <C>src/core/</C> as pure TypeScript with
                 no native imports. The Swift and Kotlin code does four things: advertise, scan, hand
                 raw bytes up, and write raw bytes out.{" "}
-                <strong className="text-gray-900">It has no concept of a packet.</strong>
+                <strong className="text-ink">It has no concept of a packet.</strong>
               </p>
               <p>
                 That constraint buys two things. The entire protocol is testable in CI without a
@@ -348,11 +328,9 @@ export default function ArchitecturePage() {
                 caption={
                   <>
                     The three tiers in{" "}
-                    <A href="https://github.com/areebahmeddd/airhop/blob/main/src/core/router/message-router.ts">
-                      message-router.ts
-                    </A>
-                    , which holds the entire routing decision. Each tier is tried in order and the
-                    first one that can carry the message wins.
+                    <TextLink href={REPO_LINKS.messageRouter}>message-router.ts</TextLink>, which
+                    holds the entire routing decision. Each tier is tried in order and the first one
+                    that can carry the message wins.
                   </>
                 }
               >
@@ -383,7 +361,7 @@ export default function ArchitecturePage() {
 
               <p>
                 Two cases fall through tier 1 that the diagram cannot show.{" "}
-                <strong className="text-gray-900">
+                <strong className="text-ink">
                   A Noise session can only be established over a direct BLE link, never across
                   relays.
                 </strong>{" "}
@@ -400,9 +378,7 @@ export default function ArchitecturePage() {
               </p>
 
               <Note label="The choice is automatic">
-                <strong className="text-gray-900">
-                  Airhop picks a tier for you on every message,
-                </strong>{" "}
+                <strong className="text-ink">Airhop picks a tier for you on every message,</strong>{" "}
                 and picks again on the next one, because peers move in and out of range between the
                 two. There is one send button and the ladder runs underneath it, so a message
                 carried by courier and one that went over WiFi look identical to whoever sent it.
@@ -415,7 +391,7 @@ export default function ArchitecturePage() {
               title="Concepts"
               lede="This page draws on Bluetooth LE, the Noise protocol family, Nostr and Cashu. Most readers know one or two of them. Here is the vocabulary, and what each idea is doing in this app specifically."
             >
-              <h3 className="pt-2 text-base font-bold text-gray-900">Radio and mesh</h3>
+              <h3 className="text-ink pt-2 text-base font-bold">Radio and mesh</h3>
               <Table
                 head={["Concept", "What it is", "In Airhop"]}
                 rows={[
@@ -462,7 +438,7 @@ export default function ArchitecturePage() {
                 ]}
               />
 
-              <h3 className="pt-2 text-base font-bold text-gray-900">Cryptography</h3>
+              <h3 className="text-ink pt-2 text-base font-bold">Cryptography</h3>
               <Table
                 head={["Concept", "What it is", "In Airhop"]}
                 rows={[
@@ -509,7 +485,7 @@ export default function ArchitecturePage() {
                 ]}
               />
 
-              <h3 className="pt-2 text-base font-bold text-gray-900">Nostr</h3>
+              <h3 className="text-ink pt-2 text-base font-bold">Nostr</h3>
               <Table
                 head={["Concept", "What it is", "In Airhop"]}
                 rows={[
@@ -546,7 +522,7 @@ export default function ArchitecturePage() {
                 ]}
               />
 
-              <h3 className="pt-2 text-base font-bold text-gray-900">Payments</h3>
+              <h3 className="text-ink pt-2 text-base font-bold">Payments</h3>
               <Table
                 head={["Concept", "What it is", "In Airhop"]}
                 rows={[
@@ -595,13 +571,13 @@ export default function ArchitecturePage() {
               </Figure>
 
               <p>
-                The Nostr key is <strong className="text-gray-900">derived, not separate</strong>.
-                Nostr uses <A href="https://en.bitcoin.it/wiki/Secp256k1">secp256k1</A> and the
-                signing key is <A href="https://ed25519.cr.yp.to">Ed25519</A>, so the two cannot be
-                the same key. Running the signing key through{" "}
-                <A href="https://datatracker.ietf.org/doc/html/rfc5869">HKDF</A> with the label{" "}
-                <C>airhop-nostr-key-v1</C> yields one stable Nostr identity that survives a
-                reinstall from the same keys, without linking to anything real.
+                The Nostr key is <strong className="text-ink">derived, not separate</strong>. Nostr
+                uses <TextLink href="https://en.bitcoin.it/wiki/Secp256k1">secp256k1</TextLink> and
+                the signing key is <TextLink href="https://ed25519.cr.yp.to">Ed25519</TextLink>, so
+                the two cannot be the same key. Running the signing key through{" "}
+                <TextLink href="https://datatracker.ietf.org/doc/html/rfc5869">HKDF</TextLink> with
+                the label <C>airhop-nostr-key-v1</C> yields one stable Nostr identity that survives
+                a reinstall from the same keys, without linking to anything real.
               </p>
               <p>
                 Location channels go one step further and derive a fresh secp256k1 identity per
@@ -615,13 +591,13 @@ export default function ArchitecturePage() {
                   [
                     "Noise static private key",
                     <>
-                      <A href="https://developer.apple.com/documentation/security/storing-keys-in-the-keychain">
+                      <TextLink href="https://developer.apple.com/documentation/security/storing-keys-in-the-keychain">
                         Keychain
-                      </A>{" "}
+                      </TextLink>{" "}
                       /{" "}
-                      <A href="https://developer.android.com/privacy-and-security/keystore">
+                      <TextLink href="https://developer.android.com/privacy-and-security/keystore">
                         Keystore
-                      </A>
+                      </TextLink>
                     </>,
                     "No",
                   ],
@@ -667,19 +643,19 @@ export default function ArchitecturePage() {
                   ["iPhone to Android", "Yes", "No", "Yes", "Yes"],
                   ["Range", "10 to 100 m per hop", "~30 m", "Global", "Wherever people walk"],
                   ["Max hops", "7", "1", "1", "Unbounded in time"],
-                  ["Speed", "~22 KB/s", "~22 KB/s", "Not used for files", "n/a"],
+                  ["Speed", "~19 KB/s", "~19 KB/s", "Not used for files", "n/a"],
                 ]}
               />
 
               <p>
                 The WiFi column needs two caveats. WiFi direct is Android{" "}
-                <A href="https://wi-fi.org/discover-wi-fi/wi-fi-aware">WiFi Aware</A> on one side
-                and iOS{" "}
-                <A href="https://developer.apple.com/documentation/multipeerconnectivity">
+                <TextLink href="https://wi-fi.org/discover-wi-fi/wi-fi-aware">WiFi Aware</TextLink>{" "}
+                on one side and iOS{" "}
+                <TextLink href="https://developer.apple.com/documentation/multipeerconnectivity">
                   MultipeerConnectivity
-                </A>{" "}
+                </TextLink>{" "}
                 on the other.{" "}
-                <strong className="text-gray-900">
+                <strong className="text-ink">
                   They are different protocols on different radios and cannot talk to each other,
                 </strong>{" "}
                 so this path is Android-to-Android or iPhone-to-iPhone only, or at least until a
@@ -708,9 +684,8 @@ export default function ArchitecturePage() {
             >
               <p>
                 A message is broadcast, and every phone that hears it re-broadcasts it with one hop
-                spent.{" "}
-                <strong className="text-gray-900">That is the entire routing algorithm.</strong> It
-                is deliberately simple, because a cleverer one would need state that a mesh of
+                spent. <strong className="text-ink">That is the entire routing algorithm.</strong>{" "}
+                It is deliberately simple, because a cleverer one would need state that a mesh of
                 strangers cannot agree on. Four mechanisms stop the obvious failure modes.
               </p>
 
@@ -747,7 +722,7 @@ export default function ArchitecturePage() {
                 to identify a packet across the mesh.
               </p>
 
-              <h3 className="pt-2 text-base font-bold text-gray-900">Fragments</h3>
+              <h3 className="text-ink pt-2 text-base font-bold">Fragments</h3>
               <p>
                 A BLE write is small. Anything larger than one fragment is split, paced and
                 reassembled on the far side.
@@ -757,7 +732,7 @@ export default function ArchitecturePage() {
                 <Fragmentation />
               </Figure>
 
-              <h3 className="pt-2 text-base font-bold text-gray-900">Gossip sync</h3>
+              <h3 className="text-ink pt-2 text-base font-bold">Gossip sync</h3>
               <p>
                 Flooding only helps if you were there when it happened. Someone who walks back into
                 range has missed everything in between, and re-broadcasting the world at them would
@@ -768,7 +743,9 @@ export default function ArchitecturePage() {
               <Figure
                 caption={
                   <>
-                    <A href="https://en.wikipedia.org/wiki/Golomb_coding">Golomb-Coded Set</A>{" "}
+                    <TextLink href="https://en.wikipedia.org/wiki/Golomb_coding">
+                      Golomb-Coded Set
+                    </TextLink>{" "}
                     reconciliation. The filter is a compressed description of a set, not the set
                     itself, which is how 1000 packet IDs fit in around 400 bytes.
                   </>
@@ -793,14 +770,14 @@ export default function ArchitecturePage() {
                 ]}
               />
 
-              <h3 className="pt-2 text-base font-bold text-gray-900">Courier</h3>
+              <h3 className="text-ink pt-2 text-base font-bold">Courier</h3>
               <p>
                 When there is no path at all, the message waits on other people&rsquo;s phones. A
                 sealed envelope is handed to peers you have some trust relationship with, and they
                 carry it until they meet the recipient.{" "}
-                <strong className="text-gray-900">The carrier cannot read it:</strong> it is
-                encrypted to the recipient before it ever leaves the sender, using a one-way Noise X
-                seal to a one-time prekey so that even a later key compromise does not expose it.
+                <strong className="text-ink">The carrier cannot read it:</strong> it is encrypted to
+                the recipient before it ever leaves the sender, using a one-way Noise X seal to a
+                one-time prekey so that even a later key compromise does not expose it.
               </p>
 
               <Table
@@ -845,11 +822,7 @@ export default function ArchitecturePage() {
                     "Fast while alone so devices meet quickly, then it backs off",
                   ],
                   ["Gossip sync", "15 s", "Lets a returning peer catch up"],
-                  [
-                    "Direct peer timeout",
-                    "15 s",
-                    "A linked peer that goes quiet is demoted quickly",
-                  ],
+                  ["Direct peer timeout", "45 s", "Handles unreported link drops beyond broadcast"],
                   ["Mesh peer timeout", "60 s", "Relayed peers get longer, packets arrive late"],
                   ["Geohash heartbeat", "40 to 80 s, randomized", "Avoids lockstep announcements"],
                   ["Participant window", "5 min", "How long a key stays listed as present"],
@@ -873,7 +846,7 @@ export default function ArchitecturePage() {
               </Note>
 
               <p>
-                <strong className="text-gray-900">Panic wipe is the terminal transition.</strong>{" "}
+                <strong className="text-ink">Panic wipe is the terminal transition.</strong>{" "}
                 Triple-tapping the logo zeroizes keys in memory, deletes every Keychain and Keystore
                 entry, clears all MMKV partitions, and deletes the app sandbox, in under a second.
                 The wallet partition is removed with a full delete rather than a clear, because a
@@ -888,9 +861,10 @@ export default function ArchitecturePage() {
               lede="Different things get different protection. Two rows in the grid below say no, and both are deliberate trade-offs."
             >
               <p>
-                Live sessions use <A href="https://noiseprotocol.org/noise.html">Noise XX</A>, the
-                same pattern and the same cipher suite bitchat uses, which is what makes cross-app
-                DMs possible at all.
+                Live sessions use{" "}
+                <TextLink href="https://noiseprotocol.org/noise.html">Noise XX</TextLink>, the same
+                pattern and the same cipher suite bitchat uses, which is what makes cross-app DMs
+                possible at all.
               </p>
 
               <Figure caption="The Noise XX handshake. Both sides prove who they are, and the ephemeral keys mean a later compromise of a static key does not decrypt this session.">
@@ -898,15 +872,17 @@ export default function ArchitecturePage() {
               </Figure>
 
               <p>
-                <strong className="text-gray-900">
+                <strong className="text-ink">
                   Noise XX gives forward secrecy per session. It does not give it per message.
                 </strong>{" "}
                 So a second layer sits on top:{" "}
-                <A href="https://signal.org/docs/specifications/doubleratchet/">Double Ratchet</A>,
-                the same algorithm Signal uses, ratcheting a new key for every message. Its root key
-                is seeded from the completed handshake's transcript hash, which is why Airhop does
-                not need X3DH: the key agreement has already happened. The transcript matters rather
-                than the two static keys, because Noise XX mixes in ephemeral keys that are
+                <TextLink href="https://signal.org/docs/specifications/doubleratchet/">
+                  Double Ratchet
+                </TextLink>
+                , the same algorithm Signal uses, ratcheting a new key for every message. Its root
+                key is seeded from the completed handshake's transcript hash, which is why Airhop
+                does not need X3DH: the key agreement has already happened. The transcript matters
+                rather than the two static keys, because Noise XX mixes in ephemeral keys that are
                 destroyed when the handshake ends, so the root key cannot be recomputed later from
                 long-lived keys alone.
               </p>
@@ -920,7 +896,7 @@ export default function ArchitecturePage() {
                 cross-app compatibility was judged worth more than confidentiality on media that is
                 usually sent to a room anyway. Nobody can forge or alter an attachment, because the
                 signature covers it, but{" "}
-                <strong className="text-gray-900">any device relaying it can open it.</strong>
+                <strong className="text-ink">any device relaying it can open it.</strong>
               </Note>
 
               <Table
@@ -948,16 +924,16 @@ export default function ArchitecturePage() {
               </Figure>
 
               <p>
-                <strong className="text-gray-900">Private channels</strong> put the key inside the
-                invite link. There is no roster and no member cap, which sounds careless until you
-                consider the use case: a link has to spread faster than anyone could add people by
-                hand. Messages are sealed with XChaCha20-Poly1305 and broadcast as type <C>0x50</C>,
-                and nothing on the wire names the channel, so an outsider cannot even tell which
-                channel a message belongs to.
+                <strong className="text-ink">Private channels</strong> put the key inside the invite
+                link. There is no roster and no member cap, which sounds careless until you consider
+                the use case: a link has to spread faster than anyone could add people by hand.
+                Messages are sealed with XChaCha20-Poly1305 and broadcast as type <C>0x50</C>, and
+                nothing on the wire names the channel, so an outsider cannot even tell which channel
+                a message belongs to.
               </p>
               <p>
-                <strong className="text-gray-900">Private groups</strong> are the opposite trade.
-                The creator signs a roster of up to 16 and hands the key to each member individually
+                <strong className="text-ink">Private groups</strong> are the opposite trade. The
+                creator signs a roster of up to 16 and hands the key to each member individually
                 inside their Noise session, so no link exists and nobody can forward their way in.
                 Messages go out as <C>0x25</C> with the group ID and key epoch in the clear, so
                 relays can carry them without being members, and rotating the key bumps the epoch so
@@ -966,7 +942,7 @@ export default function ArchitecturePage() {
 
               <Note label="Why not relay-hosted groups">
                 <NIP n="29" /> was considered and dropped.{" "}
-                <strong className="text-gray-900">
+                <strong className="text-ink">
                   It puts membership enforcement on a relay, which means a server decides who may
                   speak.
                 </strong>{" "}
@@ -979,12 +955,12 @@ export default function ArchitecturePage() {
               id="attachments"
               eyebrow="The system · 10"
               title="Attachments"
-              lede="A photo taken on a modern phone is five megabytes. The mesh takes half a megabyte and moves it at about 22 KB/s. Something has to give, and it should not be the send button."
+              lede="A photo taken on a modern phone is five megabytes. The mesh takes half a megabyte and moves it at about 19 KB/s. Something has to give, and it should not be the send button."
             >
               <p>
-                Every attachment is <strong className="text-gray-900">one packet</strong>, not a
-                stream of chunks. The whole file goes into a single TLV payload and the fragment
-                layer splits it for the radio, which is the same path a long text message takes. An
+                Every attachment is <strong className="text-ink">one packet</strong>, not a stream
+                of chunks. The whole file goes into a single TLV payload and the fragment layer
+                splits it for the radio, which is the same path a long text message takes. An
                 earlier plan to chunk large files ourselves was dropped: bitchat enforces its size
                 cap when it <em>decodes</em> a packet, so anything larger is refused outright and
                 interop breaks in both directions.
@@ -1010,11 +986,11 @@ export default function ArchitecturePage() {
               <Note label="What the quality setting actually does">
                 Low, Medium and High do not choose a file size, because every photo lands under the
                 same 512 KB either way.{" "}
-                <strong className="text-gray-900">They choose where the compression starts.</strong>{" "}
-                Low starts lower and reaches a sendable file in one pass, so it gets moving sooner
-                on a weak link. High starts high, keeps more detail, and may take a pass or two to
-                fit. There is a floor below which JPEG artefacts show on a phone screen; past that
-                point the resolution comes down instead.
+                <strong className="text-ink">They choose where the compression starts.</strong> Low
+                starts lower and reaches a sendable file in one pass, so it gets moving sooner on a
+                weak link. High starts high, keeps more detail, and may take a pass or two to fit.
+                There is a floor below which JPEG artefacts show on a phone screen; past that point
+                the resolution comes down instead.
               </Note>
 
               <p>
@@ -1042,9 +1018,9 @@ export default function ArchitecturePage() {
                 A voice note is a file: you record it, it sends, they play it. Live voice takes the
                 same gesture and makes it immediate. Speech is encoded to AAC-LC at 16 kHz mono, one
                 frame per 64 ms, and each frame goes out as it is produced. About{" "}
-                <strong className="text-gray-900">15 packets a second, roughly 2 KB/s</strong>{" "}
-                against a link that carries about 22 KB/s, so talking leaves most of it free for
-                everything else.
+                <strong className="text-ink">15 packets a second, roughly 2 KB/s</strong> against a
+                link that carries about 19 KB/s, so talking leaves most of it free for everything
+                else.
               </p>
               <p>
                 Staying out of the fragment scheduler is the hard part, and it is solved with size.
@@ -1071,7 +1047,7 @@ export default function ArchitecturePage() {
                 accumulate, a few milliseconds to encode, and 30 to 60 ms to cross one radio hop.
                 The receiver then holds 350 ms of audio before starting, which is what turns an
                 irregular stream of packets into a voice.{" "}
-                <strong className="text-gray-900">
+                <strong className="text-ink">
                   Mouth to ear is about 470 ms on one hop, and stays under a second across three.
                 </strong>{" "}
                 Relaying voice uses a tighter jitter window than ordinary traffic (8 to 25 ms rather
@@ -1088,7 +1064,7 @@ export default function ArchitecturePage() {
 
               <Note label="Every burst is also a voice note">
                 People in range hear you live. Everyone else{" "}
-                <strong className="text-gray-900">
+                <strong className="text-ink">
                   gets the same audio as an ordinary voice note when you let go
                 </strong>
                 , so someone who was out of range, or who arrived later, still has the message. It
@@ -1119,10 +1095,13 @@ export default function ArchitecturePage() {
               lede="When Bluetooth range runs out and there is a connection available, the same conversation continues over Nostr relays. No infrastructure anyone here controls. Two features ride this layer: the internet gateway and the mesh bridge."
             >
               <p>
-                <A href="https://nostr.org">Nostr</A> relays are chosen geographically. The app
-                ships a bundled list of over 350 public relays and picks the nearest by{" "}
-                <A href="https://en.wikipedia.org/wiki/Haversine_formula">Haversine</A> distance,
-                connecting to several at once so no single operator is load-bearing.
+                <TextLink href="https://nostr.org">Nostr</TextLink> relays are chosen
+                geographically. The app ships a bundled list of over 350 public relays and picks the
+                nearest by{" "}
+                <TextLink href="https://en.wikipedia.org/wiki/Haversine_formula">
+                  Haversine
+                </TextLink>{" "}
+                distance, connecting to several at once so no single operator is load-bearing.
               </p>
 
               <Figure
@@ -1138,9 +1117,7 @@ export default function ArchitecturePage() {
 
               <p>
                 The inner rumor is deliberately unsigned.{" "}
-                <strong className="text-gray-900">
-                  That is not an oversight, it is deniability:
-                </strong>{" "}
+                <strong className="text-ink">That is not an oversight, it is deniability:</strong>{" "}
                 because nothing inside carries your signature, a leaked message cannot be
                 cryptographically proven to have come from you.
               </p>
@@ -1164,7 +1141,7 @@ export default function ArchitecturePage() {
                 ]}
               />
 
-              <h3 className="pt-2 text-base font-bold text-gray-900">Presence and its limits</h3>
+              <h3 className="text-ink pt-2 text-base font-bold">Presence and its limits</h3>
               <p>
                 Location channels show how many people are around. Broadcasting that is a location
                 leak, so it is restricted on purpose: heartbeats are only sent for coarse cells at
@@ -1175,7 +1152,7 @@ export default function ArchitecturePage() {
                 lockstep, and a key stays listed for 5 minutes after its last event.
               </p>
 
-              <h3 className="pt-2 text-base font-bold text-gray-900">The internet gateway</h3>
+              <h3 className="text-ink pt-2 text-base font-bold">The internet gateway</h3>
               <Figure caption="A phone with a connection carrying a nearby offline phone's public location traffic. Never applied to private messages.">
                 <InternetGateway />
               </Figure>
@@ -1189,7 +1166,7 @@ export default function ArchitecturePage() {
                 neighbor's behalf.
               </p>
 
-              <h3 className="pt-2 text-base font-bold text-gray-900">The mesh bridge</h3>
+              <h3 className="text-ink pt-2 text-base font-bold">The mesh bridge</h3>
               <Figure caption="Two Bluetooth crowds, out of radio range, sharing one public channel through a rendezvous cell on Nostr. Public channel only, never DMs.">
                 <MeshBridge />
               </Figure>
@@ -1219,11 +1196,14 @@ export default function ArchitecturePage() {
                   [
                     "Implementation",
                     <>
-                      <A href="https://arti.torproject.org">Arti</A>, compiled into the app binary
+                      <TextLink href="https://arti.torproject.org">Arti</TextLink>, compiled into
+                      the app binary
                     </>,
                     <>
-                      <A href="https://guardianproject.info/apps/org.torproject.android/">Orbot</A>,
-                      a separate app you install
+                      <TextLink href="https://guardianproject.info/apps/org.torproject.android/">
+                        Orbot
+                      </TextLink>
+                      , a separate app you install
                     </>,
                   ],
                   ["Covers", "The Nostr WebSocket only", "Every connection, as a system VPN"],
@@ -1241,7 +1221,7 @@ export default function ArchitecturePage() {
               </Note>
 
               <p>
-                <strong className="text-gray-900">
+                <strong className="text-ink">
                   Tor has no effect on the Bluetooth mesh, and cannot.
                 </strong>{" "}
                 Mesh traffic is radio-local: it never reaches an IP network, so there is nothing to
@@ -1260,9 +1240,9 @@ export default function ArchitecturePage() {
               </Figure>
 
               <p>
-                <A href="https://cashu.space">Cashu</A> is a Chaumian ecash protocol backed by
-                Bitcoin.{" "}
-                <strong className="text-gray-900">
+                <TextLink href="https://cashu.space">Cashu</TextLink> is a Chaumian ecash protocol
+                backed by Bitcoin.{" "}
+                <strong className="text-ink">
                   The mint is the one trusted party in the entire application,
                 </strong>{" "}
                 which is why Airhop ships with no default mint and never picks one for you. It
@@ -1296,15 +1276,14 @@ export default function ArchitecturePage() {
               />
 
               <Note label="Two limits the wallet cannot design around">
-                <strong className="text-gray-900">DLEQ proves origin, not freshness.</strong> A
-                valid proof shows the mint really signed that coin. It can never show the sender did
-                not already spend it, because only the mint knows that. So a coin received offline
-                is shown as unconfirmed on its own line rather than folded silently into your
-                balance.
+                <strong className="text-ink">DLEQ proves origin, not freshness.</strong> A valid
+                proof shows the mint really signed that coin. It can never show the sender did not
+                already spend it, because only the mint knows that. So a coin received offline is
+                shown as unconfirmed on its own line rather than folded silently into your balance.
                 <br />
                 <br />
-                <strong className="text-gray-900">Reclaiming is a race.</strong> An undelivered send
-                can be reclaimed because the coins were reserved rather than deleted, but if the
+                <strong className="text-ink">Reclaiming is a race.</strong> An undelivered send can
+                be reclaimed because the coins were reserved rather than deleted, but if the
                 recipient already holds the token string, whoever reaches the mint first keeps the
                 money. The app says so before you tap.
               </Note>
@@ -1334,8 +1313,8 @@ export default function ArchitecturePage() {
                 Airhop ships no model of its own. The app lists a few small open-weight models,
                 roughly 1 to 3 billion parameters in GGUF format, with the memory and storage each
                 one needs, and downloads the one you pick from{" "}
-                <A href="https://huggingface.co">Hugging Face</A>.{" "}
-                <strong className="text-gray-900">
+                <TextLink href="https://huggingface.co">Hugging Face</TextLink>.{" "}
+                <strong className="text-ink">
                   That download is the only moment the assistant touches a network.
                 </strong>{" "}
                 Everything after it runs locally.
@@ -1355,12 +1334,12 @@ export default function ArchitecturePage() {
             >
               <p>
                 Both networks build identity out of keys rather than usernames, which is why this
-                works at all. The <A href="https://atproto.com">AT Protocol</A>, which Bluesky runs
-                on, derives a <C>did:key</C> from your signing key.{" "}
-                <A href="https://www.w3.org/TR/activitypub/">ActivityPub</A>, the W3C standard
-                behind <A href="https://joinmastodon.org">Mastodon</A>, Pixelfed and PeerTube,
-                builds an Actor from the same key. Neither asks you to create an account, because
-                you already hold the only thing either of them needs.
+                works at all. The <TextLink href="https://atproto.com">AT Protocol</TextLink>, which
+                Bluesky runs on, derives a <C>did:key</C> from your signing key.{" "}
+                <TextLink href="https://w3.org/TR/activitypub/">ActivityPub</TextLink>, the W3C
+                standard behind <TextLink href="https://joinmastodon.org">Mastodon</TextLink>,
+                Pixelfed and PeerTube, builds an Actor from the same key. Neither asks you to create
+                an account, because you already hold the only thing either of them needs.
               </p>
 
               <Table
@@ -1380,10 +1359,8 @@ export default function ArchitecturePage() {
               />
 
               <Note label="What a plugin is not allowed to do">
-                <strong className="text-gray-900">
-                  Mesh traffic is never exposed to a plugin.
-                </strong>{" "}
-                A plugin sees only content you have explicitly marked as shareable, it cannot read
+                <strong className="text-ink">Mesh traffic is never exposed to a plugin.</strong> A
+                plugin sees only content you have explicitly marked as shareable, it cannot read
                 private keys, and it cannot contact the network on your behalf without a
                 confirmation for that specific action. Enabling one does not change the wire format,
                 the mesh, or any encryption described above.
@@ -1391,15 +1368,17 @@ export default function ArchitecturePage() {
 
               <p>
                 One integration was deliberately kept out of the core.{" "}
-                <A href="https://en.wikipedia.org/wiki/Unified_Payments_Interface">UPI</A>,
-                India&rsquo;s payment rail, settles bank to bank with full KYC linkage visible to
+                <TextLink href="https://en.wikipedia.org/wiki/Unified_Payments_Interface">
+                  UPI
+                </TextLink>
+                , India&rsquo;s payment rail, settles bank to bank with full KYC linkage visible to
                 NPCI, which is structurally incompatible with everything on this page. It exists as
                 an opt-in plugin for people who want to pay in rupees while online, gated behind a
                 disclosure that says exactly that, and it never touches the offline path. Cashu
                 remains the payment system Airhop is built around.
               </p>
 
-              <h3 className="pt-2 text-base font-bold text-gray-900">
+              <h3 className="text-ink pt-2 text-base font-bold">
                 Everything that is off until you turn it on
               </h3>
               <Table
@@ -1456,9 +1435,9 @@ export default function ArchitecturePage() {
                 ]}
               />
 
-              <h3 className="pt-2 text-base font-bold text-gray-900">The native contract</h3>
+              <h3 className="text-ink pt-2 text-base font-bold">The native contract</h3>
               <p>
-                <strong className="text-gray-900">The bridge is deliberately tiny</strong>, because
+                <strong className="text-ink">The bridge is deliberately tiny</strong>, because
                 anything richer would mean protocol knowledge on the native side, which is the one
                 thing this design exists to prevent. TypeScript calls down to start and stop
                 advertising, start and stop scanning, and write bytes to a link. Native calls back
@@ -1496,7 +1475,7 @@ export default function ArchitecturePage() {
                 and identifies the peer from its first ANNOUNCE.
               </p>
 
-              <h3 className="pt-2 text-base font-bold text-gray-900">Packet types</h3>
+              <h3 className="text-ink pt-2 text-base font-bold">Packet types</h3>
               <p>
                 Everything up to <C>0x29</C> is bitchat-defined and shared. bitchat allocates
                 forward and has reached <C>0x2c</C>, so Airhop&rsquo;s own types start at{" "}
@@ -1536,7 +1515,7 @@ export default function ArchitecturePage() {
               <Note label="How the signature survives relaying">
                 A relay has to decrement the TTL, which would invalidate a naive signature over the
                 whole packet. So{" "}
-                <strong className="text-gray-900">
+                <strong className="text-ink">
                   the signature is computed over the packet re-encoded with <C>ttl=0</C>
                 </strong>{" "}
                 and the signature field absent. Relays can decrement freely and tag solicited sync
@@ -1603,79 +1582,64 @@ export default function ArchitecturePage() {
               />
 
               <Note label="What it does not protect against">
-                <strong className="text-gray-900">Physical proximity.</strong> Being on a Bluetooth
-                mesh reveals that you are physically near certain people. That is inherent to the
-                medium.
+                <strong className="text-ink">Physical proximity.</strong> Being on a Bluetooth mesh
+                reveals that you are physically near certain people. That is inherent to the medium.
                 <br />
                 <br />
-                <strong className="text-gray-900">A linkable device.</strong> Your peer ID comes
-                from your long-term key, so it does not rotate. The same phone is recognisable
-                across sessions until you regenerate the identity. Only the per-area location
-                identities are throwaway.
+                <strong className="text-ink">A linkable device.</strong> Your peer ID comes from
+                your long-term key, so it does not rotate. The same phone is recognisable across
+                sessions until you regenerate the identity. Only the per-area location identities
+                are throwaway.
                 <br />
                 <br />
-                <strong className="text-gray-900">Attachments in the clear.</strong> Photos, files
-                and voice notes are signed but not encrypted, so that bitchat can read them. They
-                are therefore kept to the public Bluetooth room and direct mesh messages, and never
-                sent over the internet.
+                <strong className="text-ink">Attachments in the clear.</strong> Photos, files and
+                voice notes are signed but not encrypted, so that bitchat can read them. They are
+                therefore kept to the public Bluetooth room and direct mesh messages, and never sent
+                over the internet.
                 <br />
                 <br />
-                <strong className="text-gray-900">Timing correlation.</strong> An observer watching
+                <strong className="text-ink">Timing correlation.</strong> An observer watching
                 several radios at once can infer patterns from when packets move, even without
                 reading them.
                 <br />
                 <br />
-                <strong className="text-gray-900">A compromised operating system.</strong> If the OS
-                is owned, every guarantee above is void.
+                <strong className="text-ink">A compromised operating system.</strong> If the OS is
+                owned, every guarantee above is void.
                 <br />
                 <br />
-                <strong className="text-gray-900">Mint trust.</strong> Ecash requires trusting a
-                mint to hold the bitcoin and keep an honest list of what has been spent.
+                <strong className="text-ink">Mint trust.</strong> Ecash requires trusting a mint to
+                hold the bitcoin and keep an honest list of what has been spent.
               </Note>
             </Section>
 
-            <div className="border-t border-gray-100 pt-10">
-              <div className="font-mono text-[10px] font-semibold tracking-[0.25em] text-gray-400 uppercase">
+            <div className="border-line border-t pt-10">
+              <div className="text-mute font-mono text-[10px] font-semibold tracking-[0.25em] uppercase">
                 Go deeper
               </div>
-              <p className="mt-3 text-sm leading-relaxed text-gray-600">
+              <p className="text-secondary mt-3 text-sm leading-relaxed">
                 This page is the readable version. The specifications it is drawn from live in the
-                repository:{" "}
-                <A href="https://github.com/areebahmeddd/airhop/blob/main/docs/spec/ARCHITECTURE.md">
-                  ARCHITECTURE.md
-                </A>{" "}
+                repository: <TextLink href={REPO_LINKS.architectureDoc}>ARCHITECTURE.md</TextLink>{" "}
                 for design decisions,{" "}
-                <A href="https://github.com/areebahmeddd/airhop/blob/main/docs/spec/PROTOCOLS.md">
-                  PROTOCOLS.md
-                </A>{" "}
-                for exact byte layouts and constants,{" "}
-                <A href="https://github.com/areebahmeddd/airhop/blob/main/docs/dev/GLOSSARY.md">
-                  GLOSSARY.md
-                </A>{" "}
-                for terminology, and{" "}
-                <A href="https://github.com/areebahmeddd/airhop/blob/main/docs/dev/PROGRESS.md">
-                  PROGRESS.md
-                </A>{" "}
-                for build status and milestones.
+                <TextLink href={REPO_LINKS.protocolsDoc}>PROTOCOLS.md</TextLink> for exact byte
+                layouts and constants,{" "}
+                <TextLink href={REPO_LINKS.glossaryDoc}>GLOSSARY.md</TextLink> for terminology, and{" "}
+                <TextLink href={REPO_LINKS.progressDoc}>PROGRESS.md</TextLink> for build status and
+                milestones.
               </p>
-              <p className="mt-4 text-sm leading-relaxed text-gray-600">
+              <p className="text-secondary mt-4 text-sm leading-relaxed">
                 For the protocol Airhop inherits, read the{" "}
-                <A href="https://github.com/permissionlesstech/bitchat/blob/main/WHITEPAPER.md">
+                <TextLink href="https://github.com/permissionlesstech/bitchat/blob/main/WHITEPAPER.md">
                   bitchat protocol whitepaper
-                </A>
+                </TextLink>
                 . It covers the mesh layer, the store-and-forward stack and the Noise session model,
                 and is released into the public domain under the{" "}
-                <A href="https://github.com/permissionlesstech/bitchat/blob/main/LICENSE">
+                <TextLink href="https://github.com/permissionlesstech/bitchat/blob/main/LICENSE">
                   Unlicense
-                </A>
+                </TextLink>
                 .
               </p>
-              <p className="mt-4 text-sm leading-relaxed text-gray-600">
-                Shorter answers to most of this are in the{" "}
-                <Link to="/faq" className={LINK}>
-                  FAQ
-                </Link>
-                .
+              <p className="text-secondary mt-4 text-sm leading-relaxed">
+                Shorter answers to most of this are in the <TextLink href="/faq">FAQ</TextLink>.
               </p>
             </div>
           </div>

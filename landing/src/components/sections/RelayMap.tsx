@@ -1,3 +1,4 @@
+import { RELAY_COUNT, RELAY_SITES, type RelaySite } from "@/data/relays";
 import {
   geoBounds,
   geoContains,
@@ -10,10 +11,8 @@ import {
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { feature } from "topojson-client";
 import worldAtlas from "world-atlas/countries-110m.json?url";
-import { RELAY_COUNT, RELAY_SITES, type RelaySite } from "../data/relays";
 
 type Topology = Parameters<typeof feature>[0];
-type TopologyObject = Parameters<typeof feature>[1];
 
 const WIDTH = 800;
 const HEIGHT = 356;
@@ -102,7 +101,7 @@ function createCountryLookup(features: readonly ExtendedFeature[]) {
       if (!withinLng) continue;
 
       if (geoContains(features[i], [lng, lat])) {
-        const label = features[i].properties?.["name"];
+        const label: unknown = features[i].properties?.["name"];
         if (typeof label === "string") name = COUNTRY_LABELS[label] ?? label;
         break;
       }
@@ -130,9 +129,9 @@ export default function RelayMap() {
       .then((res) => res.json())
       .then((topology: Topology) => {
         if (cancelled) return;
-        const countries = feature(topology, topology.objects["countries"] as TopologyObject);
+        const countries = feature(topology, topology.objects["countries"]);
         const features = "features" in countries ? countries.features : [countries];
-        setLand(features.filter((f) => f.id !== ANTARCTICA_ID) as ExtendedFeature[]);
+        setLand(features.filter((f) => f.id !== ANTARCTICA_ID));
       })
       .catch(() => {});
 
@@ -229,15 +228,15 @@ export default function RelayMap() {
 
   const onBlur = useCallback(
     (e: React.FocusEvent<SVGSVGElement>) => {
-      if (!e.currentTarget.contains(e.relatedTarget as Node | null)) clear();
+      if (!e.currentTarget.contains(e.relatedTarget)) clear();
     },
     [clear],
   );
 
   return (
-    <div className="border-t border-gray-200 px-6 pt-5 pb-3">
+    <div className="px-6 pt-5 pb-3">
       <p
-        className="mb-2 truncate font-mono text-[9px] font-bold tracking-widest text-gray-500 uppercase"
+        className="text-secondary mb-2 h-4 truncate font-mono text-[10px] leading-4 font-bold tracking-widest uppercase"
         aria-live="polite"
         aria-atomic="true"
       >
@@ -279,8 +278,8 @@ export default function RelayMap() {
             <path
               key={i}
               d={d}
-              fill="#e5e7eb"
-              stroke="#fff"
+              fill="var(--t-inner)"
+              stroke="var(--t-card)"
               strokeWidth={0.5}
               pointerEvents="none"
             />
@@ -291,7 +290,7 @@ export default function RelayMap() {
               key={i}
               d={arc.d}
               fill="none"
-              stroke="#111827"
+              stroke="var(--t-ink)"
               strokeWidth={1}
               strokeOpacity={
                 active === null ? 0.3 : arc.a === active || arc.b === active ? 0.75 : 0.08
@@ -313,7 +312,7 @@ export default function RelayMap() {
                 cx={p[0]}
                 cy={p[1]}
                 r={isActive ? radius + 1.5 : radius}
-                fill="#111827"
+                fill="var(--t-ink)"
                 fillOpacity={active === null ? 0.75 : isActive ? 1 : 0.25}
                 pointerEvents="none"
               />
@@ -325,7 +324,7 @@ export default function RelayMap() {
               cy={map.points[active][1]}
               r={dotRadius(map.sites[active].relays) + 5}
               fill="none"
-              stroke="#111827"
+              stroke="var(--t-ink)"
               strokeWidth={1}
               strokeOpacity={0.5}
               pointerEvents="none"

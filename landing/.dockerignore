@@ -16,6 +16,8 @@ Dockerfile
 # Docs and tooling config
 README.md
 .prettierrc
+.prettierignore
+eslint.config.js
 
 # Environment and secrets
 .env

@@ -1,34 +1,43 @@
 # Airhop
 
-> Airhop is an open-source iOS and Android app for censorship-resistant communication. It works with zero internet connectivity using Bluetooth Low Energy mesh networking with multi-hop relay (up to 7 hops). When internet is available, Nostr relays serve as an internet bridge.
+> Airhop is a free, open-source iOS and Android messenger for censorship-resistant communication. It works with zero internet connectivity: nearby phones form a Bluetooth Low Energy mesh and relay messages for each other, up to 7 hops, end-to-end encrypted. When the internet is available, Nostr relays serve as a bridge beyond radio range.
 
-Airhop is free, MIT-licensed, and has no accounts, no ads, no telemetry, and no company or investors behind it. It is an independent side project built by Areeb Ahmed, built on the foundation of bitchat and wire-compatible with it. It is not affiliated with or endorsed by permissionlesstech or the bitchat project.
+Airhop is MIT-licensed and has no accounts, no ads, no telemetry, and no company or investors behind it. It is an independent side project built by Areeb Ahmed, built on the foundation of bitchat and wire-compatible with it. It is not affiliated with or endorsed by permissionlesstech or the bitchat project. Airhop has not had an external security audit; one is planned for v1.9.0.
 
-## Key Features
+## Key facts
 
-- Bluetooth mesh: communicate with no internet, messages relay up to 7 hops
-- End-to-end encryption: Noise XX handshake, Double Ratchet forward secrecy
-- Offline payments: ecash tokens sent directly over BLE
-- Offline AI: on-device assistant answers questions with zero network calls
-- No accounts: identity is an Ed25519 key pair stored in OS Keychain
-- Tor integration: iOS (Arti) and Android (Orbot)
-- bitchat compatible: Airhop and bitchat nodes interoperate on the same mesh
-- Panic wipe: triple-tap destroys all keys and messages in under one second
+- Bluetooth mesh: works with no internet, no router and no extra hardware; messages relay up to 7 hops, roughly 10 to 100 m per hop
+- End-to-end encryption: Noise XX handshake with X25519 and ChaCha20-Poly1305, plus Double Ratchet forward secrecy
+- No accounts: identity is an Ed25519 key pair generated on the device and stored in the iOS Keychain or Android Keystore
+- Offline payments: Cashu ecash tokens sent device to device over Bluetooth with neither phone online
+- Offline AI: an on-device assistant that answers questions with zero network calls
+- Tor integration: Arti on iOS, Orbot on Android, so relays never see your IP
+- bitchat compatible: Airhop and bitchat devices join the same mesh with no configuration
+- Panic wipe: triple-tap destroys every key and message in under one second
+- Platforms: iOS 16.0 and later, Android 8.0 and later; macOS and Windows planned
 
 ## Pages
 
-- / - What Airhop is, the feature list, how it works, and a live map of Nostr relay locations
-- /architecture - Technical breakdown in 17 sections: identity derivation, transport selection, BLE mesh internals (TTL 7, fragments, gossip sync, courier store-and-forward), Noise XX and Double Ratchet, the four room types, the Nostr bridge, Tor, the Cashu wallet, and the bitchat-compatible v2 wire format
-- /faq - Common questions on the mesh, messaging, privacy, payments and the AI assistant
-- /blogs - Writing on mesh networking, privacy and offline-first software
-- /brand - Brand kit: the mark and wordmark, colour and type tokens, downloadable assets, press facts and boilerplate
-- /privacy-policy - What stays on the device, what each optional feature exposes, and how long anything is kept
-- /terms-of-service - Acceptable use, content, payments, warranty, and the MIT licence
+- [Home](https://airhop.1mindlabs.org/): What Airhop is, when you would need it, the feature list, how the mesh works, a comparison against other private messengers, and a map of Nostr relay locations
+- [Architecture](https://airhop.1mindlabs.org/architecture): Technical breakdown in 19 sections covering identity derivation, transport selection, BLE mesh internals (TTL 7, fragments, Golomb-coded gossip sync, courier store-and-forward), Noise XX and Double Ratchet, the four room types, the Nostr bridge, Tor, the Cashu wallet, the module map, the bitchat-compatible v2 wire format, and the threat model
+- [FAQ](https://airhop.1mindlabs.org/faq): Answers on the mesh, messaging, privacy and security, everyday use, payments, the AI assistant, and the open-source project
+- [Brand kit](https://airhop.1mindlabs.org/brand): The pixel bird mark and wordmark, colour and type tokens, downloadable press assets, press facts and boilerplate
+- [Privacy policy](https://airhop.1mindlabs.org/privacy-policy): What stays on the device, what each optional feature exposes to peers and relays, and how long anything is kept
+- [Terms of service](https://airhop.1mindlabs.org/terms-of-service): Acceptable use, content you post, payments and mint risk, warranty, and the MIT licence
+- [Blog](https://airhop.1mindlabs.org/blogs): Writing on mesh networking, privacy and offline-first software (not yet published)
 
-## Links
+## Specifications
 
-- Website: https://airhop.1mindlabs.org
-- GitHub: https://github.com/areebahmeddd/airhop
-- iOS: https://apps.apple.com/app/airhop/id000000000
-- Android: https://play.google.com/store/apps/details?id=org.onemindlabs.airhop
-- F-Droid: https://f-droid.org/en/packages/org.onemindlabs.airhop
+- [Architecture specification](https://github.com/areebahmeddd/airhop/blob/main/docs/spec/ARCHITECTURE.md): Design decisions behind the protocol and the app
+- [Protocol specification](https://github.com/areebahmeddd/airhop/blob/main/docs/spec/PROTOCOLS.md): Exact byte layouts, BLE service UUIDs, packet types and constants, shared with bitchat
+- [Glossary](https://github.com/areebahmeddd/airhop/blob/main/docs/dev/GLOSSARY.md): Terminology used across the project
+- [Roadmap](https://github.com/areebahmeddd/airhop/blob/main/docs/design/ROADMAP.md): Version targets, including the planned external security audit at v1.9.0
+- [Vision](https://github.com/areebahmeddd/airhop/blob/main/docs/design/VISION.md): Why Airhop exists and the principles behind it
+
+## Optional
+
+- [Source code](https://github.com/areebahmeddd/airhop): Full source under the MIT licence, with issues and discussions open
+- [App Store](https://apps.apple.com/app/airhop/id000000000): iOS download
+- [Google Play](https://play.google.com/store/apps/details?id=org.onemindlabs.airhop): Android download
+- [F-Droid](https://f-droid.org/en/packages/org.onemindlabs.airhop): Android download from the F-Droid catalogue
+- [bitchat](https://bitchat.free): The project Airhop is built on and stays wire-compatible with

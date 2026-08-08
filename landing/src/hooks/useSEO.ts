@@ -1,11 +1,11 @@
+import { SITE_URL } from "@/lib/links";
 import { useEffect } from "react";
-
-const SITE_URL = "https://airhop.1mindlabs.org";
 
 interface SEOOptions {
   title: string;
   description: string;
   path: string;
+  type?: "website" | "article";
   noIndex?: boolean;
 }
 
@@ -29,17 +29,18 @@ function setLink(rel: string, href: string) {
   el.setAttribute("href", href);
 }
 
-export function useSEO({ title, description, path, noIndex }: SEOOptions) {
+export function useSEO({ title, description, path, type = "website", noIndex }: SEOOptions) {
   useEffect(() => {
-    const url = `${SITE_URL}${path}`;
+    const url = path === "/" ? SITE_URL : `${SITE_URL}${path}`;
     document.title = title;
     setMeta("name", "description", description);
     setMeta("name", "robots", noIndex ? "noindex, nofollow" : "index, follow");
     if (!noIndex) setLink("canonical", url);
+    setMeta("property", "og:type", type);
     setMeta("property", "og:title", title);
     setMeta("property", "og:description", description);
     setMeta("property", "og:url", url);
     setMeta("name", "twitter:title", title);
     setMeta("name", "twitter:description", description);
-  }, [title, description, path, noIndex]);
+  }, [title, description, path, type, noIndex]);
 }

@@ -1,28 +1,160 @@
-@import "@fontsource/jetbrains-mono/latin-300.css";
 @import "@fontsource/jetbrains-mono/latin-400.css";
 @import "@fontsource/jetbrains-mono/latin-500.css";
 @import "@fontsource/jetbrains-mono/latin-600.css";
 @import "@fontsource/jetbrains-mono/latin-700.css";
-@import "@fontsource/jetbrains-mono/latin-800.css";
 @import "tailwindcss";
 
-@theme {
-  --font-sans: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+:root {
+  color-scheme: light;
+  --t-canvas: #ffffff;
+  --t-card: #fcfcfd;
+  --t-card-subtle: #f9f9fb;
+  --t-inner: #f0f0f3;
+  --t-hover: #e8e8ec;
+  --t-line: #d9d9e0;
+  --t-line-strong: #cdced6;
+  --t-mute: #6e7178;
+  --t-secondary: #60646c;
+  --t-ink: #1c2024;
+  --relay: #2563eb;
+  --ok: #16a34a;
+  --alert: #dc2626;
+  --grad-hi: #ffffff;
+  --grad-lo: #fafafc;
+  --dg-ink: #1c2024;
+  --dg-mute: #60646c;
+  --dg-line: #cdced6;
+  --dg-fill: #ffffff;
+  --dg-soft: #f0f0f3;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
+    --t-canvas: #0c0d0e;
+    --t-card: #17181a;
+    --t-card-subtle: #1e2022;
+    --t-inner: #282a2d;
+    --t-hover: #2f3134;
+    --t-line: #363a3f;
+    --t-line-strong: #43484e;
+    --t-mute: #878b94;
+    --t-secondary: #b0b4ba;
+    --t-ink: #edeef0;
+    --relay: #5b8def;
+    --ok: #35c66b;
+    --alert: #f0555a;
+    --grad-hi: #1a1c1e;
+    --grad-lo: #141618;
+    --dg-ink: #edeef0;
+    --dg-mute: #b0b4ba;
+    --dg-line: #43484e;
+    --dg-fill: #212225;
+    --dg-soft: #272a2d;
+  }
+}
+
+@supports (interpolate-size: allow-keywords) {
+  :root {
+    interpolate-size: allow-keywords;
+  }
+}
+
+@theme inline {
+  --font-sans:
+    -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans",
+    sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --color-canvas: var(--t-canvas);
+  --color-card: var(--t-card);
+  --color-card-subtle: var(--t-card-subtle);
+  --color-inner: var(--t-inner);
+  --color-hover: var(--t-hover);
+  --color-line: var(--t-line);
+  --color-line-strong: var(--t-line-strong);
+  --color-mute: var(--t-mute);
+  --color-secondary: var(--t-secondary);
+  --color-ink: var(--t-ink);
+  --color-relay: var(--relay);
+  --color-ok: var(--ok);
+  --color-alert: var(--alert);
+  --color-white: var(--t-canvas);
+  --color-black: var(--t-ink);
+  --color-gray-50: var(--t-card-subtle);
+  --color-gray-100: var(--t-inner);
+  --color-gray-200: var(--t-line);
+  --color-gray-300: var(--t-line-strong);
+  --color-gray-400: var(--t-secondary);
+  --color-gray-500: var(--t-secondary);
+  --color-gray-600: var(--t-secondary);
+  --color-gray-700: var(--t-secondary);
+  --color-gray-800: var(--t-ink);
+  --color-gray-900: var(--t-ink);
 }
 
 html {
   scroll-behavior: smooth;
 }
 
-@layer utilities {
-  .dot-grid {
-    background-image: radial-gradient(#f0f0f0 1.5px, transparent 1.5px);
-    background-size: 24px 24px;
-  }
+body {
+  background-color: var(--t-canvas);
+  color: var(--t-ink);
+  font-variant-numeric: tabular-nums;
+  -webkit-font-smoothing: antialiased;
+}
 
+:focus-visible {
+  outline: 2px solid var(--t-ink);
+  outline-offset: 2px;
+}
+
+.bg-card {
+  background-image: linear-gradient(to bottom, var(--grad-hi), var(--grad-lo));
+}
+
+.dot-field,
+.dot-field-up {
+  background-image: radial-gradient(var(--t-line-strong) 1px, transparent 1px);
+  background-size: 10px 10px;
+}
+
+.dot-field {
+  -webkit-mask-image: linear-gradient(to bottom, black, transparent 72%);
+  mask-image: linear-gradient(to bottom, black, transparent 72%);
+}
+
+.dot-field-up {
+  -webkit-mask-image: linear-gradient(to top, black, transparent 72%);
+  mask-image: linear-gradient(to top, black, transparent 72%);
+}
+
+.disclose::details-content {
+  block-size: 0;
+  overflow: hidden;
+  transition:
+    block-size 0.22s ease-out,
+    content-visibility 0.22s allow-discrete;
+}
+
+.disclose[open]::details-content {
+  block-size: auto;
+}
+
+@keyframes heroUnderline {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+.hero-underline {
+  stroke-dasharray: 100;
+  stroke-dashoffset: 100;
+  animation: heroUnderline 0.45s ease-out forwards;
+}
+
+@layer utilities {
   .heart-pixel {
-    fill: #000;
+    fill: var(--t-ink);
     animation-duration: 7s;
     animation-iteration-count: infinite;
     animation-timing-function: linear;
@@ -32,6 +164,10 @@ html {
 @media (prefers-reduced-motion: reduce) {
   html {
     scroll-behavior: auto;
+  }
+
+  .disclose::details-content {
+    transition: none;
   }
 
   *,

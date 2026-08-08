@@ -1,5 +1,6 @@
+import { useSEO } from "@/hooks/useSEO";
+import { ArrowLeft } from "lucide-react";
 import { Link } from "react-router-dom";
-import { useSEO } from "../hooks/useSEO";
 
 export default function NotFoundPage() {
   useSEO({
@@ -12,24 +13,29 @@ export default function NotFoundPage() {
   return (
     <main
       id="main-content"
-      className="flex min-h-[calc(100vh-64px)] flex-col items-center justify-center px-6 text-center"
+      className="flex flex-1 flex-col items-center justify-center px-6 py-16 text-center"
     >
-      <div className="space-y-4">
-        <div className="font-mono text-xs font-semibold tracking-[0.25em] text-gray-400 uppercase">
+      <div className="flex flex-col items-center gap-4">
+        <span className="text-secondary font-mono text-[11px] font-semibold tracking-[0.25em] uppercase">
           404
-        </div>
-        <h1 className="text-3xl font-extrabold tracking-tight text-black sm:text-4xl">
+        </span>
+        <h1 className="text-ink text-3xl font-semibold tracking-tight sm:text-4xl">
           Page not found
         </h1>
-        <p className="mx-auto max-w-sm font-mono text-sm leading-relaxed font-light text-gray-500">
+        <p className="text-secondary mx-auto max-w-sm text-sm leading-relaxed">
           The page you are looking for does not exist or has been moved.
         </p>
         <div className="pt-2">
           <Link
             to="/"
-            className="inline-block bg-black px-6 py-3 font-mono text-xs font-bold tracking-widest text-white transition-all hover:bg-black/90"
+            className="group/btn bg-ink text-canvas inline-flex min-h-11 items-center gap-2 rounded-full px-6 text-sm font-medium transition-opacity duration-150 hover:opacity-90"
           >
-            BACK TO HOME
+            <ArrowLeft
+              size={14}
+              aria-hidden="true"
+              className="transition-transform duration-150 group-hover/btn:-translate-x-0.5"
+            />
+            Back to home
           </Link>
         </div>
       </div>

@@ -1,25 +1,20 @@
-import { useSEO } from "../hooks/useSEO";
+import { useSEO } from "@/hooks/useSEO";
+import { SEO } from "@/lib/seo";
 
 export default function BlogsPage() {
-  useSEO({
-    title: "Blog - Airhop",
-    description: "Writing on mesh networking, privacy, and offline-first software.",
-    path: "/blogs",
-  });
+  useSEO(SEO["/blogs"]);
 
   return (
     <main
       id="main-content"
-      className="flex min-h-[calc(100vh-64px)] flex-col items-center justify-center px-6 text-center"
+      className="flex flex-1 flex-col items-center justify-center px-6 py-24 text-center"
     >
-      <div className="space-y-4">
-        <div className="font-mono text-xs font-semibold tracking-[0.25em] text-gray-400 uppercase">
-          BLOG
-        </div>
-        <h1 className="text-3xl font-extrabold tracking-tight text-black sm:text-4xl">
-          Coming soon
-        </h1>
-        <p className="mx-auto max-w-sm font-mono text-sm leading-relaxed font-light text-gray-500">
+      <div className="flex flex-col items-center gap-4">
+        <span className="text-secondary font-mono text-[11px] font-semibold tracking-[0.25em] uppercase">
+          Blog
+        </span>
+        <h1 className="text-ink text-3xl font-semibold tracking-tight sm:text-4xl">Coming soon</h1>
+        <p className="text-secondary mx-auto max-w-sm text-sm leading-relaxed">
           Writing on mesh networking, privacy, and offline-first software.
         </p>
       </div>

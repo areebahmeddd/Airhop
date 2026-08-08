@@ -16,7 +16,7 @@
       "project": ["src/**/*.{ts,tsx,js}", "scripts/**/*.js", "press/**/*.mjs"]
     },
     "landing": {
-      "project": ["src/**/*.{ts,tsx}"]
+      "project": ["src/**/*.{ts,tsx,css}", "plugins/**/*.ts"]
     }
   }
 }

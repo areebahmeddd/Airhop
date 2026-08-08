@@ -1,12 +1,12 @@
-import { ArrowLeft } from "lucide-react";
-import { isValidElement } from "react";
-import { Link } from "react-router-dom";
-import { useSEO } from "../hooks/useSEO";
+import TextLink from "@/components/ui/TextLink";
+import { REPO_LINKS, REPO_URL } from "@/lib/links";
 
-const SECTIONS: {
+export interface FaqSection {
   heading: string;
   questions: { q: string; a: React.ReactNode }[];
-}[] = [
+}
+
+export const FAQ_SECTIONS: FaqSection[] = [
   {
     heading: "Basics",
     questions: [
@@ -29,15 +29,8 @@ const SECTIONS: {
         a: (
           <>
             Yes. Airhop is completely free, open-source under the{" "}
-            <a
-              href="https://github.com/areebahmeddd/airhop/blob/main/LICENSE"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-gray-900 underline underline-offset-2 transition-colors hover:text-gray-600"
-            >
-              MIT license
-            </a>
-            , and has <strong>no ads, no subscriptions, and no paywall of any kind.</strong>
+            <TextLink href={REPO_LINKS.license}>MIT license</TextLink>, and has{" "}
+            <strong>no ads, no subscriptions, and no paywall of any kind.</strong>
           </>
         ),
       },
@@ -52,16 +45,8 @@ const SECTIONS: {
             Most private messengers fall into three groups. Apps like Signal and Session are strong
             on privacy but need the internet, so they go down when the network does. Meshtastic and
             goTenna work offline but only with a separate radio you have to buy and carry. Briar,
-            Berty, Bridgefy and{" "}
-            <a
-              href="https://bitchat.free"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-gray-900 underline underline-offset-2 transition-colors hover:text-gray-600"
-            >
-              bitchat
-            </a>{" "}
-            run phone to phone on hardware you already own, and that is where Airhop sits.
+            Berty, Bridgefy and <TextLink href="https://bitchat.free">bitchat</TextLink> run phone
+            to phone on hardware you already own, and that is where Airhop sits.
             <br />
             <br />
             Against bitchat specifically, Airhop is built on top of it and stays wire-compatible,
@@ -104,16 +89,8 @@ const SECTIONS: {
               </li>
             </ul>
             Desktop, browser, and watch apps are not here yet, but those are planned rather than
-            ruled out. The{" "}
-            <a
-              href="https://github.com/areebahmeddd/airhop/blob/main/docs/design/ROADMAP.md"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-gray-900 underline underline-offset-2 transition-colors hover:text-gray-600"
-            >
-              roadmap
-            </a>{" "}
-            tracks what is next.
+            ruled out. The <TextLink href={REPO_LINKS.roadmapDoc}>roadmap</TextLink> tracks what is
+            next.
           </>
         ),
       },
@@ -196,13 +173,8 @@ const SECTIONS: {
             <br />
             Live voice can be switched off entirely in Settings, and incoming audio only plays while
             you have that conversation open in front of you. The{" "}
-            <Link
-              to="/architecture"
-              className="text-gray-900 underline underline-offset-2 transition-colors hover:text-gray-600"
-            >
-              architecture page
-            </Link>{" "}
-            describes how the frames travel.
+            <TextLink href="/architecture">architecture page</TextLink> describes how the frames
+            travel.
           </>
         ),
       },
@@ -221,16 +193,9 @@ const SECTIONS: {
             <br />
             <br />
             For communication beyond Bluetooth range, Airhop automatically uses the{" "}
-            <a
-              href="https://fiatjaf.com/nostr.html"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-gray-900 underline underline-offset-2 transition-colors hover:text-gray-600"
-            >
-              Nostr
-            </a>{" "}
-            internet fallback to reach a contact who is online but out of range. Location channels
-            also require a connection.
+            <TextLink href="https://fiatjaf.com/nostr.html">Nostr</TextLink> internet fallback to
+            reach a contact who is online but out of range. Location channels also require a
+            connection.
           </>
         ),
       },
@@ -239,25 +204,13 @@ const SECTIONS: {
         a: (
           <>
             They are two modes of the same Bluetooth chip in your phone.{" "}
-            <a
-              href="https://en.wikipedia.org/wiki/Bluetooth"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-gray-900 underline underline-offset-2 transition-colors hover:text-gray-600"
-            >
-              Classic Bluetooth
-            </a>{" "}
-            is the one you already use every day. It pairs two devices and holds the connection
-            open, which is what wireless headphones, car audio, and file transfers rely on. It moves
-            data quickly, but it drains the battery and only talks to what you have paired.{" "}
-            <a
-              href="https://en.wikipedia.org/wiki/Bluetooth_Low_Energy"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-gray-900 underline underline-offset-2 transition-colors hover:text-gray-600"
-            >
+            <TextLink href="https://en.wikipedia.org/wiki/Bluetooth">Classic Bluetooth</TextLink> is
+            the one you already use every day. It pairs two devices and holds the connection open,
+            which is what wireless headphones, car audio, and file transfers rely on. It moves data
+            quickly, but it drains the battery and only talks to what you have paired.{" "}
+            <TextLink href="https://en.wikipedia.org/wiki/Bluetooth_Low_Energy">
               Bluetooth Low Energy
-            </a>{" "}
+            </TextLink>{" "}
             is the lighter mode. Devices announce themselves and listen in short bursts instead of
             pairing, so one phone can see many nearby devices at once and the radio sleeps between
             packets.
@@ -281,7 +234,7 @@ const SECTIONS: {
       },
       {
         q: "What media can I send?",
-        a: "Images, voice notes, videos, and any other file format, all over Bluetooth using chunked streaming. Large files are split into fragments, paced so the radio is not overrun, and reassembled on the other side. Videos are sent as files and play inline; they are not live streams. The 1 MB ceiling is bitchat's, enforced the moment it decodes a packet, so raising it would mean every bitchat peer silently dropping the file; photos and voice notes are capped tighter at 512 KB for the same reason. Bluetooth carries roughly 22 KB/s, so a file near the 1 MB limit takes about 45 seconds, but it works with no internet at all. On Android to Android or iPhone to iPhone, a faster direct WiFi link is used automatically when both devices support it.",
+        a: "Images, voice notes, videos, and any other file format, all over Bluetooth using chunked streaming. Large files are split into fragments, paced so the radio is not overrun, and reassembled on the other side. Videos are sent as files and play inline; they are not live streams. The 1 MB ceiling is bitchat's, enforced the moment it decodes a packet, so raising it would mean every bitchat peer silently dropping the file; photos and voice notes are capped tighter at 512 KB for the same reason. Bluetooth carries roughly 19 KB/s, so a file near the 1 MB limit takes about 56 seconds, but it works with no internet at all. On Android to Android or iPhone to iPhone, a faster direct WiFi link is used automatically when both devices support it.",
       },
       {
         q: "Why is there no video or voice calling?",
@@ -321,16 +274,7 @@ const SECTIONS: {
             Place an Airhop device and a bitchat device in the same room and they automatically join
             one mesh, relay each other's messages, and exchange direct messages with no
             configuration and no awareness that different software is running. The full wire format
-            is documented in{" "}
-            <a
-              href="https://github.com/areebahmeddd/airhop/blob/main/docs/spec/PROTOCOLS.md"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-gray-900 underline underline-offset-2 transition-colors hover:text-gray-600"
-            >
-              PROTOCOLS.md
-            </a>
-            .
+            is documented in <TextLink href={REPO_LINKS.protocolsDoc}>PROTOCOLS.md</TextLink>.
           </>
         ),
       },
@@ -344,24 +288,11 @@ const SECTIONS: {
         a: (
           <>
             When you and a contact are out of Bluetooth range and internet is available, Airhop uses{" "}
-            <a
-              href="https://fiatjaf.com/nostr.html"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-gray-900 underline underline-offset-2 transition-colors hover:text-gray-600"
-            >
-              Nostr
-            </a>{" "}
-            relays as an optional internet fallback to continue the conversation. Messages are sent
-            as{" "}
-            <a
-              href="https://github.com/nostr-protocol/nips/blob/master/17.md"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-gray-900 underline underline-offset-2 transition-colors hover:text-gray-600"
-            >
+            <TextLink href="https://fiatjaf.com/nostr.html">Nostr</TextLink> relays as an optional
+            internet fallback to continue the conversation. Messages are sent as{" "}
+            <TextLink href="https://github.com/nostr-protocol/nips/blob/master/17.md">
               NIP-17
-            </a>{" "}
+            </TextLink>{" "}
             gift-wrapped direct messages, so relay operators cannot read them.
           </>
         ),
@@ -401,27 +332,13 @@ const SECTIONS: {
         a: (
           <>
             Neither{" "}
-            <a
-              href="https://en.wikipedia.org/wiki/Centralisation"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-gray-900 underline underline-offset-2 transition-colors hover:text-gray-600"
-            >
-              centralized
-            </a>{" "}
-            nor web3. There is no blockchain, no token, and no company that owns it. Nostr relays
-            are just servers run by independent operators on any hosting provider, not only a couple
-            of big cloud platforms, so no single relay can lock you out or control the network. You
-            are not tied to one relay either. If an operator disappears or blocks you, you move to
+            <TextLink href="https://en.wikipedia.org/wiki/Centralisation">centralized</TextLink> nor
+            web3. There is no blockchain, no token, and no company that owns it. Nostr relays are
+            just servers run by independent operators on any hosting provider, not only a couple of
+            big cloud platforms, so no single relay can lock you out or control the network. You are
+            not tied to one relay either. If an operator disappears or blocks you, you move to
             another. That is what makes it{" "}
-            <a
-              href="https://en.wikipedia.org/wiki/Decentralization"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-gray-900 underline underline-offset-2 transition-colors hover:text-gray-600"
-            >
-              decentralized
-            </a>
+            <TextLink href="https://en.wikipedia.org/wiki/Decentralization">decentralized</TextLink>
             : not a blockchain consensus mechanism, just nobody being able to own the whole network.
           </>
         ),
@@ -442,75 +359,23 @@ const SECTIONS: {
             <p className="mt-3">
               Every alternative pulled the design back toward a single point of control. The
               traditional approach, plain{" "}
-              <a
-                href="https://en.wikipedia.org/wiki/Transmission_Control_Protocol"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-gray-900 underline underline-offset-2 transition-colors hover:text-gray-600"
-              >
+              <TextLink href="https://en.wikipedia.org/wiki/Transmission_Control_Protocol">
                 TCP
-              </a>{" "}
+              </TextLink>{" "}
               or{" "}
-              <a
-                href="https://en.wikipedia.org/wiki/User_Datagram_Protocol"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-gray-900 underline underline-offset-2 transition-colors hover:text-gray-600"
-              >
-                UDP
-              </a>{" "}
+              <TextLink href="https://en.wikipedia.org/wiki/User_Datagram_Protocol">UDP</TextLink>{" "}
               connections to a server we run, means one machine at a fixed address that everyone
               must trust and anyone can block or seize, on top of firewall and NAT hurdles.
-              Federated servers like{" "}
-              <a
-                href="https://matrix.org"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-gray-900 underline underline-offset-2 transition-colors hover:text-gray-600"
-              >
-                Matrix
-              </a>{" "}
-              or{" "}
-              <a
-                href="https://xmpp.org"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-gray-900 underline underline-offset-2 transition-colors hover:text-gray-600"
-              >
-                XMPP
-              </a>{" "}
-              soften that but still need accounts and a homeserver you run or trust. Fully
-              peer-to-peer stacks like{" "}
-              <a
-                href="https://waku.org"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-gray-900 underline underline-offset-2 transition-colors hover:text-gray-600"
-              >
-                Waku
-              </a>{" "}
-              or{" "}
-              <a
-                href="https://libp2p.io"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-gray-900 underline underline-offset-2 transition-colors hover:text-gray-600"
-              >
-                libp2p
-              </a>{" "}
-              match the spirit but carry a heavy peer-discovery layer with far fewer ready public
-              nodes.{" "}
-              <a
-                href="https://scuttlebutt.nz"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-gray-900 underline underline-offset-2 transition-colors hover:text-gray-600"
-              >
-                Secure Scuttlebutt
-              </a>{" "}
-              keeps a permanent, fully replicated log of everything, the opposite of an ephemeral
-              messenger. Nostr is the smallest option that stays serverless in practice, asks
-              nothing of us, and already interoperates with bitchat.
+              Federated servers like <TextLink href="https://matrix.org">Matrix</TextLink> or{" "}
+              <TextLink href="https://xmpp.org">XMPP</TextLink> soften that but still need accounts
+              and a homeserver you run or trust. Fully peer-to-peer stacks like{" "}
+              <TextLink href="https://waku.org">Waku</TextLink> or{" "}
+              <TextLink href="https://libp2p.io">libp2p</TextLink> match the spirit but carry a
+              heavy peer-discovery layer with far fewer ready public nodes.{" "}
+              <TextLink href="https://scuttlebutt.nz">Secure Scuttlebutt</TextLink> keeps a
+              permanent, fully replicated log of everything, the opposite of an ephemeral messenger.
+              Nostr is the smallest option that stays serverless in practice, asks nothing of us,
+              and already interoperates with bitchat.
             </p>
           </>
         ),
@@ -530,39 +395,16 @@ const SECTIONS: {
             Yes, and Airhop's custom relays are built for it. A relay is just a small always-on
             server, and a 1 GB VPS runs a personal or small-community one for a few dollars a month.
             Popular open-source options are{" "}
-            <a
-              href="https://github.com/hoytech/strfry"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-gray-900 underline underline-offset-2 transition-colors hover:text-gray-600"
-            >
-              strfry
-            </a>{" "}
-            (fast, C++), nostr-rs-relay (lightweight, Rust and SQLite), and{" "}
-            <a
-              href="https://github.com/fiatjaf/khatru"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-gray-900 underline underline-offset-2 transition-colors hover:text-gray-600"
-            >
-              khatru
-            </a>{" "}
-            (a Go framework from Nostr's creator, for building your own). If you would rather not
-            touch a terminal, the{" "}
-            <a
-              href="https://apps.umbrel.com/app/nostr-relay"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-gray-900 underline underline-offset-2 transition-colors hover:text-gray-600"
-            >
-              Umbrel
-            </a>{" "}
-            and Start9 app stores install a relay in one click on a home server. One requirement:
-            Airhop accepts only secure public relays, so put yours behind a domain with TLS (a
-            reverse proxy like Caddy, or a Cloudflare Tunnel) and reach it at
-            wss://your-relay.example.com. Plain ws://, IP addresses, and local names are rejected,
-            the same bar other Nostr clients and bitchat use. Then add the URL under Network &amp;
-            Relays → Custom relays.
+            <TextLink href="https://github.com/hoytech/strfry">strfry</TextLink> (fast, C++),
+            nostr-rs-relay (lightweight, Rust and SQLite), and{" "}
+            <TextLink href="https://github.com/fiatjaf/khatru">khatru</TextLink> (a Go framework
+            from Nostr's creator, for building your own). If you would rather not touch a terminal,
+            the <TextLink href="https://apps.umbrel.com/app/nostr-relay">Umbrel</TextLink> and
+            Start9 app stores install a relay in one click on a home server. One requirement: Airhop
+            accepts only secure public relays, so put yours behind a domain with TLS (a reverse
+            proxy like Caddy, or a Cloudflare Tunnel) and reach it at wss://your-relay.example.com.
+            Plain ws://, IP addresses, and local names are rejected, the same bar other Nostr
+            clients and bitchat use. Then add the URL under Network &amp; Relays → Custom relays.
           </>
         ),
       },
@@ -571,32 +413,12 @@ const SECTIONS: {
         a: (
           <>
             Yes, optionally, on both platforms.{" "}
-            <a
-              href="https://torproject.org"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-gray-900 underline underline-offset-2 transition-colors hover:text-gray-600"
-            >
-              Tor
-            </a>{" "}
-            covers Nostr traffic specifically. iOS uses{" "}
-            <a
-              href="https://arti.torproject.org"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-gray-900 underline underline-offset-2 transition-colors hover:text-gray-600"
-            >
-              Arti
-            </a>
-            , Android uses{" "}
-            <a
-              href="https://guardianproject.info/apps/org.torproject.android/"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-gray-900 underline underline-offset-2 transition-colors hover:text-gray-600"
-            >
+            <TextLink href="https://torproject.org">Tor</TextLink> covers Nostr traffic
+            specifically. iOS uses <TextLink href="https://arti.torproject.org">Arti</TextLink>,
+            Android uses{" "}
+            <TextLink href="https://guardianproject.info/apps/org.torproject.android/">
               Orbot
-            </a>
+            </TextLink>
             . When enabled, all Nostr relay traffic is routed over Tor. It has no effect on the BLE
             mesh itself, which never touches the internet either way.
           </>
@@ -612,72 +434,37 @@ const SECTIONS: {
         a: (
           <>
             <strong>
-              <a
-                href="https://en.wikipedia.org/wiki/Peer-to-peer"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-gray-900 underline underline-offset-2 transition-colors hover:text-gray-600"
-              >
-                Peer-to-peer
-              </a>
-              : yes.
+              <TextLink href="https://en.wikipedia.org/wiki/Peer-to-peer">Peer-to-peer</TextLink>:
+              yes.
             </strong>{" "}
             The Bluetooth mesh needs no server at all, and the optional Nostr relays are swappable
             and store nothing you depend on.
             <br />
             <br />
             <strong>
-              <a
-                href="https://en.wikipedia.org/wiki/End-to-end_encryption"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-gray-900 underline underline-offset-2 transition-colors hover:text-gray-600"
-              >
+              <TextLink href="https://en.wikipedia.org/wiki/End-to-end_encryption">
                 End-to-end encrypted
-              </a>
+              </TextLink>
               : yes.
             </strong>
             <ul className="my-2 list-disc space-y-1 pl-5">
               <li>
                 <strong>Direct messages:</strong>{" "}
-                <a
-                  href="https://noiseprotocol.org/noise.html"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-gray-900 underline underline-offset-2 transition-colors hover:text-gray-600"
-                >
-                  Noise XX
-                </a>{" "}
-                with{" "}
-                <a
-                  href="https://signal.org/docs/specifications/doubleratchet/"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-gray-900 underline underline-offset-2 transition-colors hover:text-gray-600"
-                >
+                <TextLink href="https://noiseprotocol.org/noise.html">Noise XX</TextLink> with{" "}
+                <TextLink href="https://signal.org/docs/specifications/doubleratchet/">
                   Double Ratchet
-                </a>{" "}
+                </TextLink>{" "}
                 forward secrecy, plus{" "}
-                <a
-                  href="https://github.com/nostr-protocol/nips/blob/master/17.md"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-gray-900 underline underline-offset-2 transition-colors hover:text-gray-600"
-                >
+                <TextLink href="https://github.com/nostr-protocol/nips/blob/master/17.md">
                   NIP-17
-                </a>{" "}
+                </TextLink>{" "}
                 gift-wrapping when they travel over the internet.
               </li>
               <li>
                 <strong>Private channels:</strong>{" "}
-                <a
-                  href="https://en.wikipedia.org/wiki/ChaCha20-Poly1305"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-gray-900 underline underline-offset-2 transition-colors hover:text-gray-600"
-                >
+                <TextLink href="https://en.wikipedia.org/wiki/ChaCha20-Poly1305">
                   XChaCha20-Poly1305
-                </a>{" "}
+                </TextLink>{" "}
                 under a random 32-byte key that only members hold. Nothing on the wire names the
                 channel, so an outsider cannot tell which channel a message belongs to, or that they
                 are missing one.
@@ -748,33 +535,15 @@ const SECTIONS: {
         q: "Do I need an account?",
         a: (
           <>
-            No. Your identity is an{" "}
-            <a
-              href="https://ed25519.cr.yp.to"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-gray-900 underline underline-offset-2 transition-colors hover:text-gray-600"
-            >
-              Ed25519
-            </a>{" "}
-            key pair generated on-device and stored in{" "}
-            <a
-              href="https://developer.apple.com/documentation/security/storing-keys-in-the-keychain"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-gray-900 underline underline-offset-2 transition-colors hover:text-gray-600"
-            >
+            No. Your identity is an <TextLink href="https://ed25519.cr.yp.to">Ed25519</TextLink> key
+            pair generated on-device and stored in{" "}
+            <TextLink href="https://developer.apple.com/documentation/security/storing-keys-in-the-keychain">
               iOS Keychain
-            </a>{" "}
+            </TextLink>{" "}
             or{" "}
-            <a
-              href="https://developer.android.com/privacy-and-security/keystore"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-gray-900 underline underline-offset-2 transition-colors hover:text-gray-600"
-            >
+            <TextLink href="https://developer.android.com/privacy-and-security/keystore">
               Android Keystore
-            </a>
+            </TextLink>
             .{" "}
             <strong>
               There is no sign-up, no email, no phone number, and nothing that registers with any
@@ -808,23 +577,13 @@ const SECTIONS: {
         a: (
           <>
             No. Your private keys live in the{" "}
-            <a
-              href="https://developer.apple.com/documentation/security/storing-keys-in-the-keychain"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-gray-900 underline underline-offset-2 transition-colors hover:text-gray-600"
-            >
+            <TextLink href="https://developer.apple.com/documentation/security/storing-keys-in-the-keychain">
               iOS Keychain
-            </a>{" "}
+            </TextLink>{" "}
             or{" "}
-            <a
-              href="https://developer.android.com/privacy-and-security/keystore"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-gray-900 underline underline-offset-2 transition-colors hover:text-gray-600"
-            >
+            <TextLink href="https://developer.android.com/privacy-and-security/keystore">
               Android Keystore
-            </a>
+            </TextLink>
             , hardware-backed on modern devices, and never in ordinary app storage. Message history
             sits in an encrypted local database. <strong>No plaintext ever touches disk.</strong>
             <br />
@@ -1043,14 +802,7 @@ const SECTIONS: {
           <>
             No. <strong>Payments are entirely optional</strong> and every other feature works
             without them. A{" "}
-            <a
-              href="https://en.wikipedia.org/wiki/Lightning_Network"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-gray-900 underline underline-offset-2 transition-colors hover:text-gray-600"
-            >
-              Lightning
-            </a>{" "}
+            <TextLink href="https://en.wikipedia.org/wiki/Lightning_Network">Lightning</TextLink>{" "}
             wallet is only needed to move money in or out. Once you have a balance, paying someone
             next to you needs nothing but Bluetooth.
           </>
@@ -1060,25 +812,11 @@ const SECTIONS: {
         q: "What is ecash?",
         a: (
           <>
-            <a
-              href="https://en.wikipedia.org/wiki/Ecash"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-gray-900 underline underline-offset-2 transition-colors hover:text-gray-600"
-            >
-              Ecash
-            </a>{" "}
-            is bearer digital cash. A mint issues cryptographically signed coins worth a fixed
-            amount, with no account and no balance sitting on a server.{" "}
+            <TextLink href="https://en.wikipedia.org/wiki/Ecash">Ecash</TextLink> is bearer digital
+            cash. A mint issues cryptographically signed coins worth a fixed amount, with no account
+            and no balance sitting on a server.{" "}
             <strong>Whoever holds a coin can spend it, like a banknote.</strong> Airhop uses{" "}
-            <a
-              href="https://cashu.space"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-gray-900 underline underline-offset-2 transition-colors hover:text-gray-600"
-            >
-              Cashu
-            </a>
+            <TextLink href="https://cashu.space">Cashu</TextLink>
             , an ecash protocol backed by Bitcoin, so value moves device to device over the mesh
             with no internet in the middle.
             <br />
@@ -1130,41 +868,20 @@ const SECTIONS: {
             <ul className="my-2 list-disc space-y-1 pl-5">
               <li>
                 <strong>To try it out:</strong>{" "}
-                <a
-                  href="https://testnut.cashu.space"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-gray-900 underline underline-offset-2 transition-colors hover:text-gray-600"
-                >
-                  testnut.cashu.space
-                </a>{" "}
-                is the community test mint. It issues free play-money sats, so you can walk through
-                every flow with nothing at risk. The sats are not real and the mint is wiped
-                periodically, so never keep anything there you would miss.
+                <TextLink href="https://testnut.cashu.space">testnut.cashu.space</TextLink> is the
+                community test mint. It issues free play-money sats, so you can walk through every
+                flow with nothing at risk. The sats are not real and the mint is wiped periodically,
+                so never keep anything there you would miss.
               </li>
               <li>
                 <strong>For real sats:</strong> pick a publicly run mint with a track record.{" "}
-                <a
-                  href="https://bitcoinmints.com"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-gray-900 underline underline-offset-2 transition-colors hover:text-gray-600"
-                >
-                  bitcoinmints.com
-                </a>{" "}
-                tracks who is running what.
+                <TextLink href="https://bitcoinmints.com">bitcoinmints.com</TextLink> tracks who is
+                running what.
               </li>
               <li>
                 <strong>To trust nobody:</strong> run your own with{" "}
-                <a
-                  href="https://github.com/cashubtc/nutshell"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-gray-900 underline underline-offset-2 transition-colors hover:text-gray-600"
-                >
-                  Nutshell
-                </a>
-                . A Raspberry Pi is enough.
+                <TextLink href="https://github.com/cashubtc/nutshell">Nutshell</TextLink>. A
+                Raspberry Pi is enough.
               </li>
             </ul>
             Treat the balance like cash in a jacket pocket, not a savings account. Keep small
@@ -1177,14 +894,7 @@ const SECTIONS: {
         a: (
           <>
             <strong>In:</strong> tap Deposit, enter an amount, and the mint gives you a{" "}
-            <a
-              href="https://en.wikipedia.org/wiki/Lightning_Network"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-gray-900 underline underline-offset-2 transition-colors hover:text-gray-600"
-            >
-              Lightning
-            </a>{" "}
+            <TextLink href="https://en.wikipedia.org/wiki/Lightning_Network">Lightning</TextLink>{" "}
             invoice. Pay it from any Lightning wallet and the sats arrive as ecash. If you close the
             app mid-payment, Airhop picks the deposit back up next time it opens.
             <br />
@@ -1246,14 +956,7 @@ const SECTIONS: {
             <br />
             <br />
             Offline, Airhop still checks the mint's signature on every token it receives (a{" "}
-            <a
-              href="https://github.com/cashubtc/nuts/blob/main/12.md"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-gray-900 underline underline-offset-2 transition-colors hover:text-gray-600"
-            >
-              DLEQ proof
-            </a>
+            <TextLink href="https://github.com/cashubtc/nuts/blob/main/12.md">DLEQ proof</TextLink>
             ), so a forged token is rejected outright. That proves the mint issued it.{" "}
             <strong>It can never prove it is unspent, because only the mint knows that.</strong> Tap
             Refresh once you are online and the unconfirmed line clears.
@@ -1335,14 +1038,9 @@ const SECTIONS: {
         a: (
           <>
             Paying someone by their Nostr identity over the internet, using{" "}
-            <a
-              href="https://github.com/nostr-protocol/nips/blob/master/61.md"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-gray-900 underline underline-offset-2 transition-colors hover:text-gray-600"
-            >
+            <TextLink href="https://github.com/nostr-protocol/nips/blob/master/61.md">
               NIP-61
-            </a>
+            </TextLink>
             . The ecash is locked to their public key, so only they can spend it even though the
             event is public.
             <br />
@@ -1428,17 +1126,10 @@ const SECTIONS: {
             <strong>Airhop does not ship a model of its own.</strong> The app lists a few small
             open-weight models (roughly 1 to 3 billion parameters, in GGUF format) with the size and
             memory each one needs, and downloads the one you pick from{" "}
-            <a
-              href="https://huggingface.co"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-gray-900 underline underline-offset-2 transition-colors hover:text-gray-600"
-            >
-              Hugging Face
-            </a>
-            . That download is the only part that needs internet, and it happens once. The flow is
-            the same on iOS and Android, and the app blocks a download outright if the device does
-            not have the memory or storage to run it.
+            <TextLink href="https://huggingface.co">Hugging Face</TextLink>. That download is the
+            only part that needs internet, and it happens once. The flow is the same on iOS and
+            Android, and the app blocks a download outright if the device does not have the memory
+            or storage to run it.
           </>
         ),
       },
@@ -1451,25 +1142,9 @@ const SECTIONS: {
         q: "Is Airhop open source?",
         a: (
           <>
-            Yes. The full source code is on{" "}
-            <a
-              href="https://github.com/areebahmeddd/airhop"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-gray-900 underline underline-offset-2 transition-colors hover:text-gray-600"
-            >
-              GitHub
-            </a>{" "}
-            under the{" "}
-            <a
-              href="https://github.com/areebahmeddd/airhop/blob/main/LICENSE"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-gray-900 underline underline-offset-2 transition-colors hover:text-gray-600"
-            >
-              MIT license
-            </a>
-            . Protocol specifications are in the docs/ directory.
+            Yes. The full source code is on <TextLink href={REPO_URL}>GitHub</TextLink> under the{" "}
+            <TextLink href={REPO_LINKS.license}>MIT license</TextLink>. Protocol specifications are
+            in the docs/ directory.
           </>
         ),
       },
@@ -1478,125 +1153,11 @@ const SECTIONS: {
         a: (
           <>
             Yes. Open issues, submit pull requests, or start a discussion. Read the{" "}
-            <a
-              href="https://github.com/areebahmeddd/airhop/blob/main/CONTRIBUTING.md"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-gray-900 underline underline-offset-2 transition-colors hover:text-gray-600"
-            >
-              contributing guide
-            </a>{" "}
-            before opening a large PR.
+            <TextLink href={REPO_LINKS.contributing}>contributing guide</TextLink> before opening a
+            large PR.
           </>
         ),
       },
     ],
   },
 ];
-
-function toPlainText(node: React.ReactNode): string {
-  if (node == null || typeof node === "boolean") return "";
-  if (typeof node === "string" || typeof node === "number") return String(node);
-  if (Array.isArray(node)) return node.map(toPlainText).join(" ");
-  if (isValidElement(node)) {
-    return toPlainText((node.props as { children?: React.ReactNode }).children);
-  }
-  return "";
-}
-
-function faqAnswerText(node: React.ReactNode): string {
-  return toPlainText(node).replace(/\s+/g, " ").trim();
-}
-
-const FAQ_SCHEMA = {
-  "@context": "https://schema.org",
-  "@type": "FAQPage",
-  mainEntity: SECTIONS.flatMap((section) =>
-    section.questions.map((item) => ({
-      "@type": "Question",
-      name: item.q,
-      acceptedAnswer: {
-        "@type": "Answer",
-        text: faqAnswerText(item.a),
-      },
-    })),
-  ),
-};
-
-export default function FAQPage() {
-  useSEO({
-    title: "Frequently Asked Questions - Airhop",
-    description:
-      "Answers about Airhop's Bluetooth mesh messaging, encryption, offline payments, the Nostr internet layer, and bitchat compatibility.",
-    path: "/faq",
-  });
-
-  return (
-    <main id="main-content" className="min-h-screen bg-white font-sans antialiased">
-      <script
-        type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(FAQ_SCHEMA) }}
-      />
-      <div className="mx-auto max-w-2xl px-6 py-16">
-        <Link
-          to="/"
-          className="group inline-flex items-center gap-1.5 text-sm text-gray-500 transition-colors hover:text-gray-700"
-        >
-          <ArrowLeft
-            className="h-3.5 w-3.5 transition-transform duration-200 group-hover:-translate-x-0.5"
-            aria-hidden="true"
-          />
-          Back to home
-        </Link>
-
-        <div className="mt-10">
-          <h1 className="text-3xl font-semibold tracking-tight text-gray-900">
-            Frequently Asked Questions
-          </h1>
-          <p className="mt-2 text-sm text-gray-500">Common questions about Airhop.</p>
-        </div>
-
-        <div className="mt-10 space-y-10">
-          {SECTIONS.map((section) => (
-            <section key={section.heading} className="space-y-1">
-              <h2 className="mb-3 text-base font-semibold text-gray-900">{section.heading}</h2>
-              {section.questions.map((item) => (
-                <details key={item.q} className="group border-b border-gray-100 py-3">
-                  <summary className="flex cursor-pointer list-none items-center justify-between gap-4">
-                    <span className="text-sm font-medium text-gray-900">{item.q}</span>
-                    <span className="shrink-0 text-sm text-gray-500 transition-transform group-open:rotate-45">
-                      +
-                    </span>
-                  </summary>
-                  <div className="mt-3 pr-6 text-sm leading-relaxed text-gray-600">{item.a}</div>
-                </details>
-              ))}
-            </section>
-          ))}
-        </div>
-
-        <div className="mt-16 border-t border-gray-100 pt-8">
-          <p className="text-sm text-gray-500">
-            Questions not answered here can be sent to{" "}
-            <a
-              href="mailto:hi@areeb.dev"
-              className="text-gray-900 underline underline-offset-2 transition-colors hover:text-gray-600"
-            >
-              hi@areeb.dev
-            </a>{" "}
-            or raised by opening a discussion on{" "}
-            <a
-              href="https://github.com/areebahmeddd/airhop/discussions"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-gray-900 underline underline-offset-2 transition-colors hover:text-gray-600"
-            >
-              GitHub
-            </a>
-            .
-          </p>
-        </div>
-      </div>
-    </main>
-  );
-}

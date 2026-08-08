@@ -1,66 +1,42 @@
-import { ArrowLeft } from "lucide-react";
-import { Link } from "react-router-dom";
-import { useSEO } from "../hooks/useSEO";
+import PageHeader from "@/components/ui/PageHeader";
+import TextLink from "@/components/ui/TextLink";
+import { useSEO } from "@/hooks/useSEO";
+import { REPO_LINKS, REPO_URL } from "@/lib/links";
+import { SEO } from "@/lib/seo";
 
 export default function PrivacyPage() {
-  useSEO({
-    title: "Privacy Policy - Airhop",
-    description:
-      "How Airhop handles data: no accounts, no servers, no tracking. Your identity and messages stay on your device.",
-    path: "/privacy-policy",
-  });
+  useSEO(SEO["/privacy-policy"]);
 
   return (
-    <main id="main-content" className="min-h-screen bg-white font-sans antialiased">
+    <main id="main-content">
       <div className="mx-auto max-w-2xl px-6 py-16">
-        <Link
-          to="/"
-          className="group inline-flex items-center gap-1.5 text-sm text-gray-500 transition-colors hover:text-gray-700"
-        >
-          <ArrowLeft
-            className="h-3.5 w-3.5 transition-transform duration-200 group-hover:-translate-x-0.5"
-            aria-hidden="true"
-          />
-          Back to home
-        </Link>
+        <PageHeader eyebrow="Legal" title="Privacy Policy" meta="Last updated: August 01, 2026" />
 
-        <div className="mt-10">
-          <h1 className="text-3xl font-semibold tracking-tight text-gray-900">Privacy Policy</h1>
-          <p className="mt-2 text-sm text-gray-500">Last updated: August 01, 2026</p>
-        </div>
-
-        <div className="mt-10 space-y-10 text-gray-700">
-          <section className="space-y-3">
-            <h2 className="text-base font-semibold text-gray-900">Summary</h2>
-            <ul className="list-disc space-y-1.5 pl-5 text-sm leading-relaxed marker:text-gray-400">
+        <div className="text-secondary mt-14">
+          <section className="border-line space-y-4 border-t pt-12 first:border-t-0 first:pt-0">
+            <h2 className="text-ink text-base font-semibold">Summary</h2>
+            <ul className="marker:text-mute list-disc space-y-2 pl-5 text-[15px] leading-[1.75]">
               <li>No project-operated accounts or messaging servers.</li>
               <li>No analytics, advertising, telemetry, or tracking of any kind.</li>
               <li>No sale of user data.</li>
               <li>Your identity is a cryptographic key pair that never leaves your device.</li>
               <li>
                 All source code is{" "}
-                <a
-                  href="https://github.com/areebahmeddd/airhop"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="underline underline-offset-2 transition-colors hover:text-gray-900"
-                >
+                <TextLink href={REPO_URL} tone="quiet">
                   open source
-                </a>
+                </TextLink>
                 . The storage, networking, and cryptography described here can be verified in the
                 code.
               </li>
             </ul>
           </section>
 
-          <section className="space-y-3">
-            <h2 className="text-base font-semibold text-gray-900">
-              What Airhop stores on your device
-            </h2>
-            <p className="text-sm leading-relaxed">
+          <section className="border-line space-y-4 border-t pt-12 first:border-t-0 first:pt-0">
+            <h2 className="text-ink text-base font-semibold">What Airhop stores on your device</h2>
+            <p className="text-[15px] leading-[1.75]">
               Airhop stores data only on your device. None of it is transmitted to us.
             </p>
-            <ul className="list-disc space-y-2 pl-5 text-sm leading-relaxed marker:text-gray-400">
+            <ul className="marker:text-mute list-disc space-y-2.5 pl-5 text-[15px] leading-[1.75]">
               <li>
                 <strong>Identity keys.</strong> An Ed25519 signing key and a Noise static key are
                 generated locally on first launch and stored in your device's secure storage (iOS
@@ -122,14 +98,12 @@ export default function PrivacyPage() {
             </ul>
           </section>
 
-          <section className="space-y-3">
-            <h2 className="text-base font-semibold text-gray-900">
-              What is shared with nearby peers
-            </h2>
-            <p className="text-sm leading-relaxed">
+          <section className="border-line space-y-4 border-t pt-12 first:border-t-0 first:pt-0">
+            <h2 className="text-ink text-base font-semibold">What is shared with nearby peers</h2>
+            <p className="text-[15px] leading-[1.75]">
               When the app is running, nearby mesh devices can receive:
             </p>
-            <ul className="list-disc space-y-1.5 pl-5 text-sm leading-relaxed marker:text-gray-400">
+            <ul className="marker:text-mute list-disc space-y-2 pl-5 text-[15px] leading-[1.75]">
               <li>
                 Your display name, which the app generates from your public key, and your public
                 identity keys.
@@ -165,11 +139,11 @@ export default function PrivacyPage() {
                 receiver).
               </li>
             </ul>
-            <p className="text-sm leading-relaxed">
+            <p className="text-[15px] leading-[1.75]">
               Private text messages are encrypted end-to-end and readable only by the intended
               recipient. Public channel messages are visible to all participants in that channel.
             </p>
-            <p className="text-sm leading-relaxed">
+            <p className="text-[15px] leading-[1.75]">
               <strong>
                 Attachments are an exception: photos, videos, voice notes, and files are signed but
                 not encrypted.
@@ -178,31 +152,24 @@ export default function PrivacyPage() {
               media at all. Because attachments relay hop by hop, any device carrying one can read
               it. Treat an attachment as visible to the mesh, not private.
             </p>
-            <p className="text-sm leading-relaxed">
+            <p className="text-[15px] leading-[1.75]">
               Nearby mesh devices are not limited to Airhop.{" "}
-              <a
-                href="https://bitchat.free"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="underline underline-offset-2 transition-colors hover:text-gray-900"
-              >
+              <TextLink href="https://bitchat.free" tone="quiet">
                 bitchat
-              </a>{" "}
+              </TextLink>{" "}
               is a separate, compatible app that can join the same mesh and receive this same data.
               bitchat is an independent project with its own codebase, not operated or audited by
               us.
             </p>
           </section>
 
-          <section className="space-y-3">
-            <h2 className="text-base font-semibold text-gray-900">
-              Nostr and the internet (optional)
-            </h2>
-            <p className="text-sm leading-relaxed">
+          <section className="border-line space-y-4 border-t pt-12 first:border-t-0 first:pt-0">
+            <h2 className="text-ink text-base font-semibold">Nostr and the internet (optional)</h2>
+            <p className="text-[15px] leading-[1.75]">
               When Airhop uses the internet, it connects to public or user-selected Nostr relays to
               extend conversations beyond Bluetooth range.
             </p>
-            <ul className="list-disc space-y-1.5 pl-5 text-sm leading-relaxed marker:text-gray-400">
+            <ul className="marker:text-mute list-disc space-y-2 pl-5 text-[15px] leading-[1.75]">
               <li>
                 <strong>Private messages.</strong> Fallback messages use NIP-17 gift wraps. Relay
                 operators can observe event timestamps and network metadata, but not message
@@ -219,13 +186,13 @@ export default function PrivacyPage() {
             </ul>
           </section>
 
-          <section className="space-y-3">
-            <h2 className="text-base font-semibold text-gray-900">Location channels (optional)</h2>
-            <p className="text-sm leading-relaxed">
+          <section className="border-line space-y-4 border-t pt-12 first:border-t-0 first:pt-0">
+            <h2 className="text-ink text-base font-semibold">Location channels (optional)</h2>
+            <p className="text-[15px] leading-[1.75]">
               Location channels let you talk to people in the same area. Location permission is
               optional and only requested when you use them.
             </p>
-            <ul className="list-disc space-y-1.5 pl-5 text-sm leading-relaxed marker:text-gray-400">
+            <ul className="marker:text-mute list-disc space-y-2 pl-5 text-[15px] leading-[1.75]">
               <li>
                 <strong>Exact coordinates never leave your device</strong> and are never stored.
                 Your position is truncated to a grid cell, and the smallest cell we ever publish is
@@ -246,18 +213,18 @@ export default function PrivacyPage() {
             </ul>
           </section>
 
-          <section className="space-y-3">
-            <h2 className="text-base font-semibold text-gray-900">Ecash payments (optional)</h2>
-            <p className="text-sm leading-relaxed">
+          <section className="border-line space-y-4 border-t pt-12 first:border-t-0 first:pt-0">
+            <h2 className="text-ink text-base font-semibold">Ecash payments (optional)</h2>
+            <p className="text-[15px] leading-[1.75]">
               Payments are off until you add a mint. Sending and receiving ecash over Bluetooth
               involves no server, no relay, and no mint: the two devices do it themselves, and
               nothing about the payment leaves them.
             </p>
-            <p className="text-sm leading-relaxed">
+            <p className="text-[15px] leading-[1.75]">
               Talking to a mint is different, and only happens when you deposit, withdraw, refresh,
               or claim a token while online.
             </p>
-            <ul className="list-disc space-y-1.5 pl-5 text-sm leading-relaxed marker:text-gray-400">
+            <ul className="marker:text-mute list-disc space-y-2 pl-5 text-[15px] leading-[1.75]">
               <li>
                 <strong>What a mint can see.</strong> Your IP address, the amounts you deposit and
                 withdraw, and when. Mints are third parties whose retention and privacy practices
@@ -288,9 +255,9 @@ export default function PrivacyPage() {
             </ul>
           </section>
 
-          <section className="space-y-3">
-            <h2 className="text-base font-semibold text-gray-900">Tor routing (optional)</h2>
-            <p className="text-sm leading-relaxed">
+          <section className="border-line space-y-4 border-t pt-12 first:border-t-0 first:pt-0">
+            <h2 className="text-ink text-base font-semibold">Tor routing (optional)</h2>
+            <p className="text-[15px] leading-[1.75]">
               Airhop supports routing Nostr traffic through Tor using Arti on iOS or Orbot on
               Android. When enabled,{" "}
               <strong>relay operators cannot observe your IP address.</strong> Tor is off by
@@ -298,9 +265,9 @@ export default function PrivacyPage() {
             </p>
           </section>
 
-          <section className="space-y-3">
-            <h2 className="text-base font-semibold text-gray-900">Mesh bridge (optional)</h2>
-            <p className="text-sm leading-relaxed">
+          <section className="border-line space-y-4 border-t pt-12 first:border-t-0 first:pt-0">
+            <h2 className="text-ink text-base font-semibold">Mesh bridge (optional)</h2>
+            <p className="text-[15px] leading-[1.75]">
               A device with the mesh bridge enabled links your area&apos;s public #bluetooth channel
               with another Bluetooth crowd out of radio range, carrying that public chat between
               them over the internet. It only ever touches public #bluetooth traffic, never your
@@ -311,9 +278,9 @@ export default function PrivacyPage() {
             </p>
           </section>
 
-          <section className="space-y-3">
-            <h2 className="text-base font-semibold text-gray-900">Internet gateway (optional)</h2>
-            <p className="text-sm leading-relaxed">
+          <section className="border-line space-y-4 border-t pt-12 first:border-t-0 first:pt-0">
+            <h2 className="text-ink text-base font-semibold">Internet gateway (optional)</h2>
+            <p className="text-[15px] leading-[1.75]">
               A device with the gateway setting enabled relays location-channel messages on behalf
               of nearby devices that have no internet connection. The relayed messages are already
               public to that channel and are signed by their original author, so a gateway cannot
@@ -322,9 +289,9 @@ export default function PrivacyPage() {
             </p>
           </section>
 
-          <section className="space-y-3">
-            <h2 className="text-base font-semibold text-gray-900">Cryptography</h2>
-            <ul className="list-disc space-y-1.5 pl-5 text-sm leading-relaxed marker:text-gray-400">
+          <section className="border-line space-y-4 border-t pt-12 first:border-t-0 first:pt-0">
+            <h2 className="text-ink text-base font-semibold">Cryptography</h2>
+            <ul className="marker:text-mute list-disc space-y-2 pl-5 text-[15px] leading-[1.75]">
               <li>
                 <strong>Private sessions.</strong> Noise XX with X25519 and ChaCha20-Poly1305.
               </li>
@@ -352,18 +319,13 @@ export default function PrivacyPage() {
               </li>
               <li>
                 <strong>Implementation.</strong> All cryptographic operations use the{" "}
-                <a
-                  href="https://github.com/paulmillr/noble-curves"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="underline underline-offset-2 transition-colors hover:text-gray-900"
-                >
+                <TextLink href="https://github.com/paulmillr/noble-curves" tone="quiet">
                   @noble
-                </a>{" "}
+                </TextLink>{" "}
                 library suite, which has been independently audited by Cure53.
               </li>
             </ul>
-            <p className="text-sm leading-relaxed">
+            <p className="text-[15px] leading-[1.75]">
               <strong>
                 No cryptographic protection prevents a recipient from copying, screenshotting, or
                 forwarding a message after reading it.
@@ -373,9 +335,9 @@ export default function PrivacyPage() {
             </p>
           </section>
 
-          <section className="space-y-3">
-            <h2 className="text-base font-semibold text-gray-900">How long data is kept</h2>
-            <ul className="list-disc space-y-1.5 pl-5 text-sm leading-relaxed marker:text-gray-400">
+          <section className="border-line space-y-4 border-t pt-12 first:border-t-0 first:pt-0">
+            <h2 className="text-ink text-base font-semibold">How long data is kept</h2>
+            <ul className="marker:text-mute list-disc space-y-2 pl-5 text-[15px] leading-[1.75]">
               <li>
                 <strong>Undelivered private messages:</strong> until acknowledged, or 24 hours,
                 whichever comes first.
@@ -408,9 +370,9 @@ export default function PrivacyPage() {
             </ul>
           </section>
 
-          <section className="space-y-3">
-            <h2 className="text-base font-semibold text-gray-900">Your controls</h2>
-            <ul className="list-disc space-y-1.5 pl-5 text-sm leading-relaxed marker:text-gray-400">
+          <section className="border-line space-y-4 border-t pt-12 first:border-t-0 first:pt-0">
+            <h2 className="text-ink text-base font-semibold">Your controls</h2>
+            <ul className="marker:text-mute list-disc space-y-2 pl-5 text-[15px] leading-[1.75]">
               <li>
                 <strong>Panic wipe.</strong> Instantly erase all local keys, messages, queued mail,
                 and app data from the Profile screen.
@@ -434,45 +396,39 @@ export default function PrivacyPage() {
             </ul>
           </section>
 
-          <section className="space-y-3">
-            <h2 className="text-base font-semibold text-gray-900">This website</h2>
-            <p className="text-sm leading-relaxed">
+          <section className="border-line space-y-4 border-t pt-12 first:border-t-0 first:pt-0">
+            <h2 className="text-ink text-base font-semibold">This website</h2>
+            <p className="text-[15px] leading-[1.75]">
               airhop.1mindlabs.org is a static informational site deployed on{" "}
-              <a
-                href="https://pages.cloudflare.com"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="underline underline-offset-2 transition-colors hover:text-gray-900"
-              >
+              <TextLink href="https://pages.cloudflare.com" tone="quiet">
                 Cloudflare Pages
-              </a>
+              </TextLink>
               . It has no user accounts, no cookies, and no analytics.{" "}
               <strong>
                 We have no interest in your personal data and collect none of it (and never will!).
               </strong>
             </p>
-            <p className="text-sm leading-relaxed">
+            <p className="text-[15px] leading-[1.75]">
               The relay map is drawn from data bundled into the site at build time. Viewing it
               contacts no one.
             </p>
-            <p className="text-sm leading-relaxed">Two things happen outside our control:</p>
-            <ul className="list-disc space-y-1.5 pl-5 text-sm leading-relaxed marker:text-gray-400">
+            <p className="text-[15px] leading-[1.75]">Two things happen outside our control:</p>
+            <ul className="marker:text-mute list-disc space-y-2 pl-5 text-[15px] leading-[1.75]">
               <li>
                 <strong>Hosting logs.</strong> Cloudflare's infrastructure may log standard request
                 metadata (IP address, browser, page path) for security and availability purposes. We
                 do not access these logs for analytics or share them with any third party.
               </li>
               <li>
-                <strong>GitHub API.</strong> The site makes two browser-side requests to GitHub: one
-                for the latest release tag and one for the public star count. No user data is
-                included in either request.
+                <strong>GitHub API.</strong> The site makes one browser-side request to GitHub, for
+                the latest release tag shown in the header. No user data is included in it.
               </li>
             </ul>
           </section>
 
-          <section className="space-y-3">
-            <h2 className="text-base font-semibold text-gray-900">Children's privacy</h2>
-            <p className="text-sm leading-relaxed">
+          <section className="border-line space-y-4 border-t pt-12 first:border-t-0 first:pt-0">
+            <h2 className="text-ink text-base font-semibold">Children's privacy</h2>
+            <p className="text-[15px] leading-[1.75]">
               Airhop has no account registration or age-verification system. The project does not
               knowingly collect personal data from children. Public channel messages, location
               channels, bulletin-board notices, and mesh traffic are visible to other participants
@@ -480,34 +436,26 @@ export default function PrivacyPage() {
             </p>
           </section>
 
-          <section className="space-y-3">
-            <h2 className="text-base font-semibold text-gray-900">Changes to this policy</h2>
-            <p className="text-sm leading-relaxed">
+          <section className="border-line space-y-4 border-t pt-12 first:border-t-0 first:pt-0">
+            <h2 className="text-ink text-base font-semibold">Changes to this policy</h2>
+            <p className="text-[15px] leading-[1.75]">
               Material changes will be reflected in this document and its updated date. Because no
               personal data is held on project servers, a policy change cannot affect data that
               exists only on your device.
             </p>
           </section>
 
-          <section className="space-y-3">
-            <h2 className="text-base font-semibold text-gray-900">Contact</h2>
-            <p className="text-sm leading-relaxed">
+          <section className="border-line space-y-4 border-t pt-12 first:border-t-0 first:pt-0">
+            <h2 className="text-ink text-base font-semibold">Contact</h2>
+            <p className="text-[15px] leading-[1.75]">
               Questions about this policy can be sent to{" "}
-              <a
-                href="mailto:hi@areeb.dev"
-                className="underline underline-offset-2 transition-colors hover:text-gray-900"
-              >
+              <TextLink href="mailto:hi@areeb.dev" tone="quiet">
                 hi@areeb.dev
-              </a>{" "}
+              </TextLink>{" "}
               or raised by opening an issue on{" "}
-              <a
-                href="https://github.com/areebahmeddd/airhop/issues"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="underline underline-offset-2 transition-colors hover:text-gray-900"
-              >
+              <TextLink href={REPO_LINKS.issues} tone="quiet">
                 GitHub
-              </a>
+              </TextLink>
               .
             </p>
           </section>

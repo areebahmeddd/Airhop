@@ -1,95 +1,143 @@
 <!doctype html>
 <html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="light dark" />
+    <meta name="theme-color" media="(prefers-color-scheme: light)" content="#ffffff" />
+    <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#0c0d0e" />
 
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- Per-route meta, rewritten by plugins/static-html.ts -->
+    <!-- seo:start -->
+    <title>Airhop - Private, offline-first messenger</title>
+    <meta
+      name="description"
+      content="Private peer-to-peer messaging for iOS and Android. No internet, no servers, no accounts. Communicate over Bluetooth mesh anywhere."
+    />
+    <link rel="canonical" href="https://airhop.1mindlabs.org" />
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Airhop - Private, offline-first messenger" />
+    <meta
+      property="og:description"
+      content="Private peer-to-peer messaging for iOS and Android. No internet, no servers, no accounts. Communicate over Bluetooth mesh anywhere."
+    />
+    <meta property="og:url" content="https://airhop.1mindlabs.org" />
+    <meta name="twitter:title" content="Airhop - Private, offline-first messenger" />
+    <meta
+      name="twitter:description"
+      content="Private peer-to-peer messaging for iOS and Android. No internet, no servers, no accounts. Communicate over Bluetooth mesh anywhere."
+    />
+    <!-- seo:end -->
 
-  <!-- Primary meta -->
-  <title>Airhop - Private, offline-first messenger</title>
-  <meta name="description"
-    content="Private peer-to-peer messaging for iOS and Android. No internet, no servers, no accounts. Communicate over Bluetooth mesh anywhere." />
-  <link rel="canonical" href="https://airhop.1mindlabs.org" />
-  <link rel="icon" href="/favicon.ico" sizes="any" />
-  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-  <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <link rel="icon" href="/favicon.ico" sizes="any" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
 
-  <!-- Open Graph -->
-  <meta property="og:type" content="website" />
-  <meta property="og:site_name" content="Airhop" />
-  <meta property="og:title" content="Airhop - Private, offline-first messenger" />
-  <meta property="og:description"
-    content="Private peer-to-peer messaging for iOS and Android. No internet, no servers, no accounts. Communicate over Bluetooth mesh anywhere." />
-  <meta property="og:url" content="https://airhop.1mindlabs.org" />
-  <meta property="og:image" content="https://airhop.1mindlabs.org/og-preview.png" />
+    <!-- Shared social tags -->
+    <meta property="og:site_name" content="Airhop" />
+    <meta property="og:locale" content="en_US" />
+    <meta property="og:image" content="https://airhop.1mindlabs.org/brand/airhop-og.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta
+      property="og:image:alt"
+      content="Airhop: private, offline-first messaging over Bluetooth mesh."
+    />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:image" content="https://airhop.1mindlabs.org/brand/airhop-og.png" />
+    <meta
+      name="twitter:image:alt"
+      content="Airhop: private, offline-first messaging over Bluetooth mesh."
+    />
 
-  <!-- Twitter Card -->
-  <meta name="twitter:card" content="summary_large_image" />
-  <meta name="twitter:title" content="Airhop - Private, offline-first messenger" />
-  <meta name="twitter:description"
-    content="Private peer-to-peer messaging for iOS and Android. No internet, no servers, no accounts. Communicate over Bluetooth mesh anywhere." />
-  <meta name="twitter:image" content="https://airhop.1mindlabs.org/og-preview.png" />
+    <!-- External origins -->
+    <link rel="dns-prefetch" href="https://api.github.com" />
 
-  <!-- Preconnect for external origins -->
-  <link rel="preconnect" href="https://api.github.com" />
-
-  <!-- Structured data -->
-  <script type="application/ld+json">
-    {
-      "@context": "https://schema.org",
-      "@graph": [
-        {
-          "@type": "MobileApplication",
-          "@id": "https://airhop.1mindlabs.org/#app",
-          "name": "Airhop",
-          "url": "https://airhop.1mindlabs.org",
-          "description": "Private peer-to-peer messaging over Bluetooth mesh for iOS and Android. No internet, no servers, no accounts.",
-          "applicationCategory": "CommunicationApplication",
-          "operatingSystem": "iOS, Android",
-          "isAccessibleForFree": true,
-          "license": "https://opensource.org/licenses/MIT",
-          "sameAs": [
-            "https://github.com/areebahmeddd/airhop"
-          ],
-          "downloadUrl": [
-            "https://apps.apple.com/app/airhop/id000000000",
-            "https://play.google.com/store/apps/details?id=org.onemindlabs.airhop"
-          ],
-          "offers": {
-            "@type": "Offer",
-            "price": "0",
-            "priceCurrency": "USD"
+    <!-- Structured data -->
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@graph": [
+          {
+            "@type": "MobileApplication",
+            "@id": "https://airhop.1mindlabs.org/#app",
+            "name": "Airhop",
+            "url": "https://airhop.1mindlabs.org",
+            "description": "Private peer-to-peer messaging over Bluetooth mesh for iOS and Android. No internet, no servers, no accounts.",
+            "applicationCategory": "CommunicationApplication",
+            "operatingSystem": "iOS, Android",
+            "isAccessibleForFree": true,
+            "license": "https://opensource.org/licenses/MIT",
+            "sameAs": ["https://github.com/areebahmeddd/airhop"],
+            "downloadUrl": [
+              "https://apps.apple.com/app/airhop/id000000000",
+              "https://play.google.com/store/apps/details?id=org.onemindlabs.airhop"
+            ],
+            "offers": {
+              "@type": "Offer",
+              "price": "0",
+              "priceCurrency": "USD"
+            },
+            "author": {
+              "@id": "https://github.com/areebahmeddd#person"
+            }
           },
-          "author": {
-            "@id": "https://github.com/areebahmeddd#person"
-          }
-        },
-        {
-          "@type": "WebSite",
-          "@id": "https://airhop.1mindlabs.org/#website",
-          "name": "Airhop",
-          "url": "https://airhop.1mindlabs.org",
-          "about": {
-            "@id": "https://airhop.1mindlabs.org/#app"
+          {
+            "@type": "WebSite",
+            "@id": "https://airhop.1mindlabs.org/#website",
+            "name": "Airhop",
+            "url": "https://airhop.1mindlabs.org",
+            "about": {
+              "@id": "https://airhop.1mindlabs.org/#app"
+            },
+            "publisher": {
+              "@id": "https://github.com/areebahmeddd#person"
+            }
           },
-          "publisher": {
-            "@id": "https://github.com/areebahmeddd#person"
+          {
+            "@type": "Person",
+            "@id": "https://github.com/areebahmeddd#person",
+            "name": "Areeb Ahmed",
+            "url": "https://areeb.dev",
+            "sameAs": [
+              "https://github.com/areebahmeddd",
+              "https://x.com/areebahmeddd",
+              "https://linkedin.com/in/areebahmeddd",
+              "https://instagram.com/areebahmeddd"
+            ]
           }
-        },
-        {
-          "@type": "Person",
-          "@id": "https://github.com/areebahmeddd#person",
-          "name": "Areeb Ahmed",
-          "url": "https://github.com/areebahmeddd"
-        }
-      ]
-    }
-  </script>
-</head>
+        ]
+      }
+    </script>
+  </head>
 
-<body>
-  <div id="root"></div>
-  <script type="module" src="/src/main.tsx"></script>
-</body>
-
+  <body>
+    <div id="root"></div>
+    <noscript>
+      <h1>Airhop</h1>
+      <p>
+        Airhop is a free, open-source messenger for iOS and Android that works with no internet.
+        Nearby phones form a Bluetooth Low Energy mesh and relay messages for each other, up to
+        seven hops, end-to-end encrypted. There are no servers, no accounts and no tracking. When
+        the internet is available, Nostr relays extend conversations beyond radio range. Airhop is
+        wire-compatible with bitchat and MIT licensed.
+      </p>
+      <p>This site needs JavaScript to render. The same material is available as plain text:</p>
+      <ul>
+        <li><a href="/llms.txt">Site summary for language models (llms.txt)</a></li>
+        <li><a href="https://github.com/areebahmeddd/airhop">Source code and documentation</a></li>
+        <li>
+          <a href="https://github.com/areebahmeddd/airhop/blob/main/docs/spec/ARCHITECTURE.md"
+            >Architecture specification</a
+          >
+        </li>
+        <li>
+          <a href="https://github.com/areebahmeddd/airhop/blob/main/docs/spec/PROTOCOLS.md"
+            >Wire protocol specification</a
+          >
+        </li>
+      </ul>
+    </noscript>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
 </html>

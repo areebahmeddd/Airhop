@@ -1,66 +1,75 @@
-import { lazy, Suspense, useEffect } from "react";
-import { Route, Routes, useLocation } from "react-router-dom";
-import Footer from "./components/Footer";
-import Navbar from "./components/Navbar";
-import BlogsPage from "./pages/BlogsPage";
-import BrandPage from "./pages/BrandPage";
-import FAQPage from "./pages/FAQPage";
-import HomePage from "./pages/HomePage";
-import NotFoundPage from "./pages/NotFoundPage";
-import PrivacyPage from "./pages/PrivacyPage";
-import TermsPage from "./pages/TermsPage";
+import Footer from "@/components/layout/Footer";
+import Navbar from "@/components/layout/Navbar";
+import HomePage from "@/pages/HomePage";
+import NotFoundPage from "@/pages/NotFoundPage";
+import { lazy, Suspense, useLayoutEffect, useRef } from "react";
+import { NavigationType, Route, Routes, useLocation, useNavigationType } from "react-router-dom";
 
-const ArchitecturePage = lazy(() => import("./pages/ArchitecturePage"));
+const ROUTES = [
+  { path: "/", Component: HomePage },
+  { path: "/architecture", Component: lazy(() => import("@/pages/ArchitecturePage")) },
+  { path: "/faq", Component: lazy(() => import("@/pages/FAQPage")) },
+  { path: "/blogs", Component: lazy(() => import("@/pages/BlogsPage")) },
+  { path: "/brand", Component: lazy(() => import("@/pages/BrandPage")) },
+  { path: "/privacy-policy", Component: lazy(() => import("@/pages/PrivacyPage")) },
+  { path: "/terms-of-service", Component: lazy(() => import("@/pages/TermsPage")) },
+];
 
-function ScrollToTop() {
-  const { pathname } = useLocation();
-  useEffect(() => {
-    window.scrollTo({ top: 0, behavior: "smooth" });
-  }, [pathname]);
+function ScrollManager() {
+  const { pathname, hash, key } = useLocation();
+  const navigationType = useNavigationType();
+  const previousPath = useRef<string | null>(null);
+
+  useLayoutEffect(() => {
+    const samePage = previousPath.current === pathname;
+    previousPath.current = pathname;
+
+    if (hash) {
+      const id = hash.slice(1);
+      let frames = 0;
+      let pending = 0;
+      const findTarget = () => {
+        const target = document.getElementById(id);
+        if (target) {
+          target.scrollIntoView({ block: "start" });
+          return;
+        }
+        if (frames++ < 60) pending = requestAnimationFrame(findTarget);
+      };
+      findTarget();
+      return () => cancelAnimationFrame(pending);
+    }
+
+    if (navigationType === NavigationType.Pop) return;
+
+    window.scrollTo({ top: 0, behavior: samePage ? "smooth" : "instant" });
+  }, [pathname, hash, key, navigationType]);
+
   return null;
 }
 
 export default function App() {
-  const { pathname } = useLocation();
-  const knownPaths = [
-    "/",
-    "/architecture",
-    "/faq",
-    "/blogs",
-    "/brand",
-    "/privacy-policy",
-    "/terms-of-service",
-  ];
-  const isNotFound = !knownPaths.includes(pathname);
-
   return (
-    <div className="min-h-screen bg-white font-sans text-black selection:bg-gray-200 selection:text-black">
-      <ScrollToTop />
+    <div className="bg-canvas text-ink selection:bg-line selection:text-ink flex min-h-screen flex-col font-sans">
+      <ScrollManager />
       <a
         href="#main-content"
-        className="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 focus:z-50 focus:bg-black focus:px-4 focus:py-2 focus:text-sm focus:font-bold focus:text-white"
+        className="focus:bg-ink focus:text-canvas sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 focus:z-[60] focus:rounded-full focus:px-4 focus:py-2 focus:text-sm focus:font-bold"
       >
         Skip to content
       </a>
       <Navbar />
-      <Routes>
-        <Route path="/" element={<HomePage />} />
-        <Route
-          path="/architecture"
-          element={
-            <Suspense fallback={<div className="min-h-screen bg-white" />}>
-              <ArchitecturePage />
-            </Suspense>
-          }
-        />
-        <Route path="/faq" element={<FAQPage />} />
-        <Route path="/blogs" element={<BlogsPage />} />
-        <Route path="/brand" element={<BrandPage />} />
-        <Route path="/privacy-policy" element={<PrivacyPage />} />
-        <Route path="/terms-of-service" element={<TermsPage />} />
-        <Route path="*" element={<NotFoundPage />} />
-      </Routes>
-      {!isNotFound && <Footer />}
+      <div className="flex flex-1 flex-col">
+        <Suspense fallback={<div className="bg-canvas flex-1" />}>
+          <Routes>
+            {ROUTES.map(({ path, Component }) => (
+              <Route key={path} path={path} element={<Component />} />
+            ))}
+            <Route path="*" element={<NotFoundPage />} />
+          </Routes>
+        </Suspense>
+      </div>
+      <Footer />
     </div>
   );
 }
