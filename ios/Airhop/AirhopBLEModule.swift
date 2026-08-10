@@ -84,6 +84,22 @@ final class AirhopBLEModule: RCTEventEmitter {
     // every fragment dropped under load would silently vanish mid-transfer.
     private var pendingNotifies: [(data: Data, central: CBCentral)] = []
 
+    // How many refused notifications may be held before the peripheral role
+    // starts reporting WRITE_BUSY instead of accepting more.
+    //
+    // A fragment is at most one BLE frame (~469 bytes of payload), so the
+    // ceiling is roughly 120 KiB: enough to ride out the bursts CoreBluetooth
+    // routinely refuses mid-transfer, far short of letting one bad link consume
+    // memory in proportion to how badly it is behaving.
+    //
+    // Global rather than per-central, deliberately. CoreBluetooth caps
+    // simultaneous centrals in the single digits, so the worst case is one
+    // struggling peer eating headroom its neighbours would rarely need at the
+    // same moment - and the cost of getting that wrong is backpressure, which is
+    // the correct response anyway. A per-central map would buy fairness nobody
+    // can observe.
+    private static let maxPendingNotifies = 256
+
     // What the app WANTS, kept apart from what CoreBluetooth is currently doing.
     //
     // These used to be a single pair of "isAdvertising"/"isScanning" flags that
@@ -545,12 +561,34 @@ final class AirhopBLEModule: RCTEventEmitter {
                 let ok = self.peripheralManager?.updateValue(data, for: char, onSubscribedCentrals: [central]) ?? false
                 if ok {
                     resolve(nil)
-                } else {
-                    // Transmit queue full: hold the packet and flush it when
-                    // CoreBluetooth signals readiness instead of dropping it.
-                    self.pendingNotifies.append((data: data, central: central))
-                    resolve(nil)
+                    return
                 }
+                // Transmit queue full. Hold the packet and flush it when
+                // CoreBluetooth signals readiness, rather than dropping a
+                // fragment the far side can never reassemble without.
+                //
+                // Bounded, and this is the point. The queue used to be an
+                // unbounded array that always reported success, so a congested
+                // link during a large attachment grew it without limit while the
+                // sender's pacer, seeing nothing but successes, kept pushing at
+                // full speed. bitchat solves it the same way
+                // (BLEOutboundNotificationBuffer, capped at
+                // blePendingNotificationsCapCount): queue, because a brief burst
+                // is better smoothed than bounced, but refuse once the buffer
+                // says the link is not keeping up.
+                //
+                // WRITE_BUSY past the cap is the same code the central role
+                // above returns and the same one Android returns, so the pacer
+                // needs no per-platform branch: it backs off, which is exactly
+                // what a full queue means.
+                if self.pendingNotifies.count >= Self.maxPendingNotifies {
+                    reject("WRITE_BUSY",
+                           "Transmit queue full (\(self.pendingNotifies.count) held)",
+                           nil)
+                    return
+                }
+                self.pendingNotifies.append((data: data, central: central))
+                resolve(nil)
                 return
             }
 
@@ -560,47 +598,23 @@ final class AirhopBLEModule: RCTEventEmitter {
 
     // MARK: Tor proxy detection
 
-    // Probe whether a SOCKS5 proxy is reachable at localhost:port.
-    // Resolves with the port if reachable, 0 if not. Runs off the main queue.
-    // On iOS, Orbot (if installed and active) exposes a SOCKS5 proxy on port 9050.
-    // Full Arti (embedded Tor) integration requires adding the Arti xcframework
-    // as a Swift Package dependency (see bitchat/ios/Package.swift for reference).
+    // Always 0 on iOS, and that is the correct answer rather than a stub.
+    //
+    // This used to open a real socket to 127.0.0.1:9050, which is ORBOT's port.
+    // Orbot does not exist on iOS, and Airhop's own Tor is Arti listening on
+    // 39050, so the probe could only ever time out and report "nothing there"
+    // after half a second of work. Its one caller (tor-routing's
+    // probeAndroidTorProxy) is Android-gated, so the wrong answer was never
+    // read - but a method that lies confidently when called is worse than one
+    // that is honestly unavailable.
+    //
+    // iOS asks NativeAirhopTor.getTorStatus() instead, which reports Arti's real
+    // bootstrap and SOCKS state. The method stays declared so the two platforms
+    // keep one bridge contract, alongside the other documented iOS no-ops.
     @objc
     func getTorProxyPort(_ resolve: @escaping RCTPromiseResolveBlock,
                          rejecter reject: @escaping RCTPromiseRejectBlock) {
-        let port = 9050
-        DispatchQueue.global(qos: .utility).async {
-            let host = CFHostCreateWithName(nil, "127.0.0.1" as CFString).takeRetainedValue()
-            var ctx = CFStreamClientContext()
-            var readStream:  Unmanaged<CFReadStream>?
-            var writeStream: Unmanaged<CFWriteStream>?
-            CFStreamCreatePairWithSocketToHost(nil, "127.0.0.1" as CFString, UInt32(port),
-                                               &readStream, &writeStream)
-            guard let read = readStream?.takeRetainedValue(),
-                  let write = writeStream?.takeRetainedValue() else {
-                resolve(0)
-                return
-            }
-            CFReadStreamOpen(read)
-            CFWriteStreamOpen(write)
-            // Give the connection 500 ms to open
-            let deadline = CFAbsoluteTimeGetCurrent() + 0.5
-            while CFAbsoluteTimeGetCurrent() < deadline {
-                let rs = CFReadStreamGetStatus(read)
-                let ws = CFWriteStreamGetStatus(write)
-                if rs == .open && ws == .open {
-                    CFReadStreamClose(read)
-                    CFWriteStreamClose(write)
-                    resolve(port)
-                    return
-                }
-                if rs == .error || ws == .error { break }
-                Thread.sleep(forTimeInterval: 0.02)
-            }
-            CFReadStreamClose(read)
-            CFWriteStreamClose(write)
-            resolve(0)
-        }
+        resolve(0)
     }
 
     // Android-only in practice: on Android the Tor toggle checks whether Orbot is

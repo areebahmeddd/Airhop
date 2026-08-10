@@ -106,7 +106,7 @@ describe("media retention", () => {
 
   it("keeps a chosen window across other changes", () => {
     useSettingsStore.getState().setMediaRetentionDays(30);
-    useSettingsStore.getState().setKeyboardLearning(false);
+    useSettingsStore.getState().setHideNotificationPreviews(false);
     expect(state().mediaRetentionDays).toBe(30);
   });
 
@@ -117,29 +117,5 @@ describe("media retention", () => {
     useSettingsStore.getState().setMediaRetentionDays(30);
     useSettingsStore.getState().reset();
     expect(state().mediaRetentionDays).toBe(7);
-  });
-});
-
-describe("keyboard suggestions", () => {
-  it("defaults on, because an app that is painful to type in goes unused", () => {
-    useSettingsStore.getState().reset();
-    expect(state().keyboardLearning).toBe(true);
-  });
-
-  it("can be turned off and stays off", () => {
-    useSettingsStore.getState().setKeyboardLearning(false);
-    expect(state().keyboardLearning).toBe(false);
-  });
-
-  it("is independent of the notification-preview toggle", () => {
-    useSettingsStore.getState().setKeyboardLearning(false);
-    useSettingsStore.getState().setHideNotificationPreviews(false);
-    expect(state().keyboardLearning).toBe(false);
-  });
-
-  it("returns to on after a panic wipe", () => {
-    useSettingsStore.getState().setKeyboardLearning(false);
-    useSettingsStore.getState().reset();
-    expect(state().keyboardLearning).toBe(true);
   });
 });

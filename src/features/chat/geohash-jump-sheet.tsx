@@ -221,7 +221,7 @@ export function GeohashJumpSheet({
           autoCorrect={false}
           returnKeyType="go"
           onSubmitEditing={handleGo}
-          selectionColor={Colors.accent}
+          selectionColor={Colors.selection}
         />
       </View>
       {/* Only speak when there is something to say about what was typed. The

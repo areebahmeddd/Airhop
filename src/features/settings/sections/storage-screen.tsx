@@ -136,7 +136,16 @@ export default function StorageScreen({ onBack }: Props): React.JSX.Element {
               chevron={false}
               accessibilityLabel={T("settings.storage.clear_cache")}
               control={
-                <Text style={styles.settingValue}>
+                <Text
+                  style={[
+                    styles.settingValue,
+                    // Dimmed when there is nothing to clear, because the handler
+                    // returns early in that case and every other confirm-then-act
+                    // row in Settings responds to a tap. A full-contrast "Clear"
+                    // that does nothing is the row lying about being live.
+                    stats.cacheBytes === 0 ? styles.settingValueMuted : null,
+                  ]}
+                >
                   {T("settings.storage.clear")}
                 </Text>
               }

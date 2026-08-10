@@ -325,9 +325,9 @@ Persisted as AES-ChaChaPoly ciphertext (key in Keychain; plaintext never touches
 The most novel mechanism. When no transport can deliver:
 
 1. The message is **sealed** (Noise X) into a **courier envelope**.
-2. The envelope is handed to up to **3 connected peers** who may physically encounter the recipient.
+2. The envelope is handed to up to **4 connected peers** who may physically encounter the recipient.
 
-**Opaque addressing:** The only routing information is a **16-byte rotating recipient tag**: an HMAC of the recipient's static key and the UTC day. Only parties who already know the recipient's key can compute this tag. Couriers see nothing about sender, recipient, or content. Tags rotate daily, so they cannot be correlated across days.
+**Opaque addressing:** The only routing information is a **16-byte rotating recipient tag**: an HMAC of the recipient's static key and the UTC day. Only parties who already know the recipient's key can compute this tag. Couriers see nothing about sender, recipient, or content. Tags rotate daily. They are NOT unlinkable: anyone who has heard a peer's announce can compute that peer's tag for any day. See PROTOCOLS.md section 6.
 
 **Trust tiers:**
 
@@ -917,10 +917,17 @@ other device's limits, not ours. The code is the authority for the rest.
 
 Deliberate differences, all of them local-only:
 
-| Constant   | bitchat      | Airhop    | Where                       |
-| ---------- | ------------ | --------- | --------------------------- |
-| Outbox TTL | 24 h         | 7 days    | `src/store/outbox-store.ts` |
-| Outbox cap | 100 per peer | 500 total | `src/store/outbox-store.ts` |
+| Constant   | bitchat | Airhop | Where                       |
+| ---------- | ------- | ------ | --------------------------- |
+| Outbox TTL | 24 h    | 7 days | `src/store/outbox-store.ts` |
+
+The per-peer cap (100) and the retry cap (8 attempts) match bitchat exactly, so
+they are not listed above. The TTL is the one deliberate divergence, and it is
+not an oversight: courier envelopes held by third parties expire at 24 h to match
+bitchat's wire rule, so the sender's own queue is the only thing that can still
+deliver on a later encounter. A week covers people who do not meet daily, which
+is the case this app exists for. It costs nothing in airtime, because retries are
+bounded by the attempt cap rather than by the clock.
 
 The outbox is our own queue of undelivered messages. Nothing about it goes on
 the wire, so holding longer only means retrying longer for a peer who has been

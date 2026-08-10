@@ -381,7 +381,22 @@ export class RadioController {
     // The background service exists to keep a RUNNING mesh alive off-screen, so
     // it is tied to the mesh running - not, as before, to advertising. Invisible
     // stops advertising and must keep relaying.
-    await this.setBackgroundService(true);
+    //
+    // Gated on SCANNING, not on the combined result.
+    //
+    // This used to be issued whatever `applyRadios` reported, which put a
+    // persistent "Airhop mesh active" notification over a phone whose scanner
+    // had just refused. Gating it on `ok` fixed that and introduced the opposite
+    // fault: `ok` is also false when only ADVERTISING failed, and a device that
+    // scans and relays perfectly well but cannot advertise would then lose the
+    // service that keeps it alive off screen. Both directions are wrong for the
+    // same reason, which is that `ok` answers "did every call succeed" and the
+    // service exists for "is this device still doing mesh work".
+    //
+    // Scanning is that question. A phone that scans is receiving and relaying
+    // for everyone around it, which is worth holding the process up for whether
+    // or not anybody can see it back. The retry below re-asserts advertising.
+    await this.setBackgroundService(this.actual.scanning);
 
     if (ok) {
       this.attempt = 0;

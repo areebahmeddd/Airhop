@@ -1,7 +1,7 @@
 // Message router: decides which transport carries each message.
 //
 // Priority order (per ARCHITECTURE.md section 3, Transport Stack):
-//   1. WiFi Aware / MultipeerConnectivity direct (high-bandwidth, same Noise session)
+//   1. WiFi Aware direct, Android only (high-bandwidth, same Noise session)
 //   2. BLE mesh direct (Noise session established)
 //   3. Nostr gift-wrap DM (if recipient's Nostr pubkey is known)
 //   4. Courier (store-and-forward via connected mesh peers)
@@ -616,9 +616,9 @@ export class MessageRouter {
   // Transport selection:
   //   1. Direct: if the recipient has an active Noise session, encrypt and
   //      unicast it. The injected `unicast` callback picks the physical
-  //      transport, preferring a WiFi link (MultipeerConnectivity on iOS,
-  //      WiFi Aware on Android) over BLE when one exists. Both share the same
-  //      Noise session, which is transport-agnostic.
+  //      transport, preferring a WiFi Aware link (Android only) over BLE when
+  //      one exists. Both share the same Noise session, which is
+  //      transport-agnostic.
   //   2. Nostr: if a NostrSendFn was injected and the recipient's Nostr pubkey
   //      is known, fire-and-forget a gift-wrap DM over the internet. Returns
   //      'sent-nostr' so the caller can show a pending indicator.

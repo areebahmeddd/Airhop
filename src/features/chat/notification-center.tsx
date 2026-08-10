@@ -28,7 +28,6 @@ import { showAlert } from "../../store/alert-store";
 import { useChatStore } from "../../store/chat-store";
 import Avatar from "../../ui/components/avatar";
 import EmptyState from "../../ui/components/empty-state";
-import PrivacyCover from "../../ui/components/privacy-cover";
 import {
   Duration,
   FontSize,
@@ -152,7 +151,6 @@ export default function NotificationCenter({
         />
       </SafeAreaView>
       {/* Its own window, and it is message previews. */}
-      <PrivacyCover />
     </Modal>
   );
 }

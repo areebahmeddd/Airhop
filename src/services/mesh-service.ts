@@ -22,7 +22,7 @@ import {
   verifyEvent,
   type Event as NostrEvent,
 } from "nostr-tools";
-import { DeviceEventEmitter, type EmitterSubscription } from "react-native";
+import { DeviceEventEmitter, type EventSubscription } from "react-native";
 import AirhopBLE from "../bridge/NativeAirhopBLE";
 import NativeAirhopWiFi from "../bridge/NativeAirhopWiFi";
 import type { ContactCard } from "../core/crypto/contact-exchange";
@@ -105,7 +105,9 @@ import {
   pingHopCount,
 } from "../core/mesh/mesh-ping";
 import {
+  decodeNoisePayload,
   decodePrivateMessagePacket,
+  encodeNoisePrivateMessage,
   NoisePayloadType,
   type NoisePayloadTypeValue,
 } from "../core/mesh/noise-payload";
@@ -171,7 +173,7 @@ import {
 } from "../store/group-invite-outbox";
 import { groupChannel, useGroupStore } from "../store/group-store";
 import { useMeshStateStore } from "../store/mesh-state-store";
-import { useOutboxStore } from "../store/outbox-store";
+import { useOutboxStore, type PendingMessage } from "../store/outbox-store";
 import { usePeerStore } from "../store/peer-store";
 import { useSettingsStore } from "../store/settings-store";
 import { useTransferStore } from "../store/transfer-store";
@@ -190,6 +192,7 @@ import {
   isManualGeoChannel,
   type GeoParticipant,
 } from "./geohash-channel-service";
+import { rebindNutzapWatcher } from "./nutzap-watcher-handle";
 import { PrivateChannelService } from "./private-channel-service";
 import { RadioController } from "./radio-controller";
 import {
@@ -197,6 +200,7 @@ import {
   NativeAudioCapture,
   NativeAudioPlayback,
 } from "./voice-audio";
+import { WiFiController } from "./wifi-controller";
 
 // ---- Constants --------------------------------------------------------------
 
@@ -209,6 +213,11 @@ const DR_SEED_INFO = new TextEncoder().encode("airhop-dr-seed-v1");
 // Slow on purpose: it is a safety net behind the event-driven flush, not the
 // primary delivery path, so it stays cheap and never spams relays.
 const OUTBOX_SWEEP_INTERVAL_MS = 45_000;
+
+// Floor between outbox retries, however many events ask for one. Retries are
+// event-driven now, and events arrive in bursts: a foreground round trip alone
+// raises several.
+const OUTBOX_RETRY_MIN_INTERVAL_MS = 10_000;
 
 // A board notice only counts as "new" for the notification bell if it was
 // created within this window. It keeps a channel's history replay on subscribe,
@@ -401,6 +410,7 @@ export class MeshService {
   private gatewayUnsub: (() => void) | null = null;
   // Unsubscribe for the settings listener that toggles the bridge on/off.
   private bridgeUnsub: (() => void) | null = null;
+  private internetUnsub: (() => void) | null = null;
   // Unsubscribe for the settings listener that tears live voice down when the
   // user switches it off mid-burst.
   private liveVoiceUnsub: (() => void) | null = null;
@@ -413,6 +423,7 @@ export class MeshService {
   // original send trusted the mesh and never tried the internet, and nothing
   // else retried it. Null when the service is stopped.
   private outboxSweepTimer: ReturnType<typeof setInterval> | null = null;
+  private lastOutboxRetryMs = 0;
 
   // Currently connected BLE link IDs.
   private readonly connectedLinks = new Set<string>();
@@ -499,7 +510,7 @@ export class MeshService {
   // duplicating the WiFi-vs-BLE preference logic.
   private unicastFn!: (recipientPeerID: string, packet: Packet) => void;
 
-  private subs: EmitterSubscription[] = [];
+  private subs: EventSubscription[] = [];
   private nickname = "";
   // Whether start() has run without a matching stop(). Guards the recovery
   // paths (see retryRadios) so a late event - a permission granted in Settings,
@@ -509,6 +520,12 @@ export class MeshService {
   // Owns the BLE radios: what they should be doing, what is stopping them, and
   // the retries in between. See radio-controller.ts.
   private readonly radio: RadioController;
+  // The same job for the same-platform WiFi fast path. Separate from `radio`
+  // because the two answer to different facts and, crucially, to different
+  // stakes: a blocked BLE radio is a broken mesh and gets a banner, a blocked
+  // WiFi Aware attach is a slower attachment and gets a retry. See
+  // wifi-controller.ts.
+  private readonly wifi = new WiFiController();
 
   // Cumulative bytes moved over BLE/WiFi this session, for the Storage &
   // Data screen's Network Usage row. Resets when the app restarts.
@@ -557,8 +574,8 @@ export class MeshService {
       //
       // This iterated `connectedLinks` alone, so a broadcast reached Bluetooth
       // peers and nobody on the WiFi fast path, while `unicastFn` just below
-      // correctly preferred WiFi. Two phones joined only over WiFi Aware or
-      // MultipeerConnectivity discovered each other (announces are unicast on
+      // correctly preferred WiFi. Two phones joined only over WiFi Aware
+      // discovered each other (announces are unicast on
       // link-up) and then never saw one another's public messages, board posts
       // or group traffic. The transport looked connected and carried nothing.
       const results = await Promise.all([
@@ -740,15 +757,44 @@ export class MeshService {
     // nearby peers learn the capability change without waiting a full cycle.
     this.gatewayUnsub?.();
     this.gatewayUnsub = useSettingsStore.subscribe((state, prev) => {
-      if (state.gatewayEnabled !== prev.gatewayEnabled) {
-        this.announceManager.announceNow();
-      }
+      if (state.gatewayEnabled === prev.gatewayEnabled) return;
+      // Turning the gateway off drops whatever is parked for it.
+      //
+      // These are other people's messages, accepted on the promise of putting
+      // them on the internet. The queue survived the toggle, so a user who
+      // switched the gateway off and later came back online had that batch
+      // published anyway, minutes after they withdrew consent. flushQueuedUplinks
+      // re-checks the toggle, but only its value at flush time, which does not
+      // help a queue that outlives the decision.
+      if (!state.gatewayEnabled) this.queuedUplinks.length = 0;
+      this.announceManager.announceNow();
     });
     this.bridgeUnsub?.();
     this.bridgeUnsub = useSettingsStore.subscribe((state, prev) => {
       if (state.bridgeEnabled !== prev.bridgeEnabled) {
         this.bridgeService?.setEnabled(state.bridgeEnabled);
         this.announceManager.announceNow();
+      }
+    });
+
+    // The internet master switch, watched here rather than trusted to whoever
+    // writes it.
+    //
+    // It was the one settings flag with no subscription: the Network screen's
+    // handler called applyInternetEnabled by hand immediately after setting it,
+    // and that hand-wiring was the only thing that made the toggle do anything.
+    // Every other writer - the "reset settings" path, a panic wipe restoring
+    // defaults, any screen added later - flipped a flag that the transport never
+    // read again, so the app reported one state and behaved as the other.
+    // gatewayEnabled and bridgeEnabled are watched two blocks up for exactly
+    // this reason; this one was the odd one out.
+    //
+    // applyInternetEnabled is idempotent, so the existing hand call and this
+    // subscription both firing is a no-op the second time.
+    this.internetUnsub?.();
+    this.internetUnsub = useSettingsStore.subscribe((state, prev) => {
+      if (state.internetEnabled !== prev.internetEnabled) {
+        this.applyInternetEnabled(state.internetEnabled);
       }
     });
 
@@ -848,11 +894,16 @@ export class MeshService {
     // once we have their npub and relays are up, without waiting for them to
     // reappear on BLE (the only trigger that existed before).
     this.outboxSweepTimer = setInterval(() => {
-      this.retryQueuedOverInternet();
+      this.expireQueuedMail();
     }, OUTBOX_SWEEP_INTERVAL_MS);
 
     // Subscribe to gift-wrap events addressed to our Nostr pubkey.
     this.subscribeNostrInbox();
+    // And re-attach the nutzap watcher to the client just built. Coming back
+    // from Away builds a fresh transport, and without this the watcher stayed
+    // pointed at the destroyed one, so incoming payments silently stopped being
+    // redeemed for the rest of the session.
+    rebindNutzapWatcher();
 
     // BLE event listeners.
     this.subs = [
@@ -978,21 +1029,53 @@ export class MeshService {
       ),
     ];
 
-    // Start WiFi direct (MultipeerConnectivity on iOS, WiFi Aware on Android).
-    // The native module may not be present on all devices; fails silently.
-    NativeAirhopWiFi?.startWiFi().catch(() => {});
-
     this.subs.push(
+      // The fast path became unusable, or usable again.
+      //
+      // Android reports both edges, off the framework's WiFi Aware state
+      // broadcast, so turning WiFi back on recovers immediately. iOS registers
+      // no WiFi module, so this never fires there and the controller latches
+      // "unsupported" on its first pass.
+      DeviceEventEmitter.addListener(
+        "AirhopWiFi.availabilityChanged",
+        ({ available }: { available: boolean }) => {
+          this.wifi.onAvailabilityChanged(available);
+          if (!available) {
+            // The sockets are gone with the radio. Forget them here rather than
+            // discovering it one failed write at a time: the native disconnect
+            // events cover an orderly close, not a radio pulled out from under
+            // the transport.
+            this.wifiConnectedLinks.clear();
+            this.wifiPeerToLink.clear();
+            this.wifiLinkToPeer.clear();
+          }
+        },
+      ),
       DeviceEventEmitter.addListener(
         "AirhopWiFi.linkConnected",
         ({ linkID }: { linkID: string }) => {
           this.wifiConnectedLinks.add(linkID);
           // Immediately announce ourselves over the new WiFi link.
+          //
+          // A FRESH packet, deliberately, unlike the BLE link-up beside it which
+          // reuses the held greeting. The two links reach the same peer, and the
+          // deduplicator keys on the packet ID, so sending the same bytes down
+          // both means whichever arrives second is dropped - and it is that
+          // second announce that tells onAnnounce which link to map the peer to.
+          // Reusing the held packet here silently cost the WiFi fast path: the
+          // peer was never bound to its WiFi link, so attachments fell back to
+          // BLE and fragmented a 64 KiB file the fast path was there to carry.
+          //
+          // Capabilities and the bridge cell are passed for the reason described
+          // in currentAnnouncePacket: omitting them is a withdrawal, not a
+          // smaller packet.
           const pkt = this.announceManager.buildPacket(
             this.identity,
             this.nickname,
             [],
             hexToBytes(this.nostrPubKeyHex),
+            this.localCapabilities(),
+            this.bridgeService?.advertisedBridgeGeohash(),
           );
           this.sendWifi(linkID, bytesToBase64(encodePacket(pkt))).catch(
             () => {},
@@ -1017,6 +1100,16 @@ export class MeshService {
         },
       ),
     );
+
+    // Start WiFi Aware (Android only) through its reconciler, for the same
+    // reasons the radios go through theirs:
+    // one attempt with its error discarded could not survive WiFi being off at
+    // launch, a permission landing a moment late, or the adapter being toggled.
+    // See wifi-controller.ts.
+    //
+    // After the listeners, not before, so an availability report that lands
+    // while the attach is in flight is heard rather than dropped into a gap.
+    this.wifi.start();
   }
 
   // ---------------------------------------------------------------------------
@@ -1859,8 +1952,21 @@ export class MeshService {
     // Only advertise gateway when we can actually serve: internet on and the
     // toggle enabled. The bridge self-gates (advertisedBridgeGeohash is
     // undefined unless online with a cell, and null once torn down).
+    // Live relay connectivity is part of "can actually serve", not just the two
+    // settings. A gateway exists to put someone else's message on the internet,
+    // so a phone whose every relay is down is not one, however its toggles are
+    // set. Advertising anyway meant offline peers picked it, deposited into its
+    // 20-slot queue, and were told nothing - while a gateway that could have
+    // published sat one hop further away, unchosen.
+    //
+    // This matches the bridge bit beside it, which has always self-gated on
+    // relaysConnected, and it is what the gateway-recovery scenario already
+    // says the behaviour is. Withdrawal is not left to the next 15-30s tick
+    // either: buildNostrTransport re-announces on the falling edge now.
     const gateway =
-      settings.internetEnabled && settings.gatewayEnabled
+      settings.internetEnabled &&
+      settings.gatewayEnabled &&
+      this.relaysConnected
         ? Capability.gateway
         : 0;
     const bridge =
@@ -2027,6 +2133,7 @@ export class MeshService {
         // message delivered by a blind flood would be retried on every sweep
         // until it aged out a week later.
         useOutboxStore.getState().resolve(messageId);
+        this.courieredTo.delete(messageId);
       }
       return;
     }
@@ -2115,6 +2222,7 @@ export class MeshService {
           );
         // Acknowledged, so stop owing it. Same rule on every transport.
         useOutboxStore.getState().resolve(payload.messageId);
+        this.courieredTo.delete(payload.messageId);
       }
       return;
     }
@@ -2460,15 +2568,67 @@ export class MeshService {
   // Initial spray budget: how many peers may carry a copy.
   private static readonly COURIER_COPIES = 4;
 
+  // Message IDs already opened out of a courier envelope, so the redundant
+  // copies spray-and-wait exists to create collapse into one message. Bounded by
+  // rememberEventID, and per session: an envelope cannot outlive its 24h expiry,
+  // and a duplicate arriving after a relaunch is collapsed by the chat store on
+  // the same id instead.
+  private readonly openedCourierIDs = new Set<string>();
+
+  // Couriers we have already given each outgoing message to, keyed by message
+  // id. Sealing is randomised and CourierStore.deposit has no content dedupe, so
+  // without this the retry sweep handed a FRESH envelope for the same message to
+  // the same carriers every pass - exhausting their per-depositor quota (2 for a
+  // non-contact) within a couple of sweeps, after which every later deposit from
+  // this device was refused for every recipient.
+  private readonly courieredTo = new Map<string, Set<string>>();
+
   // Seal a DM to a peer we can't currently reach and hand it to the mesh.
-  // Returns false when we can't seal (no Noise key for them yet), so the caller
-  // can fall back to the local outbox.
-  private sendViaCourier(recipientPeerID: string, text: string): boolean {
+  // Returns false when nothing actually took a copy, so the caller can fall back
+  // to the local outbox and the composer does not claim a carrier it never had.
+  private sendViaCourier(
+    recipientPeerID: string,
+    text: string,
+    messageID: string,
+  ): boolean {
     const peer = this.registry.get(recipientPeerID);
     const noisePub = peer?.noisePubKey;
     // Sealing is to their static Noise key; without it there is no envelope to
     // build. (Known from a prior ANNOUNCE or a scanned contact card.)
     if (!noisePub) return false;
+
+    // Refuse when nobody can carry it, rather than reporting success.
+    //
+    // An envelope is held by peers; with no courier to address it to there is
+    // nothing to hold it, and nothing re-originates it later. Returning true
+    // here showed "carried by a friend" for a message no friend received.
+    // bitchat filters couriers to connected peers and refuses the same way
+    // (BLEService.sendCourierMessage).
+    const already = this.courieredTo.get(messageID) ?? new Set<string>();
+    const couriers = this.courierCandidates()
+      .filter((p) => !already.has(p))
+      .slice(0, MeshService.COURIER_COPIES);
+    if (couriers.length === 0) return false;
+
+    // The envelope carries a typed private message, not raw text.
+    //
+    // This is a wire-format correction, not a preference. bitchat opens a
+    // courier envelope, requires the plaintext to be
+    // NoisePayloadType.privateMessage, and refuses anything else outright
+    // ("Courier envelope carried unsupported payload type"). Sealing bare UTF-8
+    // meant every envelope Airhop sent was dropped by every bitchat recipient,
+    // and every bitchat envelope Airhop received rendered a binary TLV as the
+    // message body, while courier-store.ts claimed compatibility in its header.
+    //
+    // It also carries the message ID, which is what makes the rest work: the
+    // recipient can dedupe the redundant copies spray-and-wait exists to create,
+    // and the outbox entry can be resolved by an ordinary receipt.
+    const inner = encodeNoisePrivateMessage(messageID, text);
+    // A PrivateMessagePacket caps content at 255 bytes, and bitchat's does too,
+    // so an oversized message has no courier representation on either side.
+    // Refusing leaves it queued, which is honest, rather than sealing something
+    // no recipient can read.
+    if (inner === null) return false;
 
     try {
       // Prefer a forward-secret v2 seal when we hold a prekey bundle for them:
@@ -2478,7 +2638,7 @@ export class MeshService {
       const ciphertext = noiseXSeal(
         this.identity.noiseStaticPrivKey,
         prekey?.publicKey ?? noisePub,
-        new TextEncoder().encode(text),
+        inner,
       );
       const payload = encodeEnvelopePayload({
         // Tag is derived from the recipient's STATIC key + today's epoch day, so
@@ -2491,32 +2651,67 @@ export class MeshService {
         // will carry at all. The outbox keeps retrying for 7 days regardless;
         // this only bounds how long a third party holds a copy for us.
         expiryMs: Date.now() + ENVELOPE_TTL_MS,
-        copies: MeshService.COURIER_COPIES,
+        // Split across the couriers below, not replicated. Each gets its own
+        // directed envelope, so seeding all of them with the full budget would
+        // put four times the intended number of copies on the mesh, each of
+        // which then sprays half of ITS budget onward.
+        copies: Math.max(
+          1,
+          Math.floor(MeshService.COURIER_COPIES / couriers.length),
+        ),
         ciphertext,
         prekeyID: prekey?.id,
       });
-      this.broadcastCourierPayload(payload);
+      // One directed copy per courier, and remember each so a later sweep hands
+      // this message to somebody new rather than to the same carriers again.
+      for (const courier of couriers) {
+        this.sendCourierPayloadTo(payload, courier);
+        already.add(courier);
+      }
+      this.courieredTo.set(messageID, already);
       return true;
     } catch {
       return false;
     }
   }
 
-  private broadcastCourierPayload(payload: Uint8Array): void {
+  // Hand one envelope to ONE named peer.
+  //
+  // Directed, not broadcast, for three reasons: bitchat refuses any envelope not
+  // addressed to it, the deposit quota is per depositor so a broadcast charges
+  // one deposit against every peer in range, and a broadcast reveals to everyone
+  // in earshot that this device is couriering.
+  //
+  // Flood-originated as well as written down the direct link, because a courier
+  // may be several hops away. The recipient field stops relays depositing it.
+  private sendCourierPayloadTo(payload: Uint8Array, peerID: string): void {
     const packet: Packet = {
       type: PacketType.COURIER_ENV,
       ttl: 7,
       flags: Flags.SIGNED,
       senderID: hexToBytes(this.identity.peerID),
-      recipientID: new Uint8Array(8), // broadcast: anyone may carry it
+      recipientID: hexToBytes(peerID),
       timestamp: Date.now(),
       signature: new Uint8Array(64),
       payload,
     };
     packet.signature = signPacket(packet, this.identity.signingPrivKey);
-
     const b64 = bytesToBase64(encodePacket(packet));
     this.floodRouter.originate(packet);
+
+    // Straight down the link when we hold one, so the common case is one write
+    // rather than a flood.
+    const bleLink = this.peerToLink.get(peerID);
+    const wifiLink = this.wifiPeerToLink.get(peerID);
+    if (wifiLink !== undefined) {
+      this.sendWifi(wifiLink, b64).catch(() => {});
+      return;
+    }
+    if (bleLink !== undefined) {
+      this.sendBle(bleLink, b64).catch(() => {});
+      return;
+    }
+    // No direct link: let the flood carry it to them.
     for (const linkID of this.connectedLinks) {
       this.sendBle(linkID, b64).catch(() => {});
     }
@@ -2525,20 +2720,54 @@ export class MeshService {
     }
   }
 
+  // Peers that could carry mail for someone else right now: directly linked,
+  // announced, and with a Noise key we can charge a deposit against.
+  private courierCandidates(): string[] {
+    const peers: string[] = [];
+    for (const linkID of this.connectedLinks) {
+      const peerID = this.linkToPeer.get(linkID);
+      if (peerID !== undefined) peers.push(peerID);
+    }
+    for (const linkID of this.wifiConnectedLinks) {
+      const peerID = this.wifiLinkToPeer.get(linkID);
+      if (peerID !== undefined && !peers.includes(peerID)) peers.push(peerID);
+    }
+    return peers.filter((p) => this.registry.get(p)?.noisePubKey !== undefined);
+  }
+
   // An envelope arrived. Either it's addressed to us (open and deliver), or we
   // carry it onward for whoever it belongs to.
   private onCourierEnvelope(packet: Packet): void {
     const senderID = bytesToHex(packet.senderID);
     if (senderID === this.identity.peerID) return;
 
+    // Addressed to us, or it is not ours to open OR to carry.
+    //
+    // Envelopes are directed now (see sendCourierPayloadTo), and relays see them
+    // in passing because they are flooded. Without this check every peer along
+    // the path deposited a copy: the same deposit charged against the depositor
+    // once per listener, the pool filled with mail nobody chose to carry, and
+    // the sender's metadata went to everyone in earshot rather than to the
+    // couriers it picked. bitchat gates identically, at the top of its own
+    // handler.
+    if (bytesToHex(packet.recipientID) !== this.identity.peerID) return;
+
     // Is it ours? Check today's tag and yesterday's: an envelope sealed just
     // before a UTC day boundary carries the previous day's tag, and dropping
     // those would silently lose messages once a day.
     const myPub = x25519.getPublicKey(this.identity.noiseStaticPrivKey);
     const now = Date.now();
+    // Three days, not two: yesterday, today, and TOMORROW.
+    //
+    // The tag is derived from a UTC epoch day, so a sender whose clock runs
+    // ahead across the boundary seals with tomorrow's tag. Checking only
+    // backwards meant that envelope was silently unmatchable and we carried our
+    // own mail around instead of opening it. bitchat's candidateTags spans the
+    // same three days for the same reason.
     const tags = [
       computeRecipientTag(myPub, now),
       computeRecipientTag(myPub, now - 86_400_000),
+      computeRecipientTag(myPub, now + 86_400_000),
     ];
     const env = decodeEnvelopePayload(packet.payload);
     if (env === null) return;
@@ -2564,18 +2793,60 @@ export class MeshService {
         const fromPeerID = bytesToHex(sha256(senderStaticPubKey)).slice(0, 16);
         if (useBlockedStore.getState().isBlocked(fromPeerID)) return;
 
-        const text = new TextDecoder().decode(plaintext);
+        // The plaintext is a typed Noise payload, exactly as bitchat seals it.
+        // Anything else is from a build that predates this or is not a private
+        // message at all, and there is nothing useful to render either way.
+        const typed = decodeNoisePayload(plaintext);
+        if (typed === null || typed.type !== NoisePayloadType.PRIVATE_MESSAGE) {
+          return;
+        }
+        const pm = decodePrivateMessagePacket(typed.body);
+        if (pm === null) return;
+
+        // Dedupe on the message ID the SENDER chose, not on anything about this
+        // envelope.
+        //
+        // Spray-and-wait deliberately puts several copies on the mesh, each
+        // resealed by its carrier with a fresh timestamp, so no envelope-derived
+        // identity can collapse them. The id used to be built from the relaying
+        // carrier's clock, which meant up to four carriers produced four
+        // identical bubbles for one message - and a courier copy never collapsed
+        // against the direct copy either, because the direct one arrives under
+        // the sender's id. Both are one comparison now.
+        if (this.openedCourierIDs.has(pm.messageID)) return;
+        this.rememberEventID(this.openedCourierIDs, pm.messageID);
+
         const channel = `dm:${fromPeerID}`;
         useChatStore.getState().addChannel(channel);
         useChatStore.getState().addMessage({
-          id: `courier-${fromPeerID}-${String(packet.timestamp)}`,
+          id: pm.messageID,
           channel,
           senderID: fromPeerID,
           senderNickname: resolveDisplayName(fromPeerID),
-          text,
+          text: pm.content,
           timestampMs: packet.timestamp,
           isMine: false,
         });
+        // Acknowledge it.
+        //
+        // Couriered mail is the one path that could never resolve its sender's
+        // outbox entry, because there was no id to name in a receipt, so a
+        // message that really did arrive kept being re-sent on every sweep for
+        // as long as the entry lived. Both routes are tried because neither is
+        // reliable here: the mesh receipt needs a session with someone who is by
+        // definition out of range, and the Nostr one needs their npub and a
+        // relay. Whichever lands clears the sender's hourglass.
+        this.sendReceipt(fromPeerID, DmPayloadType.DELIVERED, pm.messageID);
+        const senderNpub =
+          this.registry.get(fromPeerID)?.nostrPubkey ??
+          useContactsStore.getState().getContact(fromPeerID)?.nostrPubkeyHex;
+        if (senderNpub !== undefined && senderNpub.length > 0) {
+          this.publishNostrAck(
+            senderNpub,
+            NoisePayloadType.DELIVERED,
+            pm.messageID,
+          );
+        }
 
         // Burn the one-time prekey now that it has opened a message, then
         // publish a fresh bundle so senders stop using the spent key.
@@ -2591,7 +2862,20 @@ export class MeshService {
       return;
     }
 
-    // Not ours: carry it. Contacts get the larger quota; everyone else the
+    // Not ours: carry it, but only for a depositor who has proven who they are.
+    //
+    // The quota is charged to `packet.senderID`, which is an unauthenticated
+    // header field, and nothing was verifying it. Any peer in range could put a
+    // known peer's ID on an envelope and spend that peer's storage allowance -
+    // or, at the favourite tier, a contact's larger one. FILE_TRANSFER and
+    // public messages already go through this check; the courier is the path
+    // where skipping it actually costs somebody else something.
+    //
+    // bitchat gates the same way in acceptCourierDeposit before its store is
+    // touched.
+    if (!this.senderIsAuthentic(packet, senderID)) return;
+
+    // Contacts get the larger quota; everyone else the
     // smaller one, so an unknown peer can't fill our storage.
     const depositorPub = this.registry.get(senderID)?.noisePubKey;
     if (!depositorPub) return; // unknown depositor: no quota to charge
@@ -2611,8 +2895,35 @@ export class MeshService {
     const peer = this.registry.get(peerID);
     if (!peer?.noisePubKey) return;
     this.courier.evictExpired();
+
+    // FIRST: is any of this mail actually for them?
+    //
+    // This is the handover spray-and-wait exists to end with, and nothing was
+    // calling it. `deliverMatching` was written, tested, and wired to nothing,
+    // so the only way a carried envelope ever reached its recipient was if that
+    // recipient happened to overhear a spray meant for someone else, and an
+    // envelope whose budget reached 1 stopped being sprayed at all - so a
+    // carrier could sit next to the recipient holding mail it would never hand
+    // over, until the 24h expiry threw it away.
+    //
+    // Destructive and budget-independent, like bitchat's handoverEnvelopes: the
+    // recipient is the destination, not another carrier, so there is nothing
+    // left to spray afterwards and no reason to require copies >= 2.
+    // All three days, matching the receive gate. The tag is stamped by the
+    // SENDER at seal time and rotates on the UTC epoch day, while an envelope
+    // lives 24h - so any envelope carried across midnight carries yesterday's
+    // tag and would never match a today-only comparison. Checking one day meant
+    // the handover missed most of what a carrier actually holds.
+    const now = Date.now();
+    for (const dayOffset of [0, -86_400_000, 86_400_000]) {
+      const tag = computeRecipientTag(peer.noisePubKey, now + dayOffset);
+      for (const env of this.courier.deliverMatching(tag)) {
+        this.sendCourierPayloadTo(encodeEnvelopePayload(env), peerID);
+      }
+    }
+
     for (const env of this.courier.sprayTo(peer.noisePubKey)) {
-      this.broadcastCourierPayload(encodeEnvelopePayload(env));
+      this.sendCourierPayloadTo(encodeEnvelopePayload(env), peerID);
     }
   }
 
@@ -3240,6 +3551,25 @@ export class MeshService {
       this.nickname,
       [],
       hexToBytes(this.nostrPubKeyHex),
+      // Capabilities and the bridge cell, exactly as the periodic announce
+      // carries them.
+      //
+      // Omitting them here was not a smaller announce, it was a capability
+      // WITHDRAWAL. An absent TLV 0x05 decodes as capabilities = 0, and the
+      // registry's `entry.capabilities ?? existing` keeps 0 rather than falling
+      // back, so every receiver zeroed this device's gateway and bridge bits.
+      // This packet goes out on every link-up at TTL 7, so one link flap
+      // anywhere in the room erased those bits mesh-wide until the next periodic
+      // announce, 15 to 30 seconds later.
+      //
+      // Inside that window firstReachableGateway and firstReachableBridge find
+      // nobody, and the cost is silent: a geohash post gives up with no retry,
+      // and a bridge crossing has already stamped its dedup sets before it
+      // discovers there is no bridge, so it can never cross afterwards. That is
+      // the "works about half the time" in the one-phone bridge-and-gateway
+      // report, and it is why the failure looked nondeterministic.
+      this.localCapabilities(),
+      this.bridgeService?.advertisedBridgeGeohash(),
     );
     this.greetingAnnounce = { packet, builtAtMs: now };
     return packet;
@@ -4255,7 +4585,7 @@ export class MeshService {
       // the recipient can deliver it, AND keep our own copy queued in case they
       // simply walk back to us. The two paths are complementary, and the
       // recipient dedupes by message id if both arrive.
-      const carried = this.sendViaCourier(recipientPeerID, text);
+      const carried = this.sendViaCourier(recipientPeerID, text, msgID);
       // Genuinely queue it. This used to be dropped while the UI said
       // "queued for delivery" while the message was gone for good, even if the
       // peer reappeared moments later.
@@ -4639,9 +4969,27 @@ export class MeshService {
   // now exists where there wasn't one). Each message is dequeued optimistically
   // and re-queued only if delivery still fails, so a flush can never duplicate
   // a message that did go out.
+  // Tell the composer about mail the queue has given up on.
+  //
+  // Eviction used to be silent: an entry past its TTL simply vanished while its
+  // bubble kept the "waiting to send" hourglass forever, which is exactly the
+  // silent-loss shape the outbox exists to prevent. A message that is never
+  // going out has to say so, the same way a refused send does, so the user can
+  // decide to try another way.
+  private reportDroppedMail(dropped: PendingMessage[]): void {
+    // Anything leaving the queue takes its courier record with it, so the map
+    // cannot grow for the life of the process.
+    for (const msg of dropped) this.courieredTo.delete(msg.id);
+    if (dropped.length === 0) return;
+    const chat = useChatStore.getState();
+    for (const msg of dropped) {
+      chat.setMessageStatus(msg.channel, msg.id, "failed");
+    }
+  }
+
   private flushOutbox(peerID: string): void {
     const outbox = useOutboxStore.getState();
-    outbox.evictExpired();
+    this.reportDroppedMail(outbox.evictExpired());
     const queued = outbox.forPeer(peerID);
     if (queued.length === 0) return;
 
@@ -4673,10 +5021,32 @@ export class MeshService {
         continue;
       }
       if (result === "needs-courier") {
-        // Still no route, so leave it queued and record the attempt.
-        outbox.markAttempted(msg.id);
-        // A peer with no route now won't have one for the rest of this batch
-        // either; stop rather than burning attempts on every queued message.
+        // No route, so nothing left the device. Deliberately NOT counted as an
+        // attempt.
+        //
+        // An attempt has to mean "this went on a wire and nobody acknowledged
+        // it", not "the sweep ran". Counting this branch tied the budget to the
+        // 45-second timer instead of to delivery opportunities, which turned the
+        // seven-day retry window into about eighteen minutes: someone who walked
+        // out of range for twenty minutes had their message dropped, and the
+        // counter persists across relaunches so the budget was cumulative too.
+        //
+        // Try to courier it again before giving up on this pass.
+        //
+        // sendViaCourier ran once, at compose time, and that was the only call
+        // site. A message written with no couriers in range therefore returned
+        // false and was NEVER couriered again, even if a carrier walked in five
+        // seconds later - only the direct and Nostr retries survived, and
+        // neither reaches a recipient who is out of range of both. bitchat
+        // solves this with courierBecameAvailable; the sweep is our equivalent
+        // hook, and it already runs on exactly the events that matter (a peer
+        // appearing, a resume, a reconnect).
+        //
+        // Cheap when it cannot help: it returns false immediately with no
+        // couriers, and the recipient dedupes redundant copies by message id.
+        this.sendViaCourier(peerID, msg.text, msg.id);
+        // A peer with no route now will not have one for the rest of this batch
+        // either, so stop walking it.
         break;
       }
       // The bubble has been showing the queued hourglass since the original
@@ -4725,9 +5095,39 @@ export class MeshService {
   // BLE reappearance. Skips peers that still have a live direct link: those are
   // the mesh's job and will flush on their own events. Safe to call often, since
   // a successful send resolves the outbox entry and the recipient dedupes by id.
-  private retryQueuedOverInternet(): void {
+  // Drop anything past its TTL and tell the sender. Cleanup only: no sends.
+  //
+  // bitchat separates these too (cleanupExpiredMessages vs flushOutbox), and the
+  // separation is what makes an attempt mean something. A timer that re-sends is
+  // a timer that manufactures "attempts" out of elapsed time, which is how a
+  // seven-day queue turned into eighteen minutes and how an unreachable peer got
+  // re-flooded ten thousand times.
+  private expireQueuedMail(): void {
     const outbox = useOutboxStore.getState();
-    outbox.evictExpired();
+    const dropped = outbox.evictExpired();
+    for (const d of dropped) this.courieredTo.delete(d.id);
+    this.reportDroppedMail(dropped);
+  }
+
+  // Retry everything owed, over whatever route now exists.
+  //
+  // Called on real delivery opportunities only - a peer announcing, the app
+  // coming forward, relays reconnecting - never on a bare timer. That is
+  // bitchat's model: flushOutbox fires from peer key events and startup, and
+  // there is no periodic send sweep anywhere in MessageRouter.
+  private retryQueuedOverInternet(): void {
+    // One retry per window, however many events land.
+    //
+    // iOS raises "inactive" for the app switcher, Control Center and every
+    // permission dialog, and emits it on both edges of a background round trip,
+    // so a single pull-down of Control Center used to re-publish the whole
+    // pending outbox to relays three times. Relay reconnects flap similarly.
+    const now = Date.now();
+    if (now - this.lastOutboxRetryMs < OUTBOX_RETRY_MIN_INTERVAL_MS) return;
+    this.lastOutboxRetryMs = now;
+
+    const outbox = useOutboxStore.getState();
+    this.reportDroppedMail(outbox.evictExpired());
     const peerIDs = new Set(outbox.pending.map((m) => m.recipientPeerID));
     for (const peerID of peerIDs) {
       // Retry for EVERY peer with mail owed, including directly linked ones.
@@ -4793,6 +5193,12 @@ export class MeshService {
   retryRadios(): void {
     if (!this.running) return;
     this.radio.refresh();
+    // Every reason to re-read the Bluetooth stack is a reason to re-try the
+    // WiFi attach: both are refused by a permission that has just been granted,
+    // and both are refused by a radio the user has just switched on. The two
+    // used to diverge here, which is why turning WiFi on and returning to the
+    // app fixed Bluetooth and left the fast path dead until a relaunch.
+    this.wifi.refresh();
   }
 
   // The app moved between foreground and background. Passed straight through to
@@ -4801,6 +5207,22 @@ export class MeshService {
   // phone spends nearly all of its day.
   setAppForeground(foreground: boolean): void {
     this.radio.setAppForeground(foreground);
+    if (!foreground) return;
+    // Coming back to the app is the strongest signal we get that the world may
+    // have moved, because the usual reason someone left was to change it:
+    // Settings is where Bluetooth, WiFi, mobile data and airplane mode live.
+    //
+    // The radios have their own reconciler for that. Queued mail did not - it
+    // waited on a peer's ANNOUNCE or on the 45-second sweep - so the sequence
+    // "send a DM, watch it queue, go and turn the internet on, come back" left
+    // the message sitting there while everything it needed was in place. The
+    // user's read of that is that the app has to be restarted to notice, which
+    // is how it was reported.
+    //
+    // Cheap and idempotent: it walks only the peers with mail actually
+    // outstanding, an entry survives until the recipient acknowledges it, and a
+    // redundant resend is collapsed by message id at the far end.
+    this.retryQueuedOverInternet();
   }
 
   // Pull-to-refresh hook: drop stale peers, re-check the radios, and re-resolve
@@ -4811,6 +5233,7 @@ export class MeshService {
   refresh(): void {
     usePeerStore.getState().evictStale();
     this.radio.refresh();
+    this.wifi.refresh();
     void this.geoChannels?.refresh();
   }
 
@@ -4826,11 +5249,37 @@ export class MeshService {
       // instead of implying nothing is reachable.
       onConnectionChange: (connected) => {
         useMeshStateStore.getState().setNostrConnected(connected);
-        if (!connected) return;
+        if (!connected) {
+          // Withdraw the gateway claim now rather than at the next tick.
+          //
+          // The capability is gated on live relays, so losing them changes what
+          // we advertise - but only the falling edge was unhandled, so an
+          // offline gateway went on being chosen by its neighbours for up to
+          // thirty seconds. The connect path below has always re-announced; this
+          // is the other half of that.
+          this.announceManager.announceNow();
+          // And the bridge banner, whose "active" now depends on live relays but
+          // which nothing recomputed on this edge.
+          this.bridgeService?.onRelayConnectivityChanged();
+          return;
+        }
         // Anything a mesh-only peer handed us while we were offline goes out
         // now. Same trigger bitchat uses (ChatViewModelBootstrapper watches
         // NostrRelayManager.isConnected and flushes both services).
         this.flushQueuedUplinks();
+        // And our own mail. The DM outbox had no connectivity trigger at all:
+        // its only routes out were a peer's ANNOUNCE arriving over Bluetooth
+        // and a 45-second sweep. So a message queued as "will retry when a
+        // route is available" sat there after the user turned their internet
+        // back on, for up to three quarters of a minute, with the relay it
+        // needed already live. Long enough that reopening the app looked like
+        // the thing that fixed it, which is how this was reported.
+        //
+        // Relays coming up IS a new route appearing, and it is the exact
+        // trigger bitchat flushes on. Safe to call often: an entry survives
+        // until the recipient acknowledges it, and the recipient collapses a
+        // duplicate by message id.
+        this.retryQueuedOverInternet();
         // Relays coming up while bridging turns us into a serving bridge (we can
         // now publish + advertise a cell): refresh presence/subscription and push
         // a fresh announce so mesh-only peers discover us.
@@ -5045,6 +5494,9 @@ export class MeshService {
     // keep working: they reach the new instances through `this.` fields.
     this.buildNostrTransport();
     this.subscribeNostrInbox();
+    // The nutzap watcher captured the client we just replaced, so it is now
+    // subscribed to a closed pool. See nutzap-watcher-handle.
+    rebindNutzapWatcher();
   }
 
   // Stop and null every Nostr transport + channel service, leaving all the
@@ -5072,9 +5524,17 @@ export class MeshService {
       if (this.nostrClient === null) {
         this.buildNostrTransport();
         this.subscribeNostrInbox();
+        rebindNutzapWatcher();
       }
     } else {
       this.teardownNostr();
+      // No client to watch on. Drop the subscription rather than leaving it
+      // against a pool that has just been destroyed.
+      rebindNutzapWatcher();
+      // Same reasoning as the gateway toggle: parked uplinks are other people's
+      // messages held against an internet connection the user has just switched
+      // off, and they must not be published when it comes back.
+      this.queuedUplinks.length = 0;
     }
     // The gateway capability we advertise depends on internet being on, so push
     // a fresh announce now rather than waiting for the next cycle.
@@ -5164,6 +5624,8 @@ export class MeshService {
     this.liveVoiceUnsub = null;
     this.bridgeUnsub?.();
     this.bridgeUnsub = null;
+    this.internetUnsub?.();
+    this.internetUnsub = null;
     this.contactsUnsub?.();
     this.contactsUnsub = null;
     if (this.outboxSweepTimer !== null) {
@@ -5173,6 +5635,16 @@ export class MeshService {
     this.privateChannels?.stop();
     this.privateChannels = null;
     this.geoChannels?.stop();
+    // Nulled, like every other Nostr-riding service beside it.
+    //
+    // This was the one left behind, and it is not a dangling reference: the
+    // service holds its OWN handle on the client, and pool.destroy() empties the
+    // relay map without latching anything, so the pool lazily REBUILDS a relay
+    // on the next call. So a stopped mesh plus one pull-to-refresh - or a
+    // foreground resume, or a location grant - re-subscribed every geohash cell,
+    // reopened those sockets, and restarted the presence heartbeat, announcing
+    // this device's cell over a mesh the user had switched off.
+    this.geoChannels = null;
     this.bridgeService?.stop();
     this.bridgeService = null;
     // Resolve any outstanding pings as unreachable and drop their timers.
@@ -5183,13 +5655,23 @@ export class MeshService {
     }
     this.nostrClient?.close();
     this.nostrClient = null;
+    // The watcher captured the client that just died. Drop it here rather than
+    // leaving it subscribed to a destroyed pool while holding this identity's
+    // Nostr key; start() rebinds it against the fresh client.
+    rebindNutzapWatcher();
+    // Other people's messages, parked for a gateway that is now off. The
+    // settings subscription that normally clears these is unsubscribed a few
+    // lines below, and presence sets gatewayEnabled false AFTER calling stop(),
+    // so nothing else would ever reach them and they would be published on the
+    // next return to Online.
+    this.queuedUplinks.length = 0;
     // The relay pool is gone, so the internet bridge is down. Reset explicitly
     // rather than relying on close() to fire per-relay failure callbacks.
     useMeshStateStore.getState().setNostrConnected(false);
     // The radios were already brought down by this.radio.stop() at the top,
     // through the one path that also cancels retries and releases the background
     // service. Calling the native stops again here would race that.
-    NativeAirhopWiFi?.stopWiFi().catch(() => {});
+    this.wifi.stop();
     // And forget the links it just closed. Unlike a BLE central link, which
     // survives a stopped scan, a WiFi link is a socket stopWiFi() destroys, and
     // link IDs are never reissued. The native disconnect events cannot clean up
@@ -5236,6 +5718,10 @@ export class MeshService {
     this.clearRadioStopGrace();
     this.radio.stop();
     this.radio.dispose();
+    // stop() above already asked the WiFi transport to come down; this is what
+    // stops its retry ladder, so a pending attach cannot land after a panic wipe
+    // and reopen a socket under an identity that no longer exists.
+    this.wifi.dispose();
   }
 }
 

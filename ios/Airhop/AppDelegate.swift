@@ -29,10 +29,6 @@ class AppDelegate: ExpoAppDelegate {
 #endif
 
 #if os(iOS)
-    // Installed before the first resign-active, so the app-switcher snapshot
-    // never captures an open conversation.
-    AirhopPrivacyScreen.shared.install()
-
     // Bluetooth state restoration, only on a restoration launch.
     //
     // iOS expects the manager with the matching restore identifier to exist

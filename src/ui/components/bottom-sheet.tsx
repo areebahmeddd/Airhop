@@ -48,17 +48,16 @@ import {
 import Animated, {
   Easing,
   interpolate,
-  runOnJS,
   useAnimatedStyle,
   useSharedValue,
   withSpring,
   withTiming,
 } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { scheduleOnRN } from "react-native-worklets";
 import { useT } from "../../i18n";
 import { Duration, Radius, Spacing, useThemeColors } from "../theme";
 import { useKeyboardHeight } from "../use-keyboard";
-import PrivacyCover from "./privacy-cover";
 
 // Pull further than this share of the sheet's own height and letting go
 // dismisses instead of springing back. A third is the familiar iOS/Material
@@ -76,6 +75,28 @@ const CLOSE_TIMING = {
   duration: Duration.slow,
   easing: Easing.out(Easing.cubic),
 } as const;
+
+// How long after a slide-out should have finished before the sheet unmounts
+// itself regardless of what the animation reported.
+//
+// The Modal used to be unmounted ONLY from withTiming's completion callback,
+// which runs on the UI thread. That thread stops producing frames the moment
+// the activity is paused, and a paused activity is the single most common thing
+// to happen immediately after a sheet closes: the permission primer's Continue
+// button resolves startMeshWithPermissions, which opens the OS permission
+// dialog on the next tick. The animation was left mid-flight, the callback
+// never fired with `finished: true`, and `mounted` stayed true forever.
+//
+// A React Native Modal is its own window and captures every touch in it, so
+// what the user was left holding was the whole app behind a scrim that ate
+// every tap - an unresponsive tab bar under a grey sheet, indistinguishable
+// from a hang. It survived returning to the app, because nothing re-drove the
+// animation.
+//
+// JS timers keep running while the activity is paused, which is exactly why the
+// backstop lives here rather than in another animation callback. The grace is
+// generous because beating the animation would cut a healthy close short.
+const CLOSE_FALLBACK_MS = CLOSE_TIMING.duration + 200;
 
 interface Props {
   visible: boolean;
@@ -134,8 +155,34 @@ export default function BottomSheet({
   // does not, and telling it again would re-run an onClose that often resets
   // state.
   const userDismissedRef = useRef(false);
+  // The unmount backstop described at CLOSE_FALLBACK_MS, and the parent's
+  // latest intent, so a sheet reopened while sliding out is never torn down by
+  // the previous close's timer.
+  const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const visibleRef = useRef(visible);
+  visibleRef.current = visible;
+  // Whether this presentation has already been closed out, so the slower of the
+  // animation callback and the timer does nothing.
+  const closedRef = useRef(false);
+
+  function clearCloseTimer(): void {
+    if (closeTimer.current !== null) {
+      clearTimeout(closeTimer.current);
+      closeTimer.current = null;
+    }
+  }
 
   function finishClose(): void {
+    clearCloseTimer();
+    // Reopened while the slide-out was in flight. The effect below has already
+    // sprung the sheet back up, so completing the close would unmount a sheet
+    // the parent is currently asking for.
+    if (visibleRef.current) return;
+    // Whichever of the animation callback and the backstop timer arrives
+    // second must not run onClose a second time: several callers reset state
+    // in it, and a few of them are not idempotent.
+    if (closedRef.current) return;
+    closedRef.current = true;
     openedRef.current = false;
     translateY.value = screenHeight;
     setMounted(false);
@@ -147,8 +194,13 @@ export default function BottomSheet({
     userDismissedRef.current = byUser;
     Keyboard.dismiss();
     translateY.value = withTiming(sheetHeight.value, CLOSE_TIMING, (done) => {
-      if (done) runOnJS(finishClose)();
+      if (done) scheduleOnRN(finishClose);
     });
+    // Unmount on a JS timer whichever way the animation goes. finishClose is
+    // idempotent, so whichever of the two arrives first wins and the other is a
+    // no-op.
+    clearCloseTimer();
+    closeTimer.current = setTimeout(finishClose, CLOSE_FALLBACK_MS);
   }
 
   // Every dismissal the user performs - drag, backdrop tap, system back.
@@ -158,6 +210,10 @@ export default function BottomSheet({
 
   useEffect(() => {
     if (visible) {
+      // A pending slide-out is now stale, and its backstop must not fire into
+      // the presentation this open is starting.
+      clearCloseTimer();
+      closedRef.current = false;
       // Mounting in response to the parent opening us. Not derived state: the
       // unmount is deferred until the slide-out finishes, so the two can't be
       // the same value.
@@ -177,6 +233,10 @@ export default function BottomSheet({
     // either would re-run this on the render the branches above cause.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visible]);
+
+  // A sheet torn down by its parent mid-close must not leave a timer holding a
+  // handle to this component.
+  useEffect(() => clearCloseTimer, []);
 
   // First real layout: drop the sheet to just below the screen edge and spring
   // it up. Measuring first is what keeps the travel distance equal to the
@@ -210,7 +270,7 @@ export default function BottomSheet({
     .onEnd((e) => {
       const far = translateY.value > sheetHeight.value * DISMISS_DISTANCE_RATIO;
       if (far || e.velocityY > DISMISS_VELOCITY) {
-        runOnJS(dismiss)();
+        scheduleOnRN(dismiss);
       } else {
         translateY.value = withSpring(0, OPEN_SPRING);
       }
@@ -307,7 +367,6 @@ export default function BottomSheet({
           {/* A Modal is its own window, so the app-root cover does not reach in
               here. Every sheet in the app is this component, so one mount
               covers all of them. */}
-          <PrivacyCover />
         </View>
       </GestureHandlerRootView>
     </Modal>

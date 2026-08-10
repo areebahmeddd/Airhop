@@ -75,16 +75,26 @@ export class WifiFabric {
 
   // Bring a link up between two devices, as discovery would.
   //
-  // Refuses across platforms and says so rather than failing quietly: an
-  // Android phone publishing on WiFi Aware and an iPhone browsing over
-  // MultipeerConnectivity are invisible to each other, and a scenario that
-  // expected them to link is asserting something that cannot happen in the
+  // Refuses and says so rather than failing quietly, in two cases. An iPhone has
+  // no fast path at all: MultipeerConnectivity was removed, so iOS registers no
+  // WiFi module and the controller latches "unsupported" on its first pass. And
+  // two different platforms cannot see each other even in principle. A scenario
+  // that expected either link is asserting something that cannot happen in the
   // field.
   link(aID: string, bID: string): boolean {
     if (this.disposed) return false;
     const a = this.nodes.get(aID);
     const b = this.nodes.get(bID);
     if (a === undefined || b === undefined) return false;
+    const noFastPath = [a, b].find((n) => n.platform !== "android");
+    if (noFastPath !== undefined) {
+      this.refusedCrossPlatform++;
+      this.world.say(
+        "WIFI_NO_FAST_PATH",
+        `${noFastPath.platform} has no WiFi transport, so ${aID} <-> ${bID} stays on Bluetooth`,
+      );
+      return false;
+    }
     if (a.platform !== b.platform) {
       this.refusedCrossPlatform++;
       this.world.say(

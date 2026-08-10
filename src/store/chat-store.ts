@@ -442,9 +442,25 @@ export const useChatStore = create<ChatState>()(
             // from that too: the proofs are back in the sender's wallet, so
             // there is nothing left to retry.
             if (m.status === "reclaimed") return m;
+            // "failed" is a local give-up, not a late receipt, so it is exempt
+            // from the rank rule in the same way "sending" is - but only over
+            // the statuses a give-up can legitimately correct.
+            //
+            // It ranks BELOW sent/carried/queued, which are exactly the states
+            // an undeliverable message sits in, so the rank rule silently
+            // discarded every attempt to mark one failed. The bubble kept its
+            // hourglass forever over a message the outbox had already dropped,
+            // which is the failure the give-up exists to report. It must still
+            // never overwrite delivered or read: those are proof the message
+            // arrived, and a lost receipt is not a lost message.
+            const isLocalGiveUp =
+              status === "failed" &&
+              (m.status === undefined ||
+                STATUS_RANK[m.status] <= STATUS_RANK.queued);
             if (
               m.status !== undefined &&
               status !== "sending" &&
+              !isLocalGiveUp &&
               STATUS_RANK[status] < STATUS_RANK[m.status]
             ) {
               return m;

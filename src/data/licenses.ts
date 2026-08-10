@@ -274,9 +274,9 @@ const CATALOG: {
       "Storing data and managing state: secure and fast local storage, secure randomness, native modules, and in-memory state.",
     packages: [
       {
-        name: "react-native-encrypted-storage",
+        name: "expo-secure-store",
         license: "MIT",
-        repo: "https://github.com/emeraldsanto/react-native-encrypted-storage",
+        repo: "https://github.com/expo/expo/tree/main/packages/expo-secure-store",
       },
       {
         name: "react-native-get-random-values",

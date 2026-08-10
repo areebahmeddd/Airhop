@@ -35,8 +35,31 @@ export interface PendingMessage {
 // Give up after this long. A week-old "hi" is noise, not a message.
 export const OUTBOX_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
-// Hard cap so a long offline stretch can't grow the store without bound.
-const MAX_PENDING = 500;
+// Hard cap PER RECIPIENT, so a long offline stretch cannot grow the store
+// without bound.
+//
+// Per recipient rather than global, matching bitchat's maxMessagesPerPeer. A
+// single global cap evicted the OLDEST entry whatever it was, so one chatty
+// unreachable peer silently deleted somebody else's queued mail - and the
+// sender was never told, because eviction is invisible. A per-peer cap makes
+// the cost of an unreachable conversation land on that conversation.
+export const MAX_PENDING_PER_PEER = 100;
+
+// How many real send opportunities a message gets before it is called failed.
+//
+// bitchat's number, and now bitchat's meaning. An attempt is charged only when
+// something actually went out over a route that could have acknowledged it: the
+// courier branch, which sends nothing, does not charge, and neither does the
+// expiry timer, which no longer sends at all. Retries fire on delivery
+// opportunities - a peer announcing, the app coming forward, relays
+// reconnecting - so eight of them is eight genuine chances, not eight ticks of
+// a clock.
+//
+// Getting that ordering wrong is what makes this constant dangerous: charged
+// per timer tick it turns a seven-day queue into six minutes and marks messages
+// failed that relays have already published. Charged per opportunity it bounds
+// both retention and airtime, which is the job it does in bitchat.
+export const MAX_SEND_ATTEMPTS = 8;
 
 interface OutboxState {
   pending: PendingMessage[];
@@ -47,8 +70,14 @@ interface OutboxState {
   // Everything still owed to a given peer, oldest first.
   forPeer: (peerID: string) => PendingMessage[];
   markAttempted: (id: string) => void;
-  // Drop anything past OUTBOX_TTL_MS. Called before each flush.
-  evictExpired: (nowMs?: number) => void;
+  // Drop anything past OUTBOX_TTL_MS or MAX_SEND_ATTEMPTS, and report what
+  // was dropped so the sender's bubble can stop claiming it is still coming.
+  //
+  // Returning the dropped entries rather than swallowing them is the point: an
+  // expired message used to disappear from the queue while its bubble kept the
+  // hourglass forever, which is the same silent-loss shape the queue exists to
+  // prevent. Called before each flush.
+  evictExpired: (nowMs?: number) => PendingMessage[];
   clearAll: () => void;
 }
 
@@ -72,11 +101,15 @@ export const useOutboxStore = create<OutboxState>()(
           // Same id already queued: keep the original attempt count.
           if (state.pending.some((p) => p.id === msg.id)) return state;
           const next = [...state.pending, { ...msg, attempts: 0 }];
-          // Oldest-first eviction when over the cap.
-          return {
-            pending:
-              next.length > MAX_PENDING ? next.slice(-MAX_PENDING) : next,
-          };
+          // Oldest-first eviction, within this recipient only.
+          const mine = next.filter(
+            (p) => p.recipientPeerID === msg.recipientPeerID,
+          );
+          if (mine.length <= MAX_PENDING_PER_PEER) return { pending: next };
+          const doomed = new Set(
+            mine.slice(0, mine.length - MAX_PENDING_PER_PEER).map((p) => p.id),
+          );
+          return { pending: next.filter((p) => !doomed.has(p.id)) };
         });
       },
 
@@ -99,13 +132,16 @@ export const useOutboxStore = create<OutboxState>()(
       },
 
       evictExpired(nowMs = Date.now()) {
-        set((state) => {
-          const cutoff = nowMs - OUTBOX_TTL_MS;
-          const kept = state.pending.filter((p) => p.createdAtMs >= cutoff);
-          return kept.length === state.pending.length
-            ? state
-            : { pending: kept };
-        });
+        const cutoff = nowMs - OUTBOX_TTL_MS;
+        const dropped = get().pending.filter(
+          (p) => p.createdAtMs < cutoff || p.attempts >= MAX_SEND_ATTEMPTS,
+        );
+        if (dropped.length === 0) return [];
+        const doomed = new Set(dropped.map((p) => p.id));
+        set((state) => ({
+          pending: state.pending.filter((p) => !doomed.has(p.id)),
+        }));
+        return dropped;
       },
 
       clearAll() {

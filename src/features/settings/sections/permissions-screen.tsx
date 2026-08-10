@@ -31,7 +31,7 @@ import {
   View,
 } from "react-native";
 import {
-  hasLocationPermission,
+  locationPermissionState,
   requestLocationPermission,
 } from "../../../services/location-service";
 import { getMeshService } from "../../../services/mesh-service";
@@ -156,19 +156,22 @@ export default function PermissionsScreen({
 
     const [bluetooth, location, notifications, camera, photos, microphone] =
       await Promise.all([
-        read(async () =>
+        read(async () => {
           // iOS has no queryable Bluetooth permission from JS: CoreBluetooth
           // prompts on first use and the answer lives in the system settings.
           // Reporting "unmanaged" there is honest; Android can really answer.
-          Platform.OS === "android"
-            ? (await hasBlePermissions())
-              ? "granted"
-              : "askable"
-            : "unmanaged",
-        ),
-        read(async () =>
-          (await hasLocationPermission()) ? "granted" : "askable",
-        ),
+          if (Platform.OS !== "android") return "unmanaged";
+          if (await hasBlePermissions()) return "granted";
+          // Android cannot be asked whether a denial is permanent without an
+          // Activity, so the answer comes from the last request that WAS made -
+          // the store flag the mesh banner already reads. Without it this row
+          // could only ever say "askable", and offered an Allow that the OS
+          // silently swallows for someone who has refused twice.
+          return useMeshStateStore.getState().blePermissionBlocked
+            ? "blocked"
+            : "askable";
+        }),
+        read(async () => toState(await locationPermissionState())),
         read(async () => toState(await Notifications.getPermissionsAsync())),
         read(async () => toState(await Camera.getCameraPermissionsAsync())),
         read(async () => toState(await MediaLibrary.getPermissionsAsync(true))),
@@ -221,11 +224,30 @@ export default function PermissionsScreen({
           // and the controller is the one place that knows how to tell those
           // apart.
           getMeshService()?.retryRadios();
+          // Android 11 and below asks for ACCESS_FINE_LOCATION here, because
+          // that is the permission the mesh needs there. The same grant is what
+          // the location channels run on, so record it and act on it rather than
+          // leaving the two branches each doing half of what the other needs.
+          if (result.granted && result.locationRequired) {
+            useMeshStateStore.getState().setLocationGranted(true);
+            getMeshService()?.refreshGeoChannels();
+          }
           break;
         }
         case "location": {
           const granted = await requestLocationPermission();
           useMeshStateStore.getState().setLocationGranted(granted);
+          // Re-resolve the location channels, exactly as the startup path does
+          // after the same grant. Without it the grant was recorded and nothing
+          // acted on it, so #block and its neighbours stayed empty until the
+          // next app resume - which reads as the permission not having worked.
+          if (granted) {
+            getMeshService()?.refreshGeoChannels();
+            // Android 11 and below: the permission the mesh waits on IS
+            // location, so granting it here can unblock the radios as well.
+            // Harmless above API 31, where the reconciler finds nothing to do.
+            getMeshService()?.retryRadios();
+          }
           break;
         }
         case "notifications":
@@ -260,7 +282,7 @@ export default function PermissionsScreen({
     if (state === "unmanaged") {
       return (
         <Pressable
-          onPress={() => void Linking.openSettings()}
+          onPress={() => void Linking.openSettings().catch(() => undefined)}
           hitSlop={HIT_SLOP}
           accessibilityRole="button"
           accessibilityLabel={T("settings.permissions.open_settings")}
@@ -275,7 +297,9 @@ export default function PermissionsScreen({
       <SettingSwitch
         value={state === "granted"}
         onValueChange={() =>
-          state === "askable" ? void request(key) : void Linking.openSettings()
+          state === "askable"
+            ? void request(key)
+            : void Linking.openSettings().catch(() => undefined)
         }
         accessibilityLabel={
           state === "askable"

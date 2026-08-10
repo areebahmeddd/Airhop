@@ -324,6 +324,11 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       color: Colors.textMuted,
       fontFamily: FontFamily.mono,
     },
+    // For a trailing action label whose row currently does nothing, so it reads
+    // as unavailable rather than as a live control that ignores taps.
+    settingValueMuted: {
+      opacity: 0.45,
+    },
     settingControl: {
       flexShrink: 0,
     },

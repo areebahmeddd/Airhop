@@ -249,7 +249,7 @@ export function StartNewSheet({
             autoFocus
             onSubmitEditing={handleAdd}
             returnKeyType="done"
-            selectionColor={Colors.accent}
+            selectionColor={Colors.selection}
           />
           {nameAlreadyExists && (
             <Text style={styles.inputError} accessibilityLiveRegion="polite">

@@ -49,7 +49,7 @@ When the user shows you a file, diff, or describes a change, evaluate it against
 ### 5. Key Storage
 
 - Any private key written to MMKV, AsyncStorage, SQLite, or filesystem? Hard rejection.
-- Private keys must only be stored via `react-native-encrypted-storage`.
+- Private keys must only be stored via `src/core/crypto/keychain.ts`, never `expo-secure-store` directly: the panic wipe deletes only the items that module registers.
 - Verify: no private key material logged, returned from API responses, or stored in state management.
 
 ### 6. Testing

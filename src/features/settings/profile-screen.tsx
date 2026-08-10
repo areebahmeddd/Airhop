@@ -78,6 +78,20 @@ import TermsScreen from "./sections/terms-screen";
 import VersionScreen from "./sections/version-screen";
 import { GroupDivider, SettingLinkRow, useSharedStyles } from "./shared";
 
+// Share sheets are fire-and-forget: a rejection (the OS refusing to present, a
+// provider crash) is not something the user can act on, and leaving it
+// unhandled turns the app's front-door "share my ID" pair into an unhandled
+// rejection and a button that visibly did nothing.
+async function shareOrIgnore(
+  content: Parameters<typeof Share.share>[0],
+): Promise<void> {
+  try {
+    await Share.share(content);
+  } catch {
+    // Dismissed, or the sheet could not open. Nothing to report.
+  }
+}
+
 // Presence on the mesh. Online broadcasts + scans, Away stops the mesh
 // entirely, Invisible keeps scanning but stops advertising our presence.
 type Status = PresenceStatus;
@@ -309,15 +323,47 @@ export default function ProfileScreen({
     // identity that is about to cease existing, which is the last honest moment
     // to send it. Destroying rather than stopping releases the key material too.
     destroyMeshService();
-    await panicWipe();
+    // Never leaves the app mid-wipe.
+    //
+    // `await panicWipe()` used to be unwrapped, and both callers invoke this as
+    // `void handleConfirmWipe()`. A rejection therefore skipped the two lines
+    // below: the confirm sheet stayed open over a half-wiped app, the shell was
+    // never told to drop to onboarding, and the only thing the user had seen was
+    // the triple-tap's warning haptic - which fires BEFORE any of this runs. The
+    // one irreversible action in the app reported its own failure by doing
+    // nothing at all.
+    let keysDestroyed = false;
+    try {
+      ({ keysDestroyed } = await panicWipe());
+    } catch {
+      // The wipe itself is internally best-effort, so reaching here means
+      // something outside it threw. The app still drops to onboarding below,
+      // because a half-wiped app the user cannot leave is the worse end state.
+    }
     setShowWipeModal(false);
     onWipe?.();
+    // The one claim that must not be made falsely. Everything else is gone
+    // either way; if the OS refused to release the keys, the user has to know,
+    // because the whole point of the gesture was the keys.
+    if (!keysDestroyed) {
+      showAlert(
+        t("settings.wipe.keys_failed"),
+        t("settings.wipe.keys_failed_body"),
+      );
+    }
   }
 
   // Panic button taps: a single tap opens the confirm sheet; three quick taps
   // are an escape-hatch easter egg that wipes immediately, no confirmation.
   const wipeTapCount = useRef(0);
   const wipeTapTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // The triple-tap window is a live timer on an irreversible action, so it goes
+  // with the screen rather than outliving it.
+  useEffect(() => {
+    return () => {
+      if (wipeTapTimer.current) clearTimeout(wipeTapTimer.current);
+    };
+  }, []);
   function handlePanicPress(): void {
     wipeTapCount.current += 1;
     if (wipeTapTimer.current) clearTimeout(wipeTapTimer.current);
@@ -352,7 +398,7 @@ export default function ProfileScreen({
   }
 
   async function handleSharePeerID(): Promise<void> {
-    await Share.share({ message: peerID });
+    await shareOrIgnore({ message: peerID });
   }
 
   // The QRCode component exposes an SVG ref whose toDataURL() returns the
@@ -383,7 +429,11 @@ export default function ProfileScreen({
         if (file.exists) file.delete();
         file.create();
         file.write(base64, { encoding: "base64" });
-        await MediaLibrary.saveToLibraryAsync(file.uri);
+        // See the note in message-thread's saveAttachmentToDevice:
+        // saveToLibraryAsync is a throwing stub in expo-media-library 57, so
+        // this branch always fell into the catch below and Download QR could
+        // never have worked.
+        await MediaLibrary.Asset.create(file.uri);
         showAlert(t("settings.qr.saved"), t("settings.qr.saved_body"));
       } catch {
         showAlert(
@@ -396,7 +446,7 @@ export default function ProfileScreen({
 
   async function handleShareQR(): Promise<void> {
     // A tappable deep link that opens Airhop straight into a chat with me.
-    await Share.share({
+    await shareOrIgnore({
       message: `${t("settings.qr.share_body")}\n\n${peerInviteLink(peerID)}`,
       title: t("settings.qr.share_message"),
     });

@@ -30,6 +30,9 @@ const FADE_MS = Duration.base;
 interface Props {
   message: string | null;
   onHide: () => void;
+  // Defaults to a tick, which suits the confirmations this pill mostly carries.
+  // A line reporting that something did not happen must pass its own glyph: a
+  // tick over "Not saved" reads as the opposite of the words beside it.
   icon?: React.ComponentProps<typeof Feather>["name"];
   // Lifts the pill clear of whatever is pinned to the bottom of the parent (a
   // compose bar, a row of viewer controls).

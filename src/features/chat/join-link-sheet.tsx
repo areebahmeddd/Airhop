@@ -205,7 +205,7 @@ export function JoinLinkSheet({
           autoCorrect={false}
           returnKeyType="go"
           onSubmitEditing={handleJoin}
-          selectionColor={Colors.accent}
+          selectionColor={Colors.selection}
         />
         <Pressable
           onPress={() => void handlePaste()}

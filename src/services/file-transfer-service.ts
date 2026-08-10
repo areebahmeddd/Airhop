@@ -100,7 +100,47 @@ export interface AttachmentMeta {
 // because anything else that generates an attachment file (see image-compress)
 // has to land under the same prefix, or the Storage screen would report a size
 // that its Clear button cannot free.
+//
+// The prefix bounds the ROUTINE sweeps - sweepExpiredAttachments,
+// getAttachmentCacheBytes and clearAttachmentCache - and deliberately not the
+// panic wipe, which empties the directory outright. Three classes of file sit
+// outside it and always will: documents and videos the pickers copy into their
+// own subdirectories under the user's own filenames, images small enough to send
+// without a resize, and the saved QR card. Storage therefore under-reports those
+// and Clear cannot free them. That is the right trade for a "free up space"
+// button, which must not reach into directories the OS manages, and the wrong
+// one for a wipe, which must. See wipeCacheDirectory.
 export const CACHE_FILE_PREFIX = "airhop_";
+
+// Distinguishes two files adopted inside the same millisecond.
+let adoptSeq = 0;
+
+// Move a locally produced file into the attachment cache under the prefix, and
+// return where it landed. Used by the image resizer and the voice recorder,
+// both of which write elsewhere by default.
+//
+// The prefix is what `sweepExpiredAttachments`, `getAttachmentCacheBytes` and
+// `clearAttachmentCache` match on, so a file outside it outlives the retention
+// window, is missing from the Storage total, and cannot be cleared.
+//
+// Best-effort: on failure the original path is returned and stays usable.
+export async function adoptIntoAttachmentCache(
+  uri: string,
+  name: string,
+): Promise<string> {
+  try {
+    adoptSeq += 1;
+    const safeName = name.replace(/[^a-zA-Z0-9._-]/g, "_").slice(0, 64);
+    const destination = new FileSystem.File(
+      FileSystem.Paths.cache,
+      `${CACHE_FILE_PREFIX}${String(Date.now())}_${String(adoptSeq)}_${safeName}`,
+    );
+    await new FileSystem.File(uri).move(destination);
+    return destination.uri;
+  } catch {
+    return uri;
+  }
+}
 
 export function getAttachmentCacheBytes(): number {
   const dir = new FileSystem.Directory(FileSystem.Paths.cache);
@@ -165,7 +205,7 @@ export function sweepExpiredAttachments(
     ) {
       continue;
     }
-    const writtenAt = entry.modificationTime ?? entry.creationTime;
+    const writtenAt = entry.lastModified ?? entry.creationTime;
     if (writtenAt === null || writtenAt === undefined) continue;
     // A timestamp in the future is a clock that moved, not a fresh file. Left
     // alone: deleting on a bad clock is the worse failure of the two.
@@ -200,6 +240,40 @@ export function clearAttachmentCache(): number {
     }
   }
   return freed;
+}
+
+// Empty the whole cache directory, for the panic wipe alone.
+//
+// clearAttachmentCache above deletes only top-level files carrying our own
+// prefix, which is right for the periodic sweep and wrong for a wipe, because
+// three classes of file the user would absolutely expect to be destroyed do not
+// match it:
+//
+//   * documents and videos the user SENT. The pickers copy the original into
+//     their own cache subdirectory under its real filename, and that URI is what
+//     gets attached, so it carries neither our prefix nor our directory.
+//   * images small enough to send unmodified. Only the resize path adopts a file
+//     into the attachment cache and gives it the prefix; an in-budget JPEG stays
+//     wherever the picker left it.
+//   * the saved QR card, written as `airhop-qr-<peerID>.png`. A hyphen, not the
+//     underscore the prefix uses, so it was swept by nothing - a PNG of the
+//     wiped identity's full contact card, under a filename containing its peer
+//     ID.
+//
+// Everything under the cache directory belongs to this app and is by definition
+// regenerable, so a wipe should take all of it rather than chase prefixes that
+// will drift again the next time an attachment path is added. Recursive, and
+// best-effort per entry: one locked file must not abort the rest.
+export function wipeCacheDirectory(): void {
+  const dir = new FileSystem.Directory(FileSystem.Paths.cache);
+  if (!dir.exists) return;
+  for (const entry of dir.list()) {
+    try {
+      entry.delete();
+    } catch {
+      // Mid-write, already gone, or not ours to remove.
+    }
+  }
 }
 
 // Both resolve to whether the RADIO ACCEPTED the packet, not whether anyone
@@ -748,7 +822,7 @@ export class FileTransferService {
     );
     const file = new FileSystem.File(
       FileSystem.Paths.cache,
-      `airhop_${String(Date.now())}_${safeName}`,
+      `${CACHE_FILE_PREFIX}${String(Date.now())}_${safeName}`,
     );
     try {
       file.create({ overwrite: true, intermediates: true });

@@ -72,8 +72,15 @@ export default function PeerList({
   const T = useT();
   const Colors = useThemeColors();
   const styles = useMemo(() => createStyles(Colors), [Colors]);
-  const { peers, evictStale } = usePeerStore();
-  const { addChannel } = useChatStore();
+  // Selected, not whole-store. Subscribing to the stores wholesale meant this
+  // screen re-rendered on every change either one made - and `addChannel` from
+  // the chat store meant EVERY INBOUND MESSAGE re-rendered the radar, which has
+  // nothing to do with peers. In a crowded room, with announces and per-link
+  // RSSI polls arriving continuously, that is the one place in the app with real
+  // render-thrash exposure.
+  const peers = usePeerStore((s) => s.peers);
+  const evictStale = usePeerStore((s) => s.evictStale);
+  const addChannel = useChatStore((s) => s.addChannel);
   const isBlocked = useBlockedStore((s) => s.isBlocked);
   const [now, setNow] = useState(() => Date.now());
   const [showQRScan, setShowQRScan] = useState(false);
@@ -129,9 +136,16 @@ export default function PeerList({
   // announces out of the store, but filtering here too means a peer
   // blocked mid-session (already cached before the block) disappears
   // immediately instead of waiting for TTL eviction.
-  const peerList = [...peers.values()]
-    .filter((p) => !isBlocked(p.peerID))
-    .sort((a, b) => b.lastSeenMs - a.lastSeenMs);
+  // Memoised: this spread + filter + sort ran on every render, and its result is
+  // handed straight to RadarView, so an unmemoised array also forced the radar
+  // to re-bucket every peer each time.
+  const peerList = useMemo(
+    () =>
+      [...peers.values()]
+        .filter((p) => !isBlocked(p.peerID))
+        .sort((a, b) => b.lastSeenMs - a.lastSeenMs),
+    [peers, isBlocked],
+  );
 
   function formatLastSeen(ms: number): string {
     const diffSec = Math.floor((now - ms) / 1000);
@@ -390,7 +404,7 @@ export default function PeerList({
                     keyboardType="number-pad"
                     returnKeyType="send"
                     autoFocus
-                    selectionColor={Colors.accent}
+                    selectionColor={Colors.selection}
                     onSubmitEditing={() => void handleSendSats(selectedPeer)}
                   />
                   <Pressable

@@ -52,7 +52,7 @@ These are not style guidelines. Violating them is a build blocker.
 | All crypto MUST use `@noble/curves`, `@noble/ciphers`, `@noble/hashes`                     | Reject any PR importing other crypto libs   |
 | NEVER use `Math.random()` for anything security-related                                    | `@noble/hashes` HKDF or OS CSPRNG only      |
 | Polyfill `crypto.getRandomValues` with `react-native-get-random-values` at app entry point | Required before importing any noble library |
-| Private keys MUST only be stored via `react-native-encrypted-storage`                      | iOS Keychain / Android Keystore backed      |
+| Private keys MUST only be stored via `src/core/crypto/keychain.ts`                         | Registry the panic wipe enumerates          |
 | Message content MUST only be stored in encrypted MMKV                                      | Not AsyncStorage, not SQLite plaintext      |
 | NEVER log private keys, session keys, plaintext message content, or Cashu token proofs     | Zero exceptions                             |
 | All outgoing packets MUST be Ed25519 signed                                                | `packet-codec.ts` enforces this             |
@@ -68,7 +68,7 @@ These rules exist because a bug here breaks Airhop's interoperability with bitch
   3. Testing cross-protocol delivery: Airhop v3 node → bitchat node
 - **Never change the BLE Service UUID or Characteristic UUID.** They are fixed in `PROTOCOLS.md`, section 1. Changing them creates a network partition.
 - **Never change Peer ID derivation.** It is `hex(SHA-256(noiseStaticPubKey)).slice(0, 16)`. Changing it breaks gossip sync and DM addressing.
-- **Airhop-only packet types are `0x12` (Double Ratchet DM) and `0x2a` (private channel).** Both are safe to broadcast: bitchat drops unknown types silently. Anything new must sit outside bitchat's registry for the same reason. `0x29` is not one of ours, despite the range: bitchat ships push-to-talk too, so it has to stay wire-identical.
+- **Airhop-only packet types start at `0x50`**: `0x50` (private channel, sealed) and `0x51` (private channel message). Both are safe to broadcast: bitchat drops unknown types silently. Anything new must sit at `0x50` or above. Do not take anything in bitchat's range: `0x2A` and `0x2B` are reserved upstream for courier spray-ack, and `0x29` is push-to-talk, which bitchat ships too and which must stay wire-identical.
 - Before any protocol change ships, run: Airhop node ↔ bitchat-ios node ↔ bitchat-android node message exchange test.
 
 ## 6. Testing Requirements
@@ -130,23 +130,3 @@ Three specialized agents are available in `.github/agents/`. Invoke them via VS 
 
 **When:** Before any PR touching `src/core/crypto/`, key storage, or packet signing code.  
 **What it checks:** Crypto compliance, key storage, packet signing, OWASP Mobile Top 10.
-
-## 10. Upstream bitchat Sync Process
-
-When bitchat publishes a new version:
-
-1. Invoke `@upstream-sync` with the release tag or commit range.
-2. The agent categorizes each change:
-   - 🔴 **PROTOCOL CHANGE**: must evaluate for adoption; run compat tests
-   - 🟠 **SECURITY PATCH**: must adopt immediately, do not wait for next sprint
-   - 🟡 **BUG FIX**: adopt unless it conflicts with Airhop architecture
-   - 🟢 **FEATURE**: evaluate against Airhop's gap analysis in `ROADMAP.md`
-3. Adopt security patches within 48 hours of identification.
-4. Record each decision in `docs/dev/PROGRESS.md` decision log with date and rationale.
-
-## 11. Dependency Policy
-
-- No new dependencies without discussion.
-- New production dependencies must be: audited (Cure53 or equivalent), actively maintained (commit in last 6 months), and have a clear TypeScript interface.
-- No native modules beyond `react-native-encrypted-storage`, `react-native-mmkv`, `react-native-get-random-values`, and `AirhopBLEModule` (our own) in Phase 0–1.
-- See `docs/spec/ARCHITECTURE.md`, section 14 for the full approved dependency manifest.

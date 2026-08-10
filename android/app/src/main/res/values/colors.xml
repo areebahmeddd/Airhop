@@ -2,12 +2,6 @@
   <color name="splashscreen_background">#FFFFFF</color>
   <color name="iconBackground">#ffffff</color>
   <color name="colorPrimary">#023c69</color>
-  <!-- Recents/overview privacy cover (AirhopPrivacyScreen). The app's light
-       palette: Colors.bg and Colors.textPrimary in src/ui/theme.ts. The
-       values-night copies are the dark palette, so DayNight resolves the right
-       pair and the mark is never a black bird on a black card. -->
-  <color name="airhop_privacy_background">#F8F8F8</color>
-  <color name="airhop_privacy_ink">#111111</color>
   <!-- Accent for the notification shade: the tint of the small icon and of the
        app name beside it. Read by expo-notifications through the meta-data in
        AndroidManifest, and by AirhopForegroundService for the mesh notice.

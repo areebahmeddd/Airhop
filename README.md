@@ -263,7 +263,7 @@ Airhop would not exist without the work of the bitchat community. Thank you to e
 | [jackjackbits](https://github.com/jackjackbits) | Created bitchat-ios, designed the BLE mesh protocol and wire format |
 | [callebtc](https://github.com/callebtc)         | Lead on bitchat-android, author of the Cashu ecash protocol         |
 | [Nadim Kobeissi](https://github.com/mimoo)      | Noise Protocol implementation in bitchat                            |
-| [a1denvalu3](https://github.com/a1denvalu3)     | Built the georelays toolkit that produces `assets/data/relays.csv`  |
+| [a1denvalu3](https://github.com/a1denvalu3)     | Built the georelays toolkit that produces `assets/data/nostr_relays.csv`  |
 
 ## Support
 

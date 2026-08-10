@@ -8,7 +8,7 @@
 interface FakeFile {
   name: string;
   size: number;
-  modificationTime: number | null;
+  lastModified: number | null;
   creationTime: number | null;
   deleted: boolean;
   delete: () => void;
@@ -57,15 +57,15 @@ function put(opts: {
   name: string;
   ageMs?: number;
   size?: number;
-  modificationTime?: number | null;
+  lastModified?: number | null;
   creationTime?: number | null;
 }): FakeFile {
   const file = Object.assign(Object.create(FileSystem.File.prototype), {
     name: opts.name,
     size: opts.size ?? 1000,
-    modificationTime:
-      opts.modificationTime !== undefined
-        ? opts.modificationTime
+    lastModified:
+      opts.lastModified !== undefined
+        ? opts.lastModified
         : NOW - (opts.ageMs ?? 0),
     creationTime: opts.creationTime ?? null,
     deleted: false,
@@ -115,17 +115,17 @@ describe("sweepExpiredAttachments", () => {
   it("keeps a file whose age cannot be read", () => {
     const unknown = put({
       name: "airhop_unknown.jpg",
-      modificationTime: null,
+      lastModified: null,
       creationTime: null,
     });
     sweepExpiredAttachments(NOW);
     expect(unknown.deleted).toBe(false);
   });
 
-  it("falls back to creationTime when modificationTime is missing", () => {
+  it("falls back to creationTime when lastModified is missing", () => {
     const old = put({
       name: "airhop_c.jpg",
-      modificationTime: null,
+      lastModified: null,
       creationTime: NOW - 30 * DAY,
     });
     sweepExpiredAttachments(NOW);

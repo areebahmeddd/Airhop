@@ -66,6 +66,16 @@ final class AirhopTorModule: RCTEventEmitter {
         }
     }
 
+    /// Stop Arti and destroy its on-disk state. Panic wipe only.
+    @objc
+    func wipeTorState(_ resolve: @escaping RCTPromiseResolveBlock,
+                      rejecter reject: @escaping RCTPromiseRejectBlock) {
+        Task { @MainActor in
+            await AirhopTorManager.shared.wipeState()
+            resolve(nil)
+        }
+    }
+
     /// Return the current Tor status synchronously as a JS object.
     @objc
     func getTorStatus(_ resolve: @escaping RCTPromiseResolveBlock,
@@ -108,6 +118,11 @@ final class AirhopTorModule: RCTEventEmitter {
                 .AirhopTorWillStart,
                 .AirhopTorWillRestart,
                 .AirhopTorDidBecomeReady,
+                // The terminal one. Without it a bootstrap that ran out its
+                // deadline emitted nothing, so JS never learned the difference
+                // between "still forming" and "gave up" and went on claiming
+                // onion routing indefinitely.
+                .AirhopTorDidStall,
             ]
             guard relevant.contains(notification.name) else { return }
             guard self.hasListeners else { return }

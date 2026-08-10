@@ -98,16 +98,33 @@ contact QR code.
 
 ### Key storage
 
-| Secret               | Storage                          | Backed by                         |
-| -------------------- | -------------------------------- | --------------------------------- |
-| `noiseStaticPrivKey` | `react-native-encrypted-storage` | iOS Keychain / Android Keystore   |
-| `signingPrivKey`     | `react-native-encrypted-storage` | iOS Keychain / Android Keystore   |
-| Wallet AES-256 key   | `react-native-encrypted-storage` | iOS Keychain / Android Keystore   |
-| Nutzap P2PK privkey  | `react-native-encrypted-storage` | iOS Keychain / Android Keystore   |
-| Recovery phrase      | `react-native-encrypted-storage` | iOS Keychain / Android Keystore   |
-| Cashu proofs         | `react-native-mmkv` (AES-256)    | File encrypted with the key above |
-| Active sessions      | `react-native-mmkv` (encrypted)  | RAM-backed, not persisted         |
-| Message history      | `react-native-mmkv`              | Encrypted at rest, panic-wipeable |
+| Secret               | Storage                         | Backed by                         |
+| -------------------- | ------------------------------- | --------------------------------- |
+| `noiseStaticPrivKey` | `expo-secure-store`             | iOS Keychain / Android Keystore   |
+| `signingPrivKey`     | `expo-secure-store`             | iOS Keychain / Android Keystore   |
+| Wallet AES-256 key   | `expo-secure-store`             | iOS Keychain / Android Keystore   |
+| Nutzap P2PK privkey  | `expo-secure-store`             | iOS Keychain / Android Keystore   |
+| Recovery phrase      | `expo-secure-store`             | iOS Keychain / Android Keystore   |
+| Cashu proofs         | `react-native-mmkv` (AES-256)   | File encrypted with the key above |
+| Active sessions      | `react-native-mmkv` (encrypted) | RAM-backed, not persisted         |
+| Message history      | `react-native-mmkv`             | Encrypted at rest, panic-wipeable |
+
+All five go through `src/core/crypto/keychain.ts`; nothing else calls
+`expo-secure-store` directly. The module exports a union type of the item names,
+so a caller cannot write a secret outside the registry.
+
+That registry is what the panic wipe walks, since `expo-secure-store` has no
+delete-all. A secret stored under an ad-hoc key would survive the wipe. Every
+item is attempted even after one fails, and anything left behind is reported as
+`keysDestroyed: false` rather than as success.
+
+Items are written `AFTER_FIRST_UNLOCK_THIS_DEVICE_ONLY` rather than the
+`WHEN_UNLOCKED` default. `AFTER_FIRST_UNLOCK` because iOS relaunches the app on a
+BLE event after termination and that relaunch must load the identity to join the
+mesh; `WHEN_UNLOCKED` refuses the read on a locked phone. `THIS_DEVICE_ONLY`
+because the default class is included in encrypted iCloud and iTunes backups and
+restorable onto another device. The trade is that the keychain is unreadable
+between boot and the first unlock.
 
 ### Storage key names
 
@@ -571,7 +588,23 @@ immediately.
 
 1. Remove every private key from the keychain
 2. Clear or delete every MMKV partition, including the encrypted wallet file
-3. Delete received media from the cache: photos, videos and voice notes
+3. Empty the cache directory. Not just the files Airhop prefixes: a sent
+   document, a sent video, an image small enough to send unmodified and the
+   saved QR card all live under other names or in the pickers' own
+   subdirectories, and every one of them used to survive
+4. Stop Arti and delete its data directory (iOS). It sits under Application
+   Support rather than the cache, and holds a cached consensus, chosen guard
+   nodes and timestamps, which is evidence that this device used Tor and roughly
+   when
+5. Take every delivered notification out of the system tray. Each carries a
+   sender name and a message preview, and they outlive the process
+
+The keychain step is best-effort like the rest, and the wipe continues past a
+failure rather than abandoning the data. It is the one step whose outcome is
+reported: `panicWipe` returns `keysDestroyed`, and the Profile screen says so
+when the OS refused, because a locked keychain on a booted-but-unlocked device
+is exactly the seizure case and "your keys are gone" must never be claimed
+falsely.
 
 The app is left in a first-run state and drops to onboarding. The process is not
 terminated and the sandbox is not otherwise touched.
@@ -610,7 +643,7 @@ cannot break Ed25519, X25519, ChaCha20-Poly1305, or SHA-256 preimage resistance.
 | Hostile payment source             | Ecash is redeemed only from a mint the user already added, and incoming proofs are DLEQ-verified before anything is stored                                                                                                                                                                                                            |
 | Cashu double-spend                 | The mint enforces this with blind-signature tracking; the receiver redeems promptly                                                                                                                                                                                                                                                   |
 | Physical device seizure            | Panic wipe by triple-tap, with keys in the keychain, hardware-backed on modern devices. Attachments are swept on a schedule (Privacy → Keep media for: 7 days by default, 14 or 30 by choice, with no unbounded option), so a stored photo does not outlive its conversation                                                          |
-| Screen surveillance                | Backgrounding blurs sensitive content through the standard OS API. Notification previews are withheld by default, since the system renders them on the lock screen                                                                                                                                                                    |
+| Screen surveillance                | Notification previews are withheld by default, since the system renders them on the lock screen, and a screenshot taken inside a chat is announced to the other side. Airhop does not cover the app-switcher snapshot                                                                                                                 |
 
 ### Out of scope
 
@@ -783,8 +816,14 @@ representation both runtimes agree on safely.
 7. `setBackgroundServiceEnabled`: hold the process up, independent of advertising
 8. `getTorProxyPort` / `getTorAvailability`: whether a SOCKS proxy is routing
 
-Native calls back with six events: `packetReceived`, `linkConnected`,
-`linkDisconnected`, `rssiUpdated`, `adapterStateChanged` and `powerStateChanged`.
+Native calls back with seven events: `packetReceived`, `linkConnected`,
+`linkDisconnected`, `rssiUpdated`, `adapterStateChanged`, `powerStateChanged`
+and `scanFailed`.
+
+`AirhopWiFiModule` mirrors the shape with four of its own: `packetReceived`,
+`linkConnected`, `linkDisconnected` and `availabilityChanged`. The last is what
+lets the fast path recover without a relaunch, and it carries both edges, from
+the framework's WiFi Aware state broadcast.
 
 Anything richer would put protocol knowledge on the native side, which this
 design exists to prevent.
@@ -868,7 +907,7 @@ service keeps it advertising normally.
 | `@noble/hashes`                  | `^2.2`  | SHA-256, HKDF, HMAC                                              | MIT     |
 | `react-native-get-random-values` | `~1.11` | Polyfill `crypto.getRandomValues` for @noble (Expo SDK 57 pin)   | MIT     |
 | `nostr-tools`                    | `^2.24` | Nostr client, NIP-17/59 gift-wrap                                | MIT     |
-| `react-native-encrypted-storage` | `^4.0`  | Private key storage (Keychain/Keystore)                          | MIT     |
+| `expo-secure-store`              | `~57.0` | Private key storage (Keychain/Keystore)                          | MIT     |
 | `react-native-mmkv`              | `^4.3`  | Fast JSI key-value store (requires `react-native-nitro-modules`) | MIT     |
 | `react-native-nitro-modules`     | `^0.36` | Peer dependency for react-native-mmkv v4                         | MIT     |
 | `zustand`                        | `^5.x`  | State management                                                 | MIT     |

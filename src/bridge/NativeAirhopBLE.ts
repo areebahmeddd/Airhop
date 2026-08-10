@@ -21,6 +21,23 @@ export interface Spec extends TurboModule {
   // accept these calls and silently do nothing when the adapter was off or a
   // permission had not settled, which is how a fresh install ended up with two
   // dead radios behind a UI that believed they were running.
+  //
+  // Two platform differences the caller should know about, both deliberate:
+  //
+  //   UNSUPPORTED is narrower on Android than on iOS. Android means "this chip
+  //   has no peripheral role", which still leaves scanning working. iOS means
+  //   "this device has no Bluetooth at all". The radio controller latches it as
+  //   "never ask to advertise again", which is right for Android and merely
+  //   redundant on iOS, where getRadioState().supported is already false and
+  //   produces the stronger blocker first.
+  //
+  //   iOS remembers the request when the radio is mid-reset. Asked while
+  //   CoreBluetooth reports .resetting or .unknown, iOS records the intent AND
+  //   rejects, then starts by itself once the adapter settles. Android just
+  //   rejects. So on iOS the controller can briefly believe advertising is off
+  //   while it is actually on; the next reconcile calls start again, succeeds,
+  //   and the two agree. Kept because it recovers without waiting for a retry
+  //   tick.
   startAdvertising(serviceUUID: string, localName: string): Promise<void>;
   stopAdvertising(): Promise<void>;
 
@@ -95,8 +112,14 @@ export interface Spec extends TurboModule {
   // (background BLE is granted by UIBackgroundModes, not by us).
   setBackgroundServiceEnabled(enabled: boolean): Promise<void>;
 
-  // Tor proxy: probe localhost for an active SOCKS5 proxy (Orbot on Android,
-  // Orbot/Arti on iOS). Returns the port (9050) if reachable, or 0 if not.
+  // Tor proxy: probe localhost for an active SOCKS5 proxy. ANDROID ONLY in
+  // practice - it looks for Orbot and returns 9050 if reachable, 0 if not.
+  //
+  // iOS always resolves 0, and that is the honest answer rather than a stub:
+  // Orbot does not exist there, and Airhop's own Tor is in-app Arti on a
+  // different port, which NativeAirhopTor.getTorStatus() reports properly. This
+  // used to claim it covered "Orbot/Arti on iOS" while probing Orbot's port, so
+  // it could only ever have timed out and said no.
   getTorProxyPort(): Promise<number>;
 
   // Whether Tor routing can actually work right now. Android checks the Orbot
@@ -155,5 +178,12 @@ export interface Spec extends TurboModule {
 //   which ACTION_BATTERY_CHANGED delivers and which would be pure noise. Native
 //   applies no policy to it; it only decides when the number is worth
 //   reporting.
+//
+// 'AirhopBLE.meshStopRequested'
+//   {}
+//   Android only. The user tapped "Stop mesh" on the foreground-service
+//   notification. Native raises it rather than stopping the radios itself, so
+//   the decision goes through the same presence path as the in-app control and
+//   the two can never disagree about what the mesh is doing.
 
 export default TurboModuleRegistry.getEnforcing<Spec>("AirhopBLE");

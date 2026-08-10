@@ -22,6 +22,7 @@ import { Linking, Platform, Pressable, Text, View } from "react-native";
 import { setTorRouting } from "../../core/nostr/tor-routing";
 import { useT, type TranslationKey } from "../../i18n";
 import { requestLocationPermission } from "../../services/location-service";
+import { getMeshService } from "../../services/mesh-service";
 import { showAlert } from "../../store/alert-store";
 import { useMeshStateStore } from "../../store/mesh-state-store";
 import { useSettingsStore } from "../../store/settings-store";
@@ -214,6 +215,19 @@ export default function ConnectivityGroup(): React.JSX.Element {
   async function grantLocation(): Promise<void> {
     const granted = await requestLocationPermission();
     useMeshStateStore.getState().setLocationGranted(granted);
+    if (!granted) return;
+    // Act on the grant, do not just record it.
+    //
+    // This row exists because the bridge needs a location cell, and recording
+    // the grant without re-resolving anything left the bridge inert until a
+    // pull-to-refresh or a relaunch: the user granted exactly what was asked for
+    // and nothing happened. refreshGeoChannels re-resolves the cell, which is
+    // also what the bridge reads.
+    //
+    // retryRadios matters on Android 11 and below, where the mesh's own
+    // permission IS location, so this grant can unblock the radios too.
+    getMeshService()?.refreshGeoChannels();
+    getMeshService()?.retryRadios();
   }
 
   const confirm =

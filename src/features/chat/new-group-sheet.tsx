@@ -148,7 +148,7 @@ export function NewGroupSheet({ visible, onClose, onBack, onCreated }: Props) {
         onChangeText={setName}
         placeholder={T("chat.group.name_placeholder")}
         placeholderTextColor={Colors.textMuted}
-        selectionColor={Colors.accent}
+        selectionColor={Colors.selection}
         maxLength={40}
       />
 

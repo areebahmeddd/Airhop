@@ -9,7 +9,8 @@
 // property that matters above all is that the same phrase always derives the
 // same seed.
 
-import EncryptedStorage from "react-native-encrypted-storage";
+import * as SecureStore from "expo-secure-store";
+import { KEYCHAIN_ITEMS } from "../../crypto/keychain";
 import {
   RECOVERY_WORD_COUNT,
   generateRecoveryPhrase,
@@ -27,8 +28,10 @@ import {
 const KNOWN =
   "legal winner thank year wave sausage worth useful legal winner thank yellow";
 
-beforeEach(async () => {
-  await EncryptedStorage.clear();
+beforeEach(() => {
+  // The in-memory keychain mock; see src/__mocks__/expo-secure-store.js for why
+  // this is a test-only hook rather than a call the real module offers.
+  (SecureStore as unknown as { __reset: () => void }).__reset();
 });
 
 // ---- Generation -------------------------------------------------------------
@@ -157,7 +160,10 @@ describe("phrase storage", () => {
   });
 
   it("treats a corrupted stored value as absent rather than deriving from it", async () => {
-    await EncryptedStorage.setItem("airhop.wallet.recovery.v1", "corrupted");
+    await SecureStore.setItemAsync(
+      KEYCHAIN_ITEMS.walletRecoveryPhrase,
+      "corrupted",
+    );
     expect(await loadStoredPhrase()).toBeNull();
   });
 });

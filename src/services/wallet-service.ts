@@ -41,7 +41,11 @@ import {
 import { secp256k1 } from "@noble/curves/secp256k1.js";
 import { bytesToHex, hexToBytes } from "@noble/hashes/utils.js";
 import { Platform } from "react-native";
-import EncryptedStorage from "react-native-encrypted-storage";
+import {
+  KEYCHAIN_ITEMS,
+  readSecret,
+  writeSecret,
+} from "../core/crypto/keychain";
 import type { NostrClient } from "../core/nostr/nostr-client";
 import {
   buildToken,
@@ -175,13 +179,33 @@ function asWalletError(err: unknown, fallback: WalletErrorCode): WalletError {
 // bypasses it entirely. Silently making the request there would tell the mint
 // exactly who is swapping which proofs, which is the one thing a Tor user is
 // trying to avoid, so it is refused unless they have explicitly allowed it.
-// `torActive` is read from the mesh state store rather than calling
-// `isTorRoutingActive()` directly: tor-routing pulls in the BLE native module
-// at import time, and this module is reachable from the panic wipe, which must
-// stay loadable without a native host. The store is the same flag, mirrored by
-// tor-routing's single writer.
+// Gated on the user's PREFERENCE, not on whether a circuit happens to be up
+// right now, and the difference is a real leak rather than a nicety.
+//
+// `torActive` is a claim about this instant. `torEnabled` is what the user
+// asked for and what their toggle still shows. Those two diverge in exactly one
+// state, and it is the worst one: iOS revalidation deliberately stands the claim
+// down while keeping the preference on, because a failed bootstrap is usually
+// transient and the socket must stay Tor-only rather than falling back to the
+// clear net. In that state the Nostr side is still hard-routed through Arti, the
+// switch still reads on, the user still believes they are covered - and reading
+// `torActive` alone opened this gate and put mint HTTP on the clear net with the
+// device's real IP. That is precisely the linkage the gate exists to prevent,
+// and it happened only when Tor was struggling, which is when it matters most.
+//
+// Either flag being set is enough to refuse. Overshooting costs a mint call the
+// user can allow explicitly; undershooting costs them the anonymity they think
+// they have. `version-screen.tsx` already gates its update check on
+// `torEnabled`, so this also stops the two network gates disagreeing.
+//
+// Both are read from stores rather than by calling `isTorRoutingActive()`:
+// tor-routing pulls in the BLE native module at import time, and this module is
+// reachable from the panic wipe, which must stay loadable without a native host.
 function assertMintNetworkAllowed(): void {
-  if (!useMeshStateStore.getState().torActive) return;
+  const torClaimed =
+    useMeshStateStore.getState().torActive ||
+    useSettingsStore.getState().torEnabled;
+  if (!torClaimed) return;
   if (Platform.OS !== "ios") return;
   if (useSettingsStore.getState().allowMintOverClearnet) return;
   throw new WalletError(
@@ -429,6 +453,10 @@ export function resetWalletService(): void {
   // in-memory seed has to go too. Leaving it would keep deriving proofs from a
   // phrase the user can no longer see or write down.
   activeSeed = null;
+  // Same for the cached P2PK key: it resolved from an item the wipe destroyed.
+  // Re-onboarding in the same process would otherwise publish a kind 10019
+  // naming the previous identity's pubkey.
+  nutzapPrivKey = null;
 }
 
 // ---- Store readiness --------------------------------------------------------
@@ -2160,16 +2188,35 @@ function requireNut(mintUrl: string, nut: number, what: string): void {
 // and it must be stable, or previously published kind 10019 events point at a
 // key we can no longer spend from. It lives in the Keychain next to the
 // identity keys, never in the proof store.
-const P2PK_KEY_ITEM = "airhop.wallet.p2pk.v1";
+const P2PK_KEY_ITEM = KEYCHAIN_ITEMS.walletP2pkKey;
+
+// In-flight or resolved read-or-mint. Cleared by resetWalletService.
+let nutzapPrivKey: Promise<string> | null = null;
 
 async function getNutzapPrivKeyHex(): Promise<string> {
-  const existing = await EncryptedStorage.getItem(P2PK_KEY_ITEM);
-  if (typeof existing === "string" && /^[0-9a-f]{64}$/i.test(existing)) {
-    return existing.toLowerCase();
+  // Single-flight. Four call sites reach this; on a fresh install two running
+  // together would both read nothing, both mint a key and both write. The last
+  // write wins, leaving the other caller with a private key the keychain does
+  // not hold - and its public half goes into the kind 10019, so senders would
+  // lock ecash to a pubkey this device cannot spend from. Same pattern as
+  // bootstrapWalletStorage.
+  nutzapPrivKey ??= (async () => {
+    const existing = await readSecret(P2PK_KEY_ITEM);
+    if (typeof existing === "string" && /^[0-9a-f]{64}$/i.test(existing)) {
+      return existing.toLowerCase();
+    }
+    const fresh = bytesToHex(secp256k1.utils.randomSecretKey());
+    await writeSecret(P2PK_KEY_ITEM, fresh);
+    return fresh;
+  })();
+  try {
+    return await nutzapPrivKey;
+  } catch (error) {
+    // Drop the handle so a locked keychain is not cached as the answer for the
+    // rest of the process.
+    nutzapPrivKey = null;
+    throw error;
   }
-  const fresh = bytesToHex(secp256k1.utils.randomSecretKey());
-  await EncryptedStorage.setItem(P2PK_KEY_ITEM, fresh);
-  return fresh;
 }
 
 // 33-byte compressed public key, hex. This is what goes in the kind 10019

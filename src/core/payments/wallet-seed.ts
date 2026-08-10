@@ -34,10 +34,10 @@ import {
   validateMnemonic,
 } from "@scure/bip39";
 import { wordlist } from "@scure/bip39/wordlists/english.js";
-import EncryptedStorage from "react-native-encrypted-storage";
+import { KEYCHAIN_ITEMS, readSecret, writeSecret } from "../crypto/keychain";
 
 // Keychain / Keystore entry holding the phrase.
-const PHRASE_ITEM = "airhop.wallet.recovery.v1";
+const PHRASE_ITEM = KEYCHAIN_ITEMS.walletRecoveryPhrase;
 
 // 128 bits of entropy is 12 words. Enough that guessing is hopeless, short
 // enough that people will actually write it down, and the length every other
@@ -104,7 +104,7 @@ export function recoveryPhraseToSeed(raw: string): Uint8Array {
 
 export async function loadStoredPhrase(): Promise<string | null> {
   try {
-    const stored = await EncryptedStorage.getItem(PHRASE_ITEM);
+    const stored = await readSecret(PHRASE_ITEM);
     if (typeof stored !== "string" || stored.length === 0) return null;
     return isValidRecoveryPhrase(stored)
       ? normalizeRecoveryPhrase(stored)
@@ -121,12 +121,12 @@ export async function storePhrase(raw: string): Promise<void> {
   if (!isValidRecoveryPhrase(phrase)) {
     throw new Error("refusing to store an invalid recovery phrase");
   }
-  await EncryptedStorage.setItem(PHRASE_ITEM, phrase);
+  await writeSecret(PHRASE_ITEM, phrase);
 }
 
 // There is deliberately no "forget phrase" here. Once coins are derived from a
 // phrase, deleting it is the same as deleting the coins, so the only thing that
-// removes it is the panic wipe clearing the whole keychain.
+// removes it is the panic wipe, which destroys every keychain item at once.
 
 // ---- Verification helper ----------------------------------------------------
 

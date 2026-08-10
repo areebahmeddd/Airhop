@@ -694,7 +694,7 @@ export default function ChannelInfoSheet({
               autoFocus
               autoCapitalize="none"
               autoCorrect={false}
-              selectionColor={Colors.accent}
+              selectionColor={Colors.selection}
             />
           )}
 

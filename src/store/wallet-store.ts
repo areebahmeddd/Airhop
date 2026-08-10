@@ -47,10 +47,14 @@
 // The phrase itself is never stored here. It lives in the keychain alongside
 // the identity keys (see `core/payments/wallet-seed.ts`).
 
-import EncryptedStorage from "react-native-encrypted-storage";
 import { createMMKV } from "react-native-mmkv";
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
+import {
+  KEYCHAIN_ITEMS,
+  readSecret,
+  writeSecret,
+} from "../core/crypto/keychain";
 import { bytesToBase64 } from "../core/encoding/base64";
 
 // ---- Constants --------------------------------------------------------------
@@ -58,7 +62,7 @@ import { bytesToBase64 } from "../core/encoding/base64";
 export const WALLET_STORAGE_ID = "wallet-store";
 
 // Keychain/Keystore entry holding the MMKV encryption key.
-const ENCRYPTION_KEY_ITEM = "airhop.wallet.mmkvKey.v1";
+const ENCRYPTION_KEY_ITEM = KEYCHAIN_ITEMS.walletEncryptionKey;
 
 // MMKV caps AES-256 keys at 32 bytes; 24 random bytes in base64 is exactly 32
 // ASCII characters, so this spends the whole budget on entropy.
@@ -351,10 +355,10 @@ function randomKey(): string {
 }
 
 async function loadOrCreateEncryptionKey(): Promise<string> {
-  const existing = await EncryptedStorage.getItem(ENCRYPTION_KEY_ITEM);
+  const existing = await readSecret(ENCRYPTION_KEY_ITEM);
   if (typeof existing === "string" && existing.length > 0) return existing;
   const fresh = randomKey();
-  await EncryptedStorage.setItem(ENCRYPTION_KEY_ITEM, fresh);
+  await writeSecret(ENCRYPTION_KEY_ITEM, fresh);
   return fresh;
 }
 
@@ -385,6 +389,32 @@ export function bootstrapWalletStorage(): Promise<MMKVLike> {
     return mmkv;
   })();
   return ready;
+}
+
+// Forget the open partition, so the next bootstrap opens a real one.
+//
+// Called by the panic wipe, immediately after `deleteMMKV` unlinks the file.
+// Without it the four module-scope values below and above survive the deletion,
+// and all three consequences are bad: `isWalletStorageReady()` keeps answering
+// true for a partition that no longer exists, so the Wallet tab presents an
+// empty balance as real rather than reporting first-run; a later write goes
+// through the stale native handle and RECREATES the file, still encrypted under
+// the AES key whose keychain copy the wipe just destroyed, leaving ciphertext no
+// future launch can open; and re-onboarding without restarting the process
+// writes the new identity's proofs under that same dead key.
+//
+// Deliberately does not close the handle. The file is already unlinked, the
+// process is about to drop to onboarding, and a close racing an in-flight
+// persist would be a crash where this is merely a forgotten reference.
+export function resetWalletStorage(): void {
+  instance = null;
+  ready = null;
+  hydrated = false;
+  hydrationSettled = false;
+  // Run the waiters rather than dropping them. Each one clears its own 15s
+  // timer and resolves its promise; emptying the array left those promises
+  // pending forever and the timers armed against a store that no longer exists.
+  for (const waiter of hydrationWaiters.splice(0)) waiter();
 }
 
 // Whether zustand has finished replacing the initial empty state with what was
@@ -430,10 +460,18 @@ export function isWalletStorageReady(): boolean {
 export function whenWalletHydrated(): Promise<void> {
   if (hydrationSettled) return Promise.resolve();
   return new Promise((resolve) => {
-    hydrationWaiters.push(resolve);
-    setTimeout(() => {
+    // Cleared when hydration lands, which is the normal case. The timer used to
+    // be armed and forgotten, so every caller left one running for the full
+    // fifteen seconds after the wallet was already open. Harmless, because
+    // settleHydration is idempotent, but it is fifteen seconds of a timer per
+    // call holding this closure for no reason.
+    const timer = setTimeout(() => {
       settleHydration(false);
     }, HYDRATION_TIMEOUT_MS);
+    hydrationWaiters.push(() => {
+      clearTimeout(timer);
+      resolve();
+    });
   });
 }
 

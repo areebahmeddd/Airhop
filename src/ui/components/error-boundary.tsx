@@ -29,6 +29,7 @@ import {
   DarkColors,
   FontSize,
   FontWeight,
+  MIN_TOUCH,
   Radius,
   Spacing,
 } from "../theme";
@@ -84,20 +85,24 @@ export class ErrorBoundary extends React.Component<Props, State> {
 function Fallback({ onRetry }: { onRetry: () => void }): React.JSX.Element {
   const C: ThemeColors = useColorScheme() === "dark" ? DarkColors : Colors;
   const styles = createStyles(C);
+  const [pressed, setPressed] = React.useState(false);
 
   return (
     <View style={styles.root}>
       <Text style={styles.title}>{t("error.boundary.title")}</Text>
       <Text style={styles.body}>{t("error.boundary.body")}</Text>
       <Pressable
-        style={styles.button}
+        style={[styles.button, pressed && styles.buttonPressed]}
+        onPressIn={() => setPressed(true)}
+        onPressOut={() => setPressed(false)}
         onPress={onRetry}
         accessibilityRole="button"
         accessibilityLabel={t("error.boundary.retry")}
       >
-        <Text style={styles.buttonLabel}>{t("error.boundary.retry")}</Text>
+        <Text style={styles.buttonLabel} numberOfLines={1}>
+          {t("error.boundary.retry")}
+        </Text>
       </Pressable>
-      <Text style={styles.note}>{t("error.boundary.note")}</Text>
     </View>
   );
 }
@@ -169,24 +174,28 @@ function createStyles(C: ThemeColors) {
       textAlign: "center",
       lineHeight: FontSize.sm * 1.6,
     },
+    // The PrimaryButton pill, restated rather than imported: that component
+    // themes through useThemeColors, which is exactly the store read this screen
+    // cannot make. Geometry and type are kept identical to it, so the retry looks
+    // like every other CTA in the app.
     button: {
       marginTop: Spacing.md,
       paddingHorizontal: Spacing.xl,
-      paddingVertical: Spacing.sm,
-      borderRadius: Radius.md,
+      paddingVertical: Spacing.md + 2,
+      minHeight: MIN_TOUCH,
+      alignItems: "center",
+      justifyContent: "center",
+      borderRadius: Radius.full,
       backgroundColor: C.accent,
     },
+    buttonPressed: {
+      opacity: 0.85,
+    },
     buttonLabel: {
-      fontSize: FontSize.md,
+      fontSize: FontSize.base,
       fontWeight: FontWeight.semibold,
       color: C.textInverse,
-    },
-    note: {
-      marginTop: Spacing.xs,
-      fontSize: FontSize.xs,
-      color: C.textMuted,
-      textAlign: "center",
-      lineHeight: FontSize.xs * 1.6,
+      letterSpacing: 0.1,
     },
   });
 }

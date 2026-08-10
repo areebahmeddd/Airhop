@@ -1,8 +1,4 @@
 <resources>
-  <!-- Dark counterparts of the privacy cover colours in values/colors.xml:
-       DarkColors.bg and DarkColors.textPrimary in src/ui/theme.ts. -->
-  <color name="airhop_privacy_background">#0B0B0B</color>
-  <color name="airhop_privacy_ink">#F5F5F5</color>
   <!-- See values/colors.xml. The shade is dark here, so the accent has to be
        light or the small icon disappears into it. -->
   <color name="notification_icon_color">#F5F5F5</color>

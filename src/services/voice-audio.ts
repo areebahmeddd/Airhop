@@ -13,7 +13,7 @@
 // a failure: the whole feature is an optimisation of a gesture that already
 // works.
 
-import { NativeEventEmitter, type EmitterSubscription } from "react-native";
+import { NativeEventEmitter, type EventSubscription } from "react-native";
 import NativeAirhopVoice from "../bridge/NativeAirhopVoice";
 import { base64ToBytes, bytesToBase64 } from "../core/encoding/base64";
 import type {
@@ -36,8 +36,8 @@ export function isLiveVoiceAvailable(): boolean {
 
 // Feeds encoded AAC frames from the microphone into a VoiceCaptureSession.
 export class NativeAudioCapture implements AudioCaptureBackend {
-  private frameSub: EmitterSubscription | null = null;
-  private errorSub: EmitterSubscription | null = null;
+  private frameSub: EventSubscription | null = null;
+  private errorSub: EventSubscription | null = null;
   private readonly emitter: NativeEventEmitter | null;
   // Told when capture dies on its own (mic taken by a call, encoder failure)
   // so the burst can be ended rather than left hanging open.

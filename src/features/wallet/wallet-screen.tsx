@@ -653,10 +653,34 @@ export default function WalletScreen({
   }
 
   // The user confirmed the token reached its destination. Drops the reservation.
+  //
+  // Confirmed, because this is the irreversible one. It permanently forfeits the
+  // ability to pull the money back, and it sat one tap away while Reclaim - the
+  // action that safely RETURNS the money - asked for two. That is the wrong way
+  // round: the confirm belongs on the door that does not reopen.
   function markDelivered(txId: string): void {
-    confirmSend(txId);
-    setPending(null);
-    setShowPeerPicker(false);
+    const tx = pending?.txId === txId ? pending : undefined;
+    showAlert(
+      t("wallet.delivered.title"),
+      tx !== undefined
+        ? t("wallet.delivered.body", {
+            amount: tx.amount.toLocaleString(),
+            unit: tx.unit,
+          })
+        : t("wallet.delivered.body_generic"),
+      [
+        { text: t("wallet.delivered.cancel"), style: "cancel" },
+        {
+          text: t("wallet.delivered.confirm"),
+          style: "destructive",
+          onPress: () => {
+            confirmSend(txId);
+            setPending(null);
+            setShowPeerPicker(false);
+          },
+        },
+      ],
+    );
   }
 
   // The transfer never landed. Puts the proofs back into the balance.
@@ -1901,6 +1925,19 @@ export default function WalletScreen({
                         ? ` · ${txStatusNote(tx)}`
                         : ""}
                     </Text>
+                    {/*
+                      The failure reason lives here, not only on the pending
+                      sends card. That card is filtered to sends, so a Lightning
+                      deposit or withdrawal wrote an explanation onto the
+                      transaction that rendered nowhere - including the one case
+                      where money is genuinely ambiguous, a melt whose answer
+                      never arrived and whose stored reason says the payment may
+                      have gone through. The row read "Pending" forever and the
+                      app kept the explanation to itself.
+                    */}
+                    {tx.error !== undefined && tx.error.length > 0 ? (
+                      <Text style={styles.historyError}>{tx.error}</Text>
+                    ) : null}
                   </View>
                   <Text
                     style={[
@@ -2047,7 +2084,7 @@ export default function WalletScreen({
           numberOfLines={3}
           autoCapitalize="none"
           autoCorrect={false}
-          selectionColor={Colors.accent}
+          selectionColor={Colors.selection}
         />
         <Pressable
           style={styles.generatedActionBtn}
@@ -2088,7 +2125,7 @@ export default function WalletScreen({
           placeholderTextColor={Colors.textMuted}
           keyboardType="number-pad"
           returnKeyType="next"
-          selectionColor={Colors.accent}
+          selectionColor={Colors.selection}
         />
         <TextInput
           style={[styles.tokenInput, styles.tokenInputCompact]}
@@ -2097,7 +2134,7 @@ export default function WalletScreen({
           placeholder={T("wallet.send.memo")}
           placeholderTextColor={Colors.textMuted}
           autoCapitalize="sentences"
-          selectionColor={Colors.accent}
+          selectionColor={Colors.selection}
         />
         <SheetActions
           styles={styles}
@@ -2163,7 +2200,7 @@ export default function WalletScreen({
           placeholderTextColor={Colors.textMuted}
           autoCapitalize="none"
           autoCorrect={false}
-          selectionColor={Colors.accent}
+          selectionColor={Colors.selection}
         />
         <TextInput
           style={[styles.tokenInput, styles.tokenInputCompact]}
@@ -2172,7 +2209,7 @@ export default function WalletScreen({
           placeholder={T("wallet.send.amount_in", { unit: primary.unit })}
           placeholderTextColor={Colors.textMuted}
           keyboardType="number-pad"
-          selectionColor={Colors.accent}
+          selectionColor={Colors.selection}
         />
         <TextInput
           style={[styles.tokenInput, styles.tokenInputCompact]}
@@ -2181,7 +2218,7 @@ export default function WalletScreen({
           placeholder={T("wallet.pay.memo")}
           placeholderTextColor={Colors.textMuted}
           autoCapitalize="sentences"
-          selectionColor={Colors.accent}
+          selectionColor={Colors.selection}
         />
         <SheetActions
           styles={styles}
@@ -2218,7 +2255,7 @@ export default function WalletScreen({
           autoCorrect={false}
           keyboardType="url"
           returnKeyType="done"
-          selectionColor={Colors.accent}
+          selectionColor={Colors.selection}
         />
         <SheetActions
           styles={styles}
@@ -2370,7 +2407,7 @@ export default function WalletScreen({
               placeholder={T("wallet.ln.amount_placeholder")}
               placeholderTextColor={Colors.textMuted}
               keyboardType="number-pad"
-              selectionColor={Colors.accent}
+              selectionColor={Colors.selection}
             />
             <MintPicker
               styles={styles}
@@ -2532,7 +2569,7 @@ export default function WalletScreen({
           numberOfLines={3}
           autoCapitalize="none"
           autoCorrect={false}
-          selectionColor={Colors.accent}
+          selectionColor={Colors.selection}
         />
         <Pressable
           style={styles.generatedActionBtn}
@@ -2728,7 +2765,7 @@ export default function WalletScreen({
                   autoCapitalize="none"
                   autoCorrect={false}
                   autoComplete="off"
-                  selectionColor={Colors.accent}
+                  selectionColor={Colors.selection}
                 />
               </View>
             ))}
@@ -2779,7 +2816,7 @@ export default function WalletScreen({
               autoCapitalize="none"
               autoCorrect={false}
               autoComplete="off"
-              selectionColor={Colors.accent}
+              selectionColor={Colors.selection}
             />
             <Text style={styles.modalSubtitle}>
               {mintList.length === 0
@@ -3873,6 +3910,13 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
     historySub: {
       fontSize: FontSize.xs,
       color: Colors.textMuted,
+    },
+    // Muted danger rather than the full alert colour: this is an explanation on
+    // a history row, not an alarm the user has to act on right now.
+    historyError: {
+      fontSize: FontSize.xs,
+      color: Colors.danger,
+      marginTop: Spacing.xs,
     },
     historyAmount: {
       fontSize: FontSize.sm,

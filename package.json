@@ -44,11 +44,12 @@
     "@expo-google-fonts/fira-code": "^0.4.1",
     "@expo-google-fonts/jetbrains-mono": "^0.4.1",
     "@expo/vector-icons": "^15.1.1",
-    "@noble/ciphers": "^2.2.0",
+    "@noble/ciphers": "^2.3.0",
     "@noble/curves": "^2.3.0",
     "@noble/hashes": "^2.3.0",
-    "@scure/bip39": "^2.2.0",
+    "@scure/bip39": "^2.3.0",
     "expo": "~57.0.11",
+    "expo-asset": "~57.0.9",
     "expo-audio": "~57.0.3",
     "expo-build-properties": "~57.0.9",
     "expo-camera": "~57.0.3",
@@ -64,7 +65,8 @@
     "expo-navigation-bar": "~57.0.2",
     "expo-notifications": "~57.0.9",
     "expo-screen-capture": "~57.0.1",
-    "expo-sharing": "~57.0.9",
+    "expo-secure-store": "~57.0.1",
+    "expo-sharing": "~57.0.10",
     "expo-status-bar": "~57.0.1",
     "expo-system-ui": "~57.0.2",
     "expo-video": "~57.0.2",
@@ -72,7 +74,6 @@
     "pako": "^3.0.1",
     "react": "19.2.3",
     "react-native": "0.86.2",
-    "react-native-encrypted-storage": "^4.0.3",
     "react-native-gesture-handler": "^2.32.0",
     "react-native-get-random-values": "~1.11.0",
     "react-native-mmkv": "^4.3.2",
@@ -81,6 +82,7 @@
     "react-native-reanimated": "4.5.1",
     "react-native-safe-area-context": "~5.7.0",
     "react-native-svg": "15.15.4",
+    "react-native-worklets": "0.10.1",
     "zustand": "^5.0.14"
   },
   "devDependencies": {
@@ -111,7 +113,7 @@
       "^@noble/curves/(.+?)(\\.js)?$": "<rootDir>/node_modules/@noble/curves/$1.js",
       "^@noble/hashes/(.+?)(\\.js)?$": "<rootDir>/node_modules/@noble/hashes/$1.js",
       "^@noble/ciphers/(.+?)(\\.js)?$": "<rootDir>/node_modules/@noble/ciphers/$1.js",
-      "^react-native-encrypted-storage$": "<rootDir>/src/__mocks__/react-native-encrypted-storage.js"
+      "^expo-secure-store$": "<rootDir>/src/__mocks__/expo-secure-store.js"
     }
   }
 }

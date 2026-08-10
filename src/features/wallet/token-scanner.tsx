@@ -115,13 +115,16 @@ export default function TokenScanner({
     );
     if (!granted) return;
 
-    const picked = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ["images"],
-      quality: 1,
-    });
-    if (picked.canceled || !picked.assets[0]) return;
-
+    // Inside the try, for the same reason as the contact scanner: the launch can
+    // reject on its own, and this runs from an onPress as a bare async call, so
+    // a rejection there was unhandled and left the sheet open with no error.
     try {
+      const picked = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ["images"],
+        quality: 1,
+      });
+      if (picked.canceled || !picked.assets[0]) return;
+
       const scans = await scanFromURLAsync(picked.assets[0].uri, ["qr"]);
       const value = readScan(scans[0]?.data, target);
       if (value === null) {

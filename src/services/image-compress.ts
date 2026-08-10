@@ -26,7 +26,7 @@ import {
   MAX_SENT_IMAGE_BYTES,
   resolveMimeType,
 } from "../core/mesh/bitchat-file-packet";
-import { CACHE_FILE_PREFIX } from "./file-transfer-service";
+import { adoptIntoAttachmentCache } from "./file-transfer-service";
 
 // Longest edge of a sent photo. 1600 is still worth looking at full screen on a
 // phone, and is where WhatsApp and Signal settle; past it the extra pixels cost
@@ -80,31 +80,6 @@ function fileSize(uri: string): number {
 function jpegName(name: string | undefined): string {
   const base = (name ?? "photo").replace(/\.[^.]+$/, "");
   return `${base || "photo"}.jpg`;
-}
-
-// Distinguishes two photos resized in the same millisecond.
-let resizeSeq = 0;
-
-// Move the resized file under Airhop's cache prefix, so Settings → Storage
-// counts it and its Clear button can free it, the same as every received
-// attachment. Best-effort: if the move fails the file is still perfectly
-// usable where the manipulator left it.
-async function adoptIntoAttachmentCache(
-  uri: string,
-  name: string,
-): Promise<string> {
-  try {
-    resizeSeq += 1;
-    const safeName = name.replace(/[^a-zA-Z0-9._-]/g, "_").slice(0, 64);
-    const destination = new FileSystem.File(
-      FileSystem.Paths.cache,
-      `${CACHE_FILE_PREFIX}${String(Date.now())}_${String(resizeSeq)}_${safeName}`,
-    );
-    await new FileSystem.File(uri).move(destination);
-    return destination.uri;
-  } catch {
-    return uri;
-  }
 }
 
 // Resize and re-encode until the file fits the image budget. Returns the

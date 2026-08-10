@@ -158,6 +158,67 @@ describe("Noise XX handshake", () => {
 // captured the handshake could recompute the root key outright. The old tests
 // checked that the seed was not derivable from the STATIC keys and never checked
 // the transcript itself, which is exactly how it survived.
+// The rule that stops a completed handshake being an identity claim.
+//
+// A Noise XX handshake proves possession of a static key. It does NOT prove the
+// peer ID in the packet header belongs to that key, because the header is
+// unauthenticated. mesh-service closes that gap with sessionBindsTo: a session
+// is only filed under a peer ID when SHA-256 of the authenticated remote static
+// key derives to it. Preimage resistance is what makes it work - nobody can
+// produce a key that hashes to somebody else's ID.
+//
+// Pinned here because the check is one `if` guarding two handshake paths, and
+// deleting it would break nothing visible: sessions would still complete, and
+// the damage (a peer binding a session under an ID it does not own) only shows
+// up under attack. bitchat added the same regression test in #1645 after
+// discovering their equivalent had a test-harness fallback that accepted any
+// key.
+describe("handshake identity binding", () => {
+  // The derivation, kept identical to identity.ts and mesh-service.sessionBindsTo.
+  function peerIDFor(staticPub: Uint8Array): string {
+    return bytesToHex(sha256(staticPub)).slice(0, 16);
+  }
+
+  test("a completed session derives to exactly one peer ID", () => {
+    const keys = makeKeypair();
+    const id = peerIDFor(keys.pub);
+    expect(id).toHaveLength(16);
+    expect(peerIDFor(keys.pub)).toBe(id);
+  });
+
+  test("a different key never derives to the same peer ID", () => {
+    // The property the binding rests on. If this ever failed, an attacker could
+    // answer a handshake under a victim's ID with a key of their own.
+    const victim = makeKeypair();
+    const attacker = makeKeypair();
+    expect(peerIDFor(attacker.pub)).not.toBe(peerIDFor(victim.pub));
+  });
+
+  test("the key a handshake authenticates is the one the ID must match", () => {
+    // End to end: complete a real handshake, then confirm the static key each
+    // side ends up holding for the other is the key whose hash is that peer's
+    // ID. This is the value sessionBindsTo compares, so if the handshake ever
+    // surfaced a different key the binding would silently start rejecting
+    // honest peers instead of dishonest ones.
+    const iKeys = makeKeypair();
+    const rKeys = makeKeypair();
+    const initiator = NoiseHandshake.createInitiator(iKeys.priv);
+    const responder = NoiseHandshake.createResponder(rKeys.priv);
+
+    responder.readMsg1(initiator.writeMsg1());
+    initiator.readMsg2(responder.writeMsg2());
+    responder.readMsg3(initiator.writeMsg3());
+
+    const iSession = initiator.split();
+    const rSession = responder.split();
+
+    expect(bytesToHex(iSession.remoteStaticPubKey)).toBe(bytesToHex(rKeys.pub));
+    expect(bytesToHex(rSession.remoteStaticPubKey)).toBe(bytesToHex(iKeys.pub));
+    expect(peerIDFor(iSession.remoteStaticPubKey)).toBe(peerIDFor(rKeys.pub));
+    expect(peerIDFor(rSession.remoteStaticPubKey)).toBe(peerIDFor(iKeys.pub));
+  });
+});
+
 describe("Double Ratchet seeding", () => {
   function completeHandshake(iPriv: Uint8Array, rPriv: Uint8Array) {
     const initiator = NoiseHandshake.createInitiator(iPriv);

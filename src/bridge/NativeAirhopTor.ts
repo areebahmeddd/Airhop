@@ -10,7 +10,7 @@
 // AirhopBLEModule.getTorAvailability() (Orbot installed + a VPN transport up).
 // This module is iOS-only.
 
-import type { EmitterSubscription, TurboModule } from "react-native";
+import type { EventSubscription, TurboModule } from "react-native";
 import {
   NativeEventEmitter,
   NativeModules,
@@ -43,6 +43,16 @@ export interface Spec extends TurboModule {
 
   /** Fully shut down Arti. Resolves when shutdown has been requested. */
   stopTor(): Promise<void>;
+
+  /**
+   * Stop Arti and delete everything it has written to disk. Panic wipe only.
+   *
+   * Arti's data directory sits under Application Support rather than the cache,
+   * so the wipe's cache sweep never reached it. It holds a cached consensus,
+   * chosen guard nodes and directory state, which together are on-disk evidence
+   * that this device used Tor and roughly when.
+   */
+  wipeTorState(): Promise<void>;
 
   /** Return the current Tor status snapshot. */
   getTorStatus(): Promise<TorStatus>;
@@ -78,7 +88,7 @@ let emitter: NativeEventEmitter | null = null;
 // bootstrap that stalled was never reported to anyone.
 export function subscribeTorStatus(
   listener: (status: TorStatusChangedEvent) => void,
-): EmitterSubscription | null {
+): EventSubscription | null {
   const native = NativeModules.AirhopTorModule as
     ConstructorParameters<typeof NativeEventEmitter>[0] | undefined;
   if (native == null) return null;

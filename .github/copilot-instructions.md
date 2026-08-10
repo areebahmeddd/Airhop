@@ -37,11 +37,11 @@ Apply these to every suggestion, every file, every PR:
 
 4. **Protocol compatibility.** Never change the bitchat v2 packet byte layout (`src/core/mesh/packet-codec.ts`) or the BLE Service UUID without a version bump and compat test. See `docs/spec/PROTOCOLS.md`.
 
-5. **Key storage.** Private keys in `react-native-encrypted-storage` only (iOS Keychain / Android Keystore). MMKV for all non-secret state.
+5. **Key storage.** Private keys via `src/core/crypto/keychain.ts` only (iOS Keychain / Android Keystore); never `expo-secure-store` directly, or the panic wipe cannot reach them. MMKV for non-secret state.
 
 6. **Packet signing.** Every outgoing packet is Ed25519-signed. Every incoming packet has its signature verified before relay or display. Drop unsigned/invalid packets silently.
 
-7. **No plaintext on disk.** Message content is encrypted at rest. Panic wipe destroys all keys in <1s.
+7. **No plaintext on disk.** Message content is encrypted at rest. Panic wipe destroys all keys, every database, the media cache and Tor state, and reports whether the keys actually went.
 
 8. **Polyfill at entry point.** `import 'react-native-get-random-values'` must be the first import in `App.tsx` before any `@noble` import.
 
@@ -60,7 +60,7 @@ src/
   bridge/       # TurboModule TypeScript specs (Codegen input only)
   i18n/         # translation runtime + the bundled English catalog
   core/
-    crypto/     # identity, noise-xx, noise-x, double-ratchet, x3dh
+    crypto/     # identity, keychain, noise-xx, noise-x, double-ratchet, contact-exchange
     mesh/       # packet-codec, flood-router, deduplicator, fragments, gossip, courier
     nostr/      # nostr-client, courier-relay, gift-wrap, geo-relay, presence
     payments/   # cashu, nutzap
@@ -72,7 +72,7 @@ src/
 android/        # Kotlin: AirhopBLEModule, AirhopForegroundService
 ios/            # Swift: AirhopBLEModule
 
-assets/data/    # relays.csv (bundled from bitchat/georelays/, CI-refreshed)
+assets/data/    # nostr_relays.csv (bundled from bitchat/georelays/, CI-refreshed)
 docs/
   design/       # VISION.md, ROADMAP.md
   spec/         # ARCHITECTURE.md, PROTOCOLS.md

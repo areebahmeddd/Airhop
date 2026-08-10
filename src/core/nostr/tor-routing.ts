@@ -29,6 +29,7 @@ import {
   type TorBootstrapPhase,
 } from "../../store/mesh-state-store";
 import { useSettingsStore } from "../../store/settings-store";
+import { setTorTeardown } from "./tor-teardown-handle";
 import { TorWebSocket } from "./tor-websocket";
 
 // The real React Native WebSocket, captured before any swap so it can be
@@ -129,6 +130,23 @@ let statusSubscription: { remove: () => void } | null = null;
 
 function watchTorBootstrap(): void {
   if (statusSubscription !== null) return;
+  // Register the teardown so a panic wipe can reach it. See
+  // tor-teardown-handle: this module cannot be imported from panic-wipe.ts, and
+  // a live native listener plus a stale routing flag must not outlive a wipe.
+  setTorTeardown(() => {
+    stopWatchingTorBootstrap();
+    setTorActive(false);
+    // Put nostr-tools back on the direct socket.
+    //
+    // A wipe stops Arti and deletes its state, so leaving the factory pointed
+    // at a Tor socket meant every relay built afterwards dialled a proxy that
+    // no longer exists: relays, geohash channels, gift-wrapped DMs and nutzaps
+    // all silently dead for the rest of the process, while Settings correctly
+    // showed Tor as off. Safe because the wipe also resets torEnabled to false,
+    // so this restores the socket the preference now asks for.
+    installDirectSocket();
+    setTorTeardown(null);
+  });
   statusSubscription = subscribeTorStatus((status) => {
     if (status.isReady) {
       setTorBootstrap("idle");
@@ -159,6 +177,8 @@ function stopWatchingTorBootstrap(): void {
   statusSubscription?.remove();
   statusSubscription = null;
   setTorBootstrap("idle");
+  // Nothing left to tear down, so nothing should hold a teardown for it.
+  setTorTeardown(null);
 }
 
 // Whether this platform can route Nostr WebSockets through the in-app Tor (Arti)
@@ -216,28 +236,63 @@ async function enableTorRouting(): Promise<TorRoutingResult> {
   }
 
   try {
-    // Watch first: the bootstrap we are about to await is exactly the window
-    // the banner exists to explain.
+    // Swap the socket and rebuild the pool BEFORE awaiting the circuit, not
+    // after.
+    //
+    // The old order awaited readiness first, which left the existing clear-net
+    // pool live for the whole bootstrap - up to a minute of relay
+    // subscriptions, gift-wrapped DMs, geohash presence and bridge events going
+    // out unprotected AFTER the user asked for Tor. Consent is the moment the
+    // protection has to start, not the moment the circuit happens to finish.
+    //
+    // nostr-tools captures the socket constructor per relay when the relay
+    // object is built, so the order is load-bearing in both directions: install
+    // the factory, then tear the old pool down, then let it rebuild on the new
+    // one. Sockets opened against a circuit that is not up yet simply fail and
+    // retry, which is the same fail-closed behaviour startup has always had.
     watchTorBootstrap();
     setTorBootstrap("starting");
+    installTorSocket();
+    // Persist first so a relaunch during the bootstrap comes back on Tor rather
+    // than on the clear net.
+    useSettingsStore.getState().setTorEnabled(true);
+    getMeshService()?.restartNostr();
+
     await NativeAirhopTor.startTor();
     const ready = await NativeAirhopTor.awaitTorReady(TOR_READY_TIMEOUT_S);
     if (!ready) {
-      await NativeAirhopTor.stopTor().catch(() => {});
-      stopWatchingTorBootstrap();
+      // Deliberately NOT undone. Arti keeps running, the socket stays on Tor,
+      // and the claim stays down: a bootstrap can still land after this
+      // deadline (the native poll runs longer than it does), and the stall
+      // event reports it terminally if it does not. Stopping Arti here used to
+      // kill a circuit that was nearly up, and reverting the socket would put
+      // the user back on the clear net they had just opted out of.
+      //
+      // The caller gets the failure so the sheet can explain it; the banner
+      // carries "starting" or "blocked" from the watcher above.
       return { ok: false, reason: "timeout" };
     }
-    installTorSocket();
+    // Re-check consent before claiming it. Sixty seconds is long enough for the
+    // user to toggle Tor back off, or for a panic wipe to tear the whole thing
+    // down, and an enable that resolves afterwards would assert onion routing
+    // over a socket that is back on the clear net. The status watcher above
+    // guards its own claim the same way.
+    if (!useSettingsStore.getState().torEnabled) {
+      return { ok: false, reason: "error" };
+    }
     setTorActive(true);
     setTorBootstrap("idle");
-    useSettingsStore.getState().setTorEnabled(true);
-    getMeshService()?.restartNostr();
     return { ok: true };
   } catch {
+    // A throw is different from a slow bootstrap: the module itself failed, so
+    // there is nothing to wait for and leaving the app with no internet half
+    // would be worse than the clear net it started on. Unwind completely.
     await NativeAirhopTor.stopTor().catch(() => {});
     installDirectSocket();
     setTorActive(false);
+    useSettingsStore.getState().setTorEnabled(false);
     stopWatchingTorBootstrap();
+    getMeshService()?.restartNostr();
     return { ok: false, reason: "error" };
   }
 }
@@ -289,10 +344,15 @@ export function primeTorRoutingOnStartup(): void {
     return;
   }
 
+  // The socket goes on immediately: traffic must be fail-closed from the first
+  // relay attempt, before anything is known about the circuit.
   installTorSocket();
-  setTorActive(true);
-  // Watch the bootstrap this cannot await. Until now nothing did, so a circuit
-  // that never came up left the app claiming Tor forever with no explanation.
+  // The CLAIM does not. `torActive` drives the "internet traffic onion routed"
+  // banner, and asserting it here asserted it before a single circuit existed -
+  // true within seconds on a good network, and never true at all on one that
+  // blocks Tor, where it sat green for the whole session. The watcher below
+  // raises it the moment Arti reports ready, which is the first instant it is
+  // actually true, and lowers it on the stall event.
   watchTorBootstrap();
   setTorBootstrap("starting");
   // Start Arti in the background; relays retry over Tor until it is ready.

@@ -46,6 +46,33 @@ export async function hasLocationPermission(): Promise<boolean> {
   }
 }
 
+// The same reading, keeping the distinction a boolean throws away: whether the
+// OS will still show its prompt.
+//
+// The Permissions screen needs this and had no way to get it, so a permanently
+// denied location rendered as an ordinary "Allow" whose tap is a silent no-op -
+// the one state where the only useful action is a trip to Settings. Everything
+// that just wants a yes/no keeps using hasLocationPermission.
+export async function locationPermissionState(): Promise<{
+  granted: boolean;
+  canAskAgain: boolean;
+}> {
+  try {
+    const { status, canAskAgain } =
+      await Location.getForegroundPermissionsAsync();
+    return {
+      granted: status === Location.PermissionStatus.GRANTED,
+      canAskAgain,
+    };
+  } catch {
+    // Unreadable. "Can ask again" is the recoverable guess: it offers the
+    // prompt, which is harmless if it turns out to be a no-op, where guessing
+    // blocked would send someone to Settings for a permission they could have
+    // granted in place.
+    return { granted: false, canAskAgain: true };
+  }
+}
+
 // Current coarse position, or null if unavailable/denied.
 // Served from a short cache so several callers on one screen don't each
 // trigger a separate fix.

@@ -50,7 +50,7 @@ let activeChannel = "";
 let navigate: ((channel: string) => void) | null = null;
 let openMesh: (() => void) | null = null;
 let configured = false;
-let responseSub: Notifications.Subscription | null = null;
+let responseSub: Notifications.EventSubscription | null = null;
 // When the last nearby notice went out, for the cooldown. Module state, not
 // persisted: a relaunch is already a rare event, and starting a fresh app run
 // with a clean cooldown is the behaviour a user would expect anyway.
@@ -119,21 +119,38 @@ export async function configureNotifications(): Promise<void> {
       }),
   });
 
+  // Channel creation is best-effort, and its failure must not take the tap
+  // routing below with it.
+  //
+  // These three awaits used to be unwrapped inside a function called as
+  // `void configureNotifications()`. A rejection from any of them did two
+  // things at once: it escaped as an unhandled rejection, which the global
+  // handler turns into the full-screen error fallback, and it skipped the
+  // response listener - so notification taps stopped routing for the whole
+  // session. The `configured` latch is set before the first await, so nothing
+  // ever retried. A channel that could not be created costs a default-styled
+  // notification; it should never cost the app its UI.
   if (Platform.OS === "android") {
-    await Notifications.setNotificationChannelAsync(MESSAGES_CHANNEL_ID, {
-      name: t("notif.channel.messages"),
-      importance: Notifications.AndroidImportance.HIGH,
-      vibrationPattern: [0, 200],
-      lockscreenVisibility: Notifications.AndroidNotificationVisibility.PRIVATE,
-    });
-    await Notifications.setNotificationChannelAsync(NEARBY_CHANNEL_ID, {
-      name: t("notif.channel.nearby"),
-      description: t("notif.channel.nearby_desc"),
-      // LOW: no sound, no heads-up card. It waits in the shade to be found.
-      importance: Notifications.AndroidImportance.LOW,
-      vibrationPattern: null,
-      lockscreenVisibility: Notifications.AndroidNotificationVisibility.PRIVATE,
-    });
+    try {
+      await Notifications.setNotificationChannelAsync(MESSAGES_CHANNEL_ID, {
+        name: t("notif.channel.messages"),
+        importance: Notifications.AndroidImportance.HIGH,
+        vibrationPattern: [0, 200],
+        lockscreenVisibility:
+          Notifications.AndroidNotificationVisibility.PRIVATE,
+      });
+      await Notifications.setNotificationChannelAsync(NEARBY_CHANNEL_ID, {
+        name: t("notif.channel.nearby"),
+        description: t("notif.channel.nearby_desc"),
+        // LOW: no sound, no heads-up card. It waits in the shade to be found.
+        importance: Notifications.AndroidImportance.LOW,
+        vibrationPattern: null,
+        lockscreenVisibility:
+          Notifications.AndroidNotificationVisibility.PRIVATE,
+      });
+    } catch {
+      // Android will deliver on the default channel instead.
+    }
   }
 
   responseSub?.remove();
@@ -144,8 +161,21 @@ export async function configureNotifications(): Promise<void> {
   );
 
   // Launched by tapping a notification while the app was killed.
-  const last = await Notifications.getLastNotificationResponseAsync();
-  if (last) routeFromResponse(last);
+  //
+  // The synchronous reader, not the deprecated `getLastNotificationResponseAsync`
+  // it replaces. Being synchronous is the better shape here as well as the
+  // supported one: the response is already in memory by the time the module
+  // loads, so awaiting it only opened a window in which the tapped conversation
+  // could be overtaken by whatever tab the app was going to open anyway.
+  //
+  // Guarded for the same reason as the channels above: routing the tap is a
+  // nicety, and losing the listener to it would be a bad trade.
+  try {
+    const last = Notifications.getLastNotificationResponse();
+    if (last) routeFromResponse(last);
+  } catch {
+    // The app opens on its usual tab instead of the tapped conversation.
+  }
 }
 
 function routeFromResponse(response: Notifications.NotificationResponse): void {
@@ -289,6 +319,26 @@ export async function dismissNotificationsFor(channel: string): Promise<void> {
     await Notifications.dismissNotificationAsync(channelToId(channel));
   } catch {
     // Nothing delivered for this channel, or the platform has no tray: ignore.
+  }
+}
+
+// Take every delivered notification out of the shade, and clear the badge.
+//
+// For the panic wipe. A delivered notification carries a sender nickname and a
+// message preview and lives in the system tray, not in any store the wipe
+// clears, so it survives the process and keeps rendering on the lock screen of a
+// phone whose database has just been destroyed. Nothing else should call this:
+// clearing someone's whole tray is the wipe's business and nobody else's.
+export async function dismissAllNotifications(): Promise<void> {
+  try {
+    await Notifications.dismissAllNotificationsAsync();
+  } catch {
+    // No tray on this platform, or nothing delivered.
+  }
+  try {
+    await Notifications.setBadgeCountAsync(0);
+  } catch {
+    // Badges are unsupported here.
   }
 }
 

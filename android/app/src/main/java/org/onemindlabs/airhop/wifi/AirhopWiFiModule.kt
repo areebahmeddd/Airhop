@@ -41,7 +41,10 @@
 // as the crossed Noise handshake tiebreak on the BLE side.
 package org.onemindlabs.airhop.wifi
 
+import android.content.BroadcastReceiver
 import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
 import android.net.ConnectivityManager
 import android.net.Network
 import android.net.NetworkCapabilities
@@ -61,6 +64,7 @@ import android.os.Build
 import android.util.Base64
 import android.util.Log
 import androidx.annotation.RequiresApi
+import androidx.core.content.ContextCompat
 import com.facebook.react.bridge.Promise
 import com.facebook.react.bridge.ReactApplicationContext
 import com.facebook.react.bridge.ReactContextBaseJavaModule
@@ -85,6 +89,9 @@ private const val SERVICE_NAME = "airhop-mesh-v1"
 private const val EVT_PACKET_RECEIVED   = "AirhopWiFi.packetReceived"
 private const val EVT_LINK_CONNECTED    = "AirhopWiFi.linkConnected"
 private const val EVT_LINK_DISCONNECTED = "AirhopWiFi.linkDisconnected"
+// WiFi Aware became usable, or stopped being usable. The counterpart of the BLE
+// module's adapterStateChanged, and the event the fast path recovers on.
+private const val EVT_AVAILABILITY_CHANGED = "AirhopWiFi.availabilityChanged"
 
 // Sent by a subscriber that has decided to dial, so the publisher knows to
 // stand up its side of the data path. One byte, and its value is the version:
@@ -98,6 +105,16 @@ private const val MAX_FRAME = 65544
 
 // Bytes of tiebreak token carried in serviceSpecificInfo.
 private const val TOKEN_BYTES = 8
+
+// How long a link may be silent before its read is abandoned and the link torn
+// down. Generous: the mesh is bursty and a quiet conversation is normal, so this
+// is a liveness backstop, not a heartbeat. Matches bitchat's SyncedSocket.
+private const val READ_TIMEOUT_MS = 90_000
+
+// Consecutive silent deadlines before a link is treated as half-open. Three at
+// 90s is four and a half minutes of a link that has delivered nothing, which is
+// well past any normal quiet period including a backgrounded pair under Doze.
+private const val MAX_IDLE_TIMEOUTS = 3
 
 // WifiAwareNetworkInfo, and therefore any way to learn the peer's address, is
 // API 29. Below that the discovery half of WiFi Aware works and the data path
@@ -167,21 +184,28 @@ class AirhopWiFiModule(
     @ReactMethod
     fun startWiFi(promise: Promise) {
         val manager = wifiAwareManager
+        // UNSUPPORTED, not UNAVAILABLE, and the distinction is the whole reason
+        // the JS reconciler can exist. No Aware hardware and an OS below the
+        // data-path floor are permanent facts about this device; WiFi being off
+        // is a fact about this minute. Both used to reject with the same code,
+        // so a caller could only choose between retrying a device that will
+        // never answer and never retrying one that would have.
         if (manager == null) {
-            promise.reject("WIFI_AWARE_UNAVAILABLE", "WiFi Aware not supported on this device")
+            promise.reject("WIFI_AWARE_UNSUPPORTED", "WiFi Aware not supported on this device")
             return
         }
         if (Build.VERSION.SDK_INT < AWARE_DATA_PATH_MIN_API) {
             promise.reject(
-                "WIFI_AWARE_UNAVAILABLE",
+                "WIFI_AWARE_UNSUPPORTED",
                 "WiFi Aware data paths need Android 10 or later",
             )
             return
         }
         if (!manager.isAvailable) {
             // WiFi off, or Aware disabled by the OS (it goes away under battery
-            // saver and during some tethering states). Not an error worth
-            // retrying from here; the mesh is on BLE regardless.
+            // saver and during some tethering states). Transient: the state
+            // receiver below reports it coming back, and the JS controller
+            // retries on a slow ladder in the meantime.
             promise.reject("WIFI_AWARE_UNAVAILABLE", "WiFi Aware is not available right now")
             return
         }
@@ -195,26 +219,57 @@ class AirhopWiFiModule(
         try {
             manager.attach(object : AttachCallback() {
                 override fun onAttached(session: WifiAwareSession) {
-                    awareSession = session
                     Log.d(TAG, "WiFi Aware attached")
                     // Re-checked rather than relied on from the guard above:
                     // lint cannot follow an API level check across a callback
                     // boundary, and everything below this line is API 29+.
                     if (Build.VERSION.SDK_INT < AWARE_DATA_PATH_MIN_API) {
+                        session.close()
                         promise.reject(
-                            "WIFI_AWARE_UNAVAILABLE",
+                            "WIFI_AWARE_UNSUPPORTED",
                             "WiFi Aware data paths need Android 10 or later",
                         )
                         return
                     }
                     // The server socket has to exist before publishing: its port
                     // is what setPort() advertises to every peer that dials in.
+                    //
+                    // The session is adopted only once everything below it has
+                    // succeeded. Assigning `awareSession` first, as this used to,
+                    // meant a failed socket rejected the promise while leaving the
+                    // handle set - and the early return at the top of this method
+                    // then made every later startWiFi() resolve instantly with
+                    // nothing published, nothing subscribed and nothing listening.
+                    // The transport was permanently "started" and permanently
+                    // dead, with no way back short of restarting the process.
                     if (!ensureServerSocket()) {
+                        session.close()
                         promise.reject("WIFI_AWARE_ATTACH_FAILED", "Could not open the data-path socket")
                         return
                     }
-                    startPublish(session)
-                    startSubscribe(session)
+                    awareSession = session
+                    // Both must actually start, or the attach did not give us a
+                    // usable transport.
+                    //
+                    // These swallowed their SecurityException and only logged,
+                    // while the promise resolved regardless. On a device where
+                    // attach() is permitted but publish/subscribe are refused -
+                    // the NEARBY_WIFI_DEVICES-granted-late race the reconciler
+                    // exists for - startWiFi() reported success, the controller
+                    // latched "started", and every later pass returned early at
+                    // its already-started guard. The transport stayed
+                    // permanently up with nothing published and nothing
+                    // subscribed. This is the same failure the socket check a
+                    // few lines above was added to prevent, applied to the two
+                    // calls that sit right after it.
+                    if (!startPublish(session) || !startSubscribe(session)) {
+                        teardown()
+                        promise.reject(
+                            "PERMISSION_DENIED",
+                            "WiFi Aware discovery refused"
+                        )
+                        return
+                    }
                     promise.resolve(null)
                 }
 
@@ -271,9 +326,98 @@ class AirhopWiFiModule(
         links.clear()
     }
 
+    // ---- Availability --------------------------------------------------------
+
+    // WiFi Aware appearing or disappearing under us.
+    //
+    // The BLE module has had an ACTION_STATE_CHANGED receiver since the radios
+    // were first written, and everything the mesh does about a toggled adapter
+    // hangs off it. This side had nothing: `isAvailable` was read once, inside
+    // startWiFi, and never again. So WiFi switched off at launch meant a refused
+    // attach that nobody retried, and WiFi switched off mid-session left the
+    // framework tearing down the discovery sessions while this module kept its
+    // attach handle and went on believing it was running.
+    //
+    // ACTION_WIFI_AWARE_STATE_CHANGED carries no extras by design - the docs are
+    // explicit that the state must be read back from the manager - so this asks
+    // rather than trusts what it was handed.
+    private val awareStateReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            if (intent?.action != WifiAwareManager.ACTION_WIFI_AWARE_STATE_CHANGED) return
+            val available = wifiAwareManager?.isAvailable == true
+            if (available == lastReportedAvailable) return
+            lastReportedAvailable = available
+            // Losing the radio invalidates everything built on it. Tear our own
+            // state down before telling JS, so a reconcile prompted by the event
+            // cannot race a half-released session: teardown is idempotent and
+            // clearing `awareSession` is what makes the next attach real work
+            // rather than the early return at the top of startWiFi.
+            if (!available) teardown()
+            emitEvent(EVT_AVAILABILITY_CHANGED, WritableNativeMap().apply {
+                putBoolean("available", available)
+            })
+        }
+    }
+
+    // Discovery was refused asynchronously. Reported as "unavailable" so the
+    // reconciler forgets it is started and retries on its ladder, rather than
+    // latching over a transport with nothing published or subscribed.
+    //
+    // This is the refusal that actually fires when NEARBY_WIFI_DEVICES lands a
+    // moment late: publish() and subscribe() accept the call and reject the
+    // CONFIG later, through onSessionConfigFailed. The synchronous
+    // SecurityException the attach path checks is the rarer case.
+    private fun reportDiscoveryRefused(which: String) {
+        Log.e(TAG, "WiFi Aware $which config refused")
+        teardown()
+        lastReportedAvailable = false
+        emitEvent(EVT_AVAILABILITY_CHANGED, WritableNativeMap().apply {
+            putBoolean("available", false)
+        })
+    }
+
+    // What we last told JS, so a broadcast that does not change the answer costs
+    // nothing. The framework re-broadcasts on transitions either side of the
+    // state we care about, and an unchanged report would restart the transport.
+    private var lastReportedAvailable: Boolean? = null
+    private var awareReceiverRegistered = false
+
+    override fun initialize() {
+        super.initialize()
+        registerAwareReceiver()
+    }
+
+    private fun registerAwareReceiver() {
+        if (awareReceiverRegistered) return
+        // Nothing to listen to on a device with no Aware service.
+        val manager = wifiAwareManager ?: return
+        try {
+            // NOT_EXPORTED for the same reason the BLE module says so: this only
+            // ever listens to a protected system broadcast, it is required to be
+            // explicit from API 34, and ContextCompat makes it a no-op below.
+            ContextCompat.registerReceiver(
+                reactContext,
+                awareStateReceiver,
+                IntentFilter(WifiAwareManager.ACTION_WIFI_AWARE_STATE_CHANGED),
+                ContextCompat.RECEIVER_NOT_EXPORTED,
+            )
+            awareReceiverRegistered = true
+            // Seeded from the current state so the first broadcast is compared
+            // against reality rather than against "unknown", which would report a
+            // change that never happened.
+            lastReportedAvailable = manager.isAvailable
+        } catch (e: Exception) {
+            Log.e(TAG, "Could not register WiFi Aware state receiver", e)
+        }
+    }
+
     // The JS runtime is going away. Same reasoning as the BLE module's
     // invalidate(): every link exists to hand bytes to a runtime that is gone.
     override fun invalidate() {
+        if (awareReceiverRegistered) {
+            runCatching { reactContext.unregisterReceiver(awareStateReceiver) }
+            awareReceiverRegistered = false
+        }
         teardown()
         runCatching { ioExecutor.shutdownNow() }
         super.invalidate()
@@ -285,7 +429,10 @@ class AirhopWiFiModule(
     fun writeToWiFiLink(linkID: String, dataBase64: String, promise: Promise) {
         val link = links[linkID]
         if (link == null) {
-            promise.reject("LINK_NOT_FOUND", "No active WiFi link: $linkID")
+            // UNKNOWN_LINK, matching the BLE module: the same condition on the
+            // other transport, so a caller that ever branches on it does not have
+            // to know which radio it was talking to.
+            promise.reject("UNKNOWN_LINK", "No active WiFi link: $linkID")
             return
         }
         val data = try {
@@ -348,7 +495,7 @@ class AirhopWiFiModule(
     // ---- Publish (responder role) --------------------------------------------
 
     @RequiresApi(AWARE_DATA_PATH_MIN_API)
-    private fun startPublish(session: WifiAwareSession) {
+    private fun startPublish(session: WifiAwareSession): Boolean {
         val config = PublishConfig.Builder()
             .setServiceName(SERVICE_NAME)
             // Carries this device's tiebreak token to every subscriber that
@@ -358,6 +505,10 @@ class AirhopWiFiModule(
 
         try {
             session.publish(config, object : DiscoverySessionCallback() {
+                override fun onSessionConfigFailed() {
+                    reportDiscoveryRefused("publish")
+                }
+
                 override fun onPublishStarted(started: PublishDiscoverySession) {
                     publishSession = started
                     Log.d(TAG, "WiFi Aware publish started on port $serverPort")
@@ -376,21 +527,27 @@ class AirhopWiFiModule(
                     openResponderNetwork(active, peerHandle)
                 }
             }, null)
+            return true
         } catch (e: SecurityException) {
             Log.e(TAG, "Publish refused, permission missing: ${e.message}")
+            return false
         }
     }
 
     // ---- Subscribe (initiator role) ------------------------------------------
 
     @RequiresApi(AWARE_DATA_PATH_MIN_API)
-    private fun startSubscribe(session: WifiAwareSession) {
+    private fun startSubscribe(session: WifiAwareSession): Boolean {
         val config = SubscribeConfig.Builder()
             .setServiceName(SERVICE_NAME)
             .build()
 
         try {
             session.subscribe(config, object : DiscoverySessionCallback() {
+                override fun onSessionConfigFailed() {
+                    reportDiscoveryRefused("subscribe")
+                }
+
                 override fun onSubscribeStarted(started: SubscribeDiscoverySession) {
                     subscribeSession = started
                     Log.d(TAG, "WiFi Aware subscribe started")
@@ -429,8 +586,10 @@ class AirhopWiFiModule(
                     dialledPeers.clear()
                 }
             }, null)
+            return true
         } catch (e: SecurityException) {
             Log.e(TAG, "Subscribe refused, permission missing: ${e.message}")
+            return false
         }
     }
 
@@ -598,6 +757,16 @@ class AirhopWiFiModule(
             // Frames are small and latency matters more than packing here: the
             // mesh writes one packet per call and waits for nothing.
             socket.tcpNoDelay = true
+            // A read deadline is what turns a half-open link into a closed one.
+            //
+            // Without it a socket whose far side vanished without a FIN sits in
+            // `links` and in the JS side's connected set until a write happens to
+            // fail. That is not just a stale entry: the courier decides whether
+            // it has anyone to hand mail to by counting connected links, so a
+            // zombie link makes the composer say "carried by a friend" for an
+            // envelope no friend received. bitchat sets the same deadline for
+            // the same stated reason (SyncedSocket).
+            socket.soTimeout = READ_TIMEOUT_MS
             val output = socket.getOutputStream()
             val link = LinkState(id, socket, output)
             links[id] = link
@@ -614,8 +783,9 @@ class AirhopWiFiModule(
     private fun startReadLoop(linkID: String, input: InputStream) {
         ioExecutor.execute {
             val lenBuf = ByteArray(4)
-            try {
-                while (true) {
+            var idleTimeouts = 0
+            while (true) {
+                try {
                     // Read 4-byte BE length prefix.
                     var read = 0
                     while (read < 4) {
@@ -640,15 +810,32 @@ class AirhopWiFiModule(
                         received += n
                     }
 
+                    // Something arrived, so the link is demonstrably alive.
+                    idleTimeouts = 0
                     val dataBase64 = Base64.encodeToString(data, Base64.NO_WRAP)
                     emitEvent(EVT_PACKET_RECEIVED, WritableNativeMap().apply {
                         putString("linkID", linkID)
                         putString("dataBase64", dataBase64)
                     })
+                } catch (e: java.net.SocketTimeoutException) {
+                    // A quiet link is not a dead one.
+                    //
+                    // There is no keepalive here, so silence is normal: liveness
+                    // comes from ANNOUNCE, and JS timers are throttled under
+                    // Doze, so a backgrounded pair can easily miss one deadline.
+                    // Closing on the first timeout churned healthy links every
+                    // 90s. Several consecutive timeouts with nothing arriving is
+                    // the half-open case the deadline is actually for.
+                    idleTimeouts += 1
+                    if (idleTimeouts < MAX_IDLE_TIMEOUTS) continue
+                    Log.d(TAG, "WiFi link $linkID idle past deadline, closing")
+                    handleLinkClose(linkID)
+                    return@execute
+                } catch (e: Exception) {
+                    Log.d(TAG, "Read loop ended for $linkID: ${e.message}")
+                    handleLinkClose(linkID)
+                    return@execute
                 }
-            } catch (e: Exception) {
-                Log.d(TAG, "Read loop ended for $linkID: ${e.message}")
-                handleLinkClose(linkID)
             }
         }
     }

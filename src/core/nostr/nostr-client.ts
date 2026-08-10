@@ -211,6 +211,15 @@ export class NostrClient {
           .catch((err: unknown) => {
             const msg = err instanceof Error ? err.message : String(err);
             results.push({ relay, ok: false, message: msg });
+            // Every relay has now answered, and all of them refused. Settle on
+            // that rather than holding the timer, the event and this closure for
+            // the rest of the timeout: the answer cannot change, and the caller
+            // is waiting to queue the message for a later retry.
+            if (!resolved && results.length === targets.length) {
+              resolved = true;
+              clearTimeout(timer);
+              reject(new Error("Publish rejected by every relay"));
+            }
           });
       });
     });
@@ -232,9 +241,28 @@ export class NostrClient {
     });
   }
 
-  // Close all relay connections.
+  // Close all relay connections. ALL of them, not just the default set.
+  //
+  // This used to be `pool.close(this.relays)`, which closes only the URLs it is
+  // handed. `this.relays` is the merged DM set, capped at five - so every socket
+  // opened through a per-call relay override was left behind: each geohash cell
+  // the user has opened, and every bridge rendezvous cell. Those are exactly the
+  // relays that know the most about where somebody is.
+  //
+  // The consequences were all in the wrong direction. Turning the internet off
+  // left them connected while the Mesh tab reported no relay. Going Away left
+  // them connected over a stopped mesh. A panic wipe left them connected. And
+  // enabling Tor rebuilt the DM pool on the Tor socket while those sockets
+  // stayed on the clear net, holding the device's real IP open to the relays it
+  // had just been bridging through, which is the one thing the toggle exists to
+  // stop. nostr-tools keeps a relay alive until it is closed explicitly and its
+  // idle pruning is never invoked, so nothing collected them.
+  //
+  // `destroy()` closes every relay the pool holds and empties its map, which is
+  // what "close" was always meant to mean here. The client is single-use either
+  // way: every caller builds a fresh one rather than reopening this.
   close(): void {
-    this.pool.close(this.relays);
+    this.pool.destroy();
   }
 }
 

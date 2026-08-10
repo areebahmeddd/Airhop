@@ -41,7 +41,7 @@ Check for:
 
 ### 2. Key Storage
 
-**Rule:** Private key material MUST only be stored via `react-native-encrypted-storage`.
+**Rule:** Private key material MUST only be stored via `src/core/crypto/keychain.ts`. A secret written straight to `expo-secure-store` is absent from `KEYCHAIN_ITEMS`, which is the list the panic wipe deletes, so it stays on the device.
 
 Check for:
 
@@ -118,7 +118,7 @@ Check for:
 
 | Risk                                | Check                                                                           |
 | ----------------------------------- | ------------------------------------------------------------------------------- |
-| M1: Improper Credential Usage       | Private keys in EncryptedStorage only?                                          |
+| M1: Improper Credential Usage       | Private keys in the keychain registry only?                                     |
 | M2: Inadequate Supply Chain         | Deps from `@noble` (Cure53 audited)? No unaudited crypto?                       |
 | M3: Insecure Authentication         | No authentication = no auth bypass. Verify no session tokens stored insecurely. |
 | M4: Insufficient Input Validation   | BLE input validated at boundary (section 4 above)?                              |

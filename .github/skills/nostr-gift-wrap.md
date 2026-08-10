@@ -108,7 +108,7 @@ tags:    [["x", recipientTagHex], ["expiration", unixSecString]]
 content: base64(encodeEnvelopePayload(envelope))
 ```
 
-The `x` tag is a 16-byte HMAC-derived daily recipient tag (see `computeRecipientTag` in `courier-store.ts`). It rotates daily so relay operators cannot correlate deliveries over time.
+The `x` tag is a 16-byte HMAC-derived daily recipient tag (see `computeRecipientTag` in `courier-store.ts`). It rotates daily. This is not unlinkability: anyone holding the peer's static key can compute its tag for any day.
 
 NIP-40 compliant relays auto-expire the event at the `expiration` timestamp. Non-compliant relays keep it; the recipient ignores stale envelopes.
 

@@ -106,9 +106,42 @@ export interface ParsedBridgeEvent {
 }
 
 // Classify + extract an inbound rendezvous event. Returns null if it is not a
-// well-formed bridge event (missing `r` tag, or an unhandled kind). The `m`-tag
-// fields are a radio-copy HINT only: sender/timestamp/content are public, so a
-// different Nostr signer can copy them; never trust them to authenticate.
+// well-formed bridge event (missing `r` tag, or an unhandled kind).
+//
+// The `m`-tag fields are a radio-copy HINT only: sender, timestamp and content
+// are all public, so a different Nostr signer can copy them, and they never
+// authenticate anyone.
+//
+// What they DO have to be is self-consistent, and that is checked here rather
+// than trusted. The hint is only returned when it equals a fresh
+// `bridgeStableID` over this event's own sender, timestamp and content.
+//
+// That single check is what stops the hint being a write primitive. It is used
+// as the timeline row identity, so an unverified hint let anyone who could
+// compute a message's stable ID - which needs only its public sender, timestamp
+// and text - publish a rendezvous event that landed on that exact row on every
+// far island and displaced the genuine copy, with different text under the
+// original's identity. Requiring the hash to match its own content means
+// claiming somebody's row now costs a SHA-256 preimage rather than a guess: an
+// attacker can still publish, but only under an id derived from what they
+// actually said, which is a new row rather than a substituted one.
+// Return the `m`-tag stable ID only when it is the hash of this event's own
+// sender, timestamp and content. Anything else - a missing tag, a short tag, a
+// malformed timestamp, or an id that names a different message - yields
+// undefined, and the caller falls back to an identity derived from the event.
+function verifiedStableID(
+  mTag: string[] | undefined,
+  content: string,
+): string | undefined {
+  if (mTag === undefined || mTag.length < 4) return undefined;
+  const [, claimed, senderID, timestampRaw] = mTag;
+  if (claimed === undefined || senderID === undefined) return undefined;
+  const timestampMs = Number(timestampRaw);
+  if (!Number.isFinite(timestampMs)) return undefined;
+  const expected = bridgeStableID(senderID, timestampMs, content);
+  return expected === claimed ? claimed : undefined;
+}
+
 export function parseBridgeEvent(event: NostrEvent): ParsedBridgeEvent | null {
   const cell = event.tags.find(
     (t) => t.length >= 2 && t[0] === TAG_RENDEZVOUS,
@@ -129,7 +162,7 @@ export function parseBridgeEvent(event: NostrEvent): ParsedBridgeEvent | null {
     cell,
     content: event.content,
     nickname,
-    radioMessageIDHint: mTag?.[1],
+    radioMessageIDHint: verifiedStableID(mTag, event.content),
     meshSenderID: mTag?.[2],
   };
 }

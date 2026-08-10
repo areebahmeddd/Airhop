@@ -208,12 +208,16 @@ export default function QrScanScreen({
       setError(t("contacts.scan.photo_needed"));
       return;
     }
-    const picked = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ["images"],
-      quality: 1,
-    });
-    if (picked.canceled || !picked.assets[0]) return;
+    // Inside the try, not before it. The launch can reject on its own - the OS
+    // refusing to present, a provider crash - and this runs from an onPress as a
+    // bare async call, so a rejection there was unhandled: the sheet stayed open
+    // and the error line this screen already has was never set.
     try {
+      const picked = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ["images"],
+        quality: 1,
+      });
+      if (picked.canceled || !picked.assets[0]) return;
       const scans = await scanFromURLAsync(picked.assets[0].uri, ["qr"]);
       const raw = scans[0]?.data;
       const result = raw ? parseScan(raw) : null;
@@ -401,7 +405,7 @@ export default function QrScanScreen({
                 autoCorrect={false}
                 returnKeyType="done"
                 onSubmitEditing={handleManualContinue}
-                selectionColor={Colors.accent}
+                selectionColor={Colors.selection}
               />
               <Text style={styles.fieldHint}>
                 {T("contacts.qr.peer_id_hint")}

@@ -278,7 +278,7 @@ export default function NetworkScreen({ onBack }: Props): React.JSX.Element {
                     keyboardType="url"
                     returnKeyType="done"
                     onSubmitEditing={handleAddRelay}
-                    selectionColor={Colors.accent}
+                    selectionColor={Colors.selection}
                   />
                   {relayInput.trim().length > 0 && (
                     <Pressable

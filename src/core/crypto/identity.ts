@@ -3,11 +3,11 @@
 // One identity = one key pair. The Ed25519 signing key doubles as the Nostr
 // identity (npub). The X25519 static key is used exclusively for Noise XX
 // session establishment. Both private keys live in the OS Keychain/Keystore
-// via react-native-encrypted-storage and never leave the device.
+// via ./keychain and never leave the device.
 import { ed25519, x25519 } from "@noble/curves/ed25519.js";
 import { sha256 } from "@noble/hashes/sha2.js";
 import { bytesToHex, hexToBytes } from "@noble/hashes/utils.js";
-import EncryptedStorage from "react-native-encrypted-storage";
+import { KEYCHAIN_ITEMS, readSecret, writeSecret } from "./keychain";
 
 export interface Identity {
   // X25519 static key pair - used for Noise XX session encryption only
@@ -22,7 +22,7 @@ export interface Identity {
   nostrPubKey: string;
 }
 
-const STORAGE_KEY = "airhop.identity.v1";
+const STORAGE_KEY = KEYCHAIN_ITEMS.identity;
 
 export async function generateIdentity(): Promise<Identity> {
   const noisePriv = crypto.getRandomValues(new Uint8Array(32));
@@ -44,7 +44,7 @@ export async function generateIdentity(): Promise<Identity> {
 }
 
 export async function saveIdentity(id: Identity): Promise<void> {
-  await EncryptedStorage.setItem(
+  await writeSecret(
     STORAGE_KEY,
     JSON.stringify({
       noisePrivHex: bytesToHex(id.noiseStaticPrivKey),
@@ -54,7 +54,7 @@ export async function saveIdentity(id: Identity): Promise<void> {
 }
 
 export async function loadIdentity(): Promise<Identity | null> {
-  const raw = await EncryptedStorage.getItem(STORAGE_KEY);
+  const raw = await readSecret(STORAGE_KEY);
   if (!raw) return null;
 
   const parsed: unknown = JSON.parse(raw);
@@ -86,8 +86,5 @@ export async function loadIdentity(): Promise<Identity | null> {
   };
 }
 
-// Panic wipe: destroy all keys immediately.
-// Caller must also clear MMKV, delete app files, and terminate the process.
-export async function panicWipe(): Promise<void> {
-  await EncryptedStorage.clear();
-}
+// The panic wipe is `wipeAllSecrets` in ./keychain, called directly by
+// utils/panic-wipe.ts. It walks the item registry, so it belongs beside it.

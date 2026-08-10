@@ -15,6 +15,7 @@
 
 import { hmac } from "@noble/hashes/hmac.js";
 import { sha256 } from "@noble/hashes/sha2.js";
+import { bytesToHex, hexToBytes } from "@noble/hashes/utils.js";
 import { noiseXOpen, noiseXSeal } from "../crypto/noise-x";
 import {
   Flags,
@@ -44,6 +45,12 @@ const VERIFIED_QUOTA = 2;
 
 // Spray-and-wait: initial copy budget per envelope.
 const INITIAL_COPIES = 4;
+
+// Hard ceiling on a decoded spray budget, matching bitchat's
+// CourierEnvelope.maxCopies. An envelope is unauthenticated input and `copies`
+// decides how many times a carrier re-emits it, so an unclamped byte let a
+// hostile sender claim 255 and turn the courier network into an amplifier.
+const MAX_COPIES = 8;
 
 // ---- Recipient tag -----------------------------------------------------------
 
@@ -168,7 +175,11 @@ export function decodeEnvelopePayload(
         if (len > 0 && len <= MAX_ENVELOPE_BYTES) ciphertext = value;
         break;
       case ENV_TLV_COPIES:
-        if (len === 1) copies = value[0];
+        // Clamped, exactly as bitchat clamps it in CourierEnvelope's
+        // initialiser. An envelope is unauthenticated input, and `copies` is a
+        // spray budget: accepting the raw byte let a hostile envelope claim 255
+        // and turn every carrier that picked it up into an amplifier.
+        if (len === 1) copies = Math.min(Math.max(value[0], 1), MAX_COPIES);
         break;
       case ENV_TLV_PREKEY_ID:
         if (len === 4)
@@ -199,6 +210,10 @@ interface StoredEnvelope {
   tier: CourierTier;
   copies: number;
   prekeyID?: number;
+  // Noise static keys (hex) this envelope has already been handed to, so a
+  // repeat announce from the same neighbour cannot spend budget on a copy they
+  // already hold. Per-entry, and it dies with the entry.
+  sprayedTo: Set<string>;
 }
 
 // ---- CourierStore -----------------------------------------------------------
@@ -248,7 +263,7 @@ export class CourierStore {
     // Check total pool cap.
     if (this.envelopes.length >= POOL_SIZE) {
       // Evict lowest-priority slot (verified-tier, then oldest).
-      const idx = this.findEvictionCandidate();
+      const idx = this.findEvictionCandidate(tier);
       if (idx < 0) return false; // pool full, all favorites
       this.envelopes.splice(idx, 1);
     }
@@ -262,6 +277,7 @@ export class CourierStore {
       tier,
       copies: env.copies,
       prekeyID: env.prekeyID,
+      sprayedTo: new Set(),
     });
     return true;
   }
@@ -288,11 +304,23 @@ export class CourierStore {
 
   // Spray: when meeting a courier-eligible peer, hand half the copy budget.
   // Returns packets to forward, decrementing the stored copies.
-  sprayTo(_peerNoisePub: Uint8Array): SealedEnvelope[] {
+  //
+  // The peer key is what makes this once-per-peer rather than once-per-announce.
+  // It was ignored, and announces arrive continuously, so the budget was spent
+  // on the same neighbour over and over: an envelope decayed 4 -> 2 -> 1 within
+  // a few announce cycles without ever reaching a new carrier, which is the
+  // opposite of what spray-and-wait is for. bitchat tracks the same thing in
+  // `sprayedTo` for the same stated reason.
+  sprayTo(peerNoisePub: Uint8Array): SealedEnvelope[] {
     const toSpray: SealedEnvelope[] = [];
+    const peerKey = bytesToHex(peerNoisePub);
 
     for (const e of this.envelopes) {
       if (e.copies < 2) continue;
+      // Already handed to this peer: they hold a copy, and giving them another
+      // costs budget that a peer who holds none should get.
+      if (e.sprayedTo.has(peerKey)) continue;
+      e.sprayedTo.add(peerKey);
       const half = Math.floor(e.copies / 2);
       e.copies -= half;
       toSpray.push({
@@ -319,6 +347,10 @@ export class CourierStore {
     recipientNoisePubKey: Uint8Array,
     senderPeerID: string,
     signingPrivKey: Uint8Array,
+    // The courier this envelope is addressed to. Envelopes are directed:
+    // receivers refuse anything not addressed to them, so a packet built
+    // without one is a shape production never emits and would itself reject.
+    courierPeerID: string,
     prekey?: { id: number; publicKey: Uint8Array },
   ): Packet {
     const sealTo = prekey?.publicKey ?? recipientNoisePubKey;
@@ -344,7 +376,7 @@ export class CourierStore {
       ttl: 7,
       flags: Flags.SIGNED,
       senderID: senderIDBytes,
-      recipientID: new Uint8Array(8), // broadcast
+      recipientID: hexToBytes(courierPeerID),
       timestamp: Date.now(),
       signature: new Uint8Array(64),
       payload: encodeEnvelopePayload(env),
@@ -377,22 +409,43 @@ export class CourierStore {
   }
 
   // Returns index of best eviction candidate: prefer verified-tier, then oldest.
-  private findEvictionCandidate(): number {
+  // Which envelope to drop to make room for `incoming`, or -1 to refuse it.
+  //
+  // Verified mail is evicted before favourite mail, oldest first. The tier of
+  // the INCOMING envelope matters too: a verified arrival may never displace a
+  // favourite, because that would let anyone who has merely announced push a
+  // contact's mail out of a full pool. bitchat states the same rule - evict a
+  // favourite only when the incoming envelope is itself a favourite, otherwise
+  // reject.
+  //
+  // This used to score tier and age together and always return an index for a
+  // non-empty pool, so the "pool full, all favourites" refusal at the call site
+  // was unreachable and a verified envelope did displace a favourite.
+  private findEvictionCandidate(incoming: CourierTier): number {
     let bestIdx = -1;
-    let bestScore = -1;
+    let bestAge = -1;
 
+    // First choice: the oldest verified envelope, whatever the arrival is.
     for (let i = 0; i < this.envelopes.length; i++) {
       const e = this.envelopes[i];
-      // Score: verified-tier (higher) + older (higher)
-      const tierScore = e.tier === "verified" ? 1000 : 0;
-      const ageScore = Date.now() - e.storedAt;
-      const score = tierScore + ageScore;
-      if (score > bestScore) {
-        bestScore = score;
+      if (e.tier !== "verified") continue;
+      const age = Date.now() - e.storedAt;
+      if (age > bestAge) {
+        bestAge = age;
         bestIdx = i;
       }
     }
+    if (bestIdx !== -1) return bestIdx;
 
+    // Nothing but favourites left. Only another favourite may take a slot.
+    if (incoming !== "favorite") return -1;
+    for (let i = 0; i < this.envelopes.length; i++) {
+      const age = Date.now() - this.envelopes[i].storedAt;
+      if (age > bestAge) {
+        bestAge = age;
+        bestIdx = i;
+      }
+    }
     return bestIdx;
   }
 }

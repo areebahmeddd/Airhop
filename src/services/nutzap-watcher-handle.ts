@@ -30,3 +30,34 @@ export function setNutzapWatcher(next: StopFn | null): void {
 export function stopNutzapWatcher(): void {
   setNutzapWatcher(null);
 }
+
+// How to build a watcher against whatever Nostr client is current.
+//
+// The watcher captures a NostrClient instance, and that instance does not
+// survive a transport rebuild: toggling Tor, or turning internet fallback off
+// and on, constructs a new client and leaves the old subscription pointing at a
+// closed pool. It was installed exactly once, at startup, so either toggle
+// silently ended NIP-61 for the rest of the session and incoming nutzaps
+// stopped being redeemed with nothing to say so.
+//
+// Registered by the startup path, which owns the wallet keys and the alert it
+// raises, and called by the mesh service after it builds a transport. The
+// indirection is what keeps mesh-service from importing the wallet layer.
+type RebindFn = () => void;
+
+let rebind: RebindFn | null = null;
+
+export function setNutzapRebinder(next: RebindFn | null): void {
+  rebind = next;
+}
+
+// Re-establish the watcher against the current client. A no-op before the
+// startup path has registered one, and after a panic wipe clears it.
+export function rebindNutzapWatcher(): void {
+  try {
+    rebind?.();
+  } catch {
+    // The wallet is locked, or there is no mint configured. Payments over the
+    // radio are unaffected; only the internet-side watcher is missing.
+  }
+}

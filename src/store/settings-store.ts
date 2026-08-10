@@ -62,16 +62,6 @@ interface SettingsState {
   // How many days an attachment survives on disk. Seven by default, matching
   // bitchat's sweep; see MEDIA_RETENTION_DAY_OPTIONS for why it is a choice.
   mediaRetentionDays: MediaRetentionDays;
-  // Whether the system keyboard may learn from what is typed in this app.
-  //
-  // On by default: autocorrect and predictions are what make a phone keyboard
-  // usable, and an app that is painful to type in does not get used in an
-  // emergency. Off disables autocorrect, autocapitalisation and spellcheck in
-  // the composer, which is the only lever an app has. The learning dictionary
-  // belongs to the OS and on iOS can sync through iCloud, so words typed here
-  // may outlive the message. Affects prose only: nicknames, geohashes and keys
-  // are machine input and have never had autocorrect.
-  keyboardLearning: boolean;
   // Whether this device acts as an internet gateway: relaying mesh-only peers'
   // geohash events to Nostr (toGateway carriers) and, in future, rebroadcasting
   // relay traffic to the mesh. Off by default, matching bitchat; enabling it
@@ -137,7 +127,6 @@ interface SettingsState {
   setHideNotificationPreviews: (hide: boolean) => void;
   setUploadQuality: (quality: UploadQuality) => void;
   setMediaRetentionDays: (days: MediaRetentionDays) => void;
-  setKeyboardLearning: (enabled: boolean) => void;
   setGatewayEnabled: (enabled: boolean) => void;
   setBridgeEnabled: (enabled: boolean) => void;
   setInternetEnabled: (enabled: boolean) => void;
@@ -165,7 +154,6 @@ const DEFAULTS = {
   hideNotificationPreviews: true,
   uploadQuality: "high",
   mediaRetentionDays: 7,
-  keyboardLearning: true,
   gatewayEnabled: false,
   bridgeEnabled: false,
   internetEnabled: true,
@@ -216,9 +204,6 @@ export const useSettingsStore = create<SettingsState>()(
       },
       setMediaRetentionDays(days) {
         set({ mediaRetentionDays: days });
-      },
-      setKeyboardLearning(enabled) {
-        set({ keyboardLearning: enabled });
       },
       setGatewayEnabled(enabled) {
         set({ gatewayEnabled: enabled });

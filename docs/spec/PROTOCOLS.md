@@ -109,7 +109,7 @@ Everything up to `VOICE_FRAME` matches bitchat `MessageType.swift` / `MessageTyp
 | `ANNOUNCE`           | `0x01` | Broadcast                    | Signed presence heartbeat. Payload is TLV-encoded (1-byte length): `0x01` nickname (UTF-8, 32 bytes max; normalized to Unicode NFC, see [section 3.5](#35-nicknames-are-canonicalized-not-just-carried)), `0x02` Noise pubkey (32B), `0x03` Ed25519 signing pubkey (32B), `0x04` direct neighbors (decoded, **never emitted by Airhop**, see [section 2](#2-packet-frame-layout)), `0x05` capability bits, `0x06` bridge rendezvous geohash, `0x07` Nostr secp256k1 pubkey (Airhop extension). Receive rules: signature mandatory, `senderID` must equal `SHA-256(noisePubKey)[0:16]`, timestamp bounded to ±15 min. |
 | `CHANNEL_MSG`        | `0x02` | Broadcast                    | Public channel message. Plaintext + signed. Payload is the message text as bare UTF-8 and nothing else, byte-identical to bitchat. Carries **only** `#bluetooth`, the one public mesh room; every other public channel uses `0x51`. See [section 3.7](#37-public-channel-messages).                                                                                                                                                                                                                                                                                                                                  |
 | `LEAVE`              | `0x03` | Broadcast                    | Peer departing notification. Signature mandatory, checked against the pinned signing key **before** the relay decision, so an unverifiable leave is neither acted on nor forwarded. A verified one also retires the sender's Noise session. See [section 3.6](#36-leave-is-verified-before-it-is-relayed).                                                                                                                                                                                                                                                                                                           |
-| `COURIER_ENV`        | `0x04` | Broadcast                    | Store-and-forward sealed envelope. Noise X encrypted. TLV format (see [section 6](#6-store-and-forward-courier-constants)).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| `COURIER_ENV`        | `0x04` | Directed                     | Store-and-forward sealed envelope. Noise X encrypted. TLV format (see [section 6](#6-store-and-forward-courier-constants)).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
 | `NOISE_HANDSHAKE`    | `0x10` | Unicast                      | Noise XX handshake message (initiator msg1 / responder msg2 / initiator msg3). recipientID set.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
 | `NOISE_ENCRYPTED`    | `0x11` | Unicast                      | Post-handshake encrypted payload: DM text, receipts, group invites (`0x06`/`0x07`), live voice (`0x08`), private media (`0x20`), authenticated peer state (`0x21`). recipientID set. HAS_RECIPIENT flag set. See [section 3.3](#33-noise-inner-payload-types).                                                                                                                                                                                                                                                                                                                                                       |
 | `DR_ENCRYPTED`       | `0x12` | Unicast                      | Double Ratchet encrypted DM (per-message forward secrecy beyond Noise transport). Airhop-to-Airhop only; bitchat relays it without interpreting it. (Airhop extension)                                                                                                                                                                                                                                                                                                                                                                                                                                               |
@@ -476,15 +476,41 @@ Every other type is deliberately absent from both implementations. Courier envel
 
 ## 6. Store-and-Forward (Courier) Constants
 
-| Constant                          | Value          | Notes                                     |
-| --------------------------------- | -------------- | ----------------------------------------- |
-| Courier pool size                 | `40 envelopes` | Max carried per device                    |
-| Verified-tier sub-cap             | `20 envelopes` | Verified mail cannot crowd out favorites  |
-| Envelope TTL                      | `24 hours`     | Stamped by the sender, dropped after      |
-| Expiry slack accepted             | `1 hour`       | Clock skew only; longer expiries rejected |
-| Per-envelope size cap             | `16 KiB`       | Text only; media not couriered            |
-| Per-peer deposit quota (favorite) | `5 envelopes`  | Trust tier: favorite                      |
-| Per-peer deposit quota (verified) | `2 envelopes`  | Trust tier: verified/known                |
+| Constant                          | Value          | Notes                                                          |
+| --------------------------------- | -------------- | -------------------------------------------------------------- |
+| Courier pool size                 | `40 envelopes` | Max carried per device                                         |
+| Verified-tier sub-cap             | `20 envelopes` | Verified mail cannot crowd out favorites                       |
+| Envelope TTL                      | `24 hours`     | Stamped by the sender, dropped after                           |
+| Expiry slack accepted             | `1 hour`       | Clock skew only; longer expiries rejected                      |
+| Per-envelope size cap             | `16 KiB`       | Ciphertext ceiling; the plaintext below caps content far lower |
+| Per-peer deposit quota (favorite) | `5 envelopes`  | Trust tier: favorite                                           |
+| Per-peer deposit quota (verified) | `2 envelopes`  | Trust tier: verified/known                                     |
+
+### What the envelope carries
+
+The sealed plaintext is a **typed Noise payload**, not raw text, and this is a
+compatibility requirement rather than a preference: bitchat refuses any courier
+envelope whose plaintext is not a private message, so a raw-text envelope is
+carried by the mesh and then dropped by its recipient.
+
+```
+plaintext = 0x01 || PrivateMessagePacket
+PrivateMessagePacket = 0x00 || len(messageID) || messageID
+                       0x01 || len(content)   || content
+```
+
+`0x01` is `NoisePayloadType.privateMessage`. Both TLV lengths are one byte, so
+**messageID and content are each capped at 255 bytes** (UTF-8 bytes, not
+characters) on all three implementations, and all three return nothing rather
+than truncating. A message too long to encode has no courier representation
+anywhere and stays in the sender's outbox instead.
+
+The message ID is what makes the rest work. Spray-and-wait deliberately puts
+several copies on the mesh, each resealed by its carrier, so no envelope-derived
+identity can collapse them; the recipient dedupes on the sender's ID, and can
+acknowledge the message because it has one to name.
+
+`courier-plaintext.test.ts` pins these bytes.
 
 A carrier judges an envelope by its own limits, not the sender's. An expiry
 beyond `TTL + slack` is refused outright rather than clamped, so a sender that

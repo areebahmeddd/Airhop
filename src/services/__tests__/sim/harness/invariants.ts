@@ -233,7 +233,21 @@ export class StatusWatcher {
           if (rank === undefined) continue;
           const id = `${d.id}|${m.id}`;
           const prev = this.best.get(id);
-          if (prev !== undefined && rank < prev.rank) {
+          // A give-up is not the state running backwards, it is the sender
+          // finally admitting the message is not going.
+          //
+          // The outbox drops a message once it is past its TTL or its attempt
+          // budget, and the bubble has to stop showing an hourglass over
+          // something already discarded. That is queued/sent/carried -> failed,
+          // which is a rank DECREASE and used to be impossible only because the
+          // chat store silently refused it. What must still never happen is a
+          // give-up contradicting a receipt: delivered or read means it arrived,
+          // and no amount of local retrying changes that.
+          const isGiveUp =
+            m.status === "failed" &&
+            prev !== undefined &&
+            prev.rank <= STATUS_RANK.queued;
+          if (prev !== undefined && rank < prev.rank && !isGiveUp) {
             this.findings.push({
               invariant: "monotonic-delivery-state",
               detail: `${d.id} message ${m.id} went ${prev.status} -> ${m.status}`,

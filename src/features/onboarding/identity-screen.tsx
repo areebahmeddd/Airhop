@@ -54,7 +54,7 @@ export default function IdentityScreen({
     ).start();
 
     // Generate and persist real Ed25519 + X25519 key pairs.
-    // Falls back to a time-based stub only if EncryptedStorage is unavailable
+    // Falls back to a time-based stub only if the keychain is unavailable
     // (e.g., the Android emulator without a secure hardware backend).
     //
     // Keygen + storage write typically finish in well under MIN_DISPLAY_MS, so

@@ -163,11 +163,13 @@ const EGG_TAPS = 5;
 // Component
 // ---------------------------------------------------------------------------
 
-export default function RadarView({
-  peers,
-  now,
-  onSelectPeer,
-}: Props): React.JSX.Element {
+// Memoised, because its props are now stable.
+//
+// The radar re-buckets every peer into rings and re-lays out every dot on each
+// render. peer-list passes a memoised `peers` array and a `now` that ticks once
+// a second, so without this the radar redid all of that whenever anything else
+// on the screen changed.
+function RadarView({ peers, now, onSelectPeer }: Props): React.JSX.Element {
   const T = useT();
   const TP = useTPlural();
   const Colors = useThemeColors();
@@ -632,6 +634,8 @@ function PeerNode({
     </Pressable>
   );
 }
+
+export default React.memo(RadarView);
 
 // ---------------------------------------------------------------------------
 // Styles

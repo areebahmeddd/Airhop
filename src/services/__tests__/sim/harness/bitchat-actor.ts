@@ -758,14 +758,19 @@ function joinChunks(parts: Uint8Array[]): Uint8Array {
 }
 
 // The courier envelope TLV carries an expiry as a u64 millisecond timestamp
-// under tag 0x03 (see courier-store.ts). Returns null when absent.
+// under tag 0x02 (see courier-store.ts; 0x03 is the ciphertext).
+//
+// This read 0x03 and additionally required an 8-byte length, so it matched
+// nothing and always returned null: onCourierEnvelope returned early every
+// time, and the "bitchat refuses an over-long expiry" conformance check was
+// dead code that nothing asserted either. Returns null when absent.
 function readCourierExpiryMs(payload: Uint8Array): number | null {
   let o = 0;
   while (o + 3 <= payload.length) {
     const tag = payload[o];
     const len = (payload[o + 1] << 8) | payload[o + 2];
     const value = payload.subarray(o + 3, o + 3 + len);
-    if (tag === 0x03 && len === 8) {
+    if (tag === 0x02 && len === 8) {
       const view = new DataView(
         value.buffer,
         value.byteOffset,

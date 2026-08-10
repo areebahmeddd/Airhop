@@ -34,7 +34,7 @@ You must read these four documents before making any code suggestions:
 
 - Swift lives in `ios/`. Kotlin lives in `android/`. They expose **raw bytes** to TypeScript.
 - **No protocol logic in native code.** No routing decisions. No crypto in Swift or Kotlin.
-- The only native modules are `AirhopBLEModule` (Swift + Kotlin) and `AirhopForegroundService` (Kotlin).
+- Native modules: `AirhopBLEModule` and `AirhopVoiceModule` (Swift + Kotlin), `AirhopForegroundService` and `AirhopWiFiModule` (Kotlin), `AirhopTorModule` and `AirhopTorSocket` (Swift).
 
 ### Build Order
 
@@ -68,7 +68,10 @@ rather than drifting quietly, so a change to either has to be deliberate.
 
 ### Storage
 
-- Private keys: `react-native-encrypted-storage` only (iOS Keychain / Android Keystore)
+- Private keys: `src/core/crypto/keychain.ts` only, never `expo-secure-store`
+  directly. It holds the registry the panic wipe deletes (SecureStore has no
+  clear-all), so a secret written outside it survives a wipe. Add new ones to
+  `KEYCHAIN_ITEMS`.
 - Non-secret state: `react-native-mmkv` (JSI, synchronous)
 - Never store private keys in MMKV, AsyncStorage, SQLite, or filesystem
 
@@ -125,13 +128,13 @@ Skills are reference files in `.github/skills/`. Read the relevant one before wo
 
 ## Common Mistakes to Avoid
 
-| Mistake                                     | Correct approach                                             |
-| ------------------------------------------- | ------------------------------------------------------------ |
-| Using `Math.random()` for nonces            | Use `@noble/hashes` HKDF or `crypto.getRandomValues`         |
-| Storing keys in Zustand store               | Zustand is MMKV-persisted; use `EncryptedStorage` for keys   |
-| Writing routing logic in Swift/Kotlin       | Routing lives in `src/core/mesh/flood-router.ts`             |
-| Creating a new native module for BLE        | Extend `AirhopBLEModule`; one module only                    |
-| Hardcoding a relay URL                      | Load from `assets/data/relays.csv` via `GeoRelayDirectory`   |
-| Writing a user-facing string inline         | Add a key to `src/i18n/locales/en.ts` and use `T("key")`     |
-| Using `marginLeft` / `left` in a stylesheet | Use `marginStart` / `start`, so right-to-left flips          |
-| Changing packet byte layout "to fix a bug"  | Understand the wire format in `docs/spec/PROTOCOLS.md` first |
+| Mistake                                     | Correct approach                                                 |
+| ------------------------------------------- | ---------------------------------------------------------------- |
+| Using `Math.random()` for nonces            | Use `@noble/hashes` HKDF or `crypto.getRandomValues`             |
+| Storing keys in Zustand store               | Zustand is MMKV-persisted; use `core/crypto/keychain` for keys   |
+| Writing routing logic in Swift/Kotlin       | Routing lives in `src/core/mesh/flood-router.ts`                 |
+| Creating a new native module for BLE        | Extend `AirhopBLEModule`; one module only                        |
+| Hardcoding a relay URL                      | Load from `assets/data/nostr_relays.csv` via `GeoRelayDirectory` |
+| Writing a user-facing string inline         | Add a key to `src/i18n/locales/en.ts` and use `T("key")`         |
+| Using `marginLeft` / `left` in a stylesheet | Use `marginStart` / `start`, so right-to-left flips              |
+| Changing packet byte layout "to fix a bug"  | Understand the wire format in `docs/spec/PROTOCOLS.md` first     |

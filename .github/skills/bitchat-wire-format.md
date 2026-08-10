@@ -83,7 +83,7 @@ risk; two projects assigning meaning to the same number is.
 | `ANNOUNCE`           | `0x01` | Broadcast         | Signed presence heartbeat; TLV payload                               |
 | `CHANNEL_MSG`        | `0x02` | Broadcast         | Public channel message                                               |
 | `LEAVE`              | `0x03` | Broadcast         | Peer departing                                                       |
-| `COURIER_ENV`        | `0x04` | Broadcast         | Store-and-forward sealed envelope                                    |
+| `COURIER_ENV`        | `0x04` | Directed          | Store-and-forward sealed envelope                                    |
 | `NOISE_HANDSHAKE`    | `0x10` | Unicast           | Noise XX handshake message                                           |
 | `NOISE_ENCRYPTED`    | `0x11` | Unicast           | Post-handshake payload (DM, receipts, group state)                   |
 | `DR_ENCRYPTED`       | `0x12` | Unicast           | Double Ratchet DM (Airhop extension)                                 |

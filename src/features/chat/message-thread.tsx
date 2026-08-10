@@ -42,12 +42,14 @@ import {
   type NativeScrollEvent,
   type NativeSyntheticEvent,
 } from "react-native";
+import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Animated, {
   Easing,
   useAnimatedStyle,
   useSharedValue,
   withTiming,
 } from "react-native-reanimated";
+import { scheduleOnRN } from "react-native-worklets";
 import {
   MAX_BITCHAT_TRANSFER_BYTES,
   MAX_VIDEO_SECONDS,
@@ -63,14 +65,16 @@ import {
   type EmbeddedToken,
 } from "../../core/payments/cashu";
 import { t, useT, useTPlural, type TranslationKey } from "../../i18n";
-import { chevronBack, textAlignEnd } from "../../i18n/layout";
+import { chevronBack, isRTLLayout, textAlignEnd } from "../../i18n/layout";
 import {
   setAudioForPlayback,
   setAudioForRecording,
 } from "../../services/audio-session";
 import { reportWalletError } from "../../services/ecash-transfer";
 import {
+  adoptIntoAttachmentCache,
   AttachmentTooLargeError,
+  CACHE_FILE_PREFIX,
   sizeLabel,
 } from "../../services/file-transfer-service";
 import {
@@ -108,9 +112,9 @@ import {
 import { useWalletStore } from "../../store/wallet-store";
 import Avatar from "../../ui/components/avatar";
 import BottomSheet from "../../ui/components/bottom-sheet";
-import PrivacyCover from "../../ui/components/privacy-cover";
 import Toast from "../../ui/components/toast";
 import {
+  Duration,
   FontFamily,
   FontSize,
   FontWeight,
@@ -295,6 +299,15 @@ const TRANSFER_CARD_LIMIT = 2;
 // this only changes when peers arrive or leave, and the answer drives an icon,
 // not a decision.
 const LIVE_AVAILABILITY_POLL_MS = 3000;
+
+// How far the finger travels toward the start of the compose row before letting
+// go discards the hold instead of sending it. Sized to the hint text: past the
+// drift of a hand held up to speak, within one flick of a thumb already there.
+const CANCEL_SLIDE_DISTANCE = 110;
+
+// Where it disarms again. Hysteresis: a single threshold flips state every time
+// a resting thumb drifts across it, and each flip is a haptic and a re-render.
+const CANCEL_SLIDE_DISARM = 70;
 
 // A burst shorter than this is a mis-tap, not a message. Nothing is kept for
 // it: the room may have heard a click, and a quarter-second bubble in the
@@ -1449,6 +1462,23 @@ export default function MessageThread({
   // these after awaits, where a render-old closure would lie to them.
   const holdSeqRef = useRef(0);
   const liveHoldRef = useRef(false);
+  // How far the finger has slid back from the mic, 0 to CANCEL_SLIDE_DISTANCE.
+  // A shared value, not state: it moves every frame of the drag and must not
+  // re-render a thread of hundreds of bubbles.
+  const cancelSlide = useSharedValue(0);
+  // Whether letting go now cancels. Decided on the UI thread beside the travel
+  // it derives from; the React copy is for the hint's text, glyph and colour and
+  // flips at most twice per hold.
+  const cancelArmedShared = useSharedValue(false);
+  const [cancelArmed, setCancelArmed] = useState(false);
+  // Whether the recording was started by tap ("Voice note" in the attach sheet,
+  // or the accessibility toggle) rather than by holding the mic.
+  //
+  // Decides what the recording bar offers. On a hold, a finger is on the mic and
+  // nothing in the bar is reachable: lifting to reach a button IS the release,
+  // which sends. That is why its X appeared to discard and sent instead. Started
+  // by tap there is no held finger, so the bar's own controls are the way out.
+  const [handsFreeRecording, setHandsFreeRecording] = useState(false);
   const liveVoiceEnabled = useSettingsStore((s) => s.liveVoiceEnabled);
   const isRecording = recorderState.isRecording;
   // Voice recording
@@ -1471,7 +1501,6 @@ export default function MessageThread({
   const autoDownloadMedia = useSettingsStore((s) => s.autoDownloadMedia);
   const bridgeEnabled = useSettingsStore((s) => s.bridgeEnabled);
   const undoSendSeconds = useSettingsStore((s) => s.undoSendSeconds);
-  const keyboardLearning = useSettingsStore((s) => s.keyboardLearning);
   const [showAttachMenu, setShowAttachMenu] = useState(false);
   const [showSendEcash, setShowSendEcash] = useState(false);
   // Raw string of the token currently being claimed, so its button can show
@@ -1500,7 +1529,10 @@ export default function MessageThread({
       () => {},
     );
     setSenderKeyCopied(true);
-    setTimeout(() => setSenderKeyCopied(false), 1500);
+    // Reffed and cleared on unmount, like every other timer in this file. A bare
+    // setTimeout here fires setState against a thread the user has already left.
+    if (copiedTimer.current) clearTimeout(copiedTimer.current);
+    copiedTimer.current = setTimeout(() => setSenderKeyCopied(false), 1500);
   }
   // Channel members list: currently-reachable peers, tap one to open the
   // same profile sheet as tapping their avatar on a message.
@@ -1520,7 +1552,13 @@ export default function MessageThread({
   // message has not arrived and belongs above the compose bar; this confirms
   // something the user just did and has to show up wherever they did it,
   // including over the full-screen photo viewer.
-  const [toast, setToast] = useState<string | null>(null);
+  //
+  // The glyph travels with the line. The pill defaults to a tick, so "Not saved"
+  // and "Can't open file" went out under a checkmark.
+  const [toast, setToast] = useState<{
+    message: string;
+    icon: React.ComponentProps<typeof Feather>["name"];
+  } | null>(null);
   const dmStatusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const listRef = useRef<FlatList<ChatMessage>>(null);
   // Long-press action sheet target.
@@ -1547,19 +1585,22 @@ export default function MessageThread({
   // truth rather than a flag that can disagree with the set.
   const [pickedIds, setPickedIds] = useState<Set<string>>(new Set());
   const [showBulkForward, setShowBulkForward] = useState(false);
-  // Set right after scrolling to a search result, cleared after a brief
-  // flash. Not persisted (unlike isStarred), purely a transient UI cue.
+  // Set right after scrolling to a search result, cleared after a brief flash.
+  // Purely a transient UI cue: nothing about it is persisted.
   const [highlightedMessageId, setHighlightedMessageId] = useState<
     string | null
   >(null);
   const highlightTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const prevScrollTrigger = useRef(targetMessageTrigger ?? 0);
+  // Clears the "copied" pill on the sender-key row.
+  const copiedTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Clean up recording timer, DM status timer, and any active sound on unmount.
   useEffect(() => {
     return () => {
       if (recordingTimerRef.current) clearInterval(recordingTimerRef.current);
       if (dmStatusTimerRef.current) clearTimeout(dmStatusTimerRef.current);
+      if (copiedTimer.current) clearTimeout(copiedTimer.current);
       void audioRecorder.stop().catch(() => {});
     };
   }, [audioRecorder]);
@@ -2255,7 +2296,11 @@ export default function MessageThread({
         void handleDocumentAttach();
         break;
       case "voice":
-        void startRecording();
+        // Started by tap, so the recording bar keeps its own cancel and send
+        // buttons: there is no held finger for slide-to-cancel to work with.
+        void startRecording().then((started) => {
+          if (started) setHandsFreeRecording(true);
+        });
         break;
       case "ecash":
         setShowSendEcash(true);
@@ -2767,9 +2812,11 @@ export default function MessageThread({
     durationMs: number,
   ): Promise<void> {
     try {
+      // Written straight into the attachment cache, under the prefix a recorded
+      // note is adopted into, so both are swept and cleared alike.
       const file = new FileSystem.File(
         FileSystem.Paths.cache,
-        `airhop_${String(Date.now())}_voice.aac`,
+        `${CACHE_FILE_PREFIX}${String(Date.now())}_voice.aac`,
       );
       file.create({ overwrite: true, intermediates: true });
       file.write(bytes);
@@ -2785,7 +2832,41 @@ export default function MessageThread({
     }
   }
 
+  // The recording bar's elapsed-seconds ticker, restarted rather than stacked.
+  // Two mic paths used to assign the interval straight into the ref, so starting
+  // a hold during a hands-free recording orphaned the first one for the life of
+  // the screen and counted up at double speed.
+  function startRecordingTimer(): void {
+    if (recordingTimerRef.current) clearInterval(recordingTimerRef.current);
+    setRecordingSecs(0);
+    recordingTimerRef.current = setInterval(() => {
+      setRecordingSecs((s) => s + 1);
+    }, 1000);
+  }
+
+  function stopRecordingTimer(): void {
+    if (recordingTimerRef.current) {
+      clearInterval(recordingTimerRef.current);
+      recordingTimerRef.current = null;
+    }
+    setRecordingSecs(0);
+  }
+
+  // Return the audio session to playback. Every path that closes the microphone
+  // must end here.
+  //
+  // Live voice opens the mic through the native module, not expo-audio, so on
+  // iOS the session sits in `.playAndRecord` and expo-audio does not know. Left
+  // there, every later playback routes to the earpiece and reads as a broken
+  // play button. Three paths skipped it: backgrounding mid-burst, leaving the
+  // thread mid-burst, and capture dying - all unwatched, so the symptom
+  // surfaced later on an unrelated message.
+  async function releaseAudioSession(): Promise<void> {
+    await setAudioForPlayback().catch(() => {});
+  }
+
   async function handleTalkStart(): Promise<void> {
+    setHandsFreeRecording(false);
     // Opening the mic is not instant: a permission prompt can sit on screen for
     // seconds, and the audio session itself takes a moment. A finger can be
     // long gone by the time either finishes, so every press takes a number and
@@ -2798,7 +2879,7 @@ export default function MessageThread({
     const service = getMeshService();
     const canGoLive = service?.canSendLiveVoice(channel) === true;
     if (!canGoLive) {
-      await startRecording();
+      await startRecording(hold);
       return;
     }
     const granted = await ensurePermission(
@@ -2820,12 +2901,16 @@ export default function MessageThread({
       liveHoldRef.current = false;
       setIsTalkingLive(false);
       setIsPTTActive(false);
-      setToast(t("chat.perm.recording_stopped"));
+      void releaseAudioSession();
+      setToast({ message: t("chat.perm.recording_stopped"), icon: "mic-off" });
     });
     if (hold !== holdSeqRef.current) {
       // Released while the mic was opening. Close it now rather than leaving a
       // burst running that nobody is holding.
-      if (live) await service.stopVoiceBurst();
+      if (live) {
+        await service.stopVoiceBurst();
+        await releaseAudioSession();
+      }
       return;
     }
     if (live) {
@@ -2836,15 +2921,12 @@ export default function MessageThread({
       // finalizes into a voice note. A recorded note is composing and follows
       // the same rule as text, moving the view only on send.
       jumpToLatest();
-      setRecordingSecs(0);
-      recordingTimerRef.current = setInterval(() => {
-        setRecordingSecs((s) => s + 1);
-      }, 1000);
+      startRecordingTimer();
       return;
     }
     // Live was offered and could not start. Fall back rather than dropping the
     // press: the user held the button and expects to have said something.
-    await startRecording();
+    await startRecording(hold);
   }
 
   async function handleTalkEnd(): Promise<void> {
@@ -2861,15 +2943,9 @@ export default function MessageThread({
     }
     liveHoldRef.current = false;
     setIsTalkingLive(false);
-    if (recordingTimerRef.current) {
-      clearInterval(recordingTimerRef.current);
-      recordingTimerRef.current = null;
-    }
-    setRecordingSecs(0);
+    stopRecordingTimer();
     const finalized = await getMeshService()?.stopVoiceBurst();
-    // Live voice opens the microphone through the native module, so
-    // expo-audio's idea of the session is stale by the time this returns.
-    await setAudioForPlayback().catch(() => {});
+    await releaseAudioSession();
     // The same audio, now as an ordinary voice note. People in range heard it
     // live; this is what reaches anyone who was not, and what stays in the
     // thread afterwards. It rides the existing attachment path, so it is a
@@ -2880,6 +2956,133 @@ export default function MessageThread({
       await sendLiveBurstAsNote(finalized.bytes, finalized.durationMs);
     }
   }
+
+  // Released past the slide threshold: discard the hold instead of sending it.
+  //
+  // A recorded note never left the device, so the discard is complete. A live
+  // burst already played in range: CANCELED drops what receivers buffered and
+  // removes the bubble, and the note for out-of-range peers is never written.
+  // The bar states which case is running before the finger lifts.
+  async function handleTalkCancel(): Promise<void> {
+    // Same invalidation as handleTalkEnd, so a burst still opening its mic
+    // closes itself instead of running on unheld.
+    holdSeqRef.current += 1;
+    setIsPTTActive(false);
+    if (!liveHoldRef.current) {
+      await cancelRecording();
+      return;
+    }
+    liveHoldRef.current = false;
+    setIsTalkingLive(false);
+    stopRecordingTimer();
+    await getMeshService()?.cancelVoiceBurst();
+    await releaseAudioSession();
+  }
+
+  // The handlers are re-declared every render (they close over the channel and
+  // the send path), and a gesture rebuilt mid-hold would drop the finger already
+  // on it. The gesture is built once and reaches them through this.
+  const talkRef = useRef({
+    start: handleTalkStart,
+    end: handleTalkEnd,
+    cancel: handleTalkCancel,
+  });
+  useEffect(() => {
+    talkRef.current = {
+      start: handleTalkStart,
+      end: handleTalkEnd,
+      cancel: handleTalkCancel,
+    };
+  });
+
+  // The three moments the gesture hands back to React. Stable identities, so
+  // the gesture below is built once.
+  //
+  // Push-to-talk is used without looking at it, so each carries a haptic:
+  // medium on open (the mic is live), rigid at the cancel threshold (releasing
+  // now does something different), light on close.
+  const beginTalk = useCallback((): void => {
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(
+      () => {},
+    );
+    void talkRef.current.start();
+  }, []);
+
+  const reportCancelArmed = useCallback((armed: boolean): void => {
+    setCancelArmed(armed);
+    void Haptics.impactAsync(
+      armed
+        ? Haptics.ImpactFeedbackStyle.Rigid
+        : Haptics.ImpactFeedbackStyle.Light,
+    ).catch(() => {});
+  }, []);
+
+  const finishTalk = useCallback((cancelled: boolean): void => {
+    setCancelArmed(false);
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+    void (cancelled ? talkRef.current.cancel() : talkRef.current.end());
+  }, []);
+
+  // Hold the mic to talk, slide back to cancel.
+  //
+  // A Pan with no minimum distance: a press that also reports movement.
+  // `onBegin` fires as the finger lands; `onFinalize` fires on every ending
+  // there is - release, system cancellation, an incoming call - which is what
+  // stops a live microphone outliving the touch that opened it.
+  //
+  // The callbacks are worklets, so the button tracks the finger on the UI thread
+  // and crosses to JS three times per hold. During a live burst the JS thread is
+  // packetizing and signing audio frames several times a second, and a drag
+  // paced by it would stutter in exactly the case this serves.
+  const talkGesture = useMemo(
+    () =>
+      Gesture.Pan()
+        .minDistance(0)
+        // A cancel takes the finger off the button immediately; the hold has to
+        // survive that.
+        .shouldCancelWhenOutside(false)
+        .onBegin(() => {
+          cancelSlide.value = 0;
+          cancelArmedShared.value = false;
+          scheduleOnRN(beginTalk);
+        })
+        .onUpdate((e) => {
+          // Toward the start of the row, whichever side that is under RTL.
+          const travel = isRTLLayout ? e.translationX : -e.translationX;
+          const slid = Math.min(Math.max(travel, 0), CANCEL_SLIDE_DISTANCE);
+          cancelSlide.value = slid;
+          // Arming takes the full distance, disarming needs most of the way
+          // back. See CANCEL_SLIDE_DISARM.
+          const armed = cancelArmedShared.value
+            ? slid > CANCEL_SLIDE_DISARM
+            : slid >= CANCEL_SLIDE_DISTANCE;
+          if (armed === cancelArmedShared.value) return;
+          cancelArmedShared.value = armed;
+          scheduleOnRN(reportCancelArmed, armed);
+        })
+        .onFinalize(() => {
+          const cancelled = cancelArmedShared.value;
+          cancelArmedShared.value = false;
+          cancelSlide.value = withTiming(0, { duration: Duration.base });
+          scheduleOnRN(finishTalk, cancelled);
+        }),
+    [cancelSlide, cancelArmedShared, beginTalk, reportCancelArmed, finishTalk],
+  );
+
+  // The button follows the finger, so the slide reads as dragging the recording
+  // away rather than as missing the button. It also shrinks, which is the same
+  // progress again for a thumb covering the hint text.
+  const micSlideStyle = useAnimatedStyle(() => ({
+    transform: [
+      { translateX: (isRTLLayout ? 1 : -1) * cancelSlide.value },
+      { scale: 1 - 0.15 * (cancelSlide.value / CANCEL_SLIDE_DISTANCE) },
+    ],
+  }));
+
+  // The hint fades as the mic closes on it; the armed copy replaces it.
+  const cancelHintStyle = useAnimatedStyle(() => ({
+    opacity: 1 - 0.5 * (cancelSlide.value / CANCEL_SLIDE_DISTANCE),
+  }));
 
   // Who is talking right now, resolved to display names for the receiving pill
   // and the mic button ring. The whole list, not just the first: a mesh has no
@@ -2947,21 +3150,35 @@ export default function MessageThread({
     setIsTalkingLive(false);
     setIsPTTActive(false);
     void getMeshService()?.stopVoiceBurst();
+    void releaseAudioSession();
   }, [appActive]);
 
   useEffect(
     () => () => {
-      // Unmount: the thread is gone, so there is nobody to finalize a note for.
-      // End the burst anyway rather than leaving a live microphone behind.
+      // Unmount: nobody left to finalize a note for, but end the burst rather
+      // than leave a live microphone behind, and return the session or the next
+      // voice note anywhere in the app plays through the earpiece.
       if (liveHoldRef.current) {
         liveHoldRef.current = false;
         void getMeshService()?.stopVoiceBurst();
+        void setAudioForPlayback().catch(() => {});
       }
     },
     [],
   );
 
-  async function startRecording(): Promise<void> {
+  // Returns whether the microphone opened. The hands-free callers gate
+  // `handsFreeRecording` on it, so a denied permission cannot leave the flag on
+  // describing a bar that is not on screen.
+  //
+  // `hold` is the press this belongs to; everything after an await is checked
+  // against it. Opening the mic is not instant (a permission prompt can sit for
+  // seconds), so a quick tap released first used to start recording unheld,
+  // leaving a bar only another full hold could dismiss. Same rule the live path
+  // has always had. Omitted by hands-free callers, which have no release to race.
+  async function startRecording(hold?: number): Promise<boolean> {
+    const stillHeld = (): boolean =>
+      hold === undefined || hold === holdSeqRef.current;
     const granted = await ensurePermission(
       () => AudioModule.getRecordingPermissionsAsync(),
       () => AudioModule.requestRecordingPermissionsAsync(),
@@ -2970,36 +3187,52 @@ export default function MessageThread({
         purpose: t("chat.perm.mic_note_purpose"),
       },
     );
-    if (!granted) return;
+    if (!granted || !stillHeld()) return false;
     await setAudioForRecording();
     try {
       await audioRecorder.prepareToRecordAsync();
+      // Re-checked before the call that opens the mic: preparing is the slow
+      // half on both platforms.
+      if (!stillHeld()) {
+        await releaseAudioSession();
+        return false;
+      }
       audioRecorder.record();
-      setRecordingSecs(0);
-      recordingTimerRef.current = setInterval(() => {
-        setRecordingSecs((s) => s + 1);
-      }, 1000);
+      startRecordingTimer();
+      return true;
     } catch {
       // Hand the session back before bailing out. Leaving allowsRecording on
       // keeps iOS in play-and-record, which routes playback to the earpiece:
       // one failed recording and every voice note afterwards sounds broken,
       // with nothing on screen to explain why.
-      await setAudioForPlayback().catch(() => {});
+      await releaseAudioSession();
       showAlert(T("chat.thread.error"), t("chat.perm.record_failed"));
+      return false;
     }
   }
 
   async function stopRecording(): Promise<void> {
-    if (recordingTimerRef.current) {
-      clearInterval(recordingTimerRef.current);
-      recordingTimerRef.current = null;
-    }
+    setHandsFreeRecording(false);
     const duration = recordingSecs;
-    setRecordingSecs(0);
+    stopRecordingTimer();
     try {
       await audioRecorder.stop();
-      const uri = audioRecorder.uri;
-      if (!uri) return;
+      const recorded = audioRecorder.uri;
+      if (!recorded) {
+        // The recorder produced nothing. Say so: the bar closes either way, and
+        // a hold-to-record that silently vanishes reads as the message having
+        // been sent. The start path already alerts on failure; this is the other
+        // half of the same feature.
+        setToast({ message: t("chat.voice.not_recorded"), icon: "mic-off" });
+        return;
+      }
+      // expo-audio writes to a directory of its own, outside the attachment
+      // cache: a note left there escapes the retention sweep, the Storage total
+      // and Clear cache. Photos already go through this.
+      const uri = await adoptIntoAttachmentCache(
+        recorded,
+        wireMediaName("voice", "m4a"),
+      );
       // audio/mp4 is bitchat's name for AAC-in-MP4, which is what the recorder
       // produces. The old "audio/x-m4a" is not on either client's allow-list,
       // so every voice note was refused on arrival while looking sent here.
@@ -3011,22 +3244,20 @@ export default function MessageThread({
         duration * 1000,
       );
     } catch {
-      // Discard on error.
+      // Same reasoning as the empty-recording branch above: never fail mute.
+      setToast({ message: t("chat.voice.not_recorded"), icon: "mic-off" });
     } finally {
       // Always, even if stop() threw: an audio session left in record mode
       // sends every later playback to the earpiece instead of the speaker.
-      await setAudioForPlayback().catch(() => {});
+      await releaseAudioSession();
     }
   }
 
   async function cancelRecording(): Promise<void> {
-    if (recordingTimerRef.current) {
-      clearInterval(recordingTimerRef.current);
-      recordingTimerRef.current = null;
-    }
-    setRecordingSecs(0);
+    setHandsFreeRecording(false);
+    stopRecordingTimer();
     await audioRecorder.stop().catch(() => {});
-    await setAudioForPlayback().catch(() => {});
+    await releaseAudioSession();
   }
 
   function handleInvite(): void {
@@ -3207,16 +3438,25 @@ export default function MessageThread({
     );
     if (!granted) return;
     try {
-      await MediaLibrary.saveToLibraryAsync(attachment.uri);
-      setToast(
-        attachment.type === "video"
-          ? t("chat.media.saved_videos")
-          : t("chat.media.saved_photos"),
-      );
+      // Asset.create, not saveToLibraryAsync.
+      //
+      // The old call is not merely deprecated in expo-media-library 57: the
+      // exported symbol is a stub that throws unconditionally. Both call sites
+      // were wrapped in a try/catch, so the failure was invisible - the app
+      // asked for photo permission, the user granted it, and Save always
+      // reported "not saved". The feature had been dead since the SDK bump.
+      await MediaLibrary.Asset.create(attachment.uri);
+      setToast({
+        message:
+          attachment.type === "video"
+            ? t("chat.media.saved_videos")
+            : t("chat.media.saved_photos"),
+        icon: "check",
+      });
     } catch {
       // A toast reaches the user in both places; the adjacent share button is
       // the way out either way.
-      setToast(t("chat.media.not_saved"));
+      setToast({ message: t("chat.media.not_saved"), icon: "x-circle" });
     }
   }
 
@@ -3228,7 +3468,7 @@ export default function MessageThread({
   ): Promise<void> {
     function fail(body: TranslationKey): void {
       if (insideViewer) {
-        setToast(t("chat.media.cant_open"));
+        setToast({ message: t("chat.media.cant_open"), icon: "x-circle" });
         return;
       }
       showAlert(t("chat.media.cant_open"), t(body));
@@ -3610,6 +3850,19 @@ export default function MessageThread({
             const isPureToken =
               tokens.length > 0 && tokens[0]!.raw.trim() === item.text.trim();
 
+            // What the render props below will draw for this row beyond the
+            // message itself; see MessageBubble's `renderState`. `claimingToken`
+            // is not compared per-token, since every claim button is disabled
+            // while any swap is in flight.
+            const renderState = [
+              revealedAttachments.has(item.id) ? "reveal" : "",
+              playingMessageId === item.id ? "play" : "",
+              autoDownloadMedia ? "auto" : "",
+              tokens.length === 0
+                ? ""
+                : `${claimingToken ?? ""}#${tokens.filter(isTokenClaimed).length}`,
+            ].join("|");
+
             return (
               <View>
                 {needsDateSeparator(index) && (
@@ -3637,6 +3890,7 @@ export default function MessageThread({
                   renderAttachment={(attachment) =>
                     renderAttachmentBubble(attachment, item.id, item.isMine)
                   }
+                  renderState={renderState}
                   formatTime={formatClockTime}
                   onLongPress={handleLongPressMessage}
                   selecting={selecting}
@@ -3914,20 +4168,25 @@ export default function MessageThread({
               would be behind this viewer, so saving from here would look like
               it did nothing. Lifted clear of the action row. */}
           <Toast
-            message={toast}
+            message={toast?.message ?? null}
+            icon={toast?.icon}
             onHide={() => setToast(null)}
             bottomOffset={112}
           />
           {/* Its own window, so the app-root cover does not reach it. A photo
               at full screen is the last thing that should survive into the app
               switcher. */}
-          <PrivacyCover />
         </Pressable>
       </Modal>
 
       {/* Same pill for a save made from the thread itself (the long-press
           menu), floated above the compose bar. */}
-      <Toast message={toast} onHide={() => setToast(null)} bottomOffset={88} />
+      <Toast
+        message={toast?.message ?? null}
+        icon={toast?.icon}
+        onHide={() => setToast(null)}
+        bottomOffset={88}
+      />
 
       {/* Live attachment transfers for this thread: one card each, sending or
           receiving, with percent, speed and time remaining. */}
@@ -4056,11 +4315,11 @@ export default function MessageThread({
         </View>
       )}
 
-      {/* Someone else has the floor. The same pill transmitting uses, in the
-          same strip the recording bar occupies, so both halves of a
-          conversation read alike and the two states never both appear. Accent
-          rather than danger: red is for the irreversible half, a burst already
-          playing on the other phone. */}
+      {/* Someone else has the floor. The transmitting pill, in the strip the
+          recording bar occupies, so both halves of a conversation read alike.
+          Red in both directions: the accent is a plain near-black or near-white,
+          so an accent-tinted LIVE read as ordinary chrome. The two states never
+          appear at once, so nothing needs a second colour. */}
       {!selecting &&
         liveTalker !== null &&
         !isPTTActive &&
@@ -4075,13 +4334,11 @@ export default function MessageThread({
                 : T("chat.voice.live_speaking", { name: liveTalker })
             }
           >
-            <View style={[styles.liveBadge, styles.liveIncomingBadge]}>
-              <View style={[styles.liveDot, styles.liveIncomingDot]} />
+            <View style={styles.liveBadge}>
+              <View style={styles.liveDot} />
               {/* Untranslated, like the transmitting badge: a broadcast marker
                   read the same everywhere. */}
-              <Text style={[styles.liveBadgeText, styles.liveIncomingText]}>
-                LIVE
-              </Text>
+              <Text style={styles.liveBadgeText}>LIVE</Text>
             </View>
             <Text style={styles.liveIncomingName} numberOfLines={1}>
               {liveTalkers.length > 1
@@ -4125,21 +4382,14 @@ export default function MessageThread({
             // budget that additionally clamps DMs in handleDraftChange. Kept so
             // a runaway paste cannot build a packet nothing will carry.
             maxLength={2000}
-            // All three traits follow one setting (Privacy, Keyboard
-            // suggestions, on by default): predictions and the dictionary they
-            // feed are the same feature from two sides, so splitting them would
-            // offer a choice nobody can reason about.
-            //
-            // Worth knowing what this cannot promise: the learned dictionary
-            // belongs to the OS, so turning it off stops future learning in this
-            // field rather than unlearning anything already absorbed.
-            autoCorrect={keyboardLearning}
-            spellCheck={keyboardLearning}
-            autoCapitalize={keyboardLearning ? "sentences" : "none"}
+            // Autocorrect, spellcheck and capitalisation stay at the platform
+            // defaults. The Privacy switch that used to gate them promised more
+            // than it delivered: the learned dictionary belongs to the OS, so
+            // turning it off only stopped future learning in this one field.
             returnKeyType="send"
-            blurOnSubmit
+            submitBehavior="blurAndSubmit"
             onSubmitEditing={handleSend}
-            selectionColor={Colors.accent}
+            selectionColor={Colors.selection}
             // The placeholder is the only thing naming this field, and it vanishes
             // the moment there is a draft.
             accessibilityLabel={T("chat.thread.message")}
@@ -4170,102 +4420,138 @@ export default function MessageThread({
               <Feather name="mic" size={16} color={Colors.textMuted} />
             </Pressable>
           ) : (
-            // PTT button: hold to talk.
+            // PTT button: hold to talk, slide back to cancel.
             mediaAllowed && (
-              <Pressable
-                style={[
-                  styles.pttButton,
-                  isPTTActive && styles.pttButtonActive,
-                  // Somebody else has the floor. The button still works: a mesh
-                  // has no floor arbiter, and refusing to send would desync the
-                  // moment the network partitions. It just says so first.
-                  liveTalker !== null && !isPTTActive && styles.pttButtonBusy,
-                ]}
-                onPressIn={() => {
-                  // Push-to-talk is the one control in the app used without
-                  // looking at it: you hold the phone up and speak. A haptic on
-                  // open and on close is how every walkie-talkie app confirms the
-                  // channel without asking for your eyes. Medium on start (the
-                  // mic is live now), light on release (it closed cleanly).
-                  void Haptics.impactAsync(
-                    Haptics.ImpactFeedbackStyle.Medium,
-                  ).catch(() => {});
-                  void handleTalkStart();
-                }}
-                onPressOut={() => {
-                  void Haptics.impactAsync(
-                    Haptics.ImpactFeedbackStyle.Light,
-                  ).catch(() => {});
-                  void handleTalkEnd();
-                }}
-                hitSlop={hitSlopFor(COMPOSE_BUTTON_SIZE)}
-                accessibilityRole="button"
-                accessibilityLabel={
-                  liveTalker !== null
-                    ? T("chat.thread.someone_talking", {
-                        hold: liveAvailable
-                          ? T("chat.voice.hold_live")
-                          : T("chat.voice.hold_record"),
-                        name: liveTalker,
-                      })
-                    : liveAvailable
-                      ? T("chat.voice.hold_live")
-                      : T("chat.voice.hold_record")
-                }
-              >
-                {/* Always the mic. The radio glyph already means "the mesh"
-                  elsewhere (peer list, radar, network settings), so state is
-                  carried by colour instead:
-
-                    muted  hold records a voice note
-                    accent hold goes out live
-                    danger you are live right now
-
-                  Busy is the border, a separate property, so "live available"
-                  and "someone else is talking" can both show at once. */}
-                <Feather
-                  name="mic"
-                  size={16}
-                  color={
-                    isPTTActive
-                      ? Colors.danger
+              <GestureDetector gesture={talkGesture}>
+                {/* Attached to a padded wrapper, not the drawn button:
+                    `hitSlop` is honoured by the responder system and ignored by
+                    gesture handlers, so the 44pt target must be a real view. The
+                    negative margin returns those points to the layout, keeping
+                    the row the same width as with the send button. */}
+                <View
+                  style={styles.pttTarget}
+                  accessible
+                  accessibilityRole="button"
+                  accessibilityLabel={
+                    liveTalker !== null
+                      ? T("chat.thread.someone_talking", {
+                          hold: liveAvailable
+                            ? T("chat.voice.hold_live")
+                            : T("chat.voice.hold_record"),
+                          name: liveTalker,
+                        })
                       : liveAvailable
-                        ? Colors.accent
-                        : Colors.textMuted
+                        ? T("chat.voice.hold_live")
+                        : T("chat.voice.hold_record")
                   }
-                />
-              </Pressable>
+                  // A hold-and-slide cannot be performed with a screen reader
+                  // on, so this is a start/stop toggle there. No cancel: a
+                  // gesture that exists only as a distance has no accessible
+                  // form.
+                  accessibilityHint={T("chat.voice.a11y_toggle")}
+                  onAccessibilityTap={() => {
+                    if (isPTTActive) {
+                      void talkRef.current.end();
+                      return;
+                    }
+                    // Nothing is held, so the bar's buttons are the way out and
+                    // the slide hint would be unusable advice. Set after
+                    // start(), which clears the flag for the held case, and only
+                    // for a note: a live burst has no buttons to offer.
+                    void talkRef.current.start().then(() => {
+                      if (!liveHoldRef.current) setHandsFreeRecording(true);
+                    });
+                  }}
+                >
+                  <Animated.View
+                    style={[
+                      styles.pttButton,
+                      isPTTActive && styles.pttButtonActive,
+                      // Somebody else has the floor. The button still works: a
+                      // mesh has no floor arbiter, and refusing to send would
+                      // desync the moment the network partitions. It just says
+                      // so first.
+                      liveTalker !== null &&
+                        !isPTTActive &&
+                        styles.pttButtonBusy,
+                      // Past the threshold the button is a discard.
+                      cancelArmed && styles.pttButtonCancel,
+                      micSlideStyle,
+                    ]}
+                  >
+                    {/* The mic, until the slide turns it into a discard. The
+                      radio glyph already means "the mesh" elsewhere (peer list,
+                      radar, network settings), so state is carried by colour:
+
+                        muted  hold records a voice note
+                        accent hold goes out live
+                        danger you are live right now
+
+                      Busy is the border, a separate property, so "live
+                      available" and "someone else is talking" can both show at
+                      once. */}
+                    <Feather
+                      name={cancelArmed ? "trash-2" : "mic"}
+                      size={16}
+                      color={
+                        cancelArmed || isPTTActive
+                          ? Colors.danger
+                          : liveAvailable
+                            ? Colors.accent
+                            : Colors.textMuted
+                      }
+                    />
+                  </Animated.View>
+                </View>
+              </GestureDetector>
             )
           )}
         </View>
       )}
 
-      {/* In-compose voice recording bar: replaces compose row while recording */}
+      {/* Recording bar, below the compose row while the mic is open: elapsed
+          time, whether this is going out live, and the way out. */}
       {(isRecording || isTalkingLive) && (
         <View style={styles.recordingBar}>
-          <Pressable
-            style={styles.recordingCancel}
-            onPress={() => {
-              if (isTalkingLive) {
-                setIsTalkingLive(false);
-                setIsPTTActive(false);
-                liveHoldRef.current = false;
-                void getMeshService()?.cancelVoiceBurst();
-                // Give the session back, as at the end of a burst.
-                void setAudioForPlayback().catch(() => {});
-                return;
-              }
-              void cancelRecording();
-            }}
-            accessibilityRole="button"
-            accessibilityLabel={
-              isTalkingLive
-                ? T("chat.voice.stop_discard")
-                : T("chat.voice.cancel_recording")
-            }
-          >
-            <Feather name="x" size={18} color={Colors.textMuted} />
-          </Pressable>
+          {/* Two ways in, two ways out. Started by tap, no finger is held, so an
+              ordinary button ends it. Started by holding the mic, lifting to
+              reach anything here IS the release: a tap in this bar could only
+              land after the recording had been sent, which is what the X used to
+              do. That path gets slide-to-cancel instead. */}
+          {handsFreeRecording ? (
+            <Pressable
+              style={styles.recordingCancel}
+              onPress={() => void cancelRecording()}
+              hitSlop={hitSlopFor(36)}
+              accessibilityRole="button"
+              accessibilityLabel={T("chat.voice.cancel_recording")}
+            >
+              <Feather name="x" size={18} color={Colors.textMuted} />
+            </Pressable>
+          ) : (
+            <Animated.View
+              style={[styles.recordingCancelHint, cancelHintStyle]}
+              accessibilityLiveRegion="polite"
+            >
+              <Feather
+                name={cancelArmed ? "trash-2" : chevronBack}
+                size={16}
+                color={cancelArmed ? Colors.danger : Colors.textMuted}
+              />
+              <Text
+                style={[
+                  styles.recordingCancelText,
+                  cancelArmed && styles.recordingCancelTextArmed,
+                ]}
+                numberOfLines={1}
+                maxFontSizeMultiplier={MaxFontScale.chrome}
+              >
+                {cancelArmed
+                  ? T("chat.voice.release_cancel")
+                  : T("chat.voice.slide_cancel")}
+              </Text>
+            </Animated.View>
+          )}
           {/* LIVE is not decoration. A voice note can be cancelled before
               anyone hears it; a live burst cannot, because it already played
               on the other phone. The sender has to be able to tell which one
@@ -4313,13 +4599,14 @@ export default function MessageThread({
           >
             {formatDuration(burstEnded ? BURST_MAX_SECS : recordingSecs)}
           </Text>
-          {/* A live burst ends by letting go, so there is nothing to "send".
-              Showing a send button would imply the audio is still waiting on
-              this device when it left as it was spoken. */}
-          {!isTalkingLive && (
+          {/* Only the hands-free path has anything to press. A held recording
+              ends by letting go, and a live burst has nothing to send: the audio
+              left as it was spoken. */}
+          {handsFreeRecording && (
             <Pressable
               style={styles.recordingStop}
               onPress={() => void stopRecording()}
+              hitSlop={hitSlopFor(40)}
               accessibilityRole="button"
               accessibilityLabel={T("chat.voice.stop_send")}
             >
@@ -4537,7 +4824,7 @@ export default function MessageThread({
                   <View style={styles.dmInfoStatus}>
                     <View style={styles.dmInfoDot} />
                     <Text style={styles.dmInfoStatusText}>
-                      {T("chat.thread.in_ble_range")}
+                      {T("chat.thread.in_range")}
                     </Text>
                   </View>
                 )}
@@ -5007,6 +5294,13 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       flexShrink: 0,
       marginBottom: 1,
     },
+    // The mic's touch target: MIN_TOUCH square, occupying only the drawn
+    // button's footprint. Padding rather than hitSlop; see the wrapper.
+    pttTarget: {
+      padding: (MIN_TOUCH - COMPOSE_BUTTON_SIZE) / 2,
+      margin: -(MIN_TOUCH - COMPOSE_BUTTON_SIZE) / 2,
+      flexShrink: 0,
+    },
     pttButton: {
       width: COMPOSE_BUTTON_SIZE,
       height: COMPOSE_BUTTON_SIZE,
@@ -5060,6 +5354,12 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       backgroundColor: Colors.dangerDim,
       borderColor: Colors.danger,
     },
+    // Slid past the threshold: letting go discards. Same danger tint as the live
+    // state; the glyph inside tells them apart.
+    pttButtonCancel: {
+      backgroundColor: Colors.dangerDim,
+      borderColor: Colors.danger,
+    },
     // Receiving live audio. Sits above the compose bar, in the strip the
     // recording bar takes over when this device is the one talking.
     liveIncomingRow: {
@@ -5071,16 +5371,6 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       borderTopWidth: StyleSheet.hairlineWidth,
       borderTopColor: Colors.border,
       backgroundColor: Colors.bg,
-    },
-    // The transmitting badge shape, in accent rather than red.
-    liveIncomingBadge: {
-      backgroundColor: Colors.accentGhost,
-    },
-    liveIncomingDot: {
-      backgroundColor: Colors.accent,
-    },
-    liveIncomingText: {
-      color: Colors.accent,
     },
     liveIncomingName: {
       flexShrink: 1,
@@ -5187,6 +5477,23 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       alignItems: "center",
       justifyContent: "center",
       flexShrink: 0,
+    },
+    // Slide-to-cancel, on the held path. Shrinks before the waveform, which
+    // carries no information.
+    recordingCancelHint: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: Spacing.xs,
+      flexShrink: 1,
+    },
+    recordingCancelText: {
+      fontSize: FontSize.sm,
+      color: Colors.textMuted,
+      flexShrink: 1,
+    },
+    recordingCancelTextArmed: {
+      color: Colors.danger,
+      fontWeight: FontWeight.medium,
     },
     recordingWave: {
       flexGrow: 1,

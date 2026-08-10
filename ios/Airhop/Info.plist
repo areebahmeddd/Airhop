@@ -99,15 +99,10 @@
 	     device; only the truncated geohash is published. -->
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>Airhop uses your approximate location to place you in nearby area channels (block, city, region). Your exact position never leaves your device.</string>
-	<!-- Required for MultipeerConnectivity on iOS 14+. Without this the system
-	     cannot show the local network access prompt and MC discovery will fail. -->
-	<key>NSLocalNetworkUsageDescription</key>
-	<string>Airhop uses the local network to connect directly to nearby devices for high-bandwidth transfers (video, large files).</string>
-	<!-- Bonjour service type declared by AirhopMCModule (MCConst.serviceType). -->
-	<key>NSBonjourServices</key>
-	<array>
-		<string>_airhop-mesh._tcp</string>
-	</array>
+	<!-- No local-network keys. iOS has no same-platform fast path: the
+	     MultipeerConnectivity module was removed, so nothing here browses or
+	     advertises on the local network and asking for that permission would be
+	     a prompt with nothing behind it. -->
 	<key>RCTNewArchEnabled</key>
 	<true/>
 	<key>UIBackgroundModes</key>

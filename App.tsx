@@ -33,12 +33,12 @@ import {
   GestureDetector,
   GestureHandlerRootView,
 } from "react-native-gesture-handler";
-import { runOnJS } from "react-native-reanimated";
 import {
   initialWindowMetrics,
   SafeAreaProvider,
   SafeAreaView,
 } from "react-native-safe-area-context";
+import { scheduleOnRN } from "react-native-worklets";
 import AirhopBLE from "./src/bridge/NativeAirhopBLE";
 import type { Identity } from "./src/core/crypto/identity";
 import { loadIdentity } from "./src/core/crypto/identity";
@@ -84,7 +84,11 @@ import {
   setNotificationsActiveChannel,
   setNotificationsAppActive,
 } from "./src/services/notification-service";
-import { setNutzapWatcher } from "./src/services/nutzap-watcher-handle";
+import {
+  rebindNutzapWatcher,
+  setNutzapRebinder,
+  setNutzapWatcher,
+} from "./src/services/nutzap-watcher-handle";
 import { applyPresence } from "./src/services/presence";
 import {
   initWalletService,
@@ -121,7 +125,6 @@ import {
   installGlobalErrorHandler,
 } from "./src/ui/components/error-boundary";
 import MeshStatusBar from "./src/ui/components/mesh-status-bar";
-import PrivacyCover from "./src/ui/components/privacy-cover";
 import TransferBadge from "./src/ui/components/transfer-badge";
 import {
   DISABLED_OPACITY,
@@ -139,6 +142,7 @@ import { getBatteryOptimizationSettingsURI } from "./src/utils/battery-optimizat
 import {
   ensureBlePermissions,
   hasBlePermissions,
+  type BlePermissionResult,
 } from "./src/utils/ble-permissions";
 import { parseAirhopLink } from "./src/utils/deep-link";
 import { formatNumber } from "./src/utils/format";
@@ -151,6 +155,7 @@ import {
   currentWipeGeneration,
   isCurrentWipeGeneration,
 } from "./src/utils/wipe-generation";
+import { settleOr, withTimeout } from "./src/utils/with-timeout";
 
 // Layout direction is a native flag that React Native reads once, at startup,
 // before anything mounts. Setting it here, at module scope, is the only place
@@ -179,6 +184,30 @@ interface MessageTarget {
 // Placeholder peer ID shown before identity is loaded from secure storage.
 const FALLBACK_PEER_ID = "0000000000000000";
 
+// How long to wait for the keychain before deciding this launch has no
+// identity. A healthy read is single-digit milliseconds; this is the point past
+// which "slow" has become "never" and the user is owed a screen either way.
+const IDENTITY_LOAD_TIMEOUT_MS = 8_000;
+
+// How long the permission conversation may hold the mesh start.
+//
+// `PermissionsAndroid.requestMultiple` settles when the user answers a dialog
+// hosted by another process, so it can be orphaned by an Activity that is
+// destroyed while the dialog is up - which is exactly what an OEM that reaps
+// the Activity behind a foreground service does. Past this deadline the mesh
+// starts regardless and the radio controller reads the real grant off the
+// device, which it would have done anyway.
+const PERMISSION_PROMPT_TIMEOUT_MS = 60_000;
+
+// A `PermissionsAndroid.check` is a synchronous binder call behind a promise,
+// so anything past this is the binder being wedged rather than a slow answer.
+const PERMISSION_CHECK_TIMEOUT_MS = 3_000;
+
+// The primer is a sheet the user dismisses, so this is deliberately long enough
+// to read it twice. It is a backstop against the sheet never appearing at all,
+// not a limit on how long someone may take.
+const PRIMER_TIMEOUT_MS = 120_000;
+
 // Request the BLE runtime permissions the OS requires, THEN start the mesh.
 // Without the grant, native startScanning/startAdvertising throw and are
 // swallowed: a silent, total discovery failure. On denial we surface a
@@ -202,13 +231,74 @@ async function startMeshWithPermissions(
   // NSBluetoothAlwaysUsageDescription string. That prompt IS the primer there,
   // and iOS has no location coupling to explain away. The sheet still renders
   // correctly on iOS if it is ever shown; it simply is not needed.
+  //
+  // Both awaits below are time-boxed, and the deadline is the point of them
+  // rather than a nicety. Everything from here to initMeshService() is a
+  // conversation with the OS about permissions, and the mesh used to be started
+  // only once that conversation finished. It is not a conversation the app
+  // controls: the primer resolves on a sheet the user has to dismiss, and
+  // `PermissionsAndroid.requestMultiple` settles on a dialog hosted by another
+  // process, which an Activity teardown can orphan. Either one going quiet left
+  // a running app with no mesh at all and a Mesh tab reading "starting…" for
+  // the rest of the session, which is indistinguishable from a broken radio.
+  //
+  // Missing the deadline costs nothing that matters. The radio controller reads
+  // the real grant off the device on its first pass and publishes the true
+  // blocker, so a permission answer that arrives late, or never, changes only
+  // how quickly the banner is right - not whether the mesh exists.
   const settings = useSettingsStore.getState();
-  if (!settings.permissionPrimerSeen && !(await hasBlePermissions())) {
+  if (
+    !settings.permissionPrimerSeen &&
+    !(await settleOr(hasBlePermissions(), PERMISSION_CHECK_TIMEOUT_MS, false))
+  ) {
     settings.markPermissionPrimerSeen();
-    await showPermissionPrimer();
+    await settleOr(showPermissionPrimer(), PRIMER_TIMEOUT_MS, undefined);
+    // The sheet never came up, or came up and was never dismissed. Put the
+    // store back in step so a later caller is not told a primer is on screen.
+    acknowledgePermissionPrimer();
   }
 
-  const perm = await ensureBlePermissions();
+  // `null` is "the OS never answered", which is different from every answer it
+  // could have given and must not be rendered as one. Nothing is published for
+  // it: the controller's own reading of the device is the better source, and
+  // guessing here would put a red banner over a permission the user may well
+  // have granted.
+  const perm = await settleOr<BlePermissionResult | null>(
+    ensureBlePermissions(),
+    PERMISSION_PROMPT_TIMEOUT_MS,
+    null,
+  );
+  if (perm !== null) applyBlePermissionResult(perm);
+
+  // Apply the persisted Tor preference BEFORE the mesh starts, so the very first
+  // relay pool is built on the Tor socket (never leaking the clear net for a Tor
+  // user). No-op when Tor is off or unavailable.
+  //
+  // Guarded because it is the last thing standing between here and the mesh
+  // existing. It used to be a bare call: a throw from it meant initMeshService
+  // on the next line never ran, and because this function is void-ed at both
+  // call sites the failure was silent - a fully rendered app whose
+  // getMeshService() returned null forever.
+  try {
+    primeTorRoutingOnStartup();
+  } catch {
+    // Tor is a preference, not a prerequisite. The pool comes up on the direct
+    // socket and the Privacy screen reports Tor as off, which is true.
+  }
+  initMeshService(identity, nickname);
+  // The grant may have landed while the mesh was still being built, and the
+  // controller stops retrying once it has published a permission blocker. This
+  // is the nudge that turns "denied" into a running radio without a relaunch.
+  getMeshService()?.retryRadios();
+  startMeshDependents();
+}
+
+// Turn a permission answer into the one reason the mesh cannot run.
+//
+// Split out so the startup path and the Permissions screen cannot drift: both
+// need the blocked/denied distinction and the Settings deep link, and the
+// screen previously had neither.
+function applyBlePermissionResult(perm: BlePermissionResult): void {
   // Record WHY the mesh cannot run, not merely that it cannot.
   //
   // A single "granted" boolean collapsed two situations that need different
@@ -247,12 +337,14 @@ async function startMeshWithPermissions(
   // A denial that can still be re-asked gets no dialog. The Mesh banner already
   // says what is wrong and carries the button that fixes it, and stacking a
   // modal on top of that is two things to dismiss for one problem.
-  // Apply the persisted Tor preference BEFORE the mesh starts, so the very first
-  // relay pool is built on the Tor socket (never leaking the clear net for a Tor
-  // user). No-op when Tor is off or unavailable.
-  primeTorRoutingOnStartup();
-  initMeshService(identity, nickname);
+}
 
+// Everything that rides on a started mesh: the wallet, the presence reset, and
+// the permission prompts that are not the mesh's own.
+//
+// Separated from the mesh start so it is unmistakable that nothing here can
+// prevent the mesh existing. Every branch is fire-and-forget by design.
+function startMeshDependents(): void {
   // Open the encrypted ecash store and settle anything left in flight. Proofs
   // live in an AES-256 MMKV file whose key is in the Keychain/Keystore, so this
   // is async and must happen before the Wallet tab can spend. Failure leaves
@@ -278,35 +370,54 @@ async function startMeshWithPermissions(
       // Offline, or the mint is down. Retried on the next launch.
     });
 
+    // Register how to (re)attach the nutzap watcher, then attach it.
+    //
+    // Registered rather than only called, because the watcher captures a
+    // NostrClient and that instance dies with every transport rebuild. Toggling
+    // Tor, or internet fallback, used to end NIP-61 for the rest of the session
+    // and silently stop redeeming incoming payments. The mesh service calls the
+    // rebinder after it builds a transport, so the subscription follows the
+    // client instead of outliving it.
+    setNutzapRebinder(() => {
+      const live = getMeshService()?.getNostrClient();
+      const myPubkey = getMeshService()?.getNostrPubKeyHex();
+      if (!live || !myPubkey) {
+        // Internet is off, or the mesh is stopped. Drop the old subscription
+        // rather than leaving it against a closed pool.
+        setNutzapWatcher(null);
+        return;
+      }
+      if (!isCurrentWipeGeneration(generation)) return;
+      // setNutzapWatcher stops whatever it replaces, so this cannot stack.
+      setNutzapWatcher(
+        startNutzapWatcher({
+          myPubkey,
+          client: live,
+          onRedeemed: (amount, unit, from) => {
+            showAlert(
+              t("wallet.nutzap.received_title", {
+                amount: formatNumber(amount),
+                unit,
+              }),
+              t("wallet.nutzap.received_body", { from: from.slice(0, 12) }),
+            );
+          },
+        }),
+      );
+    });
+
     const client = getMeshService()?.getNostrClient();
     const privKey = getMeshService()?.getNostrPrivKey();
-    const pubKey = getMeshService()?.getNostrPubKeyHex();
-    if (!client || !privKey || !pubKey) return;
-    // Tell the network how to pay us (NIP-61 kind 10019), then watch for
-    // incoming nutzaps. Both are no-ops without a mint configured.
+    if (!client || !privKey) return;
+    // Tell the network how to pay us (NIP-61 kind 10019). A no-op without a
+    // mint configured.
     await publishOwnNutzapInfo({
       client,
       privKey,
       relays: client.activeRelays,
     });
     if (!isCurrentWipeGeneration(generation)) return;
-    // Installed through the shared handle rather than a local, so a panic wipe
-    // can stop it too - see nutzap-watcher-handle.ts.
-    setNutzapWatcher(
-      startNutzapWatcher({
-        myPubkey: pubKey,
-        client,
-        onRedeemed: (amount, unit, from) => {
-          showAlert(
-            t("wallet.nutzap.received_title", {
-              amount: formatNumber(amount),
-              unit,
-            }),
-            t("wallet.nutzap.received_body", { from: from.slice(0, 12) }),
-          );
-        },
-      }),
-    );
+    rebindNutzapWatcher();
   })();
   // The mesh always starts Online (advertising + scanning), so keep the chosen
   // presence in step, in case a prior session left it Away/Invisible.
@@ -515,7 +626,20 @@ function AppContent(): React.JSX.Element {
   // On mount: check for an existing persisted identity. If found, skip
   // onboarding and start the BLE mesh service immediately.
   useEffect(() => {
-    loadIdentity()
+    // Time-boxed, because this one promise decides whether the app renders at
+    // all. `readSecret` reaches the Keystore, and a Keystore that
+    // stalls never rejects - it simply does not answer. The `.catch` below
+    // covers a refusal; nothing covered silence, so the app sat on the blank
+    // background-coloured view above forever, which reads as a hung splash.
+    //
+    // Timing out yields `null`, which is the same answer a first install gives,
+    // so the user lands on onboarding rather than on nothing. That is the right
+    // failure: a device whose keychain is unreachable cannot load an identity
+    // this launch either way, and IdentityScreen surfaces the write failure
+    // where it can be read. IDENTITY_LOAD_TIMEOUT_MS is far longer than a
+    // healthy read (single-digit milliseconds) so a slow-but-working device is
+    // never sent to onboarding by mistake.
+    withTimeout(loadIdentity(), IDENTITY_LOAD_TIMEOUT_MS, null)
       .then((existing) => {
         if (existing) {
           setGeneratedPeerID(existing.peerID);
@@ -554,7 +678,7 @@ function AppContent(): React.JSX.Element {
         setAppReady(true);
       })
       .catch(() => {
-        // EncryptedStorage unavailable (e.g. simulator without secure enclave).
+        // Keychain unavailable (e.g. simulator without secure enclave).
         // Fall through to onboarding so identity can be generated and stored later.
         setOnboardingStep("welcome");
         setAppReady(true);
@@ -583,8 +707,15 @@ function AppContent(): React.JSX.Element {
   // announce arrives, which can happen while it is open. Derived rather than
   // synced into state, so no frame renders a channel that is already gone.
   const channelRedirects = useChatStore((s) => s.channelRedirects);
+  // Scoped to the Chats tab, because "open" has to mean "on screen".
+  //
+  // chatView survives a tab switch by design, so without the tab test a thread
+  // left behind on Chats stayed the active channel while the user looked at the
+  // radar or the wallet. Everything downstream trusts that: inbound messages to
+  // it were marked read, produced no haptic and no bell entry, and vanished from
+  // the unread counts, all while nobody was looking at them.
   const openThread =
-    chatView.kind === "thread"
+    tab === "chats" && chatView.kind === "thread"
       ? (channelRedirects[chatView.channel] ?? chatView.channel)
       : "";
   const isSearching =
@@ -699,9 +830,19 @@ function AppContent(): React.JSX.Element {
     // Both are checks, never requests: prompting someone who just walked back
     // into the app would be ambushing them.
     const syncPermissions = (): void => {
-      void hasLocationPermission().then((granted) =>
-        useMeshStateStore.getState().setLocationGranted(granted),
-      );
+      void hasLocationPermission().then((granted) => {
+        const store = useMeshStateStore.getState();
+        const changed = store.locationGranted !== granted;
+        store.setLocationGranted(granted);
+        // Re-resolve the location channels when the answer actually moved.
+        //
+        // Leaving for system Settings and coming back is the main way a location
+        // grant changes, and this handler recorded it without acting on it, so
+        // the geohash channels stayed empty on the one edge where they were most
+        // likely to have just become available. Gated on the change so an
+        // ordinary resume does not re-subscribe every cell.
+        if (changed && granted) getMeshService()?.refreshGeoChannels();
+      });
       // Re-check the radios unconditionally.
       //
       // This used to compare the BLE permission against the last known value
@@ -722,7 +863,20 @@ function AppContent(): React.JSX.Element {
     const sub = AppState.addEventListener("change", (next) => {
       setAppActive(next === "active");
       setNotificationsAppActive(next === "active");
-      getMeshService()?.setAppForeground(next === "active");
+      // "inactive" is NOT backgrounded, and this is the one consumer that has to
+      // know the difference.
+      //
+      // It means the app is on screen but not receiving events: a permission
+      // dialog on top of it, the app switcher open, an incoming call. Reading it
+      // as backgrounded told the power policy nobody was watching, which drops
+      // the radios to power-saver, and every mode change restarts the scanner.
+      // The result was that the OS permission dialog - the single most common
+      // way to reach this state, on the very first launch - bounced the scan off
+      // and on again underneath itself. Everything else here still treats it as
+      // "not active", which is right for them: a notification should be raised,
+      // chat state should be flushed, and the privacy cover should be up,
+      // because the user genuinely is not reading the screen.
+      getMeshService()?.setAppForeground(next !== "background");
       if (next !== "active") {
         // Chat persistence is throttled, so leaving the foreground is the last
         // safe moment to force whatever is still inside that window to disk.
@@ -896,6 +1050,20 @@ function AppContent(): React.JSX.Element {
     // actually belongs to. That matters when opened from search, which spans
     // both; a no-op when opened from the list itself (already the right tab).
     setChatSubTab(channel.startsWith("dm:") ? "dms" : "channels");
+    // Switch to Chats, which this did not do.
+    //
+    // The thread render is gated on `tab === "chats"`, so setting the view
+    // without the tab opened nothing: a tapped notification, a deep link and the
+    // restored last thread all landed on whatever tab was showing, usually Mesh.
+    // Worse than doing nothing, because the "what is being read" effect is
+    // driven by chatView alone, so the app marked the message read, cleared its
+    // unread count and dismissed its notification while showing the radar. The
+    // message was gone with nothing to say it had arrived.
+    //
+    // `false` keeps the view: navigateToTab resets chatView to the list when it
+    // is told to, and this is the one caller that has already chosen a thread.
+    // Matches openDMFromMesh and openTransferChannel, which always did this.
+    navigateToTab("chats", false);
     setChatView({ kind: "thread", channel });
   }
   // Keep the notification tap handler pointed at the latest openChannel. In an
@@ -1035,14 +1203,14 @@ function AppContent(): React.JSX.Element {
           ? event.translationX > 0
           : event.translationX < 0;
         if (canGoBackInTab) {
-          if (!forward) runOnJS(goBackInTab)();
+          if (!forward) scheduleOnRN(goBackInTab);
           return;
         }
         const currentIndex = TABS.findIndex((t) => t.id === tab);
         const target = forward
           ? TABS[currentIndex + 1]
           : TABS[currentIndex - 1];
-        if (target) runOnJS(navigateToTab)(target.id, true);
+        if (target) scheduleOnRN(navigateToTab, target.id, true);
       });
     if (!canGoBackInTab) return pan;
     return pan.hitSlop(
@@ -1096,7 +1264,6 @@ function AppContent(): React.JSX.Element {
         />
         {/* Last in the tree, so it paints over the tab bar and every screen
             under it. Modals render in their own window and mount their own. */}
-        <PrivacyCover />
 
         <View style={styles.flexFill}>
           {/* Onboarding flow */}
@@ -1552,7 +1719,7 @@ function AppContent(): React.JSX.Element {
                       placeholder={T("chat.search.placeholder")}
                       placeholderTextColor={Colors.textMuted}
                       returnKeyType="search"
-                      selectionColor={Colors.accent}
+                      selectionColor={Colors.selection}
                       // A placeholder is not a label: it disappears the moment
                       // there is a query, so a screen reader landing on a
                       // half-typed field would otherwise announce nothing but

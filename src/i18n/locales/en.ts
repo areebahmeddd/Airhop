@@ -195,26 +195,18 @@ export const strings = {
   "permission.blocked_body": "Turn it on in Settings to {purpose}.",
 
   // ---- The screen after an unhandled error ---------------------------------------
-  // Shown by ui/components/error-boundary.tsx when the interface throws. Two
-  // things this copy must get right, because a user reading it is already
-  // worried:
-  //
-  //   It must not imply data loss. Nothing has been lost - keys are in the
-  //   keychain and messages are in MMKV, neither of which the UI crashing
-  //   touches.
-  //   It must say the mesh is still running, because it is. The radios and the
-  //   relay pool live outside the React tree and keep carrying other people's
-  //   messages while this screen is up, and on a phone being used during a
-  //   blackout that is the single most reassuring fact available.
+  // Shown by ui/components/error-boundary.tsx when the interface throws. A user
+  // reading this is already worried, so it stays to what happened and what to do
+  // next. Nothing is lost when the UI crashes - keys are in the keychain, messages
+  // are in MMKV, and the mesh keeps relaying from outside the React tree - but
+  // listing all of that reads as a disclaimer and plants the doubt it answers.
   //
   // No error text, no stack, no "report this". There is nowhere to report it to
   // and a code the user cannot act on is noise.
   "error.boundary.title": "Something went wrong",
   "error.boundary.body":
-    "Airhop hit an unexpected problem and had to stop what it was showing. Your messages, contacts and keys are untouched.",
+    "Airhop hit an unexpected problem and had to stop what it was showing.",
   "error.boundary.retry": "Try again",
-  "error.boundary.note":
-    "The mesh is still running in the background, so nearby messages are still being relayed.",
 
   // ---- Chats: channel list -------------------------------------------------------
   // Section headers. The style uppercases them, so sentence case here: a script
@@ -463,7 +455,10 @@ export const strings = {
   "chat.thread.jump_latest": "Jump to latest message",
   "chat.thread.back_to_members": "Back to members",
   "chat.thread.nostr_key": "Nostr public key",
-  "chat.thread.in_ble_range": "In BLE range",
+  "chat.thread.in_range": "In range",
+  // Hold-to-record produced no file, or stopping threw. The bar closes either
+  // way, so without this the note simply disappears and reads as sent.
+  "chat.voice.not_recorded": "Voice note didn't record",
   "chat.thread.message": "Message",
   "chat.thread.message_placeholder": "Message…",
   // Shown when a direct message is within sight of its length budget. "Room"
@@ -645,8 +640,13 @@ export const strings = {
   "chat.voice.unavailable": "Voice notes not available here",
   "chat.voice.hold_live": "Hold to talk live",
   "chat.voice.hold_record": "Hold to record a voice note",
-  "chat.voice.stop_discard": "Stop talking and discard",
   "chat.voice.cancel_recording": "Cancel recording",
+  // Recording bar, while the mic is held. The finger is on the button, so the
+  // way out is a movement rather than a target.
+  "chat.voice.slide_cancel": "Slide to cancel",
+  "chat.voice.release_cancel": "Release to cancel",
+  // The mic is a plain toggle under a screen reader; see chat/message-thread.
+  "chat.voice.a11y_toggle": "Double tap to start or stop talking.",
   "chat.voice.limit_reached": "Two minute limit reached, release to send",
   "chat.voice.stop_send": "Stop recording and send",
   // Someone else has the floor. Present tense: it shows only while their audio
@@ -1274,6 +1274,17 @@ export const strings = {
     "Nothing was recovered from the mints scanned.",
 
   // ---- Wallet: pending and activity ----------------------------------------------
+  // Confirming delivery is irreversible: it releases the reserved proofs, so
+  // the money can no longer be pulled back. Worded around that, not around the
+  // recipient.
+  "wallet.delivered.title": "Mark as received?",
+  "wallet.delivered.body":
+    "This releases {amount} {unit} for good. If it never actually arrived, you will not be able to reclaim it.",
+  "wallet.delivered.body_generic":
+    "This releases the reserved amount for good. If it never actually arrived, you will not be able to reclaim it.",
+  "wallet.delivered.cancel": "Not yet",
+  "wallet.delivered.confirm": "They got it",
+
   "wallet.reclaim.title": "Reclaim this token?",
   "wallet.reclaim.body":
     "The {amount} {unit} goes back into your balance. Only do this if the token never reached anyone: if they already have the string, whoever redeems it at the mint first keeps the money, and that could be them.",
@@ -1692,11 +1703,6 @@ export const strings = {
   // obvious from the label alone. Two sentences, so both take a full stop.
   "settings.security.hide_previews_desc":
     "Keep the sender and message out of notifications. Your lock screen shows them without unlocking the phone.",
-  // The autocorrect is what you see; the dictionary it builds is what outlives
-  // the message, so the description answers where that dictionary lives.
-  "settings.security.keyboard_learning": "Keyboard suggestions",
-  "settings.security.keyboard_learning_desc":
-    "Allow keyboard suggestions and autocorrect while typing. Your dictionary stays on your device.",
   "settings.security.media_retention": "Keep media for",
   "settings.security.media_retention_desc":
     "Photos, videos and voice notes are deleted after the selected time",
@@ -1791,8 +1797,12 @@ export const strings = {
     "Orbot is installed but not connected. Open Orbot, start its VPN, then turn this on.",
   "settings.conn.tor_unavailable":
     "Tor routing is not available in this build.",
+  // Tor stays ON after this. The toggle installs the Tor socket and persists the
+  // preference before waiting, and a slow bootstrap is deliberately not undone,
+  // so telling the user to "try again" would be telling them to switch off the
+  // thing that is still working on it.
   "settings.conn.tor_timeout":
-    "Could not connect through Tor within 60 seconds. Check your network connection and try again.",
+    "Tor is taking longer than a minute to connect. It stays on and keeps trying; the Mesh tab will say when it is routing, or if this network is blocking it.",
   "settings.conn.tor_failed":
     "Could not start Tor. Ensure the app has network access.",
   "settings.conn.mint_clearnet": "Allow mint traffic over clear net",
@@ -1982,6 +1992,12 @@ export const strings = {
   "settings.wipe.body":
     "This will instantly destroy all your keys, messages, and wallet proofs. This cannot be undone.",
   "settings.wipe.got_it": "Got it",
+  // Shown only when the OS refused to release the keys, which happens on a
+  // device that has booted but not been unlocked. Everything else is destroyed
+  // by then, so this names the one thing that is not.
+  "settings.wipe.keys_failed": "Keys could not be destroyed",
+  "settings.wipe.keys_failed_body":
+    "Your messages, contacts and wallet are gone, but the device refused to release your keys. Unlock the device and wipe again.",
 
   // ---- Settings: help and feedback -----------------------------------------------
   "settings.help.contact": "Contact us",

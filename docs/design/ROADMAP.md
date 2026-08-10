@@ -54,7 +54,7 @@ bitchat is an excellent foundation. Airhop fills the gaps it left open.
 │                                                                             │
 │  ┌─────────────────────────────────────────────────────────────────────┐    │
 │  │              MESSAGE ROUTER (TypeScript)                            │    │
-│  │  canDeliverPromptly() → BLE first → WiFi second → Nostr third       │    │
+│  │  canDeliverPromptly() → both radios → Nostr → courier                │    │
 │  │  → Courier envelope (store-and-forward) → Double Ratchet step       │    │
 │  └──────────────────────────────┬──────────────────────────────────────┘    │
 │                                 │                                           │
@@ -151,7 +151,7 @@ bitchat is an excellent foundation. Airhop fills the gaps it left open.
 - [x] QR contact exchange (`src/core/crypto/contact-exchange.ts`: binary ContactCard, QR URI scheme `airhop:v1/<base64url>`)
 - [x] QR code scanner for peer verification (encodeQRContent/decodeQRContent, deep-link format)
 - [x] Human-readable usernames (`src/utils/username.ts`: deterministic `adjective-noun-XXXX` from peer ID)
-- [x] Panic wipe (`src/utils/panic-wipe.ts`: clears EncryptedStorage keys + all MMKV partitions; < 1s)
+- [x] Panic wipe (`src/utils/panic-wipe.ts`: clears every keychain item, all MMKV partitions, the media cache and Tor state)
 - [x] Battery optimization flow (`src/utils/battery-optimization.ts`: OEM deep links for 10 skins + standard Android fallback)
 - [x] Georelay visibility: the channel info sheet lists the relays carrying a cell and marks the ones the user added (`GeoRelayDirectory.closestRelaysToGeohash()` via `MeshService.getGeohashRelays()`)
 - [x] Full cross-platform compat test (`src/core/mesh/__tests__/compat.test.ts`: peer ID, byte offsets, relay TTL compat, ANNOUNCE TLV, fragment constants, BLE UUIDs)

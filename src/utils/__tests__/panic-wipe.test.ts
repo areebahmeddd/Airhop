@@ -3,8 +3,9 @@
  */
 
 // Imports come first in source; Babel hoists jest.mock() calls above them.
-import { panicWipe as identityPanicWipe } from "../../core/crypto/identity";
-import { clearAttachmentCache } from "../../services/file-transfer-service";
+import { wipeAllSecrets } from "../../core/crypto/keychain";
+import { wipeCacheDirectory } from "../../services/file-transfer-service";
+import { dismissAllNotifications } from "../../services/notification-service";
 import { setNutzapWatcher } from "../../services/nutzap-watcher-handle";
 import { useChatStore } from "../../store/chat-store";
 import { useMeshStateStore } from "../../store/mesh-state-store";
@@ -15,15 +16,26 @@ import {
   isCurrentWipeGeneration,
 } from "../wipe-generation";
 
-// identity.panicWipe wipes the Keychain/Keystore; mock it out in tests.
-jest.mock("../../core/crypto/identity", () => ({
-  panicWipe: jest.fn().mockResolvedValue(undefined),
+// wipeAllSecrets reaches the Keychain/Keystore; mock it out in tests. Only that
+// one export: KEYCHAIN_ITEMS is read at module scope by wallet-store and
+// wallet-service, so replacing the whole module leaves those reading a property
+// off undefined before a single test runs.
+jest.mock("../../core/crypto/keychain", () => ({
+  ...jest.requireActual("../../core/crypto/keychain"),
+  wipeAllSecrets: jest.fn().mockResolvedValue(undefined),
 }));
 
-// The media-cache clear touches expo-file-system; mock the whole module so the
-// test stays a pure unit and can assert the clear was invoked.
+// The cache wipe touches expo-file-system; mock the whole module so the test
+// stays a pure unit and can assert the wipe was invoked.
 jest.mock("../../services/file-transfer-service", () => ({
-  clearAttachmentCache: jest.fn(),
+  wipeCacheDirectory: jest.fn(),
+}));
+
+// Dismissing the tray reaches expo-notifications, which registers push
+// listeners at import. Mocked so this stays a unit test of the wipe and does not
+// depend on a notifications runtime.
+jest.mock("../../services/notification-service", () => ({
+  dismissAllNotifications: jest.fn().mockResolvedValue(undefined),
 }));
 
 // Provide a full in-memory MMKV implementation so Zustand's persist middleware
@@ -62,7 +74,7 @@ jest.mock("react-native-mmkv", () => {
   };
 });
 
-const mockClearKeys = identityPanicWipe as jest.Mock;
+const mockClearKeys = wipeAllSecrets as jest.Mock;
 const mmkvMock = jest.requireMock("react-native-mmkv") as {
   __mockClearAll: jest.Mock;
   deleteMMKV: jest.Mock;
@@ -74,7 +86,8 @@ beforeEach(() => {
   mockClearKeys.mockClear();
   mockClearAll.mockClear();
   deleteMMKV.mockClear();
-  (clearAttachmentCache as jest.Mock).mockClear();
+  (wipeCacheDirectory as jest.Mock).mockClear();
+  mockClearKeys.mockResolvedValue(undefined);
 });
 
 describe("panicWipe", () => {
@@ -110,13 +123,37 @@ describe("panicWipe", () => {
     );
   });
 
-  test("deletes received media files from disk", async () => {
+  test("empties the whole cache directory, not just prefixed attachments", async () => {
+    // Prefix matching missed sent documents, sent videos, in-budget images and
+    // the saved QR card, all of which survived every wipe.
     await panicWipe();
-    expect(clearAttachmentCache).toHaveBeenCalledTimes(1);
+    expect(wipeCacheDirectory).toHaveBeenCalledTimes(1);
   });
 
-  test("resolves (does not throw) on success", async () => {
-    await expect(panicWipe()).resolves.toBeUndefined();
+  test("reports the keys as destroyed on success", async () => {
+    await expect(panicWipe()).resolves.toEqual({ keysDestroyed: true });
+  });
+
+  test("finishes the wipe even when the keychain refuses, and says so", async () => {
+    // A locked Keychain is the seizure case this gesture exists for. The bare
+    // await here used to abandon every step below it, leaving all thirteen MMKV
+    // partitions, the wallet file and the media cache intact while the caller
+    // surfaced nothing at all.
+    mockClearKeys.mockRejectedValue(new Error("keychain locked"));
+
+    const result = await panicWipe();
+
+    expect(result.keysDestroyed).toBe(false);
+    expect(mockClearAll).toHaveBeenCalledTimes(MMKV_STORE_IDS.length);
+    expect(deleteMMKV).toHaveBeenCalledWith(WALLET_STORAGE_ID);
+    expect(wipeCacheDirectory).toHaveBeenCalledTimes(1);
+  });
+
+  test("takes delivered notifications out of the tray", async () => {
+    // They carry a sender name and a message preview, live in the system tray
+    // rather than in any store, and survive the process.
+    await panicWipe();
+    expect(dismissAllNotifications).toHaveBeenCalled();
   });
 
   test("wipes every sensitive persisted store, including the activity feed", () => {

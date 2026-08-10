@@ -112,7 +112,7 @@ export default function SendEcashSheet({
         placeholderTextColor={Colors.textMuted}
         keyboardType="number-pad"
         returnKeyType="next"
-        selectionColor={Colors.accent}
+        selectionColor={Colors.selection}
       />
       <TextInput
         style={[styles.input, styles.inputCompact]}
@@ -121,7 +121,7 @@ export default function SendEcashSheet({
         placeholder={T("wallet.pay.memo")}
         placeholderTextColor={Colors.textMuted}
         autoCapitalize="sentences"
-        selectionColor={Colors.accent}
+        selectionColor={Colors.selection}
       />
       <View style={styles.actions}>
         <Pressable

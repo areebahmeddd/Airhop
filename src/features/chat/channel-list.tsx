@@ -17,7 +17,9 @@ import {
   Text,
   View,
 } from "react-native";
-import { Swipeable } from "react-native-gesture-handler";
+import ReanimatedSwipeable, {
+  type SwipeableMethods,
+} from "react-native-gesture-handler/ReanimatedSwipeable";
 import Animated, { FadeIn, LinearTransition } from "react-native-reanimated";
 import { t, tPlural, type TranslationKey, useT, useTPlural } from "../../i18n";
 import { useRichText } from "../../i18n/rich-text";
@@ -265,7 +267,7 @@ export default function ChannelList({
   );
   // Open Swipeable rows, keyed by channel, so tapping an action can close its
   // own row instead of leaving it hanging open.
-  const swipeableRefs = useRef(new Map<string, Swipeable>()).current;
+  const swipeableRefs = useRef(new Map<string, SwipeableMethods>()).current;
 
   function closeSwipeable(channel: string): void {
     swipeableRefs.get(channel)?.close();
@@ -555,7 +557,7 @@ export default function ChannelList({
         layout={LinearTransition.duration(Duration.slow)}
         entering={FadeIn.duration(Duration.base)}
       >
-        <Swipeable
+        <ReanimatedSwipeable
           ref={(ref) => {
             if (ref) swipeableRefs.set(item, ref);
             else swipeableRefs.delete(item);
@@ -582,7 +584,7 @@ export default function ChannelList({
           )}
         >
           {row}
-        </Swipeable>
+        </ReanimatedSwipeable>
       </Animated.View>
     );
   }

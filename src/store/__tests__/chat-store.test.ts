@@ -157,6 +157,35 @@ describe("setMessageStatus", () => {
     expect(state().messages["#test"][0].status).toBe("reclaimed");
   });
 
+  // The outbox drops a message it has given up on and asks for the bubble to
+  // say so. "failed" ranks below the three states an undeliverable message
+  // actually sits in, so the rank rule used to discard every one of those
+  // requests and the hourglass stayed forever over something already gone.
+  it.each(["queued", "sent", "carried", "sending"] as const)(
+    "a give-up corrects a bubble stuck at %s",
+    (stuck) => {
+      state().addMessage(
+        makeMessage({ id: "m1", isMine: true, status: stuck }),
+      );
+      state().setMessageStatus("#test", "m1", "failed");
+      expect(state().messages["#test"][0].status).toBe("failed");
+    },
+  );
+
+  // The other half of the same rule. A receipt is proof the message arrived, and
+  // a sender-side give-up is only ever proof that WE stopped trying - usually
+  // because the ack was lost, not the message.
+  it.each(["delivered", "read"] as const)(
+    "but never contradicts a %s receipt",
+    (acked) => {
+      state().addMessage(
+        makeMessage({ id: "m1", isMine: true, status: acked }),
+      );
+      state().setMessageStatus("#test", "m1", "failed");
+      expect(state().messages["#test"][0].status).toBe(acked);
+    },
+  );
+
   // Terminal on purpose: the proofs are back in the sender's wallet, so a
   // receipt that wanders in afterwards must not relabel the bubble "delivered"
   // and imply the recipient was paid.

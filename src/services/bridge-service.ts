@@ -182,6 +182,14 @@ export class BridgeService {
     this.subscription?.close();
     this.subscription = null;
     this.subscribedCell = null;
+    // Everyone counted "across" was across the OLD cell. Carrying them into the
+    // new one inflated the banner with people the user has just walked away
+    // from, for as long as their ten-minute presence TTL had left to run.
+    this.participants.clear();
+    // And let the first heartbeat into the new cell go out immediately rather
+    // than waiting out the rate limit from the old one, which left the device in
+    // a cell nobody there could see it in for up to half a minute.
+    this.lastPresenceAtMs = 0;
     if (cell === null) return;
     const relays = this.relaysForCell(cell);
     this.subscribedCell = cell;
@@ -561,9 +569,31 @@ export class BridgeService {
     }
   }
 
+  // Relay connectivity moved under us. Re-publish the status, because `active`
+  // depends on it and nothing else recomputes on that edge.
+  //
+  // Status was only emitted on refresh, teardown and an inbound participant
+  // event, and all three need working relays. So losing them left the banner
+  // claiming to be bridging islands for as long as the outage lasted, bounded
+  // only by the four-minute presence tick. Gating `active` on relays fixed the
+  // value; this is what makes anyone recompute it.
+  onRelayConnectivityChanged(): void {
+    this.emitStatus();
+  }
+
   private emitStatus(): void {
     this.hooks.onStatus({
-      active: this.enabled && this.activeCell !== null,
+      // The same predicate the advertised capability uses, relays included.
+      //
+      // These two had drifted: the bit peers read self-gated on live relays, but
+      // the banner did not, so a phone with the toggle on and every relay down
+      // told its owner it was bridging islands while it could neither publish
+      // nor receive a single message. A status indicator that over-claims is the
+      // failure the banner layer exists to prevent.
+      active:
+        this.enabled &&
+        this.activeCell !== null &&
+        this.hooks.relaysConnected(),
       cell: this.activeCell ?? undefined,
       peopleAcross: this.peopleAcross(),
     });

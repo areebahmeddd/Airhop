@@ -106,6 +106,7 @@ describe("forward-secret courier seal/open via prekey", () => {
       recipNoise.pub,
       "aabbccdd00112233",
       senderSignPriv,
+      "00112233445566aa",
       prekey,
     );
 

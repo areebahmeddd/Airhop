@@ -3,7 +3,7 @@
  */
 // The same-platform fast path.
 //
-// ARCHITECTURE.md lists WiFi Aware and MultipeerConnectivity as an accelerator
+// ARCHITECTURE.md lists WiFi Aware (Android only) as an accelerator
 // that the mesh engine is not supposed to notice: same `Transport` interface as
 // BLE, priority 1 in the router, and it carries what BLE cannot. Until this
 // suite the transport was code-complete and entirely unproven. The harness's
@@ -156,10 +156,10 @@ test("W-F01 two phones meet over WiFi with no Bluetooth between them", async () 
   s.assert(true);
 });
 
-test("W-F02 an Android phone and an iPhone never form a WiFi link", async () => {
+test("W-F02 an iPhone never forms a WiFi link with anyone", async () => {
   const s = (scenario = new Scenario({
     id: "W-F02",
-    title: "WiFi Aware and MultipeerConnectivity are different protocols",
+    title: "iOS has no fast path, so every iPhone hop stays on Bluetooth",
     seed: 901,
   }));
   const radio = new RadioFabric(s.world);
@@ -180,11 +180,12 @@ test("W-F02 an Android phone and an iPhone never form a WiFi link", async () => 
   iphone.launch();
 
   // Airhop presents one transport behind one interface, which makes it easy to
-  // assume one network. Android publishes on WiFi Aware; iOS browses over
-  // MultipeerConnectivity. Neither can see the other, at any distance.
+  // assume every device has it. iOS does not: MultipeerConnectivity was removed
+  // rather than repaired, so an iPhone registers no WiFi module at all and every
+  // hop it takes is Bluetooth, whoever is on the other end.
   const linked = wifi.link("droid", "iphone");
 
-  s.check("the fabric refused the cross-platform link", !linked);
+  s.check("the fabric refused the link", !linked);
   s.check(
     "and recorded why rather than failing silently",
     wifi.refusedCrossPlatform === 1,

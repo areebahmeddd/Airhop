@@ -45,10 +45,12 @@ const AVATAR_TAP_SIZE = 32;
 // triggered React Native's "VirtualizedList slow to update" warning. A message
 // object is replaced whenever it changes (immutable store updates), so a
 // reference check on `item` is enough; `tokens` is skipped because it derives
-// from `item.text`, and the callbacks are behaviorally stable (they act on the
-// item passed to them). The bubble still re-renders on theme/font changes via
-// its own useThemeColors subscription, and an in-progress attachment card keeps
-// updating through its own store subscription.
+// from `item.text`, and the plain callbacks are behaviorally stable (they act
+// on the item passed to them). The two render props are not: they draw on the
+// thread's interactive state, which `renderState` exposes. The bubble still
+// re-renders on theme/font changes via its own useThemeColors subscription, and
+// an in-progress attachment card keeps updating through its own store
+// subscription.
 interface Props {
   item: ChatMessage;
   showAvatar: boolean;
@@ -57,6 +59,15 @@ interface Props {
   isPureToken: boolean;
   renderToken: (token: EmbeddedToken) => React.ReactNode;
   renderAttachment: (attachment: ChatAttachment) => React.ReactNode;
+  // This row's interactive state, flattened for the memo comparator: photo
+  // revealed, voice note playing, token being claimed.
+  //
+  // The comparator cannot check the render props themselves. They are fresh
+  // closures every parent render, so comparing them would defeat the memo (the
+  // composer's draft changes per keystroke); ignoring them froze the bubble on
+  // its first render, so tapping load/play/claim changed nothing on screen.
+  // Row-scoped, so one tap re-renders one bubble.
+  renderState: string;
   formatTime: (ms: number) => string;
   onLongPress: (item: ChatMessage) => void;
   // Tapping the failed indicator on one of your own messages resends it. Only
@@ -87,6 +98,8 @@ function MessageBubble({
   isFirstFromSender,
   tokens,
   isPureToken,
+  // `renderState` is not destructured: the memo comparator reads it, the body
+  // never does.
   renderToken,
   renderAttachment,
   formatTime,
@@ -599,6 +612,7 @@ export default React.memo(
   MessageBubble,
   (prev, next) =>
     prev.item === next.item &&
+    prev.renderState === next.renderState &&
     prev.showAvatar === next.showAvatar &&
     prev.isFirstFromSender === next.isFirstFromSender &&
     prev.isPureToken === next.isPureToken &&

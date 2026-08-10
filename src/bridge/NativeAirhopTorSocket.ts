@@ -12,7 +12,7 @@
 // the native file has not been compiled in; callers must gate on
 // isTorSocketNativeAvailable() before use.
 
-import type { EmitterSubscription } from "react-native";
+import type { EventSubscription } from "react-native";
 import { NativeEventEmitter, NativeModules } from "react-native";
 
 // ---- Native module ----------------------------------------------------------
@@ -65,7 +65,7 @@ let emitter: NativeEventEmitter | null = null;
 // isTorSocketNativeAvailable() is true; the emitter needs the native module.
 export function subscribeTorSocket(
   listener: (event: TorSocketEvent) => void,
-): EmitterSubscription {
+): EventSubscription {
   if (emitter === null) {
     emitter = new NativeEventEmitter(
       NativeModules.AirhopTorSocket as unknown as ConstructorParameters<

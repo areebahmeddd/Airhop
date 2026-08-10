@@ -56,7 +56,6 @@ export default function SecurityScreen({ onBack }: Props): React.JSX.Element {
   const hideNotificationPreviews = useSettingsStore(
     (s) => s.hideNotificationPreviews,
   );
-  const keyboardLearning = useSettingsStore((s) => s.keyboardLearning);
   const mediaRetentionDays = useSettingsStore((s) => s.mediaRetentionDays);
   const [showRetentionSheet, setShowRetentionSheet] = useState(false);
 
@@ -105,28 +104,11 @@ export default function SecurityScreen({ onBack }: Props): React.JSX.Element {
         </View>
 
         {/* The choices, below the guarantees: those describe what is true, these
-            ask the user something. All three are the same question in different
+            ask the user something. Both are the same question in different
             clothes - what does this device leak to something outside the app? -
-            so they share one box: the keyboard, the lock screen, and the disk. */}
+            so they share one box: the lock screen and the disk. */}
         <View style={styles.section}>
           <View style={styles.settingsGroup}>
-            {/* On by default. Typing comfort is not a luxury in an app somebody
-                opens during a blackout, and the leak is small and indirect: the
-                keyboard's dictionary, not the message. */}
-            <SettingRow
-              icon="type"
-              label={T("settings.security.keyboard_learning")}
-              description={T("settings.security.keyboard_learning_desc")}
-              control={
-                <SettingSwitch
-                  value={keyboardLearning}
-                  onValueChange={(v) =>
-                    useSettingsStore.getState().setKeyboardLearning(v)
-                  }
-                />
-              }
-            />
-            <GroupDivider />
             <SettingRow
               icon="eye-off"
               label={T("settings.security.hide_previews")}

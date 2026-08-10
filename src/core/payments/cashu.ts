@@ -30,8 +30,8 @@
 import {
   getDecodedToken,
   getEncodedToken,
+  hasValidDleq,
   KeyChain,
-  verifyDleqIfPresent,
   type KeyChainCache,
   type Proof,
   type ProofLike,
@@ -293,10 +293,12 @@ export function verifyTokenOffline(
       continue;
     }
     try {
-      // `verifyDleqIfPresent` returns true for a proof with no witness, which is
-      // the NUT-12 "MUST verify if present" rule. We only reach it for proofs
-      // that do carry one, or for ones where skipping is correct.
-      if (!verifyDleqIfPresent(proof, keyset)) {
+      // `require: false` accepts a proof carrying no witness, which is the
+      // NUT-12 "MUST verify if present" rule: a mint that predates DLEQ is not
+      // a mint issuing bad proofs. Anything that DOES carry one must verify.
+      // (This replaces `verifyDleqIfPresent`, which is the same behaviour under
+      // the name cashu-ts is removing in v5.)
+      if (!hasValidDleq(proof, keyset, { require: false })) {
         return {
           status: "invalid",
           reason: `proof ${proof.secret.slice(0, 8)}… failed DLEQ verification`,

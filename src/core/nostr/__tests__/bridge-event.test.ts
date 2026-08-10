@@ -125,4 +125,71 @@ describe("parseBridgeEvent", () => {
     const wrongKind = { ...ev, kind: 1 };
     expect(parseBridgeEvent(wrongKind)).toBeNull();
   });
+
+  // The hint becomes the timeline row identity, so an unchecked one is a write
+  // primitive: the sender, timestamp and text of a public message are all
+  // public, so anyone could compute a victim's stable ID, publish their own
+  // rendezvous event claiming it, and land on that exact row on every far
+  // island with different words under the original's identity. Claiming a row
+  // now requires the id to hash the claimant's OWN content.
+  test("ignores a stable ID that does not match the event's own content", () => {
+    const genuine = createBridgeMeshEvent({
+      content: "meet at the north gate",
+      cell: "u4pruy",
+      privKey: CELL_KEY,
+      meshSenderID: "a1b2c3d4e5f60718",
+      meshTimestampMs: 1700000000000,
+    });
+    const victimID = parseBridgeEvent(genuine)?.radioMessageIDHint;
+    expect(victimID).toBeDefined();
+
+    // Same tags, different words: the substitution.
+    const forged = { ...genuine, content: "meet at the south gate" };
+
+    expect(parseBridgeEvent(forged)?.radioMessageIDHint).toBeUndefined();
+  });
+
+  test("ignores a stable ID whose sender or timestamp was rewritten", () => {
+    const ev = createBridgeMeshEvent({
+      content: "hello world",
+      cell: "u4pruy",
+      privKey: CELL_KEY,
+      meshSenderID: "a1b2c3d4e5f60718",
+      meshTimestampMs: 1700000000000,
+    });
+    const swapSender = {
+      ...ev,
+      tags: ev.tags.map((t) =>
+        t[0] === "m" ? [t[0], t[1], "ffffffffffffffff", t[3]] : t,
+      ),
+    };
+    expect(parseBridgeEvent(swapSender)?.radioMessageIDHint).toBeUndefined();
+
+    const swapTime = {
+      ...ev,
+      tags: ev.tags.map((t) => (t[0] === "m" ? [t[0], t[1], t[2], "1"] : t)),
+    };
+    expect(parseBridgeEvent(swapTime)?.radioMessageIDHint).toBeUndefined();
+  });
+
+  test("ignores a truncated or unparseable m tag rather than trusting it", () => {
+    const ev = createBridgeMeshEvent({
+      content: "hello world",
+      cell: "u4pruy",
+      privKey: CELL_KEY,
+      meshSenderID: "a1b2c3d4e5f60718",
+      meshTimestampMs: 1700000000000,
+    });
+    const short = {
+      ...ev,
+      tags: ev.tags.map((t) => (t[0] === "m" ? [t[0], t[1]] : t)),
+    };
+    expect(parseBridgeEvent(short)?.radioMessageIDHint).toBeUndefined();
+
+    const badTime = {
+      ...ev,
+      tags: ev.tags.map((t) => (t[0] === "m" ? [t[0], t[1], t[2], "soon"] : t)),
+    };
+    expect(parseBridgeEvent(badTime)?.radioMessageIDHint).toBeUndefined();
+  });
 });

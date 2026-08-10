@@ -275,14 +275,52 @@ describe("CourierStore sprayTo", () => {
     const tag = new Uint8Array(16).fill(0x10);
 
     store.deposit(makeEnvelopePayload(tag, 4), depositor.pub, "verified");
-    const peer = makeNoiseKeypair();
-    const toSpray = store.sprayTo(peer.pub);
+    const first = makeNoiseKeypair();
+    const toSpray = store.sprayTo(first.pub);
     expect(toSpray.length).toBe(1);
     expect(toSpray[0].copies).toBe(2); // half of 4
-    // Store copy budget reduced to 2
-    // (no direct accessor, but spray again should yield 1)
-    const toSpray2 = store.sprayTo(peer.pub);
+
+    // A DIFFERENT courier, which is what halving is for. The budget is spent on
+    // reaching new carriers, so the second one gets half of what is left.
+    const second = makeNoiseKeypair();
+    const toSpray2 = store.sprayTo(second.pub);
     expect(toSpray2[0].copies).toBe(1);
+  });
+
+  test("hands an envelope to each peer once, not once per announce", () => {
+    // Spraying is driven by announces, which arrive continuously from the same
+    // neighbours. Without a per-peer record the budget was spent re-handing the
+    // same copy to someone who already held it, so an envelope decayed
+    // 4 -> 2 -> 1 without ever reaching a second carrier - the opposite of what
+    // spray-and-wait is for.
+    const store = new CourierStore();
+    const depositor = makeNoiseKeypair();
+    const tag = new Uint8Array(16).fill(0x11);
+    store.deposit(makeEnvelopePayload(tag, 4), depositor.pub, "verified");
+
+    const peer = makeNoiseKeypair();
+    expect(store.sprayTo(peer.pub)).toHaveLength(1);
+    expect(store.sprayTo(peer.pub)).toHaveLength(0);
+    expect(store.sprayTo(peer.pub)).toHaveLength(0);
+
+    // And the budget it did not spend is still there for somebody new.
+    const stranger = makeNoiseKeypair();
+    expect(store.sprayTo(stranger.pub)).toHaveLength(1);
+  });
+
+  test("clamps a hostile copy budget rather than amplifying it", () => {
+    // `copies` is unauthenticated input that decides how many times a carrier
+    // re-emits an envelope. bitchat clamps it in the envelope initialiser; an
+    // unclamped byte would let one sender claim 255 and recruit every carrier
+    // that picked it up into an amplifier.
+    const store = new CourierStore();
+    const depositor = makeNoiseKeypair();
+    const tag = new Uint8Array(16).fill(0x12);
+    store.deposit(makeEnvelopePayload(tag, 255), depositor.pub, "verified");
+
+    const peer = makeNoiseKeypair();
+    const sprayed = store.sprayTo(peer.pub);
+    expect(sprayed[0].copies).toBeLessThanOrEqual(4);
   });
 
   test("skips envelopes with copies < 2", () => {
@@ -323,6 +361,7 @@ describe("CourierStore seal/open integration", () => {
       recipient.pub,
       signing.peerID,
       signing.priv,
+      "00112233445566aa",
     );
 
     expect(packet.type).toBe(0x04); // PacketType.COURIER_ENV

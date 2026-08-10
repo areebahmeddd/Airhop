@@ -44,6 +44,12 @@ export const Colors = {
   accent: "#111111",
   accentGhost: "rgba(17,17,17,0.05)", // subtle pressed/hover bg
 
+  // Highlight behind selected text in an input. Never `accent`: that is a solid
+  // near-black, and a text field paints the selection as an opaque block behind
+  // the glyphs, so selecting a whole message hid the text under a slab. Enough
+  // alpha to show the run, little enough to keep every glyph readable.
+  selection: "rgba(17,17,17,0.18)",
+
   // ---- Message bubbles ------------------------------------------------------
   // My messages: near-black with white text (iMessage-style inversion).
   myBubble: "#111111",
@@ -105,6 +111,9 @@ export const DarkColors = {
 
   accent: "#F5F5F5",
   accentGhost: "rgba(245,245,245,0.08)",
+  // Heavier than the light palette's: a pale wash on a near-black canvas reads
+  // fainter than the same alpha of black on white.
+  selection: "rgba(245,245,245,0.24)",
 
   myBubble: "#F5F5F5",
   myBubbleText: "#111111",

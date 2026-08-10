@@ -14,7 +14,9 @@ import {
   Text,
   View,
 } from "react-native";
-import { Swipeable } from "react-native-gesture-handler";
+import ReanimatedSwipeable, {
+  type SwipeableMethods,
+} from "react-native-gesture-handler/ReanimatedSwipeable";
 import Animated, { FadeIn, LinearTransition } from "react-native-reanimated";
 import { t, tPlural, useT } from "../../i18n";
 import { getMeshService } from "../../services/mesh-service";
@@ -87,7 +89,7 @@ export default function DmList({ onSelectDM }: Props): React.JSX.Element {
   const [moreOptionsDM, setMoreOptionsDM] = useState<string | null>(null);
   // Which DM's contact-info sheet is open (null when closed).
   const [infoChannel, setInfoChannel] = useState<string | null>(null);
-  const swipeableRefs = useRef(new Map<string, Swipeable>()).current;
+  const swipeableRefs = useRef(new Map<string, SwipeableMethods>()).current;
 
   function handleRefresh(): void {
     setRefreshing(true);
@@ -331,7 +333,7 @@ export default function DmList({ onSelectDM }: Props): React.JSX.Element {
               layout={LinearTransition.duration(Duration.slow)}
               entering={FadeIn.duration(Duration.base)}
             >
-              <Swipeable
+              <ReanimatedSwipeable
                 ref={(ref) => {
                   if (ref) swipeableRefs.set(item, ref);
                   else swipeableRefs.delete(item);
@@ -360,7 +362,7 @@ export default function DmList({ onSelectDM }: Props): React.JSX.Element {
                 )}
               >
                 {row}
-              </Swipeable>
+              </ReanimatedSwipeable>
             </Animated.View>
           );
         }}

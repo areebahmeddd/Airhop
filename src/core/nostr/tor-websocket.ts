@@ -10,7 +10,7 @@
 // ready-state constants. It is not a full WHATWG WebSocket (no addEventListener,
 // no binaryType), which is fine because nostr-tools never uses those.
 
-import type { EmitterSubscription } from "react-native";
+import type { EventSubscription } from "react-native";
 import {
   AirhopTorSocketNative,
   subscribeTorSocket,
@@ -45,7 +45,7 @@ export class TorWebSocket {
   onclose: Handler = null;
 
   private readonly id: string;
-  private readonly sub: EmitterSubscription;
+  private readonly sub: EventSubscription;
   // Frames requested before the socket finished opening. In practice nostr-tools
   // only sends after onopen, but buffering keeps us correct rather than dropping
   // a REQ if that ever changes.

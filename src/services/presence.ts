@@ -33,7 +33,20 @@ export function applyPresence(next: PresenceStatus, nickname: string): void {
     // Coming back from Away means the whole mesh was stopped, so it needs a
     // real start; from Invisible only advertising was off.
     if (current === "away") mesh?.start(nickname);
-    else mesh?.setDiscoverable(true);
+    // Stated unconditionally, not only on the Invisible edge.
+    //
+    // Discoverability is intent the radio controller holds across a stop:
+    // suspend() and stop() clear `running` and leave `discoverable` alone, on
+    // purpose, so an outage does not make an Invisible user discoverable when
+    // the radio returns. The cost was that Online could not undo it. Going
+    // Invisible, then Away, then Online restarted the mesh with the controller
+    // still holding discoverable=false, so the phone scanned and relayed but
+    // never advertised - nobody could see it - while the profile dot said
+    // Online and no banner disagreed. Nothing corrected it short of a relaunch.
+    //
+    // setDiscoverable is a no-op when the value already matches, so saying it
+    // every time costs nothing and removes the ordering dependency entirely.
+    mesh?.setDiscoverable(true);
   } else if (next === "away") {
     mesh?.stop();
     // Away stops the whole mesh, so the internet gateway can no longer relay
