@@ -5,6 +5,12 @@ All notable changes are documented here. The format follows [Keep a Changelog](h
 
 ## What's New
 
+- feat: enhance audio capture and playback with loudness level tracking (by @areebahmeddd) [6bcebfd]
+
+**Full changelog:** [v0.9.13..v0.9.14](https://github.com/areebahmeddd/airhop/compare/v0.9.13..v0.9.14)
+
+## What's New
+
 - feat: enhance geohash channel service with deletion management and WiFi fast path support (by @areebahmeddd) [1646ae9]
 - fix(ui): follow laws of ui/ux, mobile basics, micro ui ux interactions (by @areebahmeddd) [5841b05]
 - fix(core): bug patch after field testing with friends (by @areebahmeddd) [bde4ace]
