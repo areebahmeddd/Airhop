@@ -5,6 +5,14 @@ All notable changes are documented here. The format follows [Keep a Changelog](h
 
 ## What's New
 
+- fix(ui): follow laws of ui/ux, mobile basics, micro ui ux interactions (by @areebahmeddd) [5841b05]
+- fix(core): bug patch after field testing with friends (by @areebahmeddd) [bde4ace]
+- feat(landing): revamp website design (by @areebahmeddd) [a2a0c98]
+
+**Full changelog:** [v0.9.12..v0.9.13](https://github.com/areebahmeddd/airhop/compare/v0.9.12..v0.9.13)
+
+## What's New
+
 - refactor: improve fragment pacing logic and update related comments for clarity (by @areebahmeddd) [d1bd03e]
 - fix(router): stop dropping DMs from a direct peer between announces (by @areebahmeddd) [c1fbe19]
 - refactor: update metadata handling and improve code consistency across components (by @areebahmeddd) [f9b067f]
