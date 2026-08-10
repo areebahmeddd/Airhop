@@ -34,6 +34,15 @@ export const NoisePayloadType = {
   // asserted in an announce. See peer-state-packet.ts for why that difference
   // is the whole point. Permanently assigned; not part of the media migration.
   AUTHENTICATED_PEER_STATE: 0x21,
+  // A contact card handed over inside an existing conversation, so two people
+  // who met under location-channel pseudonyms can choose to become durable
+  // contacts. Body is the same binary a QR encodes (core/crypto/contact-exchange),
+  // so one format serves the camera and the wire.
+  //
+  // Airhop-only, and safe to be: bitchat drops a NoisePayload whose type it does
+  // not know, which is exactly the right outcome for a client that has no
+  // concept of keeping someone from a geohash.
+  CONTACT_CARD: 0x22,
 } as const;
 export type NoisePayloadTypeValue =
   (typeof NoisePayloadType)[keyof typeof NoisePayloadType];

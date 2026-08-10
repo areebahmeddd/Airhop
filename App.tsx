@@ -106,7 +106,6 @@ import {
   useChatStore,
 } from "./src/store/chat-store";
 import {
-  threadBanners,
   useMeshBanners,
   useMeshStateStore,
   type BannerAction,
@@ -1821,26 +1820,12 @@ function AppContent(): React.JSX.Element {
                 </View>
               )}
 
-              {/* Transport banner.
-
-                  The full stack lives on the Mesh tab: that is where an empty
-                  screen needs explaining, and where the buttons that fix each
-                  blocker belong. A thread gets the short list instead - see
-                  threadBanners for which and why - because someone writing a
-                  message should not have to send it to find out the radio is
-                  off. The thread's own strip still reports what became of a
-                  message once sent; this is the part that has to be true
-                  beforehand.
-
-                  Above the thread's own header rather than below it, which is
-                  the one place a full-width strip can go without reaching into
-                  message-thread's layout. Renders nothing when the list is
-                  empty, so nothing shifts for the ordinary case. */}
-              {(tab === "mesh" || isInThread) && (
+              {/* Transport banner. Mesh tab only: that is where an empty screen
+                  needs explaining, and it is where the buttons that fix each
+                  blocker belong. Renders nothing when nothing is wrong. */}
+              {!isInThread && tab === "mesh" && (
                 <MeshStatusBar
-                  banners={
-                    isInThread ? threadBanners(meshBanners) : meshBanners
-                  }
+                  banners={meshBanners}
                   onAction={(kind) => void handleBannerAction(kind, username)}
                   onDismiss={(key) => {
                     if (key === "background-limits") {

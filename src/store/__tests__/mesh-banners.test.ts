@@ -1,8 +1,4 @@
-import {
-  computeMeshBanners,
-  threadBanners,
-  type MeshBannerInputs,
-} from "../mesh-state-store";
+import { computeMeshBanners, type MeshBannerInputs } from "../mesh-state-store";
 
 // A healthy, fully-online baseline. Individual tests override one field.
 const HEALTHY: MeshBannerInputs = {
@@ -35,7 +31,7 @@ describe("computeMeshBanners", () => {
     expect(banners).toEqual([
       {
         key: "paused",
-        label: "Mesh paused · You're away",
+        label: "Mesh paused · you're away",
         tone: "neutral",
         action: { label: "Resume", kind: "resume" },
       },
@@ -492,89 +488,5 @@ describe("the incomplete-wipe banner", () => {
       peerCount: 0,
     });
     expect(banners[0].key).toBe("wipe-incomplete");
-  });
-});
-
-// Which banners follow the reader into a conversation. The rule: only what
-// stops this conversation working and can be acted on, plus the wipe warning.
-describe("threadBanners", () => {
-  function keysFor(inputs: Partial<MeshBannerInputs>): string[] {
-    return threadBanners(computeMeshBanners({ ...HEALTHY, ...inputs })).map(
-      (b) => b.key,
-    );
-  }
-
-  it("carries the blockers that stop a message going, with their fix buttons", () => {
-    for (const blocker of [
-      "adapter-off",
-      "permission-denied",
-      "permission-blocked",
-      "location-permission",
-      "location-services-off",
-    ] as const) {
-      const banners = threadBanners(
-        computeMeshBanners({ ...HEALTHY, bleBlocker: blocker, peerCount: 0 }),
-      );
-      expect(banners).toHaveLength(1);
-      expect(banners[0].action).toBeDefined();
-    }
-  });
-
-  it("carries Away, a skewed clock, a blocked Tor and an incomplete wipe", () => {
-    expect(keysFor({ presenceStatus: "away" })).toEqual(["paused"]);
-    expect(keysFor({ clockSkewed: true })).toEqual(["clock-skew"]);
-    expect(keysFor({ torBootstrap: "blocked", peerCount: 0 })).toEqual([
-      "tor-blocked",
-    ]);
-    expect(keysFor({ wipeIncomplete: true })).toEqual(["wipe-incomplete"]);
-  });
-
-  // Everything that describes a mesh which is working. Repeating these over a
-  // conversation is chrome, and the thread's own strip already reports what
-  // became of anything actually sent.
-  it("drops the informational notes", () => {
-    expect(
-      keysFor({
-        locationGranted: false,
-        powerSaving: true,
-        advertisingUnsupported: true,
-        wifiFastPath: "unavailable",
-        backgroundLimitsBrand: "Xiaomi",
-        nostrConnected: true,
-        torActive: true,
-        gatewayEnabled: true,
-        bridgeActive: true,
-        peerCount: 0,
-      }),
-    ).toEqual([]);
-    expect(keysFor({ internetEnabled: false })).toEqual([]);
-  });
-
-  // Neither can be acted on. "Starting" is transient and would flash on every
-  // thread open; "no Bluetooth hardware" never changes and never dismisses, so
-  // it would become furniture. Both still show on the Mesh tab.
-  it("drops the two blockers with nothing to tap", () => {
-    for (const blocker of ["starting", "unsupported"] as const) {
-      expect(keysFor({ bleBlocker: blocker, peerCount: 0 })).toEqual([]);
-      expect(
-        computeMeshBanners({ ...HEALTHY, bleBlocker: blocker, peerCount: 0 }),
-      ).toHaveLength(1);
-    }
-  });
-
-  it("keeps severity order when several apply at once", () => {
-    expect(
-      keysFor({
-        wipeIncomplete: true,
-        bleBlocker: "adapter-off",
-        clockSkewed: true,
-        locationGranted: false,
-        peerCount: 0,
-      }),
-    ).toEqual(["wipe-incomplete", "ble-adapter-off", "clock-skew"]);
-  });
-
-  it("is empty on a healthy mesh, so a thread shows no chrome", () => {
-    expect(keysFor({})).toEqual([]);
   });
 });

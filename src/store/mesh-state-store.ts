@@ -169,6 +169,12 @@ interface MeshStateStore {
   // launch, so a retry that succeeds simply stops raising it - and a wipe leaves
   // no on-disk trace of having been attempted.
   wipeIncomplete: boolean;
+  // The location cells we are currently listening for geo DMs in, or null when
+  // we cannot say (no position fix, or the mesh is stopped). A conversation
+  // started in a cell that is not in this list can still be written to, but
+  // nothing sent back reaches us - see publishLiveCells in
+  // services/geohash-channel-service for why null is not the empty list.
+  liveGeoCells: string[] | null;
   // State of the Android WiFi Aware fast path (see services/wifi-controller).
   wifiFastPath: WifiFastPath;
   // Whether the Nostr relay pool has at least one live connection.
@@ -217,6 +223,7 @@ interface MeshStateStore {
   setPowerSaving: (saving: boolean) => void;
   setLocationGranted: (granted: boolean) => void;
   setWipeIncomplete: (incomplete: boolean) => void;
+  setLiveGeoCells: (cells: string[] | null) => void;
   setWifiFastPath: (state: WifiFastPath) => void;
   setNostrConnected: (connected: boolean) => void;
   setTorActive: (active: boolean) => void;
@@ -232,6 +239,7 @@ export const useMeshStateStore = create<MeshStateStore>()((set) => ({
   powerSaving: false,
   locationGranted: true,
   wipeIncomplete: false,
+  liveGeoCells: null,
   wifiFastPath: "unknown",
   nostrConnected: false,
   torActive: false,
@@ -261,6 +269,9 @@ export const useMeshStateStore = create<MeshStateStore>()((set) => ({
   },
   setWipeIncomplete(incomplete) {
     set({ wipeIncomplete: incomplete });
+  },
+  setLiveGeoCells(cells) {
+    set({ liveGeoCells: cells });
   },
   setWifiFastPath(state) {
     set({ wifiFastPath: state });
@@ -622,50 +633,6 @@ export function computeMeshBanners(inputs: MeshBannerInputs): MeshBanner[] {
   }
 
   return banners;
-}
-
-// The banners that follow the reader into a conversation.
-//
-// The full stack belongs on the Mesh tab, where an empty radar is the thing
-// needing explanation and every fix button is in reach. A thread is a different
-// question: the reader is not diagnosing the mesh, they are trying to send a
-// message, and the only states worth their attention are the ones that stop
-// that from happening and that they can do something about.
-//
-// The thread already reports what became of a message it tried to send (queued,
-// no route, no reach). What it cannot say is why, BEFORE anything is typed - so
-// someone sits in a conversation with the radio switched off, writes, sends, and
-// only then learns. These few carry that forward.
-//
-// Everything else stays out on purpose. The informational notes (location off,
-// battery saver, relaying, Tor on, gateway, bridge, the WiFi fast path) describe
-// a mesh that is working; repeating them over a conversation is chrome nobody
-// asked for. So do the two that cannot be acted on: "no Bluetooth hardware" is
-// permanent, and a banner that never changes and never dismisses becomes
-// furniture people stop reading - while "starting" is transient and would flash
-// on every thread open.
-const THREAD_BANNER_KEYS = new Set([
-  // The mesh is stopped because the user chose Away. Carries Resume.
-  "paused",
-  // Secrets survived a panic wipe. Not about this conversation, and the one
-  // thing here important enough to say wherever the user happens to be.
-  "wipe-incomplete",
-  // The radio cannot run, and each of these carries the button that fixes it.
-  "ble-adapter-off",
-  "ble-permission",
-  "ble-permission-blocked",
-  "ble-location-permission",
-  "ble-location-services",
-  // Every peer refuses us and we refuse every peer, so nothing in this thread
-  // will send or arrive. Says what to do in the label.
-  "clock-skew",
-  // Anything routing over the internet is paused, which for a Nostr-delivered
-  // thread is the whole of it.
-  "tor-blocked",
-]);
-
-export function threadBanners(banners: MeshBanner[]): MeshBanner[] {
-  return banners.filter((b) => THREAD_BANNER_KEYS.has(b.key));
 }
 
 // Hook form for components: recomputes as presence, permissions, relay, Tor and

@@ -24,8 +24,19 @@
 // Events emitted by native code via NativeEventEmitter:
 //
 // 'AirhopVoice.frame'
-//   { dataBase64: string }
-//   One encoded AAC frame from the microphone, ready to packetize.
+//   { dataBase64: string, level: number }
+//   One encoded AAC frame from the microphone, ready to packetize. `level` is
+//   how loud the audio in it was, 0 to 1, so a meter can be drawn without a
+//   second event stream: frames already cross the bridge fifteen times a
+//   second, which is the rate a meter wants anyway. Plain RMS, unshaped -
+//   speech sits low on a linear scale, and the curve that makes it read well
+//   belongs in the UI where it can be tuned without a native rebuild.
+//
+// 'AirhopVoice.playbackLevel'
+//   { level: number }
+//   The same measurement for audio on its way to the speaker, emitted as it is
+//   played rather than as it arrives. Its own event because playback has no
+//   frame stream to ride along on.
 //
 // 'AirhopVoice.captureError'
 //   { message: string }

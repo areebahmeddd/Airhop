@@ -32,7 +32,6 @@ function makeIdentity(): Identity {
     signingPrivKey,
     signingPubKey,
     peerID,
-    nostrPubKey: bytesToHex(signingPubKey),
   };
 }
 

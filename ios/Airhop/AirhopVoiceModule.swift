@@ -41,6 +41,65 @@ private enum VoiceConst {
 private enum VoiceEvent {
     static let frame = "AirhopVoice.frame"
     static let captureError = "AirhopVoice.captureError"
+    static let playbackLevel = "AirhopVoice.playbackLevel"
+}
+
+/// Loudness of a buffer of float PCM, 0 (silence) to 1 (clipping).
+///
+/// Plain RMS, deliberately unshaped: speech sits low on a linear scale, so a
+/// meter drawn straight from this barely moves. The curve that makes it read
+/// well belongs in the UI, where it can be tuned without rebuilding the app.
+private func rmsLevel(of buffer: AVAudioPCMBuffer) -> Double {
+    guard let channel = buffer.floatChannelData?[0], buffer.frameLength > 0 else { return 0 }
+    let count = Int(buffer.frameLength)
+    var sum: Float = 0
+    for i in 0..<count {
+        let sample = channel[i]
+        sum += sample * sample
+    }
+    return Double((sum / Float(count)).squareRoot()).clamped01
+}
+
+private extension Double {
+    /// Guards the meter against a denormal or an out-of-range sample reaching
+    /// the UI as a bar taller than its track.
+    var clamped01: Double {
+        guard isFinite else { return 0 }
+        return Swift.min(1, Swift.max(0, self))
+    }
+}
+
+// MARK: - Capture generation
+
+/// Which capture a render-thread callback belongs to.
+///
+/// Removing a tap does not cancel a buffer already handed to it, so a callback
+/// from the burst that just ended can still run after the next one has started.
+/// Its frames would be attributed to the new burst - the previous talker's last
+/// words playing under the new burst's ID on every listener. Every callback
+/// proves it is still the current capture before emitting anything.
+private final class VoiceCaptureGeneration {
+    private let lock = NSLock()
+    private var value: UInt64 = 0
+
+    func begin() -> UInt64 {
+        lock.lock()
+        defer { lock.unlock() }
+        value &+= 1
+        return value
+    }
+
+    func invalidate() {
+        lock.lock()
+        defer { lock.unlock() }
+        value &+= 1
+    }
+
+    func isCurrent(_ generation: UInt64) -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return value == generation
+    }
 }
 
 // MARK: - Module
@@ -50,9 +109,30 @@ final class AirhopVoiceModule: RCTEventEmitter {
 
     // MARK: Capture state
 
-    private let captureEngine = AVAudioEngine()
+    // Recreated on every capture, never reused. An engine whose input unit was
+    // instantiated against an earlier audio session keeps reporting a dead
+    // 0 Hz input and silently fails to enable the microphone, and Airhop hands
+    // the session back to playback-only between every burst (the mic button's
+    // release path calls setAudioForPlayback). So the second hold and every one
+    // after it would capture nothing while reporting success - the burst goes
+    // live on the far side and no audio ever follows. bitchat hit the same
+    // thing on device and fixed it the same way; see the `engine` comment in
+    // their PTTCaptureEngine.swift.
+    private var captureEngine = AVAudioEngine()
+    // Whether `captureEngine`'s input unit has been instantiated by us. Reading
+    // `inputNode` on an engine that was never armed instantiates it against
+    // whatever session happens to be active, which is the state this class
+    // exists to avoid, so teardown has to know not to touch it.
+    private var captureEngineArmed = false
+    // Loudness of the most recent block of microphone audio, ridden along on the
+    // next frame event rather than sent on its own. The frames already cross the
+    // bridge fifteen times a second, which is the rate a meter wants, so this
+    // costs no extra traffic and cannot drift out of step with the audio it
+    // describes.
+    private var captureLevel: Double = 0
     private var captureConverter: AVAudioConverter?
     private var isCapturing = false
+    private let captureGeneration = VoiceCaptureGeneration()
     // Serialises capture setup/teardown against the render thread's tap.
     private let captureQueue = DispatchQueue(label: "org.onemindlabs.airhop.voice.capture")
 
@@ -70,7 +150,7 @@ final class AirhopVoiceModule: RCTEventEmitter {
     @objc override static func requiresMainQueueSetup() -> Bool { false }
 
     override func supportedEvents() -> [String]! {
-        [VoiceEvent.frame, VoiceEvent.captureError]
+        [VoiceEvent.frame, VoiceEvent.captureError, VoiceEvent.playbackLevel]
     }
 
     // MARK: - Formats
@@ -153,9 +233,18 @@ final class AirhopVoiceModule: RCTEventEmitter {
         guard let pcmFormat, let aacFormat else {
             throw VoiceError.format("Unsupported audio format")
         }
+        // Fresh engine bound to the session configureSession() just activated.
+        // See the `captureEngine` comment for what reuse costs.
+        captureEngine = AVAudioEngine()
+        captureEngineArmed = true
+        let generation = captureGeneration.begin()
         let input = captureEngine.inputNode
         let inputFormat = input.outputFormat(forBus: 0)
-        guard inputFormat.sampleRate > 0 else {
+        // A dead input reports 0 Hz, and on some routes a plausible rate with no
+        // channels; both mean the microphone is not going to produce anything,
+        // and failing here lets the caller fall back to a voice note instead of
+        // holding a mic that captures silence.
+        guard inputFormat.sampleRate > 0, inputFormat.channelCount > 0 else {
             throw VoiceError.format("Microphone unavailable")
         }
 
@@ -175,7 +264,13 @@ final class AirhopVoiceModule: RCTEventEmitter {
             bufferSize: 2048,
             format: inputFormat
         ) { [weak self] buffer, _ in
-            self?.handleCapturedBuffer(buffer, toPCM: toPCM, toAAC: toAAC, pcmFormat: pcmFormat)
+            self?.handleCapturedBuffer(
+                buffer,
+                generation: generation,
+                toPCM: toPCM,
+                toAAC: toAAC,
+                pcmFormat: pcmFormat
+            )
         }
 
         captureEngine.prepare()
@@ -186,11 +281,14 @@ final class AirhopVoiceModule: RCTEventEmitter {
     /// and must never block: anything slow here is heard as a dropout.
     private func handleCapturedBuffer(
         _ buffer: AVAudioPCMBuffer,
+        generation: UInt64,
         toPCM: AVAudioConverter,
         toAAC: AVAudioConverter,
         pcmFormat: AVAudioFormat
     ) {
-        guard isCapturing else { return }
+        // Belongs to a capture that has already been torn down: its audio is
+        // not this burst's to send. See VoiceCaptureGeneration.
+        guard captureGeneration.isCurrent(generation) else { return }
 
         // Resample to 16 kHz mono.
         let ratio = pcmFormat.sampleRate / buffer.format.sampleRate
@@ -208,6 +306,9 @@ final class AirhopVoiceModule: RCTEventEmitter {
             return buffer
         }
         if error != nil || pcm.frameLength == 0 { return }
+        // Measured on the resampled 16 kHz mono audio, which is what actually
+        // goes out, rather than on whatever shape the hardware handed us.
+        captureLevel = rmsLevel(of: pcm)
 
         // Encode to AAC. The converter emits one packet per 1024 samples, so a
         // buffer that is not a whole number of frames simply carries the
@@ -231,6 +332,9 @@ final class AirhopVoiceModule: RCTEventEmitter {
         }
         if encodeError != nil || compressed.packetCount == 0 { return }
 
+        // Re-checked after the encode: the hold can end while a buffer is in
+        // flight, and a frame emitted past that point lands in the next burst.
+        guard captureGeneration.isCurrent(generation) else { return }
         emitPackets(from: compressed)
     }
 
@@ -257,9 +361,15 @@ final class AirhopVoiceModule: RCTEventEmitter {
 
     private func teardownCapture() {
         isCapturing = false
+        captureConverter = nil
+        // Invalidated before the engine stops, so a buffer already in flight on
+        // the render thread is discarded rather than emitted into whatever
+        // burst comes next.
+        captureGeneration.invalidate()
+        guard captureEngineArmed else { return }
+        captureEngineArmed = false
         if captureEngine.isRunning { captureEngine.stop() }
         captureEngine.inputNode.removeTap(onBus: 0)
-        captureConverter = nil
     }
 
     // MARK: - Playback
@@ -379,6 +489,9 @@ final class AirhopVoiceModule: RCTEventEmitter {
             return compressed
         }
         guard error == nil, pcm.frameLength > 0 else { return }
+        // Measured as the audio is handed to the speaker, so the meter shows
+        // what is actually being heard rather than what has merely arrived.
+        emitPlaybackLevel(rmsLevel(of: pcm))
 
         queuedFrames += 1
         playerNode.scheduleBuffer(pcm) { [weak self] in
@@ -407,7 +520,18 @@ final class AirhopVoiceModule: RCTEventEmitter {
 
     private func emitFrame(_ frame: Data) {
         guard bridge != nil else { return }
-        sendEvent(withName: VoiceEvent.frame, body: ["dataBase64": frame.base64EncodedString()])
+        sendEvent(
+            withName: VoiceEvent.frame,
+            body: ["dataBase64": frame.base64EncodedString(), "level": captureLevel]
+        )
+    }
+
+    /// Loudness of audio just handed to the speaker. Unlike capture there is no
+    /// existing event to ride along on, so this is its own, at the same fifteen
+    /// a second the frames arrive at.
+    private func emitPlaybackLevel(_ level: Double) {
+        guard bridge != nil else { return }
+        sendEvent(withName: VoiceEvent.playbackLevel, body: ["level": level])
     }
 }
 

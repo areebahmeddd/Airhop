@@ -4,6 +4,7 @@
 import type { Packet } from "../packet-codec";
 import { Flags, PacketType } from "../packet-codec";
 import {
+  encodeBurstCanceled,
   encodeBurstData,
   encodeBurstStart,
   VoiceCodec,
@@ -44,6 +45,19 @@ function makeStartPacket(seed: number): Packet {
     timestamp: Math.floor(Date.now() / 1000),
     signature: new Uint8Array(64),
     payload: encodeBurstStart(burstID(seed), VoiceCodec.AAC_LC_16KHZ_MONO),
+  };
+}
+
+function makeCanceledPacket(seed: number): Packet {
+  return {
+    type: PacketType.VOICE_FRAME,
+    ttl: 7,
+    flags: Flags.SIGNED,
+    senderID: new Uint8Array(8),
+    recipientID: new Uint8Array(8),
+    timestamp: Math.floor(Date.now() / 1000),
+    signature: new Uint8Array(64),
+    payload: encodeBurstCanceled(burstID(seed), 9),
   };
 }
 
@@ -311,5 +325,101 @@ describe("VoicePlayer inbound burst caps", () => {
     // identified by 8 random bytes, so this is a different conversation.
     player.handlePacket(makeStartPacket(4), "aabbccdd00112233");
     expect(player.activeSessions).toHaveLength(1);
+  });
+});
+
+// Three people in a room, two of them talking. There is one speaker, so only
+// one of them can be heard; the question is whether the third person hears one
+// voice cleanly or two voices shredding each other.
+describe("two people talking at once", () => {
+  beforeEach(() => jest.useFakeTimers());
+  afterEach(() => {
+    jest.runOnlyPendingTimers();
+    jest.useRealTimers();
+  });
+
+  function playerWithLog(): {
+    player: VoicePlayer;
+    played: string[];
+    ended: string[];
+  } {
+    const played: string[] = [];
+    const ended: string[] = [];
+    const player = track(
+      new VoicePlayer({
+        playFrames: (burstIDHex) => {
+          played.push(burstIDHex);
+          return Promise.resolve();
+        },
+        endSession: (burstIDHex) => {
+          ended.push(burstIDHex);
+        },
+      }),
+    );
+    return { player, played, ended };
+  }
+
+  // The hex spelling of burstID(seed): eight copies of the same byte.
+  const hex = (seed: number): string =>
+    seed.toString(16).padStart(2, "0").repeat(8);
+
+  it("plays only the first talker, and keeps counting both", () => {
+    const { player, played } = playerWithLog();
+
+    player.handlePacket(makeStartPacket(1), "alice");
+    player.handlePacket(makeDataPacket(1, 1), "alice");
+    jest.advanceTimersByTime(400);
+
+    // Bob keys up while Alice still has the floor.
+    player.handlePacket(makeStartPacket(2), "bob");
+    for (let seq = 1; seq <= 5; seq++) {
+      player.handlePacket(makeDataPacket(2, seq), "bob");
+      player.handlePacket(makeDataPacket(1, seq + 1), "alice");
+      jest.advanceTimersByTime(400);
+    }
+
+    // Every batch that reached the speaker was Alice's. Bob never took it away
+    // from her mid-sentence, which is what made both unintelligible.
+    expect(played.length).toBeGreaterThan(0);
+    expect(new Set(played)).toEqual(new Set([hex(1)]));
+    // Both are still talkers: the banner says two people are speaking, and
+    // Bob's voice note still arrives afterwards.
+    expect(player.activeSessions).toHaveLength(2);
+  });
+
+  it("hands the floor to whoever is still talking when the first stops", () => {
+    const { player, played } = playerWithLog();
+
+    player.handlePacket(makeStartPacket(1), "alice");
+    player.handlePacket(makeDataPacket(1, 1), "alice");
+    player.handlePacket(makeStartPacket(2), "bob");
+    player.handlePacket(makeDataPacket(2, 1), "bob");
+    jest.advanceTimersByTime(400);
+    expect(new Set(played)).toEqual(new Set([hex(1)]));
+
+    // Alice stops. Bob talks through her silence, so his session stays open
+    // while hers ages out on the idle timeout.
+    let bobSeq = 2;
+    for (let i = 0; i < 10; i++) {
+      player.handlePacket(makeDataPacket(2, bobSeq++), "bob");
+      jest.advanceTimersByTime(400);
+    }
+
+    expect(player.activeSessions).toHaveLength(1);
+    expect(played).toContain(hex(2));
+  });
+
+  it("silences a retracted burst instead of letting its tail play out", () => {
+    const { player, ended } = playerWithLog();
+
+    player.handlePacket(makeStartPacket(1), "alice");
+    player.handlePacket(makeDataPacket(1, 1), "alice");
+    jest.advanceTimersByTime(400);
+
+    player.handlePacket(makeCanceledPacket(1), "alice");
+    // Up to two seconds of what she took back can still be queued in the audio
+    // pipeline; ending the session is what stops it being heard.
+    expect(ended).toEqual([hex(1)]);
+    expect(player.activeSessions).toHaveLength(0);
   });
 });

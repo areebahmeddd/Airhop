@@ -46,7 +46,6 @@ export function makeIdentity(seedByte = 7): Identity {
     signingPrivKey: signingPriv,
     signingPubKey: signingPub,
     peerID: bytesToHex(sha256(noisePub)).slice(0, 16),
-    nostrPubKey: bytesToHex(signingPub),
   };
 }
 

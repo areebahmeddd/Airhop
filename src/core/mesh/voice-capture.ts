@@ -16,6 +16,11 @@
 // seq 0 is reserved for the START packet. DATA packets start at seq 1.
 // Codec 0x01 = AAC-LC 16 kHz mono (matches VoiceBurstCodec.aacLC16kMono).
 //
+// START is sent with the first captured frame, not when the button goes down.
+// A burst is only real once there is audio in it, and announcing one before the
+// microphone has produced anything is what turns a failed capture into a live
+// bubble on the far side that never plays. See sendStartIfNeeded.
+//
 // DATA packets batch multiple encoded frames (each prefixed with a u16 length)
 // into a single VOICE_FRAME packet up to PTT_MAX_BURST_BYTES (210 bytes) so
 // the packet never needs BLE fragmentation.
@@ -101,6 +106,14 @@ const RETRACT_REPEAT_MS = [110, 330];
 // note. That is why a short burst is RETRACTED and not ended - the same call
 // bitchat makes in PTTLiveVoiceSession.finish(), which sends `.canceled` below
 // its own minimum and deletes the file rather than delivering it.
+//
+// The threshold itself is ours, not bitchat's: theirs is 1 s, shared with their
+// voice-note recorder. Airhop's recorder has no floor at all, so matching 1 s
+// here would mean a 700 ms hold sends a note when nobody is in range and
+// nothing when somebody is - the delivery strategy leaking into whether the
+// message exists. 500 ms is short enough to be a tap and long enough that the
+// two paths agree in every case a user can feel. Nothing on the wire depends on
+// it: receivers enforce no minimum, on either client.
 export const MIN_BURST_KEEP_MS = 500;
 
 // ---- Types ------------------------------------------------------------------
@@ -116,9 +129,9 @@ export interface VoiceCaptureConfig {
   // goes here and `onPacket` is not used: a DM burst must never also be
   // broadcast, or the audio meant for one person is heard by the whole room.
   //
-  // Returns false when the frame could not be sent (no session), which ends
-  // the burst rather than talking into a void.
-  onDmPayload?: (payload: Uint8Array) => boolean;
+  // Best-effort, like the broadcast path: a frame that cannot go out right now
+  // is simply not sent. See emit().
+  onDmPayload?: (payload: Uint8Array) => void;
 }
 
 export interface AudioCaptureBackend {
@@ -133,23 +146,22 @@ export class VoiceCaptureSession {
   private readonly backend: AudioCaptureBackend;
   private readonly codec: VoiceCodecId;
 
-  private active = false;
-  // Whether the burst has been accounted for on the wire: exactly one of END or
-  // CANCELED has gone out for it, and nothing more will.
+  // Whether the microphone is open for this burst.
   //
-  // Separate from `active`, which says only whether the microphone is still
-  // feeding frames. Two things stop the encoder that must not close the burst:
-  // a DM burst whose Noise session went away stops encoding in emit() rather
-  // than talk into a void, and suspend() stops the mic when the last peer in
-  // range walks off. Neither is the user letting go.
+  // One flag, because there is one thing that opens it and one thing that
+  // closes it: the user's finger. Nothing else may end a burst early - not a
+  // peer walking out of range, not a Noise session going away - because the
+  // hold is also a recording, and a recording that stops when the radio does is
+  // a message the talker loses half of without being told. The wire is
+  // best-effort on top of that; see emit().
   //
-  // Folding both into one flag meant the release that came afterwards found an
-  // inactive session and sent nothing at all. A swipe-to-cancel then left the
-  // far side holding the burst it had just been told to drop.
-  //
-  // Starts closed, so a cancel that arrives before the mic was ever opened is
-  // still a no-op rather than a CANCELED for a zeroed burst ID.
-  private closed = true;
+  // Starts false, so a release or a cancel that arrives before the mic was ever
+  // opened is a no-op rather than an END or a CANCELED for a zeroed burst ID.
+  private open = false;
+  // Whether this burst has announced itself. Until the first frame is captured
+  // nobody has been told the burst exists, so there is nothing to end, nothing
+  // to retract, and no bubble anywhere to clean up. See sendStartIfNeeded.
+  private startSent = false;
   private burstID = new Uint8Array(BURST_ID_SIZE);
   private seq = 0; // next seq to emit (0 = START, 1+ = DATA)
   private dataPacketCount = 0;
@@ -181,14 +193,21 @@ export class VoiceCaptureSession {
     }
   }
 
-  // Begin a PTT burst: sends START packet, begins capturing.
+  // Begin a PTT burst: opens the microphone. Nothing goes on the wire until the
+  // first frame arrives - see sendStartIfNeeded.
+  //
+  // Throws if the microphone could not be opened. The burst is left closable
+  // either way: the caller still has a finger on the button, and cancelPtt()
+  // on a burst that never announced itself is correctly a no-op.
   async startPtt(): Promise<void> {
-    if (this.active) return;
-    this.active = true;
-    this.closed = false;
+    if (this.open) return;
+    this.open = true;
+    this.startSent = false;
     this.clearRetractTimers();
     this.burstID = randomBytes(BURST_ID_SIZE);
-    this.seq = 0;
+    // seq 0 belongs to START, which is emitted with the first frame; DATA
+    // packets number from 1 whether or not that has happened yet.
+    this.seq = 1;
     this.dataPacketCount = 0;
     this.burstStartMs = Date.now();
     this.pendingFrames = [];
@@ -196,25 +215,27 @@ export class VoiceCaptureSession {
     this.recorded = [];
     this.recordedBytes = 0;
 
-    // Send START packet (seq=0).
-    this.emit(encodeBurstStart(this.burstID, this.codec));
-    this.seq = 1;
-
     await this.backend.startCapture((frameData) => {
-      if (this.active) this.addFrame(frameData);
+      if (this.open) this.addFrame(frameData);
     });
   }
 
   // End the PTT burst: flush pending frames, send END packet.
   async stopPtt(): Promise<void> {
-    if (this.closed) return;
-    this.closed = true;
-    this.active = false;
+    if (!this.open) return;
+    this.open = false;
     await this.backend.stopCapture();
 
     // A hold too short to be a message is retracted, not ended. See
     // MIN_BURST_KEEP_MS: the tail is deliberately not flushed first, because
     // the point is that nothing survives this press on either side.
+    //
+    // Measured in captured audio, not in how long the button was down. bitchat
+    // checks both because its frame counter can outlive the hold; ours cannot,
+    // since a frame exists only if the microphone produced it. So the frame
+    // count already covers the case the wall clock is there for - a long hold
+    // that captured nothing because the mic never opened - and covers it more
+    // honestly, without counting the time the mic took to open as speech.
     if (this.recordedDurationMs < MIN_BURST_KEEP_MS) {
       this.discard();
       this.retract();
@@ -224,40 +245,31 @@ export class VoiceCaptureSession {
     // Flush any buffered frames.
     this.flushPending();
 
-    const durationMs = Date.now() - this.burstStartMs;
+    // The length of the audio, not of the press. They differ by however long
+    // the microphone took to open, which is hundreds of milliseconds on a cold
+    // start and would otherwise be reported to the far side as speech. Same
+    // quantity bitchat sends (encoded frames x frame duration).
     this.emit(
-      encodeBurstEnd(this.burstID, this.seq, this.dataPacketCount, durationMs),
+      encodeBurstEnd(
+        this.burstID,
+        this.seq,
+        this.dataPacketCount,
+        this.recordedDurationMs,
+      ),
     );
   }
 
   // Abort the PTT burst: send CANCELED packet, discard pending frames.
   async cancelPtt(): Promise<void> {
-    if (this.closed) return;
-    this.closed = true;
-    this.active = false;
+    if (!this.open) return;
+    this.open = false;
     await this.backend.stopCapture();
     this.discard();
     this.retract();
   }
 
-  // Stop the microphone but leave the burst open.
-  //
-  // For when the reason to stop is not the user: the last peer in range walked
-  // off, so there is nobody to stream to and no reason to keep encoding. The
-  // gesture is still theirs, and releasing it still decides what happens to
-  // what they said - an END and a voice note, or a CANCELED and nothing.
-  //
-  // Closing the burst here would make that decision for them, and would make
-  // the swipe-to-cancel that follows a no-op against a session that had already
-  // sent its END.
-  async suspend(): Promise<void> {
-    if (this.closed || !this.active) return;
-    this.active = false;
-    await this.backend.stopCapture();
-  }
-
   get isActive(): boolean {
-    return this.active;
+    return this.open;
   }
 
   // The burst ID as lowercase hex, which is how both the receiver's session key
@@ -282,6 +294,9 @@ export class VoiceCaptureSession {
     // the fragment scheduler, which is the one thing the 210-byte budget
     // exists to prevent. Matches VoiceBurstPacketizer.add in bitchat.
     if (BURST_HEADER_SIZE + frameCost > PTT_MAX_BURST_BYTES) return;
+    // This frame is going into the burst, so the burst now exists. Announce it
+    // before anything carrying audio can go out ahead of it.
+    this.sendStartIfNeeded();
     // If adding this frame would exceed the budget or the frame count limit,
     // flush what we have first.
     if (
@@ -314,6 +329,24 @@ export class VoiceCaptureSession {
     return this.recorded.length * MS_PER_FRAME;
   }
 
+  // Announce the burst, once, on the first frame that will be sent.
+  //
+  // Deliberately not done when the button goes down. A microphone that fails to
+  // open - a stale audio session, a call holding the input, a permission
+  // revoked between the check and the press - would otherwise leave a START on
+  // the wire with no audio behind it, and both clients turn a bare START into a
+  // live bubble: bitchat opens an assembly for it (ChatLiveVoiceCoordinator
+  // .handle), Airhop opens a session (VoicePlayer.handleBurstPayload). The far
+  // side then shows LIVE for the three seconds its idle timeout takes to give
+  // up. Sending START with the audio means a burst that captured nothing is
+  // simply never mentioned. Matches PTTLiveVoiceSession.start in bitchat, which
+  // sends START from inside its first onFrames callback for the same reason.
+  private sendStartIfNeeded(): void {
+    if (this.startSent) return;
+    this.startSent = true;
+    this.emit(encodeBurstStart(this.burstID, this.codec));
+  }
+
   // Tell every listener to drop this burst, and keep saying it. See
   // RETRACT_REPEAT_MS for why once is not enough.
   //
@@ -321,6 +354,11 @@ export class VoiceCaptureSession {
   // signature: the copies are distinct packets rather than replays, which keeps
   // them clear of the freshness window and the flood deduplicator alike.
   private retract(): void {
+    // Nobody was ever told about this burst, so there is nothing to take back.
+    // Saying so anyway costs three signed packets on a link that carries about
+    // 15 KB/s, and every receiver would drop them as control packets for a
+    // burst they never saw.
+    if (!this.startSent) return;
     this.emit(encodeBurstCanceled(this.burstID, this.seq));
     for (const delay of RETRACT_REPEAT_MS) {
       this.retractTimers.push(
@@ -355,19 +393,20 @@ export class VoiceCaptureSession {
     this.emit(payload);
   }
 
+  // Put one burst packet on the wire, if there is a wire.
+  //
+  // Best-effort, always. A frame that cannot go out - nobody in range, a Noise
+  // session that went away when the peer walked off - is dropped and the burst
+  // carries on: live audio has no queue worth waiting in, but the microphone is
+  // still open and the recording is still accumulating, so the words survive as
+  // the voice note the release sends. Stopping the capture here instead cost
+  // the talker the second half of a sentence every time a link flapped, which
+  // on Bluetooth is often, and told them nothing.
   private emit(burstPayload: Uint8Array): void {
     // A DM burst is sealed to one peer and never broadcast. Same bytes, and
     // the only difference is the envelope they travel in.
     if (this.config.onDmPayload !== undefined) {
-      const sent = this.config.onDmPayload(burstPayload);
-      // The session went away mid-burst (peer walked off, or it was never
-      // established). Stop encoding rather than talk into nothing; live audio
-      // has no queue to wait in.
-      //
-      // Encoding only: the burst stays open, because the finger is still on the
-      // button and the release still has to be able to close it. A session that
-      // comes back before then makes that END or CANCELED land after all.
-      if (!sent) this.active = false;
+      this.config.onDmPayload(burstPayload);
       return;
     }
     const packet: Packet = {

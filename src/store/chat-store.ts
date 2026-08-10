@@ -118,6 +118,40 @@ interface ChatState {
   // holding the old name resolves through here: the open thread, the
   // last-thread restore, a tapped notification, a bell row.
   channelRedirects: Record<string, string>;
+  // The geohash cell a `dm:nostr_<pubkey>` conversation belongs to.
+  //
+  // A location-channel DM is written from our per-cell identity, which is
+  // derived from (seed, geohash) - so replying to one needs to know WHICH cell
+  // it happened in. That binding used to live only in memory, which meant it
+  // was gone after a relaunch: opening such a thread from the Direct list and
+  // sending fell through to our MAIN Nostr identity instead. The recipient got
+  // a message from a key they had never seen, so it opened a second thread
+  // rather than continuing theirs - and it handed a person we had only ever met
+  // pseudonymously in a location channel our permanent identity, which is the
+  // exact link per-cell identities exist to prevent.
+  //
+  // Persisted here rather than in a store of its own so it is written, cleared
+  // and wiped with the conversation it describes. Absence means the thread is
+  // NOT a geohash DM: it is someone who reached our durable identity and whose
+  // peer ID we do not know yet, and replying to them from that identity is
+  // correct.
+  geoDmCells: Record<string, string>;
+  // How far a contact-card exchange has got in a location DM, keyed by their
+  // per-cell pubkey.
+  //
+  // Both halves are needed before the two threads may be folded into one, and
+  // the reason is attribution rather than tidiness. Merging is what switches our
+  // replies from the pseudonymous per-cell rail onto the durable one - and the
+  // durable inbox recognises a sender only by a Nostr key it already knows.
+  // (It cannot do otherwise: the envelope carries a sender peer ID, but that
+  // field is unauthenticated, so trusting it would let anyone file a message
+  // into anyone's thread.)
+  //
+  // So switching rails before they hold OUR card lands our messages in a second,
+  // unattributed thread on their side - the exact split this feature exists to
+  // heal. Waiting until both have been exchanged means both people cross over at
+  // the same moment, and neither ever sees the conversation fork.
+  geoCardExchange: Record<string, { theirPeerID?: string; sentMine?: boolean }>;
 
   addChannel: (channel: string) => void;
   // Follow a merged-away channel to the thread it now lives in. Identity for
@@ -152,6 +186,19 @@ interface ChatState {
   // Nostr-only correspondent is later identified over BLE, so the two threads
   // for the same person become one.
   mergeChannel: (from: string, to: string) => void;
+  // Remember which cell a geohash DM belongs to. A no-op when unchanged, so the
+  // inbound path can call it per message without rewriting the store.
+  setGeoDmCell: (pubkey: string, geohash: string) => void;
+  // Record a half of the card exchange. `theirPeerID` is who they turned out to
+  // be; `sentMine` is that we have told them who we are.
+  noteGeoCardExchange: (
+    pubkey: string,
+    half: { theirPeerID?: string; sentMine?: boolean },
+  ) => void;
+  // Both halves are done and the threads have been folded together, so the
+  // bookkeeping - and the record of which cell we met in - has no one left to
+  // serve.
+  clearGeoCardExchange: (pubkey: string) => void;
   addMessage: (msg: ChatMessage) => void;
   // Advance an outgoing message's delivery status (never downgrades). `atMs`
   // stamps the delivered/read time for the Message info sheet.
@@ -344,6 +391,8 @@ export const useChatStore = create<ChatState>()(
       channelKeys: {},
       channelReach: {},
       channelRedirects: {},
+      geoDmCells: {},
+      geoCardExchange: {},
 
       addChannel(channel: string) {
         set((state) => {
@@ -518,6 +567,15 @@ export const useChatStore = create<ChatState>()(
           delete channelKeys[channel];
           const channelReach = { ...state.channelReach };
           delete channelReach[channel];
+          // A deleted geohash DM must not leave its cell behind. The binding is
+          // a record of where we were when we spoke to someone, and outliving
+          // the conversation it belongs to is exactly the kind of location
+          // breadcrumb the per-cell identities exist to avoid.
+          const geoDmCells = { ...state.geoDmCells };
+          const geoCardExchange = { ...state.geoCardExchange };
+          const geoKey = channel.replace(/^dm:nostr_/, "");
+          delete geoDmCells[geoKey];
+          delete geoCardExchange[geoKey];
           // Clear activeChannel rather than reassigning it to some arbitrary
           // surviving channel. The old behaviour picked the first non-DM
           // channel (usually #bluetooth) while the user was sitting on the LIST
@@ -535,6 +593,8 @@ export const useChatStore = create<ChatState>()(
             mutedChannels,
             channelKeys,
             channelReach,
+            geoDmCells,
+            geoCardExchange,
             activeChannel,
           };
         });
@@ -651,6 +711,40 @@ export const useChatStore = create<ChatState>()(
       // Nostr before this peer was seen on Bluetooth is merged the moment they
       // walk into range. So the pointers move with the messages, or the open
       // thread renders a channel that no longer exists.
+      noteGeoCardExchange(
+        pubkey: string,
+        half: { theirPeerID?: string; sentMine?: boolean },
+      ) {
+        set((state) => ({
+          geoCardExchange: {
+            ...state.geoCardExchange,
+            [pubkey]: { ...state.geoCardExchange[pubkey], ...half },
+          },
+        }));
+      },
+
+      clearGeoCardExchange(pubkey: string) {
+        set((state) => {
+          const geoCardExchange = { ...state.geoCardExchange };
+          delete geoCardExchange[pubkey];
+          // The cell goes with it: once the conversation is durable, where we
+          // happened to meet is a location breadcrumb with nothing left to do.
+          const geoDmCells = { ...state.geoDmCells };
+          delete geoDmCells[pubkey];
+          return { geoCardExchange, geoDmCells };
+        });
+      },
+
+      setGeoDmCell(pubkey: string, geohash: string) {
+        // Guarded, because the inbound geo-DM path calls this on every message
+        // and the store's writes reach disk. Only a genuinely new binding is
+        // worth a write.
+        if (get().geoDmCells[pubkey] === geohash) return;
+        set((state) => ({
+          geoDmCells: { ...state.geoDmCells, [pubkey]: geohash },
+        }));
+      },
+
       mergeChannel(from: string, to: string) {
         if (from === to) return;
         // Reading either name means reading the merged conversation, so nothing
@@ -760,6 +854,8 @@ export const useChatStore = create<ChatState>()(
           channelKeys: {},
           channelReach: {},
           channelRedirects: {},
+          geoDmCells: {},
+          geoCardExchange: {},
         });
       },
     }),
@@ -782,6 +878,14 @@ export const useChatStore = create<ChatState>()(
         // Persisted: a notification in the shade, the last-thread restore and
         // an old bell row all outlive the session holding a stale name.
         channelRedirects: state.channelRedirects,
+        // Persisted for the reason given on the field: without it, a relaunch
+        // turns a reply to a location-channel DM into a message from our
+        // durable identity.
+        geoDmCells: state.geoDmCells,
+        // Persisted alongside it: a half-finished exchange has to survive a
+        // relaunch, or tapping Keep and reopening the app would offer it again
+        // and merge nothing.
+        geoCardExchange: state.geoCardExchange,
       }),
     },
   ),

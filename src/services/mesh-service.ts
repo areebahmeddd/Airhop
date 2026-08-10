@@ -25,7 +25,11 @@ import {
 import { DeviceEventEmitter, type EventSubscription } from "react-native";
 import AirhopBLE from "../bridge/NativeAirhopBLE";
 import NativeAirhopWiFi from "../bridge/NativeAirhopWiFi";
-import type { ContactCard } from "../core/crypto/contact-exchange";
+import {
+  decodeContactCard,
+  encodeContactCard,
+  type ContactCard,
+} from "../core/crypto/contact-exchange";
 import {
   canEncrypt,
   initReceiver,
@@ -256,6 +260,17 @@ export interface GroupSendResult {
 export interface MeshPingResult {
   rttMs: number;
   hops: number | null;
+}
+
+// How loud the live voice moving through this device is, 0 to 1.
+//
+// `outbound` is the microphone while a burst of yours is open; `inbound` is
+// whoever currently holds the speaker. Both are raw RMS, deliberately not
+// shaped for display: speech sits low on a linear scale, and the curve that
+// makes a meter read well belongs beside the bars it draws.
+export interface VoiceLevel {
+  outbound: number;
+  inbound: number;
 }
 
 // TTL a ping launches with (also the hop-count reference for the pong).
@@ -495,6 +510,16 @@ export class MeshService {
   private pttPlayback: NativeAudioPlayback | null = null;
   // Called when a burst starts or ends, so the UI can show who is talking.
   private onPttActivity: ((talkers: string[]) => void) | null = null;
+  // Called about fifteen times a second while voice is moving, so the meter in
+  // the recording bar and the one in the incoming banner show the actual voice
+  // rather than a decorative animation.
+  //
+  // Both directions in one report because a listener needs both and they can
+  // overlap: somebody can key up while another burst is still playing. Each is
+  // 0 whenever that pipeline is not running, so a UI reading only one of them
+  // never has to know about the other.
+  private onPttLevel: ((level: VoiceLevel) => void) | null = null;
+  private pttLevel: VoiceLevel = { outbound: 0, inbound: 0 };
   // The conversation the user is looking at right now, with the app in front of
   // them, or null. A burst is only played when it belongs to THIS channel. See
   // setLiveVoiceAudible.
@@ -979,7 +1004,6 @@ export class MeshService {
             this.peerStateEchoed.delete(peerID);
           }
           this.linkToPeer.delete(linkID);
-          this.endBurstIfUnreachable();
         },
       ),
 
@@ -1474,6 +1498,7 @@ export class MeshService {
     // audio should stop there rather than play on to the end.
     this.pttPlayback = new NativeAudioPlayback(
       () => this.audibleChannel !== null,
+      (level) => this.reportPttLevel({ inbound: level }),
     );
     // The player tells us when a burst ends on its own clock rather than on a
     // packet, which is the only way the floor can be given up without us being
@@ -1499,6 +1524,28 @@ export class MeshService {
     return () => {
       this.onPttActivity = null;
     };
+  }
+
+  // How loud the voice moving through this device is, in either direction.
+  // Reported only when it changes something, which for a meter is every frame
+  // while audio flows and then once more at zero. Returns an unsubscribe.
+  setPttLevelListener(fn: (level: VoiceLevel) => void): () => void {
+    this.onPttLevel = fn;
+    return () => {
+      this.onPttLevel = null;
+    };
+  }
+
+  private reportPttLevel(next: Partial<VoiceLevel>): void {
+    const level = { ...this.pttLevel, ...next };
+    if (
+      level.outbound === this.pttLevel.outbound &&
+      level.inbound === this.pttLevel.inbound
+    ) {
+      return;
+    }
+    this.pttLevel = level;
+    this.onPttLevel?.(level);
   }
 
   // Whether live voice can be offered at all: the native audio module has to
@@ -1555,6 +1602,12 @@ export class MeshService {
     if (!this.canSendLiveVoice(channel)) return false;
     // Any existing capture, not just an active one: a session that is still
     // opening its microphone counts as the burst in progress.
+    //
+    // The press that lands here is told it is live, because it is - on the
+    // burst that is already open, not on one of its own. There is one
+    // microphone, so there is one burst, and the caller that adopts it also
+    // owns its ending: whoever started it must not close it afterwards. See
+    // handleTalkStart.
     if (this.pttCapture !== null) return true;
 
     const capture = new VoiceCaptureSession(
@@ -1571,20 +1624,27 @@ export class MeshService {
         // A DM burst is sealed to the one peer instead. Same burst bytes, so
         // the two scopes share every line of the wire format above this.
         onDmPayload: channel.startsWith("dm:")
-          ? (payload) =>
+          ? (payload) => {
+              // The return value is deliberately dropped: a frame that finds no
+              // session is gone, and the burst keeps recording either way. See
+              // VoiceCaptureSession.emit.
               this.router.sendNoisePayload(
                 channel.slice(3),
                 NoisePayloadType.VOICE_FRAME,
                 payload,
-              )
+              );
+            }
           : undefined,
       },
-      new NativeAudioCapture(() => {
-        // Capture died on its own: a call took the mic, or the encoder gave
-        // up. End the burst so the far side gets an END rather than silence.
-        void this.stopVoiceBurst();
-        onFailure();
-      }),
+      new NativeAudioCapture(
+        () => {
+          // Capture died on its own: a call took the mic, or the encoder gave
+          // up. End the burst so the far side gets an END rather than silence.
+          void this.stopVoiceBurst();
+          onFailure();
+        },
+        (level) => this.reportPttLevel({ outbound: level }),
+      ),
     );
     // Claimed before opening the mic, not after. Two presses landing together
     // would otherwise both pass the guard above, and the second would overwrite
@@ -1593,6 +1653,11 @@ export class MeshService {
     try {
       await capture.startPtt();
     } catch {
+      // The microphone never opened. Close the session rather than drop it:
+      // START is only sent with the first frame, so this normally puts nothing
+      // on the wire at all, but a burst that managed one frame before failing
+      // has been announced and has to be taken back.
+      await capture.cancelPtt().catch(() => undefined);
       // Only give up the slot if it is still ours: a release during startPtt
       // has already cleared it, and clobbering that would resurrect a burst
       // the user let go of.
@@ -1641,23 +1706,6 @@ export class MeshService {
 
   get isTalking(): boolean {
     return this.pttCapture?.isActive === true;
-  }
-
-  // The last peer in range walked off (or Bluetooth dropped) while somebody was
-  // still talking. Close the microphone rather than keep encoding audio that
-  // now reaches nobody: a walkie-talkie with no one on the other end should
-  // stop, not carry on burning battery.
-  //
-  // Suspended, not closed. The burst belongs to the finger still holding the
-  // button, and how it ends is the talker's call: releasing sends the END and
-  // keeps the recording as a voice note, sliding back sends the CANCELED and
-  // keeps nothing. Closing it here made that choice for them and made the swipe
-  // that followed a no-op, so a burst the user cancelled was kept by everyone
-  // who had heard it before the link dropped.
-  private endBurstIfUnreachable(): void {
-    if (this.pttCapture === null) return;
-    if (this.connectedLinks.size + this.wifiConnectedLinks.size > 0) return;
-    void this.pttCapture.suspend().catch(() => undefined);
   }
 
   // Drop every live-voice resource. Called when the mesh stops, so a burst
@@ -3339,6 +3387,140 @@ export class MeshService {
   // this to open the existing room instead of duplicating it. Null otherwise.
   localGeoChannelFor(geohash: string): string | null {
     return this.geoChannels?.namedChannelForGeohash(geohash) ?? null;
+  }
+
+  // Our own card, ready to hand to someone we met under a location pseudonym.
+  // Returns false when there is no cell bound to them (so nothing to send it
+  // over) - which is the same condition the UI uses to offer the action at all.
+  shareContactCardOverGeoDm(pubkey: string): boolean {
+    const geohash = this.geoChannels?.geohashForGeoDmPeer(pubkey);
+    if (geohash === undefined || this.geoChannels === null) return false;
+    this.geoChannels.sendContactCard(
+      geohash,
+      pubkey,
+      encodeContactCard(this.getContactCard()),
+    );
+    useChatStore.getState().noteGeoCardExchange(pubkey, { sentMine: true });
+    this.mergeGeoThreadIfMutual(pubkey);
+    return true;
+  }
+
+  // Fold a location DM into the durable conversation, but only once BOTH cards
+  // have crossed.
+  //
+  // Merging is what moves our replies off the pseudonymous per-cell rail and
+  // onto the durable one, and the durable inbox files a message by the Nostr key
+  // it came from. Until they hold our card they have no way to know that key is
+  // us, so crossing over early puts our messages in a second, unattributed
+  // thread on their side - the very split this exists to heal. Both halves means
+  // both people cross at the same moment and neither sees a fork.
+  private mergeGeoThreadIfMutual(pubkey: string): void {
+    const chat = useChatStore.getState();
+    const exchange = chat.geoCardExchange[pubkey];
+    const peerID = exchange?.theirPeerID;
+    if (peerID === undefined || exchange?.sentMine !== true) return;
+
+    const to = `dm:${peerID}`;
+    chat.addChannel(to);
+    // Carries the history over rather than stranding it in a thread that has
+    // stopped working.
+    chat.mergeChannel(`dm:nostr_${pubkey}`, to);
+    // And any thread their durable key opened on its own.
+    //
+    // Our card takes a relay round trip to reach them, so for a few seconds
+    // after we merge they are still on the pseudonymous rail while we are on the
+    // durable one. A message we send in that window arrives at a client that
+    // cannot yet attribute our key, and theirs can do the same to us. Folding
+    // the durable-keyed thread in here is the same repair the announce path
+    // already performs, applied at the moment we learn the two are one person.
+    const durableKey =
+      useContactsStore.getState().contacts[peerID]?.nostrPubkeyHex;
+    if (durableKey !== undefined && durableKey.length > 0) {
+      chat.mergeChannel(`dm:nostr_${durableKey}`, to);
+    }
+    chat.addMessage({
+      id: `card-done-${pubkey}`,
+      channel: to,
+      senderID: peerID,
+      senderNickname: resolveDisplayName(peerID),
+      text: t("chat.geo.exchange_complete"),
+      timestampMs: Date.now(),
+      isMine: false,
+      isSystem: true,
+    });
+    // The bookkeeping and the cell we met in have nobody left to serve.
+    chat.clearGeoCardExchange(pubkey);
+    // Anything queued against the pseudonym now has a durable route.
+    this.flushOutbox(peerID);
+  }
+
+  // A contact card that arrived inside a location-channel DM.
+  //
+  // Routed through addVerifiedContact so it faces exactly the checks a scanned
+  // one does - above all that the peer ID equals SHA-256 of the Noise key it
+  // ships with. That binding is the only reason a peer ID means anything, and a
+  // card is entirely attacker-shaped input: whoever we are talking to chose
+  // every byte of it.
+  //
+  // `inPerson: false`, and the distinction matters here more than anywhere. We
+  // are not looking at the other phone; we are trusting a pseudonym in a public
+  // channel. So this may introduce someone new, and may never RE-PIN keys
+  // already bound to a peer ID - otherwise anyone who could open a geohash DM
+  // could overwrite a contact the user verified in person.
+  private acceptGeoContactCard(
+    card: Uint8Array,
+    senderPubkey: string,
+  ): string | null {
+    let decoded;
+    try {
+      decoded = decodeContactCard(card);
+    } catch {
+      return null;
+    }
+    if (!this.addVerifiedContact(decoded, { inPerson: false })) return null;
+
+    const nostrPubkeyHex = bytesToHex(decoded.nostrPubKey);
+    const chat = useChatStore.getState();
+    // Durable record, so they survive this session and are reachable over the
+    // internet from anywhere. Written with `source: "geo-card"` so the contact
+    // sheet can say how we came to know them.
+    useContactsStore.getState().addContact({
+      peerID: decoded.peerID,
+      noisePubKeyHex: bytesToHex(decoded.noisePubKey),
+      signingPubKeyHex: bytesToHex(decoded.signingPubKey),
+      nickname: decoded.nickname,
+      addedAtMs: Date.now(),
+      // "link", not a source of its own: the trust is identical. The keys are
+      // real and self-consistent, and nothing proves the sender owns them - a
+      // card can be forwarded as easily as a URL. So it introduces a contact and
+      // never earns the verified shield, which is exactly what "link" means.
+      source: "link",
+      nostrPubkeyHex,
+    });
+    this.nostrPubkeyToPeerID.set(nostrPubkeyHex, decoded.peerID);
+    chat.noteGeoCardExchange(senderPubkey, { theirPeerID: decoded.peerID });
+
+    // Said in the pseudonymous thread, which is still where this conversation
+    // lives until we answer in kind. It names the next step rather than
+    // announcing a success, because half an exchange is not one: they can reach
+    // us now, and we still cannot be reached back.
+    chat.addMessage({
+      id: `card-${senderPubkey}`,
+      // Resolved for the same reason handleGeoDm resolves: this thread may
+      // already have been folded away by an exchange that completed first.
+      channel: chat.resolveChannel(`dm:nostr_${senderPubkey}`),
+      senderID: `nostr_${senderPubkey}`,
+      senderNickname: decoded.nickname,
+      text: t("chat.geo.card_received", {
+        name: resolveDisplayName(decoded.peerID),
+      }),
+      timestampMs: Date.now(),
+      isMine: false,
+      isSystem: true,
+    });
+    // A no-op unless we had already sent ours, in which case this completes it.
+    this.mergeGeoThreadIfMutual(senderPubkey);
+    return decoded.peerID;
   }
 
   // Nearby geohash channel participants, for the channel info sheet.
@@ -5326,6 +5508,8 @@ export class MeshService {
         uplink: (event, geohash) => this.uplinkGeohashEvent(event, geohash),
         onRelayEvent: (event, geohash) =>
           this.rebroadcastRelayEvent(event, geohash),
+        onContactCard: (card, senderPubkey) =>
+          this.acceptGeoContactCard(card, senderPubkey),
       },
     );
     void this.geoChannels.refresh();

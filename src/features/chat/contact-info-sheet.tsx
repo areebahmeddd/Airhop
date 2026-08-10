@@ -14,6 +14,7 @@ import { useT } from "../../i18n";
 import { getMeshService } from "../../services/mesh-service";
 import { useChatStore } from "../../store/chat-store";
 import { useContactsStore } from "../../store/contacts-store";
+import { useMeshStateStore } from "../../store/mesh-state-store";
 import { REACHABLE_TTL_MS, usePeerStore } from "../../store/peer-store";
 import Avatar from "../../ui/components/avatar";
 import BottomSheet from "../../ui/components/bottom-sheet";
@@ -91,6 +92,44 @@ export default function ContactInfoSheet({
   // lasting identity to verify, so the sheet says "Anonymous" rather than the
   // "Not verified · scan their QR" line that a mesh peer gets.
   const isAnonymous = peerID !== null && isNostrId(peerID);
+
+  // Whether we can offer to hand this person our durable contact card.
+  //
+  // Only for a location-channel pseudonym we still have a cell bound to, since
+  // that cell is the encrypted channel the card travels over. It is the one way
+  // across the gap those pseudonyms create on purpose: their cell key and our
+  // peer ID are unlinkable by design, so nothing but the person saying "this is
+  // also me" can join them, and this is that.
+  const geoDmPubkey = isAnonymous
+    ? (peerID?.slice("nostr_".length) ?? null)
+    : null;
+  const geoDmCell = useChatStore((s) =>
+    geoDmPubkey !== null ? s.geoDmCells[geoDmPubkey] : undefined,
+  );
+  // A relay has to be able to carry the card. Without one the send is a silent
+  // no-op that would still flip the button to "Shared", which is worse than the
+  // button not being there: it would claim we had told them who we are.
+  //
+  // `nostrConnected` is the whole condition, not just a network check. It is
+  // reset when the mesh stops (Away) and when the internet toggle goes off, so
+  // one subscription covers every way this can be unavailable. The thread's own
+  // notice explains the state; this only decides whether to offer the action.
+  const nostrConnected = useMeshStateStore((s) => s.nostrConnected);
+  const canKeep =
+    geoDmPubkey !== null && geoDmCell !== undefined && nostrConnected;
+  // Read from the store rather than held locally, so "already shared" survives
+  // closing the sheet and relaunching the app. Giving away a durable identity
+  // twice because the button forgot is exactly the mistake worth designing out.
+  const kept = useChatStore((s) =>
+    geoDmPubkey !== null
+      ? s.geoCardExchange[geoDmPubkey]?.sentMine === true
+      : false,
+  );
+
+  function handleKeepPerson(): void {
+    if (geoDmPubkey === null || kept) return;
+    getMeshService()?.shareContactCardOverGeoDm(geoDmPubkey);
+  }
 
   // The identifier under the name is the one string in this sheet nobody can
   // retype, and for a Nostr contact it is the only handle they have at all.
@@ -262,6 +301,31 @@ export default function ContactInfoSheet({
                   </Text>
                 </Pressable>
               )}
+              {/* The counterpart to Verify for someone met in a location
+                  channel, where Verify cannot apply: there is no lasting
+                  identity to check yet, and this is what creates one. Disabled
+                  rather than hidden once tapped, so the screen confirms the send
+                  instead of the button quietly vanishing. */}
+              {canKeep && (
+                <Pressable
+                  style={[styles.verifyBtn, kept && styles.keepBtnDone]}
+                  onPress={handleKeepPerson}
+                  disabled={kept}
+                  accessibilityRole="button"
+                  accessibilityState={{ disabled: kept }}
+                  accessibilityLabel={T("chat.geo.keep_person")}
+                  accessibilityHint={T("chat.geo.keep_person_desc")}
+                >
+                  <Feather
+                    name={kept ? "check" : "user-plus"}
+                    size={16}
+                    color={Colors.textInverse}
+                  />
+                  <Text style={styles.verifyText}>
+                    {kept ? T("chat.geo.card_sent") : T("chat.geo.keep_person")}
+                  </Text>
+                </Pressable>
+              )}
               <Pressable
                 style={styles.payBtn}
                 onPress={() => setPaying(true)}
@@ -416,6 +480,11 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       paddingVertical: Spacing.md,
       borderRadius: Radius.full,
       backgroundColor: Colors.accent,
+    },
+    // Sent. Dimmed rather than recoloured: the action is spent, not failed, and
+    // a second hue here would read as a new state to interpret.
+    keepBtnDone: {
+      opacity: 0.6,
     },
     verifyText: {
       fontSize: FontSize.base,

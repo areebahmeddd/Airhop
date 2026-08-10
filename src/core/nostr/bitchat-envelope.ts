@@ -29,6 +29,10 @@ export interface BitchatDmContent {
   type: number; // NoisePayloadType
   messageID: string;
   content: string; // empty for receipts
+  // Raw payload body, for the types that carry bytes rather than text. Only
+  // CONTACT_CARD uses it today; `content` stays the text channel so no existing
+  // caller has to learn about it.
+  body?: Uint8Array;
 }
 
 function peerIdBytes(peerID: string | null): Uint8Array {
@@ -87,6 +91,25 @@ export function encodeBitchatAckEnvelope(
   );
 }
 
+// Build the "bitchat1:" content for a contact card handed over inside a
+// conversation. The body is the same binary a QR carries, so a card that arrives
+// this way goes through exactly the checks a scanned one does.
+//
+// No message ID: a card is not a message, gets no bubble and no receipt. It is
+// wrapped in the same envelope only because that is the shape this transport
+// carries, and because a bitchat client then drops it on the unknown type rather
+// than rendering something it cannot read.
+export function encodeBitchatCardEnvelope(
+  senderPeerID: string,
+  recipientPeerID: string | null,
+  card: Uint8Array,
+): string {
+  const payload = new Uint8Array(1 + card.length);
+  payload[0] = NoisePayloadType.CONTACT_CARD;
+  payload.set(card, 1);
+  return wrap(senderPeerID, recipientPeerID, payload);
+}
+
 // Parse a "bitchat1:" string into its NoisePayload contents. Null if it is not a
 // bitchat envelope or is malformed.
 export function decodeBitchatEnvelope(s: string): BitchatDmContent | null {
@@ -117,6 +140,12 @@ export function decodeBitchatEnvelope(s: string): BitchatDmContent | null {
       messageID: new TextDecoder().decode(np.body),
       content: "",
     };
+  }
+  if (np.type === NoisePayloadType.CONTACT_CARD) {
+    // Handed back as bytes and validated by the caller, not here: a card is only
+    // trustworthy once its peer ID is checked against SHA-256 of its Noise key,
+    // and that check lives with the one place that already does it.
+    return { type: np.type, messageID: "", content: "", body: np.body };
   }
   return null;
 }

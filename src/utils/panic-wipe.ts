@@ -220,6 +220,10 @@ export async function panicWipe(): Promise<PanicWipeResult> {
     // too. Left set, a wipe on a phone with WiFi off would open the fresh
     // install on a note about a transport it has not tried yet.
     wifiFastPath: "unknown",
+    // Which cells we were listening in is a record of where the user was. It
+    // goes with the mesh that was just destroyed, and null is the honest value
+    // for a device that is no longer listening anywhere.
+    liveGeoCells: null,
     // Cleared, not set, and the caller raises it a moment later if the keychain
     // actually refused something. A wipe that works must not leave the warning
     // from the one before it standing.

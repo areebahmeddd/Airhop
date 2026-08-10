@@ -87,6 +87,10 @@ class VoiceSession {
   readonly codec: VoiceCodecId;
   private readonly backend: AudioPlaybackBackend;
   private readonly onDone: (burstIDHex: string) => void;
+  // Whether this burst is the one being heard right now. Asked at the moment
+  // audio would be played rather than once at the start, because the floor can
+  // free mid-burst. See VoicePlayer.holdsFloor.
+  private readonly canPlay: () => boolean;
 
   private buffer: BufferedFrame[] = [];
   private nextExpectedSeq = 1; // DATA seq starts at 1 (0 is START)
@@ -104,12 +108,14 @@ class VoiceSession {
     codec: VoiceCodecId,
     backend: AudioPlaybackBackend,
     onDone: (burstIDHex: string) => void,
+    canPlay: () => boolean,
   ) {
     this.burstIDHex = burstIDHex;
     this.senderPeerID = senderPeerID;
     this.codec = codec;
     this.backend = backend;
     this.onDone = onDone;
+    this.canPlay = canPlay;
     this.resetTimeout();
   }
 
@@ -214,11 +220,17 @@ class VoiceSession {
     // Flatten all frames from all DATA packets in sequence order.
     const rawFrames = toDeliver.flatMap((entry) => entry.frames);
 
-    this.backend
-      .playFrames(this.burstIDHex, this.codec, rawFrames)
-      .catch(() => {
-        // Best-effort: playback errors are non-fatal.
-      });
+    // Somebody else has the floor: this burst is counted as a talker and still
+    // finishes normally, it just makes no sound. The audio is dropped rather
+    // than held, because by the time the floor frees it would be stale, and
+    // the burst's own voice note carries it to this listener anyway.
+    if (this.canPlay()) {
+      this.backend
+        .playFrames(this.burstIDHex, this.codec, rawFrames)
+        .catch(() => {
+          // Best-effort: playback errors are non-fatal.
+        });
+    }
 
     if (isFinal && this.buffer.length === 0 && this.endReceived) {
       this.signalDone();
@@ -261,6 +273,21 @@ export class VoicePlayer {
   private readonly onSessionsChanged: () => void;
   // Key: "${senderPeerID}:${sessionId}"
   private sessions = new Map<string, VoiceSession>();
+  // Which burst is being heard, of however many are arriving.
+  //
+  // One voice at a time. A mesh has no floor arbiter, so two people keying up
+  // at once is ordinary rather than exceptional, and there is exactly one
+  // speaker to play them through. Mixing was never on the table (neither client
+  // does it), but neither is handing the speaker back and forth: each burst
+  // arrives about fifteen packets a second, so alternating between two of them
+  // tore down and rebuilt the whole decode-and-play pipeline thirty times a
+  // second and left both voices unintelligible.
+  //
+  // So the first burst to produce audio keeps the speaker until it ends. The
+  // others are still counted as talkers - the banner says how many - and their
+  // voice notes still arrive afterwards, so nothing is lost; it is only not
+  // heard live. Matches bitchat's rule in PUSH-TO-TALK-DESIGN.md section 6.
+  private floorKey: string | null = null;
   // Bursts cut off for breaking a cap. Every packet of such a burst is ignored
   // from then on, including its END: without this the session was torn down and
   // the very next packet opened a replacement with its byte count back at zero,
@@ -330,6 +357,10 @@ export class VoicePlayer {
           // Cut off: free the slot, and remember the burst so its remaining
           // packets cannot open a fresh one.
           this.sessions.delete(key);
+          // The floor goes with it, but the speaker is left alone: the cut-off
+          // path plays what legitimately arrived before closing, and silencing
+          // it here would throw away the audio it just flushed.
+          this.releaseFloor(key);
           if (this.cutOffBursts.size >= MAX_CUTOFF_MEMORY) {
             const oldest = this.cutOffBursts.keys().next().value;
             if (oldest !== undefined) this.cutOffBursts.delete(oldest);
@@ -349,6 +380,12 @@ export class VoicePlayer {
         const session = this.sessions.get(key);
         if (session) session.destroy();
         this.sessions.delete(key);
+        // The one case that silences the speaker rather than letting it finish.
+        // A retraction means the talker wants what they said thrown away, and
+        // up to two seconds of it can still be queued in the audio pipeline;
+        // ending the session there is what stops it being played. Matches
+        // bitchat's cancelAssembly, which calls stop() on the burst's player.
+        this.stopFloor(key, burstIDHex);
         break;
       }
     }
@@ -371,6 +408,7 @@ export class VoicePlayer {
       if (oldest !== undefined) {
         this.sessions.get(oldest)?.destroy();
         this.sessions.delete(oldest);
+        this.releaseFloor(oldest);
       }
     }
     const session = new VoiceSession(
@@ -379,12 +417,40 @@ export class VoicePlayer {
       codec,
       this.backend,
       (id) => {
-        this.sessions.delete(`${senderPeerID}:${id}`);
+        const doneKey = `${senderPeerID}:${id}`;
+        this.sessions.delete(doneKey);
+        // The burst finished on its own, so its tail is already queued and
+        // playing out. Only the floor is given up; whoever was waiting behind
+        // it is heard from their next batch on.
+        this.releaseFloor(doneKey);
         this.onSessionsChanged();
       },
+      () => this.holdsFloor(key),
     );
     this.sessions.set(key, session);
     return session;
+  }
+
+  // Whether this burst is the one being heard, taking the floor if it is free.
+  // First to ask with audio in hand wins it. See floorKey.
+  private holdsFloor(key: string): boolean {
+    if (this.floorKey === null) this.floorKey = key;
+    return this.floorKey === key;
+  }
+
+  // Give up the floor without touching what is already playing. The burst that
+  // was waiting behind takes it on its next batch, so somebody who keyed up
+  // while another person was talking is heard from the moment the floor frees
+  // rather than not at all.
+  private releaseFloor(key: string): void {
+    if (this.floorKey === key) this.floorKey = null;
+  }
+
+  // Give up the floor and silence what is still queued behind it.
+  private stopFloor(key: string, burstIDHex: string): void {
+    if (this.floorKey !== key) return;
+    this.floorKey = null;
+    this.backend.endSession(burstIDHex);
   }
 
   // Active PTT sessions (for UI display).
@@ -400,5 +466,6 @@ export class VoicePlayer {
     for (const session of this.sessions.values()) session.destroy();
     this.sessions.clear();
     this.cutOffBursts.clear();
+    this.floorKey = null;
   }
 }

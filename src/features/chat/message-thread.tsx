@@ -41,6 +41,8 @@ import {
   type GestureResponderEvent,
   type NativeScrollEvent,
   type NativeSyntheticEvent,
+  type StyleProp,
+  type ViewStyle,
 } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Animated, {
@@ -48,6 +50,7 @@ import Animated, {
   useAnimatedStyle,
   useSharedValue,
   withTiming,
+  type SharedValue,
 } from "react-native-reanimated";
 import { scheduleOnRN } from "react-native-worklets";
 import {
@@ -130,12 +133,14 @@ import {
 } from "../../ui/theme";
 import { useKeyboardInset } from "../../ui/use-keyboard";
 import { channelInviteLink } from "../../utils/deep-link";
+import { unconfirmedSince } from "../../utils/delivery-silence";
 import { resolveDisplayName } from "../../utils/display-name";
 import {
   formatBytes,
   formatClockTime,
   formatDateSeparator,
   formatDuration,
+  formatLongDate,
 } from "../../utils/format";
 import {
   BRIDGE_CHANNEL,
@@ -289,7 +294,17 @@ const VOICE_RECORDING = {
   sampleRate: 16000,
   numberOfChannels: 1,
   bitRate: 32000,
+  // Puts a loudness reading on the recorder's status, which is what draws the
+  // meter for a plain voice note. The live path gets the same number from its
+  // own frames; this is the only way to get it for this one.
+  isMeteringEnabled: true,
 };
+
+// How often the voice-note meter reads the recorder. The live path reports
+// about fifteen times a second on its own clock; this is deliberately slower,
+// because every read is a call across the bridge and ten a second is already
+// past what the eye resolves in a twelve-bar meter.
+const VOICE_METER_POLL_MS = 100;
 
 // Attachments leave one at a time on one paced queue, so at most this many
 // transfer cards can be telling the user anything; the rest are at 0% and get
@@ -342,6 +357,9 @@ function screenshotNoticeText(nickname: string): string {
 const COMPOSE_ATTACH_SIZE = 36;
 const COMPOSE_BUTTON_SIZE = 40;
 const JUMP_BUTTON_SIZE = 36;
+// Header action circles. Same 32pt as the app header's pills, so a circular
+// icon button is one size everywhere it appears in chrome.
+const HEADER_ICON_SIZE = 32;
 
 // Slash commands offered by the "/" quick-picker. Only the ones handleSend
 // actually acts on appear here, so the list never advertises a command that does
@@ -1157,6 +1175,104 @@ function VoiceNoteBubble({
   );
 }
 
+// The live voice meter: the last WAVE_BARS loudness readings, oldest first, so
+// the newest sample enters at the end and the shape scrolls left as somebody
+// speaks. Replaces twelve hardcoded heights that never moved and had never
+// touched the audio.
+//
+// One reading arrives roughly fifteen times a second from whichever pipeline is
+// running, which is fast enough to read as speech and far too fast to put
+// through React. The whole history therefore lives in one shared value and the
+// bars animate on the UI thread, the same reason the slide-to-cancel travel
+// does: a thread of hundreds of bubbles must not re-render for a meter.
+const WAVE_BARS = 12;
+
+// The floor. A bar never disappears, so an idle meter reads as a quiet line
+// rather than a gap where a control used to be.
+const WAVE_MIN_HEIGHT = 3;
+
+// The ceilings, one per row. The sending bar is its own strip and can afford
+// the taller meter the old static bars already used; the incoming banner is a
+// single thin line above the composer, so its meter is sized to sit inside that
+// without pushing the row taller when somebody shouts.
+const WAVE_MAX_HEIGHT = 16;
+const WAVE_INCOMING_MAX_HEIGHT = 11;
+
+// Speech RMS lands around 0.05 to 0.25 of full scale, so a bar drawn straight
+// from it would barely leave the floor. The square root opens up the quiet end
+// where speech actually lives, and the gain puts an ordinary talking voice near
+// the top of the track without pinning it there.
+const WAVE_GAIN = 1.8;
+
+// Long enough to smooth the step between samples, short enough that the meter
+// still lands on the syllable that caused it.
+const WAVE_SETTLE_MS = 90;
+
+function WaveBar({
+  levels,
+  index,
+  maxHeight,
+  color,
+}: {
+  levels: SharedValue<number[]>;
+  index: number;
+  maxHeight: number;
+  color: string;
+}): React.ReactElement {
+  const style = useAnimatedStyle(() => {
+    const raw = levels.value[index] ?? 0;
+    const shaped = Math.min(1, Math.sqrt(raw) * WAVE_GAIN);
+    return {
+      height: withTiming(
+        WAVE_MIN_HEIGHT + (maxHeight - WAVE_MIN_HEIGHT) * shaped,
+        { duration: WAVE_SETTLE_MS },
+      ),
+    };
+  });
+  return (
+    <Animated.View
+      style={[
+        { width: 3, borderRadius: Radius.xs, backgroundColor: color },
+        style,
+      ]}
+    />
+  );
+}
+
+// Decorative in the sense that it carries no text, but not in the sense the old
+// bars were: every height here is a measurement of the voice being sent or
+// heard. Hidden from screen readers, which are told who is talking in words by
+// the row this sits in.
+function VoiceWave({
+  levels,
+  maxHeight,
+  color,
+  style,
+}: {
+  levels: SharedValue<number[]>;
+  maxHeight: number;
+  color: string;
+  style: StyleProp<ViewStyle>;
+}): React.ReactElement {
+  return (
+    <View
+      style={style}
+      accessibilityElementsHidden
+      importantForAccessibility="no-hide-descendants"
+    >
+      {Array.from({ length: WAVE_BARS }, (_, i) => (
+        <WaveBar
+          key={i}
+          levels={levels}
+          index={i}
+          maxHeight={maxHeight}
+          color={color}
+        />
+      ))}
+    </View>
+  );
+}
+
 export default function MessageThread({
   channel,
   localNickname,
@@ -1322,7 +1438,13 @@ export default function MessageThread({
   // people in Bluetooth range. A teleported cell is a place nobody nearby is in
   // and never goes out over Bluetooth, so it reaches nobody at all. Both are
   // worth saying before the user types, not after a message goes quiet.
-  const needsInternet = isGeo && !nostrConnected;
+  //
+  // A DM with a location-channel pseudonym is the third case, and it said
+  // nothing at all: that conversation has no Bluetooth half to fall back on -
+  // their per-cell key is the only address we hold - so with no relay it reaches
+  // nobody, and the thread looked perfectly ordinary while doing so.
+  const needsInternet =
+    (isGeo || channel.startsWith("dm:nostr_")) && !nostrConnected;
 
   // Header subtitle for a channel (not a group/DM): what kind of room this is,
   // then its place name and/or live count.
@@ -1383,6 +1505,64 @@ export default function MessageThread({
     dmPeerID !== null &&
     (dmPeerID.startsWith("nostr_") ||
       (dmContactNostr !== undefined && dmContactNostr.length > 0));
+  // A contact we hold NO keys for: added from a bare peer ID (typed, pasted, or
+  // an airhop://peer link) and never met.
+  //
+  // A peer ID is SHA-256 of their Noise key, so it identifies them and encrypts
+  // nothing. With no Noise key there is no session and no courier envelope
+  // (both are sealed TO that key), and with no Nostr pubkey there is no
+  // gift-wrap either - so nothing can carry a message until we are physically
+  // near them or they hand us a card.
+  //
+  // Worth its own line because the composer's ordinary "we'll deliver when a
+  // route appears" is, for this one case, a promise that waiting cannot keep:
+  // it queues hopefully for a week and then fails. See the notice below.
+  const dmContactNoise = useContactsStore((s) =>
+    dmPeerID !== null ? s.contacts[dmPeerID]?.noisePubKeyHex : undefined,
+  );
+  // Heard their announce this session, so the registry holds their keys even if
+  // no contact record does.
+  const dmPeerHasKeys = usePeerStore((s) =>
+    dmPeerID !== null
+      ? (s.peers.get(dmPeerID)?.noisePubKeyHex ?? "").length > 0
+      : false,
+  );
+  const dmKeyless =
+    dmPeerID !== null &&
+    !dmPeerID.startsWith("nostr_") &&
+    !dmPeerHasKeys &&
+    (dmContactNoise ?? "").length === 0 &&
+    (dmContactNostr ?? "").length === 0;
+
+  // A conversation with someone met in a location channel, after we have moved
+  // out of the cell it happened in.
+  //
+  // We can still write to them - the per-cell key is derived from the cell, not
+  // from where we are standing - but our inbox for that cell is no longer
+  // subscribed, so nothing they send comes back. A thread that half works, with
+  // nothing on screen to say which half, reads as the app being broken.
+  //
+  // Both halves are store-derived, so this is plain render-time state rather
+  // than a poll: the cell a conversation belongs to is persisted beside the
+  // conversation, and the cells we are listening in are republished whenever
+  // the mesh re-resolves them.
+  //
+  // `liveGeoCells === null` means we cannot tell (no position fix, or the mesh
+  // is stopped) and must read exactly like "fine": telling someone a
+  // conversation has been left behind because a location fix has not landed
+  // would be the same kind of lie as saying nothing at all.
+  const geoDmPubkey =
+    dmPeerID !== null && dmPeerID.startsWith("nostr_")
+      ? dmPeerID.slice("nostr_".length)
+      : null;
+  const geoDmCell = useChatStore((s) =>
+    geoDmPubkey !== null ? s.geoDmCells[geoDmPubkey] : undefined,
+  );
+  const liveGeoCells = useMeshStateStore((s) => s.liveGeoCells);
+  const leftGeoCell =
+    geoDmCell !== undefined &&
+    liveGeoCells !== null &&
+    !liveGeoCells.includes(geoDmCell);
   const [draft, setDraft] = useState("");
   // Focused when something else drafts into the composer, so the text is not
   // left behind a closed keyboard.
@@ -1462,6 +1642,45 @@ export default function MessageThread({
   // these after awaits, where a render-old closure would lie to them.
   const holdSeqRef = useRef(0);
   const liveHoldRef = useRef(false);
+  // How a press ended, for the window where it ended before the microphone had
+  // finished opening.
+  //
+  // Nothing else knows. Opening the mic takes long enough for a whole hold to
+  // come and go inside it, and until it resolves the press that started it is
+  // the only thing holding the burst - the release handlers cannot close a
+  // burst that does not exist yet, and calling into the service mid-open would
+  // leave a live microphone behind whatever they did. So they record the verdict
+  // and the start applies it. Keyed by press, so a second press landing in the
+  // same window cannot inherit the first one's ending - which is also why it is
+  // never cleared: press numbers only ever go up, so a stale verdict matches
+  // nothing.
+  const holdOutcomeRef = useRef<{ hold: number; canceled: boolean } | null>(
+    null,
+  );
+  // The voice meter's history, and the plain array behind it.
+  //
+  // The ref is the one that gets shifted; the shared value is handed a copy, so
+  // the UI thread always reads a settled array rather than one being mutated
+  // underneath it. See WaveBar.
+  const waveLevels = useSharedValue<number[]>(
+    new Array<number>(WAVE_BARS).fill(0),
+  );
+  const waveHistory = useRef<number[]>(new Array<number>(WAVE_BARS).fill(0));
+  const pushWaveLevel = useCallback(
+    (level: number): void => {
+      waveHistory.current.shift();
+      waveHistory.current.push(level);
+      waveLevels.value = [...waveHistory.current];
+    },
+    [waveLevels],
+  );
+  // Flatten it. The meter is shared by the sending bar and the receiving
+  // banner, and whichever appears next must not open showing the tail of the
+  // last thing that was said.
+  const resetWave = useCallback((): void => {
+    waveHistory.current.fill(0);
+    waveLevels.value = [...waveHistory.current];
+  }, [waveLevels]);
   // How far the finger has slid back from the mic, 0 to CANCEL_SLIDE_DISTANCE.
   // A shared value, not state: it moves every frame of the drag and must not
   // re-render a thread of hundreds of bubbles.
@@ -1607,6 +1826,21 @@ export default function MessageThread({
 
   const msgs = useMemo(() => messages[channel] ?? [], [messages, channel]);
   const isDM = channel.startsWith("dm:");
+
+  // How long this conversation has been going out with nothing coming back.
+  //
+  // Stated, never scored: the messages are unconfirmed, not failed, and a peer
+  // who returns weeks later really does receive them. It is also the only
+  // visible trace of someone who wiped and came back as a new identity - which
+  // is unlinkable on purpose, so this says what is true of the transport and
+  // guesses nothing about the person. See utils/delivery-silence.
+  //
+  // Recomputed on the peer clock so it appears without needing the thread
+  // reopened; the value changes once a week at most, so the cost is a compare.
+  const unconfirmedFrom = useMemo(
+    () => (isDM ? unconfirmedSince(msgs, peerClock) : null),
+    [isDM, msgs, peerClock],
+  );
 
   // The live selection, narrowed to messages actually in this thread. Derived
   // rather than reset on navigation: this component is reused across
@@ -2897,6 +3131,9 @@ export default function MessageThread({
       recordingTimerRef.current = null;
     }
     setRecordingSecs(0);
+    // Every path that closes the sending bar comes through here, so this is
+    // where the meter goes flat.
+    resetWave();
   }
 
   // Return the audio session to playback. Every path that closes the microphone
@@ -2926,7 +3163,11 @@ export default function MessageThread({
     const service = getMeshService();
     const canGoLive = service?.canSendLiveVoice(channel) === true;
     if (!canGoLive) {
-      await startRecording(hold);
+      // A microphone that never opened leaves the button armed and red with
+      // nothing behind it until the finger lifts. The permission itself is
+      // already explained by ensurePermission; this is only the button telling
+      // the truth about what it is doing, which is nothing.
+      if (!(await startRecording(hold))) setIsPTTActive(false);
       return;
     }
     const granted = await ensurePermission(
@@ -2952,10 +3193,35 @@ export default function MessageThread({
       setToast({ message: t("chat.perm.recording_stopped"), icon: "mic-off" });
     });
     if (hold !== holdSeqRef.current) {
-      // Released while the mic was opening. Close it now rather than leaving a
-      // burst running that nobody is holding.
-      if (live) {
-        await service.stopVoiceBurst();
+      // The hold ended while the mic was opening. Close the burst the way the
+      // user closed it, rather than merely closing it: a swipe has to retract,
+      // or the far side keeps playing audio the talker took back, and a release
+      // has to deliver its note, or the words are heard live by everyone in
+      // range and exist nowhere afterwards. Same two endings the held path has;
+      // this is only the case where the finger got there first.
+      //
+      // Unless a newer press is already holding this burst. `startVoiceBurst`
+      // hands the press that arrives mid-open the burst that is already open
+      // rather than a second one, so there is exactly one microphone and one
+      // ending, and the ending belongs to whoever has the button now. Closing
+      // it here would take the burst out from under a finger that is still
+      // down.
+      if (live && !liveHoldRef.current) {
+        if (
+          holdOutcomeRef.current?.hold === hold &&
+          holdOutcomeRef.current.canceled
+        ) {
+          await service.cancelVoiceBurst();
+        } else {
+          const finalized = await service.stopVoiceBurst();
+          if (finalized) {
+            await sendLiveBurstAsNote(
+              finalized.bytes,
+              finalized.durationMs,
+              finalized.burstIDHex,
+            );
+          }
+        }
         await releaseAudioSession();
       }
       return;
@@ -2973,12 +3239,14 @@ export default function MessageThread({
     }
     // Live was offered and could not start. Fall back rather than dropping the
     // press: the user held the button and expects to have said something.
-    await startRecording(hold);
+    if (!(await startRecording(hold))) setIsPTTActive(false);
   }
 
   async function handleTalkEnd(): Promise<void> {
     // Invalidate any start still in flight, so a burst that opens after this
-    // point closes itself instead of running on.
+    // point closes itself instead of running on, and leave it the verdict to
+    // close with. See holdOutcomeRef.
+    holdOutcomeRef.current = { hold: holdSeqRef.current, canceled: false };
     holdSeqRef.current += 1;
     setIsPTTActive(false);
     // The ref, not the state: this handler can be a render behind, and being
@@ -3019,7 +3287,10 @@ export default function MessageThread({
   // The bar states which case is running before the finger lifts.
   async function handleTalkCancel(): Promise<void> {
     // Same invalidation as handleTalkEnd, so a burst still opening its mic
-    // closes itself instead of running on unheld.
+    // closes itself instead of running on unheld - and the same verdict, which
+    // here is what stops a swipe caught inside that window from being delivered
+    // as an ordinary release. See holdOutcomeRef.
+    holdOutcomeRef.current = { hold: holdSeqRef.current, canceled: true };
     holdSeqRef.current += 1;
     setIsPTTActive(false);
     if (!liveHoldRef.current) {
@@ -3162,9 +3433,58 @@ export default function MessageThread({
       // Only on the transition into talking, not once per burst packet.
       const talking = names.length > 0;
       if (talking && !liveTalkingRef.current) jumpToLatest();
+      // Nobody is holding the floor any more, so the banner is about to go and
+      // its meter must not be left showing the last thing that was said.
+      if (!talking) resetWave();
       liveTalkingRef.current = talking;
     });
-  }, [jumpToLatest]);
+  }, [jumpToLatest, resetWave]);
+
+  // The meter, fed from whichever pipeline is actually moving audio.
+  //
+  // One meter, owned by whichever bar is on screen. Sending wins: while the
+  // microphone is open the recording bar is up and the incoming banner is
+  // hidden behind it, so the bars have to be the user's own voice.
+  //
+  // The two directions really can overlap, and not only in the obvious way. A
+  // DM burst reaches you over any number of hops, but sending one needs a
+  // direct link to that peer, so a peer two hops away streams to you while your
+  // own hold falls back to a voice note - which is metered by the poll below,
+  // off a different clock. Both pushing into one history is a meter that
+  // matches neither voice.
+  useEffect(() => {
+    const service = getMeshService();
+    if (!service) return;
+    return service.setPttLevelListener(({ outbound, inbound }) => {
+      if (liveHoldRef.current) {
+        pushWaveLevel(outbound);
+        return;
+      }
+      // Recording a note: the poll owns the meter, and the banner is hidden.
+      if (isRecording) return;
+      pushWaveLevel(inbound);
+    });
+  }, [pushWaveLevel, isRecording]);
+
+  // The same meter for an ordinary voice note, which is recorded by expo-audio
+  // rather than by the live pipeline and so has no frames to ride along on.
+  //
+  // Polled off the recorder rather than read from `recorderState`, whose every
+  // sample is a re-render of the whole thread. Metering is in decibels; the
+  // conversion turns that back into the same 0-to-1 amplitude the live path
+  // reports, so both feed one curve and the two bars look alike.
+  useEffect(() => {
+    if (!isRecording || isTalkingLive) return;
+    const timer = setInterval(() => {
+      const db = audioRecorder.getStatus().metering;
+      pushWaveLevel(
+        typeof db === "number" && Number.isFinite(db)
+          ? Math.min(1, 10 ** (db / 20))
+          : 0,
+      );
+    }, VOICE_METER_POLL_MS);
+    return () => clearInterval(timer);
+  }, [isRecording, isTalkingLive, audioRecorder, pushWaveLevel]);
 
   // Whether the next hold will go live, so the button can show which it is.
   // Re-checked as peers come and go: in a DM it depends on that peer having a
@@ -3192,31 +3512,35 @@ export default function MessageThread({
   }, [appActive, channel]);
 
   // Nothing may keep the microphone open once this screen is not in front of
-  // the user. Backgrounding the app, taking a call, or navigating away while
-  // still holding the button all land here, and all of them end the burst with
-  // a proper END so the far side hears a finish rather than the audio simply
-  // stopping and timing out. Live voice is foreground-only by design.
+  // the user. Backgrounding the app or taking a call while still holding the
+  // button lands here, and live voice is foreground-only by design.
+  //
+  // Ended, not abandoned: the release path, exactly. Whatever was said has
+  // already been heard by everyone in range, so it is a message, and a message
+  // has to leave a record - the far side gets its END, the thread gets its
+  // voice note, and anyone who was out of range still receives it. Ending the
+  // burst without the note left listeners holding audio that existed nowhere
+  // else, including in the talker's own thread.
+  //
+  // Only for a live hold. A voice note being recorded was heard by nobody, so
+  // an interruption can discard it; that path is unchanged.
   useEffect(() => {
     if (appActive) return;
     if (!liveHoldRef.current) return;
-    holdSeqRef.current += 1;
-    liveHoldRef.current = false;
-    setIsTalkingLive(false);
-    setIsPTTActive(false);
-    void getMeshService()?.stopVoiceBurst();
-    void releaseAudioSession();
+    void talkRef.current.end();
   }, [appActive]);
 
+  // Leaving the thread mid-hold. The same ending as backgrounding, for the same
+  // reason: the words were already heard, so they get their END and their note.
+  //
+  // Through the ref, not a copy of the work. The cleanup is created once and
+  // would otherwise close over the first render's channel and nickname, and
+  // send the note into whichever conversation this screen opened on. Everything
+  // it needs - the store write, the transfer, the audio session - outlives the
+  // component, so the send completes after the screen is gone.
   useEffect(
     () => () => {
-      // Unmount: nobody left to finalize a note for, but end the burst rather
-      // than leave a live microphone behind, and return the session or the next
-      // voice note anywhere in the app plays through the earpiece.
-      if (liveHoldRef.current) {
-        liveHoldRef.current = false;
-        void getMeshService()?.stopVoiceBurst();
-        void setAudioForPlayback().catch(() => {});
-      }
+      if (liveHoldRef.current) void talkRef.current.end();
     },
     [],
   );
@@ -3736,18 +4060,18 @@ export default function MessageThread({
           </Pressable>
         )}
 
-        {/* Channel actions, on one track: the same pill the notice composer's
-            expiry steps sit in, so a row of icon buttons is spaced and shaped
-            the way every other cluster of small controls in the app is. Only
-            channels have these, so the pill is absent (not empty) elsewhere.
-            Notices apply to every channel; inviting does not, so a public or
-            location channel shows the pill with the one button in it. */}
+        {/* Channel actions: separate filled circles, one per action, the same
+            as the bell and + on the Chats header. A connected track read as a
+            single wide control and hid that these do two unrelated things.
+            Only channels have these, so the row is absent (not empty)
+            elsewhere. Notices apply to every channel; inviting does not, so a
+            public or location channel shows the one circle. */}
         {!isDM && !isGroup && !selecting && (
           <View style={styles.headerActions}>
             <Pressable
               style={styles.headerAction}
               onPress={openNotices}
-              hitSlop={hitSlopFor(32)}
+              hitSlop={hitSlopFor(HEADER_ICON_SIZE)}
               accessibilityRole="button"
               accessibilityLabel={
                 unseenNotices > 0
@@ -3765,24 +4089,19 @@ export default function MessageThread({
             {/* Invite, only where an invite means something. In a private
                 channel the link carries the key, so it is the only way in. */}
             {isPrivate && (
-              <>
-                {/* Hairline between the two, so the track reads as two buttons
-                    rather than one wide one. */}
-                <View style={styles.headerActionDivider} />
-                <Pressable
-                  style={styles.headerAction}
-                  onPress={handleInvite}
-                  hitSlop={hitSlopFor(32)}
-                  accessibilityRole="button"
-                  accessibilityLabel={T("chat.thread.invite")}
-                >
-                  <Feather
-                    name="user-plus"
-                    size={18}
-                    color={Colors.textSecondary}
-                  />
-                </Pressable>
-              </>
+              <Pressable
+                style={styles.headerAction}
+                onPress={handleInvite}
+                hitSlop={hitSlopFor(HEADER_ICON_SIZE)}
+                accessibilityRole="button"
+                accessibilityLabel={T("chat.thread.invite")}
+              >
+                <Feather
+                  name="user-plus"
+                  size={18}
+                  color={Colors.textSecondary}
+                />
+              </Pressable>
             )}
           </View>
         )}
@@ -4090,19 +4409,69 @@ export default function MessageThread({
         </View>
       )}
 
+      {/* Nothing we hold can carry a message to this person, and no amount of
+          waiting changes that. Said BEFORE the first send, because the only way
+          to learn it today is to type something and watch it sit: the queue
+          keeps it hopefully for a week and then calls it failed. Outranks every
+          other notice in a DM - the others explain a slow route, this one says
+          there is no route to be had - and names both ways out. */}
+      {dmKeyless && !showDraftCounter && !selecting && (
+        <View style={styles.dmStatusBar}>
+          <Feather name="alert-circle" size={12} color={Colors.textMuted} />
+          <Text style={styles.dmStatusText}>{T("chat.thread.no_keys")}</Text>
+        </View>
+      )}
+
+      {/* Met in a location channel, and we have since left it. Sending still
+          works; receiving does not, so the honest line is about them reaching
+          us, not about the message going. The second half is the way out:
+          swapping codes replaces the per-cell pseudonym with durable keys. */}
+      {leftGeoCell && !dmKeyless && !showDraftCounter && !selecting && (
+        <View style={styles.dmStatusBar}>
+          <Feather name="map-pin" size={12} color={Colors.textMuted} />
+          <Text style={styles.dmStatusText}>{T("chat.thread.left_cell")}</Text>
+        </View>
+      )}
+
+      {/* Weeks of sending with nothing confirmed. Ranked below the three above
+          because each of those names a reason and this one deliberately does
+          not: it reports the transport's silence and leaves the cause alone. */}
+      {unconfirmedFrom !== null &&
+        !dmKeyless &&
+        !leftGeoCell &&
+        !needsInternet &&
+        !showDraftCounter &&
+        !selecting && (
+          <View style={styles.dmStatusBar}>
+            <Feather name="clock" size={12} color={Colors.textMuted} />
+            <Text style={styles.dmStatusText}>
+              {T("chat.thread.unconfirmed_since", {
+                date: formatLongDate(unconfirmedFrom),
+              })}
+            </Text>
+          </View>
+        )}
+
       {/* Standing notice rather than a per-send one, so the limit is clear
           before anything is typed. Hidden while a per-send hint is up, so the
           two never stack. */}
-      {needsInternet &&
+      {!dmKeyless &&
+        !leftGeoCell &&
+        needsInternet &&
         dmStatus === null &&
         !showDraftCounter &&
         !selecting && (
           <View style={styles.dmStatusBar}>
             <Feather name="wifi-off" size={12} color={Colors.textMuted} />
             <Text style={styles.dmStatusText}>
-              {isManualGeo
-                ? T("chat.thread.cell_needs_internet")
-                : T("chat.thread.channel_needs_internet")}
+              {/* Three cases, and the DM needs its own line: the channel
+                  wording promises a Bluetooth fallback, which a conversation
+                  with a per-cell pseudonym does not have. */}
+              {isDM
+                ? T("chat.thread.geo_dm_needs_internet")
+                : isManualGeo
+                  ? T("chat.thread.cell_needs_internet")
+                  : T("chat.thread.channel_needs_internet")}
             </Text>
           </View>
         )}
@@ -4399,6 +4768,18 @@ export default function MessageThread({
                 ? TP("chat.voice.live_speaking_count", liveTalkers.length)
                 : T("chat.voice.live_speaking", { name: liveTalker })}
             </Text>
+            {/* The talker's own voice, measured as it leaves the speaker. A
+                still badge looks identical whether somebody is speaking or the
+                link died mid-sentence; this is the difference. Shorter than the
+                sending meter because the row it sits in is, and it shows one
+                voice however many people are named: only the burst holding the
+                floor is being played. */}
+            <VoiceWave
+              levels={waveLevels}
+              maxHeight={WAVE_INCOMING_MAX_HEIGHT}
+              color={Colors.danger}
+              style={styles.liveIncomingWave}
+            />
           </View>
         )}
 
@@ -4624,19 +5005,16 @@ export default function MessageThread({
               </Text>
             </View>
           )}
-          {/* Animated-look waveform (static bars that suggest audio) */}
-          <View style={styles.recordingWave}>
-            {[5, 10, 7, 14, 9, 12, 6, 11, 8, 13, 7, 10].map((h, i) => (
-              <View
-                key={i}
-                style={[
-                  styles.recordingBar_bar,
-                  { height: h },
-                  isTalkingLive && !burstEnded && styles.recordingBarLive,
-                ]}
-              />
-            ))}
-          </View>
+          {/* The voice actually being captured, live or recorded. Once the
+              burst has hit its ceiling nothing is going out any more, so the
+              meter stops claiming otherwise the same way the badge does: it
+              keeps its shape but goes muted and flat. */}
+          <VoiceWave
+            levels={waveLevels}
+            maxHeight={WAVE_MAX_HEIGHT}
+            color={burstEnded ? Colors.textMuted : Colors.danger}
+            style={styles.recordingWave}
+          />
           {/* Elapsed throughout, so it reads the same as a recording. The
               colour is the warning: muted once the burst is over, and only in
               the last seconds before that does it turn red. */}
@@ -5052,31 +5430,23 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       color: Colors.textMuted,
       letterSpacing: 0.5,
     },
-    // Channel actions: a connected track (surface + hairline border) holding
-    // fully-rounded icon buttons, matching the notice composer's expiry steps.
-    // The 3pt inset is what keeps a button's own rounding clear of the track's.
+    // Channel actions: one filled circle per action, the same shape, size and
+    // fill as the header pills on Chats, Mesh and Wallet.
     headerActions: {
       flexDirection: "row",
       alignItems: "center",
-      backgroundColor: Colors.surface,
-      borderWidth: 1,
-      borderColor: Colors.border,
-      borderRadius: Radius.full,
-      padding: 3,
+      // The same gap the app header puts between its bell and + (headerControls
+      // in App.tsx), so two adjacent header circles sit the same distance apart
+      // wherever they appear.
+      gap: Spacing.sm,
     },
     headerAction: {
-      width: 32,
-      height: 32,
+      width: HEADER_ICON_SIZE,
+      height: HEADER_ICON_SIZE,
       borderRadius: Radius.full,
       alignItems: "center",
       justifyContent: "center",
-    },
-    // Short of the track's full height, so it divides the buttons without
-    // touching the border and reading as a second edge.
-    headerActionDivider: {
-      width: 1,
-      height: 20,
-      backgroundColor: Colors.borderStrong,
+      backgroundColor: Colors.surfaceRaised,
     },
     // DM header: avatar + name row, left-aligned after the back arrow.
     headerDmId: {
@@ -5395,9 +5765,6 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       color: Colors.danger,
       letterSpacing: 0.5,
     },
-    recordingBarLive: {
-      backgroundColor: Colors.danger,
-    },
     // The ended state of the LIVE badge: same shape, none of the urgency.
     endedBadge: {
       backgroundColor: Colors.surfaceRaised,
@@ -5431,6 +5798,17 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       flexShrink: 1,
       fontSize: FontSize.xs,
       color: Colors.textSecondary,
+    },
+    // Pushed to the end of the row, so the badge and the name keep their place
+    // as the meter takes whatever width is left. Same bar width, gap and
+    // alignment as the sending meter: one voice indicator, two rows.
+    liveIncomingWave: {
+      flexGrow: 1,
+      flexShrink: 1,
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "flex-end",
+      gap: 3,
     },
     // Attachment picker sheet
     attachSheet: {
@@ -5550,18 +5928,17 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       color: Colors.danger,
       fontWeight: FontWeight.medium,
     },
+    // Centred on the row rather than sitting on a baseline, so a bar grows in
+    // both directions from the middle and the meter reads as a waveform instead
+    // of a bar chart.
     recordingWave: {
       flexGrow: 1,
       flexShrink: 1,
       flexDirection: "row",
       alignItems: "center",
+      justifyContent: "flex-end",
       gap: 3,
       paddingHorizontal: Spacing.sm,
-    },
-    recordingBar_bar: {
-      width: 3,
-      borderRadius: Radius.xs,
-      backgroundColor: Colors.danger,
     },
     recordingTimer: {
       fontSize: FontSize.sm,
@@ -5872,16 +6249,18 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
     // Sits inside the icon button now that it lives on a track: hung off the
     // corner it would straddle the pill's border. Ringed in the track's own
     // colour so it reads as a cutout, the same trick the back badge uses.
+    // Straddles the circle's edge, ringed in the header's own background, the
+    // same cutout the back button's unread badge and the bell's count use.
     noticeDot: {
       position: "absolute",
-      top: 5,
-      end: 5,
-      width: 8,
-      height: 8,
+      top: -2,
+      end: -2,
+      width: 10,
+      height: 10,
       borderRadius: Radius.full,
       backgroundColor: Colors.accent,
-      borderWidth: 1,
-      borderColor: Colors.surface,
+      borderWidth: 2,
+      borderColor: Colors.bg,
     },
     // Attachment composer (caption before send).
     composerSheet: {

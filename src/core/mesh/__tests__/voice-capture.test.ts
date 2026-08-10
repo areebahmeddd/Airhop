@@ -266,7 +266,7 @@ describe("packetizer budget", () => {
 describe("DM burst scoping", () => {
   // A DM burst is sealed to one peer. It must never also go out as a broadcast,
   // or audio meant for one person is heard by everyone in range.
-  function dmSession(send: (payload: Uint8Array) => boolean) {
+  function dmSession(send: (payload: Uint8Array) => void) {
     const broadcast: Packet[] = [];
     let onFrame: ((f: Uint8Array) => void) | null = null;
     const session = new VoiceCaptureSession(
@@ -326,38 +326,22 @@ describe("DM burst scoping", () => {
     expect(kinds[kinds.length - 1]).toBe("end");
   });
 
-  it("stops the burst when the session goes away mid-talk", async () => {
-    // The peer walked off. Live audio has no queue to wait in, so encoding on
-    // into a dead session would just burn the microphone.
-    let alive = true;
-    const { session, feed } = dmSession(() => alive);
-
-    await session.startPtt();
-    expect(session.isActive).toBe(true);
-    alive = false;
-    feed(new Uint8Array(130).fill(7));
-    // The flush that carries this frame fails, and the session closes itself.
-    feed(new Uint8Array(130).fill(8));
-    expect(session.isActive).toBe(false);
-  });
-
-  // A dead session stops the ENCODER, not the burst. The finger is still on the
-  // button, and whatever it does next still has to reach the far side: a peer
-  // who dropped out for a moment and came back must be told the burst was
+  // A peer walking off stops the frames, not the burst. The finger is still on
+  // the button, so the microphone stays open - the words keep going into the
+  // note - and whatever the finger does next still has to reach the far side: a
+  // peer who dropped out for a moment and came back must be told the burst was
   // retracted, or they keep and play audio the talker took back.
   it("still retracts after the session went away mid-talk", async () => {
     let alive = true;
     const sealed: Uint8Array[] = [];
     const { session, feed } = dmSession((p) => {
       if (alive) sealed.push(p);
-      return alive;
     });
 
     await session.startPtt();
     alive = false;
-    feed(new Uint8Array(130).fill(7));
-    feed(new Uint8Array(130).fill(8));
-    expect(session.isActive).toBe(false);
+    hold(feed);
+    expect(session.isActive).toBe(true);
 
     // The peer is back by the time the user slides to cancel.
     alive = true;
@@ -412,45 +396,50 @@ describe("burst close is the talker's decision", () => {
   const kinds = (packets: Packet[]) =>
     packets.map((p) => decodeBurstPacket(p.payload)?.kind);
 
-  it("suspend stops the microphone without ending the burst", async () => {
-    const collected = collect();
-    const { packets, session } = collected;
-    await session.startPtt();
-    session.feed(new Uint8Array(130).fill(1));
-    await session.suspend();
+  // The hold is a recording as well as a stream, and only the finger ends it.
+  // A link that flaps - which on Bluetooth is often - must cost the frames it
+  // was down for and nothing else, or the talker loses the second half of a
+  // sentence and is told nothing.
+  it("keeps recording through a burst whose frames cannot be sent", async () => {
+    const packets: Uint8Array[] = [];
+    let onFrame: ((f: Uint8Array) => void) | null = null;
+    let reachable = true;
+    const session = new VoiceCaptureSession(
+      {
+        senderPeerID: "aabbccdd00112233",
+        signingPrivKey: ed25519.utils.randomSecretKey(),
+        onPacket: () => undefined,
+        onDmPayload: (payload) => {
+          if (reachable) packets.push(payload);
+        },
+      },
+      {
+        startCapture: (cb) => {
+          onFrame = cb;
+          return Promise.resolve();
+        },
+        stopCapture: () => Promise.resolve(),
+      },
+    );
+    const feed = (f: Uint8Array): void => onFrame?.(f);
 
-    expect(collected.stops).toBe(1);
-    expect(session.isActive).toBe(false);
-    // Nothing has closed it: no END and no CANCELED have gone out.
-    expect(kinds(packets)).not.toContain("end");
-    expect(kinds(packets)).not.toContain("canceled");
-  });
-
-  it("releasing after a suspend still ends the burst and keeps the audio", async () => {
-    const { packets, session } = collect();
     await session.startPtt();
-    hold(session.feed);
-    await session.suspend();
+    hold(feed);
+    const sentWhileReachable = packets.length;
+    reachable = false; // peer walks off mid-sentence
+    hold(feed);
+    reachable = true; // and back again
+    hold(feed);
     await session.stopPtt();
 
-    expect(kinds(packets)[packets.length - 1]).toBe("end");
-    // The words were said. They are still a playable note for anyone who was
-    // out of range while it was live.
-    expect(session.finalizedRecording()).not.toBeNull();
-  });
-
-  it("sliding back after a suspend still retracts the burst", async () => {
-    const { packets, session } = collect();
-    await session.startPtt();
-    // Long enough that a release would have kept it, so this proves the slide
-    // is what threw it away.
-    hold(session.feed);
-    await session.suspend();
-    await session.cancelPtt();
-
-    expect(kinds(packets)).toContain("canceled");
-    expect(kinds(packets)).not.toContain("end");
-    expect(session.finalizedRecording()).toBeNull();
+    // The mic never closed, so all three stretches are in the note.
+    expect(session.isActive).toBe(false);
+    const recording = session.finalizedRecording();
+    expect(recording).not.toBeNull();
+    expect(session.recordedDurationMs).toBe(KEEPABLE_FRAMES * 3 * 64);
+    // And the burst still ends properly for whoever came back in range.
+    expect(packets.length).toBeGreaterThan(sentWhileReachable);
+    expect(packets.map((p) => decodeBurstPacket(p)?.kind).at(-1)).toBe("end");
   });
 
   it("closes a burst exactly once", async () => {
@@ -517,8 +506,10 @@ describe("CANCELED is repeated", () => {
   function collect(): {
     packets: Packet[];
     session: VoiceCaptureSession;
+    speak: () => void;
   } {
     const packets: Packet[] = [];
+    let feed: (f: Uint8Array) => void = () => undefined;
     const session = new VoiceCaptureSession(
       {
         senderPeerID: "aabbccdd00112233",
@@ -526,16 +517,22 @@ describe("CANCELED is repeated", () => {
         onPacket: (p) => packets.push(p),
       },
       {
-        startCapture: () => Promise.resolve(),
+        startCapture: (onFrame) => {
+          feed = onFrame;
+          return Promise.resolve();
+        },
         stopCapture: () => Promise.resolve(),
       },
     );
-    return { packets, session };
+    // Enough audio for the burst to have been announced. A retraction only
+    // exists for a burst somebody was told about; see the empty-burst case.
+    return { packets, session, speak: () => hold(feed) };
   }
 
   it("sends the same retraction three times inside half a second", async () => {
-    const { packets, session } = collect();
+    const { packets, session, speak } = collect();
     await session.startPtt();
+    speak();
     await session.cancelPtt();
 
     const canceled = () =>
@@ -556,11 +553,12 @@ describe("CANCELED is repeated", () => {
   });
 
   it("gives each copy its own timestamp, so none is a stale replay", async () => {
-    const { packets, session } = collect();
+    const { packets, session, speak } = collect();
     const now = jest.spyOn(Date, "now");
     try {
       now.mockReturnValue(5_000_000);
       await session.startPtt();
+      speak();
       await session.cancelPtt();
       now.mockReturnValue(5_000_400);
       jest.advanceTimersByTime(500);
@@ -574,6 +572,46 @@ describe("CANCELED is repeated", () => {
     // A receiver drops a voice frame older than 30s and deduplicates by packet
     // ID: identical copies would be thrown away as replays of the first.
     expect(new Set(canceled.map((p) => p.timestamp)).size).toBeGreaterThan(1);
+  });
+
+  // A burst nobody was told about is a burst nobody has to be told about.
+  //
+  // The far side turns a bare START into a live bubble - bitchat opens an
+  // assembly for it, Airhop opens a session - and then shows LIVE for the three
+  // seconds its idle timeout takes to give up on audio that is never coming. A
+  // microphone that fails to open is not rare (a stale audio session, a call
+  // holding the input), so the burst has to stay unannounced until it has
+  // something to say.
+  it("says nothing at all for a hold that captured no audio", async () => {
+    const { packets, session } = collect();
+    await session.startPtt();
+    await session.stopPtt();
+    jest.advanceTimersByTime(500);
+    expect(packets).toHaveLength(0);
+  });
+
+  it("says nothing at all for a cancel that captured no audio", async () => {
+    const { packets, session } = collect();
+    await session.startPtt();
+    await session.cancelPtt();
+    jest.advanceTimersByTime(500);
+    expect(packets).toHaveLength(0);
+  });
+
+  // The corollary: audio is never sent ahead of the burst it belongs to. A DATA
+  // packet arriving first is recoverable on both clients, but only by guessing
+  // the codec, and the guess is only right because 0x01 is the only value the
+  // format defines today.
+  it("announces the burst before any audio in it", async () => {
+    const { packets, session, speak } = collect();
+    await session.startPtt();
+    speak();
+    await session.stopPtt();
+
+    const kinds = packets.map((p) => decodeBurstPacket(p.payload)?.kind);
+    expect(kinds[0]).toBe("start");
+    expect(kinds.filter((k) => k === "start")).toHaveLength(1);
+    expect(kinds.at(-1)).toBe("end");
   });
 });
 

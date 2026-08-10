@@ -88,7 +88,7 @@ Check for:
 - Prologue data not included in hash if used: **FAIL**
 - Session keys not cleared from memory after session end: **WARN**
 
-### 6. Double Ratchet (Phase 3+)
+### 6. Double Ratchet
 
 Check for:
 

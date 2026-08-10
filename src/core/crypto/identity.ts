@@ -9,17 +9,27 @@ import { sha256 } from "@noble/hashes/sha2.js";
 import { bytesToHex, hexToBytes } from "@noble/hashes/utils.js";
 import { KEYCHAIN_ITEMS, readSecret, writeSecret } from "./keychain";
 
+// Deliberately NOT here: the Nostr public key.
+//
+// This carried a `nostrPubKey` field set to the Ed25519 signing public key, and
+// a comment claiming that was the npub in hex. Both were wrong. The Nostr
+// identity is secp256k1, and it comes from HKDF over the signing PRIVATE key
+// (deriveNostrPrivKey, core/nostr/gift-wrap) - the Ed25519 public key bears no
+// relation to it at all. Nothing ever read the field, so nothing was broken;
+// it was a plausible-looking value that would have published an address no
+// relay could deliver to. MeshService owns the real one as `nostrPubKeyHex`,
+// derived once at construction, and that is what the ANNOUNCE TLV and the QR
+// contact card carry.
 export interface Identity {
   // X25519 static key pair - used for Noise XX session encryption only
   noiseStaticPrivKey: Uint8Array;
   noiseStaticPubKey: Uint8Array;
-  // Ed25519 key pair - used for packet signing and as Nostr identity
+  // Ed25519 key pair. Signs packets, and is the SEED the Nostr identity is
+  // derived from - not the Nostr identity itself.
   signingPrivKey: Uint8Array;
   signingPubKey: Uint8Array;
   // First 16 hex chars of SHA-256(noiseStaticPubKey) = 8 bytes
   peerID: string;
-  // Ed25519 signing pubkey as hex = the Nostr npub (without bech32 encoding)
-  nostrPubKey: string;
 }
 
 const STORAGE_KEY = KEYCHAIN_ITEMS.identity;
@@ -39,7 +49,6 @@ export async function generateIdentity(): Promise<Identity> {
     signingPrivKey: signingPriv,
     signingPubKey: signingPub,
     peerID,
-    nostrPubKey: bytesToHex(signingPub),
   };
 }
 
@@ -82,7 +91,6 @@ export async function loadIdentity(): Promise<Identity | null> {
     signingPrivKey: signingPriv,
     signingPubKey: signingPub,
     peerID: bytesToHex(sha256(noisePub)).slice(0, 16),
-    nostrPubKey: bytesToHex(signingPub),
   };
 }
 

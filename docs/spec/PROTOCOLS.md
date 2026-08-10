@@ -223,6 +223,7 @@ The plaintext inside a `NOISE_ENCRYPTED` packet is `[type: u8][body]`. Values ma
 | `0x09` | _(accepted, never sent)_ | Alias for `0x20` emitted by prerelease bitchat-iOS builds                                      |
 | `0x20` | PRIVATE_FILE             | `BitchatFilePacket` TLV ([section 3.2](#32-file-packet-payload)), encrypted before fragmenting |
 | `0x21` | AUTHENTICATED_PEER_STATE | `[version=0x01][TLV…]`: `0x01` capabilities, `0x02` Ed25519 key                                |
+| `0x22` | CONTACT_CARD             | Contact card binary, same encoding as the QR card                                              |
 
 **`0x20` is how a DM attachment travels.** The cleartext directed `FILE_TRANSFER` is signed, so a relay cannot forge it, but it is not confidential, and every node it crosses can read the whole file. bitchat classifies that form as the legacy migration fallback and has scheduled its removal. Airhop seals to `0x20` whenever the recipient has **proven** capability bit 8, and falls back to the signed cleartext form only for peers that have not.
 
@@ -231,6 +232,13 @@ The plaintext inside a `NOISE_ENCRYPTED` packet is `[type: u8][body]`. Values ma
 - A proven signing key **may correct** a TOFU pin. An announce **may never** overwrite a proven one.
 - Capabilities from `0x21` are authoritative; announced bits are a discovery hint and never authorise a change in how we send.
 - Decoding is all-or-nothing: unknown version, missing or duplicated required fields, a non-minimal capability encoding, or malformed lengths all change no state.
+
+**`0x22` links a geohash pseudonym to a durable identity.** A per-cell pubkey and a peer ID are unlinkable by construction, so only the holder can assert they are the same person. `0x22` carries that assertion as a contact card, sent inside an existing geohash DM. Airhop extension; bitchat has no `0x22` and drops it on the unknown type.
+
+- Sent only on explicit user action. Never automatic, and never an automatic reply to an inbound card.
+- Gift-wrapped from the sender's **per-cell** key, so the envelope stays pseudonymous. Only the card body identifies the sender.
+- Validated on receipt exactly as a scanned card: peer ID must equal `SHA-256(noisePubKey)[0:16]`. Treated as **not in person**, so it may introduce a contact but never re-pin keys already bound to a peer ID.
+- Threads merge only after **both** cards have crossed. Merging moves replies to the durable rail, which attributes senders by known Nostr key alone; merging earlier strands them in an unattributed thread.
 
 Capability bits (ANNOUNCE TLV `0x05` and `0x21` TLV `0x01`, minimal little-endian):
 

@@ -25,6 +25,16 @@ import { t } from "../i18n";
 
 const EVT_FRAME = "AirhopVoice.frame";
 const EVT_CAPTURE_ERROR = "AirhopVoice.captureError";
+const EVT_PLAYBACK_LEVEL = "AirhopVoice.playbackLevel";
+
+// A loudness reading from native, 0 (silence) to 1 (clipping), or 0 for
+// anything that is not a usable number. Native is trusted to send RMS, but a
+// meter is drawn from this and a stray value would be a bar taller than the row
+// it sits in.
+function readLevel(value: unknown): number {
+  if (typeof value !== "number" || !Number.isFinite(value)) return 0;
+  return Math.min(1, Math.max(0, value));
+}
 
 // Whether this build can do live voice at all. Checked before offering PTT so
 // the UI never promises something the device cannot do.
@@ -42,9 +52,16 @@ export class NativeAudioCapture implements AudioCaptureBackend {
   // Told when capture dies on its own (mic taken by a call, encoder failure)
   // so the burst can be ended rather than left hanging open.
   private readonly onFailure: (message: string) => void;
+  // How loud each frame was, for the meter beside the timer. Rides on the frame
+  // event, so it stops arriving exactly when the audio does.
+  private readonly onLevel: (level: number) => void;
 
-  constructor(onFailure: (message: string) => void = () => undefined) {
+  constructor(
+    onFailure: (message: string) => void = () => undefined,
+    onLevel: (level: number) => void = () => undefined,
+  ) {
     this.onFailure = onFailure;
+    this.onLevel = onLevel;
     this.emitter = isLiveVoiceAvailable()
       ? new NativeEventEmitter(
           NativeAirhopVoice as unknown as ConstructorParameters<
@@ -61,10 +78,12 @@ export class NativeAudioCapture implements AudioCaptureBackend {
     // Subscribe before starting, so no frame from the first moments is missed.
     this.frameSub = this.emitter.addListener(
       EVT_FRAME,
-      (event: { dataBase64?: string }) => {
+      (event: { dataBase64?: string; level?: number }) => {
         if (typeof event.dataBase64 !== "string") return;
         const frame = base64ToBytes(event.dataBase64);
-        if (frame.length > 0) onFrame(frame);
+        if (frame.length === 0) return;
+        onFrame(frame);
+        this.onLevel(readLevel(event.level));
       },
     );
     this.errorSub = this.emitter.addListener(
@@ -88,6 +107,9 @@ export class NativeAudioCapture implements AudioCaptureBackend {
     this.frameSub = null;
     this.errorSub?.remove();
     this.errorSub = null;
+    // The meter is fed by the frames, so it has to be told the audio stopped;
+    // otherwise the bars freeze at whatever the last syllable measured.
+    this.onLevel(0);
     // Best-effort: the mic is already gone if this throws, and a failure here
     // must not stop the burst from being closed off cleanly.
     await NativeAirhopVoice?.stopCapture().catch(() => undefined);
@@ -108,9 +130,32 @@ export class NativeAudioPlayback implements AudioPlaybackBackend {
   // than once per burst, so leaving the thread or backgrounding the app stops
   // the sound where it happens instead of at the end of the burst.
   private readonly isAudible: () => boolean;
+  // How loud the talker is, for the meter in the incoming banner. Reported from
+  // the speaker rather than from the packets, so it moves only while audio is
+  // genuinely being played: a burst held behind the floor, or one arriving
+  // while the user is looking elsewhere, correctly shows nothing.
+  private readonly onLevel: (level: number) => void;
+  private levelSub: EventSubscription | null = null;
 
-  constructor(isAudible: () => boolean = () => true) {
+  constructor(
+    isAudible: () => boolean = () => true,
+    onLevel: (level: number) => void = () => undefined,
+  ) {
     this.isAudible = isAudible;
+    this.onLevel = onLevel;
+    if (isLiveVoiceAvailable()) {
+      const emitter = new NativeEventEmitter(
+        NativeAirhopVoice as unknown as ConstructorParameters<
+          typeof NativeEventEmitter
+        >[0],
+      );
+      this.levelSub = emitter.addListener(
+        EVT_PLAYBACK_LEVEL,
+        (event: { level?: number }) => {
+          this.onLevel(readLevel(event.level));
+        },
+      );
+    }
   }
 
   async playFrames(
@@ -127,6 +172,7 @@ export class NativeAudioPlayback implements AudioPlaybackBackend {
     if (!this.isAudible()) {
       if (this.openBurst !== null) {
         this.openBurst = null;
+        this.onLevel(0);
         void native.stopPlayback().catch(() => undefined);
       }
       return;
@@ -149,6 +195,7 @@ export class NativeAudioPlayback implements AudioPlaybackBackend {
   endSession(burstIDHex: string): void {
     if (this.openBurst !== burstIDHex) return;
     this.openBurst = null;
+    this.onLevel(0);
     void NativeAirhopVoice?.stopPlayback().catch(() => undefined);
   }
 
@@ -156,6 +203,9 @@ export class NativeAudioPlayback implements AudioPlaybackBackend {
   // mesh goes down.
   close(): void {
     this.openBurst = null;
+    this.onLevel(0);
+    this.levelSub?.remove();
+    this.levelSub = null;
     void NativeAirhopVoice?.stopPlayback().catch(() => undefined);
   }
 }

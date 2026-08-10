@@ -452,6 +452,32 @@ export const strings = {
     "Not in Bluetooth range. Delivering over the internet.",
   "chat.thread.not_nearby":
     "Not nearby. We'll deliver when they're back in range or online.",
+  // A contact added from a bare peer ID and never met. The peer ID identifies
+  // them and encrypts nothing, so there is genuinely no route until one of these
+  // two things happens. Names both, because either one fixes it.
+  "chat.thread.no_keys":
+    "You'll need to be in Bluetooth range, or scan their code, to message them.",
+  // System line written into the thread when someone hands over their contact
+  // card in a location channel. Says what changed, in terms of what the reader
+  // can now do, rather than naming keys.
+  // Half an exchange is not one: they can reach us, we still cannot be reached
+  // back. So this names the next step rather than announcing a success.
+  "chat.geo.card_received":
+    "{name} shared their contact. Share yours back to keep talking after either of you moves.",
+  // Both halves have crossed and the conversation is durable. The payoff, said
+  // once, where the merged thread now lives.
+  "chat.geo.exchange_complete":
+    "Contacts exchanged. You can reach each other from anywhere now.",
+  // The action that sends ours. Deliberately about the person, not the
+  // mechanism: "keep" is what the user is actually deciding.
+  "chat.geo.keep_person": "Keep this person",
+  "chat.geo.keep_person_desc":
+    "Share your contact so you can keep talking after either of you moves. They'll learn your permanent identity.",
+  "chat.geo.card_sent": "Shared · waiting for theirs",
+  // Met in a location channel, then moved out of it. Sending still works, so the
+  // sentence is about them reaching us, and it ends with the way out.
+  "chat.thread.left_cell":
+    "You've left this area, so they can't reach you here. Swap codes to keep talking anywhere.",
   "chat.thread.no_route":
     "Can't reach them right now. Message will send when a route is available.",
   "chat.thread.empty": "No messages yet",
@@ -483,22 +509,31 @@ export const strings = {
   "chat.thread.notices_new": "Notices for this channel, {count} new",
   "chat.thread.say_something": "Say something in {channel}.",
   "chat.thread.jump_latest_new": "Jump to latest message, {count} new",
-  "chat.thread.no_reach": "No peers nearby - nobody received this yet",
+  // Weeks of sending with nothing coming back. Says only what is true of the
+  // transport: the messages are unconfirmed, not failed, and a peer who returns
+  // still receives them. Never guesses why - a wipe, a lost phone and a silent
+  // uninstall are indistinguishable on purpose.
+  "chat.thread.unconfirmed_since": "No delivery confirmed since {date}",
+  "chat.thread.no_reach": "No peers nearby · nobody received this yet",
   // Location channels are carried over the internet. Shown while no relay is
   // reachable, so an offline send is never a silent one. The second is for a
   // teleported cell, which never goes out over Bluetooth at all.
   "chat.thread.channel_needs_internet":
-    "Internet off - this channel only reaches people in Bluetooth range",
+    "Internet off · this channel only reaches people in Bluetooth range",
   "chat.thread.cell_needs_internet":
-    "Internet off - this cell is reachable over the internet only",
+    "Internet off · this cell is reachable over the internet only",
+  // Someone met in a location channel: their per-cell key is the only address we
+  // hold, so unlike a channel there is no Bluetooth half to fall back on.
+  "chat.thread.geo_dm_needs_internet":
+    "Internet off · this conversation is carried over the internet only",
   "chat.thread.via_gateway":
-    "Internet off - a nearby device is carrying this online for you",
+    "Internet off · a nearby device is carrying this online for you",
   "chat.thread.group_queued":
     "Nobody from this group is nearby yet. It will reach them when they are.",
   "chat.thread.no_group_key":
     "You are no longer in this group, so this cannot be sent",
   "chat.thread.no_reach_offline":
-    "Internet off and no peers nearby - nobody received this yet",
+    "Internet off and no peers nearby · nobody received this yet",
   "chat.thread.mention": "Mention {name}",
   "chat.thread.someone_talking": "{hold}. {name} is talking.",
   "chat.thread.attach_note":
@@ -869,7 +904,7 @@ export const strings = {
     "This phone can see others but cannot be discovered",
   "mesh.banner.location_off_android":
     "Location off · Android needs it to find peers",
-  "mesh.banner.paused": "Mesh paused · You're away",
+  "mesh.banner.paused": "Mesh paused · you're away",
   "mesh.banner.location_off": "Location off · location channels unavailable",
   "mesh.banner.battery_saver": "Battery saver · scanning less often",
   // Stands until a launch manages to finish the job. No button: the retry is
@@ -938,7 +973,7 @@ export const strings = {
   "mesh.radar.you_centre": "You, at the centre of the mesh",
   "mesh.radar.sonar_hint":
     "Plays a sonar sweep. Scanning is already continuous.",
-  "mesh.radar.paused": "Mesh paused · You're away",
+  "mesh.radar.paused": "Mesh paused · you're away",
   "mesh.radar.ring_hint":
     "Ring position reflects signal strength, not distance",
   "mesh.radar.set_online":

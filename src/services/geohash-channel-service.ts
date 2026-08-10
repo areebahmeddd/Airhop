@@ -29,6 +29,7 @@ import { NoisePayloadType } from "../core/mesh/noise-payload";
 import {
   decodeBitchatEnvelope,
   encodeBitchatAckEnvelope,
+  encodeBitchatCardEnvelope,
   encodeBitchatDmEnvelope,
 } from "../core/nostr/bitchat-envelope";
 import {
@@ -59,6 +60,7 @@ import { t } from "../i18n";
 import { useActivityStore } from "../store/activity-store";
 import { useBlockedStore } from "../store/blocked-store";
 import { useChatStore } from "../store/chat-store";
+import { useMeshStateStore } from "../store/mesh-state-store";
 import { useNoticesStore } from "../store/notices-store";
 import { useSettingsStore } from "../store/settings-store";
 import { getCoarseLocation, type Coords } from "./location-service";
@@ -230,6 +232,12 @@ export interface GatewayHooks {
   // Every channel event our relay subscription delivers. When this device is a
   // gateway it may rebroadcast the event onto the mesh (downlink carrier).
   onRelayEvent(event: NostrEvent, geohash: string): void;
+  // Someone in a location channel handed us their durable contact card. The
+  // mesh layer owns what happens next - the peer-ID binding check, the contact
+  // record, the routing registry - because it already does all three for a
+  // scanned QR and a card must not get an easier path for arriving over a wire.
+  // Returns the peer ID once accepted, or null if the card does not hold up.
+  onContactCard(card: Uint8Array, senderPubkey: string): string | null;
 }
 
 export interface GeoParticipant {
@@ -267,9 +275,9 @@ export class GeohashChannelService {
     string,
     ReturnType<typeof setTimeout>
   >();
-  // A geo-DM peer's Nostr pubkey → the geohash cell we talk to them in, so a
-  // reply re-derives our per-cell identity and targets the right relays.
-  private readonly geoDmPeers = new Map<string, string>();
+  // The geo-DM peer → cell binding lives in chat-store (`geoDmCells`), NOT in a
+  // field here. It used to be an in-memory Map, which meant it did not survive a
+  // relaunch: see the note on that field for what a reply then did instead.
   // Read receipts owed over geo DM, keyed by the peer's Nostr pubkey.
   private readonly pendingGeoDmReadAcks = new Map<string, Set<string>>();
 
@@ -375,6 +383,11 @@ export class GeohashChannelService {
     // nothing to announce into.
     if (this.broadcastableCells().length > 0) this.startPresenceHeartbeat();
     else this.stopPresenceHeartbeat();
+
+    // Every subscribe and unsubscribe above has landed, so this is the one place
+    // the answer is settled. Publishing per-channel instead would flap through
+    // "not listening anywhere" on the way past a cell change.
+    this.publishLiveCells();
   }
 
   // The geohash a joined channel should subscribe to right now. Teleported
@@ -447,6 +460,32 @@ export class GeohashChannelService {
   // location channel is running BLE-only rather than leaving it silently local.
   get hasLocation(): boolean {
     return this.coords !== null;
+  }
+
+  // Publish the cells we are currently listening for geo DMs in.
+  //
+  // The per-cell DM inbox is opened per SUBSCRIBED channel, so leaving the
+  // channel - or simply moving until the cell resolves elsewhere - ends it with
+  // nothing said. Sending still works either way (the key is derived from the
+  // cell, not from where we are standing), so this is the RECEIVING half, and it
+  // is the half a conversation goes quiet on. A thread compares its own cell
+  // against this to say so out loud.
+  //
+  // `null` when we have no position, and that is load-bearing rather than lazy:
+  // with no fix, "not listening there" and "no idea where we are" are the same
+  // observation, and only one of them is worth telling somebody their
+  // conversation has moved on from. Publishing null says nothing, which is the
+  // honest answer to a question we cannot answer.
+  private publishLiveCells(): void {
+    if (!this.hasLocation) {
+      useMeshStateStore.getState().setLiveGeoCells(null);
+      return;
+    }
+    const live: string[] = [];
+    for (const [channel, cell] of this.channelGeohash) {
+      if (this.dmSubscriptions.has(channel)) live.push(cell);
+    }
+    useMeshStateStore.getState().setLiveGeoCells(live);
   }
 
   // Publish a message to a geo channel's Nostr cell. Returns false when there
@@ -579,6 +618,10 @@ export class GeohashChannelService {
   stop(): void {
     this.stopPresenceHeartbeat();
     this.teardownAll();
+    // The mesh is going down, so we are not listening anywhere and no longer
+    // know whether we would be. Back to "cannot say" rather than "nowhere",
+    // which would tell every location thread it had been left behind.
+    useMeshStateStore.getState().setLiveGeoCells(null);
     for (const p of this.presenceByGeohash.values()) p.stop();
     this.presenceByGeohash.clear();
   }
@@ -716,17 +759,23 @@ export class GeohashChannelService {
 
   // ---- Geohash direct messages ----------------------------------------------
 
-  // Whether we have an active geo-DM conversation with a Nostr pubkey, i.e. the
-  // caller should route a reply through the per-cell path rather than a main
-  // Nostr DM. Returns the geohash if so.
+  // Whether this Nostr pubkey is someone we met in a location channel, i.e. the
+  // caller must route a reply from our per-cell identity rather than our main
+  // one. Returns the cell if so, and undefined for a peer who reached our
+  // durable identity - where replying from it is the correct thing to do.
+  //
+  // Read from the persisted store rather than a field, so the answer is the same
+  // on the first launch of a conversation and every one after it. The cell is
+  // all that is needed: our per-cell key is derived from (seed, geohash), so we
+  // can still write from it long after we have left the cell.
   geohashForGeoDmPeer(pubkey: string): string | undefined {
-    return this.geoDmPeers.get(pubkey);
+    return useChatStore.getState().geoDmCells[pubkey];
   }
 
   // Bind a participant's geohash pubkey to a cell, so tapping them in a channel
   // and sending first (before they message us) still routes correctly.
   registerGeoDmPeer(pubkey: string, geohash: string): void {
-    this.geoDmPeers.set(pubkey, geohash);
+    useChatStore.getState().setGeoDmCell(pubkey, geohash);
   }
 
   // Send an end-to-end encrypted DM to a participant's per-geohash pubkey, from
@@ -750,9 +799,38 @@ export class GeohashChannelService {
     return true;
   }
 
+  // Hand our durable contact card to someone we met under a location-channel
+  // pseudonym, so the two of us can keep talking once either of us moves.
+  //
+  // This is the one thing that can cross the gap per-cell identities create on
+  // purpose. Their cell key and our peer ID are unlinkable by design - that is
+  // what stops relays following anyone between neighbourhoods - so no amount of
+  // cleverness here could join them up. Only the person can, by choosing to say
+  // "this is also me", and this is that choice being carried.
+  //
+  // Deliberately never automatic, and never a reply to receiving one: it gives
+  // away the durable identity that everything else in this file works to keep
+  // separate from a location. It has to be a tap, every time.
+  //
+  // Still written from our PER-CELL key, like every other message in this
+  // conversation. The card in the payload is what discloses us; the envelope
+  // around it stays pseudonymous, so a relay learns nothing new.
+  sendContactCard(
+    geohash: string,
+    recipientPubkey: string,
+    card: Uint8Array,
+  ): void {
+    this.publishGeoWrap(
+      geohash,
+      recipientPubkey,
+      encodeBitchatCardEnvelope(this.localPeerID, null, card),
+    );
+    this.registerGeoDmPeer(recipientPubkey, geohash);
+  }
+
   // Flush queued read receipts for a geo-DM conversation when its thread opens.
   sendGeoReadReceipts(pubkey: string): void {
-    const geohash = this.geoDmPeers.get(pubkey);
+    const geohash = this.geohashForGeoDmPeer(pubkey);
     const pending = this.pendingGeoDmReadAcks.get(pubkey);
     if (geohash === undefined || pending === undefined || pending.size === 0)
       return;
@@ -802,8 +880,22 @@ export class GeohashChannelService {
     const env = decodeBitchatEnvelope(dm.content);
     if (env === null) return;
 
-    const channel = `dm:nostr_${dm.senderPubkey}`;
-    this.registerGeoDmPeer(dm.senderPubkey, geohash);
+    // Resolved, not assumed. Once a card exchange completes we fold this
+    // pseudonymous thread into the durable one - but the other side only stops
+    // using this rail when OUR card reaches them, and that is a relay round trip
+    // away. Anything they send in between arrives here addressed to a name that
+    // is now an alias, and writing to it directly would file the message in a
+    // thread the user can no longer open. resolveChannel is exactly the contract
+    // for "anything still holding the old name".
+    const pseudonymous = `dm:nostr_${dm.senderPubkey}`;
+    const channel = useChatStore.getState().resolveChannel(pseudonymous);
+    // Re-bound only while this is still a pseudonymous conversation. Completing
+    // a card exchange deliberately drops the cell - once the thread is durable,
+    // where we met is a location breadcrumb with nothing left to serve - and a
+    // late message on the old rail must not quietly write it back.
+    if (channel === pseudonymous) {
+      this.registerGeoDmPeer(dm.senderPubkey, geohash);
+    }
 
     if (env.type === NoisePayloadType.DELIVERED) {
       useChatStore
@@ -815,6 +907,19 @@ export class GeohashChannelService {
       useChatStore
         .getState()
         .setMessageStatus(channel, env.messageID, "read", Date.now());
+      return;
+    }
+    // They chose to tell us who they durably are. Accepting it is what turns a
+    // conversation that dies when either of us moves into one that does not.
+    //
+    // No bubble and no receipt: a card is not a message. What the reader gets is
+    // the system line the mesh layer writes once the card has actually been
+    // accepted - saying "they shared their contact" for one that failed its
+    // binding check would be worse than silence.
+    if (env.type === NoisePayloadType.CONTACT_CARD) {
+      if (env.body !== undefined) {
+        this.gateway?.onContactCard(env.body, dm.senderPubkey);
+      }
       return;
     }
     if (env.type !== NoisePayloadType.PRIVATE_MESSAGE) return;

@@ -25,7 +25,7 @@ src/core/   →   Native modules   →   src/features/   →   src/ui/
 
 - **Do not write `src/features/` code** until the `src/core/` service it depends on has passing unit tests.
 - **Do not write `src/ui/` code** until the feature logic in `src/features/` is proved functional.
-- **Native code** (`android/`, `ios/`) is written once during Phase 0 and touched only to fix BLE hardware bugs. Protocol logic lives in TypeScript.
+- **Native code** (`android/`, `ios/`) is written once during initial development and touched only to fix BLE hardware bugs. Protocol logic lives in TypeScript.
 
 ## 3. Coding Standards
 
