@@ -5,6 +5,7 @@ All notable changes are documented here. The format follows [Keep a Changelog](h
 
 ## What's New
 
+- feat: enhance geohash channel service with deletion management and WiFi fast path support (by @areebahmeddd) [1646ae9]
 - fix(ui): follow laws of ui/ux, mobile basics, micro ui ux interactions (by @areebahmeddd) [5841b05]
 - fix(core): bug patch after field testing with friends (by @areebahmeddd) [bde4ace]
 - feat(landing): revamp website design (by @areebahmeddd) [a2a0c98]
