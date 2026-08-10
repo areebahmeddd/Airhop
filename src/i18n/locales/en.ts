@@ -872,6 +872,13 @@ export const strings = {
   "mesh.banner.paused": "Mesh paused · You're away",
   "mesh.banner.location_off": "Location off · location channels unavailable",
   "mesh.banner.battery_saver": "Battery saver · scanning less often",
+  // Stands until a launch manages to finish the job. No button: the retry is
+  // automatic, and the honest instruction is the one thing the user can do.
+  "mesh.banner.wipe_incomplete":
+    "Wipe incomplete · some data may remain, reopening retries",
+  // Not a fault: everything still sends, over Bluetooth. What is off is the
+  // direct phone-to-phone WiFi link that carries photos and files fast.
+  "mesh.banner.wifi_off": "Wi-Fi off · large files send slower",
   "mesh.banner.clock_skew":
     "This phone’s clock is wrong · set the date and time to automatic",
   "mesh.banner.internet_off": "Internet off · Bluetooth only",

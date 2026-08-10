@@ -42,6 +42,7 @@ import { scheduleOnRN } from "react-native-worklets";
 import AirhopBLE from "./src/bridge/NativeAirhopBLE";
 import type { Identity } from "./src/core/crypto/identity";
 import { loadIdentity } from "./src/core/crypto/identity";
+import { sweepOrphanedSecrets } from "./src/core/crypto/keychain";
 import {
   primeTorRoutingOnStartup,
   revalidateTorRouting,
@@ -105,6 +106,7 @@ import {
   useChatStore,
 } from "./src/store/chat-store";
 import {
+  threadBanners,
   useMeshBanners,
   useMeshStateStore,
   type BannerAction,
@@ -623,6 +625,29 @@ function AppContent(): React.JSX.Element {
   const meshBanners = useMeshBanners();
   const primerVisible = usePrimerStore((s) => s.visible);
 
+  // Android system nav bar: tint its buttons/pill to the theme, the same way the
+  // status bar does, so the top and bottom chrome read as one themed surface.
+  // Driven by our in-app theme, not the OS scheme, so forcing dark while the
+  // phone is light still gets light buttons. Under edge-to-edge the bar is
+  // transparent and our content draws behind it, so only the button contrast is
+  // ours to set. No-op on iOS, which has no such bar.
+  //
+  // Set imperatively rather than through the declarative <NavigationBar>
+  // component, and the difference is the whole point. That component keeps a
+  // module-level stack of mounted entries and re-derives the native state
+  // whenever the stack changes - including when it EMPTIES. Unmounting the last
+  // one therefore fires `ExpoNavigationBar.setHidden(false)` on a setImmediate,
+  // unawaited and uncaught. The one moment the stack empties is teardown: the
+  // Activity is destroyed, React unmounts the root, and the call lands on an
+  // app context whose activity is already gone, so it rejects with "The current
+  // activity is no longer available" as an unhandled rejection nobody can catch
+  // from here. Setting the style directly has no unmount path, so there is
+  // nothing left to fire into a dead Activity.
+  useEffect(() => {
+    if (Platform.OS !== "android") return;
+    NavigationBar.setStyle(resolvedTheme === "dark" ? "dark" : "light");
+  }, [resolvedTheme]);
+
   // On mount: check for an existing persisted identity. If found, skip
   // onboarding and start the BLE mesh service immediately.
   useEffect(() => {
@@ -674,6 +699,33 @@ function AppContent(): React.JSX.Element {
         } else {
           // First launch: show the welcome/onboarding flow.
           setOnboardingStep("welcome");
+          // No identity means nothing on this device owns a wallet secret, so
+          // anything still in the keychain is a leftover - in practice, a panic
+          // wipe the Keystore refused while the phone was locked. Sweeping here
+          // is what makes that wipe retry itself instead of failing once and
+          // staying failed.
+          //
+          // Deliberately not awaited: it is a keychain round trip and the
+          // welcome screen must not wait on it. That is also why the sweep
+          // leaves the identity item alone - the very next thing onboarding does
+          // is write one, and a delete still in flight would take it with it.
+          // See sweepOrphanedSecrets. A first install finds nothing and this is
+          // three no-op deletes.
+          void sweepOrphanedSecrets()
+            .then((leftovers) => {
+              // Only ever raises the banner. Clearing is not this call's to do:
+              // a wipe in THIS session sets the flag from its own result, and it
+              // could still be in flight - the primer, the OS dialogs and the
+              // mesh start all sit between. Every launch re-derives it from
+              // scratch, which is what makes it self-clearing.
+              if (leftovers) {
+                useMeshStateStore.getState().setWipeIncomplete(true);
+              }
+            })
+            .catch(() => {
+              // Unreachable keychain. It said nothing about data at rest, so
+              // neither do we.
+            });
         }
         setAppReady(true);
       })
@@ -1239,15 +1291,6 @@ function AppContent(): React.JSX.Element {
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider initialMetrics={initialWindowMetrics}>
         <StatusBar style={resolvedTheme === "dark" ? "light" : "dark"} />
-        {/* Android system nav bar: tint its buttons/pill to the theme, the same
-            way the status bar above does, so the top and bottom chrome read as
-            one themed surface. Driven by our in-app theme, not the OS scheme, so
-            forcing dark while the phone is light still gets light buttons. Under
-            edge-to-edge the bar is transparent and our content draws behind it,
-            so only the button contrast is ours to set. Null on iOS. */}
-        {Platform.OS === "android" && (
-          <NavigationBar style={resolvedTheme === "dark" ? "dark" : "light"} />
-        )}
         <CustomAlert />
         {/* Mounted beside the alert, not inside the onboarding flow: the primer
             is shown on the first launch that actually needs a permission, which
@@ -1778,12 +1821,26 @@ function AppContent(): React.JSX.Element {
                 </View>
               )}
 
-              {/* Transport banner. Mesh tab only: that is where an empty screen
-                  needs explaining, and it is where the buttons that fix each
-                  blocker belong. Renders nothing when nothing is wrong. */}
-              {!isInThread && tab === "mesh" && (
+              {/* Transport banner.
+
+                  The full stack lives on the Mesh tab: that is where an empty
+                  screen needs explaining, and where the buttons that fix each
+                  blocker belong. A thread gets the short list instead - see
+                  threadBanners for which and why - because someone writing a
+                  message should not have to send it to find out the radio is
+                  off. The thread's own strip still reports what became of a
+                  message once sent; this is the part that has to be true
+                  beforehand.
+
+                  Above the thread's own header rather than below it, which is
+                  the one place a full-width strip can go without reaching into
+                  message-thread's layout. Renders nothing when the list is
+                  empty, so nothing shifts for the ordinary case. */}
+              {(tab === "mesh" || isInThread) && (
                 <MeshStatusBar
-                  banners={meshBanners}
+                  banners={
+                    isInThread ? threadBanners(meshBanners) : meshBanners
+                  }
                   onAction={(kind) => void handleBannerAction(kind, username)}
                   onDismiss={(key) => {
                     if (key === "background-limits") {

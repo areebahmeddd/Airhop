@@ -54,6 +54,20 @@ const PUBLISH_TIMEOUT_MS = 8_000;
 // are best-effort lookups across a relay set that is never guaranteed complete.
 const QUERY_MAX_WAIT_MS = 6_000;
 
+// How long the inbound pump may run handlers before handing the thread back.
+// Under a 16 ms frame, so a full queue costs at most part of one frame's budget
+// rather than every frame until it is empty.
+const PUMP_SLICE_MS = 8;
+
+// Queue ceiling for that pump. Sized well above any honest burst (a cold start
+// with five cells backfilling is low hundreds), so reaching it means a relay is
+// flooding us and the right answer is to stop accepting rather than to grow.
+const MAX_PENDING_EVENTS = 4_000;
+
+// Placeholder passed to a queued EOSE callback, which takes no event but shares
+// the queue so it keeps its place in line.
+const EOSE_MARKER = {} as Event;
+
 // ---- Types ------------------------------------------------------------------
 
 export interface NostrClientConfig {
@@ -81,6 +95,9 @@ export class NostrClient {
   private readonly onConnectionChange?: (connected: boolean) => void;
   // Last reported connectivity, so we only notify on an actual transition.
   private connected = false;
+  // Inbound handler queue and its drain flag. See the pump below.
+  private readonly pending: [EventHandler, Event][] = [];
+  private draining = false;
 
   constructor(config: NostrClientConfig = {}) {
     this.onConnectionChange = config.onConnectionChange;
@@ -159,21 +176,86 @@ export class NostrClient {
     relays?: string[],
   ): SubCloser {
     const targets = this.resolveRelays(relays);
+    // Every handler goes through the pump, so no subscription can hold the JS
+    // thread for longer than one time slice however much a relay sends.
+    const deliver = (event: Event): void => this.enqueue(onEvent, event);
+    // EOSE queues behind the events it terminates rather than jumping them.
+    // Nothing passes an onEose today, but "the backfill is complete" arriving
+    // before the backfill would be a genuinely confusing thing to leave lying
+    // around for whoever wires the first one up.
+    const deliverEose =
+      onEose === undefined
+        ? undefined
+        : (): void => this.enqueue(() => onEose(), EOSE_MARKER);
     // SimplePool.subscribeMany takes a single merged filter. Merge all filters
     // into one using OR semantics via the ids/kinds/authors fields approach:
     // for multiple filters we subscribe each separately and merge the closers.
     if (filters.length === 1) {
       return this.pool.subscribeMany(targets, filters[0], {
-        onevent: onEvent,
-        oneose: onEose,
+        onevent: deliver,
+        oneose: deliverEose,
       });
     }
     const closers = filters.map((f) =>
-      this.pool.subscribeMany(targets, f, { onevent: onEvent }),
+      this.pool.subscribeMany(targets, f, { onevent: deliver }),
     );
     return {
       close: (reason?: string) => closers.forEach((c) => c.close(reason)),
     };
+  }
+
+  // ---- Inbound pump ---------------------------------------------------------
+  //
+  // Relay traffic arrives on a WebSocket callback, which means every subscriber
+  // handler used to run inline on the JS thread the instant an event landed. A
+  // handler is not cheap here: it writes a zustand store (and so re-renders),
+  // decrypts gift wraps, and walks the notices list. A burst - a cold start with
+  // several cells backfilling at once, a busy cell, or simply a relay that
+  // decides to send a lot - therefore ran as one unbroken block of JS with no
+  // frame in between. The symptom is not a crash but a freeze: animations that
+  // need JS between steps stop mid-loop, and taps queue up unanswered, which is
+  // indistinguishable from a hang to the person holding the phone.
+  //
+  // So handlers are queued and drained in slices instead. Ordering is preserved,
+  // nothing is dispatched from inside the socket callback, and the thread gets a
+  // turn between slices, so the UI stays live under any inbound rate.
+  //
+  // What this does NOT cover, deliberately: nostr-tools verifies each event's
+  // signature inside its own socket handler, before ours is reached. That cost
+  // is bounded by asking for less (see the filters in geohash-channel-service),
+  // not from here.
+  private enqueue(handler: EventHandler, event: Event): void {
+    // Back-pressure rather than unbounded growth. A queue this deep means we are
+    // thousands of events behind, at which point the newest are the ones we can
+    // most afford to drop: every subscription in the app backfills, so anything
+    // missed comes back on the next one.
+    if (this.pending.length >= MAX_PENDING_EVENTS) return;
+    this.pending.push([handler, event]);
+    this.scheduleDrain();
+  }
+
+  private scheduleDrain(): void {
+    if (this.draining) return;
+    this.draining = true;
+    setTimeout(() => this.drain(), 0);
+  }
+
+  private drain(): void {
+    const deadline = Date.now() + PUMP_SLICE_MS;
+    while (this.pending.length > 0 && Date.now() < deadline) {
+      const next = this.pending.shift();
+      if (next === undefined) break;
+      const [handler, event] = next;
+      try {
+        handler(event);
+      } catch {
+        // One malformed event must not stop the queue behind it. The handlers
+        // parse attacker-supplied content, so a throw here is an expected
+        // outcome rather than a bug worth taking the pump down for.
+      }
+    }
+    this.draining = false;
+    if (this.pending.length > 0) this.scheduleDrain();
   }
 
   // Publish an event. Resolves when at least one relay ACKs OK, or rejects after
@@ -263,6 +345,10 @@ export class NostrClient {
   // way: every caller builds a fresh one rather than reopening this.
   close(): void {
     this.pool.destroy();
+    // Anything still queued belongs to subscriptions that have just gone away,
+    // and its handlers close over a transport this client no longer owns. A
+    // pending drain finds an empty queue and stops.
+    this.pending.length = 0;
   }
 }
 

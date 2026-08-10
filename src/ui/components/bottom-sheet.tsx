@@ -155,15 +155,39 @@ export default function BottomSheet({
   // does not, and telling it again would re-run an onClose that often resets
   // state.
   const userDismissedRef = useRef(false);
-  // The unmount backstop described at CLOSE_FALLBACK_MS, and the parent's
-  // latest intent, so a sheet reopened while sliding out is never torn down by
-  // the previous close's timer.
+  // The unmount backstop described at CLOSE_FALLBACK_MS.
   const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const visibleRef = useRef(visible);
-  visibleRef.current = visible;
+  // How many times the parent has asked for this sheet to be on screen: once on
+  // mount if it mounts open, then once per false -> true edge of `visible`.
+  const presentation = useRef(0);
+  // The presentation a slide-out belongs to. finishClose completes only the
+  // presentation it was started for, so a sheet asked for again mid-close is
+  // left alone rather than torn down by the previous close.
+  //
+  // This used to be a plain "is `visible` still true?" test, which is only
+  // correct for callers that DRIVE the prop. Every caller that mounts the sheet
+  // conditionally passes a constant `visible` instead - channel info, the
+  // message action sheet, the add-members picker, the token scanner - and there
+  // the prop is true for the sheet's entire life. So a dismissal the user
+  // performed (backdrop tap, drag, system back) found `visible` still true,
+  // returned early, and never ran setMounted(false) or onClose().
+  //
+  // The sheet slid off screen and the scrim faded out, so it looked closed. What
+  // was actually left behind was a transparent Modal - its own window, covering
+  // the app, capturing every touch - so the tab bar and everything under it went
+  // dead with nothing on screen to explain why. Comparing presentations instead
+  // asks the question that was always meant: "has the parent asked for me AGAIN
+  // since this close began?", which a constant `visible` correctly answers no.
+  const closingPresentation = useRef(-1);
   // Whether this presentation has already been closed out, so the slower of the
   // animation callback and the timer does nothing.
   const closedRef = useRef(false);
+  // True from the moment a slide-out starts until the sheet unmounts. The
+  // contents keep rendering while they fly away, and without this a row tapped
+  // during those 300ms still fires its action - so a backdrop tap could close
+  // the sheet and then a second tap on the same spot could hit whatever was
+  // underneath the finger. A closing sheet accepts no more input.
+  const [closing, setClosing] = useState(false);
 
   function clearCloseTimer(): void {
     if (closeTimer.current !== null) {
@@ -174,10 +198,10 @@ export default function BottomSheet({
 
   function finishClose(): void {
     clearCloseTimer();
-    // Reopened while the slide-out was in flight. The effect below has already
-    // sprung the sheet back up, so completing the close would unmount a sheet
-    // the parent is currently asking for.
-    if (visibleRef.current) return;
+    // Asked for again while the slide-out was in flight. The effect below has
+    // already sprung the sheet back up, so completing the close would unmount a
+    // sheet the parent is currently asking for.
+    if (presentation.current !== closingPresentation.current) return;
     // Whichever of the animation callback and the backstop timer arrives
     // second must not run onClose a second time: several callers reset state
     // in it, and a few of them are not idempotent.
@@ -186,12 +210,19 @@ export default function BottomSheet({
     openedRef.current = false;
     translateY.value = screenHeight;
     setMounted(false);
+    setClosing(false);
     if (userDismissedRef.current) onClose();
   }
 
   // Slide out, then hand control back to the parent.
   function slideOut(byUser: boolean): void {
+    // Already on the way out: a second backdrop tap or back press mid-close must
+    // not restart the animation from where it has got to, which reads as the
+    // sheet stuttering.
+    if (closingPresentation.current === presentation.current) return;
     userDismissedRef.current = byUser;
+    closingPresentation.current = presentation.current;
+    setClosing(true);
     Keyboard.dismiss();
     translateY.value = withTiming(sheetHeight.value, CLOSE_TIMING, (done) => {
       if (done) scheduleOnRN(finishClose);
@@ -214,11 +245,17 @@ export default function BottomSheet({
       // the presentation this open is starting.
       clearCloseTimer();
       closedRef.current = false;
-      // Mounting in response to the parent opening us. Not derived state: the
-      // unmount is deferred until the slide-out finishes, so the two can't be
-      // the same value.
-      // eslint-disable-next-line react-hooks/set-state-in-effect
+      // A new presentation, which is what tells a slide-out still in flight
+      // that it is closing something the parent has since asked for again.
+      presentation.current += 1;
+      // Mounting in response to the parent opening us, and cancelling any
+      // "on the way out" left by the close this open interrupted. Not derived
+      // state: the unmount is deferred until the slide-out finishes, so neither
+      // can be the same value as `visible`.
+      /* eslint-disable react-hooks/set-state-in-effect */
       setMounted(true);
+      setClosing(false);
+      /* eslint-enable react-hooks/set-state-in-effect */
       // Reopened while still sliding out (a sheet closed and immediately shown
       // again). Layout won't fire a second time, so nothing else would bring it
       // back up; springing here also cancels the pending slide-out, whose
@@ -343,6 +380,10 @@ export default function BottomSheet({
             styles.root,
             { paddingBottom: Math.max(keyboardHeight, insets.bottom) },
           ]}
+          // See `closing`: the sheet is still on screen while it slides away,
+          // and a row tapped in that window would run an action for a sheet the
+          // user has already dismissed.
+          pointerEvents={closing ? "none" : "auto"}
         >
           <Animated.View
             style={[

@@ -343,6 +343,78 @@ describe("wireFileName", () => {
   });
 });
 
+// ---- Port of bitchat's finalized-voice-note matcher -------------------------
+//
+// A live burst reaches its listeners twice: as the audio they hear while it is
+// being spoken, and afterwards as an ordinary voice note carrying the same
+// seconds of speech for anyone who was out of range. bitchat shows one row for
+// both, and the ONLY thing that tells it they are the same thing is the note's
+// file name: it pulls the burst ID out of the name and looks for a burst it
+// already assembled under that ID.
+//
+// Miss, and nothing errors anywhere. The listener simply sees the burst they
+// heard and then a second bubble repeating it, and the sender has no way to
+// know. Airhop shipped `voice.aac` for exactly this reason, which fails the
+// prefix check on its first character.
+//
+// Ports of ChatLiveVoiceCoordinator.burstID(fromVoiceFileName:) on iOS and
+// LiveVoiceManager.burstIDFromVoiceFileName on Android. They agree, and are
+// kept apart so they can be diffed against the originals.
+function burstIDLikeBitchatIOS(fileName: string): string | null {
+  if (!fileName.startsWith("voice_")) return null;
+  const afterPrefix = fileName.slice("voice_".length);
+  const hex = afterPrefix.slice(0, 16);
+  if (hex.length !== 16 || !/^[0-9a-fA-F]{16}$/.test(hex)) return null;
+  return hex;
+}
+
+function burstIDLikeBitchatAndroid(fileName: string): string | null {
+  if (!fileName.startsWith("voice_")) return null;
+  const id = fileName.slice("voice_".length).slice(0, 16);
+  if (id.length !== 16 || !/^[0-9a-fA-F]{16}$/.test(id)) return null;
+  return id.toLowerCase();
+}
+
+describe("a live burst and its recording are one message", () => {
+  // What message-thread.sendLiveBurstAsNote builds, from what
+  // mesh-service.stopVoiceBurst hands back.
+  const noteName = (burstIDHex: string) => `voice_${burstIDHex}.aac`;
+  const burstIDHex = "a3f10c92b47d5e60";
+
+  it("both clients recover the burst ID from the note's name", () => {
+    const name = wireFileName("voice", noteName(burstIDHex), "audio/aac");
+    expect(name).toBe("voice_a3f10c92b47d5e60.aac");
+    expect(burstIDLikeBitchatIOS(name)).toBe(burstIDHex);
+    expect(burstIDLikeBitchatAndroid(name)).toBe(burstIDHex);
+  });
+
+  // bitchat's incoming file store renames a collision rather than overwrite it,
+  // and both matchers read a fixed 16 characters, so a uniquified copy still
+  // resolves to the same burst.
+  it("survives the receiver uniquifying the name", () => {
+    expect(burstIDLikeBitchatIOS(`voice_${burstIDHex} (1).aac`)).toBe(
+      burstIDHex,
+    );
+    expect(burstIDLikeBitchatAndroid(`voice_${burstIDHex} (1).aac`)).toBe(
+      burstIDHex,
+    );
+  });
+
+  // The two names Airhop could plausibly regress to. Neither errors; both just
+  // silently stop matching, which is what makes this worth pinning.
+  it("rejects the names that leave the listener with two bubbles", () => {
+    for (const name of [
+      "voice.aac", // no burst ID at all - what this used to send
+      "voice_note.aac", // a word where the ID goes
+      wireMediaName("voice", "m4a"), // voice_<uuid>: hyphens are not hex
+      `${burstIDHex}.aac`, // ID without the prefix
+    ]) {
+      expect(burstIDLikeBitchatIOS(name)).toBeNull();
+      expect(burstIDLikeBitchatAndroid(name)).toBeNull();
+    }
+  });
+});
+
 describe("ensureFileExtension", () => {
   it("adds one derived from the mime when there is none", () => {
     expect(ensureFileExtension("Photo", "image/jpeg")).toBe("Photo.jpg");

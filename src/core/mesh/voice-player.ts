@@ -21,7 +21,14 @@ import {
 const JITTER_BUFFER_MS = 350;
 
 // A session is dropped if no new frame arrives within this window.
-const SESSION_TIMEOUT_MS = 5_000;
+//
+// This is the safety net under every burst that never says goodbye: a talker
+// who walks out of range, or whose END was lost on the way. Matches bitchat's
+// IDLE_TIMEOUT_MS / pttBurstEndTimeoutSeconds, both 3 s, so the same silence
+// resolves at the same moment on either client rather than leaving one of them
+// showing a talker the other has already given up on. Comfortably clear of the
+// 350 ms jitter buffer, so ordinary gaps never trip it.
+const SESSION_TIMEOUT_MS = 3_000;
 
 // Maximum frames held in the jitter buffer per session (prevents memory abuse
 // if packets arrive much faster than they are played back).
@@ -242,6 +249,16 @@ class VoiceSession {
 
 export class VoicePlayer {
   private readonly backend: AudioPlaybackBackend;
+  // Told whenever the set of talkers changes, so the UI can stop naming one who
+  // has stopped.
+  //
+  // Every other way a session ends is driven by a packet arriving, and the
+  // caller re-reads `activeSessions` right after handing us that packet. The
+  // idle timeout is the one that fires with nothing arriving, which is exactly
+  // the case where the talker went quiet without saying so - so without this
+  // the "LIVE - Alice is speaking" pill outlived the audio, waiting for a
+  // packet that was never coming.
+  private readonly onSessionsChanged: () => void;
   // Key: "${senderPeerID}:${sessionId}"
   private sessions = new Map<string, VoiceSession>();
   // Bursts cut off for breaking a cap. Every packet of such a burst is ignored
@@ -250,8 +267,12 @@ export class VoicePlayer {
   // which handed a flooding peer an unlimited budget one cap at a time.
   private readonly cutOffBursts = new Set<string>();
 
-  constructor(backend: AudioPlaybackBackend) {
+  constructor(
+    backend: AudioPlaybackBackend,
+    onSessionsChanged: () => void = () => undefined,
+  ) {
     this.backend = backend;
+    this.onSessionsChanged = onSessionsChanged;
   }
 
   // Feed a raw VOICE_FRAME packet into the player. Handles session lifecycle and
@@ -359,6 +380,7 @@ export class VoicePlayer {
       this.backend,
       (id) => {
         this.sessions.delete(`${senderPeerID}:${id}`);
+        this.onSessionsChanged();
       },
     );
     this.sessions.set(key, session);

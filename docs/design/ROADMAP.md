@@ -54,7 +54,7 @@ bitchat is an excellent foundation. Airhop fills the gaps it left open.
 │                                                                             │
 │  ┌─────────────────────────────────────────────────────────────────────┐    │
 │  │              MESSAGE ROUTER (TypeScript)                            │    │
-│  │  canDeliverPromptly() → both radios → Nostr → courier                │    │
+│  │  canDeliverPromptly() → both radios → Nostr → courier               │    │
 │  │  → Courier envelope (store-and-forward) → Double Ratchet step       │    │
 │  └──────────────────────────────┬──────────────────────────────────────┘    │
 │                                 │                                           │

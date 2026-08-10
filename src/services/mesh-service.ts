@@ -522,10 +522,12 @@ export class MeshService {
   private readonly radio: RadioController;
   // The same job for the same-platform WiFi fast path. Separate from `radio`
   // because the two answer to different facts and, crucially, to different
-  // stakes: a blocked BLE radio is a broken mesh and gets a banner, a blocked
-  // WiFi Aware attach is a slower attachment and gets a retry. See
-  // wifi-controller.ts.
-  private readonly wifi = new WiFiController();
+  // stakes: a blocked BLE radio is a broken mesh and gets a red banner, a
+  // blocked WiFi Aware attach is a slower attachment and gets a retry plus, at
+  // most, a neutral note. See wifi-controller.ts.
+  private readonly wifi = new WiFiController((state) =>
+    useMeshStateStore.getState().setWifiFastPath(state),
+  );
 
   // Cumulative bytes moved over BLE/WiFi this session, for the Storage &
   // Data screen's Network Usage row. Resets when the app restarts.
@@ -1473,7 +1475,12 @@ export class MeshService {
     this.pttPlayback = new NativeAudioPlayback(
       () => this.audibleChannel !== null,
     );
-    this.pttPlayer = new VoicePlayer(this.pttPlayback);
+    // The player tells us when a burst ends on its own clock rather than on a
+    // packet, which is the only way the floor can be given up without us being
+    // handed something to notice it by.
+    this.pttPlayer = new VoicePlayer(this.pttPlayback, () => {
+      this.reportPttActivity();
+    });
     return this.pttPlayer;
   }
 
@@ -1605,6 +1612,10 @@ export class MeshService {
   async stopVoiceBurst(): Promise<{
     bytes: Uint8Array;
     durationMs: number;
+    // Which burst this recording is of. The note is named after it, which is
+    // what lets a listener's live bubble and this file be recognised as the
+    // same thing rather than shown twice. See sendLiveBurstAsNote.
+    burstIDHex: string;
   } | null> {
     const capture = this.pttCapture;
     this.pttCapture = null;
@@ -1612,7 +1623,11 @@ export class MeshService {
     await capture.stopPtt().catch(() => undefined);
     const bytes = capture.finalizedRecording();
     if (bytes === null) return null;
-    return { bytes, durationMs: capture.recordedDurationMs };
+    return {
+      bytes,
+      durationMs: capture.recordedDurationMs,
+      burstIDHex: capture.burstIDHex,
+    };
   }
 
   // Abandon the burst: send CANCELED so receivers drop what they buffered.
@@ -1631,12 +1646,18 @@ export class MeshService {
   // The last peer in range walked off (or Bluetooth dropped) while somebody was
   // still talking. Close the microphone rather than keep encoding audio that
   // now reaches nobody: a walkie-talkie with no one on the other end should
-  // stop, not carry on burning battery. The finished recording is still sent
-  // as a voice note once a route returns, so nothing said is lost.
+  // stop, not carry on burning battery.
+  //
+  // Suspended, not closed. The burst belongs to the finger still holding the
+  // button, and how it ends is the talker's call: releasing sends the END and
+  // keeps the recording as a voice note, sliding back sends the CANCELED and
+  // keeps nothing. Closing it here made that choice for them and made the swipe
+  // that followed a no-op, so a burst the user cancelled was kept by everyone
+  // who had heard it before the link dropped.
   private endBurstIfUnreachable(): void {
     if (this.pttCapture === null) return;
     if (this.connectedLinks.size + this.wifiConnectedLinks.size > 0) return;
-    void this.stopVoiceBurst();
+    void this.pttCapture.suspend().catch(() => undefined);
   }
 
   // Drop every live-voice resource. Called when the mesh stops, so a burst

@@ -44,6 +44,24 @@ export type BannerTone =
 // How far along Airhop's own Tor bootstrap is. iOS only; see `torBootstrap`.
 export type TorBootstrapPhase = "idle" | "starting" | "blocked";
 
+// State of the WiFi Aware fast path, the Android-only high-bandwidth transport
+// that carries photos and files between two Android phones. BLE carries
+// everything without it, so none of this is ever a blocker.
+//
+//   unknown      not asked yet, iOS, or a failure we cannot name. Says nothing,
+//                which is the only honest thing to render for "no reading".
+//   unsupported  no Aware hardware, or an OS below the data-path floor.
+//   active       attached, publishing and subscribing.
+//   unavailable  the device has it, but not right now - WiFi switched off,
+//                tethering, battery saver. The only state worth a banner: it is
+//                the one the user can undo, and the difference it makes (a
+//                video that arrives in seconds rather than minutes) is otherwise
+//                invisible.
+//   permission   NEARBY_WIFI_DEVICES missing. Not surfaced: the app never asks
+//                for it, so a banner would name a fix with no way to take it.
+export type WifiFastPath =
+  "unknown" | "unsupported" | "active" | "unavailable" | "permission";
+
 // The single reason the BLE mesh cannot run right now, or "none".
 //
 // This replaces the three independent booleans (adapterEnabled,
@@ -145,6 +163,14 @@ interface MeshStateStore {
   // Distinct from the location-services-off blocker above, which is the OS-wide
   // toggle and does stop BLE scanning on Android.
   locationGranted: boolean;
+  // A panic wipe left secrets on the device. Set when a wipe reports that the
+  // keychain refused something, and when a launch with no identity to own them
+  // still finds secrets it can read. Never persisted: it is re-derived every
+  // launch, so a retry that succeeds simply stops raising it - and a wipe leaves
+  // no on-disk trace of having been attempted.
+  wipeIncomplete: boolean;
+  // State of the Android WiFi Aware fast path (see services/wifi-controller).
+  wifiFastPath: WifiFastPath;
   // Whether the Nostr relay pool has at least one live connection.
   nostrConnected: boolean;
   // Whether Nostr traffic is currently routed through Tor (see tor-routing.ts).
@@ -190,6 +216,8 @@ interface MeshStateStore {
   setBlePermissionBlocked: (blocked: boolean) => void;
   setPowerSaving: (saving: boolean) => void;
   setLocationGranted: (granted: boolean) => void;
+  setWipeIncomplete: (incomplete: boolean) => void;
+  setWifiFastPath: (state: WifiFastPath) => void;
   setNostrConnected: (connected: boolean) => void;
   setTorActive: (active: boolean) => void;
   setTorBootstrap: (phase: TorBootstrapPhase) => void;
@@ -203,6 +231,8 @@ export const useMeshStateStore = create<MeshStateStore>()((set) => ({
   blePermissionBlocked: false,
   powerSaving: false,
   locationGranted: true,
+  wipeIncomplete: false,
+  wifiFastPath: "unknown",
   nostrConnected: false,
   torActive: false,
   torBootstrap: "idle",
@@ -228,6 +258,12 @@ export const useMeshStateStore = create<MeshStateStore>()((set) => ({
   },
   setLocationGranted(granted) {
     set({ locationGranted: granted });
+  },
+  setWipeIncomplete(incomplete) {
+    set({ wipeIncomplete: incomplete });
+  },
+  setWifiFastPath(state) {
+    set({ wifiFastPath: state });
   },
   setNostrConnected(connected) {
     set({ nostrConnected: connected });
@@ -270,6 +306,12 @@ export interface MeshBannerInputs {
   // This chipset has no BLE peripheral role, so the device can scan and relay
   // but can never be discovered. Optional, defaulting to the capable case.
   advertisingUnsupported?: boolean;
+  // State of the WiFi Aware fast path. Optional and defaulting to "unknown", so
+  // a caller with no reading says nothing rather than guessing.
+  wifiFastPath?: WifiFastPath;
+  // A panic wipe left secrets behind. Optional, defaulting to the case where
+  // nothing has told us otherwise.
+  wipeIncomplete?: boolean;
   nostrConnected: boolean;
   torActive: boolean;
   // Optional so existing callers keep compiling; absent reads as "idle".
@@ -376,18 +418,37 @@ function bleBlockerBanner(blocker: BleBlocker): MeshBanner | null {
 // intentionally NOT special-cased: it still scans and relays, so its banners
 // track real connectivity.
 export function computeMeshBanners(inputs: MeshBannerInputs): MeshBanner[] {
-  if (inputs.presenceStatus === "away") {
-    return [
-      {
-        key: "paused",
-        label: t("mesh.banner.paused"),
-        tone: "neutral",
-        action: { label: t("mesh.banner.action.resume"), kind: "resume" },
-      },
-    ];
+  const banners: MeshBanner[] = [];
+
+  // A panic wipe that did not commit, and the one banner that outranks even
+  // Away - because it is not about the mesh at all.
+  //
+  // The wipe already raises an alert when the keychain refuses something, but an
+  // alert is dismissed once and then gone, leaving an app that looks like a
+  // fresh install over data that is still on the device. Under duress "did it
+  // work?" must not be a guess, and the natural response to a guess is doing it
+  // again. So the claim stands on screen until it stops being true.
+  //
+  // Nothing to tap: the retry is automatic on the next launch (see
+  // sweepOrphanedSecrets), which is also what makes this self-clearing rather
+  // than a flag somebody has to remember to lower.
+  if (inputs.wipeIncomplete === true) {
+    banners.push({
+      key: "wipe-incomplete",
+      label: t("mesh.banner.wipe_incomplete"),
+      tone: "danger",
+    });
   }
 
-  const banners: MeshBanner[] = [];
+  if (inputs.presenceStatus === "away") {
+    banners.push({
+      key: "paused",
+      label: t("mesh.banner.paused"),
+      tone: "neutral",
+      action: { label: t("mesh.banner.action.resume"), kind: "resume" },
+    });
+    return banners;
+  }
 
   // The one thing standing between the user and a working mesh, said plainly,
   // with the button that fixes it. Exactly one of these can apply, because
@@ -469,6 +530,25 @@ export function computeMeshBanners(inputs: MeshBannerInputs): MeshBanner[] {
     });
   }
 
+  // The WiFi Aware fast path exists on this device but is not usable right now,
+  // which in practice means WiFi is switched off. Placed above the internet
+  // block rather than inside it, and deliberately: Aware is a direct
+  // phone-to-phone radio, so it is just as relevant in pure-Bluetooth mode.
+  //
+  // Neutral, and with no button, because nothing is broken. Every message, photo
+  // and file still goes over BLE; what is lost is speed, and a video that takes
+  // minutes instead of seconds is otherwise an unexplained slowness the user
+  // would reasonably read as the app being bad at its job. Only "unavailable"
+  // says anything: hardware that never had the fast path, and a permission the
+  // app never asks for, are both notes with no action behind them.
+  if (inputs.wifiFastPath === "unavailable") {
+    banners.push({
+      key: "wifi-fast-path",
+      label: t("mesh.banner.wifi_off"),
+      tone: "neutral",
+    });
+  }
+
   // Internet off is a deliberate pure-Bluetooth mode: say so once and skip the
   // internet-dependent notes below (relay, Tor, gateway, bridge) that cannot
   // apply while no relay is contacted.
@@ -544,6 +624,50 @@ export function computeMeshBanners(inputs: MeshBannerInputs): MeshBanner[] {
   return banners;
 }
 
+// The banners that follow the reader into a conversation.
+//
+// The full stack belongs on the Mesh tab, where an empty radar is the thing
+// needing explanation and every fix button is in reach. A thread is a different
+// question: the reader is not diagnosing the mesh, they are trying to send a
+// message, and the only states worth their attention are the ones that stop
+// that from happening and that they can do something about.
+//
+// The thread already reports what became of a message it tried to send (queued,
+// no route, no reach). What it cannot say is why, BEFORE anything is typed - so
+// someone sits in a conversation with the radio switched off, writes, sends, and
+// only then learns. These few carry that forward.
+//
+// Everything else stays out on purpose. The informational notes (location off,
+// battery saver, relaying, Tor on, gateway, bridge, the WiFi fast path) describe
+// a mesh that is working; repeating them over a conversation is chrome nobody
+// asked for. So do the two that cannot be acted on: "no Bluetooth hardware" is
+// permanent, and a banner that never changes and never dismisses becomes
+// furniture people stop reading - while "starting" is transient and would flash
+// on every thread open.
+const THREAD_BANNER_KEYS = new Set([
+  // The mesh is stopped because the user chose Away. Carries Resume.
+  "paused",
+  // Secrets survived a panic wipe. Not about this conversation, and the one
+  // thing here important enough to say wherever the user happens to be.
+  "wipe-incomplete",
+  // The radio cannot run, and each of these carries the button that fixes it.
+  "ble-adapter-off",
+  "ble-permission",
+  "ble-permission-blocked",
+  "ble-location-permission",
+  "ble-location-services",
+  // Every peer refuses us and we refuse every peer, so nothing in this thread
+  // will send or arrive. Says what to do in the label.
+  "clock-skew",
+  // Anything routing over the internet is paused, which for a Nostr-delivered
+  // thread is the whole of it.
+  "tor-blocked",
+]);
+
+export function threadBanners(banners: MeshBanner[]): MeshBanner[] {
+  return banners.filter((b) => THREAD_BANNER_KEYS.has(b.key));
+}
+
 // Hook form for components: recomputes as presence, permissions, relay, Tor and
 // peers change.
 export function useMeshBanners(): MeshBanner[] {
@@ -574,6 +698,8 @@ export function useMeshBanners(): MeshBanner[] {
   );
   const powerSaving = useMeshStateStore((s) => s.powerSaving);
   const clockSkewed = useMeshStateStore((s) => s.clockSkewed);
+  const wifiFastPath = useMeshStateStore((s) => s.wifiFastPath);
+  const wipeIncomplete = useMeshStateStore((s) => s.wipeIncomplete);
   const backgroundLimitsBrand =
     !backgroundLimitsAcknowledged && needsBatteryOptimizationPrompt()
       ? getDeviceBrand()
@@ -586,6 +712,8 @@ export function useMeshBanners(): MeshBanner[] {
     backgroundLimitsBrand,
     powerSaving,
     clockSkewed,
+    wifiFastPath,
+    wipeIncomplete,
     nostrConnected,
     torActive,
     torBootstrap,

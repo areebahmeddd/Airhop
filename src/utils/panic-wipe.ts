@@ -214,6 +214,16 @@ export async function panicWipe(): Promise<PanicWipeResult> {
     // longer exists. A first-run state should not open by diagnosing a mesh the
     // user has just destroyed.
     clockSkewed: false,
+    // Same rule, and no risk of disagreeing with the controller that publishes
+    // it: destroyMeshService() ran before this, so the WiFiController holding
+    // the last reading is already gone and the next one starts from "unknown"
+    // too. Left set, a wipe on a phone with WiFi off would open the fresh
+    // install on a note about a transport it has not tried yet.
+    wifiFastPath: "unknown",
+    // Cleared, not set, and the caller raises it a moment later if the keychain
+    // actually refused something. A wipe that works must not leave the warning
+    // from the one before it standing.
+    wipeIncomplete: false,
   });
 
   // Drop the cached Cashu Wallet instances too: they hold the previous

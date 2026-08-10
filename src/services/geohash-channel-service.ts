@@ -200,6 +200,26 @@ const TAG_GEOHASH = "g";
 const TAG_EXPIRATION = "expiration"; // NIP-40
 const TAG_TOPIC = "t"; // ["t","urgent"] parity with urgent board posts
 
+// How far back the location-note feed looks.
+//
+// The feed used to carry no `since` at all, so five joined cells each pulled
+// their relays' 200 most recent `#g` notes however old they were. A note that
+// predates this window is either NIP-40 expired or older than the 7-day life of
+// the board post it mirrors, so it has nothing to show; asking for it only
+// bought a bigger cold-start burst to verify and throw away.
+const GEO_NOTE_LOOKBACK_SECONDS = 7 * 24 * 60 * 60;
+
+// Deletions are asked for by author, and this caps how many authors one filter
+// may name. Ordered by when we last heard from them, so the cap drops the
+// authors whose notes are oldest - which are the ones nearest to ageing out of
+// the window above anyway.
+const MAX_DELETION_AUTHORS = 128;
+
+// Debounce on rebuilding a cell's deletion subscription. A backfill hands us a
+// couple of hundred notes in a burst, and resubscribing per new author would
+// open and close a subscription per note.
+const DELETION_RESUBSCRIBE_DEBOUNCE_MS = 2_000;
+
 // Hooks the mesh layer supplies so geohash chat can cross the mesh/internet
 // boundary through a gateway peer. Both are optional; without them the service
 // is a plain internet-only geohash client.
@@ -235,6 +255,18 @@ export class GeohashChannelService {
   private readonly dmSubscriptions = new Map<string, () => void>();
   // channel → unsubscribe function for that cell's kind-1 location-note feed.
   private readonly noteSubscriptions = new Map<string, () => void>();
+  // channel → unsubscribe for the NIP-09 deletions that can retract those
+  // notes, scoped to the authors we have actually heard from. See
+  // resubscribeDeletions for why this is not one standing filter.
+  private readonly deletionSubscriptions = new Map<string, () => void>();
+  // channel → authors of the notes we hold there, in the order we last saw
+  // them, which is what MAX_DELETION_AUTHORS trims against.
+  private readonly noteAuthors = new Map<string, Set<string>>();
+  // channel → pending debounce for the above.
+  private readonly deletionResubscribes = new Map<
+    string,
+    ReturnType<typeof setTimeout>
+  >();
   // A geo-DM peer's Nostr pubkey → the geohash cell we talk to them in, so a
   // reply re-derives our per-cell identity and targets the right relays.
   private readonly geoDmPeers = new Map<string, string>();
@@ -901,22 +933,23 @@ export class GeohashChannelService {
 
     // Location-note feed: kind-1 notes tagged to this cell (standalone notes
     // and bitchat board posts bridged to Nostr) surface in the notices sheet.
-    //
-    // Kind-5 rides the same subscription. A NIP-09 deletion is a request and a
-    // relay is not obliged to honour it, so a retracted note keeps being served
-    // until we apply the deletion ourselves. Deletions carry no `#g` tag, so
-    // they are matched by author.
     const notesClose = this.client.subscribe(
       [
-        { kinds: [KIND_TEXT_NOTE], "#g": [geohash], limit: 200 },
-        { kinds: [KIND_DELETION], limit: 200 },
+        {
+          kinds: [KIND_TEXT_NOTE],
+          "#g": [geohash],
+          since: Math.floor(Date.now() / 1000) - GEO_NOTE_LOOKBACK_SECONDS,
+          limit: 200,
+        },
       ],
       (event) => {
-        if (event.kind === KIND_DELETION) {
-          this.handleNoteDeletion(event);
-          return;
+        // Only an author whose note we KEPT is worth asking about: our own
+        // bridged copies and notes tagged to a neighbouring cell are both
+        // dropped by handleLocationNote, and a deletion for either could never
+        // apply to anything on screen.
+        if (this.handleLocationNote(event, geohash, identity.pubKeyHex)) {
+          this.rememberNoteAuthor(channel, geohash, event.pubkey);
         }
-        this.handleLocationNote(event, geohash, identity.pubKeyHex);
       },
       undefined,
       this.relaysForGeohash(geohash),
@@ -924,16 +957,101 @@ export class GeohashChannelService {
     this.noteSubscriptions.set(channel, () => notesClose.close());
   }
 
+  // Note the author of a note we now hold, and rebuild this cell's deletion
+  // subscription if that is somebody new.
+  private rememberNoteAuthor(
+    channel: string,
+    geohash: string,
+    pubkey: string,
+  ): void {
+    let authors = this.noteAuthors.get(channel);
+    if (authors === undefined) {
+      authors = new Set();
+      this.noteAuthors.set(channel, authors);
+    }
+    const known = authors.has(pubkey);
+    // Re-inserted even when known, so the set stays ordered by last-seen and
+    // the trim below drops the stalest rather than an arbitrary 128. Only a
+    // genuinely new author is worth a resubscribe.
+    authors.delete(pubkey);
+    authors.add(pubkey);
+    // Bounded to what a filter can carry, so a busy cell cannot grow this
+    // without limit for the life of the subscription.
+    while (authors.size > MAX_DELETION_AUTHORS) {
+      const oldest = authors.values().next();
+      if (oldest.done === true) break;
+      authors.delete(oldest.value);
+    }
+    if (known) return;
+    const pending = this.deletionResubscribes.get(channel);
+    if (pending !== undefined) return;
+    this.deletionResubscribes.set(
+      channel,
+      setTimeout(() => {
+        this.deletionResubscribes.delete(channel);
+        // The cell may have been left, or moved, during the debounce.
+        if (this.channelGeohash.get(channel) !== geohash) return;
+        this.resubscribeDeletions(channel, geohash);
+      }, DELETION_RESUBSCRIBE_DEBOUNCE_MS),
+    );
+  }
+
+  // Deletions that can retract the notes on screen, asked for BY AUTHOR.
+  //
+  // This used to ride the note subscription as a bare `{ kinds: [5], limit: 200 }`
+  // - no author, no tag, no `since` - which is a request for every deletion
+  // event the relay holds, and then a standing feed of every new one. Five
+  // joined cells each opened one, across five geo relays apiece, so a launch
+  // with internet pulled thousands of events that had nothing to do with this
+  // app. Every one of them costs a SHA-256 and a schnorr verify inside
+  // nostr-tools' socket handler, on the JS thread, before our handler is even
+  // reached. That is what froze the app on a fresh install with WiFi on: the
+  // radar's sonar loop stopped between pulses, the tab bar stopped answering,
+  // and turning WiFi off "fixed" it because with no relay reachable the flood
+  // never arrived.
+  //
+  // Scoping by author loses nothing. handleNoteDeletion already refuses any
+  // deletion not signed by the same key that signed the note - `e` tags are
+  // free to write - so a deletion from an author we hold no note from could
+  // never have applied. What used to be filtered after paying for it is now
+  // filtered by the relay.
+  private resubscribeDeletions(channel: string, geohash: string): void {
+    const close = this.deletionSubscriptions.get(channel);
+    if (close !== undefined) {
+      close();
+      this.deletionSubscriptions.delete(channel);
+    }
+    const authors = [...(this.noteAuthors.get(channel) ?? [])];
+    if (authors.length === 0) return;
+    const deletionsClose = this.client.subscribe(
+      [
+        {
+          kinds: [KIND_DELETION],
+          authors,
+          // A deletion older than the notes it could retract is unusable.
+          since: Math.floor(Date.now() / 1000) - GEO_NOTE_LOOKBACK_SECONDS,
+        },
+      ],
+      (event) => this.handleNoteDeletion(event),
+      undefined,
+      this.relaysForGeohash(geohash),
+    );
+    this.deletionSubscriptions.set(channel, () => deletionsClose.close());
+  }
+
   // Apply a NIP-09 deletion to the notes on screen. The authorship check is the
   // whole mechanism: `e` tags are free to write, so a deletion only counts for
   // events signed by the same key that signed the note.
   private handleNoteDeletion(event: NostrEvent): void {
     const notices = useNoticesStore.getState();
+    // Flattened once per event rather than once per `e` tag. A deletion may
+    // carry many, and the old shape rebuilt the whole cross-cell note list and
+    // rescanned it for each one - work that grows with the product of the two.
+    let held: { id: string; pubkey: string }[] | null = null;
     for (const [tag, value] of event.tags) {
       if (tag !== "e" || value === undefined) continue;
-      const target = Object.values(notices.notesByGeohash)
-        .flat()
-        .find((n) => n.id === value);
+      held ??= Object.values(notices.notesByGeohash).flat();
+      const target = held.find((n) => n.id === value);
       if (target === undefined || target.pubkey !== event.pubkey) continue;
       notices.removeNote(value);
     }
@@ -942,16 +1060,19 @@ export class GeohashChannelService {
   // Parse a kind-1 location note into the notices store. Our own bridged copy
   // is skipped: the signed board post already renders it, carrying urgency and
   // supporting merged deletion.
+  //
+  // Returns whether the note was kept, which is what decides whether its author
+  // is worth watching for deletions. See rememberNoteAuthor.
   private handleLocationNote(
     event: NostrEvent,
     geohash: string,
     selfPubkey: string,
-  ): void {
-    if (event.pubkey === selfPubkey) return;
+  ): boolean {
+    if (event.pubkey === selfPubkey) return false;
     const matched = event.tags.find(
       ([t, v]) => t === TAG_GEOHASH && v === geohash,
     );
-    if (matched === undefined) return;
+    if (matched === undefined) return false;
     const expirationSec = event.tags.find(([t]) => t === TAG_EXPIRATION)?.[1];
     const expiresAtMs =
       expirationSec !== undefined ? Number(expirationSec) * 1000 : undefined;
@@ -994,6 +1115,7 @@ export class GeohashChannelService {
         geohash,
       });
     }
+    return true;
   }
 
   private unsubscribeChannel(channel: string): void {
@@ -1012,6 +1134,20 @@ export class GeohashChannelService {
       notesClose();
       this.noteSubscriptions.delete(channel);
     }
+    const deletionsClose = this.deletionSubscriptions.get(channel);
+    if (deletionsClose !== undefined) {
+      deletionsClose();
+      this.deletionSubscriptions.delete(channel);
+    }
+    const resubscribe = this.deletionResubscribes.get(channel);
+    if (resubscribe !== undefined) {
+      clearTimeout(resubscribe);
+      this.deletionResubscribes.delete(channel);
+    }
+    // Dropped with the subscription: the authors belong to the cell that was
+    // just left, and carrying them into the next one would ask its relays for
+    // deletions by people who never posted there.
+    this.noteAuthors.delete(channel);
     this.channelGeohash.delete(channel);
   }
 

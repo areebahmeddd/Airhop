@@ -310,11 +310,6 @@ const CANCEL_SLIDE_DISTANCE = 110;
 // a resting thumb drifts across it, and each flip is a haptic and a re-render.
 const CANCEL_SLIDE_DISARM = 70;
 
-// A burst shorter than this is a mis-tap, not a message. Nothing is kept for
-// it: the room may have heard a click, and a quarter-second bubble in the
-// thread afterwards is worse than nothing.
-const MIN_BURST_KEEP_MS = 500;
-
 // The live-burst ceiling in seconds, for the HUD. Derived from the value the
 // capture layer actually enforces, so the badge cannot claim a burst is still
 // going out after the encoder has stopped feeding it.
@@ -798,14 +793,18 @@ function createTransferStyles(Colors: ReturnType<typeof useThemeColors>) {
 // stat, and an effect would render one frame of a working bubble first. Only
 // the bubbles on screen are mounted, and the answer is memoised per file.
 function useAttachmentPresent(uri: string): boolean {
-  return useMemo(() => {
-    try {
-      return new FileSystem.File(uri).exists;
-    } catch {
-      // An unreadable path is a missing file to anyone looking at it.
-      return false;
-    }
-  }, [uri]);
+  return useMemo(() => attachmentPresent(uri), [uri]);
+}
+
+// The same question outside a render, for the actions that need an answer at
+// the moment they are taken rather than at the moment a bubble was drawn.
+function attachmentPresent(uri: string): boolean {
+  try {
+    return new FileSystem.File(uri).exists;
+  } catch {
+    // An unreadable path is a missing file to anyone looking at it.
+    return false;
+  }
 }
 
 // The one way the app says a file is no longer here. Shared by every kind, so a
@@ -2442,8 +2441,21 @@ export default function MessageThread({
   // Forwarding reuses the existing send pipeline: it's just composing a new
   // message with the original content in a different channel/DM. No protocol
   // changes needed.
-  function forwardMessage(source: ChatMessage, targetChannel: string): void {
+  // Returns false when there was nothing to forward, so the caller can leave
+  // the reader where they are instead of walking them into a thread to look at
+  // a message that never arrived.
+  function forwardMessage(source: ChatMessage, targetChannel: string): boolean {
     if (source.attachment) {
+      // Attachments live in a cache that is swept after a week and can be
+      // cleared by hand. The bubble already reads "no longer available"; say
+      // the same thing here rather than starting a send whose only outcome is
+      // a red mark in a room the reader was not in a moment ago.
+      if (!attachmentPresent(source.attachment.uri)) {
+        // The same sentence the bubble is already showing, so the answer to
+        // "why not" is one the reader has seen before.
+        showAlert(t("chat.attach.not_sent"), t("chat.media.gone_note"));
+        return false;
+      }
       sendAttachmentMessage(
         source.attachment.type,
         source.attachment.uri,
@@ -2451,10 +2463,17 @@ export default function MessageThread({
         source.attachment.mimeType,
         source.attachment.durationMs,
         // Carry the caption (it lives on the message text) so a forwarded photo
-        // keeps its caption, the way it arrived.
-        { targetChannel, forwarded: true, caption: source.text || undefined },
+        // keeps its caption, the way it arrived. The size comes along too, or
+        // the copy loses the "PDF · 412 KB" line the original had for no reason
+        // the reader can see.
+        {
+          targetChannel,
+          forwarded: true,
+          caption: source.text || undefined,
+          sizeBytes: source.attachment.sizeBytes,
+        },
       );
-      return;
+      return true;
     }
     const msg: ChatMessage = {
       id: `${localPeerID}-${Date.now()}-${Math.random().toString(36).slice(2)}`,
@@ -2471,26 +2490,36 @@ export default function MessageThread({
     if (targetChannel === channel) followOwnMessage();
     addMessage(msg);
     const service = getMeshService();
-    if (!service) return;
+    if (!service) return true;
     if (targetChannel.startsWith("dm:")) {
       service.sendDm(targetChannel.slice(3), source.text);
     } else {
       service.sendChannelMessage(targetChannel, source.text);
     }
+    return true;
   }
 
   // Bulk forward. Sent oldest-first so the target thread reads in the same order
   // the reader saw them here, and one at a time through the same single-message
   // path, so an attachment forwards exactly as it does on its own.
-  function forwardSelected(targetChannel: string): void {
+  //
+  // True when any of them went, which is what decides whether the reader is
+  // taken to the target thread. A selection where every attachment has aged out
+  // of the cache moves nobody anywhere.
+  function forwardSelected(targetChannel: string): boolean {
     const picked = msgs
       .filter((m) => selectedIds.has(m.id))
       .sort((a, b) => a.timestampMs - b.timestampMs);
-    for (const m of picked) forwardMessage(m, targetChannel);
+    let sent = false;
+    for (const m of picked) sent = forwardMessage(m, targetChannel) || sent;
+    // Nothing went, so nothing has changed: the sheet stays open on the target
+    // list and the selection stays made, ready for a room that can take it.
+    if (!sent) return false;
     // Only the picks: the sheet closes itself after its confirmation tick, and
     // pulling it out from under that would drop the one bit of feedback the
     // forward gives.
     setPickedIds(new Set());
+    return true;
   }
 
   function clearSelection(): void {
@@ -2811,20 +2840,37 @@ export default function MessageThread({
   async function sendLiveBurstAsNote(
     bytes: Uint8Array,
     durationMs: number,
+    burstIDHex: string,
   ): Promise<void> {
     try {
+      // Named after the burst it is a recording of, in bitchat's
+      // `voice_<16 hex>` shape.
+      //
+      // That name is the only thing tying this file to the live bubble a
+      // listener already has on screen. bitchat matches the two by burst ID and
+      // swaps the finished audio into the existing row; a name it cannot parse
+      // matches nothing, and the same few seconds of speech arrive twice - once
+      // as the burst they heard, once as a note repeating it. See
+      // ChatLiveVoiceCoordinator.burstID(fromVoiceFileName:) on iOS and
+      // LiveVoiceManager.burstIDFromVoiceFileName on Android; both take the 16
+      // characters after `voice_` and require every one of them to be hex.
+      //
+      // The extension stays `.aac`, because that is what the bytes are: a live
+      // burst finalizes as ADTS AAC, not an MP4 container. Only the stem is
+      // load-bearing here.
+      const wireName = `voice_${burstIDHex}.aac`;
       // Written straight into the attachment cache, under the prefix a recorded
       // note is adopted into, so both are swept and cleared alike.
       const file = new FileSystem.File(
         FileSystem.Paths.cache,
-        `${CACHE_FILE_PREFIX}${String(Date.now())}_voice.aac`,
+        `${CACHE_FILE_PREFIX}${String(Date.now())}_${wireName}`,
       );
       file.create({ overwrite: true, intermediates: true });
       file.write(bytes);
       sendAttachmentMessage(
         "voice",
         file.uri,
-        "voice.aac",
+        wireName,
         "audio/aac",
         durationMs,
       );
@@ -2951,10 +2997,17 @@ export default function MessageThread({
     // live; this is what reaches anyone who was not, and what stays in the
     // thread afterwards. It rides the existing attachment path, so it is a
     // normal message row with a normal bubble and needs no special handling on
-    // either end. Too short to be worth sending is treated as a slip of the
-    // finger rather than a message.
-    if (finalized && finalized.durationMs >= MIN_BURST_KEEP_MS) {
-      await sendLiveBurstAsNote(finalized.bytes, finalized.durationMs);
+    // either end.
+    //
+    // Null for a hold too short to be a message: that decision belongs beside
+    // the frame count that makes it, and the burst was retracted rather than
+    // ended so nobody is left holding it either. See MIN_BURST_KEEP_MS.
+    if (finalized) {
+      await sendLiveBurstAsNote(
+        finalized.bytes,
+        finalized.durationMs,
+        finalized.burstIDHex,
+      );
     }
   }
 
@@ -4898,10 +4951,10 @@ export default function MessageThread({
         carriesMedia={forwardSource?.attachment !== undefined}
         onClose={() => setForwardSource(null)}
         onForward={(target) => {
-          if (forwardSource) {
-            forwardMessage(forwardSource, target);
-            onNavigateToChannel(target);
-          }
+          if (!forwardSource) return false;
+          if (!forwardMessage(forwardSource, target)) return false;
+          onNavigateToChannel(target);
+          return true;
         }}
       />
 
@@ -4914,8 +4967,9 @@ export default function MessageThread({
         carriesMedia={selectedCarriesMedia}
         onClose={() => setShowBulkForward(false)}
         onForward={(target) => {
-          forwardSelected(target);
+          if (!forwardSelected(target)) return false;
           onNavigateToChannel(target);
+          return true;
         }}
       />
     </View>

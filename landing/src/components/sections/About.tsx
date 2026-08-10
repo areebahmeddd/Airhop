@@ -54,8 +54,7 @@ export default function About() {
                   Android Keystore
                 </TextLink>
                 . There are no accounts, no registrations, and nothing that touches any server, i.e.
-                it can be used as a burner app that leaves nothing linking back to your activity
-                once deleted.
+                it can be used as a burner app that leaves nothing linking back to you once deleted.
               </p>
               <p>
                 Every session uses the{" "}

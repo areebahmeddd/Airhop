@@ -1,4 +1,8 @@
-import { computeMeshBanners, type MeshBannerInputs } from "../mesh-state-store";
+import {
+  computeMeshBanners,
+  threadBanners,
+  type MeshBannerInputs,
+} from "../mesh-state-store";
 
 // A healthy, fully-online baseline. Individual tests override one field.
 const HEALTHY: MeshBannerInputs = {
@@ -381,5 +385,196 @@ describe("clock skew banner", () => {
       presenceStatus: "away",
     });
     expect(banners.map((b) => b.key)).toEqual(["paused"]);
+  });
+});
+
+// The WiFi Aware fast path, which is an accelerator and never a blocker. It gets
+// a note only when the user could act on it, and never a colour that suggests
+// something is broken: every message still sends over Bluetooth.
+describe("the WiFi fast-path note", () => {
+  it("says nothing when the fast path is running", () => {
+    expect(computeMeshBanners({ ...HEALTHY, wifiFastPath: "active" })).toEqual(
+      [],
+    );
+  });
+
+  it("says nothing on hardware that never had it, or before the first pass", () => {
+    for (const state of ["unsupported", "unknown"] as const) {
+      expect(computeMeshBanners({ ...HEALTHY, wifiFastPath: state })).toEqual(
+        [],
+      );
+    }
+  });
+
+  // The app never requests NEARBY_WIFI_DEVICES, so a note about it would name a
+  // problem with no way to act on it.
+  it("says nothing about a permission it never asks for", () => {
+    expect(
+      computeMeshBanners({ ...HEALTHY, wifiFastPath: "permission" }),
+    ).toEqual([]);
+  });
+
+  it("raises a neutral, actionless note when WiFi is switched off", () => {
+    const banners = computeMeshBanners({
+      ...HEALTHY,
+      wifiFastPath: "unavailable",
+    });
+    expect(banners).toEqual([
+      {
+        key: "wifi-fast-path",
+        label: "Wi-Fi off · large files send slower",
+        tone: "neutral",
+      },
+    ]);
+  });
+
+  // Aware is a direct phone-to-phone radio, so it has nothing to do with the
+  // internet toggle and must survive the early return that toggle triggers.
+  it("still shows in pure-Bluetooth mode", () => {
+    const banners = computeMeshBanners({
+      ...HEALTHY,
+      wifiFastPath: "unavailable",
+      internetEnabled: false,
+    });
+    expect(banners.map((b) => b.key)).toEqual([
+      "wifi-fast-path",
+      "internet-off",
+    ]);
+  });
+
+  it("is suppressed while the user has deliberately paused", () => {
+    const banners = computeMeshBanners({
+      ...HEALTHY,
+      wifiFastPath: "unavailable",
+      presenceStatus: "away",
+    });
+    expect(banners.map((b) => b.key)).toEqual(["paused"]);
+  });
+});
+
+// A panic wipe that did not commit. The only banner about data at rest rather
+// than about the mesh, and the only one that outranks Away.
+describe("the incomplete-wipe banner", () => {
+  it("is absent by default, so a caller with no evidence says nothing", () => {
+    expect(computeMeshBanners(HEALTHY)).toEqual([]);
+    expect(computeMeshBanners({ ...HEALTHY, wipeIncomplete: false })).toEqual(
+      [],
+    );
+  });
+
+  it("says data may remain, with no button, since the retry is automatic", () => {
+    const banners = computeMeshBanners({ ...HEALTHY, wipeIncomplete: true });
+    expect(banners).toEqual([
+      {
+        key: "wipe-incomplete",
+        label: "Wipe incomplete · some data may remain, reopening retries",
+        tone: "danger",
+      },
+    ]);
+  });
+
+  // Away short-circuits every other banner because a paused mesh makes them
+  // moot. This one is not about the mesh, so it has to survive that.
+  it("survives the Away short-circuit, and leads it", () => {
+    const banners = computeMeshBanners({
+      ...HEALTHY,
+      wipeIncomplete: true,
+      presenceStatus: "away",
+    });
+    expect(banners.map((b) => b.key)).toEqual(["wipe-incomplete", "paused"]);
+  });
+
+  it("outranks even a hard Bluetooth blocker", () => {
+    const banners = computeMeshBanners({
+      ...HEALTHY,
+      wipeIncomplete: true,
+      bleBlocker: "adapter-off",
+      peerCount: 0,
+    });
+    expect(banners[0].key).toBe("wipe-incomplete");
+  });
+});
+
+// Which banners follow the reader into a conversation. The rule: only what
+// stops this conversation working and can be acted on, plus the wipe warning.
+describe("threadBanners", () => {
+  function keysFor(inputs: Partial<MeshBannerInputs>): string[] {
+    return threadBanners(computeMeshBanners({ ...HEALTHY, ...inputs })).map(
+      (b) => b.key,
+    );
+  }
+
+  it("carries the blockers that stop a message going, with their fix buttons", () => {
+    for (const blocker of [
+      "adapter-off",
+      "permission-denied",
+      "permission-blocked",
+      "location-permission",
+      "location-services-off",
+    ] as const) {
+      const banners = threadBanners(
+        computeMeshBanners({ ...HEALTHY, bleBlocker: blocker, peerCount: 0 }),
+      );
+      expect(banners).toHaveLength(1);
+      expect(banners[0].action).toBeDefined();
+    }
+  });
+
+  it("carries Away, a skewed clock, a blocked Tor and an incomplete wipe", () => {
+    expect(keysFor({ presenceStatus: "away" })).toEqual(["paused"]);
+    expect(keysFor({ clockSkewed: true })).toEqual(["clock-skew"]);
+    expect(keysFor({ torBootstrap: "blocked", peerCount: 0 })).toEqual([
+      "tor-blocked",
+    ]);
+    expect(keysFor({ wipeIncomplete: true })).toEqual(["wipe-incomplete"]);
+  });
+
+  // Everything that describes a mesh which is working. Repeating these over a
+  // conversation is chrome, and the thread's own strip already reports what
+  // became of anything actually sent.
+  it("drops the informational notes", () => {
+    expect(
+      keysFor({
+        locationGranted: false,
+        powerSaving: true,
+        advertisingUnsupported: true,
+        wifiFastPath: "unavailable",
+        backgroundLimitsBrand: "Xiaomi",
+        nostrConnected: true,
+        torActive: true,
+        gatewayEnabled: true,
+        bridgeActive: true,
+        peerCount: 0,
+      }),
+    ).toEqual([]);
+    expect(keysFor({ internetEnabled: false })).toEqual([]);
+  });
+
+  // Neither can be acted on. "Starting" is transient and would flash on every
+  // thread open; "no Bluetooth hardware" never changes and never dismisses, so
+  // it would become furniture. Both still show on the Mesh tab.
+  it("drops the two blockers with nothing to tap", () => {
+    for (const blocker of ["starting", "unsupported"] as const) {
+      expect(keysFor({ bleBlocker: blocker, peerCount: 0 })).toEqual([]);
+      expect(
+        computeMeshBanners({ ...HEALTHY, bleBlocker: blocker, peerCount: 0 }),
+      ).toHaveLength(1);
+    }
+  });
+
+  it("keeps severity order when several apply at once", () => {
+    expect(
+      keysFor({
+        wipeIncomplete: true,
+        bleBlocker: "adapter-off",
+        clockSkewed: true,
+        locationGranted: false,
+        peerCount: 0,
+      }),
+    ).toEqual(["wipe-incomplete", "ble-adapter-off", "clock-skew"]);
+  });
+
+  it("is empty on a healthy mesh, so a thread shows no chrome", () => {
+    expect(keysFor({})).toEqual([]);
   });
 });

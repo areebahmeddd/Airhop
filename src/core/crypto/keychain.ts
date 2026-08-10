@@ -65,3 +65,45 @@ export async function wipeAllSecrets(): Promise<void> {
     throw new Error(`keychain wipe left ${String(failed)} item(s) behind`);
   }
 }
+
+// Enforce the invariant that no identity means no secrets, and report whether
+// anything defied it. Called at launch, and only on the branch where there is
+// definitively no identity to own them.
+//
+// This is what turns a failed panic wipe from permanent into a retry. The wipe
+// most likely to fail is the one that matters: `AFTER_FIRST_UNLOCK` refuses
+// reads and deletes on a phone that has booted but not been unlocked, which is
+// exactly the seizure the gesture exists for. Nothing used to try again, so the
+// keys stayed for good. The next launch is past that unlock, and here the same
+// delete usually just works.
+//
+// Not framed as "retry the wipe", because it does not need to know a wipe ever
+// happened - which is the point. A secret with no identity to own it has no
+// owner and no reader; deleting it is unconditionally correct, so this needs no
+// persisted "a wipe was attempted here" flag, and a wipe leaves no trace of
+// having been attempted.
+//
+// The identity itself is deliberately NOT swept, and the reason is a race rather
+// than a scruple. The caller runs this without waiting, on its way to showing
+// the welcome screen, and the very next thing onboarding does is WRITE an
+// identity. A delete still in flight when that lands would destroy the key the
+// user just created, leaving an app that cannot start - a far worse outcome than
+// the one this exists to fix. Nothing is lost by skipping it: the caller only
+// reaches here because loadIdentity found no identity, so there is nothing to
+// delete, and in the one case where there might be (a read that failed while the
+// item survived) a keychain refusing reads refuses deletes too.
+//
+// Returns true ONLY when a leftover is positively confirmed: the delete was
+// refused AND a read afterwards still hands back a value. A keychain that
+// refuses both is unreadable rather than dirty, and claiming otherwise would put
+// an alarm about data at rest in front of someone whose device is merely locked.
+export async function sweepOrphanedSecrets(): Promise<boolean> {
+  const orphanable = Object.values(KEYCHAIN_ITEMS).filter(
+    (item) => item !== KEYCHAIN_ITEMS.identity,
+  );
+  const deletes = await Promise.allSettled(orphanable.map(deleteSecret));
+  if (deletes.every((r) => r.status === "fulfilled")) return false;
+  // Something refused, so ask what actually survived it.
+  const reads = await Promise.allSettled(orphanable.map(readSecret));
+  return reads.some((r) => r.status === "fulfilled" && r.value !== null);
+}

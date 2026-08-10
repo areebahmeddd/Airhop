@@ -36,15 +36,21 @@
 //
 // What is deliberately different from the BLE controller:
 //
-//   * No blocker is published and no banner is raised. WiFi Aware is an
-//     accelerator between two Android devices, and BLE carries everything
-//     either way. A user whose WiFi is off has not lost the mesh, and telling
-//     them otherwise would be a false alarm on the one screen that must stay
-//     trustworthy.
+//   * No BLOCKER is published. WiFi Aware is an accelerator between two Android
+//     devices, and BLE carries everything either way. A user whose WiFi is off
+//     has not lost the mesh, and saying they have would be a false alarm on the
+//     one screen that must stay trustworthy.
+//
+//     What it does report, through `onState`, is which of those situations it is
+//     in, so the Mesh tab can say the fast path is off in the same neutral voice
+//     it uses for battery saver. Saying nothing at all was its own small lie:
+//     the same video takes seconds with Aware and minutes without it, and with
+//     no note the difference reads as the app being slow.
 //   * "Unsupported" is latched forever rather than retried. No hardware, or an
 //     API level below the data path, is not a state a device leaves.
 
 import NativeAirhopWiFi from "../bridge/NativeAirhopWiFi";
+import type { WifiFastPath } from "../store/mesh-state-store";
 
 // Retry schedule for an attach that was refused. Slower than the BLE ladder at
 // every step: nothing the user is looking at depends on this transport, so the
@@ -84,6 +90,21 @@ function classify(error: unknown): WiFiFailure {
 }
 
 export class WiFiController {
+  // Told whenever the reported state changes, never on every pass: the reconciler
+  // runs on a retry ladder and re-reporting "still off" every few seconds would
+  // churn a subscriber for no news. Optional so the tests (and any caller with
+  // nothing to show) construct it bare.
+  constructor(private readonly onState?: (state: WifiFastPath) => void) {}
+
+  // Last thing handed to onState, so only transitions are reported.
+  private reported: WifiFastPath = "unknown";
+
+  private report(state: WifiFastPath): void {
+    if (state === this.reported) return;
+    this.reported = state;
+    this.onState?.(state);
+  }
+
   private desiredRunning = false;
   // Whether native has confirmed the transport is up. Only ever set from a call
   // that resolved, so it cannot claim more than the device agreed to.
@@ -150,6 +171,16 @@ export class WiFiController {
     if (this.unsupported) return;
     if (!available) {
       this.started = false;
+      // Deliberately NOT reported as "WiFi off" here, however much it looks
+      // like it. AirhopWiFiModule emits this same `available: false` from two
+      // places: the framework's state broadcast (the radio really has gone) and
+      // reportDiscoveryRefused (publish or subscribe was refused, on a device
+      // whose WiFi is on). Guessing "off" would put a banner about a toggle in
+      // front of someone whose toggle is already on.
+      //
+      // The retry below answers it properly within half a second: startWiFi
+      // re-reads `isAvailable` natively and rejects with a code that says which
+      // of the two it was, and reconcileOnce reports THAT.
       // Invalidate any attach still in flight: its resolve would otherwise
       // land after this and re-assert `started` over a transport the framework
       // has just torn down.
@@ -227,6 +258,7 @@ export class WiFiController {
     // asked once and never polled again.
     if (NativeAirhopWiFi === null || NativeAirhopWiFi === undefined) {
       this.unsupported = true;
+      this.report("unsupported");
       return;
     }
 
@@ -248,8 +280,20 @@ export class WiFiController {
         // to add after retrying an UNSUPPORTED advertiser every five seconds for
         // the life of the process.
         this.unsupported = true;
+        this.report("unsupported");
         return;
       }
+      // "unavailable" is the one the user can act on, and the only one the Mesh
+      // tab shows: the radio exists and is switched off. A transient attach
+      // failure is reported as no reading rather than as WiFi being off, since
+      // saying so would send someone to a toggle that is already on.
+      this.report(
+        failure === "unavailable"
+          ? "unavailable"
+          : failure === "permission"
+            ? "permission"
+            : "unknown",
+      );
       // Everything else can change: the user turns WiFi on, stops tethering, or
       // grants the permission. A permission refusal is retried too, on the slow
       // end of the ladder - unlike Bluetooth there is no banner asking the user
@@ -272,6 +316,7 @@ export class WiFiController {
     this.started = true;
     this.lastFailure = null;
     this.attempt = 0;
+    this.report("active");
 
     // `stop()` and `dispose()` are synchronous calls that can land while the
     // attach above is in flight - the user choosing Away, or a panic wipe, on

@@ -13,12 +13,26 @@ import {
   encodeBurstEnd,
   encodeBurstStart,
   framesToAdtsFile,
+  MIN_BURST_KEEP_MS,
   VoiceCaptureSession,
   VoiceCodec,
 } from "../voice-capture";
 
 function makeBurstID(seed: number): Uint8Array {
   return new Uint8Array(8).fill(seed);
+}
+
+// Realistic frames: AAC-LC 16 kHz mono at 16 kbps is about 130 bytes, and each
+// one is 64 ms of audio.
+const frame = (fill = 9) => new Uint8Array(130).fill(fill);
+
+// Enough of them to be a message rather than a mis-tap. Below MIN_BURST_KEEP_MS
+// a release retracts the burst instead of ending it, so any test asserting an
+// END has to hold the button for at least this long.
+const KEEPABLE_FRAMES = Math.ceil(MIN_BURST_KEEP_MS / 64) + 4;
+
+function hold(feed: (f: Uint8Array) => void, frames = KEEPABLE_FRAMES): void {
+  for (let i = 0; i < frames; i++) feed(frame(i + 1));
 }
 
 describe("VoiceCodec constants", () => {
@@ -193,12 +207,9 @@ describe("packetizer budget", () => {
   it("never emits a payload that would need fragmentation", async () => {
     const { packets, session } = collect();
     await session.startPtt();
-    // Realistic frames: AAC-LC 16 kHz mono at 16 kbps is about 130 bytes.
-    for (let i = 0; i < 12; i++) {
-      (session as unknown as { feed: (f: Uint8Array) => void }).feed(
-        new Uint8Array(130).fill(i + 1),
-      );
-    }
+    hold((f) =>
+      (session as unknown as { feed: (x: Uint8Array) => void }).feed(f),
+    );
     await session.stopPtt();
 
     for (const packet of packets) {
@@ -224,11 +235,9 @@ describe("packetizer budget", () => {
   it("never emits a FRAME that would need fragmentation", async () => {
     const { packets, session } = collect();
     await session.startPtt();
-    for (let i = 0; i < 12; i++) {
-      (session as unknown as { feed: (f: Uint8Array) => void }).feed(
-        new Uint8Array(130).fill(i + 1),
-      );
-    }
+    hold((f) =>
+      (session as unknown as { feed: (x: Uint8Array) => void }).feed(f),
+    );
     await session.stopPtt();
 
     expect(packets.length).toBeGreaterThan(2); // START + data + END
@@ -290,7 +299,7 @@ describe("DM burst scoping", () => {
     });
 
     await session.startPtt();
-    feed(new Uint8Array(130).fill(7));
+    hold(feed);
     await session.stopPtt();
 
     expect(broadcast).toHaveLength(0);
@@ -306,7 +315,7 @@ describe("DM burst scoping", () => {
     });
 
     await session.startPtt();
-    feed(new Uint8Array(130).fill(7));
+    hold(feed);
     await session.stopPtt();
 
     // One wire format, two envelopes: every payload decodes with the same
@@ -330,6 +339,262 @@ describe("DM burst scoping", () => {
     // The flush that carries this frame fails, and the session closes itself.
     feed(new Uint8Array(130).fill(8));
     expect(session.isActive).toBe(false);
+  });
+
+  // A dead session stops the ENCODER, not the burst. The finger is still on the
+  // button, and whatever it does next still has to reach the far side: a peer
+  // who dropped out for a moment and came back must be told the burst was
+  // retracted, or they keep and play audio the talker took back.
+  it("still retracts after the session went away mid-talk", async () => {
+    let alive = true;
+    const sealed: Uint8Array[] = [];
+    const { session, feed } = dmSession((p) => {
+      if (alive) sealed.push(p);
+      return alive;
+    });
+
+    await session.startPtt();
+    alive = false;
+    feed(new Uint8Array(130).fill(7));
+    feed(new Uint8Array(130).fill(8));
+    expect(session.isActive).toBe(false);
+
+    // The peer is back by the time the user slides to cancel.
+    alive = true;
+    sealed.length = 0;
+    await session.cancelPtt();
+
+    expect(sealed.length).toBeGreaterThan(0);
+    expect(decodeBurstPacket(sealed[0])?.kind).toBe("canceled");
+  });
+});
+
+// Closing a burst is the one decision that belongs to the person holding the
+// button, and it has to survive everything that can stop the microphone without
+// them: a Noise session dropping, the last peer in range walking off.
+describe("burst close is the talker's decision", () => {
+  function collect(): {
+    packets: Packet[];
+    session: VoiceCaptureSession & { feed: (f: Uint8Array) => void };
+    stops: number;
+  } {
+    const packets: Packet[] = [];
+    let onFrame: ((f: Uint8Array) => void) | null = null;
+    const counter = { stops: 0 };
+    const session = new VoiceCaptureSession(
+      {
+        senderPeerID: "aabbccdd00112233",
+        signingPrivKey: ed25519.utils.randomSecretKey(),
+        onPacket: (p) => packets.push(p),
+      },
+      {
+        startCapture: (cb) => {
+          onFrame = cb;
+          return Promise.resolve();
+        },
+        stopCapture: () => {
+          counter.stops++;
+          return Promise.resolve();
+        },
+      },
+    );
+    return {
+      packets,
+      get stops() {
+        return counter.stops;
+      },
+      session: Object.assign(session, {
+        feed: (f: Uint8Array) => onFrame?.(f),
+      }),
+    };
+  }
+
+  const kinds = (packets: Packet[]) =>
+    packets.map((p) => decodeBurstPacket(p.payload)?.kind);
+
+  it("suspend stops the microphone without ending the burst", async () => {
+    const collected = collect();
+    const { packets, session } = collected;
+    await session.startPtt();
+    session.feed(new Uint8Array(130).fill(1));
+    await session.suspend();
+
+    expect(collected.stops).toBe(1);
+    expect(session.isActive).toBe(false);
+    // Nothing has closed it: no END and no CANCELED have gone out.
+    expect(kinds(packets)).not.toContain("end");
+    expect(kinds(packets)).not.toContain("canceled");
+  });
+
+  it("releasing after a suspend still ends the burst and keeps the audio", async () => {
+    const { packets, session } = collect();
+    await session.startPtt();
+    hold(session.feed);
+    await session.suspend();
+    await session.stopPtt();
+
+    expect(kinds(packets)[packets.length - 1]).toBe("end");
+    // The words were said. They are still a playable note for anyone who was
+    // out of range while it was live.
+    expect(session.finalizedRecording()).not.toBeNull();
+  });
+
+  it("sliding back after a suspend still retracts the burst", async () => {
+    const { packets, session } = collect();
+    await session.startPtt();
+    // Long enough that a release would have kept it, so this proves the slide
+    // is what threw it away.
+    hold(session.feed);
+    await session.suspend();
+    await session.cancelPtt();
+
+    expect(kinds(packets)).toContain("canceled");
+    expect(kinds(packets)).not.toContain("end");
+    expect(session.finalizedRecording()).toBeNull();
+  });
+
+  it("closes a burst exactly once", async () => {
+    const { packets, session } = collect();
+    await session.startPtt();
+    hold(session.feed);
+    await session.stopPtt();
+    await session.stopPtt();
+    await session.cancelPtt();
+
+    expect(kinds(packets).filter((k) => k === "end")).toHaveLength(1);
+    expect(kinds(packets)).not.toContain("canceled");
+  });
+
+  it("does not retract a burst that was never started", async () => {
+    const { packets, session } = collect();
+    await session.cancelPtt();
+    expect(packets).toHaveLength(0);
+  });
+
+  // A tap on the mic instead of a hold. bitchat does the same thing in
+  // PTTLiveVoiceSession.finish(): below its minimum it sends `.canceled` and
+  // deletes the file rather than delivering a fragment of a word.
+  //
+  // Ending it instead would leave everyone in range holding a third of a second
+  // of audio as a voice note, in a conversation where the person who pressed the
+  // button sees no message at all.
+  it("retracts a hold too short to be a message", async () => {
+    const { packets, session } = collect();
+    await session.startPtt();
+    hold(session.feed, 2); // 128 ms
+    await session.stopPtt();
+
+    expect(kinds(packets)).toContain("canceled");
+    expect(kinds(packets)).not.toContain("end");
+    // And nothing is left to send as a note, so the thread stays empty on both
+    // sides rather than only on one.
+    expect(session.finalizedRecording()).toBeNull();
+  });
+
+  it("keeps a hold that just clears the minimum", async () => {
+    const { packets, session } = collect();
+    await session.startPtt();
+    hold(session.feed, Math.ceil(MIN_BURST_KEEP_MS / 64));
+    await session.stopPtt();
+
+    expect(kinds(packets)).toContain("end");
+    expect(kinds(packets)).not.toContain("canceled");
+    expect(session.finalizedRecording()).not.toBeNull();
+  });
+});
+
+// A retraction is the one control packet nothing else can stand in for. Both
+// clients turn a burst that merely stops into a finished voice note after three
+// seconds, so a lost END costs nothing; a lost CANCELED means the far side
+// keeps and plays exactly what the talker took back.
+describe("CANCELED is repeated", () => {
+  beforeEach(() => jest.useFakeTimers());
+  afterEach(() => {
+    jest.runOnlyPendingTimers();
+    jest.useRealTimers();
+  });
+
+  function collect(): {
+    packets: Packet[];
+    session: VoiceCaptureSession;
+  } {
+    const packets: Packet[] = [];
+    const session = new VoiceCaptureSession(
+      {
+        senderPeerID: "aabbccdd00112233",
+        signingPrivKey: ed25519.utils.randomSecretKey(),
+        onPacket: (p) => packets.push(p),
+      },
+      {
+        startCapture: () => Promise.resolve(),
+        stopCapture: () => Promise.resolve(),
+      },
+    );
+    return { packets, session };
+  }
+
+  it("sends the same retraction three times inside half a second", async () => {
+    const { packets, session } = collect();
+    await session.startPtt();
+    await session.cancelPtt();
+
+    const canceled = () =>
+      packets.filter((p) => decodeBurstPacket(p.payload)?.kind === "canceled");
+    expect(canceled()).toHaveLength(1);
+
+    jest.advanceTimersByTime(500);
+    expect(canceled()).toHaveLength(3);
+
+    // Every copy names the same burst, or the repeats retract nothing.
+    const ids = new Set(
+      canceled().map((p) => {
+        const burst = decodeBurstPacket(p.payload);
+        return burst ? bytesToHex(burst.burstID) : "";
+      }),
+    );
+    expect(ids).toEqual(new Set([session.burstIDHex]));
+  });
+
+  it("gives each copy its own timestamp, so none is a stale replay", async () => {
+    const { packets, session } = collect();
+    const now = jest.spyOn(Date, "now");
+    try {
+      now.mockReturnValue(5_000_000);
+      await session.startPtt();
+      await session.cancelPtt();
+      now.mockReturnValue(5_000_400);
+      jest.advanceTimersByTime(500);
+    } finally {
+      now.mockRestore();
+    }
+
+    const canceled = packets.filter(
+      (p) => decodeBurstPacket(p.payload)?.kind === "canceled",
+    );
+    // A receiver drops a voice frame older than 30s and deduplicates by packet
+    // ID: identical copies would be thrown away as replays of the first.
+    expect(new Set(canceled.map((p) => p.timestamp)).size).toBeGreaterThan(1);
+  });
+});
+
+describe("burstIDHex", () => {
+  it("is the 16 lowercase hex characters bitchat matches a voice note on", async () => {
+    const session = new VoiceCaptureSession(
+      {
+        senderPeerID: "aabbccdd00112233",
+        signingPrivKey: ed25519.utils.randomSecretKey(),
+        onPacket: () => undefined,
+      },
+      {
+        startCapture: () => Promise.resolve(),
+        stopCapture: () => Promise.resolve(),
+      },
+    );
+    await session.startPtt();
+    // `voice_<burstIDHex>.aac` is the name the finalized note travels under, and
+    // both bitchat clients take the 16 characters after `voice_` and require
+    // every one of them to be a hex digit.
+    expect(session.burstIDHex).toMatch(/^[0-9a-f]{16}$/);
   });
 });
 
@@ -403,8 +668,6 @@ describe("burst duration ceiling", () => {
     };
   }
 
-  const frame = () => new Uint8Array(130).fill(9);
-
   it("stops emitting once the burst passes two minutes", async () => {
     const now = jest.spyOn(Date, "now");
     try {
@@ -413,13 +676,13 @@ describe("burst duration ceiling", () => {
       await session.startPtt();
 
       // Well inside the ceiling: these are carried.
-      for (let i = 0; i < 12; i++) session.feed(frame());
+      hold(session.feed);
       const during = packets.length;
       expect(during).toBeGreaterThan(1); // START plus at least one DATA
 
       // Two minutes and a second later, the mic is still held.
       now.mockReturnValue(1_000_000 + 121_000);
-      for (let i = 0; i < 12; i++) session.feed(frame());
+      hold(session.feed);
 
       expect(packets.length).toBe(during);
     } finally {
@@ -433,10 +696,10 @@ describe("burst duration ceiling", () => {
       now.mockReturnValue(2_000_000);
       const { packets, session } = collect();
       await session.startPtt();
-      for (let i = 0; i < 12; i++) session.feed(frame());
+      hold(session.feed);
 
       now.mockReturnValue(2_000_000 + 121_000);
-      for (let i = 0; i < 12; i++) session.feed(frame());
+      hold(session.feed);
       await session.stopPtt();
 
       // The END is what tells every listener the burst is over; suppressing

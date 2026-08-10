@@ -61,6 +61,46 @@ function makeDataPacket(seed: number, seq: number, data?: Uint8Array): Packet {
   };
 }
 
+// A talker who walks out of range mid-sentence sends no END and no CANCELED:
+// the packets simply stop. Nothing arrives to notice that by, so the player's
+// own timeout is the only thing that ends the burst - and it has to say so, or
+// the screen keeps naming somebody who stopped talking seconds ago. This is the
+// same stale-indicator bug we saw from the other side on bitchat, and the
+// timeout matches theirs so both give up together.
+describe("a talker who stops without saying so", () => {
+  beforeEach(() => jest.useFakeTimers());
+  afterEach(() => {
+    jest.runOnlyPendingTimers();
+    jest.useRealTimers();
+  });
+
+  it("is dropped on the player's own clock, and the floor is reported free", () => {
+    const changes: number[] = [];
+    const player = track(
+      new VoicePlayer(
+        {
+          playFrames: () => Promise.resolve(),
+          endSession: () => undefined,
+        },
+        () => changes.push(player.activeSessions.length),
+      ),
+    );
+
+    player.handlePacket(makeStartPacket(1), "peer1");
+    player.handlePacket(makeDataPacket(1, 1), "peer1");
+    jest.advanceTimersByTime(400); // past the jitter buffer, still talking
+    expect(player.activeSessions).toHaveLength(1);
+    expect(changes).toHaveLength(0);
+
+    // They walk off. No END, no CANCELED, just silence.
+    jest.advanceTimersByTime(3_000);
+    expect(player.activeSessions).toHaveLength(0);
+    // And somebody was told, rather than the burst quietly disappearing from a
+    // list nothing re-reads.
+    expect(changes).toEqual([0]);
+  });
+});
+
 describe("VoicePlayer", () => {
   let playedFrames: Uint8Array[][];
   let endedSessions: string[];

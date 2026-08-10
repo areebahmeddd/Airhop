@@ -287,3 +287,125 @@ describe("an availability drop during an attach", () => {
     expect(wifi.isStarted).toBe(true);
   });
 });
+
+// What the controller TELLS the rest of the app. The Mesh tab shows a neutral
+// note when the fast path is off, so the reporting has to be honest about which
+// of "off", "never had it" and "we don't know" applies - and quiet when nothing
+// has changed, since the reconciler runs on a retry ladder.
+describe("reporting the fast path's state", () => {
+  test("reports it live once native attaches", async () => {
+    mockStartWiFi.mockResolvedValue(undefined);
+    const seen: string[] = [];
+    const wifi = new WiFiController((state) => seen.push(state));
+
+    wifi.start();
+    await settle();
+
+    expect(seen).toEqual(["active"]);
+  });
+
+  test("reports WiFi being off, and only once across a ladder of retries", async () => {
+    mockStartWiFi.mockImplementation(() =>
+      rejectWith("WIFI_AWARE_UNAVAILABLE"),
+    );
+    const seen: string[] = [];
+    const wifi = new WiFiController((state) => seen.push(state));
+
+    wifi.start();
+    await settle(60_000);
+
+    expect(mockStartWiFi.mock.calls.length).toBeGreaterThan(1);
+    expect(seen).toEqual(["unavailable"]);
+  });
+
+  // Switching WiFi off mid-session, which is the banner's real trigger. Native
+  // reports the drop, the retry re-reads the radio, and THAT is what names it.
+  test("reports WiFi off once the retry confirms the radio is the reason", async () => {
+    mockStartWiFi.mockResolvedValue(undefined);
+    const seen: string[] = [];
+    const wifi = new WiFiController((state) => seen.push(state));
+
+    wifi.start();
+    await settle();
+    expect(seen).toEqual(["active"]);
+
+    mockStartWiFi.mockImplementation(() =>
+      rejectWith("WIFI_AWARE_UNAVAILABLE"),
+    );
+    wifi.onAvailabilityChanged(false);
+    await settle(1_000);
+
+    expect(seen).toEqual(["active", "unavailable"]);
+  });
+
+  // The same `available: false` also arrives when discovery is refused on a
+  // device whose WiFi is on (AirhopWiFiModule.reportDiscoveryRefused). Calling
+  // that "WiFi off" would send the user to a toggle that is already on.
+  test("does not blame WiFi for a drop that turns out to be a refusal", async () => {
+    mockStartWiFi.mockResolvedValue(undefined);
+    const seen: string[] = [];
+    const wifi = new WiFiController((state) => seen.push(state));
+
+    wifi.start();
+    await settle();
+
+    mockStartWiFi.mockImplementation(() => rejectWith("PERMISSION_DENIED"));
+    wifi.onAvailabilityChanged(false);
+    await settle(1_000);
+
+    expect(seen).toEqual(["active", "permission"]);
+  });
+
+  // "Attach failed for some other reason" is not "WiFi is off". Saying so would
+  // send someone to a toggle that is already on, so it reports no reading -
+  // which from a cold start means saying nothing at all.
+  test("stays silent on an unnameable failure rather than blaming WiFi", async () => {
+    mockStartWiFi.mockImplementation(() =>
+      rejectWith("WIFI_AWARE_ATTACH_FAILED"),
+    );
+    const seen: string[] = [];
+    const wifi = new WiFiController((state) => seen.push(state));
+
+    wifi.start();
+    await settle(60_000);
+
+    expect(seen).toEqual([]);
+  });
+
+  // And it retracts a stale claim: a transport that WAS up and then failed for
+  // an unnameable reason must stop being reported as live.
+  test("retracts a live claim when a later attach fails unnameably", async () => {
+    mockStartWiFi.mockResolvedValue(undefined);
+    const seen: string[] = [];
+    const wifi = new WiFiController((state) => seen.push(state));
+
+    wifi.start();
+    await settle();
+
+    mockStartWiFi.mockImplementation(() =>
+      rejectWith("WIFI_AWARE_ATTACH_FAILED"),
+    );
+    // Losing the radio clears `started`, so the next pass really re-attaches.
+    // The drop itself says nothing - only the re-attach knows why - and what it
+    // finds is a failure it cannot name, so the live claim is retracted to "no
+    // reading" rather than upgraded into a WiFi-off banner.
+    wifi.onAvailabilityChanged(false);
+    wifi.onAvailabilityChanged(true);
+    await settle(60_000);
+
+    expect(seen).toEqual(["active", "unknown"]);
+  });
+
+  test("reports hardware that will never have it, so the note is never shown there", async () => {
+    mockStartWiFi.mockImplementation(() =>
+      rejectWith("WIFI_AWARE_UNSUPPORTED"),
+    );
+    const seen: string[] = [];
+    const wifi = new WiFiController((state) => seen.push(state));
+
+    wifi.start();
+    await settle(60_000);
+
+    expect(seen).toEqual(["unsupported"]);
+  });
+});

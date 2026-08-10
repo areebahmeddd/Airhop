@@ -346,7 +346,17 @@ export default function ProfileScreen({
     // The one claim that must not be made falsely. Everything else is gone
     // either way; if the OS refused to release the keys, the user has to know,
     // because the whole point of the gesture was the keys.
+    //
+    // Said twice, and both are needed. The alert is the interruption: it lands
+    // the moment it is known, while the person is still standing over the
+    // decision. The banner is the memory: an alert is dismissed once and then
+    // the app looks exactly like a fresh install over data that is still here,
+    // and "did it work?" becomes a guess - which under duress is answered by
+    // wiping again. Set after panicWipe, whose own store reset would otherwise
+    // clear it. Re-derived on every launch from the keychain itself, so a retry
+    // that succeeds takes it away without anything having to remember.
     if (!keysDestroyed) {
+      useMeshStateStore.getState().setWipeIncomplete(true);
       showAlert(
         t("settings.wipe.keys_failed"),
         t("settings.wipe.keys_failed_body"),

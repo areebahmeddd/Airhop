@@ -31,7 +31,10 @@ interface Props {
   visible: boolean;
   excludeChannel: string;
   onClose: () => void;
-  onForward: (targetChannel: string) => void;
+  // Returns whether anything was actually sent. A selection whose files have
+  // aged out of the cache sends nothing and says so in its own alert, and the
+  // sheet must not answer that with a tick.
+  onForward: (targetChannel: string) => boolean;
   // Whether the selection carries an attachment. Media only travels where
   // canSendMedia allows, so a room that refuses it cannot be a target: the
   // send would leave a bubble here and reach nobody, and in a mixed selection
@@ -116,7 +119,9 @@ export default function ForwardSheet({
       showAlert(t("chat.forward.cant_send_here"), blocked);
       return;
     }
-    onForward(channel);
+    // Nothing left: the caller has already explained why, and the sheet stays
+    // open on the target list so the tap can be spent on something else.
+    if (!onForward(channel)) return;
     setSentTo(channel);
     closeTimer.current = setTimeout(() => {
       closeTimer.current = null;
