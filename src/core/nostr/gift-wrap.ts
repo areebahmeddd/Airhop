@@ -132,12 +132,22 @@ function randomizedTimestamp(): number {
 
 // ---- Receive ----------------------------------------------------------------
 
+// How far the inner rumor's clock may sit ahead of ours before we stop believing
+// it. Matches the skew bitchat tolerates on the same field.
+const RUMOR_CLOCK_SKEW_SECONDS = 15 * 60;
+
 // Decrypt and authenticate a received kind 1059 gift wrap.
 // Throws on any authentication or decryption failure so callers can drop the
 // event without inspecting error details.
+//
+// `lookbackSeconds` bounds how old the inner rumor may claim to be, and must
+// match the `since` the caller subscribed with. Pass Infinity when the
+// subscription has no `since`: a relay may then legitimately hold a message from
+// while the recipient was away, and rejecting it would lose real mail.
 export function unwrapDm(
   giftWrap: Event,
   recipientPrivKey: Uint8Array,
+  lookbackSeconds: number,
 ): DecryptedDm {
   if (giftWrap.kind !== KIND_GIFT_WRAP) {
     throw new Error("Not a gift wrap event");
@@ -176,6 +186,28 @@ export function unwrapDm(
   // Step 4: Ensure the seal's signer is who the rumor claims to be.
   if (seal.pubkey !== rumor.pubkey) {
     throw new Error("Rumor pubkey does not match seal signer");
+  }
+
+  // The rumor's own clock has to be plausible.
+  //
+  // The gift wrap's outer timestamp is randomised by design (NIP-17), so the
+  // inner rumor's `created_at` is the only claim about when this was sent - and
+  // nothing signs it into a window. A relay, or the sender, can date it
+  // arbitrarily. Threads sort by time, so a far-future rumor pins itself to the
+  // bottom of a conversation for good and a far-past one buries itself in
+  // history where it is never seen. Neither breaks the crypto above; both let
+  // someone choose where their message lands in your timeline.
+  //
+  // The window mirrors what the subscription already guarantees: no older than
+  // the lookback we asked the relay for, and no further ahead than ordinary
+  // clock skew. Same shape as the bridge and carrier paths, and as bitchat's
+  // own check on this field.
+  const nowSec = Date.now() / 1000;
+  const tooOld =
+    rumor.created_at < nowSec - lookbackSeconds - RUMOR_CLOCK_SKEW_SECONDS;
+  const tooNew = rumor.created_at > nowSec + RUMOR_CLOCK_SKEW_SECONDS;
+  if (tooOld || tooNew) {
+    throw new Error("Rumor timestamp outside the plausible window");
   }
 
   return {

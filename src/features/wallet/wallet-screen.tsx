@@ -2733,7 +2733,12 @@ export default function WalletScreen({
                 onCancel={closeBackupSheet}
               />
             ) : (
-              <Pressable style={styles.modalCancel} onPress={closeBackupSheet}>
+              <Pressable
+                style={styles.modalCancel}
+                onPress={closeBackupSheet}
+                accessibilityRole="button"
+                accessibilityLabel={T("common.done")}
+              >
                 <Text style={styles.modalCancelText}>{T("common.done")}</Text>
               </Pressable>
             )}
@@ -2893,6 +2898,8 @@ export default function WalletScreen({
                 setShowRestore(false);
                 setRestoreResult(null);
               }}
+              accessibilityRole="button"
+              accessibilityLabel={T("common.done")}
             >
               <Text style={styles.modalCancelText}>{T("common.done")}</Text>
             </Pressable>
@@ -2990,7 +2997,12 @@ export default function WalletScreen({
             {T("wallet.send.qr_too_big_short")}
           </Text>
         )}
-        <Pressable style={styles.modalCancel} onPress={() => setQrToken(null)}>
+        <Pressable
+          style={styles.modalCancel}
+          onPress={() => setQrToken(null)}
+          accessibilityRole="button"
+          accessibilityLabel={T("common.done")}
+        >
           <Text style={styles.modalCancelText}>{T("common.done")}</Text>
         </Pressable>
       </BottomSheet>
@@ -4091,7 +4103,7 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       justifyContent: "center",
     },
     modalConfirmDisabled: {
-      opacity: 0.4,
+      opacity: DISABLED_OPACITY,
     },
     modalConfirmText: {
       fontSize: FontSize.base,

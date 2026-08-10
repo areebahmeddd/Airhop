@@ -755,7 +755,11 @@ export class GeohashChannelService {
   private handleGeoDm(event: NostrEvent, geohash: string): void {
     let dm: { content: string; senderPubkey: string; timestamp: number };
     try {
-      dm = unwrapDm(event, this.identityFor(geohash).privKey);
+      dm = unwrapDm(
+        event,
+        this.identityFor(geohash).privKey,
+        GEO_DM_LOOKBACK_SECONDS,
+      );
     } catch {
       return;
     }

@@ -242,7 +242,9 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       flexDirection: "row",
       alignItems: "center",
       paddingHorizontal: Spacing.base,
-      height: 56,
+      // minHeight, so a wrapped title at large system font is not clipped.
+      // Shared by every settings sub-screen.
+      minHeight: 56,
       borderBottomWidth: StyleSheet.hairlineWidth,
       borderBottomColor: Colors.border,
       backgroundColor: Colors.bg,
@@ -327,7 +329,7 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
     // For a trailing action label whose row currently does nothing, so it reads
     // as unavailable rather than as a live control that ignores taps.
     settingValueMuted: {
-      opacity: 0.45,
+      opacity: DISABLED_OPACITY,
     },
     settingControl: {
       flexShrink: 0,

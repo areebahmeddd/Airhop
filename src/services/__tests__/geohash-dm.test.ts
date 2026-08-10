@@ -58,7 +58,11 @@ describe("geohash DM", () => {
 
     // The recipient unwraps with their per-cell key and decodes the envelope.
     expect(published).toHaveLength(1);
-    const dm = unwrapDm(published[0] as never, recipIdentity.privKey);
+    const dm = unwrapDm(
+      published[0] as never,
+      recipIdentity.privKey,
+      Number.POSITIVE_INFINITY,
+    );
     const env = decodeBitchatEnvelope(dm.content)!;
     expect(env.messageID).toBe("gm-1");
     expect(env.content).toBe("meet at the plaza");

@@ -59,6 +59,7 @@ import {
   Spacing,
   TAB_BAR_CLEARANCE,
   useThemeColors,
+  withAlpha,
 } from "../../ui/theme";
 import { peerInviteLink } from "../../utils/deep-link";
 import { panicWipe } from "../../utils/panic-wipe";
@@ -1238,7 +1239,7 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
     },
     // Danger zone, uses settingsGroup box for consistency with other sections
     dangerGroup: {
-      borderColor: "rgba(220,38,38,0.2)",
+      borderColor: withAlpha(Colors.danger, 0.2),
     },
     // Pressable fills the cell; inner View owns the row direction.
     dangerRow: {

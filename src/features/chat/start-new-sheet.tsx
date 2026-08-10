@@ -20,6 +20,7 @@ import { useT } from "../../i18n";
 import { useChatStore } from "../../store/chat-store";
 import BottomSheet from "../../ui/components/bottom-sheet";
 import {
+  DISABLED_OPACITY,
   FontSize,
   FontWeight,
   Radius,
@@ -566,7 +567,7 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       justifyContent: "center",
     },
     modalConfirmDisabled: {
-      opacity: 0.4,
+      opacity: DISABLED_OPACITY,
     },
     modalConfirmText: {
       fontSize: FontSize.base,

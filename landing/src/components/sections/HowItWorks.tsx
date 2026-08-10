@@ -53,6 +53,20 @@ export default function HowItWorks() {
           sub="Nearby nodes form a self-healing mesh over Bluetooth. When there is internet, Nostr relays extend it, with no infrastructure anyone controls."
         />
 
+        <div className="mt-6 flex justify-center">
+          <Link
+            to="/architecture"
+            className="group border-line bg-card-subtle text-secondary hover:border-line-strong hover:bg-inner hover:text-ink inline-flex h-11 items-center gap-2 rounded-full border pr-4 pl-5 font-mono text-[11px] font-semibold tracking-widest uppercase transition-colors duration-150"
+          >
+            Read the full architecture
+            <ArrowRight
+              size={13}
+              className="flex-shrink-0 transition-transform duration-150 group-hover:translate-x-0.5"
+              aria-hidden="true"
+            />
+          </Link>
+        </div>
+
         <div className="mx-auto mt-10 grid max-w-6xl grid-cols-1 gap-4 md:grid-cols-3">
           {STEPS.map((step, i) => (
             <motion.div
@@ -421,20 +435,6 @@ export default function HowItWorks() {
             )}
           </div>
         </motion.div>
-
-        <div className="mt-8 flex justify-center">
-          <Link
-            to="/architecture"
-            className="group border-line bg-card-subtle text-secondary hover:border-line-strong hover:bg-inner hover:text-ink inline-flex h-11 items-center gap-2 rounded-full border pr-4 pl-5 font-mono text-[11px] font-semibold tracking-widest uppercase transition-colors duration-150"
-          >
-            Read the full architecture
-            <ArrowRight
-              size={13}
-              className="flex-shrink-0 transition-transform duration-150 group-hover:translate-x-0.5"
-              aria-hidden="true"
-            />
-          </Link>
-        </div>
       </div>
     </section>
   );

@@ -43,6 +43,7 @@ import { useContactsStore } from "../../store/contacts-store";
 import Avatar from "../../ui/components/avatar";
 import BottomSheet from "../../ui/components/bottom-sheet";
 import {
+  DISABLED_OPACITY,
   FontFamily,
   FontSize,
   FontWeight,
@@ -420,6 +421,9 @@ export default function QrScanScreen({
               ]}
               onPress={handleManualContinue}
               disabled={!canContinueManual}
+              accessibilityRole="button"
+              accessibilityLabel={T("common.continue")}
+              accessibilityState={{ disabled: !canContinueManual }}
             >
               <Text style={styles.primaryBtnText}>{T("common.continue")}</Text>
             </Pressable>
@@ -715,7 +719,7 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       justifyContent: "center",
     },
     primaryBtnDisabled: {
-      opacity: 0.38,
+      opacity: DISABLED_OPACITY,
     },
     primaryBtnText: {
       fontSize: FontSize.base,

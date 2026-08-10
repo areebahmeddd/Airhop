@@ -27,6 +27,7 @@ import { Modal, Pressable, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { readScan, type ScanTarget } from "../../core/payments/scan";
 import { t, useT } from "../../i18n";
+import BottomSheet from "../../ui/components/bottom-sheet";
 import {
   FontSize,
   FontWeight,
@@ -193,10 +194,13 @@ export default function TokenScanner({
           </SafeAreaView>
         </View>
       ) : (
-        <View style={styles.sheetRoot}>
-          <Pressable style={StyleSheet.absoluteFill} onPress={dismiss} />
-          <View style={styles.sheet}>
-            <View style={styles.handle} />
+        // The shared sheet, not a hand-rolled one. This was the last screen
+        // still building its own Modal + scrim + decorative grab handle - a
+        // handle that ignored the finger, which BottomSheet exists to stop.
+        // It also brings real drag-to-dismiss, a labelled backdrop and the
+        // paused-activity unmount backstop.
+        <BottomSheet visible onClose={dismiss} sheetStyle={styles.sheet}>
+          <View>
             <Text style={styles.title}>
               {target === "token"
                 ? T("wallet.scan.title_token")
@@ -231,11 +235,16 @@ export default function TokenScanner({
                 {T("wallet.scan.pick_image")}
               </Text>
             </Pressable>
-            <Pressable style={styles.cancel} onPress={dismiss}>
+            <Pressable
+              style={styles.cancel}
+              onPress={dismiss}
+              accessibilityRole="button"
+              accessibilityLabel={T("common.cancel")}
+            >
               <Text style={styles.cancelText}>{T("common.cancel")}</Text>
             </Pressable>
           </View>
-        </View>
+        </BottomSheet>
       )}
     </Modal>
   );
@@ -281,11 +290,6 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       paddingBottom: Spacing.xl,
       lineHeight: FontSize.sm * 1.5,
     },
-    sheetRoot: {
-      flex: 1,
-      justifyContent: "flex-end",
-      backgroundColor: Colors.overlay,
-    },
     sheet: {
       backgroundColor: Colors.surface,
       borderTopLeftRadius: Radius["2xl"],
@@ -293,15 +297,6 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       paddingHorizontal: Spacing.xl,
       paddingBottom: Spacing["2xl"],
       gap: Spacing.md,
-    },
-    handle: {
-      width: 36,
-      height: 4,
-      borderRadius: Radius.xs,
-      backgroundColor: Colors.borderStrong,
-      alignSelf: "center",
-      marginTop: Spacing.sm,
-      marginBottom: Spacing.md,
     },
     title: {
       fontSize: FontSize.md,

@@ -114,6 +114,7 @@ import Avatar from "../../ui/components/avatar";
 import BottomSheet from "../../ui/components/bottom-sheet";
 import Toast from "../../ui/components/toast";
 import {
+  DISABLED_OPACITY,
   Duration,
   FontFamily,
   FontSize,
@@ -5269,7 +5270,7 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
     // than recoloured, the same treatment SettingSwitch gives a locked switch,
     // so it still reads as itself and plainly not available.
     composeDisabled: {
-      opacity: 0.4,
+      opacity: DISABLED_OPACITY,
     },
     input: {
       flex: 1,

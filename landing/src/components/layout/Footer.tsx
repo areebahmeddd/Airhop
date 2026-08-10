@@ -111,7 +111,7 @@ export default function Footer() {
     <footer className="border-line bg-card rounded-t-3xl border-t">
       <div className="mx-auto max-w-7xl px-6 pt-12 md:px-10">
         <div className="lg:grid lg:grid-cols-12 lg:gap-6">
-          <div className="space-y-3 lg:col-span-3">
+          <div className="space-y-3 lg:col-span-4">
             <Link
               to="/"
               className="inline-flex items-center gap-3 select-none"
@@ -125,28 +125,28 @@ export default function Footer() {
             </p>
           </div>
 
-          <div className="mt-10 grid grid-cols-2 gap-x-6 gap-y-8 sm:grid-cols-4 lg:col-span-9 lg:mt-0 lg:gap-6">
+          <div className="mt-10 grid grid-cols-2 gap-x-6 gap-y-10 sm:grid-cols-4 lg:col-span-8 lg:mt-0 lg:gap-6">
             {NAV_COLUMNS.map((col) => (
-              <div key={col.heading} className="space-y-3">
-                <p className="text-secondary font-mono text-[10px] font-semibold tracking-[0.18em] uppercase">
+              <div key={col.heading} className="min-w-0">
+                <p className="text-secondary mb-4 flex h-4 items-center font-mono text-[10px] leading-4 font-semibold tracking-[0.18em] uppercase">
                   {col.heading}
                 </p>
-                <ul className="space-y-2">
+                <ul className="space-y-1">
                   {col.links.map((link) => (
-                    <li key={link.label}>
+                    <li key={link.label} className="flex">
                       {link.external ? (
                         <a
                           href={link.href}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="text-secondary hover:text-ink inline-flex min-h-6 items-center text-[13px] transition-colors duration-150"
+                          className="text-secondary hover:text-ink inline-flex min-h-7 items-center text-[13px] leading-normal transition-colors duration-150"
                         >
                           {link.label}
                         </a>
                       ) : (
                         <Link
                           to={link.href}
-                          className="text-secondary hover:text-ink inline-flex min-h-6 items-center text-[13px] transition-colors duration-150"
+                          className="text-secondary hover:text-ink inline-flex min-h-7 items-center text-[13px] leading-normal transition-colors duration-150"
                         >
                           {link.label}
                         </Link>
@@ -159,7 +159,7 @@ export default function Footer() {
           </div>
         </div>
 
-        <div className="mt-10 flex justify-center pb-6">
+        <div className="mt-12 flex justify-center pb-8">
           <p className="text-secondary text-center font-mono text-[10px] select-none">
             &copy; Made with
             <PixelHeart />

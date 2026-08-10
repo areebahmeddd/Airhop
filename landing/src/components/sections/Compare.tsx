@@ -20,14 +20,33 @@ function No() {
   );
 }
 
+function Partial() {
+  return (
+    <span
+      className="text-secondary font-mono text-sm"
+      title="Clients are open source, servers are not"
+    >
+      <span aria-hidden="true">~</span>
+      <span className="sr-only">Partial, clients are open source, servers are not</span>
+    </span>
+  );
+}
+
+type Support = boolean | "partial";
+
+function Mark({ value }: { value: Support }) {
+  if (value === "partial") return <Partial />;
+  return value ? <Yes /> : <No />;
+}
+
 const ROWS: {
   name: string;
   href: string;
   transport: string;
   encryption: string;
-  offline: boolean;
-  hardwareFree: boolean;
-  openSource: boolean;
+  offline: Support;
+  hardwareFree: Support;
+  openSource: Support;
   self?: boolean;
 }[] = [
   {
@@ -40,13 +59,13 @@ const ROWS: {
     openSource: true,
   },
   {
-    name: "Meshtastic",
-    href: "https://meshtastic.org",
-    transport: "LoRa radio",
-    encryption: "AES-256 + Curve25519 PKI",
-    offline: true,
-    hardwareFree: false,
-    openSource: true,
+    name: "Threema",
+    href: "https://threema.ch",
+    transport: "Centralized servers",
+    encryption: "NaCl + Ibex",
+    offline: false,
+    hardwareFree: true,
+    openSource: "partial",
   },
   {
     name: "Session",
@@ -65,6 +84,24 @@ const ROWS: {
     offline: false,
     hardwareFree: true,
     openSource: true,
+  },
+  {
+    name: "Meshtastic",
+    href: "https://meshtastic.org",
+    transport: "LoRa radio",
+    encryption: "AES-256 + Curve25519 PKI",
+    offline: true,
+    hardwareFree: false,
+    openSource: true,
+  },
+  {
+    name: "goTenna",
+    href: "https://gotenna.com",
+    transport: "Proprietary sub-GHz radio",
+    encryption: "AES-256 + ECC-384 PKI",
+    offline: true,
+    hardwareFree: false,
+    openSource: false,
   },
   {
     name: "Bridgefy",
@@ -187,9 +224,15 @@ export default function Compare() {
                       <td className="text-secondary px-5 py-3.5 font-mono text-xs">
                         {row.encryption}
                       </td>
-                      <td className="px-5 py-3.5">{row.offline ? <Yes /> : <No />}</td>
-                      <td className="px-5 py-3.5">{row.hardwareFree ? <Yes /> : <No />}</td>
-                      <td className="px-5 py-3.5">{row.openSource ? <Yes /> : <No />}</td>
+                      <td className="px-5 py-3.5">
+                        <Mark value={row.offline} />
+                      </td>
+                      <td className="px-5 py-3.5">
+                        <Mark value={row.hardwareFree} />
+                      </td>
+                      <td className="px-5 py-3.5">
+                        <Mark value={row.openSource} />
+                      </td>
                     </tr>
                   ))}
                 </tbody>

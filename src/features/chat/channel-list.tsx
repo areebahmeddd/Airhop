@@ -475,8 +475,13 @@ export default function ChannelList({
       <Pressable
         style={styles.channelRow}
         onPress={() => onSelectChannel(item)}
+        // Long-press opens the same sheet the swipe does. Swipe alone is both
+        // unfamiliar as the only route and unreachable with a screen reader,
+        // since ReanimatedSwipeable exposes no accessibility actions.
+        onLongPress={() => handleSwipeMore(item)}
         accessibilityRole="button"
         accessibilityLabel={rowLabel}
+        accessibilityHint={t("chat.channels.row_hint")}
       >
         <View style={styles.channelRowBody}>
           {/* Head line: channel name + timestamp + pin indicator */}

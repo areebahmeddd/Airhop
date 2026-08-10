@@ -324,13 +324,23 @@ export function GeohashJumpSheet({
       <Text style={styles.footNote}>{T("chat.jump.how")}</Text>
 
       <View style={styles.actions}>
-        <Pressable style={styles.cancel} onPress={handleBack}>
+        <Pressable
+          style={styles.cancel}
+          onPress={handleBack}
+          accessibilityRole="button"
+          accessibilityLabel={t("common.back")}
+        >
           <Text style={styles.cancelText}>{t("common.back")}</Text>
         </Pressable>
         <Pressable
           style={[styles.confirm, !valid && styles.confirmDisabled]}
           onPress={handleGo}
           disabled={!valid}
+          accessibilityRole="button"
+          accessibilityLabel={T("chat.jump.go")}
+          // Without this the button announces as plain text and a
+          // reader user taps into nothing.
+          accessibilityState={{ disabled: !valid }}
         >
           <Text style={styles.confirmText}>{T("chat.jump.go")}</Text>
         </Pressable>

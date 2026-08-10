@@ -32,7 +32,7 @@ describe("Nostr DM interop round-trip", () => {
     const { event } = wrapDm(envelope, senderPriv, recipPubHex);
 
     // Recipient side.
-    const dm = unwrapDm(event, recipPriv);
+    const dm = unwrapDm(event, recipPriv, Number.POSITIVE_INFINITY);
     const decoded = decodeBitchatEnvelope(dm.content)!;
     expect(decoded.type).toBe(NoisePayloadType.PRIVATE_MESSAGE);
     expect(decoded.messageID).toBe("msg-42");
@@ -53,7 +53,9 @@ describe("Nostr DM interop round-trip", () => {
       "msg-42",
     );
     const { event } = wrapDm(ack, senderPriv, recipPubHex);
-    const decoded = decodeBitchatEnvelope(unwrapDm(event, recipPriv).content)!;
+    const decoded = decodeBitchatEnvelope(
+      unwrapDm(event, recipPriv, Number.POSITIVE_INFINITY).content,
+    )!;
     expect(decoded.type).toBe(NoisePayloadType.READ_RECEIPT);
     expect(decoded.messageID).toBe("msg-42");
   });
@@ -65,6 +67,6 @@ describe("Nostr DM interop round-trip", () => {
     const recipPubHex = bytesToHex(xOnlyPublicKey(recipPriv));
     const env = encodeBitchatDmEnvelope(SENDER_PEER, null, "m", "secret")!;
     const { event } = wrapDm(env, senderPriv, recipPubHex);
-    expect(() => unwrapDm(event, eve)).toThrow();
+    expect(() => unwrapDm(event, eve, Number.POSITIVE_INFINITY)).toThrow();
   });
 });

@@ -24,7 +24,7 @@ describe("wrapDm / unwrapDm", () => {
     const recipient = makePair();
 
     const result = wrapDm("hello mesh", sender.priv, recipient.pub);
-    const dm = unwrapDm(result.event, recipient.priv);
+    const dm = unwrapDm(result.event, recipient.priv, Number.POSITIVE_INFINITY);
 
     expect(dm.content).toBe("hello mesh");
     expect(dm.senderPubkey).toBe(sender.pub);
@@ -36,7 +36,7 @@ describe("wrapDm / unwrapDm", () => {
     const text = "line one\nline two\n✓ done 🎉";
 
     const { event } = wrapDm(text, sender.priv, recipient.pub);
-    const dm = unwrapDm(event, recipient.priv);
+    const dm = unwrapDm(event, recipient.priv, Number.POSITIVE_INFINITY);
 
     expect(dm.content).toBe(text);
   });
@@ -46,7 +46,7 @@ describe("wrapDm / unwrapDm", () => {
     const recipient = makePair();
 
     const { event, wrapperPubkey } = wrapDm("test", sender.priv, recipient.pub);
-    const dm = unwrapDm(event, recipient.priv);
+    const dm = unwrapDm(event, recipient.priv, Number.POSITIVE_INFINITY);
 
     expect(dm.senderPubkey).toBe(sender.pub);
     expect(dm.senderPubkey).not.toBe(wrapperPubkey);
@@ -106,7 +106,9 @@ describe("unwrapDm error cases", () => {
 
     const { event } = wrapDm("secret", sender.priv, recipient.pub);
 
-    expect(() => unwrapDm(event, wrongKey.priv)).toThrow();
+    expect(() =>
+      unwrapDm(event, wrongKey.priv, Number.POSITIVE_INFINITY),
+    ).toThrow();
   });
 
   it("throws when gift-wrap content is tampered", () => {
@@ -116,7 +118,9 @@ describe("unwrapDm error cases", () => {
     const { event } = wrapDm("tamper me", sender.priv, recipient.pub);
     const tampered = { ...event, content: event.content.slice(0, -4) + "xxxx" };
 
-    expect(() => unwrapDm(tampered, recipient.priv)).toThrow();
+    expect(() =>
+      unwrapDm(tampered, recipient.priv, Number.POSITIVE_INFINITY),
+    ).toThrow();
   });
 
   it("throws when misdirected wrap is opened by a third party", () => {
@@ -127,11 +131,60 @@ describe("unwrapDm error cases", () => {
     const { event } = wrapDm("private", sender.priv, realRecipient.pub);
 
     // Third party cannot unwrap (wrong private key for decryption).
-    expect(() => unwrapDm(event, eavesDropper.priv)).toThrow();
+    expect(() =>
+      unwrapDm(event, eavesDropper.priv, Number.POSITIVE_INFINITY),
+    ).toThrow();
   });
 });
 
 // ---- deriveNostrPrivKey -----------------------------------------------------
+
+// The gift wrap's outer timestamp is randomised by design, so the inner rumor's
+// created_at is the only claim about when a DM was sent - and nothing signs it
+// into a window. Threads sort by time, so an unchecked value lets a sender or a
+// relay choose where the message lands in the recipient's conversation.
+describe("rumor timestamp window", () => {
+  // A rumor is built by wrapDm at the current time, so the only way to test the
+  // bounds is to move the clock the check reads.
+  function unwrapWithClockOffset(offsetSec: number, lookback: number): void {
+    const sender = makePair();
+    const recipient = makePair();
+    const { event } = wrapDm("timestamped", sender.priv, recipient.pub);
+    const realNow = Date.now;
+    Date.now = () => realNow() + offsetSec * 1000;
+    try {
+      unwrapDm(event, recipient.priv, lookback);
+    } finally {
+      Date.now = realNow;
+    }
+  }
+
+  it("accepts a rumor within ordinary clock skew", () => {
+    // Ten minutes of drift either way is normal on real phones.
+    expect(() => unwrapWithClockOffset(-10 * 60, 3600)).not.toThrow();
+    expect(() => unwrapWithClockOffset(10 * 60, 3600)).not.toThrow();
+  });
+
+  it("rejects a rumor dated well into the future", () => {
+    // The harmful direction: a future-dated message pins itself to the bottom
+    // of the conversation and stays there.
+    expect(() => unwrapWithClockOffset(-60 * 60, 3600)).toThrow();
+  });
+
+  it("rejects a rumor older than the subscription lookback", () => {
+    // Beyond what the relay was asked for, so it cannot be a message we simply
+    // had not collected yet.
+    expect(() => unwrapWithClockOffset(3 * 3600, 3600)).toThrow();
+  });
+
+  it("accepts any age when there is no lookback to mirror", () => {
+    // The mesh DM subscription has no `since`, so a relay may legitimately hold
+    // a DM from while the recipient was away. Only the future bound applies.
+    expect(() =>
+      unwrapWithClockOffset(30 * 24 * 3600, Number.POSITIVE_INFINITY),
+    ).not.toThrow();
+  });
+});
 
 describe("deriveNostrPrivKey", () => {
   it("produces a 32-byte key", () => {

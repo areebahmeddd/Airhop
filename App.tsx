@@ -1317,7 +1317,13 @@ function AppContent(): React.JSX.Element {
                   {tab === "chats" && chatView.kind === "list" ? (
                     // Chats header: title left, segmented + New button right
                     <>
-                      <Text style={styles.headerTitle} numberOfLines={1}>
+                      <Text
+                        style={styles.headerTitle}
+                        numberOfLines={1}
+                        // Screen readers offer heading navigation; with nothing
+                        // marked as a heading that gesture goes nowhere.
+                        accessibilityRole="header"
+                      >
                         {T("nav.tab.chats")}
                       </Text>
                       <View style={styles.headerControls}>
@@ -1502,7 +1508,13 @@ function AppContent(): React.JSX.Element {
                     // Mesh header: title left, view toggle + add-contact button
                     // right. Radar is the default view.
                     <>
-                      <Text style={styles.headerTitle} numberOfLines={1}>
+                      <Text
+                        style={styles.headerTitle}
+                        numberOfLines={1}
+                        // Screen readers offer heading navigation; with nothing
+                        // marked as a heading that gesture goes nowhere.
+                        accessibilityRole="header"
+                      >
                         {T("nav.tab.mesh")}
                       </Text>
                       <View style={styles.headerControls}>
@@ -1598,7 +1610,13 @@ function AppContent(): React.JSX.Element {
                     // icon-box style as Mesh's "add contact" pill, moved up
                     // here from a row inside the balance card.
                     <>
-                      <Text style={styles.headerTitle} numberOfLines={1}>
+                      <Text
+                        style={styles.headerTitle}
+                        numberOfLines={1}
+                        // Screen readers offer heading navigation; with nothing
+                        // marked as a heading that gesture goes nowhere.
+                        accessibilityRole="header"
+                      >
                         {T("nav.tab.wallet")}
                       </Text>
                       <View style={styles.headerControls}>
@@ -1681,7 +1699,13 @@ function AppContent(): React.JSX.Element {
                     </>
                   ) : (
                     // Standard header: just the title
-                    <Text style={styles.headerTitle} numberOfLines={1}>
+                    <Text
+                      style={styles.headerTitle}
+                      numberOfLines={1}
+                      // Screen readers offer heading navigation; with nothing
+                      // marked as a heading that gesture goes nowhere.
+                      accessibilityRole="header"
+                    >
                       {T(HEADER_TITLES[tab])}
                     </Text>
                   )}
@@ -2015,7 +2039,8 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       alignItems: "center",
       justifyContent: "space-between",
       paddingHorizontal: Spacing.base,
-      height: 56,
+      // minHeight, so a title that wraps at large system font is not clipped.
+      minHeight: 56,
       borderBottomWidth: StyleSheet.hairlineWidth,
       borderBottomColor: Colors.border,
     },
@@ -2035,7 +2060,12 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
     searchRow: {
       flexDirection: "row",
       alignItems: "center",
-      gap: Spacing.sm,
+      // Spacing.md, not sm. Each pill is 32pt with 6pt of slop per side, so an
+      // 8pt gap put centres 40pt apart and made adjacent 44pt touch boxes
+      // overlap by 4 - resolved by view order, not by which is nearer the
+      // finger. On the wallet header that puts Send next to Receive. Same
+      // reasoning as the segmented control below, which avoids slop entirely.
+      gap: Spacing.md,
       paddingHorizontal: Spacing.base,
       paddingTop: Spacing.sm,
       paddingBottom: Spacing.xs,

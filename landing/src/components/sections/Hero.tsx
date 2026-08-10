@@ -1,12 +1,25 @@
 import { REPO_LINKS, STORE_LINKS } from "@/lib/links";
-import { ArrowRight, ChevronDown } from "lucide-react";
+import {
+  ArrowRight,
+  Boxes,
+  ChevronDown,
+  Download,
+  Globe,
+  Laptop,
+  Monitor,
+  Play,
+  Smartphone,
+  Terminal,
+  type LucideIcon,
+} from "lucide-react";
 import { motion } from "motion/react";
 import { useEffect, useRef, useState } from "react";
 
 interface DownloadOption {
   label: string;
   description: string;
-  href: string;
+  icon: LucideIcon;
+  href?: string;
 }
 
 interface DownloadGroup {
@@ -16,41 +29,63 @@ interface DownloadGroup {
 
 const DOWNLOAD_GROUPS: DownloadGroup[] = [
   {
-    heading: "iOS",
+    heading: "Mobile",
     options: [
       {
         label: "App Store",
         description: "iOS 16.0+",
+        icon: Smartphone,
         href: STORE_LINKS.appStore,
       },
       {
-        label: "TestFlight",
-        description: "Public beta",
-        href: STORE_LINKS.testFlight,
-      },
-    ],
-  },
-  {
-    heading: "Android",
-    options: [
-      {
         label: "Google Play",
         description: "Android 8.0+",
+        icon: Play,
         href: STORE_LINKS.playStore,
       },
       {
         label: "F-Droid",
-        description: "F-Droid catalog",
+        description: "Open source catalog",
+        icon: Boxes,
         href: STORE_LINKS.fDroid,
       },
       {
         label: "APK",
         description: "Direct download",
+        icon: Download,
         href: REPO_LINKS.apk,
       },
     ],
   },
+  {
+    heading: "Desktop",
+    options: [
+      {
+        label: "macOS",
+        description: "Coming soon",
+        icon: Laptop,
+      },
+      {
+        label: "Windows",
+        description: "Coming soon",
+        icon: Monitor,
+      },
+      {
+        label: "Web",
+        description: "Coming soon",
+        icon: Globe,
+      },
+      {
+        label: "CLI",
+        description: "Coming soon",
+        icon: Terminal,
+      },
+    ],
+  },
 ];
+
+const DOWNLOAD_ROW =
+  "flex min-h-13 items-center gap-2.5 rounded-lg px-2 py-2 text-left sm:gap-3 sm:px-3";
 
 const RELEASE_BIRDS: Record<string, string> = {
   "1": "Albatross",
@@ -180,30 +215,58 @@ function DownloadDropdown() {
           initial={{ opacity: 0, y: -4 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.15, ease: "easeOut" }}
-          className="border-line bg-card absolute top-full left-1/2 z-20 mt-2 w-80 max-w-[calc(100vw-2.5rem)] -translate-x-1/2 rounded-2xl border p-2"
+          className="border-line bg-card absolute top-full left-1/2 z-20 mt-2 grid max-h-[min(70vh,32rem)] w-[22rem] max-w-[calc(100vw-3rem)] -translate-x-1/2 grid-cols-[1.15fr_0.85fr] gap-2 overflow-y-auto overscroll-contain rounded-2xl border p-2 sm:w-[32rem] sm:gap-4 sm:p-3"
         >
           {DOWNLOAD_GROUPS.map((group, gi) => (
-            <div key={group.heading} className={gi > 0 ? "border-line mt-2 border-t pt-2" : ""}>
-              <p className="text-secondary px-3 pt-1.5 pb-1 text-left font-mono text-[10px] font-semibold tracking-[0.18em] uppercase">
+            <div
+              key={group.heading}
+              className={`min-w-0 ${gi > 0 ? "border-line border-l pl-2 sm:pl-4" : ""}`}
+            >
+              <p className="text-secondary px-2 pt-1.5 pb-2 text-left font-mono text-[10px] font-semibold tracking-[0.18em] uppercase sm:px-3">
                 {group.heading}
               </p>
-              {group.options.map((option) => (
-                <a
-                  key={option.label}
-                  href={option.href}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  onClick={() => setOpen(false)}
-                  className="hover:bg-inner flex min-h-11 items-center justify-between gap-6 rounded-[10px] px-3 transition-colors duration-150"
-                >
-                  <span className="text-ink text-sm font-medium whitespace-nowrap">
-                    {option.label}
-                  </span>
-                  <span className="text-secondary font-mono text-[11px] whitespace-nowrap">
-                    {option.description}
-                  </span>
-                </a>
-              ))}
+              {group.options.map((option) => {
+                const Icon = option.icon;
+                const body = (
+                  <>
+                    <Icon
+                      size={16}
+                      strokeWidth={1.75}
+                      className={option.href ? "text-secondary shrink-0" : "text-mute shrink-0"}
+                      aria-hidden="true"
+                    />
+                    <span className="min-w-0">
+                      <span
+                        className={`block truncate text-sm leading-5 font-medium ${option.href ? "text-ink" : "text-secondary"}`}
+                      >
+                        {option.label}
+                      </span>
+                      <span
+                        className={`block truncate font-mono text-[11px] leading-4 ${option.href ? "text-secondary" : "text-mute"}`}
+                      >
+                        {option.description}
+                      </span>
+                    </span>
+                  </>
+                );
+
+                return option.href ? (
+                  <a
+                    key={option.label}
+                    href={option.href}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={() => setOpen(false)}
+                    className={`${DOWNLOAD_ROW} hover:bg-inner transition-colors duration-150`}
+                  >
+                    {body}
+                  </a>
+                ) : (
+                  <div key={option.label} className={`${DOWNLOAD_ROW} select-none`}>
+                    {body}
+                  </div>
+                );
+              })}
             </div>
           ))}
         </motion.div>

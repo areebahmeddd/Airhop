@@ -248,6 +248,10 @@ export const strings = {
   "chat.dm.delete_body":
     "This removes the conversation from your list and deletes its messages. The contact is kept, and a new message from them starts a fresh chat.",
   "chat.dm.in_range": "in range",
+  // Spoken by a screen reader after the row label, because the actions behind
+  // the swipe are otherwise undiscoverable.
+  "chat.dm.row_hint": "Double tap and hold for more options",
+  "chat.channels.row_hint": "Double tap and hold for more options",
   "chat.dm.you_prefix": "You:",
   "chat.dm.none": "No direct messages",
   "chat.dm.none_desc":

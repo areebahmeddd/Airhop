@@ -40,6 +40,7 @@ import { useSettingsStore } from "../../store/settings-store";
 import Avatar from "../../ui/components/avatar";
 import BottomSheet from "../../ui/components/bottom-sheet";
 import {
+  DISABLED_OPACITY,
   FontFamily,
   FontSize,
   FontWeight,
@@ -1168,7 +1169,7 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       justifyContent: "center",
     },
     addConfirmDisabled: {
-      opacity: 0.4,
+      opacity: DISABLED_OPACITY,
     },
     addConfirmText: {
       fontSize: FontSize.base,

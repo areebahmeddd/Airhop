@@ -5398,7 +5398,13 @@ export class MeshService {
       [{ kinds: [1059], "#p": [this.nostrPubKeyHex] }],
       (event) => {
         try {
-          const dm = unwrapDm(event, this.nostrPrivKey);
+          // No `since` on this subscription, so only the future bound applies: a
+          // relay may hold a genuinely old DM from while we were away.
+          const dm = unwrapDm(
+            event,
+            this.nostrPrivKey,
+            Number.POSITIVE_INFINITY,
+          );
           // Map sender Nostr pubkey back to their peerID if we know them.
           const peerID = this.nostrPubkeyToPeerID.get(dm.senderPubkey);
           // Blocking has to be honoured on the internet path too, otherwise a

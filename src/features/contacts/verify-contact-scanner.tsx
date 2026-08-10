@@ -205,7 +205,11 @@ export default function VerifyContactScanner({
                   {T("contacts.verify.open_settings")}
                 </Text>
               </Pressable>
-              <Pressable onPress={onClose}>
+              <Pressable
+                onPress={onClose}
+                accessibilityRole="button"
+                accessibilityLabel={T("common.close")}
+              >
                 <Text style={styles.secondaryText}>{T("common.close")}</Text>
               </Pressable>
             </View>
@@ -223,7 +227,12 @@ export default function VerifyContactScanner({
               <Text style={styles.resultBody}>
                 {T("contacts.verify.match_body", { name })}
               </Text>
-              <Pressable style={styles.primaryBtn} onPress={onClose}>
+              <Pressable
+                style={styles.primaryBtn}
+                onPress={onClose}
+                accessibilityRole="button"
+                accessibilityLabel={T("contacts.verify.done")}
+              >
                 <Text style={styles.primaryBtnText}>
                   {T("contacts.verify.done")}
                 </Text>
@@ -243,12 +252,21 @@ export default function VerifyContactScanner({
               <Text style={styles.resultBody}>
                 {T("contacts.verify.different_body", { name })}
               </Text>
-              <Pressable style={styles.primaryBtn} onPress={handleRetry}>
+              <Pressable
+                style={styles.primaryBtn}
+                onPress={handleRetry}
+                accessibilityRole="button"
+                accessibilityLabel={T("contacts.verify.scan_again")}
+              >
                 <Text style={styles.primaryBtnText}>
                   {T("contacts.verify.scan_again")}
                 </Text>
               </Pressable>
-              <Pressable onPress={onClose}>
+              <Pressable
+                onPress={onClose}
+                accessibilityRole="button"
+                accessibilityLabel={T("common.cancel")}
+              >
                 <Text style={styles.secondaryText}>{T("common.cancel")}</Text>
               </Pressable>
             </View>
@@ -266,12 +284,21 @@ export default function VerifyContactScanner({
               <Text style={styles.resultBody}>
                 {T("contacts.verify.tampered_body")}
               </Text>
-              <Pressable style={styles.primaryBtn} onPress={handleRetry}>
+              <Pressable
+                style={styles.primaryBtn}
+                onPress={handleRetry}
+                accessibilityRole="button"
+                accessibilityLabel={T("contacts.verify.scan_again")}
+              >
                 <Text style={styles.primaryBtnText}>
                   {T("contacts.verify.scan_again")}
                 </Text>
               </Pressable>
-              <Pressable onPress={onClose}>
+              <Pressable
+                onPress={onClose}
+                accessibilityRole="button"
+                accessibilityLabel={T("common.cancel")}
+              >
                 <Text style={styles.secondaryText}>{T("common.cancel")}</Text>
               </Pressable>
             </View>

@@ -224,13 +224,23 @@ export function JoinLinkSheet({
       )}
 
       <View style={styles.actions}>
-        <Pressable style={styles.cancel} onPress={handleBack}>
+        <Pressable
+          style={styles.cancel}
+          onPress={handleBack}
+          accessibilityRole="button"
+          accessibilityLabel={T("common.back")}
+        >
           <Text style={styles.cancelText}>{T("common.back")}</Text>
         </Pressable>
         <Pressable
           style={[styles.confirm, link === null && styles.confirmDisabled]}
           onPress={handleJoin}
           disabled={link === null}
+          accessibilityRole="button"
+          accessibilityLabel={T("chat.join.join")}
+          // Without this the button announces as plain text and a
+          // reader user taps into nothing.
+          accessibilityState={{ disabled: link === null }}
         >
           <Text style={styles.confirmText}>{T("chat.join.join")}</Text>
         </Pressable>

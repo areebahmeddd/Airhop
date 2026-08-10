@@ -201,13 +201,23 @@ export function NewGroupSheet({ visible, onClose, onBack, onCreated }: Props) {
       {error !== null && <Text style={styles.error}>{error}</Text>}
 
       <View style={styles.actions}>
-        <Pressable style={styles.cancel} onPress={handleBack}>
+        <Pressable
+          style={styles.cancel}
+          onPress={handleBack}
+          accessibilityRole="button"
+          accessibilityLabel={T("common.back")}
+        >
           <Text style={styles.cancelText}>{T("common.back")}</Text>
         </Pressable>
         <Pressable
           style={[styles.confirm, !canCreate && styles.confirmDisabled]}
           onPress={handleCreate}
           disabled={!canCreate}
+          accessibilityRole="button"
+          accessibilityLabel={T("chat.group.create")}
+          // Without this the button announces as plain text and a
+          // reader user taps into nothing.
+          accessibilityState={{ disabled: !canCreate }}
         >
           <Text style={styles.confirmText}>{T("chat.group.create")}</Text>
         </Pressable>

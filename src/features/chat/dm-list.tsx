@@ -251,8 +251,16 @@ export default function DmList({ onSelectDM }: Props): React.JSX.Element {
             <Pressable
               style={styles.row}
               onPress={() => onSelectDM(item)}
+              // Long-press opens the same sheet the swipe does.
+              //
+              // Swipe was the only way in, which is a problem twice over: every
+              // messenger people already use offers long-press as its peer, and
+              // ReanimatedSwipeable exposes no accessibility actions, so with a
+              // screen reader on these options did not exist at all.
+              onLongPress={() => handleSwipeMore(item)}
               accessibilityRole="button"
               accessibilityLabel={rowLabel}
+              accessibilityHint={t("chat.dm.row_hint")}
             >
               {/* Avatar with presence dot (green in range, grey otherwise) */}
               <Avatar

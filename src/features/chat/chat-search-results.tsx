@@ -25,6 +25,7 @@ import { useBoardStore } from "../../store/board-store";
 import { useChatStore } from "../../store/chat-store";
 import { useNoticesStore } from "../../store/notices-store";
 import Avatar from "../../ui/components/avatar";
+import EmptyState from "../../ui/components/empty-state";
 import {
   FontSize,
   FontWeight,
@@ -242,23 +243,19 @@ export default function ChatSearchResults({
         // Media-filtered view: messages of the selected kind, narrowed by the
         // query if one is typed.
         mediaHits.length === 0 ? (
-          <View style={styles.emptyState}>
-            <Feather
-              name={activeFilter.icon}
-              size={26}
-              color={Colors.textMuted}
-            />
-            <Text style={styles.emptyText}>
-              {trimmed.length > 0
+          <EmptyState
+            icon={activeFilter.icon}
+            title={
+              trimmed.length > 0
                 ? T("chat.search.no_matches", {
                     filter: T(activeFilter.labelKey).toLowerCase(),
                     query: trimmed,
                   })
                 : T("chat.search.no_media", {
                     filter: T(activeFilter.labelKey).toLowerCase(),
-                  })}
-            </Text>
-          </View>
+                  })
+            }
+          />
         ) : (
           <FlatList
             data={mediaHits}
@@ -282,12 +279,10 @@ export default function ChatSearchResults({
           <Text style={styles.emptyText}>{T("chat.search.hint")}</Text>
         </View>
       ) : sections.length === 0 ? (
-        <View style={styles.emptyState}>
-          <Feather name="search" size={26} color={Colors.textMuted} />
-          <Text style={styles.emptyText}>
-            {T("chat.search.no_results", { query: trimmed })}
-          </Text>
-        </View>
+        <EmptyState
+          icon="search"
+          title={T("chat.search.no_results", { query: trimmed })}
+        />
       ) : (
         <SectionList<ResultRow, ResultSection>
           sections={sections}
@@ -676,14 +671,6 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       fontWeight: FontWeight.bold,
       color: Colors.textPrimary,
       backgroundColor: Colors.accentGhost,
-    },
-    emptyState: {
-      flex: 1,
-      alignItems: "center",
-      justifyContent: "center",
-      gap: Spacing.sm,
-      paddingHorizontal: Spacing.xl,
-      paddingTop: Spacing["4xl"],
     },
     emptyText: {
       fontSize: FontSize.sm,

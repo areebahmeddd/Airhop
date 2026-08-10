@@ -1154,7 +1154,7 @@ export const FAQ_SECTIONS: FaqSection[] = [
           <>
             Yes. Open issues, submit pull requests, or start a discussion. Read the{" "}
             <TextLink href={REPO_LINKS.contributing}>contributing guide</TextLink> before opening a
-            large PR.
+            PR.
           </>
         ),
       },

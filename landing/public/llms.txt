@@ -2,7 +2,7 @@
 
 > Airhop is a free, open-source iOS and Android messenger for censorship-resistant communication. It works with zero internet connectivity: nearby phones form a Bluetooth Low Energy mesh and relay messages for each other, up to 7 hops, end-to-end encrypted. When the internet is available, Nostr relays serve as a bridge beyond radio range.
 
-Airhop is MIT-licensed and has no accounts, no ads, no telemetry, and no company or investors behind it. It is an independent side project built by Areeb Ahmed, built on the foundation of bitchat and wire-compatible with it. It is not affiliated with or endorsed by permissionlesstech or the bitchat project. Airhop has not had an external security audit; one is planned for v1.9.0.
+Airhop is MIT-licensed and has no accounts, no ads, no telemetry, and no company or investors behind it. It is an independent side project built by Areeb Ahmed, built on the foundation of bitchat and wire-compatible with it. It is not affiliated with or endorsed by permissionlesstech or the bitchat project.
 
 ## Key facts
 
@@ -22,9 +22,9 @@ Airhop is MIT-licensed and has no accounts, no ads, no telemetry, and no company
 - [Architecture](https://airhop.1mindlabs.org/architecture): Technical breakdown in 19 sections covering identity derivation, transport selection, BLE mesh internals (TTL 7, fragments, Golomb-coded gossip sync, courier store-and-forward), Noise XX and Double Ratchet, the four room types, the Nostr bridge, Tor, the Cashu wallet, the module map, the bitchat-compatible v2 wire format, and the threat model
 - [FAQ](https://airhop.1mindlabs.org/faq): Answers on the mesh, messaging, privacy and security, everyday use, payments, the AI assistant, and the open-source project
 - [Brand kit](https://airhop.1mindlabs.org/brand): The pixel bird mark and wordmark, colour and type tokens, downloadable press assets, press facts and boilerplate
-- [Privacy policy](https://airhop.1mindlabs.org/privacy-policy): What stays on the device, what each optional feature exposes to peers and relays, and how long anything is kept
 - [Terms of service](https://airhop.1mindlabs.org/terms-of-service): Acceptable use, content you post, payments and mint risk, warranty, and the MIT licence
-- [Blog](https://airhop.1mindlabs.org/blogs): Writing on mesh networking, privacy and offline-first software (not yet published)
+- [Privacy policy](https://airhop.1mindlabs.org/privacy-policy): What stays on the device, what each optional feature exposes to peers and relays, and how long anything is kept
+- [Blogs](https://airhop.1mindlabs.org/blogs): Writing on mesh networking, privacy and offline-first software
 
 ## Specifications
 
