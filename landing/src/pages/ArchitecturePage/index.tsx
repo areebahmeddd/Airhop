@@ -1,9 +1,10 @@
 import PageHeader from "@/components/ui/PageHeader";
 import TextLink from "@/components/ui/TextLink";
 import { useSEO } from "@/hooks/useSEO";
-import { REPO_LINKS } from "@/lib/links";
-import { SEO } from "@/lib/seo";
-import { useEffect, useState } from "react";
+import { useT, type Translator } from "@/i18n";
+import { AUTHOR_NAME, REPO_LINKS, SITE_URL } from "@/lib/links";
+import { LAST_UPDATED, LAST_UPDATED_DISPLAY, SEO } from "@/lib/seo";
+import { useEffect, useMemo, useState } from "react";
 import {
   FloodPropagation,
   Fragmentation,
@@ -23,8 +24,6 @@ import {
   VoiceBurst,
   WalletStates,
 } from "./diagrams";
-
-const LAST_UPDATED = "August 01, 2026";
 
 const CODE = "rounded-[6px] bg-inner px-1 py-0.5 text-[0.85em] text-ink";
 
@@ -206,41 +205,41 @@ function Note({ label, children }: { label: string; children: React.ReactNode })
   );
 }
 
-const SCHEMA = {
-  "@context": "https://schema.org",
-  "@type": "TechArticle",
-  headline: "Airhop Architecture",
-  description:
-    "A full technical breakdown of Airhop: identity, transports, the Bluetooth mesh, encryption, the Nostr internet layer, Tor, the Cashu wallet, the on-device AI assistant, and the wire format.",
-  dateModified: "2026-08-01",
-  author: { "@type": "Person", name: "Areeb Ahmed" },
-  url: "https://airhop.1mindlabs.org/architecture",
-};
+function articleSchema(T: Translator) {
+  return {
+    "@context": "https://schema.org",
+    "@type": "TechArticle",
+    headline: T("seo.architecture.headline"),
+    description: T("seo.architecture.summary"),
+    dateModified: LAST_UPDATED,
+    author: { "@type": "Person", name: AUTHOR_NAME },
+    url: `${SITE_URL}/architecture`,
+  };
+}
 
 export default function ArchitecturePage() {
+  const T = useT();
   const active = useActiveSection();
+  const schema = useMemo(() => JSON.stringify(articleSchema(T)).replace(/</g, "\\u003c"), [T]);
 
   useSEO(SEO["/architecture"]);
 
   return (
     <main id="main-content">
-      <script
-        type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(SCHEMA).replace(/</g, "\\u003c") }}
-      />
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: schema }} />
 
       <div className="mx-auto max-w-6xl px-6 py-16 md:px-10">
         <PageHeader
-          eyebrow="Documentation"
-          title="Architecture"
-          meta={`Last updated: ${LAST_UPDATED}`}
+          eyebrow={T("page.architecture.eyebrow")}
+          title={T("page.architecture.title")}
+          meta={T("common.last_updated", { date: LAST_UPDATED_DISPLAY })}
         />
 
         <div className="mt-14 lg:grid lg:grid-cols-[176px_1fr] lg:gap-14">
-          <nav aria-label="On this page" className="mb-12 lg:mb-0">
+          <nav aria-label={T("page.architecture.toc")} className="mb-12 lg:mb-0">
             <div className="-mx-1 px-1 lg:sticky lg:top-24 lg:max-h-[calc(100vh-7rem)] lg:overflow-y-auto">
               <div className="text-mute font-mono text-[10px] font-semibold tracking-[0.18em] uppercase">
-                On this page
+                {T("page.architecture.toc")}
               </div>
               <ul className="mt-3 space-y-3.5">
                 {TOC.map((group) => (

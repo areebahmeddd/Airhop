@@ -2,6 +2,10 @@ const REPO = "https://github.com/areebahmeddd/airhop";
 
 export const SITE_URL = "https://airhop.1mindlabs.org";
 
+export const AUTHOR_NAME = "Areeb Ahmed";
+
+export const AUTHOR_URL = "https://areeb.dev";
+
 export const REPO_URL = REPO;
 
 export const SPONSOR_URL = "https://github.com/sponsors/areebahmeddd";

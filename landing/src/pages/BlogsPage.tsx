@@ -1,7 +1,10 @@
 import { useSEO } from "@/hooks/useSEO";
+import { useT } from "@/i18n";
 import { SEO } from "@/lib/seo";
 
 export default function BlogsPage() {
+  const T = useT();
+
   useSEO(SEO["/blogs"]);
 
   return (
@@ -11,11 +14,13 @@ export default function BlogsPage() {
     >
       <div className="flex flex-col items-center gap-4">
         <span className="text-secondary font-mono text-[11px] font-semibold tracking-[0.25em] uppercase">
-          Blog
+          {T("page.blogs.eyebrow")}
         </span>
-        <h1 className="text-ink text-3xl font-semibold tracking-tight sm:text-4xl">Coming soon</h1>
+        <h1 className="text-ink text-3xl font-semibold tracking-tight sm:text-4xl">
+          {T("page.blogs.title")}
+        </h1>
         <p className="text-secondary mx-auto max-w-sm text-sm leading-relaxed">
-          Writing on mesh networking, privacy, and offline-first software.
+          {T("page.blogs.body")}
         </p>
       </div>
     </main>

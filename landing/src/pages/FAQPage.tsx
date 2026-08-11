@@ -1,11 +1,13 @@
 import PageHeader from "@/components/ui/PageHeader";
 import TextLink from "@/components/ui/TextLink";
 import { useSEO } from "@/hooks/useSEO";
+import { useT } from "@/i18n";
+import { FAQ_SECTIONS } from "@/i18n/content/en/faq";
+import { useRichText } from "@/i18n/rich-text";
 import { REPO_LINKS } from "@/lib/links";
 import { SEO } from "@/lib/seo";
 import { Plus } from "lucide-react";
-import { isValidElement } from "react";
-import { FAQ_SECTIONS } from "./content";
+import { isValidElement, useMemo } from "react";
 
 function toPlainText(node: React.ReactNode): string {
   if (node == null || typeof node === "boolean") return "";
@@ -25,35 +27,49 @@ function serializeSchema(schema: unknown): string {
   return JSON.stringify(schema).replace(/</g, "\\u003c");
 }
 
-const FAQ_SCHEMA = {
-  "@context": "https://schema.org",
-  "@type": "FAQPage",
-  mainEntity: FAQ_SECTIONS.flatMap((section) =>
-    section.questions.map((item) => ({
-      "@type": "Question",
-      name: item.q,
-      acceptedAnswer: {
-        "@type": "Answer",
-        text: faqAnswerText(item.a),
-      },
-    })),
-  ),
-};
+function faqSchema() {
+  return {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    mainEntity: FAQ_SECTIONS.flatMap((section) =>
+      section.questions.map((item) => ({
+        "@type": "Question",
+        name: item.q,
+        acceptedAnswer: {
+          "@type": "Answer",
+          text: faqAnswerText(item.a),
+        },
+      })),
+    ),
+  };
+}
+
+function ContactLine() {
+  const nodes = useMemo(
+    () => ({
+      email: <TextLink href="mailto:hi@areeb.dev">hi@areeb.dev</TextLink>,
+      github: <TextLink href={REPO_LINKS.discussions}>GitHub</TextLink>,
+    }),
+    [],
+  );
+
+  return <>{useRichText("page.faq.contact", nodes)}</>;
+}
 
 export default function FAQPage() {
+  const T = useT();
+  const schema = useMemo(() => serializeSchema(faqSchema()), []);
+
   useSEO(SEO["/faq"]);
 
   return (
     <main id="main-content">
-      <script
-        type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: serializeSchema(FAQ_SCHEMA) }}
-      />
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: schema }} />
       <div className="mx-auto max-w-2xl px-6 py-16">
         <PageHeader
-          eyebrow="FAQ"
-          title="Frequently asked questions"
-          meta="Common questions about Airhop."
+          eyebrow={T("page.faq.eyebrow")}
+          title={T("page.faq.title")}
+          meta={T("page.faq.meta")}
         />
 
         <div className="mt-12 space-y-8">
@@ -84,9 +100,7 @@ export default function FAQPage() {
 
         <div className="border-line mt-14 border-t pt-8">
           <p className="text-secondary text-sm">
-            Questions not answered here can be sent to{" "}
-            <TextLink href="mailto:hi@areeb.dev">hi@areeb.dev</TextLink> or raised by opening a
-            discussion on <TextLink href={REPO_LINKS.discussions}>GitHub</TextLink>.
+            <ContactLine />
           </p>
         </div>
       </div>

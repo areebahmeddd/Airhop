@@ -1,16 +1,23 @@
 import PageHeader from "@/components/ui/PageHeader";
 import TextLink from "@/components/ui/TextLink";
 import { useSEO } from "@/hooks/useSEO";
+import { useT } from "@/i18n";
 import { REPO_LINKS, REPO_URL } from "@/lib/links";
-import { SEO } from "@/lib/seo";
+import { LAST_UPDATED_DISPLAY, SEO } from "@/lib/seo";
 
 export default function TermsPage() {
+  const T = useT();
+
   useSEO(SEO["/terms-of-service"]);
 
   return (
     <main id="main-content">
       <div className="mx-auto max-w-2xl px-6 py-16">
-        <PageHeader eyebrow="Legal" title="Terms of Service" meta="Last updated: August 01, 2026" />
+        <PageHeader
+          eyebrow={T("page.legal.eyebrow")}
+          title={T("page.terms.title")}
+          meta={T("common.last_updated", { date: LAST_UPDATED_DISPLAY })}
+        />
 
         <div className="text-secondary mt-14">
           <section className="border-line space-y-4 border-t pt-12 first:border-t-0 first:pt-0">

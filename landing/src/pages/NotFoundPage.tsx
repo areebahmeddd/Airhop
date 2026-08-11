@@ -1,14 +1,13 @@
 import { useSEO } from "@/hooks/useSEO";
+import { useT } from "@/i18n";
+import { NOT_FOUND_SEO } from "@/lib/seo";
 import { ArrowLeft } from "lucide-react";
 import { Link } from "react-router-dom";
 
 export default function NotFoundPage() {
-  useSEO({
-    title: "Page Not Found - Airhop",
-    description: "The page you are looking for does not exist or has been moved.",
-    path: "/404",
-    noIndex: true,
-  });
+  const T = useT();
+
+  useSEO(NOT_FOUND_SEO);
 
   return (
     <main
@@ -20,10 +19,10 @@ export default function NotFoundPage() {
           404
         </span>
         <h1 className="text-ink text-3xl font-semibold tracking-tight sm:text-4xl">
-          Page not found
+          {T("page.notfound.title")}
         </h1>
         <p className="text-secondary mx-auto max-w-sm text-sm leading-relaxed">
-          The page you are looking for does not exist or has been moved.
+          {T("page.notfound.body")}
         </p>
         <div className="pt-2">
           <Link
@@ -35,7 +34,7 @@ export default function NotFoundPage() {
               aria-hidden="true"
               className="transition-transform duration-150 group-hover/btn:-translate-x-0.5"
             />
-            Back to home
+            {T("common.back_to_home")}
           </Link>
         </div>
       </div>
