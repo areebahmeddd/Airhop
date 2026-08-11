@@ -5,6 +5,12 @@ All notable changes are documented here. The format follows [Keep a Changelog](h
 
 ## What's New
 
+- feat: enhance QR scan and contact management with verification and copy functionality (by @areebahmeddd) [4af924c]
+
+**Full changelog:** [v0.9.14..v0.9.15](https://github.com/areebahmeddd/airhop/compare/v0.9.14..v0.9.15)
+
+## What's New
+
 - feat: enhance contact management and display names (#10) (by @areebahmeddd) [a66e515]
 - feat: implement internationalization (i18n) support with language management and translation functionality (#23) (by @Areeb Ahmed) [c516e64]
 - feat: add LanguagePicker and ThemeToggle components (by @areebahmeddd) [d55c98d]
