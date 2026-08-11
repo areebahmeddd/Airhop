@@ -1933,9 +1933,27 @@ function AppContent(): React.JSX.Element {
               {/* Floating bottom stack: the ongoing-transfer pill and the tab
                   bar, both hovering over the content that scrolls beneath.
                   box-none so taps land on content in the gaps around the pills,
-                  not on the transparent container. */}
+                  not on the transparent container.
+
+                  A SafeAreaView rather than a View, for its bottom edge only.
+                  An absolutely positioned child is laid out against its parent's
+                  PADDING box, so `bottom: 0` sits under the outer SafeAreaView's
+                  inset rather than above it. Under gesture navigation that inset
+                  is a few points and the pill's own margin hid the difference;
+                  with three-button navigation it is around 48, and the system
+                  buttons drew straight over the tab bar. Consuming the inset
+                  here puts it back on top.
+
+                  Not the `useSafeAreaInsets` hook: the provider is rendered
+                  inside this component, so a hook call in its body would sit
+                  ABOVE the provider and throw. This element is a descendant, so
+                  it reads the inset correctly. */}
               {!isInThread && (
-                <View style={styles.floatingBottom} pointerEvents="box-none">
+                <SafeAreaView
+                  edges={["bottom"]}
+                  style={styles.floatingBottom}
+                  pointerEvents="box-none"
+                >
                   <TransferBadge onOpen={openTransferChannel} />
                   {/* Outer wrap carries the shadow + rounding; the bar itself
                       clips its children to the pill (overflow hidden), and a
@@ -2023,7 +2041,7 @@ function AppContent(): React.JSX.Element {
                       })}
                     </View>
                   </View>
-                </View>
+                </SafeAreaView>
               )}
             </SafeAreaView>
           )}
@@ -2220,6 +2238,11 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       flex: 1,
     },
     // Bottom stack (transfer pill + tab bar) floating over the content beneath.
+    // Clearance from the system navigation bar comes from the element itself
+    // consuming the bottom inset, not from here - see the note where it is
+    // rendered. Scrolling screens are unaffected either way: they sit inside the
+    // outer SafeAreaView, so TAB_BAR_CLEARANCE still measures from the right
+    // place.
     floatingBottom: {
       position: "absolute",
       left: 0,

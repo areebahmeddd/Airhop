@@ -6,6 +6,7 @@
 
 :root {
   color-scheme: light dark;
+  --ease-settle: cubic-bezier(0.3, 0.3, 0.5, 1);
   --t-canvas: light-dark(#ffffff, #0c0d0e);
   --t-card: light-dark(#fcfcfd, #17181a);
   --t-card-subtle: light-dark(#f9f9fb, #1e2022);
@@ -61,6 +62,61 @@
 :root[data-theme-sweep]::view-transition-new(root) {
   animation: themeSweep 0.42s cubic-bezier(0.65, 0, 0.35, 1);
   mix-blend-mode: normal;
+}
+
+.theme-knob {
+  view-transition-name: theme-knob;
+}
+
+.theme-mark-light {
+  view-transition-name: theme-mark-light;
+  --spin-from: -180deg;
+}
+
+.theme-mark-dark {
+  view-transition-name: theme-mark-dark;
+  --spin-from: -720deg;
+}
+
+:root[data-theme-sweep]::view-transition-group(theme-knob) {
+  animation-duration: 0.5s;
+  animation-timing-function: var(--ease-settle);
+}
+
+:root[data-theme-sweep]::view-transition-old(theme-knob),
+:root[data-theme-sweep]::view-transition-new(theme-knob) {
+  animation-duration: 0.3s;
+}
+
+:root[data-theme-sweep]::view-transition-old(theme-mark-light),
+:root[data-theme-sweep]::view-transition-old(theme-mark-dark) {
+  animation: none;
+  opacity: 0;
+}
+
+:root[data-theme-sweep]::view-transition-new(theme-mark-light),
+:root[data-theme-sweep]::view-transition-new(theme-mark-dark) {
+  animation: none;
+  opacity: 1;
+}
+
+:root[data-theme-switching] .theme-option {
+  transition: color 0.3s ease-out !important;
+}
+
+@keyframes themeSpin {
+  from {
+    rotate: var(--spin-from, -360deg);
+  }
+  to {
+    rotate: 0deg;
+  }
+}
+
+.theme-spin {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: themeSpin 1.3s var(--ease-settle);
 }
 
 @supports (interpolate-size: allow-keywords) {

@@ -1619,6 +1619,10 @@ export const strings = {
 
   // ---- Contacts: add and share ---------------------------------------------------
   "contacts.qr.verified": "Verified via QR",
+  // A card that arrived as text or from the photo roll. Says what it gave us
+  // (their keys) and what it did not (proof of who sent it), because the two
+  // come apart here and only the camera answers both.
+  "contacts.qr.keys_unverified": "Keys received, not verified",
   "contacts.qr.not_verified": "Not verified yet",
   "contacts.qr.message": "Message",
   "contacts.qr.add": "Add contact",
@@ -1626,12 +1630,13 @@ export const strings = {
   "contacts.qr.aim": "Point your camera at their QR code",
   "contacts.qr.add_desc": "Reach someone who isn’t nearby on the mesh.",
   // "airhop://peer" is a URL scheme, not copy: keep it as it is.
-  "contacts.qr.peer_id_hint": "16 characters, or an airhop://peer link.",
+  "contacts.qr.peer_id_hint":
+    "A peer ID is 16 characters. A contact code starts with airhop:.",
   "contacts.qr.or_scan": "or scan their QR",
   "contacts.qr.trust_note":
-    "Scanning a QR verifies their public key. A typed ID stays unverified until you meet on the mesh.",
-  "contacts.qr.peer_id": "Peer ID",
-  "contacts.qr.peer_id_placeholder": "Paste or type a peer ID",
+    "Only a QR you scan with your camera verifies their key. A pasted code carries their keys but not proof it came from them.",
+  "contacts.qr.peer_id": "Peer ID or contact code",
+  "contacts.qr.peer_id_placeholder": "Paste an ID or contact code",
   "contacts.qr.scan_camera_a11y": "Scan QR code with camera",
   "contacts.qr.scan_camera_desc": "Use your camera",
   "contacts.qr.upload_a11y": "Upload QR image from gallery",
@@ -1641,7 +1646,7 @@ export const strings = {
 
   // ---- Contacts: scanning a code -------------------------------------------------
   "contacts.scan.invalid_id":
-    "Enter a valid 16-character peer ID or paste an airhop://peer/… link.",
+    "Paste a 16-character peer ID, an airhop://peer/… link, or a contact code.",
   "contacts.scan.camera_label": "Camera access",
   "contacts.scan.camera_purpose": "scan a contact's QR code",
   "contacts.scan.camera_needed":
@@ -2051,6 +2056,10 @@ export const strings = {
   // freely to pass it around.
   "settings.qr.note":
     "This contains your public keys, which allow others to message you from anywhere. Share it only with people you trust. It won’t change unless you wipe your identity.",
+  // The same card as text. "Code" and not "key" or "card": it is the thing you
+  // paste, and the note above already says what is inside it.
+  "settings.qr.code_label": "Contact code",
+  "settings.qr.copy_code": "Copy contact code",
   "settings.qr.share": "Share QR code",
   "settings.qr.share_short": "Share QR",
   "settings.qr.download": "Download QR code",

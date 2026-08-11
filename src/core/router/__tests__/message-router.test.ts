@@ -970,3 +970,66 @@ describe("PeerRegistry: authenticated peer state", () => {
     expect(r.get("ffffffffffffffff")).toBeUndefined();
   });
 });
+
+// The rule the add-contact screen leans on: a card read off the other phone may
+// correct keys, a card that arrived any other way may only introduce.
+describe("PeerRegistry: out-of-band re-pinning", () => {
+  const PEER = "aabbccdd00112233";
+  const PINNED = new Uint8Array(32).fill(0x11);
+  const SUBSTITUTE = new Uint8Array(32).fill(0x44);
+  const NOISE = new Uint8Array(32).fill(0x55);
+
+  function withPinnedPeer(): PeerRegistry {
+    const r = new PeerRegistry();
+    r.update({
+      peerID: PEER,
+      noisePubKey: NOISE,
+      signingPubKey: PINNED,
+      nickname: "alice",
+    });
+    return r;
+  }
+
+  test("a scanned card outranks the pin and re-keys the peer", () => {
+    const r = withPinnedPeer();
+    r.update({
+      peerID: PEER,
+      noisePubKey: NOISE,
+      signingPubKey: SUBSTITUTE,
+      nickname: "alice",
+      trusted: true,
+    });
+    expect(Array.from(r.get(PEER)!.signingPubKey)).toEqual(
+      Array.from(SUBSTITUTE),
+    );
+  });
+
+  test("the same card without in-person standing leaves the pin alone", () => {
+    const r = withPinnedPeer();
+    r.update({
+      peerID: PEER,
+      noisePubKey: NOISE,
+      signingPubKey: SUBSTITUTE,
+      nickname: "alice",
+      trusted: false,
+    });
+    expect(Array.from(r.get(PEER)!.signingPubKey)).toEqual(Array.from(PINNED));
+  });
+
+  test("an untrusted card still introduces a peer we did not know", () => {
+    const r = new PeerRegistry();
+    r.update({
+      peerID: PEER,
+      noisePubKey: NOISE,
+      signingPubKey: PINNED,
+      nickname: "alice",
+      trusted: false,
+    });
+    expect(r.get(PEER)).toBeDefined();
+  });
+
+  test("the source hint is not stored on the peer", () => {
+    const r = withPinnedPeer();
+    expect(r.get(PEER)).not.toHaveProperty("trusted");
+  });
+});

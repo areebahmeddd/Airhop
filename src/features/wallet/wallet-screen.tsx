@@ -30,6 +30,7 @@ import React, {
 } from "react";
 import {
   ActivityIndicator,
+  Linking,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -2468,7 +2469,28 @@ export default function WalletScreen({
                 {deposit.invoice}
               </Text>
             </View>
+            {/* Three actions of visibly different weight, because they are not
+                equals. Opening a wallet is the one that finishes the job on this
+                phone, so it leads; copying serves the other routes (a second
+                device, a paste elsewhere); closing walks away. Rendered
+                identically they read as a menu to be deciphered rather than a
+                path to follow. Same three-tier pattern the QR sheet uses. */}
             <View style={styles.generatedActions}>
+              <Pressable
+                style={styles.generatedPrimaryBtn}
+                onPress={() => void openInvoiceInWallet(deposit.invoice)}
+                accessibilityRole="button"
+                accessibilityLabel={T("wallet.ln.open_wallet")}
+              >
+                <Feather
+                  name="external-link"
+                  size={18}
+                  color={Colors.textInverse}
+                />
+                <Text style={styles.generatedPrimaryText}>
+                  {T("wallet.ln.open_wallet_short")}
+                </Text>
+              </Pressable>
               <Pressable
                 style={styles.generatedActionBtn}
                 onPress={() => void Clipboard.setStringAsync(deposit.invoice)}
@@ -2478,19 +2500,6 @@ export default function WalletScreen({
                 <Feather name="copy" size={18} color={Colors.accent} />
                 <Text style={styles.generatedActionText}>
                   {T("wallet.ln.copy_invoice")}
-                </Text>
-              </Pressable>
-              <Pressable
-                style={styles.generatedActionBtn}
-                onPress={() =>
-                  void Share.share({ message: `lightning:${deposit.invoice}` })
-                }
-                accessibilityRole="button"
-                accessibilityLabel={T("wallet.ln.open_wallet")}
-              >
-                <Feather name="external-link" size={18} color={Colors.accent} />
-                <Text style={styles.generatedActionText}>
-                  {T("wallet.ln.open_wallet_short")}
                 </Text>
               </Pressable>
             </View>
@@ -2516,13 +2525,16 @@ export default function WalletScreen({
               </View>
             )}
             <View style={styles.modalActions}>
+              {/* Plain, not a third pill. Walking away is not a peer of the two
+                  actions above it, and giving it the same shape is what made
+                  the sheet read as three equal choices. */}
               <Pressable
-                style={styles.modalCancel}
+                style={styles.modalDismiss}
                 onPress={() => setShowDeposit(false)}
                 accessibilityRole="button"
                 accessibilityLabel={T("common.close")}
               >
-                <Text style={styles.modalCancelText}>{T("common.close")}</Text>
+                <Text style={styles.modalDismissText}>{T("common.close")}</Text>
               </Pressable>
               {depositExpired && (
                 <Pressable
@@ -3183,6 +3195,36 @@ function QuoteRow({
 }
 
 // ---- Transaction formatting -------------------------------------------------
+
+// Hand a Lightning invoice to whichever app is registered for `lightning:`.
+//
+// This used to be `Share.share`, which is the OS "send this text to..." sheet:
+// on Android that lists Messages and Drive rather than a wallet, so a button
+// labelled "Open in wallet" opened anything but. `openURL` is the actual
+// handoff - the OS routes the URI to the app that claims the scheme.
+//
+// Tried rather than checked. `canOpenURL` needs the scheme declared in the
+// manifest's `queries` on Android 11+ and in LSApplicationQueriesSchemes on
+// iOS, and without those it answers "no" even when a wallet is installed - so
+// asking first would fail exactly where the feature is meant to work. `openURL`
+// rejects when nothing handles it, which is the same answer arrived at honestly.
+//
+// The share sheet stays as the fallback: with no wallet installed it is the only
+// way to get the invoice onto another device, which is precisely the situation
+// somebody without one is in.
+async function openInvoiceInWallet(invoice: string): Promise<void> {
+  const uri = `lightning:${invoice}`;
+  try {
+    await Linking.openURL(uri);
+  } catch {
+    try {
+      await Share.share({ message: uri });
+    } catch {
+      // Both routes refused. The invoice is on screen and Copy is beside this
+      // button, so there is nothing to report that the sheet does not show.
+    }
+  }
+}
 
 function isCredit(tx: WalletTx): boolean {
   return tx.kind === "receive" || tx.kind === "mint" || tx.kind === "nutzap-in";
@@ -4093,6 +4135,24 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       color: Colors.textPrimary,
       fontWeight: FontWeight.semibold,
     },
+    // The quietest tier: a dismissal, not an action. Filled but borderless,
+    // matching the panic sheet's Cancel, so this is the vocabulary the app
+    // already has rather than a fourth button shape invented here. The border is
+    // what separates it from the secondary pill above it.
+    modalDismiss: {
+      width: "100%",
+      minHeight: 50,
+      paddingVertical: Spacing.md,
+      borderRadius: Radius.full,
+      backgroundColor: Colors.surfaceRaised,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    modalDismissText: {
+      fontSize: FontSize.base,
+      color: Colors.textSecondary,
+      fontWeight: FontWeight.semibold,
+    },
     modalConfirm: {
       width: "100%",
       minHeight: 50,
@@ -4205,6 +4265,24 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       fontSize: FontSize.sm,
       fontWeight: FontWeight.semibold,
       color: Colors.accent,
+    },
+    // The one action that completes the deposit without leaving for another
+    // device. Solid accent, matching every other primary in the app.
+    generatedPrimaryBtn: {
+      width: "100%",
+      minHeight: 50,
+      paddingVertical: Spacing.md,
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: Spacing.xs,
+      borderRadius: Radius.full,
+      backgroundColor: Colors.accent,
+    },
+    generatedPrimaryText: {
+      fontSize: FontSize.base,
+      fontWeight: FontWeight.bold,
+      color: Colors.textInverse,
     },
     // Peer picker
     peerPickerRow: {

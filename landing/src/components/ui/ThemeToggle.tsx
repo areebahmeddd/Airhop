@@ -1,17 +1,56 @@
 import { useTheme } from "@/hooks/useTheme";
 import { useT, type TranslationKey } from "@/i18n";
 import { setTheme, type Theme } from "@/lib/theme";
-import type { LucideIcon } from "lucide-react";
-import { Moon, Sun } from "lucide-react";
+import { useState, type ReactNode } from "react";
 
-const OPTIONS: { value: Theme; labelKey: TranslationKey; Icon: LucideIcon; active: string }[] = [
-  { value: "light", labelKey: "settings.theme.light", Icon: Sun, active: "text-sun" },
-  { value: "dark", labelKey: "settings.theme.dark", Icon: Moon, active: "text-moon" },
+const SUN = (
+  <>
+    <circle cx="12" cy="12" r="4" />
+    <path d="M12 2v2" />
+    <path d="M12 20v2" />
+    <path d="M2 12h2" />
+    <path d="M20 12h2" />
+    <path d="m4.93 4.93 1.41 1.41" />
+    <path d="m17.66 17.66 1.41 1.41" />
+    <path d="m19.07 4.93-1.41 1.41" />
+    <path d="m6.34 17.66-1.41 1.41" />
+  </>
+);
+
+const MOON = <path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z" />;
+
+const OPTIONS: {
+  value: Theme;
+  labelKey: TranslationKey;
+  active: string;
+  mark: string;
+  glyph: ReactNode;
+}[] = [
+  {
+    value: "light",
+    labelKey: "settings.theme.light",
+    active: "text-sun",
+    mark: "theme-mark-light",
+    glyph: SUN,
+  },
+  {
+    value: "dark",
+    labelKey: "settings.theme.dark",
+    active: "text-moon",
+    mark: "theme-mark-dark",
+    glyph: MOON,
+  },
 ];
 
 export default function ThemeToggle() {
   const T = useT();
   const theme = useTheme();
+  const [spins, setSpins] = useState(false);
+
+  const pick = (value: Theme) => {
+    setSpins(true);
+    setTheme(value);
+  };
 
   return (
     <div
@@ -21,22 +60,35 @@ export default function ThemeToggle() {
     >
       <span
         aria-hidden="true"
-        className={`bg-canvas pointer-events-none absolute top-px left-px h-6 w-6 rounded-full transition-transform duration-200 ease-out ${
+        className={`theme-knob bg-canvas pointer-events-none absolute top-px left-px h-6 w-6 rounded-full transition-transform duration-200 ease-out ${
           theme === "dark" ? "translate-x-6" : "translate-x-0"
         }`}
       />
-      {OPTIONS.map(({ value, labelKey, Icon, active }) => (
+      {OPTIONS.map(({ value, labelKey, active, mark, glyph }) => (
         <button
           key={value}
           type="button"
-          onClick={() => setTheme(value)}
+          onClick={() => pick(value)}
           aria-pressed={theme === value}
           aria-label={T(labelKey)}
-          className={`relative flex h-6 w-6 items-center justify-center rounded-full transition-colors duration-150 ${
+          className={`theme-option relative flex h-6 w-6 items-center justify-center rounded-full transition-colors duration-150 ${
             theme === value ? active : "text-mute hover:text-secondary"
           }`}
         >
-          <Icon size={12} aria-hidden="true" />
+          <svg
+            className={mark}
+            viewBox="0 0 24 24"
+            width="12"
+            height="12"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+          >
+            <g className={spins && theme === value ? "theme-spin" : undefined}>{glyph}</g>
+          </svg>
         </button>
       ))}
     </div>

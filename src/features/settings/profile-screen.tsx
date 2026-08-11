@@ -272,9 +272,12 @@ export default function ProfileScreen({
   const [showPeerIDModal, setShowPeerIDModal] = useState(false);
   const [idCopied, setIdCopied] = useState(false);
   const idCopiedTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [codeCopied, setCodeCopied] = useState(false);
+  const codeCopiedTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
     return () => {
       if (idCopiedTimer.current) clearTimeout(idCopiedTimer.current);
+      if (codeCopiedTimer.current) clearTimeout(codeCopiedTimer.current);
     };
   }, []);
   // Presence lives in the app-level mesh-state store, not local state, so it
@@ -455,6 +458,18 @@ export default function ProfileScreen({
     setIdCopied(true);
     if (idCopiedTimer.current) clearTimeout(idCopiedTimer.current);
     idCopiedTimer.current = setTimeout(() => setIdCopied(false), 1600);
+  }
+
+  // The same card the QR encodes, as text. A QR needs a camera and a line of
+  // sight; the code travels through anything that carries a string, which is how
+  // most people actually reach someone who isn't in the room. Copy only: the
+  // string is ~180 characters and nobody reads or retypes it, so the box shows
+  // enough to recognise and the glyph does the work.
+  function handleCopyContactCode(): void {
+    void Clipboard.setStringAsync(qrValue).catch(() => {});
+    setCodeCopied(true);
+    if (codeCopiedTimer.current) clearTimeout(codeCopiedTimer.current);
+    codeCopiedTimer.current = setTimeout(() => setCodeCopied(false), 1600);
   }
 
   // The QRCode component exposes an SVG ref whose toDataURL() returns the
@@ -849,6 +864,34 @@ export default function ProfileScreen({
             }}
           />
         </View>
+        {/* Same card, as text, for when there is no camera between you: chat,
+            mail, a note. Sits above the warning rather than below it so the one
+            sentence about what this contains covers the code as well as the
+            QR - they are the same bytes. */}
+        <Pressable
+          style={styles.codeBox}
+          onPress={handleCopyContactCode}
+          accessibilityRole="button"
+          accessibilityLabel={T("settings.qr.copy_code")}
+        >
+          <View style={styles.codeBoxText}>
+            <Text style={styles.codeBoxLabel}>
+              {T("settings.qr.code_label")}
+            </Text>
+            <Text
+              style={styles.codeBoxValue}
+              numberOfLines={1}
+              ellipsizeMode="tail"
+            >
+              {qrValue}
+            </Text>
+          </View>
+          <Feather
+            name={codeCopied ? "check" : "copy"}
+            size={COPY_GLYPH}
+            color={codeCopied ? Colors.online : Colors.textMuted}
+          />
+        </Pressable>
         <View style={styles.noteBox}>
           <Feather name="alert-circle" size={14} color={Colors.textMuted} />
           <Text style={styles.noteText}>{T("settings.qr.note")}</Text>
@@ -1493,6 +1536,38 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       color: Colors.textPrimary,
       fontFamily: FontFamily.mono,
       letterSpacing: 1,
+    },
+    // The peer ID box's shape, left-aligned: the ID is a short token worth
+    // centring, the code is a truncated blob that reads as a value under a
+    // label.
+    codeBox: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: Spacing.sm,
+      alignSelf: "stretch",
+      minHeight: 50,
+      paddingHorizontal: Spacing.base,
+      paddingVertical: Spacing.sm,
+      borderRadius: Radius.md,
+      backgroundColor: Colors.surfaceRaised,
+      borderWidth: 1,
+      borderColor: Colors.border,
+    },
+    // Bounds the truncation: without it the mono line sizes to its full ~180
+    // characters and pushes the glyph off the box.
+    codeBoxText: {
+      flex: 1,
+      gap: 2,
+    },
+    codeBoxLabel: {
+      fontSize: FontSize.xs,
+      color: Colors.textMuted,
+      fontWeight: FontWeight.medium,
+    },
+    codeBoxValue: {
+      fontSize: FontSize.sm,
+      color: Colors.textPrimary,
+      fontFamily: FontFamily.mono,
     },
     qrLarge: {
       padding: Spacing.xl,

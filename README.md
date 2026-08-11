@@ -269,10 +269,10 @@ Airhop would not exist without the work of the bitchat community. Thank you to e
 
 Help keep the project going by contributing through the app or website, sponsoring on GitHub, or simply giving this repository a star.
 
-<a href="https://www.star-history.com/?repos=areebahmeddd%2Fairhop&type=date&logscale=&legend=top-left">
+<a href="https://www.star-history.com/?repos=areebahmeddd%2Fairhop&type=date&legend=top-left">
  <picture>
-   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=areebahmeddd/airhop&type=date&theme=dark&logscale&legend=top-left&sealed_token=-WkVGqvQDeQazbrkJu_cQRz5cPPAO6r0amRCkxBz9TDWfy-pvo-a8Iwuc-JqmwgWoWIBOfDJcjvCf8BEJyd0vbq4heI9MeZJiAnMahoWYaYeFSVS7g5StAqbZFATBHow8IpRrAoT2L41KWJqTUKqlA2x0Ksf3PuBSpr5X_REc7lIyWLGqNv_8BG7wv44" />
-   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=areebahmeddd/airhop&type=date&logscale&legend=top-left&sealed_token=-WkVGqvQDeQazbrkJu_cQRz5cPPAO6r0amRCkxBz9TDWfy-pvo-a8Iwuc-JqmwgWoWIBOfDJcjvCf8BEJyd0vbq4heI9MeZJiAnMahoWYaYeFSVS7g5StAqbZFATBHow8IpRrAoT2L41KWJqTUKqlA2x0Ksf3PuBSpr5X_REc7lIyWLGqNv_8BG7wv44" />
-   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=areebahmeddd/airhop&type=date&logscale&legend=top-left&sealed_token=-WkVGqvQDeQazbrkJu_cQRz5cPPAO6r0amRCkxBz9TDWfy-pvo-a8Iwuc-JqmwgWoWIBOfDJcjvCf8BEJyd0vbq4heI9MeZJiAnMahoWYaYeFSVS7g5StAqbZFATBHow8IpRrAoT2L41KWJqTUKqlA2x0Ksf3PuBSpr5X_REc7lIyWLGqNv_8BG7wv44" />
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=areebahmeddd/airhop&type=date&theme=dark&legend=top-left&sealed_token=JSsEpriySIayAI2wUVg8LzhhTxFJWz5H0YZ5rvfw7WevEVWX9zhQ37u8MkG4kcls5YxCSAaN7p-XnzLR7zC1dwxrMNapMfl1DKcoP_LxvwWHHaOYoT4tTuwyZSV2DSw7qkGrTJYNxfU6fQ7ljueKHAvq6Vx0rgTJprOdvixJW4SxEv1kWzxeVK9ZV8W_" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=areebahmeddd/airhop&type=date&legend=top-left&sealed_token=JSsEpriySIayAI2wUVg8LzhhTxFJWz5H0YZ5rvfw7WevEVWX9zhQ37u8MkG4kcls5YxCSAaN7p-XnzLR7zC1dwxrMNapMfl1DKcoP_LxvwWHHaOYoT4tTuwyZSV2DSw7qkGrTJYNxfU6fQ7ljueKHAvq6Vx0rgTJprOdvixJW4SxEv1kWzxeVK9ZV8W_" />
+   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=areebahmeddd/airhop&type=date&legend=top-left&sealed_token=JSsEpriySIayAI2wUVg8LzhhTxFJWz5H0YZ5rvfw7WevEVWX9zhQ37u8MkG4kcls5YxCSAaN7p-XnzLR7zC1dwxrMNapMfl1DKcoP_LxvwWHHaOYoT4tTuwyZSV2DSw7qkGrTJYNxfU6fQ7ljueKHAvq6Vx0rgTJprOdvixJW4SxEv1kWzxeVK9ZV8W_" />
  </picture>
 </a>

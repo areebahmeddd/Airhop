@@ -1,18 +1,25 @@
 // Add-contact screen: for a peer that isn't visible on the mesh radar.
 //
 // Entry-first: tapping "Add contact" opens a small hub, not the camera. From
-// there a peer ID can be pasted or typed, or their QR scanned with the camera or
-// picked from a saved image in the gallery. This keeps the common case (someone
-// texts you their ID) one paste away, and treats the camera as a deliberate
-// choice rather than an interruption. All three paths converge on the same
-// confirm step (avatar, username, peer ID, then Add Contact) before a contact is
-// actually added, so identity is always double-checked regardless of how the ID
-// arrived.
+// there a peer ID or contact code can be pasted or typed, or their QR scanned
+// with the camera or picked from a saved image in the gallery. This keeps the
+// common case (someone texts you their ID) one paste away, and treats the camera
+// as a deliberate choice rather than an interruption. All three paths converge
+// on the same confirm step (avatar, username, peer ID, then Add Contact) before
+// a contact is actually added, so identity is always double-checked regardless
+// of how the ID arrived.
 //
-// A scanned QR carries a full contact card (peer ID + Noise and Ed25519 public
-// keys + nickname) and its peer ID is verified against the fingerprint of its
-// own Noise key before it is accepted. A manually typed ID carries no keys, so
-// that contact stays unverified until their first ANNOUNCE arrives.
+// Two things vary by route, independently:
+//
+//   What arrived. A contact card (peer ID + Noise and Ed25519 public keys +
+//   nickname) whether scanned or pasted, and its peer ID is checked against the
+//   fingerprint of its own Noise key before anything is accepted. A bare ID
+//   carries no keys, so that contact stays unverified until their first ANNOUNCE.
+//
+//   Who vouched for it. Only the camera saw the other phone. A card off the
+//   photo roll or out of a chat app holds the same keys and proves nothing about
+//   its sender, so it is stored as "link": good enough to encrypt to, never a
+//   verified shield, and never allowed to re-pin an existing peer's keys.
 
 import { Feather } from "@expo/vector-icons";
 import { bytesToHex } from "@noble/hashes/utils.js";
@@ -113,6 +120,15 @@ export default function QrScanScreen({
   const [foundPeerID, setFoundPeerID] = useState<string | null>(null);
   // Keys from a scanned contact card, when the payload carried them.
   const [foundCard, setFoundCard] = useState<ContactCard | null>(null);
+  // Whether the card came off the other person's screen through this camera.
+  //
+  // Only that earns the verified shield and the right to re-pin keys already
+  // bound to a peer ID. The same card read from the photo roll or pasted as text
+  // is exactly as valid and exactly as unproven: it can be forwarded through any
+  // number of hands, so it may introduce somebody and must never overwrite them.
+  // Tracked from where the read happened, because by the time the card reaches
+  // the confirm step every route looks identical.
+  const [foundInPerson, setFoundInPerson] = useState(false);
   const [input, setInput] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [, requestCameraPermission, getCameraPermission] =
@@ -124,6 +140,8 @@ export default function QrScanScreen({
   function resetAll(): void {
     setStage("entry");
     setFoundPeerID(null);
+    setFoundCard(null);
+    setFoundInPerson(false);
     setInput("");
     setError(null);
     hasScannedRef.current = false;
@@ -141,20 +159,23 @@ export default function QrScanScreen({
     hasScannedRef.current = true;
     setFoundPeerID(result.peerID);
     setFoundCard(result.card);
+    // Read off their screen, in front of us.
+    setFoundInPerson(true);
     setStage("confirm");
   }
 
   function handleManualContinue(): void {
-    const parsed = parsePeerID(input);
+    const parsed = parseScan(input.trim());
     if (!parsed) {
       setError(t("contacts.scan.invalid_id"));
       return;
     }
     setError(null);
-    setFoundPeerID(parsed);
-    // Typed IDs carry no keys, so this contact stays unverified until we hear
-    // their ANNOUNCE.
-    setFoundCard(null);
+    setFoundPeerID(parsed.peerID);
+    // A pasted contact code carries real keys; a typed ID carries none and stays
+    // unverified until we hear their ANNOUNCE. Neither was read in person.
+    setFoundCard(parsed.card);
+    setFoundInPerson(false);
     setStage("confirm");
   }
 
@@ -228,6 +249,8 @@ export default function QrScanScreen({
       }
       setFoundPeerID(result.peerID);
       setFoundCard(result.card);
+      // Off the photo roll, so nobody was standing there.
+      setFoundInPerson(false);
       setStage("confirm");
     } catch {
       setError(t("contacts.scan.unreadable"));
@@ -237,6 +260,7 @@ export default function QrScanScreen({
   function handleRescan(): void {
     setFoundPeerID(null);
     setFoundCard(null);
+    setFoundInPerson(false);
     hasScannedRef.current = false;
     setStage("entry");
   }
@@ -254,15 +278,21 @@ export default function QrScanScreen({
       // Such a QR is claiming an identity it cannot prove. Accepting it would
       // mean every DM "to that contact" gets encrypted to whoever forged it.
       const accepted =
-        getMeshService()?.addVerifiedContact(card, { inPerson: true }) ?? false;
+        getMeshService()?.addVerifiedContact(card, {
+          inPerson: foundInPerson,
+        }) ?? false;
       if (!accepted) {
         setError(t("contacts.scan.tampered"));
         setStage("entry");
         return;
       }
-      // Scanning a card upgrades a known peer to verified without disturbing a
-      // name they chose. The card also carries the peer's Nostr pubkey, which
-      // makes them reachable over the internet even if we never meet on BLE.
+      // Scanning a card in person upgrades a known peer to verified without
+      // disturbing a name they chose. A card that arrived any other way holds
+      // the same keys but proves nothing about who sent it, so it is recorded
+      // as "link": usable for encryption, never a shield. Downgrading an
+      // already-verified contact would be a lie in the other direction, so a
+      // prior stronger source wins.
+      const source = foundInPerson || prior?.source === "qr" ? "qr" : "link";
       useContactsStore.getState().addContact({
         ...prior,
         peerID: card.peerID,
@@ -270,7 +300,7 @@ export default function QrScanScreen({
         signingPubKeyHex: bytesToHex(card.signingPubKey),
         nickname: prior?.nickname.trim() ? prior.nickname : card.nickname,
         addedAtMs: prior?.addedAtMs ?? Date.now(),
-        source: "qr",
+        source,
         // The card always carries the peer's Nostr pubkey, which makes them
         // reachable over the internet even if we never meet on Bluetooth.
         nostrPubkeyHex: bytesToHex(card.nostrPubKey),
@@ -295,7 +325,7 @@ export default function QrScanScreen({
   }
 
   const foundUsername = foundPeerID ? peerIDToUsername(foundPeerID) : "";
-  const canContinueManual = parsePeerID(input) !== null;
+  const canContinueManual = parseScan(input.trim()) !== null;
 
   // Is this peer already saved? Drives the confirm step: an existing contact is
   // shown by their saved name with a "Message" action, a new one with "Add
@@ -308,18 +338,38 @@ export default function QrScanScreen({
     existingContact && existingContact.nickname.trim().length > 0
       ? existingContact.nickname
       : foundUsername;
-  // Confirm-step status: an existing contact takes precedence over the
-  // verified/unverified read of the payload we just scanned or typed.
-  const confirmPillColor = alreadyContact
-    ? Colors.textSecondary
-    : foundCard
-      ? Colors.verified
-      : Colors.textMuted;
-  const confirmPillLabel = alreadyContact
-    ? T("contacts.scan.already_added")
-    : foundCard
-      ? T("contacts.qr.verified")
-      : T("contacts.qr.not_verified");
+  // Confirm-step status. An existing contact takes precedence; otherwise the
+  // pill reports what this payload actually established, which is two questions
+  // and not one: whether we hold their keys, and whether we saw where they came
+  // from. A pasted card answers the first and not the second, so it must not
+  // wear the shield the camera earns.
+  const confirmPill: {
+    label: string;
+    color: string;
+    icon: keyof typeof Feather.glyphMap;
+  } = alreadyContact
+    ? {
+        label: T("contacts.scan.already_added"),
+        color: Colors.textSecondary,
+        icon: "user-check",
+      }
+    : foundCard && foundInPerson
+      ? {
+          label: T("contacts.qr.verified"),
+          color: Colors.verified,
+          icon: "shield",
+        }
+      : foundCard
+        ? {
+            label: T("contacts.qr.keys_unverified"),
+            color: Colors.textSecondary,
+            icon: "key",
+          }
+        : {
+            label: T("contacts.qr.not_verified"),
+            color: Colors.textMuted,
+            icon: "clock",
+          };
   const confirmPrimaryLabel = alreadyContact
     ? T("contacts.qr.message")
     : T("contacts.qr.add");
@@ -478,8 +528,11 @@ export default function QrScanScreen({
               </Pressable>
             </View>
 
+            {/* Muted, not the verified green it used to be. The note now says
+                what most routes into this screen do NOT establish, and a green
+                shield over a caveat reads as reassurance. */}
             <View style={styles.noteRow}>
-              <Feather name="shield" size={14} color={Colors.verified} />
+              <Feather name="shield" size={14} color={Colors.textMuted} />
               <Text style={styles.noteText}>{T("contacts.qr.trust_note")}</Text>
             </View>
           </>
@@ -493,18 +546,12 @@ export default function QrScanScreen({
               <Text style={styles.confirmPeerID}>{foundPeerID}</Text>
               <View style={styles.verifyPill}>
                 <Feather
-                  name={
-                    alreadyContact
-                      ? "user-check"
-                      : foundCard
-                        ? "shield"
-                        : "clock"
-                  }
+                  name={confirmPill.icon}
                   size={12}
-                  color={confirmPillColor}
+                  color={confirmPill.color}
                 />
-                <Text style={[styles.verifyText, { color: confirmPillColor }]}>
-                  {confirmPillLabel}
+                <Text style={[styles.verifyText, { color: confirmPill.color }]}>
+                  {confirmPill.label}
                 </Text>
               </View>
             </View>
