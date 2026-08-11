@@ -1667,6 +1667,12 @@ export const strings = {
   "settings.peer_id": "Peer ID",
   "settings.share_peer_id": "Share your Peer ID",
   "settings.share_id_short": "Share ID",
+  "settings.peer_id_sheet.title": "Your peer ID",
+  "settings.peer_id_sheet.copy": "Copy peer ID",
+  // The one thing worth knowing before picking this over the QR: an ID on its
+  // own carries no keys, so it can only ever reach you over Bluetooth.
+  "settings.peer_id_sheet.note":
+    "This only works when you’re both within Bluetooth range. To let someone message you from anywhere, share your QR code instead.",
 
   // ---- Settings: hub rows --------------------------------------------------------
   "settings.section.general": "General",
@@ -1958,8 +1964,6 @@ export const strings = {
   "settings.font.system": "System",
   "settings.font.system_desc": "Uses your device's default monospace font",
   // Typeface names are product names and stay as they are in every language.
-  "settings.font.firacode": "Fira Code",
-  "settings.font.firacode_desc": "Clean with distinctive characters",
   "settings.font.jetbrains": "JetBrains Mono",
   "settings.font.jetbrains_desc": "Modern and easy to read",
   // Group headers in the Appearance sheet. Uppercase in English; a script with
@@ -1981,12 +1985,12 @@ export const strings = {
   "settings.language.es": "Spanish",
   "settings.language.soon": "Coming soon",
   "settings.language.soon_a11y": "{value}, coming soon",
+  // No "System default" row: an untouched install already follows the phone, so
+  // the descriptions say what picking a side does, which is stop following it.
   "settings.theme.light": "Light",
   "settings.theme.light_desc": "Always use the light palette",
   "settings.theme.dark": "Dark",
   "settings.theme.dark_desc": "Always use the dark palette",
-  "settings.theme.system": "System default",
-  "settings.theme.system_desc": "Uses your device's appearance setting",
 
   // ---- Settings: profile and identity --------------------------------------------
   "settings.status.online": "Online",
@@ -2024,6 +2028,11 @@ export const strings = {
     "Add me on Airhop - offline-first, private mesh messaging.",
   "settings.qr.show_short": "Show QR",
   "settings.qr.title": "Your QR code",
+  // The counterpart note. Says what the code carries in terms of what it lets
+  // someone do, not in terms of keys, and gives a familiar yardstick for how
+  // freely to pass it around.
+  "settings.qr.note":
+    "This contains your public keys, which allow others to message you from anywhere. Share it only with people you trust. It won’t change unless you wipe your identity.",
   "settings.qr.share": "Share QR code",
   "settings.qr.share_short": "Share QR",
   "settings.qr.download": "Download QR code",

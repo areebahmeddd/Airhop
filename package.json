@@ -41,7 +41,6 @@
   },
   "dependencies": {
     "@cashu/cashu-ts": "^4.7.2",
-    "@expo-google-fonts/fira-code": "^0.4.1",
     "@expo-google-fonts/jetbrains-mono": "^0.4.1",
     "@expo/vector-icons": "^15.1.1",
     "@noble/ciphers": "^2.3.0",

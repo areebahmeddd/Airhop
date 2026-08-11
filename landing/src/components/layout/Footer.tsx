@@ -1,4 +1,6 @@
+import LanguagePicker from "@/components/ui/LanguagePicker";
 import PixelBird from "@/components/ui/PixelBird";
+import ThemeToggle from "@/components/ui/ThemeToggle";
 import { REPO_LINKS, SOCIAL_LINKS, STORE_LINKS } from "@/lib/links";
 import { useId } from "react";
 import { Link } from "react-router-dom";
@@ -107,6 +109,8 @@ const NAV_COLUMNS = [
 ];
 
 export default function Footer() {
+  const headingId = useId();
+
   return (
     <footer className="border-line bg-card rounded-t-3xl border-t">
       <div className="mx-auto max-w-7xl px-6 pt-12 md:px-10">
@@ -125,13 +129,19 @@ export default function Footer() {
             </p>
           </div>
 
-          <div className="mt-10 grid grid-cols-2 gap-x-6 gap-y-10 sm:grid-cols-4 lg:col-span-8 lg:mt-0 lg:gap-6">
+          <nav
+            aria-label="Footer"
+            className="mt-10 grid grid-cols-2 gap-x-6 gap-y-10 sm:grid-cols-4 lg:col-span-8 lg:mt-0 lg:gap-6"
+          >
             {NAV_COLUMNS.map((col) => (
               <div key={col.heading} className="min-w-0">
-                <p className="text-secondary mb-4 flex h-4 items-center font-mono text-[10px] leading-4 font-semibold tracking-[0.18em] uppercase">
+                <p
+                  id={`${headingId}-${col.heading}`}
+                  className="text-secondary mb-4 flex h-4 items-center font-mono text-[10px] leading-4 font-semibold tracking-[0.18em] uppercase"
+                >
                   {col.heading}
                 </p>
-                <ul className="space-y-1">
+                <ul className="space-y-1" aria-labelledby={`${headingId}-${col.heading}`}>
                   {col.links.map((link) => (
                     <li key={link.label} className="flex">
                       {link.external ? (
@@ -156,11 +166,11 @@ export default function Footer() {
                 </ul>
               </div>
             ))}
-          </div>
+          </nav>
         </div>
 
-        <div className="mt-12 flex justify-center pb-8">
-          <p className="text-secondary text-center font-mono text-[10px] select-none">
+        <div className="border-line mt-10 flex flex-wrap items-center justify-between gap-x-6 gap-y-3 border-t py-4">
+          <p className="text-secondary font-mono text-[10px] select-none">
             &copy; Made with
             <PixelHeart />
             by{" "}
@@ -168,11 +178,16 @@ export default function Footer() {
               href="https://areeb.dev"
               target="_blank"
               rel="noopener noreferrer"
-              className="hover:text-ink no-underline transition-colors duration-150"
+              className="hover:text-ink underline underline-offset-2 transition-colors duration-150"
             >
               Areeb Ahmed
             </a>
           </p>
+
+          <div className="flex items-center gap-2">
+            <LanguagePicker />
+            <ThemeToggle />
+          </div>
         </div>
       </div>
     </footer>

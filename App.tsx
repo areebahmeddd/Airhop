@@ -1,7 +1,6 @@
 ﻿// Polyfill must be the first import. Required before any @noble/* usage.
 import "react-native-get-random-values";
 
-import { FiraCode_400Regular } from "@expo-google-fonts/fira-code";
 import {
   JetBrainsMono_400Regular,
   useFonts,
@@ -570,7 +569,7 @@ function AppContent(): React.JSX.Element {
   // the system monospace, so there is nothing to wait for and a missing/unlinked
   // font can never delay or hang launch. The mono bits switch over live once it
   // is loaded (see useThemeColors).
-  useFonts({ JetBrainsMono_400Regular, FiraCode_400Regular });
+  useFonts({ JetBrainsMono_400Regular });
   const [onboardingStep, setOnboardingStep] = useState<OnboardingStep | null>(
     null,
   );

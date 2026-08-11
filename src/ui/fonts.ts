@@ -17,7 +17,7 @@ export interface MonoFontSpec {
   // Shown in the Appearance picker.
   // Keys, not text: this is a module constant, so translated strings would
   // freeze in the language the app started in. The picker translates them on
-  // render. "Fira Code" and "JetBrains Mono" are product names and stay put.
+  // render. "JetBrains Mono" is a product name and stays put.
   labelKey: TranslationKey;
   descriptionKey: TranslationKey;
   icon: ComponentProps<typeof Feather>["name"];
@@ -30,12 +30,6 @@ export const MONO_FONTS: Record<MonoFont, MonoFontSpec> = {
     descriptionKey: "settings.font.system_desc",
     icon: "type",
   },
-  firacode: {
-    family: "FiraCode_400Regular",
-    labelKey: "settings.font.firacode",
-    descriptionKey: "settings.font.firacode_desc",
-    icon: "code",
-  },
   jetbrains: {
     family: "JetBrainsMono_400Regular",
     labelKey: "settings.font.jetbrains",
@@ -45,4 +39,4 @@ export const MONO_FONTS: Record<MonoFont, MonoFontSpec> = {
 };
 
 // The order the Appearance picker lists the fonts in.
-export const MONO_FONT_ORDER: MonoFont[] = ["system", "firacode", "jetbrains"];
+export const MONO_FONT_ORDER: MonoFont[] = ["system", "jetbrains"];

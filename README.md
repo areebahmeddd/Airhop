@@ -117,7 +117,7 @@ Airhop chooses a transport per message. Bluetooth is the only one that needs no 
 | Carries                 | Channel messages, DMs, files, ecash                                | DMs and files, when a link exists        | DMs and geohash channel messages |
 | Needs internet          | No                                                                 | No                                       | Yes                              |
 | Works iPhone to Android | Yes                                                                | No                                       | Yes                              |
-| Range                   | ~10-30 m indoors, up to ~100 m line of sight, extended by relaying | ~30 m                                    | Global                           |
+| Range                   | ~10-30 m indoors, up to ~100 m line of sight, extended by each hop | ~30 m                                    | Global                           |
 | Max hops                | 7                                                                  | 1                                        | 1                                |
 | Speed                   | ~19 KB/s to one peer, ~16 KB/s to a channel                        | ~19 KB/s (shared with Bluetooth for now) | Not used for files               |
 | Latency per hop         | 10-220 ms (randomised to avoid collisions)                         | n/a                                      | Relay round trip; more over Tor  |
@@ -127,8 +127,8 @@ Notes on the numbers:
 - Text messages (channel and DM) are tiny and effectively instant on any transport. Throughput only matters for files.
 - The **~19 KB/s** figure is 467 bytes per fragment sent one every 25 ms. The delay is required: without it the radio drops fragments and the transfer never completes.
 - A channel attachment paces at 30 ms instead (**~16 KB/s**), since each broadcast fragment requires one radio write per connected peer, increasing airtime usage as the room grows.
-- WiFi currently shares that same paced queue, so it runs at the same speed as Bluetooth for now. _Lifting the cap on the WiFi path is planned_.
-- A 1 MB file (the per-file cap) takes about 56 seconds to one peer. Attachments are capped at 1 MB for bitchat compatibility and to keep transfers short. _Increasing the cap is planned_.
+- WiFi currently shares that same paced queue, so it runs at the same speed as Bluetooth for now. [ Lifting the cap is planned ]
+- A 1 MB file (the per-file cap) takes about 56 seconds to one peer. Attachments are capped at 1 MB for bitchat compatibility and to keep transfers short. [ Increasing the cap is planned ]
 - Android WiFi Aware and iOS MultipeerConnectivity are different protocols and cannot connect to each other, so the WiFi path only works Android to Android or iPhone to iPhone.
 - Nostr relays carry small signed events, not file bytes. Files can be shared over Nostr only by uploading them to a separate HTTP host and posting a link ([NIP-96](https://github.com/nostr-protocol/nips/blob/master/96.md)). Airhop does not do this: that host is a central server that can log, throttle, or take down your files, which is exactly what this app avoids. Attachments therefore travel only over Bluetooth or WiFi.
 

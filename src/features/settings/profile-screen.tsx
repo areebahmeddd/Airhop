@@ -4,9 +4,11 @@
 // at the very bottom, outside every section.
 
 import Feather from "@expo/vector-icons/Feather";
+import * as Clipboard from "expo-clipboard";
 import * as FileSystem from "expo-file-system";
 import * as Haptics from "expo-haptics";
 import * as MediaLibrary from "expo-media-library";
+import * as Sharing from "expo-sharing";
 import React, {
   useCallback,
   useEffect,
@@ -42,10 +44,7 @@ import {
   useMeshStateStore,
   type PresenceStatus,
 } from "../../store/mesh-state-store";
-import {
-  useSettingsStore,
-  type ThemePreference,
-} from "../../store/settings-store";
+import { useSettingsStore } from "../../store/settings-store";
 import Avatar from "../../ui/components/avatar";
 import BottomSheet from "../../ui/components/bottom-sheet";
 import { MONO_FONT_ORDER, MONO_FONTS } from "../../ui/fonts";
@@ -58,8 +57,10 @@ import {
   Radius,
   Spacing,
   TAB_BAR_CLEARANCE,
+  useResolvedTheme,
   useThemeColors,
   withAlpha,
+  type ResolvedTheme,
 } from "../../ui/theme";
 import { peerInviteLink } from "../../utils/deep-link";
 import { panicWipe } from "../../utils/panic-wipe";
@@ -136,11 +137,34 @@ const STATUS_ORDER: Status[] = ["online", "away", "invisible"];
 // radius follows it rather than being a hand-halved 9.
 const STATUS_DOT_SIZE = 18;
 
+// The code and the mark in its middle.
+//
+// 220 rather than the old 200 because the card now carries a full contact card
+// at error-correction H, which is a denser grid than before; the extra points
+// keep each module comfortably above the size a camera needs. It still clears
+// the sheet's padding on the narrowest phone we support.
+//
+// The mark is capped at a fifth of the code. Past roughly 30% the occluded area
+// exceeds what even H can recover and the code stops scanning at an angle.
+const QR_SIZE = 220;
+const QR_LOGO_SIZE = 44;
+const AIRHOP_MARK = require("../../../assets/images/icon.png") as number;
+
+// Copy glyph in the peer ID box. Shared by the icon and the inset that keeps the
+// ID centred against it, so the two can never drift apart.
+const COPY_GLYPH = 15;
+
 // Keys, not text: a module constant is evaluated once at import, so translated
 // strings here would freeze in whichever language the app started in. The
 // component translates them on render. Guarded by `npm run i18n:audit`.
+//
+// There is no "System default" row. An untouched install already follows the
+// phone (see ThemePreference), so the row would only ever restate what the tick
+// is already sitting on, and asking someone to choose between "dark" and "dark
+// because your phone is" is a choice about plumbing, not about appearance.
+// Picking a side here pins it; not picking one keeps tracking the phone.
 const THEME_META: Record<
-  ThemePreference,
+  ResolvedTheme,
   {
     labelKey: TranslationKey;
     descriptionKey: TranslationKey;
@@ -157,13 +181,8 @@ const THEME_META: Record<
     descriptionKey: "settings.theme.dark_desc",
     icon: "moon",
   },
-  system: {
-    labelKey: "settings.theme.system",
-    descriptionKey: "settings.theme.system_desc",
-    icon: "smartphone",
-  },
 };
-const THEME_ORDER: ThemePreference[] = ["light", "dark", "system"];
+const THEME_ORDER: ResolvedTheme[] = ["light", "dark"];
 
 // What a phone-to-phone move will carry. Shown in the transfer sheet so the
 // scope of the feature is stated before it exists: people ask "does my wallet
@@ -246,6 +265,18 @@ export default function ProfileScreen({
   const STATUS_META = useMemo(() => getStatusMeta(Colors), [Colors]);
   const [view, setView] = useState<SettingsView>("root");
   const [showQRModal, setShowQRModal] = useState(false);
+  // Sharing your ID used to open the OS share sheet straight from the pill, so
+  // the one moment worth explaining what you are handing over had nowhere to say
+  // it. Both share actions are sheets now, and each carries the one sentence
+  // that stops it being the wrong choice.
+  const [showPeerIDModal, setShowPeerIDModal] = useState(false);
+  const [idCopied, setIdCopied] = useState(false);
+  const idCopiedTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    return () => {
+      if (idCopiedTimer.current) clearTimeout(idCopiedTimer.current);
+    };
+  }, []);
   // Presence lives in the app-level mesh-state store, not local state, so it
   // survives this screen unmounting on a tab switch and never drifts out of sync
   // with the actual mesh (which stays stopped/hidden until changed again).
@@ -254,7 +285,10 @@ export default function ProfileScreen({
   const [showWipeModal, setShowWipeModal] = useState(false);
   const [showTransferModal, setShowTransferModal] = useState(false);
   const [showThemeModal, setShowThemeModal] = useState(false);
-  const theme = useSettingsStore((s) => s.theme);
+  // The tick follows the palette on screen, not the stored preference, so an
+  // install that has never been touched still shows which of the two it is
+  // rather than nothing at all.
+  const theme = useResolvedTheme();
   const setTheme = useSettingsStore((s) => s.setTheme);
   const monoFont = useSettingsStore((s) => s.monoFont);
   const setMonoFont = useSettingsStore((s) => s.setMonoFont);
@@ -412,6 +446,17 @@ export default function ProfileScreen({
     await shareOrIgnore({ message: peerID });
   }
 
+  // The ID is the one string on this screen nobody can retype from memory, and
+  // selecting it by hand fights the sheet's pan-to-dismiss. Same tap-to-copy the
+  // contact sheet uses for a peer's ID, with the tick replacing the glyph in
+  // place rather than a dialog over a sheet.
+  function handleCopyPeerID(): void {
+    void Clipboard.setStringAsync(peerID).catch(() => {});
+    setIdCopied(true);
+    if (idCopiedTimer.current) clearTimeout(idCopiedTimer.current);
+    idCopiedTimer.current = setTimeout(() => setIdCopied(false), 1600);
+  }
+
   // The QRCode component exposes an SVG ref whose toDataURL() returns the
   // rendered code as base64 PNG data, no data URI prefix.
   const qrRef = useRef<{
@@ -431,32 +476,74 @@ export default function ProfileScreen({
       },
     );
     if (!granted) return;
-    qrRef.current?.toDataURL(async (base64) => {
+    const uri = await writeQRToCache();
+    try {
+      if (uri === null) throw new Error("qr render failed");
+      // See the note in message-thread's saveAttachmentToDevice:
+      // saveToLibraryAsync is a throwing stub in expo-media-library 57, so
+      // this branch always fell into the catch below and Download QR could
+      // never have worked.
+      await MediaLibrary.Asset.create(uri);
+      showAlert(t("settings.qr.saved"), t("settings.qr.saved_body"));
+    } catch {
+      showAlert(
+        t("settings.qr.save_failed"),
+        t("settings.qr.save_failed_body"),
+      );
+    }
+  }
+
+  // Render the code to a PNG in the cache and hand back its uri.
+  //
+  // Shared by Share and Save, because both need the same bytes and the ref's
+  // callback API is easier to reason about wrapped once than threaded through
+  // two handlers.
+  async function writeQRToCache(): Promise<string | null> {
+    const ref = qrRef.current;
+    if (ref === null) return null;
+    const base64 = await new Promise<string | null>((resolve) => {
       try {
-        const file = new FileSystem.File(
-          FileSystem.Paths.cache,
-          `airhop-qr-${peerID.slice(0, 8)}.png`,
-        );
-        if (file.exists) file.delete();
-        file.create();
-        file.write(base64, { encoding: "base64" });
-        // See the note in message-thread's saveAttachmentToDevice:
-        // saveToLibraryAsync is a throwing stub in expo-media-library 57, so
-        // this branch always fell into the catch below and Download QR could
-        // never have worked.
-        await MediaLibrary.Asset.create(file.uri);
-        showAlert(t("settings.qr.saved"), t("settings.qr.saved_body"));
+        ref.toDataURL((data) => resolve(data));
       } catch {
-        showAlert(
-          t("settings.qr.save_failed"),
-          t("settings.qr.save_failed_body"),
-        );
+        resolve(null);
       }
     });
+    if (base64 === null) return null;
+    try {
+      const file = new FileSystem.File(
+        FileSystem.Paths.cache,
+        `airhop-qr-${peerID.slice(0, 8)}.png`,
+      );
+      if (file.exists) file.delete();
+      file.create();
+      file.write(base64, { encoding: "base64" });
+      return file.uri;
+    } catch {
+      return null;
+    }
   }
 
   async function handleShareQR(): Promise<void> {
-    // A tappable deep link that opens Airhop straight into a chat with me.
+    // Share the CODE, not a link to a bare peer ID.
+    //
+    // This used to send `airhop://peer/<id>` and nothing else, which is the one
+    // artifact that cannot reach the person: an ID is a hash of the Noise key
+    // and carries no keys at all, so the recipient could only ever message back
+    // from inside Bluetooth range. The button said "Share QR" and handed over
+    // the weakest thing the app has. The image carries the whole contact card.
+    const uri = await writeQRToCache();
+    if (uri !== null && (await Sharing.isAvailableAsync())) {
+      try {
+        await Sharing.shareAsync(uri, {
+          mimeType: "image/png",
+          dialogTitle: t("settings.qr.share_message"),
+        });
+        return;
+      } catch {
+        // Fall through: a refused share sheet should still leave a way to send
+        // something, and the link below is what used to be sent anyway.
+      }
+    }
     await shareOrIgnore({
       message: `${t("settings.qr.share_body")}\n\n${peerInviteLink(peerID)}`,
       title: t("settings.qr.share_message"),
@@ -571,7 +658,7 @@ export default function ProfileScreen({
       <View style={styles.sharePills}>
         <Pressable
           style={styles.sharePill}
-          onPress={() => void handleSharePeerID()}
+          onPress={() => setShowPeerIDModal(true)}
           accessibilityRole="button"
           accessibilityLabel={T("settings.share_peer_id")}
         >
@@ -739,17 +826,33 @@ export default function ProfileScreen({
           {T("settings.qr.title")}
         </Text>
         <View style={styles.qrLarge}>
+          {/* The mark sits in the middle, which costs the code the modules it
+              covers - so the error-correction level goes up to H (30%
+              recoverable) to pay for it. Without that the logo eats real data
+              and a smudged or angled scan starts failing. */}
           <QRCode
             value={qrValue}
-            size={200}
+            size={QR_SIZE}
+            ecl="H"
             color={Colors.textPrimary}
             backgroundColor={Colors.surface}
+            logo={AIRHOP_MARK}
+            logoSize={QR_LOGO_SIZE}
+            logoBackgroundColor={Colors.surface}
+            // Half the logo's own size, which is what makes it a circle rather
+            // than a rounded square. The white ring behind it derives its radius
+            // from this one, so both round together.
+            logoBorderRadius={QR_LOGO_SIZE / 2}
+            logoMargin={4}
             getRef={(c) => {
               qrRef.current = c;
             }}
           />
         </View>
-        <Text style={styles.qrSheetPeerID}>{peerID}</Text>
+        <View style={styles.noteBox}>
+          <Feather name="alert-circle" size={14} color={Colors.textMuted} />
+          <Text style={styles.noteText}>{T("settings.qr.note")}</Text>
+        </View>
         <View style={styles.qrActions}>
           <Pressable
             style={styles.qrShareBtn}
@@ -771,6 +874,65 @@ export default function ProfileScreen({
             <Feather name="download" size={16} color={Colors.textPrimary} />
             <Text style={styles.qrDownloadText}>
               {T("settings.qr.download_short")}
+            </Text>
+          </Pressable>
+        </View>
+      </BottomSheet>
+
+      {/* Peer ID sheet. The pill used to open the OS share sheet directly, which
+          left no room to say what a bare ID can and cannot do - and it cannot do
+          the thing most people reach for it to do. */}
+      <BottomSheet
+        visible={showPeerIDModal}
+        onClose={() => setShowPeerIDModal(false)}
+        sheetStyle={shared.sheet}
+      >
+        <Text style={[shared.sheetTitle, styles.qrSheetTitle]}>
+          {T("settings.peer_id_sheet.title")}
+        </Text>
+        <Pressable
+          style={styles.idBox}
+          onPress={handleCopyPeerID}
+          accessibilityRole="button"
+          accessibilityLabel={T("settings.peer_id_sheet.copy")}
+        >
+          <Text style={styles.idBoxValue}>{peerID}</Text>
+          <Feather
+            name={idCopied ? "check" : "copy"}
+            size={COPY_GLYPH}
+            color={idCopied ? Colors.online : Colors.textMuted}
+          />
+        </Pressable>
+        <View style={styles.noteBox}>
+          <Feather name="info" size={14} color={Colors.textMuted} />
+          <Text style={styles.noteText}>
+            {T("settings.peer_id_sheet.note")}
+          </Text>
+        </View>
+        <View style={styles.qrActions}>
+          <Pressable
+            style={styles.qrShareBtn}
+            onPress={() => void handleSharePeerID()}
+            accessibilityRole="button"
+            accessibilityLabel={T("settings.share_peer_id")}
+          >
+            <Feather name="share" size={16} color={Colors.textInverse} />
+            <Text style={styles.qrShareText}>
+              {T("settings.share_id_short")}
+            </Text>
+          </Pressable>
+          <Pressable
+            style={styles.qrDownloadBtn}
+            onPress={() => {
+              setShowPeerIDModal(false);
+              setShowQRModal(true);
+            }}
+            accessibilityRole="button"
+            accessibilityLabel={T("settings.qr.show")}
+          >
+            <Feather name="grid" size={16} color={Colors.textPrimary} />
+            <Text style={styles.qrDownloadText}>
+              {T("settings.qr.show_short")}
             </Text>
           </Pressable>
         </View>
@@ -1286,19 +1448,58 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
     qrSheetTitle: {
       textAlign: "center",
     },
+    // The one sentence each share sheet needs, in the same quiet box both use so
+    // neither reads as the more serious of the two. Muted rather than amber:
+    // nothing here is a warning, it is the thing worth knowing before choosing.
+    noteBox: {
+      flexDirection: "row",
+      alignItems: "flex-start",
+      gap: Spacing.sm,
+      alignSelf: "stretch",
+      padding: Spacing.md,
+      borderRadius: Radius.md,
+      backgroundColor: Colors.surfaceRaised,
+      borderWidth: 1,
+      borderColor: Colors.border,
+    },
+    noteText: {
+      flex: 1,
+      fontSize: FontSize.xs,
+      lineHeight: FontSize.xs * 1.5,
+      color: Colors.textMuted,
+    },
+    // The ID itself, tappable to copy. Mono and roomy: it is meant to be read
+    // aloud or checked against another screen.
+    idBox: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: Spacing.sm,
+      alignSelf: "stretch",
+      minHeight: 50,
+      paddingHorizontal: Spacing.base,
+      borderRadius: Radius.md,
+      backgroundColor: Colors.surfaceRaised,
+      borderWidth: 1,
+      borderColor: Colors.border,
+    },
+    // The glyph sits at the right edge, so centering the ID inside the leftover
+    // space would push it off the box's centre. The matching left inset gives it
+    // back the width the glyph took.
+    idBoxValue: {
+      flex: 1,
+      textAlign: "center",
+      marginLeft: COPY_GLYPH + Spacing.sm,
+      fontSize: FontSize.base,
+      color: Colors.textPrimary,
+      fontFamily: FontFamily.mono,
+      letterSpacing: 1,
+    },
     qrLarge: {
       padding: Spacing.xl,
       backgroundColor: Colors.surface,
       borderRadius: Radius.lg,
       borderWidth: 1,
       borderColor: Colors.border,
-    },
-    qrSheetPeerID: {
-      fontSize: FontSize.xs,
-      color: Colors.textMuted,
-      fontFamily: FontFamily.mono,
-      letterSpacing: 0.8,
-      textAlign: "center",
     },
     // Share / Download: stacked full-width buttons, same bounded-pill
     // pattern as the panic-wipe actions. Share is the solid primary action;

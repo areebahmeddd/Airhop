@@ -39,6 +39,13 @@ export default defineConfig([
     extends: [tseslint.configs.disableTypeChecked],
   },
   {
+    files: ["public/**/*.js"],
+    languageOptions: {
+      globals: globals.browser,
+    },
+    extends: [tseslint.configs.disableTypeChecked],
+  },
+  {
     ignores: ["node_modules/", "dist/"],
   },
 ]);

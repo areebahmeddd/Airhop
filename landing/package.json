@@ -23,8 +23,8 @@
     "build": "npm run typecheck && vite build",
     "start": "vite preview",
     "check": "npm run format:check && npm run lint && npm run typecheck",
-    "format": "prettier --write \"{src/**/*.{ts,tsx,css},plugins/**/*.ts,*.{js,ts,json,md},index.html}\"",
-    "format:check": "prettier --check \"{src/**/*.{ts,tsx,css},plugins/**/*.ts,*.{js,ts,json,md},index.html}\"",
+    "format": "prettier --write \"{src/**/*.{ts,tsx,css},plugins/**/*.ts,public/**/*.js,*.{js,ts,json,md},index.html}\"",
+    "format:check": "prettier --check \"{src/**/*.{ts,tsx,css},plugins/**/*.ts,public/**/*.js,*.{js,ts,json,md},index.html}\"",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit"
   },

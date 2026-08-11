@@ -9,11 +9,15 @@ import { createJSONStorage, persist } from "zustand/middleware";
 import { MAX_CUSTOM_RELAYS, validateRelayUrl } from "../core/nostr/geo-relay";
 import type { BitcoinUnit } from "../core/payments/cashu";
 
+// "system" is the unset state, not a listed choice: until you pick a side the
+// app is whichever the phone is, and follows it when the phone changes. The
+// Appearance picker offers only light and dark, and ticks the resolved one, so
+// there is never a row that means "no, really, the other one".
 export type ThemePreference = "light" | "dark" | "system";
 export type UploadQuality = "low" | "medium" | "high";
 // The typeface for the app's monospace text (keys, IDs, geohashes, amounts):
 // the device's built-in monospace, or a bundled coding font.
-export type MonoFont = "system" | "firacode" | "jetbrains";
+export type MonoFont = "system" | "jetbrains";
 
 // expo-image-picker's `quality` option (0-1 JPEG compression factor).
 export const UPLOAD_QUALITY_VALUES: Record<UploadQuality, number> = {
@@ -264,6 +268,18 @@ export const useSettingsStore = create<SettingsState>()(
     {
       name: "settings-store",
       storage: createJSONStorage(() => mmkvStorage),
+      version: 1,
+      // v1 dropped Fira Code. A persisted "firacode" would miss the MONO_FONTS
+      // table entirely, and FontFamily.mono reads that table on every style
+      // build, so the stale value has to be retired on load rather than guarded
+      // against at each read.
+      migrate: (persisted, version) => {
+        const state = persisted as Partial<SettingsState> | undefined;
+        if (state && version < 1 && (state.monoFont as string) === "firacode") {
+          return { ...state, monoFont: "system" } as SettingsState;
+        }
+        return persisted as SettingsState;
+      },
     },
   ),
 );

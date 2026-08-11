@@ -180,11 +180,6 @@ const CATALOG: {
       "What draws the interface: fonts, icons, gestures, animation, and SVG and QR rendering.",
     packages: [
       {
-        name: "@expo-google-fonts/fira-code",
-        license: "MIT AND OFL-1.1",
-        repo: "https://github.com/expo/google-fonts",
-      },
-      {
         name: "@expo-google-fonts/jetbrains-mono",
         license: "MIT AND OFL-1.1",
         repo: "https://github.com/expo/google-fonts",

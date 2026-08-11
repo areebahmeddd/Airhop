@@ -7,7 +7,10 @@
 
 import { useMemo } from "react";
 import { useColorScheme, type ColorSchemeName } from "react-native";
-import { useSettingsStore } from "../store/settings-store";
+import {
+  useSettingsStore,
+  type ThemePreference,
+} from "../store/settings-store";
 import { MONO_FONTS } from "./fonts";
 
 export const Colors = {
@@ -336,13 +339,18 @@ export function avatarColor(seed: string): string {
   return AVATAR_PALETTE[h % AVATAR_PALETTE.length];
 }
 
+// The two palettes the app actually has. The preference can also be "system",
+// which is not a palette but the absence of a choice; everything downstream of
+// resolveTheme() deals in this pair only.
+export type ResolvedTheme = "light" | "dark";
+
 // Resolves the Appearance preference ("light" | "dark" | "system") against
 // the OS color scheme. Shared by useThemeColors() and useResolvedTheme() so
 // both always agree on which mode is active.
 function resolveTheme(
-  preference: "light" | "dark" | "system",
+  preference: ThemePreference,
   systemScheme: ColorSchemeName,
-): "light" | "dark" {
+): ResolvedTheme {
   return preference === "system"
     ? systemScheme === "dark"
       ? "dark"
@@ -375,7 +383,7 @@ export function useThemeColors(): Record<keyof typeof Colors, string> {
 // Same resolution as useThemeColors(), but returns just "light" | "dark",
 // for callers that need the mode itself (e.g. StatusBar's `style` prop)
 // rather than the palette.
-export function useResolvedTheme(): "light" | "dark" {
+export function useResolvedTheme(): ResolvedTheme {
   const preference = useSettingsStore((s) => s.theme);
   const systemScheme = useColorScheme();
   return resolveTheme(preference, systemScheme);

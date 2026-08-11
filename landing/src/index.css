@@ -5,53 +5,62 @@
 @import "tailwindcss";
 
 :root {
-  color-scheme: light;
-  --t-canvas: #ffffff;
-  --t-card: #fcfcfd;
-  --t-card-subtle: #f9f9fb;
-  --t-inner: #f0f0f3;
-  --t-hover: #e8e8ec;
-  --t-line: #d9d9e0;
-  --t-line-strong: #cdced6;
-  --t-mute: #6e7178;
-  --t-secondary: #60646c;
-  --t-ink: #1c2024;
-  --relay: #2563eb;
-  --ok: #16a34a;
-  --alert: #dc2626;
-  --grad-hi: #ffffff;
-  --grad-lo: #fafafc;
-  --dg-ink: #1c2024;
-  --dg-mute: #60646c;
-  --dg-line: #cdced6;
-  --dg-fill: #ffffff;
-  --dg-soft: #f0f0f3;
+  color-scheme: light dark;
+  --t-canvas: light-dark(#ffffff, #0c0d0e);
+  --t-card: light-dark(#fcfcfd, #17181a);
+  --t-card-subtle: light-dark(#f9f9fb, #1e2022);
+  --t-inner: light-dark(#f0f0f3, #282a2d);
+  --t-hover: light-dark(#e8e8ec, #2f3134);
+  --t-line: light-dark(#d9d9e0, #363a3f);
+  --t-line-strong: light-dark(#cdced6, #43484e);
+  --t-mute: light-dark(#6e7178, #878b94);
+  --t-secondary: light-dark(#60646c, #b0b4ba);
+  --t-ink: light-dark(#1c2024, #edeef0);
+  --relay: light-dark(#2563eb, #5b8def);
+  --ok: light-dark(#16a34a, #35c66b);
+  --alert: light-dark(#dc2626, #f0555a);
+  --sun: light-dark(#d97706, #f59e0b);
+  --moon: light-dark(#7c3aed, #a78bfa);
+  --grad-hi: light-dark(#ffffff, #1a1c1e);
+  --grad-lo: light-dark(#fafafc, #141618);
+  --dg-ink: light-dark(#1c2024, #edeef0);
+  --dg-mute: light-dark(#60646c, #b0b4ba);
+  --dg-line: light-dark(#cdced6, #43484e);
+  --dg-fill: light-dark(#ffffff, #212225);
+  --dg-soft: light-dark(#f0f0f3, #272a2d);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    color-scheme: dark;
-    --t-canvas: #0c0d0e;
-    --t-card: #17181a;
-    --t-card-subtle: #1e2022;
-    --t-inner: #282a2d;
-    --t-hover: #2f3134;
-    --t-line: #363a3f;
-    --t-line-strong: #43484e;
-    --t-mute: #878b94;
-    --t-secondary: #b0b4ba;
-    --t-ink: #edeef0;
-    --relay: #5b8def;
-    --ok: #35c66b;
-    --alert: #f0555a;
-    --grad-hi: #1a1c1e;
-    --grad-lo: #141618;
-    --dg-ink: #edeef0;
-    --dg-mute: #b0b4ba;
-    --dg-line: #43484e;
-    --dg-fill: #212225;
-    --dg-soft: #272a2d;
+:root[data-theme="light"] {
+  color-scheme: light;
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+}
+
+:root[data-theme-switching] *,
+:root[data-theme-switching] *::before,
+:root[data-theme-switching] *::after {
+  transition: none !important;
+}
+
+@keyframes themeSweep {
+  from {
+    clip-path: inset(0 0 100% 0);
   }
+  to {
+    clip-path: inset(0 0 0 0);
+  }
+}
+
+:root[data-theme-sweep]::view-transition-old(root) {
+  animation: none;
+  mix-blend-mode: normal;
+}
+
+:root[data-theme-sweep]::view-transition-new(root) {
+  animation: themeSweep 0.42s cubic-bezier(0.65, 0, 0.35, 1);
+  mix-blend-mode: normal;
 }
 
 @supports (interpolate-size: allow-keywords) {
@@ -78,6 +87,8 @@
   --color-relay: var(--relay);
   --color-ok: var(--ok);
   --color-alert: var(--alert);
+  --color-sun: var(--sun);
+  --color-moon: var(--moon);
   --color-white: var(--t-canvas);
   --color-black: var(--t-ink);
   --color-gray-50: var(--t-card-subtle);
@@ -153,6 +164,14 @@ body {
 }
 
 @layer utilities {
+  .no-scrollbar {
+    scrollbar-width: none;
+  }
+
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+
   .heart-pixel {
     fill: var(--t-ink);
     animation-duration: 7s;

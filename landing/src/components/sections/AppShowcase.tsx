@@ -1,4 +1,5 @@
 import SectionHeader from "@/components/ui/SectionHeader";
+import { useTheme } from "@/hooks/useTheme";
 import { motion, useReducedMotion } from "motion/react";
 import { useState } from "react";
 
@@ -39,6 +40,7 @@ export default function AppShowcase() {
   const [active, setActive] = useState(0);
   const [loaded, setLoaded] = useState<number[]>([0]);
   const reduceMotion = useReducedMotion();
+  const theme = useTheme();
 
   function select(index: number) {
     setActive(index);
@@ -99,24 +101,19 @@ export default function AppShowcase() {
             >
               {SCREENS.map((screen, i) =>
                 loaded.includes(i) ? (
-                  <picture key={screen.base}>
-                    <source
-                      media="(prefers-color-scheme: dark)"
-                      srcSet={`/screens/${screen.base}-dark.png`}
-                    />
-                    <img
-                      src={`/screens/${screen.base}-light.png`}
-                      alt={i === active ? screen.alt : ""}
-                      width={1290}
-                      height={2796}
-                      loading="lazy"
-                      decoding="async"
-                      aria-hidden={i === active ? undefined : true}
-                      className={`absolute inset-x-0 bottom-0 w-full transition-opacity duration-300 ease-out ${
-                        i === active ? "opacity-100" : "opacity-0"
-                      }`}
-                    />
-                  </picture>
+                  <img
+                    key={screen.base}
+                    src={`/screens/${screen.base}-${theme}.png`}
+                    alt={i === active ? screen.alt : ""}
+                    width={1290}
+                    height={2796}
+                    loading="lazy"
+                    decoding="async"
+                    aria-hidden={i === active ? undefined : true}
+                    className={`absolute inset-x-0 bottom-0 w-full transition-opacity duration-300 ease-out ${
+                      i === active ? "opacity-100" : "opacity-0"
+                    }`}
+                  />
                 ) : null,
               )}
             </div>
