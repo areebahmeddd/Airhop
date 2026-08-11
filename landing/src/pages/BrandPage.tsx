@@ -2,6 +2,7 @@ import PageHeader from "@/components/ui/PageHeader";
 import Mark from "@/components/ui/PixelBird";
 import TextLink from "@/components/ui/TextLink";
 import { useSEO } from "@/hooks/useSEO";
+import { useT } from "@/i18n";
 import { REPO_LINKS, REPO_URL, SITE_URL } from "@/lib/links";
 import { SEO } from "@/lib/seo";
 import { Check, Copy, Download } from "lucide-react";
@@ -127,15 +128,17 @@ function Panel({ title, children }: { title: string; children: React.ReactNode }
 }
 
 export default function BrandPage() {
+  const T = useT();
+
   useSEO(SEO["/brand"]);
 
   return (
     <main id="main-content">
       <div className="mx-auto max-w-3xl px-6 py-16">
         <PageHeader
-          eyebrow="Brand"
-          title="Brand Kit"
-          meta="Assets and rules for putting Airhop in an article, a store listing, a talk or a README. Free to use for reference and press."
+          eyebrow={T("page.brand.eyebrow")}
+          title={T("page.brand.title")}
+          meta={T("page.brand.meta")}
         />
 
         <div className="mt-14 space-y-12">

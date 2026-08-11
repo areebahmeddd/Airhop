@@ -1,8 +1,10 @@
 import LanguagePicker from "@/components/ui/LanguagePicker";
 import PixelBird from "@/components/ui/PixelBird";
 import ThemeToggle from "@/components/ui/ThemeToggle";
-import { REPO_LINKS, SOCIAL_LINKS, STORE_LINKS } from "@/lib/links";
-import { useId } from "react";
+import { useT, type TranslationKey } from "@/i18n";
+import { useRichText } from "@/i18n/rich-text";
+import { AUTHOR_NAME, AUTHOR_URL, REPO_LINKS, SOCIAL_LINKS, STORE_LINKS } from "@/lib/links";
+import { useId, useMemo } from "react";
 import { Link } from "react-router-dom";
 
 const HEART_PIXELS = [
@@ -36,7 +38,7 @@ function PixelHeart() {
   return (
     <svg
       viewBox="0 0 7 6"
-      className="mx-1 inline-block h-[9px] w-[10.5px] -translate-y-px align-middle"
+      className="inline-block h-[9px] w-[10.5px] -translate-y-px align-middle"
       aria-hidden="true"
     >
       <style>
@@ -61,54 +63,67 @@ function PixelHeart() {
   );
 }
 
-const NAV_COLUMNS = [
+const NAV_COLUMNS: {
+  headingKey: TranslationKey;
+  links: { labelKey: TranslationKey; href: string; external: boolean }[];
+}[] = [
   {
-    heading: "Download",
+    headingKey: "footer.group.download",
     links: [
-      { label: "App Store", href: STORE_LINKS.appStore, external: true },
-      {
-        label: "Google Play",
-        href: STORE_LINKS.playStore,
-        external: true,
-      },
-      {
-        label: "F-Droid",
-        href: STORE_LINKS.fDroid,
-        external: true,
-      },
+      { labelKey: "footer.link.app_store", href: STORE_LINKS.appStore, external: true },
+      { labelKey: "footer.link.play_store", href: STORE_LINKS.playStore, external: true },
+      { labelKey: "footer.link.f_droid", href: STORE_LINKS.fDroid, external: true },
     ],
   },
   {
-    heading: "Resources",
+    headingKey: "footer.group.resources",
     links: [
-      { label: "Architecture", href: "/architecture", external: false },
-      { label: "Blogs", href: "/blogs", external: false },
-      { label: "FAQ", href: "/faq", external: false },
+      { labelKey: "footer.link.architecture", href: "/architecture", external: false },
+      { labelKey: "footer.link.blogs", href: "/blogs", external: false },
+      { labelKey: "footer.link.faq", href: "/faq", external: false },
     ],
   },
   {
-    heading: "Social",
+    headingKey: "footer.group.social",
     links: [
-      { label: "X", href: SOCIAL_LINKS.x, external: true },
-      { label: "Instagram", href: SOCIAL_LINKS.instagram, external: true },
-      { label: "LinkedIn", href: SOCIAL_LINKS.linkedin, external: true },
+      { labelKey: "footer.link.x", href: SOCIAL_LINKS.x, external: true },
+      { labelKey: "footer.link.instagram", href: SOCIAL_LINKS.instagram, external: true },
+      { labelKey: "footer.link.linkedin", href: SOCIAL_LINKS.linkedin, external: true },
     ],
   },
   {
-    heading: "Legal",
+    headingKey: "footer.group.legal",
     links: [
-      { label: "Terms of Service", href: "/terms-of-service", external: false },
-      { label: "Privacy Policy", href: "/privacy-policy", external: false },
-      {
-        label: "Project License",
-        href: REPO_LINKS.license,
-        external: true,
-      },
+      { labelKey: "footer.link.terms", href: "/terms-of-service", external: false },
+      { labelKey: "footer.link.privacy", href: "/privacy-policy", external: false },
+      { labelKey: "footer.link.license", href: REPO_LINKS.license, external: true },
     ],
   },
 ];
 
+function Credit() {
+  const nodes = useMemo(
+    () => ({
+      heart: <PixelHeart />,
+      author: (
+        <a
+          href={AUTHOR_URL}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="hover:text-ink underline underline-offset-2 transition-colors duration-150"
+        >
+          {AUTHOR_NAME}
+        </a>
+      ),
+    }),
+    [],
+  );
+
+  return <>{useRichText("footer.credit", nodes)}</>;
+}
+
 export default function Footer() {
+  const T = useT();
   const headingId = useId();
 
   return (
@@ -119,31 +134,31 @@ export default function Footer() {
             <Link
               to="/"
               className="inline-flex items-center gap-3 select-none"
-              aria-label="Airhop home"
+              aria-label={T("nav.home")}
             >
               <PixelBird className="text-ink h-4 w-auto" />
               <span className="text-ink font-mono text-sm font-bold tracking-[0.34em]">AIRHOP</span>
             </Link>
             <p className="text-secondary max-w-xs text-sm leading-relaxed select-none">
-              Private mesh communication
+              {T("footer.tagline")}
             </p>
           </div>
 
           <nav
-            aria-label="Footer"
+            aria-label={T("footer.aria")}
             className="mt-10 grid grid-cols-2 gap-x-6 gap-y-10 sm:grid-cols-4 lg:col-span-8 lg:mt-0 lg:gap-6"
           >
             {NAV_COLUMNS.map((col) => (
-              <div key={col.heading} className="min-w-0">
+              <div key={col.headingKey} className="min-w-0">
                 <p
-                  id={`${headingId}-${col.heading}`}
+                  id={`${headingId}-${col.headingKey}`}
                   className="text-secondary mb-4 flex h-4 items-center font-mono text-[10px] leading-4 font-semibold tracking-[0.18em] uppercase"
                 >
-                  {col.heading}
+                  {T(col.headingKey)}
                 </p>
-                <ul className="space-y-1" aria-labelledby={`${headingId}-${col.heading}`}>
+                <ul className="space-y-1" aria-labelledby={`${headingId}-${col.headingKey}`}>
                   {col.links.map((link) => (
-                    <li key={link.label} className="flex">
+                    <li key={link.labelKey} className="flex">
                       {link.external ? (
                         <a
                           href={link.href}
@@ -151,14 +166,14 @@ export default function Footer() {
                           rel="noopener noreferrer"
                           className="text-secondary hover:text-ink inline-flex min-h-7 items-center text-[13px] leading-normal transition-colors duration-150"
                         >
-                          {link.label}
+                          {T(link.labelKey)}
                         </a>
                       ) : (
                         <Link
                           to={link.href}
                           className="text-secondary hover:text-ink inline-flex min-h-7 items-center text-[13px] leading-normal transition-colors duration-150"
                         >
-                          {link.label}
+                          {T(link.labelKey)}
                         </Link>
                       )}
                     </li>
@@ -171,17 +186,7 @@ export default function Footer() {
 
         <div className="border-line mt-10 flex flex-wrap items-center justify-between gap-x-6 gap-y-3 border-t py-4">
           <p className="text-secondary font-mono text-[10px] select-none">
-            &copy; Made with
-            <PixelHeart />
-            by{" "}
-            <a
-              href="https://areeb.dev"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="hover:text-ink underline underline-offset-2 transition-colors duration-150"
-            >
-              Areeb Ahmed
-            </a>
+            <Credit />
           </p>
 
           <div className="flex items-center gap-2">

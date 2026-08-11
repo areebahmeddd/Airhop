@@ -1,13 +1,7 @@
+import { useT } from "@/i18n";
 import { SITE_URL } from "@/lib/links";
+import type { PageSeo } from "@/lib/seo";
 import { useEffect } from "react";
-
-interface SEOOptions {
-  title: string;
-  description: string;
-  path: string;
-  type?: "website" | "article";
-  noIndex?: boolean;
-}
 
 function setMeta(attr: "name" | "property", key: string, content: string) {
   let el = document.head.querySelector<HTMLMetaElement>(`meta[${attr}="${key}"]`);
@@ -29,7 +23,12 @@ function setLink(rel: string, href: string) {
   el.setAttribute("href", href);
 }
 
-export function useSEO({ title, description, path, type = "website", noIndex }: SEOOptions) {
+export function useSEO(page: PageSeo) {
+  const T = useT();
+  const title = T(page.titleKey);
+  const description = T(page.descriptionKey);
+  const { path, type, noIndex } = page;
+
   useEffect(() => {
     const url = path === "/" ? SITE_URL : `${SITE_URL}${path}`;
     document.title = title;

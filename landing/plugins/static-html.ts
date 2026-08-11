@@ -1,6 +1,7 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import type { Plugin } from "vite";
+import { t } from "../src/i18n/index.ts";
 import { SITE_URL } from "../src/lib/links.ts";
 import { breadcrumbSchema, PAGES, type PageSeo } from "../src/lib/seo.ts";
 
@@ -16,8 +17,8 @@ function escapeAttr(value: string): string {
 
 function headBlock(page: PageSeo): string {
   const url = page.path === "/" ? SITE_URL : `${SITE_URL}${page.path}`;
-  const title = escapeAttr(page.title);
-  const description = escapeAttr(page.description);
+  const title = escapeAttr(t(page.titleKey));
+  const description = escapeAttr(t(page.descriptionKey));
   const crumbs = breadcrumbSchema(page);
 
   const lines = [

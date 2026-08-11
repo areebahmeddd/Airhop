@@ -1,3 +1,4 @@
+import { useT } from "@/i18n";
 import { ArrowLeft } from "lucide-react";
 import { Link } from "react-router-dom";
 
@@ -10,6 +11,8 @@ export default function PageHeader({
   title: string;
   meta?: string;
 }) {
+  const T = useT();
+
   return (
     <header className="max-w-3xl">
       <Link
@@ -20,7 +23,7 @@ export default function PageHeader({
           className="h-3.5 w-3.5 transition-transform duration-150 group-hover:-translate-x-0.5"
           aria-hidden="true"
         />
-        Back to home
+        {T("common.back_to_home")}
       </Link>
 
       <p className="text-mute mt-6 font-mono text-[11px] font-semibold tracking-[0.2em] uppercase">

@@ -1,18 +1,20 @@
 import PixelBird from "@/components/ui/PixelBird";
+import { useT, type TranslationKey } from "@/i18n";
 import { Menu, X } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 
-const NAV_ITEMS = [
-  { label: "How it works", href: "/#how-it-works" },
-  { label: "Architecture", href: "/architecture" },
-  { label: "FAQ", href: "/faq" },
+const NAV_ITEMS: { labelKey: TranslationKey; href: string }[] = [
+  { labelKey: "nav.how_it_works", href: "/#how-it-works" },
+  { labelKey: "nav.architecture", href: "/architecture" },
+  { labelKey: "nav.faq", href: "/faq" },
 ];
 
 const MENU_ID = "primary-navigation";
 
 export default function Navbar() {
+  const T = useT();
   const [isOpen, setIsOpen] = useState(false);
   const [condensed, setCondensed] = useState(false);
   const toggleRef = useRef<HTMLButtonElement>(null);
@@ -44,7 +46,7 @@ export default function Navbar() {
   return (
     <header className="sticky top-0 z-50 px-3 pt-2">
       <nav
-        aria-label="Main"
+        aria-label={T("nav.aria")}
         className={`mx-auto flex max-w-7xl items-center justify-between rounded-2xl border px-4 transition-[padding,background-color,border-color] duration-200 ease-out md:px-6 ${
           condensed
             ? "border-line bg-canvas/85 py-1.5 backdrop-blur-md"
@@ -54,7 +56,7 @@ export default function Navbar() {
         <Link
           to="/"
           className="flex min-h-11 w-fit items-center gap-3 select-none"
-          aria-label="Airhop home"
+          aria-label={T("nav.home")}
           onClick={() => setIsOpen(false)}
         >
           <PixelBird className="text-ink h-4 w-auto" />
@@ -63,8 +65,8 @@ export default function Navbar() {
 
         <div className="hidden items-center gap-1 md:flex">
           {NAV_ITEMS.map((item) => (
-            <Link key={item.label} to={item.href} className={linkClass}>
-              {item.label}
+            <Link key={item.href} to={item.href} className={linkClass}>
+              {T(item.labelKey)}
             </Link>
           ))}
         </div>
@@ -73,7 +75,7 @@ export default function Navbar() {
           ref={toggleRef}
           onClick={() => setIsOpen(!isOpen)}
           className="text-ink hover:bg-inner flex h-11 w-11 items-center justify-center justify-self-end rounded-full transition-colors duration-150 md:hidden"
-          aria-label={isOpen ? "Close menu" : "Open menu"}
+          aria-label={isOpen ? T("nav.menu.close") : T("nav.menu.open")}
           aria-expanded={isOpen}
           aria-controls={MENU_ID}
         >
@@ -93,12 +95,12 @@ export default function Navbar() {
           >
             {NAV_ITEMS.map((item) => (
               <Link
-                key={item.label}
+                key={item.href}
                 to={item.href}
                 onClick={() => setIsOpen(false)}
                 className="text-ink hover:bg-inner flex min-h-11 items-center rounded-[10px] px-3 text-[15px] font-medium transition-colors duration-150"
               >
-                {item.label}
+                {T(item.labelKey)}
               </Link>
             ))}
           </motion.div>

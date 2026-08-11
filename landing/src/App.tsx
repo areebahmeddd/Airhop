@@ -1,5 +1,6 @@
 import Footer from "@/components/layout/Footer";
 import Navbar from "@/components/layout/Navbar";
+import { useT } from "@/i18n";
 import HomePage from "@/pages/HomePage";
 import NotFoundPage from "@/pages/NotFoundPage";
 import { lazy, Suspense, useLayoutEffect, useRef } from "react";
@@ -49,6 +50,8 @@ function ScrollManager() {
 }
 
 export default function App() {
+  const T = useT();
+
   return (
     <div className="bg-canvas text-ink selection:bg-line selection:text-ink flex min-h-screen flex-col font-sans">
       <ScrollManager />
@@ -56,7 +59,7 @@ export default function App() {
         href="#main-content"
         className="focus:bg-ink focus:text-canvas sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 focus:z-[60] focus:rounded-full focus:px-4 focus:py-2 focus:text-sm focus:font-bold"
       >
-        Skip to content
+        {T("nav.skip")}
       </a>
       <Navbar />
       <div className="flex flex-1 flex-col">
