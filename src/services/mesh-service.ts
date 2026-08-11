@@ -3531,9 +3531,14 @@ export class MeshService {
   // Start (or resume) an encrypted geohash DM with a channel participant. Binds
   // their per-cell pubkey to this channel's geohash so a reply is sent from our
   // matching per-cell identity. The caller then opens dm:nostr_<pubkey>.
-  openGeoDm(channel: string, pubkey: string): void {
+  // `displayName` is the `nick#last4` the channel renders, which is the only
+  // place that name exists: a geo DM carries no nickname of its own, so without
+  // carrying it over the conversation would read as "anon#last4" everywhere.
+  openGeoDm(channel: string, pubkey: string, displayName?: string): void {
     const geohash = this.geoChannels?.geohashFor(channel);
-    if (geohash) this.geoChannels?.registerGeoDmPeer(pubkey, geohash);
+    if (geohash) {
+      this.geoChannels?.registerGeoDmPeer(pubkey, geohash, displayName);
+    }
   }
 
   // The geohash a location channel currently resolves to, or null when

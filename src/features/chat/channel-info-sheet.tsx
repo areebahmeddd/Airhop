@@ -442,7 +442,7 @@ export default function ChannelInfoSheet({
           name: p.nickname,
           teleported: p.teleported,
           onChat: () => {
-            getMeshService()?.openGeoDm(channel, p.pubkey);
+            getMeshService()?.openGeoDm(channel, p.pubkey, p.nickname);
             onNavigateToChannel?.(`dm:nostr_${p.pubkey}`);
             onClose();
           },

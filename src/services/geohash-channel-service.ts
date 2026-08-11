@@ -774,8 +774,15 @@ export class GeohashChannelService {
 
   // Bind a participant's geohash pubkey to a cell, so tapping them in a channel
   // and sending first (before they message us) still routes correctly.
-  registerGeoDmPeer(pubkey: string, geohash: string): void {
-    useChatStore.getState().setGeoDmCell(pubkey, geohash);
+  // `displayName` is the `nick#last4` the channel rendered. Optional because the
+  // inbound path has no nickname to offer: a geo DM carries none, so only the
+  // channel that introduced the two people ever knows it.
+  registerGeoDmPeer(
+    pubkey: string,
+    geohash: string,
+    displayName?: string,
+  ): void {
+    useChatStore.getState().setGeoDmCell(pubkey, geohash, displayName);
   }
 
   // Send an end-to-end encrypted DM to a participant's per-geohash pubkey, from

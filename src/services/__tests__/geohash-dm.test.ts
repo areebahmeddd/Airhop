@@ -14,6 +14,7 @@ import { unwrapDm } from "../../core/nostr/gift-wrap";
 import type { NostrClient } from "../../core/nostr/nostr-client";
 import { useChatStore } from "../../store/chat-store";
 import { useMeshStateStore } from "../../store/mesh-state-store";
+import { resolveDisplayName } from "../../utils/display-name";
 import { GeohashChannelService } from "../geohash-channel-service";
 
 jest.mock("expo-location", () => ({}));
@@ -457,5 +458,65 @@ describe("messages arriving after a merge", () => {
   it("leaves an unmerged conversation exactly where it is", () => {
     const from = `dm:nostr_${CELL_KEY}`;
     expect(useChatStore.getState().resolveChannel(from)).toBe(from);
+  });
+});
+
+// One person, one name, wherever their conversation appears.
+//
+// A geohash nickname rides the `n` tag on CHANNEL messages and nothing else - a
+// geo DM carries none - so the pubkey alone can only ever produce "anon#last4".
+// The channel showed "NeverDie#0c08" and every other surface showed
+// "anon#0c08": same person, two names, because the name was only ever on the
+// message rather than anywhere a conversation could reach.
+describe("carrying a location peer's name out of the channel", () => {
+  const GEOHASH = "u4pruy";
+  const PUBKEY = `${"ab".repeat(31)}0c08`;
+
+  beforeEach(() => {
+    useChatStore.getState().clearAll();
+  });
+
+  it("falls back to the anonymous label when nobody has supplied a name", () => {
+    expect(resolveDisplayName(`nostr_${PUBKEY}`)).toBe("anon#0c08");
+  });
+
+  it("uses the name the channel rendered once a conversation opens", () => {
+    const service = new GeohashChannelService(
+      mockClient([]),
+      ed25519.utils.randomSecretKey(),
+      "alice",
+      "aabbccdd00112233",
+    );
+    service.registerGeoDmPeer(PUBKEY, GEOHASH, "NeverDie#0c08");
+
+    expect(resolveDisplayName(`nostr_${PUBKEY}`)).toBe("NeverDie#0c08");
+  });
+
+  // The inbound path has no name to offer, so it must not erase one we already
+  // carried in from the channel.
+  it("keeps the name when a later binding arrives without one", () => {
+    const service = new GeohashChannelService(
+      mockClient([]),
+      ed25519.utils.randomSecretKey(),
+      "alice",
+      "aabbccdd00112233",
+    );
+    service.registerGeoDmPeer(PUBKEY, GEOHASH, "NeverDie#0c08");
+    service.registerGeoDmPeer(PUBKEY, GEOHASH);
+
+    expect(resolveDisplayName(`nostr_${PUBKEY}`)).toBe("NeverDie#0c08");
+  });
+
+  it("forgets the name with the conversation it belonged to", () => {
+    const service = new GeohashChannelService(
+      mockClient([]),
+      ed25519.utils.randomSecretKey(),
+      "alice",
+      "aabbccdd00112233",
+    );
+    service.registerGeoDmPeer(PUBKEY, GEOHASH, "NeverDie#0c08");
+    useChatStore.getState().removeChannel(`dm:nostr_${PUBKEY}`);
+
+    expect(resolveDisplayName(`nostr_${PUBKEY}`)).toBe("anon#0c08");
   });
 });

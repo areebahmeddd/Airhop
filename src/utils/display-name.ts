@@ -8,14 +8,22 @@
 // nickname, so the SAME peer appeared under two different names on two screens.
 //
 // Precedence, most trusted first:
-//   1. Contact nickname: the user added them deliberately (QR card).
-//   2. Announced nickname: what the peer calls themselves over the mesh.
-//   3. Generated username: deterministic from the peer ID; always available.
+//   1. Local nickname: a name the user typed for a contact they verified in
+//      person. Theirs to choose, so it outranks anything the peer asserts.
+//   2. Contact nickname: what the peer called themselves on the card that was
+//      scanned.
+//   3. Announced nickname: what the peer calls themselves over the mesh.
+//   4. Generated username: deterministic from the peer ID; always available.
+//
+// The first two both come back from `nicknameFor`, which prefers the local one.
+// `resolvePeerOwnName` below skips it, for the one place that has to show who
+// the peer says they are rather than what the user has filed them under.
 //
 // A Nostr-only correspondent (`nostr_<pubkey>`) has no peer ID to derive from,
 // so it gets a short npub-style label instead of a nonsense generated name.
 
 import { geohashDisplayName } from "../core/nostr/geohash-identity";
+import { useChatStore } from "../store/chat-store";
 import { useContactsStore } from "../store/contacts-store";
 import { usePeerStore } from "../store/peer-store";
 import {
@@ -32,7 +40,13 @@ import {
 // DM header, the DM list and the contact-info sheet. This keeps them identical
 // across all of those. The stored message senderNickname uses this exact form.
 function nostrPseudonym(peerID: string): string {
-  return geohashDisplayName(peerID.slice(NOSTR_ID_PREFIX.length));
+  const pubkey = peerID.slice(NOSTR_ID_PREFIX.length);
+  // Their geohash nickname rides the `n` tag on channel messages and nothing
+  // else - a geo DM carries none - so the pubkey alone can only ever produce
+  // "anon#last4". Recorded when the conversation opened; see geoDmNames.
+  const known = useChatStore.getState().geoDmNames[pubkey];
+  if (known !== undefined && known.length > 0) return known;
+  return geohashDisplayName(pubkey);
 }
 
 // Name shown for a sender inside a PUBLIC channel.
@@ -74,6 +88,23 @@ export function resolveDisplayName(peerID: string): string {
 
   const contactName = useContactsStore.getState().nicknameFor(peerID);
   if (contactName !== undefined) return contactName;
+
+  const announced = usePeerStore.getState().getPeer(peerID)?.nickname;
+  if (announced !== undefined && announced.length > 0) return announced;
+
+  return peerIDToUsername(peerID);
+}
+
+// The name the peer goes by, ignoring any local label the user has put on them.
+//
+// The same chain as above minus step 1, and it exists for one screen: the
+// contact sheet shows this beside the name it displays, so renaming somebody
+// never hides who they say they are. Everywhere else wants resolveDisplayName.
+export function resolvePeerOwnName(peerID: string): string {
+  if (isNostrId(peerID)) return nostrPseudonym(peerID);
+
+  const own = useContactsStore.getState().ownNicknameFor(peerID);
+  if (own !== undefined) return own;
 
   const announced = usePeerStore.getState().getPeer(peerID)?.nickname;
   if (announced !== undefined && announced.length > 0) return announced;

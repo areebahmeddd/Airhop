@@ -2781,9 +2781,50 @@ export default function MessageThread({
     });
   }
 
+  // How the sender sheet names whoever it was opened for.
+  //
+  // The sheet is opened FROM a message, so it has to say what the label above
+  // that bubble says. For a location peer that carried name is the only source
+  // there is: their nickname rides the `n` tag on channel messages, and nothing
+  // records it until a conversation with them opens - so resolving from the
+  // pubkey alone produced "anon#last4" beneath a bubble clearly labelled
+  // "NeverDie#0c08".
+  //
+  // A mesh peer still resolves normally, because there a local nickname the user
+  // chose outranks whatever name was stored with an old message.
+  const senderDisplayName =
+    senderInfoTarget === null
+      ? ""
+      : isNostrId(senderInfoTarget.peerID) &&
+          senderInfoTarget.nickname.length > 0
+        ? senderInfoTarget.nickname
+        : resolveDisplayName(senderInfoTarget.peerID);
+
   function handleMessageSender(): void {
     if (!senderInfoTarget) return;
     const { peerID, nickname } = senderInfoTarget;
+    // Bind the cell before opening the thread, exactly as the members list does.
+    //
+    // This was missing, and it is not only a lost button. The binding is what
+    // tells the send path to write from our PER-CELL identity; without it a
+    // reply falls through to our durable Nostr key, so a person we met under a
+    // pseudonym is handed our permanent identity - the very leak the per-cell
+    // scheme exists to prevent - and "Keep this person" never appears, because
+    // there is no cell for the card to travel over.
+    //
+    // Two doors into the same conversation had different behaviour: tapping
+    // someone in the members list was safe, tapping their avatar in the message
+    // list was not.
+    if (isNostrId(peerID)) {
+      // `nickname` is the `nick#last4` this very message list rendered, so the
+      // conversation carries the name the channel showed rather than falling
+      // back to "anon#last4" the moment it leaves the channel.
+      getMeshService()?.openGeoDm(
+        channel,
+        peerID.slice(NOSTR_ID_PREFIX.length),
+        nickname,
+      );
+    }
     // Messaging someone from a channel saves them as a contact, the same as
     // messaging a peer from the Mesh tab. Unverified until a QR card confirms.
     useContactsStore
@@ -5215,13 +5256,11 @@ export default function MessageThread({
               )}
               <View style={styles.dmInfoBody}>
                 <Avatar
-                  username={resolveDisplayName(senderInfoTarget.peerID)}
+                  username={senderDisplayName}
                   peerID={senderInfoTarget.peerID}
                   size={64}
                 />
-                <Text style={styles.dmInfoName}>
-                  {resolveDisplayName(senderInfoTarget.peerID)}
-                </Text>
+                <Text style={styles.dmInfoName}>{senderDisplayName}</Text>
                 {isNostrId(senderInfoTarget.peerID) ? (
                   <Pressable
                     style={styles.keyBox}
@@ -5244,6 +5283,12 @@ export default function MessageThread({
                         }
                       />
                     </View>
+                    {/* The same note the contact sheet carries. Both are places
+                        somebody decides whether to treat a pseudonym as a
+                        person they can keep, so both have to say it. */}
+                    <Text style={styles.keyBoxNote}>
+                      {T("chat.contact.cell_key_note")}
+                    </Text>
                   </Pressable>
                 ) : (
                   <Text style={styles.dmInfoPeerID}>
@@ -5267,7 +5312,7 @@ export default function MessageThread({
                   onPress={handleMessageSender}
                   accessibilityRole="button"
                   accessibilityLabel={t("chat.thread.message_peer", {
-                    name: resolveDisplayName(senderInfoTarget.peerID),
+                    name: senderDisplayName,
                   })}
                 >
                   <Feather
@@ -6232,6 +6277,14 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       color: Colors.textSecondary,
       letterSpacing: 0.3,
       lineHeight: 16,
+    },
+    // Matches the contact sheet's note under the same box, so the two places a
+    // pseudonym is inspected read identically.
+    keyBoxNote: {
+      fontSize: FontSize["2xs"],
+      lineHeight: FontSize["2xs"] * 1.5,
+      color: Colors.textMuted,
+      marginTop: Spacing.sm,
     },
     dmInfoStatus: {
       flexDirection: "row",

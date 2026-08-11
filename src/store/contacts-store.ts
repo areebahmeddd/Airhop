@@ -20,6 +20,11 @@ import { createMMKV } from "react-native-mmkv";
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 
+// Cap on a local nickname, matching the 32 bytes a contact card carries for the
+// peer's own name. A label the user types has no wire format of its own, but
+// holding the two to one length keeps the sheet's two name rows the same shape.
+const MAX_NICKNAME_LENGTH = 32;
+
 export interface Contact {
   peerID: string; // 16 hex chars
   noisePubKeyHex: string; // 32-byte X25519, hex
@@ -46,6 +51,19 @@ export interface Contact {
   // who has left Bluetooth range (or was never in it) can still fall back to a
   // gift-wrapped Nostr DM. Absent for contacts we only know by peer ID.
   nostrPubkeyHex?: string;
+  // A name only you see, kept apart from `nickname` above.
+  //
+  // `nickname` is what the peer calls themselves, and it must survive being
+  // relabelled: the contact sheet shows both, so "who they say they are" stays
+  // checkable after you have renamed them to something you recognise. Writing
+  // your label over theirs would destroy the only copy of it you hold.
+  //
+  // Never leaves the device. It is not announced, not carried in a card, and
+  // not what anyone else sees.
+  //
+  // Set only on a contact verified in person - see setLocalNickname for why
+  // that gate is a security property rather than a formality.
+  localNickname?: string;
 }
 
 interface ContactsState {
@@ -67,12 +85,24 @@ interface ContactsState {
   // as suspect, not authoritative). No-op when no contact exists for the peer,
   // so we never manufacture a contact for a stranger just because we heard them.
   setNostrPubkey: (peerID: string, nostrPubkeyHex: string) => void;
-  // Set a custom display name for a saved contact. Flows into DMs, channel
-  // messages, and notifications through resolveDisplayName / nicknameFor.
-  renameContact: (peerID: string, nickname: string) => void;
+  // Give a verified contact a name only you see. An empty string clears it and
+  // hands the peer their own name back.
+  //
+  // Refused for anyone not verified in person, and that is the point rather
+  // than a formality. A local name is what you will recognise them by from then
+  // on - it replaces the generated username in the DM list, in the radar, in
+  // channel messages and in notifications. If any stranger could be relabelled,
+  // somebody who announced a familiar-looking nickname could be filed under
+  // "Mum" and the label would be doing the identifying from that moment on.
+  // Requiring a scanned card means the name is anchored to a fingerprint the
+  // user checked while standing in front of the person.
+  setLocalNickname: (peerID: string, nickname: string) => void;
   getContact: (peerID: string) => Contact | undefined;
   // Display name for a peer ID, or undefined to fall back to a generated one.
   nicknameFor: (peerID: string) => string | undefined;
+  // The peer's own name, ignoring any local label. Undefined when they have
+  // never announced one.
+  ownNicknameFor: (peerID: string) => string | undefined;
   all: () => Contact[];
   clearAll: () => void;
 }
@@ -146,14 +176,21 @@ export const useContactsStore = create<ContactsState>()(
         });
       },
 
-      renameContact(peerID, nickname) {
+      setLocalNickname(peerID, nickname) {
         set((state) => {
           const existing = state.contacts[peerID];
           if (!existing) return state;
+          // The gate lives here rather than in the sheet, so the rule holds
+          // however the store is reached. See the interface for why.
+          if (existing.source !== "qr") return state;
+          const trimmed = nickname.trim().slice(0, MAX_NICKNAME_LENGTH);
           return {
             contacts: {
               ...state.contacts,
-              [peerID]: { ...existing, nickname },
+              [peerID]: {
+                ...existing,
+                localNickname: trimmed.length > 0 ? trimmed : undefined,
+              },
             },
           };
         });
@@ -163,7 +200,19 @@ export const useContactsStore = create<ContactsState>()(
         return get().contacts[peerID];
       },
 
+      // Your own label wins over theirs. Everything downstream reads names
+      // through here, so one line puts a local nickname on the DM list, the
+      // radar, channel messages and notifications at once.
       nicknameFor(peerID) {
+        const contact = get().contacts[peerID];
+        const name = contact?.localNickname ?? contact?.nickname;
+        return name !== undefined && name.length > 0 ? name : undefined;
+      },
+
+      // What the peer calls themselves, ignoring any label you have put on
+      // them. The contact sheet shows this beside your name for them, so the
+      // identity you verified stays checkable after renaming.
+      ownNicknameFor(peerID) {
         const nickname = get().contacts[peerID]?.nickname;
         return nickname !== undefined && nickname.length > 0
           ? nickname

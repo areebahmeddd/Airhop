@@ -9,7 +9,7 @@
 import { Feather } from "@expo/vector-icons";
 import * as Clipboard from "expo-clipboard";
 import React, { useMemo, useState } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { useT } from "../../i18n";
 import { getMeshService } from "../../services/mesh-service";
 import { useChatStore } from "../../store/chat-store";
@@ -23,11 +23,16 @@ import {
   FontSize,
   FontWeight,
   HIT_SLOP,
+  hitSlopFor,
+  MIN_TOUCH,
   Radius,
   Spacing,
   useThemeColors,
 } from "../../ui/theme";
-import { resolveDisplayName } from "../../utils/display-name";
+import {
+  resolveDisplayName,
+  resolvePeerOwnName,
+} from "../../utils/display-name";
 import { formatLongDate } from "../../utils/format";
 import {
   isNostrId,
@@ -92,6 +97,49 @@ export default function ContactInfoSheet({
   // lasting identity to verify, so the sheet says "Anonymous" rather than the
   // "Not verified · scan their QR" line that a mesh peer gets.
   const isAnonymous = peerID !== null && isNostrId(peerID);
+
+  // What they call themselves, which the sheet keeps showing after a rename so
+  // the identity that was verified never disappears behind a label.
+  const ownName = peerID ? resolvePeerOwnName(peerID) : "";
+  // The pencil is offered to any mesh peer, verified or not, and says why when
+  // it cannot be used.
+  //
+  // Hiding it from unverified contacts made the feature invisible to exactly
+  // the people who would want it: you cannot discover that renaming exists, or
+  // that verifying is what unlocks it, from a control that is not there. Shown
+  // and explained, the same tap teaches both - and the Verify button that fixes
+  // it is already on screen underneath.
+  //
+  // Offered on a location-channel pseudonym too, where it cannot be used either
+  // - a per-cell name changes when someone moves, so a label pinned to it would
+  // outlive the thing it names. But hiding it there left the sheet with no
+  // answer to "can I call them something else", and the answer is a real path
+  // rather than a no: keep them, verify them when you meet, then rename. The
+  // note below names whichever step comes next.
+  const canRename = peerID !== null;
+  // Held as "which peer is this about" rather than a bare boolean, and derived
+  // back below.
+  //
+  // This sheet is mounted once and reused for everyone, so plain flags leaked
+  // between people: opening an unverified contact showed the blocked note before
+  // anything was tapped, and - the one that mattered - a half-typed name for one
+  // person was still in the field when the sheet reopened on another, one tap
+  // away from being saved to the wrong contact. Comparing against the peer makes
+  // that impossible rather than merely unlikely.
+  const [editingFor, setEditingFor] = useState<string | null>(null);
+  const [blockedFor, setBlockedFor] = useState<string | null>(null);
+  const [draftName, setDraftName] = useState("");
+  const editingName = peerID !== null && editingFor === peerID;
+  const renameBlocked = peerID !== null && blockedFor === peerID;
+
+  function commitRename(): void {
+    if (peerID !== null) {
+      // An empty field clears the label and hands them their own name back,
+      // which is the only "undo" this needs.
+      useContactsStore.getState().setLocalNickname(peerID, draftName);
+    }
+    setEditingFor(null);
+  }
 
   // Whether we can offer to hand this person our durable contact card.
   //
@@ -216,6 +264,28 @@ export default function ContactInfoSheet({
       >
         {peerID && (
           <>
+            {/* Rename, for a contact verified in person only. Same corner slot
+                the channel sheet uses for its bookmark, so the sheets share one
+                place for "the action about this thing itself". */}
+            {canRename && !editingName && (
+              <Pressable
+                style={styles.cornerBtn}
+                onPress={() => {
+                  if (!verified) {
+                    setBlockedFor(peerID);
+                    return;
+                  }
+                  setBlockedFor(null);
+                  setDraftName(contact?.localNickname ?? "");
+                  setEditingFor(peerID);
+                }}
+                hitSlop={hitSlopFor(28)}
+                accessibilityRole="button"
+                accessibilityLabel={T("chat.contact.rename")}
+              >
+                <Feather name="edit-2" size={17} color={Colors.textMuted} />
+              </Pressable>
+            )}
             <View style={styles.body}>
               <Avatar
                 username={name}
@@ -224,7 +294,52 @@ export default function ContactInfoSheet({
                 presence={isOnline ? "online" : "offline"}
                 ringColor={Colors.surface}
               />
-              <Text style={styles.name}>{name}</Text>
+              {editingName ? (
+                <View style={styles.renameRow}>
+                  <TextInput
+                    style={styles.renameInput}
+                    value={draftName}
+                    onChangeText={setDraftName}
+                    placeholder={ownName}
+                    placeholderTextColor={Colors.textMuted}
+                    maxLength={32}
+                    autoFocus
+                    selectionColor={Colors.selection}
+                    onSubmitEditing={commitRename}
+                    returnKeyType="done"
+                    accessibilityLabel={T("chat.contact.rename")}
+                  />
+                  <Pressable
+                    onPress={commitRename}
+                    hitSlop={hitSlopFor(28)}
+                    accessibilityRole="button"
+                    accessibilityLabel={T("common.done")}
+                  >
+                    <Feather name="check" size={18} color={Colors.accent} />
+                  </Pressable>
+                </View>
+              ) : (
+                <Text style={styles.name}>{name}</Text>
+              )}
+              {/* Only when the two differ, so an unrenamed contact is not told
+                  their name twice. Blank is the clear action. */}
+              {!editingName && contact?.localNickname !== undefined && (
+                <Text style={styles.renameHint}>
+                  {T("chat.contact.renamed_by_you")}
+                </Text>
+              )}
+              {/* The reason, on the tap that asked for it. Verify sits a few
+                  rows below, so the explanation and the fix are on one screen. */}
+              {renameBlocked && !verified && (
+                <Text style={styles.renameBlockedNote}>
+                  {/* A pseudonym cannot be verified at all, so pointing at the
+                      scanner there would be a dead end. Name the step that
+                      actually comes first. */}
+                  {isAnonymous
+                    ? T("chat.contact.rename_needs_contact")
+                    : T("chat.contact.rename_needs_verify")}
+                </Text>
+              )}
               {/* A Nostr peer has no short mesh ID — its identifier IS a
                       64-hex public key. Box and label it so it reads as a
                       deliberate credential, not a stray string. */}
@@ -246,22 +361,48 @@ export default function ContactInfoSheet({
                       color={copied ? Colors.online : Colors.textMuted}
                     />
                   </View>
+                  {/* Why this key is not a lasting handle. Said here, under the
+                      key itself, because that is where somebody decides whether
+                      to treat it as a contact. */}
+                  <Text style={styles.keyBoxNote}>
+                    {T("chat.contact.cell_key_note")}
+                  </Text>
                 </Pressable>
               ) : (
-                <Pressable
-                  style={styles.peerIDRow}
-                  onPress={handleCopyID}
-                  hitSlop={HIT_SLOP}
-                  accessibilityRole="button"
-                  accessibilityLabel={T("chat.contact.copy_peer_id")}
-                >
-                  <Text style={styles.peerID}>{peerID}</Text>
-                  <Feather
-                    name={copied ? "check" : "copy"}
-                    size={13}
-                    color={copied ? Colors.online : Colors.textMuted}
-                  />
-                </Pressable>
+                /* Who they are, in the two forms that matter: the name they
+                   go by, and the ID that is actually bound to their keys. Both
+                   stay visible after a rename, so a label the user chose can
+                   never hide the identity they verified. */
+                <View style={styles.identityBox}>
+                  <View style={styles.identityRow}>
+                    <Text style={styles.identityLabel}>
+                      {T("chat.contact.peer_name")}
+                    </Text>
+                    <Text style={styles.identityValue} numberOfLines={1}>
+                      {ownName}
+                    </Text>
+                  </View>
+                  <View style={styles.infoDivider} />
+                  <Pressable
+                    style={styles.identityRow}
+                    onPress={handleCopyID}
+                    hitSlop={HIT_SLOP}
+                    accessibilityRole="button"
+                    accessibilityLabel={T("chat.contact.copy_peer_id")}
+                  >
+                    <Text style={styles.identityLabel}>
+                      {T("chat.contact.peer_id")}
+                    </Text>
+                    <Text style={styles.identityMono} numberOfLines={1}>
+                      {peerID}
+                    </Text>
+                    <Feather
+                      name={copied ? "check" : "copy"}
+                      size={13}
+                      color={copied ? Colors.online : Colors.textMuted}
+                    />
+                  </Pressable>
+                </View>
               )}
 
               <View style={styles.infoCard}>
@@ -387,6 +528,88 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       flexDirection: "row",
       alignItems: "center",
       gap: Spacing.xs,
+    },
+    // Top-right corner, matching the channel sheet's bookmark: one slot per
+    // sheet for the action about the thing itself.
+    cornerBtn: {
+      position: "absolute",
+      top: Spacing.base,
+      end: Spacing.base,
+      zIndex: 1,
+      padding: Spacing.xs,
+    },
+    renameRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: Spacing.sm,
+      alignSelf: "stretch",
+      marginTop: Spacing.sm,
+    },
+    renameInput: {
+      flex: 1,
+      minHeight: MIN_TOUCH,
+      paddingHorizontal: Spacing.md,
+      borderRadius: Radius.md,
+      backgroundColor: Colors.surfaceRaised,
+      borderWidth: 1,
+      borderColor: Colors.borderStrong,
+      fontSize: FontSize.md,
+      color: Colors.textPrimary,
+      textAlign: "center",
+    },
+    renameBlockedNote: {
+      fontSize: FontSize.xs,
+      lineHeight: FontSize.xs * 1.5,
+      color: Colors.textMuted,
+      textAlign: "center",
+      paddingHorizontal: Spacing.md,
+    },
+    renameHint: {
+      fontSize: FontSize["2xs"],
+      color: Colors.textMuted,
+      letterSpacing: 0.4,
+      textTransform: "uppercase",
+    },
+    // Name and ID together, so a label the user chose can never hide the
+    // identity underneath it.
+    identityBox: {
+      alignSelf: "stretch",
+      backgroundColor: Colors.surfaceRaised,
+      borderRadius: Radius.md,
+      borderWidth: 1,
+      borderColor: Colors.border,
+      marginTop: Spacing.xs,
+    },
+    identityRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: Spacing.sm,
+      paddingHorizontal: Spacing.md,
+      paddingVertical: Spacing.sm + 2,
+    },
+    identityLabel: {
+      fontSize: FontSize.xs,
+      color: Colors.textMuted,
+    },
+    identityValue: {
+      flex: 1,
+      textAlign: "right",
+      fontSize: FontSize.sm,
+      color: Colors.textPrimary,
+    },
+    identityMono: {
+      flex: 1,
+      textAlign: "right",
+      fontSize: FontSize.xs,
+      color: Colors.textSecondary,
+      fontFamily: FontFamily.mono,
+      letterSpacing: 0.6,
+    },
+    keyBoxNote: {
+      fontSize: FontSize["2xs"],
+      lineHeight: FontSize["2xs"] * 1.5,
+      color: Colors.textMuted,
+      marginTop: Spacing.sm,
     },
     peerID: {
       fontSize: FontSize.xs,

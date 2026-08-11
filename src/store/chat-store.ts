@@ -136,6 +136,19 @@ interface ChatState {
   // peer ID we do not know yet, and replying to them from that identity is
   // correct.
   geoDmCells: Record<string, string>;
+  // The name a location-channel peer goes by, keyed by their per-cell pubkey.
+  //
+  // A geohash nickname rides the `n` tag on their CHANNEL messages, so it is
+  // known where they are talking and nowhere else: a geo DM carries no nickname
+  // at all. Without this the same person read as "NeverDie#0c08" in the channel
+  // and "anon#0c08" everywhere their conversation appeared - the DM list, the
+  // thread header, the contact sheet - because those all resolve from the pubkey
+  // alone and the pubkey does not know it.
+  //
+  // Recorded when a conversation with them opens, which is both the moment the
+  // name is in hand and the only reason to keep it. Bounded by conversations
+  // rather than by everyone ever seen in a cell.
+  geoDmNames: Record<string, string>;
   // How far a contact-card exchange has got in a location DM, keyed by their
   // per-cell pubkey.
   //
@@ -188,7 +201,9 @@ interface ChatState {
   mergeChannel: (from: string, to: string) => void;
   // Remember which cell a geohash DM belongs to. A no-op when unchanged, so the
   // inbound path can call it per message without rewriting the store.
-  setGeoDmCell: (pubkey: string, geohash: string) => void;
+  // `displayName` is the already-formatted `nick#last4`, exactly as the channel
+  // renders it, so the two surfaces can never disagree about spelling.
+  setGeoDmCell: (pubkey: string, geohash: string, displayName?: string) => void;
   // Record a half of the card exchange. `theirPeerID` is who they turned out to
   // be; `sentMine` is that we have told them who we are.
   noteGeoCardExchange: (
@@ -392,6 +407,7 @@ export const useChatStore = create<ChatState>()(
       channelReach: {},
       channelRedirects: {},
       geoDmCells: {},
+      geoDmNames: {},
       geoCardExchange: {},
 
       addChannel(channel: string) {
@@ -572,9 +588,11 @@ export const useChatStore = create<ChatState>()(
           // the conversation it belongs to is exactly the kind of location
           // breadcrumb the per-cell identities exist to avoid.
           const geoDmCells = { ...state.geoDmCells };
+          const geoDmNames = { ...state.geoDmNames };
           const geoCardExchange = { ...state.geoCardExchange };
           const geoKey = channel.replace(/^dm:nostr_/, "");
           delete geoDmCells[geoKey];
+          delete geoDmNames[geoKey];
           delete geoCardExchange[geoKey];
           // Clear activeChannel rather than reassigning it to some arbitrary
           // surviving channel. The old behaviour picked the first non-DM
@@ -594,6 +612,7 @@ export const useChatStore = create<ChatState>()(
             channelKeys,
             channelReach,
             geoDmCells,
+            geoDmNames,
             geoCardExchange,
             activeChannel,
           };
@@ -727,21 +746,32 @@ export const useChatStore = create<ChatState>()(
         set((state) => {
           const geoCardExchange = { ...state.geoCardExchange };
           delete geoCardExchange[pubkey];
-          // The cell goes with it: once the conversation is durable, where we
-          // happened to meet is a location breadcrumb with nothing left to do.
+          // The cell and the pseudonym's name go with it: once the conversation
+          // is durable it resolves through their contact, so both are just a
+          // record of where we met and what they called themselves there.
           const geoDmCells = { ...state.geoDmCells };
+          const geoDmNames = { ...state.geoDmNames };
           delete geoDmCells[pubkey];
-          return { geoCardExchange, geoDmCells };
+          delete geoDmNames[pubkey];
+          return { geoCardExchange, geoDmCells, geoDmNames };
         });
       },
 
-      setGeoDmCell(pubkey: string, geohash: string) {
+      setGeoDmCell(pubkey: string, geohash: string, displayName?: string) {
         // Guarded, because the inbound geo-DM path calls this on every message
-        // and the store's writes reach disk. Only a genuinely new binding is
-        // worth a write.
-        if (get().geoDmCells[pubkey] === geohash) return;
-        set((state) => ({
-          geoDmCells: { ...state.geoDmCells, [pubkey]: geohash },
+        // and the store's writes reach disk. Only a genuinely new binding, or a
+        // name we did not have, is worth one.
+        const state = get();
+        const cellUnchanged = state.geoDmCells[pubkey] === geohash;
+        const named = displayName !== undefined && displayName.length > 0;
+        const nameUnchanged =
+          !named || state.geoDmNames[pubkey] === displayName;
+        if (cellUnchanged && nameUnchanged) return;
+        set((s) => ({
+          geoDmCells: { ...s.geoDmCells, [pubkey]: geohash },
+          geoDmNames: named
+            ? { ...s.geoDmNames, [pubkey]: displayName }
+            : s.geoDmNames,
         }));
       },
 
@@ -855,6 +885,7 @@ export const useChatStore = create<ChatState>()(
           channelReach: {},
           channelRedirects: {},
           geoDmCells: {},
+          geoDmNames: {},
           geoCardExchange: {},
         });
       },
@@ -882,6 +913,7 @@ export const useChatStore = create<ChatState>()(
         // turns a reply to a location-channel DM into a message from our
         // durable identity.
         geoDmCells: state.geoDmCells,
+        geoDmNames: state.geoDmNames,
         // Persisted alongside it: a half-finished exchange has to survive a
         // relaunch, or tapping Keep and reopening the app would offer it again
         // and merge nothing.

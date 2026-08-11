@@ -61,11 +61,6 @@ const UNDO_OPTIONS: {
     descriptionKey: "settings.general.undo_2_desc",
   },
   {
-    value: 5,
-    labelKey: "settings.general.undo_5",
-    descriptionKey: "settings.general.undo_5_desc",
-  },
-  {
     value: 10,
     labelKey: "settings.general.undo_10",
     descriptionKey: "settings.general.undo_10_desc",

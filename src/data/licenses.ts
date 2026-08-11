@@ -62,7 +62,7 @@ const CATALOG: {
   {
     category: "Core",
     description:
-      "The framework the app is built on: React and React Native, run and packaged by Expo.",
+      "What the app is built on: React and React Native, packaged by Expo.",
     packages: [
       { name: "expo", license: "MIT", repo: "https://github.com/expo/expo" },
       {
@@ -80,7 +80,7 @@ const CATALOG: {
   {
     category: "Device features",
     description:
-      "Access to device hardware and system features like the camera, microphone, location, notifications, clipboard, and files.",
+      "The parts of the phone the app asks for: camera, microphone, location, files, notifications.",
     packages: [
       {
         name: "expo-audio",
@@ -177,7 +177,7 @@ const CATALOG: {
   {
     category: "UI & rendering",
     description:
-      "What draws the interface: fonts, icons, gestures, animation, and SVG and QR rendering.",
+      "What draws the screen: fonts, icons, assets, gestures, animation, SVG and QR codes.",
     packages: [
       {
         name: "@expo-google-fonts/jetbrains-mono",
@@ -188,6 +188,11 @@ const CATALOG: {
         name: "@expo/vector-icons",
         license: "MIT",
         repo: "https://github.com/expo/vector-icons",
+      },
+      {
+        name: "expo-asset",
+        license: "MIT",
+        repo: "https://github.com/expo/expo",
       },
       {
         name: "expo-font",
@@ -219,12 +224,17 @@ const CATALOG: {
         license: "MIT",
         repo: "https://github.com/software-mansion/react-native-svg",
       },
+      {
+        name: "react-native-worklets",
+        license: "MIT",
+        repo: "https://github.com/software-mansion/react-native-reanimated/tree/main/packages/react-native-worklets",
+      },
     ],
   },
   {
     category: "Cryptography & protocol",
     description:
-      "The building blocks for encryption and messaging: key exchange, ciphers, hashing, seed phrases, wire compression, ecash tokens, and Nostr support.",
+      "The foundations of encryption and messaging: key exchange, ciphers, hashing, seed phrases, compression, ecash, Nostr.",
     packages: [
       {
         name: "@cashu/cashu-ts",
@@ -266,7 +276,7 @@ const CATALOG: {
   {
     category: "Storage & state",
     description:
-      "Storing data and managing state: secure and fast local storage, secure randomness, native modules, and in-memory state.",
+      "Where data is kept: local storage, secure randomness, native modules, in-memory state.",
     packages: [
       {
         name: "expo-secure-store",
@@ -300,7 +310,7 @@ const CATALOG: {
   {
     category: "Binaries & frameworks",
     description:
-      "Prebuilt native code committed to this repo and shipped in the app, not installed from npm.",
+      "Native code committed to this repo and shipped in the app, not installed from npm.",
     packages: [
       {
         // ios/Frameworks/arti.xcframework. iOS only: on Android, Tor goes

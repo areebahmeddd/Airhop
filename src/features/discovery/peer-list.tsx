@@ -45,7 +45,10 @@ import {
   TAB_BAR_CLEARANCE,
   useThemeColors,
 } from "../../ui/theme";
-import { resolveDisplayName } from "../../utils/display-name";
+import {
+  resolveDisplayName,
+  resolvePeerOwnName,
+} from "../../utils/display-name";
 import QrScanScreen from "../contacts/qr-scan-screen";
 import RadarView from "./radar-view";
 
@@ -323,6 +326,17 @@ export default function PeerList({
               <Text style={styles.sheetUsername}>
                 {resolveDisplayName(selectedPeer.peerID)}
               </Text>
+              {/* Only when the title is a name the user chose. Unrenamed, the
+                  title already IS what they call themselves, and repeating it
+                  underneath would be the same word twice. */}
+              {resolveDisplayName(selectedPeer.peerID) !==
+                resolvePeerOwnName(selectedPeer.peerID) && (
+                <Text style={styles.sheetOwnName}>
+                  {t("mesh.peer.their_name", {
+                    name: resolvePeerOwnName(selectedPeer.peerID),
+                  })}
+                </Text>
+              )}
               {/* Same copy affordance as the contact sheet: one tap, and the
                   glyph turns into a check in place. Hand-selecting the ID
                   would fight this sheet's pan-to-dismiss gesture. */}
@@ -557,6 +571,12 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       fontSize: FontSize.lg,
       fontWeight: FontWeight.bold,
       color: Colors.textPrimary,
+    },
+    // Their own name, under a title the user renamed. Quiet: it is a reference,
+    // not the label anyone is meant to read them by from now on.
+    sheetOwnName: {
+      fontSize: FontSize.xs,
+      color: Colors.textMuted,
     },
     // Peer ID + its copy glyph, kept on one centered line.
     sheetPeerIDRow: {

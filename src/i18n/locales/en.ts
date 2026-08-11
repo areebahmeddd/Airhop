@@ -803,6 +803,24 @@ export const strings = {
     "Noise XX, plus Double Ratchet between Airhop devices",
   "chat.contact.copy_nostr": "Copy Nostr public key",
   "chat.contact.nostr_key": "Nostr public key",
+  // Under the key itself, where somebody decides whether to treat this person as
+  // a contact. Says what changes and what to do, without naming cells or keys.
+  "chat.contact.cell_key_note":
+    "This key belongs to the area you met in. It changes if either of you moves, and the conversation stops with it. Swap contacts to keep talking anywhere.",
+  "chat.contact.peer_name": "Peer name",
+  "chat.contact.peer_id": "Peer ID",
+  "chat.contact.rename": "Rename",
+  // Shown when the pencil is tapped on someone not yet verified. Names the
+  // reason and the fix, both of which are one screen away.
+  // The same rule reached from a location-channel pseudonym, where verifying is
+  // not yet possible. Names the step that comes first rather than the one that
+  // would send them to a scanner with nothing to scan.
+  "chat.contact.rename_needs_contact":
+    "You can rename people you have verified in person. Keep this person first, then verify them when you meet.",
+  "chat.contact.rename_needs_verify":
+    "You can rename people you have verified in person. Scan their code to verify them first.",
+  // Shown under a name the user chose, so it never reads as the peer's own.
+  "chat.contact.renamed_by_you": "Your name for them",
   "chat.contact.copy_peer_id": "Copy peer ID",
   "chat.contact.verify": "Verify contact",
 
@@ -989,6 +1007,8 @@ export const strings = {
     "Other Airhop or bitchat devices within Bluetooth range appear here.",
   "mesh.peer.id_copied": "Peer ID copied",
   "mesh.peer.copy_id": "Copy peer ID",
+  // Under a title the user renamed, so their own name stays visible.
+  "mesh.peer.their_name": "Goes by {name}",
   "mesh.peer.in_range": "In range",
   "mesh.peer.send_dm": "Send a direct message",
   "mesh.peer.message": "Message",
@@ -1712,8 +1732,6 @@ export const strings = {
   "settings.general.undo_off_desc": "Send right away, no undo",
   "settings.general.undo_2": "2 seconds",
   "settings.general.undo_2_desc": "A quick chance to take it back",
-  "settings.general.undo_5": "5 seconds",
-  "settings.general.undo_5_desc": "A longer window",
   "settings.general.undo_10": "10 seconds",
   "settings.general.undo_10_desc": "The longest window",
   "settings.general.quality": "Upload quality",
