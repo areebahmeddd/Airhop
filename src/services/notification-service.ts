@@ -199,6 +199,10 @@ function routeFromResponse(response: Notifications.NotificationResponse): void {
 export async function handleInboundMessage(
   msg: ChatMessage,
   totalUnread: number,
+  // Whether this message names the local user. Decided by the caller, which is
+  // the only place that knows our own nickname; this file stays a pure renderer
+  // of whatever it is handed.
+  mentionsMe = false,
 ): Promise<void> {
   if (
     shouldHapticPing({
@@ -228,6 +232,7 @@ export async function handleInboundMessage(
     msg,
     channelLabel(msg.channel),
     useSettingsStore.getState().hideNotificationPreviews,
+    mentionsMe,
   );
   try {
     await Notifications.scheduleNotificationAsync({

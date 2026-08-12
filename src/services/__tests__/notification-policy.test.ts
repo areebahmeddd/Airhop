@@ -259,3 +259,44 @@ describe("nearbyNotificationContent", () => {
     );
   });
 });
+
+// A mention is the only thing allowed past a muted conversation, so it has to
+// be findable on a lock screen holding a dozen identical room notifications.
+describe("notificationContentFor a mention", () => {
+  it("names the sender rather than the room", () => {
+    expect(
+      notificationContentFor(
+        msg({ channel: "#city", text: "@bob look at this" }),
+        "#city",
+        false,
+        true,
+      ),
+    ).toEqual({ title: "alice mentioned you", body: "@bob look at this" });
+  });
+
+  it("still says it was a mention when previews are hidden", () => {
+    const content = notificationContentFor(
+      msg({ channel: "#city", text: "@bob secret plan" }),
+      "#city",
+      true,
+      true,
+    );
+    expect(content.body).toBe("You were mentioned");
+    // Neither the sender, the room, nor the text may reach the lock screen.
+    expect(`${content.title} ${content.body}`).not.toContain("alice");
+    expect(`${content.title} ${content.body}`).not.toContain("#city");
+    expect(`${content.title} ${content.body}`).not.toContain("secret");
+  });
+
+  it("leaves an ordinary channel message alone", () => {
+    expect(
+      notificationContentFor(msg({ channel: "#city", text: "hi" }), "#city"),
+    ).toEqual({ title: "#city", body: "alice: hi" });
+  });
+
+  it("does not apply to a DM, which already names the sender", () => {
+    expect(
+      notificationContentFor(msg({ text: "@bob hey" }), undefined, false, true),
+    ).toEqual({ title: "alice", body: "@bob hey" });
+  });
+});

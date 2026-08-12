@@ -208,6 +208,11 @@ const PERMISSION_CHECK_TIMEOUT_MS = 3_000;
 // not a limit on how long someone may take.
 const PRIMER_TIMEOUT_MS = 120_000;
 
+// How old a "sending" message must be before a launch treats it as stranded.
+// Far past the longest Undo Send window, so it can only reach messages a dead
+// process left behind.
+const STALE_SEND_MS = 60_000;
+
 // Request the BLE runtime permissions the OS requires, THEN start the mesh.
 // Without the grant, native startScanning/startAdvertising throw and are
 // swallowed: a silent, total discovery failure. On denial we surface a
@@ -821,6 +826,15 @@ function AppContent(): React.JSX.Element {
     }
   }, []);
 
+  // Settle messages the last process left mid-send, once per launch.
+  //
+  // Same shape as the sweep above, and here for the same reason: nothing else
+  // owns them. See failStaleSending for why they are failed rather than
+  // re-sent.
+  useEffect(() => {
+    useChatStore.getState().failStaleSending(STALE_SEND_MS);
+  }, []);
+
   // Claim an audible audio session once. Otherwise it is the OS default, which
   // on iOS is a category the ring/silent switch mutes, so a voice note played
   // before anything has been recorded is silent. Recording borrows the session
@@ -997,6 +1011,7 @@ function AppContent(): React.JSX.Element {
         void handleInboundMessage(
           msg,
           sumUnread(chat.unreadCounts, chat.mutedChannels),
+          mentionsMe,
         );
         // Bell history logs real notifications only: skip the conversation you
         // are actively reading (that is not a notification), same activeChannel

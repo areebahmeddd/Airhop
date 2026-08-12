@@ -17,8 +17,11 @@
 // persisted preference never drift apart.
 
 import { useWebSocketImplementation } from "nostr-tools/pool";
+import type { EventSubscription } from "react-native";
 import { Platform } from "react-native";
-import NativeAirhopBLE from "../../bridge/NativeAirhopBLE";
+import NativeAirhopBLE, {
+  subscribeVpnLost,
+} from "../../bridge/NativeAirhopBLE";
 import NativeAirhopTor, {
   subscribeTorStatus,
 } from "../../bridge/NativeAirhopTor";
@@ -102,11 +105,38 @@ export function isTorRoutingActive(): boolean {
   return torActive;
 }
 
+let vpnLostSub: EventSubscription | null = null;
+
 // Single writer for the active flag, mirrored into the mesh store so the Mesh
 // banner reacts the instant Tor is toggled (or primed at startup).
+//
+// The VPN watch is bound here rather than to the setting: the setting is what
+// the user asked for, this is what is actually carrying traffic.
+//
+// Android-only in effect (both native calls resolve immediately on iOS, where
+// Arti reports its own state) and idempotent on both sides.
 function setTorActive(active: boolean): void {
   torActive = active;
   useMeshStateStore.getState().setTorActive(active);
+  if (active) {
+    // Listener first, so a VPN dropping between the two calls is not missed.
+    //
+    // It re-probes rather than acting on the event: a user can be on a corporate
+    // VPN and Orbot at once, so "a VPN went away" is not "Orbot went away".
+    // revalidateTorRouting no-ops if Tor is still routing.
+    vpnLostSub ??= subscribeVpnLost(() => {
+      void revalidateTorRouting();
+    });
+    // Optional on the method as well as the module: a JS-only update can land on
+    // an older native binary that has neither call. A device that refuses the
+    // registration keeps the old behaviour, where the foreground re-check
+    // catches a drop later.
+    void NativeAirhopBLE?.startVpnWatch?.().catch(() => {});
+  } else {
+    void NativeAirhopBLE?.stopVpnWatch?.().catch(() => {});
+    vpnLostSub?.remove();
+    vpnLostSub = null;
+  }
 }
 
 function setTorBootstrap(phase: TorBootstrapPhase): void {

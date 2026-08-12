@@ -58,9 +58,15 @@ jest.mock("nostr-tools/pool", () => ({
   useWebSocketImplementation: jest.fn(),
 }));
 
+// Deliberately bare: iOS never consults the BLE module for Tor. `default: {}`
+// is the point - it proves the iOS path touches none of it, which is why the
+// VPN-watch calls in setTorActive are optional on the method, not just the
+// module. subscribeVpnLost returns null here for the same reason the real one
+// does when the module is absent: there is nothing to subscribe to.
 jest.mock("../../../bridge/NativeAirhopBLE", () => ({
   __esModule: true,
   default: {},
+  subscribeVpnLost: () => null,
 }));
 
 jest.mock("../../../bridge/NativeAirhopTor", () => ({

@@ -1398,7 +1398,7 @@ export default function ArchitecturePage() {
                     "Off, and one-way once enabled, because a deleted phrase is indistinguishable from deleted coins",
                   ],
                   ["AI assistant", "Off. Nothing downloads until you pick a model"],
-                  ["Social bridges", "Off, individually, per plugin"],
+                  ["Social bridges", "Off. Individually, per plugin"],
                 ]}
               />
             </Section>

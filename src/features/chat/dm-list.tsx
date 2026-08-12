@@ -43,6 +43,7 @@ import { usePullRefreshColors } from "../../ui/use-pull-refresh";
 import { sortConversationsByActivity } from "../../utils/conversation-order";
 import { resolveDisplayName } from "../../utils/display-name";
 import { formatListTimestamp } from "../../utils/format";
+import { held } from "../../utils/haptics";
 import { messagePreviewText } from "../../utils/message-preview";
 import ContactInfoSheet from "./contact-info-sheet";
 
@@ -257,7 +258,10 @@ export default function DmList({ onSelectDM }: Props): React.JSX.Element {
               // messenger people already use offers long-press as its peer, and
               // ReanimatedSwipeable exposes no accessibility actions, so with a
               // screen reader on these options did not exist at all.
-              onLongPress={() => handleSwipeMore(item)}
+              onLongPress={() => {
+                held();
+                handleSwipeMore(item);
+              }}
               accessibilityRole="button"
               accessibilityLabel={rowLabel}
               accessibilityHint={t("chat.dm.row_hint")}

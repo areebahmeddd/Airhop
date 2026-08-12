@@ -36,6 +36,7 @@ export const strings = {
   "common.copied": "Copied",
   "common.share": "Share",
   "common.continue": "Continue",
+  "common.try_again": "Try again",
   "common.settings": "Settings",
   "common.off": "Off",
 
@@ -109,6 +110,12 @@ export const strings = {
   // move it, and may drop it if their wording does not need it.
   "onboarding.identity.body":
     "Creating an Ed25519 key pair on this device.\nNothing is sent anywhere.",
+  // Shown when the key pair could not be written to the OS keychain. Names what
+  // failed and what fixes it, without requiring the user to know what a keychain
+  // is. No error code: every realistic cause clears on a retry or a restart.
+  "onboarding.identity.failed_heading": "Couldn’t create your keys",
+  "onboarding.identity.failed_body":
+    "This device wouldn’t let Airhop store them securely. Try again, or restart your phone and reopen Airhop.",
   // The four steps are read as one element rather than four stops. `{steps}` is
   // the joined list.
   "onboarding.identity.steps_a11y": "Steps: {steps}",
@@ -206,7 +213,6 @@ export const strings = {
   "error.boundary.title": "Something went wrong",
   "error.boundary.body":
     "Airhop hit an unexpected problem and had to stop what it was showing.",
-  "error.boundary.retry": "Try again",
 
   // ---- Chats: channel list -------------------------------------------------------
   // Section headers. The style uppercases them, so sentence case here: a script
@@ -1619,9 +1625,8 @@ export const strings = {
 
   // ---- Contacts: add and share ---------------------------------------------------
   "contacts.qr.verified": "Verified via QR",
-  // A card that arrived as text or from the photo roll. Says what it gave us
-  // (their keys) and what it did not (proof of who sent it), because the two
-  // come apart here and only the camera answers both.
+  // A card that arrived as text or from the photo roll: it gave us their keys
+  // but no proof of who sent it. Only the camera answers both.
   "contacts.qr.keys_unverified": "Keys received, not verified",
   "contacts.qr.not_verified": "Not verified yet",
   "contacts.qr.message": "Message",
@@ -2056,8 +2061,8 @@ export const strings = {
   // freely to pass it around.
   "settings.qr.note":
     "This contains your public keys, which allow others to message you from anywhere. Share it only with people you trust. It won’t change unless you wipe your identity.",
-  // The same card as text. "Code" and not "key" or "card": it is the thing you
-  // paste, and the note above already says what is inside it.
+  // The same card as text. "Code" rather than "key" or "card": it is the thing
+  // you paste, and the note above says what is inside it.
   "settings.qr.code_label": "Contact code",
   "settings.qr.copy_code": "Copy contact code",
   "settings.qr.share": "Share QR code",
@@ -2201,6 +2206,13 @@ export const strings = {
   "notif.hidden.title": "Airhop",
   "notif.hidden.dm": "New message",
   "notif.hidden.channel": "New activity",
+  // Distinct from the line above even when redacted: being named is worth
+  // unlocking for in a way that general room activity is not, and it says
+  // nothing about who or where.
+  "notif.hidden.mention": "You were mentioned",
+  // Names the sender rather than the room. `{sender}` is user content and is
+  // never translated.
+  "notif.mention.title": "{sender} mentioned you",
 } as const;
 
 // Plural forms live apart from the flat strings because plural categories are

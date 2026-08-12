@@ -740,3 +740,56 @@ describe("markChannelRead", () => {
     expect(useActivityStore.getState().unseenCount()).toBe(1);
   });
 });
+
+// A launch settles whatever the last process left mid-send: "sending" is the one
+// in-flight status nothing owns across a restart.
+describe("failStaleSending", () => {
+  const NOW = 1_700_000_000_000;
+  const MINUTE = 60_000;
+
+  function held(overrides: Partial<ChatMessage> = {}): ChatMessage {
+    return makeMessage({
+      id: `held-${overrides.timestampMs ?? NOW}`,
+      isMine: true,
+      status: "sending",
+      timestampMs: NOW - 5 * MINUTE,
+      ...overrides,
+    });
+  }
+
+  it("fails a message the last process left sending", () => {
+    state().addMessage(held());
+    state().failStaleSending(MINUTE, NOW);
+    expect(state().messages["#test"]?.[0]?.status).toBe("failed");
+  });
+
+  it("leaves a send that is still in its hold window alone", () => {
+    state().addMessage(held({ timestampMs: NOW - 2_000 }));
+    state().failStaleSending(MINUTE, NOW);
+    expect(state().messages["#test"]?.[0]?.status).toBe("sending");
+  });
+
+  it("never touches a message that actually went out", () => {
+    for (const status of ["sent", "delivered", "read", "queued"] as const) {
+      state().clearAll();
+      state().addMessage(held({ status }));
+      state().failStaleSending(MINUTE, NOW);
+      expect(state().messages["#test"]?.[0]?.status).toBe(status);
+    }
+  });
+
+  it("sweeps every channel, not just the active one", () => {
+    state().addMessage(held({ channel: "#one" }));
+    state().addMessage(held({ channel: "#two" }));
+    state().failStaleSending(MINUTE, NOW);
+    expect(state().messages["#one"]?.[0]?.status).toBe("failed");
+    expect(state().messages["#two"]?.[0]?.status).toBe("failed");
+  });
+
+  it("is a no-op when nothing is stranded", () => {
+    state().addMessage(makeMessage({ status: "sent" }));
+    const before = state().messages;
+    state().failStaleSending(MINUTE, NOW);
+    expect(state().messages).toBe(before);
+  });
+});

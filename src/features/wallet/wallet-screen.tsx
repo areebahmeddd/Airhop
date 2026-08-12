@@ -120,6 +120,7 @@ import {
 } from "../../ui/theme";
 import { usePullRefreshColors } from "../../ui/use-pull-refresh";
 import { formatListTimestamp, formatNumber } from "../../utils/format";
+import { acknowledged } from "../../utils/haptics";
 import { nostrShortLabel, peerIDToUsername } from "../../utils/username";
 import TokenScanner, { type ScanTarget } from "./token-scanner";
 
@@ -715,6 +716,7 @@ export default function WalletScreen({
 
   async function handleCopyToken(token: string): Promise<void> {
     await Clipboard.setStringAsync(token);
+    acknowledged();
     showAlert(T("common.copied"), t("wallet.copied.token_body"));
   }
 
@@ -724,6 +726,7 @@ export default function WalletScreen({
   // it, and say plainly why it needs cleaning up afterwards.
   async function handleCopyPhrase(): Promise<void> {
     await Clipboard.setStringAsync(phrase);
+    acknowledged();
     showAlert(T("common.copied"), t("wallet.copied.phrase_body"));
   }
 
@@ -2061,6 +2064,7 @@ export default function WalletScreen({
             style={styles.npubRow}
             onPress={() => {
               void Clipboard.setStringAsync(myNpub);
+              acknowledged();
               showAlert(T("common.copied"), t("wallet.nostr.copied_body"));
             }}
             accessibilityRole="button"
@@ -2493,7 +2497,10 @@ export default function WalletScreen({
               </Pressable>
               <Pressable
                 style={styles.generatedActionBtn}
-                onPress={() => void Clipboard.setStringAsync(deposit.invoice)}
+                onPress={() => {
+                  void Clipboard.setStringAsync(deposit.invoice);
+                  acknowledged();
+                }}
                 accessibilityRole="button"
                 accessibilityLabel={T("wallet.ln.copy_invoice")}
               >

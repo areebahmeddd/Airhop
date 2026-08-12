@@ -627,6 +627,23 @@ final class AirhopBLEModule: RCTEventEmitter {
         resolve(["orbotInstalled": false, "vpnActive": false])
     }
 
+    // Android-only in practice, and no-ops here for a stronger reason than the
+    // pair above: there is no VPN to watch. Arti runs in-process, so iOS learns
+    // that Tor stopped from Arti itself (NativeAirhopTor.getTorStatus) rather
+    // than by inferring it from a transport disappearing. Declared so the bridge
+    // contract stays mirrored and JS needs no platform branch at the call site.
+    @objc
+    func startVpnWatch(_ resolve: @escaping RCTPromiseResolveBlock,
+                       rejecter reject: @escaping RCTPromiseRejectBlock) {
+        resolve(nil)
+    }
+
+    @objc
+    func stopVpnWatch(_ resolve: @escaping RCTPromiseResolveBlock,
+                      rejecter reject: @escaping RCTPromiseRejectBlock) {
+        resolve(nil)
+    }
+
     // Helper: find the cached characteristic for a connected peripheral
     private func discoverCharacteristic(on peripheral: CBPeripheral) -> CBCharacteristic? {
         return peripheral.services?

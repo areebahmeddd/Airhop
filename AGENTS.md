@@ -123,7 +123,7 @@ Skills are reference files in `.github/skills/`. Read the relevant one before wo
 - No `any` in `src/core/` or `src/bridge/`
 - Named exports only in `src/core/` and `src/bridge/`
 - File naming: `kebab-case.ts`
-- Keep `src/core/` modules under ~400 lines: one protocol concern per file, each independently testable. This holds today and must keep holding.
+- One protocol concern per `src/core/` module, each independently testable. A file that needs "and" to describe it is two files.
 - `src/services/mesh-service.ts` and several `src/features/` screens are far past that. They are known refactor targets, **not** precedent. Add a new packet type's logic as a focused module in `src/core/mesh/` and keep the mesh-service side to wiring.
 
 ## Common Mistakes to Avoid

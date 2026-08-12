@@ -732,6 +732,9 @@ class AirhopBLEModule(
         } catch (e: Exception) {
             // Context already torn down.
         }
+        // Otherwise the callback outlives the module and eventually trips the
+        // per-app callback limit.
+        stopVpnWatch()
         // Anyone still waiting on the enable dialog will never hear back
         // otherwise, and an unresolved promise is a UI stuck on a spinner.
         resolvePendingEnable(false)
@@ -1431,6 +1434,65 @@ class AirhopBLEModule(
                 promise.resolve(0)
             }
         }.start()
+    }
+
+    // Watch for the VPN going away, so a Tor claim cannot outlive the thing
+    // carrying it.
+    //
+    // getTorAvailability only answers when asked, and the only caller was app
+    // foreground. Orbot can be stopped from its own notification without leaving
+    // Airhop, and a dropped VPN does not fail our sockets - they reconnect
+    // directly, so the relay pool came back on the clear net while the UI still
+    // said Tor was on.
+    //
+    // Registered only while Tor is on: a permanent callback watching a feature
+    // few enable is battery cost with no reader.
+    private var vpnCallback: ConnectivityManager.NetworkCallback? = null
+
+    private fun connectivityManager(): ConnectivityManager? =
+        try {
+            reactContext.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
+        } catch (_: Exception) {
+            null
+        }
+
+    @ReactMethod
+    fun startVpnWatch() {
+        if (vpnCallback != null) return
+        val cm = connectivityManager() ?: return
+        val callback = object : ConnectivityManager.NetworkCallback() {
+            // Only loss is reported. A VPN coming up is not evidence Tor is
+            // routing (it could be any VPN, and the user never asked to turn Tor
+            // back on), so JS re-validates rather than being handed a conclusion.
+            override fun onLost(network: android.net.Network) {
+                emitEvent("onVpnLost", WritableNativeMap())
+            }
+        }
+        try {
+            val request = android.net.NetworkRequest.Builder()
+                .addTransportType(NetworkCapabilities.TRANSPORT_VPN)
+                // Without this the default filter drops the very transport we
+                // are trying to watch.
+                .removeCapability(NetworkCapabilities.NET_CAPABILITY_NOT_VPN)
+                .build()
+            cm.registerNetworkCallback(request, callback)
+            vpnCallback = callback
+        } catch (e: Exception) {
+            // Keeps the old behaviour: the foreground re-check catches a drop
+            // later.
+            Log.w(TAG, "Could not watch the VPN transport: ${e.message}")
+        }
+    }
+
+    @ReactMethod
+    fun stopVpnWatch() {
+        val callback = vpnCallback ?: return
+        vpnCallback = null
+        try {
+            connectivityManager()?.unregisterNetworkCallback(callback)
+        } catch (_: Exception) {
+            // Already unregistered, or the service is gone with the context.
+        }
     }
 
     // Report whether Tor routing can actually work on this device, so the UI

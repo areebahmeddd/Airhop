@@ -675,122 +675,130 @@ test("N07 a message marked nearby-only is never bridged", async () => {
 // Both at once, and then under pressure
 // ---------------------------------------------------------------------------
 
-test("N08 gateway and bridge together, with a phone that has no signal", async () => {
-  const s = (scenario = new Scenario({
-    id: "N08",
-    title: "one island bridges, and carries for a neighbour with no signal",
-    seed: 720,
-  }));
-  const radio = new RadioFabric(s.world);
-  const relay = new RelayFabric(s.world);
+// Seeds N08 runs under.
+//
+// One seed is one fixed interleaving, so a single green run proves determinism,
+// not robustness. This scenario was recorded rather than asserted while the
+// crossing succeeded about half the time, so promoting it needed evidence across
+// interleavings it was never tuned for. 720 is the original; the rest are
+// arbitrary.
+//
+// Each seed is its own test, so the hooks above give every run a clean world.
+const COMBINED_ROLE_SEEDS = [720, 101, 202, 303, 404, 505, 606, 707, 808];
 
-  // Island A: a phone that both bridges AND acts as a gateway, plus a phone
-  // with no signal at all. Island B: an ordinary bridged island.
-  // Deliberately ONE phone carrying both roles. That is the realistic case -
-  // whoever has signal in a group ends up being both the bridge and the
-  // gateway - and it is the combination worth proving, not just each half.
-  const hub = SimDevice.create(
-    s.world,
-    { ...android("hub", 11), bridgeEnabled: true, gatewayEnabled: true },
-    relay,
-  );
-  // Everyone opts in to bridging: bridgeOutgoing checks the SENDER's own
-  // setting, so the phone with no signal has to have it on for its words to
-  // leave the mesh at all.
-  const stranded = SimDevice.create(
-    s.world,
-    { ...android("stranded", 22), bridgeEnabled: true },
-    relay,
-  );
-  const bridgeB = SimDevice.create(
-    s.world,
-    { ...android("bridgeB", 33), bridgeEnabled: true },
-    relay,
-  );
-  const localB = SimDevice.create(
-    s.world,
-    { ...android("localB", 44), bridgeEnabled: true },
-    relay,
-  );
-  const devices = [hub, stranded, bridgeB, localB];
-  for (const d of devices) {
-    radio.add(d);
-    locations().place(d.id, PLACES.bengaluru);
-  }
-  s.track(...devices);
-  radio.setTopology([
-    ["hub", "stranded"],
-    ["bridgeB", "localB"],
-  ]);
-  relay.setOffline("stranded", true);
-  relay.setOffline("localB", true);
-  for (const d of devices) d.launch();
+test.each(COMBINED_ROLE_SEEDS)(
+  "N08 gateway and bridge together, with a phone that has no signal (seed %i)",
+  async (seed) => {
+    const s = (scenario = new Scenario({
+      id: "N08",
+      title: "one island bridges, and carries for a neighbour with no signal",
+      seed,
+    }));
+    const radio = new RadioFabric(s.world);
+    const relay = new RelayFabric(s.world);
 
-  await waitForCoarse(s.world, () => radio.linkCount() === 2, 30_000);
-  for (const d of devices) {
-    d.joinChannel(BRIDGE_CHANNEL);
-    d.joinChannel(CELL_CHANNEL);
-  }
-  await cellsResolved(s, devices, CELL_CHANNEL);
-  await waitForCoarse(
-    s.world,
-    () => stranded.seesGateway() && localB.seesBridge(),
-    90_000,
-  );
-  await settleIn(s, 20_000);
+    // Island A: a phone that both bridges AND acts as a gateway, plus a phone
+    // with no signal at all. Island B: an ordinary bridged island.
+    // Deliberately ONE phone carrying both roles. That is the realistic case -
+    // whoever has signal in a group ends up being both the bridge and the
+    // gateway - and it is the combination worth proving, not just each half.
+    const hub = SimDevice.create(
+      s.world,
+      { ...android("hub", 11), bridgeEnabled: true, gatewayEnabled: true },
+      relay,
+    );
+    // Everyone opts in to bridging: bridgeOutgoing checks the SENDER's own
+    // setting, so the phone with no signal has to have it on for its words to
+    // leave the mesh at all.
+    const stranded = SimDevice.create(
+      s.world,
+      { ...android("stranded", 22), bridgeEnabled: true },
+      relay,
+    );
+    const bridgeB = SimDevice.create(
+      s.world,
+      { ...android("bridgeB", 33), bridgeEnabled: true },
+      relay,
+    );
+    const localB = SimDevice.create(
+      s.world,
+      { ...android("localB", 44), bridgeEnabled: true },
+      relay,
+    );
+    const devices = [hub, stranded, bridgeB, localB];
+    for (const d of devices) {
+      radio.add(d);
+      locations().place(d.id, PLACES.bengaluru);
+    }
+    s.track(...devices);
+    radio.setTopology([
+      ["hub", "stranded"],
+      ["bridgeB", "localB"],
+    ]);
+    relay.setOffline("stranded", true);
+    relay.setOffline("localB", true);
+    for (const d of devices) d.launch();
 
-  // The stranded phone talks in the public room. It has no signal, so its words
-  // reach the far island only if the hub both carries AND bridges.
-  stranded.send(BRIDGE_CHANNEL, "from the phone with no signal");
-  stranded.send(CELL_CHANNEL, "and in the city channel too");
-  // Wait for the crossing rather than a fixed settle: it depends on a deposit
-  // to the hub, a publish to the rendezvous cell, the far bridge's
-  // subscription delivering it, and a broadcast back down onto island B.
-  await waitForCoarse(
-    s.world,
-    () =>
+    await waitForCoarse(s.world, () => radio.linkCount() === 2, 30_000);
+    for (const d of devices) {
+      d.joinChannel(BRIDGE_CHANNEL);
+      d.joinChannel(CELL_CHANNEL);
+    }
+    await cellsResolved(s, devices, CELL_CHANNEL);
+    await waitForCoarse(
+      s.world,
+      () => stranded.seesGateway() && localB.seesBridge(),
+      90_000,
+    );
+    await settleIn(s, 20_000);
+
+    // The stranded phone talks in the public room. It has no signal, so its words
+    // reach the far island only if the hub both carries AND bridges.
+    stranded.send(BRIDGE_CHANNEL, "from the phone with no signal");
+    stranded.send(CELL_CHANNEL, "and in the city channel too");
+    // Wait for the crossing rather than a fixed settle: it depends on a deposit
+    // to the hub, a publish to the rendezvous cell, the far bridge's
+    // subscription delivering it, and a broadcast back down onto island B.
+    await waitForCoarse(
+      s.world,
+      () =>
+        localB.texts(BRIDGE_CHANNEL).includes("from the phone with no signal"),
+      150_000,
+    );
+
+    // One phone carrying both roles, which is the configuration that matters:
+    // whoever has signal in a group ends up being the bridge and the gateway.
+    s.check(
+      "the far island received the stranded phone's message",
       localB.texts(BRIDGE_CHANNEL).includes("from the phone with no signal"),
-    150_000,
-  );
+      `localB=[${localB.texts(BRIDGE_CHANNEL).join(" | ")}], ` +
+        `cell events=${relay.eventsOfKind(KIND_GEOHASH_MESSAGE).length}`,
+    );
 
-  // OPEN: one phone carrying BOTH roles is not reliable.
-  //
-  // With the roles on separate phones, both halves are solid - N01 proves the
-  // gateway uplink and N05 proves the bridge crossing, each stable across
-  // repeated runs. Put both jobs on ONE phone and the crossing succeeds only
-  // about half the time, and when it fails that phone also does not show the
-  // message on its own timeline despite having relayed it.
-  //
-  // This is recorded rather than asserted because it is a real finding about
-  // the app, not a flaky test, and pinning a green check on a coin flip would
-  // hide it. It matters because it is the most likely real configuration:
-  // whoever has signal in a group ends up being both the bridge and the
-  // gateway. Tracked in PROGRESS.md.
-  const crossed = localB
-    .texts(BRIDGE_CHANNEL)
-    .includes("from the phone with no signal");
-  s.world.say(
-    crossed ? "COMBINED_ROLE_CROSSED" : "COMBINED_ROLE_DID_NOT_CROSS",
-    `localB=[${localB.texts(BRIDGE_CHANNEL).join(" | ")}], ` +
-      `hub timeline=[${hub.texts(BRIDGE_CHANNEL).join(" | ")}], ` +
-      `cell events=${relay.eventsOfKind(KIND_GEOHASH_MESSAGE).length}`,
-  );
+    // The other half of the old failure, and the easier one to lose again:
+    // carrying for someone must never cost you your own copy.
+    s.check(
+      "the phone doing both jobs still has the message on its own timeline",
+      hub.texts(BRIDGE_CHANNEL).includes("from the phone with no signal"),
+      `hub timeline=[${hub.texts(BRIDGE_CHANNEL).join(" | ")}]`,
+    );
 
-  // What must hold either way.
-  s.check(
-    "the stranded phone never opened a connection of its own",
-    relay.connectionCount("stranded") === 0,
-    `${relay.connectionCount("stranded")} connections`,
-  );
+    // What must hold either way.
+    s.check(
+      "the stranded phone never opened a connection of its own",
+      relay.connectionCount("stranded") === 0,
+      `${relay.connectionCount("stranded")} connections`,
+    );
 
-  s.expectNone("exactly once", exactlyOnce(devices));
-  s.expectNone("no duplicate text", noDuplicateText(devices, BRIDGE_CHANNEL));
-  s.expectNone("no forged senders", noForgedSenders(devices));
-  s.expectNone("badge matches threads", badgeMatchesThreads(devices));
-  s.expectNone("unread coherent", unreadCoherent(devices));
-  s.expectNone("process health", noCrashes(devices));
-  s.assert(true);
-});
+    s.expectNone("exactly once", exactlyOnce(devices));
+    s.expectNone("no duplicate text", noDuplicateText(devices, BRIDGE_CHANNEL));
+    s.expectNone("no forged senders", noForgedSenders(devices));
+    s.expectNone("badge matches threads", badgeMatchesThreads(devices));
+    s.expectNone("unread coherent", unreadCoherent(devices));
+    s.expectNone("process health", noCrashes(devices));
+    s.assert(true);
+  },
+);
 
 test("N09 both features under a hostile network and a moving crowd", async () => {
   const seed = 20260801;

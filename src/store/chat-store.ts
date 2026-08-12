@@ -226,6 +226,20 @@ interface ChatState {
   // Remove a single message. Used by Undo Send to pull an outgoing message back
   // during its brief hold window, before it is ever transmitted.
   removeMessage: (channel: string, id: string) => void;
+  // Give up on messages left mid-flight by a process that died, so a retry can
+  // be offered instead of an hourglass that never resolves.
+  //
+  // "sending" is the only in-flight status with no owner across a restart: the
+  // outbox resumes queued and sent, the courier resumes carried. A message is
+  // "sending" during Undo Send's hold window (held in a ref, flushed on unmount)
+  // or between transmit and the transport answering, and a kill in either window
+  // strands it.
+  //
+  // Marked failed rather than re-sent: the persisted state cannot say whether
+  // the bytes reached the radio, so re-sending could duplicate. "failed" is also
+  // what makes the bubble tappable, since handleRetryMessage refuses any other
+  // status.
+  failStaleSending: (olderThanMs: number, now?: number) => void;
   setActiveChannel: (channel: string) => void;
   markChannelRead: (channel: string) => void;
   setLastThread: (channel: string) => void;
@@ -554,6 +568,25 @@ export const useChatStore = create<ChatState>()(
           const next = existing.filter((m) => m.id !== id);
           if (next.length === existing.length) return state;
           return { messages: { ...state.messages, [channel]: next } };
+        });
+      },
+
+      failStaleSending(olderThanMs, now = Date.now()) {
+        set((state) => {
+          const messages: Record<string, ChatMessage[]> = {};
+          let changed = false;
+          for (const [channel, list] of Object.entries(state.messages)) {
+            let touched = false;
+            const next = list.map((m) => {
+              if (m.status !== "sending") return m;
+              if (now - m.timestampMs < olderThanMs) return m;
+              touched = true;
+              return { ...m, status: "failed" as const };
+            });
+            messages[channel] = touched ? next : list;
+            if (touched) changed = true;
+          }
+          return changed ? { messages } : state;
         });
       },
 

@@ -7,7 +7,6 @@
 
 import { Feather } from "@expo/vector-icons";
 import * as Clipboard from "expo-clipboard";
-import * as Haptics from "expo-haptics";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
@@ -49,6 +48,7 @@ import {
   resolveDisplayName,
   resolvePeerOwnName,
 } from "../../utils/display-name";
+import { acknowledged } from "../../utils/haptics";
 import QrScanScreen from "../contacts/qr-scan-screen";
 import RadarView from "./radar-view";
 
@@ -107,8 +107,8 @@ export default function PeerList({
   function handleCopyPeerID(id: string): void {
     void Clipboard.setStringAsync(id).catch(() => {});
     // A copy is silent and the glyph swap is easy to miss mid-tap, so the
-    // confirmation is also felt. Matches how the wallet confirms a copied token.
-    void Haptics.selectionAsync().catch(() => {});
+    // confirmation is also felt. Every copy in the app goes through this.
+    acknowledged();
     setCopiedPeerID(true);
     if (copyResetRef.current !== null) clearTimeout(copyResetRef.current);
     copyResetRef.current = setTimeout(() => setCopiedPeerID(false), 1500);

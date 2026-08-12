@@ -6,7 +6,6 @@
 // claimToken) and are handed down as render props.
 
 import { Feather, MaterialCommunityIcons } from "@expo/vector-icons";
-import * as Haptics from "expo-haptics";
 import React, { useMemo } from "react";
 import {
   Linking,
@@ -34,6 +33,7 @@ import {
   Spacing,
   useThemeColors,
 } from "../../ui/theme";
+import { held } from "../../utils/haptics";
 
 // Drawn size of a sender's avatar in a channel thread. Tapping it (or the name
 // beside it) opens that sender's profile, so both carry hitSlopFor() to reach the
@@ -116,7 +116,7 @@ function MessageBubble({
   const styles = useMemo(() => createStyles(Colors), [Colors]);
 
   function handleLongPress(): void {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+    held();
     // In selection mode a long press is the same as a tap: holding again to
     // reopen the menu that started the selection would be a dead end.
     if (selecting === true) {

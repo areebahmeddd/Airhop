@@ -14,6 +14,8 @@ const mockGetTorAvailability = jest.fn<
   Promise<{ orbotInstalled: boolean; vpnActive: boolean }>,
   []
 >();
+const mockStartVpnWatch = jest.fn<Promise<void>, []>();
+const mockStopVpnWatch = jest.fn<Promise<void>, []>();
 const mockRestartNostr = jest.fn();
 const mockSetTorActive = jest.fn();
 const mockSetTorEnabled = jest.fn();
@@ -38,7 +40,12 @@ jest.mock("../../../bridge/NativeAirhopBLE", () => ({
   default: {
     getTorProxyPort: () => mockGetTorProxyPort(),
     getTorAvailability: () => mockGetTorAvailability(),
+    startVpnWatch: () => mockStartVpnWatch(),
+    stopVpnWatch: () => mockStopVpnWatch(),
   },
+  // Returns null when the module is absent; stands in for a real subscription
+  // so the pairing below can be observed.
+  subscribeVpnLost: () => ({ remove: jest.fn() }),
 }));
 
 // Android has no embedded Arti yet, which is what this module must cope with.
@@ -101,6 +108,8 @@ function device(options: {
   orbotInstalled: boolean;
   vpnActive: boolean;
 }): void {
+  mockStartVpnWatch.mockResolvedValue(undefined);
+  mockStopVpnWatch.mockResolvedValue(undefined);
   mockGetTorProxyPort.mockResolvedValue(options.port);
   mockGetTorAvailability.mockResolvedValue({
     orbotInstalled: options.orbotInstalled,
@@ -235,5 +244,41 @@ describe("priming the persisted preference at startup", () => {
 
     expect(mockSetTorActive).toHaveBeenLastCalledWith(true);
     expect(mockSetTorEnabled).not.toHaveBeenCalledWith(false);
+  });
+});
+
+// The watch has to be live for exactly as long as the Tor claim is, or the app
+// goes on saying "Tor on" over clear-net traffic until the next foreground.
+describe("the VPN watch tracks the Tor claim", () => {
+  it("starts watching when Tor actually comes on", async () => {
+    device({ port: 9050, orbotInstalled: true, vpnActive: true });
+    await setTorRouting(true);
+    expect(mockStartVpnWatch).toHaveBeenCalled();
+  });
+
+  it("does not watch when Tor was refused", async () => {
+    device({ port: 0, orbotInstalled: true, vpnActive: true });
+    await setTorRouting(true);
+    expect(mockStartVpnWatch).not.toHaveBeenCalled();
+  });
+
+  it("stops watching when Tor is turned off", async () => {
+    device({ port: 9050, orbotInstalled: true, vpnActive: true });
+    await setTorRouting(true);
+    jest.clearAllMocks();
+    device({ port: 0, orbotInstalled: false, vpnActive: false });
+    await setTorRouting(false);
+    expect(mockStopVpnWatch).toHaveBeenCalled();
+  });
+
+  it("stops watching when a revalidation finds Tor gone", async () => {
+    device({ port: 9050, orbotInstalled: true, vpnActive: true });
+    await setTorRouting(true);
+    jest.clearAllMocks();
+    // Orbot stopped: the port stops answering and the VPN transport goes.
+    device({ port: 0, orbotInstalled: true, vpnActive: false });
+    await revalidateTorRouting();
+    expect(mockStopVpnWatch).toHaveBeenCalled();
+    expect(mockSetTorActive).toHaveBeenCalledWith(false);
   });
 });

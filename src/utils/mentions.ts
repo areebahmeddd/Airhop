@@ -38,13 +38,15 @@ export function applyMention(draft: string, nickname: string): string {
 // token must end at whitespace, punctuation, or end of string, so a mention of
 // a longer name does not count as a mention of a prefix of it.
 //
-// NOT CALLED FROM THE APP YET, and kept deliberately. Mentions are currently
-// only highlighted, which message-bubble does syntactically without consulting
-// the roster, so nothing yet needs to answer "was I mentioned". The moment
-// something does, notifying on a mention being the obvious one, it needs the
-// Unicode handling below: the nickname and the typed text can arrive in
-// different encodings and comparing them raw silently never matches. Rewriting
-// this later would almost certainly rewrite it without that.
+// Drives two things from App.tsx's inbound subscription: a mention is the only
+// message allowed past a muted conversation, and it is rendered with its own
+// notification copy rather than the room's.
+//
+// The NFC normalization is load-bearing. An announced nickname is canonical
+// (announce-manager normalizes at decode) but typed text is whatever the
+// sender's keyboard produced, and an iOS keyboard and an Android one can emit
+// the same accented name differently. Comparing raw meant a cross-platform
+// mention silently never matched.
 export function mentionsNickname(text: string, nickname: string): boolean {
   const target = normalizeNickname(nickname);
   if (target.length === 0) return false;

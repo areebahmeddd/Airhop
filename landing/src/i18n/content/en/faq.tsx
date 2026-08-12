@@ -332,12 +332,13 @@ export const FAQ_SECTIONS: FaqSection[] = [
         a: (
           <>
             Neither{" "}
-            <TextLink href="https://en.wikipedia.org/wiki/Centralisation">centralized</TextLink> nor
-            web3. There is no blockchain, no token, and no company that owns it. Nostr relays are
-            just servers run by independent operators on any hosting provider, not only a couple of
-            big cloud platforms, so no single relay can lock you out or control the network. You are
-            not tied to one relay either. If an operator disappears or blocks you, you move to
-            another. That is what makes it{" "}
+            <TextLink href="https://en.wikipedia.org/wiki/Centralisation">centralized</TextLink> nor{" "}
+            <TextLink href="https://en.wikipedia.org/wiki/Web3">web3</TextLink>. There is no
+            blockchain, no token, and no company that owns it. Nostr relays are just servers run by
+            independent operators on any hosting provider, not only a couple of big cloud platforms,
+            so no single relay can lock you out or control the network. You are not tied to one
+            relay either. If an operator disappears or blocks you, you move to another. That is what
+            makes it{" "}
             <TextLink href="https://en.wikipedia.org/wiki/Decentralization">decentralized</TextLink>
             : not a blockchain consensus mechanism, just nobody being able to own the whole network.
           </>

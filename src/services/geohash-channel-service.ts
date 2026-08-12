@@ -788,6 +788,13 @@ export class GeohashChannelService {
   // Send an end-to-end encrypted DM to a participant's per-geohash pubkey, from
   // our own per-geohash identity for that cell. Returns false if the content is
   // too long for one PrivateMessagePacket.
+  //
+  // The envelope names us by durable peer ID and omits the recipient, matching
+  // bitchat (NostrTransport.sendPrivateMessageGeohash). Sealed, so no relay sees
+  // it, but the recipient does from the first message. That ID carries no keys
+  // and cannot be used to reach us, but it does not rotate per cell, so a
+  // correspondent who meets us in two neighbourhoods can link the two. Public
+  // channel notes carry nothing of the sort.
   sendGeoDm(
     geohash: string,
     recipientPubkey: string,
@@ -809,15 +816,16 @@ export class GeohashChannelService {
   // Hand our durable contact card to someone we met under a location-channel
   // pseudonym, so the two of us can keep talking once either of us moves.
   //
-  // This is the one thing that can cross the gap per-cell identities create on
-  // purpose. Their cell key and our peer ID are unlinkable by design - that is
-  // what stops relays following anyone between neighbourhoods - so no amount of
-  // cleverness here could join them up. Only the person can, by choosing to say
-  // "this is also me", and this is that choice being carried.
+  // The one thing that can cross the gap per-cell identities create on purpose:
+  // a cell key works only in its own cell, so both sides lose the thread as soon
+  // as either one moves.
   //
-  // Deliberately never automatic, and never a reply to receiving one: it gives
-  // away the durable identity that everything else in this file works to keep
-  // separate from a location. It has to be a tap, every time.
+  // What it discloses is the KEYS, not the name. Our peer ID already reached this
+  // recipient inside every DM envelope (see sendGeoDm); what is new is the Noise,
+  // Ed25519 and durable Nostr keys, which turn a handle they cannot use into an
+  // identity they can verify, encrypt to and reach anywhere.
+  //
+  // Never automatic, and never a reply to receiving one. It has to be a tap.
   //
   // Still written from our PER-CELL key, like every other message in this
   // conversation. The card in the payload is what discloses us; the envelope

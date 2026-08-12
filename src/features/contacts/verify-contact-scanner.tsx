@@ -32,6 +32,7 @@ import {
   Spacing,
   useThemeColors,
 } from "../../ui/theme";
+import { rejected, succeeded } from "../../utils/haptics";
 
 interface Props {
   visible: boolean;
@@ -83,6 +84,10 @@ export default function VerifyContactScanner({
 
     // Guard 1: the code must belong to THIS contact, not just any Airhop user.
     if (card.peerID.toLowerCase() !== peerID.toLowerCase()) {
+      // Felt, not just shown. The phone is held up at the other screen through a
+      // viewfinder, so the outcome has to reach the hand as well as the eye -
+      // and these two outcomes are the security answer this screen exists for.
+      rejected();
       setOutcome("mismatch");
       return;
     }
@@ -91,6 +96,7 @@ export default function VerifyContactScanner({
     const accepted =
       getMeshService()?.addVerifiedContact(card, { inPerson: true }) ?? false;
     if (!accepted) {
+      rejected();
       setOutcome("tampered");
       return;
     }
@@ -111,6 +117,7 @@ export default function VerifyContactScanner({
         ? bytesToHex(card.nostrPubKey)
         : prior?.nostrPubkeyHex,
     });
+    succeeded();
     setOutcome("match");
   }
 

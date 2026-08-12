@@ -63,6 +63,7 @@ export function notificationContentFor(
   msg: ChatMessage,
   channelLabel?: string,
   hidePreviews = false,
+  mentionsMe = false,
 ): {
   title: string;
   body: string;
@@ -72,6 +73,24 @@ export function notificationContentFor(
       return { title: t("notif.hidden.title"), body: t("notif.hidden.dm") };
     }
     return { title: msg.senderNickname, body: messagePreview(msg) };
+  }
+  // A mention is the one message in a busy room actually addressed to you, and
+  // it is already the only thing allowed past a mute. Reading identically to
+  // every other line defeated that: the notification the user most needed to
+  // pick out was the one hardest to. Names the sender rather than the room,
+  // since who is asking is the useful half. Matches bitchat's
+  // sendMentionNotification.
+  if (mentionsMe) {
+    if (hidePreviews) {
+      return {
+        title: t("notif.hidden.title"),
+        body: t("notif.hidden.mention"),
+      };
+    }
+    return {
+      title: t("notif.mention.title", { sender: msg.senderNickname }),
+      body: messagePreview(msg),
+    };
   }
   // A redacted channel notification keeps the room name. The channel a person
   // is in is not the secret the body is, and without it every notification

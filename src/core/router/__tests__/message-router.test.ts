@@ -972,7 +972,7 @@ describe("PeerRegistry: authenticated peer state", () => {
 });
 
 // The rule the add-contact screen leans on: a card read off the other phone may
-// correct keys, a card that arrived any other way may only introduce.
+// correct keys; one that arrived any other way may only introduce a peer.
 describe("PeerRegistry: out-of-band re-pinning", () => {
   const PEER = "aabbccdd00112233";
   const PINNED = new Uint8Array(32).fill(0x11);

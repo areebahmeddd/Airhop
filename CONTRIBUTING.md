@@ -95,6 +95,7 @@ Before opening any pull request:
 - [ ] `npm run lint` passes with zero errors
 - [ ] `npm run typecheck` passes with zero errors
 - [ ] `npm run i18n:audit -- --max 0` passes (no hardcoded user-facing strings)
+- [ ] `npm run deadcode` reports nothing new (unused exports, files, and dependencies)
 - [ ] `npm run verify:vendored` passes (only if you changed a vendored binary)
 - [ ] `npm run coverage` passes with zero failures
 - [ ] `docs/dev/PROGRESS.md` updated if a milestone was completed or a decision was made

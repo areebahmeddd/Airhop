@@ -142,6 +142,7 @@ import {
   formatDuration,
   formatLongDate,
 } from "../../utils/format";
+import { acknowledged } from "../../utils/haptics";
 import {
   BRIDGE_CHANNEL,
   canSendMedia,
@@ -1747,6 +1748,7 @@ export default function MessageThread({
     void Clipboard.setStringAsync(peerID.slice(NOSTR_ID_PREFIX.length)).catch(
       () => {},
     );
+    acknowledged();
     setSenderKeyCopied(true);
     // Reffed and cleared on unmount, like every other timer in this file. A bare
     // setTimeout here fires setState against a thread the user has already left.
@@ -5341,10 +5343,11 @@ export default function MessageThread({
           const target = actionSheet;
           if (target) scheduleSheetHandoff(() => setForwardSource(target));
         }}
-        onCopy={() =>
-          actionSheet &&
-          void Clipboard.setStringAsync(actionSheet.text).catch(() => {})
-        }
+        onCopy={() => {
+          if (!actionSheet) return;
+          void Clipboard.setStringAsync(actionSheet.text).catch(() => {});
+          acknowledged();
+        }}
         onInfo={() => {
           // Same close-then-open handoff as Forward, so the two sheets don't
           // fight for the screen.

@@ -97,10 +97,10 @@ function Fallback({ onRetry }: { onRetry: () => void }): React.JSX.Element {
         onPressOut={() => setPressed(false)}
         onPress={onRetry}
         accessibilityRole="button"
-        accessibilityLabel={t("error.boundary.retry")}
+        accessibilityLabel={t("common.try_again")}
       >
         <Text style={styles.buttonLabel} numberOfLines={1}>
-          {t("error.boundary.retry")}
+          {t("common.try_again")}
         </Text>
       </Pressable>
     </View>

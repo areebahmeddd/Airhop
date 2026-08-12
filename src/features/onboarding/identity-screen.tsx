@@ -3,11 +3,12 @@
 // the OS Keychain. The loading animation reassures the user that something
 // real is happening without exposing cryptographic jargon.
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { Animated, Easing, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { generateIdentity, saveIdentity } from "../../core/crypto/identity";
 import { useT, type TranslationKey } from "../../i18n";
+import PrimaryButton from "../../ui/components/primary-button";
 import {
   FontFamily,
   FontSize,
@@ -41,6 +42,15 @@ export default function IdentityScreen({
   const styles = useMemo(() => createStyles(Colors), [Colors]);
   const [spinAnim] = useState(() => new Animated.Value(0));
   const steps = STEP_KEYS.map((key) => T(key));
+  // The work either produced a key pair on disk or it did not.
+  //
+  // A failure used to fall through to `onComplete` with a timestamp shaped like
+  // a peer ID. Onboarding accepted it, so the user landed in an app whose mesh
+  // could never start (loadIdentity finds nothing) with no screen saying why.
+  const [failed, setFailed] = useState(false);
+  // Bumped by Try again to re-run the effect below. A Keystore refuses for
+  // reasons that pass: locked mid-write, or storage momentarily full.
+  const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
     // Spin the ring indicator.
@@ -54,12 +64,13 @@ export default function IdentityScreen({
     ).start();
 
     // Generate and persist real Ed25519 + X25519 key pairs.
-    // Falls back to a time-based stub only if the keychain is unavailable
-    // (e.g., the Android emulator without a secure hardware backend).
     //
     // Keygen + storage write typically finish in well under MIN_DISPLAY_MS, so
     // this screen is held on-screen for a minimum duration alongside the real
     // work. Otherwise it flashes by unreadably fast on most devices.
+    //
+    // The minimum applies to the failure too: an error screen in 80ms reads as
+    // a validation error the user caused rather than as attempted work.
     let cancelled = false;
     Promise.all([
       generateIdentity().then(async (id) => {
@@ -72,15 +83,43 @@ export default function IdentityScreen({
         if (!cancelled) onComplete(peerID);
       })
       .catch(async () => {
-        const fallback = Date.now().toString(16).padStart(16, "0").slice(0, 16);
         await delay(MIN_DISPLAY_MS);
-        if (!cancelled) onComplete(fallback);
+        if (!cancelled) setFailed(true);
       });
 
     return () => {
       cancelled = true;
     };
-  }, [onComplete, spinAnim]);
+  }, [onComplete, spinAnim, attempt]);
+
+  const retry = useCallback((): void => {
+    setFailed(false);
+    setAttempt((n) => n + 1);
+  }, []);
+
+  if (failed) {
+    return (
+      <SafeAreaView style={styles.root}>
+        <View style={styles.inner}>
+          {/* Live region for the same reason the working state has one: this
+              replaces the spinner with no navigation event. */}
+          <View style={styles.copy} accessibilityLiveRegion="assertive">
+            <Text style={styles.heading} accessibilityRole="header">
+              {T("onboarding.identity.failed_heading")}
+            </Text>
+            <Text style={styles.body}>
+              {T("onboarding.identity.failed_body")}
+            </Text>
+          </View>
+          <PrimaryButton
+            label={T("common.try_again")}
+            onPress={retry}
+            accessibilityLabel={T("common.try_again")}
+          />
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   const spin = spinAnim.interpolate({
     inputRange: [0, 1],

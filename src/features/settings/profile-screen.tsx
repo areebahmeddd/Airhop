@@ -63,6 +63,7 @@ import {
   type ResolvedTheme,
 } from "../../ui/theme";
 import { peerInviteLink } from "../../utils/deep-link";
+import { acknowledged } from "../../utils/haptics";
 import { panicWipe } from "../../utils/panic-wipe";
 import { ensurePermission } from "../../utils/permissions";
 import ConnectivityGroup from "./connectivity-group";
@@ -455,18 +456,18 @@ export default function ProfileScreen({
   // place rather than a dialog over a sheet.
   function handleCopyPeerID(): void {
     void Clipboard.setStringAsync(peerID).catch(() => {});
+    acknowledged();
     setIdCopied(true);
     if (idCopiedTimer.current) clearTimeout(idCopiedTimer.current);
     idCopiedTimer.current = setTimeout(() => setIdCopied(false), 1600);
   }
 
-  // The same card the QR encodes, as text. A QR needs a camera and a line of
-  // sight; the code travels through anything that carries a string, which is how
-  // most people actually reach someone who isn't in the room. Copy only: the
-  // string is ~180 characters and nobody reads or retypes it, so the box shows
+  // The same card the QR encodes, as text, for when there is no camera between
+  // the two people. Copy only: the string is ~180 characters, so the box shows
   // enough to recognise and the glyph does the work.
   function handleCopyContactCode(): void {
     void Clipboard.setStringAsync(qrValue).catch(() => {});
+    acknowledged();
     setCodeCopied(true);
     if (codeCopiedTimer.current) clearTimeout(codeCopiedTimer.current);
     codeCopiedTimer.current = setTimeout(() => setCodeCopied(false), 1600);
@@ -864,10 +865,8 @@ export default function ProfileScreen({
             }}
           />
         </View>
-        {/* Same card, as text, for when there is no camera between you: chat,
-            mail, a note. Sits above the warning rather than below it so the one
-            sentence about what this contains covers the code as well as the
-            QR - they are the same bytes. */}
+        {/* Above the warning, not below: the same sentence covers the code and
+            the QR, which are the same bytes. */}
         <Pressable
           style={styles.codeBox}
           onPress={handleCopyContactCode}
@@ -1537,9 +1536,8 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       fontFamily: FontFamily.mono,
       letterSpacing: 1,
     },
-    // The peer ID box's shape, left-aligned: the ID is a short token worth
-    // centring, the code is a truncated blob that reads as a value under a
-    // label.
+    // The peer ID box's shape, left-aligned: a short token is worth centring, a
+    // truncated blob reads better as a value under a label.
     codeBox: {
       flexDirection: "row",
       alignItems: "center",
@@ -1553,8 +1551,8 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       borderWidth: 1,
       borderColor: Colors.border,
     },
-    // Bounds the truncation: without it the mono line sizes to its full ~180
-    // characters and pushes the glyph off the box.
+    // Bounds the truncation. Without it the mono line sizes to its full width
+    // and pushes the glyph off the box.
     codeBoxText: {
       flex: 1,
       gap: 2,

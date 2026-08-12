@@ -54,6 +54,7 @@ import {
 import { usePullRefreshColors } from "../../ui/use-pull-refresh";
 import { sortConversationsByActivity } from "../../utils/conversation-order";
 import { formatListTimestamp } from "../../utils/format";
+import { held } from "../../utils/haptics";
 import { messagePreviewText } from "../../utils/message-preview";
 import { sumUnread } from "../../utils/unread";
 import ChannelInfoSheet from "./channel-info-sheet";
@@ -478,7 +479,10 @@ export default function ChannelList({
         // Long-press opens the same sheet the swipe does. Swipe alone is both
         // unfamiliar as the only route and unreachable with a screen reader,
         // since ReanimatedSwipeable exposes no accessibility actions.
-        onLongPress={() => handleSwipeMore(item)}
+        onLongPress={() => {
+          held();
+          handleSwipeMore(item);
+        }}
         accessibilityRole="button"
         accessibilityLabel={rowLabel}
         accessibilityHint={t("chat.channels.row_hint")}

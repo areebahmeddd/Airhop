@@ -10,8 +10,12 @@
 // same surface.
 //
 // Do not add protocol logic here - only the raw I/O contract with native.
-import type { TurboModule } from "react-native";
-import { TurboModuleRegistry } from "react-native";
+import type { EventSubscription, TurboModule } from "react-native";
+import {
+  NativeEventEmitter,
+  NativeModules,
+  TurboModuleRegistry,
+} from "react-native";
 
 export interface Spec extends TurboModule {
   // Peripheral (GATT Server - makes this device visible to scanners).
@@ -131,6 +135,17 @@ export interface Spec extends TurboModule {
     vpnActive: boolean;
   }>;
 
+  // Watch the VPN transport while Tor is on, emitting 'onVpnLost' when it goes.
+  //
+  // getTorAvailability above only answers when asked, and the only caller was
+  // app foreground. Without this the app kept claiming Tor over clear-net
+  // traffic until the user next backgrounded it.
+  //
+  // ANDROID ONLY. iOS resolves immediately and emits nothing: Arti is in-process
+  // and reports its own state through NativeAirhopTor.getTorStatus().
+  startVpnWatch(): Promise<void>;
+  stopVpnWatch(): Promise<void>;
+
   // Required by React Native NativeEventEmitter contract
   addListener(eventName: string): void;
   removeListeners(count: number): void;
@@ -185,5 +200,26 @@ export interface Spec extends TurboModule {
 //   notification. Native raises it rather than stopping the radios itself, so
 //   the decision goes through the same presence path as the in-app control and
 //   the two can never disagree about what the mesh is doing.
+//
+// 'onVpnLost'
+//   {}
+//   Android only, and only while startVpnWatch is registered. The VPN transport
+//   carrying our traffic went away, in practice Orbot being stopped. Native
+//   reports the loss and nothing more; whether Tor was what that VPN carried is
+//   for JS to re-probe. Unprefixed name, matching how native emits it.
+
+let emitter: NativeEventEmitter | null = null;
+
+// Subscribe to the VPN transport dropping. Returns null on iOS and anywhere the
+// module is absent, so callers need no platform branch.
+export function subscribeVpnLost(
+  listener: () => void,
+): EventSubscription | null {
+  const native = NativeModules.AirhopBLE as
+    ConstructorParameters<typeof NativeEventEmitter>[0] | undefined;
+  if (native == null) return null;
+  emitter ??= new NativeEventEmitter(native);
+  return emitter.addListener("onVpnLost", listener);
+}
 
 export default TurboModuleRegistry.getEnforcing<Spec>("AirhopBLE");

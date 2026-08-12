@@ -75,11 +75,11 @@ export const strings = {
 
   "seo.breadcrumb.home": "Home",
 
-  "seo.home.title": "Airhop - Private, offline-first messenger",
+  "seo.home.title": "Airhop — Private, offline-first messenger",
   "seo.home.description":
     "Private peer-to-peer messaging for iOS and Android. No internet, no servers, no accounts. Communicate over Bluetooth mesh anywhere.",
 
-  "seo.architecture.title": "Architecture - Airhop",
+  "seo.architecture.title": "Architecture — Airhop",
   "seo.architecture.description":
     "How Airhop works, top to bottom: identity, transport selection, the Bluetooth mesh, encryption, the internet layer, Tor, offline ecash, on-device AI, and the bitchat-compatible wire format.",
   "seo.architecture.breadcrumb": "Architecture",
@@ -87,30 +87,30 @@ export const strings = {
   "seo.architecture.summary":
     "A full technical breakdown of Airhop: identity, transports, the Bluetooth mesh, encryption, the Nostr internet layer, Tor, the Cashu wallet, the on-device AI assistant, and the wire format.",
 
-  "seo.faq.title": "Frequently Asked Questions - Airhop",
+  "seo.faq.title": "Frequently Asked Questions — Airhop",
   "seo.faq.description":
     "Answers about Airhop's Bluetooth mesh messaging, encryption, offline payments, the Nostr internet layer, and bitchat compatibility.",
   "seo.faq.breadcrumb": "FAQ",
 
-  "seo.blogs.title": "Blog - Airhop",
+  "seo.blogs.title": "Blog — Airhop",
   "seo.blogs.description": "Writing on mesh networking, privacy, and offline-first software.",
   "seo.blogs.breadcrumb": "Blog",
 
-  "seo.brand.title": "Brand Kit - Airhop",
+  "seo.brand.title": "Brand Kit — Airhop",
   "seo.brand.description":
     "The Airhop brand kit: the pixel bird mark, the wordmark, colour and type tokens, press assets and boilerplate.",
   "seo.brand.breadcrumb": "Brand Kit",
 
-  "seo.privacy.title": "Privacy Policy - Airhop",
+  "seo.privacy.title": "Privacy Policy — Airhop",
   "seo.privacy.description":
     "How Airhop handles data: no accounts, no servers, no tracking. Your identity and messages stay on your device.",
   "seo.privacy.breadcrumb": "Privacy Policy",
 
-  "seo.terms.title": "Terms of Service - Airhop",
+  "seo.terms.title": "Terms of Service — Airhop",
   "seo.terms.description": "Terms governing use of the Airhop app and website.",
   "seo.terms.breadcrumb": "Terms of Service",
 
-  "seo.notfound.title": "Page Not Found - Airhop",
+  "seo.notfound.title": "Page Not Found — Airhop",
   "seo.notfound.description": "The page you are looking for does not exist or has been moved.",
 };
 

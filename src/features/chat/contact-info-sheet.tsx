@@ -34,6 +34,7 @@ import {
   resolvePeerOwnName,
 } from "../../utils/display-name";
 import { formatLongDate } from "../../utils/format";
+import { acknowledged } from "../../utils/haptics";
 import {
   isNostrId,
   NOSTR_ID_PREFIX,
@@ -144,10 +145,10 @@ export default function ContactInfoSheet({
   // Whether we can offer to hand this person our durable contact card.
   //
   // Only for a location-channel pseudonym we still have a cell bound to, since
-  // that cell is the encrypted channel the card travels over. It is the one way
-  // across the gap those pseudonyms create on purpose: their cell key and our
-  // peer ID are unlinkable by design, so nothing but the person saying "this is
-  // also me" can join them, and this is that.
+  // that cell is the encrypted channel the card travels over. A cell key works
+  // only in its own cell, so both sides lose the thread as soon as either moves.
+  // What the card hands over is the KEYS (see sendGeoDm for what the envelope
+  // already carried), which is what makes them reachable anywhere.
   const geoDmPubkey = isAnonymous
     ? (peerID?.slice("nostr_".length) ?? null)
     : null;
@@ -194,6 +195,7 @@ export default function ContactInfoSheet({
 
   function handleCopyID(): void {
     void Clipboard.setStringAsync(idValue).catch(() => {});
+    acknowledged();
     setCopied(true);
     setTimeout(() => setCopied(false), 1500);
   }

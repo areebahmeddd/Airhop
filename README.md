@@ -267,7 +267,7 @@ Airhop would not exist without the work of the bitchat community. Thank you to e
 
 ## Support
 
-Help keep the project going by contributing through the app or website, sponsoring on GitHub, or simply giving this repository a star.
+Help keep the project going by donating via the website, sponsoring on GitHub, or simply giving this repository a star.
 
 <a href="https://www.star-history.com/?repos=areebahmeddd%2Fairhop&type=date&legend=top-left">
  <picture>

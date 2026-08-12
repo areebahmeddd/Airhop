@@ -50,6 +50,7 @@ import {
   Spacing,
   useThemeColors,
 } from "../../ui/theme";
+import { acknowledged } from "../../utils/haptics";
 import { peerIDToUsername } from "../../utils/username";
 
 // Protocol-defined default channels. Read-only, cannot be left.
@@ -335,6 +336,7 @@ export default function ChannelInfoSheet({
   function handleCopyGeohash(): void {
     if (geohash === null) return;
     void Clipboard.setStringAsync(geohash).catch(() => {});
+    acknowledged();
     setCopied(true);
     setTimeout(() => setCopied(false), 1500);
   }
