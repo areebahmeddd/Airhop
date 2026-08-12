@@ -5,6 +5,7 @@ All notable changes are documented here. The format follows [Keep a Changelog](h
 
 ## What's New
 
+- feat: enhance haptic feedback and notification handling (by @areebahmeddd) [bc755c2]
 - feat: enhance QR scan and contact management with verification and copy functionality (by @areebahmeddd) [4af924c]
 
 **Full changelog:** [v0.9.14..v0.9.15](https://github.com/areebahmeddd/airhop/compare/v0.9.14..v0.9.15)
