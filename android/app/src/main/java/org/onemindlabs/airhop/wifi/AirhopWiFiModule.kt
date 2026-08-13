@@ -45,6 +45,7 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.content.pm.PackageManager
 import android.net.ConnectivityManager
 import android.net.Network
 import android.net.NetworkCapabilities
@@ -129,8 +130,42 @@ class AirhopWiFiModule(
 
     override fun getName(): String = "AirhopWiFi"
 
-    private val wifiAwareManager: WifiAwareManager? =
-        reactContext.getSystemService(Context.WIFI_AWARE_SERVICE) as? WifiAwareManager
+    // Whether this device advertises the Aware feature at all.
+    //
+    // Asked of the package manager rather than inferred from the service,
+    // matching bitchat's WifiAwareSupport. The two answer different questions
+    // and only this one is a fact about the hardware: a device can advertise
+    // the feature while the service object is momentarily unavailable, and
+    // collapsing both into "unsupported" tells the user their phone cannot do
+    // something it can.
+    private val hasAwareFeature: Boolean =
+        try {
+            reactContext.packageManager.hasSystemFeature(
+                PackageManager.FEATURE_WIFI_AWARE,
+            )
+        } catch (_: Exception) {
+            false
+        }
+
+    // Resolved per call, never cached.
+    //
+    // This used to be a `val` read once when the module was constructed, which
+    // is early in app startup. A service not yet ready at that moment latched
+    // null for the life of the process, and every later check reported "not
+    // supported" on a device that supports it perfectly well. bitchat calls
+    // getSystemService at check time for the same reason.
+    //
+    // The typed overload rather than the string constant plus a cast: a failed
+    // `as?` is indistinguishable from an absent service, and one of those is
+    // recoverable.
+    private fun awareManager(): WifiAwareManager? =
+        try {
+            reactContext.applicationContext.getSystemService(
+                WifiAwareManager::class.java,
+            )
+        } catch (_: Exception) {
+            null
+        }
 
     private var awareSession: WifiAwareSession? = null
     private var publishSession: PublishDiscoverySession? = null
@@ -183,22 +218,32 @@ class AirhopWiFiModule(
 
     @ReactMethod
     fun startWiFi(promise: Promise) {
-        val manager = wifiAwareManager
         // UNSUPPORTED, not UNAVAILABLE, and the distinction is the whole reason
         // the JS reconciler can exist. No Aware hardware and an OS below the
         // data-path floor are permanent facts about this device; WiFi being off
         // is a fact about this minute. Both used to reject with the same code,
         // so a caller could only choose between retrying a device that will
         // never answer and never retrying one that would have.
-        if (manager == null) {
-            promise.reject("WIFI_AWARE_UNSUPPORTED", "WiFi Aware not supported on this device")
-            return
-        }
+        //
+        // Order matters: the permanent facts are asked first, so a device that
+        // genuinely cannot do this is never told to try again later.
         if (Build.VERSION.SDK_INT < AWARE_DATA_PATH_MIN_API) {
             promise.reject(
                 "WIFI_AWARE_UNSUPPORTED",
                 "WiFi Aware data paths need Android 10 or later",
             )
+            return
+        }
+        if (!hasAwareFeature) {
+            promise.reject("WIFI_AWARE_UNSUPPORTED", "WiFi Aware not supported on this device")
+            return
+        }
+        // The feature is there but the service is not, which is a state rather
+        // than a verdict: UNAVAILABLE, so the reconciler keeps retrying instead
+        // of latching this device off for the session.
+        val manager = awareManager()
+        if (manager == null) {
+            promise.reject("WIFI_AWARE_UNAVAILABLE", "WiFi Aware is not available right now")
             return
         }
         if (!manager.isAvailable) {
@@ -344,7 +389,7 @@ class AirhopWiFiModule(
     private val awareStateReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
             if (intent?.action != WifiAwareManager.ACTION_WIFI_AWARE_STATE_CHANGED) return
-            val available = wifiAwareManager?.isAvailable == true
+            val available = awareManager()?.isAvailable == true
             if (available == lastReportedAvailable) return
             lastReportedAvailable = available
             // Losing the radio invalidates everything built on it. Tear our own
@@ -390,7 +435,7 @@ class AirhopWiFiModule(
     private fun registerAwareReceiver() {
         if (awareReceiverRegistered) return
         // Nothing to listen to on a device with no Aware service.
-        val manager = wifiAwareManager ?: return
+        val manager = awareManager() ?: return
         try {
             // NOT_EXPORTED for the same reason the BLE module says so: this only
             // ever listens to a protected system broadcast, it is required to be

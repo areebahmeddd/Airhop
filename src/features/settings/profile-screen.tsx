@@ -68,6 +68,7 @@ import { panicWipe } from "../../utils/panic-wipe";
 import { ensurePermission } from "../../utils/permissions";
 import ConnectivityGroup from "./connectivity-group";
 import AboutScreen from "./sections/about-screen";
+import DiagnosticsScreen from "./sections/diagnostics-screen";
 import GeneralScreen from "./sections/general-screen";
 import HelpScreen from "./sections/help-screen";
 import LicensesScreen from "./sections/licenses-screen";
@@ -221,6 +222,7 @@ type SettingsView =
   | "network"
   | "permissions"
   | "storage"
+  | "diagnostics"
   | "help"
   | "terms"
   | "privacy"
@@ -583,6 +585,9 @@ export default function ProfileScreen({
   if (view === "storage") {
     return <StorageScreen onBack={() => setView("root")} />;
   }
+  if (view === "diagnostics") {
+    return <DiagnosticsScreen onBack={() => setView("root")} />;
+  }
   if (view === "help") {
     return (
       <HelpScreen
@@ -732,17 +737,28 @@ export default function ProfileScreen({
           />
           <GroupDivider />
           <SettingLinkRow
+            icon="hard-drive"
+            label={T("settings.section.storage")}
+            description={T("settings.section.storage_desc")}
+            onPress={() => openSection("storage")}
+          />
+          <GroupDivider />
+          <SettingLinkRow
             icon="key"
             label={T("settings.section.permissions")}
             description={T("settings.section.permissions_desc")}
             onPress={() => openSection("permissions")}
           />
           <GroupDivider />
+          {/* Left in plain sight rather than behind a tap-count reveal. It
+              changes nothing, and the whole reason it exists is so a tester can
+              read numbers back during a field report - hidden, it would be one
+              more thing to explain before the useful part. */}
           <SettingLinkRow
-            icon="hard-drive"
-            label={T("settings.section.storage")}
-            description={T("settings.section.storage_desc")}
-            onPress={() => openSection("storage")}
+            icon="activity"
+            label={T("settings.section.diagnostics")}
+            description={T("settings.section.diagnostics_desc")}
+            onPress={() => openSection("diagnostics")}
           />
           <GroupDivider />
           <SettingLinkRow
@@ -1050,7 +1066,7 @@ export default function ProfileScreen({
           showsVerticalScrollIndicator={false}
         >
           <Text style={styles.appearanceGroupLabel}>
-            {T("settings.theme.group")}
+            {T("settings.group.theme")}
           </Text>
           <View style={[shared.settingsGroup, styles.appearanceGroup]}>
             {THEME_ORDER.map((key, i) => {
@@ -1102,7 +1118,7 @@ export default function ProfileScreen({
           {/* Font: keep the sheet open on select so the change is visible live
                 (the mono bits behind it update instantly) and easy to compare. */}
           <Text style={styles.appearanceGroupLabel}>
-            {T("settings.font.group")}
+            {T("settings.group.font")}
           </Text>
           <View style={[shared.settingsGroup, styles.appearanceGroup]}>
             {MONO_FONT_ORDER.map((key, i) => {
@@ -1160,7 +1176,7 @@ export default function ProfileScreen({
             "is my language coming" without a picker that can only pick one
             thing, and the rows become live the release their catalogs land. */}
           <Text style={styles.appearanceGroupLabel}>
-            {T("settings.language.group")}
+            {T("settings.group.language")}
           </Text>
           <View style={[shared.settingsGroup, styles.appearanceGroup]}>
             <View
@@ -1341,20 +1357,26 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
     // The sheet centers its children, so both the box and its header need to be
     // stretched to full width or they collapse to their content and the rows
     // wrap and overlap.
-    appearanceGroup: {
-      width: "100%",
-    },
-    // Small group header inside the Appearance sheet (theme / font / language).
+    // Above each group inside the Appearance sheet, so three pickers in one
+    // scroll are told apart without reading their options.
+    // Matched to `sectionTitle` in shared.tsx rather than styled separately, so
+    // a group heading reads the same here as on every sub-screen.
     appearanceGroupLabel: {
-      alignSelf: "stretch",
       fontSize: FontSize.xs,
-      fontWeight: FontWeight.semibold,
       color: Colors.textMuted,
       letterSpacing: 0.8,
-      marginTop: Spacing.md,
-      marginBottom: Spacing.xs,
-      marginStart: Spacing.xs,
+      textTransform: "uppercase",
+      paddingHorizontal: Spacing.xs,
+      paddingBottom: Spacing.sm,
     },
+    appearanceGroup: {
+      width: "100%",
+      // Stands in for the `gap` a `section` wrapper would give: these are
+      // direct children of a ScrollView, so nothing else separates a box from
+      // the next heading.
+      marginBottom: Spacing.lg,
+    },
+    // Small group header inside the Appearance sheet (theme / font / language).
     // Capped so the language list scrolls inside the sheet instead of pushing
     // the sheet past the top of the screen, where it would clip rather than
     // scroll (a sheet body is a plain View).

@@ -277,7 +277,7 @@ export default function VersionScreen({ onBack }: Props): React.JSX.Element {
               accessibilityRole="link"
               suppressHighlighting
             >
-              MIT
+              MIT License
             </Text>
           </Text>
         </View>

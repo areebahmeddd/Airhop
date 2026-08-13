@@ -6,10 +6,14 @@ import {
   decodeQRContent,
   encodeContactCard,
   encodeQRContent,
-  type ContactCard,
+  type AirhopContactCard,
 } from "../contact-exchange";
 
-function makeCard(overrides: Partial<ContactCard> = {}): ContactCard {
+// Typed as the narrower card these functions actually round-trip: our own
+// format always carries a Nostr key, so the fixtures do too.
+function makeCard(
+  overrides: Partial<AirhopContactCard> = {},
+): AirhopContactCard {
   return {
     peerID: "3a9f2c1b4e5d6f70",
     noisePubKey: new Uint8Array(32).fill(0xaa),

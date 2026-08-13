@@ -47,8 +47,8 @@ import {
 // Constants per PROTOCOLS.md section 5.
 const SYNC_INTERVAL_MS = 15_000;
 const SEEN_CAPACITY = 1000;
-const GCS_MAX_BYTES = 400;
-const GCS_TARGET_FPR = 0.01; // 1%
+export const GCS_MAX_BYTES = 400;
+export const GCS_TARGET_FPR = 0.01; // 1%
 
 // REQUEST_SYNC and every packet sent in answer to one travel exactly one hop.
 // bitchat sets ttl 0 in both directions (GossipSyncManager.sendRequestSync and

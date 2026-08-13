@@ -16,11 +16,18 @@ import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import React, { useState } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import { setTorRouting } from "../../../core/nostr/tor-routing";
-import { useT, type TranslationKey, type Translator } from "../../../i18n";
+import {
+  useT,
+  useTPlural,
+  type TranslationKey,
+  type Translator,
+} from "../../../i18n";
 import { getMeshService } from "../../../services/mesh-service";
 import { showAlert } from "../../../store/alert-store";
 import {
+  MEDIA_RETENTION_DAY_OPTIONS,
   useSettingsStore,
+  type MediaRetentionDays,
   type UploadQuality,
 } from "../../../store/settings-store";
 import BottomSheet from "../../../ui/components/bottom-sheet";
@@ -97,6 +104,18 @@ const QUALITY_META: Record<
 };
 const QUALITY_ORDER: UploadQuality[] = ["low", "medium", "high"];
 
+// One line per option, because the number alone decides nothing: "7 days" and
+// "30 days" only become a choice once the tradeoff is named.
+//
+// Keyed on the union rather than `number`, so adding a fourth option to
+// MEDIA_RETENTION_DAY_OPTIONS is a compile error here until it has copy. The
+// alternative is a picker that silently renders one blank row.
+const RETENTION_DESCRIPTION: Record<MediaRetentionDays, TranslationKey> = {
+  7: "settings.general.retention_7_desc",
+  14: "settings.general.retention_14_desc",
+  30: "settings.general.retention_30_desc",
+};
+
 // The unshipped features. Each row states what it will do rather than linking
 // out or staying silent about it, so the answer to "can Airhop do X" is on a
 // screen instead of only in a changelog.
@@ -130,6 +149,7 @@ const FEATURES: {
 export default function GeneralScreen({ onBack }: Props): React.JSX.Element {
   const Colors = useThemeColors();
   const T = useT();
+  const TP = useTPlural();
   const styles = useSharedStyles();
   const undoSendSeconds = useSettingsStore((s) => s.undoSendSeconds);
   const setUndoSendSeconds = useSettingsStore((s) => s.setUndoSendSeconds);
@@ -139,6 +159,8 @@ export default function GeneralScreen({ onBack }: Props): React.JSX.Element {
   const setUploadQuality = useSettingsStore((s) => s.setUploadQuality);
   const [showUndoSheet, setShowUndoSheet] = useState(false);
   const [showQualitySheet, setShowQualitySheet] = useState(false);
+  const mediaRetentionDays = useSettingsStore((s) => s.mediaRetentionDays);
+  const [showRetentionSheet, setShowRetentionSheet] = useState(false);
 
   function doReset(): void {
     // reset() flips the persisted values back to defaults, but the connectivity
@@ -185,6 +207,9 @@ export default function GeneralScreen({ onBack }: Props): React.JSX.Element {
             the connectivity toggles instead, and this reads as what it is, a
             note on what the app does and will do. */}
         <View style={styles.section}>
+          <Text style={styles.sectionTitle}>
+            {T("settings.group.features")}
+          </Text>
           <View style={styles.settingsGroup}>
             <SettingRow
               icon="credit-card"
@@ -226,6 +251,9 @@ export default function GeneralScreen({ onBack }: Props): React.JSX.Element {
         </View>
 
         <View style={styles.section}>
+          <Text style={styles.sectionTitle}>
+            {T("settings.group.messages")}
+          </Text>
           <View style={styles.settingsGroup}>
             <SettingLinkRow
               icon="rotate-ccw"
@@ -244,6 +272,7 @@ export default function GeneralScreen({ onBack }: Props): React.JSX.Element {
         {/* Media you send, then media you receive. One box, because from the
             user's side they are the same subject: how photos behave. */}
         <View style={styles.section}>
+          <Text style={styles.sectionTitle}>{T("settings.group.media")}</Text>
           <View style={styles.settingsGroup}>
             <SettingLinkRow
               icon="image"
@@ -255,6 +284,23 @@ export default function GeneralScreen({ onBack }: Props): React.JSX.Element {
                   {T(QUALITY_META[uploadQuality].labelKey)}
                 </Text>
               }
+            />
+            <GroupDivider />
+            {/* Moved here from Privacy & security. It reads as a privacy
+                control (a seized phone holds less), but every neighbour of it
+                there was about what leaves this device, and this is about what
+                stays on it. Beside quality and show-media it completes one
+                subject: how media behaves, sending through keeping. */}
+            <SettingLinkRow
+              icon="clock"
+              label={T("settings.general.media_retention")}
+              description={T("settings.general.media_retention_desc")}
+              control={
+                <Text style={styles.settingValue}>
+                  {TP("settings.general.retention_days", mediaRetentionDays)}
+                </Text>
+              }
+              onPress={() => setShowRetentionSheet(true)}
             />
             <GroupDivider />
             {/* Not a download switch, whatever it used to be called. Media
@@ -280,6 +326,7 @@ export default function GeneralScreen({ onBack }: Props): React.JSX.Element {
             undoes all of them, and it should not read as one more row in the
             list above it. */}
         <View style={styles.section}>
+          <Text style={styles.sectionTitle}>{T("settings.group.reset")}</Text>
           <View style={styles.settingsGroup}>
             <SettingLinkRow
               icon="refresh-ccw"
@@ -322,6 +369,65 @@ export default function GeneralScreen({ onBack }: Props): React.JSX.Element {
                     <Text style={styles.optionLabel}>{T(opt.labelKey)}</Text>
                     <Text style={styles.optionDescription}>
                       {T(opt.descriptionKey)}
+                    </Text>
+                  </View>
+                  {selected && (
+                    <Feather
+                      name="check"
+                      size={18}
+                      color={Colors.textPrimary}
+                    />
+                  )}
+                </Pressable>
+              </React.Fragment>
+            );
+          })}
+        </View>
+      </BottomSheet>
+
+      {/* Retention picker. Same grouped-option sheet the quality and undo
+          pickers use, so this reads as one more of those rather than a new
+          kind of control. Each option carries the consequence rather than only
+          the number, because "14 days" says nothing on its own. */}
+      <BottomSheet
+        visible={showRetentionSheet}
+        onClose={() => setShowRetentionSheet(false)}
+        sheetStyle={styles.sheet}
+      >
+        <Text style={styles.sheetTitle}>
+          {T("settings.general.media_retention")}
+        </Text>
+        <Text style={styles.sheetSubtitle}>
+          {T("settings.general.media_retention_sheet")}
+        </Text>
+        <View style={styles.optionGroup}>
+          {MEDIA_RETENTION_DAY_OPTIONS.map((days, i) => {
+            const selected = days === mediaRetentionDays;
+            return (
+              <React.Fragment key={days}>
+                {i > 0 && <GroupDivider />}
+                <Pressable
+                  style={[
+                    styles.optionRowGrouped,
+                    selected && styles.optionRowGroupedSelected,
+                  ]}
+                  onPress={() => {
+                    useSettingsStore.getState().setMediaRetentionDays(days);
+                    setShowRetentionSheet(false);
+                  }}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected }}
+                  accessibilityLabel={TP(
+                    "settings.general.retention_days",
+                    days,
+                  )}
+                >
+                  <View style={styles.optionText}>
+                    <Text style={styles.optionLabel}>
+                      {TP("settings.general.retention_days", days)}
+                    </Text>
+                    <Text style={styles.optionDescription}>
+                      {T(RETENTION_DESCRIPTION[days])}
                     </Text>
                   </View>
                   {selected && (

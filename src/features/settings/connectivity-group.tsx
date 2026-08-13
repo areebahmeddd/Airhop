@@ -35,7 +35,7 @@ import {
   useSharedStyles,
 } from "./shared";
 
-type ToggleKey = "liveVoice" | "tor" | "gateway" | "bridge";
+type ToggleKey = "liveVoice" | "background" | "tor" | "gateway" | "bridge";
 
 // Keys rather than text: this is a module constant, so it cannot call a hook,
 // and building it once at module load would freeze the copy in whichever
@@ -51,6 +51,18 @@ interface ConfirmCopy {
 // is, and somebody holding their thumb over a switch is asking what happens
 // next, not what it is called.
 const CONFIRM: Record<ToggleKey, { on: ConfirmCopy; off: ConfirmCopy }> = {
+  background: {
+    on: {
+      title: "settings.conn.background_on_title",
+      body: "settings.conn.background_on_body",
+      action: "settings.conn.turn_on",
+    },
+    off: {
+      title: "settings.conn.background_off_title",
+      body: "settings.conn.background_off_body",
+      action: "settings.conn.turn_off",
+    },
+  },
   liveVoice: {
     on: {
       title: "settings.conn.live_voice_on_title",
@@ -119,6 +131,12 @@ export default function ConnectivityGroup(): React.JSX.Element {
   const torEnabled = useSettingsStore((s) => s.torEnabled);
   const liveVoiceEnabled = useSettingsStore((s) => s.liveVoiceEnabled);
   const setLiveVoiceEnabled = useSettingsStore((s) => s.setLiveVoiceEnabled);
+  const backgroundMeshEnabled = useSettingsStore(
+    (s) => s.backgroundMeshEnabled,
+  );
+  const setBackgroundMeshEnabled = useSettingsStore(
+    (s) => s.setBackgroundMeshEnabled,
+  );
   const gatewayEnabled = useSettingsStore((s) => s.gatewayEnabled);
   const setGatewayEnabled = useSettingsStore((s) => s.setGatewayEnabled);
   const bridgeEnabled = useSettingsStore((s) => s.bridgeEnabled);
@@ -155,6 +173,9 @@ export default function ConnectivityGroup(): React.JSX.Element {
     switch (key) {
       case "liveVoice":
         setLiveVoiceEnabled(next);
+        break;
+      case "background":
+        setBackgroundMeshEnabled(next);
         break;
       case "tor":
         void handleTorToggle(next);
@@ -256,6 +277,21 @@ export default function ConnectivityGroup(): React.JSX.Element {
             <GroupDivider />
           </>
         )}
+        {/* First, because it is the widest switch in the group: everything
+            below decides how the mesh behaves, this one decides whether it is
+            running at all once the app is closed. */}
+        <SettingRow
+          icon="power"
+          label={T("settings.conn.background")}
+          description={T("settings.conn.background_desc")}
+          control={
+            <SettingSwitch
+              value={backgroundMeshEnabled}
+              onValueChange={(v) => requestToggle("background", v)}
+            />
+          }
+        />
+        <GroupDivider />
         {/* Above the internet toggles because it is not one of them: live
             voice never leaves Bluetooth, so it stays available when
             everything below is greyed out. */}

@@ -38,6 +38,7 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { parseBitchatVerifyQr } from "../../core/crypto/bitchat-verify-qr";
 import {
   decodeQRContent,
   type ContactCard,
@@ -94,14 +95,35 @@ interface ScanResult {
   card: ContactCard | null;
 }
 
-// Parse either a v1 contact card (`airhop:v1/<base64url>`) or a bare peer ID.
-// Card parsing is tried first: it is strictly more informative, and the two
-// formats are unambiguous.
-function parseScan(raw: string): ScanResult | null {
+// A code that was recognised and refused, so the caller can say which. Only
+// bitchat QRs produce one: ours carry no expiry and nothing else read here can
+// fail in a way worth reporting rather than ignoring.
+type ScanRefusal = "expired" | "tampered";
+
+// Parse anything this screen accepts, in order of how much it tells us.
+//
+//   airhop:v1/<base64url>   our contact card
+//   bitchat://verify?...    a bitchat verification QR, signed and time-boxed
+//   16 hex / airhop://peer  a bare peer ID
+//
+// The formats are unambiguous, so order is about cost rather than precedence.
+function parseScan(raw: string): ScanResult | ScanRefusal | null {
   const card = decodeQRContent(raw.trim());
   if (card) return { peerID: card.peerID.toLowerCase(), card };
+
+  const bitchat = parseBitchatVerifyQr(raw);
+  if (bitchat !== null) {
+    return bitchat.ok
+      ? { peerID: bitchat.card.peerID, card: bitchat.card }
+      : bitchat.reason;
+  }
+
   const peerID = parsePeerID(raw);
   return peerID ? { peerID, card: null } : null;
+}
+
+function isScanResult(v: ScanResult | ScanRefusal | null): v is ScanResult {
+  return v !== null && typeof v !== "string";
 }
 
 // ---------------------------------------------------------------------------
@@ -153,7 +175,21 @@ export default function QrScanScreen({
   function handleBarcodeScanned(data: string): void {
     if (hasScannedRef.current) return;
     const result = parseScan(data);
-    if (!result) return; // Not an Airhop QR code, keep scanning.
+    if (result === null) return; // Not a code we read, keep scanning.
+    // Recognised and refused. Reported rather than ignored: through a
+    // viewfinder an expired bitchat code looks exactly like an unreadable one,
+    // and the fix ("ask them to show it again") is only obvious once said.
+    if (!isScanResult(result)) {
+      hasScannedRef.current = true;
+      rejected();
+      setError(
+        result === "expired"
+          ? t("contacts.scan.bitchat_expired")
+          : t("contacts.scan.tampered"),
+      );
+      setStage("entry");
+      return;
+    }
     hasScannedRef.current = true;
     // The user is looking at the viewfinder, not at the confirm step sliding in
     // behind it. Camera only: the gallery path reads from this screen.
@@ -166,8 +202,16 @@ export default function QrScanScreen({
 
   function handleManualContinue(): void {
     const parsed = parseScan(input.trim());
-    if (!parsed) {
+    if (parsed === null) {
       setError(t("contacts.scan.invalid_id"));
+      return;
+    }
+    if (!isScanResult(parsed)) {
+      setError(
+        parsed === "expired"
+          ? t("contacts.scan.bitchat_expired")
+          : t("contacts.scan.tampered"),
+      );
       return;
     }
     setError(null);
@@ -243,8 +287,16 @@ export default function QrScanScreen({
       const scans = await scanFromURLAsync(picked.assets[0].uri, ["qr"]);
       const raw = scans[0]?.data;
       const result = raw ? parseScan(raw) : null;
-      if (!result) {
+      if (result === null) {
         setError(t("contacts.scan.no_qr"));
+        return;
+      }
+      if (!isScanResult(result)) {
+        setError(
+          result === "expired"
+            ? t("contacts.scan.bitchat_expired")
+            : t("contacts.scan.tampered"),
+        );
         return;
       }
       setFoundPeerID(result.peerID);
@@ -300,9 +352,13 @@ export default function QrScanScreen({
         nickname: prior?.nickname.trim() ? prior.nickname : card.nickname,
         addedAtMs: prior?.addedAtMs ?? Date.now(),
         source,
-        // The card always carries the peer's Nostr pubkey, which makes them
-        // reachable over the internet even if we never meet on Bluetooth.
-        nostrPubkeyHex: bytesToHex(card.nostrPubKey),
+        // Their Nostr pubkey, which makes them reachable over the internet even
+        // if we never meet on Bluetooth. Absent only for a bitchat QR whose
+        // owner has no Nostr identity, which leaves a mesh-only contact rather
+        // than a broken one - and never clears a key a previous scan learned.
+        ...(card.nostrPubKey !== undefined
+          ? { nostrPubkeyHex: bytesToHex(card.nostrPubKey) }
+          : {}),
       });
     } else if (!prior) {
       // New peer, ID only: remember them so the contact survives a restart, but
@@ -324,7 +380,7 @@ export default function QrScanScreen({
   }
 
   const foundUsername = foundPeerID ? peerIDToUsername(foundPeerID) : "";
-  const canContinueManual = parseScan(input.trim()) !== null;
+  const canContinueManual = isScanResult(parseScan(input.trim()));
 
   // Is this peer already saved? Drives the confirm step: an existing contact is
   // shown by their saved name with a "Message" action, a new one with "Add
@@ -525,10 +581,10 @@ export default function QrScanScreen({
               </Pressable>
             </View>
 
-            {/* Muted, not verified green: the note is a caveat, and a green
-                shield over one reads as reassurance. */}
+            {/* Verified blue: the note is about what a scanned QR proves, and
+                the shield ties it to the verified badge it earns. */}
             <View style={styles.noteRow}>
-              <Feather name="shield" size={14} color={Colors.textMuted} />
+              <Feather name="shield" size={14} color={Colors.verified} />
               <Text style={styles.noteText}>{T("contacts.qr.trust_note")}</Text>
             </View>
           </>

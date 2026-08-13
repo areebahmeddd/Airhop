@@ -24,12 +24,24 @@ import { base64UrlToBytes, bytesToBase64Url } from "../encoding/base64";
 
 // ---- Types ------------------------------------------------------------------
 
+// A card read from our own `airhop:v1/` format, where the Nostr key is part of
+// the fixed layout and therefore always present. Narrower than ContactCard so
+// callers of the decoders below need no guard for a field that format cannot
+// omit.
+export type AirhopContactCard = ContactCard & { nostrPubKey: Uint8Array };
+
 export interface ContactCard {
   peerID: string; // 16 hex chars
   noisePubKey: Uint8Array; // 32-byte X25519
   signingPubKey: Uint8Array; // 32-byte Ed25519
   nickname: string; // 0–32 UTF-8 characters
-  nostrPubKey: Uint8Array; // 32-byte secp256k1 (Nostr identity)
+  // 32-byte secp256k1 (Nostr identity).
+  //
+  // Optional because a card can now come from a bitchat verification QR, where
+  // the npub field is itself optional. Our own `airhop:v1/` cards always carry
+  // one - encodeContactCard refuses without it - so absence means "read from
+  // bitchat, mesh-only contact" rather than a malformed card of ours.
+  nostrPubKey?: Uint8Array;
 }
 
 // ---- Binary encode/decode ---------------------------------------------------
@@ -49,7 +61,11 @@ export function encodeContactCard(card: ContactCard): Uint8Array {
   if (card.signingPubKey.length !== 32) {
     throw new Error("contact-exchange: signingPubKey must be 32 bytes");
   }
-  if (card.nostrPubKey.length !== 32) {
+  // Required here even though the field is optional on the type: `airhop:v1/`
+  // has a fixed-width Nostr key at the end, so there is no way to encode a card
+  // without one. Absence only ever comes from a bitchat QR, which is read and
+  // never re-emitted.
+  if (card.nostrPubKey === undefined || card.nostrPubKey.length !== 32) {
     throw new Error("contact-exchange: nostrPubKey must be 32 bytes");
   }
 
@@ -76,7 +92,7 @@ export function encodeContactCard(card: ContactCard): Uint8Array {
   return buf;
 }
 
-export function decodeContactCard(buf: Uint8Array): ContactCard {
+export function decodeContactCard(buf: Uint8Array): AirhopContactCard {
   if (buf.length < FIXED_HEADER_SIZE) {
     throw new Error(
       `contact-exchange: buffer too short (${buf.length} < ${FIXED_HEADER_SIZE})`,
@@ -128,7 +144,7 @@ export function encodeQRContent(card: ContactCard): string {
 }
 
 // Parse a QR code content string. Returns null if it's not an Airhop contact QR.
-export function decodeQRContent(qr: string): ContactCard | null {
+export function decodeQRContent(qr: string): AirhopContactCard | null {
   if (!qr.startsWith(QR_SCHEME)) return null;
   const b64 = qr.slice(QR_SCHEME.length);
   let binary: Uint8Array;

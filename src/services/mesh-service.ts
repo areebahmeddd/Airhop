@@ -429,6 +429,7 @@ export class MeshService {
   // Unsubscribe for the settings listener that tears live voice down when the
   // user switches it off mid-burst.
   private liveVoiceUnsub: (() => void) | null = null;
+  private backgroundPrefUnsub: (() => void) | null = null;
   // Unsubscribe for the contacts-store listener that binds a peer's durable
   // Nostr pubkey from the registry when a contact is created.
   private contactsUnsub: (() => void) | null = null;
@@ -561,6 +562,20 @@ export class MeshService {
 
   getByteCounters(): { sent: number; received: number } {
     return { sent: this.bytesSent, received: this.bytesReceived };
+  }
+
+  // Live radio links, split by transport, for the Diagnostics screen.
+  //
+  // A link is a socket we hold, which is a different question from how many
+  // peers we can reach: one link can carry a dozen relayed peers, and a peer we
+  // announce to may be several hops away with no link of ours anywhere near it.
+  // Reporting them separately is what makes "nobody is nearby" and "the radio is
+  // not connecting" distinguishable in a bug report.
+  getLinkCounts(): { ble: number; wifi: number } {
+    return {
+      ble: this.connectedLinks.size,
+      wifi: this.wifiConnectedLinks.size,
+    };
   }
 
   // Every outgoing write goes through one of these two so bytesSent stays
@@ -1135,7 +1150,22 @@ export class MeshService {
     //
     // After the listeners, not before, so an availability report that lands
     // while the attach is in flight is heard rather than dropped into a gap.
+    //
+    // Never gated on a preference. The fast path is chosen per message by the
+    // router, which treats a WiFi link as one more link, and it degrades to
+    // Bluetooth on its own when there is none. There is nothing here a user
+    // could usefully decide.
     this.wifi.start();
+
+    // The radio controller reads the background preference during reconcile, so
+    // the switch has to ask for one. Without this the foreground service would
+    // keep running until something else happened to trigger a pass, which on a
+    // phone left alone can be a long time.
+    this.backgroundPrefUnsub?.();
+    this.backgroundPrefUnsub = useSettingsStore.subscribe((state, prev) => {
+      if (state.backgroundMeshEnabled === prev.backgroundMeshEnabled) return;
+      this.radio.refresh();
+    });
   }
 
   // ---------------------------------------------------------------------------
@@ -3479,7 +3509,12 @@ export class MeshService {
     }
     if (!this.addVerifiedContact(decoded, { inPerson: false })) return null;
 
-    const nostrPubkeyHex = bytesToHex(decoded.nostrPubKey);
+    // A geo card is always one of ours, so this is present; the guard follows
+    // the type rather than the path.
+    const nostrPubkeyHex =
+      decoded.nostrPubKey !== undefined
+        ? bytesToHex(decoded.nostrPubKey)
+        : undefined;
     const chat = useChatStore.getState();
     // Durable record, so they survive this session and are reachable over the
     // internet from anywhere. Written with `source: "geo-card"` so the contact
@@ -3497,7 +3532,9 @@ export class MeshService {
       source: "link",
       nostrPubkeyHex,
     });
-    this.nostrPubkeyToPeerID.set(nostrPubkeyHex, decoded.peerID);
+    if (nostrPubkeyHex !== undefined) {
+      this.nostrPubkeyToPeerID.set(nostrPubkeyHex, decoded.peerID);
+    }
     chat.noteGeoCardExchange(senderPubkey, { theirPeerID: decoded.peerID });
 
     // Said in the pseudonymous thread, which is still where this conversation
@@ -5838,6 +5875,8 @@ export class MeshService {
     this.gatewayUnsub = null;
     this.liveVoiceUnsub?.();
     this.liveVoiceUnsub = null;
+    this.backgroundPrefUnsub?.();
+    this.backgroundPrefUnsub = null;
     this.bridgeUnsub?.();
     this.bridgeUnsub = null;
     this.internetUnsub?.();

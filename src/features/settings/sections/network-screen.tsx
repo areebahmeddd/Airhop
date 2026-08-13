@@ -160,7 +160,7 @@ export default function NetworkScreen({ onBack }: Props): React.JSX.Element {
         <View style={styles.section}>
           <View style={styles.settingsGroup}>
             <SettingRow
-              icon="radio"
+              icon="cloud"
               label={T("settings.network.internet")}
               description={T("settings.network.internet_desc")}
               control={

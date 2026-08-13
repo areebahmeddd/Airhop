@@ -42,6 +42,7 @@
 
 import AirhopBLE from "../bridge/NativeAirhopBLE";
 import { useMeshStateStore, type BleBlocker } from "../store/mesh-state-store";
+import { useSettingsStore } from "../store/settings-store";
 import { PowerPolicy } from "./power-policy";
 
 // The facts the device reports about itself. Every field is observed, never
@@ -396,7 +397,13 @@ export class RadioController {
     // Scanning is that question. A phone that scans is receiving and relaying
     // for everyone around it, which is worth holding the process up for whether
     // or not anybody can see it back. The retry below re-asserts advertising.
-    await this.setBackgroundService(this.actual.scanning);
+    // Gated on the preference as well as on the radio. Off means the mesh runs
+    // only while the app is in front of the user: no foreground service, no
+    // persistent notification, and no radio work once it is closed. The radios
+    // themselves are untouched, so nothing about this session changes.
+    await this.setBackgroundService(
+      this.actual.scanning && useSettingsStore.getState().backgroundMeshEnabled,
+    );
 
     if (ok) {
       this.attempt = 0;

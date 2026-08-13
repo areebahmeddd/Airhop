@@ -1670,6 +1670,11 @@ export const strings = {
     "Photo access is needed to pick an image. You can still add by peer ID.",
   "contacts.scan.no_qr": "No Airhop QR code found in that image.",
   "contacts.scan.unreadable": "Couldn't read a QR code from that image.",
+  // A bitchat verification QR past its five-minute window. Their code is
+  // rebuilt with a fresh timestamp every time the sheet opens, so the fix is to
+  // ask for it again rather than anything the scanner can do.
+  "contacts.scan.bitchat_expired":
+    "That bitchat code has expired. Ask them to open their QR again.",
   "contacts.scan.tampered":
     "This QR code is invalid: its peer ID doesn't match its keys. It may have been tampered with.",
   "contacts.scan.already_added": "Already in your contacts",
@@ -1726,6 +1731,73 @@ export const strings = {
   "settings.section.permissions_desc":
     "Bluetooth, location, notifications, camera, mic",
   "settings.section.storage": "Storage & data",
+  "settings.section.diagnostics": "Diagnostics",
+
+  // ---- Settings: group headings --------------------------------------------------
+  // One per box on a screen that has more than one. Sentence case and plain
+  // words: they name what the box is about so the eye can skip to the right
+  // one, which is the only job they have. Screens with a single box get none -
+  // the screen title already said it.
+  "settings.group.transports": "Transports",
+  "settings.group.nearby": "Nearby",
+  "settings.group.sync": "Sync",
+  "settings.group.features": "Features",
+  "settings.group.messages": "Messages",
+  "settings.group.media": "Media",
+  "settings.group.reset": "Reset",
+  "settings.group.always_on": "Always on",
+  "settings.group.notifications": "Notifications",
+  "settings.group.blocked": "Blocked",
+  "settings.group.theme": "Theme",
+  "settings.group.font": "Font",
+  "settings.group.language": "Language",
+  "settings.section.diagnostics_desc": "Connection status and nearby devices",
+
+  // ---- Settings: diagnostics -----------------------------------------------------
+  // A read-only screen, so every string here is a label or a reading. Nothing
+  // asks the user to decide anything: the values it shows are protocol
+  // constants that must match bitchat exactly, or live counters.
+  "settings.diag.ble_links": "Bluetooth links",
+  "settings.diag.ble_links_desc": "Devices this phone is connected to directly",
+  // "Wi-Fi" is ambiguous on its own: this is a phone-to-phone radio that needs
+  // no router and no internet, which is a different thing from the Wi-Fi a
+  // phone joins. The subtitle carries the distinction, since the label has to
+  // stay the technology's real name on a technical screen.
+  "settings.diag.wifi": "Wi-Fi Aware",
+  "settings.diag.wifi_about": "Phone to phone, no router or internet",
+  "settings.diag.wifi_active": "Running",
+  "settings.diag.wifi_unsupported": "Not supported on this device",
+  "settings.diag.wifi_permission": "Blocked by a permission",
+  "settings.diag.wifi_unavailable": "Not available right now",
+  // Not "off": the module has not answered yet, which is worth telling apart
+  // from a device that cannot do it at all.
+  "settings.diag.wifi_unknown": "Waiting for the radio",
+  "settings.diag.relays": "Nostr relays",
+  "settings.diag.relays_desc": "Used for location channels and internet reach",
+  "settings.diag.connected": "Connected",
+  "settings.diag.disconnected": "Not connected",
+
+  "settings.diag.traffic": "TRAFFIC THIS SESSION",
+  "settings.diag.sent": "Sent",
+  "settings.diag.received": "Received",
+
+  // `{count}` is already formatted by the caller.
+  "settings.diag.peer_direct": "Direct link",
+  "settings.diag.peer_relayed": "Heard through another device",
+  "settings.diag.rssi": "{dbm} dBm",
+  "settings.diag.no_rssi": "No signal reading",
+  "settings.diag.no_peers": "Nobody in range",
+  // Names the distinction the screen exists for: no peers with links up is a
+  // different problem from no peers and no links.
+  "settings.diag.no_peers_desc": "{links} radio link(s) open.",
+
+  "settings.diag.gcs_size": "Filter size",
+  "settings.diag.gcs_size_desc": "Largest sync filter put on the air",
+  "settings.diag.fpr": "False positive rate",
+  "settings.diag.fpr_desc": "How often the filter claims a packet we lack",
+  "settings.diag.bytes": "{n} bytes",
+  "settings.diag.footnote":
+    "Nothing here can be changed. These values are fixed so Airhop stays compatible with bitchat.",
   "settings.section.storage_desc": "Usage and cache",
   "settings.section.appearance": "Appearance",
   "settings.section.appearance_desc": "Theme, font, and language",
@@ -1769,10 +1841,23 @@ export const strings = {
     "Read and post to Bluesky and Mastodon feeds",
   "settings.general.show_media": "Show media automatically",
   "settings.general.show_media_desc":
-    "Photos and videos appear in the chat. Turn off to keep them behind a tap.",
+    "Photos and videos appear in the chat, or stay behind a tap",
   "settings.general.reset": "Reset settings",
+  "settings.general.media_retention": "Keep media for",
+  "settings.general.media_retention_desc":
+    "Photos, videos and voice notes are deleted after the selected time",
+  // Sheet subtitle. States the choice, then the one thing people assume
+  // wrongly: this is not a backup.
+  "settings.general.media_retention_sheet":
+    "Choose how long media stays on this device. Deleted media can't be recovered.",
+  "settings.general.retention_7_desc":
+    "Least left behind. Best if the phone itself is the risk.",
+  "settings.general.retention_14_desc":
+    "A middle ground for a week or two away from signal.",
+  "settings.general.retention_30_desc":
+    "Keeps threads readable longest, and keeps the most on disk.",
   "settings.general.reset_desc":
-    "Put every preference back to its default. Your identity, messages, contacts, and wallet are untouched.",
+    "Puts every preference back to its default, leaving your identity, messages, contacts and wallet untouched",
   "settings.general.reset_title": "Reset settings?",
   "settings.general.reset_body":
     "Every preference goes back to its default: appearance, undo send, and connectivity (internet, Tor, gateway, bridge, relays). Your identity, messages, contacts, and wallet are untouched.",
@@ -1788,20 +1873,7 @@ export const strings = {
   // Says what is withheld and where it is visible, because the reason is not
   // obvious from the label alone. Two sentences, so both take a full stop.
   "settings.security.hide_previews_desc":
-    "Keep the sender and message out of notifications. Your lock screen shows them without unlocking the phone.",
-  "settings.security.media_retention": "Keep media for",
-  "settings.security.media_retention_desc":
-    "Photos, videos and voice notes are deleted after the selected time",
-  // Sheet subtitle. States the choice, then the one thing people assume
-  // wrongly: this is not a backup.
-  "settings.security.media_retention_sheet":
-    "Choose how long media stays on this device. Deleted media can't be recovered.",
-  "settings.security.retention_7_desc":
-    "Least left behind. Best if the phone itself is the risk.",
-  "settings.security.retention_14_desc":
-    "A middle ground for a week or two away from signal.",
-  "settings.security.retention_30_desc":
-    "Keeps threads readable longest, and keeps the most on disk.",
+    "Keeps the sender and message off your lock screen, which shows them without unlocking",
   "settings.security.no_blocked": "No blocked peers",
   "settings.security.no_blocked_desc":
     "Blocked peers can't message you or appear on the Mesh tab",
@@ -1859,9 +1931,23 @@ export const strings = {
     "Same BLE mesh as bitchat, fully interoperable. This is always on, and cannot be disabled.",
 
   // ---- Settings: connectivity toggles --------------------------------------------
+  // Background operation. The one toggle whose off state changes what the app
+  // does rather than how fast it does it, so the copy leads with that.
+  "settings.conn.background": "Run in the background",
+  "settings.conn.background_desc":
+    "Keep the mesh running when Airhop is closed",
+  "settings.conn.background_on_title": "Keep the mesh running?",
+  "settings.conn.background_on_body":
+    "Airhop keeps relaying and receiving when it is closed, so messages arrive while you are away. Android shows an ongoing notification while it does.",
+  "settings.conn.background_off_title": "Stop the mesh when Airhop closes?",
+  // Blunt on purpose. Someone turning this off to lose the notification needs
+  // to learn the cost here, not a day later when a message never came.
+  "settings.conn.background_off_body":
+    "Messages will only arrive while Airhop is open, and this phone stops relaying for people nearby. The ongoing notification goes away.",
+
   "settings.conn.live_voice": "Live voice",
   "settings.conn.live_voice_desc":
-    "Walkie-talkie over Bluetooth: hold the mic and people in range hear you as you speak",
+    "Use your phone like a walkie-talkie to talk with people within Bluetooth range",
   "settings.conn.live_voice_on_title": "Turn on live voice?",
   "settings.conn.live_voice_on_body":
     "Holding the mic sends your voice to everyone in Bluetooth range as you speak, and their voice plays on your phone. Nothing is recorded.",
@@ -1947,7 +2033,7 @@ export const strings = {
   // deliberately absent - location stopped gating the scanner when the manifest
   // asserted neverForLocation, and this row must not imply otherwise.
   "settings.permissions.location_desc":
-    "Opens nearby area channels. Without it, those channels stay closed and the Bluetooth mesh carries on as normal. Your precise location never leaves your device.",
+    "Opens nearby area channels. Without it, those channels stay closed and the Bluetooth mesh carries on as normal.",
   "settings.permissions.notifications": "Notifications",
   "settings.permissions.notifications_desc":
     "Receive alerts for new messages even when the app is closed. Without it, you only see them when you open Airhop.",
@@ -1980,8 +2066,7 @@ export const strings = {
   "settings.storage.cache": "Cache",
   // Says the retention window here because this is the one screen where someone
   // thinks about stored media, and it explains why an old photo is gone.
-  "settings.storage.cache_desc":
-    "{size} of attachments. Anything older than 7 days is deleted automatically.",
+  "settings.storage.cache_desc": "{size} of attachments",
   "settings.storage.clear_cache": "Clear attachment cache",
   "settings.storage.clear": "Clear",
   "settings.storage.clear_title": "Clear cached media?",
@@ -2002,9 +2087,6 @@ export const strings = {
   "settings.font.jetbrains_desc": "Modern and easy to read",
   // Group headers in the Appearance sheet. Uppercase in English; a script with
   // no case simply writes its own word.
-  "settings.theme.group": "THEME",
-  "settings.font.group": "FONT",
-  "settings.language.group": "LANGUAGE",
   // Written in the reading language, so each catalog carries its own list. The
   // endonym beside them lives in src/i18n/languages.ts and is never translated.
   "settings.language.en": "English",
@@ -2263,7 +2345,7 @@ export const plurals = {
     other: "{count} left",
   },
   // How long attachments are kept. A count of days, so it pluralises.
-  "settings.security.retention_days": {
+  "settings.general.retention_days": {
     one: "{count} day",
     other: "{count} days",
   },

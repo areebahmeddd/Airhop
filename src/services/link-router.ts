@@ -68,8 +68,12 @@ export function applyAirhopLink(link: DeepLink): string | null {
     // never met, under a nickname the sender chose. Verification is an
     // in-person act, and this is the one path that cannot witness it.
     source: "link",
-    // The card carries the peer's Nostr pubkey (internet reachability).
-    nostrPubkeyHex: bytesToHex(card.nostrPubKey),
+    // The card carries the peer's Nostr pubkey (internet reachability). An
+    // `airhop:v1/` link always has one; the guard is for the type, not the
+    // format.
+    ...(card.nostrPubKey !== undefined
+      ? { nostrPubkeyHex: bytesToHex(card.nostrPubKey) }
+      : {}),
   });
   const channel = `dm:${card.peerID}`;
   useChatStore.getState().addChannel(channel);

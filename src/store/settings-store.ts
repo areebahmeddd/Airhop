@@ -49,6 +49,17 @@ interface SettingsState {
   // exactly as it did before live voice existed, in both directions: no live
   // sending, and incoming bursts are ignored rather than played.
   liveVoiceEnabled: boolean;
+  // Whether the mesh keeps running once the app is closed.
+  //
+  // On by default: a mesh that stops when you look away is not a mesh. Off
+  // trades that for a phone with no persistent notification and no radio work
+  // in the background, and the cost is stated plainly on the row - messages
+  // stop arriving until Airhop is opened again.
+  //
+  // Distinct from Away, which stops the mesh even in the foreground. This is
+  // the middle state that was previously unreachable: run while I am using it,
+  // stop when I am not.
+  backgroundMeshEnabled: boolean;
   // Whether a system notification withholds the sender and the message body.
   //
   // ON by default, which is the deliberate part. The lock screen is rendered by
@@ -128,6 +139,7 @@ interface SettingsState {
   setTheme: (theme: ThemePreference) => void;
   setAutoDownloadMedia: (enabled: boolean) => void;
   setLiveVoiceEnabled: (enabled: boolean) => void;
+  setBackgroundMeshEnabled: (enabled: boolean) => void;
   setHideNotificationPreviews: (hide: boolean) => void;
   setUploadQuality: (quality: UploadQuality) => void;
   setMediaRetentionDays: (days: MediaRetentionDays) => void;
@@ -154,6 +166,7 @@ const DEFAULTS = {
   theme: "system",
   autoDownloadMedia: true,
   liveVoiceEnabled: true,
+  backgroundMeshEnabled: true,
   // Private by default; see the field comment above for why.
   hideNotificationPreviews: true,
   uploadQuality: "high",
@@ -196,6 +209,9 @@ export const useSettingsStore = create<SettingsState>()(
       },
       setAutoDownloadMedia(enabled) {
         set({ autoDownloadMedia: enabled });
+      },
+      setBackgroundMeshEnabled(enabled) {
+        set({ backgroundMeshEnabled: enabled });
       },
       setLiveVoiceEnabled(enabled) {
         set({ liveVoiceEnabled: enabled });
