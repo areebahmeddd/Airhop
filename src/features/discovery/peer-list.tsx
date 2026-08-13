@@ -51,6 +51,7 @@ import {
 import { acknowledged } from "../../utils/haptics";
 import QrScanScreen from "../contacts/qr-scan-screen";
 import RadarView from "./radar-view";
+import RelayGlyph from "./relay-glyph";
 
 type ViewMode = "list" | "radar";
 
@@ -257,13 +258,28 @@ export default function PeerList({
                 style={styles.row}
                 onPress={() => setSelectedPeer(item)}
                 accessibilityRole="button"
-                accessibilityLabel={t(
+                // Relay appended rather than substituted: whether the box on the
+                // pole is still answering matters as much as whether a person
+                // is, so it keeps the same online/offline label a peer gets.
+                accessibilityLabel={`${t(
                   online ? "mesh.peer.view_peer_online" : "mesh.peer.view_peer",
                   { name: username },
-                )}
+                )}${
+                  item.isInfrastructure === true
+                    ? `, ${t("mesh.peer.relay")}`
+                    : ""
+                }`}
               >
                 <View style={styles.avatarWrapper}>
-                  <Avatar username={username} peerID={item.peerID} size={46} />
+                  {item.isInfrastructure === true ? (
+                    <RelayGlyph size={46} />
+                  ) : (
+                    <Avatar
+                      username={username}
+                      peerID={item.peerID}
+                      size={46}
+                    />
+                  )}
                   <View style={styles.rowStatusBadge}>
                     <StatusDot
                       status={online ? "online" : "offline"}
@@ -276,11 +292,18 @@ export default function PeerList({
                   <Text style={styles.rowUsername} numberOfLines={1}>
                     {username}
                   </Text>
-                  <Text style={styles.rowPeerID}>
-                    {item.peerID.slice(0, 8)}
-                    {" · "}
-                    {item.peerID.slice(8)}
-                  </Text>
+                  {/* A relay's ID is of no use to anyone: it will never be a
+                      contact and there is nothing to look it up against. The
+                      word earns the line more than sixteen hex characters. */}
+                  {item.isInfrastructure === true ? (
+                    <Text style={styles.rowRelay}>{T("mesh.peer.relay")}</Text>
+                  ) : (
+                    <Text style={styles.rowPeerID}>
+                      {item.peerID.slice(0, 8)}
+                      {" · "}
+                      {item.peerID.slice(8)}
+                    </Text>
+                  )}
                 </View>
 
                 <View style={styles.rowRight}>
@@ -318,11 +341,15 @@ export default function PeerList({
           <>
             {/* Identity */}
             <View style={styles.sheetIdentity}>
-              <Avatar
-                username={resolveDisplayName(selectedPeer.peerID)}
-                peerID={selectedPeer.peerID}
-                size={64}
-              />
+              {selectedPeer.isInfrastructure === true ? (
+                <RelayGlyph size={64} />
+              ) : (
+                <Avatar
+                  username={resolveDisplayName(selectedPeer.peerID)}
+                  peerID={selectedPeer.peerID}
+                  size={64}
+                />
+              )}
               <Text style={styles.sheetUsername}>
                 {resolveDisplayName(selectedPeer.peerID)}
               </Text>
@@ -376,102 +403,125 @@ export default function PeerList({
               </View>
             </View>
 
-            {/* Message + Send sats: a tight pair of actions, not spread
-                  apart by the sheet's larger identity/actions rhythm. */}
-            <View style={styles.sheetActions}>
-              <Pressable
-                style={styles.sheetMessageBtn}
-                onPress={() => handleSendDM(selectedPeer)}
-                accessibilityRole="button"
-                accessibilityLabel={T("mesh.peer.send_dm")}
-              >
-                <Feather
-                  name="message-circle"
-                  size={18}
-                  color={Colors.textInverse}
-                />
-                <Text style={styles.sheetMessageBtnText}>
-                  {T("mesh.peer.message")}
+            {/* A relay gets an explanation where a person gets actions. Both
+                would be dead controls: nobody reads the messages, and there is
+                no wallet to receive sats. Saying what the thing is answers the
+                question that made the user tap it. */}
+            {selectedPeer.isInfrastructure === true ? (
+              <View style={styles.relayNote}>
+                <Text style={styles.relayNoteTitle}>
+                  {T("mesh.peer.relay")}
                 </Text>
-              </Pressable>
-
-              {!showSendSats ? (
+                <Text style={styles.relayNoteBody}>
+                  {T("mesh.peer.relay_body")}
+                </Text>
+              </View>
+            ) : (
+              /* Message + Send sats: a tight pair of actions, not spread
+                  apart by the sheet's larger identity/actions rhythm. */
+              <View style={styles.sheetActions}>
                 <Pressable
-                  style={styles.sheetSatsBtn}
-                  onPress={() => setShowSendSats(true)}
+                  style={styles.sheetMessageBtn}
+                  onPress={() => handleSendDM(selectedPeer)}
                   accessibilityRole="button"
-                  accessibilityLabel={T("mesh.peer.send_sats")}
+                  accessibilityLabel={T("mesh.peer.send_dm")}
                 >
-                  <Feather name="zap" size={16} color={Colors.textSecondary} />
-                  <Text style={styles.sheetSatsBtnText}>
-                    {T("mesh.peer.send_sats")}
+                  <Feather
+                    name="message-circle"
+                    size={18}
+                    color={Colors.textInverse}
+                  />
+                  <Text style={styles.sheetMessageBtnText}>
+                    {T("mesh.peer.message")}
                   </Text>
                 </Pressable>
-              ) : (
-                <View style={styles.sendSatsRow}>
-                  <TextInput
-                    style={styles.sendSatsInput}
-                    value={sendSatsAmount}
-                    onChangeText={setSendSatsAmount}
-                    placeholder={T("mesh.peer.amount_placeholder")}
-                    placeholderTextColor={Colors.textMuted}
-                    keyboardType="number-pad"
-                    returnKeyType="send"
-                    autoFocus
-                    selectionColor={Colors.selection}
-                    onSubmitEditing={() => void handleSendSats(selectedPeer)}
-                  />
+
+                {!showSendSats ? (
                   <Pressable
-                    style={[
-                      styles.sendSatsConfirm,
-                      (parsedSats === null || sendingSats) &&
-                        styles.sendSatsConfirmDisabled,
-                    ]}
-                    onPress={() => void handleSendSats(selectedPeer)}
-                    disabled={parsedSats === null || sendingSats}
+                    style={styles.sheetSatsBtn}
+                    onPress={() => setShowSendSats(true)}
                     accessibilityRole="button"
-                    accessibilityLabel={
-                      parsedSats === null
-                        ? T("mesh.peer.amount_first")
-                        : t("mesh.peer.send_amount", { amount: parsedSats })
-                    }
-                    accessibilityState={{
-                      disabled: parsedSats === null || sendingSats,
-                      busy: sendingSats,
-                    }}
+                    accessibilityLabel={T("mesh.peer.send_sats")}
                   >
-                    {/* Quoting the token is a network round trip, so a send can
+                    <Feather
+                      name="zap"
+                      size={16}
+                      color={Colors.textSecondary}
+                    />
+                    <Text style={styles.sheetSatsBtnText}>
+                      {T("mesh.peer.send_sats")}
+                    </Text>
+                  </Pressable>
+                ) : (
+                  <View style={styles.sendSatsRow}>
+                    <TextInput
+                      style={styles.sendSatsInput}
+                      value={sendSatsAmount}
+                      onChangeText={setSendSatsAmount}
+                      placeholder={T("mesh.peer.amount_placeholder")}
+                      placeholderTextColor={Colors.textMuted}
+                      keyboardType="number-pad"
+                      returnKeyType="send"
+                      autoFocus
+                      selectionColor={Colors.selection}
+                      onSubmitEditing={() => void handleSendSats(selectedPeer)}
+                    />
+                    <Pressable
+                      style={[
+                        styles.sendSatsConfirm,
+                        (parsedSats === null || sendingSats) &&
+                          styles.sendSatsConfirmDisabled,
+                      ]}
+                      onPress={() => void handleSendSats(selectedPeer)}
+                      disabled={parsedSats === null || sendingSats}
+                      accessibilityRole="button"
+                      accessibilityLabel={
+                        parsedSats === null
+                          ? T("mesh.peer.amount_first")
+                          : t("mesh.peer.send_amount", { amount: parsedSats })
+                      }
+                      accessibilityState={{
+                        disabled: parsedSats === null || sendingSats,
+                        busy: sendingSats,
+                      }}
+                    >
+                      {/* Quoting the token is a network round trip, so a send can
                         sit for a second or two. A frozen arrow gave no sign the
                         tap had registered, which is what invites the double tap
                         the `sendingSats` guard exists to survive. */}
-                    {sendingSats ? (
-                      <ActivityIndicator
-                        size="small"
-                        color={Colors.textInverse}
-                      />
-                    ) : (
+                      {sendingSats ? (
+                        <ActivityIndicator
+                          size="small"
+                          color={Colors.textInverse}
+                        />
+                      ) : (
+                        <Feather
+                          name={arrowForward}
+                          size={16}
+                          color={Colors.textInverse}
+                        />
+                      )}
+                    </Pressable>
+                    <Pressable
+                      style={styles.sendSatsCancel}
+                      onPress={() => {
+                        setShowSendSats(false);
+                        setSendSatsAmount("");
+                      }}
+                      disabled={sendingSats}
+                      accessibilityRole="button"
+                      accessibilityLabel={T("mesh.peer.cancel_send")}
+                    >
                       <Feather
-                        name={arrowForward}
+                        name="x"
                         size={16}
-                        color={Colors.textInverse}
+                        color={Colors.textSecondary}
                       />
-                    )}
-                  </Pressable>
-                  <Pressable
-                    style={styles.sendSatsCancel}
-                    onPress={() => {
-                      setShowSendSats(false);
-                      setSendSatsAmount("");
-                    }}
-                    disabled={sendingSats}
-                    accessibilityRole="button"
-                    accessibilityLabel={T("mesh.peer.cancel_send")}
-                  >
-                    <Feather name="x" size={16} color={Colors.textSecondary} />
-                  </Pressable>
-                </View>
-              )}
-            </View>
+                    </Pressable>
+                  </View>
+                )}
+              </View>
+            )}
           </>
         )}
       </BottomSheet>
@@ -546,6 +596,12 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       fontFamily: FontFamily.mono,
       letterSpacing: 0.8,
     },
+    // Sits where the peer ID would, so the two row shapes stay the same height.
+    // Not mono: it is a word, not an identifier.
+    rowRelay: {
+      fontSize: FontSize.xs,
+      color: Colors.textMuted,
+    },
     rowLastSeen: {
       fontSize: FontSize.xs,
       color: Colors.textMuted,
@@ -602,6 +658,28 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
     sheetActions: {
       width: "100%",
       gap: Spacing.sm,
+    },
+    // Takes the place of the action pills, so it carries their width and the
+    // same rounded, bordered surface. Reads as a card of information rather
+    // than a control the user is failing to find.
+    relayNote: {
+      width: "100%",
+      gap: Spacing.xs,
+      backgroundColor: Colors.surfaceRaised,
+      borderWidth: 1,
+      borderColor: Colors.border,
+      borderRadius: Radius.lg,
+      padding: Spacing.base,
+    },
+    relayNoteTitle: {
+      fontSize: FontSize.sm,
+      fontWeight: FontWeight.semibold,
+      color: Colors.textPrimary,
+    },
+    relayNoteBody: {
+      fontSize: FontSize.sm,
+      color: Colors.textSecondary,
+      lineHeight: 20,
     },
     sheetMessageBtn: {
       backgroundColor: Colors.accent,

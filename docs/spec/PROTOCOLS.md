@@ -604,3 +604,79 @@ bitchat reached the same conclusion about its own docs and has relabelled them (
 | Packet types `0x50+`  | Airhop extensions         | Relayed, not interpreted  | Relayed, not interpreted  | ✅ Safe      |
 
 > ✅ **Crypto note (corrected):** all three clients use `Noise_XX_25519_ChaChaPoly_SHA256`. An earlier version of this doc claimed bitchat-Android had diverged to AES-256-GCM; that was incorrect. Its vendored noise-java library contains AES-GCM cipher classes, but the only protocol name ever instantiated is ChaChaPoly, so those classes are never selected. There is no divergence and no platform to choose between.
+
+## 10. Relay Nodes
+
+A bare relay node extends an Airhop mesh with no change to this repository and
+nothing on either phone knowing it is there. Forwarding consults no peer
+registry and verifies no signature, so **a relay needs no standing with anyone**:
+it is handed bytes, reads the header, and puts them back on the air.
+
+Third-party nodes already exist, typically an ESP32 on solar power:
+[Bitle](https://github.com/bitleproject/bitle) (a full peer: Noise XX, courier
+mailbox, gossip sync, and a 915 MHz LoRa backbone between nodes),
+[bitchat-esp32](https://github.com/hackerhouse-opensource/bitchat-esp32), and
+[bitchat-relay](https://github.com/fvolcic/bitchat-relay). Listed as evidence
+that the case is real, not as endorsement: none has been tested against Airhop
+on hardware.
+
+| Rule            | Value                                                  |
+| --------------- | ------------------------------------------------------ |
+| Forward         | Every unseen packet, on every link but the arrival one |
+| TTL             | Decrement before forwarding; drop at `ttl <= 1`        |
+| Dedup           | On packet ID, so a ring forwards each packet once      |
+| Malformed frame | Drop, never fail                                       |
+
+A relay must not decrypt and must not reassemble fragments. Fragments are
+forwarded individually; only the addressee reassembles.
+
+### Two kinds of relay
+
+A bare repeater holds no keys and announces nothing. It stays out of every
+roster, which costs it nothing, because forwarding never required standing.
+
+A peer relay holds a Noise identity and announces like anybody else, which is
+what lets it take part in gossip sync and carry courier mail rather than only
+repeating what it hears. The cost is that it lands in every phone's peer list
+looking like a person nobody can message.
+
+Bitle takes the second shape and marks itself, using an ANNOUNCE TLV outside the
+range either client assigns:
+
+| TLV    | Length | Meaning                                             |
+| ------ | ------ | --------------------------------------------------- |
+| `0xB0` | 4      | Firmware version, big-endian. Airhop skips it       |
+| `0xB1` | 1      | Flags. Bit 0 dedicated relay, bit 1 clock authority |
+
+Airhop reads bit 0 and draws those peers as equipment: an aerial in place of the
+avatar, and an explanation in place of the Message and Send ecash actions.
+
+**The flag decides presentation and nothing else.** It sits inside the signed
+payload, but a node signs its own announce, so any device can claim to be
+infrastructure. Since the claim only removes actions from its own row, there is
+nothing to gain by making it falsely. Bitle states the same contract where it
+writes the byte. Never let this flag gate a capability, a trust decision, or a
+routing choice.
+
+We read `0xB1` and never write it. Airhop is a phone, and a phone that claimed
+to be infrastructure would hide its own Message button on every other device.
+
+### Announces travel first
+
+A relay does not make two strangers reachable. It makes their announces
+reachable, and delivery follows. A public message is verified against a signing
+key learned from an ANNOUNCE, so one sent before that announce has propagated is
+dropped at the far end. This is correct behaviour and reads as a delivery bug in
+the field.
+
+`tier-relay.test.ts` pins the forwarding rules against a relay that holds no keys
+and never announces (`sim/harness/relay-node.ts`): delivery through one relay,
+discovery without the relay entering the roster, a two-relay chain with no person
+between, a three-relay ring forwarding each packet once, and a private message
+crossing a node that cannot read it. That is the bare shape deliberately, because
+it is the weakest thing Airhop has to work with. A peer relay is an ordinary peer
+to everything upstream of the roster, and the `0xB1` handling is covered in
+`announce-manager.test.ts`.
+
+Neither has been run against hardware. A Bitle node in the room is the first
+thing worth checking when one is available.

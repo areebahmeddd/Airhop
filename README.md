@@ -73,6 +73,7 @@ Built on the foundation of [bitchat](https://bitchat.free), using the same [BLE 
 | 🕸️ **Networking** | Bluetooth mesh            | Communicate with nearby devices without internet                                                                                               |
 |                   | Mesh bridge               | Link this area's public #bluetooth chat with another out-of-range Bluetooth crowd over the internet. Off by default                            |
 |                   | Multi-hop routing         | Messages automatically relay across nearby devices (up to 7 hops)                                                                              |
+|                   | Relay nodes               | Third-party [Bitle](https://bitle.org) hardware extends the mesh where nobody stands. Requires an ESP32 board, plus LoRa to link nodes         |
 |                   | WiFi high-bandwidth mode  | Faster file transfers between two Android devices, or two iPhones. Not across platforms                                                        |
 |                   | bitchat compatibility     | Airhop nodes communicate directly with bitchat on iOS and Android                                                                              |
 | 🌐 **Internet**   | Internet fallback         | DMs and channels keep flowing over Nostr relays when a user moves out of Bluetooth range                                                       |
@@ -153,19 +154,19 @@ Offline and private messengers generally fall into three categories:
 
 Airhop belongs to the third category and extends it with a Nostr-based internet layer for long-distance communication when connectivity is available. The table is grouped in that order, starting with the apps most people already measure private messaging against.
 
-| Project                                    | Transport                     | Encryption                | Works offline | Hardware-free | Open source | Platforms                       |
-| ------------------------------------------ | ----------------------------- | ------------------------- | ------------- | ------------- | ----------- | ------------------------------- |
-| [Signal](https://signal.org)               | Centralized servers           | Signal protocol           | ❌            | ✅            | ✅          | iOS, Android, Desktop           |
-| [Threema](https://threema.ch)              | Centralized servers           | NaCl + Ibex               | ❌            | ✅            | ⚠️          | iOS, Android, Desktop           |
-| [Session](https://getsession.org)          | Onion routing (service nodes) | Session protocol          | ❌            | ✅            | ✅          | iOS, Android, Desktop           |
-| [White Noise](https://www.whitenoise.chat) | Nostr relays                  | MLS (Marmot)              | ❌            | ✅            | ✅          | iOS, Android                    |
-| [Meshtastic](https://meshtastic.org)       | LoRa radio                    | AES-256 + Curve25519 PKI  | ✅            | ❌            | ✅          | iOS, Android, Web + hardware    |
-| [goTenna](https://gotenna.com)             | Proprietary sub-GHz radio     | AES-256 + ECC-384 PKI     | ✅            | ❌            | ❌          | iOS, Android + hardware         |
-| [Bridgefy](https://bridgefy.me)            | Bluetooth + WiFi              | Signal (libsignal)        | ✅            | ✅            | ❌          | iOS, Android                    |
-| [Briar](https://briarproject.org)          | Bluetooth + WiFi + Tor        | Bramble                   | ✅            | ✅            | ✅          | Android, Desktop                |
-| [Berty](https://berty.tech)                | Bluetooth + mDNS              | Scuttlebutt + Ratchet     | ✅            | ✅            | ✅          | iOS, Android                    |
-| [bitchat](https://bitchat.free)            | Bluetooth + Nostr             | Noise XX                  | ✅            | ✅            | ✅          | iOS, Android                    |
-| [Airhop](https://airhop.1mindlabs.org)     | Bluetooth + WiFi + Nostr      | Noise XX + Double Ratchet | ✅            | ✅            | ✅          | iOS, Android, Desktop, Web, CLI |
+| Project                                | Transport                     | Encryption                | Works offline | Hardware-free | Open source | Platforms                       |
+| -------------------------------------- | ----------------------------- | ------------------------- | ------------- | ------------- | ----------- | ------------------------------- |
+| [Signal](https://signal.org)           | Centralized servers           | Signal protocol           | ❌            | ✅            | ✅          | iOS, Android, Desktop           |
+| [Threema](https://threema.ch)          | Centralized servers           | NaCl + Ibex               | ❌            | ✅            | ⚠️          | iOS, Android, Desktop           |
+| [Session](https://getsession.org)      | Onion routing (service nodes) | Session protocol          | ❌            | ✅            | ✅          | iOS, Android, Desktop           |
+| [White Noise](https://whitenoise.chat) | Nostr relays                  | MLS (Marmot)              | ❌            | ✅            | ✅          | iOS, Android                    |
+| [Meshtastic](https://meshtastic.org)   | LoRa radio                    | AES-256 + Curve25519 PKI  | ✅            | ❌            | ✅          | iOS, Android, Web + hardware    |
+| [goTenna](https://gotenna.com)         | Proprietary sub-GHz radio     | AES-256 + ECC-384 PKI     | ✅            | ❌            | ❌          | iOS, Android + hardware         |
+| [Bridgefy](https://bridgefy.me)        | Bluetooth + WiFi              | Signal (libsignal)        | ✅            | ✅            | ❌          | iOS, Android                    |
+| [Briar](https://briarproject.org)      | Bluetooth + WiFi + Tor        | Bramble                   | ✅            | ✅            | ✅          | Android, Desktop                |
+| [Berty](https://berty.tech)            | Bluetooth + mDNS              | Scuttlebutt + Ratchet     | ✅            | ✅            | ✅          | iOS, Android                    |
+| [bitchat](https://bitchat.free)        | Bluetooth + Nostr             | Noise XX                  | ✅            | ✅            | ✅          | iOS, Android                    |
+| [Airhop](https://airhop.1mindlabs.org) | Bluetooth + WiFi + Nostr      | Noise XX + Double Ratchet | ✅            | ✅            | ✅          | iOS, Android, Desktop, Web, CLI |
 
 ⚠️ Threema's client apps are open source, but its servers are not, and the app is a paid one-time purchase.
 
@@ -258,12 +259,12 @@ cd .. && npm run android
 
 Airhop would not exist without the work of the bitchat community. Thank you to everyone who built the foundation this project stands on. Their work is released into the public domain under the [Unlicense](https://github.com/permissionlesstech/bitchat/blob/main/LICENSE).
 
-| Person                                          | Contribution                                                        |
-| ----------------------------------------------- | ------------------------------------------------------------------- |
-| [jackjackbits](https://github.com/jackjackbits) | Created bitchat-ios, designed the BLE mesh protocol and wire format |
-| [callebtc](https://github.com/callebtc)         | Lead on bitchat-android, author of the Cashu ecash protocol         |
-| [Nadim Kobeissi](https://github.com/mimoo)      | Noise Protocol implementation in bitchat                            |
-| [a1denvalu3](https://github.com/a1denvalu3)     | Built the georelays toolkit that produces `assets/data/nostr_relays.csv`  |
+| Person                                          | Contribution                                                             |
+| ----------------------------------------------- | ------------------------------------------------------------------------ |
+| [jackjackbits](https://github.com/jackjackbits) | Created bitchat-ios, designed the BLE mesh protocol and wire format      |
+| [callebtc](https://github.com/callebtc)         | Lead on bitchat-android, author of the Cashu ecash protocol              |
+| [Nadim Kobeissi](https://github.com/mimoo)      | Noise Protocol implementation in bitchat                                 |
+| [a1denvalu3](https://github.com/a1denvalu3)     | Built the georelays toolkit that produces `assets/data/nostr_relays.csv` |
 
 ## Support
 

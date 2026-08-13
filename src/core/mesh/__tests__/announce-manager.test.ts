@@ -19,6 +19,7 @@ import {
   encodeCapabilities,
   isAnnounceFresh,
 } from "../announce-manager";
+import { signPacket } from "../packet-codec";
 
 function makeIdentity(): Identity {
   const noiseStaticPrivKey = x25519.utils.randomSecretKey();
@@ -240,5 +241,118 @@ describe("ANNOUNCE bridge geohash TLV (0x06)", () => {
     expect(info).not.toBeNull();
     expect(info!.capabilities & Capability.bridge).toBe(Capability.bridge);
     expect(info!.bridgeGeohash).toBe("9q8yyk");
+  });
+});
+
+// Bitle's own TLVs, which we read and never write. A Bitle node is a full peer
+// with keys and a signed announce, so the only thing separating it from a person
+// in the roster is this byte. See bitleproject/bitle, main/noise_handshake.c.
+describe("Bitle role TLV (0xB1)", () => {
+  // Appended, because Bitle appends: 0xB0 then 0xB1, after the signing key. The
+  // shape matters as much as the value, since a decoder that mishandles a
+  // trailing unknown TLV loses nothing visible until a relay is in the room.
+  function withBitleTail(payload: Uint8Array, flags: number): Uint8Array {
+    const fw = [0xb0, 4, 0x00, 0x00, 0x00, 0x07];
+    const role = [0xb1, 1, flags];
+    return new Uint8Array([...payload, ...fw, ...role]);
+  }
+
+  test("a relay announce decodes as infrastructure", () => {
+    const id = makeIdentity();
+    const base = encodeAnnouncePayload(id, "Bitle-4213");
+    const info = decodeAnnouncePayload(
+      withBitleTail(base, 0x01),
+      new Uint8Array(8),
+    );
+    expect(info?.isInfrastructure).toBe(true);
+  });
+
+  test("the clock-authority bit alone does not make a peer infrastructure", () => {
+    // 0xB1 bit 1 says a node's clock traces back to a phone, which a phone can
+    // set about itself. Only bit 0 means "not a person".
+    const id = makeIdentity();
+    const base = encodeAnnouncePayload(id, "Bitle-4213");
+    const info = decodeAnnouncePayload(
+      withBitleTail(base, 0x02),
+      new Uint8Array(8),
+    );
+    expect(info?.isInfrastructure).toBe(false);
+  });
+
+  test("bits Bitle has not defined yet are ignored", () => {
+    const id = makeIdentity();
+    const base = encodeAnnouncePayload(id, "Bitle-4213");
+    const info = decodeAnnouncePayload(
+      withBitleTail(base, 0xff),
+      new Uint8Array(8),
+    );
+    expect(info?.isInfrastructure).toBe(true);
+  });
+
+  test("an ordinary peer is not infrastructure", () => {
+    const id = makeIdentity();
+    const info = decodeAnnouncePayload(
+      encodeAnnouncePayload(id, "grace"),
+      new Uint8Array(8),
+    );
+    expect(info?.isInfrastructure).toBe(false);
+  });
+
+  test("the Bitle tail does not disturb the keys ahead of it", () => {
+    // The half that actually matters. A relay is only useful if we still learn
+    // its Noise and signing keys, which is what lets it join the mesh at all.
+    const id = makeIdentity();
+    const base = encodeAnnouncePayload(id, "Bitle-4213");
+    const info = decodeAnnouncePayload(
+      withBitleTail(base, 0x03),
+      new Uint8Array(8),
+    );
+    expect(info).not.toBeNull();
+    expect(info!.noisePubKey).toEqual(id.noiseStaticPubKey);
+    expect(info!.signingPubKey).toEqual(id.signingPubKey);
+    expect(info!.nickname).toBe("Bitle-4213");
+  });
+
+  test("we never advertise the role TLV ourselves", () => {
+    // Airhop is a phone. Claiming to be infrastructure would put us behind the
+    // glyph and take our own Message button away on every other device.
+    const id = makeIdentity();
+    const payload = encodeAnnouncePayload(
+      id,
+      "heidi",
+      [],
+      undefined,
+      Capability.gateway,
+      "u4pruy",
+    );
+    expect(readTlv(payload, 0xb1)).toBeNull();
+    expect(readTlv(payload, 0xb0)).toBeNull();
+  });
+
+  test("a signed relay announce passes validation with the flag intact", () => {
+    // The flag rides inside signed bytes, so it reaches us only if the whole
+    // announce verifies. It is also why the flag proves nothing: the node
+    // signing the claim is the node making it, which is the entire reason this
+    // decides presentation and never capability.
+    const id = makeIdentity();
+    const mgr = new AnnounceManager();
+    const pkt = mgr.buildPacket(id, "Bitle-4213");
+    pkt.payload = withBitleTail(pkt.payload, 0x01);
+    pkt.signature = signPacket(pkt, id.signingPrivKey);
+    const info = mgr.validateAndParse(pkt);
+    expect(info).not.toBeNull();
+    expect(info!.isInfrastructure).toBe(true);
+  });
+
+  test("a tampered role byte takes the whole announce down", () => {
+    const id = makeIdentity();
+    const mgr = new AnnounceManager();
+    const pkt = mgr.buildPacket(id, "Bitle-4213");
+    pkt.payload = withBitleTail(pkt.payload, 0x01);
+    pkt.signature = signPacket(pkt, id.signingPrivKey);
+    // Flip the flag in flight. Nothing special protects this byte; it is covered
+    // by the same signature as the keys, so the packet is simply dropped.
+    pkt.payload[pkt.payload.length - 1] = 0x00;
+    expect(mgr.validateAndParse(pkt)).toBeNull();
   });
 });

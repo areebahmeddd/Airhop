@@ -32,6 +32,7 @@ import {
   useThemeColors,
 } from "../../ui/theme";
 import { useReducedMotion } from "../../ui/use-reduced-motion";
+import RelayGlyph from "./relay-glyph";
 
 import { t, useT, useTPlural, type TranslationKey } from "../../i18n";
 import { resolveDisplayName } from "../../utils/display-name";
@@ -617,10 +618,16 @@ function PeerNode({
       // brings the target to the 44pt floor without moving anything.
       hitSlop={hitSlopFor(AVATAR_SIZE)}
       accessibilityRole="button"
-      accessibilityLabel={`${username}, ${isOnline ? T("mesh.radar.in_range") : T("mesh.radar.recently_seen")}`}
+      // The glyph is what tells a sighted user this is equipment, so the label
+      // has to say it too or the dial reads as one more person.
+      accessibilityLabel={`${username}${peer.isInfrastructure === true ? `, ${T("mesh.peer.relay")}` : ""}, ${isOnline ? T("mesh.radar.in_range") : T("mesh.radar.recently_seen")}`}
       accessibilityHint={T("mesh.radar.peer_hint")}
     >
-      <Avatar username={username} peerID={peer.peerID} size={AVATAR_SIZE} />
+      {peer.isInfrastructure === true ? (
+        <RelayGlyph size={AVATAR_SIZE} />
+      ) : (
+        <Avatar username={username} peerID={peer.peerID} size={AVATAR_SIZE} />
+      )}
       <View style={styles.statusBadge}>
         <StatusDot status={isOnline ? "online" : "offline"} size={7} />
       </View>

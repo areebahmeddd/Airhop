@@ -2625,6 +2625,9 @@ export class MeshService {
         // to trim: an announce relayed across the mesh is cheap to fake in
         // bulk, one that arrived over a link we hold is not.
         isDirect: isDirectAnnounce,
+        // Relay nodes announce like anyone else, so without this they sit in
+        // the Mesh tab as a person who never replies.
+        isInfrastructure: info.isInfrastructure,
       });
       // This peer is reachable again: deliver anything we owe them. Covers the
       // ordinary case of someone walking back into range.

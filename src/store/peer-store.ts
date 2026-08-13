@@ -14,6 +14,11 @@ export interface NearbyPeer {
   // actual GATT connection. That makes it the one thing worth protecting when
   // the list has to be trimmed.
   isDirect?: boolean;
+  // A relay node rather than a person, per the Bitle role TLV. Changes how the
+  // peer is drawn and takes away the actions that make no sense against a box
+  // on a pole. Self-declared and therefore forgeable, which is why it decides
+  // nothing beyond presentation. See announce-manager.
+  isInfrastructure?: boolean;
 }
 
 interface PeerState {

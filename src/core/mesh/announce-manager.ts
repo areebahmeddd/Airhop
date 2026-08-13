@@ -88,6 +88,21 @@ const TLV_CAPABILITIES = 0x05; // bitchat capabilities bitfield (little-endian)
 const TLV_BRIDGE_GEOHASH = 0x06; // bitchat bridge cell (decoded, ignored)
 const TLV_NOSTR_PUB = 0x07; // Airhop extension: secp256k1 X-only Nostr pubkey
 
+// Bitle's own TLV, read but never written (bitleproject/bitle, noise_handshake.c).
+//
+// A Bitle relay is a full peer, not a repeater: it holds a Noise identity and
+// signs announces, so it lands in the roster looking like a person nobody can
+// reach. 0xB1 is the one byte that says otherwise, bit 0 meaning "dedicated
+// relay". It sits far outside the 0x01-0x07 range either client assigns, so
+// there is no collision to manage and an older phone simply skips it.
+//
+// Cosmetic, and it has to stay cosmetic. The byte is inside the signed payload,
+// but a node signs its own announce, so anyone can claim to be infrastructure.
+// All it does here is change a glyph and drop a Message button, which is nothing
+// worth forging. Bitle commits to the same contract where it writes the byte.
+const TLV_BITLE_ROLE = 0xb1;
+const BITLE_ROLE_INFRASTRUCTURE = 1 << 0;
+
 // Capability bits, byte-for-byte with bitchat PeerCapabilities (BitFoundation).
 // Advertised in ANNOUNCE TLV 0x05 so peers can degrade per-feature.
 export const Capability = {
@@ -145,6 +160,7 @@ export interface AnnounceInfo {
   nostrPubKey?: Uint8Array; // 32 bytes secp256k1 X-only (Airhop extension)
   capabilities: number; // bitchat capability bits (TLV 0x05); 0 when absent
   bridgeGeohash?: string; // rendezvous cell a bridge peer advertises (TLV 0x06)
+  isInfrastructure: boolean; // Bitle relay marker (TLV 0xB1 bit 0); false when absent
 }
 
 function writeTlv(buf: number[], type: number, value: Uint8Array): void {
@@ -228,6 +244,7 @@ export function decodeAnnouncePayload(
   let nostrPubKey: Uint8Array | undefined;
   let capabilities = 0;
   let bridgeGeohash: string | undefined;
+  let isInfrastructure = false;
   const neighborIDs: Uint8Array[] = [];
 
   while (offset + 2 <= payload.length) {
@@ -266,6 +283,12 @@ export function decodeAnnouncePayload(
       case TLV_NOSTR_PUB:
         if (value.length === 32) nostrPubKey = value;
         break;
+      case TLV_BITLE_ROLE:
+        // Bit-tested rather than compared, so the clock-authority bit Bitle
+        // also carries here, and any bit it adds later, leave this alone.
+        isInfrastructure =
+          value.length >= 1 && (value[0] & BITLE_ROLE_INFRASTRUCTURE) !== 0;
+        break;
     }
   }
 
@@ -280,6 +303,7 @@ export function decodeAnnouncePayload(
     nostrPubKey,
     capabilities,
     bridgeGeohash,
+    isInfrastructure,
   };
 }
 

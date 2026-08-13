@@ -184,12 +184,26 @@ export default function DiagnosticsScreen({
                 <React.Fragment key={peer.peerID}>
                   {i > 0 && <GroupDivider />}
                   <SettingRow
-                    icon={peer.isDirect ? "link" : "share-2"}
+                    // Relay first: what a peer IS outranks how we reached it,
+                    // and a relay we hold a link to is still not a person.
+                    icon={
+                      peer.isInfrastructure === true
+                        ? "radio"
+                        : peer.isDirect
+                          ? "link"
+                          : "share-2"
+                    }
                     label={resolveDisplayName(peer.peerID)}
                     description={
-                      peer.isDirect
-                        ? T("settings.diag.peer_direct")
-                        : T("settings.diag.peer_relayed")
+                      peer.isInfrastructure === true
+                        ? `${t("mesh.peer.relay")} · ${
+                            peer.isDirect
+                              ? t("settings.diag.peer_direct")
+                              : t("settings.diag.peer_relayed")
+                          }`
+                        : peer.isDirect
+                          ? T("settings.diag.peer_direct")
+                          : T("settings.diag.peer_relayed")
                     }
                     control={
                       <View style={local.peerMeta}>

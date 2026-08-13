@@ -1,7 +1,7 @@
 # Dependencies
 node_modules/
-.yarn/cache
-.yarn/unplugged
+.yarn/cache/
+.yarn/unplugged/
 .yarn/build-state.yml
 .pnp.*
 npm-debug.log*
@@ -21,7 +21,7 @@ web-build/
 # TypeScript
 *.tsbuildinfo
 
-# Build output
+# Build & Cache
 build/
 .cache/
 
@@ -29,7 +29,7 @@ build/
 coverage/
 .jest-cache/
 
-# Environment and secrets
+# Environment & Secrets
 .env
 .env.*
 !.env.example
@@ -62,19 +62,11 @@ android/captures/
 # Release keystores are injected by CI
 *.jks
 
-# Editors and IDEs
-.idea/
-*.swp
-*.swo
-*.sublime-project
-*.sublime-workspace
-
-# Landing page generated artifacts
+# Project-specific Artifacts
 landing/node_modules/
 landing/dist/
-
-# Press renderer testing
 press/.build/
+deck/
 
 # macOS
 .DS_Store
@@ -88,9 +80,16 @@ ehthumbs.db
 Desktop.ini
 $RECYCLE.BIN/
 
-# Temporary and patch files
+# Temporary & Patch Files
 *.log
 *.orig
 *.rej
 .temp/
 .tmp/
+
+# Editors & IDEs
+.idea/
+*.swp
+*.swo
+*.sublime-project
+*.sublime-workspace

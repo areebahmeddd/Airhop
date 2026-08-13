@@ -800,6 +800,63 @@ export default function ArchitecturePage() {
                 to the limit, it is refused. A sender that asks for more carriage does not get more,
                 it gets none. That is what closes the storage-pinning vector.
               </Note>
+
+              <h3 className="text-ink pt-2 text-base font-bold">Relay nodes</h3>
+              <p>
+                A mesh needs people standing in the gaps. Where nobody stands, hardware can: a small
+                board on a battery, bolted to a pole, doing nothing but listening and
+                re-broadcasting. It needs no permission and no registration, because{" "}
+                <strong className="text-ink">
+                  forwarding consults no registry and verifies no signature.
+                </strong>{" "}
+                A phone hands it bytes, it reads the header, spends a hop and puts them back on the
+                air. Nothing in this repository changes, and neither phone knows it is there.
+              </p>
+
+              <Table
+                head={["Rule", "What a relay does"]}
+                rows={[
+                  ["Forward", "Every unseen packet, on every link except the one it arrived on"],
+                  ["TTL", "Decrement before forwarding, drop at 1"],
+                  ["Deduplication", "On packet ID, so a ring of relays forwards each packet once"],
+                  ["Fragments", "Passed along individually, only the addressee reassembles"],
+                  ["Malformed frame", "Dropped, never fatal. Nobody reboots a box on a pole"],
+                  ["Plaintext", "None. A relay carries what it cannot read"],
+                ]}
+              />
+
+              <p>
+                Relays come in two shapes. A bare repeater holds no keys and announces nothing, so
+                it never appears in anyone&rsquo;s list. A peer relay holds a Noise identity and
+                announces like any phone, which is what lets it join gossip sync and carry courier
+                mail rather than only repeating what it hears.{" "}
+                <TextLink href="https://bitle.org">Bitle</TextLink> takes the second shape and adds
+                a 915 MHz LoRa link between nodes, so two clusters of people a kilometer apart can
+                share a room.
+              </p>
+
+              <p>
+                That comes at a cost. A relay that announces arrives in every phone&rsquo;s peer
+                list looking like a person nobody can reach. Bitle answers it with one byte,
+                ANNOUNCE TLV <C>0xB1</C>, bit 0 meaning dedicated relay. Airhop reads that bit and
+                draws those peers as equipment: an aerial in place of the avatar, and an explanation
+                in place of the message and payment actions.
+              </p>
+
+              <Note label="The flag decides presentation and nothing else">
+                The byte sits inside the signed payload, but a node signs its own announce, so any
+                device can claim to be infrastructure. All the claim does is take buttons away from
+                its own row, which is nothing worth forging. It never gates a capability, a trust
+                decision or a routing choice. Airhop reads the flag and never sends it.
+              </Note>
+
+              <p>
+                One ordering property is worth knowing before deploying any of this. A relay does
+                not make two strangers reachable, it makes their announces reachable. A public
+                message is checked against a signing key learned from an ANNOUNCE, so a message sent
+                before that announce has crossed the relay is dropped at the far end. That is
+                correct behavior, and in the field it looks exactly like a delivery bug.
+              </p>
             </Section>
 
             <Section
@@ -875,7 +932,7 @@ export default function ArchitecturePage() {
                   Noise XX gives forward secrecy per session. It does not give it per message.
                 </strong>{" "}
                 So a second layer sits on top:{" "}
-                <TextLink href="https://signal.org/docs/specifications/doubleratchet/">
+                <TextLink href="https://signal.org/docs/specifications/doubleratchet">
                   Double Ratchet
                 </TextLink>
                 , the same algorithm Signal uses, ratcheting a new key for every message. Its root
@@ -1199,7 +1256,7 @@ export default function ArchitecturePage() {
                       the app binary
                     </>,
                     <>
-                      <TextLink href="https://guardianproject.info/apps/org.torproject.android/">
+                      <TextLink href="https://guardianproject.info/apps/org.torproject.android">
                         Orbot
                       </TextLink>
                       , a separate app you install

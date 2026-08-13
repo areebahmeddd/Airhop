@@ -1022,6 +1022,12 @@ export const strings = {
   // Under a title the user renamed, so their own name stays visible.
   "mesh.peer.their_name": "Goes by {name}",
   "mesh.peer.in_range": "In range",
+  // A Bitle relay signs announces like any peer, so it arrives in the list
+  // looking like somebody. These two say what it actually is: the label sits
+  // where a peer ID would, the body replaces the actions in its sheet.
+  "mesh.peer.relay": "Relay node",
+  "mesh.peer.relay_body":
+    "A radio someone left running to widen the mesh. It carries messages it cannot read. There is nobody here to message.",
   "mesh.peer.send_dm": "Send a direct message",
   "mesh.peer.message": "Message",
   // "Send ecash", not "Send sats", to match the DM attach menu, the contact

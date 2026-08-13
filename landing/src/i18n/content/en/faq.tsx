@@ -88,9 +88,9 @@ export const FAQ_SECTIONS: FaqSection[] = [
                 phone loses the history. That is the trade for having nothing to seize or subpoena.
               </li>
             </ul>
-            Desktop, browser, and watch apps are not here yet, but those are planned rather than
-            ruled out. The <TextLink href={REPO_LINKS.roadmapDoc}>roadmap</TextLink> tracks what is
-            next.
+            Desktop, browser, terminal, and watch clients are not here yet, but those are planned
+            rather than ruled out. The <TextLink href={REPO_LINKS.roadmapDoc}>roadmap</TextLink>{" "}
+            tracks what is next.
           </>
         ),
       },
