@@ -109,6 +109,8 @@ jobs:
         uses: ./.github/actions/setup-android
 
       # Build the same release artifacts and ABI set shipped in production.
+      # Dependency locking also fails this step when android/app/gradle.lockfile
+      # no longer matches what node_modules resolves to.
       - name: Build release APK and AAB
         working-directory: android
         run: |
@@ -181,15 +183,23 @@ jobs:
       - name: Set up JavaScript toolchain
         uses: ./.github/actions/setup-js
 
-      # Record the Xcode and iOS SDK versions used for the build.
       - name: Report toolchain
         run: |
           xcodebuild -version
           xcrun --sdk iphoneos --show-sdk-version
 
-      # Install the pinned CocoaPods dependencies.
       - name: Install CocoaPods dependencies
-        run: npx pod-install
+        uses: ./.github/actions/setup-pods
+
+      # Pod versions come from node_modules, and pod install rewrites the lock
+      # in place, so a stale lock never fails a build on its own.
+      - name: Verify Podfile.lock is in sync
+        run: |
+          set -euo pipefail
+          if ! git diff --exit-code --stat ios/Podfile.lock; then
+            echo "::error::ios/Podfile.lock is stale. Run the 'Sync Native Lockfiles' workflow on this branch to regenerate it."
+            exit 1
+          fi
 
       # Build the unsigned Release app to verify the production iOS build.
       - name: Build (unsigned)

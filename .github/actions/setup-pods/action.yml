@@ -1,0 +1,23 @@
+name: Install CocoaPods dependencies
+description: Install the CocoaPods version recorded in ios/Podfile.lock and run pod install.
+
+runs:
+  using: composite
+  steps:
+    - name: Install the pinned CocoaPods
+      shell: bash
+      run: |
+        set -euo pipefail
+        pod_version="$(awk '/^COCOAPODS: /{ print $2 }' ios/Podfile.lock)"
+        if [[ -z "$pod_version" ]]; then
+          echo "::error::No COCOAPODS version recorded in ios/Podfile.lock"
+          exit 1
+        fi
+        echo "Pinning CocoaPods to $pod_version"
+        sudo gem install cocoapods --version "$pod_version" --no-document
+        echo "POD_VERSION=$pod_version" >> "$GITHUB_ENV"
+
+    - name: Run pod install
+      shell: bash
+      working-directory: ios
+      run: pod "_${POD_VERSION}_" install
