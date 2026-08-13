@@ -34,7 +34,7 @@ jest.mock("../../../bridge/NativeAirhopWiFi", () => {
 
 import { SimDevice, type DeviceSpec } from "./harness/device";
 import { noCrashes } from "./harness/invariants";
-import { MintFabric } from "./harness/mint-fabric";
+import { MintFabric, simInvoice } from "./harness/mint-fabric";
 import { RadioFabric } from "./harness/radio-fabric";
 import { RelayFabric } from "./harness/relay-fabric";
 import { Scenario, waitFor } from "./harness/scenario";
@@ -544,7 +544,7 @@ test("W08 withdrawing to Lightning returns the unused routing reserve", async ()
   await alice.addMint(mint.url);
   await alice.depositSats(500);
 
-  const quote = await alice.withdrawQuote("lnbc100sim");
+  const quote = await alice.withdrawQuote(simInvoice(100));
   s.check(
     "the quote separates what they receive from what it may cost",
     quote?.amount === 100 && quote?.feeReserve === 16 && quote?.total === 116,
@@ -552,7 +552,7 @@ test("W08 withdrawing to Lightning returns the unused routing reserve", async ()
   );
 
   const before = alice.totalHeld();
-  const result = await alice.withdraw("lnbc100sim");
+  const result = await alice.withdraw(simInvoice(100));
 
   s.check(
     "the invoice was paid",
@@ -605,7 +605,7 @@ test("W09 a Lightning payment that fails gives the money back", async () => {
   await alice.depositSats(500);
 
   const before = alice.totalHeld();
-  const result = await alice.withdraw("lnbc100sim");
+  const result = await alice.withdraw(simInvoice(100));
 
   s.check(
     "the withdrawal reports failure rather than success",
@@ -629,7 +629,7 @@ test("W09 a Lightning payment that fails gives the money back", async () => {
   // And it must be genuinely spendable, not merely counted: the mint never
   // marked those proofs spent, so a real withdrawal should now succeed.
   mint.setConditions({ meltFails: false, meltActualFee: 2 });
-  const retry = await alice.withdraw("lnbc100sim");
+  const retry = await alice.withdraw(simInvoice(100));
   s.check(
     "a retry after the outage goes through",
     retry?.paid === 100,
@@ -731,7 +731,7 @@ test("W11 a withdrawal whose answer never arrives is resolved, not guessed", asy
   await alice.depositSats(500);
 
   const before = alice.totalHeld();
-  const result = await alice.withdraw("lnbc100sim");
+  const result = await alice.withdraw(simInvoice(100));
   s.check("the withdrawal could not report success", result === null);
 
   // The only honest position: the money is neither spendable nor written off.
@@ -891,7 +891,7 @@ test("W13 Tor on iOS blocks mint traffic instead of leaking it", async () => {
   // Blocked means refused, not merely discouraged: a deposit must not reach the
   // network, and must not deduct anything on the way to failing.
   const before = iphone.totalHeld();
-  const withdrew = await iphone.withdraw("lnbc100sim");
+  const withdrew = await iphone.withdraw(simInvoice(100));
   s.check("a withdrawal while blocked fails", withdrew === null);
   s.check(
     "and takes nothing with it",

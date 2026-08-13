@@ -1,0 +1,140 @@
+name: Sync Native Lockfiles
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  gradle:
+    name: Regenerate Gradle lockfiles
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up JavaScript toolchain
+        uses: ./.github/actions/setup-js
+
+      - name: Set up Android toolchain
+        uses: ./.github/actions/setup-android
+
+      - name: Regenerate lockfiles
+        working-directory: android
+        run: |
+          set -euo pipefail
+          chmod +x gradlew
+          ./gradlew dependencies --write-locks --no-daemon
+          ./gradlew :app:dependencies --write-locks --no-daemon
+
+      - name: Upload Gradle lockfiles
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: gradle-lockfiles
+          path: |
+            android/app/gradle.lockfile
+            android/settings-gradle.lockfile
+          if-no-files-found: error
+
+  pods:
+    name: Regenerate Podfile.lock
+    runs-on: macos-26
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up JavaScript toolchain
+        uses: ./.github/actions/setup-js
+
+      - name: Regenerate Podfile.lock
+        working-directory: ios
+        run: |
+          set -euo pipefail
+          pod_version="$(awk '/^COCOAPODS: /{ print $2 }' Podfile.lock)"
+          if [[ -z "$pod_version" ]]; then
+            echo "::error::No COCOAPODS version recorded in ios/Podfile.lock"
+            exit 1
+          fi
+          echo "Pinning CocoaPods to $pod_version"
+          sudo gem install cocoapods --version "$pod_version" --no-document
+          rm Podfile.lock
+          pod "_${pod_version}_" install --repo-update
+
+      - name: Upload Podfile.lock
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: podfile-lock
+          path: ios/Podfile.lock
+          if-no-files-found: error
+
+  commit:
+    name: Commit synced lockfiles
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    needs: [gradle, pods]
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Download regenerated lockfiles
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          path: ${{ runner.temp }}/locks
+
+      - name: Place lockfiles
+        run: |
+          set -euo pipefail
+          cp "$RUNNER_TEMP/locks/gradle-lockfiles/app/gradle.lockfile" android/app/gradle.lockfile
+          cp "$RUNNER_TEMP/locks/gradle-lockfiles/settings-gradle.lockfile" android/settings-gradle.lockfile
+          cp "$RUNNER_TEMP/locks/podfile-lock/Podfile.lock" ios/Podfile.lock
+
+      - name: Check for changes
+        id: changes
+        run: |
+          set -euo pipefail
+          git add android/app/gradle.lockfile android/settings-gradle.lockfile ios/Podfile.lock
+          if git diff --cached --quiet; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "Native lockfiles already in sync with package.json." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            git diff --cached --stat
+          fi
+
+      - name: Commit and push
+        if: steps.changes.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TARGET_REF: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          gh auth setup-git
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "chore(locks): sync native lockfiles with package.json" \
+            -m "Regenerated from node_modules: Gradle on ubuntu, CocoaPods on macOS."
+          git push origin "HEAD:$TARGET_REF"
+
+          {
+            echo "Synced native lockfiles on \`$TARGET_REF\`."
+            echo "Re-run CI on this branch; a token-pushed commit does not start one."
+          } >> "$GITHUB_STEP_SUMMARY"

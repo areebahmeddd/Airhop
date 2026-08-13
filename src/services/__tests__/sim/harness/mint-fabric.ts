@@ -30,6 +30,21 @@ const DENOMINATIONS = [
   65536,
 ];
 
+// Simulation invoices are lnbc<sats*10>n1sim. BOLT-11 states an amount as a
+// count plus a multiplier, and `n` is nano-BTC, so a sat is ten of them.
+// cashu-ts decodes this and rejects a quote whose invoice disagrees with it, so
+// the amount has to be encoded properly even though the payload is nonsense.
+const NANO_BTC_PER_SAT = 10;
+
+export function simInvoice(sats: number): string {
+  return `lnbc${String(sats * NANO_BTC_PER_SAT)}n1sim`;
+}
+
+function simInvoiceSats(request: string): number {
+  const nano = Number(/^lnbc(\d+)n/.exec(request)?.[1] ?? 0);
+  return nano / NANO_BTC_PER_SAT;
+}
+
 // NUT-00 hash_to_curve, domain-separated exactly as the spec requires. Getting
 // this wrong would make every signature verify against nothing.
 //
@@ -413,7 +428,7 @@ export class MintFabric {
     if (existing !== undefined) {
       return this.json({
         quote: maybeId,
-        request: `lnbc${String(existing.amount)}sim`,
+        request: simInvoice(existing.amount),
         amount: existing.amount,
         unit: existing.unit,
         state: existing.paid ? (existing.issued ? "ISSUED" : "PAID") : "UNPAID",
@@ -432,7 +447,7 @@ export class MintFabric {
     });
     return this.json({
       quote: id,
-      request: `lnbc${String(amount)}sim`,
+      request: simInvoice(amount),
       amount,
       unit: body.unit ?? "sat",
       state: "UNPAID",
@@ -475,10 +490,9 @@ export class MintFabric {
         change: existing.change ?? [],
       });
     }
-    // The simulation's invoices encode their amount as lnbc<amount>sim.
     const request =
-      typeof body.request === "string" ? body.request : "lnbc0sim";
-    const amount = Number(/lnbc(\d+)/.exec(request)?.[1] ?? 0);
+      typeof body.request === "string" ? body.request : simInvoice(0);
+    const amount = simInvoiceSats(request);
     const id = `melt-${String(this.quotes.size + 1)}`;
     this.quotes.set(id, {
       amount,
