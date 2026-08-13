@@ -135,14 +135,27 @@ export class NativeAudioPlayback implements AudioPlaybackBackend {
   // genuinely being played: a burst held behind the floor, or one arriving
   // while the user is looking elsewhere, correctly shows nothing.
   private readonly onLevel: (level: number) => void;
+  // The speaker has gone quiet: no burst is playing and none is about to.
+  //
+  // Playing a burst puts the audio session into the recording-capable state the
+  // native module needs, and nothing else takes it back out: every existing
+  // path that restores it hangs off the microphone being released, and a
+  // listener who never talks never releases anything. Left there, the session
+  // stays active and ducking, so the podcast a user was half-listening to is
+  // quieter for the rest of the app's life. Whoever owns this decides whether
+  // handing it back is safe right now; see mesh-service, which is the layer
+  // that knows whether the microphone is also in use.
+  private readonly onIdle: () => void;
   private levelSub: EventSubscription | null = null;
 
   constructor(
     isAudible: () => boolean = () => true,
     onLevel: (level: number) => void = () => undefined,
+    onIdle: () => void = () => undefined,
   ) {
     this.isAudible = isAudible;
     this.onLevel = onLevel;
+    this.onIdle = onIdle;
     if (isLiveVoiceAvailable()) {
       const emitter = new NativeEventEmitter(
         NativeAirhopVoice as unknown as ConstructorParameters<
@@ -174,6 +187,7 @@ export class NativeAudioPlayback implements AudioPlaybackBackend {
         this.openBurst = null;
         this.onLevel(0);
         void native.stopPlayback().catch(() => undefined);
+        this.onIdle();
       }
       return;
     }
@@ -197,6 +211,7 @@ export class NativeAudioPlayback implements AudioPlaybackBackend {
     this.openBurst = null;
     this.onLevel(0);
     void NativeAirhopVoice?.stopPlayback().catch(() => undefined);
+    this.onIdle();
   }
 
   // Stop immediately, whatever is playing. Used when the app backgrounds or the
@@ -207,5 +222,6 @@ export class NativeAudioPlayback implements AudioPlaybackBackend {
     this.levelSub?.remove();
     this.levelSub = null;
     void NativeAirhopVoice?.stopPlayback().catch(() => undefined);
+    this.onIdle();
   }
 }

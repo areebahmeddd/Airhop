@@ -124,6 +124,10 @@ const IGNORE = new Set([
   "Play Store",
   "GitHub Sponsors",
   "Areeb Ahmed",
+  // The license's formal name, substituted into `released_under` as a link.
+  // Same rule as the store names above: SPDX identifiers are not localised, and
+  // a translated "MIT License" names a license that does not exist.
+  "MIT License",
   // Error class names, assigned to `this.name` so a stack trace reads well.
   "WalletError",
   "AttachmentTooLargeError",

@@ -47,10 +47,11 @@ public final class AirhopTorSession {
         let cfg = URLSessionConfiguration.ephemeral
         cfg.waitsForConnectivity = true
         // Arti SOCKS5 port: 39050 (distinct from Orbot/C-Tor which uses 9050).
+        // Shared with the manager and the socket module; see AirhopTorEndpoint.
         cfg.connectionProxyDictionary = [
             "SOCKSEnable": 1,
-            "SOCKSProxy": "127.0.0.1",
-            "SOCKSPort":  39050,
+            "SOCKSProxy": AirhopTorEndpoint.socksHost,
+            "SOCKSPort": AirhopTorEndpoint.socksPort,
         ]
         return URLSession(configuration: cfg)
     }

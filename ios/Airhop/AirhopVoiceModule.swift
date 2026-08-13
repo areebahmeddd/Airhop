@@ -36,6 +36,12 @@ private enum VoiceConst {
     // About two seconds of audio. Past that the sender is outrunning the
     // speaker and the oldest audio is already stale.
     static let maxQueuedFrames = 32
+    // How many times one burst may rebuild its playback engine before being
+    // given up on. A route that connects and disconnects repeatedly - a car
+    // stereo at the edge of range - would otherwise rebuild forever, and a
+    // burst that has been interrupted eight times has nothing worth hearing
+    // left in it. Matches bitchat's maxEngineRestarts in PTTBurstPlayer.swift.
+    static let maxPlaybackRestarts = 8
 }
 
 private enum VoiceEvent {
@@ -133,16 +139,33 @@ final class AirhopVoiceModule: RCTEventEmitter {
     private var captureConverter: AVAudioConverter?
     private var isCapturing = false
     private let captureGeneration = VoiceCaptureGeneration()
+    // System observers that live exactly as long as one capture. Held so that
+    // teardown can drop them: an observer outliving its burst would report the
+    // next one dead on a notification meant for a microphone already gone.
+    // Only ever touched on `captureQueue`, alongside the rest of capture setup
+    // and teardown, so it needs no lock of its own.
+    private var captureObservers: [NSObjectProtocol] = []
     // Serialises capture setup/teardown against the render thread's tap.
     private let captureQueue = DispatchQueue(label: "org.onemindlabs.airhop.voice.capture")
 
     // MARK: Playback state
 
-    private let playbackEngine = AVAudioEngine()
-    private let playerNode = AVAudioPlayerNode()
+    // Recreated on every burst, never reused, for the same reason as
+    // `captureEngine` above: an engine built against one audio session does not
+    // survive that session being reconfigured, and Airhop reconfigures often.
+    // See beginPlayback.
+    private var playbackEngine = AVAudioEngine()
+    private var playerNode = AVAudioPlayerNode()
     private var playbackConverter: AVAudioConverter?
     private var isPlaying = false
     private var queuedFrames = 0
+    // Watches the engine above for the reconfigure that kills it. One at a
+    // time, replaced with the engine it belongs to, and only ever touched on
+    // `playbackQueue`. See observePlaybackReconfigure.
+    private var playbackObserver: NSObjectProtocol?
+    // Rebuilds spent on the burst now playing. Reset per burst, capped so a
+    // flapping route cannot rebuild forever. See VoiceConst.maxPlaybackRestarts.
+    private var playbackRestarts = 0
     private let playbackQueue = DispatchQueue(label: "org.onemindlabs.airhop.voice.playback")
 
     // MARK: RN boilerplate
@@ -221,11 +244,33 @@ final class AirhopVoiceModule: RCTEventEmitter {
     /// behaviour the design asks for: other audio dips rather than stops.
     private func configureSession() throws {
         let session = AVAudioSession.sharedInstance()
-        try session.setCategory(
-            .playAndRecord,
-            mode: .voiceChat,
-            options: [.duckOthers, .defaultToSpeaker, .allowBluetooth]
-        )
+        // HFP is the only Bluetooth profile that carries a microphone, and the
+        // Simulator does not offer it: asking for it there fails the whole
+        // setCategory call, so live voice would be dead on every simulator run
+        // rather than merely routing to the Mac's own mic. bitchat guards the
+        // same way; see their AudioSessionCoordinator.swift.
+        #if targetEnvironment(simulator)
+        let options: AVAudioSession.CategoryOptions = [.duckOthers, .defaultToSpeaker]
+        #else
+        let options: AVAudioSession.CategoryOptions = [
+            .duckOthers, .defaultToSpeaker, .allowBluetoothHFP,
+        ]
+        #endif
+        // Only when something actually differs. Both halves of the module call
+        // this, and a burst arriving while you hold the mic is the ordinary
+        // case, not the exotic one: startPlayback would otherwise re-apply a
+        // category the session already has, reconfiguring the engine under a
+        // live capture, which observeCaptureFailures cannot tell apart from the
+        // microphone being taken away. Re-setting an identical category is a
+        // no-op on the audio route, so skipping it costs nothing either.
+        let alreadyConfigured = session.category == .playAndRecord
+            && session.mode == .voiceChat
+            && session.categoryOptions == options
+        if !alreadyConfigured {
+            try session.setCategory(.playAndRecord, mode: .voiceChat, options: options)
+        }
+        // Always: an interruption leaves the session inactive, and this is the
+        // call that brings it back for the next burst.
         try session.setActive(true, options: [])
     }
 
@@ -273,8 +318,84 @@ final class AirhopVoiceModule: RCTEventEmitter {
             )
         }
 
+        // Registered before start(), so no reconfigure can land unobserved in
+        // the window between the engine running and the observers existing.
+        // beginCapture() throwing is safe: startCapture's catch calls
+        // teardownCapture(), which drops whatever was registered here.
+        observeCaptureFailures(generation: generation)
+
         captureEngine.prepare()
         try captureEngine.start()
+    }
+
+    /// The ways a live capture dies without the tap ever saying so.
+    ///
+    /// The tap is not an error channel: when the route dies or the engine is
+    /// reconfigured, buffers simply stop arriving. Nothing in
+    /// handleCapturedBuffer can tell that apart from a talker who has gone
+    /// quiet, so the burst has to be ended from here instead.
+    ///
+    /// Deliberately only the failures JS cannot see for itself. A call, Siri,
+    /// or a switch to another app all leave AppState, and message-thread.tsx
+    /// already ends the hold on that - by the same route a user's release
+    /// takes, which also delivers the voice note. Observing interruptions here
+    /// too would race that better ending and sometimes win, turning a note that
+    /// would have been sent into one that is dropped. What is left is hardware
+    /// going away while the app stays in the foreground, which nothing above
+    /// this layer can observe.
+    ///
+    /// Each observer is scoped to this engine and this session rather than to
+    /// every notification of its kind, and carries the generation of the
+    /// capture that registered it. bitchat observes the same two in
+    /// PTTCaptureEngine.swift and AudioSessionCoordinator.swift.
+    private func observeCaptureFailures(generation: UInt64) {
+        let center = NotificationCenter.default
+        let session = AVAudioSession.sharedInstance()
+
+        // A route or format change reconfigures the engine underneath the tap.
+        // The tap survives the notification and stops producing, so this is a
+        // dead burst rather than a hiccup.
+        captureObservers.append(center.addObserver(
+            forName: .AVAudioEngineConfigurationChange,
+            object: captureEngine,
+            queue: .main
+        ) { [weak self] _ in
+            self?.failCapture(generation, "Audio route changed")
+        })
+
+        // The input device itself disappeared: headset unplugged, AirPods back
+        // in the case. Often arrives alongside the engine notification above,
+        // which costs nothing - the first one to land invalidates the
+        // generation and the second finds itself stale.
+        captureObservers.append(center.addObserver(
+            forName: AVAudioSession.routeChangeNotification,
+            object: session,
+            queue: .main
+        ) { [weak self] note in
+            guard let raw = note.userInfo?[AVAudioSessionRouteChangeReasonKey] as? UInt,
+                  AVAudioSession.RouteChangeReason(rawValue: raw) == .oldDeviceUnavailable
+            else { return }
+            self?.failCapture(generation, "Microphone disconnected")
+        })
+    }
+
+    /// A capture that died on its own rather than one the user stopped.
+    ///
+    /// Ends the burst and tells JS, which stops the session so listeners get a
+    /// proper END instead of a three-second timeout, and shows the talker that
+    /// the microphone is gone. Without it the button stays lit, the meter holds
+    /// whatever the last syllable measured, and the talker goes on talking to
+    /// nobody.
+    ///
+    /// Reported only by the capture that is still current, matching failCapture
+    /// in AirhopVoiceModule.kt: a notification for a burst that has already
+    /// been torn down must not end the one recording now.
+    private func failCapture(_ generation: UInt64, _ message: String) {
+        captureQueue.async { [weak self] in
+            guard let self, self.captureGeneration.isCurrent(generation) else { return }
+            self.teardownCapture()
+            self.emitCaptureError(message)
+        }
     }
 
     /// Runs on the audio render thread. Must not allocate more than necessary
@@ -313,11 +434,11 @@ final class AirhopVoiceModule: RCTEventEmitter {
         // Encode to AAC. The converter emits one packet per 1024 samples, so a
         // buffer that is not a whole number of frames simply carries the
         // remainder into the next call.
-        guard let compressed = AVAudioCompressedBuffer(
+        let compressed = AVAudioCompressedBuffer(
             format: toAAC.outputFormat,
             packetCapacity: 8,
             maximumPacketSize: VoiceConst.maxEncodedFrameBytes
-        ) else { return }
+        )
 
         var pcmSupplied = false
         var encodeError: NSError?
@@ -362,6 +483,12 @@ final class AirhopVoiceModule: RCTEventEmitter {
     private func teardownCapture() {
         isCapturing = false
         captureConverter = nil
+        // Dropped before the generation bumps. A notification block already on
+        // its way to the main queue still runs, and still finds its generation
+        // stale, so both halves of the guard hold.
+        let center = NotificationCenter.default
+        captureObservers.forEach { center.removeObserver($0) }
+        captureObservers.removeAll()
         // Invalidated before the engine stops, so a buffer already in flight on
         // the render thread is discarded rather than emitted into whatever
         // burst comes next.
@@ -436,15 +563,106 @@ final class AirhopVoiceModule: RCTEventEmitter {
             throw VoiceError.format("Cannot decode voice audio")
         }
         playbackConverter = converter
+        playbackRestarts = 0
+        try startPlaybackEngine(format: pcmFormat)
+        queuedFrames = 0
+    }
 
-        if playerNode.engine == nil {
-            playbackEngine.attach(playerNode)
-        }
-        playbackEngine.connect(playerNode, to: playbackEngine.mainMixerNode, format: pcmFormat)
+    /// Builds the engine and node this burst plays through, and starts them.
+    ///
+    /// A fresh pair every time, never reused, because a running engine does not
+    /// survive its session being reconfigured underneath it, and this app
+    /// reconfigures constantly: releaseAudioSession() hands the category back to
+    /// playback the moment a talker lets go, which lands under a burst that is
+    /// still playing whenever two people talk over each other - the ordinary
+    /// case on a busy channel, not an exotic one. Reused, the engine stays
+    /// wedged and every later burst is silent until the app restarts, the same
+    /// failure the capture side already recreates to avoid.
+    ///
+    /// Both replaced together, so a node is never left attached to an engine
+    /// that has been let go. bitchat pairs its playback engine and node the same
+    /// way; see SystemPTTPlaybackEngine in PTTBurstPlayer.swift.
+    private func startPlaybackEngine(format: AVAudioFormat) throws {
+        playbackEngine = AVAudioEngine()
+        playerNode = AVAudioPlayerNode()
+        playbackEngine.attach(playerNode)
+        playbackEngine.connect(playerNode, to: playbackEngine.mainMixerNode, format: format)
+        // Before start(), for the reason the capture side gives: nothing may
+        // land in the window between the engine running and being watched.
+        observePlaybackReconfigure()
         playbackEngine.prepare()
         try playbackEngine.start()
         playerNode.play()
+    }
+
+    /// Watches for the engine being reconfigured out from under a playing burst.
+    ///
+    /// The trigger is usually this app: every path that closes the microphone
+    /// ends at releaseAudioSession(), which hands the category back while a
+    /// burst from someone else may still be playing. Without this the node goes
+    /// on accepting buffers that are never heard, and the listener loses the
+    /// whole rest of that burst without either side being told.
+    ///
+    /// Registered per engine and re-checked against the current one: removal
+    /// does not recall a notification already on its way to the main queue, and
+    /// rebuilding the engine we are already playing through would cost a gap
+    /// rather than close one.
+    private func observePlaybackReconfigure() {
+        removePlaybackObserver()
+        playbackObserver = NotificationCenter.default.addObserver(
+            forName: .AVAudioEngineConfigurationChange,
+            object: playbackEngine,
+            queue: .main
+        ) { [weak self] note in
+            guard let self else { return }
+            self.playbackQueue.async {
+                guard let engine = note.object as? AVAudioEngine,
+                      engine === self.playbackEngine
+                else { return }
+                self.restartPlayback()
+            }
+        }
+    }
+
+    private func removePlaybackObserver() {
+        guard let observer = playbackObserver else { return }
+        NotificationCenter.default.removeObserver(observer)
+        playbackObserver = nil
+    }
+
+    /// Rebuilds a dead engine mid-burst and plays on.
+    ///
+    /// The audio already handed to the old node is gone: about a jitter buffer's
+    /// worth, ~350 ms, one syllable. Recovering it is what bitchat's
+    /// PTTBurstPlayer does by keeping every scheduled buffer and replaying the
+    /// unfinished tail, and it is deliberately not done here. Their player owns
+    /// the jitter buffer, so that list already exists; Airhop's lives in
+    /// voice-player.ts and this module is a sink that holds one counter, as the
+    /// note at the top of this file says it should. Copying the replay would put
+    /// a second copy of the buffer state on this side of the bridge to save one
+    /// syllable. Worth revisiting only if buffering ever moves down here.
+    ///
+    /// Deliberately no configureSession(): the reconfigure is normally the app
+    /// handing the category back on purpose, and re-asserting playAndRecord here
+    /// would take it straight back and route later playback to the earpiece.
+    /// Playing under whatever category is now active is exactly right.
+    private func restartPlayback() {
+        guard isPlaying, let pcmFormat else { return }
+        playbackRestarts += 1
+        guard playbackRestarts <= VoiceConst.maxPlaybackRestarts else {
+            teardownPlayback()
+            return
+        }
+        if playerNode.engine != nil { playerNode.stop() }
+        if playbackEngine.isRunning { playbackEngine.stop() }
         queuedFrames = 0
+        do {
+            try startPlaybackEngine(format: pcmFormat)
+        } catch {
+            // Nothing left to play through. The burst ends here rather than
+            // feeding a node that cannot sound; the next one builds again.
+            teardownPlayback()
+        }
     }
 
     /// Decode one AAC frame and hand the PCM to the player node. The node owns
@@ -455,11 +673,11 @@ final class AirhopVoiceModule: RCTEventEmitter {
               let aacFormat
         else { return }
 
-        guard let compressed = AVAudioCompressedBuffer(
+        let compressed = AVAudioCompressedBuffer(
             format: aacFormat,
             packetCapacity: 1,
             maximumPacketSize: frame.count
-        ) else { return }
+        )
         compressed.byteLength = UInt32(frame.count)
         compressed.packetCount = 1
         frame.withUnsafeBytes { raw in
@@ -503,6 +721,10 @@ final class AirhopVoiceModule: RCTEventEmitter {
     private func teardownPlayback() {
         isPlaying = false
         queuedFrames = 0
+        // Dropped first, so a rebuild cannot be started for a burst that is
+        // being torn down. A notification already on its way to the main queue
+        // still runs, and restartPlayback's `isPlaying` guard turns it away.
+        removePlaybackObserver()
         if playerNode.engine != nil { playerNode.stop() }
         if playbackEngine.isRunning { playbackEngine.stop() }
         playbackConverter = nil
@@ -524,6 +746,15 @@ final class AirhopVoiceModule: RCTEventEmitter {
             withName: VoiceEvent.frame,
             body: ["dataBase64": frame.base64EncodedString(), "level": captureLevel]
         )
+    }
+
+    /// Why the microphone stopped, for a burst that ended without the user
+    /// letting go. The string is diagnostic rather than copy: JS ignores it and
+    /// shows its own translated line, the same way the Kotlin module's messages
+    /// are never rendered. See voice-audio.ts and message-thread.tsx.
+    private func emitCaptureError(_ message: String) {
+        guard bridge != nil else { return }
+        sendEvent(withName: VoiceEvent.captureError, body: ["message": message])
     }
 
     /// Loudness of audio just handed to the speaker. Unlike capture there is no

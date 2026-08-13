@@ -183,6 +183,7 @@ import { useSettingsStore } from "../store/settings-store";
 import { useTransferStore } from "../store/transfer-store";
 import { channelDisplayName, resolveDisplayName } from "../utils/display-name";
 import { BRIDGE_CHANNEL, canSendMedia } from "../utils/media-policy";
+import { setAudioForPlayback } from "./audio-session";
 import { BridgeService } from "./bridge-service";
 import {
   FileTransferService,
@@ -1529,6 +1530,26 @@ export class MeshService {
     this.pttPlayback = new NativeAudioPlayback(
       () => this.audibleChannel !== null,
       (level) => this.reportPttLevel({ inbound: level }),
+      () => {
+        // The speaker is quiet, so hand the audio session back - the same
+        // ending a released microphone gets, for the listener who never
+        // pressed anything. Without it a burst heard once leaves the session
+        // recording-capable and ducking for the rest of the run.
+        //
+        // Only when the microphone is genuinely free. Playback ending under a
+        // live hold is ordinary, not exotic: the other talker simply finished
+        // first. Restoring there would reconfigure the session beneath our own
+        // capture engine, which reads that as the microphone being taken away
+        // and ends the burst the user is still holding. This guard is the
+        // reason the call lives here rather than beside the stopPlayback() that
+        // prompts it.
+        if (this.pttCapture !== null) return;
+        // A burst arriving in this same instant can land after this and pay for
+        // one engine rebuild. The player recovers from that on its own, and
+        // sequencing it exactly would cost a state machine out of all
+        // proportion to a category being set twice.
+        void setAudioForPlayback();
+      },
     );
     // The player tells us when a burst ends on its own clock rather than on a
     // packet, which is the only way the floor can be given up without us being

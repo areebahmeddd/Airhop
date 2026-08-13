@@ -48,12 +48,12 @@ final class AirhopTorSocket: RCTEventEmitter, URLSessionWebSocketDelegate {
   private lazy var session: URLSession = {
     let cfg = URLSessionConfiguration.ephemeral
     cfg.waitsForConnectivity = false
-    // Arti SOCKS5 port (39050), distinct from Orbot/C-Tor (9050). Read from the
-    // manager so the two stay in lock step if the port ever changes.
+    // Arti SOCKS5 port (39050), distinct from Orbot/C-Tor (9050). Shared with
+    // the manager so the two stay in lock step if the port ever changes.
     cfg.connectionProxyDictionary = [
       "SOCKSEnable": 1,
-      "SOCKSProxy": "127.0.0.1",
-      "SOCKSPort": AirhopTorManager.shared.socksPort,
+      "SOCKSProxy": AirhopTorEndpoint.socksHost,
+      "SOCKSPort": AirhopTorEndpoint.socksPort,
     ]
     return URLSession(configuration: cfg, delegate: self, delegateQueue: delegateQueue)
   }()

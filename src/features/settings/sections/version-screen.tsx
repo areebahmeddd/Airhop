@@ -27,11 +27,13 @@ import {
   AUTHOR_URL,
   LATEST_RELEASE_API,
   LATEST_RELEASE_PAGE,
+  LICENSE_NAME,
   LICENSE_URL,
   PLAY_STORE_URL,
 } from "../../../data/app-info";
 import { birdForVersion } from "../../../data/releases";
 import { t, useT } from "../../../i18n";
+import { useRichText } from "../../../i18n/rich-text";
 import { useSettingsStore } from "../../../store/settings-store";
 import PrimaryButton from "../../../ui/components/primary-button";
 import {
@@ -85,6 +87,22 @@ export default function VersionScreen({ onBack }: Props): React.JSX.Element {
   const styles = useMemo(() => createStyles(Colors), [Colors]);
   const [check, setCheck] = useState<CheckState>({ status: "idle" });
   const bird = birdForVersion(APP_VERSION);
+
+  // One translated sentence with the license name substituted in as a tappable
+  // node, so a translator can put it wherever their language needs it. The name
+  // itself stays English. See i18n/rich-text.tsx.
+  const license = useRichText("settings.version.released_under", {
+    license: (
+      <Text
+        style={styles.creditLink}
+        onPress={() => void Linking.openURL(LICENSE_URL)}
+        accessibilityRole="link"
+        suppressHighlighting
+      >
+        {LICENSE_NAME}
+      </Text>
+    ),
+  });
 
   // Easter egg: triple-tap the version hero and the bird flaps its wings with
   // a small hop (a nod to "airhop"). Purely local delight, nothing persists.
@@ -269,17 +287,7 @@ export default function VersionScreen({ onBack }: Props): React.JSX.Element {
               {AUTHOR_NAME}
             </Text>
           </View>
-          <Text style={styles.creditText}>
-            {T("settings.version.released_under")}{" "}
-            <Text
-              style={styles.creditLink}
-              onPress={() => void Linking.openURL(LICENSE_URL)}
-              accessibilityRole="link"
-              suppressHighlighting
-            >
-              MIT License
-            </Text>
-          </Text>
+          <Text style={styles.creditText}>{license}</Text>
         </View>
       </ScrollView>
     </View>

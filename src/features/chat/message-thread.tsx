@@ -3780,6 +3780,24 @@ export default function MessageThread({
     const duration = recordingSecs;
     stopRecordingTimer();
     try {
+      // Only when a note is actually being recorded. Every other ending -
+      // permission denied, a live capture that died under the hold, a live
+      // start that never got off the ground - lands here too, because the
+      // release handler reads "not a live hold" as "a note, then", and none of
+      // those has a recorder running.
+      //
+      // Nothing below is safe on one that is not: expo-audio's stop() returns
+      // silently when the recorder was never started (AudioRecorder.swift
+      // guards on its own state), while `uri` keeps pointing at the last note
+      // this screen recorded, which adoptIntoAttachmentCache has already MOVED
+      // into the cache. So the branch would adopt a path with no file behind
+      // it and post a voice message that plays nothing - or, if that file is
+      // somehow still there, send the same note a second time.
+      //
+      // Read through getStatus() rather than `recorderState`, for the reason
+      // the meter poll gives: the hook's value can be a render behind, and
+      // this handler is the one place that must not be.
+      if (!audioRecorder.getStatus().isRecording) return;
       await audioRecorder.stop();
       const recorded = audioRecorder.uri;
       if (!recorded) {

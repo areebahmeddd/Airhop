@@ -52,6 +52,20 @@ public extension Notification.Name {
     static let AirhopTorDidStall = Notification.Name("AirhopTorDidStall")
 }
 
+// ---- SOCKS endpoint ---------------------------------------------------------
+
+/// Where Arti's SOCKS5 listener lives.
+///
+/// Outside the manager because it is read off the main actor: AirhopTorSocket
+/// builds its URLSession on its own queue, and the manager is @MainActor, so
+/// reaching through `AirhopTorManager.shared` for a constant is a data race the
+/// compiler is right to reject. Both sides read these, so the port cannot drift.
+enum AirhopTorEndpoint {
+    /// Arti uses 39050, NOT 9050 (which is Orbot/C-Tor).
+    static let socksHost = "127.0.0.1"
+    static let socksPort = 39050
+}
+
 // ---- TorManager -------------------------------------------------------------
 
 /// Manages the Arti Tor client lifecycle for Airhop.
@@ -62,9 +76,9 @@ public extension Notification.Name {
 public final class AirhopTorManager: ObservableObject {
     public static let shared = AirhopTorManager()
 
-    // SOCKS5 endpoint. Arti uses port 39050, NOT 9050 (which is Orbot/C-Tor).
-    let socksHost: String = "127.0.0.1"
-    let socksPort: Int = 39050
+    // SOCKS5 endpoint, shared with AirhopTorSocket. See AirhopTorEndpoint.
+    let socksHost: String = AirhopTorEndpoint.socksHost
+    let socksPort: Int = AirhopTorEndpoint.socksPort
 
     // MARK: - Published state
 

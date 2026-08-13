@@ -1933,7 +1933,7 @@ export const strings = {
   // ---- Settings: connectivity toggles --------------------------------------------
   // Background operation. The one toggle whose off state changes what the app
   // does rather than how fast it does it, so the copy leads with that.
-  "settings.conn.background": "Run in the background",
+  "settings.conn.background": "Run in background",
   "settings.conn.background_desc":
     "Keep the mesh running when Airhop is closed",
   "settings.conn.background_on_title": "Keep the mesh running?",
@@ -1946,8 +1946,7 @@ export const strings = {
     "Messages will only arrive while Airhop is open, and this phone stops relaying for people nearby. The ongoing notification goes away.",
 
   "settings.conn.live_voice": "Live voice",
-  "settings.conn.live_voice_desc":
-    "Use your phone like a walkie-talkie to talk with people within Bluetooth range",
+  "settings.conn.live_voice_desc": "Talk to nearby people like a walkie-talkie",
   "settings.conn.live_voice_on_title": "Turn on live voice?",
   "settings.conn.live_voice_on_body":
     "Holding the mic sends your voice to everyone in Bluetooth range as you speak, and their voice plays on your phone. Nothing is recorded.",
@@ -2225,7 +2224,7 @@ export const strings = {
   "settings.version.number": "Version {version}",
   "settings.version.update_to": "Update to {version}",
   "settings.version.update_to_a11y": "Update to version {version}",
-  "settings.version.released_under": "Released under",
+  "settings.version.released_under": "Released under {license}",
   "settings.version.notes_a11y": "View release notes for version {version}",
   "settings.version.tor_paused":
     "Update check is paused while Tor is on, so it cannot leak your IP. Check the releases page in a browser.",

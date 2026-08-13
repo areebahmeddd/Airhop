@@ -111,7 +111,8 @@
       "^@noble/curves/(.+?)(\\.js)?$": "<rootDir>/node_modules/@noble/curves/$1.js",
       "^@noble/hashes/(.+?)(\\.js)?$": "<rootDir>/node_modules/@noble/hashes/$1.js",
       "^@noble/ciphers/(.+?)(\\.js)?$": "<rootDir>/node_modules/@noble/ciphers/$1.js",
-      "^expo-secure-store$": "<rootDir>/src/__mocks__/expo-secure-store.js"
+      "^expo-secure-store$": "<rootDir>/src/__mocks__/expo-secure-store.js",
+      "^expo-audio$": "<rootDir>/src/__mocks__/expo-audio.js"
     }
   }
 }

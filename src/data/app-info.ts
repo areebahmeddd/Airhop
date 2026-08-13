@@ -17,6 +17,10 @@ export const GITHUB_URL = `https://github.com/${GITHUB_REPO}`;
 // The project's MIT license text on GitHub, same target as the landing footer.
 export const LICENSE_URL = `${GITHUB_URL}/blob/main/LICENSE`;
 
+// The license's formal name. Identity, not copy: a license is named the same in
+// every locale, so this sits here with AUTHOR_NAME rather than in the catalog.
+export const LICENSE_NAME = "MIT License";
+
 // GitHub redirects /releases/latest to the newest published release, so this
 // opens the current release notes without a network round trip of our own.
 export const LATEST_RELEASE_PAGE = `${GITHUB_URL}/releases/latest`;
