@@ -142,7 +142,7 @@ import {
   formatDuration,
   formatLongDate,
 } from "../../utils/format";
-import { acknowledged } from "../../utils/haptics";
+import { acknowledged, held } from "../../utils/haptics";
 import {
   BRIDGE_CHANNEL,
   canSendMedia,
@@ -325,6 +325,13 @@ const CANCEL_SLIDE_DISTANCE = 110;
 // Where it disarms again. Hysteresis: a single threshold flips state every time
 // a resting thumb drifts across it, and each flip is a haptic and a re-render.
 const CANCEL_SLIDE_DISARM = 70;
+
+// How far the finger lifts before a held recording becomes a hands-free one.
+//
+// Shorter than the cancel slide because the two must never be ambiguous: a
+// diagonal drag has to resolve to one of them, and cancel is the destructive
+// answer, so it takes the longer, more deliberate travel.
+const LOCK_SLIDE_DISTANCE = 64;
 
 // The live-burst ceiling in seconds, for the HUD. Derived from the value the
 // capture layer actually enforces, so the badge cannot claim a burst is still
@@ -1690,6 +1697,15 @@ export default function MessageThread({
   // it derives from; the React copy is for the hint's text, glyph and colour and
   // flips at most twice per hold.
   const cancelArmedShared = useSharedValue(false);
+  // Whether THIS hold can be locked, and whether it already was.
+  //
+  // Read from the gesture worklet, so both are shared values rather than the
+  // refs the rest of the hold uses. Locking is offered only once the press has
+  // settled on the recording path: a live burst is a floor, and leaving one open
+  // with no finger on the button would broadcast the room a microphone nobody
+  // is holding.
+  const lockAvailableShared = useSharedValue(false);
+  const lockedShared = useSharedValue(false);
   const [cancelArmed, setCancelArmed] = useState(false);
   // Whether the recording was started by tap ("Voice note" in the attach sheet,
   // or the accessibility toggle) rather than by holding the mic.
@@ -1700,16 +1716,37 @@ export default function MessageThread({
   // by tap there is no held finger, so the bar's own controls are the way out.
   const [handsFreeRecording, setHandsFreeRecording] = useState(false);
   const liveVoiceEnabled = useSettingsStore((s) => s.liveVoiceEnabled);
+  // Whether a note recording is open right now, for the unmount cleanup. That
+  // cleanup is created once, so it cannot read `isRecording` from a render.
+  const recordingRef = useRef(false);
   const isRecording = recorderState.isRecording;
+  recordingRef.current = isRecording;
   // Voice recording
   const [recordingSecs, setRecordingSecs] = useState(0);
   const recordingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  // Seconds elapsed, counted beside the state rather than from it. The tick
+  // needs to compare against the ceiling in the same pass that increments, and
+  // a state updater is the wrong place to decide anything.
+  const elapsedRef = useRef(0);
   // A live burst stops going out at the ceiling while the button is still held,
   // so the HUD has to say so. Derived from the same elapsed count the HUD
   // already shows rather than a second timer, so the two can never disagree.
   // Only meaningful for a live burst: a recording is a local file with no
   // airtime to spend, and it is capped by the attachment size limit instead.
-  const burstEnded = isTalkingLive && recordingSecs >= BURST_MAX_SECS;
+  // The recording ceiling, and it applies to both paths for different reasons.
+  //
+  // Live: the capture layer already stops adding frames past MAX_BURST_MS, so
+  // this is the UI catching up with a burst that has already ended.
+  // Note: nothing was stopping it. At 32 kbps a recording crosses the 512 KiB
+  // voice cap at about 128 s, and `rejectIfTooLarge` deliberately skips voice,
+  // so an over-long note was refused by the transport at send with the audio
+  // already gone. Same number for both, which is also the one the UI shows.
+  const atRecordingLimit = recordingSecs >= BURST_MAX_SECS;
+  const burstEnded = isTalkingLive && atRecordingLimit;
+  // Read from inside the level listener, which is subscribed once and would
+  // otherwise keep driving the meter after the burst it belongs to has ended.
+  const atLimitRef = useRef(false);
+  atLimitRef.current = atRecordingLimit;
   // Which voice note is playing, by message id. One at a time: starting a
   // second pauses the first, since two clips over one speaker is noise.
   const [playingMessageId, setPlayingMessageId] = useState<string | null>(null);
@@ -3163,8 +3200,35 @@ export default function MessageThread({
   function startRecordingTimer(): void {
     if (recordingTimerRef.current) clearInterval(recordingTimerRef.current);
     setRecordingSecs(0);
+    elapsedRef.current = 0;
     recordingTimerRef.current = setInterval(() => {
-      setRecordingSecs((s) => s + 1);
+      elapsedRef.current += 1;
+      setRecordingSecs(elapsedRef.current);
+      if (elapsedRef.current < BURST_MAX_SECS) return;
+
+      // The ceiling, and it lands here so both paths reach it through one
+      // clock. Stopping the timer is what freezes the display, and the meter
+      // goes flat beside it: a bar still counting over audio nobody is
+      // recording is the app lying about what it is doing.
+      clearInterval(recordingTimerRef.current ?? undefined);
+      recordingTimerRef.current = null;
+      resetWave();
+
+      // The ref, not the state: this fires from a timer that can be a render
+      // ahead of it, and being wrong here either sends a live burst as a note
+      // or leaves a note recording past its own size cap.
+      if (liveHoldRef.current) return;
+
+      // A note is ended rather than parked, because the file is what breaches
+      // the cap: at 32 kbps it crosses the 512 KiB voice limit at about this
+      // point, and `rejectIfTooLarge` skips voice, so the transport used to
+      // refuse it at send with the audio already gone.
+      //
+      // Sent rather than left under a Send button, which over a recorder that
+      // has already stopped would read as though more could still be said. The
+      // toast is what stops the send looking spontaneous.
+      setToast({ message: t("chat.voice.limit_sent"), icon: "mic-off" });
+      void stopRecording();
     }, 1000);
   }
 
@@ -3226,6 +3290,7 @@ export default function MessageThread({
       setIsPTTActive(false);
       return;
     }
+    lockAvailableShared.value = false;
     const live = await service.startVoiceBurst(channel, () => {
       // Capture died under us (a call took the mic). Close the burst and drop
       // the live state so the HUD does not claim to still be transmitting.
@@ -3385,6 +3450,17 @@ export default function MessageThread({
     ).catch(() => {});
   }, []);
 
+  // The hold became hands-free. The microphone is already open and stays open;
+  // all that changes is who is holding it, which is now the bar rather than a
+  // finger. `handsFreeRecording` is the state that swap has always been made of,
+  // so the X and Send appear exactly as they do for a tapped voice note.
+  const lockTalk = useCallback((): void => {
+    held();
+    setCancelArmed(false);
+    setIsPTTActive(false);
+    setHandsFreeRecording(true);
+  }, []);
+
   const finishTalk = useCallback((cancelled: boolean): void => {
     setCancelArmed(false);
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
@@ -3412,9 +3488,27 @@ export default function MessageThread({
         .onBegin(() => {
           cancelSlide.value = 0;
           cancelArmedShared.value = false;
+          lockedShared.value = false;
+          lockAvailableShared.value = false;
           scheduleOnRN(beginTalk);
         })
         .onUpdate((e) => {
+          // Locked: the finger no longer steers anything. The bar's own X and
+          // Send are the way out from here.
+          if (lockedShared.value) return;
+          // Lift to lock, but only on a hold that is recording a note and only
+          // while it is not already sliding toward cancel. Checking the slide
+          // is what keeps a diagonal drag from doing both.
+          if (
+            lockAvailableShared.value &&
+            cancelSlide.value === 0 &&
+            -e.translationY >= LOCK_SLIDE_DISTANCE
+          ) {
+            lockedShared.value = true;
+            cancelSlide.value = withTiming(0, { duration: Duration.base });
+            scheduleOnRN(lockTalk);
+            return;
+          }
           // Toward the start of the row, whichever side that is under RTL.
           const travel = isRTLLayout ? e.translationX : -e.translationX;
           const slid = Math.min(Math.max(travel, 0), CANCEL_SLIDE_DISTANCE);
@@ -3429,12 +3523,28 @@ export default function MessageThread({
           scheduleOnRN(reportCancelArmed, armed);
         })
         .onFinalize(() => {
+          // A locked hold has already handed the recording to the bar, so
+          // lifting is not a release: ending it here is what would send a note
+          // the user has not finished.
+          if (lockedShared.value) {
+            lockedShared.value = false;
+            return;
+          }
           const cancelled = cancelArmedShared.value;
           cancelArmedShared.value = false;
           cancelSlide.value = withTiming(0, { duration: Duration.base });
           scheduleOnRN(finishTalk, cancelled);
         }),
-    [cancelSlide, cancelArmedShared, beginTalk, reportCancelArmed, finishTalk],
+    [
+      cancelSlide,
+      cancelArmedShared,
+      lockAvailableShared,
+      lockedShared,
+      beginTalk,
+      reportCancelArmed,
+      lockTalk,
+      finishTalk,
+    ],
   );
 
   // The button follows the finger, so the slide reads as dragging the recording
@@ -3448,6 +3558,12 @@ export default function MessageThread({
   }));
 
   // The hint fades as the mic closes on it; the armed copy replaces it.
+  // Whether to offer the lock. Mirrors the gesture's own condition, minus the
+  // travel: a note recording is running, nothing is sliding toward cancel, and
+  // the bar is not already hands-free.
+  const lockHintVisible =
+    isRecording && !isTalkingLive && !handsFreeRecording && !cancelArmed;
+
   const cancelHintStyle = useAnimatedStyle(() => ({
     opacity: 1 - 0.5 * (cancelSlide.value / CANCEL_SLIDE_DISTANCE),
   }));
@@ -3500,7 +3616,9 @@ export default function MessageThread({
     if (!service) return;
     return service.setPttLevelListener(({ outbound, inbound }) => {
       if (liveHoldRef.current) {
-        pushWaveLevel(outbound);
+        // Past the ceiling the capture layer is dropping these frames, so the
+        // bars would be showing a voice that is no longer going anywhere.
+        if (!atLimitRef.current) pushWaveLevel(outbound);
         return;
       }
       // Recording a note: the poll owns the meter, and the banner is hidden.
@@ -3517,7 +3635,7 @@ export default function MessageThread({
   // conversion turns that back into the same 0-to-1 amplitude the live path
   // reports, so both feed one curve and the two bars look alike.
   useEffect(() => {
-    if (!isRecording || isTalkingLive) return;
+    if (!isRecording || isTalkingLive || atRecordingLimit) return;
     const timer = setInterval(() => {
       const db = audioRecorder.getStatus().metering;
       pushWaveLevel(
@@ -3527,7 +3645,13 @@ export default function MessageThread({
       );
     }, VOICE_METER_POLL_MS);
     return () => clearInterval(timer);
-  }, [isRecording, isTalkingLive, audioRecorder, pushWaveLevel]);
+  }, [
+    isRecording,
+    isTalkingLive,
+    atRecordingLimit,
+    audioRecorder,
+    pushWaveLevel,
+  ]);
 
   // Whether the next hold will go live, so the button can show which it is.
   // Re-checked as peers come and go: in a DM it depends on that peer having a
@@ -3583,7 +3707,20 @@ export default function MessageThread({
   // component, so the send completes after the screen is gone.
   useEffect(
     () => () => {
-      if (liveHoldRef.current) void talkRef.current.end();
+      if (liveHoldRef.current) {
+        void talkRef.current.end();
+        return;
+      }
+      // A note recording nobody is holding: hands-free, or a hold that was
+      // locked. Discarded rather than sent, which is what the interruption
+      // rule above already says about audio nobody has heard - and unlike a
+      // live burst there is no far side waiting on a close.
+      //
+      // Left running, this outlived the screen: the microphone stayed open and
+      // the audio session stayed in record mode, which routes every later
+      // playback to the earpiece. Reachable before this through the attach
+      // sheet's Voice note; lift-to-lock makes it ordinary.
+      if (recordingRef.current) void talkRef.current.cancel();
     },
     [],
   );
@@ -3620,6 +3757,12 @@ export default function MessageThread({
       }
       audioRecorder.record();
       startRecordingTimer();
+      // A recording is running, so the hold can be locked. Set here rather than
+      // where the path was chosen: a denied permission or a failed prepare
+      // would otherwise leave the lift-to-lock gesture offered over a recorder
+      // that never opened, and locking it would raise a bar with nothing behind
+      // it. Also covers the live path falling back to a note.
+      lockAvailableShared.value = true;
       return true;
     } catch {
       // Hand the session back before bailing out. Leaving allowsRecording on
@@ -4908,6 +5051,13 @@ export default function MessageThread({
                     the row the same width as with the send button. */}
                 <View
                   style={styles.pttTarget}
+                  // Inert while the bar owns the recording. A press here would
+                  // otherwise start a second recorder over the one already
+                  // running and, worse, send it on release: the gesture's
+                  // finalize has no way to tell a press that did nothing from a
+                  // release that meant something. The bar's Send and X are the
+                  // controls in this state, under a screen reader too.
+                  pointerEvents={handsFreeRecording ? "none" : "auto"}
                   accessible
                   accessibilityRole="button"
                   accessibilityLabel={
@@ -5029,6 +5179,21 @@ export default function MessageThread({
                   : T("chat.voice.slide_cancel")}
               </Text>
             </Animated.View>
+          )}
+          {/* Lift-to-lock, shown only while the hold can actually take it: a
+              live burst is a floor and is never locked, and a hands-free
+              recording is already there. Icon rather than a second sentence,
+              because the cancel hint beside it owns the one line the bar has,
+              and a chevron over a padlock is the idiom people arrive with. */}
+          {lockHintVisible && (
+            <View
+              style={styles.recordingLockHint}
+              accessible
+              accessibilityLabel={T("chat.voice.lift_lock")}
+            >
+              <Feather name="chevron-up" size={12} color={Colors.textMuted} />
+              <Feather name="lock" size={13} color={Colors.textMuted} />
+            </View>
           )}
           {/* LIVE is not decoration. A voice note can be cancelled before
               anyone hears it; a live burst cannot, because it already played
@@ -5979,6 +6144,11 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
     // Centred on the row rather than sitting on a baseline, so a bar grows in
     // both directions from the middle and the meter reads as a waveform instead
     // of a bar chart.
+    recordingLockHint: {
+      alignItems: "center",
+      gap: -2,
+      paddingHorizontal: Spacing.xs,
+    },
     recordingWave: {
       flexGrow: 1,
       flexShrink: 1,

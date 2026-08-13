@@ -693,7 +693,13 @@ export const strings = {
   // The mic is a plain toggle under a screen reader; see chat/message-thread.
   "chat.voice.a11y_toggle": "Double tap to start or stop talking.",
   "chat.voice.limit_reached": "Two minute limit reached, release to send",
+  // A recorded note reaching the same ceiling. It is sent rather than held, so
+  // this says what happened rather than what to do next.
+  "chat.voice.limit_sent": "Two minute limit reached, note sent",
   "chat.voice.stop_send": "Stop recording and send",
+  // The lift-to-lock affordance, which is two icons on screen. Screen-reader
+  // only, so it says the gesture rather than describing the glyphs.
+  "chat.voice.lift_lock": "Slide up to record hands-free",
   // Someone else has the floor. Present tense: it shows only while their audio
   // is playing.
   "chat.voice.live_speaking": "{name} speaking",
