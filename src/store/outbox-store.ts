@@ -1,14 +1,11 @@
 // Pending outbound DMs awaiting a route to their recipient.
 //
-// Why this exists: `MessageRouter.sendDm` returns "needs-courier" when a peer
-// has no Noise session, no WiFi/BLE link and no known Nostr pubkey. That result
-// used to be discarded. The UI claimed "queued for delivery" while the message
-// was dropped on the floor and never retried, even when the peer walked back
-// into range seconds later. Every out-of-range DM was silently lost.
-//
-// This store is the actual queue behind that promise. MeshService enqueues on
-// failure and flushes when a peer becomes reachable again (their ANNOUNCE
-// arrives, or a Noise/Double-Ratchet session is established).
+// `MessageRouter.sendDm` returns "needs-courier" when a peer has no Noise
+// session, no WiFi or BLE link and no known Nostr pubkey. This store is the queue
+// behind the "queued for delivery" the UI shows for that case: MeshService
+// enqueues on failure and flushes when the peer becomes reachable again, either
+// through their ANNOUNCE or once a Noise or Double Ratchet session exists.
+// Without it that promise is a lie and every out-of-range DM is lost.
 //
 // Persisted, because "I'll deliver this when they're back in range" has to
 // survive an app restart to mean anything.
@@ -74,9 +71,9 @@ interface OutboxState {
   // was dropped so the sender's bubble can stop claiming it is still coming.
   //
   // Returning the dropped entries rather than swallowing them is the point: an
-  // expired message used to disappear from the queue while its bubble kept the
-  // hourglass forever, which is the same silent-loss shape the queue exists to
-  // prevent. Called before each flush.
+  // expired message disappearing from the queue while its bubble keeps the
+  // hourglass forever is the same silent-loss shape the queue exists to prevent.
+  // Called before each flush.
   evictExpired: (nowMs?: number) => PendingMessage[];
   clearAll: () => void;
 }

@@ -1,15 +1,15 @@
 // Attachment wire format, byte-compatible with bitchat's BitchatFilePacket
 // (BitchatFilePacket.swift / MimeType.swift / FileTransferLimits.swift).
 //
-// bitchat sends a whole file as ONE FILE_TRANSFER (0x22) packet whose payload is
-// a TLV blob; the fragment layer (which we already match) splits it into frames
-// that fit one BLE write. There is no app-level chunking or JSON metadata. The canonical
-// tags are fileName(0x01), fileSize(0x02), mimeType(0x03), content(0x04); we
-// append two Airhop-only tags (channel 0x05, duration 0x06) that bitchat skips as
-// unknown, so our multi-channel routing and voice-note durations survive without
-// breaking bitchat parsing.
+// A whole file travels as ONE FILE_TRANSFER (0x22) packet whose payload is a TLV
+// blob, and the fragment layer splits it into frames that fit a single BLE write.
+// There is no app-level chunking and no JSON metadata. Canonical tags are
+// fileName (0x01), fileSize (0x02), mimeType (0x03) and content (0x04); Airhop
+// appends channel (0x05) and duration (0x06), which bitchat skips as unknown, so
+// multi-channel routing and voice-note durations survive without breaking its
+// parsing.
 
-// ---- Limits (bitchat FileTransferLimits) ------------------------------------
+// Limits, from bitchat FileTransferLimits.
 
 export const MAX_FILE_BYTES = 1 * 1024 * 1024; // 1 MiB, absolute ceiling
 export const MAX_VOICE_BYTES = 512 * 1024; // 512 KiB
@@ -57,17 +57,14 @@ export const MAX_BITCHAT_TRANSFER_BYTES = 350 * 1024; // 350 KiB
 export const MAX_FRAMED_FILE_BYTES =
   MAX_FILE_BYTES + 0xffff * 2 + 18 + (16 + 8 + 8 + 64);
 
-// ---- Wire file names --------------------------------------------------------
-
 // bitchat derives a stable message ID for private media from the file name, and
 // only for two exact shapes: `img_<UUID>.jpg` and `voice_<UUID>.m4a` (it also
-// accepts a 16-hex-digit voice token). Anything else, including the plain
-// "photo.jpg" Airhop used to send, makes BitchatFilePacket.stableID return nil,
-// which drops the whole transfer onto bitchat's legacy path: no delivery
-// receipt, no arrival dedup, and repeat arrivals stacking up as "name (1)",
-// "name (2)". The name is not what a person reads for a photo or a voice note
-// (both render as media, never as a file row), so matching bitchat's shape costs
-// nothing and buys the receipts.
+// accepts a 16-hex-digit voice token). Any other name makes
+// BitchatFilePacket.stableID return nil, dropping the transfer onto bitchat's
+// legacy path: no delivery receipt, no arrival dedup, and repeat arrivals
+// stacking up as "name (1)", "name (2)". Nobody reads the name of a photo or a
+// voice note, since both render as media rather than a file row, so matching
+// bitchat's shape costs nothing and buys the receipts.
 export function wireMediaName(
   kind: "image" | "voice",
   extension: "jpg" | "m4a",
@@ -163,7 +160,7 @@ function uuidV4(): string {
   return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
 }
 
-// ---- MIME allow-list (bitchat MimeType.allowed, plus video for Airhop) ------
+// ---- MIME allow-list (bitchat MimeType.allowed, plus video for Airhop) ----
 
 // bitchat accepts every one of these, including video, but only renders images
 // and voice notes: MimeType resolves an unrecognised type through
@@ -362,7 +359,7 @@ export function maxBytesForType(type: AttachmentKind): number {
   return MAX_FILE_BYTES;
 }
 
-// ---- TLV encode/decode ------------------------------------------------------
+// ---- TLV encode/decode ----
 
 const TLV_FILENAME = 0x01;
 const TLV_FILESIZE = 0x02;

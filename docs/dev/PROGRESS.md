@@ -12,7 +12,7 @@ private-group wire and epoch keys, gateway carrier codec, mesh ping/pong,
 outbox delivery, contact-card binding, geohash derivation + relay determinism,
 geohash DM round trip, Nostr gift-wrap and the bitchat envelope, proof selection.
 
-**Verified by the multi-device simulation** (`src/services/__tests__/sim/`):
+**Verified by the multi-device simulation** (`src/__tests__/simulation/`):
 multi-hop delivery across a chain of phones that cannot hear each other, a
 25-phone room converging on one channel, a live mixed Airhop/bitchat mesh in both
 directions, parallel attachment transfers, live push-to-talk sharing a radio with
@@ -31,21 +31,6 @@ vendored `bitchat/ios` and `bitchat/android` sources as the protocol source of
 truth. The multi-device simulation, the adversarial scenarios, and the security
 review below were produced the same way. Every claim here is meant to be
 checkable against the code rather than taken on trust.
-
-## Documentation Status
-
-| Document                                                                   | Status      | Purpose                                          |
-| -------------------------------------------------------------------------- | ----------- | ------------------------------------------------ |
-| [`docs/design/VISION.md`](../design/VISION.md)                             | ✅ Complete | Why + principles + build order                   |
-| [`docs/design/ROADMAP.md`](../design/ROADMAP.md)                           | ✅ Complete | Version targets, milestones, gap analysis        |
-| [`docs/spec/ARCHITECTURE.md`](../spec/ARCHITECTURE.md)                     | ✅ Complete | Architecture, stack, code snippets               |
-| [`docs/spec/PROTOCOLS.md`](../spec/PROTOCOLS.md)                           | ✅ Complete | Wire format, constants, compat table             |
-| [`docs/dev/REFERENCE.md`](REFERENCE.md)                                    | ✅ Complete | bitchat codebase knowledge transfer              |
-| [`docs/dev/PROGRESS.md`](PROGRESS.md)                                      | ✅ Active   | Current implementation progress                  |
-| [`docs/dev/GLOSSARY.md`](GLOSSARY.md)                                      | ✅ Complete | Definitions for all technical terms              |
-| [`CONTRIBUTING.md`](../../CONTRIBUTING.md)                                 | ✅ Complete | Standards for contributors + AI agents           |
-| [`.github/copilot-instructions.md`](../../.github/copilot-instructions.md) | ✅ Complete | VS Code Copilot workspace context                |
-| [`.github/agents/`](../../.github/agents)                                  | ✅ Complete | Architect, Upstream Sync, Security Review agents |
 
 ## v0.5.0: Foundation ✅
 
@@ -283,7 +268,7 @@ XX, or SHA-256 preimage resistance. Everything below is written against that.
 
 ### Attacks run against a live mesh
 
-Each row is an executable scenario in `src/services/__tests__/sim/`, run against
+Each row is an executable scenario in `src/__tests__/simulation/`, run against
 fully isolated copies of the app over a modelled radio - not a unit test of the
 check itself. "Refused" means the app rejected it _and_ told the user nothing
 false while refusing.
@@ -302,6 +287,10 @@ false while refusing.
 | M03 | File lying about its type (magic bytes vs extension)          | Refused                                                                    |
 | W03 | Same ecash token redeemed twice                               | Refused by a real BDHKE mint                                               |
 | W05 | Mint dies mid-swap                                            | Input proofs not destroyed                                                 |
+| W17 | Swap response lost, then the process is killed                | Replayed from the persisted preview against the mint's NUT-19 cache        |
+| W18 | Same, against a mint that does not cache responses            | Outputs recovered by NUT-09 from the exact blinded messages                |
+| W19 | Paying 100 out of a single 512 sat coin                       | Only the payment's own coins are tied up while Lightning routes            |
+| W20 | A mint charging NUT-02 input fees                             | "Send 100" still means they get 100; a melt is funded for the fee too      |
 | F01 | Outsider standing next to a private group                     | Ciphertext only; no metadata leak                                          |
 | F03 | Store-and-forward carrier inspecting what it carries          | Sealed; the carrier cannot read it                                         |
 | F04 | Tor unavailable                                               | Fails closed; never silently falls back to clearnet                        |

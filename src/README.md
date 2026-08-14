@@ -72,8 +72,14 @@ runtime.
 ### Running tests
 
 ```sh
-# Run all tests
-npx jest
+# Run all tests once
+npm test
+
+# Re-run on change while working
+npm run test:watch
+
+# Run one area
+npm test -- --testPathPattern=src/core
 
 # Run with coverage
 npm run coverage

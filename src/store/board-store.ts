@@ -27,7 +27,7 @@ import {
 import { bytesToHex } from "@noble/hashes/utils.js";
 import { createMMKV } from "react-native-mmkv";
 import { create } from "zustand";
-import { noticeAuthor, useNoticesStore } from "./location-notes-store";
+import { noticeAuthor, useLocationNotesStore } from "./location-notes-store";
 
 export type BoardIngestResult = "accepted" | "duplicate" | "rejected";
 
@@ -82,7 +82,6 @@ function idEq(a: Uint8Array, b: Uint8Array): boolean {
 }
 
 export const useBoardStore = create<BoardState>((set, get) => {
-  // -- persistence ----------------------------------------------------------
   function persist(): void {
     const { posts, tombstones } = get();
     const entries: PersistedEntry[] = [
@@ -101,7 +100,6 @@ export const useBoardStore = create<BoardState>((set, get) => {
     else storage.set(STORAGE_KEY, JSON.stringify(entries));
   }
 
-  // -- pruning --------------------------------------------------------------
   // Returns possibly-new arrays; callers set() them. Never mutates in place.
   function pruneArrays(
     posts: BoardPost[],
@@ -116,7 +114,6 @@ export const useBoardStore = create<BoardState>((set, get) => {
     return { posts: livePosts, tombstones: liveTombstones, changed };
   }
 
-  // -- ingest helpers -------------------------------------------------------
   function ingestPost(
     post: BoardPost,
     posts: BoardPost[],
@@ -124,7 +121,7 @@ export const useBoardStore = create<BoardState>((set, get) => {
     now: number,
   ): { result: BoardIngestResult; posts: BoardPost[] } {
     if (post.expiresAt <= now) return { result: "rejected", posts };
-    // Receive-time sanity: the decoder only enforces the created→expires span,
+    // Receive-time sanity: the decoder only enforces the created->expires span,
     // so a forged future createdAt would sort ahead of honest posts and hold a
     // slot without ever pruning.
     if (
@@ -220,7 +217,7 @@ export const useBoardStore = create<BoardState>((set, get) => {
       // post without saying so un-hides the copy. Mesh-board posts (empty
       // geohash) are never bridged and have none.
       if (target.geohash.length > 0) {
-        useNoticesStore.getState().suppressBridged({
+        useLocationNotesStore.getState().suppressBridged({
           geohash: target.geohash,
           content: target.content,
           nickname: noticeAuthor(target.authorNickname),

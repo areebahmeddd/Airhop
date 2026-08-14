@@ -21,17 +21,22 @@
 
 import { create } from "zustand";
 
+// Grouped identity, then body, then place, then time, so the two timestamps sit
+// together and every literal that builds one reads in the same order.
 export interface LocationNote {
   id: string; // Nostr event id
   pubkey: string; // per-cell author pubkey (unlinkable)
-  content: string;
-  createdAtMs: number;
   nickname?: string;
-  // The matched `g` tag: can be a neighbor of the subscribed cell.
+
+  content: string;
+  isUrgent: boolean;
+
+  // The matched `g` tag, which can be a neighbour of the subscribed cell.
   geohash: string;
+
+  createdAtMs: number;
   // NIP-40 expiration in ms, when the note carries one.
   expiresAtMs?: number;
-  isUrgent: boolean;
 }
 
 // A bridged copy is a same-content note signed by an unlinkable key, so the two
@@ -102,7 +107,7 @@ function pruneExpired(notes: LocationNote[], now: number): LocationNote[] {
   );
 }
 
-export const useNoticesStore = create<NoticesState>((set, get) => ({
+export const useLocationNotesStore = create<NoticesState>((set, get) => ({
   notesByGeohash: {},
   seenIDs: {},
   suppressed: [],

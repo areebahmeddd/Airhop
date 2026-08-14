@@ -1,16 +1,9 @@
 // Paying a person, in one place.
 //
 // Four screens can pay someone: the DM thread's attach menu, the contact info
-// sheet, the Mesh tab's peer sheet, and the Wallet tab's Zap. They used to reach
-// two different implementations depending on which door the user walked through,
-// and the two disagreed about almost everything that matters. The chat door sent
-// a reclaimable bearer token and never tried NIP-61 even when the recipient had
-// published how to be paid properly; the Zap door tried NIP-61 first but, when
-// it fell back to a DM, published that DM straight to the relays, so it left no
-// message in the conversation, could not be retried when a relay dropped it, and
-// on a publish timeout reserved a second set of proofs for the same payment.
-//
-// So there is one entry point now, `payPerson`, and it owns the whole ladder:
+// sheet, the Mesh tab's peer sheet, and the Wallet tab's Zap. All four go through
+// `payPerson`, which owns the whole ladder, so they cannot disagree about what a
+// payment does, which rail carried it, or whether it can be reclaimed:
 //
 //   1. Radio, when a direct link exists. Instant, local, needs no internet, and
 //      reclaimable. Someone standing in front of you should not wait on a mint.
@@ -265,8 +258,15 @@ async function payAsNutzap(params: {
       recipientPubkey: params.target.p2pkPubkey,
     });
   } catch {
-    // Mint unreachable, Tor blocking, denominations short. Nothing left the
-    // wallet, so the token rails below are safe to try.
+    // Mint unreachable, Tor blocking, denominations short: almost always
+    // nothing left the wallet, so the token rails below are the right next move.
+    //
+    // One exception, narrow but real. The request may have reached the mint with
+    // only its answer lost, in which case those proofs are spent and the token
+    // rail hands over a dud. No value is destroyed: the swap preview is on disk
+    // and `reconcile` recovers the locked outputs as a token to deliver by hand.
+    // Telling the two apart needs the mint, which is what is missing here, so
+    // the ladder carries on rather than stalling.
     return null;
   }
 
@@ -309,7 +309,7 @@ async function payAsNutzap(params: {
     settleNutzap(locked.txId);
     // No `fallbackReason`: the rail sentence for this case already says the
     // relay refused it and that a message went instead. Repeating it under
-    // "sent this way because…" says the same thing twice.
+    // "sent this way because..." says the same thing twice.
     return { rail: "nutzap-dm", ...base };
   }
 

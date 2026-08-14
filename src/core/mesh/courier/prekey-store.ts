@@ -48,8 +48,6 @@ interface LocalState {
   consumed: ConsumedPrekey[];
 }
 
-// ---- LocalPrekeyStore -------------------------------------------------------
-
 export class LocalPrekeyStore {
   private readonly storage;
   private readonly key = "local";
@@ -153,8 +151,6 @@ export class LocalPrekeyStore {
     this.ensure();
   }
 }
-
-// ---- PeerPrekeyStore --------------------------------------------------------
 
 interface StoredPeerBundle {
   generatedAt: number;

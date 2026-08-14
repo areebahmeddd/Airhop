@@ -42,8 +42,6 @@ export function isLiveVoiceAvailable(): boolean {
   return NativeAirhopVoice !== null && NativeAirhopVoice !== undefined;
 }
 
-// ---- Capture ----------------------------------------------------------------
-
 // Feeds encoded AAC frames from the microphone into a VoiceCaptureSession.
 export class NativeAudioCapture implements AudioCaptureBackend {
   private frameSub: EventSubscription | null = null;
@@ -115,8 +113,6 @@ export class NativeAudioCapture implements AudioCaptureBackend {
     await NativeAirhopVoice?.stopCapture().catch(() => undefined);
   }
 }
-
-// ---- Playback ---------------------------------------------------------------
 
 // Plays the frames the jitter buffer releases.
 //

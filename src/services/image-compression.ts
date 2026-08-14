@@ -42,11 +42,11 @@ const MIN_QUALITY = 0.3;
 // stubborn one walks down the list. The lower rungs shrink the edge as well:
 // past a point it is resolution costing the bytes, not the quality.
 //
-// Starting from the setting is what makes it mean something. It used to only
-// reach the picker, which this step then re-encoded over the top of, so "High"
-// and "Medium" produced the same file for exactly the photos big enough to
-// care. Now Low starts lower and lands in one pass; High starts high, keeps
-// more detail, and may take a pass or two to fit.
+// Starting from the setting is what makes it mean something. Applied only to the
+// picker, which this step then re-encodes over the top of, "High" and "Medium"
+// produce the same file for exactly the photos big enough to care. Low starts
+// lower and lands in one pass; High starts high, keeps more detail, and may take
+// a pass or two to fit.
 function attemptsFor(quality: number): { maxEdge: number; compress: number }[] {
   const step = (factor: number): number =>
     Math.max(MIN_QUALITY, Math.round(quality * factor * 100) / 100);

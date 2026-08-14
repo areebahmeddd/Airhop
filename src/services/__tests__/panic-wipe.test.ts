@@ -218,7 +218,6 @@ describe("panicWipe", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
 // Chat persistence is throttled: a write sits in a 400ms window holding a
 // complete plaintext snapshot of every thread in memory, armed to put it back
 // on disk. A wipe that clears the store and the file but leaves that snapshot

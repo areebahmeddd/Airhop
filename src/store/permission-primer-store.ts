@@ -24,7 +24,7 @@ interface PrimerState {
   hide: () => void;
 }
 
-export const usePrimerStore = create<PrimerState>((set) => ({
+export const usePermissionPrimerStore = create<PrimerState>((set) => ({
   visible: false,
   show() {
     set({ visible: true });
@@ -45,17 +45,17 @@ let pending: (() => void) | null = null;
 // startup and startup must not be blocked by a screen the user is already
 // looking at.
 export function showPermissionPrimer(): Promise<void> {
-  if (usePrimerStore.getState().visible) return Promise.resolve();
+  if (usePermissionPrimerStore.getState().visible) return Promise.resolve();
   return new Promise<void>((resolve) => {
     pending = resolve;
-    usePrimerStore.getState().show();
+    usePermissionPrimerStore.getState().show();
   });
 }
 
 // Called by the primer screen's single button, and by anything that tears the
 // screen down. Safe to call when nothing is waiting.
 export function acknowledgePermissionPrimer(): void {
-  usePrimerStore.getState().hide();
+  usePermissionPrimerStore.getState().hide();
   const resolve = pending;
   pending = null;
   resolve?.();

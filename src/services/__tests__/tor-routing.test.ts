@@ -1,5 +1,3 @@
-// tor-routing.test.ts
-//
 // Guards the Android Tor decision, which is a privacy claim rather than a
 // convenience. The bug these cover: the old check asked "is Orbot installed"
 // and "is any VPN up", so an installed-but-idle Orbot sitting beside an
@@ -61,7 +59,7 @@ jest.mock("@bridge/NativeAirhopTorSocket", () => ({
   subscribeTorSocket: jest.fn(),
 }));
 
-jest.mock("@services/mesh-service", () => ({
+jest.mock("../mesh-service", () => ({
   getMeshService: () => ({ restartNostr: mockRestartNostr }),
 }));
 

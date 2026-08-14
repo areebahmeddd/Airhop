@@ -1,10 +1,9 @@
 // The Chats header "+" flow: pick what to start, then fill in that form.
 //
-// This used to live inside channel-list, which meant the "+" only worked on the
-// Channels sub-tab: on Direct the list is unmounted, so there was nothing to
-// open. Lifting the whole flow to one component that App.tsx mounts alongside
-// the Chats list gives both sub-tabs the same button and the same sheets, with
-// no second copy of the chooser to keep in sync.
+// Mounted alongside the Chats list rather than inside channel-list, because the
+// Direct sub-tab unmounts that list and the "+" has to work on both. One
+// component means both sub-tabs share the same button and sheets, with no second
+// copy of the chooser to keep in sync.
 //
 // The chooser comes first so a channel and a group are seen side by side at the
 // moment of deciding: both are private and both are encrypted, so the actual
@@ -434,9 +433,6 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       fontWeight: FontWeight.semibold,
       color: Colors.textPrimary,
     },
-    // Privacy note in the create sheet: a short, scannable list of what a
-    // channel actually is (encrypted, invite-only, Bluetooth range) rather than
-    // one dense paragraph.
     privacyNote: {
       gap: Spacing.sm,
       backgroundColor: Colors.surfaceRaised,
@@ -520,9 +516,6 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       color: Colors.textMuted,
       lineHeight: 17,
     },
-    // The "join instead" escape hatch under the create form. Quiet: it is the
-    // second reason to be here, not a competing button, so it reads as a line
-    // of text with the accent doing the work of saying it is tappable.
     joinLinkRow: {
       flexDirection: "row",
       alignItems: "center",
@@ -549,9 +542,6 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       alignItems: "center",
       justifyContent: "center",
     },
-    // Dismiss actions read at full contrast, matching the wallet sheets,
-    // the scanner and the alert buttons: a muted label on a filled pill
-    // reads as disabled rather than as the quieter of two choices.
     modalCancelText: {
       fontSize: FontSize.base,
       color: Colors.textPrimary,
@@ -574,8 +564,6 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       color: Colors.textInverse,
       fontWeight: FontWeight.semibold,
     },
-    // Chooser rows: icon, then a title over a one-line explanation of what
-    // makes this option different from the others.
     chooserGroup: {
       backgroundColor: Colors.surfaceRaised,
       borderRadius: Radius.lg,

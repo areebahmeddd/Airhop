@@ -1,5 +1,3 @@
-// tor-websocket.ts
-//
 // A minimal WebSocket implementation backed by the AirhopTorSocket native
 // module, which tunnels over Arti's SOCKS5 proxy. nostr-tools accepts a custom
 // WebSocket via useWebSocketImplementation(); tor-routing.ts installs this one

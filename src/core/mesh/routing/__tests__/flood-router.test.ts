@@ -1,6 +1,11 @@
 /**
  * @jest-environment node
  */
+// Deciding whether to rebroadcast a packet, and when.
+//
+// A mesh with no jitter has every phone answer at once and the radio collides
+// with itself, so the delay matters as much as the decision. TTL and the
+// duplicate check are what bound how far and how long a packet travels.
 import { Flags, PacketType, type Packet } from "../../wire/packet-codec";
 import { FloodRouter } from "../flood-router";
 
@@ -43,7 +48,7 @@ describe("FloodRouter", () => {
       expect(router.receive(packet, (p) => sent.push(p))).toBe(false);
     });
 
-    it("schedules relay after jitter (10–220 ms)", () => {
+    it("schedules relay after jitter (10-220 ms)", () => {
       const sent: Packet[] = [];
       router.receive(makePacket(0x01, 7), (p) => sent.push(p));
 

@@ -1,12 +1,11 @@
 // Reads the translation catalog from outside TypeScript.
 //
-// The catalog is TypeScript rather than JSON so that `en.ts` can carry the
-// section comments and the do-not-translate notes that make a 1,000-key file
-// readable, and so that any locale added later is type-checked against the
-// source language by the `npm run typecheck` CI already runs. The cost is that
-// a script cannot just `require()` it, so it is read through the TypeScript
-// compiler API instead of a regex. `typescript` is already a devDependency, so
-// this adds no dependency and, unlike a regex, it cannot be confused by an
+// The catalog is TypeScript rather than JSON so `en.ts` can carry the section
+// markers that make a 1,400-key file navigable, and so any locale added later is
+// type-checked against the source language by the `npm run typecheck` CI already
+// runs. The cost is that a script cannot simply `require()` it, so it is read
+// through the TypeScript compiler API. `typescript` is already a devDependency,
+// so this adds nothing, and unlike a regex it cannot be confused by an
 // apostrophe, a brace inside a string, or a multi-line value.
 //
 // Used by `i18n-audit.js --unused`.
@@ -27,7 +26,7 @@ function parseFile(file) {
   );
 }
 
-/** The text of a property name, whether it is quoted or a bare identifier. */
+// A property name, whether it is quoted or a bare identifier.
 function propertyName(node) {
   if (ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node)) {
     return node.text;
@@ -40,7 +39,8 @@ function readStringValue(node) {
   if (ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node)) {
     return node.text;
   }
-  // Prettier splits long string literals across lines with `+`.
+  // Prettier splits a literal longer than the print width across lines with `+`,
+  // which is the shape most long-form copy ends up in.
   if (
     ts.isBinaryExpression(node) &&
     node.operatorToken.kind === ts.SyntaxKind.PlusToken
@@ -57,11 +57,6 @@ function readStringValue(node) {
   return null;
 }
 
-/**
- * Reads a string-valued object literal into a plain object. Handles the
- * string concatenation Prettier produces when a value is longer than the print
- * width ("a" + "b"), which is the shape most long-form copy ends up in.
- */
 function readStringObject(node) {
   const out = {};
   for (const prop of node.properties) {
@@ -88,7 +83,7 @@ function readPluralObject(node) {
   return out;
 }
 
-/** Finds `export const <name> = { ... }` (optionally `as const`). */
+// Finds `export const <name> = { ... }`, with or without `as const`.
 function findExportedObject(source, name) {
   let found = null;
   source.forEachChild((node) => {
@@ -105,7 +100,8 @@ function findExportedObject(source, name) {
   return found;
 }
 
-/** Reads a locale file into `{ strings, plurals }`. */
+// A missing locale reads as empty rather than throwing, so `--unused` still
+// reports against the languages that do exist.
 function readLocale(code) {
   const file = path.join(LOCALES_DIR, `${code}.ts`);
   if (!fs.existsSync(file)) return { strings: {}, plurals: {} };

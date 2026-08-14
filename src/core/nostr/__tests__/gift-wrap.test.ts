@@ -8,15 +8,11 @@ import { ed25519 } from "@noble/curves/ed25519.js";
 import { generateSecretKey, getPublicKey } from "nostr-tools";
 import { deriveNostrPrivKey, unwrapDm, wrapDm } from "../gift-wrap";
 
-// ---- Helpers ----------------------------------------------------------------
-
 function makePair(): { priv: Uint8Array; pub: string } {
   const priv = generateSecretKey();
   const pub = getPublicKey(priv);
   return { priv, pub };
 }
-
-// ---- wrapDm / unwrapDm round-trip -------------------------------------------
 
 describe("wrapDm / unwrapDm", () => {
   it("round-trips plaintext content", () => {
@@ -96,8 +92,6 @@ describe("wrapDm / unwrapDm", () => {
   });
 });
 
-// ---- Error cases ------------------------------------------------------------
-
 describe("unwrapDm error cases", () => {
   it("throws when the gift wrap is opened with the wrong recipient key", () => {
     const sender = makePair();
@@ -136,8 +130,6 @@ describe("unwrapDm error cases", () => {
     ).toThrow();
   });
 });
-
-// ---- deriveNostrPrivKey -----------------------------------------------------
 
 // The gift wrap's outer timestamp is randomised by design, so the inner rumor's
 // created_at is the only claim about when a DM was sent - and nothing signs it

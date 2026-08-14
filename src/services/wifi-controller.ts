@@ -59,9 +59,8 @@ import type { WifiFastPath } from "@store/mesh-state-store";
 const BACKOFF_MS = [500, 1500, 4000, 10_000, 30_000] as const;
 
 // Rejection codes the native modules use. Kept as a union here rather than
-// matched on message text, which is what the Android side used to force: a
-// human-readable string is a UI concern and control flow that reads it breaks
-// the first time somebody rewords it.
+// matched on message text: a human-readable string is a UI concern, and control
+// flow that reads it breaks the first time somebody rewords it.
 type WiFiFailure =
   // No Aware hardware, or an OS too old for the data path. Permanent.
   | "unsupported"
@@ -136,8 +135,6 @@ export class WiFiController {
   // refresh() and even a later "available again" returned early at the guard.
   private generation = 0;
 
-  // ---- intent ---------------------------------------------------------------
-
   start(): void {
     this.desiredRunning = true;
     this.attempt = 0;
@@ -162,11 +159,11 @@ export class WiFiController {
 
   // Native saw WiFi Aware become available or stop being available.
   //
-  // Losing availability is the case that used to be unrecoverable. The framework
-  // terminates the discovery sessions but the module kept its attach handle, so
-  // it believed it was still running and every later start resolved instantly
-  // having done nothing. Forgetting the belief here is what lets the next pass
-  // do real work.
+  // Losing availability is the case that is otherwise unrecoverable. The
+  // framework terminates the discovery sessions while the module keeps its attach
+  // handle, so it believes it is still running and every later start resolves
+  // instantly having done nothing. Forgetting that belief here is what lets the
+  // next pass do real work.
   onAvailabilityChanged(available: boolean): void {
     if (this.unsupported) return;
     if (!available) {
@@ -213,8 +210,6 @@ export class WiFiController {
     this.desiredRunning = false;
     if (this.started) void this.releaseNative();
   }
-
-  // ---- reconciliation -------------------------------------------------------
 
   private clearTimer(): void {
     if (this.retryTimer !== null) {
@@ -328,8 +323,9 @@ export class WiFiController {
     }
   }
 
-  // Bring the native transport down and stop believing it is up. Idempotent, and
-  // the only place `started` goes back to false on purpose.
+  // Bring the native transport down and stop believing it is up. Idempotent. One
+  // of the two places `started` deliberately goes back to false; the other is
+  // onAvailabilityChanged, when the framework withdraws the radio underneath us.
   private async releaseNative(): Promise<void> {
     this.started = false;
     try {
@@ -339,8 +335,6 @@ export class WiFiController {
       // and a refused stop must not leave `started` claiming a live transport.
     }
   }
-
-  // ---- introspection, for tests and diagnostics -----------------------------
 
   get isStarted(): boolean {
     return this.started;

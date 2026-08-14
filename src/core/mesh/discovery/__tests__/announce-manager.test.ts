@@ -5,6 +5,12 @@
  * must match bitchat PeerCapabilities.encoded() exactly, so a bitchat gateway
  * reads our advertisement and we read its. See PeerCapabilities.swift.
  */
+// Whether a presence announce is fresh enough to trust.
+//
+// Phone clocks disagree, so the window has to be generous in both directions,
+// and it is also the only thing stopping a captured announce being replayed
+// later to fake a presence. Too tight breaks honest peers; too loose accepts
+// the replay.
 import { ed25519, x25519 } from "@noble/curves/ed25519.js";
 import { sha256 } from "@noble/hashes/sha2.js";
 import { bytesToHex } from "@noble/hashes/utils.js";

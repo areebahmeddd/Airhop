@@ -1,6 +1,12 @@
 /**
  * @jest-environment node
  */
+// Which packet type and payload a message goes out as.
+//
+// The mesh room travels under bitchat's own type so both apps read one another
+// on the same channel, while everything else uses Airhop's. Getting this wrong
+// does not error: the message goes out where the other app cannot see it, or
+// arrives shaped so it renders as noise.
 import { ed25519 } from "@noble/curves/ed25519.js";
 import { NoiseHandshake } from "../../crypto/noise-xx";
 import {
@@ -859,7 +865,6 @@ describe("message ID (cross-transport dedupe)", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
 // Session-authenticated identity (Noise payload 0x21).
 //
 // Announced state is a claim: an announce is signed with a key carried inside

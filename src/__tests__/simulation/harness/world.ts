@@ -82,8 +82,6 @@ export class World {
     this.closers.push(fn);
   }
 
-  // ---- time -----------------------------------------------------------------
-
   // Step forward, flushing microtasks between steps so promise continuations
   // (every native call is a Promise) land in a realistic order relative to
   // timers rather than all at once at the end.
@@ -173,8 +171,6 @@ export class World {
     return value as T;
   }
 
-  // ---- reporting ------------------------------------------------------------
-
   formatTimeline(filter?: (e: WorldEvent) => boolean): string {
     const rows = filter ? this.events.filter(filter) : this.events;
     return rows
@@ -182,7 +178,7 @@ export class World {
         const t = String(e.atMs).padStart(6, " ");
         const who = e.who.padEnd(10, " ");
         const src = e.source.padEnd(7, " ");
-        const detail = e.detail !== undefined ? ` — ${e.detail}` : "";
+        const detail = e.detail !== undefined ? `, ${e.detail}` : "";
         return `${t}ms ${who} ${src} ${e.kind}${detail}`;
       })
       .join("\n");
@@ -196,7 +192,7 @@ export class World {
       .map((e) => {
         const t = String(e.atMs).padStart(6, " ");
         const who = e.who.padEnd(10, " ");
-        const detail = e.detail !== undefined ? ` — ${e.detail}` : "";
+        const detail = e.detail !== undefined ? `, ${e.detail}` : "";
         return `${t}ms ${who} ${e.kind}${detail}`;
       })
       .join("\n");

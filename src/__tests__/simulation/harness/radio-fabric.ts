@@ -161,7 +161,7 @@ export class RadioFabric {
     });
   }
 
-  // ---- membership -----------------------------------------------------------
+  // ---- membership ----
 
   add(device: RadioNode): void {
     this.devices.set(device.id, device);
@@ -181,7 +181,7 @@ export class RadioFabric {
     this.devices.delete(deviceID);
   }
 
-  // ---- topology -------------------------------------------------------------
+  // ---- topology ----
 
   // Explicit adjacency. Pass a list of pairs that CAN hear each other; anything
   // not listed cannot. This is how a multi-hop chain is built: a-b, b-c, c-d
@@ -250,7 +250,7 @@ export class RadioFabric {
     return this.adjacency.get(a)?.has(b) ?? false;
   }
 
-  // ---- conditions -----------------------------------------------------------
+  // ---- conditions ----
 
   setConditions(partial: Partial<LinkConditions>): void {
     this.conditions = { ...this.conditions, ...partial };
@@ -274,7 +274,7 @@ export class RadioFabric {
     return { ...this.conditions, ...(this.perPair.get(pairKey(a, b)) ?? {}) };
   }
 
-  // ---- visibility -----------------------------------------------------------
+  // ---- visibility ----
 
   // Can `scanner` currently see `advertiser`? This is where the platform
   // asymmetry lives.
@@ -312,7 +312,7 @@ export class RadioFabric {
     return true;
   }
 
-  // ---- link management ------------------------------------------------------
+  // ---- link management ----
 
   // Idempotent: work out which links should exist, open the missing ones, close
   // the ones that should not. Called on every radio change from any device.
@@ -456,7 +456,7 @@ export class RadioFabric {
     b?.native.fabricLinkDown(link.bLinkID);
   }
 
-  // ---- carriage -------------------------------------------------------------
+  // ---- carriage ----
 
   private onWrite(fromID: string, linkID: string, dataBase64: string): void {
     if (this.disposed) return;
@@ -481,8 +481,8 @@ export class RadioFabric {
     // left; iOS refuses it outright. Either way nothing arrives, so the fabric
     // drops it and counts it.
     //
-    // The fabric used to accept any size, which is why a 557-byte fragment
-    // passed every simulation while every attachment vanished on real hardware.
+    // A fabric that accepts any size lets a 557-byte fragment pass every
+    // simulation while every attachment vanishes on real hardware.
     // `framesOversized` exists so a scenario can assert it never happened.
     if (bytes > MAX_BLE_FRAME) {
       this.framesOversized++;
@@ -575,7 +575,7 @@ export class RadioFabric {
     this.typeCounts.set(type, (this.typeCounts.get(type) ?? 0) + 1);
   }
 
-  // ---- adversary ------------------------------------------------------------
+  // ---- adversary ----
 
   // Listen to everything on the air.
   //
@@ -618,7 +618,7 @@ export class RadioFabric {
     return true;
   }
 
-  // ---- introspection --------------------------------------------------------
+  // ---- introspection ----
 
   // Human-readable airtime breakdown, most expensive first.
   airtimeReport(): string {

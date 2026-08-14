@@ -1,18 +1,18 @@
-// A transcription of the parts of App.tsx that own the transport lifecycle,
-// driving the REAL mesh-service.
+// A transcription of the parts of src/app/app.tsx that own the transport
+// lifecycle, driving the REAL mesh-service.
 //
-// Only the lifecycle is modelled - navigation, chat, and wallet are irrelevant
-// to a race between a permission grant and a radio. What is modelled is
-// modelled faithfully:
+// Navigation, chat and wallet are left out: none of them can lose a race between
+// a permission grant and a radio. Four paths are modelled, faithfully enough
+// that a defect here is a defect in the app:
 //
-//   App.tsx:154-250  startMeshWithPermissions — request, record, start, then
-//                    chain location and notification prompts
-//   App.tsx:319-344  mount: reuse an existing mesh for the same identity
-//   App.tsx:434-469  AppState 'active': re-check permissions, retryRadios
-//   App.tsx:477-483  meshStopRequested -> applyPresence('away')
+//   startMeshWithPermissions  request, record, start, then chain the location
+//                             and notification prompts
+//   mount                     reuse an existing mesh for the same identity
+//   AppState "active"         re-check permissions, retry the radios
+//   meshStopRequested         applyPresence("away")
 //
-// and src/platform/ble-permissions.ts:34-120, whose fine-location requirement and
-// grant/deny/blocked handling are reproduced against the OS model.
+// Alongside src/platform/ble-permissions.ts, whose fine-location requirement and
+// grant, deny and blocked handling are reproduced against the OS model.
 
 import type { Identity } from "@core/crypto/identity";
 import { ed25519, x25519 } from "@noble/curves/ed25519.js";
@@ -49,7 +49,6 @@ export function makeIdentity(seedByte = 7): Identity {
   };
 }
 
-// ble-permissions.ts:34-52
 function requiredBlePermissions(os: DeviceOS): AndroidPermission[] {
   // API 31+ asks for Bluetooth and nothing else: the manifest asserts
   // neverForLocation on BLUETOOTH_SCAN. Below that the flag does not exist and
@@ -64,7 +63,7 @@ function requiredBlePermissions(os: DeviceOS): AndroidPermission[] {
   return ["android.permission.ACCESS_FINE_LOCATION"];
 }
 
-// ble-permissions.ts:58-64 — a check, never a prompt.
+// A check, never a prompt.
 export function hasBlePermissions(os: DeviceOS): boolean {
   if (os.platform !== "android") return true;
   return requiredBlePermissions(os).every(
@@ -72,8 +71,8 @@ export function hasBlePermissions(os: DeviceOS): boolean {
   );
 }
 
-// ble-permissions.ts:69-120. `answer` stands in for the user tapping through
-// the OS dialog; the OS model applies the settle delay on the grant.
+// `answer` stands in for the user tapping through the OS dialog. The OS model
+// applies the settle delay on the grant.
 export function ensureBlePermissions(
   os: DeviceOS,
   answer: (p: AndroidPermission) => "granted" | "denied" | "blocked",
@@ -163,7 +162,6 @@ export class AppShell {
     this.os.log("js", "JS_RUNTIME_READY");
   }
 
-  // App.tsx:477-483
   wireMeshStopListener(): void {
     this.stopRequestSub = DeviceEventEmitter.addListener(
       "AirhopBLE.meshStopRequested",
@@ -174,10 +172,10 @@ export class AppShell {
     );
   }
 
-  // App.tsx:154-250, in order.
+  // In the app's own order.
   async startMeshWithPermissions(): Promise<void> {
     const perm = ensureBlePermissions(this.os, this.answer);
-    // App.tsx:161-:181 — record WHY, not merely whether.
+    // Record WHY the mesh cannot run, not merely that it cannot.
     const setBlocker = useMeshStateStore.getState().setBleBlocker;
     useMeshStateStore.getState().setBlePermissionBlocked(perm.blockedForever);
     if (perm.granted) setBlocker("starting");
@@ -196,7 +194,7 @@ export class AppShell {
     await Promise.resolve();
   }
 
-  // App.tsx:319-344 — a remount reuses an existing mesh for the same identity.
+  // A remount reuses an existing mesh for the same identity.
   async mount(): Promise<void> {
     const existing = getMeshService();
     if (existing?.peerID !== this.identity.peerID) {
@@ -206,13 +204,12 @@ export class AppShell {
     }
   }
 
-  // App.tsx:434-469
   async setAppState(next: "active" | "background"): Promise<void> {
     this.os.appForeground = next === "active";
     this.os.log("user", `APP_${next.toUpperCase()}`);
     if (next !== "active") return;
-    // App.tsx:456 — unconditional. The controller reads the device itself, so
-    // the resume handler no longer has to guess whether anything changed.
+    // Unconditional: the controller reads the device itself, so the resume
+    // handler does not have to guess whether anything changed.
     this.os.log("js", "retryRadios (resume)");
     getMeshService()?.retryRadios();
     await Promise.resolve();

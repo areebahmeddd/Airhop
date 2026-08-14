@@ -83,8 +83,6 @@ const ios = (id: string, seedByte: number): DeviceSpec => ({
   seedByte,
 });
 
-// ---------------------------------------------------------------------------
-
 test("A01 cold start on Android brings the mesh up and finds the room", async () => {
   const s = (scenario = new Scenario({
     id: "A01",

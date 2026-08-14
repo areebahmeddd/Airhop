@@ -32,8 +32,6 @@ import {
 } from "@services/file-transfer-service";
 import {
   isGeoChannel,
-  isManualGeoChannel,
-  manualGeohashOf,
   type GeoParticipant,
 } from "@services/geohash-channel-service";
 import { prepareImageForSend } from "@services/image-compression";
@@ -60,7 +58,7 @@ import {
   transferSpeedBps,
   useTransferStore,
 } from "@store/transfer-store";
-import { useWalletStore } from "@store/wallet-store";
+import { keysetIdsOf, useWalletStore } from "@store/wallet-store";
 import Avatar from "@ui/components/avatar";
 import BottomSheet from "@ui/components/bottom-sheet";
 import Toast from "@ui/components/toast";
@@ -80,6 +78,7 @@ import {
   Spacing,
   useThemeColors,
 } from "@ui/theme";
+import { isManualGeoChannel, manualGeohashOf } from "@utils/channel-key";
 import { channelInviteLink } from "@utils/deep-link";
 import { unconfirmedSince } from "@utils/delivery-silence";
 import {
@@ -381,7 +380,7 @@ const SLASH_COMMANDS: {
   { cmd: "slap", emoji: "🐟", hintKey: "chat.cmd.slap_hint" },
 ];
 
-// The partial command while typing "/…" at the very start of the draft, before
+// The partial command while typing "/..." at the very start of the draft, before
 // any space ("/hu" -> "hu", "/hug foo" -> null, "not /hug" -> null). Null when
 // the draft is not a command being composed. Mirrors activeMentionQuery for "@".
 function activeSlashQuery(draft: string): string | null {
@@ -389,8 +388,8 @@ function activeSlashQuery(draft: string): string | null {
   return m ? m[1]!.toLowerCase() : null;
 }
 
-// (A previous isScreenshotNotice() text-sniffer was removed: matching on user
-// text let any peer forge a system row and destroyed the real message content.)
+// Deliberately not a text-sniffer: matching on user text lets any peer forge a
+// system row, and destroys the real message content.
 
 // Fixed bar heights for the voice-note waveform. A constant, not a literal in
 // the render, so the playhead maths below has one length to divide by.
@@ -529,7 +528,6 @@ function createUndoStyles(Colors: ReturnType<typeof useThemeColors>) {
       fontWeight: FontWeight.semibold,
       color: Colors.accent,
     },
-    // Countdown line pinned to the bottom edge, draining as the window elapses.
     track: {
       position: "absolute",
       left: 0,
@@ -1189,13 +1187,13 @@ function VoiceNoteBubble({
 const WAVE_BARS = 12;
 
 // The floor. A bar never disappears, so an idle meter reads as a quiet line
-// rather than a gap where a control used to be.
+// rather than a gap where a control should be.
 const WAVE_MIN_HEIGHT = 3;
 
 // The ceilings, one per row. The sending bar is its own strip and can afford
-// the taller meter the old static bars already used; the incoming banner is a
-// single thin line above the composer, so its meter is sized to sit inside that
-// without pushing the row taller when somebody shouts.
+// the taller meter the static bars use. The incoming banner is a single thin
+// line above the composer, so its meter is sized to sit inside that without
+// pushing the row taller when somebody shouts.
 const WAVE_MAX_HEIGHT = 16;
 const WAVE_INCOMING_MAX_HEIGHT = 11;
 
@@ -1450,10 +1448,10 @@ export default function MessageThread({
   // Header subtitle for a channel (not a group/DM): what kind of room this is,
   // then its place name and/or live count.
   const channelSubtitleParts: string[] = [];
-  // Kind first, and only the encrypted kind is named. A private channel used to
-  // fall through to the "Public channel" default whenever nobody was nearby, so
-  // it claimed the opposite of the truth while sitting next to its own invite
-  // button; of everything on this line that is the one thing that must not
+  // Kind first, and only the encrypted kind is named. A private channel must
+  // never fall through to the "Public channel" default when nobody is nearby: it
+  // would claim the opposite of the truth while sitting next to its own invite
+  // button, and of everything on this line that is the one thing that must not
   // mislead, since it is a claim about who can read the room. Public stays
   // unmarked because it is the default the rest of the app already assumes, and
   // leading with the kind means a narrow screen ellipsizes the live count
@@ -1481,7 +1479,7 @@ export default function MessageThread({
   }
   // Nothing live to report: name the kind rather than guess. A location channel
   // whose cell has not resolved yet is still a location channel, not the plain
-  // public room the old single fallback called it.
+  // public room a single fallback would call it.
   const channelSubtitle =
     channelSubtitleParts.length > 0
       ? channelSubtitleParts.join("  ·  ")
@@ -1616,8 +1614,8 @@ export default function MessageThread({
 
   // Slash commands matching what is typed after "/". Independent of mentions, so
   // it also shows in DMs (where there is no one to @-mention but you can still
-  // /hug the peer). The two pickers never show at once: one needs "@…", the
-  // other a leading "/…".
+  // /hug the peer). The two pickers never show at once: one needs "@...", the
+  // other a leading "/...".
   const slashQuery = activeSlashQuery(draft);
   const slashMatches = useMemo(
     () =>
@@ -1758,6 +1756,11 @@ export default function MessageThread({
   const [claimingToken, setClaimingToken] = useState<string | null>(null);
   // Tokens already taken into the wallet, so their cards read "Claimed".
   const claimedTokens = useWalletStore((s) => s.claimedTokens);
+  // A V4 token names its keyset by a short id, and the v2 form cannot be
+  // decoded without the full id to map it back to. Memoised on `mints` because
+  // the list is rebuilt each call and every message render reads it.
+  const mints = useWalletStore((s) => s.mints);
+  const keysetIds = useMemo(() => keysetIdsOf(mints), [mints]);
   const [showChannelInfo, setShowChannelInfo] = useState(false);
   const [showDMInfo, setShowDMInfo] = useState(false);
   // Channel-message sender profile sheet: tap a message's avatar/name to
@@ -2001,9 +2004,9 @@ export default function MessageThread({
   // Re-armed by every content-size change, so it fires once, after the last
   // batch, rather than part way down a thread still rendering itself. Ending the
   // landing is the other half of the fix: the jump-to-latest pill is suppressed
-  // for its whole duration, and since the landing previously only ended on a
-  // drag, a thread that came to rest short of the end offered nothing to escape
-  // with. From here the ordinary at-bottom rule takes over, which re-pins on
+  // for its whole duration, and a landing that ends only on a drag leaves a
+  // thread resting short of the end with nothing to escape with. From here the
+  // ordinary at-bottom rule takes over, which re-pins on
   // layout shifts just the same, so nothing that relied on landing loses it.
   function scheduleLandingSettle(): void {
     if (settleTimerRef.current) clearTimeout(settleTimerRef.current);
@@ -2186,7 +2189,7 @@ export default function MessageThread({
     showStatus("queued");
   }
 
-  // ---- Composer length budget -------------------------------------------------
+  // ---- Composer length budget ----
   //
   // A DM rides a TLV with a one-byte length field, so its budget is 255 UTF-8
   // bytes and belongs to the wire. Channel and group messages carry text as the
@@ -2321,9 +2324,9 @@ export default function MessageThread({
       // Private group: seal under the epoch key and broadcast (0x25).
       //
       // A group is Bluetooth-only, so reach is the same question a channel
-      // broadcast faces, and it gets the same three answers. The status used to
-      // be "sent" whenever the packet was merely sealed, which is why a message
-      // to a group nobody was in range of still showed a tick. Groups have no
+      // broadcast faces, and it gets the same three answers. Reporting "sent"
+      // whenever the packet is merely sealed gives a message to a group nobody is
+      // in range of a tick it has not earned. Groups have no
       // delivery receipts on either client, so this tick is all the user gets and
       // it has to be true.
       const sent = service.sendGroupMessage(
@@ -2618,8 +2621,8 @@ export default function MessageThread({
         sizeBytes: options?.sizeBytes,
       },
       forwarded: options?.forwarded,
-      // An attachment used to carry no status at all, so a photo sat with no
-      // mark beside a text message that had ticks. It starts as "sending"
+      // An attachment carries a status of its own, so a photo does not sit
+      // unmarked beside a text message with ticks. It starts as "sending"
       // (reading the file and pacing it over the radio is not instant) and
       // settles below once the transfer either leaves or finds no route.
       status: "sending",
@@ -2902,26 +2905,9 @@ export default function MessageThread({
     return true;
   }
 
-  async function handleCameraAttach(): Promise<void> {
-    const granted = await ensurePermission(
-      () => ImagePicker.getCameraPermissionsAsync(),
-      () => ImagePicker.requestCameraPermissionsAsync(),
-      {
-        label: t("chat.perm.camera_label"),
-        purpose: t("chat.perm.camera_purpose"),
-      },
-    );
-    if (!granted) return;
-    const result = await ImagePicker.launchCameraAsync({
-      mediaTypes: ["images", "videos"],
-      // `quality` applies to stills only. A recording is sent as it comes off
-      // the camera, and the mesh takes 1 MiB, so the length is the only lever
-      // there is: 15 seconds keeps a low-resolution clip in range, and a longer
-      // one would be refused after the user had already shot it.
-      videoMaxDuration: MAX_VIDEO_SECONDS,
-      quality: UPLOAD_QUALITY_VALUES[useSettingsStore.getState().uploadQuality],
-      allowsEditing: false,
-    });
+  // Shared by the camera and library pickers, which differ only in how the
+  // asset is obtained.
+  function acceptPickedMedia(result: ImagePicker.ImagePickerResult): void {
     if (result.canceled || !result.assets[0]) return;
     const asset = result.assets[0];
     const type: ChatAttachment["type"] =
@@ -2943,6 +2929,29 @@ export default function MessageThread({
     });
   }
 
+  async function handleCameraAttach(): Promise<void> {
+    const granted = await ensurePermission(
+      () => ImagePicker.getCameraPermissionsAsync(),
+      () => ImagePicker.requestCameraPermissionsAsync(),
+      {
+        label: t("chat.perm.camera_label"),
+        purpose: t("chat.perm.camera_purpose"),
+      },
+    );
+    if (!granted) return;
+    const result = await ImagePicker.launchCameraAsync({
+      mediaTypes: ["images", "videos"],
+      // `quality` applies to stills only. A recording is sent as it comes off
+      // the camera, and the mesh takes 1 MiB, so the length is the only lever
+      // there is: 15 seconds keeps a low-resolution clip in range, and a longer
+      // one would be refused after the user had already shot it.
+      videoMaxDuration: MAX_VIDEO_SECONDS,
+      quality: UPLOAD_QUALITY_VALUES[useSettingsStore.getState().uploadQuality],
+      allowsEditing: false,
+    });
+    acceptPickedMedia(result);
+  }
+
   async function handleLibraryAttach(): Promise<void> {
     const granted = await ensurePermission(
       () => ImagePicker.getMediaLibraryPermissionsAsync(),
@@ -2958,25 +2967,7 @@ export default function MessageThread({
       quality: UPLOAD_QUALITY_VALUES[useSettingsStore.getState().uploadQuality],
       allowsEditing: false,
     });
-    if (result.canceled || !result.assets[0]) return;
-    const asset = result.assets[0];
-    const type: ChatAttachment["type"] =
-      asset.type === "video" ? "video" : "image";
-    if (rejectIfTooLarge(type, asset.fileSize)) return;
-    setCaptionDraft("");
-    setPendingAttachment({
-      type,
-      uri: asset.uri,
-      sizeBytes: asset.fileSize,
-      // An image goes out under bitchat's stable-ID name so the far side can
-      // dedup it and acknowledge it; video has no such shape and keeps the
-      // picker's name.
-      name:
-        type === "video"
-          ? (asset.fileName ?? "video.mp4")
-          : wireMediaName("image", "jpg"),
-      mimeType: asset.mimeType,
-    });
+    acceptPickedMedia(result);
   }
 
   async function handleDocumentAttach(): Promise<void> {
@@ -3187,9 +3178,9 @@ export default function MessageThread({
   }
 
   // The recording bar's elapsed-seconds ticker, restarted rather than stacked.
-  // Two mic paths used to assign the interval straight into the ref, so starting
-  // a hold during a hands-free recording orphaned the first one for the life of
-  // the screen and counted up at double speed.
+  // Two mic paths share this ref, so assigning the interval straight into it
+  // orphans the first one for the life of the screen when a hold starts during a
+  // hands-free recording, and the counter runs at double speed.
   function startRecordingTimer(): void {
     if (recordingTimerRef.current) clearInterval(recordingTimerRef.current);
     setRecordingSecs(0);
@@ -3214,8 +3205,8 @@ export default function MessageThread({
 
       // A note is ended rather than parked, because the file is what breaches
       // the cap: at 32 kbps it crosses the 512 KiB voice limit at about this
-      // point, and `rejectIfTooLarge` skips voice, so the transport used to
-      // refuse it at send with the audio already gone.
+      // point, and `rejectIfTooLarge` skips voice, so without this the transport
+      // refuses it at send with the audio already gone.
       //
       // Sent rather than left under a Send button, which over a recorder that
       // has already stopped would read as though more could still be said. The
@@ -3711,8 +3702,8 @@ export default function MessageThread({
       //
       // Left running, this outlived the screen: the microphone stayed open and
       // the audio session stayed in record mode, which routes every later
-      // playback to the earpiece. Reachable before this through the attach
-      // sheet's Voice note; lift-to-lock makes it ordinary.
+      // playback to the earpiece. Also reachable through the attach sheet's
+      // Voice note; lift-to-lock makes it ordinary.
       if (recordingRef.current) void talkRef.current.cancel();
     },
     [],
@@ -4015,11 +4006,10 @@ export default function MessageThread({
     try {
       // Asset.create, not saveToLibraryAsync.
       //
-      // The old call is not merely deprecated in expo-media-library 57: the
-      // exported symbol is a stub that throws unconditionally. Both call sites
-      // were wrapped in a try/catch, so the failure was invisible - the app
-      // asked for photo permission, the user granted it, and Save always
-      // reported "not saved". The feature had been dead since the SDK bump.
+      // saveToLibraryAsync is not merely deprecated in expo-media-library 57:
+      // the exported symbol is a stub that throws unconditionally. Inside the
+      // try/catch below that failure is invisible, so the app asks for photo
+      // permission, the user grants it, and Save always reports "not saved".
       await MediaLibrary.Asset.create(attachment.uri);
       setToast({
         message:
@@ -4355,10 +4345,10 @@ export default function MessageThread({
               (msgs[index - 1]?.senderID ?? "") !== item.senderID;
             // Only LOCALLY generated notices render as a system row.
             //
-            // This used to also sniff the text for "took a screenshot", which
-            // meant any peer could forge a system row just by typing that phrase
-            // and worse, the branch below substitutes a canned string for
-            // non-mine messages, so an ordinary sentence like "I took a
+            // Never sniff the text for "took a screenshot": any peer could then
+            // forge a system row by typing that phrase, and worse, the branch
+            // below substitutes a canned string for non-mine messages, so an
+            // ordinary sentence like "I took a
             // screenshot of the map" had its real content silently replaced.
             // A peer's screenshot notice now renders as the normal message it
             // actually is; a trustworthy version needs a protocol signal, not a
@@ -4385,7 +4375,7 @@ export default function MessageThread({
               );
             }
 
-            // IRC-style emote (/hug, /slap): a real message wrapped in "* … *",
+            // IRC-style emote (/hug, /slap): a real message wrapped in "* ... *",
             // rendered centered and italic like an action rather than a bubble.
             const isEmoteRow =
               item.isSystem !== true &&
@@ -4415,7 +4405,7 @@ export default function MessageThread({
             // Compute the token list once and suppress raw text when the
             // entire message is a Cashu token (no extra prose).
             const tokens = mayContainToken(item.text)
-              ? findTokensInText(item.text)
+              ? findTokensInText(item.text, keysetIds)
               : [];
             const isPureToken =
               tokens.length > 0 && tokens[0]!.raw.trim() === item.text.trim();
@@ -4547,7 +4537,7 @@ export default function MessageThread({
                   : t("chat.thread.say_something", {
                       // Never the raw store key: a group's key is
                       // "group:<id>", which read as "Say something in
-                      // group:7920…". Same label the header shows.
+                      // group:7920...". Same label the header shows.
                       channel: isGroup ? displayName : channelLabel,
                     })}
               </Text>
@@ -5584,7 +5574,6 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       flex: 1,
       backgroundColor: Colors.bg,
     },
-    // Header
     header: {
       flexDirection: "row",
       alignItems: "center",
@@ -5654,14 +5643,9 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       color: Colors.textMuted,
       letterSpacing: 0.5,
     },
-    // Channel actions: one filled circle per action, the same shape, size and
-    // fill as the header pills on Chats, Mesh and Wallet.
     headerActions: {
       flexDirection: "row",
       alignItems: "center",
-      // The same gap the app header puts between its bell and + (headerControls
-      // in App.tsx), so two adjacent header circles sit the same distance apart
-      // wherever they appear.
       gap: Spacing.sm,
     },
     headerAction: {
@@ -5672,13 +5656,11 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       justifyContent: "center",
       backgroundColor: Colors.surfaceRaised,
     },
-    // DM header: avatar + name row, left-aligned after the back arrow.
     headerDmId: {
       flexDirection: "row",
       alignItems: "center",
       gap: Spacing.sm,
     },
-    // Messages
     listWrap: {
       flex: 1,
     },
@@ -5688,7 +5670,6 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       paddingTop: Spacing.base,
       paddingBottom: Spacing.sm,
     },
-    // Floats at the end of the list, clear of the compose bar below it.
     jumpToLatest: {
       position: "absolute",
       end: Spacing.base,
@@ -5703,9 +5684,6 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       justifyContent: "center",
       ...Shadow.medium,
     },
-    // Same badge as the back button's unread count, so a number over a circular
-    // control means one thing throughout the thread. Ringed in the list's own
-    // background rather than the button's, because it straddles that edge.
     jumpBadge: {
       position: "absolute",
       top: -2,
@@ -5744,7 +5722,6 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       letterSpacing: 0.4,
       textTransform: "uppercase",
     },
-    // System row (e.g. screenshot notices): centered, muted, no bubble.
     systemRow: {
       flexDirection: "row",
       alignItems: "center",
@@ -5757,7 +5734,7 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       color: Colors.textMuted,
       fontStyle: "italic",
     },
-    // Centered, italic emote line (/hug, /slap) — a touch stronger than a system
+    // Centered, italic emote line (/hug, /slap), a touch stronger than a system
     // notice so it reads as a playful action, not a status message.
     emoteText: {
       fontSize: FontSize.sm,
@@ -5765,7 +5742,6 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       fontStyle: "italic",
       textAlign: "center",
     },
-    // Empty state
     emptyState: {
       flex: 1,
       alignItems: "center",
@@ -5783,7 +5759,6 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       color: Colors.textMuted,
       textAlign: "center",
     },
-    // Peer offline notice
     peerOfflineBanner: {
       flexDirection: "row",
       alignItems: "center",
@@ -5799,7 +5774,6 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       color: Colors.textMuted,
       flex: 1,
     },
-    // Compose bar
     dmStatusBar: {
       flexDirection: "row",
       alignItems: "center",
@@ -5812,7 +5786,6 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       fontSize: FontSize.xs,
       color: Colors.textMuted,
     },
-    // ---- @-mention picker (above the compose bar) ------------------------------
     mentionBar: {
       borderTopWidth: StyleSheet.hairlineWidth,
       borderTopColor: Colors.border,
@@ -5834,7 +5807,6 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       fontWeight: FontWeight.medium,
       color: Colors.textPrimary,
     },
-    // ---- "/" command picker (shares mentionBar/mentionList) --------------------
     slashRow: {
       flexDirection: "row",
       alignItems: "center",
@@ -5861,8 +5833,6 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       fontSize: FontSize.xs,
       color: Colors.textMuted,
     },
-    // Selection bar: one full-width action in the compose bar's slot, so the
-    // row keeps the same height and border as the bar it stands in for.
     selectBar: {
       borderTopWidth: StyleSheet.hairlineWidth,
       borderTopColor: Colors.border,
@@ -5961,13 +5931,9 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       flexShrink: 0,
       marginBottom: 1,
     },
-    // Somebody else has the floor: an accent ring, not a disabled state. The
-    // button still sends; the tint is a courtesy, not a lock.
     pttButtonBusy: {
       borderColor: Colors.accent,
     },
-    // LIVE badge on the recording bar. Danger-tinted like the recording dot
-    // everywhere else in the app, in the same pill idiom as the rest.
     liveBadge: {
       flexDirection: "row",
       alignItems: "center",
@@ -5989,7 +5955,6 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       color: Colors.danger,
       letterSpacing: 0.5,
     },
-    // The ended state of the LIVE badge: same shape, none of the urgency.
     endedBadge: {
       backgroundColor: Colors.surfaceRaised,
     },
@@ -6000,14 +5965,10 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       backgroundColor: Colors.dangerDim,
       borderColor: Colors.danger,
     },
-    // Slid past the threshold: letting go discards. Same danger tint as the live
-    // state; the glyph inside tells them apart.
     pttButtonCancel: {
       backgroundColor: Colors.dangerDim,
       borderColor: Colors.danger,
     },
-    // Receiving live audio. Sits above the compose bar, in the strip the
-    // recording bar takes over when this device is the one talking.
     liveIncomingRow: {
       flexDirection: "row",
       alignItems: "center",
@@ -6023,9 +5984,6 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       fontSize: FontSize.xs,
       color: Colors.textSecondary,
     },
-    // Pushed to the end of the row, so the badge and the name keep their place
-    // as the meter takes whatever width is left. Same bar width, gap and
-    // alignment as the sending meter: one voice indicator, two rows.
     liveIncomingWave: {
       flexGrow: 1,
       flexShrink: 1,
@@ -6034,7 +5992,6 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       justifyContent: "flex-end",
       gap: 3,
     },
-    // Attachment picker sheet
     attachSheet: {
       width: "100%",
       paddingHorizontal: Spacing.base,
@@ -6108,15 +6065,11 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       borderWidth: 1,
       borderColor: Colors.border,
     },
-    // Dismiss actions read at full contrast, matching the wallet sheets,
-    // the scanner and the alert buttons: a muted label on a filled pill
-    // reads as disabled rather than as the quieter of two choices.
     attachCancelText: {
       fontSize: FontSize.base,
       color: Colors.textPrimary,
       fontWeight: FontWeight.semibold,
     },
-    // Voice recording bar (shown when isRecording = true)
     recordingBar: {
       flexDirection: "row",
       alignItems: "center",
@@ -6135,8 +6088,6 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       justifyContent: "center",
       flexShrink: 0,
     },
-    // Slide-to-cancel, on the held path. Shrinks before the waveform, which
-    // carries no information.
     recordingCancelHint: {
       flexDirection: "row",
       alignItems: "center",
@@ -6224,9 +6175,6 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       gap: Spacing.xs,
       marginBottom: Spacing.xs,
     },
-    // Video poster shown before the player is mounted: a neutral surface with a
-    // centered play badge, matching the image "tap to load" gate.
-    // A file no longer on the device: one shape for every attachment kind.
     attachGone: {
       flexDirection: "row",
       alignItems: "center",
@@ -6279,7 +6227,6 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       alignItems: "center",
       justifyContent: "center",
     },
-    // Full-screen photo viewer.
     fullscreenBackdrop: {
       flex: 1,
       backgroundColor: "#000000",
@@ -6301,8 +6248,6 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       alignItems: "center",
       justifyContent: "center",
     },
-    // Bottom of the viewer, opposite the close button, so neither covers the
-    // photo's middle. Same scrim-on-black circles as the close.
     fullscreenActions: {
       position: "absolute",
       bottom: 48,
@@ -6324,10 +6269,6 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       paddingVertical: Spacing.xs,
       minWidth: 160,
     },
-    // Icon-in-a-circle, same neutral-surface pattern used everywhere else
-    // in the app (channel/DM row icons, etc.), always readable regardless
-    // of which bubble color it happens to sit on, unlike a translucent
-    // overlay tuned for only one specific bubble/theme combination.
     attachVoicePlay: {
       width: 32,
       height: 32,
@@ -6343,9 +6284,6 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       alignItems: "center",
       gap: 2,
     },
-    // Bars and duration sit directly on the bubble (not a neutral circle),
-    // so, like the message text right next to them, they need to track
-    // which bubble color they're on. See onMyBubble/onTheirBubble below.
     attachVoiceBar: {
       width: 3,
       borderRadius: Radius.xs,
@@ -6383,21 +6321,10 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       fontSize: FontSize.xs,
       opacity: 0.7,
     },
-    // Shared "text/fill on top of a message bubble" pair, the same tokens
-    // messageTextMine/messageTextTheirs use, so anything sitting directly
-    // on a bubble (not a neutral surface) stays correctly readable through
-    // both themes. Sets both `color` and `backgroundColor`; each consumer
-    // (Text vs. View) only reads the property it cares about.
-    // Anything drawn directly on a bubble has to flip with it, the way the
-    // message text next to it does. Text flips its colour and a waveform bar
-    // flips its fill, so they are two styles: one that set both painted the
-    // duration a solid block, the bars' backgroundColor landing behind digits
-    // that were already the same colour.
     textOnMyBubble: { color: Colors.textInverse },
     textOnTheirBubble: { color: Colors.textPrimary },
     barOnMyBubble: { backgroundColor: Colors.textInverse },
     barOnTheirBubble: { backgroundColor: Colors.textPrimary },
-    // DM peer info sheet
     dmInfoSheet: {
       width: "100%",
       paddingBottom: Spacing["2xl"],
@@ -6428,7 +6355,6 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       letterSpacing: 0.8,
       textAlign: "center",
     },
-    // Boxed, labeled Nostr public key, consistent with the contact-info sheet.
     keyBox: {
       alignSelf: "stretch",
       marginTop: Spacing.xs,
@@ -6447,8 +6373,6 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       textTransform: "uppercase",
       letterSpacing: 0.6,
     },
-    // The key wraps to two lines, so the glyph centers against the block
-    // rather than sitting on the first line.
     keyBoxRow: {
       flexDirection: "row",
       alignItems: "center",
@@ -6462,8 +6386,6 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       letterSpacing: 0.3,
       lineHeight: 16,
     },
-    // Matches the contact sheet's note under the same box, so the two places a
-    // pseudonym is inspected read identically.
     keyBoxNote: {
       fontSize: FontSize["2xs"],
       lineHeight: FontSize["2xs"] * 1.5,
@@ -6482,12 +6404,6 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       borderRadius: Radius.full,
       backgroundColor: Colors.online,
     },
-    // Unseen-notices dot on the header's board icon.
-    // Sits inside the icon button now that it lives on a track: hung off the
-    // corner it would straddle the pill's border. Ringed in the track's own
-    // colour so it reads as a cutout, the same trick the back badge uses.
-    // Straddles the circle's edge, ringed in the header's own background, the
-    // same cutout the back button's unread badge and the bell's count use.
     noticeDot: {
       position: "absolute",
       top: -2,
@@ -6499,7 +6415,6 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       borderWidth: 2,
       borderColor: Colors.bg,
     },
-    // Attachment composer (caption before send).
     composerSheet: {
       backgroundColor: Colors.bg,
       paddingHorizontal: Spacing.base,
@@ -6564,8 +6479,6 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       borderTopWidth: StyleSheet.hairlineWidth,
       borderTopColor: Colors.border,
     },
-    // Channel sender profile sheet's single action: solid pill, same
-    // primary-button shape used everywhere else this session.
     senderInfoMessageBtn: {
       width: "100%",
       minHeight: 50,
@@ -6581,9 +6494,6 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       fontWeight: FontWeight.bold,
       color: Colors.textInverse,
     },
-    // Cashu payment cards rendered inside message bubbles. Deliberately distinct
-    // from grey file attachments: an accent-tinted card with a hero amount, so
-    // money reads as money at a glance (the WhatsApp / GPay payment convention).
     paymentCard: {
       marginTop: Spacing.xs,
       padding: Spacing.md,
@@ -6637,8 +6547,6 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       color: Colors.online,
       fontWeight: FontWeight.semibold,
     },
-    // Same row as "Claimed", muted rather than green: the absence of a payment
-    // rather than the completion of one.
     paymentCardVoid: {
       flexDirection: "row",
       alignItems: "center",

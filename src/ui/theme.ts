@@ -1,4 +1,4 @@
-// Design tokens for Airhop v1.0.
+// Design tokens.
 //
 // Monochromatic light palette. One interactive accent (near-black). Semantic
 // colors used strictly for meaning, never decoration.
@@ -11,57 +11,62 @@ import { useColorScheme, type ColorSchemeName } from "react-native";
 import { MONO_FONTS } from "./fonts";
 
 export const Colors = {
-  // ---- Backgrounds ----------------------------------------------------------
+  // ---- Backgrounds ----
   bg: "#F8F8F8", // off-white screen background
   surface: "#FFFFFF", // cards, list rows, sheets
   surfaceRaised: "#F0F0F0", // inputs, segmented controls
   surfacePressed: "#E8E8E8", // pressed state background
 
-  // ---- Borders --------------------------------------------------------------
+  // ---- Borders ----
   border: "#E4E4E4", // subtle dividers
   borderStrong: "#C8C8C8", // prominent borders
 
-  // ---- Text -----------------------------------------------------------------
+  // ---- Text ----
   // The three greys are contrast-checked against both light surfaces they ever
   // sit on (bg #F8F8F8 and surface #FFFFFF) at the smallest size each is used
   // at, so every one of them clears WCAG 2.2 AA (4.5:1) for normal text.
   // Ratios against #F8F8F8, the worse of the two:
-  //   textPrimary   #111111  →  17.4:1  (AAA)
-  //   textSecondary #565656  →   7.0:1  (AAA)
-  //   textMuted     #6F6F6F  →   4.8:1  (AA)
-  // The previous #666666 / #8A8A8A pair put every timestamp, scope line,
-  // placeholder and section label at 3.2:1, which fails AA outright. Both were
-  // darkened rather than the palette restructured: same hue, same monochrome
-  // scheme, same three-step hierarchy, just legible.
+  //   textPrimary   #111111  ->  17.4:1  (AAA)
+  //   textSecondary #565656  ->   7.0:1  (AAA)
+  //   textMuted     #6F6F6F  ->   4.8:1  (AA)
+  // Lighter greys fail: a #666666 / #8A8A8A pair puts every timestamp, scope
+  // line, placeholder and section label at 3.2:1, under AA. Darken rather than
+  // restructure, keeping the same hue and the same three-step hierarchy.
   textPrimary: "#111111", // headings, primary content
   textSecondary: "#565656", // supporting text
   textMuted: "#6F6F6F", // timestamps, placeholders, labels
   textInverse: "#FFFFFF", // text on near-black (accent) surfaces
+  //
+  // A dismiss action (Cancel, Close) uses textPrimary, never textMuted: a
+  // muted label on a filled pill reads as disabled rather than as the quieter
+  // of two choices. Applies to every sheet, the scanner and the alert buttons.
 
-  // ---- Interactive accent (single: near-black) ------------------------------
-  // Everything interactive: buttons, active tabs, send, CTAs. Uses near-black.
-  // On a light canvas this is maximally legible and unambiguous.
+  // ---- Interactive accent ----
+  // One accent only. Buttons, active tabs, send, CTAs. Near-black is maximally
+  // legible on a light canvas and unambiguous.
   accent: "#111111",
   accentGhost: "rgba(17,17,17,0.05)", // subtle pressed/hover bg
 
+  // ---- Selection ----
   // Highlight behind selected text in an input. Never `accent`: that is a solid
   // near-black, and a text field paints the selection as an opaque block behind
   // the glyphs, so selecting a whole message hid the text under a slab. Enough
   // alpha to show the run, little enough to keep every glyph readable.
   selection: "rgba(17,17,17,0.18)",
 
-  // ---- Message bubbles ------------------------------------------------------
+  // ---- Message bubbles ----
   // My messages: near-black with white text (iMessage-style inversion).
   myBubble: "#111111",
   myBubbleText: "#FFFFFF",
   theirBubble: "#EBEBEB",
 
-  // ---- Semantic (use only where meaning is conveyed) -----------------------
+  // ---- Semantic ----
+  // Only where meaning is conveyed, never for decoration.
   online: "#16A34A", // peer is reachable
-  // Darkened from #CCCCCC: a status dot is a meaningful UI indicator, so it
-  // owes 3:1 against its own background (WCAG 1.4.11). At #CCCCCC on a white
-  // row it measured 1.6:1 and simply could not be seen, which made "this peer
-  // has gone quiet" unreadable at exactly the size it matters most.
+  // A status dot is a meaningful UI indicator, so it owes 3:1 against its own
+  // background (WCAG 1.4.11). A pale #CCCCCC measures 1.6:1 on a white row and
+  // cannot be seen, which makes "this peer has gone quiet" unreadable at exactly
+  // the size it matters most.
   offline: "#909090", // peer timed out
   syncing: "#D97706", // BLE scanning / Nostr reconnecting
   syncingDim: "rgba(217,119,6,0.10)", // caution banner bg (location off)
@@ -69,15 +74,16 @@ export const Colors = {
   dangerDim: "rgba(220,38,38,0.08)",
   success: "#16A34A",
 
-  // ---- Trust indicators (the only two semantic colors for security UI) ------
-  // Green means one thing only: end-to-end encrypted. Blue means one thing
-  // only: a verified contact. Never reuse either for anything else, so a green
-  // padlock always reads as "encrypted" and a blue shield as "verified".
+  // ---- Trust indicators ----
+  // The only two colors security UI may use. Green means end-to-end encrypted
+  // and blue means a verified contact, never anything else, so a green padlock
+  // always reads as "encrypted" and a blue shield as "verified".
   e2ee: "#16A34A", // padlock + "end-to-end encrypted" text
   verified: "#2563EB", // verified-contact shield/badge
 
-  // Mesh-status banner accents: each hue names a distinct network state so the
-  // Mesh tab reads at a glance (per-tone bg is the same hue at low alpha).
+  // ---- Mesh-status banner accents ----
+  // Each hue names a distinct network state so the Mesh tab reads at a glance.
+  // Every -Dim is the same hue at low alpha.
   relay: "#2563EB", // traffic carried over the internet (Nostr relay)
   relayDim: "rgba(37,99,235,0.09)",
   tor: "#7C3AED", // onion-routed internet traffic (Tor)
@@ -87,38 +93,45 @@ export const Colors = {
   bridge: "#4F46E5", // public mesh chat stitched across islands (bridge)
   bridgeDim: "rgba(79,70,229,0.09)",
 
-  // ---- Overlays -------------------------------------------------------------
+  // ---- Overlays ----
   overlay: "rgba(0,0,0,0.45)",
 } as const;
 
-// Dark variant of the same tokens, same keys as Colors so any screen can
-// swap the whole palette by swapping which object it reads from. Currently
-// wired up via useThemeColors() below; most screens still import the static
-// `Colors` light palette directly and are unaffected by the theme setting.
+// Dark variant, same keys as Colors so a screen swaps the whole palette by
+// swapping which object it reads. Screens reach it through useThemeColors()
+// below rather than importing either palette directly, which is what makes the
+// theme setting apply everywhere.
 export const DarkColors = {
+  // ---- Backgrounds ----
   bg: "#0B0B0B",
   surface: "#161616",
   surfaceRaised: "#1F1F1F",
   surfacePressed: "#2A2A2A",
 
+  // ---- Borders ----
   border: "#2A2A2A",
   borderStrong: "#3D3D3D",
 
+  // ---- Text ----
   textPrimary: "#F5F5F5",
   textSecondary: "#A6A6A6",
   textMuted: "#787878",
   textInverse: "#111111",
 
+  // ---- Interactive accent ----
   accent: "#F5F5F5",
   accentGhost: "rgba(245,245,245,0.08)",
+  // ---- Selection ----
   // Heavier than the light palette's: a pale wash on a near-black canvas reads
   // fainter than the same alpha of black on white.
   selection: "rgba(245,245,245,0.24)",
 
+  // ---- Message bubbles ----
   myBubble: "#F5F5F5",
   myBubbleText: "#111111",
   theirBubble: "#232323",
 
+  // ---- Semantic ----
   online: "#22C55E",
   // Same 3:1 non-text floor as the light palette (see Colors.offline).
   offline: "#6A6A6A",
@@ -128,11 +141,13 @@ export const DarkColors = {
   dangerDim: "rgba(239,68,68,0.15)",
   success: "#22C55E",
 
-  // Trust indicators (see light palette): green = e2ee, blue = verified.
+  // ---- Trust indicators ----
+  // Same meanings as the light palette: green = e2ee, blue = verified.
   e2ee: "#22C55E",
   verified: "#3B82F6",
 
-  // Brighter hues for the dark canvas; dim backgrounds carry more alpha to stay
+  // ---- Mesh-status banner accents ----
+  // Brighter hues for the dark canvas, and every -Dim carries more alpha to stay
   // visible on near-black.
   relay: "#3B82F6",
   relayDim: "rgba(59,130,246,0.16)",
@@ -143,6 +158,7 @@ export const DarkColors = {
   bridge: "#6366F1",
   bridgeDim: "rgba(99,102,241,0.16)",
 
+  // ---- Overlays ----
   overlay: "rgba(0,0,0,0.6)",
 } as const;
 
@@ -167,9 +183,8 @@ export const TAB_BAR_CLEARANCE = 96;
 export const FontSize = {
   // Floor of the scale. Only for glyph-sized text inside a fixed circle or
   // track: unread counts, the radar's ring labels. Anything a user has to READ
-  // starts at `xs`. Nothing in the app should go below this, which is why the
-  // hand-written `fontSize: 9` badges were raised to it: a 9pt digit is
-  // illegible on a dense screen and had no token to justify itself.
+  // starts at `xs`. Nothing goes below this: a 9pt digit is illegible on a
+  // dense screen and has no token to justify itself.
   "2xs": 10,
   xs: 11,
   sm: 13,
@@ -204,6 +219,10 @@ export const MaxFontScale = {
 export const Duration = {
   base: 180, // fades, enters
   slow: 220, // sheet dismiss, list reorder
+  // How long a pull-to-refresh spinner is held. The refresh itself (a BLE
+  // rescan kick) returns instantly, and a flash-then-gone spinner reads as
+  // broken, so it is held briefly for legible feedback.
+  refreshSpinner: 700,
 } as const;
 
 export const FontWeight = {
@@ -227,9 +246,8 @@ export const FontFamily = {
 
 export const Radius = {
   // The cap on a hairline track: progress bars, waveform bars, the sheet's grab
-  // handle. It was written inline in a dozen files; naming it is what stops the
-  // thirteenth from being 3. Anything meant to be a CIRCLE uses `full` instead,
-  // never a hand-halved size.
+  // handle. Named so a dozen call sites cannot each pick their own. Anything
+  // meant to be a CIRCLE uses `full`, never a hand-halved size.
   xs: 2,
   sm: 6,
   md: 10,
@@ -239,9 +257,9 @@ export const Radius = {
   full: 999,
 } as const;
 
-// One value for "this control is inactive", instead of the 0.35 / 0.4 / 0.45
-// that had accumulated across the header pills, the sheet confirms and the
-// settings switches. 0.4 is the floor at which a glyph still reads as a shape
+// One value for "this control is inactive", so header pills, sheet confirms and
+// settings switches cannot drift apart. 0.4 is the floor at which a glyph still
+// reads as a shape
 // (so the control's affordance survives) while clearly not inviting a tap.
 // WCAG exempts inactive controls from the 4.5:1 text rule (1.4.3), which is why
 // this is allowed to be a dim rather than a colour change, but every disabled
@@ -270,9 +288,7 @@ export function hitSlopFor(visualSize: number): {
   return { top: pad, bottom: pad, left: pad, right: pad };
 }
 
-// Elevation, as one set of three steps instead of a hand-tuned shadow per
-// component. Values match what the tab bar, the transfer pill and the segmented
-// thumb were already using, so nothing moves; they just stop drifting.
+// Elevation, as three steps rather than a hand-tuned shadow per component.
 //
 // Shadows are near-invisible on a dark canvas (black on #0B0B0B), so anything
 // that relies on one for separation must also carry a hairline border. Both the
@@ -304,8 +320,7 @@ export const Shadow = {
   },
 } as const;
 
-// Muted avatar colors: used only for identity circles.
-// Deeper palette for adequate contrast on light backgrounds.
+// Identity circles only. Deep enough for adequate contrast on light surfaces.
 const AVATAR_PALETTE = [
   "#3B5CE0", // indigo
   "#0D8FA3", // teal
@@ -319,10 +334,9 @@ const AVATAR_PALETTE = [
 
 // Tint an opaque #RRGGBB token with an alpha, e.g. withAlpha(accent, 0.08).
 //
-// The avatar and the onboarding identity card were both doing this by string
-// concatenation (`color + "22"`, `color + "33"`, `color + "44"`), which is three
-// magic hex pairs nobody can read as an opacity and which silently produces
-// garbage if the input is ever shorthand or already has an alpha channel.
+// Never by string concatenation (`color + "22"`): a magic hex pair reads as
+// nothing, and it produces garbage when the input is shorthand or already
+// carries an alpha channel.
 export function withAlpha(hex: string, alpha: number): string {
   const clamped = Math.round(Math.min(1, Math.max(0, alpha)) * 255);
   return `${hex}${clamped.toString(16).padStart(2, "0")}`;
@@ -341,9 +355,8 @@ export function avatarColor(seed: string): string {
 // resolveTheme() deals in this pair only.
 export type ResolvedTheme = "light" | "dark";
 
-// Resolves the Appearance preference ("light" | "dark" | "system") against
-// the OS color scheme. Shared by useThemeColors() and useResolvedTheme() so
-// both always agree on which mode is active.
+// Shared by useThemeColors() and useResolvedTheme() so both always agree on
+// which mode is active. "system" is the absence of a choice, resolved here.
 function resolveTheme(
   preference: ThemePreference,
   systemScheme: ColorSchemeName,
@@ -355,23 +368,18 @@ function resolveTheme(
     : preference;
 }
 
-// Resolves the Appearance preference ("light" | "dark" | "system") against
-// the OS color scheme and returns the matching palette. Re-renders whenever
-// either the preference or the OS scheme changes.
+// The palette for the active mode. Re-renders when the preference, the OS
+// scheme, or the mono-font choice changes.
 export function useThemeColors(): Record<keyof typeof Colors, string> {
   const preference = useSettingsStore((s) => s.theme);
-  // Subscribe to the mono-font choice too. Component styles are memoized on the
-  // object this hook returns, so returning a fresh identity when the font
-  // changes makes every screen recompute its styles and pick up FontFamily.mono
-  // live, exactly the way a theme switch already works. No app restart needed.
+  // Part of the identity on purpose: it does not change the palette, but a fresh
+  // object forces every memoized style to recompute and re-read FontFamily.mono,
+  // so a font change applies live like a theme switch.
   const monoFont = useSettingsStore((s) => s.monoFont);
   const systemScheme = useColorScheme();
   const base =
     resolveTheme(preference, systemScheme) === "dark" ? DarkColors : Colors;
   return useMemo(() => {
-    // monoFont is part of the identity on purpose: it doesn't change the
-    // palette, but a fresh object forces every memoized style to recompute and
-    // re-read FontFamily.mono when the font choice changes.
     void monoFont;
     return { ...base };
   }, [base, monoFont]);

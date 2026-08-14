@@ -32,7 +32,7 @@ import BottomSheet from "./bottom-sheet";
 // stacked so there is no adjacency to worry about.
 const ALERT_BUTTON_HEIGHT = 50;
 
-export default function CustomAlert(): React.JSX.Element {
+export default function AlertModal(): React.JSX.Element {
   const Colors = useThemeColors();
   const styles = useMemo(() => createStyles(Colors), [Colors]);
   const insets = useSafeAreaInsets();
@@ -91,9 +91,6 @@ export default function CustomAlert(): React.JSX.Element {
 
 function createStyles(Colors: ReturnType<typeof useThemeColors>) {
   return StyleSheet.create({
-    // Rides on BottomSheet's shared base (surface, top radii, grab handle). The
-    // handle already owns the top spacing, so this only adds the sides and the
-    // gap between title, message, and actions.
     sheet: {
       paddingHorizontal: Spacing.xl,
       gap: Spacing.sm,
@@ -103,8 +100,6 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       fontWeight: FontWeight.bold,
       color: Colors.textPrimary,
     },
-    // Left-aligned, not centered: body copy is easier to read against a
-    // consistent left edge, and a confirm's message is often two or three lines.
     message: {
       fontSize: FontSize.base,
       color: Colors.textSecondary,
@@ -116,12 +111,6 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       gap: Spacing.sm,
       marginTop: Spacing.xs,
     },
-    // Two button shapes, not three: the solid accent one for a plain default
-    // action, and a bordered outline one shared by destructive and cancel.
-    // `btnDestructive` and `btnCancel` were byte-identical, which meant the two
-    // could silently drift apart while looking like a deliberate pair. What
-    // actually distinguishes them is the label colour, and that is all that
-    // differs now.
     btnDefault: {
       width: "100%",
       minHeight: ALERT_BUTTON_HEIGHT,

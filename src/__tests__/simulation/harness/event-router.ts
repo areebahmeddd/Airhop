@@ -74,8 +74,6 @@ class DeviceEventRouter {
     return map;
   }
 
-  // ---- the EventEmitter surface RN code expects -----------------------------
-
   addListener(eventType: string, listener: Listener): Subscription {
     const owner = this.current;
     const events = this.bucket(owner);

@@ -450,7 +450,6 @@ describe("joinPrivateChannel key clashes", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
 // Persistence throttling.
 //
 // Writes are coalesced because zustand/persist serialises the WHOLE store on
@@ -585,7 +584,6 @@ describe("unread while the app is away", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
 // Merging two threads for the same person.
 //
 // A DM is reachable under two keys: `dm:nostr_<pubkey>` before the sender is

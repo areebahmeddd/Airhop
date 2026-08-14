@@ -1,6 +1,11 @@
 /**
  * @jest-environment node
  */
+// Recipient tags, which decide who a stored envelope is offered to.
+//
+// The tag has to be stable for a day so a courier can match it repeatedly, and
+// unlinkable across days so the same recipient cannot be tracked over time.
+// Those two pull against each other, and both are asserted here.
 import { ed25519, x25519 } from "@noble/curves/ed25519.js";
 import { bytesToHex } from "@noble/hashes/utils.js";
 import { noiseXOpen } from "../../../crypto/noise-x";
@@ -42,7 +47,7 @@ describe("recipientTag", () => {
     expect(computeRecipientTag(keys.pub)).toHaveLength(16);
   });
 
-  test("same pubkey + same day → same tag", () => {
+  test("same pubkey + same day -> same tag", () => {
     const keys = makeNoiseKeypair();
     const nowMs = Date.now();
     expect(bytesToHex(computeRecipientTag(keys.pub, nowMs))).toBe(
@@ -50,7 +55,7 @@ describe("recipientTag", () => {
     );
   });
 
-  test("different pubkeys → different tags", () => {
+  test("different pubkeys -> different tags", () => {
     const k1 = makeNoiseKeypair();
     const k2 = makeNoiseKeypair();
     const nowMs = Date.now();
@@ -59,7 +64,7 @@ describe("recipientTag", () => {
     );
   });
 
-  test("same pubkey, different day → different tags", () => {
+  test("same pubkey, different day -> different tags", () => {
     const keys = makeNoiseKeypair();
     const day0 = 0;
     const day1 = 86400 * 1000;

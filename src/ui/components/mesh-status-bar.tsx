@@ -48,7 +48,7 @@ interface Props {
   // somewhere people think to look when a chat app says it cannot see anyone.
   onAction?: (kind: BannerAction) => void;
   // Put an advisory away for good. Only banners marked dismissible offer this;
-  // a real blocker has no × , because hiding it would leave an empty radar with
+  // a real blocker has no x , because hiding it would leave an empty radar with
   // nothing explaining it.
   onDismiss?: (key: string) => void;
 }
@@ -201,8 +201,6 @@ const styles = StyleSheet.create({
     width: DOT_SIZE,
     height: DOT_SIZE,
     borderRadius: DOT_SIZE / 2,
-    // Never let the dot be squeezed out by a long label wrapping beside it: it
-    // is the only thing carrying the banner's severity.
     flexShrink: 0,
   },
   label: {
@@ -223,9 +221,6 @@ const styles = StyleSheet.create({
     fontWeight: FontWeight.semibold,
   },
   dismiss: {
-    // Drawn after the label and before the action pill, so the reading order is
-    // "what is wrong, put it away, or fix it" and the fix stays the rightmost
-    // (and most reachable) target.
     paddingHorizontal: Spacing.xs,
     flexShrink: 0,
   },

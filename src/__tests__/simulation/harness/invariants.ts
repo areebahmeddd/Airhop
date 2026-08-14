@@ -30,8 +30,6 @@ function key(m: SeenMessage): string {
   return m.id;
 }
 
-// ---- convergence ------------------------------------------------------------
-
 // Everyone listed ended up with the same set of messages in the channel.
 //
 // Deliberately compares SETS, not sequences. Two devices can legitimately order
@@ -108,8 +106,6 @@ export function senderKeptOwnCopy(
     }));
 }
 
-// ---- exactly once -----------------------------------------------------------
-
 // The same logical message never appears twice on one device.
 //
 // This is the invariant that BLE flood + gossip resync + the Nostr mirror +
@@ -165,8 +161,6 @@ export function noDuplicateText(
   return findings;
 }
 
-// ---- authenticity -----------------------------------------------------------
-
 // Nothing rendered claims to come from a peer ID that no device in the world
 // owns. A forged or corrupted packet must be dropped before display, never
 // shown with an attacker-chosen sender.
@@ -200,8 +194,6 @@ export function noForgedSenders(
   }
   return findings;
 }
-
-// ---- delivery state ---------------------------------------------------------
 
 const STATUS_RANK: Record<string, number> = {
   sending: 0,
@@ -239,8 +231,8 @@ export class StatusWatcher {
           // The outbox drops a message once it is past its TTL or its attempt
           // budget, and the bubble has to stop showing an hourglass over
           // something already discarded. That is queued/sent/carried -> failed,
-          // which is a rank DECREASE and used to be impossible only because the
-          // chat store silently refused it. What must still never happen is a
+          // which is a rank DECREASE, permitted here and nowhere else. What must
+          // never happen is a
           // give-up contradicting a receipt: delivered or read means it arrived,
           // and no amount of local retrying changes that.
           const isGiveUp =
@@ -265,8 +257,6 @@ export class StatusWatcher {
     return this.findings;
   }
 }
-
-// ---- unread / badge ---------------------------------------------------------
 
 // The unread count for a conversation never exceeds the number of messages in
 // it that could plausibly be unread, and an opened thread reads as zero.
@@ -340,8 +330,6 @@ export function noOversizedFrames(radio: {
   ];
 }
 
-// ---- process health ---------------------------------------------------------
-
 // No device died. An uncaught exception on a thread the OS owns is process
 // death, and the OS model records it rather than letting the harness carry on
 // as if a thrown callback were survivable.
@@ -367,8 +355,6 @@ export function noLeakedTimers(before: number): Finding[] {
     },
   ];
 }
-
-// ---- helpers ----------------------------------------------------------------
 
 export function combine(...groups: Finding[][]): Finding[] {
   return groups.flat();

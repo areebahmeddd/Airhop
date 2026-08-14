@@ -221,8 +221,8 @@ export class BitchatActor implements RadioNode {
   // BLEFragmentAssemblyBuffer.swift, including the detail that matters most:
   // `startedAtMs` is stamped once and never refreshed, so the window is measured
   // from the first fragment rather than the last. That is bitchat's real
-  // behaviour and the reason a large Airhop transfer used to be dropped on
-  // arrival however well the radio was doing.
+  // behaviour, and the reason a large Airhop transfer can be dropped on arrival
+  // however well the radio is doing.
   private readonly assemblies = new Map<
     string,
     {
@@ -254,7 +254,7 @@ export class BitchatActor implements RadioNode {
     this.peerID = bytesToHex(sha256(this.noiseStaticPubKey)).slice(0, 16);
   }
 
-  // ---- radio plumbing -------------------------------------------------------
+  // ---- radio plumbing ----
 
   private port: RadioPort | null = null;
 
@@ -305,7 +305,7 @@ export class BitchatActor implements RadioNode {
     this.port?.radiosChanged();
   }
 
-  // ---- sending --------------------------------------------------------------
+  // ---- sending ----
 
   private write(linkID: string, packet: Packet): void {
     this.port?.write(linkID, base64Encode(encodePacket(packet)));
@@ -428,7 +428,7 @@ export class BitchatActor implements RadioNode {
     }
   }
 
-  // ---- receiving ------------------------------------------------------------
+  // ---- receiving ----
 
   private onPacket(linkID: string, dataBase64: string): void {
     let packet: Packet | null;
@@ -607,7 +607,7 @@ export class BitchatActor implements RadioNode {
 
   private onChannelMsg(packet: Packet, senderID: string): void {
     const key = this.peerKeys.get(senderID);
-    // BLEPublicMessageHandler.swift:88 - an absent key is a FAILED check.
+    // BLEPublicMessageHandler.swift - an absent key is a FAILED check.
     if (
       key === undefined ||
       (packet.flags & Flags.SIGNED) === 0 ||

@@ -3,7 +3,7 @@
 // Every peer periodically broadcasts a signed ANNOUNCE packet so others can
 // discover its identity, Noise public key, and signing key. This is the entry
 // point for peer discovery: receiving a valid ANNOUNCE is how a node learns
-// another peer's senderID → signingPubKey mapping.
+// another peer's senderID -> signingPubKey mapping.
 //
 // ANNOUNCE payload format (TLV, per PROTOCOLS.md section 3):
 //   0x01  nickname           (UTF-8, up to 32 bytes)
@@ -76,7 +76,7 @@ export function isAnnounceFresh(
   return Math.abs(nowMs - timestampMs) <= maxSkewMs;
 }
 
-// ANNOUNCE TLV types. 0x01–0x06 are bitchat's (Packets.swift TLVType); we must
+// ANNOUNCE TLV types. 0x01-0x06 are bitchat's (Packets.swift TLVType); we must
 // not reuse them. bitchat's 0x05 is a capabilities bitfield and 0x06 is a bridge
 // geohash. Reading either as our Nostr key (or vice versa) would corrupt both
 // sides, so our Nostr pubkey lives at 0x07, which bitchat skips as unknown.

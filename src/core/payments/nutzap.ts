@@ -10,7 +10,7 @@
 //
 //   kind 10019  "here is how to pay me", replaceable, published by the receiver
 //               tags: ["relay", <url>]           where to send nutzaps
-//                     ["mint", <url>, <unit>…]   which mints they will accept
+//                     ["mint", <url>, <unit>...]   which mints they will accept
 //                     ["pubkey", <33-byte hex>]  the P2PK key to lock to
 //
 //   kind 9321   the nutzap itself, published by the sender
@@ -52,8 +52,6 @@ const MAX_RELAYS = 16;
 // How far back to look for nutzaps we might have missed while offline.
 const LOOKBACK_S = 60 * 60 * 24 * 30;
 
-// ---- Types ------------------------------------------------------------------
-
 export interface NutzapInfo {
   // Nostr pubkey of the person being paid (hex, x-only).
   pubkey: string;
@@ -78,8 +76,6 @@ export interface ReceivedNutzap {
   // The event this nutzap was attached to, when the sender tagged one.
   targetEventId?: string;
 }
-
-// ---- Publish our own nutzap info (kind 10019) -------------------------------
 
 // Announce where and how we can be paid. Without this event nobody can nutzap
 // us at all: a sender has no way to know which mints we trust or which key to
@@ -128,8 +124,6 @@ export async function publishNutzapInfo(params: {
   return event;
 }
 
-// ---- Fetch a recipient's nutzap info ----------------------------------------
-
 // Look up how to pay someone. Returns null when they have never published a
 // kind 10019, which is the normal case for most Nostr users and the signal to
 // fall back to an unlocked token in a DM.
@@ -174,8 +168,6 @@ export function parseNutzapInfo(event: Event): NutzapInfo | null {
 
   return { pubkey: event.pubkey, mintUrls, p2pkPubkey, relays };
 }
-
-// ---- Publish a nutzap (kind 9321) -------------------------------------------
 
 // Send P2PK-locked proofs to a recipient.
 //
@@ -223,8 +215,8 @@ export async function publishNutzap(params: {
             ...(proof.witness !== undefined ? { witness: proof.witness } : {}),
           }),
         ]),
-        // "u" is the mint URL. The old code emitted a second "u" tag holding
-        // the unit, which readers parse as a second mint.
+        // "u" is the mint URL, and there must be exactly one: a second "u" tag
+        // holding the unit is parsed by readers as a second mint.
         ["u", params.mintUrl],
         ["p", params.recipientPubkey],
         ...(params.targetEventId ? [["e", params.targetEventId]] : []),
@@ -237,8 +229,6 @@ export async function publishNutzap(params: {
   await params.client.publish(event, params.relays);
   return event;
 }
-
-// ---- Subscribe to incoming nutzaps ------------------------------------------
 
 // Watch for nutzaps addressed to us. The callback fires once per event; the
 // caller is responsible for redeeming and for ignoring events it has already
@@ -263,8 +253,6 @@ export function subscribeNutzaps(
   );
   return () => closer.close();
 }
-
-// ---- Parsing ----------------------------------------------------------------
 
 export function parseNutzap(event: Event): ReceivedNutzap | null {
   if (event.kind !== KIND_NUTZAP) return null;

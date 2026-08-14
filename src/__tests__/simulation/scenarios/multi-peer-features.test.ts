@@ -63,8 +63,6 @@ const android = (id: string, seedByte: number): DeviceSpec => ({
   seedByte,
 });
 
-// ---------------------------------------------------------------------------
-
 test("F01 a private group is unreadable to the phone standing next to it", async () => {
   const s = (scenario = new Scenario({
     id: "F01",

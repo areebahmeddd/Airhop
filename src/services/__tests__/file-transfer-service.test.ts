@@ -306,7 +306,7 @@ describe("wire format (BitchatFilePacket)", () => {
   });
 });
 
-// ---- Refused attachments ------------------------------------------------------
+// ---- Refused attachments ----
 //
 // The receive path drops a bad attachment in four places, all of them silently.
 // From the outside that is identical to the file never being sent, which is the

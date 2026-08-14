@@ -5,8 +5,9 @@
 // something else is happening at the same moment.
 //
 // A photo is one FILE_TRANSFER packet split into fragments that each fit a single
-// BLE write, paced onto the radio 20ms apart. A live voice burst is a stream of small packets
-// that must NOT enter the fragment scheduler. Both share one radio. Every
+// BLE write, paced onto the radio 20ms apart. A live voice burst is a stream of
+// small packets that must NOT enter the fragment scheduler. Both share one
+// radio. Every
 // scenario here is about what happens when they share it badly.
 
 jest.mock("expo-location", () => ({}));
@@ -160,8 +161,6 @@ const android = (id: string, seedByte: number): DeviceSpec => ({
   platform: "android",
   seedByte,
 });
-
-// ---------------------------------------------------------------------------
 
 test("M01 a photo arrives byte-exact and is readable from its bubble", async () => {
   const s = (scenario = new Scenario({

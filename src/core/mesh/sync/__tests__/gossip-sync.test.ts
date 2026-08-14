@@ -1,6 +1,12 @@
 /**
  * @jest-environment node
  */
+// The filter two phones exchange to work out what each is missing.
+//
+// A Golomb-coded set is compact enough to gossip over BLE, which is the only
+// reason catch-up is affordable at all. The encoding is shared with bitchat, so
+// these pin the bytes as much as the behaviour: a filter this app builds must
+// be readable by an app it was not compiled with.
 import { ed25519 } from "@noble/curves/ed25519.js";
 import {
   decodePacket,

@@ -76,7 +76,7 @@ const DIRECT_PEER_TTL_MS = ANNOUNCE_CONNECTED_MAX_MS * 1.5;
 // Matches bitchat's 60-second mesh reachability window.
 const PEER_REACHABLE_TTL_MS = 60_000;
 
-// ---- Peer registry ----------------------------------------------------------
+// ---- Peer registry ----
 
 export interface PeerEntry {
   peerID: string; // 16 hex chars
@@ -409,7 +409,7 @@ export class PeerRegistry {
   }
 }
 
-// ---- MessageRouter ----------------------------------------------------------
+// ---- MessageRouter ----
 
 export interface RouterIdentity {
   peerID: string; // 16 hex chars
@@ -426,10 +426,10 @@ export type NostrSendFn = (
   text: string,
 ) => Promise<void>;
 
-// NOTE: a separate WiFiUnicastFn tier used to live here. It was removed because
-// it duplicated work the injected `unicast` callback already does: MeshService's
-// unicast checks for an active WiFi link and uses it before falling back to BLE.
-// Having a second WiFi check in the router meant the transport was consulted
+// There is deliberately no separate WiFiUnicastFn tier here. It would duplicate
+// what the injected `unicast` callback already does: MeshService's unicast checks
+// for an active WiFi link and uses it before falling back to BLE. A second WiFi
+// check in the router means the transport is consulted
 // twice, and because the parameter was never actually passed, it read like an
 // unfinished feature when the behaviour was in fact already correct.
 //
@@ -761,7 +761,7 @@ export class MessageRouter {
   }
 }
 
-// ---- Helpers -----------------------------------------------------------------
+// ---- Helpers ----
 
 function hexToBytes(hex: string): Uint8Array {
   const bytes = new Uint8Array(hex.length >> 1);

@@ -44,9 +44,9 @@ export default function IdentityScreen({
   const steps = STEP_KEYS.map((key) => T(key));
   // The work either produced a key pair on disk or it did not.
   //
-  // A failure used to fall through to `onComplete` with a timestamp shaped like
-  // a peer ID. Onboarding accepted it, so the user landed in an app whose mesh
-  // could never start (loadIdentity finds nothing) with no screen saying why.
+  // A failure must not fall through to `onComplete` with a timestamp shaped like
+  // a peer ID. Onboarding accepts it, and the user lands in an app whose mesh can
+  // never start (loadIdentity finds nothing) with no screen saying why.
   const [failed, setFailed] = useState(false);
   // Bumped by Try again to re-run the effect below. A Keystore refuses for
   // reasons that pass: locked mid-write, or storage momentarily full.
@@ -200,7 +200,6 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       paddingHorizontal: Spacing["2xl"],
       gap: Spacing["2xl"],
     },
-    // Spinner
     spinnerWrapper: {
       width: 72,
       height: 72,
@@ -215,10 +214,9 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       borderWidth: 1.5,
       borderColor: "transparent",
       borderTopColor: Colors.accent,
-      // Was a hardcoded rgba(0,0,0,0.08): black on black, so in dark mode the
-      // ring's trailing arc simply did not exist and the spinner read as a
-      // single floating tick. The border token is the same value in spirit and
-      // resolves correctly in both themes.
+      // The border token, never a hardcoded rgba(0,0,0,0.08): black on black
+      // leaves the ring's trailing arc invisible in dark mode, and the spinner
+      // reads as a single floating tick.
       borderRightColor: Colors.border,
     },
     spinnerDot: {
@@ -227,7 +225,6 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       borderRadius: Radius.full,
       backgroundColor: Colors.accent,
     },
-    // Copy
     copy: {
       alignItems: "center",
       gap: Spacing.sm,
@@ -244,14 +241,12 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       textAlign: "center",
       lineHeight: FontSize.sm * 1.6,
     },
-    // Steps
     steps: {
       alignSelf: "stretch",
       backgroundColor: Colors.surface,
       borderRadius: Radius.lg,
-      // Every other card in the app carries a hairline edge; this one was the
-      // sole exception, so on the near-white onboarding background it had no
-      // boundary at all.
+      // Every card in the app carries a hairline edge. Without one, this card has
+      // no boundary at all on the near-white onboarding background.
       borderWidth: 1,
       borderColor: Colors.border,
       padding: Spacing.base,

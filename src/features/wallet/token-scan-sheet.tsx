@@ -53,7 +53,7 @@ interface Props {
   onScanned: (value: string) => void;
 }
 
-export default function TokenScanner({
+export default function TokenScanSheet({
   visible,
   target,
   onClose,

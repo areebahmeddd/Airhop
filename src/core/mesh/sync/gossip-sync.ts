@@ -196,7 +196,7 @@ function decodeTypeFlags(bytes: Uint8Array): number {
   return v;
 }
 
-// ---- GCS h64 derivation -----------------------------------------------------
+// ---- GCS h64 derivation ----
 
 // 8-byte value for GCS membership check:
 // h64 = first 8 bytes of SHA-256(packetID) as big-endian u64, sign bit cleared.
@@ -210,7 +210,7 @@ function packetIdToH64(packetId: Uint8Array): bigint {
   return raw & 0x7fff_ffff_ffff_ffffn; // clear sign bit
 }
 
-// ---- GCS filter (Golomb-Coded Set) -------------------------------------------
+// ---- GCS filter (Golomb-Coded Set) ----
 
 function deriveP(fpr: number): number {
   const f = Math.max(0.000001, Math.min(0.25, fpr));
@@ -311,7 +311,7 @@ function encodeGolombRice(sorted: bigint[], p: number): Uint8Array {
     const delta = v - prev;
     if (delta <= 0n) continue; // skip duplicates
     prev = v;
-    const x = delta - 1n; // encode x+1 → store x
+    const x = delta - 1n; // encode x+1 -> store x
     const q = Number(x >> BigInt(p));
     const r = Number(x & BigInt((1 << p) - 1));
     // Unary: q ones then zero
@@ -397,7 +397,7 @@ function filterContains(sortedValues: bigint[], candidate: bigint): boolean {
   return false;
 }
 
-// ---- Wire encode/decode for REQUEST_SYNC payload ----------------------------
+// ---- Wire encode/decode for REQUEST_SYNC payload ----
 
 // TLV encoder: type (u8), length (u16 BE), value
 function encodeTlv(type: number, value: Uint8Array): Uint8Array {
@@ -504,7 +504,7 @@ export function decodeGossipFilterPayload(
   return { p, m, data, types, since };
 }
 
-// ---- Response rate limiting --------------------------------------------------
+// ---- Response rate limiting ----
 
 // Sliding window of answers per peer. Not a deduplicator: a peer asks every 15s
 // and gets an answer. This only caps the case where it asks far faster, since
@@ -534,7 +534,7 @@ class SyncResponseRateLimiter {
   }
 }
 
-// ---- GossipSync class -------------------------------------------------------
+// ---- GossipSync class ----
 
 export type SendToPeerFn = (peerID: string, packet: Packet) => void;
 
@@ -560,7 +560,7 @@ export interface GossipSyncWiring {
 // Only ANNOUNCE, CHANNEL_MSG, BOARD_POST and GROUP_MESSAGE are gossiped;
 // syncBitForType is the single place that decides.
 export class GossipSync {
-  // Ordered list of (packetIdHex → packet), newest at end. Capped at SEEN_CAPACITY.
+  // Ordered list of (packetIdHex -> packet), newest at end. Capped at SEEN_CAPACITY.
   private readonly seen = new Map<string, Packet>();
   private timer: ReturnType<typeof setInterval> | null = null;
   private readonly rateLimiter = new SyncResponseRateLimiter();
@@ -776,7 +776,7 @@ export class GossipSync {
   }
 }
 
-// ---- Helpers -----------------------------------------------------------------
+// ---- Helpers ----
 
 function isGossipType(type: PacketType): boolean {
   return syncBitForType(type) !== null;

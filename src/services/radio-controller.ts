@@ -1,11 +1,9 @@
 // The one place that decides whether the BLE radios should be running, and
 // makes reality match.
 //
-// This exists because "start the radios" was previously spread across
-// mesh-service.start(), retryRadios(), setDiscoverable(), scheduleRadioRestart()
-// and App.tsx's resume handler, each issuing native calls on its own authority
-// and each swallowing whatever came back. Five callers with no shared idea of
-// what state the radios were meant to be in produced three distinct failures:
+// One owner, because callers issuing native radio calls on their own authority
+// and swallowing the results cannot agree on what state the radios are in. Three
+// failures this design exists to prevent:
 //
 //   1. A permission grant is visible to the app before the Bluetooth stack
 //      honours it. Calls issued in that window threw SecurityException, were
@@ -35,7 +33,7 @@
 //
 // The backoff is deliberately not a fixed sleep. bitchat-android waits a flat
 // second after granting permissions ("This solves the issue where app needs
-// restart to work on first install", MainActivity.kt:684). A flat wait is both
+// restart to work on first install", MainActivity.kt). A flat wait is both
 // too long on a fast device and too short on a slow one; retrying until the
 // stack actually accepts the call is correct on every device and instant on
 // most.
@@ -169,7 +167,7 @@ export class RadioController {
 
   constructor(private readonly peerID: string) {}
 
-  // ---- intent ---------------------------------------------------------------
+  // ---- intent ----
 
   start(): void {
     this.desired.running = true;
@@ -255,7 +253,7 @@ export class RadioController {
     this.clearTimers();
   }
 
-  // ---- reconciliation -------------------------------------------------------
+  // ---- reconciliation ----
 
   private clearTimers(): void {
     if (this.retryTimer !== null) {
@@ -385,10 +383,10 @@ export class RadioController {
     //
     // Gated on SCANNING, not on the combined result.
     //
-    // This used to be issued whatever `applyRadios` reported, which put a
-    // persistent "Airhop mesh active" notification over a phone whose scanner
-    // had just refused. Gating it on `ok` fixed that and introduced the opposite
-    // fault: `ok` is also false when only ADVERTISING failed, and a device that
+    // Issued whatever `applyRadios` reports, this puts a persistent "Airhop mesh
+    // active" notification over a phone whose scanner has just refused. Gating it
+    // on `ok` alone has the opposite fault: `ok` is also false when only
+    // ADVERTISING failed, and a device that
     // scans and relays perfectly well but cannot advertise would then lose the
     // service that keeps it alive off screen. Both directions are wrong for the
     // same reason, which is that `ok` answers "did every call succeed" and the
@@ -599,7 +597,7 @@ export class RadioController {
     }
   }
 
-  // ---- introspection, for tests and diagnostics -----------------------------
+  // ---- introspection, for tests and diagnostics ----
 
   get currentBlocker(): BleBlocker | null {
     return this.lastBlocker;

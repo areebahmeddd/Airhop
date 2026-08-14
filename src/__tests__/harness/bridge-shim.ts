@@ -1,6 +1,6 @@
 // Indirection so a scenario can install a fresh native module per run while
 // mesh-service keeps the module-scope import it does in production
-// (src/services/mesh-service.ts:26). Swapping the import itself between tests
+// (src/services/mesh-service.ts). Swapping the import itself between tests
 // would mean re-importing mesh-service, and its singleton would come with it.
 
 import type { BleNativeModule } from "./android-native";

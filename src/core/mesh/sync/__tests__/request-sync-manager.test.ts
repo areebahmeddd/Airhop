@@ -1,6 +1,11 @@
 /**
  * @jest-environment node
  */
+// Which sync responses are answers to something we asked.
+//
+// Accepting an unsolicited response would let any peer push state into this
+// phone by pretending to answer a request that was never made, so the window
+// and the pairing with an outstanding request are the whole defence.
 import {
   RequestSyncManager,
   RESPONSE_WINDOW_MS,

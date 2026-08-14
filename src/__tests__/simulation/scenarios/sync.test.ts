@@ -150,8 +150,6 @@ function phones(
   return { radio, devices };
 }
 
-// ---------------------------------------------------------------------------
-
 test("S01 catching up after a partition does not re-flood the mesh", async () => {
   // The bug this exists for: sync responses were replayed carrying their
   // original ttl. The requester's flood router sees each one as new, which it

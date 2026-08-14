@@ -122,10 +122,10 @@ interface ChatState {
   //
   // A location-channel DM is written from our per-cell identity, which is
   // derived from (seed, geohash) - so replying to one needs to know WHICH cell
-  // it happened in. That binding used to live only in memory, which meant it
-  // was gone after a relaunch: opening such a thread from the Direct list and
-  // sending fell through to our MAIN Nostr identity instead. The recipient got
-  // a message from a key they had never seen, so it opened a second thread
+  // it happened in. Held only in memory that binding is gone after a relaunch,
+  // and opening such a thread from the Direct list falls through to the MAIN
+  // Nostr identity instead. The recipient then gets a message from a key they
+  // have never seen, which opens a second thread
   // rather than continuing theirs - and it handed a person we had only ever met
   // pseudonymously in a location channel our permanent identity, which is the
   // exact link per-cell identities exist to prevent.
@@ -315,7 +315,7 @@ export function freeChannelLabel(
     if (channelKeys[candidate] === undefined) return candidate;
   }
   // 98 rooms sharing one name is not a real scenario; fall back to the name as
-  // given rather than looping, and let the last one win as it used to.
+  // given rather than looping and letting the last one win.
   return channel;
 }
 
@@ -489,7 +489,7 @@ export const useChatStore = create<ChatState>()(
           const overflow = next.length - MAX_PER_CHANNEL;
           const dropped = overflow > 0 ? next.slice(0, overflow) : [];
           const trimmed = overflow > 0 ? next.slice(overflow) : next;
-          // Keep unread count consistent: subtract any unread messages lost to trimming.
+          // Keep the unread count consistent: subtract anything lost to trimming.
           const droppedUnread = dropped.filter((m) => !m.isMine).length;
           const isUnread = !msg.isMine && msg.channel !== state.activeChannel;
           const prevUnread = state.unreadCounts[msg.channel] ?? 0;
@@ -628,9 +628,9 @@ export const useChatStore = create<ChatState>()(
           delete geoDmNames[geoKey];
           delete geoCardExchange[geoKey];
           // Clear activeChannel rather than reassigning it to some arbitrary
-          // surviving channel. The old behaviour picked the first non-DM
-          // channel (usually #bluetooth) while the user was sitting on the LIST
-          // view, and since addMessage suppresses the unread bump for the
+          // surviving channel. Picking the first non-DM channel (usually
+          // #bluetooth) while the user sits on the LIST view is wrong, because
+          // addMessage suppresses the unread bump for the
           // active channel, that channel then silently stopped showing unread
           // badges until the user opened and closed some other thread.
           const activeChannel =
@@ -655,10 +655,10 @@ export const useChatStore = create<ChatState>()(
       renameChannel(oldName: string, newName: string) {
         // Normalise: ensure exactly one leading #.
         const clean = "#" + newName.replace(/^#+/, "");
-        // Decide OUTSIDE set() so the result can be reported. Previously this
-        // silently no-opped on a collision while the caller carried on as if it
-        // had worked: renaming #foo onto an existing #bar left #foo untouched
-        // and overwrote #bar's description with #foo's drafts.
+        // Decide OUTSIDE set() so the result can be reported. Silently no-opping
+        // on a collision lets the caller carry on as if it worked: renaming #foo
+        // onto an existing #bar leaves #foo untouched and overwrites #bar's
+        // description with #foo's drafts.
         if (clean === oldName || get().channels.includes(clean)) return false;
 
         set((state) => {

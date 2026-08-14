@@ -1,12 +1,9 @@
 // The one empty state in the app.
 //
-// There were five, hand-rolled in dm-list, peer-list, channel-list,
-// notification-center and chat-search-results. They had already drifted: the
-// icon sat at 0.4 opacity in two of them and 0.6 in a third, at 26pt in one and
-// 36pt in the others, with the title in textSecondary in four and the gap
-// between title and hint different in every one. An empty screen is the first
-// thing a new user sees on four of the app's surfaces, so it is the last place
-// that should look assembled by hand.
+// Used by dm-list, peer-list, channel-list, notification-center and
+// chat-search-results. An empty screen is the first thing a new user sees on four
+// of these surfaces, so icon size, opacity, title colour and spacing are fixed
+// here rather than per caller, where they drift.
 //
 // Two variants, because there are two jobs:
 //
@@ -26,7 +23,7 @@ import { StyleSheet, Text, View } from "react-native";
 import { FontSize, FontWeight, Spacing, useThemeColors } from "../theme";
 
 // Held down so the glyph reads as a watermark behind the words rather than
-// competing with them for the eye. One value, previously 0.4 or 0.6 by file.
+// competing with them for the eye. One value, not 0.4 or 0.6 by file.
 const ICON_OPACITY = 0.4;
 
 interface Props {
@@ -88,13 +85,11 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       paddingHorizontal: Spacing.xl,
       gap: Spacing.xs,
     },
-    // Owns the vertical space, so the block lands in the middle of the surface.
     full: {
       flex: 1,
       paddingVertical: Spacing["4xl"],
       gap: Spacing.sm,
     },
-    // Inline: takes only the room it needs.
     compact: {
       paddingVertical: Spacing["2xl"],
     },

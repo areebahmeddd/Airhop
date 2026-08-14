@@ -14,7 +14,7 @@
 //   the author so a member cannot forge another member's messages.
 //
 // All TLVs use a 2-byte big-endian length. ChaCha20-Poly1305 is RFC 8439
-// (12-byte nonce, 16-byte tag) with AAD = groupID ‖ epoch(4B BE), matching
+// (12-byte nonce, 16-byte tag) with AAD = groupID || epoch(4B BE), matching
 // CryptoKit's ChaChaPoly so the two clients interoperate.
 
 import { chacha20poly1305 } from "@noble/ciphers/chacha.js";
@@ -59,7 +59,7 @@ export interface GroupMessageEnvelope {
   groupID: Uint8Array;
   epoch: number;
   nonce: Uint8Array; // 12 bytes
-  ciphertext: Uint8Array; // ChaChaPoly body ‖ 16-byte tag
+  ciphertext: Uint8Array; // ChaChaPoly body || 16-byte tag
 }
 
 export interface GroupMessagePlaintext {
@@ -70,7 +70,7 @@ export interface GroupMessagePlaintext {
   content: string;
 }
 
-// ---- byte helpers -----------------------------------------------------------
+// ---- byte helpers ----
 
 function u32be(value: number): Uint8Array {
   const out = new Uint8Array(4);
@@ -125,7 +125,7 @@ export function groupFingerprint(noiseStaticPubKey: Uint8Array): string {
   return bytesToHex(sha256(noiseStaticPubKey));
 }
 
-// ---- roster -----------------------------------------------------------------
+// ---- roster ----
 
 function truncatedNickname(nickname: string): Uint8Array {
   let n = nickname;
@@ -180,7 +180,7 @@ function hexToBytesSafe(hex: string): Uint8Array | null {
   }
 }
 
-// ---- group state (invite / key update) --------------------------------------
+// ---- group state (invite / key update) ----
 
 enum StateField {
   GROUP_ID = 0x01,
@@ -325,7 +325,7 @@ export function decodeGroupState(data: Uint8Array): GroupStatePayload | null {
   return { groupID, name, key, epoch, members, creatorFingerprint, signature };
 }
 
-// ---- group message envelope (0x25) ------------------------------------------
+// ---- group message envelope (0x25) ----
 
 enum EnvField {
   GROUP_ID = 0x01,
@@ -382,7 +382,7 @@ export function decodeGroupEnvelope(
   return { groupID, epoch, nonce, ciphertext };
 }
 
-// ---- message crypto ---------------------------------------------------------
+// ---- message crypto ----
 
 enum InnerField {
   MESSAGE_ID = 0x01,
@@ -539,7 +539,7 @@ export function newGroupKey(): Uint8Array {
   return crypto.getRandomValues(new Uint8Array(GROUP_KEY_LENGTH));
 }
 
-// ---- Applying an inbound group state ----------------------------------------
+// ---- Applying an inbound group state ----
 
 // What to do with a creator-signed group state that has already passed
 // signature verification and the sender-is-creator check.

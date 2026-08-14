@@ -32,7 +32,7 @@ import {
   type Packet,
 } from "../wire/packet-codec";
 
-// ---- Constants (per PUSH-TO-TALK-DESIGN.md / VoiceBurstPacket.swift) --------
+// ---- Constants (per PUSH-TO-TALK-DESIGN.md / VoiceBurstPacket.swift) ----
 
 // Codec values: must match VoiceBurstCodec in bitchat.
 export const VoiceCodec = {
@@ -116,7 +116,7 @@ const RETRACT_REPEAT_MS = [110, 330];
 // it: receivers enforce no minimum, on either client.
 export const MIN_BURST_KEEP_MS = 500;
 
-// ---- Types ------------------------------------------------------------------
+// ---- Types ----
 
 export interface VoiceCaptureConfig {
   senderPeerID: string; // 16 hex chars
@@ -139,7 +139,7 @@ export interface AudioCaptureBackend {
   stopCapture(): Promise<void>;
 }
 
-// ---- VoiceCaptureSession ----------------------------------------------------
+// ---- VoiceCaptureSession ----
 
 export class VoiceCaptureSession {
   private readonly config: VoiceCaptureConfig;
@@ -278,7 +278,7 @@ export class VoiceCaptureSession {
     return bytesToHex(this.burstID);
   }
 
-  // ---- Private ----------------------------------------------------------------
+  // ---- Private ----
 
   private addFrame(frameData: Uint8Array): void {
     // Past the burst ceiling, drop the frame. Deliberately silent: the button
@@ -424,7 +424,7 @@ export class VoiceCaptureSession {
   }
 }
 
-// ---- VoiceBurstPacket encode/decode -----------------------------------------
+// ---- VoiceBurstPacket encode/decode ----
 // Matches VoiceBurstPacket.swift / encode() and decode() exactly.
 
 function writeBurstHeader(
@@ -494,7 +494,7 @@ export function encodeBurstCanceled(
   return buf;
 }
 
-// ---- ADTS wrapping ----------------------------------------------------------
+// ---- ADTS wrapping ----
 
 // Wrap raw AAC frames in ADTS headers to make a standalone, playable file.
 //
@@ -548,7 +548,7 @@ export function framesToAdtsFile(frames: readonly Uint8Array[]): Uint8Array {
   return out;
 }
 
-// ---- Parsed burst packet types ----------------------------------------------
+// ---- Parsed burst packet types ----
 
 export type BurstPacket =
   | { kind: "start"; burstID: Uint8Array; seq: number; codec: VoiceCodecId }

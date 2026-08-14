@@ -3,9 +3,9 @@
 // Wire-compatible with bitchat iOS NoiseProtocol.swift.
 //
 // Three-message handshake pattern:
-//   msg1: initiator → responder  (→ e)              32 bytes
-//   msg2: responder → initiator  (← e,ee,s,es)      96 bytes
-//   msg3: initiator → responder  (→ s,se)            64 bytes
+//   msg1: initiator -> responder  (-> e)              32 bytes
+//   msg2: responder -> initiator  (<- e,ee,s,es)      96 bytes
+//   msg3: initiator -> responder  (-> s,se)            64 bytes
 //
 // Transport messages: [4-byte BE nonce prefix][ciphertext+16-byte Poly1305 tag]
 // The nonce is prepended so the receiver can decrypt out-of-order messages
@@ -53,14 +53,14 @@ export interface NoiseSession {
   // that produces the transport keys, so k1/k2 are bit-identical to a two-output
   // split and bitchat transport interop is unaffected.
   readonly exporterSecret: Uint8Array;
-  // Encrypt `plaintext` → [4-byte BE nonce][ciphertext+tag]
+  // Encrypt `plaintext` -> [4-byte BE nonce][ciphertext+tag]
   encrypt(plaintext: Uint8Array): Uint8Array;
-  // Decrypt [4-byte BE nonce][ciphertext+tag] → plaintext.
+  // Decrypt [4-byte BE nonce][ciphertext+tag] -> plaintext.
   // Throws on auth failure or replay.
   decrypt(message: Uint8Array): Uint8Array;
 }
 
-// --- Internal helpers ---------------------------------------------------------
+// ---- Internal helpers ----
 
 // HKDF as specified by the Noise Protocol Framework:
 //   tempKey = HMAC-SHA256(ck, ikm)
@@ -84,9 +84,9 @@ function noiseHkdf(
 }
 
 // Build a 12-byte ChaCha20-Poly1305 nonce matching bitchat's layout:
-//   bytes [0–3]  = 0x00
-//   bytes [4–7]  = counter as LE u32
-//   bytes [8–11] = 0x00
+//   bytes [0-3]  = 0x00
+//   bytes [4-7]  = counter as LE u32
+//   bytes [8-11] = 0x00
 function makeNonce(counter: number): Uint8Array {
   const nonce = new Uint8Array(12);
   new DataView(nonce.buffer).setUint32(4, counter >>> 0, true);
@@ -114,7 +114,7 @@ function chachaDecrypt(
   return chacha20poly1305(key, makeNonce(n), aad).decrypt(ciphertextWithTag);
 }
 
-// --- Sliding-window replay guard (1024-nonce window) -------------------------
+// ---- Sliding-window replay guard (1024-nonce window) ----
 
 class ReplayWindow {
   private highest = 0;
@@ -156,7 +156,7 @@ class ReplayWindow {
   }
 }
 
-// --- Transport session -------------------------------------------------------
+// ---- Transport session ----
 
 function makeTransportSession(
   sendKey: Uint8Array,
@@ -214,7 +214,7 @@ function makeTransportSession(
   };
 }
 
-// --- NoiseHandshake class ----------------------------------------------------
+// ---- NoiseHandshake class ----
 
 // Manages the XX handshake state. Create with `createInitiator` or
 // `createResponder`, then call the appropriate write/read methods in order,
@@ -266,14 +266,14 @@ export class NoiseHandshake {
     return new NoiseHandshake(localStaticPrivKey, "responder");
   }
 
-  // msg1: initiator → responder (→ e)
+  // msg1: initiator -> responder (-> e)
   // Returns 32-byte ephemeral public key (no encryption yet, no payload).
   writeMsg1(): Uint8Array {
     this.assertRole("initiator");
     this.localEphemeralPriv = crypto.getRandomValues(new Uint8Array(32));
     this.localEphemeralPub = x25519.getPublicKey(this.localEphemeralPriv);
     this.mixHash(this.localEphemeralPub);
-    // Empty payload: no key yet → just mixHash(empty)
+    // Empty payload: no key yet -> just mixHash(empty)
     this.encryptAndHash(new Uint8Array(0));
     return this.localEphemeralPub.slice();
   }
@@ -288,7 +288,7 @@ export class NoiseHandshake {
     this.decryptAndHash(msg.slice(32));
   }
 
-  // msg2: responder → initiator (← e,ee,s,es)
+  // msg2: responder -> initiator (<- e,ee,s,es)
   // Returns 96 bytes: 32 (e_pub) + 48 (enc_s+tag) + 16 (enc_empty+tag)
   writeMsg2(): Uint8Array {
     this.assertRole("responder");
@@ -308,7 +308,7 @@ export class NoiseHandshake {
     this.mixKey(ee);
     // s: encrypt local static pub
     const enc_s = this.encryptAndHash(this.localStaticPub); // 48 bytes
-    // es: responder role → DH(my_static, remote_eph)
+    // es: responder role -> DH(my_static, remote_eph)
     const es = x25519.getSharedSecret(
       this.localStaticPriv,
       this.remoteEphemeralPub,
@@ -338,7 +338,7 @@ export class NoiseHandshake {
     const enc_s = msg.slice(off, off + 48);
     off += 48;
     this.remoteStaticPub = this.decryptAndHash(enc_s); // 32 bytes
-    // es: initiator role → DH(my_eph, remote_static)
+    // es: initiator role -> DH(my_eph, remote_static)
     const es = x25519.getSharedSecret(
       this.localEphemeralPriv!,
       this.remoteStaticPub,
@@ -348,7 +348,7 @@ export class NoiseHandshake {
     this.decryptAndHash(msg.slice(off));
   }
 
-  // msg3: initiator → responder (→ s,se)
+  // msg3: initiator -> responder (-> s,se)
   // Returns 64 bytes: 48 (enc_s+tag) + 16 (enc_empty+tag)
   writeMsg3(): Uint8Array {
     this.assertRole("initiator");
@@ -357,7 +357,7 @@ export class NoiseHandshake {
 
     // s: encrypt local static pub
     const enc_s = this.encryptAndHash(this.localStaticPub); // 48 bytes
-    // se: initiator role → DH(my_static, remote_eph)
+    // se: initiator role -> DH(my_static, remote_eph)
     const se = x25519.getSharedSecret(
       this.localStaticPriv,
       this.remoteEphemeralPub,
@@ -379,7 +379,7 @@ export class NoiseHandshake {
     const enc_s = msg.slice(off, off + 48);
     off += 48;
     this.remoteStaticPub = this.decryptAndHash(enc_s); // 32 bytes
-    // se: responder role → DH(my_eph, remote_static)
+    // se: responder role -> DH(my_eph, remote_static)
     const se = x25519.getSharedSecret(
       this.localEphemeralPriv!,
       this.remoteStaticPub,
@@ -422,7 +422,7 @@ export class NoiseHandshake {
     return session;
   }
 
-  // Symmetric state helpers
+  // ---- Symmetric state helpers ----
 
   private mixHash(data: Uint8Array): void {
     this.h = sha256(concatBytes(this.h, data));

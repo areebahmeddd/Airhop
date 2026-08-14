@@ -110,8 +110,6 @@ function toBase64(bytes: Uint8Array): string {
   return out;
 }
 
-// ---------------------------------------------------------------------------
-
 test("C03 replaying captured packets does not duplicate anything", async () => {
   const s = (scenario = new Scenario({
     id: "C03",

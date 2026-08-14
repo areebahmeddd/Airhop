@@ -17,7 +17,7 @@
 //
 // Security notes:
 //   - Relay operators see: kind 1059, recipient pubkey, and a random
-//     timestamp ±2 days (per NIP-59). They cannot read the content or
+//     timestamp +/-2 days (per NIP-59). They cannot read the content or
 //     the sender identity.
 //   - The seal (kind 13) is signed by the REAL sender key, providing
 //     deniability only at the gift-wrap layer while still authenticating
@@ -41,12 +41,10 @@ const KIND_DM_RUMOR = 14;
 const KIND_SEAL = 13;
 const KIND_GIFT_WRAP = 1059;
 
-// bitchat randomizes seal + gift-wrap timestamps by ±15 minutes (NostrProtocol
+// bitchat randomizes seal + gift-wrap timestamps by +/-15 minutes (NostrProtocol
 // randomizedTimestamp). Matching this keeps our events indistinguishable from
 // theirs to a relay.
 const TIMESTAMP_JITTER_SECONDS = 15 * 60;
-
-// ---- Types ------------------------------------------------------------------
 
 export interface DecryptedDm {
   content: string;
@@ -60,8 +58,6 @@ export interface GiftWrapResult {
   // The ephemeral pubkey used as the gift-wrap sender (for diagnostics).
   wrapperPubkey: string;
 }
-
-// ---- Send -------------------------------------------------------------------
 
 // Wrap a plaintext DM from senderPrivKey to recipientPubkey (hex).
 // Returns the kind 1059 gift wrap event ready to publish to relays.
@@ -120,14 +116,12 @@ export function wrapDm(
   return { event: giftWrap, wrapperPubkey: ephemeralPubkey };
 }
 
-// bitchat randomizes the seal and gift-wrap timestamps by ±15 minutes to blur
+// bitchat randomizes the seal and gift-wrap timestamps by +/-15 minutes to blur
 // send timing without moving them so far that relays reject them.
 function randomizedTimestamp(): number {
   const jitter = Math.floor((Math.random() * 2 - 1) * TIMESTAMP_JITTER_SECONDS);
   return Math.floor(Date.now() / 1000) + jitter;
 }
-
-// ---- Receive ----------------------------------------------------------------
 
 // How far the inner rumor's clock may sit ahead of ours before we stop believing
 // it. Matches the skew bitchat tolerates on the same field.
@@ -213,8 +207,6 @@ export function unwrapDm(
     timestamp: rumor.created_at,
   };
 }
-
-// ---- Helpers ----------------------------------------------------------------
 
 // Derive a secp256k1 private key from an Ed25519 signing key via HKDF-SHA256.
 // This gives each identity a deterministic Nostr key without a second key pair.

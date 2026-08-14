@@ -216,9 +216,6 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       alignItems: "center",
       justifyContent: "center",
     },
-    // Dismiss actions read at full contrast, matching the wallet sheets, the
-    // scanner and the alert buttons: a muted label on a filled pill reads as
-    // disabled rather than as the quieter of two choices.
     cancelText: {
       fontSize: FontSize.base,
       color: Colors.textPrimary,

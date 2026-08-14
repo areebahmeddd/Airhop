@@ -188,7 +188,7 @@ interface WalletServiceLike {
   receiveToken: (
     raw: string,
     opts?: { preferOffline?: boolean },
-  ) => Promise<{ amount: number; outcome: string }>;
+  ) => Promise<{ amount: number; outcome: string; dleq?: string }>;
   refreshAccount: (...args: unknown[]) => Promise<unknown>;
   [k: string]: unknown;
 }
@@ -314,7 +314,7 @@ export class SimDevice {
     this.inner = inner;
   }
 
-  // ---- construction ---------------------------------------------------------
+  // ---- construction ----
 
   static create(
     world: World,
@@ -398,7 +398,7 @@ export class SimDevice {
     this.inner.os.log("user", kind, detail);
   }
 
-  // ---- lifecycle ------------------------------------------------------------
+  // ---- lifecycle ----
 
   // Tapping the icon. The JS bundle finishes loading, then the app starts the
   // mesh. Native events raised before this had nowhere to go, which is modelled
@@ -428,7 +428,7 @@ export class SimDevice {
   foreground(): void {
     this.inner.os.appForeground = true;
     this.inner.os.log("user", "APP_ACTIVE");
-    // App.tsx:456 — unconditional on resume; the controller reads the device
+    // Unconditional on resume; the controller reads the device
     // itself rather than the resume handler guessing what changed.
     this.mesh?.retryRadios();
     this.inner.native.radioPort?.radiosChanged();
@@ -514,7 +514,7 @@ export class SimDevice {
     this.launched = false;
   }
 
-  // ---- user actions ---------------------------------------------------------
+  // ---- user actions ----
 
   joinChannel(channel: string): void {
     call(this.inner.stores.chatStore, "addChannel", channel);
@@ -563,7 +563,7 @@ export class SimDevice {
   // status at all, so every unread, badge and delivery-tick assertion below it
   // would be vacuous.
   //
-  // Mirrors message-thread.tsx:1709 handleSend + :1586 transmit, with the undo
+  // Mirrors message-thread.tsx handleSend transmit, with the undo
   // window off (undoSendSeconds <= 0), which is the immediate-send path.
   send(channel: string, text: string, nearbyOnly = false): string {
     const id = `${this.peerID}-${this.world.now}-${this.msgSeq++}`;
@@ -653,7 +653,7 @@ export class SimDevice {
     return this.mesh?.sendAttachment(channel, bytes, meta, onOutcome) ?? false;
   }
 
-  // ---- observation ----------------------------------------------------------
+  // ---- observation ----
 
   messages(channel: string): SeenMessage[] {
     const raw = this.inner.stores.chatStore.getState().messages as
@@ -777,7 +777,7 @@ export class SimDevice {
     return Object.keys(c);
   }
 
-  // ---- private groups ------------------------------------------------------
+  // ---- private groups ----
 
   // Create a private group. Returns its hex id, which is also the suffix of its
   // channel key (`group:<id>`).
@@ -799,7 +799,7 @@ export class SimDevice {
     return call(this.inner.stores.groupStore, "get", groupIDHex) !== undefined;
   }
 
-  // ---- bulletin board ------------------------------------------------------
+  // ---- bulletin board ----
 
   // Pin a signed notice. `geohash` empty means the mesh-local board.
   postNotice(
@@ -837,7 +837,7 @@ export class SimDevice {
     }));
   }
 
-  // ---- media ---------------------------------------------------------------
+  // ---- media ----
 
   // Every file this phone has cached, by uri.
   files(): { uri: string; bytes: Uint8Array }[] {
@@ -888,7 +888,7 @@ export class SimDevice {
     this.mesh?.setLiveVoiceAudible(channel);
   }
 
-  // ---- wallet ---------------------------------------------------------------
+  // ---- wallet ----
 
   // The last send this device prepared, so a scenario can reclaim it the way
   // the Wallet screen does when a sheet is dismissed.
@@ -949,6 +949,35 @@ export class SimDevice {
     }
   }
 
+  // What the Send sheet shows before the user commits: what the recipient gets,
+  // what leaves the balance, and the mint fee that separates the two. Spends
+  // nothing, so a scenario can assert on the pricing without moving any money.
+  async sendQuote(amount: number): Promise<{
+    amount: number;
+    spend: number;
+    fee: number;
+    exact: boolean;
+  } | null> {
+    const mint = this.firstMintUrl();
+    if (mint === null) return null;
+    const wallet = this.inner.wallet as unknown as {
+      quoteSend: (p: { amount: number; mintUrl: string }) => Promise<{
+        amount: number;
+        spend: number;
+        fee: number;
+        exact: boolean;
+      }>;
+    };
+    try {
+      return await this.world.resolve(
+        wallet.quoteSend({ amount, mintUrl: mint }),
+      );
+    } catch (e) {
+      this.log("SEND_QUOTE_FAILED", String(e));
+      return null;
+    }
+  }
+
   // The transaction the last prepareSend opened, for asserting on its fate.
   lastSendTxId(): string | null {
     return this.lastTxId;
@@ -967,16 +996,32 @@ export class SimDevice {
     raw: string,
     opts: { preferOffline?: boolean } = {},
   ): Promise<boolean> {
-    if (raw.length === 0) return false;
+    const result = await this.receiveTokenResult(raw, opts);
+    if (result === null) return false;
+    return result.outcome === "swapped" || result.outcome === "stored";
+  }
+
+  // The same receive, with the verdict kept rather than reduced to yes/no.
+  // `dleq` is the offline forgery check, which is the whole decision when there
+  // is no mint to ask, and a scenario cannot assert on it through a boolean.
+  // Null means the receive was refused outright.
+  async receiveTokenResult(
+    raw: string,
+    opts: { preferOffline?: boolean } = {},
+  ): Promise<{ amount: number; outcome: string; dleq?: string } | null> {
+    if (raw.length === 0) return null;
     try {
       const result = await this.world.resolve(
         this.inner.wallet.receiveToken(raw, opts),
       );
-      this.log("RECEIVE_TOKEN", `${result.amount} (${result.outcome})`);
-      return result.outcome === "swapped" || result.outcome === "stored";
+      this.log(
+        "RECEIVE_TOKEN",
+        `${result.amount} (${result.outcome}, dleq ${result.dleq ?? "none"})`,
+      );
+      return result;
     } catch (e) {
       this.log("RECEIVE_TOKEN_FAILED", String(e));
-      return false;
+      return null;
     }
   }
 
@@ -1030,6 +1075,18 @@ export class SimDevice {
     return this.accounts().reduce((a, b) => a + b.balance, 0);
   }
 
+  // Every proof secret this phone holds. Lets a scenario reach past the wallet
+  // and tell the mint a proof was spent by somebody else, which is the only way
+  // to build the phantom balance a lost swap response leaves behind.
+  secrets(): string[] {
+    const store = this.inner.stores.walletStore;
+    const proofs = (
+      store.getState() as { proofs?: Record<string, { secret: string }[]> }
+    ).proofs;
+    if (proofs === undefined) return [];
+    return Object.values(proofs).flatMap((list) => list.map((p) => p.secret));
+  }
+
   // The part of the balance the mint has not confirmed as unspent.
   unverifiedBalance(): number {
     return this.accounts().reduce((a, b) => a + b.unverified, 0);
@@ -1046,7 +1103,7 @@ export class SimDevice {
     return this.balance() + this.reservedBalance();
   }
 
-  // ---- Lightning out (melt) -------------------------------------------------
+  // ---- Lightning out (melt) ----
 
   // Withdraw to a bolt11 invoice: quote it, then pay it.
   //
@@ -1161,7 +1218,7 @@ export class SimDevice {
     return (proofs ?? []).reduce((sum, p) => sum + p.amount, 0);
   }
 
-  // ---- Tor -----------------------------------------------------------------
+  // ---- Tor ----
 
   // Whether the wallet would currently refuse a mint call. On iOS with Tor up,
   // it must: Arti wraps WebSockets, not fetch, so a mint request would leave
@@ -1178,7 +1235,7 @@ export class SimDevice {
     call(this.inner.stores.meshStateStore, "setTorActive", active);
   }
 
-  // ---- backup and recovery --------------------------------------------------
+  // ---- backup and recovery ----
 
   // Turn on the recovery phrase. Every coin minted or swapped after this uses
   // deterministic secrets derived from it (NUT-13), which is the only reason a
@@ -1233,7 +1290,7 @@ export class SimDevice {
     }
   }
 
-  // ---- payments -------------------------------------------------------------
+  // ---- payments ----
 
   // Pay someone the way every screen in the app pays them: through the one
   // ladder, so a scenario exercises the rail choice rather than a primitive the
@@ -1259,7 +1316,7 @@ export class SimDevice {
 
   // Announce how to nutzap us (kind 10019) and start redeeming what arrives.
   //
-  // App.tsx does both of these on launch; the harness does not run App.tsx, so
+  // The app does both of these on launch; the harness does not run it, so
   // a scenario that wants the receive half has to ask for it. Returns false when
   // there is no Nostr client, which is the honest answer for an offline device.
   async startNutzapReceiving(): Promise<boolean> {
@@ -1322,6 +1379,18 @@ export class SimDevice {
     return (history ?? []).find((tx) => tx.id === txId)?.status;
   }
 
+  // Transactions still holding a swap preview, meaning a /v1/swap whose answer
+  // this phone never saw. The count is what a scenario asserts on either side of
+  // a reconcile: non-zero is money the mint may be holding against outputs only
+  // this device can unblind, and zero afterwards is the recovery having run.
+  pendingSwapPreviews(): number {
+    const history = this.inner.stores.walletStore.getState().history as
+      { status: string; swapPreview?: unknown }[] | undefined;
+    return (history ?? []).filter(
+      (tx) => tx.status === "pending" && tx.swapPreview !== undefined,
+    ).length;
+  }
+
   // Rewrite a transaction. For putting the wallet into a state a scenario needs
   // to START from, where building up to it honestly would mean driving a relay
   // failure the fabric cannot stage.
@@ -1329,7 +1398,7 @@ export class SimDevice {
     call(this.inner.stores.walletStore, "updateTx", txId, patch);
   }
 
-  // ---- storage / wipe -------------------------------------------------------
+  // ---- storage / wipe ----
 
   // Triple-tap the logo. The real wipe also clears the Keychain, which is
   // exercised by panic-wipe.test.ts; what matters to a scenario is that the
@@ -1348,7 +1417,7 @@ export class SimDevice {
   }
 }
 
-// ---- the isolated registry --------------------------------------------------
+// ---- the isolated registry ----
 
 function buildSandbox(
   world: World,
@@ -1455,7 +1524,7 @@ function buildSandbox(
       transferStore: require(P.transferStore).useTransferStore,
       walletStore: require(P.walletStore).useWalletStore,
       activityStore: require(P.activityStore).useActivityStore,
-      noticesStore: require(P.noticesStore).useNoticesStore,
+      noticesStore: require(P.noticesStore).useLocationNotesStore,
     };
 
     // Settings have to be right BEFORE the mesh starts: start() reads

@@ -1,5 +1,3 @@
-// tor-routing.ts
-//
 // Orchestrates routing Nostr traffic through Tor. React Native's built-in
 // WebSocket cannot speak SOCKS5, so on iOS we swap nostr-tools' WebSocket
 // implementation for TorWebSocket (backed by the AirhopTorSocket native module
@@ -19,7 +17,7 @@
 import NativeAirhopBLE, { subscribeVpnLost } from "@bridge/NativeAirhopBLE";
 import NativeAirhopTor, { subscribeTorStatus } from "@bridge/NativeAirhopTor";
 import { isTorSocketNativeAvailable } from "@bridge/NativeAirhopTorSocket";
-import { getMeshService } from "@services/mesh-service";
+import { setTorTeardown } from "@core/nostr/tor-teardown-handle";
 import {
   useMeshStateStore,
   type TorBootstrapPhase,
@@ -28,7 +26,7 @@ import { useSettingsStore } from "@store/settings-store";
 import { useWebSocketImplementation } from "nostr-tools/pool";
 import type { EventSubscription } from "react-native";
 import { Platform } from "react-native";
-import { setTorTeardown } from "./tor-teardown-handle";
+import { getMeshService } from "./mesh-service";
 import { TorWebSocket } from "./tor-websocket";
 
 // The real React Native WebSocket, captured before any swap so it can be
@@ -66,9 +64,9 @@ interface AndroidTorProbe {
 // Two independent signals, both required:
 //
 //   port !== 0   something answers on Orbot's SOCKS port, so Orbot's Tor daemon
-//                is genuinely running. This is the signal the old check lacked,
-//                and the reason an installed-but-idle Orbot sitting beside an
-//                unrelated VPN used to read as "Tor on - internet traffic
+//                is genuinely running. Without it, an installed-but-idle Orbot
+//                sitting beside an unrelated VPN reads as "Tor on, internet
+//                traffic
 //                routed" while nothing was routed at all.
 //   vpnActive    a VPN transport is up, so app traffic is being captured. Orbot
 //                routes transparently in VPN mode, so without this Tor may be
@@ -125,8 +123,8 @@ function setTorActive(active: boolean): void {
     });
     // Optional on the method as well as the module: a JS-only update can land on
     // an older native binary that has neither call. A device that refuses the
-    // registration keeps the old behaviour, where the foreground re-check
-    // catches a drop later.
+    // registration falls back to the foreground re-check, which catches a drop
+    // later.
     void NativeAirhopBLE?.startVpnWatch?.().catch(() => {});
   } else {
     void NativeAirhopBLE?.stopVpnWatch?.().catch(() => {});
@@ -265,9 +263,9 @@ async function enableTorRouting(): Promise<TorRoutingResult> {
     // Swap the socket and rebuild the pool BEFORE awaiting the circuit, not
     // after.
     //
-    // The old order awaited readiness first, which left the existing clear-net
-    // pool live for the whole bootstrap - up to a minute of relay
-    // subscriptions, gift-wrapped DMs, geohash presence and bridge events going
+    // Awaiting readiness first would leave the existing clear-net pool live for
+    // the whole bootstrap, up to a minute of relay subscriptions, gift-wrapped
+    // DMs, geohash presence and bridge events going
     // out unprotected AFTER the user asked for Tor. Consent is the moment the
     // protection has to start, not the moment the circuit happens to finish.
     //
@@ -290,9 +288,9 @@ async function enableTorRouting(): Promise<TorRoutingResult> {
       // Deliberately NOT undone. Arti keeps running, the socket stays on Tor,
       // and the claim stays down: a bootstrap can still land after this
       // deadline (the native poll runs longer than it does), and the stall
-      // event reports it terminally if it does not. Stopping Arti here used to
-      // kill a circuit that was nearly up, and reverting the socket would put
-      // the user back on the clear net they had just opted out of.
+      // event reports it terminally if it does not. Stopping Arti here kills a
+      // circuit that is nearly up, and reverting the socket puts the user back on
+      // the clear net they just opted out of.
       //
       // The caller gets the failure so the sheet can explain it; the banner
       // carries "starting" or "blocked" from the watcher above.
@@ -409,10 +407,9 @@ export function primeTorRoutingOnStartup(): void {
 // never completes: the banner reads "Tor on" over a Nostr layer that silently
 // never connects, and nothing ever corrected it.
 //
-// This file's comment used to say iOS status arrives over `TorStatusChanged`.
-// Nothing subscribes to that event, so on iOS the claim was simply never
-// revisited. Rather than add an event subscription and its lifecycle, this uses
-// the status snapshot the native module already exposes, on the same foreground
+// iOS status does not arrive over `TorStatusChanged`: nothing subscribes to that
+// event. Rather than add a subscription and its lifecycle, this reads the status
+// snapshot the native module already exposes, on the same foreground
 // trigger Android uses.
 //
 // `isStarting` is treated as still-fine: a bootstrap in progress is the normal

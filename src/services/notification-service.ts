@@ -122,11 +122,11 @@ export async function configureNotifications(): Promise<void> {
   // Channel creation is best-effort, and its failure must not take the tap
   // routing below with it.
   //
-  // These three awaits used to be unwrapped inside a function called as
-  // `void configureNotifications()`. A rejection from any of them did two
-  // things at once: it escaped as an unhandled rejection, which the global
-  // handler turns into the full-screen error fallback, and it skipped the
-  // response listener - so notification taps stopped routing for the whole
+  // These three awaits must stay wrapped. Unwrapped inside a function called as
+  // `void configureNotifications()`, a rejection from any of them does two things
+  // at once: it escapes as an unhandled rejection, which the global handler turns
+  // into the full-screen error fallback, and it skips the response listener, so
+  // notification taps stop routing for the whole
   // session. The `configured` latch is set before the first await, so nothing
   // ever retried. A channel that could not be created costs a default-styled
   // notification; it should never cost the app its UI.

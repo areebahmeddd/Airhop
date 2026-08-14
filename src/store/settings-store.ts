@@ -56,9 +56,8 @@ interface SettingsState {
   // in the background, and the cost is stated plainly on the row - messages
   // stop arriving until Airhop is opened again.
   //
-  // Distinct from Away, which stops the mesh even in the foreground. This is
-  // the middle state that was previously unreachable: run while I am using it,
-  // stop when I am not.
+  // Distinct from Away, which stops the mesh even in the foreground. The middle
+  // state: run while I am using it, stop when I am not.
   backgroundMeshEnabled: boolean;
   // Whether a system notification withholds the sender and the message body.
   //

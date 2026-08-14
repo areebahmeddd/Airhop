@@ -5,8 +5,9 @@
 // channel message, the file packet, the fragment header, the voice burst, and
 // the group state.
 //
-// Sibling of packet-frame-vectors.test.ts, which pins the packet envelope itself (header
-// layout, flags, signature coverage, packet ID). Between them they cover the two
+// Sibling of packet-frame-vectors.test.ts, which pins the packet envelope itself
+// (header layout, flags, signature coverage, packet ID). Between them they cover
+// the two
 // halves: that file owns the frame, this one owns what rides inside it.
 //
 // Every other interop test in this repo is Airhop-encodes-then-Airhop-decodes,
@@ -60,8 +61,6 @@ function hex(bytes: Uint8Array): string {
   return bytesToHex(bytes);
 }
 
-// ---- File packet -------------------------------------------------------------
-
 describe("bitchat vector: file packet TLV", () => {
   // BitchatFilePacket.encode() emits, in this order and no other:
   //   0x01  fileName   u16 length
@@ -112,8 +111,6 @@ describe("bitchat vector: file packet TLV", () => {
     expect(hex(encoded.slice(sizeTagAt + 3, sizeTagAt + 7))).toBe("0000012c");
   });
 });
-
-// ---- Fragment ----------------------------------------------------------------
 
 describe("bitchat vector: fragment", () => {
   const identity = { peerID: "0011223344556677" };
@@ -180,8 +177,6 @@ describe("bitchat vector: fragment", () => {
   });
 });
 
-// ---- Voice burst -------------------------------------------------------------
-
 describe("bitchat vector: voice burst", () => {
   const burstID = new Uint8Array([1, 2, 3, 4, 5, 6, 7, 8]);
 
@@ -215,13 +210,11 @@ describe("bitchat vector: voice burst", () => {
   });
 });
 
-// ---- Group state -------------------------------------------------------------
-
 describe("bitchat vector: group state TLV", () => {
   // GroupProtocol.encode() emits its tags in this exact order, all with u16
   // lengths: groupID(16) name key(32) epoch(u32 BE) roster creatorFingerprint(32)
   // signature(64). The roster blob is count(1) then, per member,
-  // fingerprint(32) ‖ signingKey(32) ‖ nickLen(1) ‖ nickname.
+  // fingerprint(32) || signingKey(32) || nickLen(1) || nickname.
   test("tags appear in bitchat's order with u16 lengths", () => {
     const state: GroupStatePayload = {
       groupID: new Uint8Array(16).fill(0xa1),
@@ -276,8 +269,6 @@ describe("bitchat vector: group state TLV", () => {
     expect(hex(encoded.slice(epochAt + 3, epochAt + 7))).toBe("00000102");
   });
 });
-
-// ---- Public channel message --------------------------------------------------
 
 // bitchat's public message payload is the message text as UTF-8 and nothing
 // else. BLEService.sendMessage builds the packet with

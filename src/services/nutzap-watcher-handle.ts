@@ -1,13 +1,12 @@
 // The live NIP-61 nutzap subscription, held where both the startup path and the
 // panic wipe can reach it.
 //
-// It used to live at module scope in App.tsx, which meant only App.tsx could
-// stop it - and the only thing that did was the NEXT successful startup
-// replacing it. A panic wipe destroys the mesh, the keys and every store, but
-// left this running: a subscription against the wiped identity, holding that
-// identity's Nostr private key alive in a closure for the rest of the process.
-// That is precisely what the wipe exists to prevent, so the handle lives here
-// instead, in a module with no imports of its own and therefore no cycle.
+// Held here, in a module with no imports of its own and therefore no cycle,
+// rather than at app scope where only the app could stop it. A panic wipe
+// destroys the mesh, the keys and every store; a subscription left running
+// against the wiped identity holds that identity's Nostr private key alive in a
+// closure for the rest of the process, which is precisely what the wipe exists to
+// prevent.
 
 type StopFn = () => void;
 

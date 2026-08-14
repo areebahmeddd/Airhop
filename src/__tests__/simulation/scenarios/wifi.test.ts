@@ -48,7 +48,7 @@ import { SimDevice, type DeviceSpec } from "../harness/device";
 import { noCrashes } from "../harness/invariants";
 import { media, sameBytes } from "../harness/media-fabric";
 import { RadioFabric } from "../harness/radio-fabric";
-import { Scenario, waitFor } from "../harness/scenario";
+import { advanceFor, Scenario, waitFor } from "../harness/scenario";
 import { WifiFabric } from "../harness/wifi-fabric";
 
 jest.setTimeout(120_000);
@@ -76,8 +76,6 @@ const android = (id: string, seedByte: number): DeviceSpec => ({
 });
 
 const CHANNEL = "#bluetooth";
-
-// ---------------------------------------------------------------------------
 
 test("W-F01 two phones meet over WiFi with no Bluetooth between them", async () => {
   const s = (scenario = new Scenario({
@@ -196,7 +194,7 @@ test("W-F02 an iPhone never forms a WiFi link with anyone", async () => {
   droid.joinChannel(CHANNEL);
   iphone.joinChannel(CHANNEL);
   droid.send(CHANNEL, "should not arrive by wifi");
-  await waitFor(s.world, () => false, 3_000).catch(() => undefined);
+  await advanceFor(s.world, 3_000);
 
   s.check(
     "and nothing crossed",
@@ -242,7 +240,7 @@ test("W-F03 a phone that walks away stops looking reachable", async () => {
   // heard about recently is still worth trying. What must NOT happen is the
   // send succeeding over a socket that is gone.
   a.send(CHANNEL, "shouted at a closed socket");
-  await waitFor(s.world, () => false, 3_000).catch(() => undefined);
+  await advanceFor(s.world, 3_000);
 
   s.check(
     "nothing was written to the dead link",
@@ -336,9 +334,7 @@ test("W-F04 a photo too big for one BLE frame crosses WiFi in one piece", async 
   s.assert(true);
 });
 
-// ---------------------------------------------------------------------------
-// Both radios at once
-// ---------------------------------------------------------------------------
+// ---- Both radios at once ----
 
 // The scenario that is NOT here, and why.
 //
@@ -400,7 +396,7 @@ test("W-F06 a public message on both radios is still read once", async () => {
   s.check("it arrived", seen);
 
   // Settle, so a late second copy would have landed by now.
-  await waitFor(s.world, () => false, 5_000).catch(() => undefined);
+  await advanceFor(s.world, 5_000);
   s.check(
     "and exactly once, however many radios carried it",
     b.texts(CHANNEL).filter((t) => t === "said once").length === 1,

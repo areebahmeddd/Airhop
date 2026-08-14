@@ -48,8 +48,6 @@ function proofTag(amount: number, secret = "s1"): string[] {
   ];
 }
 
-// ---- kind 10019 -------------------------------------------------------------
-
 describe("parseNutzapInfo", () => {
   it("reads mints, relays and the P2PK key", () => {
     const info = parseNutzapInfo(
@@ -112,8 +110,6 @@ describe("parseNutzapInfo", () => {
     expect(parseNutzapInfo(event({ kind: 1 }))).toBeNull();
   });
 });
-
-// ---- kind 9321 --------------------------------------------------------------
 
 describe("parseNutzap", () => {
   it("reads proofs from proof tags and the mint from the u tag", () => {
@@ -193,8 +189,6 @@ describe("parseNutzap", () => {
     expect(zap?.comment?.length).toBe(280);
   });
 });
-
-// ---- key shape --------------------------------------------------------------
 
 describe("key shapes", () => {
   it("a Nostr identity key is not a valid P2PK lock key", () => {

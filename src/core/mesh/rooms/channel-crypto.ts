@@ -42,8 +42,6 @@ export interface ChannelPlaintext {
   text: string;
 }
 
-// ---- key ---------------------------------------------------------------------
-
 // A fresh channel key, base64url-encoded for storage and links.
 export function generateChannelKey(): string {
   return bytesToBase64Url(randomBytes(KEY_LEN));
@@ -54,8 +52,6 @@ export function isValidChannelKey(keyB64: string): boolean {
   const bytes = tryBase64UrlToBytes(keyB64);
   return bytes !== null && bytes.length === KEY_LEN;
 }
-
-// ---- Nostr identity (for internet-reachable private channels) ----------------
 
 export interface ChannelNostrIdentity {
   privKey: Uint8Array;
@@ -85,7 +81,6 @@ export function deriveChannelNostrIdentity(
   return { privKey: fallback, pubKeyHex: getPublicKey(fallback) };
 }
 
-// ---- message framing (plaintext, before encryption) -------------------------
 //   [msgIdLen u8][msgId][senderIdLen u8][senderId][nickLen u8][nick][text]
 
 function lp(s: string): Uint8Array {
@@ -138,8 +133,6 @@ function unframe(bytes: Uint8Array): ChannelPlaintext | null {
     text: dec.decode(bytes.slice(off)),
   };
 }
-
-// ---- seal / open -------------------------------------------------------------
 
 // Encrypt a channel message. The returned bytes are the payload:
 // [nonce (24)][ciphertext + auth tag].

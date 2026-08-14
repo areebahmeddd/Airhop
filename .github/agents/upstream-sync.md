@@ -94,14 +94,14 @@ Output the checklist in this format:
 
 ### 🔴 PROTOCOL Changes: Evaluate Immediately
 
-- [ ] **[Change title]**: `[upstream file]` → `[airhop equivalent]`  
+- [ ] **[Change title]**: `[upstream file]` -> `[airhop equivalent]`  
       Summary: [what changed]  
       Impact: [does this break Airhop ↔ bitchat compatibility?]  
       Action: [adopt / reject / evaluate, and why]
 
 ### 🟠 SECURITY Patches: Adopt Within 48 Hours
 
-- [ ] **[Change title]**: `[upstream file]` → `[airhop equivalent]`  
+- [ ] **[Change title]**: `[upstream file]` -> `[airhop equivalent]`  
       Summary: [what was fixed]  
       Action: apply to `[airhop file]`
 

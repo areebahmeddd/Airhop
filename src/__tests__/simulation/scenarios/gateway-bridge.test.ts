@@ -54,7 +54,7 @@ import {
 import { locations, PLACES } from "../harness/location-fabric";
 import { RadioFabric } from "../harness/radio-fabric";
 import { RelayFabric } from "../harness/relay-fabric";
-import { Scenario, waitForCoarse } from "../harness/scenario";
+import { advanceFor, Scenario, waitForCoarse } from "../harness/scenario";
 
 jest.setTimeout(240_000);
 
@@ -115,7 +115,7 @@ const android = (id: string, seedByte: number): DeviceSpec => ({
 
 // Let the mesh form, positions resolve and geohash subscriptions come up.
 async function settleIn(s: Scenario, ms = 30_000): Promise<void> {
-  await waitForCoarse(s.world, () => false, ms);
+  await advanceFor(s.world, ms);
 }
 
 // Wait until every phone has a position fix and has resolved the named channel
@@ -138,9 +138,7 @@ async function cellsResolved(
   );
 }
 
-// ---------------------------------------------------------------------------
-// Internet gateway
-// ---------------------------------------------------------------------------
+// ---- Internet gateway ----
 
 test("N01 a phone with no signal reaches its city channel through a neighbour", async () => {
   const s = (scenario = new Scenario({
@@ -450,9 +448,7 @@ test("N04 a gateway that loses its connection mid-conversation degrades quietly"
   s.assert(true);
 });
 
-// ---------------------------------------------------------------------------
-// Mesh bridge
-// ---------------------------------------------------------------------------
+// ---- Mesh bridge ----
 
 // Two groups of people in one place who cannot hear each other over Bluetooth:
 // different floors, opposite ends of a march. Same geohash cell, no radio path.
@@ -671,9 +667,7 @@ test("N07 a message marked nearby-only is never bridged", async () => {
   s.assert(true);
 });
 
-// ---------------------------------------------------------------------------
-// Both at once, and then under pressure
-// ---------------------------------------------------------------------------
+// ---- Both at once, and then under pressure ----
 
 // Seeds N08 runs under.
 //
@@ -981,9 +975,7 @@ test("N09 both features under a hostile network and a moving crowd", async () =>
   s.assert(true);
 });
 
-// ---------------------------------------------------------------------------
 // Mixed room: bitchat carrying Airhop's gateway and bridge traffic
-// ---------------------------------------------------------------------------
 
 test("N10 a bitchat phone relays gateway traffic it is not part of", async () => {
   const s = (scenario = new Scenario({
@@ -1306,7 +1298,7 @@ test("N14 an Airhop gateway will not publish a deposit aimed at another cell", a
     cell,
     signedGeohashNote("zzzzzz", "aimed somewhere else entirely"),
   );
-  await waitForCoarse(s.world, () => false, 5_000).catch(() => undefined);
+  await advanceFor(s.world, 5_000);
 
   s.check(
     "the gateway refused it rather than acting as an open proxy",

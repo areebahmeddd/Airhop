@@ -76,7 +76,6 @@ export default function LicensesScreen({ onBack }: Props): React.JSX.Element {
 
 function createStyles(Colors: ReturnType<typeof useThemeColors>) {
   return StyleSheet.create({
-    // Title and its blurb kept tight together, above the group card.
     header: {
       gap: Spacing.xs,
     },

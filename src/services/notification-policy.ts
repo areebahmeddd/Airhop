@@ -137,9 +137,7 @@ export function shouldHapticPing(p: {
   );
 }
 
-// ---------------------------------------------------------------------------
 // Nearby peers
-// ---------------------------------------------------------------------------
 
 // The floor between two nearby notices. The mesh finding someone is worth
 // knowing about; it is not worth knowing about every time a radio flaps or a

@@ -56,7 +56,7 @@ const MAX_BYTES_PER_SECOND = 6_000;
 // 8 random bytes, so a talker starting a genuinely new one is never affected.
 const MAX_CUTOFF_MEMORY = 32;
 
-// ---- Types ------------------------------------------------------------------
+// ---- Types ----
 
 // Injected playback backend - the platform satisfies this interface.
 export interface AudioPlaybackBackend {
@@ -78,7 +78,7 @@ interface BufferedFrame {
   arrivedMs: number;
 }
 
-// ---- VoiceSession -----------------------------------------------------------
+// ---- VoiceSession ----
 
 // Manages the jitter buffer for a single (peer, burstID) PTT burst.
 class VoiceSession {
@@ -177,7 +177,7 @@ class VoiceSession {
     this.buffer = [];
   }
 
-  // ---- Private ---------------------------------------------------------------
+  // ---- Private ----
 
   private scheduleFlush(): void {
     if (this.flushTimer !== null) return;
@@ -257,7 +257,7 @@ class VoiceSession {
   }
 }
 
-// ---- VoicePlayer ------------------------------------------------------------
+// ---- VoicePlayer ----
 
 export class VoicePlayer {
   private readonly backend: AudioPlaybackBackend;

@@ -1,4 +1,4 @@
-// "Forward to…" target picker. Reuses the existing send pipeline: a forward
+// "Forward to..." target picker. Reuses the existing send pipeline: a forward
 // is just composing a new message with the original content in a different
 // channel/DM, so it needs no protocol changes at all.
 //
@@ -8,7 +8,7 @@
 
 import { Feather } from "@expo/vector-icons";
 import { t, useT, type TranslationKey } from "@i18n";
-import { isManualGeoChannel } from "@services/geohash-channel-service";
+
 import { showAlert } from "@store/alert-store";
 import { useChatStore } from "@store/chat-store";
 import Avatar from "@ui/components/avatar";
@@ -21,6 +21,7 @@ import {
   Spacing,
   useThemeColors,
 } from "@ui/theme";
+import { isManualGeoChannel } from "@utils/channel-key";
 import { channelLabel } from "@utils/conversation-display-name";
 import { mediaBlockedReason } from "@utils/media-policy";
 import { resolveDisplayName } from "@utils/peer-display-name";
@@ -244,7 +245,6 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       paddingHorizontal: Spacing.sm,
       paddingBottom: Spacing.xs,
     },
-    // One bordered box per section; rows inside are separated by dividers.
     group: {
       backgroundColor: Colors.surfaceRaised,
       borderRadius: Radius.lg,

@@ -1,9 +1,9 @@
-// Mock for react-native-mmkv used in Jest test environments.
-// The real module is a JSI native module that cannot run in Node.js.
-// This mock provides the same API surface backed by a simple in-memory Map
-// so store modules (wallet-store, chat-store, etc.) can be exercised in CI.
+// Jest mock for react-native-mmkv, backed by an in-memory Map.
+//
+// The real module is a JSI native module that cannot run in node, so without
+// this no store module (wallet-store, chat-store and the rest) is testable.
 
-// Shared spy so tests can assert on clearAll calls across all instances.
+// Shared across instances so a test can assert on clearAll wherever it happened.
 const clearAllSpy = jest.fn();
 
 class MMKVInstance {
@@ -30,7 +30,7 @@ class MMKVInstance {
     this._store.set(key, value);
   }
 
-  // Alias used by chat-store and wallet-store mmkvStorage adapters.
+  // Alias for delete, which the chat-store and wallet-store adapters call.
   remove(key) {
     this._store.delete(key);
   }
@@ -62,8 +62,9 @@ function createMMKV({ id = "default" } = {}) {
   return instanceCache.get(id);
 }
 
-// Mirrors the real module's instance deletion (used by the panic wipe for the
-// encrypted wallet store, which cannot be reopened without its key).
+// Instance deletion, which the panic wipe uses for the encrypted wallet store:
+// that partition cannot be reopened once its key is gone, so it is deleted
+// rather than cleared.
 function deleteMMKV(id) {
   return instanceCache.delete(id);
 }
@@ -72,7 +73,6 @@ function existsMMKV(id) {
   return instanceCache.has(id);
 }
 
-// Allow tests to reset all instance state between runs.
 function __resetAll() {
   instanceCache.clear();
 }

@@ -47,7 +47,7 @@ interface Props {
 // the time it is set, so the sheet behind us is updated the moment we land here.
 type Outcome = "match" | "mismatch" | "tampered";
 
-export default function VerifyContactScanner({
+export default function VerifyContactScreen({
   visible,
   peerID,
   name,
@@ -318,8 +318,6 @@ export default function VerifyContactScanner({
 
 function createStyles(Colors: ReturnType<typeof useThemeColors>) {
   return StyleSheet.create({
-    // Dark scrim over the camera, matching the platform-standard scanner look
-    // (system scanners are always dark-on-camera, not theme-aware).
     root: {
       flex: 1,
       backgroundColor: "#000000",
@@ -369,7 +367,6 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
     bottomBar: {
       paddingBottom: Spacing.xl,
     },
-    // Result panels sit centered on the dark scrim, camera torn down.
     resultCard: {
       flex: 1,
       alignItems: "center",

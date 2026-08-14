@@ -29,8 +29,8 @@
 
 export interface ThreadScrollInput {
   // The reader has not taken hold of the list yet: no drag, no jump to a
-  // specific message. Until they do, we are still placing them at the newest
-  // message and every measurement is another chance to land it.
+  // specific message. Until they do, the list is still landing on the newest
+  // message and every measurement is another chance to complete that.
   landing: boolean;
   // The reader is at (or within a bubble of) the newest message.
   atBottom: boolean;
@@ -66,7 +66,6 @@ export function resolveThreadScroll({
   return countChanged ? "animated" : "instant";
 }
 
-// ---- Finishing the landing ---------------------------------------------------
 //
 // The landing above is driven entirely by content-size events, so it ends the
 // moment the content stops changing height - whether or not it actually arrived.

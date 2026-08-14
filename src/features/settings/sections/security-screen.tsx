@@ -1,9 +1,9 @@
 // Privacy & Security sub-screen: the always-on Double Ratchet / packet-signing
 // guarantees, and the blocked-peer list.
 //
-// The connectivity toggles (live voice, Tor, gateway, bridge) used to lead this
-// screen. They are the switches people come here to flip, so they now sit on
-// the settings hub itself; see connectivity-group.tsx.
+// The connectivity toggles (live voice, Tor, gateway, bridge) sit on the settings
+// hub itself rather than here, one drill-in away, because they are the switches
+// people come to flip. See connectivity-group.tsx.
 
 import { showAlert } from "@store/alert-store";
 import { useBlockedStore } from "@store/blocked-store";

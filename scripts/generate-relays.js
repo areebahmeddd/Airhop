@@ -3,9 +3,8 @@
 // assets/data/nostr_relays.csv.
 //
 // The relay directory ships as a TypeScript module rather than being parsed
-// from the CSV at runtime: Metro does not bundle .csv as an asset, so the file
-// was simply unreachable from the app. That is why GeoRelayDirectory sat unused
-// despite being fully implemented and tested.
+// from the CSV at runtime, because Metro does not bundle .csv as an asset and
+// the file would be unreachable from the app.
 //
 // The CSV is vendored in this repo at assets/data/nostr_relays.csv and is the
 // single source of truth at runtime. Airhop does NOT fetch a relay list at
@@ -38,6 +37,11 @@ const LANDING_OUT = path.join(
   "data",
   "relays.ts",
 );
+
+// The map names a couple of relays per location on hover. One site hosts 137 of
+// them, so listing every host would be noise as well as bulk. Two names plus the
+// count is the readable form.
+const HOSTS_PER_SITE = 2;
 
 const lines = fs
   .readFileSync(CSV, "utf8")
@@ -74,8 +78,7 @@ for (const line of lines) {
 // TypeScript source file that gets bundled into the app. validate-relays.js gates
 // the sync and currently rejects anything with a quote in it, but escaping here
 // means a regression in that validator cannot turn a relay hostname into code.
-// The landing-page path below already does this; this is the same rule applied
-// to the one place that was still interpolating raw.
+// The landing-page path below does the same.
 const body = relays
   .map(
     (r) =>
@@ -90,8 +93,8 @@ fs.writeFileSync(
 // Generated from assets/data/nostr_relays.csv, vendored in this repo:
 //   https://github.com/areebahmeddd/airhop/blob/main/assets/data/nostr_relays.csv
 // It lives here as a TypeScript module rather than being read from the CSV at
-// runtime because Metro does not bundle .csv as an asset, so the file was
-// unreachable from the app, which is why GeoRelayDirectory was never wired up.
+// runtime because Metro does not bundle .csv as an asset, which would leave the
+// file unreachable from the app.
 //
 // Regenerate with: node scripts/generate-relays.js
 //
@@ -132,14 +135,9 @@ for (const r of relays) {
   }
 }
 
-// The map names a couple of relays per location on hover. One site hosts 137
-// of them, so listing every host would be noise as well as bulk. Two names
-// plus the count is the readable form, and sorting before the cut keeps the
-// choice deterministic when upstream reorders rows.
-const HOSTS_PER_SITE = 2;
-
-// Every entry is wss://, so the scheme is noise on the map readout. Dropped for
-// display, as relayDisplayHost does in the app.
+// Sorted before the cut so the choice stays deterministic when upstream reorders
+// rows. Every entry is wss://, and the scheme is noise on the map readout, so it
+// is dropped for display as relayDisplayHost does in the app.
 function displayHosts(hosts) {
   return [...hosts]
     .sort()

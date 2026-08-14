@@ -72,7 +72,6 @@ describe("presence", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
 // Heartbeat policy.
 //
 // Presence is the one thing in this app that publishes location on purpose, so

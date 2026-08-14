@@ -22,8 +22,8 @@ import { createMMKV } from "react-native-mmkv";
 
 export interface OwedGroupState {
   // NoisePayloadType: GROUP_INVITE (0x06) or GROUP_KEY_UPDATE (0x07). Carried
-  // with the bytes rather than assumed: the flush used to hardcode invite, so a
-  // rotation delivered to a reconnecting member went out mislabelled.
+  // with the bytes rather than assumed. A flush that hardcodes invite mislabels
+  // a rotation delivered to a reconnecting member.
   type: number;
   stateHex: string;
   queuedAtMs: number;

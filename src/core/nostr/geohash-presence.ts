@@ -5,12 +5,12 @@
 // The event content is the geohash string itself. Subscribers learn that the
 // sender's Nostr pubkey is in that geohash cell.
 //
-// Privacy: presence is only broadcast at precision-5 (~5 km × 5 km) and
+// Privacy: presence is only broadcast at precision-5 (~5 km x 5 km) and
 // coarser cells: never at precision 6+ which would reveal exact location.
 // Presence heartbeats are ephemeral (kind 2xxxx in Nostr) and are not
 // persisted by relays.
 //
-// Heartbeat interval: 40–80 s (jittered) matching bitchat iOS behavior.
+// Heartbeat interval: 40-80 s (jittered) matching bitchat iOS behavior.
 
 import type { Event } from "nostr-tools";
 import { finalizeEvent } from "nostr-tools";
@@ -20,7 +20,7 @@ import type { EventHandler, NostrClient } from "./nostr-client";
 export const KIND_PRESENCE = 20001;
 const KIND_GEOHASH_CHANNEL = 20000;
 
-// Geohash precision per PROTOCOLS.md section 8 (~5 km × 5 km cell).
+// Geohash precision per PROTOCOLS.md section 8 (~5 km x 5 km cell).
 const PRESENCE_PRECISION = 5;
 
 // Allowed broadcast precisions (privacy: no fine-grained location).
@@ -39,11 +39,9 @@ const CHANNEL_INITIAL_LIMIT = 200;
 // BLE and Nostr copies of one message into a single bubble.
 export const TAG_MESSAGE_ID = "mid";
 
-// ---- Geohash encoding -------------------------------------------------------
-
 const BASE32_CHARS = "0123456789bcdefghjkmnpqrstuvwxyz";
 
-// Encode (lat, lng) to a geohash string of the given precision (1–9).
+// Encode (lat, lng) to a geohash string of the given precision (1-9).
 export function encodeGeohash(
   lat: number,
   lng: number,
@@ -122,8 +120,6 @@ export function decodeGeohash(hash: string): { lat: number; lng: number } {
     lng: (minLng + maxLng) / 2,
   };
 }
-
-// ---- GeohashPresence --------------------------------------------------------
 
 export interface PresenceConfig {
   nostrPrivKey: Uint8Array; // secp256k1 private key for Nostr event signing
@@ -279,8 +275,6 @@ export class GeohashPresence {
     }
   }
 
-  // ---- Private ---------------------------------------------------------------
-
   private async publishPresence(geohash: string): Promise<void> {
     const event = finalizeEvent(
       {
@@ -319,8 +313,6 @@ export function decorrelationDelayMs(
 ): number {
   return 2_000 + random() * 3_000;
 }
-
-// ---- Helpers ----------------------------------------------------------------
 
 // Build the list of geohash strings at all ancestor precisions for (lat, lng).
 // Used to subscribe to presence across multiple precision levels at once.

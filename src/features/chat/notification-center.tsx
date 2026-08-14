@@ -170,10 +170,10 @@ function Row({
   const room = entry.isDM ? "" : channelLabel(entry.channel);
   // Formatted once for both the visible time and the row label below.
   const timeLabel = formatListTimestamp(entry.timestampMs);
-  // The row's whole content, in reading order, then where the tap goes. The
-  // label used to be only the destination ("Open #city"), so the sender, the
-  // preview, the time and the unseen dot were all silent: a screen reader user
-  // heard a list of identical "Open" buttons.
+  // The row's whole content, in reading order, then where the tap goes. A label
+  // of only the destination ("Open #city") leaves the sender, the preview, the
+  // time and the unseen dot silent, and a screen reader user hears a list of
+  // identical "Open" buttons.
   const a11y = [
     entry.seen ? null : T("chat.notif.new"),
     name,
@@ -262,7 +262,6 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       paddingVertical: Spacing.md,
       minHeight: 68,
     },
-    // A whisper of accent so unread activity is scannable without shouting.
     rowUnseen: {
       backgroundColor: Colors.accentGhost,
     },

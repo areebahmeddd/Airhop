@@ -52,10 +52,11 @@ const INITIAL_COPIES = 4;
 // hostile sender claim 255 and turn the courier network into an amplifier.
 const MAX_COPIES = 8;
 
-// ---- Recipient tag -----------------------------------------------------------
+// ---- Recipient tag ----
 
 // Matches CourierEnvelope.recipientTag(noiseStaticKey:epochDay:) in BitFoundation.
-// HMAC-SHA256(key=noiseStaticKey, message="bitchat-courier-tag-v1" || epochDay_BE4)[0:16]
+// HMAC-SHA256(key=noiseStaticKey,
+//             message="bitchat-courier-tag-v1" || epochDay_BE4)[0:16]
 // epochDay = floor(unixSeconds / 86400) as u32 BE (rotates daily).
 const TAG_CONTEXT = new TextEncoder().encode("bitchat-courier-tag-v1");
 
@@ -74,7 +75,7 @@ export function computeRecipientTag(
   return mac.slice(0, 16);
 }
 
-// ---- Envelope wire format ---------------------------------------------------
+// ---- Envelope wire format ----
 //
 // TLV encoding matching bitchat iOS CourierEnvelope.encode() / .decode().
 // Types:
@@ -197,7 +198,7 @@ export function decodeEnvelopePayload(
   return { recipientTag: tag, expiryMs, copies, ciphertext, prekeyID };
 }
 
-// ---- Trust tiers ------------------------------------------------------------
+// ---- Trust tiers ----
 
 export type CourierTier = "favorite" | "verified";
 
@@ -216,7 +217,7 @@ interface StoredEnvelope {
   sprayedTo: Set<string>;
 }
 
-// ---- CourierStore -----------------------------------------------------------
+// ---- CourierStore ----
 
 export class CourierStore {
   private readonly envelopes: StoredEnvelope[] = [];
@@ -418,9 +419,9 @@ export class CourierStore {
   // favourite only when the incoming envelope is itself a favourite, otherwise
   // reject.
   //
-  // This used to score tier and age together and always return an index for a
-  // non-empty pool, so the "pool full, all favourites" refusal at the call site
-  // was unreachable and a verified envelope did displace a favourite.
+  // Scoring tier and age together always returns an index for a non-empty pool,
+  // which makes the "pool full, all favourites" refusal at the call site
+  // unreachable and lets a verified envelope displace a favourite.
   private findEvictionCandidate(incoming: CourierTier): number {
     let bestIdx = -1;
     let bestAge = -1;

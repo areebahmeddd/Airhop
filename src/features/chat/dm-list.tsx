@@ -47,11 +47,6 @@ import ReanimatedSwipeable, {
 import Animated, { FadeIn, LinearTransition } from "react-native-reanimated";
 import ContactInfoSheet from "./contact-info-sheet";
 
-// How long the pull-to-refresh spinner stays up. The refresh itself
-// (BLE rescan kick) returns instantly, but a flash-then-gone spinner reads
-// as broken, so hold it briefly for legible feedback.
-const REFRESH_SPINNER_MS = 700;
-
 interface Props {
   onSelectDM: (channel: string) => void;
 }
@@ -95,7 +90,7 @@ export default function DmList({ onSelectDM }: Props): React.JSX.Element {
   function handleRefresh(): void {
     setRefreshing(true);
     getMeshService()?.refresh();
-    setTimeout(() => setRefreshing(false), REFRESH_SPINNER_MS);
+    setTimeout(() => setRefreshing(false), Duration.refreshSpinner);
   }
 
   function handleSwipeMore(channel: string): void {
@@ -540,7 +535,6 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
     },
     list: {
       flexGrow: 1,
-      // Clear the floating tab bar so the last DM row can scroll above it.
       paddingBottom: TAB_BAR_CLEARANCE,
     },
     // No per-row background, just flat rows directly on the screen background,
@@ -554,7 +548,6 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       gap: Spacing.md,
       minHeight: 72,
     },
-    // Row content
     rowContent: {
       flex: 1,
       gap: 3,
@@ -604,7 +597,6 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       backgroundColor: Colors.border,
       marginStart: 62, // avatar (46) + gap (16)
     },
-    // Empty state
     badge: {
       backgroundColor: Colors.accent,
       borderRadius: Radius.full,
@@ -622,7 +614,6 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       fontWeight: FontWeight.bold,
       color: Colors.textInverse,
     },
-    // Swipe-to-more (matches channel-list.tsx's swipe action styling)
     swipeActions: {
       flexDirection: "row",
       height: "100%",
@@ -639,7 +630,6 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       color: Colors.textSecondary,
       fontWeight: FontWeight.medium,
     },
-    // More sheet
     modalSheet: {
       paddingHorizontal: Spacing.xl,
       paddingBottom: Spacing.xl,

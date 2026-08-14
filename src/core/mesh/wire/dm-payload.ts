@@ -1,24 +1,21 @@
-// Private-DM payload envelope: what actually sits inside an encrypted DM.
+// The envelope inside a Double Ratchet DM (packet type DR_ENCRYPTED).
 //
-// Before this, a DM's decrypted plaintext was just the raw message text. To
-// support delivery and read receipts we need two things inside the encrypted
-// payload: a type discriminator (is this a message, or a receipt?) and the
-// message id a receipt refers to. This mirrors bitchat's NoisePayloadType so
-// the format is already wire-compatible when the full bitchat pass happens:
-//   0x01 message, 0x02 read receipt, 0x03 delivered receipt.
+// Receipts need two things in the encrypted payload that raw text cannot carry:
+// a type discriminator, and the message id a receipt refers to. Type values
+// mirror bitchat's NoisePayloadType, though this format is Airhop-to-Airhop
+// only. The bitchat-compatible envelope is noise-payload.ts, used for
+// NOISE_ENCRYPTED.
 //
 // Layout:
-//   [0]              type      u8
-//   [1]              idLen     u8   (bytes of the message id, 0-255)
-//   [2 .. 2+idLen]   id        UTF-8 message id
-//   [2+idLen .. ]    text      UTF-8 message text (type 0x01 only; empty for receipts)
+//   [0]              type    u8
+//   [1]              idLen   u8   (bytes of the message id, 0 to 255)
+//   [2 .. 2+idLen]   id      UTF-8 message id
+//   [2+idLen .. ]    text    UTF-8 text (type 0x01 only, empty for receipts)
 //
-// Backward compatibility is the safety net: any buffer that is not a
-// well-formed envelope (too short, unknown type byte, or an idLen that does not
-// fit) is treated as a legacy raw-text message. Normal UTF-8 text never starts
-// with a 0x01/0x02/0x03 control byte, so a real message is never misread as an
-// envelope, and vice versa. This means a peer on the old format still shows up
-// correctly, just without a receipt.
+// Anything that is not a well-formed envelope (too short, unknown type byte, an
+// idLen that does not fit) is read as legacy raw text. UTF-8 text never starts
+// with a 0x01, 0x02 or 0x03 control byte, so the two cannot be confused, and a
+// peer on the old format still renders correctly, just without receipts.
 
 export const DmPayloadType = {
   MESSAGE: 0x01,

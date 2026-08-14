@@ -10,23 +10,23 @@
 import {
   acknowledgePermissionPrimer,
   showPermissionPrimer,
-  usePrimerStore,
+  usePermissionPrimerStore,
 } from "../permission-primer-store";
 
 describe("permission primer", () => {
   beforeEach(() => {
-    usePrimerStore.setState({ visible: false });
+    usePermissionPrimerStore.setState({ visible: false });
     // Drain any resolver a previous test left behind.
     acknowledgePermissionPrimer();
   });
 
   test("shows the sheet and resolves once acknowledged", async () => {
     const waited = showPermissionPrimer();
-    expect(usePrimerStore.getState().visible).toBe(true);
+    expect(usePermissionPrimerStore.getState().visible).toBe(true);
 
     acknowledgePermissionPrimer();
     await expect(waited).resolves.toBeUndefined();
-    expect(usePrimerStore.getState().visible).toBe(false);
+    expect(usePermissionPrimerStore.getState().visible).toBe(false);
   });
 
   test("acknowledging is idempotent", () => {
@@ -35,7 +35,7 @@ describe("permission primer", () => {
     // A second call (backdrop tap landing after the button, say) must not throw
     // or re-open anything.
     expect(() => acknowledgePermissionPrimer()).not.toThrow();
-    expect(usePrimerStore.getState().visible).toBe(false);
+    expect(usePermissionPrimerStore.getState().visible).toBe(false);
   });
 
   test("a second request while one is open resolves rather than queueing", async () => {
@@ -49,6 +49,6 @@ describe("permission primer", () => {
 
   test("acknowledging with nothing pending is a no-op", () => {
     expect(() => acknowledgePermissionPrimer()).not.toThrow();
-    expect(usePrimerStore.getState().visible).toBe(false);
+    expect(usePermissionPrimerStore.getState().visible).toBe(false);
   });
 });

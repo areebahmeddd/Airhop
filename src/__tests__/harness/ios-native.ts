@@ -3,15 +3,15 @@
 // the Swift line on each.
 //
 // Audit anchors, current file:
-//   :98   ensureCentralManager / ensurePeripheralManager — created ONCE
-//   :128  applyState() — the reconciler every entry point funnels into
+//   :98   ensureCentralManager / ensurePeripheralManager, created ONCE
+//   :128  applyState(), the reconciler every entry point funnels into
 //   :175  registerService()
-//   :200  startAdvertising — refuses per CBManagerState
-//   :250  startScanning — same
-//   :300  getRadioState — answers before any manager exists
-//   :560  centralManagerDidUpdateState — all six states
-//   :620  reportAdapterState — change-only
-//   :745  peripheralManagerDidUpdateState — all six states, real teardown
+//   :200  startAdvertising, refuses per CBManagerState
+//   :250  startScanning, same
+//   :300  getRadioState, answers before any manager exists
+//   :560  centralManagerDidUpdateState, all six states
+//   :620  reportAdapterState, change-only
+//   :745  peripheralManagerDidUpdateState, all six states, real teardown
 
 import { DeviceEventEmitter } from "react-native";
 import type {
@@ -48,12 +48,12 @@ export class IosBleModule implements BleNativeModule {
   private readyCentralLinks = new Set<string>();
   private peripheralLinks = new Map<string, { generation: number }>();
 
-  // Swift :80-:88 — intent, separate from reality.
+  // Intent, separate from reality.
   private wantScanning = false;
   private wantAdvertising = false;
   private serviceRegistered = false;
 
-  // Swift :94 — change-only reporting.
+  // Change-only reporting.
   private lastReportedEnabled: boolean | null = null;
 
   // Observables for the harness.
@@ -81,7 +81,7 @@ export class IosBleModule implements BleNativeModule {
     });
   }
 
-  // Swift :98-:118 — one manager each, for the life of the process.
+  // One manager each, for the life of the process.
   private ensureCentralManager(): { state: CBManagerState } {
     if (this.centralManager !== null) return this.centralManager;
     const manager: { state: CBManagerState } = { state: "unknown" };
@@ -116,7 +116,7 @@ export class IosBleModule implements BleNativeModule {
     return manager;
   }
 
-  // Swift :128-:165 — the reconciler. Idempotent by construction.
+  // The reconciler. Idempotent by construction.
   private applyState(): void {
     const before = `${this.scanning}/${this.advertising}`;
     this.applyStateInner();
@@ -152,7 +152,6 @@ export class IosBleModule implements BleNativeModule {
     }
   }
 
-  // Swift :175-:195
   private registerService(): void {
     this.characteristic = {};
     this.os.schedule(SERVICE_ADD_MS, () => {
@@ -185,7 +184,6 @@ export class IosBleModule implements BleNativeModule {
     }
   }
 
-  // Swift :200-:240
   async startAdvertising(
     _serviceUUID: string,
     _localName: string,
@@ -202,7 +200,6 @@ export class IosBleModule implements BleNativeModule {
     this.applyState();
   }
 
-  // Swift :250-:285
   async startScanning(_serviceUUIDs: string[]): Promise<void> {
     this.wantScanning = true;
     const manager = this.ensureCentralManager();
@@ -216,7 +213,7 @@ export class IosBleModule implements BleNativeModule {
     this.applyState();
   }
 
-  // Swift :300-:355. Answers honestly before any manager exists, by building the
+  // Answers honestly before any manager exists, by building the
   // one shared manager here rather than reading a nil.
   async getRadioState(): Promise<RadioStateReport> {
     const manager = this.ensureCentralManager();
@@ -244,7 +241,7 @@ export class IosBleModule implements BleNativeModule {
     };
   }
 
-  // Swift :360 — no such API on iOS; the caller falls back to Settings.
+  // No such API on iOS; the caller falls back to Settings.
   async requestEnableBluetooth(): Promise<boolean> {
     return false;
   }
@@ -253,7 +250,7 @@ export class IosBleModule implements BleNativeModule {
     return false;
   }
 
-  // Swift :385 — background BLE comes from UIBackgroundModes, not from us.
+  // Background BLE comes from UIBackgroundModes, not from us.
   async setBackgroundServiceEnabled(_enabled: boolean): Promise<void> {
     return;
   }
@@ -264,7 +261,7 @@ export class IosBleModule implements BleNativeModule {
     return;
   }
 
-  // Swift :560-:615 — every CBManagerState does its own work.
+  // Every CBManagerState does its own work.
   private centralManagerDidUpdateState(): void {
     const state = this.centralManager?.state ?? "unknown";
     this.reportAdapterState(state === "poweredOn");
@@ -288,14 +285,12 @@ export class IosBleModule implements BleNativeModule {
     this.radioPort?.radiosChanged();
   }
 
-  // Swift :620-:626
   private reportAdapterState(enabled: boolean): void {
     if (this.lastReportedEnabled === enabled) return;
     this.lastReportedEnabled = enabled;
     this.emitEvent(EVT_ADAPTER_STATE, { enabled });
   }
 
-  // Swift :632-:642
   private retireAllCentralLinks(): void {
     for (const linkID of this.centralLinks.keys()) {
       this.emitEvent(EVT_LINK_DISCONNECTED, { linkID });
@@ -311,7 +306,7 @@ export class IosBleModule implements BleNativeModule {
     this.peripheralLinks.clear();
   }
 
-  // Swift :745-:800 — the method that used to make an iPhone invisible.
+  // The method that can leave an iPhone invisible.
   private peripheralManagerDidUpdateState(): void {
     const state = this.peripheralManager?.state ?? "unknown";
     switch (state) {
@@ -386,7 +381,7 @@ export class IosBleModule implements BleNativeModule {
     /* RCTEventEmitter contract */
   }
 
-  // ---- shared radio medium -------------------------------------------------
+  // ---- shared radio medium ----
 
   radioPort: RadioPort | null = null;
 
@@ -457,7 +452,7 @@ export class IosBleModule implements BleNativeModule {
     return [...this.centralLinks.keys(), ...this.peripheralLinks.keys()];
   }
 
-  // ---- test affordances ----------------------------------------------------
+  // ---- test affordances ----
 
   simulatePeerConnect(linkID: string): void {
     if (!this.scanning) return;

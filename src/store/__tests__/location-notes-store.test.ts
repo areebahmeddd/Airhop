@@ -10,7 +10,7 @@
 // relays re-serve the note on every subscribe, and need not honour NIP-09.
 import {
   matchesBridged,
-  useNoticesStore,
+  useLocationNotesStore,
   type LocationNote,
 } from "../location-notes-store";
 
@@ -39,45 +39,53 @@ function fingerprintOf(n: LocationNote) {
 }
 
 beforeEach(() => {
-  useNoticesStore.getState().clearAll();
+  useLocationNotesStore.getState().clearAll();
 });
 
 describe("bridged-copy suppression", () => {
   it("removes the note the deleted board post was bridged to", () => {
     const n = note();
-    useNoticesStore.getState().addNote(n);
-    expect(useNoticesStore.getState().notesForGeohash(GEOHASH)).toHaveLength(1);
+    useLocationNotesStore.getState().addNote(n);
+    expect(
+      useLocationNotesStore.getState().notesForGeohash(GEOHASH),
+    ).toHaveLength(1);
 
-    useNoticesStore.getState().suppressBridged(fingerprintOf(n));
-    expect(useNoticesStore.getState().notesForGeohash(GEOHASH)).toHaveLength(0);
+    useLocationNotesStore.getState().suppressBridged(fingerprintOf(n));
+    expect(
+      useLocationNotesStore.getState().notesForGeohash(GEOHASH),
+    ).toHaveLength(0);
   });
 
   // Filtering once is not enough: the note is still on the relay, and the next
   // reconnect serves it back.
   it("keeps it removed when the relay serves it again", () => {
     const n = note();
-    useNoticesStore.getState().suppressBridged(fingerprintOf(n));
-    useNoticesStore.getState().addNote(n);
-    expect(useNoticesStore.getState().notesForGeohash(GEOHASH)).toHaveLength(0);
+    useLocationNotesStore.getState().suppressBridged(fingerprintOf(n));
+    useLocationNotesStore.getState().addNote(n);
+    expect(
+      useLocationNotesStore.getState().notesForGeohash(GEOHASH),
+    ).toHaveLength(0);
   });
 
   it("suppresses a re-served copy under a different event id", () => {
     // Same notice republished by its author's other device: same content, same
     // name, same moment, new event.
     const n = note();
-    useNoticesStore.getState().suppressBridged(fingerprintOf(n));
-    useNoticesStore.getState().addNote(note({ id: "event-2" }));
-    expect(useNoticesStore.getState().notesForGeohash(GEOHASH)).toHaveLength(0);
+    useLocationNotesStore.getState().suppressBridged(fingerprintOf(n));
+    useLocationNotesStore.getState().addNote(note({ id: "event-2" }));
+    expect(
+      useLocationNotesStore.getState().notesForGeohash(GEOHASH),
+    ).toHaveLength(0);
   });
 
   it("leaves everyone else's notices alone", () => {
     const mine = note();
     const theirs = note({ id: "event-2", content: "found keys" });
-    useNoticesStore.getState().addNote(mine);
-    useNoticesStore.getState().addNote(theirs);
+    useLocationNotesStore.getState().addNote(mine);
+    useLocationNotesStore.getState().addNote(theirs);
 
-    useNoticesStore.getState().suppressBridged(fingerprintOf(mine));
-    const left = useNoticesStore.getState().notesForGeohash(GEOHASH);
+    useLocationNotesStore.getState().suppressBridged(fingerprintOf(mine));
+    const left = useLocationNotesStore.getState().notesForGeohash(GEOHASH);
     expect(left.map((n) => n.id)).toEqual(["event-2"]);
   });
 
@@ -85,9 +93,11 @@ describe("bridged-copy suppression", () => {
   // note from the next cell over is a different notice by a different person.
   it("does not reach into a neighbouring cell", () => {
     const neighbour = note({ id: "event-2", geohash: "tdr1x" });
-    useNoticesStore.getState().addNote(neighbour);
-    useNoticesStore.getState().suppressBridged(fingerprintOf(note()));
-    expect(useNoticesStore.getState().notesForGeohash("tdr1x")).toHaveLength(1);
+    useLocationNotesStore.getState().addNote(neighbour);
+    useLocationNotesStore.getState().suppressBridged(fingerprintOf(note()));
+    expect(
+      useLocationNotesStore.getState().notesForGeohash("tdr1x"),
+    ).toHaveLength(1);
   });
 });
 
@@ -118,11 +128,15 @@ describe("matchesBridged", () => {
 describe("removeNote (NIP-09 deletion)", () => {
   it("drops the note and does not let a replay resurrect it", () => {
     const n = note();
-    useNoticesStore.getState().addNote(n);
-    useNoticesStore.getState().removeNote(n.id);
-    expect(useNoticesStore.getState().notesForGeohash(GEOHASH)).toHaveLength(0);
+    useLocationNotesStore.getState().addNote(n);
+    useLocationNotesStore.getState().removeNote(n.id);
+    expect(
+      useLocationNotesStore.getState().notesForGeohash(GEOHASH),
+    ).toHaveLength(0);
 
-    useNoticesStore.getState().addNote(n);
-    expect(useNoticesStore.getState().notesForGeohash(GEOHASH)).toHaveLength(0);
+    useLocationNotesStore.getState().addNote(n);
+    expect(
+      useLocationNotesStore.getState().notesForGeohash(GEOHASH),
+    ).toHaveLength(0);
   });
 });

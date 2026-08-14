@@ -38,7 +38,7 @@ interface Decoded {
   content: Uint8Array;
 }
 
-// ---- Port of bitchat/ios BitchatFilePacket.decode ---------------------------
+// ---- Port of bitchat/ios BitchatFilePacket.decode ----
 
 const TLV_FILENAME = 0x01;
 const TLV_FILESIZE = 0x02;
@@ -118,7 +118,7 @@ function decodeLikeBitchatIOS(data: Uint8Array): Decoded | null {
   return { fileName, fileSize: fileSize ?? total, mimeType, content };
 }
 
-// ---- Port of bitchat/android BitchatFilePacket.decode ------------------------
+// ---- Port of bitchat/android BitchatFilePacket.decode ----
 
 // Android differs in three ways that matter: content length is ALWAYS 4 bytes
 // with no 2-byte fallback, FILE_SIZE must be exactly 4 bytes or the packet is
@@ -183,7 +183,7 @@ function concat(a: Uint8Array, b: Uint8Array): Uint8Array {
   return out;
 }
 
-// ---- The contract -----------------------------------------------------------
+// ---- The contract ----
 
 const CLIENTS: [string, (d: Uint8Array) => Decoded | null][] = [
   ["bitchat/ios", decodeLikeBitchatIOS],
@@ -296,7 +296,7 @@ describe("Airhop refuses what bitchat would reject", () => {
   });
 });
 
-// ---- Wire file names ---------------------------------------------------------
+// ---- Wire file names ----
 
 // The name decides whether a file can be used at all: the receiver writes it to
 // disk, and the photo library and the audio player read the type off the
@@ -343,7 +343,7 @@ describe("wireFileName", () => {
   });
 });
 
-// ---- Port of bitchat's finalized-voice-note matcher -------------------------
+// ---- Port of bitchat's finalized-voice-note matcher ----
 //
 // A live burst reaches its listeners twice: as the audio they hear while it is
 // being spoken, and afterwards as an ordinary voice note carrying the same

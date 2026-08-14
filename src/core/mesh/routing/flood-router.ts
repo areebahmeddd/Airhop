@@ -3,10 +3,11 @@
 // Routing rules per PROTOCOLS.md section 4:
 //   - Every incoming packet whose packet ID has not been seen is relayed.
 //   - TTL is decremented before relay; packets with TTL = 0 are dropped.
-//   - Relay is delayed by a random jitter (10–220 ms) to prevent cascade storms.
+//   - Relay is delayed by a random jitter (10-220 ms) to prevent cascade storms.
 //   - Duplicate packets (same ID within 5 min) are dropped silently.
 //
-// Packet ID matches bitchat PacketIdUtil: SHA-256(type|senderID|timestamp|payload)[0:16]
+// Packet ID matches bitchat PacketIdUtil:
+// SHA-256(type|senderID|timestamp|payload)[0:16]
 //
 // The router does not know about encryption, signatures, or message types.
 // Callers are responsible for verifying signatures before passing a packet in.
@@ -37,7 +38,7 @@ const TIME_CRITICAL_TTL_CAP_DENSE = 5;
 // matching bitchat's RelayController. In a sparse mesh we relay almost
 // immediately so a packet is not cancelled before it propagates; in a dense
 // mesh we wait longer so someone else's relay usually wins first and duplicate
-// suppression does more of the work. The overall window is 10–220 ms.
+// suppression does more of the work. The overall window is 10-220 ms.
 function jitterMs(degree: number): number {
   let min: number;
   let max: number;

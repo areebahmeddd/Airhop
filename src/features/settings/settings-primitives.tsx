@@ -52,7 +52,7 @@ export function useSharedStyles() {
   }, [Colors, insets.bottom]);
 }
 
-// ---- SettingRow: leading icon, label/description, trailing control --------
+// ---- SettingRow: leading icon, label/description, trailing control ----
 
 export interface SettingRowProps {
   icon?: keyof typeof Feather.glyphMap;
@@ -154,7 +154,7 @@ export function SettingLinkRow({
   );
 }
 
-// ---- SettingSwitch: the one switch every settings row uses ----------------
+// ---- SettingSwitch: the one switch every settings row uses ----
 
 // RN's Switch defaults are tuned for a light canvas, so the palette is set
 // here once rather than per row. The thumb stays white in both themes: on
@@ -185,7 +185,7 @@ export function GroupDivider(): React.JSX.Element {
   return <View style={styles.groupDivider} />;
 }
 
-// ---- Sub-screen header: back chevron + title, matches message-thread.tsx --
+// ---- Sub-screen header: back chevron + title, matches message-thread.tsx ----
 
 interface SubHeaderProps {
   title: string;
@@ -221,7 +221,7 @@ export function SubHeader({
   );
 }
 
-// ---- Shared style sheet -----------------------------------------------------
+// ---- Shared style sheet ----
 
 function createStyles(Colors: ReturnType<typeof useThemeColors>) {
   return StyleSheet.create({
@@ -229,15 +229,11 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       flex: 1,
       backgroundColor: Colors.bg,
     },
-    // Every settings sub-screen scrolls under the floating tab bar, which stays
-    // mounted while you drill in, so the last row needs the same clearance the
-    // hub itself leaves. Without it the final row sits behind the pill.
     content: {
       padding: Spacing.base,
       gap: Spacing.md,
       paddingBottom: TAB_BAR_CLEARANCE,
     },
-    // Sub-screen back header
     subHeader: {
       flexDirection: "row",
       alignItems: "center",
@@ -263,11 +259,9 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       color: Colors.textPrimary,
       textAlign: "center",
     },
-    // Balances the back button so the title stays visually centered.
     subHeaderSpacer: {
       width: 32,
     },
-    // Sections
     section: {
       gap: Spacing.sm,
       marginTop: Spacing.sm,
@@ -326,8 +320,6 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       color: Colors.textMuted,
       fontFamily: FontFamily.mono,
     },
-    // For a trailing action label whose row currently does nothing, so it reads
-    // as unavailable rather than as a live control that ignores taps.
     settingValueMuted: {
       opacity: DISABLED_OPACITY,
     },
@@ -344,8 +336,6 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       color: Colors.textMuted,
       fontWeight: FontWeight.medium,
     },
-    // Body of a settings bottom sheet (QR / Status / Wipe / Orbot / Appearance
-    // / etc.). Scrim, grab handle and drag live in BottomSheet.
     sheet: {
       width: "100%",
       paddingHorizontal: Spacing.xl,
@@ -364,8 +354,6 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       justifyContent: "center",
       marginTop: Spacing.xs,
     },
-    // Title and subtitle sit flush left. The sheet body centres its children,
-    // so both have to stretch themselves back out to the full width.
     sheetTitle: {
       alignSelf: "stretch",
       textAlign: "left",
@@ -380,10 +368,6 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       color: Colors.textMuted,
       lineHeight: FontSize.sm * 1.5,
     },
-    // Stacked, full-width bounded pill buttons: the primary action solid on
-    // top, a plain bordered secondary underneath. Static objects only, no
-    // pressed-state style functions, so every sheet's action pair renders
-    // the same predictable way.
     sheetActions: {
       width: "100%",
       marginTop: Spacing.xs,
@@ -419,9 +403,6 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       fontWeight: FontWeight.bold,
       color: Colors.textInverse,
     },
-    // Grouped modal option list: one bounded box holding every choice, rows
-    // separated by hairlines rather than each row carrying its own border.
-    // Selection reads from the check plus a raised row background.
     // A sheet whose option list is longer than the sheet. The language picker
     // ships with ten entries and targets thirty, so it scrolls from the start
     sheetScroll: {
@@ -450,9 +431,6 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
     optionRowGroupedSelected: {
       backgroundColor: Colors.surfaceRaised,
     },
-    // Standalone option list: one selectable row (icon dot + label/description
-    // + check), each row a real bounded box, not just padding on transparent
-    // background, so unselected and selected states are both unmistakable.
     optionList: {
       width: "100%",
       gap: Spacing.sm,

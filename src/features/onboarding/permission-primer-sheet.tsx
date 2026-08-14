@@ -59,7 +59,7 @@ function reasons(T: Translator): Reason[] {
   return rows;
 }
 
-export default function PermissionPrimer({
+export default function PermissionPrimerSheet({
   visible,
   onAcknowledge,
 }: Props): React.JSX.Element {
@@ -113,8 +113,6 @@ function createStyles(
   Colors: ReturnType<typeof useThemeColors>,
 ): ReturnType<typeof StyleSheet.create> {
   return StyleSheet.create({
-    // The standard sheet body box. BottomSheet supplies only the scrim, the
-    // radius and the grab handle, so padding is every caller's own.
     sheet: {
       paddingHorizontal: Spacing.xl,
       gap: Spacing.base,
@@ -122,7 +120,6 @@ function createStyles(
     head: {
       gap: Spacing.xs,
     },
-    // Sheet titles are `md` semibold app-wide.
     title: {
       fontSize: FontSize.md,
       fontWeight: FontWeight.semibold,
@@ -141,8 +138,6 @@ function createStyles(
       gap: Spacing.md,
       alignItems: "flex-start",
     },
-    // The settings-row icon column: these are the same permissions
-    // Settings > Permissions lists, and nothing in the app boxes a list icon.
     iconWrap: {
       width: 22,
       flexShrink: 0,

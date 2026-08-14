@@ -54,8 +54,8 @@ bitchat is an excellent foundation. Airhop fills the gaps it left open.
 │                                                                             │
 │  ┌─────────────────────────────────────────────────────────────────────┐    │
 │  │              MESSAGE ROUTER (TypeScript)                            │    │
-│  │  canDeliverPromptly() → both radios → Nostr → courier               │    │
-│  │  → Courier envelope (store-and-forward) → Double Ratchet step       │    │
+│  │  canDeliverPromptly() -> both radios -> Nostr -> courier            │    │
+│  │  -> Courier envelope (store-and-forward) -> Double Ratchet step     │    │
 │  └──────────────────────────────┬──────────────────────────────────────┘    │
 │                                 │                                           │
 │  ┌──────────────────────────────▼──────────────────────────────────────┐    │
@@ -66,7 +66,7 @@ bitchat is an excellent foundation. Airhop fills the gaps it left open.
 │  ┌──────────▼──────────────────┐     ┌────────────▼───────────────────┐     │
 │  │   BLE MESH ENGINE (TS)      │     │   NOSTR TRANSPORT (TS)         │     │
 │  │  PacketCodec, TTL flood     │     │  nostr-tools NIP-17/59         │     │
-│  │  GossipSync (GCS filter)    │     │  SimplePool → 300+ relays      │     │
+│  │  GossipSync (GCS filter)    │     │  SimplePool -> 300+ relays     │     │
 │  │  CourierStore, Fragments    │     │  GeoRelayDirectory, Tor proxy  │     │
 │  └──────────┬──────────────────┘     └────────────────────────────────┘     │
 │             │ JSI TurboModule                                               │
@@ -465,7 +465,7 @@ Private communication should be understandable, not merely trusted. v2.0.0 redes
 
 Everything under the Unlicense. Copy verbatim, no attribution required.
 
-### From bitchat/ios (Swift → TypeScript translation reference)
+### From bitchat/ios (Swift -> TypeScript translation reference)
 
 | Component                      | Reuse Strategy                                                        |
 | ------------------------------ | --------------------------------------------------------------------- |
@@ -481,7 +481,7 @@ Everything under the Unlicense. Copy verbatim, no attribution required.
 | `GeohashPresenceService.swift` | TypeScript port.                                                      |
 | Protocol binary format         | Exact byte layout preserved. See `docs/spec/PROTOCOLS.md`, section 2. |
 
-### From bitchat/android (Kotlin → TypeScript/Kotlin)
+### From bitchat/android (Kotlin -> TypeScript/Kotlin)
 
 | Component                       | Reuse Strategy                             |
 | ------------------------------- | ------------------------------------------ |

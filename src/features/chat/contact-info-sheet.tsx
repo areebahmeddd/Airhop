@@ -36,7 +36,7 @@ import { isNostrId, NOSTR_ID_PREFIX, peerIDToUsername } from "@utils/username";
 import * as Clipboard from "expo-clipboard";
 import React, { useMemo, useState } from "react";
 import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
-import VerifyContactScanner from "../contacts/verify-contact-screen";
+import VerifyContactScreen from "../contacts/verify-contact-screen";
 import SendEcashSheet from "../wallet/send-ecash-sheet";
 
 interface Props {
@@ -90,7 +90,7 @@ export default function ContactInfoSheet({
   // one with a real mesh identity (a 16-hex peer ID). A remote, nostr-only
   // contact has no scannable in-person code, so we don't offer it there.
   const canVerify = !!peerID && !verified && /^[0-9a-f]{16}$/i.test(peerID);
-  // A Nostr/geohash peer is an anonymous, per-cell pseudonym — there is no
+  // A Nostr/geohash peer is an anonymous, per-cell pseudonym, there is no
   // lasting identity to verify, so the sheet says "Anonymous" rather than the
   // "Not verified · scan their QR" line that a mesh peer gets.
   const isAnonymous = peerID !== null && isNostrId(peerID);
@@ -338,7 +338,7 @@ export default function ContactInfoSheet({
                     : T("chat.contact.rename_needs_verify")}
                 </Text>
               )}
-              {/* A Nostr peer has no short mesh ID — its identifier IS a
+              {/* A Nostr peer has no short mesh ID, its identifier IS a
                       64-hex public key. Box and label it so it reads as a
                       deliberate credential, not a stray string. */}
               {isNostrId(peerID) ? (
@@ -479,7 +479,7 @@ export default function ContactInfoSheet({
         )}
       </BottomSheet>
       {peerID && (
-        <VerifyContactScanner
+        <VerifyContactScreen
           visible={verifying}
           peerID={peerID}
           name={name}
@@ -521,14 +521,11 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       color: Colors.textPrimary,
       marginTop: Spacing.sm,
     },
-    // Mesh peer ID + its copy glyph, kept on one centered line.
     peerIDRow: {
       flexDirection: "row",
       alignItems: "center",
       gap: Spacing.xs,
     },
-    // Top-right corner, matching the channel sheet's bookmark: one slot per
-    // sheet for the action about the thing itself.
     cornerBtn: {
       position: "absolute",
       top: Spacing.base,
@@ -568,8 +565,6 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       letterSpacing: 0.4,
       textTransform: "uppercase",
     },
-    // Name and ID together, so a label the user chose can never hide the
-    // identity underneath it.
     identityBox: {
       alignSelf: "stretch",
       backgroundColor: Colors.surfaceRaised,
@@ -615,7 +610,6 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       color: Colors.textMuted,
       letterSpacing: 0.3,
     },
-    // Boxed, labeled Nostr public key (see the render note above).
     keyBox: {
       alignSelf: "stretch",
       marginTop: Spacing.sm,
@@ -634,8 +628,6 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       textTransform: "uppercase",
       letterSpacing: 0.6,
     },
-    // The key wraps to two lines, so the glyph centers against the block
-    // rather than sitting on the first line.
     keyBoxRow: {
       flexDirection: "row",
       alignItems: "center",
@@ -649,7 +641,6 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       letterSpacing: 0.3,
       lineHeight: 16,
     },
-    // Structured info card: one bordered box, each fact its own icon row.
     infoCard: {
       alignSelf: "stretch",
       marginTop: Spacing.sm,
@@ -702,8 +693,6 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       borderRadius: Radius.full,
       backgroundColor: Colors.accent,
     },
-    // Sent. Dimmed rather than recoloured: the action is spent, not failed, and
-    // a second hue here would read as a new state to interpret.
     keepBtnDone: {
       opacity: 0.6,
     },
@@ -712,8 +701,6 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       fontWeight: FontWeight.bold,
       color: Colors.textInverse,
     },
-    // Secondary to Verify: an outlined pill, so the two never read as equally
-    // urgent when both are on screen.
     payBtn: {
       minHeight: 50,
       flexDirection: "row",

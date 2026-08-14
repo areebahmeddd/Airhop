@@ -7,12 +7,12 @@
 // ContactCard binary layout (fixed header, variable nickname, trailing npub):
 //
 //   [0]        u8     version (1)
-//   [1–8]      bytes  peerID (8 bytes, first half of SHA-256(noisePub))
-//   [9–40]     bytes  Noise static public key (32 bytes, X25519)
-//   [41–72]    bytes  Ed25519 signing public key (32 bytes)
-//   [73]       u8     nickname length (0–32)
-//   [74–M]     utf8   nickname (0–32 bytes)
-//   [M+1–M+32] bytes  Nostr public key (32 bytes, secp256k1)
+//   [1-8]      bytes  peerID (8 bytes, first half of SHA-256(noisePub))
+//   [9-40]     bytes  Noise static public key (32 bytes, X25519)
+//   [41-72]    bytes  Ed25519 signing public key (32 bytes)
+//   [73]       u8     nickname length (0-32)
+//   [74-M]     utf8   nickname (0-32 bytes)
+//   [M+1-M+32] bytes  Nostr public key (32 bytes, secp256k1)
 //
 // Total: 106 + nicknameLen bytes. Every card carries all three keys: the Noise
 // and signing keys for BLE, and the Nostr key so a contact met only by QR (never
@@ -21,8 +21,6 @@
 
 import { bytesToHex, hexToBytes } from "@noble/hashes/utils.js";
 import { base64UrlToBytes, bytesToBase64Url } from "../encoding/base64";
-
-// ---- Types ------------------------------------------------------------------
 
 // A card read from our own `airhop:v1/` format, where the Nostr key is part of
 // the fixed layout and therefore always present. Narrower than ContactCard so
@@ -34,7 +32,7 @@ export interface ContactCard {
   peerID: string; // 16 hex chars
   noisePubKey: Uint8Array; // 32-byte X25519
   signingPubKey: Uint8Array; // 32-byte Ed25519
-  nickname: string; // 0–32 UTF-8 characters
+  nickname: string; // 0-32 UTF-8 characters
   // 32-byte secp256k1 (Nostr identity).
   //
   // Optional because a card can now come from a bitchat verification QR, where
@@ -43,8 +41,6 @@ export interface ContactCard {
   // bitchat, mesh-only contact" rather than a malformed card of ours.
   nostrPubKey?: Uint8Array;
 }
-
-// ---- Binary encode/decode ---------------------------------------------------
 
 const CARD_VERSION = 1;
 const FIXED_HEADER_SIZE = 74; // version(1) + peerID(8) + noisePub(32) + signingPub(32) + nickLen(1)
@@ -131,8 +127,6 @@ export function decodeContactCard(buf: Uint8Array): AirhopContactCard {
     nostrPubKey: buf.slice(npubStart, npubStart + NOSTR_PUBKEY_SIZE),
   };
 }
-
-// ---- QR code format ---------------------------------------------------------
 
 // URI scheme for QR codes. Standard scanners launch the app via deep link.
 // Content: "airhop:v1/<base64url-encoded-ContactCard-binary>"

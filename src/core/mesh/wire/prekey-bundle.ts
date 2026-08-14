@@ -11,7 +11,7 @@
 //
 // TLV layout (type u8, length u16 big-endian, value):
 //   0x01 noiseStaticPublicKey (32B)
-//   0x02 prekeys              (N x [id u32-BE ‖ pubkey 32B], 1..8 entries)
+//   0x02 prekeys              (N x [id u32-BE || pubkey 32B], 1..8 entries)
 //   0x03 generatedAt         (u64-BE ms; newer replaces older per noise key)
 //   0x04 signature           (64B Ed25519 over signableBytes)
 // Unknown TLVs are skipped for forward compatibility.
@@ -43,8 +43,6 @@ export interface PrekeyBundle {
   generatedAt: number; // ms
   signature: Uint8Array; // 64 bytes
 }
-
-// ---- byte helpers -----------------------------------------------------------
 
 function u32be(value: number): Uint8Array {
   const out = new Uint8Array(4);
@@ -82,8 +80,6 @@ function concat(parts: Uint8Array[]): Uint8Array {
   }
   return out;
 }
-
-// ---- signing ----------------------------------------------------------------
 
 // Canonical bytes covered by the Ed25519 signature: domain context, owner key,
 // prekey count, each (id, key) pair, and the generation time. Encoders and
@@ -132,8 +128,6 @@ export function verifyPrekeyBundle(
     return false;
   }
 }
-
-// ---- wire encode/decode -----------------------------------------------------
 
 export function encodePrekeyBundle(bundle: PrekeyBundle): Uint8Array | null {
   if (

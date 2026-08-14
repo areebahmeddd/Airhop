@@ -37,7 +37,12 @@ import {
   unreadCoherent,
 } from "./harness/invariants";
 import { RadioFabric } from "./harness/radio-fabric";
-import { Scenario, waitFor, waitForCoarse } from "./harness/scenario";
+import {
+  advanceFor,
+  Scenario,
+  waitFor,
+  waitForCoarse,
+} from "./harness/scenario";
 
 let scenario: Scenario | null = null;
 
@@ -77,8 +82,6 @@ function phones(
   s.track(...devices);
   return { radio, devices };
 }
-
-// ---------------------------------------------------------------------------
 
 test("B01 a message crosses a chain of phones that cannot hear each other", async () => {
   const s = (scenario = new Scenario({
@@ -452,7 +455,7 @@ test("B07 a crowd forming does not drown itself in control traffic", async () =>
   for (const d of devices) d.launch();
 
   // Let the room form completely.
-  await waitForCoarse(s.world, () => false, 3000);
+  await advanceFor(s.world, 3000);
 
   const announce = radio.countOfType(0x01);
   const prekey = radio.countOfType(0x24);

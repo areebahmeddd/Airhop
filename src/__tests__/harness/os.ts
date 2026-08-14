@@ -13,7 +13,7 @@
 //     Bluetooth STACK. PermissionsAndroid resolves on the first; BLE calls are
 //     checked against the second. bitchat-android papers over the window with
 //     `delay(1000)` and the comment "This solves the issue where app needs
-//     restart to work on first install" (MainActivity.kt:684). Modelled as
+//     restart to work on first install" (MainActivity.kt). Modelled as
 //     `permissionSettleMs`.
 //   - Turning the adapter off invalidates every GATT handle the app holds. The
 //     handles stay non-null and look alive; every call through them fails.
@@ -175,8 +175,6 @@ export class DeviceOS {
     this.runAs = opts.runAs;
   }
 
-  // ---- clock ---------------------------------------------------------------
-
   // There is exactly one clock in this harness: Jest's fake timers. The OS
   // model, the native modules, and the real mesh-service (whose
   // scheduleRadioRestart uses a bare setTimeout) all schedule onto it, so their
@@ -213,8 +211,6 @@ export class DeviceOS {
     }
   }
 
-  // ---- trace ---------------------------------------------------------------
-
   log(source: TraceEvent["source"], kind: string, detail?: string): void {
     const event: TraceEvent = { atMs: this.now, source, kind, detail };
     this.trace.push(event);
@@ -226,12 +222,10 @@ export class DeviceOS {
       .map((e) => {
         const t = String(e.atMs).padStart(5, " ");
         const src = e.source.padEnd(7, " ");
-        return `${t}ms ${src} ${e.kind}${e.detail !== undefined ? ` — ${e.detail}` : ""}`;
+        return `${t}ms ${src} ${e.kind}${e.detail !== undefined ? `, ${e.detail}` : ""}`;
       })
       .join("\n");
   }
-
-  // ---- process model -------------------------------------------------------
 
   // Run a block the way the OS runs it: on a thread with no exception handler
   // above it. Android does not have a concept of a callback that throws and is
@@ -263,8 +257,6 @@ export class DeviceOS {
     }
   }
 
-  // ---- permissions ---------------------------------------------------------
-
   setPermission(p: AndroidPermission, state: PermissionState): void {
     this.granted[p] = state;
     if (state === "granted") {
@@ -295,8 +287,6 @@ export class DeviceOS {
     }
     if (!this.enforced.has(p)) throw new SecurityException(p);
   }
-
-  // ---- radio ---------------------------------------------------------------
 
   // Move the adapter through the states a real toggle passes through, so code
   // that only handles the endpoints is observably wrong. Listeners registered
@@ -344,8 +334,6 @@ export class DeviceOS {
   // earlier generation is holding an invalid handle, whether or not it knows.
   gattGeneration = 0;
 
-  // ---- foreground service --------------------------------------------------
-
   startForegroundService(): void {
     if (this.platform !== "android") return;
     if (this.apiLevel >= 31 && !this.appForeground) {
@@ -373,8 +361,6 @@ export class DeviceOS {
     this.foregroundServiceRunning = false;
     this.log("os", "FGS_STOP");
   }
-
-  // ---- iOS ----------------------------------------------------------------
 
   // CoreBluetooth's view of the same radio, including the states Airhop's Swift
   // never inspects.

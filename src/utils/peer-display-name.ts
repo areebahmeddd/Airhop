@@ -36,7 +36,7 @@ import {
 // A Nostr/geohash pseudonym (`nostr_<pubkey>`) is named the same way the cell
 // chat names it (and the same way bitchat does): `anon#<last4>` of the pubkey,
 // or `<nick>#<last4>`. Using the npub label here instead made the very same
-// person you saw as "anon#ed17" in the channel show up as "npub…d4ed17" in the
+// person you saw as "anon#ed17" in the channel show up as "npub...d4ed17" in the
 // DM header, the DM list and the contact-info sheet. This keeps them identical
 // across all of those. The stored message senderNickname uses this exact form.
 function nostrPseudonym(peerID: string): string {
@@ -60,7 +60,7 @@ function nostrPseudonym(peerID: string): string {
 //
 // DMs deliberately do NOT use this: there the peer is a specific verified
 // session, not one of a crowd.
-export function channelDisplayName(
+export function channelSenderName(
   peerID: string,
   announcedNickname?: string,
 ): string {

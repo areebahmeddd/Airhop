@@ -10,18 +10,18 @@
 //
 // Audit anchors, current file:
 //   :90   lazy, nullable bluetoothManager / adapter
-//   :127  adapterStateReceiver — ON / TURNING_OFF / OFF
+//   :127  adapterStateReceiver, ON / TURNING_OFF / OFF
 //   :195  initialize() registers the receiver (NOT init{})
 //   :262  releaseRadioState()
-//   :300  emitEvent — hasActiveReactInstance() guard + try/catch
-//   :318  emitAdapterState — change-only
+//   :300  emitEvent, hasActiveReactInstance() guard + try/catch
+//   :318  emitAdapterState, change-only
 //   :330  getRadioState
 //   :420  requestEnableBluetooth
 //   :470  openLocationSettings
 //   :490  setBackgroundServiceEnabled
-//   :508  startAdvertising — precondition rejections
-//   :596  stopAdvertising — does NOT touch the foreground service
-//   :620  startScanning — precondition rejections incl. location services
+//   :508  startAdvertising, precondition rejections
+//   :596  stopAdvertising, does NOT touch the foreground service
+//   :620  startScanning, precondition rejections incl. location services
 
 import { DeviceEventEmitter } from "react-native";
 import { DeviceOS } from "./os";
@@ -106,16 +106,16 @@ export class AndroidBleModule implements BleNativeModule {
   advertising = false;
   scanning = false;
 
-  // Kotlin :319 — the change-only gate on adapter reporting.
+  // The change-only gate on adapter reporting.
   private lastReportedEnabled: boolean | null = null;
 
   private unregisterAdapterListener: (() => void) | null = null;
   private receiverRegistered = false;
 
   constructor(private readonly os: DeviceOS) {
-    // Kotlin :90-:104. The adapter is resolved lazily and may be null; nothing
-    // here throws. Constructing this module on a device with no Bluetooth used
-    // to take the whole app down inside createNativeModules.
+    // The adapter is resolved lazily and may be null; nothing here throws.
+    // Constructing this module on a device with no Bluetooth would otherwise take
+    // the whole app down inside createNativeModules.
     this.os.log(
       "native",
       "MODULE_CONSTRUCTED",
@@ -123,13 +123,12 @@ export class AndroidBleModule implements BleNativeModule {
     );
   }
 
-  // Kotlin :195-:200. Called once the catalyst instance exists, so the receiver
+  // Called once the catalyst instance exists, so the receiver
   // is not live during the window where reaching JS would throw.
   initialize(): void {
     if (this.receiverRegistered) return;
     this.receiverRegistered = true;
     this.unregisterAdapterListener = this.os.onAdapterState((state) => {
-      // Kotlin :131-:152
       if (state === "on") {
         this.emitAdapterState(true);
       } else if (state === "turningOff" || state === "off") {
@@ -143,7 +142,6 @@ export class AndroidBleModule implements BleNativeModule {
     this.os.log("native", "RECEIVER_REGISTERED");
   }
 
-  // Kotlin :232-:260
   invalidate(): void {
     this.unregisterAdapterListener?.();
     this.unregisterAdapterListener = null;
@@ -156,7 +154,6 @@ export class AndroidBleModule implements BleNativeModule {
     this.os.stopForegroundService();
   }
 
-  // Kotlin :262-:288
   private releaseRadioState(): void {
     for (const linkID of [
       ...this.peripheralLinks.keys(),
@@ -173,19 +170,17 @@ export class AndroidBleModule implements BleNativeModule {
     this.radioPort?.radiosChanged();
   }
 
-  // Kotlin :318-:325 — never announce an unchanged state.
+  // Never announce an unchanged state.
   private emitAdapterState(enabled: boolean): void {
     if (this.lastReportedEnabled === enabled) return;
     this.lastReportedEnabled = enabled;
     this.emitEvent(EVT_ADAPTER_STATE, { enabled });
   }
 
-  // Kotlin :300-:312.
   //
   // hasActiveReactInstance() guard AND a try/catch. Callers run on threads the
   // OS owns - the main thread for the BroadcastReceiver, binder threads for the
-  // GATT callbacks - so an uncaught throw here is process death, which is
-  // exactly what this used to be.
+  // GATT callbacks, so an uncaught throw here is process death.
   private emitEvent(name: string, body: Record<string, unknown>): void {
     if (!this.os.jsRuntimeReady) {
       this.os.log("native", "EVENT_DROPPED_NO_JS", name);
@@ -198,7 +193,6 @@ export class AndroidBleModule implements BleNativeModule {
     }
   }
 
-  // Kotlin :330-:352
   async getRadioState(): Promise<RadioStateReport> {
     const supported = this.os.hasBluetooth;
     return {
@@ -231,7 +225,6 @@ export class AndroidBleModule implements BleNativeModule {
     this.os.log("native", "POWER_MODE", mode);
   }
 
-  // Kotlin :360-:372
   private currentAuthorization(): "granted" | "denied" {
     // Answers for whatever the mesh needs at this API level, matching
     // requiredBlePermissions() on both sides of the boundary.
@@ -252,7 +245,6 @@ export class AndroidBleModule implements BleNativeModule {
       : "denied";
   }
 
-  // Kotlin :420-:460
   async requestEnableBluetooth(): Promise<boolean> {
     if (!this.os.hasBluetooth) return false;
     if (this.os.adapter === "on") return true;
@@ -276,13 +268,12 @@ export class AndroidBleModule implements BleNativeModule {
   // Scenario knob: how the user answers the system enable dialog.
   userWillEnableBluetooth = true;
 
-  // Kotlin :470-:482
   async openLocationSettings(): Promise<boolean> {
     this.os.log("native", "LOCATION_SETTINGS_OPENED");
     return true;
   }
 
-  // Kotlin :490-:504 — the background service, no longer tied to advertising.
+  // The background service, deliberately not tied to advertising.
   async setBackgroundServiceEnabled(enabled: boolean): Promise<void> {
     try {
       if (enabled) {
@@ -296,7 +287,7 @@ export class AndroidBleModule implements BleNativeModule {
     }
   }
 
-  // Kotlin :508-:582 — every precondition the platform will not report.
+  // Every precondition the platform will not report.
   // How many times JS has asked. A device that can never advertise must be
   // asked once, not on a five-second loop for the life of the process.
   advertiseAttempts = 0;
@@ -312,7 +303,7 @@ export class AndroidBleModule implements BleNativeModule {
     if (this.os.adapter !== "on") {
       return rejectWith("RADIO_OFF", "Bluetooth is switched off");
     }
-    // Kotlin :1035 — bluetoothLeAdvertiser is null on a chipset with no
+    // BluetoothLeAdvertiser is null on a chipset with no
     // peripheral role. Central still works, so this is a partial capability
     // rather than a dead radio, and it can never change.
     if (!this.os.canAdvertise) {
@@ -344,7 +335,7 @@ export class AndroidBleModule implements BleNativeModule {
     this.radioPort?.radiosChanged();
   }
 
-  // Kotlin :596-:612. Note what is absent: the foreground service.
+  // Note what is absent: the foreground service.
   async stopAdvertising(): Promise<void> {
     this.advertising = false;
     this.gattServer = null;
@@ -353,7 +344,6 @@ export class AndroidBleModule implements BleNativeModule {
     this.radioPort?.radiosChanged();
   }
 
-  // Kotlin :620-:690
   async startScanning(_serviceUUIDs: string[]): Promise<void> {
     if (!this.os.hasBluetooth) {
       return rejectWith("UNSUPPORTED", "This device has no Bluetooth adapter");
@@ -457,7 +447,7 @@ export class AndroidBleModule implements BleNativeModule {
     /* NativeEventEmitter contract */
   }
 
-  // ---- shared radio medium -------------------------------------------------
+  // ---- shared radio medium ----
 
   // Installed by a RadioFabric when this device is one of many. Null for the
   // single-device lifecycle tests, where nothing is listening anyway.
@@ -521,7 +511,7 @@ export class AndroidBleModule implements BleNativeModule {
     return [...this.centralLinks.keys(), ...this.peripheralLinks.keys()];
   }
 
-  // ---- test affordances ----------------------------------------------------
+  // ---- test affordances ----
 
   // The platform refusing a scan after accepting the request to start one.
   // ScanCallback.onScanFailed arrives on a binder thread, long after
@@ -551,7 +541,7 @@ export class AndroidBleModule implements BleNativeModule {
     });
   }
 
-  // Kotlin :810-:845 — the notification's "Stop mesh" action.
+  // The notification's "Stop mesh" action.
   requestMeshStop(): void {
     this.os.runOnThread("main", () => {
       if (!this.os.jsRuntimeReady) {
@@ -565,7 +555,6 @@ export class AndroidBleModule implements BleNativeModule {
     });
   }
 
-  // Kotlin :832-:845
   private forceStopRadios(): void {
     this.scanning = false;
     this.advertising = false;

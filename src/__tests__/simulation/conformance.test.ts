@@ -4,8 +4,9 @@
 // bitchat compatibility, tested against bitchat rather than against ourselves.
 //
 // VISION.md principle 6 says Airhop nodes must talk to bitchat nodes, and
-// principle 7 says that when in doubt we do what bitchat does. packet-frame-vectors.test.ts
-// already pins byte offsets, but it pins them against Airhop's own constants,
+// principle 7 says that when in doubt we do what bitchat does.
+// packet-frame-vectors.test.ts already pins byte offsets, but against Airhop's
+// own constants,
 // which cannot catch a divergence both sides of the assertion share.
 //
 // Two things here go further:
@@ -155,8 +156,6 @@ function swiftConstant(source: string, name: string): number | null {
   if (match === null) return null;
   return Number(match[1].replace(/_/g, ""));
 }
-
-// ---------------------------------------------------------------------------
 
 test("X01 an Airhop phone and a bitchat phone talk to each other", async () => {
   const s = (scenario = new Scenario({
@@ -435,7 +434,7 @@ test("X03 Airhop's constants still match the vendored bitchat sources", () => {
       upstream !== null && upstream === c.ours,
       upstream === null
         ? `TransportConfig.${c.swift} not found upstream (renamed or removed)`
-        : `bitchat=${upstream} airhop=${c.ours} — ${c.note}`,
+        : `bitchat=${upstream} airhop=${c.ours}, ${c.note}`,
     );
   }
 

@@ -25,7 +25,7 @@ import { useContactsStore } from "@store/contacts-store";
 import { useGeohashBookmarksStore } from "@store/geohash-bookmarks-store";
 import { clearOwedGroupStates } from "@store/group-invite-outbox-store";
 import { useGroupStore } from "@store/group-store";
-import { useNoticesStore } from "@store/location-notes-store";
+import { useLocationNotesStore } from "@store/location-notes-store";
 import { useMeshStateStore } from "@store/mesh-state-store";
 import { useOutboxStore } from "@store/outbox-store";
 import { usePeerStore } from "@store/peer-store";
@@ -185,7 +185,7 @@ export async function panicWipe(): Promise<PanicWipeResult> {
   useBoardStore.getState().clearAll();
   useGroupStore.getState().clearAll();
   clearOwedGroupStates();
-  useNoticesStore.getState().clearAll();
+  useLocationNotesStore.getState().clearAll();
   useChannelMembersStore.getState().clearAll();
   useGeohashBookmarksStore.getState().clearAll();
   usePlaceNamesStore.getState().clearAll();
@@ -245,11 +245,12 @@ export async function panicWipe(): Promise<PanicWipeResult> {
 
   // Tray and Tor, moved to LAST on purpose.
   //
-  // Both used to run before a single key or store was touched, and both are
-  // slow: dismissing the shade is a native round trip, and wiping Arti polls for
-  // its process to exit before deleting a directory tree. For a gesture whose
-  // threat model is a phone being taken, that spent the seconds that matter on
-  // the notification shade and a Tor consensus cache while the keys and the
+  // Neither runs before the keys and stores are gone, because both are slow:
+  // dismissing the shade is a native round trip, and wiping Arti polls for its
+  // process to exit before deleting a directory tree. For a gesture whose threat
+  // model is a phone being taken, running them first spends the seconds that
+  // matter on the notification shade and a Tor consensus cache while the keys and
+  // the
   // thirteen message partitions were still on disk. Neither depends on the keys
   // existing, so both belong after the data is gone.
   // Dismiss every notification already in the shade.

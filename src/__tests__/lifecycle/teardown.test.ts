@@ -76,8 +76,6 @@ describe("teardown, replacement and races", () => {
     jest.useRealTimers();
   });
 
-  // ---------------------------------------------------------------------------
-
   test("S21 going Away while a reconcile is mid-flight must not revive the radios", async () => {
     // The controller reads the device before touching a radio, and that read is
     // async. Presence changes are synchronous, so "Away" can land in exactly
@@ -124,8 +122,6 @@ describe("teardown, replacement and races", () => {
     v.assert();
   });
 
-  // ---------------------------------------------------------------------------
-
   test("S22 'Stop mesh' tapped when the JS runtime is already gone", async () => {
     // Android can destroy the React instance while the foreground service keeps
     // the process. The notification is still on screen, and its Stop button is
@@ -152,12 +148,10 @@ describe("teardown, replacement and races", () => {
     v.check(
       "the radios come down anyway rather than scanning for nobody",
       !native.scanning && !native.advertising,
-      "with no JS to ask, the native module has to stop them itself — otherwise the notification disappears and the radios keep draining the battery with no UI left that can stop them",
+      "with no JS to ask, the native module has to stop them itself, otherwise the notification disappears and the radios keep draining the battery with no UI left that can stop them",
     );
     v.assert();
   });
-
-  // ---------------------------------------------------------------------------
 
   test("S23 panic wipe: nothing the old identity owned may fire afterwards", async () => {
     const os = new DeviceOS({
@@ -190,8 +184,6 @@ describe("teardown, replacement and races", () => {
     );
     v.assert();
   });
-
-  // ---------------------------------------------------------------------------
 
   test("S24 re-onboarding as a new identity replaces the mesh cleanly", async () => {
     const os = new DeviceOS({ platform: "android", apiLevel: 34 });
@@ -228,8 +220,6 @@ describe("teardown, replacement and races", () => {
     v.assert();
   });
 
-  // ---------------------------------------------------------------------------
-
   test("S25 app remounted repeatedly (config changes) does not stack radios", async () => {
     // Rotation, theme change, font-scale change: Android recreates the Activity
     // and React remounts. The mesh singleton survives, and remounting must not
@@ -260,8 +250,6 @@ describe("teardown, replacement and races", () => {
     v.check("background service still up", os.foregroundServiceRunning);
     v.assert();
   });
-
-  // ---------------------------------------------------------------------------
 
   test("S26 Invisible survives a Bluetooth outage without becoming discoverable", async () => {
     // Invisible is a deliberate privacy choice. Coming back from any recovery
@@ -299,8 +287,6 @@ describe("teardown, replacement and races", () => {
     v.assert();
   });
 
-  // ---------------------------------------------------------------------------
-
   test("S27 backgrounded for a long time, then resumed", async () => {
     const os = new DeviceOS({ platform: "android", apiLevel: 34 });
     const v = new Verdict(
@@ -333,8 +319,6 @@ describe("teardown, replacement and races", () => {
     );
     v.assert();
   });
-
-  // ---------------------------------------------------------------------------
 
   test("S28 the radios are never left half-up", async () => {
     // Scanning without advertising is legitimate (Invisible). Advertising
@@ -385,8 +369,6 @@ describe("teardown, replacement and races", () => {
     v.check("settles healthy", native.scanning && native.advertising);
     v.assert();
   });
-
-  // ---------------------------------------------------------------------------
 
   test("S29 a pocketed phone stops scanning flat out", async () => {
     // The unit tests in power-policy.test.ts prove the decision. This proves the
@@ -449,8 +431,6 @@ describe("teardown, replacement and races", () => {
     v.check("process survived", os.crashed === null, os.crashed ?? undefined);
     v.assert();
   });
-
-  // ---------------------------------------------------------------------------
 
   test("S30 the battery-saver note appears only when the user would notice", async () => {
     const os = new DeviceOS({ platform: "android", apiLevel: 34 });

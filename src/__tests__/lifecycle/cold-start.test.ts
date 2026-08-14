@@ -40,7 +40,7 @@ installOfflineWebSocket();
 // How long a fresh grant takes to become effective in the Bluetooth stack.
 // bitchat-android waits a flat 1000ms for exactly this and says so: "This
 // solves the issue where app needs restart to work on first install"
-// (MainActivity.kt:684). Airhop retries until the stack accepts instead, which
+// (MainActivity.kt). Airhop retries until the stack accepts instead, which
 // is correct on a slow device and instant on a fast one.
 const REAL_GRANT_SETTLE_MS = 600;
 
@@ -102,8 +102,6 @@ describe("cold start and permissions", () => {
     jest.useRealTimers();
   });
 
-  // ---------------------------------------------------------------------------
-
   test("S01 first install, all permissions granted, real grant latency", async () => {
     const os = new DeviceOS({
       platform: "android",
@@ -139,8 +137,6 @@ describe("cold start and permissions", () => {
     );
     v.assert();
   });
-
-  // ---------------------------------------------------------------------------
 
   test("S02 first install, BLE denied once, granted later in Settings", async () => {
     const os = new DeviceOS({ platform: "android", apiLevel: 34 });
@@ -187,13 +183,11 @@ describe("cold start and permissions", () => {
     v.assert();
   });
 
-  // ---------------------------------------------------------------------------
-
   test("S03 first install, permission blocked forever", async () => {
     const os = new DeviceOS({ platform: "android", apiLevel: 34 });
     const v = new Verdict(
       "S03",
-      "'Don't allow' twice — only Settings can fix it",
+      "'Don't allow' twice, only Settings can fix it",
       os,
     );
     androidDevice(os);
@@ -216,8 +210,6 @@ describe("cold start and permissions", () => {
     );
     v.assert();
   });
-
-  // ---------------------------------------------------------------------------
 
   // This used to assert the opposite: that picking "Approximate" stopped the
   // mesh. True while BLUETOOTH_SCAN carried no neverForLocation flag, and the
@@ -259,8 +251,6 @@ describe("cold start and permissions", () => {
     v.assert();
   });
 
-  // ---------------------------------------------------------------------------
-
   test("S05 permission granted in Settings while backgrounded", async () => {
     const os = new DeviceOS({
       platform: "android",
@@ -294,9 +284,7 @@ describe("cold start and permissions", () => {
     v.assert();
   });
 
-  // ---------------------------------------------------------------------------
-
-  test("S06 permission revoked in Settings — process killed, relaunch is clean", async () => {
+  test("S06 permission revoked in Settings, process killed, relaunch is clean", async () => {
     const os = new DeviceOS({ platform: "android", apiLevel: 34 });
     const v = new Verdict(
       "S06",
@@ -336,8 +324,6 @@ describe("cold start and permissions", () => {
     v.assert();
   });
 
-  // ---------------------------------------------------------------------------
-
   test("S07 Bluetooth switched off before the app is even opened", async () => {
     const os = new DeviceOS({
       platform: "android",
@@ -375,8 +361,6 @@ describe("cold start and permissions", () => {
     v.assert();
   });
 
-  // ---------------------------------------------------------------------------
-
   // API 30 on purpose: neverForLocation does not exist below 31, so this is the
   // highest level where the OS toggle still withholds scan results. minSdk is
   // 26, so these devices are supported. S04 covers the same settings on API 34,
@@ -389,7 +373,7 @@ describe("cold start and permissions", () => {
     });
     const v = new Verdict(
       "S08",
-      "permission granted, OS location toggle off — the one case that looks like an empty room",
+      "permission granted, OS location toggle off, the one case that looks like an empty room",
       os,
     );
     const native = androidDevice(os);
@@ -422,8 +406,6 @@ describe("cold start and permissions", () => {
     v.check("scanning starts once location services return", native.scanning);
     v.assert();
   });
-
-  // ---------------------------------------------------------------------------
 
   test("S09 device without a Bluetooth adapter", async () => {
     const os = new DeviceOS({
@@ -469,8 +451,6 @@ describe("cold start and permissions", () => {
     v.assert();
   });
 
-  // ---------------------------------------------------------------------------
-
   test("S10 foreground service killed by an aggressive OEM while backgrounded", async () => {
     const os = new DeviceOS({ platform: "android", apiLevel: 34 });
     const v = new Verdict(
@@ -502,13 +482,11 @@ describe("cold start and permissions", () => {
     v.assert();
   });
 
-  // ---------------------------------------------------------------------------
-
   test("S11 the platform refuses a scan after accepting it", async () => {
     const os = new DeviceOS({ platform: "android", apiLevel: 34 });
     const v = new Verdict(
       "S11",
-      "onScanFailed arrives long after startScan resolved — the only radio failure the reconciler cannot see for itself",
+      "onScanFailed arrives long after startScan resolved, the only radio failure the reconciler cannot see for itself",
       os,
     );
     const native = androidDevice(os);
@@ -541,8 +519,6 @@ describe("cold start and permissions", () => {
     );
     v.assert();
   });
-
-  // ---------------------------------------------------------------------------
 
   // A chipset that can scan but never advertise must be asked exactly once.
   //
@@ -596,7 +572,6 @@ describe("cold start and permissions", () => {
     v.assert();
   });
 
-  // ---------------------------------------------------------------------------
   // iOS variants of the launch path.
 
   test("S07i iOS cold launch with a perfectly healthy radio", async () => {
@@ -642,12 +617,10 @@ describe("cold start and permissions", () => {
     v.check(
       "the banner reports a denied permission, not an absent radio",
       currentBlockerBanner()?.key === "ble-permission-blocked",
-      `banner: ${JSON.stringify(currentBlockerBanner())} — iOS never re-prompts once denied, so Settings is the only route and the copy has to say so`,
+      `banner: ${JSON.stringify(currentBlockerBanner())}, iOS never re-prompts once denied, so Settings is the only route and the copy has to say so`,
     );
     v.assert();
   });
-
-  // ---------------------------------------------------------------------------
 
   // Away must mean invisible, and stay that way across a power cycle.
   //

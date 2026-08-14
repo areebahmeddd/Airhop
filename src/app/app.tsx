@@ -1,14 +1,10 @@
-﻿// Polyfill must be the first import. Required before any @noble/* usage.
+// Polyfill must be the first import. Required before any @noble/* usage.
 import "react-native-get-random-values";
 
 import AirhopBLE from "@bridge/NativeAirhopBLE";
 import type { Identity } from "@core/crypto/identity";
 import { loadIdentity } from "@core/crypto/identity";
 import { sweepOrphanedSecrets } from "@core/crypto/keychain";
-import {
-  primeTorRoutingOnStartup,
-  revalidateTorRouting,
-} from "@core/nostr/tor-routing";
 import {
   JetBrainsMono_400Regular,
   useFonts,
@@ -22,7 +18,7 @@ import NotificationCenter from "@features/chat/notification-center";
 import { StartNewSheet } from "@features/chat/start-new-sheet";
 import PeerList from "@features/discovery/peer-list";
 import IdentityScreen from "@features/onboarding/identity-screen";
-import PermissionPrimer from "@features/onboarding/permission-primer-sheet";
+import PermissionPrimerSheet from "@features/onboarding/permission-primer-sheet";
 import UsernameScreen from "@features/onboarding/username-screen";
 import WelcomeScreen from "@features/onboarding/welcome-screen";
 import ProfileScreen from "@features/settings/profile-screen";
@@ -66,6 +62,10 @@ import {
 } from "@services/nutzap-watcher-handle";
 import { applyPresence } from "@services/presence-service";
 import {
+  primeTorRoutingOnStartup,
+  revalidateTorRouting,
+} from "@services/tor-routing";
+import {
   initWalletService,
   publishOwnNutzapInfo,
   reconcile,
@@ -92,12 +92,12 @@ import { countReachablePeers, usePeerStore } from "@store/peer-store";
 import {
   acknowledgePermissionPrimer,
   showPermissionPrimer,
-  usePrimerStore,
+  usePermissionPrimerStore,
 } from "@store/permission-primer-store";
 import { useSettingsStore } from "@store/settings-store";
 import { useTransferStore } from "@store/transfer-store";
 import { useWalletStore } from "@store/wallet-store";
-import CustomAlert from "@ui/components/alert-modal";
+import AlertModal from "@ui/components/alert-modal";
 import Avatar from "@ui/components/avatar";
 import {
   ErrorBoundary,
@@ -162,9 +162,7 @@ import { scheduleOnRN } from "react-native-worklets";
 // early enough for the very first frame to be correct.
 initI18n();
 
-// ---------------------------------------------------------------------------
-// Navigation types
-// ---------------------------------------------------------------------------
+// ---- Navigation types ----
 
 type OnboardingStep = "welcome" | "generating" | "reveal";
 type MainTab = "chats" | "mesh" | "wallet" | "profile";
@@ -184,29 +182,32 @@ interface MessageTarget {
 // Placeholder peer ID shown before identity is loaded from secure storage.
 const FALLBACK_PEER_ID = "0000000000000000";
 
-// How long to wait for the keychain before deciding this launch has no
-// identity. A healthy read is single-digit milliseconds; this is the point past
-// which "slow" has become "never" and the user is owed a screen either way.
+// The timeouts below are in launch order: load the identity, show the primer,
+// prompt for permissions, check the grant, then sweep stranded sends. Every one
+// of them is a backstop against a step that can hang rather than fail, since
+// none of these is a state the app can detect from the inside.
+
+// A healthy keychain read is single-digit milliseconds, so this is the point
+// past which "slow" has become "never" and the user is owed a screen either way.
 const IDENTITY_LOAD_TIMEOUT_MS = 8_000;
+
+// The primer is a sheet the user dismisses, so this is deliberately long enough
+// to read it twice. It guards against the sheet never appearing at all, and is
+// not a limit on how long someone may take.
+const PRIMER_TIMEOUT_MS = 120_000;
 
 // How long the permission conversation may hold the mesh start.
 //
 // `PermissionsAndroid.requestMultiple` settles when the user answers a dialog
-// hosted by another process, so it can be orphaned by an Activity that is
-// destroyed while the dialog is up - which is exactly what an OEM that reaps
-// the Activity behind a foreground service does. Past this deadline the mesh
-// starts regardless and the radio controller reads the real grant off the
-// device, which it would have done anyway.
+// hosted by another process, so it can be orphaned by an Activity destroyed
+// while the dialog is up, which is what an OEM that reaps the Activity behind a
+// foreground service does. Past this deadline the mesh starts regardless and the
+// radio controller reads the real grant off the device, as it would have anyway.
 const PERMISSION_PROMPT_TIMEOUT_MS = 60_000;
 
-// A `PermissionsAndroid.check` is a synchronous binder call behind a promise,
-// so anything past this is the binder being wedged rather than a slow answer.
+// A `PermissionsAndroid.check` is a synchronous binder call behind a promise, so
+// anything past this is the binder wedged rather than a slow answer.
 const PERMISSION_CHECK_TIMEOUT_MS = 3_000;
-
-// The primer is a sheet the user dismisses, so this is deliberately long enough
-// to read it twice. It is a backstop against the sheet never appearing at all,
-// not a limit on how long someone may take.
-const PRIMER_TIMEOUT_MS = 120_000;
 
 // How old a "sending" message must be before a launch treats it as stranded.
 // Far past the longest Undo Send window, so it can only reach messages a dead
@@ -239,12 +240,12 @@ async function startMeshWithPermissions(
   //
   // Both awaits below are time-boxed, and the deadline is the point of them
   // rather than a nicety. Everything from here to initMeshService() is a
-  // conversation with the OS about permissions, and the mesh used to be started
-  // only once that conversation finished. It is not a conversation the app
-  // controls: the primer resolves on a sheet the user has to dismiss, and
+  // conversation with the OS about permissions, and the mesh must not wait for it
+  // to finish. It is not a conversation the app controls: the primer resolves on a
+  // sheet the user has to dismiss, and
   // `PermissionsAndroid.requestMultiple` settles on a dialog hosted by another
   // process, which an Activity teardown can orphan. Either one going quiet left
-  // a running app with no mesh at all and a Mesh tab reading "starting…" for
+  // a running app with no mesh at all and a Mesh tab reading "starting..." for
   // the rest of the session, which is indistinguishable from a broken radio.
   //
   // Missing the deadline costs nothing that matters. The radio controller reads
@@ -280,10 +281,10 @@ async function startMeshWithPermissions(
   // user). No-op when Tor is off or unavailable.
   //
   // Guarded because it is the last thing standing between here and the mesh
-  // existing. It used to be a bare call: a throw from it meant initMeshService
-  // on the next line never ran, and because this function is void-ed at both
-  // call sites the failure was silent - a fully rendered app whose
-  // getMeshService() returned null forever.
+  // existing. As a bare call, a throw here stops initMeshService on the next line
+  // from running, and because this function is void-ed at both call sites the
+  // failure is silent: a fully rendered app whose getMeshService() returns null
+  // forever.
   try {
     primeTorRoutingOnStartup();
   } catch {
@@ -301,15 +302,15 @@ async function startMeshWithPermissions(
 // Turn a permission answer into the one reason the mesh cannot run.
 //
 // Split out so the startup path and the Permissions screen cannot drift: both
-// need the blocked/denied distinction and the Settings deep link, and the
-// screen previously had neither.
+// need the blocked/denied distinction and the Settings deep link.
 function applyBlePermissionResult(perm: BlePermissionResult): void {
   // Record WHY the mesh cannot run, not merely that it cannot.
   //
   // A single "granted" boolean collapsed two situations that need different
   // responses: denied but re-askable, and denied for good. Only the first is
-  // fixed by asking again, and both used to render as "Bluetooth permission
-  // needed". The controller re-reads the device on its first pass and will
+  // fixed by asking again, so rendering both as "Bluetooth permission needed"
+  // sends half of them nowhere. The controller re-reads the device on its first
+  // pass and will
   // correct this either way; setting it here means the banner is right during
   // the very first frames rather than after the first reconcile.
   const blocker = useMeshStateStore.getState().setBleBlocker;
@@ -378,9 +379,10 @@ function startMeshDependents(): void {
     // Register how to (re)attach the nutzap watcher, then attach it.
     //
     // Registered rather than only called, because the watcher captures a
-    // NostrClient and that instance dies with every transport rebuild. Toggling
-    // Tor, or internet fallback, used to end NIP-61 for the rest of the session
-    // and silently stop redeeming incoming payments. The mesh service calls the
+    // NostrClient and that instance dies with every transport rebuild, so without
+    // rebinding, toggling Tor or internet fallback ends NIP-61 for the rest of the
+    // session and silently stops redeeming incoming payments. The mesh service
+    // calls the
     // rebinder after it builds a transport, so the subscription follows the
     // client instead of outliving it.
     setNutzapRebinder(() => {
@@ -432,7 +434,7 @@ function startMeshDependents(): void {
   // shows two at once (concurrent prompts raced on a fresh install: the
   // notification prompt got swallowed and sometimes crashed). Runs after the
   // mesh has started so BLE is never held up waiting on any of them.
-  //   1. Location powers the geohash public channels (#block…#region): without a
+  //   1. Location powers the geohash public channels (#block...#region): without a
   //      position the app cannot resolve its cell, so they stay BLE-only and
   //      never show internet participants or bitchat traffic. On Android the BLE
   //      grant above already covers it; on iOS this is the only place it is asked.
@@ -520,9 +522,7 @@ async function handleBannerAction(
   getMeshService()?.retryRadios();
 }
 
-// ---------------------------------------------------------------------------
-// Root component
-// ---------------------------------------------------------------------------
+// ---- Root component ----
 
 // The root, and nothing else: everything the app does lives in AppContent
 // below.
@@ -626,7 +626,7 @@ function AppContent(): React.JSX.Element {
     setLastThread,
   } = useChatStore();
   const meshBanners = useMeshBanners();
-  const primerVisible = usePrimerStore((s) => s.visible);
+  const primerVisible = usePermissionPrimerStore((s) => s.visible);
 
   // Android system nav bar: tint its buttons/pill to the theme, the same way the
   // status bar does, so the top and bottom chrome read as one themed surface.
@@ -909,10 +909,10 @@ function AppContent(): React.JSX.Element {
       });
       // Re-check the radios unconditionally.
       //
-      // This used to compare the BLE permission against the last known value
-      // and only act when it had changed, which meant every blocker that is not
-      // a permission - Bluetooth switched off, location services switched off,
-      // a grant that had not yet reached the Bluetooth stack - came back to a
+      // Never compare the BLE permission against the last known value and act
+      // only on a change. Every blocker that is not a permission (Bluetooth
+      // switched off, location services switched off, a grant that has not yet
+      // reached the Bluetooth stack) then comes back to a
       // mesh that had decided nothing needed doing. The controller is a
       // reconciler: it reads the device itself and issues only the calls that
       // change something, so calling it on every resume is both correct and
@@ -1285,7 +1285,7 @@ function AppContent(): React.JSX.Element {
     );
   }, [tab, canGoBackInTab, goBackInTab, navigateToTab]);
 
-  // ---- Render ------------------------------------------------------------
+  // ---- Render ----
 
   // Render nothing until the identity check resolves (and the bundled font is
   // ready). This prevents a flash of the welcome screen for returning users on
@@ -1304,12 +1304,12 @@ function AppContent(): React.JSX.Element {
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider initialMetrics={initialWindowMetrics}>
         <StatusBar style={resolvedTheme === "dark" ? "light" : "dark"} />
-        <CustomAlert />
+        <AlertModal />
         {/* Mounted beside the alert, not inside the onboarding flow: the primer
             is shown on the first launch that actually needs a permission, which
             for someone who killed the app mid-onboarding is a launch that skips
             onboarding entirely. */}
-        <PermissionPrimer
+        <PermissionPrimerSheet
           visible={primerVisible}
           onAcknowledge={acknowledgePermissionPrimer}
         />
@@ -1567,8 +1567,6 @@ function AppContent(): React.JSX.Element {
                       <Text
                         style={styles.headerTitle}
                         numberOfLines={1}
-                        // Screen readers offer heading navigation; with nothing
-                        // marked as a heading that gesture goes nowhere.
                         accessibilityRole="header"
                       >
                         {T("nav.tab.mesh")}
@@ -1669,8 +1667,6 @@ function AppContent(): React.JSX.Element {
                       <Text
                         style={styles.headerTitle}
                         numberOfLines={1}
-                        // Screen readers offer heading navigation; with nothing
-                        // marked as a heading that gesture goes nowhere.
                         accessibilityRole="header"
                       >
                         {T("nav.tab.wallet")}
@@ -1758,8 +1754,6 @@ function AppContent(): React.JSX.Element {
                     <Text
                       style={styles.headerTitle}
                       numberOfLines={1}
-                      // Screen readers offer heading navigation; with nothing
-                      // marked as a heading that gesture goes nowhere.
                       accessibilityRole="header"
                     >
                       {T(HEADER_TITLES[tab])}
@@ -1859,8 +1853,8 @@ function AppContent(): React.JSX.Element {
                     // Keyed by channel so switching threads REMOUNTS. Without
                     // this the component persisted across a channel change and
                     // leaked per-thread state: an unsent draft typed in one
-                    // chat reappeared in the next, and a "queued for delivery"
-                    // banner from the old chat rendered over the new one.
+                    // chat reappears in the next, and a "queued for delivery"
+                    // banner from the previous chat renders over the new one.
                     <MessageThread
                       key={openThread}
                       channel={openThread}
@@ -2066,9 +2060,7 @@ function AppContent(): React.JSX.Element {
   );
 }
 
-// ---------------------------------------------------------------------------
-// Config
-// ---------------------------------------------------------------------------
+// ---- Config ----
 
 // Module-level tables cannot call a hook, so they hold keys rather than text
 // and the component translates on render. This is the pattern for every static
@@ -2095,9 +2087,7 @@ const EDGE_BACK_ZONE = 44;
 // the header stays light; hitSlopFor() makes up the difference for the thumb.
 const HEADER_ICON_SIZE = 32;
 
-// ---------------------------------------------------------------------------
-// Styles
-// ---------------------------------------------------------------------------
+// ---- Styles ----
 
 function createStyles(Colors: ReturnType<typeof useThemeColors>) {
   return StyleSheet.create({
@@ -2124,21 +2114,18 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       color: Colors.textPrimary,
       letterSpacing: -0.2,
       // The Wallet header packs four action pills beside this title. On a narrow
-      // device at a large text size the row used to overflow rather than the
-      // title giving up its width first.
+      // device at a large text size the row overflows unless the title gives up
+      // its width first.
       flexShrink: 1,
       marginEnd: Spacing.sm,
     },
-    // Search bar (Chats tab only), moved up from ChannelList so one search
-    // spans both Channels and Direct instead of being duplicated per sub-tab.
     searchRow: {
       flexDirection: "row",
       alignItems: "center",
       // Spacing.md, not sm. Each pill is 32pt with 6pt of slop per side, so an
-      // 8pt gap put centres 40pt apart and made adjacent 44pt touch boxes
-      // overlap by 4 - resolved by view order, not by which is nearer the
-      // finger. On the wallet header that puts Send next to Receive. Same
-      // reasoning as the segmented control below, which avoids slop entirely.
+      // 8pt gap puts centres 40pt apart and overlaps adjacent 44pt touch boxes
+      // by 4, resolved by view order rather than by which is nearer the finger.
+      // On the wallet header that would put Send next to Receive.
       gap: Spacing.md,
       paddingHorizontal: Spacing.base,
       paddingTop: Spacing.sm,
@@ -2162,7 +2149,6 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       color: Colors.textPrimary,
       padding: 0,
     },
-    // Segmented control (Channels / Direct)
     headerControls: {
       flexDirection: "row",
       alignItems: "center",
@@ -2174,18 +2160,14 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       borderRadius: Radius.full,
       padding: 2,
     },
-    // Raised from 7 to 9 vertical padding: at 7 the segment measured ~30pt
-    // tall, under the 44pt floor, and hitSlop is not an option here because
-    // slop on adjacent segments overlaps and makes the boundary unpredictable.
-    // Growing the track itself is the only honest fix.
+    // 9 vertical padding, not 7: at 7 the segment measures ~30pt tall, under
+    // the 44pt floor. hitSlop is not an option, since slop on adjacent segments
+    // overlaps and makes the boundary unpredictable, so the track has to grow.
     seg: {
       paddingHorizontal: Spacing.md,
       paddingVertical: 9,
       borderRadius: Radius.full,
     },
-    // Icon + label variant of `seg`, used wherever a segment carries an icon
-    // alongside its text (Chats' Channels/Direct, Mesh's Radar/List) so every
-    // segmented control in the header reads the same.
     segIconText: {
       flexDirection: "row",
       alignItems: "center",
@@ -2203,8 +2185,6 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
     segTextActive: {
       color: Colors.textPrimary,
     },
-    // Circular action button (add/create), shared by Chats, Mesh and Wallet
-    // headers so every header icon-action reads the same.
     newChannelPill: {
       width: HEADER_ICON_SIZE,
       height: HEADER_ICON_SIZE,
@@ -2216,7 +2196,6 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
     headerPillDisabled: {
       opacity: DISABLED_OPACITY,
     },
-    // Same circle as the + pill, so the two header actions read as one set.
     headerIconBtn: {
       width: HEADER_ICON_SIZE,
       height: HEADER_ICON_SIZE,
@@ -2225,8 +2204,6 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       justifyContent: "center",
       backgroundColor: Colors.surfaceRaised,
     },
-    // Unseen-activity count over the bell, same visual language as the tab and
-    // segment badges.
     bellBadge: {
       position: "absolute",
       top: -4,
@@ -2252,12 +2229,6 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
     content: {
       flex: 1,
     },
-    // Bottom stack (transfer pill + tab bar) floating over the content beneath.
-    // Clearance from the system navigation bar comes from the element itself
-    // consuming the bottom inset, not from here - see the note where it is
-    // rendered. Scrolling screens are unaffected either way: they sit inside the
-    // outer SafeAreaView, so TAB_BAR_CLEARANCE still measures from the right
-    // place.
     floatingBottom: {
       position: "absolute",
       left: 0,

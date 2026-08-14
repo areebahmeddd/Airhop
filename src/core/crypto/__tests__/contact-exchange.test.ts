@@ -25,7 +25,7 @@ function makeCard(
 }
 
 describe("ContactCard binary encode/decode", () => {
-  test("round-trip: all fields survive encode → decode", () => {
+  test("round-trip: all fields survive encode -> decode", () => {
     const card = makeCard();
     const encoded = encodeContactCard(card);
     const decoded = decodeContactCard(encoded);
@@ -73,7 +73,7 @@ describe("ContactCard binary encode/decode", () => {
     expect(buf[0]).toBe(1);
   });
 
-  test("peerID bytes are at offset 1–8", () => {
+  test("peerID bytes are at offset 1-8", () => {
     const card = makeCard({ peerID: "aabbccddeeff0011" });
     const buf = encodeContactCard(card);
     const extracted = Array.from(buf.slice(1, 9)).map((b) =>
@@ -153,7 +153,7 @@ describe("QR content encode/decode", () => {
     expect(qr.startsWith("airhop:v1/")).toBe(true);
   });
 
-  test("round-trip: QR encode → decode recovers all fields", () => {
+  test("round-trip: QR encode -> decode recovers all fields", () => {
     const card = makeCard({ nickname: "falcon-relay" });
     const qr = encodeQRContent(card);
     const decoded = decodeQRContent(qr);

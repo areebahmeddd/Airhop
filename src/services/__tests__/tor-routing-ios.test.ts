@@ -95,7 +95,7 @@ jest.mock("@bridge/NativeAirhopTorSocket", () => ({
   subscribeTorSocket: jest.fn(),
 }));
 
-jest.mock("@services/mesh-service", () => ({
+jest.mock("../mesh-service", () => ({
   getMeshService: () => ({ restartNostr: mockRestartNostr }),
 }));
 

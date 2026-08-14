@@ -63,9 +63,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
+// ---- Types ----
 
 interface Props {
   visible: boolean;
@@ -76,7 +74,7 @@ interface Props {
 type Stage = "entry" | "camera" | "confirm";
 
 const PEER_ID_RE = /^[0-9a-f]{16}$/;
-// Deep-link format exported by Profile → "Share QR".
+// Deep-link format exported by Profile -> "Share QR".
 const AIRHOP_LINK_RE = /^airhop:\/\/peer\/([0-9a-f]{16})$/i;
 
 // Accept a raw 16-char hex peer ID or an airhop://peer/<id> deep-link URL.
@@ -126,11 +124,9 @@ function isScanResult(v: ScanResult | ScanRefusal | null): v is ScanResult {
   return v !== null && typeof v !== "string";
 }
 
-// ---------------------------------------------------------------------------
-// Component
-// ---------------------------------------------------------------------------
+// ---- Component ----
 
-export default function QrScanScreen({
+export default function AddContactScreen({
   visible,
   onClose,
   onPeerFound,
@@ -632,9 +628,7 @@ export default function QrScanScreen({
   );
 }
 
-// ---------------------------------------------------------------------------
-// Styles
-// ---------------------------------------------------------------------------
+// ---- Styles ----
 
 function createStyles(Colors: ReturnType<typeof useThemeColors>) {
   return StyleSheet.create({
@@ -692,14 +686,11 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       paddingBottom: Spacing.xl,
       gap: Spacing.sm,
     },
-    // ---- Bottom sheet body (entry + confirm). Scrim, handle and drag come
-    // from BottomSheet; this is only what's inside it. ----
     sheet: {
       paddingHorizontal: Spacing.xl,
       paddingBottom: Spacing["2xl"],
       gap: Spacing.base,
     },
-    // ---- Entry hub (paste peer ID, or choose a scan source) ----
     sheetHead: {
       gap: Spacing.xs,
     },
@@ -825,7 +816,6 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       color: Colors.textInverse,
       fontWeight: FontWeight.bold,
     },
-    // ---- Confirm step ----
     confirmBody: {
       alignItems: "center",
       gap: Spacing.xs,

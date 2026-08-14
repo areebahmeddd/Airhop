@@ -1,20 +1,18 @@
 // AuthenticatedPeerStatePacket: the inner payload of NoisePayloadType 0x21.
 //
-// An ANNOUNCE is signed with the Ed25519 key carried inside it, so its
-// signature only proves internal consistency. An attacker can copy a victim's
-// public Noise key off the air, supply their own signing key and capability
-// bits, self-sign, and pass every check: the peer ID still derives from the
-// Noise key, and the signature still verifies. Trust-on-first-use holds the
-// first key seen, so whoever announces first wins the pin and the real peer
-// can never correct it. bitchat reaches the same conclusion about its own
-// peer-ID binding: announced capability bits are hints, not proof of
-// Noise-key possession.
+// An ANNOUNCE is signed with the Ed25519 key carried inside it, so its signature
+// proves only internal consistency. An attacker can copy a victim's public Noise
+// key off the air, supply their own signing key and capability bits, self-sign,
+// and pass every check: the peer ID still derives from the Noise key and the
+// signature still verifies. Trust-on-first-use holds the first key seen, so
+// whoever announces first wins the pin and the real peer cannot correct it.
+// Announced capability bits are hints, never proof of Noise-key possession.
 //
-// 0x21 travels inside a completed Noise XX session, and a session only
-// completes when the remote static key hashes to the claimed peer ID (see
-// mesh-service.sessionBindsTo). Receiving one therefore proves possession of
-// the Noise private key, so a signing key learned this way may correct a TOFU
-// pin. The reverse never applies: no announce overwrites authenticated state.
+// 0x21 travels inside a completed Noise XX session, and a session completes only
+// when the remote static key hashes to the claimed peer ID (see
+// mesh-service.sessionBindsTo). Receiving one therefore proves possession of the
+// Noise private key, so a signing key learned this way may correct a TOFU pin.
+// The reverse never applies: no announce overwrites authenticated state.
 //
 // Wire format, fixed by bitchat (PRIVATE-MEDIA-MIGRATION.md):
 //

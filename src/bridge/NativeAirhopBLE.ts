@@ -1,15 +1,13 @@
-// The native contract for the BLE mesh radios. Hand-maintained, NOT Codegen
-// input: there is no `codegenConfig` in package.json, so nothing is generated
-// from this file. Both native modules are legacy bridge modules
-// (RCT_EXTERN_REMAP_MODULE on iOS, ReactContextBaseJavaModule on Android),
-// resolved through the New Architecture's interop layer - which is what
-// TurboModuleRegistry hands back below.
+// The native contract for the BLE mesh radios.
 //
-// The spec shape is kept deliberately: it is what a Codegen migration would
-// start from, and it is what keeps the two platforms honest about exposing the
-// same surface.
+// Hand-maintained, NOT Codegen input: package.json declares no `codegenConfig`.
+// The modules behind it are legacy bridge modules (RCT_EXTERN_REMAP_MODULE on
+// iOS, ReactContextBaseJavaModule on Android) resolved through the New
+// Architecture interop layer, which is what TurboModuleRegistry returns below.
+// The spec shape is kept so a Codegen migration has a starting point and both
+// platforms stay honest about exposing the same surface.
 //
-// Do not add protocol logic here - only the raw I/O contract with native.
+// Raw I/O only. Protocol logic belongs in core/.
 import type { EventSubscription, TurboModule } from "react-native";
 import {
   NativeEventEmitter,
@@ -18,200 +16,153 @@ import {
 } from "react-native";
 
 export interface Spec extends TurboModule {
-  // Peripheral (GATT Server - makes this device visible to scanners).
+  // Peripheral role: make this device visible to scanners.
   //
-  // REJECTS rather than resolving when the radio cannot actually start, with
-  // code RADIO_OFF / PERMISSION_DENIED / UNSUPPORTED. Both platforms used to
-  // accept these calls and silently do nothing when the adapter was off or a
-  // permission had not settled, which is how a fresh install ended up with two
-  // dead radios behind a UI that believed they were running.
+  // Rejects rather than resolving when the radio cannot start (RADIO_OFF,
+  // PERMISSION_DENIED, UNSUPPORTED). Accepting the call and doing nothing leaves
+  // dead radios behind a UI that believes they are running.
   //
-  // Two platform differences the caller should know about, both deliberate:
+  // UNSUPPORTED is narrower on Android, meaning "no peripheral role" while
+  // scanning still works, than on iOS, where it means no Bluetooth at all. The
+  // radio controller latches it as never-advertise-again: correct for Android,
+  // redundant on iOS where `supported` is already false.
   //
-  //   UNSUPPORTED is narrower on Android than on iOS. Android means "this chip
-  //   has no peripheral role", which still leaves scanning working. iOS means
-  //   "this device has no Bluetooth at all". The radio controller latches it as
-  //   "never ask to advertise again", which is right for Android and merely
-  //   redundant on iOS, where getRadioState().supported is already false and
-  //   produces the stronger blocker first.
-  //
-  //   iOS remembers the request when the radio is mid-reset. Asked while
-  //   CoreBluetooth reports .resetting or .unknown, iOS records the intent AND
-  //   rejects, then starts by itself once the adapter settles. Android just
-  //   rejects. So on iOS the controller can briefly believe advertising is off
-  //   while it is actually on; the next reconcile calls start again, succeeds,
-  //   and the two agree. Kept because it recovers without waiting for a retry
-  //   tick.
+  // Asked mid-reset (CoreBluetooth `.resetting` or `.unknown`), iOS records the
+  // intent, rejects, then starts once the adapter settles; Android only rejects.
+  // So the controller can briefly believe advertising is off while it is on, and
+  // the next reconcile corrects it. Kept because it recovers without a retry tick.
   startAdvertising(serviceUUID: string, localName: string): Promise<void>;
   stopAdvertising(): Promise<void>;
 
-  // Central (GATT Client - scans for other devices). Same rejection contract.
+  // Central role: scan for other devices. Same rejection contract.
   startScanning(serviceUUIDs: string[]): Promise<void>;
   stopScanning(): Promise<void>;
 
-  // Write raw bytes to a connected peer (base64-encoded for bridge safety)
+  // Write raw bytes to a connected peer, base64-encoded for bridge safety.
   writeToLink(linkID: string, dataBase64: string): Promise<void>;
 
-  // Everything the device will tell us about whether BLE can run right now.
+  // Everything the device will report about whether BLE can run right now.
   //
-  // Needed at startup because adapterStateChanged only fires on a CHANGE, and
-  // needed as a whole because the facts are not independent: on Android 11 and
-  // below "permission granted" does not imply "scan will return results", since
-  // the OS-wide location toggle gates it separately. Answered honestly before
-  // any manager exists - the previous iOS implementation read a manager that
-  // startScanning had not constructed yet, so a healthy iPhone reported
-  // Bluetooth off on every cold launch.
+  // Needed at startup, since adapterStateChanged only fires on a change, and
+  // needed as one answer, since the facts are not independent: on Android 11 and
+  // below a granted permission does not imply a scan returns results, because the
+  // OS location toggle gates them separately. Must answer before any native
+  // manager exists, or a healthy phone reports Bluetooth off on every cold launch.
   getRadioState(): Promise<{
     supported: boolean;
     poweredOn: boolean;
-    // "unknown" means the platform has not said yet. It is not a denial.
-    // Android answers for whatever the mesh needs at this API level: the three
-    // Bluetooth runtime permissions from API 31, ACCESS_FINE_LOCATION below it.
+    // "unknown" means the platform has not answered yet, not that it refused.
+    // Android reports what the mesh needs at this API level: the three Bluetooth
+    // runtime permissions from API 31, ACCESS_FINE_LOCATION below it.
     authorization: "granted" | "denied" | "blocked" | "unknown";
-    // Android: whether a BLE scan on this device counts as a location access,
-    // and therefore whether the toggle below is load-bearing. True only below
-    // API 31, where usesPermissionFlags="neverForLocation" does not exist.
-    // Always false on iOS, which has no such coupling.
+    // Android: whether a scan counts as a location access here, and so whether
+    // the toggle below is load-bearing. True only below API 31, where
+    // `neverForLocation` does not exist. Always false on iOS.
     locationRequiredForScan: boolean;
-    // Android: the OS location toggle, reported literally. Only decides
-    // anything while locationRequiredForScan is true. Always true on iOS.
+    // Android: the OS location toggle, reported literally. Only matters while
+    // locationRequiredForScan is true. Always true on iOS.
     locationServicesEnabled: boolean;
-    // 0-100, or -1 when the platform has not reported yet. Feeds the power
-    // policy (services/power-policy.ts), which decides how hard to scan.
-    // -1 on iOS: CoreBluetooth exposes no scan-rate control, so there is
-    // nothing a battery reading could be used for there.
+    // 0 to 100, or -1 when unreported. Feeds services/power-policy.ts. Always -1
+    // on iOS, which exposes no scan-rate control for it to inform.
     batteryPercent: number;
     charging: boolean;
   }>;
 
-  // How hard to run the radios: "performance" | "balanced" | "power-saver" |
+  // How hard to run the radios: "performance", "balanced", "power-saver" or
   // "ultra-low-power".
   //
   // Android applies scan mode, advertise mode, TX power, RSSI poll interval and
-  // scan duty cycle together, because they are one decision - a duty-cycled
-  // LOW_POWER scan alongside a LOW_LATENCY advertise would save nothing. iOS is
-  // a no-op: CoreBluetooth has no equivalent knob, and it already throttles
-  // background BLE on the app's behalf. Declared for both so the shared
-  // reconciler has one code path.
+  // duty cycle together, because they are one decision: a duty-cycled LOW_POWER
+  // scan beside a LOW_LATENCY advertise saves nothing. iOS is a no-op, having no
+  // equivalent knob and already throttling background BLE. Declared on both so
+  // the reconciler has one code path.
   //
-  // Applying a mode restarts the scan, so the caller is expected to send this
-  // only on an actual change (see PowerPolicy).
+  // Applying a mode restarts the scan, so callers send it only on a real change.
   setPowerMode(mode: string): Promise<void>;
 
-  // Ask the OS to turn Bluetooth on, so the Mesh banner can offer a one-tap fix
-  // instead of describing where to go. Android shows the system enable dialog
-  // and resolves with the result. iOS has no such API and resolves false; the
-  // caller falls back to opening Settings.
+  // Ask the OS to enable Bluetooth, so the Mesh banner can offer a one-tap fix
+  // rather than describing where to go. Android shows the system dialog; iOS has
+  // no such API and resolves false, leaving the caller to open Settings.
   requestEnableBluetooth(): Promise<boolean>;
 
-  // Open the OS location-services settings (Android). Resolves false on iOS.
+  // Open OS location settings (Android). Resolves false on iOS.
   openLocationSettings(): Promise<boolean>;
 
   // Hold the process up so BLE and the relay socket survive backgrounding.
   //
-  // Deliberately NOT tied to advertising. It used to be started and stopped
-  // inside startAdvertising/stopAdvertising, so choosing "Invisible" - which
-  // only stops advertising and keeps scanning and relaying - silently ended
-  // background operation. Android runs a foreground service; iOS is a no-op
-  // (background BLE is granted by UIBackgroundModes, not by us).
+  // Deliberately not tied to advertising: driving it from startAdvertising would
+  // break "Invisible", which stops advertising while still scanning and relaying.
+  // Android runs a foreground service; iOS is a no-op, since background BLE comes
+  // from UIBackgroundModes.
   setBackgroundServiceEnabled(enabled: boolean): Promise<void>;
 
-  // Tor proxy: probe localhost for an active SOCKS5 proxy. ANDROID ONLY in
-  // practice - it looks for Orbot and returns 9050 if reachable, 0 if not.
-  //
-  // iOS always resolves 0, and that is the honest answer rather than a stub:
-  // Orbot does not exist there, and Airhop's own Tor is in-app Arti on a
-  // different port, which NativeAirhopTor.getTorStatus() reports properly. This
-  // used to claim it covered "Orbot/Arti on iOS" while probing Orbot's port, so
-  // it could only ever have timed out and said no.
+  // Probe localhost for a SOCKS5 proxy, returning its port or 0. Android only in
+  // practice: it looks for Orbot and returns 9050 when reachable. iOS resolves 0
+  // honestly rather than as a stub, since Orbot does not exist there and Airhop's
+  // own Tor is in-app Arti on another port, reported by NativeAirhopTor.
   getTorProxyPort(): Promise<number>;
 
-  // Whether Tor routing can actually work right now. Android checks the Orbot
-  // package is installed and a VPN transport is up; the Tor toggle requires both
-  // before turning on, so it never reports "on" while nothing is routing. iOS
-  // uses in-app Arti and resolves both false (it never consults this).
+  // Whether Tor routing can work right now. Android checks that Orbot is
+  // installed and a VPN transport is up, and the Tor toggle requires both, so it
+  // never reports on while nothing is routing. iOS resolves both false and never
+  // consults this.
   getTorAvailability(): Promise<{
     orbotInstalled: boolean;
     vpnActive: boolean;
   }>;
 
   // Watch the VPN transport while Tor is on, emitting 'onVpnLost' when it goes.
+  // getTorAvailability only answers when asked and is called on foreground alone,
+  // so without this the app keeps claiming Tor over clear-net traffic.
   //
-  // getTorAvailability above only answers when asked, and the only caller was
-  // app foreground. Without this the app kept claiming Tor over clear-net
-  // traffic until the user next backgrounded it.
-  //
-  // ANDROID ONLY. iOS resolves immediately and emits nothing: Arti is in-process
-  // and reports its own state through NativeAirhopTor.getTorStatus().
+  // Android only. iOS resolves immediately and emits nothing, since Arti is
+  // in-process and reports its own state.
   startVpnWatch(): Promise<void>;
   stopVpnWatch(): Promise<void>;
 
-  // Required by React Native NativeEventEmitter contract
+  // Required by the NativeEventEmitter contract.
   addListener(eventName: string): void;
   removeListeners(count: number): void;
 }
 
-// Events emitted by native code to TypeScript via NativeEventEmitter:
+// Events emitted by native code:
 //
-// 'AirhopBLE.packetReceived'
-//   { linkID: string, dataBase64: string }
-//   Fired when a connected peer writes bytes to our characteristic.
+//   AirhopBLE.packetReceived    { linkID, dataBase64 }
+//   AirhopBLE.linkConnected     { linkID, role: 'central' | 'peripheral', rssi }
+//   AirhopBLE.linkDisconnected  { linkID }
+//   AirhopBLE.rssiUpdated       { linkID, rssi }
+//   AirhopBLE.adapterStateChanged { enabled }
+//   AirhopBLE.scanFailed        { errorCode }         Android
+//   AirhopBLE.powerStateChanged { batteryPercent, charging }  Android
+//   AirhopBLE.meshStopRequested {}                    Android
+//   onVpnLost                   {}                    Android
 //
-// 'AirhopBLE.linkConnected'
-//   { linkID: string, role: 'central' | 'peripheral', rssi: number }
-//   Fired when a BLE link is established (either direction).
+// Four of them carry a constraint worth stating:
 //
-// 'AirhopBLE.linkDisconnected'
-//   { linkID: string }
-//   Fired when a BLE link drops.
+// adapterStateChanged fires on a real change only. Emitting it from every
+// CBManager state callback reads as a radio change, which restarts the radios,
+// which builds a new manager, which fires another callback.
 //
-// 'AirhopBLE.rssiUpdated'
-//   { linkID: string, rssi: number }
-//   Periodic RSSI readings from connected peers.
+// scanFailed is Android's ScanCallback.onScanFailed: the platform refusing a scan
+// after startScan() returned cleanly. It is the one radio failure the reconciler
+// cannot observe for itself, since it already believes it is scanning, so without
+// the event `actual.scanning` stays true forever and nothing retries. errorCode 6
+// is SCAN_FAILED_SCANNING_TOO_FREQUENTLY and needs a longer stand-down than the
+// usual backoff ladder.
 //
-// 'AirhopBLE.adapterStateChanged'
-//   { enabled: boolean }
-//   The OS Bluetooth radio was switched on or off. Emitted on a real CHANGE
-//   only: iOS previously emitted it from every CBManager state callback, which
-//   the mesh read as a radio change, which restarted the radios, which
-//   constructed a new CBManager, which fired another state callback - fourteen
-//   central and fourteen peripheral managers in ten seconds on an idle phone.
+// powerStateChanged is coalesced to meaningful battery movement and charger
+// changes, not the per-1% stream ACTION_BATTERY_CHANGED delivers. Native applies
+// no policy, only deciding when the number is worth reporting.
 //
-// 'AirhopBLE.scanFailed'
-//   { errorCode: number }
-//   Android only. ScanCallback.onScanFailed, i.e. the platform refused a scan
-//   AFTER startScan() returned cleanly. It is the one radio failure the
-//   reconciler cannot observe on its own - it already believes it is scanning -
-//   so without this event `actual.scanning` stays true forever and nothing
-//   retries. errorCode 6 is SCAN_FAILED_SCANNING_TOO_FREQUENTLY, which needs a
-//   longer stand-down than the usual backoff ladder.
-//
-// 'AirhopBLE.powerStateChanged'
-//   { batteryPercent: number, charging: boolean }
-//   Android only. Emitted when the battery moves enough to possibly matter (a
-//   few percent) or the charger is plugged/unplugged - NOT on every 1% step,
-//   which ACTION_BATTERY_CHANGED delivers and which would be pure noise. Native
-//   applies no policy to it; it only decides when the number is worth
-//   reporting.
-//
-// 'AirhopBLE.meshStopRequested'
-//   {}
-//   Android only. The user tapped "Stop mesh" on the foreground-service
-//   notification. Native raises it rather than stopping the radios itself, so
-//   the decision goes through the same presence path as the in-app control and
-//   the two can never disagree about what the mesh is doing.
-//
-// 'onVpnLost'
-//   {}
-//   Android only, and only while startVpnWatch is registered. The VPN transport
-//   carrying our traffic went away, in practice Orbot being stopped. Native
-//   reports the loss and nothing more; whether Tor was what that VPN carried is
-//   for JS to re-probe. Unprefixed name, matching how native emits it.
+// meshStopRequested is the "Stop mesh" button on the foreground-service
+// notification. Native raises it rather than stopping the radios itself, so the
+// decision goes through the same presence path as the in-app control and the two
+// cannot disagree.
 
 let emitter: NativeEventEmitter | null = null;
 
-// Subscribe to the VPN transport dropping. Returns null on iOS and anywhere the
-// module is absent, so callers need no platform branch.
+// Returns null on iOS and wherever the module is absent, so callers need no
+// platform branch.
 export function subscribeVpnLost(
   listener: () => void,
 ): EventSubscription | null {

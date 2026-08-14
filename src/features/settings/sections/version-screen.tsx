@@ -470,9 +470,6 @@ function PixelHeart({ color }: { color: string }): React.JSX.Element {
 
 function createStyles(Colors: ReturnType<typeof useThemeColors>) {
   return StyleSheet.create({
-    // The credit is pinned to the foot of the page (marginTop auto), so it
-    // lands wherever the content ends: without tab-bar clearance it ends up
-    // behind the floating pill instead of above it.
     content: {
       flexGrow: 1,
       padding: Spacing.base,
@@ -499,9 +496,6 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       color: Colors.textMuted,
       fontFamily: FontFamily.mono,
     },
-    // The release codename as a labeled value: a small uppercase "Codename"
-    // tag beside the name, the same label idiom as the settings section
-    // titles. Reads as intentional rather than a stray word.
     codenameRow: {
       flexDirection: "row",
       alignItems: "center",
@@ -540,9 +534,6 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       color: Colors.textPrimary,
       textDecorationLine: "underline",
     },
-    // Pinned to the foot of the page: flexGrow on the content plus this auto
-    // top margin pushes the credit down even when the page is short. Two
-    // stacked, centered lines: the heart credit, then the license line.
     credit: {
       marginTop: "auto",
       paddingTop: Spacing["2xl"],

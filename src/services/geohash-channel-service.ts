@@ -59,11 +59,17 @@ import { t } from "@i18n";
 import { useActivityStore } from "@store/activity-store";
 import { useBlockedStore } from "@store/blocked-store";
 import { useChatStore } from "@store/chat-store";
-import { useNoticesStore } from "@store/location-notes-store";
+import { useLocationNotesStore } from "@store/location-notes-store";
 import { useMeshStateStore } from "@store/mesh-state-store";
 import { useSettingsStore } from "@store/settings-store";
 import { finalizeEvent, type Event as NostrEvent } from "nostr-tools";
 import { getCoarseLocation, type Coords } from "./location-service";
+
+import {
+  geohashChannel,
+  isManualGeoChannel,
+  manualGeohashOf,
+} from "@utils/channel-key";
 
 // Blocking, on the Nostr side. The mesh enforces it at one chokepoint in
 // `routePacket`; nothing did here, so a blocked person kept posting in location
@@ -85,15 +91,15 @@ function isBlockedPubkey(pubkey: string): boolean {
   return useBlockedStore.getState().isBlocked(`nostr_${pubkey}`);
 }
 
-// Channel name → geohash precision.
+// Channel name -> geohash precision.
 //
 // Cell sizes are the standard geohash grid, chosen to match the coverage each
 // channel already advertises in the UI:
-//   7 → ~153 m      (city block)
-//   6 → ~1.2 km     (neighborhood)
-//   5 → ~4.9 km     (city)
-//   4 → ~39 km      (province / state)
-//   2 → ~1250 km    (region)
+//   7 -> ~153 m      (city block)
+//   6 -> ~1.2 km     (neighborhood)
+//   5 -> ~4.9 km     (city)
+//   4 -> ~39 km      (province / state)
+//   2 -> ~1250 km    (region)
 //
 // #bluetooth is deliberately absent: it is the BLE-only channel and must never
 // be bridged to the internet.
@@ -111,32 +117,16 @@ export const GEO_CHANNEL_PRECISION: Readonly<Record<string, number>> = {
 // jumped to, so it works with no location permission and never moves. The `gh`
 // after the prefix is the bare lowercased geohash that rides the Nostr `g` tag,
 // so it interoperates with bitchat's location channels for the same cell.
-export const MANUAL_GEO_PREFIX = "geohash:";
 
 // The standard geohash base32 alphabet (no a/i/l/o), same as bitchat.
 const GEOHASH_ALPHABET = "0123456789bcdefghjkmnpqrstuvwxyz";
-
-export function isManualGeoChannel(channel: string): boolean {
-  return channel.startsWith(MANUAL_GEO_PREFIX);
-}
 
 export function isGeoChannel(channel: string): boolean {
   return channel in GEO_CHANNEL_PRECISION || isManualGeoChannel(channel);
 }
 
-// Build the channel key for a teleported geohash cell.
-export function geohashChannel(geohash: string): string {
-  return `${MANUAL_GEO_PREFIX}${geohash}`;
-}
-
 // The bare geohash a teleported channel points at, or null for a named/other
 // channel (whose geohash is location-derived, not fixed in the key).
-export function manualGeohashOf(channel: string): string | null {
-  return isManualGeoChannel(channel)
-    ? channel.slice(MANUAL_GEO_PREFIX.length)
-    : null;
-}
-
 // Canonicalise raw user input into a geohash: lowercase, drop a leading #,
 // discard anything outside the alphabet, cap at 12 chars. Mirrors bitchat's
 // LocationStateManager.normalizeGeohash so both accept the same strings.
@@ -178,8 +168,8 @@ const GEO_DM_LOOKBACK_SECONDS = 24 * 60 * 60;
 // both apps show the same "who is here now" count.
 //
 // Paired with the 40-80s presence heartbeat (nextHeartbeatDelayMs in
-// core/nostr/geohash-presence.ts), so five minutes is about four missed rounds of slack.
-// Shortening one without the other makes the list flicker.
+// core/nostr/geohash-presence.ts), so five minutes is about four missed rounds
+// of slack. Shortening one without the other makes the list flicker.
 const PARTICIPANT_TTL_MS = 5 * 60 * 1000;
 
 // A bridged note only counts as "new" for the notification bell if it arrived
@@ -204,8 +194,8 @@ const TAG_TOPIC = "t"; // ["t","urgent"] parity with urgent board posts
 
 // How far back the location-note feed looks.
 //
-// The feed used to carry no `since` at all, so five joined cells each pulled
-// their relays' 200 most recent `#g` notes however old they were. A note that
+// Without a `since`, five joined cells each pull their relays' 200 most recent
+// `#g` notes however old they are. A note that
 // predates this window is either NIP-40 expired or older than the 7-day life of
 // the board post it mirrors, so it has nothing to show; asking for it only
 // bought a bigger cold-start burst to verify and throw away.
@@ -259,40 +249,40 @@ export class GeohashChannelService {
   // Seed for per-geohash key derivation. Never published.
   private readonly geohashSeed: Uint8Array;
 
-  // channel → unsubscribe function for that cell's geo-DM gift-wrap inbox.
+  // channel -> unsubscribe function for that cell's geo-DM gift-wrap inbox.
   private readonly dmSubscriptions = new Map<string, () => void>();
-  // channel → unsubscribe function for that cell's kind-1 location-note feed.
+  // channel -> unsubscribe function for that cell's kind-1 location-note feed.
   private readonly noteSubscriptions = new Map<string, () => void>();
-  // channel → unsubscribe for the NIP-09 deletions that can retract those
+  // channel -> unsubscribe for the NIP-09 deletions that can retract those
   // notes, scoped to the authors we have actually heard from. See
   // resubscribeDeletions for why this is not one standing filter.
   private readonly deletionSubscriptions = new Map<string, () => void>();
-  // channel → authors of the notes we hold there, in the order we last saw
+  // channel -> authors of the notes we hold there, in the order we last saw
   // them, which is what MAX_DELETION_AUTHORS trims against.
   private readonly noteAuthors = new Map<string, Set<string>>();
-  // channel → pending debounce for the above.
+  // channel -> pending debounce for the above.
   private readonly deletionResubscribes = new Map<
     string,
     ReturnType<typeof setTimeout>
   >();
-  // The geo-DM peer → cell binding lives in chat-store (`geoDmCells`), NOT in a
-  // field here. It used to be an in-memory Map, which meant it did not survive a
-  // relaunch: see the note on that field for what a reply then did instead.
+  // The geo-DM peer -> cell binding lives in chat-store (`geoDmCells`), NOT in a
+  // field here, because an in-memory Map does not survive a relaunch. See the
+  // note on that field for what a reply does without it.
   // Read receipts owed over geo DM, keyed by the peer's Nostr pubkey.
   private readonly pendingGeoDmReadAcks = new Map<string, Set<string>>();
 
   // Last resolved position. Retained so refresh() can detect a cell change.
   private coords: Coords | null = null;
-  // channel → resolved geohash for our current position.
+  // channel -> resolved geohash for our current position.
   private readonly channelGeohash = new Map<string, string>();
-  // channel → unsubscribe function.
+  // channel -> unsubscribe function.
   private readonly subscriptions = new Map<string, () => void>();
-  // channel → pubkey → participant.
+  // channel -> pubkey -> participant.
   private readonly participants = new Map<
     string,
     Map<string, GeoParticipant>
   >();
-  // geohash → the identity we post under there. Cached so a user keeps a
+  // geohash -> the identity we post under there. Cached so a user keeps a
   // stable pseudonym within a channel for the session.
   private readonly identities = new Map<string, GeohashIdentity>();
   // One presence broadcaster per geohash, since each signs with its own key.
@@ -542,7 +532,7 @@ export class GeohashChannelService {
       });
   }
 
-  // ---- Presence heartbeat ---------------------------------------------------
+  // ---- Presence heartbeat ----
 
   // Tell the cells we are in that somebody is here.
   //
@@ -626,7 +616,7 @@ export class GeohashChannelService {
     this.presenceByGeohash.clear();
   }
 
-  // ---- Board Nostr bridge ---------------------------------------------------
+  // ---- Board Nostr bridge ----
 
   // Mirror a geohash board post as a kind-1 location note so users who are
   // online (out of BLE range) see it. Signed with our per-cell identity and
@@ -666,15 +656,15 @@ export class GeohashChannelService {
       // own bridged copy is filtered out on receive, so add it optimistically:
       // the author sees their own note the moment it goes out.
       if (expiresAtMs === null) {
-        useNoticesStore.getState().addNote({
+        useLocationNotesStore.getState().addNote({
           id: event.id,
           pubkey: event.pubkey,
-          content,
-          createdAtMs: Date.now(),
           nickname: nickname.length > 0 ? nickname : undefined,
-          geohash,
-          expiresAtMs: undefined,
+          content,
           isUrgent: urgent,
+          geohash,
+          createdAtMs: Date.now(),
+          expiresAtMs: undefined,
         });
       }
       return event.id;
@@ -704,7 +694,7 @@ export class GeohashChannelService {
     }
   }
 
-  // ---- Gateway carrier bridge -----------------------------------------------
+  // ---- Gateway carrier bridge ----
 
   // Publish a pre-signed Nostr event to a cell's relays. Used by an uplink
   // gateway to forward a mesh-only peer's toGateway carrier to the internet.
@@ -757,7 +747,7 @@ export class GeohashChannelService {
     });
   }
 
-  // ---- Geohash direct messages ----------------------------------------------
+  // ---- Geohash direct messages ----
 
   // Whether this Nostr pubkey is someone we met in a location channel, i.e. the
   // caller must route a reply from our per-cell identity rather than our main
@@ -967,7 +957,7 @@ export class GeohashChannelService {
     this.pendingGeoDmReadAcks.set(dm.senderPubkey, pending);
   }
 
-  // ---- Private --------------------------------------------------------------
+  // ---- Private ----
 
   private subscribeChannel(channel: string, geohash: string): void {
     const selfPubkey = this.identityFor(geohash).pubKeyHex;
@@ -1118,11 +1108,10 @@ export class GeohashChannelService {
 
   // Deletions that can retract the notes on screen, asked for BY AUTHOR.
   //
-  // This used to ride the note subscription as a bare `{ kinds: [5], limit: 200 }`
-  // - no author, no tag, no `since` - which is a request for every deletion
-  // event the relay holds, and then a standing feed of every new one. Five
-  // joined cells each opened one, across five geo relays apiece, so a launch
-  // with internet pulled thousands of events that had nothing to do with this
+  // Never a bare `{ kinds: [5], limit: 200 }` on the note subscription. With no
+  // author, no tag and no `since` that requests every deletion event the relay
+  // holds plus a standing feed of every new one. Five joined cells across five
+  // geo relays apiece would pull thousands of events with nothing to do with this
   // app. Every one of them costs a SHA-256 and a schnorr verify inside
   // nostr-tools' socket handler, on the JS thread, before our handler is even
   // reached. That is what froze the app on a fresh install with WiFi on: the
@@ -1132,9 +1121,9 @@ export class GeohashChannelService {
   //
   // Scoping by author loses nothing. handleNoteDeletion already refuses any
   // deletion not signed by the same key that signed the note - `e` tags are
-  // free to write - so a deletion from an author we hold no note from could
-  // never have applied. What used to be filtered after paying for it is now
-  // filtered by the relay.
+  // free to write, so a deletion from an author we hold no note from could never
+  // have applied. The relay filters it rather than the client paying for it
+  // first.
   private resubscribeDeletions(channel: string, geohash: string): void {
     const close = this.deletionSubscriptions.get(channel);
     if (close !== undefined) {
@@ -1163,10 +1152,10 @@ export class GeohashChannelService {
   // whole mechanism: `e` tags are free to write, so a deletion only counts for
   // events signed by the same key that signed the note.
   private handleNoteDeletion(event: NostrEvent): void {
-    const notices = useNoticesStore.getState();
+    const notices = useLocationNotesStore.getState();
     // Flattened once per event rather than once per `e` tag. A deletion may
-    // carry many, and the old shape rebuilt the whole cross-cell note list and
-    // rescanned it for each one - work that grows with the product of the two.
+    // carry many, so rebuilding the whole cross-cell note list and rescanning it
+    // for each one is work that grows with the product of the two.
     let held: { id: string; pubkey: string }[] | null = null;
     for (const [tag, value] of event.tags) {
       if (tag !== "e" || value === undefined) continue;
@@ -1203,18 +1192,18 @@ export class GeohashChannelService {
     // Clamp to now: a relay event may carry a future-dated created_at.
     const createdAtMs =
       Math.min(event.created_at, Math.floor(Date.now() / 1000)) * 1000;
-    useNoticesStore.getState().addNote({
+    useLocationNotesStore.getState().addNote({
       id: event.id,
       pubkey: event.pubkey,
-      content: event.content,
-      createdAtMs,
       nickname,
+      content: event.content,
+      isUrgent,
       geohash,
+      createdAtMs,
       expiresAtMs:
         expiresAtMs !== undefined && Number.isFinite(expiresAtMs)
           ? expiresAtMs
           : undefined,
-      isUrgent,
     });
     // Log a live note on the bell + the room's board badge. Own notes are
     // already filtered above; the recency gate skips replayed history.

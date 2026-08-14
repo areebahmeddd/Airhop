@@ -1,12 +1,11 @@
 // Inner payload of a NOISE_ENCRYPTED direct message, byte-identical to bitchat
 // (NoisePayload.swift, BLENoisePayloadFactory.swift, Packets.swift).
 //
-// After the Noise session decrypts a NOISE_ENCRYPTED packet, the plaintext is a
-// NoisePayload: a single type byte followed by a body. This is what lets bitchat
-// tell a private message apart from a delivery/read receipt on the same
-// encrypted channel. Our old code put raw UTF-8 text here, so bitchat dropped it
-// (its NoisePayload.decode rejects an unknown first byte) and we never sent or
-// understood receipts. This module matches their format exactly.
+// Once the Noise session decrypts the packet, the plaintext is a NoisePayload: a
+// single type byte followed by a body. That byte is what distinguishes a private
+// message from a receipt on the same encrypted channel. It is not optional:
+// bitchat's NoisePayload.decode rejects an unknown first byte, so raw text here
+// is dropped outright.
 
 // bitchat NoisePayloadType (BitchatProtocol.swift). 0x04/0x05 are reserved;
 // verify (0x10/0x11) and vouch (0x12) are later milestones.
@@ -61,7 +60,7 @@ const TLV_CONTENT = 0x01;
 // bitchat's number, not a product decision: `PrivateMessagePacket` in
 // Packets.swift writes one byte of length per field, and both clients refuse
 // anything longer. Raising it needs a versioned or negotiated format agreed
-// across iOS and Android (their #784 has been held on that for months);
+// across iOS and Android (tracked upstream as bitchat #784);
 // reinterpreting the existing length byte in place corrupts a legitimate
 // 255-byte DM from every deployed client.
 //

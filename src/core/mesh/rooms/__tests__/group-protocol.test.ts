@@ -153,7 +153,6 @@ describe("group message (0x25)", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
 // groupStateAction: which question gets asked first.
 //
 // By the time this runs the caller has verified the state's signature and

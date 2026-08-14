@@ -68,15 +68,13 @@ export class Scenario {
         pass: false,
         detail: f.detail,
       });
-      this.world.say("FAIL", `${f.invariant} — ${f.detail}`);
+      this.world.say("FAIL", `${f.invariant}, ${f.detail}`);
     }
   }
 
   get failures(): Check[] {
     return this.checks.filter((c) => !c.pass);
   }
-
-  // ---- reporting ------------------------------------------------------------
 
   report(tailOnly = false): string {
     const lines: string[] = [];
@@ -127,8 +125,6 @@ export class Scenario {
   }
 }
 
-// ---- convenience ------------------------------------------------------------
-
 // Wait for a condition, advancing the world in slices, and give up after a
 // budget. Returns whether it came true, so a scenario can report "never
 // happened" rather than hanging or silently continuing.
@@ -147,6 +143,14 @@ export async function waitFor(
     if (predicate()) return true;
   }
   return false;
+}
+
+// Let the world run for a while with nothing to wait for, which is how a
+// scenario says "and then some time passed". Written out as `waitFor(world, ()
+// => false, ms)` it reads as a mistake, since waiting for `false` looks like a
+// bug rather than a deliberate sleep.
+export async function advanceFor(world: World, ms: number): Promise<void> {
+  await waitFor(world, () => false, ms);
 }
 
 // Same, but for a crowded world where the fine-grained step is the bottleneck

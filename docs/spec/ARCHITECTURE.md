@@ -80,7 +80,7 @@ secp256k1 identity, so presence in one cell cannot be linked to another.
 Usernames are derived from the public key, never chosen:
 
 ```
-peerID 3a9f2c1b → "swift-falcon-3a9f"
+peerID 3a9f2c1b -> "swift-falcon-3a9f"
 ```
 
 This makes impersonation and name squatting impossible, since a name cannot be
@@ -642,7 +642,7 @@ cannot break Ed25519, X25519, ChaCha20-Poly1305, or SHA-256 preimage resistance.
 | Group eviction by a stranger       | A group ID travels in the clear on every group message so relays can carry it. Without the ordering above, anyone who saw one could craft a self-signed state naming themselves creator with a roster omitting the victim, and the victim's client would destroy its own key and drop the room. The creator pin is checked first      |
 | Hostile payment source             | Ecash is redeemed only from a mint the user already added, and incoming proofs are DLEQ-verified before anything is stored                                                                                                                                                                                                            |
 | Cashu double-spend                 | The mint enforces this with blind-signature tracking; the receiver redeems promptly                                                                                                                                                                                                                                                   |
-| Physical device seizure            | Panic wipe by triple-tap, with keys in the keychain, hardware-backed on modern devices. Attachments are swept on a schedule (Privacy → Keep media for: 7 days by default, 14 or 30 by choice, with no unbounded option), so a stored photo does not outlive its conversation                                                          |
+| Physical device seizure            | Panic wipe by triple-tap, with keys in the keychain, hardware-backed on modern devices. Attachments are swept on a schedule (Privacy -> Keep media for: 7 days by default, 14 or 30 by choice, with no unbounded option), so a stored photo does not outlive its conversation                                                         |
 | Screen surveillance                | Notification previews are withheld by default, since the system renders them on the lock screen, and a screenshot taken inside a chat is announced to the other side. Airhop does not cover the app-switcher snapshot                                                                                                                 |
 
 ### Out of scope

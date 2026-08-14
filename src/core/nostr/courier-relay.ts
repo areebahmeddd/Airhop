@@ -29,8 +29,6 @@ const KIND_COURIER_DROP = 1401;
 // Subscription limit: fetch at most this many pending drops per poll.
 const MAX_FETCH_PER_POLL = 20;
 
-// ---- Publish ----------------------------------------------------------------
-
 // Publish a sealed courier envelope to Nostr as a kind 1401 event.
 // The envelope's expiryMs is used as the NIP-40 expiration tag.
 export async function publishCourierDrop(
@@ -61,8 +59,6 @@ export async function publishCourierDrop(
   await client.publish(event);
 }
 
-// ---- Subscribe --------------------------------------------------------------
-
 // Subscribe to incoming courier drops addressed to the given recipient tags.
 // Returns a closer function. The callback receives raw SealedEnvelope objects
 // ready for CourierStore.open().
@@ -89,8 +85,6 @@ export function subscribeCourierDrops(
   return () => closer.close();
 }
 
-// ---- Fetch (one-shot poll) --------------------------------------------------
-
 // Fetch all pending courier drops for the given recipient tags and return them.
 export async function fetchCourierDrops(
   recipientTags: Uint8Array[],
@@ -113,8 +107,6 @@ export async function fetchCourierDrops(
   }
   return envelopes;
 }
-
-// ---- Helpers ----------------------------------------------------------------
 
 function parseCourierDropEvent(event: Event): SealedEnvelope | null {
   if (event.kind !== KIND_COURIER_DROP) return null;

@@ -130,7 +130,6 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       color: Colors.textSecondary,
       fontVariant: ["tabular-nums"],
     },
-    // Thin progress line pinned to the bottom edge of the pill.
     track: {
       position: "absolute",
       left: 0,

@@ -84,8 +84,6 @@ export default function SupportScreen({ onBack }: Props): React.JSX.Element {
 
 function createLocalStyles(Colors: ReturnType<typeof useThemeColors>) {
   return StyleSheet.create({
-    // A small personal note, set in its own soft card so it reads as an aside
-    // rather than a plea tacked under the payment rows.
     note: {
       marginTop: Spacing.xs,
       backgroundColor: Colors.surface,

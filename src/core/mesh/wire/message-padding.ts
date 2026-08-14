@@ -1,12 +1,11 @@
-// PKCS#7-style privacy padding, byte-identical to bitchat's MessagePadding.swift
-// / CompressionUtil so signatures and frames match across implementations.
+// PKCS#7-style privacy padding, byte-identical to bitchat's MessagePadding.
 //
-// bitchat pads every outbound frame up to one of a few fixed block sizes with
-// PKCS#7 bytes (every pad byte equals the pad length), and the Ed25519 signature
-// is computed over the PADDED unsigned encoding. If our padding differs by a
-// single byte, no bitchat node can verify our packets and vice versa.
+// Frames are padded up to one of a few fixed block sizes, every pad byte equal to
+// the pad length, and the Ed25519 signature covers the padded unsigned encoding.
+// A single byte of difference means no bitchat node can verify an Airhop packet,
+// or the reverse.
 
-// Standard block sizes (bitchat MessagePadding.blockSizes).
+// bitchat MessagePadding.blockSizes.
 const BLOCK_SIZES = [256, 512, 1024, 2048];
 
 // Smallest block a payload of `dataSize` fits into, accounting for the ~16-byte

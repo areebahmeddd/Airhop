@@ -43,8 +43,6 @@ function proof(amount: number, n: number): StoredProof {
   };
 }
 
-// ---- Port of bitchat's CashuTokenDecoder -----------------------------------
-
 type CBOR =
   | { k: "uint"; v: number }
   | { k: "text"; v: string }
@@ -218,8 +216,6 @@ function decodeLikeBitchat(raw: string): Chip | null {
     memo,
   };
 }
-
-// ---- The contract -----------------------------------------------------------
 
 describe("a token Airhop sends renders as money in bitchat", () => {
   it("decodes to the right amount, unit and mint under bitchat's reader", () => {

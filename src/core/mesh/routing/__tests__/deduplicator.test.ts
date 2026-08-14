@@ -1,6 +1,11 @@
 /**
  * @jest-environment node
  */
+// The seen-set that stops a flooded packet circulating forever.
+//
+// Every phone rebroadcasts what it has not seen, so without this a packet in a
+// loop of peers never dies. Bounded on purpose: it evicts by age and by size,
+// because an unbounded set on a long-running mesh is a leak.
 import { Deduplicator } from "../deduplicator";
 
 function packetId(first: number): Uint8Array {

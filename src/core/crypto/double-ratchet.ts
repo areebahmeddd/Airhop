@@ -37,8 +37,6 @@ const KDF_CK_CHAIN_BYTE = new Uint8Array([0x02]);
 // (all-zeros; key is single-use so nonce reuse is not a concern here).
 const AEAD_NONCE = new Uint8Array(12); // zero nonce; MK is used once
 
-// ---- Key types --------------------------------------------------------------
-
 export interface RatchetKeyPair {
   readonly priv: Uint8Array; // 32-byte X25519 scalar
   readonly pub: Uint8Array; // 32-byte X25519 public key
@@ -49,8 +47,6 @@ export function generateRatchetKeyPair(): RatchetKeyPair {
   const pub = x25519.getPublicKey(priv);
   return { priv, pub };
 }
-
-// ---- Internal KDF helpers ---------------------------------------------------
 
 // KDF_RK: derives a new root key and chain key from the current root key and
 // a Diffie-Hellman output. Uses HKDF-SHA256 with a fixed info string.
@@ -87,12 +83,11 @@ function aeadDecrypt(
   return chacha20poly1305(mk, AEAD_NONCE, aad).decrypt(ciphertext);
 }
 
-// ---- Header encoding --------------------------------------------------------
 //
 // Header wire format (40 bytes):
-//   [0–31]   DHs_pub  (32 bytes, sender's current ratchet public key)
-//   [32–35]  PN       (u32-BE, number of messages in previous sending chain)
-//   [36–39]  N        (u32-BE, message number in current sending chain)
+//   [0-31]   DHs_pub  (32 bytes, sender's current ratchet public key)
+//   [32-35]  PN       (u32-BE, number of messages in previous sending chain)
+//   [36-39]  N        (u32-BE, message number in current sending chain)
 
 const HEADER_LEN = 40;
 
@@ -121,8 +116,6 @@ function decodeHeader(buf: Uint8Array): MessageHeader {
   };
 }
 
-// ---- Ratchet state ----------------------------------------------------------
-
 // The full Double Ratchet state for one conversation. Keep one per peer.
 // Serializable for storage: no closures, only plain data.
 export interface RatchetState {
@@ -142,12 +135,10 @@ export interface RatchetState {
   Nr: number;
   // Number of messages sent in the previous sending chain (saved in header).
   PN: number;
-  // Skipped message keys: map of "<DH_pub_hex>:<N>" → message key (32 bytes).
+  // Skipped message keys: map of "<DH_pub_hex>:<N>" -> message key (32 bytes).
   // Capped at MAX_SKIP entries total.
   MKSKIPPED: Map<string, Uint8Array>;
 }
-
-// ---- Initialization ---------------------------------------------------------
 
 // Initialize the ratchet as the SENDER (Alice):
 //   - rk:    the shared root key (32 bytes), from the Noise handshake transcript
@@ -199,8 +190,6 @@ export function initReceiver(
   };
 }
 
-// ---- Encrypt ----------------------------------------------------------------
-
 // Whether this ratchet can encrypt yet.
 //
 // A receiver-initialised state has NO sending chain: the Double Ratchet gives
@@ -248,8 +237,6 @@ export function ratchetEncrypt(
   return out;
 }
 
-// ---- Decrypt ----------------------------------------------------------------
-
 // Decrypt a message produced by ratchetEncrypt. Returns the plaintext.
 // Throws on auth failure or if the message key cannot be found.
 //
@@ -288,8 +275,6 @@ export function ratchetDecrypt(
 
   return aeadDecrypt(mk, ciphertext, headerBytes);
 }
-
-// ---- Internal helpers -------------------------------------------------------
 
 // Look up a message key in the skip cache and attempt decryption.
 function trySkippedKey(

@@ -13,7 +13,8 @@ import {
 } from "@core/payments/cashu";
 import { t } from "@i18n";
 import type { AttachmentType, ChatMessage } from "@store/chat-store";
-import { chatDisplayName } from "./conversation-display-name";
+import { selectKeysetIds, useWalletStore } from "@store/wallet-store";
+import { conversationDisplayName } from "./conversation-display-name";
 import { messagePreviewText } from "./message-preview";
 
 // Message results are capped so the results view never renders an unbounded
@@ -181,7 +182,10 @@ function attachmentKindWord(type: AttachmentType): string {
 // the memo / amount summary instead, never the raw token.
 export function searchableMessageText(message: ChatMessage): string {
   if (message.text && mayContainToken(message.text)) {
-    const tokens = findTokensInText(message.text);
+    const tokens = findTokensInText(
+      message.text,
+      selectKeysetIds(useWalletStore.getState()),
+    );
     if (tokens.length > 0) {
       return tokens.map((t) => formatTokenSummary(t.info)).join(" ");
     }
@@ -224,7 +228,7 @@ export function searchChats(query: string, channels: string[]): ChatHit[] {
   if (!q) return [];
   const hits: ChatHit[] = [];
   for (const channel of channels) {
-    const name = chatDisplayName(channel);
+    const name = conversationDisplayName(channel);
     const index = name.toLowerCase().indexOf(q);
     if (index === -1) continue;
     hits.push({ channel, displayName: name, score: scoreMatch(name, index) });

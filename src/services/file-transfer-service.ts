@@ -7,10 +7,10 @@
 // app-level chunking here. Airhop adds two TLV tags (channel, duration) that
 // bitchat skips.
 //
-//   Send:    file bytes → BitchatFilePacket TLV → one FILE_TRANSFER packet
-//            → fragmentPacket → paced FRAGMENT writes, one BLE frame each
-//   Receive: FRAGMENT packets → FragmentManager reassembles the FILE_TRANSFER
-//            packet → decode TLV → validate MIME → cache file → ChatMessage
+//   Send:    file bytes -> BitchatFilePacket TLV -> one FILE_TRANSFER packet
+//            -> fragmentPacket -> paced FRAGMENT writes, one BLE frame each
+//   Receive: FRAGMENT packets -> FragmentManager reassembles the FILE_TRANSFER
+//            packet -> decode TLV -> validate MIME -> cache file -> ChatMessage
 
 import {
   fragmentPacket,
@@ -49,7 +49,7 @@ import {
 import { BRIDGE_CHANNEL, canSendMedia } from "@utils/media-policy";
 import * as FileSystem from "expo-file-system";
 
-// ---- Types ------------------------------------------------------------------
+// ---- Types ----
 
 // Delay between consecutive outbound fragments. Without it the radio drops
 // fragments and the transfer never completes on the far side.
@@ -351,7 +351,7 @@ interface ServiceIdentity {
   signingPrivKey: Uint8Array;
 }
 
-// ---- FileTransferService ----------------------------------------------------
+// ---- FileTransferService ----
 
 export class FileTransferService {
   private readonly identity: ServiceIdentity;
@@ -601,11 +601,11 @@ export class FileTransferService {
 
   // Hand exactly one fragment to the radio and react to what it says.
   //
-  // The whole file depends on this being honest. Progress used to be counted
-  // the instant a fragment was handed over, so a refused write left the sender
-  // marching to 100% and "sent" while the receiver sat on a stream missing its
-  // third fragment forever, went quiet, and failed. Now a refusal keeps the
-  // fragment: it goes back to the front of the queue (order matters to nothing
+  // The whole file depends on this being honest. Counting progress the instant a
+  // fragment is handed over lets a refused write march the sender to 100% and
+  // "sent" while the receiver waits forever on a stream missing its third
+  // fragment. A refusal keeps the fragment instead: it goes back to the front of
+  // the queue (order matters to nothing
   // on the wire, but retrying out of order would leave gaps behind), the pacing
   // eases off to let the stack drain, and nothing is counted as sent until it is.
   private async drainOne(): Promise<void> {
@@ -784,8 +784,8 @@ export class FileTransferService {
     }
 
     // The channel tag is attacker-controlled: it is an arbitrary UTF-8 string
-    // read straight off the wire, and it used to decide, unchecked, which room
-    // the attachment landed in. Two rules bring it in line with the rest of the
+    // read straight off the wire, so it must never decide unchecked which room
+    // the attachment lands in. Two rules bring it in line with the rest of the
     // app, both mirroring what already exists elsewhere:
     //
     //   - It must name a room the user actually joined. onChannelMsg makes the

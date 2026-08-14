@@ -167,8 +167,6 @@ function forgeAnnounce(opts: {
   return toBase64(encodePacket(packet));
 }
 
-// ---------------------------------------------------------------------------
-
 test("C08 a forged ANNOUNCE cannot rebind a known peer's signing key", async () => {
   // C01 proves a message is checked against the signing key bound to the peer
   // it claims to be. This proves an attacker cannot choose that key.

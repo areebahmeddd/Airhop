@@ -13,8 +13,6 @@
 // storage, exactly as the MMKV mock already works. Two phones cannot see each
 // other's files, which is the whole point.
 
-// ---- in-memory expo-file-system --------------------------------------------
-
 interface Node {
   bytes: Uint8Array;
 }
@@ -97,8 +95,6 @@ export function createExpoFileSystemMock(): unknown {
   };
 }
 
-// ---- media bytes ------------------------------------------------------------
-
 // The receiver checks a file's declared MIME against its magic bytes and drops
 // anything that disagrees (wire/file-packet.ts mimeMatchesMagic). Test media
 // therefore has to carry real headers, or every attachment scenario would pass
@@ -140,8 +136,6 @@ export function sameBytes(a: Uint8Array, b: Uint8Array): boolean {
   }
   return true;
 }
-
-// ---- microphone and speaker -------------------------------------------------
 
 // What the fake native voice module recorded about a phone's audio, so a
 // scenario can assert that sound actually reached the speaker rather than that

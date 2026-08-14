@@ -108,7 +108,7 @@ describe("terminal punctuation", () => {
   // in the middle and none at the end reads as text that got cut off, and a
   // screen reader runs the two halves together as one clause.
   //
-  // Ellipsis counts as terminal ("Sending…"), and so does the question mark
+  // Ellipsis counts as terminal ("Sending..."), and so does the question mark
   // every confirm title ends with.
   const SENTENCE_BREAK = /[.!?]["'”)]?\s/;
   // A trailing placeholder is terminated by whatever fills it: "Private channel
@@ -158,7 +158,7 @@ describe("do not translate", () => {
   //
   //   - The transmitted /hug and /slap text. bitchat/ios detects an incoming
   //     emote by matching the English substrings ("hugs <nick>", "slaps <nick>
-  //     around") in ChatPublicConversationCoordinator. Localising what we send
+  //     around") in ChatPublicConversationCoordinator. Localising what is sent
   //     means bitchat stops recognising it. Note bitchat is itself fully
   //     localised and still keeps these as English literals, for this reason.
   //   - Slash command tokens. The hint that describes a command is translated;
@@ -169,7 +169,7 @@ describe("do not translate", () => {
   //
   // ABSENT: the emote verbs Airhop transmits. These must never reach the
   // catalog at all, because the moment one is translatable somebody will
-  // translate it, and bitchat will stop recognising our emotes.
+  // translate it, and bitchat stops recognising Airhop's emotes.
   const MUST_BE_ABSENT = ["hugs", "slaps", "around a bit with a large trout"];
 
   // VERBATIM: protocol identifiers that legitimately appear inside translated

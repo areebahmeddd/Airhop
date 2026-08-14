@@ -32,7 +32,7 @@ import {
 } from "../harness/invariants";
 import { RadioFabric } from "../harness/radio-fabric";
 import { RelayNode } from "../harness/relay-node";
-import { Scenario, waitFor } from "../harness/scenario";
+import { advanceFor, Scenario, waitFor } from "../harness/scenario";
 
 jest.setTimeout(240_000);
 
@@ -63,8 +63,6 @@ function phones(s: Scenario, ids: string[]): SimDevice[] {
     }),
   );
 }
-
-// ---------------------------------------------------------------------------
 
 test("R01 two phones out of range of each other talk through a relay", async () => {
   const s = (scenario = new Scenario({
@@ -274,7 +272,7 @@ test("R04 relays in a loop do not trade a packet forever", async () => {
   );
 
   // Well past delivery, so anything circulating has time to show itself.
-  await waitFor(s.world, () => false, 30_000);
+  await advanceFor(s.world, 30_000);
 
   // Once each, not "the counter stopped". Announces flow for as long as the
   // mesh is up, so a total that stops growing is a dead mesh. What must hold is

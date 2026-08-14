@@ -178,7 +178,6 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       // content is taller than the viewport and `flex: 1` has nothing to give.
       paddingVertical: Spacing.xl,
     },
-    // Card
     card: {
       backgroundColor: Colors.surface,
       borderRadius: Radius.lg,
@@ -249,7 +248,6 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       color: Colors.textSecondary,
       fontWeight: FontWeight.medium,
     },
-    // Explanation
     explanation: {
       fontSize: FontSize.sm,
       color: Colors.textMuted,
@@ -257,8 +255,6 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       lineHeight: FontSize.sm * 1.6,
       paddingHorizontal: Spacing.md,
     },
-    // Footer: same horizontal margin as the app's floating tab bar
-    // (Spacing.base) so the CTA width matches once onboarding hands off.
     footer: {
       paddingHorizontal: Spacing.base,
       paddingBottom: Spacing.md,

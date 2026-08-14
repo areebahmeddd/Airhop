@@ -25,9 +25,9 @@ import {
 // The Bluetooth ceiling on a single ATT attribute value, and therefore on every
 // frame we hand the radio.
 //
-// This has to be a FRAME budget, not a payload budget. It used to be spent as
-// the latter: 469 payload bytes plus a 16-byte header, an 8-byte senderID and a
-// 64-byte signature encoded to 557 bytes, 45 over the limit. Android writes
+// This has to be a FRAME budget, not a payload budget. Spent as the latter, 469
+// payload bytes plus a 16-byte header, an 8-byte senderID and a 64-byte signature
+// encode to 557 bytes, 45 over the limit. Android writes
 // without response, so the stack truncated to MTU-3 and the far side's decoder
 // failed reading a signature whose last bytes never arrived; iOS falls back to a
 // long write, which cannot exceed 512 either. Every fragment of every attachment
@@ -91,8 +91,6 @@ export interface FragmentProgress {
 }
 export type FragmentProgressCallback = (info: FragmentProgress) => void;
 
-// ---- Fragmentation -----------------------------------------------------------
-
 // Only the peer ID: fragments are unsigned, so there is no key to hold.
 export interface FragmentIdentity {
   peerID: string; // 16 hex chars = 8 bytes
@@ -131,10 +129,10 @@ export function fragmentPacket(
       ttl: 7,
       flags: 0,
       senderID: senderIDBytes,
-      // Carry the parent's recipient. A DM's fragments used to go out addressed
-      // to nobody, which made bitchat classify them as public: it archived
-      // sealed private media in its gossip store and re-offered it to third
-      // parties, and relayed each fragment to every neighbour instead of down
+      // Carry the parent's recipient. A DM's fragments addressed to nobody are
+      // classified by bitchat as public: it archives sealed private media in its
+      // gossip store and re-offers it to third parties, and relays each fragment
+      // to every neighbour instead of down
       // the directed path.
       recipientID: packet.recipientID ?? new Uint8Array(8),
       timestamp: Date.now(),
@@ -164,8 +162,6 @@ function buildFragmentPayload(
   buf.set(data, FRAG_HEADER_LEN);
   return buf;
 }
-
-// ---- Fragment header parsing -------------------------------------------------
 
 export interface FragmentHeader {
   streamU64: bigint; // 8-byte stream ID as bigint
@@ -202,8 +198,6 @@ export function decodeFragmentPayload(
     data: payload.slice(FRAG_HEADER_LEN),
   };
 }
-
-// ---- Assembly buffer ---------------------------------------------------------
 
 type AssemblyKey = string; // `${senderHex}_${streamHex}`
 
@@ -337,8 +331,6 @@ export class FragmentManager {
     this.assemblies.clear();
   }
 }
-
-// ---- Helpers -----------------------------------------------------------------
 
 function buildKey(senderID: Uint8Array, streamU64: bigint): AssemblyKey {
   let hex = "";

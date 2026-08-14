@@ -198,12 +198,12 @@ The Android implementation (`BluetoothMeshService.kt`, `MeshCore.kt`) uses:
 
 bitchat does **not** use Nostr for social networking. It uses Nostr as a **message transport**:
 
-| Usage               | Event Kind          | Purpose                           |
-| ------------------- | ------------------- | --------------------------------- |
-| Private DMs         | kind 14 → 13 → 1059 | NIP-17 gift-wrapped DMs           |
-| Location channels   | kind 20000          | Ephemeral geohash room messages   |
-| Presence heartbeats | kind 20001          | Geohash presence announcements    |
-| Courier drops       | kind 1401           | Store-and-forward relay mailboxes |
+| Usage               | Event Kind            | Purpose                           |
+| ------------------- | --------------------- | --------------------------------- |
+| Private DMs         | kind 14 -> 13 -> 1059 | NIP-17 gift-wrapped DMs           |
+| Location channels   | kind 20000            | Ephemeral geohash room messages   |
+| Presence heartbeats | kind 20001            | Geohash presence announcements    |
+| Courier drops       | kind 1401             | Store-and-forward relay mailboxes |
 
 ### 4.3 NIP-17 Gift-Wrap Encryption
 
@@ -269,7 +269,7 @@ These are generated once on first launch and never leave the device (except thro
 
 For **live BLE sessions**, bitchat runs the [Noise Protocol Framework](https://noiseprotocol.org) `XX` pattern:
 
-- **3-message handshake**: `e → e,ee,s,es → s,se`
+- **3-message handshake**: `e -> e,ee,s,es -> s,se`
 - **Mutual authentication**: both sides verify each other's static keys.
 - **Identity hiding**: identities are only revealed after initial key exchange.
 - **Forward secrecy**: session keys are ephemeral; compromise of static keys does not expose past sessions.
@@ -344,8 +344,8 @@ The most novel mechanism. When no transport can deliver:
 
 **Handover:**
 
-- Direct announce from the recipient → deliver over live link and remove envelope.
-- Relayed announce from the recipient → flood a directed copy toward them (throttled to one attempt per envelope per 10 minutes), retain the carried original.
+- Direct announce from the recipient -> deliver over live link and remove envelope.
+- Relayed announce from the recipient -> flood a directed copy toward them (throttled to one attempt per envelope per 10 minutes), retain the carried original.
 
 **Bridge Courier (Internet Extension):**
 
@@ -370,11 +370,11 @@ The most novel mechanism. When no transport can deliver:
 
 ### 7.1 Three Conversation Types in the App
 
-| Conversation                        | Transport             | Internet? | Scope                                 |
-| ----------------------------------- | --------------------- | --------- | ------------------------------------- |
-| `mesh #bluetooth`                   | BLE mesh              | No        | All nearby devices in multi-hop range |
-| Location channels (`#dr5rsj7` etc.) | Nostr                 | Yes       | Geographic area by geohash            |
-| Direct Messages                     | BLE → Nostr → Courier | Optional  | One specific peer                     |
+| Conversation                        | Transport               | Internet? | Scope                                 |
+| ----------------------------------- | ----------------------- | --------- | ------------------------------------- |
+| `mesh #bluetooth`                   | BLE mesh                | No        | All nearby devices in multi-hop range |
+| Location channels (`#dr5rsj7` etc.) | Nostr                   | Yes       | Geographic area by geohash            |
+| Direct Messages                     | BLE -> Nostr -> Courier | Optional  | One specific peer                     |
 
 ### 7.2 DM Routing Priority
 
@@ -480,7 +480,7 @@ There is no design document, no code, and no packet type for video calling. The 
 ### Current Reality
 
 - Both iOS and Android support **voice note recording and playback**.
-- Hold mic button → records AAC `.m4a` → sends as file transfer on release.
+- Hold mic button -> records AAC `.m4a` -> sends as file transfer on release.
 - The receiver hears the audio only **after the entire file arrives**.
 - This works on BLE mesh. It does **not** work on Nostr or geohash channels.
 
@@ -488,7 +488,7 @@ There is no design document, no code, and no packet type for video calling. The 
 
 The design is in bitchat's own `PUSH-TO-TALK-DESIGN.md` and the code is in `bitchat/Features/voice/`. Key elements:
 
-- `AVAudioEngine` input tap → `PTTInputResampler` → `PTTFrameEncoder` → packetizer → BLE.
+- `AVAudioEngine` input tap -> `PTTInputResampler` -> `PTTFrameEncoder` -> packetizer -> BLE.
 - Simultaneously writes to `.m4a` for finalized note delivery (no remux needed).
 - 8 concurrent receive assemblies max, 256 KB per burst cap, 30 s stale cleanup.
 - Flood protection: drop inbound frames beyond ~2× realtime per sender.
@@ -513,7 +513,7 @@ bitchat/ios/bitchat/
 │   ├── BLE/           # the BLE mesh engine
 │   ├── Board/         # Bulletin board feature
 │   ├── Courier/       # CourierStore, MessageOutboxStore, StoreAndForwardMetrics
-│   ├── Gateway/       # BridgeService, GatewayService (mesh→Nostr bridge)
+│   ├── Gateway/       # BridgeService, GatewayService (mesh->Nostr bridge)
 │   ├── Groups/        # GroupProtocol, GroupStore
 │   ├── Prekeys/       # PrekeyBundleStore, LocalPrekeyStore
 │   ├── MessageRouter.swift   # Central routing logic
@@ -534,7 +534,7 @@ bitchat/ios/bitchat/
 | `MessageRouter.swift`          | Routes messages across transports + outbox + courier          |
 | `NostrTransport.swift`         | Nostr as a `Transport` protocol implementation                |
 | `NostrRelayManager.swift`      | Manages WebSocket connections to Nostr relays                 |
-| `GeoRelayDirectory.swift`      | Geohash → nearest relay lookup; fetches `nostr_relays.csv`    |
+| `GeoRelayDirectory.swift`      | Geohash -> nearest relay lookup; fetches `nostr_relays.csv`   |
 | `GossipSyncManager.swift`      | GCS-based public message history reconciliation               |
 | `CourierStore.swift`           | Holds sealed courier envelopes for third-party peers          |
 | `MessageOutboxStore.swift`     | Per-peer sent message queue (24h, 100/peer)                   |
@@ -633,7 +633,7 @@ The `bitchat/georelays` folder is a **standalone toolchain** for discovering, fi
 
 ```
 1. nostr_relay_discovery.py
-   └─ BFS from seed relay → follows kind 3 / kind 10002 events → tests responsiveness
+   └─ BFS from seed relay -> follows kind 3 / kind 10002 events -> tests responsiveness
    └─ Output: relay_discovery_results.json (functioning relay URLs)
 
 2. filter_bitchat_relays.sh
@@ -644,7 +644,7 @@ The `bitchat/georelays` folder is a **standalone toolchain** for discovering, fi
 3. relays_geo_lookup.py <output.csv>
    └─ Downloads DB-IP city IPv4 ranges
    └─ Resolves relay URLs to A records
-   └─ Binary search to map IPv4 → lat/lon
+   └─ Binary search to map IPv4 -> lat/lon
    └─ Output: nostr_relays.csv (URL, Latitude, Longitude)
 ```
 
@@ -791,7 +791,7 @@ This makes it valuable for **protests, disaster zones, events, and remote areas*
 
 ### Panic Wipe
 
-Triple-tap the app logo → **immediately erases**:
+Triple-tap the app logo -> **immediately erases**:
 
 - Identity keys (Keychain)
 - Favorites list
@@ -862,7 +862,7 @@ From the whitepaper's "Future Work" section and observed codebase state:
 2. **Rust client compatibility**: changelog mentions Rust as a third platform target.
 3. **WiFi Aware transport (Android)**: `wifi-aware/` folder exists; higher bandwidth, longer range than BLE.
 4. **Board/bulletin board feature**: shipped on iOS as `BoardPackets.swift` (`0x23`). Not in the Android type registry.
-5. **Gateway / bridge mode**: partially implemented; BLE→Nostr bridge for mesh-only devices.
+5. **Gateway / bridge mode**: partially implemented; BLE->Nostr bridge for mesh-only devices.
 
 ## 19. Technology Stack Summary
 

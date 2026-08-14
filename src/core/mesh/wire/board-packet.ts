@@ -90,8 +90,6 @@ export function isUrgent(post: BoardPost): boolean {
 
 export const URGENT: number = URGENT_FLAG;
 
-// ---- encoders ---------------------------------------------------------------
-
 const enc = new TextEncoder();
 const dec = new TextDecoder("utf-8", { fatal: false });
 
@@ -168,8 +166,6 @@ function tlv(parts: Uint8Array[], type: TLV, value: Uint8Array): void {
   parts.push(value);
 }
 
-// ---- signing / verification -------------------------------------------------
-
 // Build and sign a board post with the author's Ed25519 signing private key.
 export function signBoardPost(
   fields: Omit<BoardPost, "signature">,
@@ -212,8 +208,6 @@ export function verifyBoardWire(wire: BoardWire): boolean {
     return false;
   }
 }
-
-// ---- wire encode/decode -----------------------------------------------------
 
 export function encodeBoardWire(wire: BoardWire): Uint8Array {
   const parts: Uint8Array[] = [];

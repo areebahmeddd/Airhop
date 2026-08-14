@@ -28,7 +28,7 @@ import { TAG_MESSAGE_ID } from "@core/nostr/geohash-presence";
 import type { NostrClient } from "@core/nostr/nostr-client";
 import { useChannelMembersStore } from "@store/channel-members-store";
 import { useChatStore } from "@store/chat-store";
-import { channelDisplayName } from "@utils/peer-display-name";
+import { channelSenderName } from "@utils/peer-display-name";
 import type { Event } from "nostr-tools";
 import { finalizeEvent } from "nostr-tools";
 
@@ -44,9 +44,9 @@ const INITIAL_LIMIT = 200;
 export class PrivateChannelService {
   private readonly client: NostrClient;
   private readonly localPeerID: string;
-  // channel → unsubscribe.
+  // channel -> unsubscribe.
   private readonly subscriptions = new Map<string, () => void>();
-  // channel → derived Nostr identity (cached).
+  // channel -> derived Nostr identity (cached).
   private readonly identities = new Map<string, ChannelNostrIdentity>();
 
   constructor(client: NostrClient, localPeerID: string) {
@@ -121,8 +121,6 @@ export class PrivateChannelService {
     this.identities.clear();
   }
 
-  // ---- Private --------------------------------------------------------------
-
   private subscribe(channel: string, keyB64: string): void {
     const identity = this.identityFor(channel, keyB64);
     if (identity === null) return;
@@ -143,7 +141,7 @@ export class PrivateChannelService {
       if (opened.senderID === this.localPeerID) return;
       if (!useChatStore.getState().channels.includes(channel)) return;
 
-      const senderNickname = channelDisplayName(
+      const senderNickname = channelSenderName(
         opened.senderID,
         opened.senderNickname,
       );

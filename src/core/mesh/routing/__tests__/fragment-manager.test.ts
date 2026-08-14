@@ -1,6 +1,12 @@
 /**
  * @jest-environment node
  */
+// Splitting a packet across BLE frames and putting it back together.
+//
+// A radio frame is small and a message is not, so anything larger travels in
+// pieces that can arrive late, twice, or not at all. Reassembly has to be
+// bounded in both slots and time: a sender who starts many transfers and
+// finishes none must not be able to hold memory open indefinitely.
 import { ed25519 } from "@noble/curves/ed25519.js";
 import { MAX_FRAMED_FILE_BYTES } from "../../wire/file-packet";
 import {
@@ -148,7 +154,7 @@ describe("parseFragmentPayload", () => {
   test("returns null when index >= total", () => {
     const buf = new Uint8Array(13 + 4);
     const view = new DataView(buf.buffer);
-    // stream (8), index=5, total=3 → invalid
+    // stream (8), index=5, total=3 -> invalid
     view.setUint16(8, 5, false);
     view.setUint16(10, 3, false);
     expect(decodeFragmentPayload(buf)).toBeNull();
@@ -346,7 +352,7 @@ describe("FragmentManager reassembly timeout", () => {
   });
 });
 
-// ---- Adversarial reassembly ---------------------------------------------------
+// ---- Adversarial reassembly ----
 //
 // Fragments are unsigned and skip the deduplicator, so both halves of the
 // assembly key (sender ID and stream ID) are attacker-choosable: anyone in

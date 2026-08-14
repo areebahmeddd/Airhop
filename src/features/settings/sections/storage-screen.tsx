@@ -1,7 +1,6 @@
 // Storage & Data sub-screen: a meter, not a settings screen. Nothing here is a
 // preference, so there is nothing to decide; you come to read a number or to
-// free some space. The media preferences that used to sit at the bottom moved
-// to General, where taste belongs (see general-screen.tsx).
+// free some space. Media preferences live in General, where taste belongs.
 //
 // Every number here is real, not decorative:
 //   - Storage Usage: MMKV byteSize for chat-store + wallet-store, plus the

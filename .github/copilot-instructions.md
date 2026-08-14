@@ -33,7 +33,7 @@ Apply these to every suggestion, every file, every PR:
 
 2. **Native code boundary.** Swift lives in `ios/`. Kotlin lives in `android/`. These expose **raw bytes** to TypeScript. Protocol logic, routing, and crypto decisions live in TypeScript (`src/core/`).
 
-3. **Build order.** `src/core/` → native modules → `src/features/` → `src/ui/`. Never write UI before core is unit-tested.
+3. **Build order.** `src/core/` -> native modules -> `src/features/` -> `src/ui/`. Never write UI before core is unit-tested.
 
 4. **Protocol compatibility.** Never change the bitchat v2 packet byte layout (`src/core/mesh/wire/packet-codec.ts`) or the BLE Service UUID without a version bump and compat test. See `docs/spec/PROTOCOLS.md`.
 

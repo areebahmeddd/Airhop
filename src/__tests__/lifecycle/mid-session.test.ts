@@ -2,7 +2,7 @@
  * @jest-environment node
  */
 // Scenarios 11-20: what happens to a running app when the world changes under
-// it — radios toggled, conversations in flight, the app put away and reopened.
+// it, radios toggled, conversations in flight, the app put away and reopened.
 
 jest.mock("expo-location", () => ({}));
 jest.mock("@bridge/NativeAirhopBLE", () => ({
@@ -80,8 +80,6 @@ describe("mid-session radio chaos and lifecycle", () => {
     jest.useRealTimers();
   });
 
-  // ---------------------------------------------------------------------------
-
   test("S11 Bluetooth toggled off then on from quick settings, app in front", async () => {
     const os = new DeviceOS({ platform: "android", apiLevel: 34 });
     const v = new Verdict(
@@ -127,13 +125,11 @@ describe("mid-session radio chaos and lifecycle", () => {
     v.assert();
   });
 
-  // ---------------------------------------------------------------------------
-
   test("S12 Bluetooth toggled while the JS runtime is not available", async () => {
     // Two real windows in one: the receiver is live from initialize(), which
     // runs before the JS bundle has finished loading, and Android leaves the app
     // in the same state when it destroys the Activity while the foreground
-    // service keeps the process — the case App.tsx:325 describes.
+    // service keeps the process, the case the app's mount path describes.
     const os = new DeviceOS({ platform: "android", apiLevel: 34 });
     const v = new Verdict(
       "S12",
@@ -157,8 +153,6 @@ describe("mid-session radio chaos and lifecycle", () => {
     );
     v.assert();
   });
-
-  // ---------------------------------------------------------------------------
 
   test("S12b Bluetooth toggled after the React instance is destroyed", async () => {
     const os = new DeviceOS({ platform: "android", apiLevel: 34 });
@@ -192,8 +186,6 @@ describe("mid-session radio chaos and lifecycle", () => {
     v.assert();
   });
 
-  // ---------------------------------------------------------------------------
-
   test("S13 Bluetooth flipped five times in two seconds", async () => {
     const os = new DeviceOS({ platform: "android", apiLevel: 34 });
     const v = new Verdict(
@@ -224,13 +216,11 @@ describe("mid-session radio chaos and lifecycle", () => {
     v.assert();
   });
 
-  // ---------------------------------------------------------------------------
-
   test("S14 Bluetooth dies mid-conversation while a DM is being sent", async () => {
     const os = new DeviceOS({ platform: "android", apiLevel: 34 });
     const v = new Verdict(
       "S14",
-      "BT off mid-DM — nothing may be silently lost",
+      "BT off mid-DM, nothing may be silently lost",
       os,
     );
     const started = await healthyAndroid(os);
@@ -265,13 +255,11 @@ describe("mid-session radio chaos and lifecycle", () => {
     v.assert();
   });
 
-  // ---------------------------------------------------------------------------
-
   test("S15 Bluetooth cycled while sitting inside a chat thread", async () => {
     const os = new DeviceOS({ platform: "android", apiLevel: 34 });
     const v = new Verdict(
       "S15",
-      "BT off then on inside a thread — link maps must be honest",
+      "BT off then on inside a thread, link maps must be honest",
       os,
     );
     const started = await healthyAndroid(os);
@@ -297,8 +285,6 @@ describe("mid-session radio chaos and lifecycle", () => {
     v.assert();
   });
 
-  // ---------------------------------------------------------------------------
-
   test("S16 internet dropped (airplane mode) with Bluetooth still on", async () => {
     const os = new DeviceOS({ platform: "android", apiLevel: 34 });
     const v = new Verdict("S16", "WiFi/data off, Bluetooth on", os);
@@ -321,9 +307,7 @@ describe("mid-session radio chaos and lifecycle", () => {
     v.assert();
   });
 
-  // ---------------------------------------------------------------------------
-
-  test("S17 airplane mode on then off — both transports recover unattended", async () => {
+  test("S17 airplane mode on then off, both transports recover unattended", async () => {
     const os = new DeviceOS({ platform: "android", apiLevel: 34 });
     const v = new Verdict("S17", "airplane mode round trip", os);
     const started = await healthyAndroid(os);
@@ -351,13 +335,11 @@ describe("mid-session radio chaos and lifecycle", () => {
     v.assert();
   });
 
-  // ---------------------------------------------------------------------------
-
   test("S18 'Stop mesh' from the notification, then the user reopens the app", async () => {
     const os = new DeviceOS({ platform: "android", apiLevel: 34 });
     const v = new Verdict(
       "S18",
-      "Stop mesh, then reopen — there must be a way back",
+      "Stop mesh, then reopen, there must be a way back",
       os,
     );
     const started = await healthyAndroid(os);
@@ -422,8 +404,6 @@ describe("mid-session radio chaos and lifecycle", () => {
     v.assert();
   });
 
-  // ---------------------------------------------------------------------------
-
   test("S19 Invisible presence must keep relaying in the background", async () => {
     const os = new DeviceOS({ platform: "android", apiLevel: 34 });
     const v = new Verdict(
@@ -444,7 +424,7 @@ describe("mid-session radio chaos and lifecycle", () => {
     v.check(
       "the mesh still survives backgrounding while Invisible",
       os.foregroundServiceRunning,
-      "setDiscoverable(false) calls stopAdvertising(), and AirhopBLEModule.kt:346 tears the foreground service down inside it — so choosing Invisible silently gives up background operation for a mesh that is still meant to be scanning and relaying",
+      "setDiscoverable(false) calls stopAdvertising(), and AirhopBLEModule.kt:346 tears the foreground service down inside it, so choosing Invisible silently gives up background operation for a mesh that is still meant to be scanning and relaying",
     );
 
     applyPresence("online", "tester");
@@ -452,8 +432,6 @@ describe("mid-session radio chaos and lifecycle", () => {
     v.check("coming back to Online restores advertising", native.advertising);
     v.assert();
   });
-
-  // ---------------------------------------------------------------------------
 
   test("S20 Activity destroyed and remounted while the mesh is healthy", async () => {
     const os = new DeviceOS({ platform: "android", apiLevel: 34 });
@@ -485,7 +463,6 @@ describe("mid-session radio chaos and lifecycle", () => {
     v.assert();
   });
 
-  // ---------------------------------------------------------------------------
   // iOS: the same chaos, against CoreBluetooth.
 
   test("S11i iOS: Bluetooth toggled off then on", async () => {
@@ -512,7 +489,7 @@ describe("mid-session radio chaos and lifecycle", () => {
     v.check(
       "advertising comes back after Bluetooth returns",
       native.advertising,
-      "peripheralManagerDidUpdateState (AirhopBLEModule.swift:467) returns early for every state that is not poweredOn, so poweredOff never clears isAdvertising. When poweredOn arrives, `if isAdvertising { return }` at :469 skips rebuilding the service — the device is invisible to every peer until the app is force-quit",
+      "peripheralManagerDidUpdateState (AirhopBLEModule.swift:467) returns early for every state that is not poweredOn, so poweredOff never clears isAdvertising. When poweredOn arrives, `if isAdvertising { return }` at :469 skips rebuilding the service, the device is invisible to every peer until the app is force-quit",
     );
     v.check("scanning comes back after Bluetooth returns", native.scanning);
     v.check(
@@ -522,8 +499,6 @@ describe("mid-session radio chaos and lifecycle", () => {
     );
     v.assert();
   });
-
-  // ---------------------------------------------------------------------------
 
   test("S21i iOS: CoreBluetooth managers must not be reallocated forever", async () => {
     // Not one of the twenty; found by the harness while running S07i and worth

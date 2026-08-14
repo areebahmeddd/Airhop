@@ -51,10 +51,10 @@ function getDeviceLocale(): string {
 // stays "Kumaraswamy Layout" and one resolved in Hindi comes back in
 // Devanagari.
 //
-// Keyed on the geohash alone, as this was, the cache never expired: changing
-// the phone's language left every previously seen channel labelled in the old
-// one, permanently. Keying on the language makes a change re-resolve, and
-// keeps both spellings for the user who switches back and forth.
+// Keyed on the geohash alone the cache never expires, so changing the phone's
+// language leaves every seen channel labelled in the old one permanently. Keying
+// on the language makes a change re-resolve, and keeps both spellings for the
+// user who switches back and forth.
 //
 // The language is sampled once per process, so a change made while Airhop is
 // running lands on the next launch rather than immediately. That is the cheap

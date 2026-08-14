@@ -17,11 +17,7 @@
 
 import { Platform } from "react-native";
 
-// ---- Types ------------------------------------------------------------------
-
 export type OEMSettingsURI = string | null;
-
-// ---- Known OEM deep links ---------------------------------------------------
 
 // Each entry is [brandPattern, settingsIntentOrURI].
 // Checked in order; first match wins. Brand is from Platform.constants.Brand
@@ -61,8 +57,6 @@ export const OEM_DEEP_LINKS: readonly { brand: string; uri: string }[] = [
 export const ANDROID_STANDARD_BATTERY_URI =
   "intent:#Intent;action=android.settings.IGNORE_BATTERY_OPTIMIZATION_SETTINGS;end";
 
-// ---- Internal helpers (exported for testing) --------------------------------
-
 // Look up the settings URI for a given brand/OS without touching Platform.
 // This is the pure logic, testable without mocking react-native.
 export function resolveSettingsURI(os: string, brand: string): OEMSettingsURI {
@@ -82,8 +76,6 @@ export function isKnownAggressiveOEM(brand: string): boolean {
   );
 }
 
-// ---- Public API -------------------------------------------------------------
-
 // Returns the most specific settings URI for the current device, or null on iOS.
 export function getBatteryOptimizationSettingsURI(): OEMSettingsURI {
   return resolveSettingsURI(Platform.OS, getDeviceBrand());
@@ -95,8 +87,6 @@ export function needsBatteryOptimizationPrompt(): boolean {
   if (Platform.OS !== "android") return false;
   return isKnownAggressiveOEM(getDeviceBrand());
 }
-
-// ---- Device brand -----------------------------------------------------------
 
 // Reads the device brand from React Native's Platform.constants.
 // Returns empty string if not available (e.g. running in tests without mocks).

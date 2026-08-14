@@ -103,7 +103,7 @@ function matches(filter: Filter, event: NostrEventLike): boolean {
   return true;
 }
 
-// ---- the socket -------------------------------------------------------------
+// ---- the socket ----
 
 class VirtualSocket {
   static readonly CONNECTING = 0;
@@ -246,7 +246,7 @@ class VirtualSocket {
   }
 }
 
-// ---- the fabric -------------------------------------------------------------
+// ---- the fabric ----
 
 export class RelayFabric {
   private readonly relays = new Map<string, Relay>();
@@ -319,7 +319,7 @@ export class RelayFabric {
     }
   }
 
-  // ---- faults ---------------------------------------------------------------
+  // ---- faults ----
 
   setOffline(deviceID: string, offline: boolean): void {
     if (offline) {
@@ -370,7 +370,7 @@ export class RelayFabric {
     for (const url of this.relays.keys()) this.setRelayConditions(url, partial);
   }
 
-  // ---- introspection --------------------------------------------------------
+  // ---- introspection ----
 
   relayUrls(): string[] {
     return [...this.relays.keys()];

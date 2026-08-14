@@ -1,23 +1,17 @@
-// Payload compression, byte-identical to bitchat's CompressionUtil (iOS
-// CompressionUtil.swift / Android CompressionUtil.kt).
+// Payload compression, byte-identical to bitchat's CompressionUtil.
 //
-// bitchat auto-compresses packet payloads with RAW DEFLATE (RFC 1951, no zlib
-// header) and stores the original size so the receiver can restore it. iOS uses
-// Apple's COMPRESSION_ZLIB and Android uses java.util.zip.Deflater with
-// DEFAULT_COMPRESSION (level 6) + nowrap=true; both are reference zlib, and the
-// two interoperate.
+// bitchat compresses payloads with raw DEFLATE (RFC 1951, no zlib header) and
+// stores the original size so the receiver can restore it. iOS uses Apple's
+// COMPRESSION_ZLIB, Android uses java.util.zip.Deflater at DEFAULT_COMPRESSION
+// with nowrap=true; both are reference zlib.
 //
-// Our compressed bytes must match theirs byte for byte. Both sides sign the
-// re-encoded packet (packet-codec signingBytes / bitchat
-// toBinaryDataForSigning) and the VERIFY path re-encodes too, so verification
-// re-compresses. A different encoder means a different signing blob and a
-// signature that will not verify, even though the payload is identical.
-//
-// Deflate output is not canonical: any conforming encoder produces a valid
-// stream, but not the same bytes. pako's original hash does NOT match reference
-// zlib. pako 2.2.0 added the ANZAC++ hash, which does, behind `legacyHash`.
-// pako 3 defaults that option to false, which is what we want, but we set it
-// explicitly so parity does not ride on a default.
+// The output must match theirs byte for byte, because signing and verification
+// both re-encode the packet, so verification re-compresses. A different encoder
+// produces a different signing blob and a signature that will not verify even
+// though the payload is identical. DEFLATE output is not canonical: any
+// conforming encoder emits a valid stream, but not the same bytes. pako's
+// original hash does not match reference zlib; `legacyHash: false` selects the
+// one that does, and it is set explicitly so parity does not ride on a default.
 
 import { deflateRaw, Inflate } from "pako";
 
@@ -68,22 +62,16 @@ export function compress(data: Uint8Array): Uint8Array | null {
 
 // Decompress raw DEFLATE. Returns null on failure, overflow or size mismatch.
 //
-// `originalSize` is a number the SENDER put on the wire, so it is a claim, not a
-// fact. The output is therefore capped at that claim while inflating rather than
+// `originalSize` is a number the sender put on the wire, so it is a claim rather
+// than a fact. Output is capped at that claim while inflating rather than
 // measured afterwards: a packet can declare 100 bytes and carry a stream that
 // expands to a gigabyte, and inflating it whole before noticing is an
-// out-of-memory crash that any unauthenticated peer in radio range can trigger.
+// out-of-memory crash any unauthenticated peer in radio range can trigger.
 //
-// Both bitchat clients bound the output the same way. iOS inflates into a buffer
-// allocated at exactly `originalSize`, so the decoder physically cannot write
-// past it. Android does the same and then asks the inflater for one more byte;
-// producing one proves the declared size was a lie. Streaming and stopping at
-// the first byte over the limit is that check, applied continuously.
-//
-// Nothing legitimate is affected. A valid stream inflates to exactly
-// `originalSize`, and anything else was already refused by the size comparison
-// this replaces. The only change is that the refusal now happens before the
-// memory is spent instead of after.
+// Both bitchat clients bound the output the same way, inflating into a buffer
+// sized at exactly `originalSize`. Stopping at the first byte over the limit is
+// that check applied continuously. A valid stream inflates to exactly
+// `originalSize`, so nothing legitimate is refused.
 export function decompress(
   compressed: Uint8Array,
   originalSize: number,

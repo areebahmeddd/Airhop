@@ -14,7 +14,8 @@
 // Variable sections (in order after the fixed header):
 //   senderID     (8 bytes, always present)
 //   recipientID  (8 bytes, only when hasRecipient = 1; omitted for broadcast)
-//   route        (v2 only, hasRoute = 1: [count u8][hop×8]...), NOT counted in payloadLength
+//   route        (v2 only, hasRoute = 1: [count u8][hopx8]...)
+//                NOT counted in payloadLength
 //   originalSize (lengthField bytes, only when isCompressed = 1)
 //   payload      (compressed bytes when isCompressed, else raw)
 //   signature    (64 bytes, only when hasSignature = 1)
@@ -65,38 +66,27 @@ export const enum PacketType {
   NOSTR_CARRIER = 0x28, // Gateway-ferried signed Nostr event
   VOICE_FRAME = 0x29, // PTT audio burst (matches bitchat-iOS voiceFrame)
 
-  // ---- Airhop extensions ----------------------------------------------------
-  //
-  // Allocated at 0x50, well clear of bitchat's frontier. bitchat assigns
-  // forward and has reached 0x2C (announceV2), with 0x2A and 0x2B reserved
-  // upstream for courier spray-ack. Anything just past their last shipped value
-  // is contested ground: two projects giving one byte two meanings makes each
-  // side's parser depend on the other's validation to not misfire.
-  //
-  // 0x50 leaves bitchat 36 values of room. conformance.test.ts (scenario X03,
-  // which parses their MessageType.swift rather than a copy) fails if they get
-  // within 16 of us, so the next collision is caught in CI rather than in the
-  // field.
+  // Airhop extensions, allocated at 0x50 to stay clear of bitchat's frontier.
+  // bitchat assigns forward and has reached 0x2C, so anything just past their
+  // last shipped value is contested ground: one byte with two meanings makes
+  // each side's parser depend on the other's validation to not misfire. 0x50
+  // leaves them 36 values of room, and conformance.test.ts fails if they come
+  // within 16, so a future collision surfaces in CI rather than in the field.
   CHANNEL_ENC = 0x50, // Airhop private channel: XChaCha20-Poly1305 sealed msg
-  // Public message in a named Airhop channel (a location cell). Not 0x02:
-  // bitchat carries location channels over Nostr and its BLE mesh has one
-  // public room, so these would be rendered in that room, addressed to an
-  // audience their author never chose, on top of the Nostr copy bitchat
-  // already receives. `#bluetooth` is that room and keeps 0x02.
+  // Not 0x02: bitchat's BLE mesh has one public room, so a location cell sent as
+  // 0x02 would render there, addressed to an audience its author never chose, on
+  // top of the Nostr copy bitchat already receives. `#bluetooth` keeps 0x02.
   CHANNEL_MSG_AIRHOP = 0x51,
 }
 
-// Removed types, recorded so they aren't reintroduced by accident:
+// Retired values, recorded so they are not reintroduced:
 //
-//   0x30 VIDEO_FRAME: video was specified over "WiFi Aware or
-//     MultipeerConnectivity", but those are different protocols that cannot
-//     interoperate. iOS<->Android video is impossible on that path, so the
-//     type described a feature that could never work cross-platform.
-//
-//   0x40 CASHU_TOKEN: ecash travels as text inside an ordinary encrypted DM
-//     and is detected by findTokensInText(). That works today and needs no
-//     dedicated packet type; a second path would only be a second thing to
-//     keep in sync.
+//   0x30 VIDEO_FRAME  specified over WiFi Aware or MultipeerConnectivity, which
+//                     cannot interoperate, so cross-platform video was never
+//                     reachable on that path.
+//   0x40 CASHU_TOKEN  ecash travels as text inside an ordinary encrypted DM and
+//                     is found by findTokensInText(). A dedicated type would be
+//                     a second path to keep in sync.
 
 // Flag bit values: must match bitchat BinaryProtocol.Flags exactly.
 export const Flags = {
@@ -127,28 +117,25 @@ const MIN_DECODE_SIZE = V1_HEADER_SIZE + SENDER_ID_SIZE; // 22 bytes
 const TTL_OFFSET = 2; // u8
 const FLAGS_OFFSET = 11; // u8
 
-// The payload exactly as it appeared on the wire, recorded by decodePacket.
+// The payload exactly as it arrived, recorded by decodePacket.
 //
-// DEFLATE output is not canonical: bitchat iOS compresses with Apple's
-// compression_encode_buffer, Android with java.util.zip.Deflater (zlib), and we
-// use pako. All three inflate each other's streams, but none is guaranteed to
-// emit the same bytes for the same input, and the size check in compress() can
-// even make them disagree on whether to compress at all.
-//
-// That matters because both bitchat platforms sign and verify over the
-// RE-ENCODED packet, so a re-encode has to reproduce the originator's exact
-// bytes. Keeping the wire form lets us do that without re-compressing, which
-// fixes two things: signature verification of foreign-encoded packets, and
-// relaying (a relay re-encodes, so recompressing would swap the originator's
-// bytes for ours and break verification for every node downstream).
+// DEFLATE output is not canonical. bitchat iOS compresses with Apple's
+// compression_encode_buffer, Android with java.util.zip.Deflater, and Airhop
+// with pako; all three inflate each other's streams, but none reproduces another's
+// bytes, and the size check in compress() can even make them disagree on whether
+// to compress at all. Since signatures cover the re-encoded packet, a re-encode
+// must reproduce the originator's exact bytes. Keeping the wire form does that
+// without recompressing, which is what makes both foreign-packet verification and
+// relaying work: a relay re-encodes, and recompressing would substitute its own
+// bytes and break verification for every node downstream.
 export interface WirePayload {
-  bytes: Uint8Array; // payload as transmitted (compressed iff `compressed`)
+  bytes: Uint8Array; // as transmitted (compressed iff `compressed`)
   compressed: boolean; // whether the originator compressed it
-  // The exact `payload` array these bytes decode to. The encoder only reuses
-  // the wire form when this is reference-identical to the packet's `payload`,
-  // so replacing the payload (tampering, rewriting) discards the wire form and
-  // falls back to compressing. Without that binding a same-length payload swap
-  // would be signed against the pre-swap bytes and verify anyway.
+  // The exact `payload` array these bytes decode to. The encoder reuses the wire
+  // form only when this is reference-identical to the packet's `payload`, so a
+  // rewritten payload falls back to compressing. Without that binding, a
+  // same-length payload swap would be signed against the pre-swap bytes and
+  // verify anyway.
   forPayload: Uint8Array;
 }
 
@@ -184,8 +171,8 @@ export interface Packet {
 // is file-transfer-service's Paced* pair.
 export type SendFn = (packet: Packet) => void;
 
-// Encode a u64 into big-endian at `offset` in a DataView.
-// JS numbers up to Number.MAX_SAFE_INTEGER (2^53-1) are fine here.
+// Timestamps are u64 on the wire but JS numbers, so these two are exact only up
+// to Number.MAX_SAFE_INTEGER (2^53-1), which is centuries of milliseconds.
 function writeU64BE(view: DataView, offset: number, n: number): void {
   const hi = Math.floor(n / 0x100000000) >>> 0;
   const lo = n >>> 0;
@@ -193,16 +180,11 @@ function writeU64BE(view: DataView, offset: number, n: number): void {
   view.setUint32(offset + 4, lo, false);
 }
 
-// Read a u64 big-endian from a DataView; returns a JS number.
-// Safe for any timestamp value for centuries to come.
 function readU64BE(view: DataView, offset: number): number {
   const hi = view.getUint32(offset, false);
   const lo = view.getUint32(offset + 4, false);
   return hi * 0x100000000 + lo;
 }
-
-// Maximum decodable payload length. Defined in packet-compression so the same
-// number bounds the declared length here and the decompressed output there.
 
 function headerSizeFor(version: number): number | null {
   if (version === 1) return V1_HEADER_SIZE;
@@ -212,25 +194,19 @@ function headerSizeFor(version: number): number | null {
 
 // Whether a packet of this type is padded to a fixed block on the wire.
 //
-// Two separate things are called padding here, and conflating them breaks the
-// protocol in opposite directions:
+// Two different things are called padding here, and conflating them breaks the
+// protocol in opposite directions. The signing preimage is padded for every type
+// always, so pad bytes sit inside the signed material of every signed packet;
+// signingBytes() forces that and this function has no part in it. The outbound
+// frame is padded only where its length would leak something, which is what this
+// decides, mirroring bitchat's BLEOutboundPacketPolicy.padsBLEFrame.
 //
-//   * The signing preimage is padded for every type, always. bitchat's
-//     toBinaryDataForSigning() encodes with padding on, so pad bytes are inside
-//     the signed material of every signed packet. signingBytes() forces it and
-//     this function has no part in that case.
-//   * The outbound frame is padded only where its length would leak something.
-//     That is what this decides, mirroring bitchat's
-//     BLEOutboundPacketPolicy.padsBLEFrame.
-//
-// Padding is a privacy tool for ciphertext whose length reveals the plaintext
-// length. On a type whose size is already public it buys nothing and costs
-// airtime on a ~15 KB/s radio: a 30-byte PING becomes 256 bytes, and a
-// ~309-byte voice burst becomes 512, right on the fragment frame budget and past
-// most negotiated MTUs. bitchat leaves voiceFrame unpadded for that reason, and
-// it is the one type where the cost is a broken feature rather than wasted
-// bytes: the 210-byte burst budget exists to keep voice out of the fragment
-// scheduler.
+// Padding hides plaintext length behind ciphertext length. On a type whose size
+// is already public it buys nothing and costs airtime on a ~15 KB/s radio: a
+// 30-byte PING becomes 256 bytes, and a ~309-byte voice burst becomes 512, past
+// the fragment frame budget and most negotiated MTUs. Voice is the one type where
+// that cost is a broken feature rather than wasted bytes, since the 210-byte
+// burst budget exists to keep it out of the fragment scheduler.
 export function padsBLEFrame(type: PacketType): boolean {
   switch (type) {
     // Noise transport and handshake frames: ciphertext length is message

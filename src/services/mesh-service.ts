@@ -178,9 +178,10 @@ import { useOutboxStore, type PendingMessage } from "@store/outbox-store";
 import { usePeerStore } from "@store/peer-store";
 import { useSettingsStore } from "@store/settings-store";
 import { useTransferStore } from "@store/transfer-store";
+import { geohashChannel, isManualGeoChannel } from "@utils/channel-key";
 import { BRIDGE_CHANNEL, canSendMedia } from "@utils/media-policy";
 import {
-  channelDisplayName,
+  channelSenderName,
   resolveDisplayName,
 } from "@utils/peer-display-name";
 import {
@@ -197,10 +198,8 @@ import {
   type SendOutcome,
 } from "./file-transfer-service";
 import {
-  geohashChannel,
   GeohashChannelService,
   isGeoChannel,
-  isManualGeoChannel,
   type GeoParticipant,
 } from "./geohash-channel-service";
 import { rebindNutzapWatcher } from "./nutzap-watcher-handle";
@@ -213,7 +212,7 @@ import {
 } from "./voice-audio-backend";
 import { WiFiController } from "./wifi-controller";
 
-// ---- Constants --------------------------------------------------------------
+// ---- Constants ----
 
 // HKDF info string used to derive the Double Ratchet root key from the Noise XX
 // handshake transcript hash. Airhop-to-Airhop only: bitchat nodes never receive
@@ -241,10 +240,9 @@ const NOTICE_BELL_WINDOW_MS = 5 * 60 * 1000;
 export interface ChannelSendResult {
   msgId: string;
   bleLinks: number;
-  // A relay was live when the publish went out. This used to be set from the
-  // channel's capability to reach Nostr, which holds whether or not the phone has
-  // internet, so a region message sent over Bluetooth alone reported "sent" and
-  // reached nobody.
+  // A relay was live when the publish went out. Not the channel's capability to
+  // reach Nostr, which holds whether or not the phone has internet: a region
+  // message carried by Bluetooth alone would report "sent" having reached nobody.
   nostr: boolean;
   // No relay was live, but a nearby peer advertises the internet-gateway
   // capability and took the signed event to publish on our behalf. Not delivered,
@@ -358,14 +356,15 @@ function clampNickname(nickname: string): string {
   return n;
 }
 
-// ---- MeshService ------------------------------------------------------------
+// ---- MeshService ----
 
 export class MeshService {
   private readonly identity: Identity;
-  // Derived secp256k1 key pair for Nostr DMs, deterministically derived from the Ed25519 signing key.
+  // secp256k1 key pair for Nostr DMs, derived deterministically from the
+  // Ed25519 signing key.
   private readonly nostrPrivKey: Uint8Array;
   private readonly nostrPubKeyHex: string;
-  // Maps a remote peer's Nostr pubkey hex to their peerID, populated as ANNOUNCEs arrive.
+  // A remote peer's Nostr pubkey hex to their peerID, filled as ANNOUNCEs arrive.
   private readonly nostrPubkeyToPeerID = new Map<string, string>();
 
   // Relay jitter adapts to how many peers we can hear (BLE + WiFi links).
@@ -450,7 +449,7 @@ export class MeshService {
 
   // Currently connected BLE link IDs.
   private readonly connectedLinks = new Set<string>();
-  // peerID (16 hex) → linkID for unicast to direct neighbours.
+  // peerID (16 hex) -> linkID for unicast to direct neighbours.
   private readonly peerToLink = new Map<string, string>();
   // linkID to peerID (16 hex): used to clean up on disconnect.
   private readonly linkToPeer = new Map<string, string>();
@@ -751,13 +750,12 @@ export class MeshService {
 
     // Hand the radios to the reconciler.
     //
-    // This used to be three fire-and-forget calls with their errors discarded:
-    // read the adapter state, start scanning, start advertising. On a fresh
-    // install all three raced the permission grant becoming effective in the
-    // Bluetooth stack, all three failed, all three failures were swallowed, and
-    // nothing retried - so the app sat with two dead radios and a UI that had
-    // no idea. The controller reads the device first, publishes the one reason
-    // it cannot run, and retries with backoff until it can.
+    // Not three fire-and-forget calls (read adapter state, start scanning, start
+    // advertising) with their errors discarded. On a fresh install all three race
+    // the permission grant becoming effective in the Bluetooth stack, and three
+    // swallowed failures leave two dead radios behind a UI that has no idea. The
+    // controller reads the device first, publishes the one reason it cannot run,
+    // and retries with backoff until it can.
     this.radio.start();
 
     // Periodic ANNOUNCE so nearby peers learn our identity.
@@ -770,11 +768,11 @@ export class MeshService {
           // the GATT server is mid-setup, another transfer has the link busy -
           // and the link is fine a moment later.
           //
-          // This used to `connectedLinks.delete(linkID)`, which was
-          // unrecoverable: nothing re-adds a link except a fresh linkConnected
-          // event, and that never comes for a link that stayed up. One
-          // transient refusal therefore removed a healthy neighbour
-          // permanently. The phone then believed it had no neighbours at all,
+          // Never `connectedLinks.delete(linkID)`, which is unrecoverable:
+          // nothing re-adds a link except a fresh linkConnected event, and that
+          // never comes for a link that stayed up. One transient refusal would
+          // remove a healthy neighbour permanently, leaving the phone believing
+          // it had no neighbours at all,
           // so sendChannelMessage reported bleLinks: 0 and the composer marked
           // every subsequent message FAILED - on a radio that was working, next
           // to a peer that was listening. Found by a scenario where one phone
@@ -964,7 +962,7 @@ export class MeshService {
           // connected peer, throttling how often a NEW one is minted.
           //
           // bitchat-ios has an explicit BLEAnnounceThrottle for this, with
-          // bleForceAnnounceMinIntervalSeconds = 0.15 (TransportConfig.swift:280)
+          // bleForceAnnounceMinIntervalSeconds = 0.15 (TransportConfig.swift)
           // gating even forced announces. Airhop had no equivalent: every
           // link-up built a freshly timestamped packet, and since the packet ID
           // covers the timestamp, each one was a distinct packet that every
@@ -983,11 +981,11 @@ export class MeshService {
           // forward-secret courier mail to us while we are offline.
           //
           // To the NEW LINK only, and reusing the current bundle packet rather
-          // than minting a fresh one. This used to be a full-mesh broadcast of a
-          // newly-timestamped packet on every single link-up, which is
-          // quadratic in a crowded room and, because each copy had a distinct
-          // packet ID, could not be suppressed by anybody's deduplicator: every
-          // emission flood-filled the whole mesh at TTL 7. Twelve phones walking
+          // than minting a fresh one. A full-mesh broadcast of a freshly
+          // timestamped packet on every link-up is quadratic in a crowded room
+          // and, because each copy carries a distinct packet ID, no deduplicator
+          // can suppress it: every emission flood-fills the mesh at TTL 7. Twelve
+          // phones walking
           // into range of each other put 6,597 PREKEY_BUNDLE packets on the air
           // in 400ms against 669 ANNOUNCE - 90% of all airtime, before anyone
           // had said a word. The bundle still reaches the wider mesh, because
@@ -1174,8 +1172,6 @@ export class MeshService {
       this.radio.refresh();
     });
   }
-
-  // ---------------------------------------------------------------------------
 
   // Peers whose packets we have rejected as stale since the last one we
   // accepted. Its size is the signal, not its contents.
@@ -1384,11 +1380,10 @@ export class MeshService {
   // Dispatch a decoded (and flood-deduped) packet to the correct handler.
   // Also called for reassembled inner packets from the fragment pipeline.
   private routePacket(packet: Packet, linkID: string): void {
-    // Single chokepoint for blocking. Enforcing this per-handler previously
-    // missed CHANNEL_MSG, NOISE_ENCRYPTED, FILE_TRANSFER and Nostr, so a
-    // blocked peer could still post in channels, DM you, send you files, and
-    // resurrect a deleted conversation. Everything that carries content from a
-    // peer is dropped here.
+    // Single chokepoint for blocking. Enforced per-handler it is easy to miss
+    // CHANNEL_MSG, NOISE_ENCRYPTED, FILE_TRANSFER or Nostr, and a blocked peer
+    // that can still post in channels, DM, send files and resurrect a deleted
+    // conversation is not blocked. Everything carrying peer content drops here.
     //
     // ANNOUNCE is deliberately exempt: it is still needed to maintain relay
     // topology so blocking someone doesn't degrade the mesh for everyone
@@ -1442,7 +1437,7 @@ export class MeshService {
         // Safe for interop in both directions: we always set SIGNED and sign on
         // the send path, and bitchat already refuses the unsigned case
         // ("Dropping raw file transfer with missing/invalid signature",
-        // BLEFileTransferHandler.swift:143). Fragmented files are covered too -
+        // BLEFileTransferHandler.swift). Fragmented files are covered too -
         // fragmentPacket carries the whole signed inner packet as its data, so a
         // reassembled packet arrives back here still carrying its signature.
         if (!this.senderIsAuthentic(packet, bytesToHex(packet.senderID)))
@@ -1475,9 +1470,7 @@ export class MeshService {
     }
   }
 
-  // ---------------------------------------------------------------------------
-  // Live push-to-talk
-  // ---------------------------------------------------------------------------
+  // ---- Live push-to-talk ----
 
   // A burst packet from a nearby talker. Signed like any public message, so an
   // unsigned or forged frame is dropped before a decoder ever sees it: the
@@ -1785,9 +1778,7 @@ export class MeshService {
     this.reportPttActivity();
   }
 
-  // ---------------------------------------------------------------------------
-  // Noise XX handshake handlers
-  // ---------------------------------------------------------------------------
+  // ---- Noise XX handshake handlers ----
 
   // Dispatch an incoming NOISE_HANDSHAKE packet through the correct leg of
   // the three-message Noise XX exchange, then call split() once the handshake
@@ -2031,9 +2022,9 @@ export class MeshService {
       // descends from the Noise chaining key, so it depends on the ephemeral DH
       // outputs and no observer can reconstruct it.
       //
-      // It must not come from the transcript hash, which is what this used to
-      // do. The reasoning behind that was wrong in a specific way worth
-      // recording: Noise XX does mix both parties' ephemeral keys into the
+      // It must not come from the transcript hash. The tempting reasoning is
+      // wrong in a specific way worth recording: Noise XX does mix both
+      // parties' ephemeral keys into the
       // handshake, but it mixes the ephemeral PUBLIC keys into the hash `h` via
       // mixHash, while the secret DH outputs go into the chaining key `ck` via
       // mixKey. Every input to `h` is a byte that was transmitted in the clear,
@@ -2425,7 +2416,7 @@ export class MeshService {
     }
 
     // Nostr read acks: the conversation is keyed either by the sender's Nostr
-    // pubkey (nostr_… thread) or by a real peerID whose contact carries an npub.
+    // pubkey (nostr_... thread) or by a real peerID whose contact carries an npub.
     const nostrPubkey = peerID.startsWith("nostr_")
       ? peerID.slice("nostr_".length)
       : useContactsStore.getState().getContact(peerID)?.nostrPubkeyHex;
@@ -2690,9 +2681,7 @@ export class MeshService {
     }
   }
 
-  // ---------------------------------------------------------------------------
   // Courier: store-and-forward for peers we can't reach directly
-  // ---------------------------------------------------------------------------
 
   // Initial spray budget: how many peers may carry a copy.
   private static readonly COURIER_COPIES = 4;
@@ -2937,11 +2926,10 @@ export class MeshService {
         //
         // Spray-and-wait deliberately puts several copies on the mesh, each
         // resealed by its carrier with a fresh timestamp, so no envelope-derived
-        // identity can collapse them. The id used to be built from the relaying
-        // carrier's clock, which meant up to four carriers produced four
-        // identical bubbles for one message - and a courier copy never collapsed
-        // against the direct copy either, because the direct one arrives under
-        // the sender's id. Both are one comparison now.
+        // identity can collapse them. Building the id from the relaying
+        // carrier's clock gives four carriers four identical bubbles for one
+        // message, and never collapses a courier copy against the direct copy,
+        // which arrives under the sender's id. Both are one comparison here.
         if (this.openedCourierIDs.has(pm.messageID)) return;
         this.rememberEventID(this.openedCourierIDs, pm.messageID);
 
@@ -3174,7 +3162,7 @@ export class MeshService {
   // enough to make four devices render a message attributed to a peer that does
   // not exist, which is how this was found.
   //
-  // bitchat-ios does not have either hole: BLEPublicMessageHandler.swift:88-93
+  // bitchat-ios does not have either hole: BLEPublicMessageHandler.swift
   // computes `verifiedViaRegistry` as `key.map { verify } ?? false` - an absent
   // key is a FAILED check, not a skipped one - and drops anything that neither
   // verifies against the registry nor against a persisted identity, logging
@@ -3241,18 +3229,17 @@ export class MeshService {
 
     // Only accept traffic for channels the user has actually joined.
     //
-    // This used to call addChannel() unconditionally, which meant any peer in
-    // radio range could inject arbitrary channels into someone's list just by
-    // broadcasting one message to a name of their choosing, with no consent, no
-    // filtering. Joining is an explicit act (bitchat works the same way: you
-    // join a channel by name), so a message for an unknown channel is dropped.
+    // Never addChannel() unconditionally: that lets any peer in radio range
+    // inject arbitrary channels into someone's list by broadcasting one message
+    // to a name of their choosing. Joining is an explicit act, as it is in
+    // bitchat, so a message for an unknown channel is dropped.
     if (!useChatStore.getState().channels.includes(channel)) return;
 
     // Public channels are open to anyone in range, so a nickname there is
     // self-asserted and two peers can claim the same one. Suffixing with the
     // peer ID makes impersonation visible, and matches how names are rendered
     // in geohash channels so one person looks the same on both transports.
-    const nickname = channelDisplayName(
+    const nickname = channelSenderName(
       senderID,
       this.registry.get(senderID)?.nickname,
     );
@@ -3289,7 +3276,7 @@ export class MeshService {
     for (const [channel, keyB64] of Object.entries(channelKeys)) {
       const opened = openChannelMessage(keyB64, packet.payload);
       if (opened === null) continue;
-      const nickname = channelDisplayName(senderID, peer?.nickname);
+      const nickname = channelSenderName(senderID, peer?.nickname);
       // The decrypt succeeding IS the membership proof, and this is the only
       // place it exists: a private channel has no roster on the wire, so who is
       // in the room can only be learned from who can open its messages.
@@ -3310,7 +3297,7 @@ export class MeshService {
     }
   }
 
-  // ---- Public API -----------------------------------------------------------
+  // ---- Public API ----
 
   // Broadcast to a channel over every transport that channel spans.
   //
@@ -3319,8 +3306,8 @@ export class MeshService {
   // same city but out of Bluetooth range actually receives it, which is what
   // "#city" claimed to do all along. #bluetooth is never bridged.
   // Returns where the message actually went, so the UI can tell the user when
-  // it reached nobody. Previously this returned void and a broadcast with zero
-  // connected links was dropped on the floor while the bubble looked sent.
+  // it reached nobody. Returning void hides a broadcast with zero connected
+  // links behind a bubble that looks sent.
   // `nearbyOnly` keeps a public #bluetooth message radio-only: it is broadcast
   // over Bluetooth but never bridged to the internet, even while bridging is on.
   sendChannelMessage(
@@ -3621,7 +3608,7 @@ export class MeshService {
     return this.geoChannels?.relaysForGeohash(geohash) ?? [];
   }
 
-  // ---- Bulletin board -------------------------------------------------------
+  // ---- Bulletin board ----
 
   // Our Ed25519 signing public key: the author key stamped on board posts, so
   // the UI can tell which notices are ours (and therefore deletable).
@@ -3801,14 +3788,14 @@ export class MeshService {
     this.broadcastPacket(packet);
   }
 
-  // ---- One-time prekeys (0x24) ----------------------------------------------
+  // ---- One-time prekeys (0x24) ----
 
   // The greeting ANNOUNCE we are currently handing to new links, and when it
   // was minted. See the linkConnected handler for why it is held rather than
   // rebuilt.
   private greetingAnnounce: { packet: Packet; builtAtMs: number } | null = null;
 
-  // bitchat-ios TransportConfig.swift:280, bleForceAnnounceMinIntervalSeconds.
+  // bitchat-ios TransportConfig.swift, bleForceAnnounceMinIntervalSeconds.
   // The floor on how often a forced announce may be re-originated.
   private static readonly FORCE_ANNOUNCE_MIN_INTERVAL_MS = 150;
 
@@ -3927,7 +3914,7 @@ export class MeshService {
     this.peerPrekeys.ingest(bundle);
   }
 
-  // ---- Private groups (0x25) ------------------------------------------------
+  // ---- Private groups (0x25) ----
 
   // The GroupMember for a peer we can build a roster entry from (needs their
   // Noise + signing keys, learned from an announce or a scanned card).
@@ -4181,10 +4168,10 @@ export class MeshService {
     // group's key so nothing further can be read. (The notice carries a throwaway
     // zero key, so there is nothing to keep anyway.)
     //
-    // Say so before the room goes. Removal used to delete the group and the
-    // channel in silence, and `removeChannel` takes the whole message history
-    // with it, so a conversation and every message in it vanished with no
-    // explanation. bitchat tells the user (system.group.removed_from); this keeps
+    // Say so before the room goes. `removeChannel` takes the whole message
+    // history with it, so a silent removal makes a conversation and every
+    // message in it vanish with no explanation. bitchat tells the user
+    // (system.group.removed_from); this keeps
     // the thread in place, marks it read-only by virtue of having no key, and
     // leaves a system line saying what happened. The user can then delete it
     // themselves, which is the one thing they could not do before.
@@ -4214,7 +4201,7 @@ export class MeshService {
       return;
     }
 
-    // First time we see this group is a genuine "you were added" — surface it
+    // First time we see this group is a genuine "you were added", surface it
     // as a local system notice so the new room isn't a silent surprise.
     const wasNew = held === undefined;
     useGroupStore.getState().upsertFromState(state);
@@ -4381,7 +4368,7 @@ export class MeshService {
     else store.advance(id, p.receivedBytes);
   }
 
-  // ---- Gateway carrier (0x28) -----------------------------------------------
+  // ---- Gateway carrier (0x28) ----
 
   // A Nostr event ferried over the mesh by a gateway. Two flows:
   //   fromGateway (broadcast): a gateway with internet rebroadcast a geohash
@@ -4578,7 +4565,7 @@ export class MeshService {
     return true;
   }
 
-  // ---- Gateway origination (0x28) -------------------------------------------
+  // ---- Gateway origination (0x28) ----
 
   // Uplink: relays were unreachable for one of our own geohash posts. If a
   // nearby peer advertises the gateway capability, ferry the signed event to it
@@ -4677,7 +4664,7 @@ export class MeshService {
     }
   }
 
-  // ---- Mesh diagnostics (ping / pong) ---------------------------------------
+  // ---- Mesh diagnostics (ping / pong) ----
 
   // Send a directed echo request to a peer and resolve with its round-trip
   // latency and hop count, or null if no pong arrives within the timeout. The
@@ -4861,9 +4848,9 @@ export class MeshService {
       // simply walk back to us. The two paths are complementary, and the
       // recipient dedupes by message id if both arrive.
       const carried = this.sendViaCourier(recipientPeerID, text, msgID);
-      // Genuinely queue it. This used to be dropped while the UI said
-      // "queued for delivery" while the message was gone for good, even if the
-      // peer reappeared moments later.
+      // Genuinely queue it. Dropping it here while the UI says "queued for
+      // delivery" loses the message for good, even if the peer reappears
+      // moments later.
       useOutboxStore.getState().enqueue({
         id: msgID,
         recipientPeerID,
@@ -5113,7 +5100,7 @@ export class MeshService {
     return true;
   }
 
-  // ---- Payment helpers (used by wallet feature layer) ----------------------
+  // ---- Payment helpers (used by wallet feature layer) ----
 
   // The local peer ID derived from the noise public key.
   getPeerID(): string {
@@ -5246,9 +5233,9 @@ export class MeshService {
   // a message that did go out.
   // Tell the composer about mail the queue has given up on.
   //
-  // Eviction used to be silent: an entry past its TTL simply vanished while its
-  // bubble kept the "waiting to send" hourglass forever, which is exactly the
-  // silent-loss shape the outbox exists to prevent. A message that is never
+  // Eviction is never silent. An entry vanishing past its TTL while its bubble
+  // keeps the "waiting to send" hourglass forever is exactly the silent-loss
+  // shape the outbox exists to prevent. A message that is never
   // going out has to say so, the same way a refused send does, so the user can
   // decide to try another way.
   private reportDroppedMail(dropped: PendingMessage[]): void {
@@ -5395,8 +5382,8 @@ export class MeshService {
     //
     // iOS raises "inactive" for the app switcher, Control Center and every
     // permission dialog, and emits it on both edges of a background round trip,
-    // so a single pull-down of Control Center used to re-publish the whole
-    // pending outbox to relays three times. Relay reconnects flap similarly.
+    // so without this a single pull-down of Control Center re-publishes the
+    // whole pending outbox to relays three times. Relay reconnects flap similarly.
     const now = Date.now();
     if (now - this.lastOutboxRetryMs < OUTBOX_RETRY_MIN_INTERVAL_MS) return;
     this.lastOutboxRetryMs = now;
@@ -5407,11 +5394,10 @@ export class MeshService {
     for (const peerID of peerIDs) {
       // Retry for EVERY peer with mail owed, including directly linked ones.
       //
-      // This used to skip anyone we held a link to, on the reasoning that a
-      // direct link means the message already went. That was true only while
-      // the queue was cleared optimistically on send. Now an entry survives
-      // until the recipient acknowledges it, so one still sitting here against
-      // a connected peer is precisely the case worth retrying: it went out and
+      // Does not skip peers we hold a link to. That would be right only if the
+      // queue were cleared optimistically on send; an entry survives until the
+      // recipient acknowledges it, so one still sitting here against a connected
+      // peer is precisely the case worth retrying: it went out and
       // was never acknowledged, which is what happens when it overtook the
       // handshake's msg3 and was dropped by a session that was not ready.
       //
@@ -5451,8 +5437,8 @@ export class MeshService {
   // Toggle BLE advertising only, leaving scanning untouched. Used for
   // "Invisible" status: peers can still be discovered, but we no longer
   // broadcast our own presence - and, importantly, we keep relaying and keep
-  // the background service, which the old direct call to stopAdvertising()
-  // silently gave up.
+  // the background service, which a direct call to stopAdvertising() silently
+  // gives up.
   setDiscoverable(enabled: boolean): void {
     this.radio.setDiscoverable(enabled);
   }
@@ -5470,9 +5456,9 @@ export class MeshService {
     this.radio.refresh();
     // Every reason to re-read the Bluetooth stack is a reason to re-try the
     // WiFi attach: both are refused by a permission that has just been granted,
-    // and both are refused by a radio the user has just switched on. The two
-    // used to diverge here, which is why turning WiFi on and returning to the
-    // app fixed Bluetooth and left the fast path dead until a relaunch.
+    // and both are refused by a radio the user has just switched on. If the two
+    // diverge here, turning WiFi on and returning to the app fixes Bluetooth and
+    // leaves the fast path dead until a relaunch.
     this.wifi.refresh();
   }
 
@@ -5830,8 +5816,8 @@ export class MeshService {
     // Say goodbye first, then take the radios down, with a short grace between
     // the two so the farewell actually leaves.
     //
-    // The old order did the opposite of what its own comment claimed.
-    // `radio.stop()` is not just a flag: it reconciles on the same tick and
+    // Order matters here. `radio.stop()` is not just a flag: it reconciles on
+    // the same tick and
     // reaches the native "stop scanning, stop advertising" call before it
     // returns, so the LEAVE and the voice END were handed to a transport that
     // had already been told to shut. A peer going Away vanished from everyone
@@ -6010,7 +5996,7 @@ export class MeshService {
   }
 }
 
-// ---- Singleton access -------------------------------------------------------
+// ---- Singleton access ----
 
 let _instance: MeshService | null = null;
 

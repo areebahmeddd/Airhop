@@ -20,7 +20,6 @@
 // bitchat shows raw text.
 //
 // What "verification" means offline
-// ---------------------------------
 // `verifyTokenOffline` runs NUT-12 DLEQ checks against the mint's cached public
 // keys. A passing DLEQ proves the mint really signed this proof, so it catches
 // forged and tampered tokens. It cannot prove the proof is *unspent* - only the
@@ -39,7 +38,7 @@ import {
 } from "@cashu/cashu-ts";
 import type { StoredProof } from "@store/wallet-store";
 
-// ---- Constants --------------------------------------------------------------
+// ---- Constants ----
 
 // Upper bound on an accepted token string. Real tokens are a few KB.
 const MAX_TOKEN_LENGTH = 60_000;
@@ -62,7 +61,7 @@ const TOKEN_HINTS = ["cashuA", "cashuB", "cashu:"];
 // `cashuA`/`cashuB`, which is exactly the bearer string we want.
 const TOKEN_PATTERN = /\bcashu[AB][A-Za-z0-9._-]{40,}\b/g;
 
-// ---- Types ------------------------------------------------------------------
+// ---- Types ----
 
 export interface TokenInfo {
   version: "A" | "B";
@@ -85,7 +84,7 @@ export interface TokenInfo {
 
 export interface EmbeddedToken {
   info: TokenInfo;
-  // The bare `cashuA…`/`cashuB…` string as it appeared in the message body.
+  // The bare `cashuA...`/`cashuB...` string as it appeared in the message body.
   raw: string;
   // Character offset in the message text where the token starts.
   offset: number;
@@ -103,7 +102,7 @@ export type DleqResult =
   // was nothing to check. Not a failure, just no offline assurance.
   | { status: "unchecked"; reason: string };
 
-// ---- Detection --------------------------------------------------------------
+// ---- Detection ----
 
 // Whether a string could contain a Cashu token. Cheap enough to call per
 // message render before the full scan.
@@ -115,11 +114,14 @@ export function mayContainToken(text: string): boolean {
 // Safe on attacker-controlled content: bounded scan window, bounded matches,
 // and every decode failure drops the candidate rather than throwing.
 //
-// Tokens are deduplicated by their bare string, so `cashu:cashuA…` and the same
-// `cashuA…` written twice in one message yield exactly one card. The previous
+// Tokens are deduplicated by their bare string, so `cashu:cashuA...` and the same
+// `cashuA...` written twice in one message yield exactly one card. The previous
 // implementation scanned once per URI prefix and deduplicated on the raw slice
 // including the prefix, which rendered the same bearer token as two cards.
-export function findTokensInText(text: string): EmbeddedToken[] {
+export function findTokensInText(
+  text: string,
+  keysetIds: readonly string[] = [],
+): EmbeddedToken[] {
   if (!mayContainToken(text)) return [];
   const scanned =
     text.length > MAX_SCAN_LENGTH ? text.slice(0, MAX_SCAN_LENGTH) : text;
@@ -137,7 +139,7 @@ export function findTokensInText(text: string): EmbeddedToken[] {
     if (seen.has(raw)) continue;
     seen.add(raw);
 
-    const info = decodeToken(raw);
+    const info = decodeToken(raw, keysetIds);
     if (!info) continue;
 
     results.push({ info, raw, offset: match.index });
@@ -173,7 +175,7 @@ export function bareToken(raw: string): string | null {
   return token;
 }
 
-// ---- Decode -----------------------------------------------------------------
+// ---- Decode ----
 
 // Decode a token string into a display/redemption summary, or null if it does
 // not cleanly parse into a known version carrying a positive amount.
@@ -182,15 +184,25 @@ export function bareToken(raw: string): string | null {
 // a V4 payload its minimal CBOR reader cannot walk, we use a full CBOR decoder,
 // so failure to decode here means the token really is malformed. Showing a card
 // for something we cannot price would be worse than showing the raw string.
-export function decodeToken(raw: string): TokenInfo | null {
+export function decodeToken(
+  raw: string,
+  keysetIds: readonly string[] = [],
+): TokenInfo | null {
   const tokenStr = bareToken(raw);
   if (!tokenStr) return null;
 
   try {
-    // The keyset-id list only matters for rehydrating the short ids that V4
-    // tokens use for keysets we already know about. An empty list keeps the
-    // short id, which is still a valid lookup key everywhere we use it.
-    const token = getDecodedToken(tokenStr, []);
+    // `keysetIds` resolves the short ids a V4 token carries. Passing none is not
+    // a neutral default: `mapShortKeysetIds` THROWS on any v2 short id (those
+    // beginning "01"), so a perfectly good token from such a mint came back
+    // null and was reported to the user as unreadable.
+    //
+    // NUT-00 requires the throw. An unresolved short id means we do not know
+    // which keyset signed the proof, so we can neither verify it nor price its
+    // fee, and guessing would be worse than refusing. The fix is therefore to
+    // supply what we already cache rather than to swallow the error: callers
+    // pass the keysets of every mint the wallet knows.
+    const token = getDecodedToken(tokenStr, keysetIds);
     if (!Array.isArray(token.proofs) || token.proofs.length === 0) return null;
 
     let amount = 0;
@@ -245,20 +257,20 @@ function sanitizeUnit(unit: string | undefined): string {
 // newlines (which would let a sender fake extra UI lines) and cap the length.
 function sanitizeMemo(memo: string | undefined): string | undefined {
   if (typeof memo !== "string" || memo.length > 512) return undefined;
-  const cleaned = memo.replace(/[ -]/g, " ").trim();
+  const cleaned = memo.replace(/[\x00-\x1f\x7f]/g, " ").trim();
   return cleaned.length > 0 ? cleaned.slice(0, 80) : undefined;
 }
 
-// ---- Offline DLEQ verification ----------------------------------------------
+// ---- Offline DLEQ verification ----
 
 // Verify every proof in a token against the mint's cached public keys (NUT-12).
 //
 // `keysetCache` is the `keyChain.cache` blob persisted per mint by the wallet
 // service. It contains public keys only, so it is safe to keep unencrypted and
 // safe to use offline. Without it there is nothing to check against, which is
-// reported as "unchecked", not as a pass: the old implementation returned true
-// both when a witness was missing and when the check threw, which meant it
-// could only ever say yes.
+// reported as "unchecked", never as a pass. Returning true both when a witness
+// is missing and when the check throws is an implementation that can only ever
+// say yes.
 export function verifyTokenOffline(
   token: Token,
   keysetCache: KeyChainCache | undefined,
@@ -331,7 +343,7 @@ export function verifyTokenOffline(
   return { status: "valid", checked };
 }
 
-// ---- Proof conversion -------------------------------------------------------
+// ---- Proof conversion ----
 
 // cashu-ts `Proof` -> persisted `StoredProof`. The `Amount` value object does
 // not survive JSON, so it is flattened to a number here and rebuilt on the way
@@ -377,7 +389,7 @@ export function toProofLike(proof: StoredProof): ProofLike {
   } as ProofLike;
 }
 
-// ---- Encode -----------------------------------------------------------------
+// ---- Encode ----
 
 // Serialise stored proofs into a `cashuB` token string. Pure serialisation: no
 // mint contact, no state change. The caller MUST reserve or remove the selected
@@ -401,7 +413,7 @@ export function buildToken(
   return getEncodedToken(token as unknown as Token);
 }
 
-// ---- Fees -------------------------------------------------------------------
+// ---- Fees ----
 
 // NUT-02 input fee for spending `inputCount` proofs of a keyset charging
 // `feePpk` parts-per-thousand. The mint rounds up, so the wallet must too or
@@ -426,7 +438,7 @@ export function feeForProofs(
   return ppk > 0 ? Math.ceil(ppk / 1000) : 0;
 }
 
-// ---- Offline proof selection ------------------------------------------------
+// ---- Offline proof selection ----
 
 export interface ProofSelection {
   selected: StoredProof[];
@@ -477,10 +489,17 @@ export function selectProofsForAmount(
     };
   };
 
-  // Prefer spending the proofs the mint has not confirmed for us: they are the
-  // ones most at risk of turning out to be already spent, and passing them on
-  // immediately is both safer for us and no worse for the recipient, who will
-  // swap right away. Within each group, largest first.
+  // Unverified proofs first, largest first within each group.
+  //
+  // An unverified proof is the one most likely to be spent already, and the risk
+  // grows the longer it is held, so passing it on moves it toward a mint sooner
+  // than this wallet would reach one. The recipient is shown it as unverified
+  // rather than as settled. The usual defence, that they swap immediately, does
+  // not apply here: this app is for recipients with no signal.
+  //
+  // Wrong for a melt, where the mint checks every input at once and an
+  // unverified one only raises the chance of failure, so `payLightningInvoice`
+  // selects with cashu-ts instead.
   const ranked = [...proofs].sort(
     (a, b) =>
       Number(a.verified === true) - Number(b.verified === true) ||
@@ -535,7 +554,7 @@ export function selectProofsForAmount(
   return describe(covering);
 }
 
-// ---- Display ----------------------------------------------------------------
+// ---- Display ----
 
 // "500 sat" / "500 sat - coffee money", for chat search previews and
 // accessibility labels.
@@ -544,7 +563,7 @@ export function formatTokenSummary(info: TokenInfo): string {
   return info.memo ? `${amount} - ${info.memo}` : amount;
 }
 
-// ---- QR hand-off ------------------------------------------------------------
+// ---- QR hand-off ----
 
 // Most characters a token can have and still fit in one QR code.
 //
@@ -565,7 +584,7 @@ export function formatTokenSummary(info: TokenInfo): string {
 // is deliberately permissive: a false positive costs a needless badge, while a
 // false negative lets someone mistake fake sats for real ones.
 const TEST_MINT_WORDS =
-  /(testnut|fakes?wallet|tests?mint|testing|testnet|regtest|signet)/i;
+  /\b(testnut|fakes?wallet|tests?mint|testing|testnet|regtest|signet)\b/i;
 
 export function isLikelyTestMint(mint: {
   url: string;

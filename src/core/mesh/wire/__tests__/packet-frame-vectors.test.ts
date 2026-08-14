@@ -8,6 +8,12 @@
  * bitchat BinaryProtocol.swift / BinaryProtocol.kt exactly. If any fail,
  * the change is likely a protocol-breaking regression.
  */
+// Fixed vectors for peer ID derivation and the packet frame.
+//
+// Both are wire contracts shared with bitchat, so they are pinned to literal
+// expected bytes rather than to whatever the current code produces. A change
+// here is a protocol change and has to be deliberate: the same key must derive
+// the same peer ID on every app and every version, or identities move.
 import { ed25519 } from "@noble/curves/ed25519.js";
 import { sha256 } from "@noble/hashes/sha2.js";
 import { bytesToHex } from "@noble/hashes/utils.js";
@@ -31,7 +37,7 @@ import {
   type Packet,
 } from "../packet-codec";
 
-// ---- Peer ID Derivation -------------------------------------------------------
+// ---- Peer ID Derivation ----
 // PROTOCOLS.md: peerID = hex(SHA-256(noiseStaticPubKey)).slice(0, 16)
 
 describe("Peer ID derivation", () => {
@@ -59,16 +65,16 @@ describe("Peer ID derivation", () => {
   });
 });
 
-// ---- Packet Header Byte Layout -----------------------------------------------
+// ---- Packet Header Byte Layout ----
 // PROTOCOLS.md section 2 / BinaryProtocol.swift:
 //
 //   Fixed header (v2, 16 bytes):
 //   [0]      version = 2
 //   [1]      type
 //   [2]      ttl
-//   [3–10]   timestamp u64 BE
+//   [3-10]   timestamp u64 BE
 //   [11]     flags
-//   [12–15]  payloadLength u32 BE
+//   [12-15]  payloadLength u32 BE
 //
 //   Variable (after header):
 //   senderID    (8 bytes, always)
@@ -108,8 +114,8 @@ describe("Packet header byte layout (v2)", () => {
     expect(buf[1]).toBe(PacketType.ANNOUNCE));
   test("byte[2] is TTL", () => expect(buf[2]).toBe(7));
 
-  // Timestamp: u64 BE at [3–10]
-  test("bytes[3–10] are timestamp u64 BE", () => {
+  // Timestamp: u64 BE at [3-10]
+  test("bytes[3-10] are timestamp u64 BE", () => {
     const view = new DataView(buf.buffer);
     const hi = view.getUint32(3, false);
     const lo = view.getUint32(7, false);
@@ -121,20 +127,20 @@ describe("Packet header byte layout (v2)", () => {
   test("byte[11] is flags", () =>
     expect(buf[11]).toBe(Flags.SIGNED | Flags.HAS_RECIPIENT));
 
-  // PayloadLength u32 BE at [12–15]
-  test("bytes[12–15] are payloadLength u32 BE", () => {
+  // PayloadLength u32 BE at [12-15]
+  test("bytes[12-15] are payloadLength u32 BE", () => {
     const view = new DataView(buf.buffer);
     expect(view.getUint32(12, false)).toBe(PAYLOAD.length);
   });
 
   // Variable section starts at [16]
-  test("bytes[16–23] are senderID", () =>
+  test("bytes[16-23] are senderID", () =>
     expect(Array.from(buf.slice(16, 24))).toEqual(Array.from(SENDER)));
-  test("bytes[24–31] are recipientID (hasRecipient=1)", () =>
+  test("bytes[24-31] are recipientID (hasRecipient=1)", () =>
     expect(Array.from(buf.slice(24, 32))).toEqual(Array.from(RECIPIENT)));
-  test("bytes[32–34] are payload", () =>
+  test("bytes[32-34] are payload", () =>
     expect(Array.from(buf.slice(32, 35))).toEqual(Array.from(PAYLOAD)));
-  test("bytes[35–98] are signature (64 bytes)", () =>
+  test("bytes[35-98] are signature (64 bytes)", () =>
     expect(buf.slice(35, 99).every((b) => b === 0x5a)).toBe(true));
   // Core is 16 header + 8 senderID + 8 recipientID + 3 payload + 64 sig = 99,
   // and an ANNOUNCE goes out at exactly that: bitchat pads only Noise frames on
@@ -166,7 +172,7 @@ describe("Packet header byte layout (v2)", () => {
   });
 });
 
-// ---- Flag Bit Values ----------------------------------------------------------
+// ---- Flag Bit Values ----
 // Must match bitchat BinaryProtocol.Flags exactly.
 
 describe("Flag bit values", () => {
@@ -177,10 +183,10 @@ describe("Flag bit values", () => {
   test("IS_RSR = 0x10", () => expect(Flags.IS_RSR).toBe(0x10));
 });
 
-// ---- Packet Round-Trip -------------------------------------------------------
+// ---- Packet Round-Trip ----
 
 describe("Packet encode/decode round-trip", () => {
-  test("all fields survive encode → decode (broadcast)", () => {
+  test("all fields survive encode -> decode (broadcast)", () => {
     const original: Packet = {
       type: PacketType.CHANNEL_MSG,
       ttl: 5,
@@ -203,7 +209,7 @@ describe("Packet encode/decode round-trip", () => {
     expect(new TextDecoder().decode(decoded!.payload)).toBe("hello mesh");
   });
 
-  test("all fields survive encode → decode (unicast with route)", () => {
+  test("all fields survive encode -> decode (unicast with route)", () => {
     const hop1 = new Uint8Array(8).fill(0xcc);
     const hop2 = new Uint8Array(8).fill(0xdd);
     const original: Packet = {
@@ -288,7 +294,7 @@ describe("Packet encode/decode round-trip", () => {
   });
 });
 
-// ---- Signature Coverage -------------------------------------------------------
+// ---- Signature Coverage ----
 // Signing matches bitchat toBinaryDataForSigning():
 // encode with ttl=0, isRSR=false, hasSignature=0, then sign the bytes.
 // This lets relay nodes decrement TTL without invalidating the signature.
@@ -363,7 +369,7 @@ describe("Signature coverage (relay TTL compat)", () => {
   });
 });
 
-// ---- PacketID Derivation ------------------------------------------------------
+// ---- PacketID Derivation ----
 // Matches bitchat PacketIdUtil.swift / PacketIdUtil.kt:
 //   SHA-256(type[1] | senderID[8] | timestamp_u64_BE[8] | payload)[0:16]
 
@@ -436,11 +442,11 @@ describe("Packet ID derivation (dedup and gossip sync key)", () => {
   });
 });
 
-// ---- ANNOUNCE TLV Format -----------------------------------------------------
+// ---- ANNOUNCE TLV Format ----
 // ANNOUNCE payload uses 1-byte type + 1-byte length TLVs (Packets.swift format).
 //   0x01 nickname, 0x02 noisePub (32 bytes), 0x03 signingPub (32 bytes)
 
-// Walk TLV payload and return map of type → value bytes.
+// Walk TLV payload and return map of type -> value bytes.
 function parseTLVs(buf: Uint8Array): Map<number, Uint8Array> {
   const map = new Map<number, Uint8Array>();
   let i = 0;
@@ -566,7 +572,7 @@ describe("ANNOUNCE TLV encoding", () => {
   });
 });
 
-// ---- Fragment Constants -------------------------------------------------------
+// ---- Fragment Constants ----
 // PROTOCOLS.md: the FRAME is the budget, and the fragment header is 13 bytes.
 //
 // The old assertion here read "FRAGMENT_SIZE is exactly 469 bytes (BLE MTU
@@ -586,7 +592,7 @@ describe("Fragment wire constants", () => {
   });
 });
 
-// ---- BLE Service / Characteristic UUIDs -------------------------------------
+// ---- BLE Service / Characteristic UUIDs ----
 // These must never change without a protocol version bump.
 
 describe("BLE UUID constants", () => {

@@ -139,8 +139,6 @@ export class WifiFabric {
     return this.links.has(pairKey(aID, bID));
   }
 
-  // ---- delivery -------------------------------------------------------------
-
   private onWrite(fromID: string, linkID: string, dataBase64: string): void {
     if (this.disposed) return;
     const toID = linkID.startsWith("wifi:") ? linkID.slice("wifi:".length) : "";

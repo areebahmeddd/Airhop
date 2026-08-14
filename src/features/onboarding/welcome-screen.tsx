@@ -235,7 +235,6 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
     scroll: {
       flexGrow: 1,
     },
-    // Fills the space above the footer and centers the brand mark in it.
     hero: {
       flex: 1,
       alignItems: "center",
@@ -266,9 +265,6 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
     actions: {
       gap: Spacing.base,
     },
-    // Checkbox + consent line. The whole row toggles the box; only the two
-    // link spans peel off to open the site, so a stray tap never leaves the
-    // app by accident.
     agreement: {
       flexDirection: "row",
       alignItems: "flex-start",

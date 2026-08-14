@@ -73,9 +73,9 @@ export async function wipeAllSecrets(): Promise<void> {
 // This is what turns a failed panic wipe from permanent into a retry. The wipe
 // most likely to fail is the one that matters: `AFTER_FIRST_UNLOCK` refuses
 // reads and deletes on a phone that has booted but not been unlocked, which is
-// exactly the seizure the gesture exists for. Nothing used to try again, so the
-// keys stayed for good. The next launch is past that unlock, and here the same
-// delete usually just works.
+// exactly the seizure the gesture exists for. Without a retry the keys stay for
+// good. The next launch is past that unlock, where the same delete usually just
+// works.
 //
 // Not framed as "retry the wipe", because it does not need to know a wipe ever
 // happened - which is the point. A secret with no identity to own it has no
