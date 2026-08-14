@@ -100,7 +100,7 @@ export function createExpoFileSystemMock(): unknown {
 // ---- media bytes ------------------------------------------------------------
 
 // The receiver checks a file's declared MIME against its magic bytes and drops
-// anything that disagrees (bitchat-file-packet.ts mimeMatchesMagic). Test media
+// anything that disagrees (wire/file-packet.ts mimeMatchesMagic). Test media
 // therefore has to carry real headers, or every attachment scenario would pass
 // vacuously by failing at the same place.
 
@@ -167,7 +167,7 @@ const FRAME_INTERVAL_MS = 64;
 // A `jest.mock` factory does not reliably resolve `react-native` to the same
 // copy the sandboxed app is using: the factory is declared by the test file, so
 // its `require` can land in the outer module registry while the phone's
-// voice-audio.ts holds the isolated registry's RCTDeviceEventEmitter. Two
+// voice-audio-backend.ts holds the isolated registry's RCTDeviceEventEmitter. Two
 // different emitters means frames are emitted into a listener list that is
 // permanently empty, and the microphone silently produces nothing. Handing the
 // emit function in from inside `jest.isolateModules` removes the ambiguity

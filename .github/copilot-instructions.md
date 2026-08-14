@@ -35,7 +35,7 @@ Apply these to every suggestion, every file, every PR:
 
 3. **Build order.** `src/core/` → native modules → `src/features/` → `src/ui/`. Never write UI before core is unit-tested.
 
-4. **Protocol compatibility.** Never change the bitchat v2 packet byte layout (`src/core/mesh/packet-codec.ts`) or the BLE Service UUID without a version bump and compat test. See `docs/spec/PROTOCOLS.md`.
+4. **Protocol compatibility.** Never change the bitchat v2 packet byte layout (`src/core/mesh/wire/packet-codec.ts`) or the BLE Service UUID without a version bump and compat test. See `docs/spec/PROTOCOLS.md`.
 
 5. **Key storage.** Private keys via `src/core/crypto/keychain.ts` only (iOS Keychain / Android Keystore); never `expo-secure-store` directly, or the panic wipe cannot reach them. MMKV for non-secret state.
 
@@ -43,7 +43,7 @@ Apply these to every suggestion, every file, every PR:
 
 7. **No plaintext on disk.** Message content is encrypted at rest. Panic wipe destroys all keys, every database, the media cache and Tor state, and reports whether the keys actually went.
 
-8. **Polyfill at entry point.** `import 'react-native-get-random-values'` must be the first import in `App.tsx` before any `@noble` import.
+8. **Polyfill at entry point.** `import 'react-native-get-random-values'` must be the first import in `src/app/app.tsx` before any `@noble` import.
 
 9. **Never hardcode user-facing text.** Add a key to `src/i18n/locales/en.ts` and use `T("your.key")` (component) or `t("your.key")` (outside React). English is the shipping language and ten land in v1.3.0, so the catalog is both what keeps copy reviewable in one diff today and what makes that a new file rather than a sweep of every screen. CI fails on any hardcoded string. See [`i18n.md`](.github/skills/i18n.md).
 

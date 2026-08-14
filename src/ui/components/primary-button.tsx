@@ -49,7 +49,7 @@ export default function PrimaryButton({
   return (
     <Pressable
       // A static style array with the press held in state, which is how every
-      // other button surface in this app is written (see settings/shared.tsx and
+      // other button surface in this app is written (see settings/settings-primitives.tsx and
       // the sheet action pairs). Pressable's `style={({ pressed }) => ...}`
       // callback form is the leaner idiom and is available again now that the
       // NativeWind JSX wrapper is gone, but it is deliberately not used here:

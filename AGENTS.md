@@ -28,7 +28,7 @@ You must read these four documents before making any code suggestions:
 ### Crypto
 
 - **`@noble/curves`, `@noble/ciphers`, `@noble/hashes` only.** No other crypto library. No `Math.random()` for security. No `crypto-js`, no `elliptic`, no `tweetnacl`.
-- `react-native-get-random-values` must be the **first import** in `App.tsx`.
+- `react-native-get-random-values` must be the **first import** in `src/app/app.tsx`. The root `App.tsx` is a one-line re-export that Expo's AppEntry resolves.
 
 ### Native Code
 
@@ -77,21 +77,30 @@ rather than drifting quietly, so a change to either has to be deliberate.
 
 ## Where Things Live
 
-| Thing                                                         | Location                 |
-| ------------------------------------------------------------- | ------------------------ |
-| Crypto (Noise XX, identity, DR)                               | `src/core/crypto/`       |
-| BLE mesh (routing, codec, fragments, gossip, courier)         | `src/core/mesh/`         |
-| Nostr (client, gift-wrap, geo-relay, presence, courier-relay) | `src/core/nostr/`        |
-| Payments: tokens, DLEQ, NIP-61, seed (pure)                   | `src/core/payments/`     |
-| Payments: anything touching a mint                            | `src/services/`          |
-| Screen logic                                                  | `src/features/`          |
-| UI components                                                 | `src/ui/`                |
-| State management                                              | `src/store/`             |
-| UI copy: the catalog, the runtime, RTL helpers                | `src/i18n/`              |
-| TurboModule specs (Codegen input)                             | `src/bridge/`            |
-| iOS native                                                    | `ios/`                   |
-| Android native                                                | `android/`               |
-| All protocol constants                                        | `docs/spec/PROTOCOLS.md` |
+| Thing                                                         | Location                   |
+| ------------------------------------------------------------- | -------------------------- |
+| Crypto (Noise XX, identity, DR)                               | `src/core/crypto/`         |
+| Wire format: the packet frame and every payload               | `src/core/mesh/wire/`      |
+| Mesh routing, dedup, fragmentation, source routes             | `src/core/mesh/routing/`   |
+| GCS gossip sync                                               | `src/core/mesh/sync/`      |
+| Announces and nickname normalisation                          | `src/core/mesh/discovery/` |
+| Private-channel and private-group crypto                      | `src/core/mesh/rooms/`     |
+| Store-and-forward envelopes and one-time prekeys              | `src/core/mesh/courier/`   |
+| Live push-to-talk capture and playback                        | `src/core/mesh/voice/`     |
+| Nostr (client, gift-wrap, geo-relay, presence, courier-relay) | `src/core/nostr/`          |
+| Payments: tokens, DLEQ, NIP-61, seed (pure)                   | `src/core/payments/`       |
+| Payments: anything touching a mint                            | `src/services/`            |
+| Screen logic                                                  | `src/features/`            |
+| UI components, hooks, theme tokens                            | `src/ui/`                  |
+| Thin wrappers over OS APIs (permissions, haptics)             | `src/platform/`            |
+| State management                                              | `src/store/`               |
+| UI copy: the catalog, the runtime, RTL helpers                | `src/i18n/`                |
+| TurboModule specs (Codegen input)                             | `src/bridge/`              |
+| Root component and tab state machine                          | `src/app/`                 |
+| Whole-app lifecycle and simulation suites                     | `src/__tests__/`           |
+| iOS native                                                    | `ios/`                     |
+| Android native                                                | `android/`                 |
+| All protocol constants                                        | `docs/spec/PROTOCOLS.md`   |
 
 ## Specialized Agents
 
@@ -122,9 +131,10 @@ Skills are reference files in `.github/skills/`. Read the relevant one before wo
 - `tsc --strict` must pass with zero errors
 - No `any` in `src/core/` or `src/bridge/`
 - Named exports only in `src/core/` and `src/bridge/`
-- File naming: `kebab-case.ts`
+- File naming: `kebab-case.ts`. The one exception is `src/bridge/Native*.ts`, which keeps React Native's Codegen spec convention.
+- Module specifiers: leaving your top-level `src/` layer means a path alias (`@core/mesh/wire/packet-codec`); staying inside the layer stays relative (`./message-bubble`, `../shared`). Aliases are declared in `tsconfig.json` and mirrored in `package.json` for jest.
 - One protocol concern per `src/core/` module, each independently testable. A file that needs "and" to describe it is two files.
-- `src/services/mesh-service.ts` and several `src/features/` screens are far past that. They are known refactor targets, **not** precedent. Add a new packet type's logic as a focused module in `src/core/mesh/` and keep the mesh-service side to wiring.
+- `src/services/mesh-service.ts` and several `src/features/` screens are far past that. They are known refactor targets, **not** precedent. Add a new packet type's codec as a focused module in `src/core/mesh/wire/` and keep the mesh-service side to wiring.
 
 ## Common Mistakes to Avoid
 
@@ -132,7 +142,7 @@ Skills are reference files in `.github/skills/`. Read the relevant one before wo
 | ------------------------------------------- | ---------------------------------------------------------------- |
 | Using `Math.random()` for nonces            | Use `@noble/hashes` HKDF or `crypto.getRandomValues`             |
 | Storing keys in Zustand store               | Zustand is MMKV-persisted; use `core/crypto/keychain` for keys   |
-| Writing routing logic in Swift/Kotlin       | Routing lives in `src/core/mesh/flood-router.ts`                 |
+| Writing routing logic in Swift/Kotlin       | Routing lives in `src/core/mesh/routing/flood-router.ts`         |
 | Creating a new native module for BLE        | Extend `AirhopBLEModule`; one module only                        |
 | Hardcoding a relay URL                      | Load from `assets/data/nostr_relays.csv` via `GeoRelayDirectory` |
 | Writing a user-facing string inline         | Add a key to `src/i18n/locales/en.ts` and use `T("key")`         |

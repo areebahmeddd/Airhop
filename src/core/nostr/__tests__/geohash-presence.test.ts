@@ -1,5 +1,5 @@
-// Tests for geohash encoding/decoding in presence.ts.
-// presence.ts has no native or network dependencies; fully testable in CI.
+// Tests for geohash encoding/decoding in geohash-presence.ts.
+// geohash-presence.ts has no native or network dependencies; fully testable in CI.
 
 import {
   decodeGeohash,

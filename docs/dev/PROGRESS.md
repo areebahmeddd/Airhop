@@ -75,10 +75,10 @@ checkable against the code rather than taken on trust.
 
 ### Core mesh engine
 
-- [x] `src/core/mesh/packet-codec.ts`: binary encode/decode, matches PROTOCOLS.md exactly
-- [x] `src/core/mesh/flood-router.ts`: TTL flood, jitter, dedup
-- [x] `src/core/mesh/deduplicator.ts`: LRU 1000-entry seen-set
-- [x] `src/core/mesh/announce-manager.ts`: signed presence broadcasts
+- [x] `src/core/mesh/wire/packet-codec.ts`: binary encode/decode, matches PROTOCOLS.md exactly
+- [x] `src/core/mesh/routing/flood-router.ts`: TTL flood, jitter, dedup
+- [x] `src/core/mesh/routing/deduplicator.ts`: LRU 1000-entry seen-set
+- [x] `src/core/mesh/discovery/announce-manager.ts`: signed presence broadcasts
 - [x] `src/core/crypto/identity.ts`: key generation, Keychain storage, peer ID
 
 ### Tests
@@ -92,9 +92,9 @@ checkable against the code rather than taken on trust.
 - [x] `src/core/crypto/noise-xx.ts`: Noise XX handshake using `@noble/curves` + `@noble/ciphers` (full XX pattern, transport encrypt/decrypt, replay window)
 - [x] Cross-language Noise XX test: JS client ↔ bitchat-ios Swift server (MUST PASS before v1.0.0 ship; requires a live device test harness, deferred to v1.0.0 integration testing)
 - [x] `src/core/crypto/noise-x.ts`: one-way Noise X for courier sealing
-- [x] `src/core/mesh/fragment-manager.ts`: split/reassemble, 30s timeout, 128-slot concurrent cap
-- [x] `src/core/mesh/gossip-sync.ts`: GCS filter reconciliation (Golomb-Rice encoding, TLV wire format)
-- [x] `src/core/mesh/courier-store.ts`: sealed envelopes, trust tiers, spray-and-wait, daily recipient tags
+- [x] `src/core/mesh/routing/fragment-manager.ts`: split/reassemble, 30s timeout, 128-slot concurrent cap
+- [x] `src/core/mesh/sync/gossip-sync.ts`: GCS filter reconciliation (Golomb-Rice encoding, TLV wire format)
+- [x] `src/core/mesh/courier/courier-store.ts`: sealed envelopes, trust tiers, spray-and-wait, daily recipient tags
 - [x] `src/core/router/message-router.ts`: transport selection (BLE mesh broadcast / unicast, courier fallback)
 - [x] Basic UI: channel list, message thread, peer list (minimal, functional)
 
@@ -103,10 +103,10 @@ checkable against the code rather than taken on trust.
 - [x] `src/core/nostr/nostr-client.ts`: SimplePool, auto-reconnect, Tor proxy config
 - [x] `src/core/nostr/gift-wrap.ts`: NIP-17/59 gift-wrap DMs (HKDF key derivation, round-trip tested)
 - [x] `src/core/nostr/geo-relay.ts`: load `assets/data/nostr_relays.csv`, Haversine nearest relay
-- [x] `src/core/nostr/presence.ts`: kind 20001 geohash heartbeats
+- [x] `src/core/nostr/geohash-presence.ts`: kind 20001 geohash heartbeats
 - [x] `src/core/nostr/courier-relay.ts`: Nostr bridge courier drops (kind 1401, tested)
 - [x] `src/core/router/message-router.ts`: Nostr added as priority-2 transport (BLE > Nostr > Courier)
-- [x] PTT voice: `src/core/mesh/voice-capture.ts` + `src/core/mesh/voice-player.ts`
+- [x] PTT voice: `src/core/mesh/voice/voice-capture.ts` + `src/core/mesh/voice/voice-player.ts`
 - [x] iOS: `AirhopTorManager.swift`: full Arti lifecycle management (FFI, bootstrap, SOCKS probe)
 - [x] iOS: `AirhopTorSession.swift`: URLSession SOCKS5 proxy factory (port 39050)
 - [x] iOS: `AirhopTorModule.swift` + `AirhopTorModule.mm`: RN native module exposing Tor to JS
@@ -123,7 +123,7 @@ checkable against the code rather than taken on trust.
       The root key is derived from the Noise XX **exporter secret** (a third
       HKDF output of `split()`, descending from the chaining key), so it cannot
       be reconstructed from long-lived keys OR from the public handshake bytes
-- [x] One-time prekey bundles (`src/core/mesh/prekey-bundle.ts`, `prekey-store.ts`)
+- [x] One-time prekey bundles (`src/core/mesh/wire/prekey-bundle.ts`, `prekey-store.ts`)
       gossiped over the mesh as `0x24`. **X3DH is deliberately not used**: the
       handshake already seeds the ratchet, which made a separate key agreement
       redundant (see ARCHITECTURE.md section 5)
@@ -144,10 +144,10 @@ checkable against the code rather than taken on trust.
 - [x] QR contact exchange (`src/core/crypto/contact-exchange.ts`: ContactCard binary format, QR URI scheme)
 - [x] QR code scanner for peer verification (encodeQRContent/decodeQRContent in contact-exchange.ts)
 - [x] Human-readable usernames (`src/utils/username.ts`: deterministic adjective-noun-suffix from peer ID, 128-entry word lists)
-- [x] Panic wipe (`src/utils/panic-wipe.ts`: clears every keychain item, all MMKV partitions, the media cache, the notification tray and Arti's data directory, and reports whether the keys were destroyed)
-- [x] Battery optimization flow (`src/utils/battery-optimization.ts`: OEM deep links for 10 skins + standard Android fallback)
+- [x] Panic wipe (`src/services/panic-wipe.ts`: clears every keychain item, all MMKV partitions, the media cache, the notification tray and Arti's data directory, and reports whether the keys were destroyed)
+- [x] Battery optimization flow (`src/platform/battery-optimization.ts`: OEM deep links for 10 skins + standard Android fallback)
 - [x] Georelays in-app relay map (`GeoRelayDirectory.nearestRelaysWithDistance()` added to geo-relay.ts)
-- [x] Full cross-platform compat test (`src/core/mesh/__tests__/compat.test.ts`: peer ID derivation, packet byte offsets, signature relay compat, ANNOUNCE TLV, fragment constants, BLE UUIDs)
+- [x] Full cross-platform compat test (`src/core/mesh/wire/__tests__/packet-frame-vectors.test.ts`: peer ID derivation, packet byte offsets, signature relay compat, ANNOUNCE TLV, fragment constants, BLE UUIDs)
 
 ## v0.9.5: Cashu Wallet ✅
 
@@ -156,7 +156,7 @@ checkable against the code rather than taken on trust.
 - [x] `src/core/payments/wallet-seed.ts`: BIP-39 recovery phrase, kept in the keychain
 - [x] `src/store/wallet-store.ts`: AES-256 encrypted proofs, per (mint, unit) accounts, reserved bucket, history, NUT-13 counters
 - [x] `src/services/wallet-service.ts`: the only module that talks to a mint
-- [x] `src/services/ecash-transfer.ts`: `payPerson`, one payment ladder (radio, nutzap, token, manual) shared by all four entry points: DM attach, contact sheet, Mesh peer sheet and Wallet Zap
+- [x] `src/services/payment-router.ts`: `payPerson`, one payment ladder (radio, nutzap, token, manual) shared by all four entry points: DM attach, contact sheet, Mesh peer sheet and Wallet Zap
 - [x] Send that reserves rather than deletes, so an undelivered token is reclaimable
 - [x] Lightning deposit and withdrawal (NUT-04 / NUT-05)
 - [x] Opt-in recovery phrase (NUT-13 / NUT-09), off by default

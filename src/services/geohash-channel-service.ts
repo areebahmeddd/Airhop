@@ -17,7 +17,7 @@
 //
 // Privacy: raw coordinates NEVER leave the device. Only the truncated geohash
 // is published, and the finest cell we ever publish is ~150 m across. Presence
-// heartbeats are additionally restricted to coarse precisions by presence.ts.
+// heartbeats are additionally restricted to coarse precisions by geohash-presence.ts.
 //
 // Degradation: with location denied, the NAMED channels resolve to no cell and
 // keep working over BLE exactly as before. Location is an enhancement, never a
@@ -178,7 +178,7 @@ const GEO_DM_LOOKBACK_SECONDS = 24 * 60 * 60;
 // both apps show the same "who is here now" count.
 //
 // Paired with the 40-80s presence heartbeat (nextHeartbeatDelayMs in
-// core/nostr/presence.ts), so five minutes is about four missed rounds of slack.
+// core/nostr/geohash-presence.ts), so five minutes is about four missed rounds of slack.
 // Shortening one without the other makes the list flicker.
 const PARTICIPANT_TTL_MS = 5 * 60 * 1000;
 
@@ -552,7 +552,7 @@ export class GeohashChannelService {
   //
   // Three rules from the cross-platform spec:
   //
-  //   * Coarse cells only (precision <= 5), enforced in presence.ts.
+  //   * Coarse cells only (precision <= 5), enforced in geohash-presence.ts.
   //   * Each cell signs with its own derived key, so being in the city cell and
   //     the region cell cannot be linked to one person.
   //   * Cells within a round are spaced 2-5s apart. Distinct keys arriving in
@@ -587,7 +587,7 @@ export class GeohashChannelService {
   // would be a false statement about their location, which is worse than an
   // undercount - and the `t=teleport` marker on messages exists precisely
   // because the two are different things. Fine-grained cells are excluded by
-  // mayBroadcastPresence; see presence.ts for why that restriction is the
+  // mayBroadcastPresence; see geohash-presence.ts for why that restriction is the
   // feature rather than a limitation.
   private broadcastableCells(): string[] {
     const cells = [...this.channelGeohash.entries()]

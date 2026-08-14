@@ -1360,7 +1360,7 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
     // wrap and overlap.
     // Above each group inside the Appearance sheet, so three pickers in one
     // scroll are told apart without reading their options.
-    // Matched to `sectionTitle` in shared.tsx rather than styled separately, so
+    // Matched to `sectionTitle` in settings-primitives.tsx rather than styled separately, so
     // a group heading reads the same here as on every sub-screen.
     appearanceGroupLabel: {
       fontSize: FontSize.xs,

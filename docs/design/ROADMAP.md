@@ -89,9 +89,9 @@ bitchat is an excellent foundation. Airhop fills the gaps it left open.
 - [x] `AirhopBLEModule` Android (Kotlin): dual-role GATT
 - [x] `AirhopForegroundService.kt`: background keepalive (foreground service, `connectedDevice` type), started with the mesh from `AirhopBLEModule` so the process, BLE, and Nostr socket survive backgrounding
 - [x] Wire TurboModule to `src/bridge/NativeAirhopBLE.ts`
-- [x] `src/core/mesh/packet-codec.ts`: binary encode/decode matching bitchat v2 (`PROTOCOLS.md`, section 2)
-- [x] `src/core/mesh/flood-router.ts`: TTL flood, jitter 10-220ms, dedup
-- [x] `src/core/mesh/announce-manager.ts`: signed presence broadcasts
+- [x] `src/core/mesh/wire/packet-codec.ts`: binary encode/decode matching bitchat v2 (`PROTOCOLS.md`, section 2)
+- [x] `src/core/mesh/routing/flood-router.ts`: TTL flood, jitter 10-220ms, dedup
+- [x] `src/core/mesh/discovery/announce-manager.ts`: signed presence broadcasts
 - [x] `src/core/crypto/identity.ts`: key generation, Keychain storage, peer ID
 
 **Milestone:** Two phones discover each other and exchange signed ANNOUNCE packets.
@@ -102,9 +102,9 @@ bitchat is an excellent foundation. Airhop fills the gaps it left open.
 
 - [x] `src/core/crypto/noise-xx.ts`: Noise XX handshake using `@noble` (transport session, replay window)
 - [x] `src/core/crypto/noise-x.ts`: one-way Noise X for courier sealing
-- [x] `src/core/mesh/fragment-manager.ts`: fragmentation / reassembly (467B of data per 512B frame, 30s timeout)
-- [x] `src/core/mesh/gossip-sync.ts`: GCS filter reconciliation (15s interval, Golomb-Rice encoding)
-- [x] `src/core/mesh/courier-store.ts`: sealed envelopes, trust tiers, spray-and-wait
+- [x] `src/core/mesh/routing/fragment-manager.ts`: fragmentation / reassembly (467B of data per 512B frame, 30s timeout)
+- [x] `src/core/mesh/sync/gossip-sync.ts`: GCS filter reconciliation (15s interval, Golomb-Rice encoding)
+- [x] `src/core/mesh/courier/courier-store.ts`: sealed envelopes, trust tiers, spray-and-wait
 - [x] `src/core/router/message-router.ts`: BLE-only routing (broadcast + unicast + courier fallback)
 - [x] Cross-language Noise XX test: JS ↔ bitchat-ios Swift server (required before device testing)
 - [x] Basic React Native UI: channel list, message thread, peer list (minimal, functional)
@@ -118,12 +118,12 @@ bitchat is an excellent foundation. Airhop fills the gaps it left open.
 - [x] `src/core/nostr/nostr-client.ts`: SimplePool, auto-reconnect, Tor proxy config
 - [x] `src/core/nostr/gift-wrap.ts`: NIP-17/59 gift-wrap DMs (HKDF key derivation, seal/unwrap round-trip)
 - [x] `src/core/nostr/geo-relay.ts`: Haversine nearest relay from bundled relays.csv
-- [x] `src/core/nostr/presence.ts`: kind 20001 geohash heartbeats (40–80s jitter, precision-5)
+- [x] `src/core/nostr/geohash-presence.ts`: kind 20001 geohash heartbeats (40–80s jitter, precision-5)
 - [x] `src/core/nostr/courier-relay.ts`: Nostr bridge courier drops (kind 1401, NIP-40 expiry)
 - [x] iOS: `AirhopTorManager` + `AirhopTorSession` + `AirhopTorModule`: full Arti integration (SOCKS5 port 39050), bundled `ios/Frameworks/arti.xcframework`
 - [x] Android: Orbot SOCKS5 detection via `getTorProxyPort()` (probes localhost:9050)
-- [x] `src/core/mesh/voice-capture.ts`: PTT frame encoder (VOICE_FRAME 0x29, AAC/Opus 16 kHz)
-- [x] `src/core/mesh/voice-player.ts`: 350ms jitter buffer, ordered frame delivery
+- [x] `src/core/mesh/voice/voice-capture.ts`: PTT frame encoder (VOICE_FRAME 0x29, AAC/Opus 16 kHz)
+- [x] `src/core/mesh/voice/voice-player.ts`: 350ms jitter buffer, ordered frame delivery
 - [x] `src/bridge/NativeAirhopVoice.ts` + `AirhopVoiceModule.kt` / `.swift`: streaming mic and speaker (AAC-LC 16 kHz mono, off the JS thread)
 - [x] `VOICE_FRAME` (0x29) send/receive/relay in mesh-service, plus `NoisePayloadType.VOICE_FRAME` (0x08) for DM bursts
 - [x] Hold-to-talk UI: live HUD, floor-courtesy hint, autoplay gating, live-voice setting
@@ -137,7 +137,7 @@ bitchat is an excellent foundation. Airhop fills the gaps it left open.
 **Goal:** High-bandwidth transport and per-message forward secrecy.
 
 - [x] `src/core/crypto/double-ratchet.ts`: Signal DR per-message forward secrecy
-- [~] X3DH: **dropped.** The Noise handshake already seeds the ratchet, so a separate key agreement was redundant. One-time prekey bundles (`src/core/mesh/prekey-bundle.ts`) are gossiped over the mesh as `0x24`, never published to Nostr.
+- [~] X3DH: **dropped.** The Noise handshake already seeds the ratchet, so a separate key agreement was redundant. One-time prekey bundles (`src/core/mesh/wire/prekey-bundle.ts`) are gossiped over the mesh as `0x24`, never published to Nostr.
 - [x] WiFi Aware native module (Android) + MultipeerConnectivity (iOS)
 - [~] Chunked file transfer >1 MiB: **dropped, see Gap 4.** bitchat enforces the 1 MiB cap when it _decodes_ a packet, so anything larger is rejected outright and interop breaks in both directions. Airhop sends one `BitchatFilePacket` per file and lets the fragment layer split it
 - [~] Video frame capture (`react-native-vision-camera` was removed from `package.json` entirely) and `0x30: videoFrame`: **dropped, see Gap 2.** The removal is recorded in `packet-codec.ts` so the type is not reintroduced by accident
@@ -151,10 +151,10 @@ bitchat is an excellent foundation. Airhop fills the gaps it left open.
 - [x] QR contact exchange (`src/core/crypto/contact-exchange.ts`: binary ContactCard, QR URI scheme `airhop:v1/<base64url>`)
 - [x] QR code scanner for peer verification (encodeQRContent/decodeQRContent, deep-link format)
 - [x] Human-readable usernames (`src/utils/username.ts`: deterministic `adjective-noun-XXXX` from peer ID)
-- [x] Panic wipe (`src/utils/panic-wipe.ts`: clears every keychain item, all MMKV partitions, the media cache and Tor state)
-- [x] Battery optimization flow (`src/utils/battery-optimization.ts`: OEM deep links for 10 skins + standard Android fallback)
+- [x] Panic wipe (`src/services/panic-wipe.ts`: clears every keychain item, all MMKV partitions, the media cache and Tor state)
+- [x] Battery optimization flow (`src/platform/battery-optimization.ts`: OEM deep links for 10 skins + standard Android fallback)
 - [x] Georelay visibility: the channel info sheet lists the relays carrying a cell and marks the ones the user added (`GeoRelayDirectory.closestRelaysToGeohash()` via `MeshService.getGeohashRelays()`)
-- [x] Full cross-platform compat test (`src/core/mesh/__tests__/compat.test.ts`: peer ID, byte offsets, relay TTL compat, ANNOUNCE TLV, fragment constants, BLE UUIDs)
+- [x] Full cross-platform compat test (`src/core/mesh/wire/__tests__/packet-frame-vectors.test.ts`: peer ID, byte offsets, relay TTL compat, ANNOUNCE TLV, fragment constants, BLE UUIDs)
 
 **Milestone:** Feature-complete. Every core service has passing tests. No known protocol bugs.
 
@@ -169,7 +169,7 @@ Cashu is the primary rail because its tokens are plain strings, so value moves d
 - [x] `src/core/payments/wallet-seed.ts`: BIP-39 recovery phrase, kept in the keychain
 - [x] `src/store/wallet-store.ts`: AES-256 encrypted proof storage, per (mint, unit) accounts, reserved bucket, transaction history, NUT-13 counters
 - [x] `src/services/wallet-service.ts`: the only module that talks to a mint. Reservations, Tor guard, Lightning, restore, consolidate
-- [x] `src/services/ecash-transfer.ts`: `payPerson`, one payment ladder (radio, nutzap, token, manual) shared by all four entry points: DM attach, contact sheet, Mesh peer sheet and Wallet Zap
+- [x] `src/services/payment-router.ts`: `payPerson`, one payment ladder (radio, nutzap, token, manual) shared by all four entry points: DM attach, contact sheet, Mesh peer sheet and Wallet Zap
 - [x] Send that reserves rather than deletes, so an undelivered token is always reclaimable
 - [x] Lightning deposit and withdrawal (NUT-04 / NUT-05) with quoted routing reserve
 - [x] Opt-in recovery phrase (NUT-13 / NUT-09), off by default, with uncovered balance shown rather than hidden

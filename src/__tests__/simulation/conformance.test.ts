@@ -4,7 +4,7 @@
 // bitchat compatibility, tested against bitchat rather than against ourselves.
 //
 // VISION.md principle 6 says Airhop nodes must talk to bitchat nodes, and
-// principle 7 says that when in doubt we do what bitchat does. compat.test.ts
+// principle 7 says that when in doubt we do what bitchat does. packet-frame-vectors.test.ts
 // already pins byte offsets, but it pins them against Airhop's own constants,
 // which cannot catch a divergence both sides of the assertion share.
 //

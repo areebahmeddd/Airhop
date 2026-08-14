@@ -4,7 +4,7 @@
     "",
     "Byte-compatible with bitchat-iOS CourierEnvelope. Published so a second",
     "implementation can be written without reading the TypeScript, and asserted",
-    "by src/core/mesh/__tests__/courier-vectors.test.ts against the running code,",
+    "by src/core/mesh/courier/__tests__/courier-vectors.test.ts against the running code,",
     "so this file cannot go stale while the suite is green.",
     "",
     "The format earns vectors because three ways of getting it wrong fail",

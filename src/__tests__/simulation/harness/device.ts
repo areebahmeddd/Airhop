@@ -1525,7 +1525,7 @@ function buildSandbox(
       voice = voiceMod.default?.__record ?? null;
       // Bind the fake microphone to THIS phone's event emitter. Doing it here
       // rather than in the jest.mock factory is what guarantees it is the same
-      // emitter voice-audio.ts subscribes on; see media-fabric.ts.
+      // emitter voice-audio-backend.ts subscribes on; see media-fabric.ts.
       const rn = require("react-native") as {
         DeviceEventEmitter: {
           emit: (event: string, body: Record<string, unknown>) => void;

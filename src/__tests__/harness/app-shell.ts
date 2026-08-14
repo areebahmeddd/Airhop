@@ -11,7 +11,7 @@
 //   App.tsx:434-469  AppState 'active': re-check permissions, retryRadios
 //   App.tsx:477-483  meshStopRequested -> applyPresence('away')
 //
-// and src/utils/ble-permissions.ts:34-120, whose fine-location requirement and
+// and src/platform/ble-permissions.ts:34-120, whose fine-location requirement and
 // grant/deny/blocked handling are reproduced against the OS model.
 
 import type { Identity } from "@core/crypto/identity";

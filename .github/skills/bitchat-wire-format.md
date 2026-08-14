@@ -1,14 +1,14 @@
 ---
 description: >
   Reference for the bitchat v2 binary wire format. Read this before touching
-  src/core/mesh/packet-codec.ts, the BLE native modules, or any code that
+  src/core/mesh/wire/packet-codec.ts, the BLE native modules, or any code that
   constructs or parses packets. A one-byte mistake silently breaks
   interoperability with every bitchat iOS and Android node on the mesh.
 ---
 
 # bitchat Wire Format
 
-Source of truth: `bitchat/ios/localPackages/BitFoundation/Sources/BitFoundation/BinaryProtocol.swift` and the Android equivalent `BinaryProtocol.kt`. The Airhop implementation is in `src/core/mesh/packet-codec.ts`.
+Source of truth: `bitchat/ios/localPackages/BitFoundation/Sources/BitFoundation/BinaryProtocol.swift` and the Android equivalent `BinaryProtocol.kt`. The Airhop implementation is in `src/core/mesh/wire/packet-codec.ts`.
 
 ## Fixed Header (v2, 16 bytes)
 
@@ -144,9 +144,9 @@ either direction. See PROTOCOLS section 5.2.
 Implementation: `channelPacketType`, `encodeMeshPublicPayload`,
 `decodeMeshPublicPayload`, `encodeAirhopChannelPayload` and
 `decodeAirhopChannelPayload` in `src/core/router/message-router.ts`. Byte layout
-is pinned by `src/core/mesh/__tests__/bitchat-payload-vectors.test.ts`, and the
+is pinned by `src/core/mesh/wire/__tests__/packet-payload-vectors.test.ts`, and the
 end-to-end behaviour by the three-node scenario in
-`src/services/__tests__/sim/conformance.test.ts`.
+`src/__tests__/simulation/conformance.test.ts`.
 
 ## ANNOUNCE TLV Payload
 

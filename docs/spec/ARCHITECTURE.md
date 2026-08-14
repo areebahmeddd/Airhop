@@ -460,7 +460,7 @@ conversation.
 ### Choosing a rail
 
 Every entry point that pays somebody (DM attach menu, contact sheet, Mesh peer
-sheet, Wallet Zap) calls `payPerson` in `services/ecash-transfer.ts`, so the four
+sheet, Wallet Zap) calls `payPerson` in `services/payment-router.ts`, so the four
 screens cannot disagree about what a payment does.
 
 | Order | Rail   | When                                                                                                            | Reclaimable |
@@ -743,19 +743,33 @@ Text is identical everywhere because it is compiled in. What varies:
 Anything that compiles to JS lives in `src/`. Anything that touches hardware
 lives in `android/` or `ios/`.
 
-| Path            | Holds                                                                    |
-| --------------- | ------------------------------------------------------------------------ |
-| `android/`      | Kotlin BLE module and the foreground service that keeps the mesh alive   |
-| `ios/`          | Swift BLE module built on CoreBluetooth                                  |
-| `src/bridge/`   | TurboModule specs, the only place native and TypeScript meet             |
-| `src/core/`     | The protocol in pure TypeScript: crypto, mesh, nostr, payments, routing  |
-| `src/services/` | Long-lived runtime wiring, chiefly the mesh service that owns the radios |
-| `src/features/` | Screens and screen-level logic                                           |
-| `src/store/`    | Zustand state with MMKV persistence                                      |
-| `src/ui/`       | Shared components and theme tokens                                       |
-| `src/utils/`    | Stateless helpers                                                        |
-| `src/i18n/`     | Translation runtime and the bundled English catalog                      |
-| `assets/data/`  | Bundled relay list, refreshed by CI                                      |
+| Path             | Holds                                                                    |
+| ---------------- | ------------------------------------------------------------------------ |
+| `android/`       | Kotlin BLE module and the foreground service that keeps the mesh alive   |
+| `ios/`           | Swift BLE module built on CoreBluetooth                                  |
+| `src/app/`       | The root component and the four-tab state machine                        |
+| `src/bridge/`    | TurboModule specs, the only place native and TypeScript meet             |
+| `src/core/`      | The protocol in pure TypeScript: crypto, mesh, nostr, payments, routing  |
+| `src/services/`  | Long-lived runtime wiring, chiefly the mesh service that owns the radios |
+| `src/features/`  | Screens and screen-level logic                                           |
+| `src/store/`     | Zustand state with MMKV persistence                                      |
+| `src/ui/`        | Shared components, hooks, and theme tokens                               |
+| `src/platform/`  | Thin wrappers over OS APIs: permissions, haptics, battery settings       |
+| `src/utils/`     | Stateless helpers, free of side effects                                  |
+| `src/i18n/`      | Translation runtime and the bundled English catalog                      |
+| `src/__tests__/` | Whole-app suites: the device harness, lifecycle, and the simulator       |
+| `assets/data/`   | Bundled relay list, refreshed by CI                                      |
+
+`src/core/mesh/` is the one subsystem large enough to be grouped further, into
+`wire/`, `routing/`, `sync/`, `discovery/`, `rooms/`, `courier/` and `voice/`.
+`wire/` is the byte layout this document's [section 4](#4-messaging-protocol)
+and [PROTOCOLS.md](PROTOCOLS.md) describe, so a diff that changes the wire
+format shows up under one directory.
+
+A module specifier that leaves its top-level layer is written as a path alias
+(`@core/mesh/wire/packet-codec`); one that stays inside the layer stays
+relative. Aliases live in `tsconfig.json` and are mirrored in `package.json`
+for jest.
 
 `src/core/` has no native dependencies, so the whole protocol is testable in CI
 without a phone. The suite covers the wire format, the handshakes and the routing
@@ -944,7 +958,7 @@ service keeps it advertising normally.
 | `react-native-gesture-handler` | `^2.32` | Gestures, sheets, swipe actions | MIT     |
 | `react-native-qrcode-svg`      | `^6.3`  | Rendering the contact card QR   | MIT     |
 
-There is no navigation library. `App.tsx` holds a hand-rolled four-tab state
+There is no navigation library. `src/app/app.tsx` holds a hand-rolled four-tab state
 machine and screens are plain components. Styling is StyleSheet plus the theme
 tokens in `src/ui/`, with no Tailwind or NativeWind.
 

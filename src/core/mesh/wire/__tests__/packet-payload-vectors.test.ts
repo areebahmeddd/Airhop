@@ -5,7 +5,7 @@
 // channel message, the file packet, the fragment header, the voice burst, and
 // the group state.
 //
-// Sibling of compat.test.ts, which pins the packet envelope itself (header
+// Sibling of packet-frame-vectors.test.ts, which pins the packet envelope itself (header
 // layout, flags, signature coverage, packet ID). Between them they cover the two
 // halves: that file owns the frame, this one owns what rides inside it.
 //

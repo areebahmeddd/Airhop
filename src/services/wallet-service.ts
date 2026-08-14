@@ -2366,7 +2366,7 @@ export async function lockProofsForNutzap(params: {
 // cost exactly what you would expect: the DM it published never appeared in the
 // conversation, was never retried when a relay dropped it, and on a publish
 // timeout it fell through to a path that reserved a SECOND set of proofs for the
-// same payment. Delivery now lives in services/ecash-transfer.ts, the one module
+// same payment. Delivery now lives in services/payment-router.ts, the one module
 // allowed to import both the mesh and the wallet.
 
 export interface NutzapTarget {

@@ -1,14 +1,14 @@
 ---
 description: >
   Reference for the mesh flood routing, deduplication, and fragment reassembly
-  rules. Read this before modifying src/core/mesh/flood-router.ts,
+  rules. Read this before modifying src/core/mesh/routing/flood-router.ts,
   deduplicator.ts, or fragment-manager.ts. Subtle mistakes here cause routing
   loops, dropped messages, or broken interoperability with bitchat nodes.
 ---
 
 # Mesh Routing and Deduplication
 
-Implementation: `src/core/mesh/flood-router.ts`, `deduplicator.ts`, `fragment-manager.ts`. Reference: `bitchat/ios/bitchat/Services/BLE/BLEService.swift` and bitchat Android.
+Implementation: `src/core/mesh/routing/flood-router.ts`, `deduplicator.ts`, `fragment-manager.ts`. Reference: `bitchat/ios/bitchat/Services/BLE/BLEService.swift` and bitchat Android.
 
 ## Flood Routing Rules
 
@@ -98,7 +98,7 @@ Partial assemblies are silently dropped after 30 seconds. The sender must retran
 
 `REQUEST_SYNC` packets (type `0x21`) use TTL=2 intentionally. They propagate only to immediate mesh neighbors, not across the wider network. This is by design: gossip reconciliation is a local-mesh operation.
 
-Gossip uses a Golomb-Coded Set (GCS) filter, not a bloom filter. The false positive rate formula is different. See `src/core/mesh/gossip-sync.ts` and the reference `bitchat/ios/bitchat/Sync/GossipSyncManager.swift`.
+Gossip uses a Golomb-Coded Set (GCS) filter, not a bloom filter. The false positive rate formula is different. See `src/core/mesh/sync/gossip-sync.ts` and the reference `bitchat/ios/bitchat/Sync/GossipSyncManager.swift`.
 
 ## Announce Broadcasts
 

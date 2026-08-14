@@ -566,7 +566,7 @@ bitchat labels its relay-DM encryption `nip44-v2`, and the name is misleading: i
 | Padding      | Padded to a power-of-two bucket            | None                                           |
 | Framing      | base64, version byte inside the payload    | `"v2:"` prefix plus base64url                  |
 
-**Airhop implements bitchat's construction deliberately, and must keep doing so.** The Nostr event signature covers the encrypted content, so byte-identical output is the whole of DM interoperability: a real NIP-44 payload is not something a bitchat client can open, and vice versa. The implementation and its reasoning are in [`src/core/nostr/bitchat-nostr-crypto.ts`](../../src/core/nostr/bitchat-nostr-crypto.ts).
+**Airhop implements bitchat's construction deliberately, and must keep doing so.** The Nostr event signature covers the encrypted content, so byte-identical output is the whole of DM interoperability: a real NIP-44 payload is not something a bitchat client can open, and vice versa. The implementation and its reasoning are in [`src/core/nostr/bitchat-nip44.ts`](../../src/core/nostr/bitchat-nip44.ts).
 
 The envelope around it **is** NIP-17-shaped: kinds 13, 14 and 1059 in section 8 carry their standard meanings, and the gift-wrap layering is the one NIP-17 describes. Only the encryption inside each layer diverges. So "NIP-17 gift-wrap" elsewhere in these docs is accurate about the structure and should be read as excluding the cipher.
 
@@ -669,7 +669,7 @@ key learned from an ANNOUNCE, so one sent before that announce has propagated is
 dropped at the far end. This is correct behaviour and reads as a delivery bug in
 the field.
 
-`tier-relay.test.ts` pins the forwarding rules against a relay that holds no keys
+`simulation/scenarios/relay.test.ts` pins the forwarding rules against a relay that holds no keys
 and never announces (`sim/harness/relay-node.ts`): delivery through one relay,
 discovery without the relay entering the roster, a two-relay chain with no person
 between, a three-relay ring forwarding each packet once, and a private message
