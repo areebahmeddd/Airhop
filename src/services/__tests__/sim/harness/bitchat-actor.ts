@@ -23,12 +23,18 @@
 // and bitchat's decoder disagree, the byte layout is wrong, and the layout is
 // the thing both projects have agreed on.
 
-import { decodeFilePacket } from "@core/mesh/bitchat-file-packet";
+import {
+  encodeBurstData,
+  encodeBurstEnd,
+  encodeBurstStart,
+  VoiceCodec,
+} from "@core/mesh/voice/voice-capture";
+import { decodeFilePacket } from "@core/mesh/wire/file-packet";
 import {
   CarrierDirection,
   decodeNostrCarrier,
   encodeNostrCarrier,
-} from "@core/mesh/nostr-carrier";
+} from "@core/mesh/wire/nostr-carrier";
 import {
   computePacketId,
   decodePacket,
@@ -38,13 +44,7 @@ import {
   signPacket,
   verifyPacket,
   type Packet,
-} from "@core/mesh/packet-codec";
-import {
-  encodeBurstData,
-  encodeBurstEnd,
-  encodeBurstStart,
-  VoiceCodec,
-} from "@core/mesh/voice-capture";
+} from "@core/mesh/wire/packet-codec";
 import { ed25519, x25519 } from "@noble/curves/ed25519.js";
 import { sha256 } from "@noble/hashes/sha2.js";
 import { bytesToHex } from "@noble/hashes/utils.js";

@@ -19,7 +19,7 @@
 import {
   MAX_SENT_IMAGE_BYTES,
   resolveMimeType,
-} from "@core/mesh/bitchat-file-packet";
+} from "@core/mesh/wire/file-packet";
 import * as FileSystem from "expo-file-system";
 import {
   ImageManipulator,

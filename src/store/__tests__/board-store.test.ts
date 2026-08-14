@@ -8,7 +8,7 @@ import {
   signBoardTombstone,
   type BoardPost,
   type BoardWire,
-} from "@core/mesh/board-packet";
+} from "@core/mesh/wire/board-packet";
 import { ed25519 } from "@noble/curves/ed25519.js";
 import { createMMKV } from "react-native-mmkv";
 import { useBoardStore } from "../board-store";

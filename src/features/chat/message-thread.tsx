@@ -1,15 +1,15 @@
 // Message thread screen for a single channel.
 // Shows messages with sender and timestamp. Text input to compose and PTT button.
 
+import { nicknameKey, normalizeNickname } from "@core/mesh/discovery/nickname";
+import { MAX_BURST_MS } from "@core/mesh/voice/voice-capture";
 import {
   MAX_BITCHAT_TRANSFER_BYTES,
   MAX_VIDEO_SECONDS,
   maxBytesForType,
   wireMediaName,
-} from "@core/mesh/bitchat-file-packet";
-import { nicknameKey, normalizeNickname } from "@core/mesh/nickname";
-import { PRIVATE_MESSAGE_MAX_CONTENT_BYTES } from "@core/mesh/noise-payload";
-import { MAX_BURST_MS } from "@core/mesh/voice-capture";
+} from "@core/mesh/wire/file-packet";
+import { PRIVATE_MESSAGE_MAX_CONTENT_BYTES } from "@core/mesh/wire/noise-payload";
 import {
   findTokensInText,
   mayContainToken,

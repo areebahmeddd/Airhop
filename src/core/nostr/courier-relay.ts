@@ -20,7 +20,7 @@ import { base64ToBytes, bytesToBase64 } from "../encoding/base64";
 import {
   encodeEnvelopePayload,
   type SealedEnvelope,
-} from "../mesh/courier-store";
+} from "../mesh/courier/courier-store";
 import type { NostrClient } from "./nostr-client";
 
 // Event kind per PROTOCOLS.md section 8 / bitchat NostrProtocol.swift.

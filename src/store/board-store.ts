@@ -23,7 +23,7 @@ import {
   type BoardPost,
   type BoardTombstone,
   type BoardWire,
-} from "@core/mesh/board-packet";
+} from "@core/mesh/wire/board-packet";
 import { bytesToHex } from "@noble/hashes/utils.js";
 import { createMMKV } from "react-native-mmkv";
 import { create } from "zustand";

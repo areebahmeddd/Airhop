@@ -3,7 +3,7 @@
  */
 // Geohash DM: a message sent from one per-cell identity is gift-wrapped so only
 // the recipient's per-cell identity can open it, wrapped in a bitchat1 envelope.
-import { NoisePayloadType } from "@core/mesh/noise-payload";
+import { NoisePayloadType } from "@core/mesh/wire/noise-payload";
 import { decodeBitchatEnvelope } from "@core/nostr/bitchat-envelope";
 import {
   deriveGeohashIdentity,

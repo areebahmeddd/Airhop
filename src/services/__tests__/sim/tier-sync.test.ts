@@ -36,7 +36,7 @@ import {
   PacketType,
   signPacket,
   type Packet,
-} from "@core/mesh/packet-codec";
+} from "@core/mesh/wire/packet-codec";
 import {
   channelPacketType,
   encodeAirhopChannelPayload,

@@ -42,7 +42,7 @@ jest.mock("@bridge/NativeAirhopVoice", () => {
 import {
   encodeFilePacket,
   MAX_SENT_IMAGE_BYTES,
-} from "@core/mesh/bitchat-file-packet";
+} from "@core/mesh/wire/file-packet";
 import {
   decodePacket,
   encodePacket,
@@ -50,7 +50,7 @@ import {
   PacketType,
   signPacket,
   type Packet,
-} from "@core/mesh/packet-codec";
+} from "@core/mesh/wire/packet-codec";
 import { BitchatActor } from "./harness/bitchat-actor";
 import { SimDevice, type DeviceSpec } from "./harness/device";
 import {

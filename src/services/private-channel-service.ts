@@ -23,7 +23,7 @@ import {
   deriveChannelNostrIdentity,
   openChannelMessage,
   type ChannelNostrIdentity,
-} from "@core/mesh/channel-crypto";
+} from "@core/mesh/rooms/channel-crypto";
 import { TAG_MESSAGE_ID } from "@core/nostr/geohash-presence";
 import type { NostrClient } from "@core/nostr/nostr-client";
 import { useChannelMembersStore } from "@store/channel-members-store";

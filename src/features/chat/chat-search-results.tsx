@@ -4,7 +4,7 @@
 // Telegram / Signal convention of one unified search surface across every
 // chat, not scoped to whichever sub-tab happens to be selected.
 
-import { isUrgent } from "@core/mesh/board-packet";
+import { isUrgent } from "@core/mesh/wire/board-packet";
 import { Feather } from "@expo/vector-icons";
 import { t, useT, type TranslationKey } from "@i18n";
 import { bytesToHex } from "@noble/hashes/utils.js";

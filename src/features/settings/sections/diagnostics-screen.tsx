@@ -16,7 +16,7 @@
 // Every number is live. Peers come from the same store the Mesh tab renders, so
 // what is shown here and what is shown there can never disagree.
 
-import { GCS_MAX_BYTES, GCS_TARGET_FPR } from "@core/mesh/gossip-sync";
+import { GCS_MAX_BYTES, GCS_TARGET_FPR } from "@core/mesh/sync/gossip-sync";
 import { t, useT } from "@i18n";
 import { getMeshService } from "@services/mesh-service";
 import { useMeshStateStore } from "@store/mesh-state-store";

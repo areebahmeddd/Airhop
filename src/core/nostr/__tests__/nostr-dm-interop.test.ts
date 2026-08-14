@@ -6,7 +6,7 @@
 // on the other side. This is the whole M2 path in one test.
 import { secp256k1 } from "@noble/curves/secp256k1.js";
 import { bytesToHex } from "@noble/hashes/utils.js";
-import { NoisePayloadType } from "../../mesh/noise-payload";
+import { NoisePayloadType } from "../../mesh/wire/noise-payload";
 import {
   decodeBitchatEnvelope,
   encodeBitchatAckEnvelope,

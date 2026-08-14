@@ -11,7 +11,7 @@ import {
   type BitchatGroup,
   type GroupMember,
   type GroupStatePayload,
-} from "@core/mesh/group-protocol";
+} from "@core/mesh/rooms/group-protocol";
 import { bytesToHex, hexToBytes } from "@noble/hashes/utils.js";
 import { createMMKV } from "react-native-mmkv";
 import { create } from "zustand";

@@ -18,8 +18,8 @@ import { base64ToBytes, bytesToBase64 } from "@core/encoding/base64";
 import type {
   AudioCaptureBackend,
   VoiceCodecId,
-} from "@core/mesh/voice-capture";
-import type { AudioPlaybackBackend } from "@core/mesh/voice-player";
+} from "@core/mesh/voice/voice-capture";
+import type { AudioPlaybackBackend } from "@core/mesh/voice/voice-player";
 import { t } from "@i18n";
 import { NativeEventEmitter, type EventSubscription } from "react-native";
 

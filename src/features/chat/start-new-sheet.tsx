@@ -12,7 +12,7 @@
 // that stays on Bluetooth) has to be stated where the choice is made. Picking
 // one closes the chooser and opens that form; its Back button returns here.
 
-import { generateChannelKey } from "@core/mesh/channel-crypto";
+import { generateChannelKey } from "@core/mesh/rooms/channel-crypto";
 import { Feather } from "@expo/vector-icons";
 import { useT } from "@i18n";
 import { useChatStore } from "@store/chat-store";

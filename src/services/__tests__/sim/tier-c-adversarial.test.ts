@@ -29,14 +29,14 @@ import type { Identity } from "@core/crypto/identity";
 import {
   ANNOUNCE_TTL,
   encodeAnnouncePayload,
-} from "@core/mesh/announce-manager";
+} from "@core/mesh/discovery/announce-manager";
 import {
   encodePacket,
   Flags,
   PacketType,
   signPacket,
   type Packet,
-} from "@core/mesh/packet-codec";
+} from "@core/mesh/wire/packet-codec";
 import {
   channelPacketType,
   encodeAirhopChannelPayload,

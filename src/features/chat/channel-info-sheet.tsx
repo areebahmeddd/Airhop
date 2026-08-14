@@ -4,7 +4,7 @@
 // Read-only: it describes what a channel is and who is in it. Default channels
 // add a protocol lock notice; a location channel adds a bookmark toggle.
 
-import { GROUP_MAX_MEMBERS } from "@core/mesh/group-protocol";
+import { GROUP_MAX_MEMBERS } from "@core/mesh/rooms/group-protocol";
 import { relayDisplayHost } from "@core/nostr/geo-relay";
 import { Feather, MaterialCommunityIcons } from "@expo/vector-icons";
 import { t, useT, useTPlural, type TranslationKey } from "@i18n";

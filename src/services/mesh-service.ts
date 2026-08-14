@@ -33,48 +33,27 @@ import { noiseXOpen, noiseXSeal } from "@core/crypto/noise-x";
 import { NoiseHandshake, type NoiseSession } from "@core/crypto/noise-xx";
 import { base64ToBytes, bytesToBase64 } from "@core/encoding/base64";
 import {
-  ANNOUNCE_TTL,
-  AnnounceManager,
-  Capability,
-  decodeAnnouncePayload,
-  isAnnounceFresh,
-} from "@core/mesh/announce-manager";
-import {
-  decodeBoardWire,
-  encodeBoardWire,
-  isUrgent,
-  newPostID,
-  signBoardPost,
-  signBoardTombstone,
-  URGENT,
-  verifyBoardWire,
-  type BoardPost,
-  type BoardWire,
-} from "@core/mesh/board-packet";
-import {
-  openChannelMessage,
-  sealChannelMessage,
-} from "@core/mesh/channel-crypto";
-import {
   computeRecipientTag,
   CourierStore,
   decodeEnvelopePayload,
   encodeEnvelopePayload,
   ENVELOPE_TTL_MS,
-} from "@core/mesh/courier-store";
+} from "@core/mesh/courier/courier-store";
 import {
-  decodeDmPayload,
-  DmPayloadType,
-  encodeDmMessage,
-  encodeDmReceipt,
-} from "@core/mesh/dm-payload";
-import { FloodRouter } from "@core/mesh/flood-router";
+  LocalPrekeyStore,
+  PeerPrekeyStore,
+} from "@core/mesh/courier/prekey-store";
 import {
-  FRAG_DATA_SIZE,
-  FragmentManager,
-  type FragmentProgress,
-} from "@core/mesh/fragment-manager";
-import { GossipSync } from "@core/mesh/gossip-sync";
+  ANNOUNCE_TTL,
+  AnnounceManager,
+  Capability,
+  decodeAnnouncePayload,
+  isAnnounceFresh,
+} from "@core/mesh/discovery/announce-manager";
+import {
+  openChannelMessage,
+  sealChannelMessage,
+} from "@core/mesh/rooms/channel-crypto";
 import {
   decodeGroupEnvelope,
   decodeGroupState,
@@ -91,25 +70,54 @@ import {
   verifyGroupState,
   type BitchatGroup,
   type GroupMember,
-} from "@core/mesh/group-protocol";
+} from "@core/mesh/rooms/group-protocol";
+import { FloodRouter } from "@core/mesh/routing/flood-router";
+import {
+  FRAG_DATA_SIZE,
+  FragmentManager,
+  type FragmentProgress,
+} from "@core/mesh/routing/fragment-manager";
+import { nextHopFor } from "@core/mesh/routing/source-route";
+import { GossipSync } from "@core/mesh/sync/gossip-sync";
+import { RequestSyncManager } from "@core/mesh/sync/request-sync-manager";
+import { VoiceCaptureSession } from "@core/mesh/voice/voice-capture";
+import { VoicePlayer } from "@core/mesh/voice/voice-player";
+import {
+  decodeBoardWire,
+  encodeBoardWire,
+  isUrgent,
+  newPostID,
+  signBoardPost,
+  signBoardTombstone,
+  URGENT,
+  verifyBoardWire,
+  type BoardPost,
+  type BoardWire,
+} from "@core/mesh/wire/board-packet";
+import {
+  decodeDmPayload,
+  DmPayloadType,
+  encodeDmMessage,
+  encodeDmReceipt,
+} from "@core/mesh/wire/dm-payload";
 import {
   decodeMeshPing,
   encodeMeshPing,
   newPingNonce,
   pingHopCount,
-} from "@core/mesh/mesh-ping";
+} from "@core/mesh/wire/mesh-ping";
 import {
   decodeNoisePayload,
   decodePrivateMessagePacket,
   encodeNoisePrivateMessage,
   NoisePayloadType,
   type NoisePayloadTypeValue,
-} from "@core/mesh/noise-payload";
+} from "@core/mesh/wire/noise-payload";
 import {
   CarrierDirection,
   decodeNostrCarrier,
   encodeNostrCarrier,
-} from "@core/mesh/nostr-carrier";
+} from "@core/mesh/wire/nostr-carrier";
 import {
   BROADCAST_ID,
   decodePacket,
@@ -121,21 +129,16 @@ import {
   signPacket,
   verifyPacket,
   type Packet,
-} from "@core/mesh/packet-codec";
+} from "@core/mesh/wire/packet-codec";
 import {
   decodePeerStatePacket,
   encodePeerStatePacket,
-} from "@core/mesh/peer-state-packet";
+} from "@core/mesh/wire/peer-state-packet";
 import {
   decodePrekeyBundle,
   encodePrekeyBundle,
   verifyPrekeyBundle,
-} from "@core/mesh/prekey-bundle";
-import { LocalPrekeyStore, PeerPrekeyStore } from "@core/mesh/prekey-store";
-import { RequestSyncManager } from "@core/mesh/request-sync-manager";
-import { nextHopFor } from "@core/mesh/source-route";
-import { VoiceCaptureSession } from "@core/mesh/voice-capture";
-import { VoicePlayer } from "@core/mesh/voice-player";
+} from "@core/mesh/wire/prekey-bundle";
 import {
   decodeBitchatEnvelope,
   encodeBitchatAckEnvelope,

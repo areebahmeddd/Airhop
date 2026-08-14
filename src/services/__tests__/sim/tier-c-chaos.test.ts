@@ -41,7 +41,7 @@ import {
   PacketType,
   signPacket,
   type Packet,
-} from "@core/mesh/packet-codec";
+} from "@core/mesh/wire/packet-codec";
 import { ed25519, x25519 } from "@noble/curves/ed25519.js";
 import { sha256 } from "@noble/hashes/sha2.js";
 import { bytesToHex } from "@noble/hashes/utils.js";

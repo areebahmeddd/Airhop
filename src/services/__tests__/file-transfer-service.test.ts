@@ -10,8 +10,8 @@
 // never reassembles. The assertions below are therefore about WHEN packets are
 // handed to the transport, not just that they are.
 
-import { decodeFilePacket } from "@core/mesh/bitchat-file-packet";
-import { PacketType, type Packet } from "@core/mesh/packet-codec";
+import { decodeFilePacket } from "@core/mesh/wire/file-packet";
+import { PacketType, type Packet } from "@core/mesh/wire/packet-codec";
 import { useChatStore } from "@store/chat-store";
 import { useTransferStore } from "@store/transfer-store";
 import { FileTransferService } from "../file-transfer-service";

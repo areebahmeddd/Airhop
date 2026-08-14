@@ -13,7 +13,7 @@ import {
   signGroupState,
   type BitchatGroup,
   type GroupMember,
-} from "@core/mesh/group-protocol";
+} from "@core/mesh/rooms/group-protocol";
 import { ed25519, x25519 } from "@noble/curves/ed25519.js";
 import { createMMKV } from "react-native-mmkv";
 import { groupChannel, useGroupStore } from "../group-store";

@@ -11,7 +11,7 @@
 // construction time so the router stays testable without a live transport.
 
 import { type NoiseSession } from "../crypto/noise-xx";
-import { ANNOUNCE_CONNECTED_MAX_MS } from "../mesh/announce-manager";
+import { ANNOUNCE_CONNECTED_MAX_MS } from "../mesh/discovery/announce-manager";
 import {
   decodeNoisePayload,
   encodeNoisePayload,
@@ -19,13 +19,13 @@ import {
   encodeNoiseReceipt,
   NoisePayloadType,
   type NoisePayload,
-} from "../mesh/noise-payload";
+} from "../mesh/wire/noise-payload";
 import {
   Flags,
   PacketType,
   signPacket,
   type Packet,
-} from "../mesh/packet-codec";
+} from "../mesh/wire/packet-codec";
 
 // Origin TTL for a PUBLIC channel message, drawn from a small range instead of
 // the fixed maximum.

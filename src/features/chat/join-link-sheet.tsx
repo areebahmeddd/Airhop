@@ -10,7 +10,7 @@
 // valid peer or contact link because the sheet is named "join" would be a
 // dead end for no reason. What the link will do is stated before you commit.
 
-import { isValidChannelKey } from "@core/mesh/channel-crypto";
+import { isValidChannelKey } from "@core/mesh/rooms/channel-crypto";
 import { Feather } from "@expo/vector-icons";
 import { t, useT } from "@i18n";
 import { applyAirhopLink } from "@services/link-router";

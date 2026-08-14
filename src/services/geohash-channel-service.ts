@@ -24,7 +24,7 @@
 // requirement. Teleported channels (geohash:<gh>) carry a fixed geohash, so
 // they stay live over the internet even with no location fix.
 
-import { NoisePayloadType } from "@core/mesh/noise-payload";
+import { NoisePayloadType } from "@core/mesh/wire/noise-payload";
 import {
   decodeBitchatEnvelope,
   encodeBitchatAckEnvelope,

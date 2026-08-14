@@ -8,8 +8,8 @@ import {
   decodePrivateMessagePacket,
   encodeNoisePrivateMessage,
   NoisePayloadType,
-} from "../../mesh/noise-payload";
-import { Flags, PacketType, type Packet } from "../../mesh/packet-codec";
+} from "../../mesh/wire/noise-payload";
+import { Flags, PacketType, type Packet } from "../../mesh/wire/packet-codec";
 import {
   channelPacketType,
   decodeAirhopChannelPayload,

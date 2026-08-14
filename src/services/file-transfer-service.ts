@@ -13,6 +13,10 @@
 //            packet → decode TLV → validate MIME → cache file → ChatMessage
 
 import {
+  fragmentPacket,
+  MAX_BLE_FRAME,
+} from "@core/mesh/routing/fragment-manager";
+import {
   decodeFilePacket,
   encodeFilePacket,
   ensureFileExtension,
@@ -22,8 +26,7 @@ import {
   resolveMimeType,
   typeFromMime,
   wireFileName,
-} from "@core/mesh/bitchat-file-packet";
-import { fragmentPacket, MAX_BLE_FRAME } from "@core/mesh/fragment-manager";
+} from "@core/mesh/wire/file-packet";
 import {
   BROADCAST_ID,
   encodePacket,
@@ -33,7 +36,7 @@ import {
   PacketType,
   signPacket,
   type Packet,
-} from "@core/mesh/packet-codec";
+} from "@core/mesh/wire/packet-codec";
 import { t } from "@i18n";
 import { bytesToHex, hexToBytes } from "@noble/hashes/utils.js";
 import { useChatStore, type ChatAttachment } from "@store/chat-store";

@@ -11,7 +11,7 @@
 // Android one can emit the same accented name in different encodings. Comparing
 // raw strings meant a cross-platform mention silently never fired.
 
-import { normalizeNickname } from "@core/mesh/nickname";
+import { normalizeNickname } from "@core/mesh/discovery/nickname";
 
 function escapeRegExp(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");

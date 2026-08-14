@@ -10,7 +10,7 @@
 // effects, which is why it lives with the services.
 
 import { decodeQRContent } from "@core/crypto/contact-exchange";
-import { isValidChannelKey } from "@core/mesh/channel-crypto";
+import { isValidChannelKey } from "@core/mesh/rooms/channel-crypto";
 import { bytesToHex } from "@noble/hashes/utils.js";
 import { useChatStore } from "@store/chat-store";
 import { useContactsStore } from "@store/contacts-store";

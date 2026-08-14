@@ -6,7 +6,7 @@
 
 import { bytesToHex } from "@noble/hashes/utils.js";
 import { finalizeEvent, generateSecretKey, type Event } from "nostr-tools";
-import type { SealedEnvelope } from "../../mesh/courier-store";
+import type { SealedEnvelope } from "../../mesh/courier/courier-store";
 import {
   fetchCourierDrops,
   publishCourierDrop,

@@ -21,7 +21,7 @@ import {
   CarrierDirection,
   encodeNostrCarrier,
   type NostrCarrierPacket,
-} from "@core/mesh/nostr-carrier";
+} from "@core/mesh/wire/nostr-carrier";
 import {
   bridgeStableID,
   createBridgeMeshEvent,

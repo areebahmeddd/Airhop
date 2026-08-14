@@ -13,7 +13,7 @@ import {
   decodePacket,
   encodePacket,
   type Packet,
-} from "@core/mesh/packet-codec";
+} from "@core/mesh/wire/packet-codec";
 import { bytesToHex } from "@noble/hashes/utils.js";
 import type { RadioPort } from "../../lifecycle/harness/android-native";
 import type { Platform } from "../../lifecycle/harness/os";

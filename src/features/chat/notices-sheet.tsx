@@ -13,7 +13,7 @@
 // first, then newest. You can delete your own posts; a signed tombstone
 // outruns stale copies across the mesh and retracts the bridged note.
 
-import { isUrgent, type BoardPost } from "@core/mesh/board-packet";
+import { isUrgent, type BoardPost } from "@core/mesh/wire/board-packet";
 import { Feather, MaterialCommunityIcons } from "@expo/vector-icons";
 import { t, useT, type TranslationKey } from "@i18n";
 import { bytesToHex } from "@noble/hashes/utils.js";

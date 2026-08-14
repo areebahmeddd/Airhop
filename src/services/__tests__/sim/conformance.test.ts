@@ -42,6 +42,7 @@ jest.mock("@bridge/NativeAirhopWiFi", () => {
   return { __esModule: true, default: shim.wifiBridge };
 });
 
+import { MAX_BLE_FRAME } from "@core/mesh/routing/fragment-manager";
 import {
   MAX_BITCHAT_TRANSFER_BYTES,
   MAX_FILE_BYTES,
@@ -49,9 +50,8 @@ import {
   MAX_IMAGE_BYTES,
   MAX_SENT_IMAGE_BYTES,
   MAX_VOICE_BYTES,
-} from "@core/mesh/bitchat-file-packet";
-import { MAX_BLE_FRAME } from "@core/mesh/fragment-manager";
-import { PacketType } from "@core/mesh/packet-codec";
+} from "@core/mesh/wire/file-packet";
+import { PacketType } from "@core/mesh/wire/packet-codec";
 import {
   CELL_PRECISION as BRIDGE_CELL_PRECISION,
   DOWNLINK_EVENTS_PER_MINUTE as BRIDGE_DOWNLINK_PER_MINUTE,
