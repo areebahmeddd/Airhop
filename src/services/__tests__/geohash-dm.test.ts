@@ -14,7 +14,7 @@ import type { NostrClient } from "@core/nostr/nostr-client";
 import { ed25519 } from "@noble/curves/ed25519.js";
 import { useChatStore } from "@store/chat-store";
 import { useMeshStateStore } from "@store/mesh-state-store";
-import { resolveDisplayName } from "@utils/display-name";
+import { resolveDisplayName } from "@utils/peer-display-name";
 import { GeohashChannelService } from "../geohash-channel-service";
 
 jest.mock("expo-location", () => ({}));

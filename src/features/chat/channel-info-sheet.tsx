@@ -8,6 +8,7 @@ import { GROUP_MAX_MEMBERS } from "@core/mesh/group-protocol";
 import { relayDisplayHost } from "@core/nostr/geo-relay";
 import { Feather, MaterialCommunityIcons } from "@expo/vector-icons";
 import { t, useT, useTPlural, type TranslationKey } from "@i18n";
+import { acknowledged } from "@platform/haptics";
 import {
   geohashLevelName,
   isGeoChannel,
@@ -37,7 +38,6 @@ import {
   Spacing,
   useThemeColors,
 } from "@ui/theme";
-import { acknowledged } from "@utils/haptics";
 import { peerIDToUsername } from "@utils/username";
 import * as Clipboard from "expo-clipboard";
 import React, { useEffect, useMemo, useRef, useState } from "react";

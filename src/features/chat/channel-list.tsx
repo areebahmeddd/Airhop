@@ -10,6 +10,7 @@
 import { Feather, MaterialCommunityIcons } from "@expo/vector-icons";
 import { t, tPlural, type TranslationKey, useT, useTPlural } from "@i18n";
 import { useRichText } from "@i18n/rich-text";
+import { held } from "@platform/haptics";
 import {
   geohashLevelName,
   isGeoChannel,
@@ -38,7 +39,6 @@ import {
 import { usePullRefreshColors } from "@ui/use-pull-refresh";
 import { sortConversationsByActivity } from "@utils/conversation-order";
 import { formatListTimestamp } from "@utils/format";
-import { held } from "@utils/haptics";
 import { messagePreviewText } from "@utils/message-preview";
 import { sumUnread } from "@utils/unread";
 import React, { useEffect, useMemo, useRef, useState } from "react";

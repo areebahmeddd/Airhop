@@ -18,6 +18,7 @@
 import { readScan, type ScanTarget } from "@core/payments/scan";
 import { Feather } from "@expo/vector-icons";
 import { t, useT } from "@i18n";
+import { ensurePermission } from "@platform/permissions";
 import BottomSheet from "@ui/components/bottom-sheet";
 import {
   FontSize,
@@ -27,7 +28,6 @@ import {
   Spacing,
   useThemeColors,
 } from "@ui/theme";
-import { ensurePermission } from "@utils/permissions";
 import {
   CameraView,
   scanFromURLAsync,

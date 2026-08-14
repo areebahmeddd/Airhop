@@ -8,6 +8,7 @@
 import type { EmbeddedToken } from "@core/payments/cashu";
 import { Feather, MaterialCommunityIcons } from "@expo/vector-icons";
 import { useT } from "@i18n";
+import { held } from "@platform/haptics";
 import type {
   ChatAttachment,
   ChatMessage,
@@ -23,7 +24,6 @@ import {
   Spacing,
   useThemeColors,
 } from "@ui/theme";
-import { held } from "@utils/haptics";
 import React, { useMemo } from "react";
 import {
   Linking,

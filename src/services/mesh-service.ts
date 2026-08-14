@@ -175,8 +175,11 @@ import { useOutboxStore, type PendingMessage } from "@store/outbox-store";
 import { usePeerStore } from "@store/peer-store";
 import { useSettingsStore } from "@store/settings-store";
 import { useTransferStore } from "@store/transfer-store";
-import { channelDisplayName, resolveDisplayName } from "@utils/display-name";
 import { BRIDGE_CHANNEL, canSendMedia } from "@utils/media-policy";
+import {
+  channelDisplayName,
+  resolveDisplayName,
+} from "@utils/peer-display-name";
 import {
   getPublicKey,
   verifyEvent,

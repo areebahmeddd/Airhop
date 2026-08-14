@@ -26,7 +26,7 @@ import {
   useThemeColors,
 } from "@ui/theme";
 import { parseAirhopLink } from "@utils/deep-link";
-import { resolveDisplayName } from "@utils/display-name";
+import { resolveDisplayName } from "@utils/peer-display-name";
 import * as Clipboard from "expo-clipboard";
 import { useMemo, useState } from "react";
 import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";

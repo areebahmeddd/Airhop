@@ -17,7 +17,7 @@ import { t, useLanguage } from "@i18n";
 import {
   getDeviceBrand,
   needsBatteryOptimizationPrompt,
-} from "@utils/battery-optimization";
+} from "@platform/battery-optimization";
 import { create } from "zustand";
 import { usePeerStore } from "./peer-store";
 import { useSettingsStore } from "./settings-store";

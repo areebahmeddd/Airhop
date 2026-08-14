@@ -18,16 +18,16 @@
 
 import Feather from "@expo/vector-icons/Feather";
 import {
+  ensureBlePermissions,
+  hasBlePermissions,
+} from "@platform/ble-permissions";
+import {
   locationPermissionState,
   requestLocationPermission,
 } from "@services/location-service";
 import { getMeshService } from "@services/mesh-service";
 import { useMeshStateStore } from "@store/mesh-state-store";
 import { HIT_SLOP } from "@ui/theme";
-import {
-  ensureBlePermissions,
-  hasBlePermissions,
-} from "@utils/ble-permissions";
 import { Camera } from "expo-camera";
 import * as MediaLibrary from "expo-media-library";
 import * as Notifications from "expo-notifications";

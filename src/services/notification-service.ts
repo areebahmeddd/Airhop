@@ -15,7 +15,7 @@
 import { t } from "@i18n";
 import type { ChatMessage } from "@store/chat-store";
 import { useSettingsStore } from "@store/settings-store";
-import { channelLabel } from "@utils/chat-display-name";
+import { channelLabel } from "@utils/conversation-display-name";
 import * as Haptics from "expo-haptics";
 import * as Notifications from "expo-notifications";
 import { Platform } from "react-native";

@@ -6,6 +6,7 @@
 
 import { Feather, MaterialCommunityIcons } from "@expo/vector-icons";
 import { t, tPlural, useT } from "@i18n";
+import { held } from "@platform/haptics";
 import { getMeshService } from "@services/mesh-service";
 import { showAlert } from "@store/alert-store";
 import { useBlockedStore } from "@store/blocked-store";
@@ -28,10 +29,9 @@ import {
 } from "@ui/theme";
 import { usePullRefreshColors } from "@ui/use-pull-refresh";
 import { sortConversationsByActivity } from "@utils/conversation-order";
-import { resolveDisplayName } from "@utils/display-name";
 import { formatListTimestamp } from "@utils/format";
-import { held } from "@utils/haptics";
 import { messagePreviewText } from "@utils/message-preview";
+import { resolveDisplayName } from "@utils/peer-display-name";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   FlatList,

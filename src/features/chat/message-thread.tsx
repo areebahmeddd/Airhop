@@ -18,6 +18,8 @@ import {
 import { Feather, MaterialCommunityIcons } from "@expo/vector-icons";
 import { t, useT, useTPlural, type TranslationKey } from "@i18n";
 import { chevronBack, isRTLLayout, textAlignEnd } from "@i18n/layout";
+import { acknowledged, held } from "@platform/haptics";
+import { ensurePermission } from "@platform/permissions";
 import {
   setAudioForPlayback,
   setAudioForRecording,
@@ -80,7 +82,6 @@ import {
 import { useKeyboardInset } from "@ui/use-keyboard";
 import { channelInviteLink } from "@utils/deep-link";
 import { unconfirmedSince } from "@utils/delivery-silence";
-import { resolveDisplayName } from "@utils/display-name";
 import {
   formatBytes,
   formatClockTime,
@@ -88,7 +89,6 @@ import {
   formatDuration,
   formatLongDate,
 } from "@utils/format";
-import { acknowledged, held } from "@utils/haptics";
 import {
   BRIDGE_CHANNEL,
   canSendMedia,
@@ -96,7 +96,7 @@ import {
   notifiesOnScreenshot,
 } from "@utils/media-policy";
 import { activeMentionQuery, applyMention } from "@utils/mentions";
-import { ensurePermission } from "@utils/permissions";
+import { resolveDisplayName } from "@utils/peer-display-name";
 import {
   resolveLandingSettle,
   resolveThreadScroll,

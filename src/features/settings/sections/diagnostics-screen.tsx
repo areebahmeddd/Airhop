@@ -22,8 +22,8 @@ import { getMeshService } from "@services/mesh-service";
 import { useMeshStateStore } from "@store/mesh-state-store";
 import { REACHABLE_TTL_MS, usePeerStore } from "@store/peer-store";
 import { FontFamily, FontSize, Spacing, useThemeColors } from "@ui/theme";
-import { resolveDisplayName } from "@utils/display-name";
 import { formatNumber } from "@utils/format";
+import { resolveDisplayName } from "@utils/peer-display-name";
 import React, { useEffect, useMemo, useState } from "react";
 import { ScrollView, Text, View } from "react-native";
 import {

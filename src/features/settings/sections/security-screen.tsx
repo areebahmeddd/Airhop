@@ -9,7 +9,7 @@ import { showAlert } from "@store/alert-store";
 import { useBlockedStore } from "@store/blocked-store";
 import { useSettingsStore } from "@store/settings-store";
 import { HIT_SLOP, useThemeColors } from "@ui/theme";
-import { resolveDisplayName } from "@utils/display-name";
+import { resolveDisplayName } from "@utils/peer-display-name";
 import React from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import {

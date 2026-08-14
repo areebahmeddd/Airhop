@@ -11,6 +11,7 @@ import { decodeQRContent } from "@core/crypto/contact-exchange";
 import { Feather } from "@expo/vector-icons";
 import { useT } from "@i18n";
 import { bytesToHex } from "@noble/hashes/utils.js";
+import { rejected, succeeded } from "@platform/haptics";
 import { getMeshService } from "@services/mesh-service";
 import { useContactsStore } from "@store/contacts-store";
 import {
@@ -21,7 +22,6 @@ import {
   Spacing,
   useThemeColors,
 } from "@ui/theme";
-import { rejected, succeeded } from "@utils/haptics";
 import { CameraView, useCameraPermissions } from "expo-camera";
 import React, { useMemo, useRef, useState } from "react";
 import {

@@ -24,9 +24,9 @@ import {
   Spacing,
   useThemeColors,
 } from "@ui/theme";
-import { channelLabel } from "@utils/chat-display-name";
-import { resolveDisplayName } from "@utils/display-name";
+import { channelLabel } from "@utils/conversation-display-name";
 import { formatListTimestamp } from "@utils/format";
+import { resolveDisplayName } from "@utils/peer-display-name";
 import React, { useMemo } from "react";
 import {
   FlatList,

@@ -25,10 +25,10 @@ import {
   Spacing,
   useThemeColors,
 } from "@ui/theme";
-import { resolveDisplayName } from "@utils/display-name";
 import { formatClockTime, formatShortDate } from "@utils/format";
 import { groupReach, type GroupReach } from "@utils/group-reach";
 import { messagePreviewText } from "@utils/message-preview";
+import { resolveDisplayName } from "@utils/peer-display-name";
 import React, { useMemo } from "react";
 import { StyleSheet, Text, View } from "react-native";
 

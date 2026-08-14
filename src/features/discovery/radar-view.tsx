@@ -32,7 +32,7 @@ import {
 import RelayGlyph from "./relay-glyph";
 
 import { t, useT, useTPlural, type TranslationKey } from "@i18n";
-import { resolveDisplayName } from "@utils/display-name";
+import { resolveDisplayName } from "@utils/peer-display-name";
 
 // What the dial says when there are no peers, per reason.
 //

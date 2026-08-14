@@ -22,7 +22,6 @@ import {
   Spacing,
   useThemeColors,
 } from "@ui/theme";
-import { chatDisplayName } from "@utils/chat-display-name";
 import {
   filterMessages,
   searchChats,
@@ -34,6 +33,7 @@ import {
   type NoticeHit,
   type SearchableNotice,
 } from "@utils/chat-search";
+import { chatDisplayName } from "@utils/conversation-display-name";
 import { formatListTimestamp } from "@utils/format";
 import { BRIDGE_CHANNEL } from "@utils/media-policy";
 import React, { useEffect, useMemo, useState } from "react";

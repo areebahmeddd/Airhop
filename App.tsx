@@ -31,6 +31,13 @@ import WalletScreen, {
 } from "@features/wallet/wallet-screen";
 import { initI18n, t, useT, useTPlural, type TranslationKey } from "@i18n";
 import { arrowBack, isRTLLayout } from "@i18n/layout";
+import { getBatteryOptimizationSettingsURI } from "@platform/battery-optimization";
+import {
+  ensureBlePermissions,
+  hasBlePermissions,
+  type BlePermissionResult,
+} from "@platform/ble-permissions";
+import { showBlockedAlert } from "@platform/permissions";
 import { setAudioForPlayback } from "@services/audio-session";
 import { sweepExpiredAttachments } from "@services/file-transfer-service";
 import { applyAirhopLink } from "@services/link-router";
@@ -106,17 +113,10 @@ import {
   useResolvedTheme,
   useThemeColors,
 } from "@ui/theme";
-import { getBatteryOptimizationSettingsURI } from "@utils/battery-optimization";
-import {
-  ensureBlePermissions,
-  hasBlePermissions,
-  type BlePermissionResult,
-} from "@utils/ble-permissions";
 import { parseAirhopLink } from "@utils/deep-link";
 import { formatNumber } from "@utils/format";
 import { mentionsNickname } from "@utils/mentions";
 import { messagePreviewText } from "@utils/message-preview";
-import { showBlockedAlert } from "@utils/permissions";
 import { sumUnread } from "@utils/unread";
 import { peerIDToUsername } from "@utils/username";
 import {

@@ -36,6 +36,7 @@ import {
 import { Feather } from "@expo/vector-icons";
 import { t, tPlural, useT, useTPlural } from "@i18n";
 import { textAlignEnd } from "@i18n/layout";
+import { acknowledged } from "@platform/haptics";
 import {
   deliverTokenToPeer,
   describePayResult,
@@ -97,7 +98,6 @@ import {
 } from "@ui/theme";
 import { usePullRefreshColors } from "@ui/use-pull-refresh";
 import { formatListTimestamp, formatNumber } from "@utils/format";
-import { acknowledged } from "@utils/haptics";
 import { nostrShortLabel, peerIDToUsername } from "@utils/username";
 import * as Clipboard from "expo-clipboard";
 import { nip19 } from "nostr-tools";

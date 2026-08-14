@@ -13,7 +13,7 @@ import {
 } from "@core/payments/cashu";
 import { t } from "@i18n";
 import type { AttachmentType, ChatMessage } from "@store/chat-store";
-import { chatDisplayName } from "./chat-display-name";
+import { chatDisplayName } from "./conversation-display-name";
 import { messagePreviewText } from "./message-preview";
 
 // Message results are capped so the results view never renders an unbounded

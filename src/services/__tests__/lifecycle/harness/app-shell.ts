@@ -24,7 +24,7 @@ import { DeviceEventEmitter } from "react-native";
 // it points at production. This file redeclared the interface and annotated
 // against its own copy, which is how the literal kept a `needsPreciseLocation`
 // field after the real one dropped it.
-import type { BlePermissionResult } from "@utils/ble-permissions";
+import type { BlePermissionResult } from "@platform/ble-permissions";
 import {
   destroyMeshService,
   getMeshService,

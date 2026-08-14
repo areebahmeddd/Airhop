@@ -8,6 +8,7 @@
 
 import { Feather } from "@expo/vector-icons";
 import { useT } from "@i18n";
+import { acknowledged } from "@platform/haptics";
 import { getMeshService } from "@services/mesh-service";
 import { useChatStore } from "@store/chat-store";
 import { useContactsStore } from "@store/contacts-store";
@@ -26,9 +27,11 @@ import {
   Spacing,
   useThemeColors,
 } from "@ui/theme";
-import { resolveDisplayName, resolvePeerOwnName } from "@utils/display-name";
 import { formatLongDate } from "@utils/format";
-import { acknowledged } from "@utils/haptics";
+import {
+  resolveDisplayName,
+  resolvePeerOwnName,
+} from "@utils/peer-display-name";
 import { isNostrId, NOSTR_ID_PREFIX, peerIDToUsername } from "@utils/username";
 import * as Clipboard from "expo-clipboard";
 import React, { useMemo, useState } from "react";

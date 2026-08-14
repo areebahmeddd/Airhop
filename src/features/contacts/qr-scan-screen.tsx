@@ -29,6 +29,8 @@ import { Feather } from "@expo/vector-icons";
 import { t, useT } from "@i18n";
 import { chevronBack } from "@i18n/layout";
 import { bytesToHex } from "@noble/hashes/utils.js";
+import { rejected, succeeded } from "@platform/haptics";
+import { ensurePermission } from "@platform/permissions";
 import { getMeshService } from "@services/mesh-service";
 import { useContactsStore } from "@store/contacts-store";
 import Avatar from "@ui/components/avatar";
@@ -43,8 +45,6 @@ import {
   Spacing,
   useThemeColors,
 } from "@ui/theme";
-import { rejected, succeeded } from "@utils/haptics";
-import { ensurePermission } from "@utils/permissions";
 import { peerIDToUsername } from "@utils/username";
 import {
   CameraView,

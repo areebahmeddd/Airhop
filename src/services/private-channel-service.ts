@@ -28,7 +28,7 @@ import type { NostrClient } from "@core/nostr/nostr-client";
 import { TAG_MESSAGE_ID } from "@core/nostr/presence";
 import { useChannelMembersStore } from "@store/channel-members-store";
 import { useChatStore } from "@store/chat-store";
-import { channelDisplayName } from "@utils/display-name";
+import { channelDisplayName } from "@utils/peer-display-name";
 import type { Event } from "nostr-tools";
 import { finalizeEvent } from "nostr-tools";
 

@@ -12,6 +12,8 @@ import {
   useT,
   type TranslationKey,
 } from "@i18n";
+import { acknowledged } from "@platform/haptics";
+import { ensurePermission } from "@platform/permissions";
 import { destroyMeshService, getMeshService } from "@services/mesh-service";
 import { applyPresence } from "@services/presence";
 import { showAlert } from "@store/alert-store";
@@ -38,9 +40,7 @@ import {
   type ResolvedTheme,
 } from "@ui/theme";
 import { peerInviteLink } from "@utils/deep-link";
-import { acknowledged } from "@utils/haptics";
 import { panicWipe } from "@utils/panic-wipe";
-import { ensurePermission } from "@utils/permissions";
 import * as Clipboard from "expo-clipboard";
 import * as FileSystem from "expo-file-system";
 import * as Haptics from "expo-haptics";
