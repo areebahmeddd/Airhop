@@ -17,33 +17,33 @@
 // Boundary-neighbor coverage (subscribing to adjacent cells) is a future
 // refinement; two islands in the same ~1.2 km cell meet today.
 
-import { verifyEvent, type Event as NostrEvent } from "nostr-tools";
 import {
   CarrierDirection,
   encodeNostrCarrier,
   type NostrCarrierPacket,
-} from "../core/mesh/nostr-carrier";
+} from "@core/mesh/nostr-carrier";
 import {
   bridgeStableID,
   createBridgeMeshEvent,
   createBridgePresenceEvent,
   parseBridgeEvent,
-} from "../core/nostr/bridge-event";
+} from "@core/nostr/bridge-event";
 import {
   GEO_RELAY_COUNT,
   GeoRelayDirectory,
   mergeGeoRelays,
-} from "../core/nostr/geo-relay";
-import { loadGeoRelays } from "../core/nostr/geo-relay-source";
+} from "@core/nostr/geo-relay";
+import { loadGeoRelays } from "@core/nostr/geo-relay-source";
 import {
   deriveGeohashIdentity,
   deriveGeohashSeed,
   geohashDisplayName,
   type GeohashIdentity,
-} from "../core/nostr/geohash-identity";
-import type { NostrClient } from "../core/nostr/nostr-client";
-import { decodeGeohash, encodeGeohash } from "../core/nostr/presence";
-import { useSettingsStore } from "../store/settings-store";
+} from "@core/nostr/geohash-identity";
+import type { NostrClient } from "@core/nostr/nostr-client";
+import { decodeGeohash, encodeGeohash } from "@core/nostr/presence";
+import { useSettingsStore } from "@store/settings-store";
+import { verifyEvent, type Event as NostrEvent } from "nostr-tools";
 import { getCoarseLocation } from "./location-service";
 
 // Geohash precision of the rendezvous cell (~1.2 km neighborhood), matching

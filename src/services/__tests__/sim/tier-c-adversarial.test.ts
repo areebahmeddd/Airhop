@@ -16,34 +16,34 @@ jest.mock("react-native/Libraries/EventEmitter/RCTDeviceEventEmitter", () =>
     require("./harness/event-router") as { routerModule: () => unknown }
   ).routerModule(),
 );
-jest.mock("../../../bridge/NativeAirhopBLE", () => {
+jest.mock("@bridge/NativeAirhopBLE", () => {
   const shim = require("../lifecycle/harness/bridge-shim");
   return { __esModule: true, default: shim.bleBridge };
 });
-jest.mock("../../../bridge/NativeAirhopWiFi", () => {
+jest.mock("@bridge/NativeAirhopWiFi", () => {
   const shim = require("../lifecycle/harness/bridge-shim");
   return { __esModule: true, default: shim.wifiBridge };
 });
 
-import { ed25519 } from "@noble/curves/ed25519.js";
-import type { Identity } from "../../../core/crypto/identity";
+import type { Identity } from "@core/crypto/identity";
 import {
   ANNOUNCE_TTL,
   encodeAnnouncePayload,
-} from "../../../core/mesh/announce-manager";
+} from "@core/mesh/announce-manager";
 import {
   encodePacket,
   Flags,
   PacketType,
   signPacket,
   type Packet,
-} from "../../../core/mesh/packet-codec";
+} from "@core/mesh/packet-codec";
 import {
   channelPacketType,
   encodeAirhopChannelPayload,
   encodeMeshPublicPayload,
   MESH_PUBLIC_CHANNEL,
-} from "../../../core/router/message-router";
+} from "@core/router/message-router";
+import { ed25519 } from "@noble/curves/ed25519.js";
 import { SimDevice } from "./harness/device";
 import { noCrashes, noForgedSenders } from "./harness/invariants";
 import { RadioFabric } from "./harness/radio-fabric";

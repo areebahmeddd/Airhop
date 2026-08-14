@@ -19,18 +19,18 @@
 // Plus the read-time guard for blocking somebody already in the participant
 // map: rows live for minutes, and a block should take effect when tapped.
 
-import { ed25519 } from "@noble/curves/ed25519.js";
-import { finalizeEvent, type Event as NostrEvent } from "nostr-tools";
-import { encodeBitchatDmEnvelope } from "../../core/nostr/bitchat-envelope";
+import { encodeBitchatDmEnvelope } from "@core/nostr/bitchat-envelope";
 import {
   deriveGeohashIdentity,
   deriveGeohashSeed,
   type GeohashIdentity,
-} from "../../core/nostr/geohash-identity";
-import { wrapDm } from "../../core/nostr/gift-wrap";
-import type { NostrClient } from "../../core/nostr/nostr-client";
-import { useBlockedStore } from "../../store/blocked-store";
-import { useChatStore } from "../../store/chat-store";
+} from "@core/nostr/geohash-identity";
+import { wrapDm } from "@core/nostr/gift-wrap";
+import type { NostrClient } from "@core/nostr/nostr-client";
+import { ed25519 } from "@noble/curves/ed25519.js";
+import { useBlockedStore } from "@store/blocked-store";
+import { useChatStore } from "@store/chat-store";
+import { finalizeEvent, type Event as NostrEvent } from "nostr-tools";
 import { GeohashChannelService } from "../geohash-channel-service";
 
 jest.mock("expo-location", () => ({}));

@@ -49,8 +49,8 @@
 //   * "Unsupported" is latched forever rather than retried. No hardware, or an
 //     API level below the data path, is not a state a device leaves.
 
-import NativeAirhopWiFi from "../bridge/NativeAirhopWiFi";
-import type { WifiFastPath } from "../store/mesh-state-store";
+import NativeAirhopWiFi from "@bridge/NativeAirhopWiFi";
+import type { WifiFastPath } from "@store/mesh-state-store";
 
 // Retry schedule for an attach that was refused. Slower than the BLE ladder at
 // every step: nothing the user is looking at depends on this transport, so the

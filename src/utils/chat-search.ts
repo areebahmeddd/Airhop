@@ -10,9 +10,9 @@ import {
   findTokensInText,
   formatTokenSummary,
   mayContainToken,
-} from "../core/payments/cashu";
-import { t } from "../i18n";
-import type { AttachmentType, ChatMessage } from "../store/chat-store";
+} from "@core/payments/cashu";
+import { t } from "@i18n";
+import type { AttachmentType, ChatMessage } from "@store/chat-store";
 import { chatDisplayName } from "./chat-display-name";
 import { messagePreviewText } from "./message-preview";
 

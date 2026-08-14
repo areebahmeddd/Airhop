@@ -8,12 +8,12 @@
 //   - `group:<id>`           -> the group's name from group-store
 //   - `#name` / everything   -> the name without its leading #
 
-import { t } from "../i18n";
+import { t } from "@i18n";
 import {
   isManualGeoChannel,
   manualGeohashOf,
-} from "../services/geohash-channel-service";
-import { useGroupStore } from "../store/group-store";
+} from "@services/geohash-channel-service";
+import { useGroupStore } from "@store/group-store";
 import { peerIDToUsername } from "./username";
 
 export function chatDisplayName(channel: string): string {

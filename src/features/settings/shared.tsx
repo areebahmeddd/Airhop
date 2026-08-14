@@ -4,11 +4,8 @@
 // One shared StyleSheet so every sub-screen matches pixel-for-pixel.
 
 import Feather from "@expo/vector-icons/Feather";
-import React, { useMemo } from "react";
-import { Pressable, StyleSheet, Switch, Text, View } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useT } from "../../i18n";
-import { chevronBack, chevronForward } from "../../i18n/layout";
+import { useT } from "@i18n";
+import { chevronBack, chevronForward } from "@i18n/layout";
 import {
   DISABLED_OPACITY,
   FontFamily,
@@ -20,7 +17,10 @@ import {
   Spacing,
   TAB_BAR_CLEARANCE,
   useThemeColors,
-} from "../../ui/theme";
+} from "@ui/theme";
+import React, { useMemo } from "react";
+import { Pressable, StyleSheet, Switch, Text, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 // Circle diameters for the two round shapes in the shared sheet vocabulary: the
 // icon medallion at the top of a confirm sheet, and an option row's leading dot.

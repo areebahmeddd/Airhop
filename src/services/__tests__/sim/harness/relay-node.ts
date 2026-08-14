@@ -8,13 +8,13 @@
 // keeps a roster, reassembles files. A relay needs none of that, and this file
 // exists to hold Airhop to that. See PROTOCOLS.md section 10.
 
-import { bytesToHex } from "@noble/hashes/utils.js";
 import {
   computePacketId,
   decodePacket,
   encodePacket,
   type Packet,
-} from "../../../../core/mesh/packet-codec";
+} from "@core/mesh/packet-codec";
+import { bytesToHex } from "@noble/hashes/utils.js";
 import type { RadioPort } from "../../lifecycle/harness/android-native";
 import type { Platform } from "../../lifecycle/harness/os";
 import type { RadioNode } from "./radio-fabric";

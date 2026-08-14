@@ -29,13 +29,13 @@ jest.mock("react-native/Libraries/EventEmitter/RCTDeviceEventEmitter", () =>
     require("./harness/event-router") as { routerModule: () => unknown }
   ).routerModule(),
 );
-jest.mock("../../../bridge/NativeAirhopBLE", () => {
+jest.mock("@bridge/NativeAirhopBLE", () => {
   const shim = require("../lifecycle/harness/bridge-shim") as {
     bleBridge: unknown;
   };
   return { __esModule: true, default: shim.bleBridge };
 });
-jest.mock("../../../bridge/NativeAirhopWiFi", () => {
+jest.mock("@bridge/NativeAirhopWiFi", () => {
   const shim = require("../lifecycle/harness/bridge-shim") as {
     wifiBridge: unknown;
   };
@@ -49,9 +49,9 @@ import {
   MAX_IMAGE_BYTES,
   MAX_SENT_IMAGE_BYTES,
   MAX_VOICE_BYTES,
-} from "../../../core/mesh/bitchat-file-packet";
-import { MAX_BLE_FRAME } from "../../../core/mesh/fragment-manager";
-import { PacketType } from "../../../core/mesh/packet-codec";
+} from "@core/mesh/bitchat-file-packet";
+import { MAX_BLE_FRAME } from "@core/mesh/fragment-manager";
+import { PacketType } from "@core/mesh/packet-codec";
 import {
   CELL_PRECISION as BRIDGE_CELL_PRECISION,
   DOWNLINK_EVENTS_PER_MINUTE as BRIDGE_DOWNLINK_PER_MINUTE,

@@ -27,7 +27,7 @@ jest.mock("../mesh-service", () => ({
   }),
 }));
 
-import { useMeshStateStore } from "../../store/mesh-state-store";
+import { useMeshStateStore } from "@store/mesh-state-store";
 import { applyPresence } from "../presence";
 
 beforeEach(() => {

@@ -17,17 +17,17 @@
 // is exactly what the sheet spells out: what turning it on costs, or what you
 // lose by turning it off.
 
+import { setTorRouting } from "@core/nostr/tor-routing";
+import { useT, type TranslationKey } from "@i18n";
+import { requestLocationPermission } from "@services/location-service";
+import { getMeshService } from "@services/mesh-service";
+import { showAlert } from "@store/alert-store";
+import { useMeshStateStore } from "@store/mesh-state-store";
+import { useSettingsStore } from "@store/settings-store";
+import BottomSheet from "@ui/components/bottom-sheet";
+import { HIT_SLOP, useThemeColors } from "@ui/theme";
 import React, { useState } from "react";
 import { Linking, Platform, Pressable, Text, View } from "react-native";
-import { setTorRouting } from "../../core/nostr/tor-routing";
-import { useT, type TranslationKey } from "../../i18n";
-import { requestLocationPermission } from "../../services/location-service";
-import { getMeshService } from "../../services/mesh-service";
-import { showAlert } from "../../store/alert-store";
-import { useMeshStateStore } from "../../store/mesh-state-store";
-import { useSettingsStore } from "../../store/settings-store";
-import BottomSheet from "../../ui/components/bottom-sheet";
-import { HIT_SLOP, useThemeColors } from "../../ui/theme";
 import {
   GroupDivider,
   SettingRow,

@@ -22,10 +22,10 @@
 // A Nostr-only correspondent (`nostr_<pubkey>`) has no peer ID to derive from,
 // so it gets a short npub-style label instead of a nonsense generated name.
 
-import { geohashDisplayName } from "../core/nostr/geohash-identity";
-import { useChatStore } from "../store/chat-store";
-import { useContactsStore } from "../store/contacts-store";
-import { usePeerStore } from "../store/peer-store";
+import { geohashDisplayName } from "@core/nostr/geohash-identity";
+import { useChatStore } from "@store/chat-store";
+import { useContactsStore } from "@store/contacts-store";
+import { usePeerStore } from "@store/peer-store";
 import {
   isNostrId,
   NOSTR_ID_PREFIX,

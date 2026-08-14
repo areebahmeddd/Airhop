@@ -16,16 +16,16 @@
 // FileTransferService gives the sender a reason about their photo rather than a
 // failure from inside an image library.
 
+import {
+  MAX_SENT_IMAGE_BYTES,
+  resolveMimeType,
+} from "@core/mesh/bitchat-file-packet";
 import * as FileSystem from "expo-file-system";
 import {
   ImageManipulator,
   SaveFormat,
   type SaveOptions,
 } from "expo-image-manipulator";
-import {
-  MAX_SENT_IMAGE_BYTES,
-  resolveMimeType,
-} from "../core/mesh/bitchat-file-packet";
 import { adoptIntoAttachmentCache } from "./file-transfer-service";
 
 // Longest edge of a sent photo. 1600 is still worth looking at full screen on a

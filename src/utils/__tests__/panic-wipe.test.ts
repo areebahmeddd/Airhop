@@ -3,13 +3,13 @@
  */
 
 // Imports come first in source; Babel hoists jest.mock() calls above them.
-import { wipeAllSecrets } from "../../core/crypto/keychain";
-import { wipeCacheDirectory } from "../../services/file-transfer-service";
-import { dismissAllNotifications } from "../../services/notification-service";
-import { setNutzapWatcher } from "../../services/nutzap-watcher-handle";
-import { useChatStore } from "../../store/chat-store";
-import { useMeshStateStore } from "../../store/mesh-state-store";
-import { WALLET_STORAGE_ID } from "../../store/wallet-store";
+import { wipeAllSecrets } from "@core/crypto/keychain";
+import { wipeCacheDirectory } from "@services/file-transfer-service";
+import { dismissAllNotifications } from "@services/notification-service";
+import { setNutzapWatcher } from "@services/nutzap-watcher-handle";
+import { useChatStore } from "@store/chat-store";
+import { useMeshStateStore } from "@store/mesh-state-store";
+import { WALLET_STORAGE_ID } from "@store/wallet-store";
 import { MMKV_STORE_IDS, panicWipe } from "../panic-wipe";
 import {
   currentWipeGeneration,
@@ -20,21 +20,21 @@ import {
 // one export: KEYCHAIN_ITEMS is read at module scope by wallet-store and
 // wallet-service, so replacing the whole module leaves those reading a property
 // off undefined before a single test runs.
-jest.mock("../../core/crypto/keychain", () => ({
-  ...jest.requireActual("../../core/crypto/keychain"),
+jest.mock("@core/crypto/keychain", () => ({
+  ...jest.requireActual("@core/crypto/keychain"),
   wipeAllSecrets: jest.fn().mockResolvedValue(undefined),
 }));
 
 // The cache wipe touches expo-file-system; mock the whole module so the test
 // stays a pure unit and can assert the wipe was invoked.
-jest.mock("../../services/file-transfer-service", () => ({
+jest.mock("@services/file-transfer-service", () => ({
   wipeCacheDirectory: jest.fn(),
 }));
 
 // Dismissing the tray reaches expo-notifications, which registers push
 // listeners at import. Mocked so this stays a unit test of the wipe and does not
 // depend on a notifications runtime.
-jest.mock("../../services/notification-service", () => ({
+jest.mock("@services/notification-service", () => ({
   dismissAllNotifications: jest.fn().mockResolvedValue(undefined),
 }));
 

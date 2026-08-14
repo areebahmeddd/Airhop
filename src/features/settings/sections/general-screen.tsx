@@ -11,27 +11,22 @@
 // disk renders by itself. Neither saves a byte, so neither belongs on a screen
 // that reports usage.
 
+import { setTorRouting } from "@core/nostr/tor-routing";
 import Feather from "@expo/vector-icons/Feather";
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
-import React, { useState } from "react";
-import { Pressable, ScrollView, Text, View } from "react-native";
-import { setTorRouting } from "../../../core/nostr/tor-routing";
-import {
-  useT,
-  useTPlural,
-  type TranslationKey,
-  type Translator,
-} from "../../../i18n";
-import { getMeshService } from "../../../services/mesh-service";
-import { showAlert } from "../../../store/alert-store";
+import { useT, useTPlural, type TranslationKey, type Translator } from "@i18n";
+import { getMeshService } from "@services/mesh-service";
+import { showAlert } from "@store/alert-store";
 import {
   MEDIA_RETENTION_DAY_OPTIONS,
   useSettingsStore,
   type MediaRetentionDays,
   type UploadQuality,
-} from "../../../store/settings-store";
-import BottomSheet from "../../../ui/components/bottom-sheet";
-import { useThemeColors } from "../../../ui/theme";
+} from "@store/settings-store";
+import BottomSheet from "@ui/components/bottom-sheet";
+import { useThemeColors } from "@ui/theme";
+import React, { useState } from "react";
+import { Pressable, ScrollView, Text, View } from "react-native";
 import {
   GroupDivider,
   SettingLinkRow,

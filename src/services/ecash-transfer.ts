@@ -30,13 +30,13 @@
 // decoration: "locked to them forever" and "queued, take it back whenever" are
 // the same gesture to the user and completely different facts about their money.
 
-import { t } from "../i18n";
-import { showAlert, useAlertStore } from "../store/alert-store";
-import { useChatStore, type ChatMessage } from "../store/chat-store";
-import { useContactsStore } from "../store/contacts-store";
-import { useOutboxStore } from "../store/outbox-store";
-import { useWalletStore } from "../store/wallet-store";
-import { isNostrId, NOSTR_ID_PREFIX } from "../utils/username";
+import { t } from "@i18n";
+import { showAlert, useAlertStore } from "@store/alert-store";
+import { useChatStore, type ChatMessage } from "@store/chat-store";
+import { useContactsStore } from "@store/contacts-store";
+import { useOutboxStore } from "@store/outbox-store";
+import { useWalletStore } from "@store/wallet-store";
+import { isNostrId, NOSTR_ID_PREFIX } from "@utils/username";
 import { getMeshService, type MeshService } from "./mesh-service";
 import {
   failNutzapDelivery,

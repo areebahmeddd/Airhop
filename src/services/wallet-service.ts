@@ -38,15 +38,8 @@ import {
   type ProofLike,
   type SerializedOutputData,
 } from "@cashu/cashu-ts";
-import { secp256k1 } from "@noble/curves/secp256k1.js";
-import { bytesToHex, hexToBytes } from "@noble/hashes/utils.js";
-import { Platform } from "react-native";
-import {
-  KEYCHAIN_ITEMS,
-  readSecret,
-  writeSecret,
-} from "../core/crypto/keychain";
-import type { NostrClient } from "../core/nostr/nostr-client";
+import { KEYCHAIN_ITEMS, readSecret, writeSecret } from "@core/crypto/keychain";
+import type { NostrClient } from "@core/nostr/nostr-client";
 import {
   buildToken,
   decodeToken,
@@ -56,14 +49,14 @@ import {
   toStoredProof,
   verifyTokenOffline,
   type TokenInfo,
-} from "../core/payments/cashu";
+} from "@core/payments/cashu";
 import {
   fetchNutzapInfo,
   publishNutzap,
   publishNutzapInfo,
   subscribeNutzaps,
   type NutzapInfo,
-} from "../core/payments/nutzap";
+} from "@core/payments/nutzap";
 import {
   generateRecoveryPhrase,
   isValidRecoveryPhrase,
@@ -71,10 +64,12 @@ import {
   normalizeRecoveryPhrase,
   recoveryPhraseToSeed,
   storePhrase,
-} from "../core/payments/wallet-seed";
-import { t } from "../i18n";
-import { useMeshStateStore } from "../store/mesh-state-store";
-import { useSettingsStore } from "../store/settings-store";
+} from "@core/payments/wallet-seed";
+import { t } from "@i18n";
+import { secp256k1 } from "@noble/curves/secp256k1.js";
+import { bytesToHex, hexToBytes } from "@noble/hashes/utils.js";
+import { useMeshStateStore } from "@store/mesh-state-store";
+import { useSettingsStore } from "@store/settings-store";
 import {
   accountKey,
   bootstrapWalletStorage,
@@ -85,7 +80,8 @@ import {
   type StoredMint,
   type StoredProof,
   type WalletTx,
-} from "../store/wallet-store";
+} from "@store/wallet-store";
+import { Platform } from "react-native";
 
 // ---- Network limits ---------------------------------------------------------
 

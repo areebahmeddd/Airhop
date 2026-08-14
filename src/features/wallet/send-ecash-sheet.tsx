@@ -12,16 +12,14 @@
 // payment can still be pulled back. All this does is collect an amount and
 // report that answer in the same words every time.
 
-import React, { useMemo, useState } from "react";
-import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
-import { useT } from "../../i18n";
+import { useT } from "@i18n";
 import {
   describePayResult,
   payPerson,
   type PayResult,
-} from "../../services/ecash-transfer";
-import { showAlert } from "../../store/alert-store";
-import BottomSheet from "../../ui/components/bottom-sheet";
+} from "@services/ecash-transfer";
+import { showAlert } from "@store/alert-store";
+import BottomSheet from "@ui/components/bottom-sheet";
 import {
   DISABLED_OPACITY,
   FontSize,
@@ -29,7 +27,9 @@ import {
   Radius,
   Spacing,
   useThemeColors,
-} from "../../ui/theme";
+} from "@ui/theme";
+import React, { useMemo, useState } from "react";
+import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 
 interface Props {
   visible: boolean;

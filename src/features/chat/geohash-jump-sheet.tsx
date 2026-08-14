@@ -6,6 +6,26 @@
 // cell.
 
 import { Feather } from "@expo/vector-icons";
+import { t, useT } from "@i18n";
+import {
+  geohashLevelName,
+  isValidGeohash,
+  normalizeGeohash,
+} from "@services/geohash-channel-service";
+import { getMeshService } from "@services/mesh-service";
+import { useGeohashBookmarksStore } from "@store/geohash-bookmarks-store";
+import { usePlaceNamesStore } from "@store/place-names-store";
+import BottomSheet from "@ui/components/bottom-sheet";
+import {
+  FontFamily,
+  FontSize,
+  FontWeight,
+  HIT_SLOP,
+  Radius,
+  Spacing,
+  useThemeColors,
+} from "@ui/theme";
+import { geohashNeighbours } from "@utils/geohash-grid";
 import { useEffect, useMemo, useState } from "react";
 import {
   Pressable,
@@ -15,26 +35,6 @@ import {
   TextInput,
   View,
 } from "react-native";
-import { t, useT } from "../../i18n";
-import {
-  geohashLevelName,
-  isValidGeohash,
-  normalizeGeohash,
-} from "../../services/geohash-channel-service";
-import { getMeshService } from "../../services/mesh-service";
-import { useGeohashBookmarksStore } from "../../store/geohash-bookmarks-store";
-import { usePlaceNamesStore } from "../../store/place-names-store";
-import BottomSheet from "../../ui/components/bottom-sheet";
-import {
-  FontFamily,
-  FontSize,
-  FontWeight,
-  HIT_SLOP,
-  Radius,
-  Spacing,
-  useThemeColors,
-} from "../../ui/theme";
-import { geohashNeighbours } from "../../utils/geohash-grid";
 
 // How long typing has to stop before the cell's name is looked up. Long enough
 // that a six-character geohash costs one lookup rather than six.

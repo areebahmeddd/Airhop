@@ -8,10 +8,10 @@
 // the app has to keep working rather than hang, throw, or leave the speaker
 // open. The audio itself needs devices; these are the decisions around it.
 
-import NativeAirhopVoice from "../../bridge/NativeAirhopVoice";
+import NativeAirhopVoice from "@bridge/NativeAirhopVoice";
 import { NativeAudioPlayback } from "../voice-audio";
 
-jest.mock("../../bridge/NativeAirhopVoice", () => ({
+jest.mock("@bridge/NativeAirhopVoice", () => ({
   __esModule: true,
   default: {
     startPlayback: jest.fn(() => Promise.resolve()),

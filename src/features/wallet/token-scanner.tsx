@@ -15,7 +15,19 @@
 //   * `onBarcodeScanned` fires repeatedly while a code stays in frame. Without
 //     a latch, one QR in view produces a stream of duplicate reads.
 
+import { readScan, type ScanTarget } from "@core/payments/scan";
 import { Feather } from "@expo/vector-icons";
+import { t, useT } from "@i18n";
+import BottomSheet from "@ui/components/bottom-sheet";
+import {
+  FontSize,
+  FontWeight,
+  HIT_SLOP,
+  Radius,
+  Spacing,
+  useThemeColors,
+} from "@ui/theme";
+import { ensurePermission } from "@utils/permissions";
 import {
   CameraView,
   scanFromURLAsync,
@@ -25,18 +37,6 @@ import * as ImagePicker from "expo-image-picker";
 import React, { useMemo, useRef, useState } from "react";
 import { Modal, Pressable, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { readScan, type ScanTarget } from "../../core/payments/scan";
-import { t, useT } from "../../i18n";
-import BottomSheet from "../../ui/components/bottom-sheet";
-import {
-  FontSize,
-  FontWeight,
-  HIT_SLOP,
-  Radius,
-  Spacing,
-  useThemeColors,
-} from "../../ui/theme";
-import { ensurePermission } from "../../utils/permissions";
 
 // What the camera is being pointed at. The mechanics are identical; only the
 // validator and the wording change, so one screen serves both rather than two

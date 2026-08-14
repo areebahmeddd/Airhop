@@ -7,6 +7,19 @@
 // roster and deliver the invite). Peers we lack keys for cannot be added yet.
 
 import { Feather } from "@expo/vector-icons";
+import { t, useT } from "@i18n";
+import { getMeshService } from "@services/mesh-service";
+import { groupChannel } from "@store/group-store";
+import { usePeerStore } from "@store/peer-store";
+import Avatar from "@ui/components/avatar";
+import BottomSheet from "@ui/components/bottom-sheet";
+import {
+  FontSize,
+  FontWeight,
+  Radius,
+  Spacing,
+  useThemeColors,
+} from "@ui/theme";
 import { useMemo, useState } from "react";
 import {
   Pressable,
@@ -16,19 +29,6 @@ import {
   TextInput,
   View,
 } from "react-native";
-import { t, useT } from "../../i18n";
-import { getMeshService } from "../../services/mesh-service";
-import { groupChannel } from "../../store/group-store";
-import { usePeerStore } from "../../store/peer-store";
-import Avatar from "../../ui/components/avatar";
-import BottomSheet from "../../ui/components/bottom-sheet";
-import {
-  FontSize,
-  FontWeight,
-  Radius,
-  Spacing,
-  useThemeColors,
-} from "../../ui/theme";
 
 interface Props {
   visible: boolean;

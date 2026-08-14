@@ -16,22 +16,18 @@
 // the app-startup path both go through here, so the socket factory and the
 // persisted preference never drift apart.
 
-import { useWebSocketImplementation } from "nostr-tools/pool";
-import type { EventSubscription } from "react-native";
-import { Platform } from "react-native";
-import NativeAirhopBLE, {
-  subscribeVpnLost,
-} from "../../bridge/NativeAirhopBLE";
-import NativeAirhopTor, {
-  subscribeTorStatus,
-} from "../../bridge/NativeAirhopTor";
-import { isTorSocketNativeAvailable } from "../../bridge/NativeAirhopTorSocket";
-import { getMeshService } from "../../services/mesh-service";
+import NativeAirhopBLE, { subscribeVpnLost } from "@bridge/NativeAirhopBLE";
+import NativeAirhopTor, { subscribeTorStatus } from "@bridge/NativeAirhopTor";
+import { isTorSocketNativeAvailable } from "@bridge/NativeAirhopTorSocket";
+import { getMeshService } from "@services/mesh-service";
 import {
   useMeshStateStore,
   type TorBootstrapPhase,
-} from "../../store/mesh-state-store";
-import { useSettingsStore } from "../../store/settings-store";
+} from "@store/mesh-state-store";
+import { useSettingsStore } from "@store/settings-store";
+import { useWebSocketImplementation } from "nostr-tools/pool";
+import type { EventSubscription } from "react-native";
+import { Platform } from "react-native";
 import { setTorTeardown } from "./tor-teardown-handle";
 import { TorWebSocket } from "./tor-websocket";
 

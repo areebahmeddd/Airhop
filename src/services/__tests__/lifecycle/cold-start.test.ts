@@ -8,25 +8,22 @@
 // why, and are worth reading if one ever goes red again.
 
 jest.mock("expo-location", () => ({}));
-jest.mock("../../../bridge/NativeAirhopBLE", () => ({
+jest.mock("@bridge/NativeAirhopBLE", () => ({
   __esModule: true,
   get default() {
     return require("./harness/bridge-shim").bleBridge;
   },
 }));
-jest.mock("../../../bridge/NativeAirhopWiFi", () => ({
+jest.mock("@bridge/NativeAirhopWiFi", () => ({
   __esModule: true,
   get default() {
     return require("./harness/bridge-shim").wifiBridge;
   },
 }));
 
-import {
-  computeMeshBanners,
-  useMeshStateStore,
-} from "../../../store/mesh-state-store";
-import { usePeerStore } from "../../../store/peer-store";
-import { useSettingsStore } from "../../../store/settings-store";
+import { computeMeshBanners, useMeshStateStore } from "@store/mesh-state-store";
+import { usePeerStore } from "@store/peer-store";
+import { useSettingsStore } from "@store/settings-store";
 import { applyPresence } from "../../presence";
 import { AndroidBleModule } from "./harness/android-native";
 import { AppShell } from "./harness/app-shell";

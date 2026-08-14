@@ -15,7 +15,7 @@
 //     anyone in range can send repeatedly. A real failure repeats on retry, and
 //     one line conveys that as well as twenty.
 
-import { t } from "../i18n";
+import { t } from "@i18n";
 
 export type AttachmentFailure =
   // The TLV did not parse: truncated, bad lengths, or a length field that

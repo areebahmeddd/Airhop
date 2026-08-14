@@ -18,7 +18,7 @@
 // commenting on a relationship. What is worth saying is that nothing has
 // reached them.
 
-import type { ChatMessage } from "../store/chat-store";
+import type { ChatMessage } from "@store/chat-store";
 
 // How long without any confirmation before it is worth saying.
 //

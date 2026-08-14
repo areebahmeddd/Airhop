@@ -1,11 +1,129 @@
 ﻿// Polyfill must be the first import. Required before any @noble/* usage.
 import "react-native-get-random-values";
 
+import AirhopBLE from "@bridge/NativeAirhopBLE";
+import type { Identity } from "@core/crypto/identity";
+import { loadIdentity } from "@core/crypto/identity";
+import { sweepOrphanedSecrets } from "@core/crypto/keychain";
+import {
+  primeTorRoutingOnStartup,
+  revalidateTorRouting,
+} from "@core/nostr/tor-routing";
 import {
   JetBrainsMono_400Regular,
   useFonts,
 } from "@expo-google-fonts/jetbrains-mono";
 import { Feather } from "@expo/vector-icons";
+import ChannelList from "@features/chat/channel-list";
+import ChatSearchResults from "@features/chat/chat-search-results";
+import DmList from "@features/chat/dm-list";
+import MessageThread from "@features/chat/message-thread";
+import NotificationCenter from "@features/chat/notification-center";
+import { StartNewSheet } from "@features/chat/start-new-sheet";
+import PeerList from "@features/discovery/peer-list";
+import IdentityScreen from "@features/onboarding/identity-screen";
+import PermissionPrimer from "@features/onboarding/permission-primer";
+import UsernameScreen from "@features/onboarding/username-screen";
+import WelcomeScreen from "@features/onboarding/welcome-screen";
+import ProfileScreen from "@features/settings/profile-screen";
+import WalletScreen, {
+  type WalletAction,
+} from "@features/wallet/wallet-screen";
+import { initI18n, t, useT, useTPlural, type TranslationKey } from "@i18n";
+import { arrowBack, isRTLLayout } from "@i18n/layout";
+import { setAudioForPlayback } from "@services/audio-session";
+import { sweepExpiredAttachments } from "@services/file-transfer-service";
+import { applyAirhopLink } from "@services/link-router";
+import {
+  hasLocationPermission,
+  requestLocationPermission,
+} from "@services/location-service";
+import { getMeshService, initMeshService } from "@services/mesh-service";
+import {
+  configureNotifications,
+  dismissNearbyNotification,
+  dismissNotificationsFor,
+  handleInboundMessage,
+  handleNearbyPeers,
+  requestNotificationPermission,
+  setAppBadgeCount,
+  setMeshNavigator,
+  setNotificationNavigator,
+  setNotificationsActiveChannel,
+  setNotificationsAppActive,
+} from "@services/notification-service";
+import {
+  rebindNutzapWatcher,
+  setNutzapRebinder,
+  setNutzapWatcher,
+} from "@services/nutzap-watcher-handle";
+import { applyPresence } from "@services/presence";
+import {
+  initWalletService,
+  publishOwnNutzapInfo,
+  reconcile,
+  reconcileIfDue,
+  startNutzapWatcher,
+} from "@services/wallet-service";
+import { useActivityStore } from "@store/activity-store";
+import { showAlert } from "@store/alert-store";
+import {
+  flushChatPersistence,
+  subscribeInboundMessages,
+  useChatStore,
+} from "@store/chat-store";
+import {
+  useMeshBanners,
+  useMeshStateStore,
+  type BannerAction,
+} from "@store/mesh-state-store";
+import { countReachablePeers, usePeerStore } from "@store/peer-store";
+import {
+  acknowledgePermissionPrimer,
+  showPermissionPrimer,
+  usePrimerStore,
+} from "@store/primer-store";
+import { useSettingsStore } from "@store/settings-store";
+import { useTransferStore } from "@store/transfer-store";
+import { useWalletStore } from "@store/wallet-store";
+import Avatar from "@ui/components/avatar";
+import CustomAlert from "@ui/components/custom-alert";
+import {
+  ErrorBoundary,
+  installGlobalErrorHandler,
+} from "@ui/components/error-boundary";
+import MeshStatusBar from "@ui/components/mesh-status-bar";
+import TransferBadge from "@ui/components/transfer-badge";
+import {
+  DISABLED_OPACITY,
+  FontSize,
+  FontWeight,
+  hitSlopFor,
+  MaxFontScale,
+  Radius,
+  Shadow,
+  Spacing,
+  useResolvedTheme,
+  useThemeColors,
+} from "@ui/theme";
+import { getBatteryOptimizationSettingsURI } from "@utils/battery-optimization";
+import {
+  ensureBlePermissions,
+  hasBlePermissions,
+  type BlePermissionResult,
+} from "@utils/ble-permissions";
+import { parseAirhopLink } from "@utils/deep-link";
+import { formatNumber } from "@utils/format";
+import { mentionsNickname } from "@utils/mentions";
+import { messagePreviewText } from "@utils/message-preview";
+import { showBlockedAlert } from "@utils/permissions";
+import { sumUnread } from "@utils/unread";
+import { peerIDToUsername } from "@utils/username";
+import {
+  currentWipeGeneration,
+  isCurrentWipeGeneration,
+} from "@utils/wipe-generation";
+import { settleOr, withTimeout } from "@utils/with-timeout";
 import { NavigationBar } from "expo-navigation-bar";
 import { StatusBar } from "expo-status-bar";
 import React, {
@@ -38,124 +156,6 @@ import {
   SafeAreaView,
 } from "react-native-safe-area-context";
 import { scheduleOnRN } from "react-native-worklets";
-import AirhopBLE from "./src/bridge/NativeAirhopBLE";
-import type { Identity } from "./src/core/crypto/identity";
-import { loadIdentity } from "./src/core/crypto/identity";
-import { sweepOrphanedSecrets } from "./src/core/crypto/keychain";
-import {
-  primeTorRoutingOnStartup,
-  revalidateTorRouting,
-} from "./src/core/nostr/tor-routing";
-import ChannelList from "./src/features/chat/channel-list";
-import ChatSearchResults from "./src/features/chat/chat-search-results";
-import DmList from "./src/features/chat/dm-list";
-import MessageThread from "./src/features/chat/message-thread";
-import NotificationCenter from "./src/features/chat/notification-center";
-import { StartNewSheet } from "./src/features/chat/start-new-sheet";
-import PeerList from "./src/features/discovery/peer-list";
-import IdentityScreen from "./src/features/onboarding/identity-screen";
-import PermissionPrimer from "./src/features/onboarding/permission-primer";
-import UsernameScreen from "./src/features/onboarding/username-screen";
-import WelcomeScreen from "./src/features/onboarding/welcome-screen";
-import ProfileScreen from "./src/features/settings/profile-screen";
-import WalletScreen, {
-  type WalletAction,
-} from "./src/features/wallet/wallet-screen";
-import { initI18n, t, useT, useTPlural, type TranslationKey } from "./src/i18n";
-import { arrowBack, isRTLLayout } from "./src/i18n/layout";
-import { setAudioForPlayback } from "./src/services/audio-session";
-import { sweepExpiredAttachments } from "./src/services/file-transfer-service";
-import { applyAirhopLink } from "./src/services/link-router";
-import {
-  hasLocationPermission,
-  requestLocationPermission,
-} from "./src/services/location-service";
-import { getMeshService, initMeshService } from "./src/services/mesh-service";
-import {
-  configureNotifications,
-  dismissNearbyNotification,
-  dismissNotificationsFor,
-  handleInboundMessage,
-  handleNearbyPeers,
-  requestNotificationPermission,
-  setAppBadgeCount,
-  setMeshNavigator,
-  setNotificationNavigator,
-  setNotificationsActiveChannel,
-  setNotificationsAppActive,
-} from "./src/services/notification-service";
-import {
-  rebindNutzapWatcher,
-  setNutzapRebinder,
-  setNutzapWatcher,
-} from "./src/services/nutzap-watcher-handle";
-import { applyPresence } from "./src/services/presence";
-import {
-  initWalletService,
-  publishOwnNutzapInfo,
-  reconcile,
-  reconcileIfDue,
-  startNutzapWatcher,
-} from "./src/services/wallet-service";
-import { useActivityStore } from "./src/store/activity-store";
-import { showAlert } from "./src/store/alert-store";
-import {
-  flushChatPersistence,
-  subscribeInboundMessages,
-  useChatStore,
-} from "./src/store/chat-store";
-import {
-  useMeshBanners,
-  useMeshStateStore,
-  type BannerAction,
-} from "./src/store/mesh-state-store";
-import { countReachablePeers, usePeerStore } from "./src/store/peer-store";
-import {
-  acknowledgePermissionPrimer,
-  showPermissionPrimer,
-  usePrimerStore,
-} from "./src/store/primer-store";
-import { useSettingsStore } from "./src/store/settings-store";
-import { useTransferStore } from "./src/store/transfer-store";
-import { useWalletStore } from "./src/store/wallet-store";
-import Avatar from "./src/ui/components/avatar";
-import CustomAlert from "./src/ui/components/custom-alert";
-import {
-  ErrorBoundary,
-  installGlobalErrorHandler,
-} from "./src/ui/components/error-boundary";
-import MeshStatusBar from "./src/ui/components/mesh-status-bar";
-import TransferBadge from "./src/ui/components/transfer-badge";
-import {
-  DISABLED_OPACITY,
-  FontSize,
-  FontWeight,
-  hitSlopFor,
-  MaxFontScale,
-  Radius,
-  Shadow,
-  Spacing,
-  useResolvedTheme,
-  useThemeColors,
-} from "./src/ui/theme";
-import { getBatteryOptimizationSettingsURI } from "./src/utils/battery-optimization";
-import {
-  ensureBlePermissions,
-  hasBlePermissions,
-  type BlePermissionResult,
-} from "./src/utils/ble-permissions";
-import { parseAirhopLink } from "./src/utils/deep-link";
-import { formatNumber } from "./src/utils/format";
-import { mentionsNickname } from "./src/utils/mentions";
-import { messagePreviewText } from "./src/utils/message-preview";
-import { showBlockedAlert } from "./src/utils/permissions";
-import { sumUnread } from "./src/utils/unread";
-import { peerIDToUsername } from "./src/utils/username";
-import {
-  currentWipeGeneration,
-  isCurrentWipeGeneration,
-} from "./src/utils/wipe-generation";
-import { settleOr, withTimeout } from "./src/utils/with-timeout";
 
 // Layout direction is a native flag that React Native reads once, at startup,
 // before anything mounts. Setting it here, at module scope, is the only place

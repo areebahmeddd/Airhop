@@ -17,9 +17,9 @@
 //
 // Callers get a plain boolean and can stay linear.
 
+import { t } from "@i18n";
+import { showAlert } from "@store/alert-store";
 import { Linking } from "react-native";
-import { t } from "../i18n";
-import { showAlert } from "../store/alert-store";
 
 // The shape every Expo permission response shares (expo-camera,
 // expo-image-picker, expo-media-library).

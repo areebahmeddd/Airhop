@@ -6,6 +6,35 @@
 // service (wired in v0.7+).
 
 import { Feather } from "@expo/vector-icons";
+import { t, useT } from "@i18n";
+import { arrowForward } from "@i18n/layout";
+import { describePayResult, payPerson } from "@services/ecash-transfer";
+import { showAlert } from "@store/alert-store";
+import { useBlockedStore } from "@store/blocked-store";
+import { useChatStore } from "@store/chat-store";
+import { useContactsStore } from "@store/contacts-store";
+import {
+  type NearbyPeer,
+  REACHABLE_TTL_MS,
+  usePeerStore,
+} from "@store/peer-store";
+import Avatar from "@ui/components/avatar";
+import BottomSheet from "@ui/components/bottom-sheet";
+import EmptyState from "@ui/components/empty-state";
+import StatusDot from "@ui/components/status-dot";
+import {
+  DISABLED_OPACITY,
+  FontFamily,
+  FontSize,
+  FontWeight,
+  HIT_SLOP,
+  Radius,
+  Spacing,
+  TAB_BAR_CLEARANCE,
+  useThemeColors,
+} from "@ui/theme";
+import { resolveDisplayName, resolvePeerOwnName } from "@utils/display-name";
+import { acknowledged } from "@utils/haptics";
 import * as Clipboard from "expo-clipboard";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -17,38 +46,6 @@ import {
   TextInput,
   View,
 } from "react-native";
-import { t, useT } from "../../i18n";
-import { arrowForward } from "../../i18n/layout";
-import { describePayResult, payPerson } from "../../services/ecash-transfer";
-import { showAlert } from "../../store/alert-store";
-import { useBlockedStore } from "../../store/blocked-store";
-import { useChatStore } from "../../store/chat-store";
-import { useContactsStore } from "../../store/contacts-store";
-import {
-  type NearbyPeer,
-  REACHABLE_TTL_MS,
-  usePeerStore,
-} from "../../store/peer-store";
-import Avatar from "../../ui/components/avatar";
-import BottomSheet from "../../ui/components/bottom-sheet";
-import EmptyState from "../../ui/components/empty-state";
-import StatusDot from "../../ui/components/status-dot";
-import {
-  DISABLED_OPACITY,
-  FontFamily,
-  FontSize,
-  FontWeight,
-  HIT_SLOP,
-  Radius,
-  Spacing,
-  TAB_BAR_CLEARANCE,
-  useThemeColors,
-} from "../../ui/theme";
-import {
-  resolveDisplayName,
-  resolvePeerOwnName,
-} from "../../utils/display-name";
-import { acknowledged } from "../../utils/haptics";
 import QrScanScreen from "../contacts/qr-scan-screen";
 import RadarView from "./radar-view";
 import RelayGlyph from "./relay-glyph";

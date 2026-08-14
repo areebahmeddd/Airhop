@@ -3,18 +3,18 @@
 // info sheet so it doesn't introduce a new UI paradigm.
 
 import { Feather } from "@expo/vector-icons";
-import React, { useMemo } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
-import { useT } from "../../i18n";
-import type { ChatMessage } from "../../store/chat-store";
-import BottomSheet from "../../ui/components/bottom-sheet";
+import { useT } from "@i18n";
+import type { ChatMessage } from "@store/chat-store";
+import BottomSheet from "@ui/components/bottom-sheet";
 import {
   FontSize,
   FontWeight,
   Radius,
   Spacing,
   useThemeColors,
-} from "../../ui/theme";
+} from "@ui/theme";
+import React, { useMemo } from "react";
+import { Pressable, StyleSheet, Text, View } from "react-native";
 
 interface Props {
   message: ChatMessage | null;

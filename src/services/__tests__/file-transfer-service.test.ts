@@ -10,10 +10,10 @@
 // never reassembles. The assertions below are therefore about WHEN packets are
 // handed to the transport, not just that they are.
 
-import { decodeFilePacket } from "../../core/mesh/bitchat-file-packet";
-import { PacketType, type Packet } from "../../core/mesh/packet-codec";
-import { useChatStore } from "../../store/chat-store";
-import { useTransferStore } from "../../store/transfer-store";
+import { decodeFilePacket } from "@core/mesh/bitchat-file-packet";
+import { PacketType, type Packet } from "@core/mesh/packet-codec";
+import { useChatStore } from "@store/chat-store";
+import { useTransferStore } from "@store/transfer-store";
 import { FileTransferService } from "../file-transfer-service";
 
 // The service only touches expo-file-system on the RECEIVE path; a shallow
@@ -254,7 +254,7 @@ describe("radio backpressure", () => {
     // Cancel while a refused fragment is on its way back to the queue.
     const id = Object.keys(
       (
-        jest.requireActual("../../store/transfer-store") as {
+        jest.requireActual("@store/transfer-store") as {
           useTransferStore: {
             getState: () => { transfers: Record<string, unknown> };
           };

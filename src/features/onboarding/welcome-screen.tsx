@@ -3,6 +3,17 @@
 // else. The design communicates confidence through restraint.
 
 import Feather from "@expo/vector-icons/Feather";
+import { useT } from "@i18n";
+import { useRichText } from "@i18n/rich-text";
+import PrimaryButton from "@ui/components/primary-button";
+import {
+  FontSize,
+  FontWeight,
+  HIT_SLOP,
+  Radius,
+  Spacing,
+  useThemeColors,
+} from "@ui/theme";
 import * as Haptics from "expo-haptics";
 import React, { useMemo, useState } from "react";
 import {
@@ -15,17 +26,6 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useT } from "../../i18n";
-import { useRichText } from "../../i18n/rich-text";
-import PrimaryButton from "../../ui/components/primary-button";
-import {
-  FontSize,
-  FontWeight,
-  HIT_SLOP,
-  Radius,
-  Spacing,
-  useThemeColors,
-} from "../../ui/theme";
 import HelloSheet from "./hello-sheet";
 
 const TERMS_URL = "https://airhop.1mindlabs.org/terms-of-service";

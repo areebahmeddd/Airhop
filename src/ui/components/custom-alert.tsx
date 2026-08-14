@@ -14,10 +14,10 @@
 // backdrop tap or a drag-down dismisses; neither invokes a button's onPress, so
 // a stray gesture can never trigger a destructive action.
 
+import { type AlertButtonConfig, useAlertStore } from "@store/alert-store";
 import React, { useMemo } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { type AlertButtonConfig, useAlertStore } from "../../store/alert-store";
 import {
   FontSize,
   FontWeight,

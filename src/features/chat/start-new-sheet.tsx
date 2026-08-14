@@ -12,13 +12,11 @@
 // that stays on Bluetooth) has to be stated where the choice is made. Picking
 // one closes the chooser and opens that form; its Back button returns here.
 
+import { generateChannelKey } from "@core/mesh/channel-crypto";
 import { Feather } from "@expo/vector-icons";
-import React, { useEffect, useMemo, useRef, useState } from "react";
-import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
-import { generateChannelKey } from "../../core/mesh/channel-crypto";
-import { useT } from "../../i18n";
-import { useChatStore } from "../../store/chat-store";
-import BottomSheet from "../../ui/components/bottom-sheet";
+import { useT } from "@i18n";
+import { useChatStore } from "@store/chat-store";
+import BottomSheet from "@ui/components/bottom-sheet";
 import {
   DISABLED_OPACITY,
   FontSize,
@@ -26,7 +24,9 @@ import {
   Radius,
   Spacing,
   useThemeColors,
-} from "../../ui/theme";
+} from "@ui/theme";
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { GeohashJumpSheet } from "./geohash-jump-sheet";
 import { JoinLinkSheet } from "./join-link-sheet";
 import { NewGroupSheet } from "./new-group-sheet";

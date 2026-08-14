@@ -16,22 +16,22 @@
 // ecash-transfer pulls in mesh-service, which resolves the native BLE and Wi-Fi
 // TurboModules at import time. Nothing here starts the mesh, so bare stubs are
 // enough to get the module graph to load under Node.
-jest.mock("../../bridge/NativeAirhopBLE", () => ({
+jest.mock("@bridge/NativeAirhopBLE", () => ({
   __esModule: true,
   default: {},
 }));
-jest.mock("../../bridge/NativeAirhopWiFi", () => ({
+jest.mock("@bridge/NativeAirhopWiFi", () => ({
   __esModule: true,
   default: {},
 }));
 
-import { useChatStore, type ChatMessage } from "../../store/chat-store";
-import { useOutboxStore } from "../../store/outbox-store";
+import { useChatStore, type ChatMessage } from "@store/chat-store";
+import { useOutboxStore } from "@store/outbox-store";
 import {
   useWalletStore,
   type StoredProof,
   type WalletTx,
-} from "../../store/wallet-store";
+} from "@store/wallet-store";
 import { reclaimTokenSend } from "../ecash-transfer";
 
 const MINT = "https://mint.example.com";

@@ -7,8 +7,21 @@
 // "verified" always means "I checked this exact person", never "I scanned some
 // code once".
 
+import { decodeQRContent } from "@core/crypto/contact-exchange";
 import { Feather } from "@expo/vector-icons";
+import { useT } from "@i18n";
 import { bytesToHex } from "@noble/hashes/utils.js";
+import { getMeshService } from "@services/mesh-service";
+import { useContactsStore } from "@store/contacts-store";
+import {
+  FontSize,
+  FontWeight,
+  HIT_SLOP,
+  Radius,
+  Spacing,
+  useThemeColors,
+} from "@ui/theme";
+import { rejected, succeeded } from "@utils/haptics";
 import { CameraView, useCameraPermissions } from "expo-camera";
 import React, { useMemo, useRef, useState } from "react";
 import {
@@ -20,19 +33,6 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { decodeQRContent } from "../../core/crypto/contact-exchange";
-import { useT } from "../../i18n";
-import { getMeshService } from "../../services/mesh-service";
-import { useContactsStore } from "../../store/contacts-store";
-import {
-  FontSize,
-  FontWeight,
-  HIT_SLOP,
-  Radius,
-  Spacing,
-  useThemeColors,
-} from "../../ui/theme";
-import { rejected, succeeded } from "../../utils/haptics";
 
 interface Props {
   visible: boolean;

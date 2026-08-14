@@ -12,11 +12,11 @@
 // coordinates never leave the device: only the cell's centre is geocoded, and it
 // is derived from the geohash the app already knows.
 
+import { decodeGeohash } from "@core/nostr/presence";
 import * as Location from "expo-location";
 import { createMMKV } from "react-native-mmkv";
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
-import { decodeGeohash } from "../core/nostr/presence";
 
 // The device's language, resolved on first use and then reused.
 //

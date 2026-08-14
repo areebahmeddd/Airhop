@@ -13,12 +13,12 @@
 // Not persisted: every field is live device state that must be re-read on
 // launch, never restored from disk.
 
-import { create } from "zustand";
-import { t, useLanguage } from "../i18n";
+import { t, useLanguage } from "@i18n";
 import {
   getDeviceBrand,
   needsBatteryOptimizationPrompt,
-} from "../utils/battery-optimization";
+} from "@utils/battery-optimization";
+import { create } from "zustand";
 import { usePeerStore } from "./peer-store";
 import { useSettingsStore } from "./settings-store";
 

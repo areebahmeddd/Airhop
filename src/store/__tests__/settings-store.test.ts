@@ -7,7 +7,7 @@
 // out of their phone. These pin the store half of that; the teardown of a burst
 // already in flight lives in mesh-service.
 
-import { MAX_CUSTOM_RELAYS } from "../../core/nostr/geo-relay";
+import { MAX_CUSTOM_RELAYS } from "@core/nostr/geo-relay";
 import {
   MEDIA_RETENTION_DAY_OPTIONS,
   useSettingsStore,

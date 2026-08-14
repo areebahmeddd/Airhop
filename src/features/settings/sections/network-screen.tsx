@@ -1,20 +1,20 @@
 // Network sub-screen: the internet (Nostr) connectivity choices, plus the
 // always-on bitchat wire compatibility.
 
-import Feather from "@expo/vector-icons/Feather";
-import React, { useState } from "react";
-import { Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import {
   DEFAULT_DM_RELAYS,
   MAX_CUSTOM_RELAYS,
   relayDisplayHost,
   validateRelayUrl,
-} from "../../../core/nostr/geo-relay";
-import { useT } from "../../../i18n";
-import { getMeshService } from "../../../services/mesh-service";
-import { showAlert } from "../../../store/alert-store";
-import { useSettingsStore } from "../../../store/settings-store";
-import { HIT_SLOP, useThemeColors } from "../../../ui/theme";
+} from "@core/nostr/geo-relay";
+import Feather from "@expo/vector-icons/Feather";
+import { useT } from "@i18n";
+import { getMeshService } from "@services/mesh-service";
+import { showAlert } from "@store/alert-store";
+import { useSettingsStore } from "@store/settings-store";
+import { HIT_SLOP, useThemeColors } from "@ui/theme";
+import React, { useState } from "react";
+import { Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import {
   GroupDivider,
   SettingRow,

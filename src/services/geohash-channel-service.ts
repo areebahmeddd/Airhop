@@ -24,28 +24,27 @@
 // requirement. Teleported channels (geohash:<gh>) carry a fixed geohash, so
 // they stay live over the internet even with no location fix.
 
-import { finalizeEvent, type Event as NostrEvent } from "nostr-tools";
-import { NoisePayloadType } from "../core/mesh/noise-payload";
+import { NoisePayloadType } from "@core/mesh/noise-payload";
 import {
   decodeBitchatEnvelope,
   encodeBitchatAckEnvelope,
   encodeBitchatCardEnvelope,
   encodeBitchatDmEnvelope,
-} from "../core/nostr/bitchat-envelope";
+} from "@core/nostr/bitchat-envelope";
 import {
   GEO_RELAY_COUNT,
   GeoRelayDirectory,
   mergeGeoRelays,
-} from "../core/nostr/geo-relay";
-import { loadGeoRelays } from "../core/nostr/geo-relay-source";
+} from "@core/nostr/geo-relay";
+import { loadGeoRelays } from "@core/nostr/geo-relay-source";
 import {
   deriveGeohashIdentity,
   deriveGeohashSeed,
   geohashDisplayName,
   type GeohashIdentity,
-} from "../core/nostr/geohash-identity";
-import { unwrapDm, wrapDm } from "../core/nostr/gift-wrap";
-import type { NostrClient } from "../core/nostr/nostr-client";
+} from "@core/nostr/geohash-identity";
+import { unwrapDm, wrapDm } from "@core/nostr/gift-wrap";
+import type { NostrClient } from "@core/nostr/nostr-client";
 import {
   decodeGeohash,
   decorrelationDelayMs,
@@ -55,14 +54,15 @@ import {
   mayBroadcastPresence,
   nextHeartbeatDelayMs,
   TAG_MESSAGE_ID,
-} from "../core/nostr/presence";
-import { t } from "../i18n";
-import { useActivityStore } from "../store/activity-store";
-import { useBlockedStore } from "../store/blocked-store";
-import { useChatStore } from "../store/chat-store";
-import { useMeshStateStore } from "../store/mesh-state-store";
-import { useNoticesStore } from "../store/notices-store";
-import { useSettingsStore } from "../store/settings-store";
+} from "@core/nostr/presence";
+import { t } from "@i18n";
+import { useActivityStore } from "@store/activity-store";
+import { useBlockedStore } from "@store/blocked-store";
+import { useChatStore } from "@store/chat-store";
+import { useMeshStateStore } from "@store/mesh-state-store";
+import { useNoticesStore } from "@store/notices-store";
+import { useSettingsStore } from "@store/settings-store";
+import { finalizeEvent, type Event as NostrEvent } from "nostr-tools";
 import { getCoarseLocation, type Coords } from "./location-service";
 
 // Blocking, on the Nostr side. The mesh enforces it at one chokepoint in

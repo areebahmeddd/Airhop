@@ -13,10 +13,7 @@
 // post/tombstone, which is byte-identical), re-verified and re-ingested on
 // launch. Wiped on panic (its MMKV id is in panic-wipe's MMKV_STORE_IDS).
 
-import { bytesToHex } from "@noble/hashes/utils.js";
-import { createMMKV } from "react-native-mmkv";
-import { create } from "zustand";
-import { base64ToBytes, bytesToBase64 } from "../core/encoding/base64";
+import { base64ToBytes, bytesToBase64 } from "@core/encoding/base64";
 import {
   BoardWireConstants,
   decodeBoardWire,
@@ -26,7 +23,10 @@ import {
   type BoardPost,
   type BoardTombstone,
   type BoardWire,
-} from "../core/mesh/board-packet";
+} from "@core/mesh/board-packet";
+import { bytesToHex } from "@noble/hashes/utils.js";
+import { createMMKV } from "react-native-mmkv";
+import { create } from "zustand";
 import { noticeAuthor, useNoticesStore } from "./notices-store";
 
 export type BoardIngestResult = "accepted" | "duplicate" | "rejected";

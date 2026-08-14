@@ -9,12 +9,12 @@
 // Parsing stays in utils/deep-link (pure, no crypto). This module owns the side
 // effects, which is why it lives with the services.
 
+import { decodeQRContent } from "@core/crypto/contact-exchange";
+import { isValidChannelKey } from "@core/mesh/channel-crypto";
 import { bytesToHex } from "@noble/hashes/utils.js";
-import { decodeQRContent } from "../core/crypto/contact-exchange";
-import { isValidChannelKey } from "../core/mesh/channel-crypto";
-import { useChatStore } from "../store/chat-store";
-import { useContactsStore } from "../store/contacts-store";
-import type { DeepLink } from "../utils/deep-link";
+import { useChatStore } from "@store/chat-store";
+import { useContactsStore } from "@store/contacts-store";
+import type { DeepLink } from "@utils/deep-link";
 import { getMeshService } from "./mesh-service";
 
 // Apply a link and return the conversation to open, or null when the link

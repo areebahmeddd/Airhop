@@ -11,9 +11,7 @@
 // TermsPage.tsx, so the two stay visually consistent, not just textually.
 // Links (including mailto:) open externally, matching the anchors on the site.
 
-import React, { useMemo } from "react";
-import { Linking, ScrollView, StyleSheet, Text, View } from "react-native";
-import { t } from "../../../i18n";
+import { t } from "@i18n";
 import {
   FontSize,
   FontWeight,
@@ -21,7 +19,9 @@ import {
   Spacing,
   TAB_BAR_CLEARANCE,
   useThemeColors,
-} from "../../../ui/theme";
+} from "@ui/theme";
+import React, { useMemo } from "react";
+import { Linking, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SubHeader, useSharedStyles } from "../shared";
 
 // A block is either a paragraph string or a bulleted list of strings.

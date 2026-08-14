@@ -6,10 +6,10 @@
 // back to the conversation the transfer belongs to.
 
 import { Feather } from "@expo/vector-icons";
+import { t } from "@i18n";
+import { useTransferStore } from "@store/transfer-store";
 import React, { useMemo } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
-import { t } from "../../i18n";
-import { useTransferStore } from "../../store/transfer-store";
 import {
   FontSize,
   FontWeight,

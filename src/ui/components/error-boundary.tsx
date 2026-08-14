@@ -15,6 +15,7 @@
 // relay pool are module state in services/, and none of it unmounts when this
 // screen appears. "Try again" remounts onto a mesh that never stopped.
 
+import { t } from "@i18n";
 import React from "react";
 import {
   Pressable,
@@ -23,7 +24,6 @@ import {
   useColorScheme,
   View,
 } from "react-native";
-import { t } from "../../i18n";
 import {
   Colors,
   DarkColors,

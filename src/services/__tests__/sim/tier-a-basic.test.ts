@@ -20,11 +20,11 @@ jest.mock("react-native/Libraries/EventEmitter/RCTDeviceEventEmitter", () =>
 // EAGER factories. A lazy `get default()` resolves after jest.isolateModules has
 // closed, which would hand every sandboxed phone the same native module. See
 // harness/device.ts.
-jest.mock("../../../bridge/NativeAirhopBLE", () => {
+jest.mock("@bridge/NativeAirhopBLE", () => {
   const shim = require("../lifecycle/harness/bridge-shim");
   return { __esModule: true, default: shim.bleBridge };
 });
-jest.mock("../../../bridge/NativeAirhopWiFi", () => {
+jest.mock("@bridge/NativeAirhopWiFi", () => {
   const shim = require("../lifecycle/harness/bridge-shim");
   return { __esModule: true, default: shim.wifiBridge };
 });

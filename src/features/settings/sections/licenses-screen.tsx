@@ -3,6 +3,9 @@
 // package's own package.json (src/data/licenses.ts), not a fabricated list.
 // Each group opens with a one-line note on what those packages are for.
 
+import { THIRD_PARTY_LICENSES } from "@data/licenses";
+import { useT } from "@i18n";
+import { FontSize, Spacing, useThemeColors } from "@ui/theme";
 import React, { useMemo } from "react";
 import {
   Linking,
@@ -12,9 +15,6 @@ import {
   Text,
   View,
 } from "react-native";
-import { THIRD_PARTY_LICENSES } from "../../../data/licenses";
-import { useT } from "../../../i18n";
-import { FontSize, Spacing, useThemeColors } from "../../../ui/theme";
 import { GroupDivider, SubHeader, useSharedStyles } from "../shared";
 
 interface Props {

@@ -8,13 +8,13 @@
 // Each row says what the permission does and what it does not.
 
 import Feather from "@expo/vector-icons/Feather";
+import { useT, type Translator } from "@i18n";
+import BottomSheet from "@ui/components/bottom-sheet";
+import PrimaryButton from "@ui/components/primary-button";
+import { FontSize, FontWeight, Spacing, useThemeColors } from "@ui/theme";
 import React, { useMemo } from "react";
 import { Platform, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useT, type Translator } from "../../i18n";
-import BottomSheet from "../../ui/components/bottom-sheet";
-import PrimaryButton from "../../ui/components/primary-button";
-import { FontSize, FontWeight, Spacing, useThemeColors } from "../../ui/theme";
 
 interface Props {
   visible: boolean;

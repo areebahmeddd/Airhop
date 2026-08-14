@@ -13,8 +13,27 @@
 // first, then newest. You can delete your own posts; a signed tombstone
 // outruns stale copies across the mesh and retracts the bridged note.
 
+import { isUrgent, type BoardPost } from "@core/mesh/board-packet";
 import { Feather, MaterialCommunityIcons } from "@expo/vector-icons";
+import { t, useT, type TranslationKey } from "@i18n";
 import { bytesToHex } from "@noble/hashes/utils.js";
+import { getMeshService } from "@services/mesh-service";
+import { useBoardStore } from "@store/board-store";
+import {
+  matchesBridged,
+  noticeAuthor,
+  useNoticesStore,
+  type LocationNote,
+} from "@store/notices-store";
+import BottomSheet from "@ui/components/bottom-sheet";
+import {
+  FontSize,
+  FontWeight,
+  HIT_SLOP,
+  Radius,
+  Spacing,
+  useThemeColors,
+} from "@ui/theme";
 import { useEffect, useMemo, useState } from "react";
 import {
   Pressable,
@@ -24,25 +43,6 @@ import {
   TextInput,
   View,
 } from "react-native";
-import { isUrgent, type BoardPost } from "../../core/mesh/board-packet";
-import { t, useT, type TranslationKey } from "../../i18n";
-import { getMeshService } from "../../services/mesh-service";
-import { useBoardStore } from "../../store/board-store";
-import {
-  matchesBridged,
-  noticeAuthor,
-  useNoticesStore,
-  type LocationNote,
-} from "../../store/notices-store";
-import BottomSheet from "../../ui/components/bottom-sheet";
-import {
-  FontSize,
-  FontWeight,
-  HIT_SLOP,
-  Radius,
-  Spacing,
-  useThemeColors,
-} from "../../ui/theme";
 
 const CONTENT_MAX = 512;
 // days: 0 is the permanent (∞) option, offered only in a location cell (it is a

@@ -5,6 +5,20 @@
 // Compass N is decorative: BLE gives proximity only, not bearing.
 
 import { Feather } from "@expo/vector-icons";
+import { useMeshStateStore, type BleBlocker } from "@store/mesh-state-store";
+import { REACHABLE_TTL_MS, type NearbyPeer } from "@store/peer-store";
+import Avatar from "@ui/components/avatar";
+import StatusDot from "@ui/components/status-dot";
+import {
+  FontSize,
+  FontWeight,
+  hitSlopFor,
+  MaxFontScale,
+  Radius,
+  Spacing,
+  useThemeColors,
+} from "@ui/theme";
+import { useReducedMotion } from "@ui/use-reduced-motion";
 import * as Haptics from "expo-haptics";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -15,27 +29,10 @@ import {
   Text,
   View,
 } from "react-native";
-import {
-  useMeshStateStore,
-  type BleBlocker,
-} from "../../store/mesh-state-store";
-import { REACHABLE_TTL_MS, type NearbyPeer } from "../../store/peer-store";
-import Avatar from "../../ui/components/avatar";
-import StatusDot from "../../ui/components/status-dot";
-import {
-  FontSize,
-  FontWeight,
-  hitSlopFor,
-  MaxFontScale,
-  Radius,
-  Spacing,
-  useThemeColors,
-} from "../../ui/theme";
-import { useReducedMotion } from "../../ui/use-reduced-motion";
 import RelayGlyph from "./relay-glyph";
 
-import { t, useT, useTPlural, type TranslationKey } from "../../i18n";
-import { resolveDisplayName } from "../../utils/display-name";
+import { t, useT, useTPlural, type TranslationKey } from "@i18n";
+import { resolveDisplayName } from "@utils/display-name";
 
 // What the dial says when there are no peers, per reason.
 //

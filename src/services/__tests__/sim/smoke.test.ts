@@ -17,11 +17,11 @@ jest.mock("react-native/Libraries/EventEmitter/RCTDeviceEventEmitter", () =>
 // at call time, which for a sandboxed device is after jest.isolateModules has
 // already closed - so every phone would resolve the OUTER registry's shim and
 // share one native module. Resolving here binds each sandbox to its own.
-jest.mock("../../../bridge/NativeAirhopBLE", () => {
+jest.mock("@bridge/NativeAirhopBLE", () => {
   const shim = require("../lifecycle/harness/bridge-shim");
   return { __esModule: true, default: shim.bleBridge };
 });
-jest.mock("../../../bridge/NativeAirhopWiFi", () => {
+jest.mock("@bridge/NativeAirhopWiFi", () => {
   const shim = require("../lifecycle/harness/bridge-shim");
   return { __esModule: true, default: shim.wifiBridge };
 });

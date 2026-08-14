@@ -47,15 +47,11 @@
 // The phrase itself is never stored here. It lives in the keychain alongside
 // the identity keys (see `core/payments/wallet-seed.ts`).
 
+import { KEYCHAIN_ITEMS, readSecret, writeSecret } from "@core/crypto/keychain";
+import { bytesToBase64 } from "@core/encoding/base64";
 import { createMMKV } from "react-native-mmkv";
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
-import {
-  KEYCHAIN_ITEMS,
-  readSecret,
-  writeSecret,
-} from "../core/crypto/keychain";
-import { bytesToBase64 } from "../core/encoding/base64";
 
 // ---- Constants --------------------------------------------------------------
 

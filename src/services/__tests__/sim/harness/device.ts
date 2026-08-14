@@ -24,7 +24,7 @@
 //     function can do. If a scenario cannot be written against this surface,
 //     that is a finding about the app, not a gap in the harness.
 
-import type { Identity } from "../../../../core/crypto/identity";
+import type { Identity } from "@core/crypto/identity";
 import type {
   AndroidBleModule,
   RadioPort,
@@ -50,25 +50,25 @@ const P = {
   shim: "../../lifecycle/harness/bridge-shim",
   appShell: "../../lifecycle/harness/app-shell",
   mesh: "../../../mesh-service",
-  chatStore: "../../../../store/chat-store",
-  peerStore: "../../../../store/peer-store",
-  meshStateStore: "../../../../store/mesh-state-store",
-  settingsStore: "../../../../store/settings-store",
-  contactsStore: "../../../../store/contacts-store",
-  walletStore: "../../../../store/wallet-store",
-  outboxStore: "../../../../store/outbox-store",
-  groupStore: "../../../../store/group-store",
-  boardStore: "../../../../store/board-store",
-  blockedStore: "../../../../store/blocked-store",
-  transferStore: "../../../../store/transfer-store",
-  activityStore: "../../../../store/activity-store",
-  noticesStore: "../../../../store/notices-store",
+  chatStore: "@store/chat-store",
+  peerStore: "@store/peer-store",
+  meshStateStore: "@store/mesh-state-store",
+  settingsStore: "@store/settings-store",
+  contactsStore: "@store/contacts-store",
+  walletStore: "@store/wallet-store",
+  outboxStore: "@store/outbox-store",
+  groupStore: "@store/group-store",
+  boardStore: "@store/board-store",
+  blockedStore: "@store/blocked-store",
+  transferStore: "@store/transfer-store",
+  activityStore: "@store/activity-store",
+  noticesStore: "@store/notices-store",
   nostrPool: "nostr-tools/pool",
   fileSystem: "expo-file-system",
   location: "expo-location",
   walletService: "../../../wallet-service",
   ecashTransfer: "../../../ecash-transfer",
-  voiceBridge: "../../../../bridge/NativeAirhopVoice",
+  voiceBridge: "@bridge/NativeAirhopVoice",
 } as const;
 
 const ALL_PERMISSIONS: AndroidPermission[] = [

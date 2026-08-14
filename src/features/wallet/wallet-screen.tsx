@@ -18,30 +18,6 @@
 //   * Anything that needs the internet says so before it is tapped, and says
 //     why when it cannot run (offline, Tor, or a mint that lacks the NUT).
 
-import { Feather } from "@expo/vector-icons";
-import * as Clipboard from "expo-clipboard";
-import { nip19 } from "nostr-tools";
-import React, {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
-import {
-  ActivityIndicator,
-  Linking,
-  Pressable,
-  RefreshControl,
-  ScrollView,
-  Share,
-  StyleSheet,
-  Text,
-  TextInput,
-  useWindowDimensions,
-  View,
-} from "react-native";
-import QRCode from "react-native-qrcode-svg";
 import {
   canEncodeTokenQr,
   formatAmount,
@@ -50,23 +26,24 @@ import {
   TOKEN_QR_MAX_CHARS,
   TOKEN_QR_SIZE,
   tokenQrPayload,
-} from "../../core/payments/cashu";
+} from "@core/payments/cashu";
 import {
   isValidRecoveryPhrase,
   pickVerificationPositions,
   unknownWordsIn,
   verifyPositions,
-} from "../../core/payments/wallet-seed";
-import { t, tPlural, useT, useTPlural } from "../../i18n";
-import { textAlignEnd } from "../../i18n/layout";
+} from "@core/payments/wallet-seed";
+import { Feather } from "@expo/vector-icons";
+import { t, tPlural, useT, useTPlural } from "@i18n";
+import { textAlignEnd } from "@i18n/layout";
 import {
   deliverTokenToPeer,
   describePayResult,
   describeRoute,
   payPerson,
   reclaimTokenSend,
-} from "../../services/ecash-transfer";
-import { getMeshService } from "../../services/mesh-service";
+} from "@services/ecash-transfer";
+import { getMeshService } from "@services/mesh-service";
 import {
   addMint as addMintService,
   claimLightningDeposit,
@@ -91,11 +68,11 @@ import {
   type MeltQuote,
   type PreparedSend,
   type RestoreResult,
-} from "../../services/wallet-service";
-import { showAlert, useAlertStore } from "../../store/alert-store";
-import { useContactsStore } from "../../store/contacts-store";
-import { REACHABLE_TTL_MS, usePeerStore } from "../../store/peer-store";
-import { useSettingsStore } from "../../store/settings-store";
+} from "@services/wallet-service";
+import { showAlert, useAlertStore } from "@store/alert-store";
+import { useContactsStore } from "@store/contacts-store";
+import { REACHABLE_TTL_MS, usePeerStore } from "@store/peer-store";
+import { useSettingsStore } from "@store/settings-store";
 import {
   isWalletStorageReady,
   selectAccounts,
@@ -103,9 +80,9 @@ import {
   whenWalletHydrated,
   type AccountBalance,
   type WalletTx,
-} from "../../store/wallet-store";
-import Avatar from "../../ui/components/avatar";
-import BottomSheet from "../../ui/components/bottom-sheet";
+} from "@store/wallet-store";
+import Avatar from "@ui/components/avatar";
+import BottomSheet from "@ui/components/bottom-sheet";
 import {
   DISABLED_OPACITY,
   FontFamily,
@@ -117,11 +94,34 @@ import {
   Spacing,
   TAB_BAR_CLEARANCE,
   useThemeColors,
-} from "../../ui/theme";
-import { usePullRefreshColors } from "../../ui/use-pull-refresh";
-import { formatListTimestamp, formatNumber } from "../../utils/format";
-import { acknowledged } from "../../utils/haptics";
-import { nostrShortLabel, peerIDToUsername } from "../../utils/username";
+} from "@ui/theme";
+import { usePullRefreshColors } from "@ui/use-pull-refresh";
+import { formatListTimestamp, formatNumber } from "@utils/format";
+import { acknowledged } from "@utils/haptics";
+import { nostrShortLabel, peerIDToUsername } from "@utils/username";
+import * as Clipboard from "expo-clipboard";
+import { nip19 } from "nostr-tools";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import {
+  ActivityIndicator,
+  Linking,
+  Pressable,
+  RefreshControl,
+  ScrollView,
+  Share,
+  StyleSheet,
+  Text,
+  TextInput,
+  useWindowDimensions,
+  View,
+} from "react-native";
+import QRCode from "react-native-qrcode-svg";
 import TokenScanner, { type ScanTarget } from "./token-scanner";
 
 // The four quick actions triggered from the App-level header.

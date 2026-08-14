@@ -5,7 +5,7 @@
 // Keeping this in one pure, tested function means both lists stay consistent and
 // neither drifts its own subtly different rule.
 
-import type { ChatMessage } from "../store/chat-store";
+import type { ChatMessage } from "@store/chat-store";
 
 // Timestamp of the newest message in a conversation, or 0 when it has none.
 // Messages are stored oldest-first (see chat-store addMessage), so the last

@@ -13,9 +13,9 @@
 // Both failures are invisible in local testing, since the sender sees their own
 // message fine, so they're pinned here.
 
-import { GeoRelayDirectory } from "../../core/nostr/geo-relay";
-import { decodeGeohash, encodeGeohash } from "../../core/nostr/presence";
-import { GEO_RELAYS } from "../../data/relays";
+import { GeoRelayDirectory } from "@core/nostr/geo-relay";
+import { decodeGeohash, encodeGeohash } from "@core/nostr/presence";
+import { GEO_RELAYS } from "@data/relays";
 import {
   GEO_CHANNEL_PRECISION,
   geohashChannel,

@@ -5,25 +5,22 @@
 // it — radios toggled, conversations in flight, the app put away and reopened.
 
 jest.mock("expo-location", () => ({}));
-jest.mock("../../../bridge/NativeAirhopBLE", () => ({
+jest.mock("@bridge/NativeAirhopBLE", () => ({
   __esModule: true,
   get default() {
     return require("./harness/bridge-shim").bleBridge;
   },
 }));
-jest.mock("../../../bridge/NativeAirhopWiFi", () => ({
+jest.mock("@bridge/NativeAirhopWiFi", () => ({
   __esModule: true,
   get default() {
     return require("./harness/bridge-shim").wifiBridge;
   },
 }));
 
-import {
-  computeMeshBanners,
-  useMeshStateStore,
-} from "../../../store/mesh-state-store";
-import { useOutboxStore } from "../../../store/outbox-store";
-import { usePeerStore } from "../../../store/peer-store";
+import { computeMeshBanners, useMeshStateStore } from "@store/mesh-state-store";
+import { useOutboxStore } from "@store/outbox-store";
+import { usePeerStore } from "@store/peer-store";
 import { getMeshService } from "../../mesh-service";
 import { applyPresence } from "../../presence";
 import { AndroidBleModule } from "./harness/android-native";

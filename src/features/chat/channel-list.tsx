@@ -8,6 +8,39 @@
 // both Chats sub-tabs, so App.tsx mounts the chooser alongside this list.
 
 import { Feather, MaterialCommunityIcons } from "@expo/vector-icons";
+import { t, tPlural, type TranslationKey, useT, useTPlural } from "@i18n";
+import { useRichText } from "@i18n/rich-text";
+import {
+  geohashLevelName,
+  isGeoChannel,
+  isManualGeoChannel,
+  manualGeohashOf,
+} from "@services/geohash-channel-service";
+import { getMeshService } from "@services/mesh-service";
+import { showAlert } from "@store/alert-store";
+import { useChatStore } from "@store/chat-store";
+import { useGroupStore } from "@store/group-store";
+import { usePeerStore } from "@store/peer-store";
+import { placeNameKey, usePlaceNamesStore } from "@store/place-names-store";
+import BottomSheet from "@ui/components/bottom-sheet";
+import EmptyState from "@ui/components/empty-state";
+import {
+  Duration,
+  FontSize,
+  FontWeight,
+  MaxFontScale,
+  MIN_TOUCH,
+  Radius,
+  Spacing,
+  TAB_BAR_CLEARANCE,
+  useThemeColors,
+} from "@ui/theme";
+import { usePullRefreshColors } from "@ui/use-pull-refresh";
+import { sortConversationsByActivity } from "@utils/conversation-order";
+import { formatListTimestamp } from "@utils/format";
+import { held } from "@utils/haptics";
+import { messagePreviewText } from "@utils/message-preview";
+import { sumUnread } from "@utils/unread";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   Pressable,
@@ -21,42 +54,6 @@ import ReanimatedSwipeable, {
   type SwipeableMethods,
 } from "react-native-gesture-handler/ReanimatedSwipeable";
 import Animated, { FadeIn, LinearTransition } from "react-native-reanimated";
-import { t, tPlural, type TranslationKey, useT, useTPlural } from "../../i18n";
-import { useRichText } from "../../i18n/rich-text";
-import {
-  geohashLevelName,
-  isGeoChannel,
-  isManualGeoChannel,
-  manualGeohashOf,
-} from "../../services/geohash-channel-service";
-import { getMeshService } from "../../services/mesh-service";
-import { showAlert } from "../../store/alert-store";
-import { useChatStore } from "../../store/chat-store";
-import { useGroupStore } from "../../store/group-store";
-import { usePeerStore } from "../../store/peer-store";
-import {
-  placeNameKey,
-  usePlaceNamesStore,
-} from "../../store/place-names-store";
-import BottomSheet from "../../ui/components/bottom-sheet";
-import EmptyState from "../../ui/components/empty-state";
-import {
-  Duration,
-  FontSize,
-  FontWeight,
-  MaxFontScale,
-  MIN_TOUCH,
-  Radius,
-  Spacing,
-  TAB_BAR_CLEARANCE,
-  useThemeColors,
-} from "../../ui/theme";
-import { usePullRefreshColors } from "../../ui/use-pull-refresh";
-import { sortConversationsByActivity } from "../../utils/conversation-order";
-import { formatListTimestamp } from "../../utils/format";
-import { held } from "../../utils/haptics";
-import { messagePreviewText } from "../../utils/message-preview";
-import { sumUnread } from "../../utils/unread";
 import ChannelInfoSheet from "./channel-info-sheet";
 
 // ---------------------------------------------------------------------------

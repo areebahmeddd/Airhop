@@ -14,14 +14,14 @@
 // render one below the other, severity-first. Renders nothing when the list is
 // empty, so a healthy mesh with peers shows no chrome at all.
 
-import React from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
-import { t, useLanguage } from "../../i18n";
+import { t, useLanguage } from "@i18n";
 import type {
   BannerAction,
   BannerTone,
   MeshBanner,
-} from "../../store/mesh-state-store";
+} from "@store/mesh-state-store";
+import React from "react";
+import { Pressable, StyleSheet, Text, View } from "react-native";
 import {
   FontSize,
   FontWeight,

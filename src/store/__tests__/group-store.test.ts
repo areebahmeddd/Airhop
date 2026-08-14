@@ -3,8 +3,6 @@
  */
 // Group store: persistence, epoch replacement, and the two-party state->message
 // flow (creator signs state, member ingests it and opens a sealed message).
-import { ed25519, x25519 } from "@noble/curves/ed25519.js";
-import { createMMKV } from "react-native-mmkv";
 import {
   decodeGroupEnvelope,
   groupFingerprint,
@@ -15,7 +13,9 @@ import {
   signGroupState,
   type BitchatGroup,
   type GroupMember,
-} from "../../core/mesh/group-protocol";
+} from "@core/mesh/group-protocol";
+import { ed25519, x25519 } from "@noble/curves/ed25519.js";
+import { createMMKV } from "react-native-mmkv";
 import { groupChannel, useGroupStore } from "../group-store";
 
 function member(nick: string): { member: GroupMember; signPriv: Uint8Array } {

@@ -29,7 +29,7 @@
 // and its `CBORReader`, kept deliberately literal so it can be diffed against
 // the Swift. If this test fails, Airhop and bitchat have diverged on payments.
 
-import type { StoredProof } from "../../../store/wallet-store";
+import type { StoredProof } from "@store/wallet-store";
 import { buildToken } from "../cashu";
 
 const MINT = "https://mint.airhop.example";

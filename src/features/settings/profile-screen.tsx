@@ -3,7 +3,44 @@
 // sub-screens (src/features/settings/sections/*). Panic wipe stays here,
 // at the very bottom, outside every section.
 
+import { encodeQRContent } from "@core/crypto/contact-exchange";
 import Feather from "@expo/vector-icons/Feather";
+import {
+  LANGUAGES,
+  PLANNED_LANGUAGES,
+  t,
+  useT,
+  type TranslationKey,
+} from "@i18n";
+import { destroyMeshService, getMeshService } from "@services/mesh-service";
+import { applyPresence } from "@services/presence";
+import { showAlert } from "@store/alert-store";
+import {
+  useMeshStateStore,
+  type PresenceStatus,
+} from "@store/mesh-state-store";
+import { useSettingsStore } from "@store/settings-store";
+import Avatar from "@ui/components/avatar";
+import BottomSheet from "@ui/components/bottom-sheet";
+import { MONO_FONT_ORDER, MONO_FONTS } from "@ui/fonts";
+import {
+  FontFamily,
+  FontSize,
+  FontWeight,
+  HIT_SLOP,
+  MIN_TOUCH,
+  Radius,
+  Spacing,
+  TAB_BAR_CLEARANCE,
+  useResolvedTheme,
+  useThemeColors,
+  withAlpha,
+  type ResolvedTheme,
+} from "@ui/theme";
+import { peerInviteLink } from "@utils/deep-link";
+import { acknowledged } from "@utils/haptics";
+import { panicWipe } from "@utils/panic-wipe";
+import { ensurePermission } from "@utils/permissions";
 import * as Clipboard from "expo-clipboard";
 import * as FileSystem from "expo-file-system";
 import * as Haptics from "expo-haptics";
@@ -26,46 +63,6 @@ import {
   View,
 } from "react-native";
 import QRCode from "react-native-qrcode-svg";
-import { encodeQRContent } from "../../core/crypto/contact-exchange";
-import {
-  LANGUAGES,
-  PLANNED_LANGUAGES,
-  t,
-  useT,
-  type TranslationKey,
-} from "../../i18n";
-import {
-  destroyMeshService,
-  getMeshService,
-} from "../../services/mesh-service";
-import { applyPresence } from "../../services/presence";
-import { showAlert } from "../../store/alert-store";
-import {
-  useMeshStateStore,
-  type PresenceStatus,
-} from "../../store/mesh-state-store";
-import { useSettingsStore } from "../../store/settings-store";
-import Avatar from "../../ui/components/avatar";
-import BottomSheet from "../../ui/components/bottom-sheet";
-import { MONO_FONT_ORDER, MONO_FONTS } from "../../ui/fonts";
-import {
-  FontFamily,
-  FontSize,
-  FontWeight,
-  HIT_SLOP,
-  MIN_TOUCH,
-  Radius,
-  Spacing,
-  TAB_BAR_CLEARANCE,
-  useResolvedTheme,
-  useThemeColors,
-  withAlpha,
-  type ResolvedTheme,
-} from "../../ui/theme";
-import { peerInviteLink } from "../../utils/deep-link";
-import { acknowledged } from "../../utils/haptics";
-import { panicWipe } from "../../utils/panic-wipe";
-import { ensurePermission } from "../../utils/permissions";
 import ConnectivityGroup from "./connectivity-group";
 import AboutScreen from "./sections/about-screen";
 import DiagnosticsScreen from "./sections/diagnostics-screen";

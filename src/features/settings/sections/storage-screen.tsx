@@ -11,18 +11,18 @@
 //   - Cache: the same on-disk attachment total, with a working Clear action
 //     that actually deletes the files.
 
-import React, { useCallback, useMemo, useState } from "react";
-import { ScrollView, Text, View } from "react-native";
-import { createMMKV } from "react-native-mmkv";
 import {
   clearAttachmentCache,
   getAttachmentCacheBytes,
-} from "../../../services/file-transfer-service";
-import { getMeshService } from "../../../services/mesh-service";
-import { showAlert } from "../../../store/alert-store";
-import { WALLET_STORAGE_ID } from "../../../store/wallet-store";
-import { formatBytes } from "../../../utils/format";
-import { MMKV_STORE_IDS } from "../../../utils/panic-wipe";
+} from "@services/file-transfer-service";
+import { getMeshService } from "@services/mesh-service";
+import { showAlert } from "@store/alert-store";
+import { WALLET_STORAGE_ID } from "@store/wallet-store";
+import { formatBytes } from "@utils/format";
+import { MMKV_STORE_IDS } from "@utils/panic-wipe";
+import React, { useCallback, useMemo, useState } from "react";
+import { ScrollView, Text, View } from "react-native";
+import { createMMKV } from "react-native-mmkv";
 import {
   GroupDivider,
   SettingLinkRow,
@@ -31,7 +31,7 @@ import {
   useSharedStyles,
 } from "../shared";
 
-import { t, useT } from "../../../i18n";
+import { t, useT } from "@i18n";
 interface Props {
   onBack: () => void;
 }

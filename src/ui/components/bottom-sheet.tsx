@@ -29,6 +29,7 @@
 // file only - every other file in the app keeps them.
 /* eslint-disable react-hooks/immutability, react-hooks/refs */
 
+import { useT } from "@i18n";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   Keyboard,
@@ -55,7 +56,6 @@ import Animated, {
 } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { scheduleOnRN } from "react-native-worklets";
-import { useT } from "../../i18n";
 import { Duration, Radius, Spacing, useThemeColors } from "../theme";
 import { useKeyboardHeight } from "../use-keyboard";
 

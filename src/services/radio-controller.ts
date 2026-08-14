@@ -40,9 +40,9 @@
 // stack actually accepts the call is correct on every device and instant on
 // most.
 
-import AirhopBLE from "../bridge/NativeAirhopBLE";
-import { useMeshStateStore, type BleBlocker } from "../store/mesh-state-store";
-import { useSettingsStore } from "../store/settings-store";
+import AirhopBLE from "@bridge/NativeAirhopBLE";
+import { useMeshStateStore, type BleBlocker } from "@store/mesh-state-store";
+import { useSettingsStore } from "@store/settings-store";
 import { PowerPolicy } from "./power-policy";
 
 // The facts the device reports about itself. Every field is observed, never

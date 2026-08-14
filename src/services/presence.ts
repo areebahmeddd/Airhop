@@ -12,8 +12,8 @@
 import {
   useMeshStateStore,
   type PresenceStatus,
-} from "../store/mesh-state-store";
-import { useSettingsStore } from "../store/settings-store";
+} from "@store/mesh-state-store";
+import { useSettingsStore } from "@store/settings-store";
 import { getMeshService } from "./mesh-service";
 
 // Move the mesh to `next` and record it. Safe to call with the mesh already in

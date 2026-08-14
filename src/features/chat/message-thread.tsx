@@ -1,7 +1,108 @@
 // Message thread screen for a single channel.
 // Shows messages with sender and timestamp. Text input to compose and PTT button.
 
+import {
+  MAX_BITCHAT_TRANSFER_BYTES,
+  MAX_VIDEO_SECONDS,
+  maxBytesForType,
+  wireMediaName,
+} from "@core/mesh/bitchat-file-packet";
+import { nicknameKey, normalizeNickname } from "@core/mesh/nickname";
+import { PRIVATE_MESSAGE_MAX_CONTENT_BYTES } from "@core/mesh/noise-payload";
+import { MAX_BURST_MS } from "@core/mesh/voice-capture";
+import {
+  findTokensInText,
+  mayContainToken,
+  type EmbeddedToken,
+} from "@core/payments/cashu";
 import { Feather, MaterialCommunityIcons } from "@expo/vector-icons";
+import { t, useT, useTPlural, type TranslationKey } from "@i18n";
+import { chevronBack, isRTLLayout, textAlignEnd } from "@i18n/layout";
+import {
+  setAudioForPlayback,
+  setAudioForRecording,
+} from "@services/audio-session";
+import { reportWalletError } from "@services/ecash-transfer";
+import {
+  adoptIntoAttachmentCache,
+  AttachmentTooLargeError,
+  CACHE_FILE_PREFIX,
+  sizeLabel,
+} from "@services/file-transfer-service";
+import {
+  isGeoChannel,
+  isManualGeoChannel,
+  manualGeohashOf,
+  type GeoParticipant,
+} from "@services/geohash-channel-service";
+import { prepareImageForSend } from "@services/image-compress";
+import { hasLocationPermission } from "@services/location-service";
+import { getMeshService } from "@services/mesh-service";
+import { hostOf, receiveToken } from "@services/wallet-service";
+import { useActivityStore } from "@store/activity-store";
+import { showAlert } from "@store/alert-store";
+import { useChannelMembersStore } from "@store/channel-members-store";
+import {
+  useChatStore,
+  type ChatAttachment,
+  type ChatMessage,
+} from "@store/chat-store";
+import { useContactsStore } from "@store/contacts-store";
+import { useGroupStore } from "@store/group-store";
+import { useMeshStateStore } from "@store/mesh-state-store";
+import { REACHABLE_TTL_MS, usePeerStore } from "@store/peer-store";
+import { usePlaceNamesStore } from "@store/place-names-store";
+import { UPLOAD_QUALITY_VALUES, useSettingsStore } from "@store/settings-store";
+import {
+  transferEtaSec,
+  transferSpeedBps,
+  useTransferStore,
+} from "@store/transfer-store";
+import { useWalletStore } from "@store/wallet-store";
+import Avatar from "@ui/components/avatar";
+import BottomSheet from "@ui/components/bottom-sheet";
+import Toast from "@ui/components/toast";
+import {
+  DISABLED_OPACITY,
+  Duration,
+  FontFamily,
+  FontSize,
+  FontWeight,
+  HIT_SLOP,
+  hitSlopFor,
+  MaxFontScale,
+  MIN_TOUCH,
+  Radius,
+  Shadow,
+  Spacing,
+  useThemeColors,
+} from "@ui/theme";
+import { useKeyboardInset } from "@ui/use-keyboard";
+import { channelInviteLink } from "@utils/deep-link";
+import { unconfirmedSince } from "@utils/delivery-silence";
+import { resolveDisplayName } from "@utils/display-name";
+import {
+  formatBytes,
+  formatClockTime,
+  formatDateSeparator,
+  formatDuration,
+  formatLongDate,
+} from "@utils/format";
+import { acknowledged, held } from "@utils/haptics";
+import {
+  BRIDGE_CHANNEL,
+  canSendMedia,
+  mediaBlockedReason,
+  notifiesOnScreenshot,
+} from "@utils/media-policy";
+import { activeMentionQuery, applyMention } from "@utils/mentions";
+import { ensurePermission } from "@utils/permissions";
+import {
+  resolveLandingSettle,
+  resolveThreadScroll,
+} from "@utils/thread-scroll";
+import { isNostrId, NOSTR_ID_PREFIX, peerIDToUsername } from "@utils/username";
+import { truncateToUtf8Bytes, utf8ByteLength } from "@utils/utf8-budget";
 import {
   AudioModule,
   RecordingPresets,
@@ -53,114 +154,6 @@ import Animated, {
   type SharedValue,
 } from "react-native-reanimated";
 import { scheduleOnRN } from "react-native-worklets";
-import {
-  MAX_BITCHAT_TRANSFER_BYTES,
-  MAX_VIDEO_SECONDS,
-  maxBytesForType,
-  wireMediaName,
-} from "../../core/mesh/bitchat-file-packet";
-import { nicknameKey, normalizeNickname } from "../../core/mesh/nickname";
-import { PRIVATE_MESSAGE_MAX_CONTENT_BYTES } from "../../core/mesh/noise-payload";
-import { MAX_BURST_MS } from "../../core/mesh/voice-capture";
-import {
-  findTokensInText,
-  mayContainToken,
-  type EmbeddedToken,
-} from "../../core/payments/cashu";
-import { t, useT, useTPlural, type TranslationKey } from "../../i18n";
-import { chevronBack, isRTLLayout, textAlignEnd } from "../../i18n/layout";
-import {
-  setAudioForPlayback,
-  setAudioForRecording,
-} from "../../services/audio-session";
-import { reportWalletError } from "../../services/ecash-transfer";
-import {
-  adoptIntoAttachmentCache,
-  AttachmentTooLargeError,
-  CACHE_FILE_PREFIX,
-  sizeLabel,
-} from "../../services/file-transfer-service";
-import {
-  isGeoChannel,
-  isManualGeoChannel,
-  manualGeohashOf,
-  type GeoParticipant,
-} from "../../services/geohash-channel-service";
-import { prepareImageForSend } from "../../services/image-compress";
-import { hasLocationPermission } from "../../services/location-service";
-import { getMeshService } from "../../services/mesh-service";
-import { hostOf, receiveToken } from "../../services/wallet-service";
-import { useActivityStore } from "../../store/activity-store";
-import { showAlert } from "../../store/alert-store";
-import { useChannelMembersStore } from "../../store/channel-members-store";
-import {
-  useChatStore,
-  type ChatAttachment,
-  type ChatMessage,
-} from "../../store/chat-store";
-import { useContactsStore } from "../../store/contacts-store";
-import { useGroupStore } from "../../store/group-store";
-import { useMeshStateStore } from "../../store/mesh-state-store";
-import { REACHABLE_TTL_MS, usePeerStore } from "../../store/peer-store";
-import { usePlaceNamesStore } from "../../store/place-names-store";
-import {
-  UPLOAD_QUALITY_VALUES,
-  useSettingsStore,
-} from "../../store/settings-store";
-import {
-  transferEtaSec,
-  transferSpeedBps,
-  useTransferStore,
-} from "../../store/transfer-store";
-import { useWalletStore } from "../../store/wallet-store";
-import Avatar from "../../ui/components/avatar";
-import BottomSheet from "../../ui/components/bottom-sheet";
-import Toast from "../../ui/components/toast";
-import {
-  DISABLED_OPACITY,
-  Duration,
-  FontFamily,
-  FontSize,
-  FontWeight,
-  HIT_SLOP,
-  hitSlopFor,
-  MaxFontScale,
-  MIN_TOUCH,
-  Radius,
-  Shadow,
-  Spacing,
-  useThemeColors,
-} from "../../ui/theme";
-import { useKeyboardInset } from "../../ui/use-keyboard";
-import { channelInviteLink } from "../../utils/deep-link";
-import { unconfirmedSince } from "../../utils/delivery-silence";
-import { resolveDisplayName } from "../../utils/display-name";
-import {
-  formatBytes,
-  formatClockTime,
-  formatDateSeparator,
-  formatDuration,
-  formatLongDate,
-} from "../../utils/format";
-import { acknowledged, held } from "../../utils/haptics";
-import {
-  BRIDGE_CHANNEL,
-  canSendMedia,
-  mediaBlockedReason,
-  notifiesOnScreenshot,
-} from "../../utils/media-policy";
-import { activeMentionQuery, applyMention } from "../../utils/mentions";
-import { ensurePermission } from "../../utils/permissions";
-import {
-  resolveLandingSettle,
-  resolveThreadScroll,
-} from "../../utils/thread-scroll";
-import {
-  isNostrId,
-  NOSTR_ID_PREFIX,
-  peerIDToUsername,
-} from "../../utils/username";
-import { truncateToUtf8Bytes, utf8ByteLength } from "../../utils/utf8-budget";
 import SendEcashSheet from "../wallet/send-ecash-sheet";
 import ChannelInfoSheet from "./channel-info-sheet";
 import ContactInfoSheet from "./contact-info-sheet";

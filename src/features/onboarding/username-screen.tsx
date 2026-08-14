@@ -2,11 +2,8 @@
 // Shows the user their deterministic human-readable username derived from the
 // generated peer ID. Communicates that this is permanent and unique to them.
 
-import React, { useMemo } from "react";
-import { ScrollView, StyleSheet, Text, View } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
-import { useT, type Translator } from "../../i18n";
-import PrimaryButton from "../../ui/components/primary-button";
+import { useT, type Translator } from "@i18n";
+import PrimaryButton from "@ui/components/primary-button";
 import {
   avatarColor,
   FontFamily,
@@ -16,8 +13,11 @@ import {
   Spacing,
   useThemeColors,
   withAlpha,
-} from "../../ui/theme";
-import { peerIDToUsername } from "../../utils/username";
+} from "@ui/theme";
+import { peerIDToUsername } from "@utils/username";
+import React, { useMemo } from "react";
+import { ScrollView, StyleSheet, Text, View } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 
 // Diameter of the identity card's avatar. Named so its border radius stays a
 // circle if the size is ever tuned.

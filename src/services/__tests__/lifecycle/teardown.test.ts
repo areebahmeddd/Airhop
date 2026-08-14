@@ -7,21 +7,21 @@
 // (a conversation, a queued message).
 
 jest.mock("expo-location", () => ({}));
-jest.mock("../../../bridge/NativeAirhopBLE", () => ({
+jest.mock("@bridge/NativeAirhopBLE", () => ({
   __esModule: true,
   get default() {
     return require("./harness/bridge-shim").bleBridge;
   },
 }));
-jest.mock("../../../bridge/NativeAirhopWiFi", () => ({
+jest.mock("@bridge/NativeAirhopWiFi", () => ({
   __esModule: true,
   get default() {
     return require("./harness/bridge-shim").wifiBridge;
   },
 }));
 
-import { useMeshStateStore } from "../../../store/mesh-state-store";
-import { usePeerStore } from "../../../store/peer-store";
+import { useMeshStateStore } from "@store/mesh-state-store";
+import { usePeerStore } from "@store/peer-store";
 import {
   destroyMeshService,
   getMeshService,

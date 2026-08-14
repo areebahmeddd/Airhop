@@ -37,7 +37,7 @@ import {
   type ProofLike,
   type Token,
 } from "@cashu/cashu-ts";
-import type { StoredProof } from "../../store/wallet-store";
+import type { StoredProof } from "@store/wallet-store";
 
 // ---- Constants --------------------------------------------------------------
 

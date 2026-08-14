@@ -4,8 +4,38 @@
 // Telegram / Signal convention of one unified search surface across every
 // chat, not scoped to whichever sub-tab happens to be selected.
 
+import { isUrgent } from "@core/mesh/board-packet";
 import { Feather } from "@expo/vector-icons";
+import { t, useT, type TranslationKey } from "@i18n";
 import { bytesToHex } from "@noble/hashes/utils.js";
+import { geohashChannel } from "@services/geohash-channel-service";
+import { getMeshService } from "@services/mesh-service";
+import { useBoardStore } from "@store/board-store";
+import { useChatStore } from "@store/chat-store";
+import { useNoticesStore } from "@store/notices-store";
+import Avatar from "@ui/components/avatar";
+import EmptyState from "@ui/components/empty-state";
+import {
+  FontSize,
+  FontWeight,
+  Radius,
+  Spacing,
+  useThemeColors,
+} from "@ui/theme";
+import { chatDisplayName } from "@utils/chat-display-name";
+import {
+  filterMessages,
+  searchChats,
+  searchMessages,
+  searchNotices,
+  type ChatHit,
+  type MediaFilter,
+  type MessageHit,
+  type NoticeHit,
+  type SearchableNotice,
+} from "@utils/chat-search";
+import { formatListTimestamp } from "@utils/format";
+import { BRIDGE_CHANNEL } from "@utils/media-policy";
 import React, { useEffect, useMemo, useState } from "react";
 import {
   FlatList,
@@ -17,36 +47,6 @@ import {
   Text,
   View,
 } from "react-native";
-import { isUrgent } from "../../core/mesh/board-packet";
-import { t, useT, type TranslationKey } from "../../i18n";
-import { geohashChannel } from "../../services/geohash-channel-service";
-import { getMeshService } from "../../services/mesh-service";
-import { useBoardStore } from "../../store/board-store";
-import { useChatStore } from "../../store/chat-store";
-import { useNoticesStore } from "../../store/notices-store";
-import Avatar from "../../ui/components/avatar";
-import EmptyState from "../../ui/components/empty-state";
-import {
-  FontSize,
-  FontWeight,
-  Radius,
-  Spacing,
-  useThemeColors,
-} from "../../ui/theme";
-import { chatDisplayName } from "../../utils/chat-display-name";
-import {
-  filterMessages,
-  searchChats,
-  searchMessages,
-  searchNotices,
-  type ChatHit,
-  type MediaFilter,
-  type MessageHit,
-  type NoticeHit,
-  type SearchableNotice,
-} from "../../utils/chat-search";
-import { formatListTimestamp } from "../../utils/format";
-import { BRIDGE_CHANNEL } from "../../utils/media-policy";
 
 // The filter chips shown above search, one per content kind Airhop supports.
 // Keys, not text: evaluated once at import, so translated strings here would

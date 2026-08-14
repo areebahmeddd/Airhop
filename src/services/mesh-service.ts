@@ -13,23 +13,13 @@
 //   - Dispatch CHANNEL_MSG, NOISE_ENCRYPTED, DR_ENCRYPTED to ChatStore
 //   - Expose sendChannelMessage(), sendDm(), sendAttachment() for feature layer
 
-import { x25519 } from "@noble/curves/ed25519.js";
-import { hkdf } from "@noble/hashes/hkdf.js";
-import { sha256 } from "@noble/hashes/sha2.js";
-import { bytesToHex, hexToBytes } from "@noble/hashes/utils.js";
-import {
-  getPublicKey,
-  verifyEvent,
-  type Event as NostrEvent,
-} from "nostr-tools";
-import { DeviceEventEmitter, type EventSubscription } from "react-native";
-import AirhopBLE from "../bridge/NativeAirhopBLE";
-import NativeAirhopWiFi from "../bridge/NativeAirhopWiFi";
+import AirhopBLE from "@bridge/NativeAirhopBLE";
+import NativeAirhopWiFi from "@bridge/NativeAirhopWiFi";
 import {
   decodeContactCard,
   encodeContactCard,
   type ContactCard,
-} from "../core/crypto/contact-exchange";
+} from "@core/crypto/contact-exchange";
 import {
   canEncrypt,
   initReceiver,
@@ -37,18 +27,18 @@ import {
   ratchetDecrypt,
   ratchetEncrypt,
   type RatchetState,
-} from "../core/crypto/double-ratchet";
-import type { Identity } from "../core/crypto/identity";
-import { noiseXOpen, noiseXSeal } from "../core/crypto/noise-x";
-import { NoiseHandshake, type NoiseSession } from "../core/crypto/noise-xx";
-import { base64ToBytes, bytesToBase64 } from "../core/encoding/base64";
+} from "@core/crypto/double-ratchet";
+import type { Identity } from "@core/crypto/identity";
+import { noiseXOpen, noiseXSeal } from "@core/crypto/noise-x";
+import { NoiseHandshake, type NoiseSession } from "@core/crypto/noise-xx";
+import { base64ToBytes, bytesToBase64 } from "@core/encoding/base64";
 import {
   ANNOUNCE_TTL,
   AnnounceManager,
   Capability,
   decodeAnnouncePayload,
   isAnnounceFresh,
-} from "../core/mesh/announce-manager";
+} from "@core/mesh/announce-manager";
 import {
   decodeBoardWire,
   encodeBoardWire,
@@ -60,31 +50,31 @@ import {
   verifyBoardWire,
   type BoardPost,
   type BoardWire,
-} from "../core/mesh/board-packet";
+} from "@core/mesh/board-packet";
 import {
   openChannelMessage,
   sealChannelMessage,
-} from "../core/mesh/channel-crypto";
+} from "@core/mesh/channel-crypto";
 import {
   computeRecipientTag,
   CourierStore,
   decodeEnvelopePayload,
   encodeEnvelopePayload,
   ENVELOPE_TTL_MS,
-} from "../core/mesh/courier-store";
+} from "@core/mesh/courier-store";
 import {
   decodeDmPayload,
   DmPayloadType,
   encodeDmMessage,
   encodeDmReceipt,
-} from "../core/mesh/dm-payload";
-import { FloodRouter } from "../core/mesh/flood-router";
+} from "@core/mesh/dm-payload";
+import { FloodRouter } from "@core/mesh/flood-router";
 import {
   FRAG_DATA_SIZE,
   FragmentManager,
   type FragmentProgress,
-} from "../core/mesh/fragment-manager";
-import { GossipSync } from "../core/mesh/gossip-sync";
+} from "@core/mesh/fragment-manager";
+import { GossipSync } from "@core/mesh/gossip-sync";
 import {
   decodeGroupEnvelope,
   decodeGroupState,
@@ -101,25 +91,25 @@ import {
   verifyGroupState,
   type BitchatGroup,
   type GroupMember,
-} from "../core/mesh/group-protocol";
+} from "@core/mesh/group-protocol";
 import {
   decodeMeshPing,
   encodeMeshPing,
   newPingNonce,
   pingHopCount,
-} from "../core/mesh/mesh-ping";
+} from "@core/mesh/mesh-ping";
 import {
   decodeNoisePayload,
   decodePrivateMessagePacket,
   encodeNoisePrivateMessage,
   NoisePayloadType,
   type NoisePayloadTypeValue,
-} from "../core/mesh/noise-payload";
+} from "@core/mesh/noise-payload";
 import {
   CarrierDirection,
   decodeNostrCarrier,
   encodeNostrCarrier,
-} from "../core/mesh/nostr-carrier";
+} from "@core/mesh/nostr-carrier";
 import {
   BROADCAST_ID,
   decodePacket,
@@ -131,29 +121,29 @@ import {
   signPacket,
   verifyPacket,
   type Packet,
-} from "../core/mesh/packet-codec";
+} from "@core/mesh/packet-codec";
 import {
   decodePeerStatePacket,
   encodePeerStatePacket,
-} from "../core/mesh/peer-state-packet";
+} from "@core/mesh/peer-state-packet";
 import {
   decodePrekeyBundle,
   encodePrekeyBundle,
   verifyPrekeyBundle,
-} from "../core/mesh/prekey-bundle";
-import { LocalPrekeyStore, PeerPrekeyStore } from "../core/mesh/prekey-store";
-import { RequestSyncManager } from "../core/mesh/request-sync-manager";
-import { nextHopFor } from "../core/mesh/source-route";
-import { VoiceCaptureSession } from "../core/mesh/voice-capture";
-import { VoicePlayer } from "../core/mesh/voice-player";
+} from "@core/mesh/prekey-bundle";
+import { LocalPrekeyStore, PeerPrekeyStore } from "@core/mesh/prekey-store";
+import { RequestSyncManager } from "@core/mesh/request-sync-manager";
+import { nextHopFor } from "@core/mesh/source-route";
+import { VoiceCaptureSession } from "@core/mesh/voice-capture";
+import { VoicePlayer } from "@core/mesh/voice-player";
 import {
   decodeBitchatEnvelope,
   encodeBitchatAckEnvelope,
   encodeBitchatDmEnvelope,
-} from "../core/nostr/bitchat-envelope";
-import { bridgeStableID } from "../core/nostr/bridge-event";
-import { deriveNostrPrivKey, unwrapDm, wrapDm } from "../core/nostr/gift-wrap";
-import { NostrClient } from "../core/nostr/nostr-client";
+} from "@core/nostr/bitchat-envelope";
+import { bridgeStableID } from "@core/nostr/bridge-event";
+import { deriveNostrPrivKey, unwrapDm, wrapDm } from "@core/nostr/gift-wrap";
+import { NostrClient } from "@core/nostr/nostr-client";
 import {
   decodeAirhopChannelPayload,
   decodeMeshPublicPayload,
@@ -162,27 +152,37 @@ import {
   PeerRegistry,
   type NostrSendFn,
   type RouterIdentity,
-} from "../core/router/message-router";
-import { t } from "../i18n";
-import { useActivityStore } from "../store/activity-store";
-import { useBlockedStore } from "../store/blocked-store";
-import { useBoardStore } from "../store/board-store";
-import { useChannelMembersStore } from "../store/channel-members-store";
-import { useChatStore } from "../store/chat-store";
-import { useContactsStore } from "../store/contacts-store";
+} from "@core/router/message-router";
+import { t } from "@i18n";
+import { x25519 } from "@noble/curves/ed25519.js";
+import { hkdf } from "@noble/hashes/hkdf.js";
+import { sha256 } from "@noble/hashes/sha2.js";
+import { bytesToHex, hexToBytes } from "@noble/hashes/utils.js";
+import { useActivityStore } from "@store/activity-store";
+import { useBlockedStore } from "@store/blocked-store";
+import { useBoardStore } from "@store/board-store";
+import { useChannelMembersStore } from "@store/channel-members-store";
+import { useChatStore } from "@store/chat-store";
+import { useContactsStore } from "@store/contacts-store";
 import {
   evictExpiredOwedGroupStates,
   queueOwedGroupState,
   takeOwedGroupStates,
-} from "../store/group-invite-outbox";
-import { groupChannel, useGroupStore } from "../store/group-store";
-import { useMeshStateStore } from "../store/mesh-state-store";
-import { useOutboxStore, type PendingMessage } from "../store/outbox-store";
-import { usePeerStore } from "../store/peer-store";
-import { useSettingsStore } from "../store/settings-store";
-import { useTransferStore } from "../store/transfer-store";
-import { channelDisplayName, resolveDisplayName } from "../utils/display-name";
-import { BRIDGE_CHANNEL, canSendMedia } from "../utils/media-policy";
+} from "@store/group-invite-outbox";
+import { groupChannel, useGroupStore } from "@store/group-store";
+import { useMeshStateStore } from "@store/mesh-state-store";
+import { useOutboxStore, type PendingMessage } from "@store/outbox-store";
+import { usePeerStore } from "@store/peer-store";
+import { useSettingsStore } from "@store/settings-store";
+import { useTransferStore } from "@store/transfer-store";
+import { channelDisplayName, resolveDisplayName } from "@utils/display-name";
+import { BRIDGE_CHANNEL, canSendMedia } from "@utils/media-policy";
+import {
+  getPublicKey,
+  verifyEvent,
+  type Event as NostrEvent,
+} from "nostr-tools";
+import { DeviceEventEmitter, type EventSubscription } from "react-native";
 import { setAudioForPlayback } from "./audio-session";
 import { BridgeService } from "./bridge-service";
 import {

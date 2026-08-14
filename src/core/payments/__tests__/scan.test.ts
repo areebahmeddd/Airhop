@@ -17,7 +17,7 @@
 // produced, rendered as a QR and scanned back by this wallet, must come out
 // identical. That is the Wallet tab's own share-and-scan loop.
 
-import type { StoredProof } from "../../../store/wallet-store";
+import type { StoredProof } from "@store/wallet-store";
 import { buildToken } from "../cashu";
 import { bareInvoice, readScan } from "../scan";
 

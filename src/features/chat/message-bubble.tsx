@@ -5,7 +5,25 @@
 // depend on per-thread interactive state: playingUri, revealedAttachments,
 // claimToken) and are handed down as render props.
 
+import type { EmbeddedToken } from "@core/payments/cashu";
 import { Feather, MaterialCommunityIcons } from "@expo/vector-icons";
+import { useT } from "@i18n";
+import type {
+  ChatAttachment,
+  ChatMessage,
+  MessageStatus,
+} from "@store/chat-store";
+import Avatar from "@ui/components/avatar";
+import {
+  FontSize,
+  FontWeight,
+  HIT_SLOP,
+  hitSlopFor,
+  Radius,
+  Spacing,
+  useThemeColors,
+} from "@ui/theme";
+import { held } from "@utils/haptics";
 import React, { useMemo } from "react";
 import {
   Linking,
@@ -16,24 +34,6 @@ import {
   type StyleProp,
   type TextStyle,
 } from "react-native";
-import type { EmbeddedToken } from "../../core/payments/cashu";
-import { useT } from "../../i18n";
-import type {
-  ChatAttachment,
-  ChatMessage,
-  MessageStatus,
-} from "../../store/chat-store";
-import Avatar from "../../ui/components/avatar";
-import {
-  FontSize,
-  FontWeight,
-  HIT_SLOP,
-  hitSlopFor,
-  Radius,
-  Spacing,
-  useThemeColors,
-} from "../../ui/theme";
-import { held } from "../../utils/haptics";
 
 // Drawn size of a sender's avatar in a channel thread. Tapping it (or the name
 // beside it) opens that sender's profile, so both carry hitSlopFor() to reach the

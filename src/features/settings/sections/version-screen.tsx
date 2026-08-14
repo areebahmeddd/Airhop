@@ -6,7 +6,31 @@
 // four honest outcomes (up to date, update available, offline, unexpected),
 // and never a spinner that hangs forever.
 
+import {
+  APP_STORE_URL,
+  APP_VERSION,
+  AUTHOR_NAME,
+  AUTHOR_URL,
+  LATEST_RELEASE_API,
+  LATEST_RELEASE_PAGE,
+  LICENSE_NAME,
+  LICENSE_URL,
+  PLAY_STORE_URL,
+} from "@data/app-info";
+import { birdForVersion } from "@data/releases";
 import Feather from "@expo/vector-icons/Feather";
+import { t, useT } from "@i18n";
+import { useRichText } from "@i18n/rich-text";
+import { useSettingsStore } from "@store/settings-store";
+import PrimaryButton from "@ui/components/primary-button";
+import {
+  FontFamily,
+  FontSize,
+  FontWeight,
+  Spacing,
+  TAB_BAR_CLEARANCE,
+  useThemeColors,
+} from "@ui/theme";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
@@ -20,30 +44,6 @@ import {
   Text,
   View,
 } from "react-native";
-import {
-  APP_STORE_URL,
-  APP_VERSION,
-  AUTHOR_NAME,
-  AUTHOR_URL,
-  LATEST_RELEASE_API,
-  LATEST_RELEASE_PAGE,
-  LICENSE_NAME,
-  LICENSE_URL,
-  PLAY_STORE_URL,
-} from "../../../data/app-info";
-import { birdForVersion } from "../../../data/releases";
-import { t, useT } from "../../../i18n";
-import { useRichText } from "../../../i18n/rich-text";
-import { useSettingsStore } from "../../../store/settings-store";
-import PrimaryButton from "../../../ui/components/primary-button";
-import {
-  FontFamily,
-  FontSize,
-  FontWeight,
-  Spacing,
-  TAB_BAR_CLEARANCE,
-  useThemeColors,
-} from "../../../ui/theme";
 import { SubHeader, useSharedStyles } from "../shared";
 
 interface Props {

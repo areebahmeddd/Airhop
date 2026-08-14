@@ -18,10 +18,10 @@
 // OS is two flows to reason about and two to keep compliant, for no benefit to
 // anyone using it.
 
+import { useT } from "@i18n";
+import { FontSize, Radius, Spacing, useThemeColors } from "@ui/theme";
 import React, { useMemo } from "react";
 import { Linking, ScrollView, StyleSheet, Text, View } from "react-native";
-import { useT } from "../../../i18n";
-import { FontSize, Radius, Spacing, useThemeColors } from "../../../ui/theme";
 import {
   GroupDivider,
   SettingLinkRow,

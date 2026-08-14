@@ -18,11 +18,11 @@ jest.mock("react-native/Libraries/EventEmitter/RCTDeviceEventEmitter", () =>
     require("./harness/event-router") as { routerModule: () => unknown }
   ).routerModule(),
 );
-jest.mock("../../../bridge/NativeAirhopBLE", () => {
+jest.mock("@bridge/NativeAirhopBLE", () => {
   const shim = require("../lifecycle/harness/bridge-shim");
   return { __esModule: true, default: shim.bleBridge };
 });
-jest.mock("../../../bridge/NativeAirhopWiFi", () => {
+jest.mock("@bridge/NativeAirhopWiFi", () => {
   const shim = require("../lifecycle/harness/bridge-shim");
   return { __esModule: true, default: shim.wifiBridge };
 });
@@ -31,7 +31,7 @@ jest.mock("../../../bridge/NativeAirhopWiFi", () => {
 jest.mock("expo-file-system", () =>
   require("./harness/media-fabric").createExpoFileSystemMock(),
 );
-jest.mock("../../../bridge/NativeAirhopVoice", () => {
+jest.mock("@bridge/NativeAirhopVoice", () => {
   const { createNativeVoiceMock } = require("./harness/media-fabric");
   const built = createNativeVoiceMock();
   const mod = built.module as Record<string, unknown>;
@@ -42,7 +42,7 @@ jest.mock("../../../bridge/NativeAirhopVoice", () => {
 import {
   encodeFilePacket,
   MAX_SENT_IMAGE_BYTES,
-} from "../../../core/mesh/bitchat-file-packet";
+} from "@core/mesh/bitchat-file-packet";
 import {
   decodePacket,
   encodePacket,
@@ -50,7 +50,7 @@ import {
   PacketType,
   signPacket,
   type Packet,
-} from "../../../core/mesh/packet-codec";
+} from "@core/mesh/packet-codec";
 import { BitchatActor } from "./harness/bitchat-actor";
 import { SimDevice, type DeviceSpec } from "./harness/device";
 import {

@@ -4,41 +4,28 @@
 // Read-only: it describes what a channel is and who is in it. Default channels
 // add a protocol lock notice; a location channel adds a bookmark toggle.
 
+import { GROUP_MAX_MEMBERS } from "@core/mesh/group-protocol";
+import { relayDisplayHost } from "@core/nostr/geo-relay";
 import { Feather, MaterialCommunityIcons } from "@expo/vector-icons";
-import * as Clipboard from "expo-clipboard";
-import React, { useEffect, useMemo, useRef, useState } from "react";
-import {
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from "react-native";
-import { GROUP_MAX_MEMBERS } from "../../core/mesh/group-protocol";
-import { relayDisplayHost } from "../../core/nostr/geo-relay";
-import { t, useT, useTPlural, type TranslationKey } from "../../i18n";
+import { t, useT, useTPlural, type TranslationKey } from "@i18n";
 import {
   geohashLevelName,
   isGeoChannel,
   isManualGeoChannel,
   manualGeohashOf,
   type GeoParticipant,
-} from "../../services/geohash-channel-service";
-import { getMeshService } from "../../services/mesh-service";
-import { showAlert } from "../../store/alert-store";
-import { useChannelMembersStore } from "../../store/channel-members-store";
-import { useChatStore } from "../../store/chat-store";
-import { useGeohashBookmarksStore } from "../../store/geohash-bookmarks-store";
-import { useGroupStore } from "../../store/group-store";
-import { usePeerStore } from "../../store/peer-store";
-import {
-  placeNameKey,
-  usePlaceNamesStore,
-} from "../../store/place-names-store";
-import { useSettingsStore } from "../../store/settings-store";
-import Avatar from "../../ui/components/avatar";
-import BottomSheet from "../../ui/components/bottom-sheet";
+} from "@services/geohash-channel-service";
+import { getMeshService } from "@services/mesh-service";
+import { showAlert } from "@store/alert-store";
+import { useChannelMembersStore } from "@store/channel-members-store";
+import { useChatStore } from "@store/chat-store";
+import { useGeohashBookmarksStore } from "@store/geohash-bookmarks-store";
+import { useGroupStore } from "@store/group-store";
+import { usePeerStore } from "@store/peer-store";
+import { placeNameKey, usePlaceNamesStore } from "@store/place-names-store";
+import { useSettingsStore } from "@store/settings-store";
+import Avatar from "@ui/components/avatar";
+import BottomSheet from "@ui/components/bottom-sheet";
 import {
   DISABLED_OPACITY,
   FontFamily,
@@ -49,9 +36,19 @@ import {
   Radius,
   Spacing,
   useThemeColors,
-} from "../../ui/theme";
-import { acknowledged } from "../../utils/haptics";
-import { peerIDToUsername } from "../../utils/username";
+} from "@ui/theme";
+import { acknowledged } from "@utils/haptics";
+import { peerIDToUsername } from "@utils/username";
+import * as Clipboard from "expo-clipboard";
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import {
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from "react-native";
 
 // Protocol-defined default channels. Read-only, cannot be left.
 const DEFAULT_CHANNEL_NAMES = new Set([

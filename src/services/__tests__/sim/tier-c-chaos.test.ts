@@ -22,29 +22,29 @@ jest.mock("react-native/Libraries/EventEmitter/RCTDeviceEventEmitter", () =>
     require("./harness/event-router") as { routerModule: () => unknown }
   ).routerModule(),
 );
-jest.mock("../../../bridge/NativeAirhopBLE", () => {
+jest.mock("@bridge/NativeAirhopBLE", () => {
   const shim = require("../lifecycle/harness/bridge-shim") as {
     bleBridge: unknown;
   };
   return { __esModule: true, default: shim.bleBridge };
 });
-jest.mock("../../../bridge/NativeAirhopWiFi", () => {
+jest.mock("@bridge/NativeAirhopWiFi", () => {
   const shim = require("../lifecycle/harness/bridge-shim") as {
     wifiBridge: unknown;
   };
   return { __esModule: true, default: shim.wifiBridge };
 });
 
-import { ed25519, x25519 } from "@noble/curves/ed25519.js";
-import { sha256 } from "@noble/hashes/sha2.js";
-import { bytesToHex } from "@noble/hashes/utils.js";
 import {
   encodePacket,
   Flags,
   PacketType,
   signPacket,
   type Packet,
-} from "../../../core/mesh/packet-codec";
+} from "@core/mesh/packet-codec";
+import { ed25519, x25519 } from "@noble/curves/ed25519.js";
+import { sha256 } from "@noble/hashes/sha2.js";
+import { bytesToHex } from "@noble/hashes/utils.js";
 import { SimDevice, type DeviceSpec } from "./harness/device";
 import {
   badgeMatchesThreads,

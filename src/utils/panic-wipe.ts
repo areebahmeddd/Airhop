@@ -13,39 +13,39 @@
 // After this call the app is left in an empty, first-run state.
 // A restart will trigger key regeneration at next launch.
 
-import { createMMKV, deleteMMKV } from "react-native-mmkv";
-import NativeAirhopTor from "../bridge/NativeAirhopTor";
-import { wipeAllSecrets } from "../core/crypto/keychain";
-import { teardownTorState } from "../core/nostr/tor-teardown-handle";
-import { wipeCacheDirectory } from "../services/file-transfer-service";
-import { clearLocationCache } from "../services/location-service";
-import { dismissAllNotifications } from "../services/notification-service";
+import NativeAirhopTor from "@bridge/NativeAirhopTor";
+import { wipeAllSecrets } from "@core/crypto/keychain";
+import { teardownTorState } from "@core/nostr/tor-teardown-handle";
+import { wipeCacheDirectory } from "@services/file-transfer-service";
+import { clearLocationCache } from "@services/location-service";
+import { dismissAllNotifications } from "@services/notification-service";
 import {
   setNutzapRebinder,
   stopNutzapWatcher,
-} from "../services/nutzap-watcher-handle";
-import { resetWalletService } from "../services/wallet-service";
-import { useActivityStore } from "../store/activity-store";
-import { useBlockedStore } from "../store/blocked-store";
-import { useBoardStore } from "../store/board-store";
-import { useChannelMembersStore } from "../store/channel-members-store";
-import { dropPendingChatPersistence, useChatStore } from "../store/chat-store";
-import { useContactsStore } from "../store/contacts-store";
-import { useGeohashBookmarksStore } from "../store/geohash-bookmarks-store";
-import { clearOwedGroupStates } from "../store/group-invite-outbox";
-import { useGroupStore } from "../store/group-store";
-import { useMeshStateStore } from "../store/mesh-state-store";
-import { useNoticesStore } from "../store/notices-store";
-import { useOutboxStore } from "../store/outbox-store";
-import { usePeerStore } from "../store/peer-store";
-import { usePlaceNamesStore } from "../store/place-names-store";
-import { useSettingsStore } from "../store/settings-store";
-import { useTransferStore } from "../store/transfer-store";
+} from "@services/nutzap-watcher-handle";
+import { resetWalletService } from "@services/wallet-service";
+import { useActivityStore } from "@store/activity-store";
+import { useBlockedStore } from "@store/blocked-store";
+import { useBoardStore } from "@store/board-store";
+import { useChannelMembersStore } from "@store/channel-members-store";
+import { dropPendingChatPersistence, useChatStore } from "@store/chat-store";
+import { useContactsStore } from "@store/contacts-store";
+import { useGeohashBookmarksStore } from "@store/geohash-bookmarks-store";
+import { clearOwedGroupStates } from "@store/group-invite-outbox";
+import { useGroupStore } from "@store/group-store";
+import { useMeshStateStore } from "@store/mesh-state-store";
+import { useNoticesStore } from "@store/notices-store";
+import { useOutboxStore } from "@store/outbox-store";
+import { usePeerStore } from "@store/peer-store";
+import { usePlaceNamesStore } from "@store/place-names-store";
+import { useSettingsStore } from "@store/settings-store";
+import { useTransferStore } from "@store/transfer-store";
 import {
   resetWalletStorage,
   useWalletStore,
   WALLET_STORAGE_ID,
-} from "../store/wallet-store";
+} from "@store/wallet-store";
+import { createMMKV, deleteMMKV } from "react-native-mmkv";
 import { bumpWipeGeneration } from "./wipe-generation";
 import { settleOr } from "./with-timeout";
 

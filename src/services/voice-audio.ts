@@ -13,15 +13,15 @@
 // a failure: the whole feature is an optimisation of a gesture that already
 // works.
 
-import { NativeEventEmitter, type EventSubscription } from "react-native";
-import NativeAirhopVoice from "../bridge/NativeAirhopVoice";
-import { base64ToBytes, bytesToBase64 } from "../core/encoding/base64";
+import NativeAirhopVoice from "@bridge/NativeAirhopVoice";
+import { base64ToBytes, bytesToBase64 } from "@core/encoding/base64";
 import type {
   AudioCaptureBackend,
   VoiceCodecId,
-} from "../core/mesh/voice-capture";
-import type { AudioPlaybackBackend } from "../core/mesh/voice-player";
-import { t } from "../i18n";
+} from "@core/mesh/voice-capture";
+import type { AudioPlaybackBackend } from "@core/mesh/voice-player";
+import { t } from "@i18n";
+import { NativeEventEmitter, type EventSubscription } from "react-native";
 
 const EVT_FRAME = "AirhopVoice.frame";
 const EVT_CAPTURE_ERROR = "AirhopVoice.captureError";

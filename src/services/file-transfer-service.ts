@@ -12,8 +12,6 @@
 //   Receive: FRAGMENT packets → FragmentManager reassembles the FILE_TRANSFER
 //            packet → decode TLV → validate MIME → cache file → ChatMessage
 
-import { bytesToHex, hexToBytes } from "@noble/hashes/utils.js";
-import * as FileSystem from "expo-file-system";
 import {
   decodeFilePacket,
   encodeFilePacket,
@@ -24,8 +22,8 @@ import {
   resolveMimeType,
   typeFromMime,
   wireFileName,
-} from "../core/mesh/bitchat-file-packet";
-import { fragmentPacket, MAX_BLE_FRAME } from "../core/mesh/fragment-manager";
+} from "@core/mesh/bitchat-file-packet";
+import { fragmentPacket, MAX_BLE_FRAME } from "@core/mesh/fragment-manager";
 import {
   BROADCAST_ID,
   encodePacket,
@@ -35,16 +33,18 @@ import {
   PacketType,
   signPacket,
   type Packet,
-} from "../core/mesh/packet-codec";
-import { t } from "../i18n";
-import { useChatStore, type ChatAttachment } from "../store/chat-store";
-import { useTransferStore } from "../store/transfer-store";
+} from "@core/mesh/packet-codec";
+import { t } from "@i18n";
+import { bytesToHex, hexToBytes } from "@noble/hashes/utils.js";
+import { useChatStore, type ChatAttachment } from "@store/chat-store";
+import { useTransferStore } from "@store/transfer-store";
 import {
   attachmentFailureMessage,
   AttachmentFailureNotifier,
   type AttachmentFailure,
-} from "../utils/attachment-failure";
-import { BRIDGE_CHANNEL, canSendMedia } from "../utils/media-policy";
+} from "@utils/attachment-failure";
+import { BRIDGE_CHANNEL, canSendMedia } from "@utils/media-policy";
+import * as FileSystem from "expo-file-system";
 
 // ---- Types ------------------------------------------------------------------
 

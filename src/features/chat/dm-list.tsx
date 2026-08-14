@@ -5,6 +5,33 @@
 // Channels list, so both chat surfaces manage conversations consistently.
 
 import { Feather, MaterialCommunityIcons } from "@expo/vector-icons";
+import { t, tPlural, useT } from "@i18n";
+import { getMeshService } from "@services/mesh-service";
+import { showAlert } from "@store/alert-store";
+import { useBlockedStore } from "@store/blocked-store";
+import { useChatStore } from "@store/chat-store";
+import { useContactsStore } from "@store/contacts-store";
+import { REACHABLE_TTL_MS, usePeerStore } from "@store/peer-store";
+import Avatar from "@ui/components/avatar";
+import BottomSheet from "@ui/components/bottom-sheet";
+import EmptyState from "@ui/components/empty-state";
+import {
+  Duration,
+  FontSize,
+  FontWeight,
+  MaxFontScale,
+  MIN_TOUCH,
+  Radius,
+  Spacing,
+  TAB_BAR_CLEARANCE,
+  useThemeColors,
+} from "@ui/theme";
+import { usePullRefreshColors } from "@ui/use-pull-refresh";
+import { sortConversationsByActivity } from "@utils/conversation-order";
+import { resolveDisplayName } from "@utils/display-name";
+import { formatListTimestamp } from "@utils/format";
+import { held } from "@utils/haptics";
+import { messagePreviewText } from "@utils/message-preview";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   FlatList,
@@ -18,33 +45,6 @@ import ReanimatedSwipeable, {
   type SwipeableMethods,
 } from "react-native-gesture-handler/ReanimatedSwipeable";
 import Animated, { FadeIn, LinearTransition } from "react-native-reanimated";
-import { t, tPlural, useT } from "../../i18n";
-import { getMeshService } from "../../services/mesh-service";
-import { showAlert } from "../../store/alert-store";
-import { useBlockedStore } from "../../store/blocked-store";
-import { useChatStore } from "../../store/chat-store";
-import { useContactsStore } from "../../store/contacts-store";
-import { REACHABLE_TTL_MS, usePeerStore } from "../../store/peer-store";
-import Avatar from "../../ui/components/avatar";
-import BottomSheet from "../../ui/components/bottom-sheet";
-import EmptyState from "../../ui/components/empty-state";
-import {
-  Duration,
-  FontSize,
-  FontWeight,
-  MaxFontScale,
-  MIN_TOUCH,
-  Radius,
-  Spacing,
-  TAB_BAR_CLEARANCE,
-  useThemeColors,
-} from "../../ui/theme";
-import { usePullRefreshColors } from "../../ui/use-pull-refresh";
-import { sortConversationsByActivity } from "../../utils/conversation-order";
-import { resolveDisplayName } from "../../utils/display-name";
-import { formatListTimestamp } from "../../utils/format";
-import { held } from "../../utils/haptics";
-import { messagePreviewText } from "../../utils/message-preview";
 import ContactInfoSheet from "./contact-info-sheet";
 
 // How long the pull-to-refresh spinner stays up. The refresh itself

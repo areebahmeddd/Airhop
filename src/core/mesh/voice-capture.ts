@@ -25,12 +25,7 @@
 // into a single VOICE_FRAME packet up to PTT_MAX_BURST_BYTES (210 bytes) so
 // the packet never needs BLE fragmentation.
 import { bytesToHex, randomBytes } from "@noble/hashes/utils.js";
-import {
-  Flags,
-  PacketType,
-  signPacket,
-  type Packet,
-} from "../mesh/packet-codec";
+import { Flags, PacketType, signPacket, type Packet } from "./packet-codec";
 
 // ---- Constants (per PUSH-TO-TALK-DESIGN.md / VoiceBurstPacket.swift) --------
 

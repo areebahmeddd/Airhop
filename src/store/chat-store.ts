@@ -1,10 +1,10 @@
 // Chat state: channels and messages.
 // MMKV-persisted so messages survive app restarts.
 
+import { MAX_CHANNEL_NAME } from "@utils/deep-link";
 import { createMMKV } from "react-native-mmkv";
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
-import { MAX_CHANNEL_NAME } from "../utils/deep-link";
 import { useActivityStore } from "./activity-store";
 import { useChannelMembersStore } from "./channel-members-store";
 

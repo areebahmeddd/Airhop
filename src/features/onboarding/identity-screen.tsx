@@ -3,12 +3,9 @@
 // the OS Keychain. The loading animation reassures the user that something
 // real is happening without exposing cryptographic jargon.
 
-import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { Animated, Easing, StyleSheet, Text, View } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
-import { generateIdentity, saveIdentity } from "../../core/crypto/identity";
-import { useT, type TranslationKey } from "../../i18n";
-import PrimaryButton from "../../ui/components/primary-button";
+import { generateIdentity, saveIdentity } from "@core/crypto/identity";
+import { useT, type TranslationKey } from "@i18n";
+import PrimaryButton from "@ui/components/primary-button";
 import {
   FontFamily,
   FontSize,
@@ -16,7 +13,10 @@ import {
   Radius,
   Spacing,
   useThemeColors,
-} from "../../ui/theme";
+} from "@ui/theme";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { Animated, Easing, StyleSheet, Text, View } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 
 // Diameter of the keygen spinner ring. Named so the radius below cannot drift
 // out of step with it and quietly stop being a circle.

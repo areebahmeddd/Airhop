@@ -7,14 +7,14 @@
 // and groups we are invited to via a creator-signed GroupStatePayload the caller
 // has already verified (upsertFromState). A newer epoch replaces an older one.
 
-import { bytesToHex, hexToBytes } from "@noble/hashes/utils.js";
-import { createMMKV } from "react-native-mmkv";
-import { create } from "zustand";
 import {
   type BitchatGroup,
   type GroupMember,
   type GroupStatePayload,
-} from "../core/mesh/group-protocol";
+} from "@core/mesh/group-protocol";
+import { bytesToHex, hexToBytes } from "@noble/hashes/utils.js";
+import { createMMKV } from "react-native-mmkv";
+import { create } from "zustand";
 
 interface StoredMember {
   fingerprint: string;

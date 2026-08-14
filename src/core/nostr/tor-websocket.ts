@@ -10,12 +10,12 @@
 // ready-state constants. It is not a full WHATWG WebSocket (no addEventListener,
 // no binaryType), which is fine because nostr-tools never uses those.
 
-import type { EventSubscription } from "react-native";
 import {
   AirhopTorSocketNative,
   subscribeTorSocket,
   type TorSocketEvent,
-} from "../../bridge/NativeAirhopTorSocket";
+} from "@bridge/NativeAirhopTorSocket";
+import type { EventSubscription } from "react-native";
 
 // Per-process unique id source. A plain counter is enough for uniqueness within
 // one app run and, unlike a random id, is fully deterministic.

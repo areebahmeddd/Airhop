@@ -19,7 +19,7 @@
 const mockStartWiFi = jest.fn<Promise<void>, []>();
 const mockStopWiFi = jest.fn<Promise<void>, []>();
 
-jest.mock("../../bridge/NativeAirhopWiFi", () => ({
+jest.mock("@bridge/NativeAirhopWiFi", () => ({
   __esModule: true,
   default: {
     startWiFi: () => mockStartWiFi(),

@@ -14,17 +14,17 @@
 // and src/utils/ble-permissions.ts:34-120, whose fine-location requirement and
 // grant/deny/blocked handling are reproduced against the OS model.
 
+import type { Identity } from "@core/crypto/identity";
 import { ed25519, x25519 } from "@noble/curves/ed25519.js";
 import { sha256 } from "@noble/hashes/sha2.js";
 import { bytesToHex } from "@noble/hashes/utils.js";
+import { useMeshStateStore } from "@store/mesh-state-store";
 import { DeviceEventEmitter } from "react-native";
-import type { Identity } from "../../../../core/crypto/identity";
-import { useMeshStateStore } from "../../../../store/mesh-state-store";
 // The real type, not a copy: the annotation below only guards against drift if
 // it points at production. This file redeclared the interface and annotated
 // against its own copy, which is how the literal kept a `needsPreciseLocation`
 // field after the real one dropped it.
-import type { BlePermissionResult } from "../../../../utils/ble-permissions";
+import type { BlePermissionResult } from "@utils/ble-permissions";
 import {
   destroyMeshService,
   getMeshService,

@@ -26,7 +26,7 @@
 // unit reads worse than either alone. Prose numbers, the ones inside a
 // translated sentence, get no such override and follow the locale.
 
-import { getLanguage, t } from "../i18n";
+import { getLanguage, t } from "@i18n";
 
 // Milliseconds in a day, for the calendar-distance arithmetic below.
 const DAY_MS = 86_400_000;

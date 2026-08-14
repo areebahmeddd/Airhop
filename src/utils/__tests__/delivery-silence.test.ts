@@ -13,7 +13,7 @@
 // inbox asks for them with no lower time bound, so a peer returning after three
 // weeks really does receive everything.
 
-import type { ChatMessage } from "../../store/chat-store";
+import type { ChatMessage } from "@store/chat-store";
 import { DELIVERY_SILENCE_MS, unconfirmedSince } from "../delivery-silence";
 
 const NOW = 1_700_000_000_000;

@@ -7,7 +7,7 @@
 // the truth table matters: notify in the background, stay quiet on the chat you
 // are reading, never notify for your own messages or local system notices.
 
-import type { ChatMessage } from "../../store/chat-store";
+import type { ChatMessage } from "@store/chat-store";
 import {
   attachmentSummary,
   isDirectMessage,

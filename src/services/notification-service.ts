@@ -12,13 +12,13 @@
 // small amount of module-level state the policy needs: whether the app is
 // foregrounded, and which conversation is currently open.
 
+import { t } from "@i18n";
+import type { ChatMessage } from "@store/chat-store";
+import { useSettingsStore } from "@store/settings-store";
+import { channelLabel } from "@utils/chat-display-name";
 import * as Haptics from "expo-haptics";
 import * as Notifications from "expo-notifications";
 import { Platform } from "react-native";
-import { t } from "../i18n";
-import type { ChatMessage } from "../store/chat-store";
-import { useSettingsStore } from "../store/settings-store";
-import { channelLabel } from "../utils/chat-display-name";
 import {
   NEARBY_COOLDOWN_MS,
   nearbyNotificationContent,

@@ -10,15 +10,12 @@
 // valid peer or contact link because the sheet is named "join" would be a
 // dead end for no reason. What the link will do is stated before you commit.
 
+import { isValidChannelKey } from "@core/mesh/channel-crypto";
 import { Feather } from "@expo/vector-icons";
-import * as Clipboard from "expo-clipboard";
-import { useMemo, useState } from "react";
-import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
-import { isValidChannelKey } from "../../core/mesh/channel-crypto";
-import { t, useT } from "../../i18n";
-import { applyAirhopLink } from "../../services/link-router";
-import { showAlert } from "../../store/alert-store";
-import BottomSheet from "../../ui/components/bottom-sheet";
+import { t, useT } from "@i18n";
+import { applyAirhopLink } from "@services/link-router";
+import { showAlert } from "@store/alert-store";
+import BottomSheet from "@ui/components/bottom-sheet";
 import {
   FontFamily,
   FontSize,
@@ -27,9 +24,12 @@ import {
   Radius,
   Spacing,
   useThemeColors,
-} from "../../ui/theme";
-import { parseAirhopLink } from "../../utils/deep-link";
-import { resolveDisplayName } from "../../utils/display-name";
+} from "@ui/theme";
+import { parseAirhopLink } from "@utils/deep-link";
+import { resolveDisplayName } from "@utils/display-name";
+import * as Clipboard from "expo-clipboard";
+import { useMemo, useState } from "react";
+import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 
 interface Props {
   visible: boolean;

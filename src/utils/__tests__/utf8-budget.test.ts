@@ -10,7 +10,7 @@
 import {
   PRIVATE_MESSAGE_MAX_CONTENT_BYTES,
   encodePrivateMessagePacket,
-} from "../../core/mesh/noise-payload";
+} from "@core/mesh/noise-payload";
 import { truncateToUtf8Bytes, utf8ByteLength } from "../utf8-budget";
 
 describe("utf8ByteLength", () => {

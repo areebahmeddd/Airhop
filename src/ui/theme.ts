@@ -5,12 +5,9 @@
 //
 // Rule: if a color does not communicate information, it should not exist.
 
+import { useSettingsStore, type ThemePreference } from "@store/settings-store";
 import { useMemo } from "react";
 import { useColorScheme, type ColorSchemeName } from "react-native";
-import {
-  useSettingsStore,
-  type ThemePreference,
-} from "../store/settings-store";
 import { MONO_FONTS } from "./fonts";
 
 export const Colors = {

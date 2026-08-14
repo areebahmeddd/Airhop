@@ -63,13 +63,13 @@ jest.mock("nostr-tools/pool", () => ({
 // VPN-watch calls in setTorActive are optional on the method, not just the
 // module. subscribeVpnLost returns null here for the same reason the real one
 // does when the module is absent: there is nothing to subscribe to.
-jest.mock("../../../bridge/NativeAirhopBLE", () => ({
+jest.mock("@bridge/NativeAirhopBLE", () => ({
   __esModule: true,
   default: {},
   subscribeVpnLost: () => null,
 }));
 
-jest.mock("../../../bridge/NativeAirhopTor", () => ({
+jest.mock("@bridge/NativeAirhopTor", () => ({
   __esModule: true,
   default: {
     startTor: () => mockStartTor(),
@@ -88,18 +88,18 @@ jest.mock("../../../bridge/NativeAirhopTor", () => ({
 }));
 
 // Arti is present in this build, which is what makes the iOS path reachable.
-jest.mock("../../../bridge/NativeAirhopTorSocket", () => ({
+jest.mock("@bridge/NativeAirhopTorSocket", () => ({
   __esModule: true,
   isTorSocketNativeAvailable: () => true,
   AirhopTorSocketNative: {},
   subscribeTorSocket: jest.fn(),
 }));
 
-jest.mock("../../../services/mesh-service", () => ({
+jest.mock("@services/mesh-service", () => ({
   getMeshService: () => ({ restartNostr: mockRestartNostr }),
 }));
 
-jest.mock("../../../store/mesh-state-store", () => ({
+jest.mock("@store/mesh-state-store", () => ({
   useMeshStateStore: {
     getState: () => ({
       setTorActive: mockSetTorActive,
@@ -108,7 +108,7 @@ jest.mock("../../../store/mesh-state-store", () => ({
   },
 }));
 
-jest.mock("../../../store/settings-store", () => ({
+jest.mock("@store/settings-store", () => ({
   useSettingsStore: {
     getState: () => ({
       get torEnabled() {

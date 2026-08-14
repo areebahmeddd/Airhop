@@ -17,12 +17,7 @@ import { hmac } from "@noble/hashes/hmac.js";
 import { sha256 } from "@noble/hashes/sha2.js";
 import { bytesToHex, hexToBytes } from "@noble/hashes/utils.js";
 import { noiseXOpen, noiseXSeal } from "../crypto/noise-x";
-import {
-  Flags,
-  PacketType,
-  signPacket,
-  type Packet,
-} from "../mesh/packet-codec";
+import { Flags, PacketType, signPacket, type Packet } from "./packet-codec";
 
 // Constants per PROTOCOLS.md section 6. Every value here matches bitchat's
 // CourierStore.Limits and CourierEnvelope, because a carrier applies its own

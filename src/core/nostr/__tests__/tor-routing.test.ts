@@ -35,7 +35,7 @@ jest.mock("nostr-tools/pool", () => ({
 // Delegating wrappers rather than the mocks themselves: this factory runs when
 // tor-routing is first imported, and imports are hoisted above the `const`
 // declarations above, so referencing them directly would capture `undefined`.
-jest.mock("../../../bridge/NativeAirhopBLE", () => ({
+jest.mock("@bridge/NativeAirhopBLE", () => ({
   __esModule: true,
   default: {
     getTorProxyPort: () => mockGetTorProxyPort(),
@@ -49,29 +49,29 @@ jest.mock("../../../bridge/NativeAirhopBLE", () => ({
 }));
 
 // Android has no embedded Arti yet, which is what this module must cope with.
-jest.mock("../../../bridge/NativeAirhopTor", () => ({
+jest.mock("@bridge/NativeAirhopTor", () => ({
   __esModule: true,
   default: null,
 }));
 
-jest.mock("../../../bridge/NativeAirhopTorSocket", () => ({
+jest.mock("@bridge/NativeAirhopTorSocket", () => ({
   __esModule: true,
   isTorSocketNativeAvailable: () => false,
   AirhopTorSocketNative: undefined,
   subscribeTorSocket: jest.fn(),
 }));
 
-jest.mock("../../../services/mesh-service", () => ({
+jest.mock("@services/mesh-service", () => ({
   getMeshService: () => ({ restartNostr: mockRestartNostr }),
 }));
 
-jest.mock("../../../store/mesh-state-store", () => ({
+jest.mock("@store/mesh-state-store", () => ({
   useMeshStateStore: {
     getState: () => ({ setTorActive: mockSetTorActive }),
   },
 }));
 
-jest.mock("../../../store/settings-store", () => ({
+jest.mock("@store/settings-store", () => ({
   useSettingsStore: {
     getState: () => ({
       get torEnabled() {

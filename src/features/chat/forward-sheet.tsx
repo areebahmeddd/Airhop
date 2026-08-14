@@ -7,14 +7,12 @@
 // Groups, Location (geohash) cells, and Direct messages.
 
 import { Feather } from "@expo/vector-icons";
-import React, { useEffect, useMemo, useRef, useState } from "react";
-import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
-import { t, useT, type TranslationKey } from "../../i18n";
-import { isManualGeoChannel } from "../../services/geohash-channel-service";
-import { showAlert } from "../../store/alert-store";
-import { useChatStore } from "../../store/chat-store";
-import Avatar from "../../ui/components/avatar";
-import BottomSheet from "../../ui/components/bottom-sheet";
+import { t, useT, type TranslationKey } from "@i18n";
+import { isManualGeoChannel } from "@services/geohash-channel-service";
+import { showAlert } from "@store/alert-store";
+import { useChatStore } from "@store/chat-store";
+import Avatar from "@ui/components/avatar";
+import BottomSheet from "@ui/components/bottom-sheet";
 import {
   DISABLED_OPACITY,
   FontSize,
@@ -22,10 +20,12 @@ import {
   Radius,
   Spacing,
   useThemeColors,
-} from "../../ui/theme";
-import { channelLabel } from "../../utils/chat-display-name";
-import { resolveDisplayName } from "../../utils/display-name";
-import { mediaBlockedReason } from "../../utils/media-policy";
+} from "@ui/theme";
+import { channelLabel } from "@utils/chat-display-name";
+import { resolveDisplayName } from "@utils/display-name";
+import { mediaBlockedReason } from "@utils/media-policy";
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 
 interface Props {
   visible: boolean;

@@ -7,17 +7,14 @@
 // Remove contact / Block actions.
 
 import { Feather } from "@expo/vector-icons";
-import * as Clipboard from "expo-clipboard";
-import React, { useMemo, useState } from "react";
-import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
-import { useT } from "../../i18n";
-import { getMeshService } from "../../services/mesh-service";
-import { useChatStore } from "../../store/chat-store";
-import { useContactsStore } from "../../store/contacts-store";
-import { useMeshStateStore } from "../../store/mesh-state-store";
-import { REACHABLE_TTL_MS, usePeerStore } from "../../store/peer-store";
-import Avatar from "../../ui/components/avatar";
-import BottomSheet from "../../ui/components/bottom-sheet";
+import { useT } from "@i18n";
+import { getMeshService } from "@services/mesh-service";
+import { useChatStore } from "@store/chat-store";
+import { useContactsStore } from "@store/contacts-store";
+import { useMeshStateStore } from "@store/mesh-state-store";
+import { REACHABLE_TTL_MS, usePeerStore } from "@store/peer-store";
+import Avatar from "@ui/components/avatar";
+import BottomSheet from "@ui/components/bottom-sheet";
 import {
   FontFamily,
   FontSize,
@@ -28,18 +25,14 @@ import {
   Radius,
   Spacing,
   useThemeColors,
-} from "../../ui/theme";
-import {
-  resolveDisplayName,
-  resolvePeerOwnName,
-} from "../../utils/display-name";
-import { formatLongDate } from "../../utils/format";
-import { acknowledged } from "../../utils/haptics";
-import {
-  isNostrId,
-  NOSTR_ID_PREFIX,
-  peerIDToUsername,
-} from "../../utils/username";
+} from "@ui/theme";
+import { resolveDisplayName, resolvePeerOwnName } from "@utils/display-name";
+import { formatLongDate } from "@utils/format";
+import { acknowledged } from "@utils/haptics";
+import { isNostrId, NOSTR_ID_PREFIX, peerIDToUsername } from "@utils/username";
+import * as Clipboard from "expo-clipboard";
+import React, { useMemo, useState } from "react";
+import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import VerifyContactScanner from "../contacts/verify-contact-scanner";
 import SendEcashSheet from "../wallet/send-ecash-sheet";
 
