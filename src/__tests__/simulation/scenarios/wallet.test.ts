@@ -20,24 +20,24 @@ jest.mock("react-native/Libraries/EventEmitter/RCTDeviceEventEmitter", () =>
   // is the only interception point that reliably catches every path by which
   // mesh-service and the native modules reach the emitter.
   (
-    require("./harness/event-router") as { routerModule: () => unknown }
+    require("../harness/event-router") as { routerModule: () => unknown }
   ).routerModule(),
 );
 jest.mock("@bridge/NativeAirhopBLE", () => {
-  const shim = require("../lifecycle/harness/bridge-shim");
+  const shim = require("../../harness/bridge-shim");
   return { __esModule: true, default: shim.bleBridge };
 });
 jest.mock("@bridge/NativeAirhopWiFi", () => {
-  const shim = require("../lifecycle/harness/bridge-shim");
+  const shim = require("../../harness/bridge-shim");
   return { __esModule: true, default: shim.wifiBridge };
 });
 
-import { SimDevice, type DeviceSpec } from "./harness/device";
-import { noCrashes } from "./harness/invariants";
-import { MintFabric, simInvoice } from "./harness/mint-fabric";
-import { RadioFabric } from "./harness/radio-fabric";
-import { RelayFabric } from "./harness/relay-fabric";
-import { Scenario, waitFor } from "./harness/scenario";
+import { SimDevice, type DeviceSpec } from "../harness/device";
+import { noCrashes } from "../harness/invariants";
+import { MintFabric, simInvoice } from "../harness/mint-fabric";
+import { RadioFabric } from "../harness/radio-fabric";
+import { RelayFabric } from "../harness/relay-fabric";
+import { Scenario, waitFor } from "../harness/scenario";
 
 // Driving a fake clock while awaiting real app promises costs real seconds.
 jest.setTimeout(120_000);

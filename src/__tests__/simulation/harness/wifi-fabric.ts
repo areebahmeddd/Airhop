@@ -17,7 +17,7 @@
 // to get wrong: the two protocols cannot talk to each other. An Android phone
 // and an iPhone never form a WiFi link, however close they stand.
 
-import type { Platform } from "../../lifecycle/harness/os";
+import type { Platform } from "../../harness/os";
 import type { World } from "./world";
 
 // What the fabric needs from a device to wire it up. Structural, so a SimDevice

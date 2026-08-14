@@ -15,24 +15,24 @@ jest.mock("react-native/Libraries/EventEmitter/RCTDeviceEventEmitter", () =>
   // is the only interception point that reliably catches every path by which
   // mesh-service and the native modules reach the emitter.
   (
-    require("./harness/event-router") as { routerModule: () => unknown }
+    require("../harness/event-router") as { routerModule: () => unknown }
   ).routerModule(),
 );
 jest.mock("@bridge/NativeAirhopBLE", () => {
-  const shim = require("../lifecycle/harness/bridge-shim");
+  const shim = require("../../harness/bridge-shim");
   return { __esModule: true, default: shim.bleBridge };
 });
 jest.mock("@bridge/NativeAirhopWiFi", () => {
-  const shim = require("../lifecycle/harness/bridge-shim");
+  const shim = require("../../harness/bridge-shim");
   return { __esModule: true, default: shim.wifiBridge };
 });
 // Each of these factories re-runs inside every sandboxed phone's module
 // registry, so each phone gets its own disk and its own microphone.
 jest.mock("expo-file-system", () =>
-  require("./harness/media-fabric").createExpoFileSystemMock(),
+  require("../harness/media-fabric").createExpoFileSystemMock(),
 );
 jest.mock("@bridge/NativeAirhopVoice", () => {
-  const { createNativeVoiceMock } = require("./harness/media-fabric");
+  const { createNativeVoiceMock } = require("../harness/media-fabric");
   const built = createNativeVoiceMock();
   const mod = built.module as Record<string, unknown>;
   mod.__record = built.record;
@@ -51,17 +51,17 @@ import {
   signPacket,
   type Packet,
 } from "@core/mesh/wire/packet-codec";
-import { BitchatActor } from "./harness/bitchat-actor";
-import { SimDevice, type DeviceSpec } from "./harness/device";
+import { BitchatActor } from "../harness/bitchat-actor";
+import { SimDevice, type DeviceSpec } from "../harness/device";
 import {
   exactlyOnce,
   noCrashes,
   noForgedSenders,
   noOversizedFrames,
-} from "./harness/invariants";
-import { media, sameBytes } from "./harness/media-fabric";
-import { RadioFabric } from "./harness/radio-fabric";
-import { Scenario, waitFor } from "./harness/scenario";
+} from "../harness/invariants";
+import { media, sameBytes } from "../harness/media-fabric";
+import { RadioFabric } from "../harness/radio-fabric";
+import { Scenario, waitFor } from "../harness/scenario";
 
 const B64 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 

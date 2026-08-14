@@ -15,8 +15,8 @@ import {
   type Packet,
 } from "@core/mesh/wire/packet-codec";
 import { bytesToHex } from "@noble/hashes/utils.js";
-import type { RadioPort } from "../../lifecycle/harness/android-native";
-import type { Platform } from "../../lifecycle/harness/os";
+import type { RadioPort } from "../../harness/android-native";
+import type { Platform } from "../../harness/os";
 import type { RadioNode } from "./radio-fabric";
 import type { World } from "./world";
 

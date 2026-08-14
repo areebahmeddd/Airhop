@@ -27,29 +27,29 @@
 jest.mock("expo-location", () => ({}));
 jest.mock("react-native/Libraries/EventEmitter/RCTDeviceEventEmitter", () =>
   (
-    require("./harness/event-router") as { routerModule: () => unknown }
+    require("../harness/event-router") as { routerModule: () => unknown }
   ).routerModule(),
 );
 jest.mock("@bridge/NativeAirhopBLE", () => {
-  const shim = require("../lifecycle/harness/bridge-shim");
+  const shim = require("../../harness/bridge-shim");
   return { __esModule: true, default: shim.bleBridge };
 });
 jest.mock("@bridge/NativeAirhopWiFi", () => {
-  const shim = require("../lifecycle/harness/bridge-shim");
+  const shim = require("../../harness/bridge-shim");
   return { __esModule: true, default: shim.wifiBridge };
 });
 // W-F04 sends a real attachment, and a received file is only recorded once it
 // has been written to this phone's disk.
 jest.mock("expo-file-system", () =>
-  require("./harness/media-fabric").createExpoFileSystemMock(),
+  require("../harness/media-fabric").createExpoFileSystemMock(),
 );
 
-import { SimDevice, type DeviceSpec } from "./harness/device";
-import { noCrashes } from "./harness/invariants";
-import { media, sameBytes } from "./harness/media-fabric";
-import { RadioFabric } from "./harness/radio-fabric";
-import { Scenario, waitFor } from "./harness/scenario";
-import { WifiFabric } from "./harness/wifi-fabric";
+import { SimDevice, type DeviceSpec } from "../harness/device";
+import { noCrashes } from "../harness/invariants";
+import { media, sameBytes } from "../harness/media-fabric";
+import { RadioFabric } from "../harness/radio-fabric";
+import { Scenario, waitFor } from "../harness/scenario";
+import { WifiFabric } from "../harness/wifi-fabric";
 
 jest.setTimeout(120_000);
 

@@ -20,7 +20,7 @@
 // well, so a bug in BOTH implementations still has something to fail against.
 
 import { hashToCurve as cashuHashToCurve } from "@cashu/cashu-ts";
-import { hashToCurve, hexToBytes } from "../mint-fabric";
+import { hashToCurve, hexToBytes } from "./mint-fabric";
 
 // https://github.com/cashubtc/nuts/blob/main/00.md#hash_to_curve
 const NUT00_ZERO = [

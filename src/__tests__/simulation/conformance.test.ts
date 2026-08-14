@@ -30,13 +30,13 @@ jest.mock("react-native/Libraries/EventEmitter/RCTDeviceEventEmitter", () =>
   ).routerModule(),
 );
 jest.mock("@bridge/NativeAirhopBLE", () => {
-  const shim = require("../lifecycle/harness/bridge-shim") as {
+  const shim = require("../harness/bridge-shim") as {
     bleBridge: unknown;
   };
   return { __esModule: true, default: shim.bleBridge };
 });
 jest.mock("@bridge/NativeAirhopWiFi", () => {
-  const shim = require("../lifecycle/harness/bridge-shim") as {
+  const shim = require("../harness/bridge-shim") as {
     wifiBridge: unknown;
   };
   return { __esModule: true, default: shim.wifiBridge };
@@ -59,14 +59,14 @@ import {
   MAX_EVENT_AGE_SECONDS as BRIDGE_MAX_EVENT_AGE_SECONDS,
   PARTICIPANT_TTL_MS as BRIDGE_PARTICIPANT_TTL_MS,
   UPLINK_EVENTS_PER_MINUTE_PER_DEPOSITOR as BRIDGE_UPLINK_PER_DEPOSITOR,
-} from "../../bridge-service";
+} from "@services/bridge-service";
 import {
   DOWNLINK_EVENTS_PER_MINUTE as GATEWAY_DOWNLINK_PER_MINUTE,
   CARRIER_MAX_EVENT_AGE_SECONDS as GATEWAY_MAX_EVENT_AGE_SECONDS,
   MAX_QUEUED_UPLINKS as GATEWAY_MAX_QUEUED,
   MAX_QUEUED_UPLINKS_PER_DEPOSITOR as GATEWAY_MAX_QUEUED_PER_DEPOSITOR,
   UPLINK_EVENTS_PER_MINUTE_PER_DEPOSITOR as GATEWAY_UPLINK_PER_DEPOSITOR,
-} from "../../mesh-service";
+} from "@services/mesh-service";
 import { BitchatActor } from "./harness/bitchat-actor";
 import { SimDevice } from "./harness/device";
 import { noCrashes } from "./harness/invariants";

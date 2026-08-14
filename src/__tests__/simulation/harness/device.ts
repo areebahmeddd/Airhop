@@ -25,17 +25,10 @@
 //     that is a finding about the app, not a gap in the harness.
 
 import type { Identity } from "@core/crypto/identity";
-import type {
-  AndroidBleModule,
-  RadioPort,
-} from "../../lifecycle/harness/android-native";
-import type { WifiNativeModule } from "../../lifecycle/harness/bridge-shim";
-import type { IosBleModule } from "../../lifecycle/harness/ios-native";
-import type {
-  AndroidPermission,
-  DeviceOS,
-  Platform,
-} from "../../lifecycle/harness/os";
+import type { AndroidBleModule, RadioPort } from "../../harness/android-native";
+import type { WifiNativeModule } from "../../harness/bridge-shim";
+import type { IosBleModule } from "../../harness/ios-native";
+import type { AndroidPermission, DeviceOS, Platform } from "../../harness/os";
 import { eventRouter } from "./event-router";
 import type { VoiceRecord } from "./media-fabric";
 import type { RelayFabric } from "./relay-fabric";
@@ -44,12 +37,12 @@ import type { World } from "./world";
 
 // Paths are resolved from THIS file, and re-resolved inside each sandbox.
 const P = {
-  os: "../../lifecycle/harness/os",
-  android: "../../lifecycle/harness/android-native",
-  ios: "../../lifecycle/harness/ios-native",
-  shim: "../../lifecycle/harness/bridge-shim",
-  appShell: "../../lifecycle/harness/app-shell",
-  mesh: "../../../mesh-service",
+  os: "../../harness/os",
+  android: "../../harness/android-native",
+  ios: "../../harness/ios-native",
+  shim: "../../harness/bridge-shim",
+  appShell: "../../harness/app-shell",
+  mesh: "@services/mesh-service",
   chatStore: "@store/chat-store",
   peerStore: "@store/peer-store",
   meshStateStore: "@store/mesh-state-store",
@@ -66,8 +59,8 @@ const P = {
   nostrPool: "nostr-tools/pool",
   fileSystem: "expo-file-system",
   location: "expo-location",
-  walletService: "../../../wallet-service",
-  ecashTransfer: "../../../payment-router",
+  walletService: "@services/wallet-service",
+  ecashTransfer: "@services/payment-router",
   voiceBridge: "@bridge/NativeAirhopVoice",
 } as const;
 
@@ -1406,15 +1399,13 @@ function buildSandbox(
     // and by DeviceOS.runOnThread for every native-to-JS callback.
     const androidMod = require(
       P.android,
-    ) as typeof import("../../lifecycle/harness/android-native");
+    ) as typeof import("../../harness/android-native");
 
-    const osMod = require(P.os) as typeof import("../../lifecycle/harness/os");
-    const shim = require(
-      P.shim,
-    ) as typeof import("../../lifecycle/harness/bridge-shim");
+    const osMod = require(P.os) as typeof import("../../harness/os");
+    const shim = require(P.shim) as typeof import("../../harness/bridge-shim");
     const appShell = require(
       P.appShell,
-    ) as typeof import("../../lifecycle/harness/app-shell");
+    ) as typeof import("../../harness/app-shell");
 
     const os = new osMod.DeviceOS({
       platform: spec.platform,
@@ -1439,9 +1430,7 @@ function buildSandbox(
       android.initialize();
       native = android;
     } else {
-      const mod = require(
-        P.ios,
-      ) as typeof import("../../lifecycle/harness/ios-native");
+      const mod = require(P.ios) as typeof import("../../harness/ios-native");
       native = new mod.IosBleModule(os);
     }
     shim.installNativeBle(native);

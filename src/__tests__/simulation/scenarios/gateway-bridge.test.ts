@@ -19,30 +19,30 @@
 
 jest.mock("expo-location", () =>
   (
-    require("./harness/location-fabric") as { expoLocationMock: () => unknown }
+    require("../harness/location-fabric") as { expoLocationMock: () => unknown }
   ).expoLocationMock(),
 );
 jest.mock("react-native/Libraries/EventEmitter/RCTDeviceEventEmitter", () =>
   (
-    require("./harness/event-router") as { routerModule: () => unknown }
+    require("../harness/event-router") as { routerModule: () => unknown }
   ).routerModule(),
 );
 jest.mock("@bridge/NativeAirhopBLE", () => {
-  const shim = require("../lifecycle/harness/bridge-shim") as {
+  const shim = require("../../harness/bridge-shim") as {
     bleBridge: unknown;
   };
   return { __esModule: true, default: shim.bleBridge };
 });
 jest.mock("@bridge/NativeAirhopWiFi", () => {
-  const shim = require("../lifecycle/harness/bridge-shim") as {
+  const shim = require("../../harness/bridge-shim") as {
     wifiBridge: unknown;
   };
   return { __esModule: true, default: shim.wifiBridge };
 });
 
 import { finalizeEvent, generateSecretKey } from "nostr-tools";
-import { BitchatActor } from "./harness/bitchat-actor";
-import { SimDevice, type DeviceSpec } from "./harness/device";
+import { BitchatActor } from "../harness/bitchat-actor";
+import { SimDevice, type DeviceSpec } from "../harness/device";
 import {
   badgeMatchesThreads,
   exactlyOnce,
@@ -50,11 +50,11 @@ import {
   noDuplicateText,
   noForgedSenders,
   unreadCoherent,
-} from "./harness/invariants";
-import { locations, PLACES } from "./harness/location-fabric";
-import { RadioFabric } from "./harness/radio-fabric";
-import { RelayFabric } from "./harness/relay-fabric";
-import { Scenario, waitForCoarse } from "./harness/scenario";
+} from "../harness/invariants";
+import { locations, PLACES } from "../harness/location-fabric";
+import { RadioFabric } from "../harness/radio-fabric";
+import { RelayFabric } from "../harness/relay-fabric";
+import { Scenario, waitForCoarse } from "../harness/scenario";
 
 jest.setTimeout(240_000);
 

@@ -14,7 +14,7 @@
 // scan start three milliseconds after device A's advertise stopped. So every
 // device writes into one ordered trace tagged with who it was.
 
-import type { TraceEvent } from "../../lifecycle/harness/os";
+import type { TraceEvent } from "../../harness/os";
 import { eventRouter } from "./event-router";
 import { Prng } from "./prng";
 

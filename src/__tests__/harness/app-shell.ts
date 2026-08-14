@@ -29,8 +29,8 @@ import {
   destroyMeshService,
   getMeshService,
   initMeshService,
-} from "../../../mesh-service";
-import { applyPresence } from "../../../presence-service";
+} from "@services/mesh-service";
+import { applyPresence } from "@services/presence-service";
 import type { AndroidPermission, DeviceOS } from "./os";
 
 // Deterministic identity: a scenario's trace should differ only because of the

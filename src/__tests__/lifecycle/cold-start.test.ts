@@ -11,27 +11,27 @@ jest.mock("expo-location", () => ({}));
 jest.mock("@bridge/NativeAirhopBLE", () => ({
   __esModule: true,
   get default() {
-    return require("./harness/bridge-shim").bleBridge;
+    return require("../harness/bridge-shim").bleBridge;
   },
 }));
 jest.mock("@bridge/NativeAirhopWiFi", () => ({
   __esModule: true,
   get default() {
-    return require("./harness/bridge-shim").wifiBridge;
+    return require("../harness/bridge-shim").wifiBridge;
   },
 }));
 
+import { applyPresence } from "@services/presence-service";
 import { computeMeshBanners, useMeshStateStore } from "@store/mesh-state-store";
 import { usePeerStore } from "@store/peer-store";
 import { useSettingsStore } from "@store/settings-store";
-import { applyPresence } from "../../presence-service";
-import { AndroidBleModule } from "./harness/android-native";
-import { AppShell } from "./harness/app-shell";
-import { installNativeBle } from "./harness/bridge-shim";
-import { IosBleModule } from "./harness/ios-native";
-import { installOfflineWebSocket } from "./harness/offline-socket";
-import { DeviceOS } from "./harness/os";
-import { Verdict } from "./harness/verdict";
+import { AndroidBleModule } from "../harness/android-native";
+import { AppShell } from "../harness/app-shell";
+import { installNativeBle } from "../harness/bridge-shim";
+import { IosBleModule } from "../harness/ios-native";
+import { installOfflineWebSocket } from "../harness/offline-socket";
+import { DeviceOS } from "../harness/os";
+import { Verdict } from "../harness/verdict";
 
 // No test here needs a relay; without this the pool opens real sockets to public
 // relays from CI and leaves them open when the test ends.

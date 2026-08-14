@@ -48,8 +48,8 @@ import {
 import { ed25519, x25519 } from "@noble/curves/ed25519.js";
 import { sha256 } from "@noble/hashes/sha2.js";
 import { bytesToHex } from "@noble/hashes/utils.js";
-import type { RadioPort } from "../../lifecycle/harness/android-native";
-import type { Platform } from "../../lifecycle/harness/os";
+import type { RadioPort } from "../../harness/android-native";
+import type { Platform } from "../../harness/os";
 import type { RadioNode } from "./radio-fabric";
 import type { World } from "./world";
 

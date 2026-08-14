@@ -25,8 +25,8 @@
 //     hunting do not need it.
 
 import { MAX_BLE_FRAME } from "@core/mesh/routing/fragment-manager";
-import type { RadioPort } from "../../lifecycle/harness/android-native";
-import type { Platform } from "../../lifecycle/harness/os";
+import type { RadioPort } from "../../harness/android-native";
+import type { Platform } from "../../harness/os";
 import type { Prng } from "./prng";
 import type { World } from "./world";
 

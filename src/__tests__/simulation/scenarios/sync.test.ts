@@ -17,15 +17,15 @@ jest.mock("react-native/Libraries/EventEmitter/RCTDeviceEventEmitter", () =>
   // is the only interception point that reliably catches every path by which
   // mesh-service and the native modules reach the emitter.
   (
-    require("./harness/event-router") as { routerModule: () => unknown }
+    require("../harness/event-router") as { routerModule: () => unknown }
   ).routerModule(),
 );
 jest.mock("@bridge/NativeAirhopBLE", () => {
-  const shim = require("../lifecycle/harness/bridge-shim");
+  const shim = require("../../harness/bridge-shim");
   return { __esModule: true, default: shim.bleBridge };
 });
 jest.mock("@bridge/NativeAirhopWiFi", () => {
-  const shim = require("../lifecycle/harness/bridge-shim");
+  const shim = require("../../harness/bridge-shim");
   return { __esModule: true, default: shim.wifiBridge };
 });
 
@@ -43,10 +43,10 @@ import {
   encodeMeshPublicPayload,
   MESH_PUBLIC_CHANNEL,
 } from "@core/router/message-router";
-import { SimDevice } from "./harness/device";
-import { noCrashes } from "./harness/invariants";
-import { RadioFabric } from "./harness/radio-fabric";
-import { Scenario, waitFor, waitForCoarse } from "./harness/scenario";
+import { SimDevice } from "../harness/device";
+import { noCrashes } from "../harness/invariants";
+import { RadioFabric } from "../harness/radio-fabric";
+import { Scenario, waitFor, waitForCoarse } from "../harness/scenario";
 
 let scenario: Scenario | null = null;
 

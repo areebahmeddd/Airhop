@@ -10,29 +10,29 @@
 jest.mock("expo-location", () => ({}));
 jest.mock("react-native/Libraries/EventEmitter/RCTDeviceEventEmitter", () =>
   (
-    require("./harness/event-router") as { routerModule: () => unknown }
+    require("../harness/event-router") as { routerModule: () => unknown }
   ).routerModule(),
 );
 jest.mock("@bridge/NativeAirhopBLE", () => {
-  const shim = require("../lifecycle/harness/bridge-shim");
+  const shim = require("../../harness/bridge-shim");
   return { __esModule: true, default: shim.bleBridge };
 });
 jest.mock("@bridge/NativeAirhopWiFi", () => {
-  const shim = require("../lifecycle/harness/bridge-shim");
+  const shim = require("../../harness/bridge-shim");
   return { __esModule: true, default: shim.wifiBridge };
 });
 
-import { SimDevice } from "./harness/device";
+import { SimDevice } from "../harness/device";
 import {
   badgeMatchesThreads,
   exactlyOnce,
   noCrashes,
   noDuplicateText,
   noForgedSenders,
-} from "./harness/invariants";
-import { RadioFabric } from "./harness/radio-fabric";
-import { RelayNode } from "./harness/relay-node";
-import { Scenario, waitFor } from "./harness/scenario";
+} from "../harness/invariants";
+import { RadioFabric } from "../harness/radio-fabric";
+import { RelayNode } from "../harness/relay-node";
+import { Scenario, waitFor } from "../harness/scenario";
 
 jest.setTimeout(240_000);
 
