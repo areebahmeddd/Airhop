@@ -18,7 +18,7 @@ import {
   SettingSwitch,
   SubHeader,
   useSharedStyles,
-} from "../shared";
+} from "../settings-primitives";
 
 import { t, useT } from "@i18n";
 interface Props {

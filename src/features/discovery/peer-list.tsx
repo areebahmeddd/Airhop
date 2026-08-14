@@ -49,7 +49,7 @@ import {
   TextInput,
   View,
 } from "react-native";
-import QrScanScreen from "../contacts/qr-scan-screen";
+import QrScanScreen from "../contacts/add-contact-screen";
 import RadarView from "./radar-view";
 import RelayGlyph from "./relay-glyph";
 

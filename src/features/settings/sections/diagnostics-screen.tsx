@@ -31,7 +31,7 @@ import {
   SettingRow,
   SubHeader,
   useSharedStyles,
-} from "../shared";
+} from "../settings-primitives";
 
 interface Props {
   onBack: () => void;

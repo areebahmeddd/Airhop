@@ -36,7 +36,7 @@ import { isNostrId, NOSTR_ID_PREFIX, peerIDToUsername } from "@utils/username";
 import * as Clipboard from "expo-clipboard";
 import React, { useMemo, useState } from "react";
 import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
-import VerifyContactScanner from "../contacts/verify-contact-scanner";
+import VerifyContactScanner from "../contacts/verify-contact-screen";
 import SendEcashSheet from "../wallet/send-ecash-sheet";
 
 interface Props {

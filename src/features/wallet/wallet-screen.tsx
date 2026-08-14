@@ -122,7 +122,7 @@ import {
   View,
 } from "react-native";
 import QRCode from "react-native-qrcode-svg";
-import TokenScanner, { type ScanTarget } from "./token-scanner";
+import TokenScanner, { type ScanTarget } from "./token-scan-sheet";
 
 // The four quick actions triggered from the App-level header.
 export type WalletAction = "receive" | "send" | "zap" | "addMint";

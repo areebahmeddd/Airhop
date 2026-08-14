@@ -47,7 +47,7 @@ import {
   SettingSwitch,
   SubHeader,
   useSharedStyles,
-} from "../shared";
+} from "../settings-primitives";
 
 import { useT, type TranslationKey } from "@i18n";
 interface Props {

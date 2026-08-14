@@ -77,7 +77,11 @@ import StorageScreen from "./sections/storage-screen";
 import SupportScreen from "./sections/support-screen";
 import TermsScreen from "./sections/terms-screen";
 import VersionScreen from "./sections/version-screen";
-import { GroupDivider, SettingLinkRow, useSharedStyles } from "./shared";
+import {
+  GroupDivider,
+  SettingLinkRow,
+  useSharedStyles,
+} from "./settings-primitives";
 
 // Share sheets are fire-and-forget: a rejection (the OS refusing to present, a
 // provider crash) is not something the user can act on, and leaving it

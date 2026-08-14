@@ -33,7 +33,7 @@ import {
   SettingRow,
   SettingSwitch,
   useSharedStyles,
-} from "./shared";
+} from "./settings-primitives";
 
 type ToggleKey = "liveVoice" | "background" | "tor" | "gateway" | "bridge";
 

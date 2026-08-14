@@ -15,7 +15,11 @@ import {
   Text,
   View,
 } from "react-native";
-import { GroupDivider, SubHeader, useSharedStyles } from "../shared";
+import {
+  GroupDivider,
+  SubHeader,
+  useSharedStyles,
+} from "../settings-primitives";
 
 interface Props {
   onBack: () => void;

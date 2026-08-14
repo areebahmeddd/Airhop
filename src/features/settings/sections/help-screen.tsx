@@ -7,7 +7,7 @@ import {
   SettingLinkRow,
   SubHeader,
   useSharedStyles,
-} from "../shared";
+} from "../settings-primitives";
 
 import { NEW_ISSUE_URL } from "@data/app-info";
 import { useT } from "@i18n";

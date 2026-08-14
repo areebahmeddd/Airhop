@@ -22,7 +22,7 @@ import {
 } from "@ui/theme";
 import React, { useMemo } from "react";
 import { Linking, ScrollView, StyleSheet, Text, View } from "react-native";
-import { SubHeader, useSharedStyles } from "../shared";
+import { SubHeader, useSharedStyles } from "../settings-primitives";
 
 // A block is either a paragraph string or a bulleted list of strings.
 // Any string (paragraph or bullet item) may contain **bold** spans and

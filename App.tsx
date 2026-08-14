@@ -22,7 +22,7 @@ import NotificationCenter from "@features/chat/notification-center";
 import { StartNewSheet } from "@features/chat/start-new-sheet";
 import PeerList from "@features/discovery/peer-list";
 import IdentityScreen from "@features/onboarding/identity-screen";
-import PermissionPrimer from "@features/onboarding/permission-primer";
+import PermissionPrimer from "@features/onboarding/permission-primer-sheet";
 import UsernameScreen from "@features/onboarding/username-screen";
 import WelcomeScreen from "@features/onboarding/welcome-screen";
 import ProfileScreen from "@features/settings/profile-screen";

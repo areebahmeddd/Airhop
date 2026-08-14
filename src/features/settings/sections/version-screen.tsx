@@ -44,7 +44,7 @@ import {
   Text,
   View,
 } from "react-native";
-import { SubHeader, useSharedStyles } from "../shared";
+import { SubHeader, useSharedStyles } from "../settings-primitives";
 
 interface Props {
   onBack: () => void;
