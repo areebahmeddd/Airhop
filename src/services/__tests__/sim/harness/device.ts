@@ -67,7 +67,7 @@ const P = {
   fileSystem: "expo-file-system",
   location: "expo-location",
   walletService: "../../../wallet-service",
-  ecashTransfer: "../../../ecash-transfer",
+  ecashTransfer: "../../../payment-router",
   voiceBridge: "@bridge/NativeAirhopVoice",
 } as const;
 

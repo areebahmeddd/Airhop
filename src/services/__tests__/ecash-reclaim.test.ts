@@ -32,7 +32,7 @@ import {
   type StoredProof,
   type WalletTx,
 } from "@store/wallet-store";
-import { reclaimTokenSend } from "../ecash-transfer";
+import { reclaimTokenSend } from "../payment-router";
 
 const MINT = "https://mint.example.com";
 const PEER = "aabbccdd00112233";

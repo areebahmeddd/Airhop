@@ -24,7 +24,6 @@ import {
   setAudioForPlayback,
   setAudioForRecording,
 } from "@services/audio-session";
-import { reportWalletError } from "@services/ecash-transfer";
 import {
   adoptIntoAttachmentCache,
   AttachmentTooLargeError,
@@ -37,9 +36,10 @@ import {
   manualGeohashOf,
   type GeoParticipant,
 } from "@services/geohash-channel-service";
-import { prepareImageForSend } from "@services/image-compress";
+import { prepareImageForSend } from "@services/image-compression";
 import { hasLocationPermission } from "@services/location-service";
 import { getMeshService } from "@services/mesh-service";
+import { reportWalletError } from "@services/payment-router";
 import { hostOf, receiveToken } from "@services/wallet-service";
 import { useActivityStore } from "@store/activity-store";
 import { showAlert } from "@store/alert-store";

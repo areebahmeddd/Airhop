@@ -27,7 +27,7 @@ import {
   getMeshService,
   initMeshService,
 } from "../../mesh-service";
-import { applyPresence } from "../../presence";
+import { applyPresence } from "../../presence-service";
 import { AndroidBleModule } from "./harness/android-native";
 import { AppShell, makeIdentity } from "./harness/app-shell";
 import { installNativeBle } from "./harness/bridge-shim";

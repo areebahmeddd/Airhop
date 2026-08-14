@@ -16,14 +16,6 @@
 import NativeAirhopTor from "@bridge/NativeAirhopTor";
 import { wipeAllSecrets } from "@core/crypto/keychain";
 import { teardownTorState } from "@core/nostr/tor-teardown-handle";
-import { wipeCacheDirectory } from "@services/file-transfer-service";
-import { clearLocationCache } from "@services/location-service";
-import { dismissAllNotifications } from "@services/notification-service";
-import {
-  setNutzapRebinder,
-  stopNutzapWatcher,
-} from "@services/nutzap-watcher-handle";
-import { resetWalletService } from "@services/wallet-service";
 import { useActivityStore } from "@store/activity-store";
 import { useBlockedStore } from "@store/blocked-store";
 import { useBoardStore } from "@store/board-store";
@@ -45,9 +37,14 @@ import {
   useWalletStore,
   WALLET_STORAGE_ID,
 } from "@store/wallet-store";
+import { settleOr } from "@utils/with-timeout";
 import { createMMKV, deleteMMKV } from "react-native-mmkv";
+import { wipeCacheDirectory } from "./file-transfer-service";
+import { clearLocationCache } from "./location-service";
+import { dismissAllNotifications } from "./notification-service";
+import { setNutzapRebinder, stopNutzapWatcher } from "./nutzap-watcher-handle";
+import { resetWalletService } from "./wallet-service";
 import { bumpWipeGeneration } from "./wipe-generation";
-import { settleOr } from "./with-timeout";
 
 // Ceiling on the two best-effort steps that run after the data is destroyed.
 // Long enough for a normal native round trip, short enough that the confirm

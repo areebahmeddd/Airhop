@@ -9,7 +9,7 @@ import { Feather } from "@expo/vector-icons";
 import { t, useT } from "@i18n";
 import { arrowForward } from "@i18n/layout";
 import { acknowledged } from "@platform/haptics";
-import { describePayResult, payPerson } from "@services/ecash-transfer";
+import { describePayResult, payPerson } from "@services/payment-router";
 import { showAlert } from "@store/alert-store";
 import { useBlockedStore } from "@store/blocked-store";
 import { useChatStore } from "@store/chat-store";

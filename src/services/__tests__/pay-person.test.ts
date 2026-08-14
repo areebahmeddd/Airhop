@@ -56,8 +56,8 @@ jest.mock("../mesh-service", () => ({
 
 import { useChatStore } from "@store/chat-store";
 import { useContactsStore } from "@store/contacts-store";
-import { payPerson } from "../ecash-transfer";
 import { getMeshService } from "../mesh-service";
+import { payPerson } from "../payment-router";
 import {
   findNutzapTarget,
   lockProofsForNutzap,

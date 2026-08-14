@@ -37,14 +37,14 @@ import { Feather } from "@expo/vector-icons";
 import { t, tPlural, useT, useTPlural } from "@i18n";
 import { textAlignEnd } from "@i18n/layout";
 import { acknowledged } from "@platform/haptics";
+import { getMeshService } from "@services/mesh-service";
 import {
   deliverTokenToPeer,
   describePayResult,
   describeRoute,
   payPerson,
   reclaimTokenSend,
-} from "@services/ecash-transfer";
-import { getMeshService } from "@services/mesh-service";
+} from "@services/payment-router";
 import {
   addMint as addMintService,
   claimLightningDeposit,

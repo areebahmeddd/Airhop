@@ -207,7 +207,7 @@ import {
   isLiveVoiceAvailable,
   NativeAudioCapture,
   NativeAudioPlayback,
-} from "./voice-audio";
+} from "./voice-audio-backend";
 import { WiFiController } from "./wifi-controller";
 
 // ---- Constants --------------------------------------------------------------

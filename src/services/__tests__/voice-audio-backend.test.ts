@@ -9,7 +9,7 @@
 // open. The audio itself needs devices; these are the decisions around it.
 
 import NativeAirhopVoice from "@bridge/NativeAirhopVoice";
-import { NativeAudioPlayback } from "../voice-audio";
+import { NativeAudioPlayback } from "../voice-audio-backend";
 
 jest.mock("@bridge/NativeAirhopVoice", () => ({
   __esModule: true,

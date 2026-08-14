@@ -22,7 +22,7 @@ import { computeMeshBanners, useMeshStateStore } from "@store/mesh-state-store";
 import { useOutboxStore } from "@store/outbox-store";
 import { usePeerStore } from "@store/peer-store";
 import { getMeshService } from "../../mesh-service";
-import { applyPresence } from "../../presence";
+import { applyPresence } from "../../presence-service";
 import { AndroidBleModule } from "./harness/android-native";
 import { AppShell } from "./harness/app-shell";
 import { installNativeBle } from "./harness/bridge-shim";

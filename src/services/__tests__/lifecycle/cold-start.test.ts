@@ -24,7 +24,7 @@ jest.mock("@bridge/NativeAirhopWiFi", () => ({
 import { computeMeshBanners, useMeshStateStore } from "@store/mesh-state-store";
 import { usePeerStore } from "@store/peer-store";
 import { useSettingsStore } from "@store/settings-store";
-import { applyPresence } from "../../presence";
+import { applyPresence } from "../../presence-service";
 import { AndroidBleModule } from "./harness/android-native";
 import { AppShell } from "./harness/app-shell";
 import { installNativeBle } from "./harness/bridge-shim";

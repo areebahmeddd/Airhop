@@ -17,7 +17,7 @@ import {
   describePayResult,
   payPerson,
   type PayResult,
-} from "@services/ecash-transfer";
+} from "@services/payment-router";
 import { showAlert } from "@store/alert-store";
 import BottomSheet from "@ui/components/bottom-sheet";
 import {

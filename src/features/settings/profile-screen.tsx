@@ -15,7 +15,8 @@ import {
 import { acknowledged } from "@platform/haptics";
 import { ensurePermission } from "@platform/permissions";
 import { destroyMeshService, getMeshService } from "@services/mesh-service";
-import { applyPresence } from "@services/presence";
+import { panicWipe } from "@services/panic-wipe";
+import { applyPresence } from "@services/presence-service";
 import { showAlert } from "@store/alert-store";
 import {
   useMeshStateStore,
@@ -40,7 +41,6 @@ import {
   type ResolvedTheme,
 } from "@ui/theme";
 import { peerInviteLink } from "@utils/deep-link";
-import { panicWipe } from "@utils/panic-wipe";
 import * as Clipboard from "expo-clipboard";
 import * as FileSystem from "expo-file-system";
 import * as Haptics from "expo-haptics";

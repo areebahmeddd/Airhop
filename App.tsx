@@ -64,7 +64,7 @@ import {
   setNutzapRebinder,
   setNutzapWatcher,
 } from "@services/nutzap-watcher-handle";
-import { applyPresence } from "@services/presence";
+import { applyPresence } from "@services/presence-service";
 import {
   initWalletService,
   publishOwnNutzapInfo,
@@ -72,6 +72,10 @@ import {
   reconcileIfDue,
   startNutzapWatcher,
 } from "@services/wallet-service";
+import {
+  currentWipeGeneration,
+  isCurrentWipeGeneration,
+} from "@services/wipe-generation";
 import { useActivityStore } from "@store/activity-store";
 import { showAlert } from "@store/alert-store";
 import {
@@ -119,10 +123,6 @@ import { mentionsNickname } from "@utils/mentions";
 import { messagePreviewText } from "@utils/message-preview";
 import { sumUnread } from "@utils/unread";
 import { peerIDToUsername } from "@utils/username";
-import {
-  currentWipeGeneration,
-  isCurrentWipeGeneration,
-} from "@utils/wipe-generation";
 import { settleOr, withTimeout } from "@utils/with-timeout";
 import { NavigationBar } from "expo-navigation-bar";
 import { StatusBar } from "expo-status-bar";

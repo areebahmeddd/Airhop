@@ -4,12 +4,12 @@
 
 // Imports come first in source; Babel hoists jest.mock() calls above them.
 import { wipeAllSecrets } from "@core/crypto/keychain";
-import { wipeCacheDirectory } from "@services/file-transfer-service";
-import { dismissAllNotifications } from "@services/notification-service";
-import { setNutzapWatcher } from "@services/nutzap-watcher-handle";
 import { useChatStore } from "@store/chat-store";
 import { useMeshStateStore } from "@store/mesh-state-store";
 import { WALLET_STORAGE_ID } from "@store/wallet-store";
+import { wipeCacheDirectory } from "../file-transfer-service";
+import { dismissAllNotifications } from "../notification-service";
+import { setNutzapWatcher } from "../nutzap-watcher-handle";
 import { MMKV_STORE_IDS, panicWipe } from "../panic-wipe";
 import {
   currentWipeGeneration,
@@ -27,14 +27,14 @@ jest.mock("@core/crypto/keychain", () => ({
 
 // The cache wipe touches expo-file-system; mock the whole module so the test
 // stays a pure unit and can assert the wipe was invoked.
-jest.mock("@services/file-transfer-service", () => ({
+jest.mock("../file-transfer-service", () => ({
   wipeCacheDirectory: jest.fn(),
 }));
 
 // Dismissing the tray reaches expo-notifications, which registers push
 // listeners at import. Mocked so this stays a unit test of the wipe and does not
 // depend on a notifications runtime.
-jest.mock("@services/notification-service", () => ({
+jest.mock("../notification-service", () => ({
   dismissAllNotifications: jest.fn().mockResolvedValue(undefined),
 }));
 

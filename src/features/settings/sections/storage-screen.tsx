@@ -16,10 +16,10 @@ import {
   getAttachmentCacheBytes,
 } from "@services/file-transfer-service";
 import { getMeshService } from "@services/mesh-service";
+import { MMKV_STORE_IDS } from "@services/panic-wipe";
 import { showAlert } from "@store/alert-store";
 import { WALLET_STORAGE_ID } from "@store/wallet-store";
 import { formatBytes } from "@utils/format";
-import { MMKV_STORE_IDS } from "@utils/panic-wipe";
 import React, { useCallback, useMemo, useState } from "react";
 import { ScrollView, Text, View } from "react-native";
 import { createMMKV } from "react-native-mmkv";
