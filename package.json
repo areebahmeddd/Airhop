@@ -112,7 +112,19 @@
       "^@noble/hashes/(.+?)(\\.js)?$": "<rootDir>/node_modules/@noble/hashes/$1.js",
       "^@noble/ciphers/(.+?)(\\.js)?$": "<rootDir>/node_modules/@noble/ciphers/$1.js",
       "^expo-secure-store$": "<rootDir>/src/__mocks__/expo-secure-store.js",
-      "^expo-audio$": "<rootDir>/src/__mocks__/expo-audio.js"
+      "^expo-audio$": "<rootDir>/src/__mocks__/expo-audio.js",
+      "^@app/(.*)$": "<rootDir>/src/app/$1",
+      "^@bridge/(.*)$": "<rootDir>/src/bridge/$1",
+      "^@core/(.*)$": "<rootDir>/src/core/$1",
+      "^@data/(.*)$": "<rootDir>/src/data/$1",
+      "^@features/(.*)$": "<rootDir>/src/features/$1",
+      "^@i18n$": "<rootDir>/src/i18n",
+      "^@i18n/(.*)$": "<rootDir>/src/i18n/$1",
+      "^@platform/(.*)$": "<rootDir>/src/platform/$1",
+      "^@services/(.*)$": "<rootDir>/src/services/$1",
+      "^@store/(.*)$": "<rootDir>/src/store/$1",
+      "^@ui/(.*)$": "<rootDir>/src/ui/$1",
+      "^@utils/(.*)$": "<rootDir>/src/utils/$1"
     }
   }
 }

@@ -1,5 +1,5 @@
-import { MESH_PUBLIC_CHANNEL } from "../core/router/message-router";
-import { t } from "../i18n";
+import { MESH_PUBLIC_CHANNEL } from "@core/router/message-router";
+import { t } from "@i18n";
 // Where media (photos, videos, files, voice notes) may be sent.
 //
 // Media rides the BLE file-transfer path only: it is flood-broadcast over
