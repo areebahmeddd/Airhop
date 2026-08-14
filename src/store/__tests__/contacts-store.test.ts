@@ -77,7 +77,7 @@ describe("setNostrPubkey", () => {
 // A name only you see, kept apart from the one they announce.
 //
 // The two used to be one field, so renaming somebody destroyed the only copy of
-// what they call themselves — and the contact sheet has to show both, or a label
+// what they call themselves, and the contact sheet has to show both, or a label
 // the user chose could quietly stand in for the identity they verified.
 describe("local nicknames", () => {
   it("shows your label over theirs, and keeps theirs readable", () => {

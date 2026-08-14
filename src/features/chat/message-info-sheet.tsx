@@ -12,25 +12,25 @@
 //           against and no membership to confirm anything with.
 
 import { MaterialCommunityIcons } from "@expo/vector-icons";
-import React, { useMemo } from "react";
-import { StyleSheet, Text, View } from "react-native";
-import { t, useT, useTPlural } from "../../i18n";
-import { useBlockedStore } from "../../store/blocked-store";
-import type { ChatMessage } from "../../store/chat-store";
-import { useGroupStore } from "../../store/group-store";
-import { reachablePeerIDs, usePeerStore } from "../../store/peer-store";
-import BottomSheet from "../../ui/components/bottom-sheet";
+import { t, useT, useTPlural } from "@i18n";
+import { useBlockedStore } from "@store/blocked-store";
+import type { ChatMessage } from "@store/chat-store";
+import { useGroupStore } from "@store/group-store";
+import { reachablePeerIDs, usePeerStore } from "@store/peer-store";
+import BottomSheet from "@ui/components/bottom-sheet";
 import {
   FontSize,
   FontWeight,
   Radius,
   Spacing,
   useThemeColors,
-} from "../../ui/theme";
-import { resolveDisplayName } from "../../utils/display-name";
-import { formatClockTime, formatShortDate } from "../../utils/format";
-import { groupReach, type GroupReach } from "../../utils/group-reach";
-import { messagePreviewText } from "../../utils/message-preview";
+} from "@ui/theme";
+import { formatClockTime, formatShortDate } from "@utils/format";
+import { groupReach, type GroupReach } from "@utils/group-reach";
+import { messagePreviewText } from "@utils/message-preview";
+import { resolveDisplayName } from "@utils/peer-display-name";
+import React, { useMemo } from "react";
+import { StyleSheet, Text, View } from "react-native";
 
 interface Props {
   message: ChatMessage | null;

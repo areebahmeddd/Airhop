@@ -20,11 +20,11 @@
 // The rest of these pin the rail choice itself, since "it went by radio" and
 // "it is locked to their key forever" are the same tap to the user.
 
-jest.mock("../../bridge/NativeAirhopBLE", () => ({
+jest.mock("@bridge/NativeAirhopBLE", () => ({
   __esModule: true,
   default: {},
 }));
-jest.mock("../../bridge/NativeAirhopWiFi", () => ({
+jest.mock("@bridge/NativeAirhopWiFi", () => ({
   __esModule: true,
   default: {},
 }));
@@ -54,10 +54,10 @@ jest.mock("../mesh-service", () => ({
   getMeshService: jest.fn(),
 }));
 
-import { useChatStore } from "../../store/chat-store";
-import { useContactsStore } from "../../store/contacts-store";
-import { payPerson } from "../ecash-transfer";
+import { useChatStore } from "@store/chat-store";
+import { useContactsStore } from "@store/contacts-store";
 import { getMeshService } from "../mesh-service";
+import { payPerson } from "../payment-router";
 import {
   findNutzapTarget,
   lockProofsForNutzap,

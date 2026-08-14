@@ -18,18 +18,18 @@
 // in the simulator, where `Platform.OS` is a single global shared by every
 // simulated phone. So it is covered here, where the platform can be moved.
 
-jest.mock("../../bridge/NativeAirhopBLE", () => ({
+jest.mock("@bridge/NativeAirhopBLE", () => ({
   __esModule: true,
   default: {},
 }));
-jest.mock("../../bridge/NativeAirhopWiFi", () => ({
+jest.mock("@bridge/NativeAirhopWiFi", () => ({
   __esModule: true,
   default: {},
 }));
 
+import { useMeshStateStore } from "@store/mesh-state-store";
+import { useSettingsStore } from "@store/settings-store";
 import { Platform } from "react-native";
-import { useMeshStateStore } from "../../store/mesh-state-store";
-import { useSettingsStore } from "../../store/settings-store";
 import { isMintNetworkBlocked } from "../wallet-service";
 
 function setPlatform(os: "ios" | "android"): void {

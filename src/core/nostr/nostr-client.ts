@@ -26,8 +26,6 @@ import {
   MAX_CUSTOM_RELAYS,
 } from "./geo-relay";
 
-// ---- Constants --------------------------------------------------------------
-
 // Maximum relays in the default pool (DM / gift-wrap traffic).
 const MAX_RELAY_COUNT = 5;
 
@@ -68,8 +66,6 @@ const MAX_PENDING_EVENTS = 4_000;
 // the queue so it keeps its place in line.
 const EOSE_MARKER = {} as Event;
 
-// ---- Types ------------------------------------------------------------------
-
 export interface NostrClientConfig {
   // Relay URLs to connect to (merged with default DM relays).
   relays?: string[];
@@ -86,8 +82,6 @@ export interface PublishResult {
 
 export type EventHandler = (event: Event) => void;
 export type EoseHandler = () => void;
-
-// ---- NostrClient ------------------------------------------------------------
 
 export class NostrClient {
   private readonly pool: SimplePool;
@@ -204,10 +198,9 @@ export class NostrClient {
     };
   }
 
-  // ---- Inbound pump ---------------------------------------------------------
   //
-  // Relay traffic arrives on a WebSocket callback, which means every subscriber
-  // handler used to run inline on the JS thread the instant an event landed. A
+  // Relay traffic arrives on a WebSocket callback, so without this every
+  // subscriber handler runs inline on the JS thread the instant an event lands. A
   // handler is not cheap here: it writes a zustand store (and so re-renders),
   // decrypts gift wraps, and walks the notices list. A burst - a cold start with
   // several cells backfilling at once, a busy cell, or simply a relay that
@@ -325,10 +318,10 @@ export class NostrClient {
 
   // Close all relay connections. ALL of them, not just the default set.
   //
-  // This used to be `pool.close(this.relays)`, which closes only the URLs it is
-  // handed. `this.relays` is the merged DM set, capped at five - so every socket
-  // opened through a per-call relay override was left behind: each geohash cell
-  // the user has opened, and every bridge rendezvous cell. Those are exactly the
+  // Not `pool.close(this.relays)`, which closes only the URLs it is handed.
+  // `this.relays` is the merged DM set, capped at five, so that leaves behind
+  // every socket opened through a per-call relay override: each geohash cell the
+  // user has opened, and every bridge rendezvous cell. Those are exactly the
   // relays that know the most about where somebody is.
   //
   // The consequences were all in the wrong direction. Turning the internet off
@@ -351,8 +344,6 @@ export class NostrClient {
     this.pending.length = 0;
   }
 }
-
-// ---- Helpers ----------------------------------------------------------------
 
 // Normalize relay URL: ensure it starts with wss:// or ws://, strip trailing slash.
 function normalizeRelayUrl(url: string): string | null {

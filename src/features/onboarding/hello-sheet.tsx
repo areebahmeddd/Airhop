@@ -6,14 +6,14 @@
 // built it, who did not, where bugs go, and where a kind word helps. Everything
 // else belongs elsewhere.
 
+import { APP_STORE_URL, GITHUB_URL, PLAY_STORE_URL } from "@data/app-info";
+import { useT } from "@i18n";
+import { useRichText } from "@i18n/rich-text";
+import BottomSheet from "@ui/components/bottom-sheet";
+import PrimaryButton from "@ui/components/primary-button";
+import { FontSize, FontWeight, Spacing, useThemeColors } from "@ui/theme";
 import React, { useMemo } from "react";
 import { Linking, Platform, StyleSheet, Text, View } from "react-native";
-import { APP_STORE_URL, GITHUB_URL, PLAY_STORE_URL } from "../../data/app-info";
-import { useT } from "../../i18n";
-import { useRichText } from "../../i18n/rich-text";
-import BottomSheet from "../../ui/components/bottom-sheet";
-import PrimaryButton from "../../ui/components/primary-button";
-import { FontSize, FontWeight, Spacing, useThemeColors } from "../../ui/theme";
 
 const EMAIL_ADDRESS = "hi@areeb.dev";
 const EMAIL_URL = `mailto:${EMAIL_ADDRESS}`;

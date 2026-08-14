@@ -10,20 +10,16 @@
 // EAS build, and this app isn't on EAS yet, so a fabricated number would
 // violate the "every row must be real" rule rather than satisfy it.
 
+import { APP_VERSION, GITHUB_URL, LATEST_RELEASE_PAGE } from "@data/app-info";
+import { useT } from "@i18n";
 import React from "react";
 import { Linking, ScrollView, Text, View } from "react-native";
-import {
-  APP_VERSION,
-  GITHUB_URL,
-  LATEST_RELEASE_PAGE,
-} from "../../../data/app-info";
-import { useT } from "../../../i18n";
 import {
   GroupDivider,
   SettingLinkRow,
   SubHeader,
   useSharedStyles,
-} from "../shared";
+} from "../settings-primitives";
 
 interface Props {
   onBack: () => void;

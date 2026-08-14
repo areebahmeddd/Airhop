@@ -1,6 +1,11 @@
 /**
  * @jest-environment node
  */
+// The name shown for a peer who has never told us one.
+//
+// Derived from the peer ID rather than stored, so every device shows the same
+// person the same name with nothing to sync. It must be total (any id yields a
+// name), stable (never changes for the same id), and never expose the raw id.
 import { isNostrId, nostrShortLabel, peerIDToUsername } from "../username";
 
 describe("peerIDToUsername", () => {
@@ -37,7 +42,7 @@ describe("peerIDToUsername", () => {
     expect(names.size).toBe(7);
   });
 
-  test("known vector: byte[0]=0x3a → adjective index 0x3a%128=58", () => {
+  test("known vector: byte[0]=0x3a -> adjective index 0x3a%128=58", () => {
     // 0x3a = 58. ADJECTIVES[58] is the adjective at index 58.
     // 0x9f = 159; 159 % 128 = 31. NOUNS[31] is at index 31.
     // We just verify the name is deterministic and formatted correctly.

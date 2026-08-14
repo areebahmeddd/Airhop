@@ -13,8 +13,27 @@
 // first, then newest. You can delete your own posts; a signed tombstone
 // outruns stale copies across the mesh and retracts the bridged note.
 
+import { isUrgent, type BoardPost } from "@core/mesh/wire/board-packet";
 import { Feather, MaterialCommunityIcons } from "@expo/vector-icons";
+import { t, useT, type TranslationKey } from "@i18n";
 import { bytesToHex } from "@noble/hashes/utils.js";
+import { getMeshService } from "@services/mesh-service";
+import { useBoardStore } from "@store/board-store";
+import {
+  matchesBridged,
+  noticeAuthor,
+  useLocationNotesStore,
+  type LocationNote,
+} from "@store/location-notes-store";
+import BottomSheet from "@ui/components/bottom-sheet";
+import {
+  FontSize,
+  FontWeight,
+  HIT_SLOP,
+  Radius,
+  Spacing,
+  useThemeColors,
+} from "@ui/theme";
 import { useEffect, useMemo, useState } from "react";
 import {
   Pressable,
@@ -24,25 +43,6 @@ import {
   TextInput,
   View,
 } from "react-native";
-import { isUrgent, type BoardPost } from "../../core/mesh/board-packet";
-import { t, useT, type TranslationKey } from "../../i18n";
-import { getMeshService } from "../../services/mesh-service";
-import { useBoardStore } from "../../store/board-store";
-import {
-  matchesBridged,
-  noticeAuthor,
-  useNoticesStore,
-  type LocationNote,
-} from "../../store/notices-store";
-import BottomSheet from "../../ui/components/bottom-sheet";
-import {
-  FontSize,
-  FontWeight,
-  HIT_SLOP,
-  Radius,
-  Spacing,
-  useThemeColors,
-} from "../../ui/theme";
 
 const CONTENT_MAX = 512;
 // days: 0 is the permanent (∞) option, offered only in a location cell (it is a
@@ -185,7 +185,7 @@ export function NoticesSheet({ visible, onClose, channel }: Props) {
   }, [visible]);
 
   const posts = useBoardStore((s) => s.posts);
-  const notesByGeohash = useNoticesStore((s) => s.notesByGeohash);
+  const notesByGeohash = useLocationNotesStore((s) => s.notesByGeohash);
 
   const scopeGeohash = scope === "here" && geohash !== null ? geohash : "";
   // Derived directly; the React Compiler memoizes it from the reads below.
@@ -509,8 +509,6 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       color: Colors.textSecondary,
     },
     urgentTextOn: { color: Colors.textInverse },
-    // Expiry: a connected segmented track (surface + border) with an accent
-    // thumb on the selected step. marginLeft:auto right-aligns it in Geo scope.
     expiryChips: {
       flexDirection: "row",
       marginStart: "auto",
@@ -532,9 +530,6 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       color: Colors.textSecondary,
     },
     chipTextActive: { color: Colors.textInverse },
-    // Sits between the chips and Post, so it reads as a consequence of the ∞
-    // step rather than a property of the sheet. Muted, not danger: this is a
-    // deliberate option, not a mistake.
     permanentNote: {
       flexDirection: "row",
       alignItems: "flex-start",

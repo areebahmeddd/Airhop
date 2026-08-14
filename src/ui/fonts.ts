@@ -6,9 +6,9 @@
 // never be silently mismapped the way a hand-written ternary would.
 
 import type { Feather } from "@expo/vector-icons";
+import type { TranslationKey } from "@i18n";
+import type { MonoFont } from "@store/settings-store";
 import type { ComponentProps } from "react";
-import type { TranslationKey } from "../i18n";
-import type { MonoFont } from "../store/settings-store";
 
 export interface MonoFontSpec {
   // The React Native `fontFamily` value. "monospace" is the OS built-in; the

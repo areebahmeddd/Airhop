@@ -15,7 +15,7 @@
 // moves `{terms}` wherever their language puts it, and the link goes with it.
 //
 // This is the same idea as react-i18next's <Trans>, minus the HTML-ish tag
-// parsing, which we do not need and which is the part that makes <Trans> hard
+// parsing, which is not needed here and is the part that makes <Trans> hard
 // to hand to a translator.
 
 import React from "react";
@@ -23,17 +23,15 @@ import { useT, type TranslationKey, type TranslationVars } from ".";
 
 const PLACEHOLDER = /\{(\w+)\}/g;
 
-/**
- * Renders a translated string with some placeholders filled by React nodes.
- *
- * Plain-text vars go in `vars` and are substituted as text; node vars go in
- * `nodes`. A placeholder with no match is left visible rather than blanked, so
- * a missing value shows up in a screenshot instead of reading as a dropped word.
- *
- * Returns a fragment, so the caller decides the wrapping <Text> and its style.
- * Nested <Text> inherits the parent's style on both platforms, which is what
- * makes an inline link work at all.
- */
+// Renders a translated string with some placeholders filled by React nodes.
+//
+// Plain-text vars go in `vars` and are substituted as text; node vars go in
+// `nodes`. A placeholder with no match is left visible rather than blanked, so
+// a missing value shows up in a screenshot instead of reading as a dropped word.
+//
+// Returns a fragment, so the caller decides the wrapping <Text> and its style.
+// Nested <Text> inherits the parent's style on both platforms, which is what
+// makes an inline link work at all.
 export function useRichText(
   key: TranslationKey,
   nodes: Record<string, React.ReactNode>,

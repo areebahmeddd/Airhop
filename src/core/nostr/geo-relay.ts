@@ -7,8 +7,6 @@
 // Nearest-relay selection uses the Haversine great-circle formula. The caller
 // provides GPS coordinates; this module returns the N nearest relay URLs.
 
-// ---- Types ------------------------------------------------------------------
-
 // Relays to publish/subscribe per geohash cell. Matches bitchat's
 // TransportConfig.nostrGeoRelayCount so both clients converge on the same set.
 // Canonical here rather than in each service, because NostrClient sizes its
@@ -27,8 +25,6 @@ export interface RelayEntry {
   lat: number; // decimal degrees
   lng: number; // decimal degrees
 }
-
-// ---- Geospatial math --------------------------------------------------------
 
 // Haversine distance in kilometres between two (lat, lng) points.
 export function haversineKm(
@@ -49,8 +45,6 @@ export function haversineKm(
 function toRad(deg: number): number {
   return (deg * Math.PI) / 180;
 }
-
-// ---- CSV parsing ------------------------------------------------------------
 
 // Parse the CSV format: "Relay URL,Latitude,Longitude" with a header row.
 // Invalid rows are silently skipped (attacker-controlled relay content).
@@ -79,15 +73,13 @@ export function parseRelaysCsv(csv: string): RelayEntry[] {
   return entries;
 }
 
-// ---- GeoRelayDirectory ------------------------------------------------------
-
 // The relays Airhop falls back on when it cannot pick something better.
 //
 // These serve two roles that want the same hosts for the same reason (widely
 // reachable, and reliably carrying NIP-59 gift-wraps): the geo fallback below,
-// and NostrClient's default DM pool. Declared once because they used to be two
-// hand-maintained literals of the same four hosts in two files, with nothing to
-// catch an edit landing on only one of them.
+// and NostrClient's default DM pool. Declared once because two hand-maintained
+// literals of the same four hosts give nothing to catch an edit landing on only
+// one of them.
 //
 // Coordinates matter only to the geo role. The DM role reads the URLs.
 //

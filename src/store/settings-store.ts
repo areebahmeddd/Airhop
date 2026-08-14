@@ -3,11 +3,11 @@
 // panic wipe (via reset()), so a wipe leaves a true first-run state with no
 // trace of the previous user's choices.
 
+import { MAX_CUSTOM_RELAYS, validateRelayUrl } from "@core/nostr/geo-relay";
+import type { BitcoinUnit } from "@core/payments/cashu";
 import { createMMKV } from "react-native-mmkv";
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
-import { MAX_CUSTOM_RELAYS, validateRelayUrl } from "../core/nostr/geo-relay";
-import type { BitcoinUnit } from "../core/payments/cashu";
 
 // "system" is the unset state, not a listed choice: until you pick a side the
 // app is whichever the phone is, and follows it when the phone changes. The
@@ -56,9 +56,8 @@ interface SettingsState {
   // in the background, and the cost is stated plainly on the row - messages
   // stop arriving until Airhop is opened again.
   //
-  // Distinct from Away, which stops the mesh even in the foreground. This is
-  // the middle state that was previously unreachable: run while I am using it,
-  // stop when I am not.
+  // Distinct from Away, which stops the mesh even in the foreground. The middle
+  // state: run while I am using it, stop when I am not.
   backgroundMeshEnabled: boolean;
   // Whether a system notification withholds the sender and the message body.
   //

@@ -1,6 +1,12 @@
 /**
  * @jest-environment node
  */
+// Forward secrecy for direct messages.
+//
+// The ratchet's whole value is that a key recovered today cannot read what was
+// sent yesterday, and that only holds if the DH step really fires when the
+// conversation changes direction. These pin the step, the ordering, and what
+// happens when messages arrive out of order.
 import { x25519 } from "@noble/curves/ed25519.js";
 import { bytesToHex } from "@noble/hashes/utils.js";
 import {
@@ -45,7 +51,7 @@ describe("Double Ratchet", () => {
     expect(decode(pt)).toBe("hello");
   });
 
-  test("multiple sequential messages Alice → Bob", () => {
+  test("multiple sequential messages Alice -> Bob", () => {
     const { alice, bob } = makeAliceBob();
     const messages = ["msg0", "msg1", "msg2", "msg3", "msg4"];
 
@@ -58,14 +64,14 @@ describe("Double Ratchet", () => {
   test("bidirectional exchange triggers DH ratchet steps", () => {
     const { alice, bob } = makeAliceBob();
 
-    const ct1 = ratchetEncrypt(alice, encode("a→b"));
-    expect(decode(ratchetDecrypt(bob, ct1))).toBe("a→b");
+    const ct1 = ratchetEncrypt(alice, encode("a->b"));
+    expect(decode(ratchetDecrypt(bob, ct1))).toBe("a->b");
 
-    const ct2 = ratchetEncrypt(bob, encode("b→a"));
-    expect(decode(ratchetDecrypt(alice, ct2))).toBe("b→a");
+    const ct2 = ratchetEncrypt(bob, encode("b->a"));
+    expect(decode(ratchetDecrypt(alice, ct2))).toBe("b->a");
 
-    const ct3 = ratchetEncrypt(alice, encode("a→b again"));
-    expect(decode(ratchetDecrypt(bob, ct3))).toBe("a→b again");
+    const ct3 = ratchetEncrypt(alice, encode("a->b again"));
+    expect(decode(ratchetDecrypt(bob, ct3))).toBe("a->b again");
   });
 
   test("out-of-order delivery (skipped messages)", () => {

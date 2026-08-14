@@ -4,8 +4,39 @@
 // Telegram / Signal convention of one unified search surface across every
 // chat, not scoped to whichever sub-tab happens to be selected.
 
+import { isUrgent } from "@core/mesh/wire/board-packet";
 import { Feather } from "@expo/vector-icons";
+import { t, useT, type TranslationKey } from "@i18n";
 import { bytesToHex } from "@noble/hashes/utils.js";
+
+import { getMeshService } from "@services/mesh-service";
+import { useBoardStore } from "@store/board-store";
+import { useChatStore } from "@store/chat-store";
+import { useLocationNotesStore } from "@store/location-notes-store";
+import Avatar from "@ui/components/avatar";
+import EmptyState from "@ui/components/empty-state";
+import {
+  FontSize,
+  FontWeight,
+  Radius,
+  Spacing,
+  useThemeColors,
+} from "@ui/theme";
+import { geohashChannel } from "@utils/channel-key";
+import {
+  filterMessages,
+  searchChats,
+  searchMessages,
+  searchNotices,
+  type ChatHit,
+  type MediaFilter,
+  type MessageHit,
+  type NoticeHit,
+  type SearchableNotice,
+} from "@utils/chat-search";
+import { conversationDisplayName } from "@utils/conversation-display-name";
+import { formatListTimestamp } from "@utils/format";
+import { BRIDGE_CHANNEL } from "@utils/media-policy";
 import React, { useEffect, useMemo, useState } from "react";
 import {
   FlatList,
@@ -17,36 +48,6 @@ import {
   Text,
   View,
 } from "react-native";
-import { isUrgent } from "../../core/mesh/board-packet";
-import { t, useT, type TranslationKey } from "../../i18n";
-import { geohashChannel } from "../../services/geohash-channel-service";
-import { getMeshService } from "../../services/mesh-service";
-import { useBoardStore } from "../../store/board-store";
-import { useChatStore } from "../../store/chat-store";
-import { useNoticesStore } from "../../store/notices-store";
-import Avatar from "../../ui/components/avatar";
-import EmptyState from "../../ui/components/empty-state";
-import {
-  FontSize,
-  FontWeight,
-  Radius,
-  Spacing,
-  useThemeColors,
-} from "../../ui/theme";
-import { chatDisplayName } from "../../utils/chat-display-name";
-import {
-  filterMessages,
-  searchChats,
-  searchMessages,
-  searchNotices,
-  type ChatHit,
-  type MediaFilter,
-  type MessageHit,
-  type NoticeHit,
-  type SearchableNotice,
-} from "../../utils/chat-search";
-import { formatListTimestamp } from "../../utils/format";
-import { BRIDGE_CHANNEL } from "../../utils/media-policy";
 
 // The filter chips shown above search, one per content kind Airhop supports.
 // Keys, not text: evaluated once at import, so translated strings here would
@@ -94,7 +95,7 @@ export default function ChatSearchResults({
   const channels = useChatStore((s) => s.channels);
   const messages = useChatStore((s) => s.messages);
   const boardPosts = useBoardStore((s) => s.posts);
-  const notesByGeohash = useNoticesStore((s) => s.notesByGeohash);
+  const notesByGeohash = useLocationNotesStore((s) => s.notesByGeohash);
 
   const [debouncedQuery, setDebouncedQuery] = useState(query);
   useEffect(() => {
@@ -387,7 +388,7 @@ function MessageResultRow({
       onPress={() => onPress(hit.channel, hit.messageId)}
       accessibilityRole="button"
       accessibilityLabel={t("chat.search.message_a11y", {
-        chat: chatDisplayName(hit.channel),
+        chat: conversationDisplayName(hit.channel),
         sender: hit.isMine ? t("chat.search.you") : hit.senderNickname,
         snippet: hit.snippet,
       })}
@@ -402,7 +403,7 @@ function MessageResultRow({
       <View style={styles.messageBody}>
         <View style={styles.messageHead}>
           <Text style={styles.messageChannel} numberOfLines={1}>
-            {chatDisplayName(hit.channel)}
+            {conversationDisplayName(hit.channel)}
           </Text>
           <Text style={styles.messageTime}>
             {formatListTimestamp(hit.timestampMs)}
@@ -444,7 +445,7 @@ function NoticeResultRow({
       onPress={() => onPress(hit.channel)}
       accessibilityRole="button"
       accessibilityLabel={t("chat.search.notice_a11y", {
-        chat: chatDisplayName(hit.channel),
+        chat: conversationDisplayName(hit.channel),
         author: hit.author,
         snippet: hit.snippet,
       })}
@@ -459,7 +460,7 @@ function NoticeResultRow({
       <View style={styles.messageBody}>
         <View style={styles.messageHead}>
           <Text style={styles.messageChannel} numberOfLines={1}>
-            {chatDisplayName(hit.channel)}
+            {conversationDisplayName(hit.channel)}
           </Text>
           <Text style={styles.messageTime}>
             {formatListTimestamp(hit.timestampMs)}
@@ -504,7 +505,7 @@ function MediaResultRow({
       onPress={() => onPress(hit.channel, hit.messageId)}
       accessibilityRole="button"
       accessibilityLabel={T("chat.search.result_a11y", {
-        chat: chatDisplayName(hit.channel),
+        chat: conversationDisplayName(hit.channel),
         kind: T(filter.labelKey),
         sender: hit.isMine ? T("chat.search.you") : hit.senderNickname,
       })}
@@ -522,7 +523,7 @@ function MediaResultRow({
       <View style={styles.messageBody}>
         <View style={styles.messageHead}>
           <Text style={styles.messageChannel} numberOfLines={1}>
-            {chatDisplayName(hit.channel)}
+            {conversationDisplayName(hit.channel)}
           </Text>
           <Text style={styles.messageTime}>
             {formatListTimestamp(hit.timestampMs)}
@@ -556,9 +557,6 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
     chipScroll: {
       flexGrow: 0,
     },
-    // Horizontal filter chips. alignItems keeps each chip at its natural
-    // height; without it a horizontal ScrollView stretches children to fill
-    // the whole column, which Radius.full then rounds into tall pills.
     chipRow: {
       alignItems: "center",
       paddingHorizontal: Spacing.base,
@@ -588,7 +586,6 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
     chipTextSelected: {
       color: Colors.textInverse,
     },
-    // Photo/video thumbnail box (icon shows through when no image).
     mediaThumb: {
       width: 40,
       height: 40,

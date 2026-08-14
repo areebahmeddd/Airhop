@@ -10,7 +10,7 @@
 //
 //   privkey = HMAC-SHA256(seed, utf8(geohash) || u32_be(i))
 //
-// trying i = 0, 1, 2… until the result is a valid secp256k1 scalar. Nothing on
+// trying i = 0, 1, 2... until the result is a valid secp256k1 scalar. Nothing on
 // the wire depends on the derivation, only that each geohash gets its own
 // unlinkable key, so bitchat and Airhop interoperate without sharing seeds
 // (they couldn't anyway; the seed never leaves the device).

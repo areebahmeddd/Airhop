@@ -1,6 +1,12 @@
 /**
  * @jest-environment node
  */
+// One-way sealing for courier envelopes.
+//
+// A courier carries an envelope for somebody it cannot authenticate to, so the
+// sender's identity travels encrypted inside it rather than in a handshake.
+// Tampering must fail loudly: an envelope that opens with the wrong sender
+// attributed would let a relay put words in someone's mouth.
 import { ed25519, x25519 } from "@noble/curves/ed25519.js";
 import { bytesToHex } from "@noble/hashes/utils.js";
 import { noiseXOpen, noiseXSeal } from "../noise-x";

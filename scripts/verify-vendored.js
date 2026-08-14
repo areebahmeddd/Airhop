@@ -6,7 +6,7 @@
 //   node scripts/verify-vendored.js --write     record the current tree as the lock
 //
 // Why this exists. `ios/Frameworks/arti.xcframework` is roughly 35 MB of
-// prebuilt static library that we did not compile, committed straight into the
+// prebuilt static library not compiled here, committed straight into the
 // repository and shipped inside the iOS app. Nobody reviews a binary diff, and
 // git alone will not tell you that the bytes changed for a reason: a swapped
 // blob looks exactly like a legitimate update in a pull request summary.

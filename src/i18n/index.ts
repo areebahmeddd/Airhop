@@ -6,22 +6,20 @@
 // depends on the device. A translation fetch would be a network call and a
 // fingerprint, in an app whose whole point is making neither.
 //
-// There is no i18n library here on purpose. Airhop hand-rolls its bottom sheet,
-// alert, toast and theme layers rather than pulling dependencies, and the
-// libraries in this space (i18next, react-intl) bring namespaces, lazy network
-// backends, and runtime string keys with no type safety, none of which an
-// offline-first app with a bundled catalog can use. What we get instead is
-// completeness enforced by `tsc` (see `locales/types.ts`).
+// There is no i18n library on purpose. i18next and react-intl bring namespaces,
+// lazy network backends and runtime string keys with no type safety, none of
+// which an offline-first app with a bundled catalog can use. Completeness comes
+// from `tsc` instead; see `locales/types.ts`.
 //
-// Scope: English, with ten languages scheduled for v1.3.0. One catalog means
-// nothing to resolve and nothing to negotiate, so there is no locale store and
-// no `Intl` polyfill here yet; each arrives with the language that needs it.
+// English ships today, with ten languages scheduled for v1.3.0. One catalog
+// means nothing to resolve and nothing to negotiate, so there is no locale store
+// and no `Intl` polyfill yet; each arrives with the language that needs it.
 //
-// What this file is for is the seam. Every screen calls `useT("some.key")`
-// instead of writing a literal, `layout.ts` uses logical properties instead of
-// physical ones, and `utils/format.ts` formats through the active language
-// rather than the default locale. A second language is a store behind these
-// hooks and a second catalog, not an edit to sixty screens.
+// This file is the seam that keeps that a small change. Screens call
+// `useT("some.key")` rather than writing a literal, `layout.ts` uses logical
+// properties rather than physical ones, and `utils/format.ts` formats through
+// the active language rather than the device locale. A second language is a
+// store behind these hooks and a second catalog, not an edit to sixty screens.
 
 import { I18nManager } from "react-native";
 import { DEFAULT_LANGUAGE, isRTL, type LanguageCode } from "./languages";
@@ -36,8 +34,6 @@ export type { TranslationKey } from "./locales/types";
 // read them the way they would read a store.
 const locale: Locale = en;
 const language: LanguageCode = DEFAULT_LANGUAGE;
-
-// ---- Interpolation --------------------------------------------------------
 
 export type TranslationVars = Record<string, string | number>;
 
@@ -55,8 +51,6 @@ function interpolate(template: string, vars?: TranslationVars): string {
     return value === undefined ? match : String(value);
   });
 }
-
-// ---- Lookup ---------------------------------------------------------------
 
 export interface Translator {
   // The language this translator is bound to, for callers that need to format
@@ -97,12 +91,10 @@ const pluralTranslator: PluralTranslator = (key, count, vars) => {
   return interpolate(template, { count, ...vars });
 };
 
-// ---- React ----------------------------------------------------------------
-
-// The hook every screen uses. It reads a constant today, so it does not
-// subscribe to anything and its identity is stable, which is what components
-// memoized on `T` want. It is a hook rather than a plain import so that the day
-// language becomes state, the subscription lands here and no screen changes.
+// The hook every screen uses. It reads a constant, so it subscribes to nothing
+// and its identity is stable, which is what components memoized on `T` want. A
+// hook rather than a plain import so that when language becomes state, the
+// subscription lands here and no screen changes.
 export function useT(): Translator {
   return translator;
 }
@@ -117,8 +109,6 @@ export function useLanguage(): LanguageCode {
   return language;
 }
 
-// ---- Outside React --------------------------------------------------------
-
 // Services, stores and notification builders run outside the component tree
 // and cannot use a hook. They read the same catalog, so they are never out of
 // step with what is on screen.
@@ -126,7 +116,7 @@ export function useLanguage(): LanguageCode {
 // Rule for callers: translate at the moment of display, never at the moment of
 // storage. A notification body is translated when it is posted; a message, a
 // contact name, or anything persisted to MMKV is stored untranslated, or the
-// user's history freezes in whichever language they used to be in.
+// user's history freezes in whichever language it was written in.
 export const t: Translator = translator;
 
 export const tPlural: PluralTranslator = pluralTranslator;
@@ -134,8 +124,6 @@ export const tPlural: PluralTranslator = pluralTranslator;
 export function getLanguage(): LanguageCode {
   return language;
 }
-
-// ---- Layout direction -----------------------------------------------------
 
 // `I18nManager.forceRTL` sets a native flag that is only read when the app
 // starts, so a direction change cannot take effect until the next launch.

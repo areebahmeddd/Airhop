@@ -20,7 +20,7 @@ Skipping this step causes rework.
 ## 2. Build Order
 
 ```
-src/core/   →   Native modules   →   src/features/   →   src/ui/
+src/core/ -> Native modules -> src/features/ -> src/ui/
 ```
 
 - **Do not write `src/features/` code** until the `src/core/` service it depends on has passing unit tests.
@@ -65,7 +65,7 @@ These rules exist because a bug here breaks Airhop's interoperability with bitch
 - **Never change the bitchat v2 packet byte layout** in `packet-codec.ts` without:
   1. Bumping `version` byte from `2` to `3`
   2. Maintaining a `v2` decode path for backward compat
-  3. Testing cross-protocol delivery: Airhop v3 node → bitchat node
+  3. Testing cross-protocol delivery: Airhop v3 node -> bitchat node
 - **Never change the BLE Service UUID or Characteristic UUID.** They are fixed in `PROTOCOLS.md`, section 1. Changing them creates a network partition.
 - **Never change Peer ID derivation.** It is `hex(SHA-256(noiseStaticPubKey)).slice(0, 16)`. Changing it breaks gossip sync and DM addressing.
 - **Airhop-only packet types start at `0x50`**: `0x50` (private channel, sealed) and `0x51` (private channel message). Both are safe to broadcast: bitchat drops unknown types silently. Anything new must sit at `0x50` or above. Do not take anything in bitchat's range: `0x2A` and `0x2B` are reserved upstream for courier spray-ack, and `0x29` is push-to-talk, which bitchat ships too and which must stay wire-identical.
@@ -95,6 +95,7 @@ Before opening any pull request:
 - [ ] `npm run lint` passes with zero errors
 - [ ] `npm run typecheck` passes with zero errors
 - [ ] `npm run i18n:audit -- --max 0` passes (no hardcoded user-facing strings)
+- [ ] `npm run verify:invisibles` passes (no literal control, bidirectional, or zero-width characters in source)
 - [ ] `npm run deadcode` reports nothing new (unused exports, files, and dependencies)
 - [ ] `npm run verify:vendored` passes (only if you changed a vendored binary)
 - [ ] `npm run coverage` passes with zero failures

@@ -1,26 +1,26 @@
 // Privacy & Security sub-screen: the always-on Double Ratchet / packet-signing
 // guarantees, and the blocked-peer list.
 //
-// The connectivity toggles (live voice, Tor, gateway, bridge) used to lead this
-// screen. They are the switches people come here to flip, so they now sit on
-// the settings hub itself; see connectivity-group.tsx.
+// The connectivity toggles (live voice, Tor, gateway, bridge) sit on the settings
+// hub itself rather than here, one drill-in away, because they are the switches
+// people come to flip. See connectivity-group.tsx.
 
+import { showAlert } from "@store/alert-store";
+import { useBlockedStore } from "@store/blocked-store";
+import { useSettingsStore } from "@store/settings-store";
+import { HIT_SLOP, useThemeColors } from "@ui/theme";
+import { resolveDisplayName } from "@utils/peer-display-name";
 import React from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
-import { showAlert } from "../../../store/alert-store";
-import { useBlockedStore } from "../../../store/blocked-store";
-import { useSettingsStore } from "../../../store/settings-store";
-import { HIT_SLOP, useThemeColors } from "../../../ui/theme";
-import { resolveDisplayName } from "../../../utils/display-name";
 import {
   GroupDivider,
   SettingRow,
   SettingSwitch,
   SubHeader,
   useSharedStyles,
-} from "../shared";
+} from "../settings-primitives";
 
-import { t, useT } from "../../../i18n";
+import { t, useT } from "@i18n";
 interface Props {
   onBack: () => void;
 }

@@ -34,8 +34,6 @@ beforeEach(() => {
   (SecureStore as unknown as { __reset: () => void }).__reset();
 });
 
-// ---- Generation -------------------------------------------------------------
-
 describe("generateRecoveryPhrase", () => {
   it("produces twelve valid words", () => {
     const phrase = generateRecoveryPhrase();
@@ -51,8 +49,6 @@ describe("generateRecoveryPhrase", () => {
   });
 });
 
-// ---- Normalisation ----------------------------------------------------------
-
 describe("normalizeRecoveryPhrase", () => {
   it("survives the shapes people actually paste", () => {
     // Line breaks from a photo transcription, numbering from a notes app,
@@ -66,8 +62,6 @@ describe("normalizeRecoveryPhrase", () => {
     expect(normalizeRecoveryPhrase("1. legal 2. winner")).toBe("legal winner");
   });
 });
-
-// ---- Validation -------------------------------------------------------------
 
 describe("isValidRecoveryPhrase", () => {
   it("accepts a real phrase", () => {
@@ -113,8 +107,6 @@ describe("unknownWordsIn", () => {
   });
 });
 
-// ---- Seed derivation --------------------------------------------------------
-
 describe("recoveryPhraseToSeed", () => {
   it("is deterministic, which is the whole point", () => {
     const a = recoveryPhraseToSeed(KNOWN);
@@ -142,8 +134,6 @@ describe("recoveryPhraseToSeed", () => {
   });
 });
 
-// ---- Storage ----------------------------------------------------------------
-
 describe("phrase storage", () => {
   it("round-trips through the keychain", async () => {
     await storePhrase(KNOWN);
@@ -167,8 +157,6 @@ describe("phrase storage", () => {
     expect(await loadStoredPhrase()).toBeNull();
   });
 });
-
-// ---- Verification step ------------------------------------------------------
 
 describe("verification", () => {
   it("asks for distinct, in-range, 1-based positions", () => {

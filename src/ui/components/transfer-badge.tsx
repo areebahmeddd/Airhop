@@ -6,10 +6,10 @@
 // back to the conversation the transfer belongs to.
 
 import { Feather } from "@expo/vector-icons";
+import { t } from "@i18n";
+import { useTransferStore } from "@store/transfer-store";
 import React, { useMemo } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
-import { t } from "../../i18n";
-import { useTransferStore } from "../../store/transfer-store";
 import {
   FontSize,
   FontWeight,
@@ -130,7 +130,6 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       color: Colors.textSecondary,
       fontVariant: ["tabular-nums"],
     },
-    // Thin progress line pinned to the bottom edge of the pill.
     track: {
       position: "absolute",
       left: 0,

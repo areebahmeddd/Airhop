@@ -6,15 +6,13 @@
 
 import { bytesToHex } from "@noble/hashes/utils.js";
 import { finalizeEvent, generateSecretKey, type Event } from "nostr-tools";
-import type { SealedEnvelope } from "../../mesh/courier-store";
+import type { SealedEnvelope } from "../../mesh/courier/courier-store";
 import {
   fetchCourierDrops,
   publishCourierDrop,
   subscribeCourierDrops,
 } from "../courier-relay";
 import type { NostrClient } from "../nostr-client";
-
-// ---- Mock helpers -----------------------------------------------------------
 
 function makeEnvelope(overrides?: Partial<SealedEnvelope>): SealedEnvelope {
   const recipientTag = crypto.getRandomValues(new Uint8Array(16));
@@ -47,8 +45,6 @@ function base64ToUint8(b64: string): Uint8Array {
   for (let i = 0; i < binary.length; i++) out[i] = binary.charCodeAt(i);
   return out;
 }
-
-// ---- publishCourierDrop -----------------------------------------------------
 
 describe("publishCourierDrop", () => {
   it("calls client.publish once", async () => {
@@ -131,14 +127,12 @@ describe("publishCourierDrop", () => {
     const expiryTag = published!.tags.find(([t]) => t === "expiration");
     expect(expiryTag).toBeDefined();
     const tagSecs = parseInt(expiryTag![1], 10);
-    // Allow ±1s rounding
+    // Allow +/-1s rounding
     expect(Math.abs(tagSecs - Math.floor(expiryMs / 1000))).toBeLessThanOrEqual(
       1,
     );
   });
 });
-
-// ---- subscribeCourierDrops --------------------------------------------------
 
 describe("subscribeCourierDrops", () => {
   it("calls client.subscribe with a kind 1401 filter", () => {
@@ -205,8 +199,6 @@ describe("subscribeCourierDrops", () => {
     expect(bytesToHex(received[0].recipientTag)).toBe(bytesToHex(recipientTag));
   });
 });
-
-// ---- fetchCourierDrops ------------------------------------------------------
 
 describe("fetchCourierDrops", () => {
   it("returns empty array for empty tag list", async () => {

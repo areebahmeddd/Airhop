@@ -5,7 +5,25 @@
 // depend on per-thread interactive state: playingUri, revealedAttachments,
 // claimToken) and are handed down as render props.
 
+import type { EmbeddedToken } from "@core/payments/cashu";
 import { Feather, MaterialCommunityIcons } from "@expo/vector-icons";
+import { useT } from "@i18n";
+import { held } from "@platform/haptics";
+import type {
+  ChatAttachment,
+  ChatMessage,
+  MessageStatus,
+} from "@store/chat-store";
+import Avatar from "@ui/components/avatar";
+import {
+  FontSize,
+  FontWeight,
+  HIT_SLOP,
+  hitSlopFor,
+  Radius,
+  Spacing,
+  useThemeColors,
+} from "@ui/theme";
 import React, { useMemo } from "react";
 import {
   Linking,
@@ -16,24 +34,6 @@ import {
   type StyleProp,
   type TextStyle,
 } from "react-native";
-import type { EmbeddedToken } from "../../core/payments/cashu";
-import { useT } from "../../i18n";
-import type {
-  ChatAttachment,
-  ChatMessage,
-  MessageStatus,
-} from "../../store/chat-store";
-import Avatar from "../../ui/components/avatar";
-import {
-  FontSize,
-  FontWeight,
-  HIT_SLOP,
-  hitSlopFor,
-  Radius,
-  Spacing,
-  useThemeColors,
-} from "../../ui/theme";
-import { held } from "../../utils/haptics";
 
 // Drawn size of a sender's avatar in a channel thread. Tapping it (or the name
 // beside it) opens that sender's profile, so both carry hitSlopFor() to reach the
@@ -494,9 +494,6 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       gap: Spacing.sm,
     },
     messageRowMine: { justifyContent: "flex-end" },
-    // A wash rather than a border: the row already carries a bubble with its own
-    // edges, and a second outline next to the search highlight's ring would be
-    // two different meanings drawn the same way.
     messageRowSelected: { backgroundColor: Colors.accentGhost },
     selectCheck: {
       width: 22,
@@ -534,9 +531,6 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
     bubble: {
       paddingHorizontal: Spacing.md,
       paddingVertical: Spacing.sm + 2,
-      // Matches the message input box (Radius.xl) so bubbles and the composer
-      // share the same generous rounding. The one tail corner (below) stays
-      // tight to keep the bubble's pointer.
       borderRadius: Radius.xl,
     },
     bubbleMine: { backgroundColor: Colors.myBubble },
@@ -553,9 +547,6 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
     },
     messageTextMine: { color: Colors.textInverse },
     messageTextTheirs: { color: Colors.textPrimary },
-    // @mentions: bold everywhere for emphasis, plus the accent colour on the
-    // light "theirs" bubble. On the near-black "mine" bubble the accent has too
-    // little contrast, so bold alone carries it (same reasoning as the ticks).
     messageMentionMine: {
       color: Colors.textInverse,
       fontWeight: FontWeight.bold,
@@ -564,9 +555,6 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       color: Colors.accent,
       fontWeight: FontWeight.bold,
     },
-    // Links are underlined so they read as tappable in both bubbles. Same
-    // colour reasoning as mentions: the accent on the light "theirs" bubble,
-    // inherited text on the near-black "mine" one.
     messageLink: {
       color: Colors.accent,
       textDecorationLine: "underline",
@@ -586,12 +574,7 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       fontSize: FontSize.xs,
       color: Colors.textMuted,
     },
-    // myBubbleText already resolves correctly per theme (white on the
-    // near-black light-mode bubble, dark on the near-white dark-mode
-    // bubble): a hardcoded white was invisible once dark mode flipped the
-    // bubble itself to near-white.
     timestampMine: { color: Colors.textInverse, opacity: 0.55 },
-    // Forwarded tag
     forwardedTag: {
       flexDirection: "row",
       alignItems: "center",

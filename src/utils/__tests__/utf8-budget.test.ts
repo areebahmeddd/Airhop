@@ -10,7 +10,7 @@
 import {
   PRIVATE_MESSAGE_MAX_CONTENT_BYTES,
   encodePrivateMessagePacket,
-} from "../../core/mesh/noise-payload";
+} from "@core/mesh/wire/noise-payload";
 import { truncateToUtf8Bytes, utf8ByteLength } from "../utf8-budget";
 
 describe("utf8ByteLength", () => {
@@ -18,7 +18,7 @@ describe("utf8ByteLength", () => {
     expect(utf8ByteLength("hello")).toBe(5);
     // A single character that costs two bytes.
     expect(utf8ByteLength("é")).toBe(2);
-    // One grapheme, one code point, four bytes — and two UTF-16 units, which
+    // One grapheme, one code point, four bytes, and two UTF-16 units, which
     // is what `String.length` and TextInput's maxLength would have counted.
     expect(utf8ByteLength("😀")).toBe(4);
     expect("😀".length).toBe(2);

@@ -3,18 +3,18 @@
  */
 // Geohash DM: a message sent from one per-cell identity is gift-wrapped so only
 // the recipient's per-cell identity can open it, wrapped in a bitchat1 envelope.
-import { ed25519 } from "@noble/curves/ed25519.js";
-import { NoisePayloadType } from "../../core/mesh/noise-payload";
-import { decodeBitchatEnvelope } from "../../core/nostr/bitchat-envelope";
+import { NoisePayloadType } from "@core/mesh/wire/noise-payload";
+import { decodeBitchatEnvelope } from "@core/nostr/bitchat-envelope";
 import {
   deriveGeohashIdentity,
   deriveGeohashSeed,
-} from "../../core/nostr/geohash-identity";
-import { unwrapDm } from "../../core/nostr/gift-wrap";
-import type { NostrClient } from "../../core/nostr/nostr-client";
-import { useChatStore } from "../../store/chat-store";
-import { useMeshStateStore } from "../../store/mesh-state-store";
-import { resolveDisplayName } from "../../utils/display-name";
+} from "@core/nostr/geohash-identity";
+import { unwrapDm } from "@core/nostr/gift-wrap";
+import type { NostrClient } from "@core/nostr/nostr-client";
+import { ed25519 } from "@noble/curves/ed25519.js";
+import { useChatStore } from "@store/chat-store";
+import { useMeshStateStore } from "@store/mesh-state-store";
+import { resolveDisplayName } from "@utils/peer-display-name";
 import { GeohashChannelService } from "../geohash-channel-service";
 
 jest.mock("expo-location", () => ({}));

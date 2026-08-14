@@ -18,31 +18,8 @@
 //   * Anything that needs the internet says so before it is tapped, and says
 //     why when it cannot run (offline, Tor, or a mint that lacks the NUT).
 
-import { Feather } from "@expo/vector-icons";
-import * as Clipboard from "expo-clipboard";
-import { nip19 } from "nostr-tools";
-import React, {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
 import {
-  ActivityIndicator,
-  Linking,
-  Pressable,
-  RefreshControl,
-  ScrollView,
-  Share,
-  StyleSheet,
-  Text,
-  TextInput,
-  useWindowDimensions,
-  View,
-} from "react-native";
-import QRCode from "react-native-qrcode-svg";
-import {
+  bareToken,
   canEncodeTokenQr,
   formatAmount,
   isLikelyTestMint,
@@ -50,23 +27,25 @@ import {
   TOKEN_QR_MAX_CHARS,
   TOKEN_QR_SIZE,
   tokenQrPayload,
-} from "../../core/payments/cashu";
+} from "@core/payments/cashu";
 import {
   isValidRecoveryPhrase,
   pickVerificationPositions,
   unknownWordsIn,
   verifyPositions,
-} from "../../core/payments/wallet-seed";
-import { t, tPlural, useT, useTPlural } from "../../i18n";
-import { textAlignEnd } from "../../i18n/layout";
+} from "@core/payments/wallet-seed";
+import { Feather } from "@expo/vector-icons";
+import { t, tPlural, useT, useTPlural } from "@i18n";
+import { textAlignEnd } from "@i18n/layout";
+import { acknowledged } from "@platform/haptics";
+import { getMeshService } from "@services/mesh-service";
 import {
   deliverTokenToPeer,
   describePayResult,
   describeRoute,
   payPerson,
   reclaimTokenSend,
-} from "../../services/ecash-transfer";
-import { getMeshService } from "../../services/mesh-service";
+} from "@services/payment-router";
 import {
   addMint as addMintService,
   claimLightningDeposit,
@@ -91,11 +70,11 @@ import {
   type MeltQuote,
   type PreparedSend,
   type RestoreResult,
-} from "../../services/wallet-service";
-import { showAlert, useAlertStore } from "../../store/alert-store";
-import { useContactsStore } from "../../store/contacts-store";
-import { REACHABLE_TTL_MS, usePeerStore } from "../../store/peer-store";
-import { useSettingsStore } from "../../store/settings-store";
+} from "@services/wallet-service";
+import { showAlert, useAlertStore } from "@store/alert-store";
+import { useContactsStore } from "@store/contacts-store";
+import { REACHABLE_TTL_MS, usePeerStore } from "@store/peer-store";
+import { useSettingsStore } from "@store/settings-store";
 import {
   isWalletStorageReady,
   selectAccounts,
@@ -103,9 +82,10 @@ import {
   whenWalletHydrated,
   type AccountBalance,
   type WalletTx,
-} from "../../store/wallet-store";
-import Avatar from "../../ui/components/avatar";
-import BottomSheet from "../../ui/components/bottom-sheet";
+} from "@store/wallet-store";
+import Avatar from "@ui/components/avatar";
+import BottomSheet from "@ui/components/bottom-sheet";
+import { usePullRefreshColors } from "@ui/hooks/use-pull-refresh";
 import {
   DISABLED_OPACITY,
   FontFamily,
@@ -117,12 +97,33 @@ import {
   Spacing,
   TAB_BAR_CLEARANCE,
   useThemeColors,
-} from "../../ui/theme";
-import { usePullRefreshColors } from "../../ui/use-pull-refresh";
-import { formatListTimestamp, formatNumber } from "../../utils/format";
-import { acknowledged } from "../../utils/haptics";
-import { nostrShortLabel, peerIDToUsername } from "../../utils/username";
-import TokenScanner, { type ScanTarget } from "./token-scanner";
+} from "@ui/theme";
+import { formatListTimestamp, formatNumber } from "@utils/format";
+import { nostrShortLabel, peerIDToUsername } from "@utils/username";
+import * as Clipboard from "expo-clipboard";
+import { nip19 } from "nostr-tools";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import {
+  ActivityIndicator,
+  Linking,
+  Pressable,
+  RefreshControl,
+  ScrollView,
+  Share,
+  StyleSheet,
+  Text,
+  TextInput,
+  useWindowDimensions,
+  View,
+} from "react-native";
+import QRCode from "react-native-qrcode-svg";
+import TokenScanSheet, { type ScanTarget } from "./token-scan-sheet";
 
 // The four quick actions triggered from the App-level header.
 export type WalletAction = "receive" | "send" | "zap" | "addMint";
@@ -138,6 +139,10 @@ const DEPOSIT_POLL_MS = 3000;
 // answer "did that go through", which is the only question this section gets
 // asked on the way past; the rest is history and can wait for a tap.
 const ACTIVITY_COLLAPSED_COUNT = 3;
+
+// A day, which is also how long wallet-service trusts a cached fee schedule, so
+// "at least this old" and "possibly out of date" are the same threshold.
+const FEE_CACHE_STALE_MS = 24 * 60 * 60 * 1000;
 
 // Drawn size of the per-mint icon buttons (confirm proofs, remove mint). Small
 // on purpose so a mint row stays a row rather than a card, with hitSlopFor()
@@ -761,7 +766,7 @@ export default function WalletScreen({
 
   // Name the person in the confirmation. A pubkey the user picked from their
   // contacts has a nickname worth showing; anything typed by hand only has its
-  // key, so it gets the same npub…tail the rest of the app uses rather than 63
+  // key, so it gets the same npub...tail the rest of the app uses rather than 63
   // characters of hex in an alert title.
   function zapRecipientLabel(pubkeyHex: string): string {
     const known = Object.values(contacts).find(
@@ -1221,7 +1226,7 @@ export default function WalletScreen({
   }
 
   // A bolt11 invoice is only good for a few minutes. Without a clock the sheet
-  // would sit on "Waiting for payment…" forever against an invoice nobody can
+  // would sit on "Waiting for payment..." forever against an invoice nobody can
   // pay any more, which reads as a hang rather than an expiry.
   useEffect(() => {
     if (!showDeposit || depositExpiresAtMs === undefined) return;
@@ -1831,13 +1836,6 @@ export default function WalletScreen({
                   </Text>
                 </View>
               )}
-              {mintList.length > 0 && (
-                <Text style={styles.backupHint}>
-                  {T("wallet.backup.mint_list_note")}
-                  {"\n"}
-                  {mintList.map((m) => hostOf(m.url)).join("\n")}
-                </Text>
-              )}
             </>
           ) : (
             <Text style={styles.backupBody}>{T("wallet.backup.off_body")}</Text>
@@ -2302,6 +2300,22 @@ export default function WalletScreen({
               })}
             </Text>
           )}
+          {/* Fees are cached for a day so a send can be priced with no signal,
+              which is right for an offline-first wallet and still something the
+              user should be able to see the age of: a mint that has raised its
+              input fee since will take more than the quote said. Shown only
+              once the cache is genuinely old, so the ordinary case stays quiet. */}
+          {pending !== null &&
+            pending.pricedFromCacheAgeMs !== undefined &&
+            pending.pricedFromCacheAgeMs >= FEE_CACHE_STALE_MS && (
+              <Text style={styles.generatedMint}>
+                {T("wallet.send.stale_fee_note", {
+                  days: Math.floor(
+                    pending.pricedFromCacheAgeMs / FEE_CACHE_STALE_MS,
+                  ),
+                })}
+              </Text>
+            )}
         </View>
         {/* A QR rather than the raw string: nobody reads 400 characters of
             base64, and this is the one form every Cashu wallet can take. Falls
@@ -2353,6 +2367,17 @@ export default function WalletScreen({
           >
             <Feather name="share" size={18} color={Colors.accent} />
             <Text style={styles.generatedActionText}>{T("common.share")}</Text>
+          </Pressable>
+          <Pressable
+            style={styles.generatedActionBtn}
+            onPress={() => pending && void openTokenInWallet(pending.token)}
+            accessibilityRole="button"
+            accessibilityLabel={T("wallet.send.open_in_wallet")}
+          >
+            <Feather name="external-link" size={18} color={Colors.accent} />
+            <Text style={styles.generatedActionText}>
+              {T("wallet.send.open_in_wallet_short")}
+            </Text>
           </Pressable>
           <Pressable
             style={styles.generatedActionBtn}
@@ -2982,7 +3007,7 @@ export default function WalletScreen({
         />
       </BottomSheet>
 
-      <TokenScanner
+      <TokenScanSheet
         visible={scannerTarget !== null}
         target={scannerTarget ?? "token"}
         onClose={closeScanner}
@@ -3081,7 +3106,7 @@ export default function WalletScreen({
   );
 }
 
-// ---- Small presentational pieces --------------------------------------------
+// ---- Small presentational pieces ----
 
 type Styles = ReturnType<typeof createStyles>;
 
@@ -3201,36 +3226,47 @@ function QuoteRow({
   );
 }
 
-// ---- Transaction formatting -------------------------------------------------
+// ---- Transaction formatting ----
 
-// Hand a Lightning invoice to whichever app is registered for `lightning:`.
+// Hand a payment instrument to whichever app claims its URI scheme.
 //
-// This used to be `Share.share`, which is the OS "send this text to..." sheet:
-// on Android that lists Messages and Drive rather than a wallet, so a button
-// labelled "Open in wallet" opened anything but. `openURL` is the actual
-// handoff - the OS routes the URI to the app that claims the scheme.
+// Try, do not ask. `canOpenURL` answers "no" unless the scheme is declared in
+// the Android manifest's `queries` and in iOS's LSApplicationQueriesSchemes, so
+// gating on it hides the button exactly where a wallet is installed. `openURL`
+// rejects when nothing handles the URI: the same answer, with nothing to
+// declare on either platform.
 //
-// Tried rather than checked. `canOpenURL` needs the scheme declared in the
-// manifest's `queries` on Android 11+ and in LSApplicationQueriesSchemes on
-// iOS, and without those it answers "no" even when a wallet is installed - so
-// asking first would fail exactly where the feature is meant to work. `openURL`
-// rejects when nothing handles it, which is the same answer arrived at honestly.
-//
-// The share sheet stays as the fallback: with no wallet installed it is the only
-// way to get the invoice onto another device, which is precisely the situation
-// somebody without one is in.
-async function openInvoiceInWallet(invoice: string): Promise<void> {
-  const uri = `lightning:${invoice}`;
+// Share is the fallback, never the handoff. It is the "send this text to..."
+// sheet, which lists Messages and Drive rather than wallets, so it cannot be
+// what a button labelled "Open in wallet" does. It is the right thing to reach
+// when no app claims the scheme, because the instrument still has to get onto
+// another device somehow.
+async function handOffToWallet(uri: string): Promise<void> {
   try {
     await Linking.openURL(uri);
   } catch {
     try {
       await Share.share({ message: uri });
     } catch {
-      // Both routes refused. The invoice is on screen and Copy is beside this
-      // button, so there is nothing to report that the sheet does not show.
+      // Silent by design: the instrument is on screen with Copy beside it, so
+      // an alert here would report a dead end the sheet disproves.
     }
   }
+}
+
+// A bolt11 invoice, for the Lightning wallet the user pays it FROM.
+function openInvoiceInWallet(invoice: string): Promise<void> {
+  return handOffToWallet(`lightning:${invoice}`);
+}
+
+// A Cashu token, for another wallet on the same phone. `cashu:` is NUT-00's own
+// scheme, not one invented here.
+//
+// Only the handoff wears it. Share still passes the BARE token, because that
+// goes to a person: every wallet reads the bare form, only some strip a scheme.
+// `bareToken` keeps the two from compounding into `cashu:cashu:`.
+function openTokenInWallet(token: string): Promise<void> {
+  return handOffToWallet(`cashu:${bareToken(token) ?? token}`);
 }
 
 function isCredit(tx: WalletTx): boolean {
@@ -3240,7 +3276,7 @@ function isCredit(tx: WalletTx): boolean {
 // Rows where no money moved: a reclaimed send came back into the balance, an
 // expired mint quote never arrived, and a failed send never left. `isCredit`
 // keys off `kind` alone, so all three printed a red debit; a reclaim showed
-// "−500" for money that had just come back.
+// "-500" for money that had just come back.
 //
 // A failed swap is the exception. It removes proofs the mint says are already
 // spent, which is a real reduction.
@@ -3270,6 +3306,10 @@ function txIcon(tx: WalletTx): React.ComponentProps<typeof Feather>["name"] {
 function txTitle(tx: WalletTx): string {
   switch (tx.kind) {
     case "receive":
+      // The title is the line somebody scanning the list reads, and nothing
+      // arrived, so the failure belongs there rather than in a note under
+      // "Received".
+      if (tx.status === "failed") return t("wallet.activity.receive_failed");
       return tx.status === "pending"
         ? t("wallet.activity.received_unconfirmed")
         : t("wallet.activity.received");
@@ -3288,15 +3328,19 @@ function txTitle(tx: WalletTx): string {
     case "nutzap-out":
       return t("wallet.zap.sent");
     case "swap":
-      return tx.status === "failed"
-        ? t("wallet.activity.spent_removed")
+      if (tx.status === "failed") return t("wallet.activity.spent_removed");
+      // A swap is persisted before its request goes out, so it can be seen in
+      // flight. Past tense would claim the coins were reissued while the mint
+      // has not answered.
+      return tx.status === "pending"
+        ? t("wallet.activity.refreshing")
         : t("wallet.activity.refreshed");
   }
 }
 
 // State note appended to a row's subtitle. Undefined when the title already
 // carries it, so a reclaim no longer reads "Reclaimed · reclaimed". The raw enum
-// value used to be interpolated here, which no catalog covered.
+// value interpolated here would be uncovered by any catalog.
 function txStatusNote(tx: WalletTx): string | undefined {
   if (tx.status === "completed") return undefined;
   if (
@@ -3361,7 +3405,6 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       textTransform: "uppercase",
       paddingHorizontal: Spacing.xs,
     },
-    // Banners
     banner: {
       flexDirection: "row",
       gap: Spacing.md,
@@ -3384,7 +3427,6 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       color: Colors.textSecondary,
       lineHeight: FontSize.sm * 1.5,
     },
-    // Balance
     balanceCard: {
       backgroundColor: Colors.surface,
       borderRadius: Radius.lg,
@@ -3431,7 +3473,6 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       color: Colors.textMuted,
       marginTop: Spacing.xs,
     },
-    // Pending sends
     pendingCard: {
       backgroundColor: Colors.surface,
       borderRadius: Radius.lg,
@@ -3466,10 +3507,10 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       flexWrap: "wrap",
       gap: Spacing.sm,
     },
-    // The five pending-send actions (QR, Copy, Share, Delivered, Reclaim) were
-    // the smallest targets in the app: 4pt of padding around 13pt of text made
-    // each one ~21pt tall, in a tight horizontal row, and one of them moves
-    // money back into the balance. They sit in a flexWrap row, so giving them a
+    // The five pending-send actions (QR, Copy, Share, Delivered, Reclaim) are the
+    // smallest targets in the app: 4pt of padding around 13pt of text is ~21pt
+    // tall, in a tight horizontal row, and one of them moves money back into the
+    // balance. They sit in a flexWrap row, so giving them a
     // real height costs a wrap on a narrow screen and nothing else.
     pendingBtn: {
       paddingHorizontal: Spacing.md,
@@ -3495,7 +3536,6 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       color: Colors.danger,
       fontWeight: FontWeight.medium,
     },
-    // Empty state
     emptyCard: {
       backgroundColor: Colors.surface,
       borderRadius: Radius.lg,
@@ -3534,7 +3574,6 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       fontWeight: FontWeight.semibold,
       color: Colors.accent,
     },
-    // Mint rows
     mintRow: {
       backgroundColor: Colors.surface,
       borderRadius: Radius.lg,
@@ -3698,7 +3737,6 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       color: Colors.textSecondary,
       fontWeight: FontWeight.medium,
     },
-    // Inline call to action inside a section (e.g. the split-balance prompt).
     inlineAction: {
       flexDirection: "row",
       alignItems: "center",
@@ -3717,7 +3755,6 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       color: Colors.accent,
       fontWeight: FontWeight.medium,
     },
-    // Backup
     backupCard: {
       backgroundColor: Colors.surface,
       borderRadius: Radius.lg,
@@ -3782,12 +3819,6 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       color: Colors.textSecondary,
       lineHeight: FontSize.sm * 1.5,
     },
-    backupHint: {
-      fontSize: FontSize.xs,
-      color: Colors.textMuted,
-      lineHeight: FontSize.xs * 1.7,
-      fontFamily: FontFamily.mono,
-    },
     backupActions: {
       flexDirection: "row",
       gap: Spacing.sm,
@@ -3809,7 +3840,6 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       fontWeight: FontWeight.semibold,
       color: Colors.accent,
     },
-    // Recovery phrase sheet
     bulletRow: {
       flexDirection: "row",
       gap: Spacing.md,
@@ -3829,8 +3859,6 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       color: Colors.textSecondary,
       lineHeight: FontSize.sm * 1.5,
     },
-    // Two columns of six, so the numbering reads down each column the way it
-    // is written on paper.
     phraseGrid: {
       flexDirection: "row",
       flexWrap: "wrap",
@@ -3874,7 +3902,6 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       fontSize: FontSize.sm,
       color: Colors.danger,
     },
-    // Radio-style picker rows (consolidate destination).
     pickRow: {
       flexDirection: "row",
       alignItems: "center",
@@ -3903,7 +3930,6 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       fontSize: FontSize.xs,
       color: Colors.textMuted,
     },
-    // Lightning
     lightningCard: {
       backgroundColor: Colors.surface,
       borderRadius: Radius.lg,
@@ -3942,7 +3968,6 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       fontSize: FontSize.xs,
       color: Colors.textMuted,
     },
-    // History
     historyCard: {
       backgroundColor: Colors.surface,
       borderRadius: Radius.lg,
@@ -3972,8 +3997,6 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       fontSize: FontSize.xs,
       color: Colors.textMuted,
     },
-    // Muted danger rather than the full alert colour: this is an explanation on
-    // a history row, not an alarm the user has to act on right now.
     historyError: {
       fontSize: FontSize.xs,
       color: Colors.danger,
@@ -3988,13 +4011,9 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
     historyCredit: {
       color: Colors.online,
     },
-    // Money leaving is worth reading at a glance, the same way money arriving
-    // already was.
     historyDebit: {
       color: Colors.danger,
     },
-    // Reclaimed, expired and failed rows: the amount is context, not a movement.
-    // Struck through and muted, since either sign would be wrong.
     historyVoid: {
       color: Colors.textMuted,
       textDecorationLine: "line-through",
@@ -4015,7 +4034,6 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       fontWeight: FontWeight.medium,
       color: Colors.textMuted,
     },
-    // Info panel
     infoPanel: {
       backgroundColor: Colors.surface,
       borderRadius: Radius.lg,
@@ -4052,7 +4070,6 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       height: StyleSheet.hairlineWidth,
       backgroundColor: Colors.border,
     },
-    // Sheets
     modalSheet: {
       paddingHorizontal: Spacing.xl,
       paddingBottom: Spacing.xl,
@@ -4117,10 +4134,6 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       letterSpacing: 0.3,
       lineHeight: 16,
     },
-    // Stacked, full-width pill actions, same shape and rhythm as every other
-    // sheet in the app (see `settings/shared` sheetActions): the group owns the
-    // spacing between its buttons so it does not compound with the sheet's own
-    // gap, and a lone button carries no stray margin.
     modalActions: {
       width: "100%",
       marginTop: Spacing.xs,
@@ -4142,10 +4155,6 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       color: Colors.textPrimary,
       fontWeight: FontWeight.semibold,
     },
-    // The quietest tier: a dismissal, not an action. Filled but borderless,
-    // matching the panic sheet's Cancel, so this is the vocabulary the app
-    // already has rather than a fourth button shape invented here. The border is
-    // what separates it from the secondary pill above it.
     modalDismiss: {
       width: "100%",
       minHeight: 50,
@@ -4183,7 +4192,6 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       borderRadius: Radius.lg,
       backgroundColor: "#FFFFFF",
     },
-    // Quote breakdown
     quoteBox: {
       backgroundColor: Colors.surfaceRaised,
       borderRadius: Radius.lg,
@@ -4217,7 +4225,6 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       fontSize: FontSize.sm,
       color: Colors.textMuted,
     },
-    // Generated token
     generatedHeader: {
       alignItems: "center",
       gap: Spacing.xs,
@@ -4273,8 +4280,6 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       fontWeight: FontWeight.semibold,
       color: Colors.accent,
     },
-    // The one action that completes the deposit without leaving for another
-    // device. Solid accent, matching every other primary in the app.
     generatedPrimaryBtn: {
       width: "100%",
       minHeight: 50,
@@ -4291,7 +4296,6 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       fontWeight: FontWeight.bold,
       color: Colors.textInverse,
     },
-    // Peer picker
     peerPickerRow: {
       flexDirection: "row",
       alignItems: "center",

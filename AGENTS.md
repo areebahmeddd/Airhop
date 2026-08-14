@@ -12,7 +12,7 @@ The bitchat reference implementation sits alongside the Airhop project as a loca
 - `bitchat/android/`: Kotlin Android implementation (public domain, copy freely)
 - `bitchat/georelays/`: Nostr relay discovery
 
-Nothing under `bitchat/` is committed, so never cite one of those paths in a file that ships with the repo. Read them freely; write the conclusion, not the citation.
+Nothing under `bitchat/` is committed, so a `bitchat/...` path is a dangling reference for anyone without the checkout. Never cite one from **shipping source** (`src/`, `scripts/`, `android/`, `ios/`): read it freely, then write the conclusion rather than the citation. This guide, `.github/agents/` and `.github/skills/` are the exception, since telling an agent where to look in that checkout is exactly their job.
 
 ## Read Before You Write Code
 
@@ -28,7 +28,7 @@ You must read these four documents before making any code suggestions:
 ### Crypto
 
 - **`@noble/curves`, `@noble/ciphers`, `@noble/hashes` only.** No other crypto library. No `Math.random()` for security. No `crypto-js`, no `elliptic`, no `tweetnacl`.
-- `react-native-get-random-values` must be the **first import** in `App.tsx`.
+- `react-native-get-random-values` must be the **first import** in `src/app/app.tsx`. The root `App.tsx` is a one-line re-export that Expo's AppEntry resolves.
 
 ### Native Code
 
@@ -39,7 +39,7 @@ You must read these four documents before making any code suggestions:
 ### Build Order
 
 ```
-src/core/ → Native modules → src/features/ → src/ui/
+src/core/ -> Native modules -> src/features/ -> src/ui/
 ```
 
 Never suggest UI code for a feature whose `src/core/` service isn't tested.
@@ -63,7 +63,8 @@ rather than drifting quietly, so a change to either has to be deliberate.
 - **Never hardcode a user-facing string.** Add a key to `src/i18n/locales/en.ts`, use `T("your.key")`. CI fails on any hardcoded string (`npm run i18n:audit`).
 - English is the shipping language and `en.ts` is the whole catalog. Ten languages land in v1.3.0, which the extraction makes a set of new files rather than a sweep of every screen.
 - Placeholders are named (`{count}`), never positional. Plurals go through `tPlural`, never `count === 1` at a call site.
-- Layout uses logical properties (`marginStart`, `start`, `textAlignEnd`), never `marginLeft` / `left` / `textAlign: "right"`.
+- **No em dashes**, in copy or in comments. Use a comma, parentheses or a full stop.
+- Layout uses logical properties (`marginStart`, `start`, `textAlignEnd`), never `marginLeft` / `left` / `textAlign: "right"`, so right-to-left works when a catalog for it ships.
 - **Some strings must never be translated** because they cross the wire: the `username.ts` word lists, the transmitted `/hug` and `/slap` text (bitchat matches it as an English substring), slash command tokens, channel names. Read [`i18n.md`](.github/skills/i18n.md) before touching any of them.
 
 ### Storage
@@ -77,21 +78,30 @@ rather than drifting quietly, so a change to either has to be deliberate.
 
 ## Where Things Live
 
-| Thing                                                         | Location                 |
-| ------------------------------------------------------------- | ------------------------ |
-| Crypto (Noise XX, identity, DR)                               | `src/core/crypto/`       |
-| BLE mesh (routing, codec, fragments, gossip, courier)         | `src/core/mesh/`         |
-| Nostr (client, gift-wrap, geo-relay, presence, courier-relay) | `src/core/nostr/`        |
-| Payments: tokens, DLEQ, NIP-61, seed (pure)                   | `src/core/payments/`     |
-| Payments: anything touching a mint                            | `src/services/`          |
-| Screen logic                                                  | `src/features/`          |
-| UI components                                                 | `src/ui/`                |
-| State management                                              | `src/store/`             |
-| UI copy: the catalog, the runtime, RTL helpers                | `src/i18n/`              |
-| TurboModule specs (Codegen input)                             | `src/bridge/`            |
-| iOS native                                                    | `ios/`                   |
-| Android native                                                | `android/`               |
-| All protocol constants                                        | `docs/spec/PROTOCOLS.md` |
+| Thing                                                         | Location                   |
+| ------------------------------------------------------------- | -------------------------- |
+| Crypto (Noise XX, identity, DR)                               | `src/core/crypto/`         |
+| Wire format: the packet frame and every payload               | `src/core/mesh/wire/`      |
+| Mesh routing, dedup, fragmentation, source routes             | `src/core/mesh/routing/`   |
+| GCS gossip sync                                               | `src/core/mesh/sync/`      |
+| Announces and nickname normalisation                          | `src/core/mesh/discovery/` |
+| Private-channel and private-group crypto                      | `src/core/mesh/rooms/`     |
+| Store-and-forward envelopes and one-time prekeys              | `src/core/mesh/courier/`   |
+| Live push-to-talk capture and playback                        | `src/core/mesh/voice/`     |
+| Nostr (client, gift-wrap, geo-relay, presence, courier-relay) | `src/core/nostr/`          |
+| Payments: tokens, DLEQ, NIP-61, seed (pure)                   | `src/core/payments/`       |
+| Payments: anything touching a mint                            | `src/services/`            |
+| Screen logic                                                  | `src/features/`            |
+| UI components, hooks, theme tokens                            | `src/ui/`                  |
+| Thin wrappers over OS APIs (permissions, haptics)             | `src/platform/`            |
+| State management                                              | `src/store/`               |
+| UI copy: the catalog, the runtime, RTL helpers                | `src/i18n/`                |
+| TurboModule specs (Codegen input)                             | `src/bridge/`              |
+| Root component and tab state machine                          | `src/app/`                 |
+| Whole-app lifecycle and simulation suites                     | `src/__tests__/`           |
+| iOS native                                                    | `ios/`                     |
+| Android native                                                | `android/`                 |
+| All protocol constants                                        | `docs/spec/PROTOCOLS.md`   |
 
 ## Specialized Agents
 
@@ -122,9 +132,35 @@ Skills are reference files in `.github/skills/`. Read the relevant one before wo
 - `tsc --strict` must pass with zero errors
 - No `any` in `src/core/` or `src/bridge/`
 - Named exports only in `src/core/` and `src/bridge/`
-- File naming: `kebab-case.ts`
+- File naming: `kebab-case.ts`. The one exception is `src/bridge/Native*.ts`, which keeps React Native's Codegen spec convention. A file's name and its primary export must agree (`alert-modal.tsx` exports `AlertModal`).
+- Module specifiers: leaving your top-level `src/` layer means a path alias (`@core/mesh/wire/packet-codec`); staying inside the layer stays relative (`./message-bubble`, `../shared`). Aliases are declared in `tsconfig.json` and mirrored in `package.json` for jest.
+- Write escape sequences, never the literal byte. A regex holding a raw backspace instead of `\b` matches nothing and makes git treat the file as binary, so it is unenforced and unreviewable at once. This has happened here. CI runs `npm run verify:invisibles` over control characters, bidirectional overrides and zero-width characters.
 - One protocol concern per `src/core/` module, each independently testable. A file that needs "and" to describe it is two files.
-- `src/services/mesh-service.ts` and several `src/features/` screens are far past that. They are known refactor targets, **not** precedent. Add a new packet type's logic as a focused module in `src/core/mesh/` and keep the mesh-service side to wiring.
+- `src/services/mesh-service.ts` and several `src/features/` screens are far past that. They are known refactor targets, **not** precedent. Add a new packet type's codec as a focused module in `src/core/mesh/wire/` and keep the mesh-service side to wiring.
+
+## Design Language
+
+Every visual value comes from a token in `src/ui/theme.ts`.
+
+- Read the palette through `useThemeColors()`, never by importing `Colors` or `DarkColors`, or the screen stops answering the theme setting. Check both themes: a wash that reads on white can vanish on near-black.
+- Tokens, not literals, for spacing, radius, font size, weight, duration and elevation. Never arithmetic on one (`FontSize.xs - 1`): if the scale lacks a value, add it to the scale.
+- `MIN_TOUCH` (44pt) is the floor. A smaller control carries `hitSlopFor(visualSize)`, and adjacent controls must not overlap slop.
+- Colour carries meaning, never decoration. Green is end-to-end encrypted, blue is a verified contact, and neither is reused.
+- Reuse `BottomSheet`, `EmptyState`, `PrimaryButton`, `AlertModal` and the settings row primitives before writing a variant.
+- Motion respects the OS reduce-motion switch. Reanimated honours it already; anything on `Animated` uses `useReducedMotion()`.
+
+## Comments and Documentation
+
+Comments here are dense on purpose. The bar for keeping one is that it says something the code cannot.
+
+- **Explain why, not what.** Justify a magic number, name a platform quirk, state an invariant. A comment restating the signature below it is noise.
+- **No history.** A file is not a changelog. Keep the rule a war story justified and drop the story; the commit message is where it belongs.
+- **File headers stay** on every non-trivial module: one sentence on what it is, then only what a reader needs to change it safely. Length tracks load-bearing content, not the file's age.
+- **`//` everywhere**, headers and members alike. The only block comments are two tool pragmas a line comment is invisible to: `/** @jest-environment node */` and a `/** @public */` knip suppression.
+- **Section banners** (`// ---- Name ----`) belong only in a long file or a flat data table, where they are the only navigation.
+- **Style blocks**: justify a number, a touch target or a platform quirk, or say nothing.
+- **Describe the system, not the authors.** The exception is protocol code, where "we" means _this node_ rather than the peer, a distinction the prose needs.
+- `landing/` takes **no** `//` comments at all.
 
 ## Common Mistakes to Avoid
 
@@ -132,7 +168,7 @@ Skills are reference files in `.github/skills/`. Read the relevant one before wo
 | ------------------------------------------- | ---------------------------------------------------------------- |
 | Using `Math.random()` for nonces            | Use `@noble/hashes` HKDF or `crypto.getRandomValues`             |
 | Storing keys in Zustand store               | Zustand is MMKV-persisted; use `core/crypto/keychain` for keys   |
-| Writing routing logic in Swift/Kotlin       | Routing lives in `src/core/mesh/flood-router.ts`                 |
+| Writing routing logic in Swift/Kotlin       | Routing lives in `src/core/mesh/routing/flood-router.ts`         |
 | Creating a new native module for BLE        | Extend `AirhopBLEModule`; one module only                        |
 | Hardcoding a relay URL                      | Load from `assets/data/nostr_relays.csv` via `GeoRelayDirectory` |
 | Writing a user-facing string inline         | Add a key to `src/i18n/locales/en.ts` and use `T("key")`         |

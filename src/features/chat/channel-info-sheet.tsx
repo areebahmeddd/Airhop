@@ -4,41 +4,27 @@
 // Read-only: it describes what a channel is and who is in it. Default channels
 // add a protocol lock notice; a location channel adds a bookmark toggle.
 
+import { GROUP_MAX_MEMBERS } from "@core/mesh/rooms/group-protocol";
+import { relayDisplayHost } from "@core/nostr/geo-relay";
 import { Feather, MaterialCommunityIcons } from "@expo/vector-icons";
-import * as Clipboard from "expo-clipboard";
-import React, { useEffect, useMemo, useRef, useState } from "react";
-import {
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from "react-native";
-import { GROUP_MAX_MEMBERS } from "../../core/mesh/group-protocol";
-import { relayDisplayHost } from "../../core/nostr/geo-relay";
-import { t, useT, useTPlural, type TranslationKey } from "../../i18n";
+import { t, useT, useTPlural, type TranslationKey } from "@i18n";
+import { acknowledged } from "@platform/haptics";
 import {
   geohashLevelName,
   isGeoChannel,
-  isManualGeoChannel,
-  manualGeohashOf,
   type GeoParticipant,
-} from "../../services/geohash-channel-service";
-import { getMeshService } from "../../services/mesh-service";
-import { showAlert } from "../../store/alert-store";
-import { useChannelMembersStore } from "../../store/channel-members-store";
-import { useChatStore } from "../../store/chat-store";
-import { useGeohashBookmarksStore } from "../../store/geohash-bookmarks-store";
-import { useGroupStore } from "../../store/group-store";
-import { usePeerStore } from "../../store/peer-store";
-import {
-  placeNameKey,
-  usePlaceNamesStore,
-} from "../../store/place-names-store";
-import { useSettingsStore } from "../../store/settings-store";
-import Avatar from "../../ui/components/avatar";
-import BottomSheet from "../../ui/components/bottom-sheet";
+} from "@services/geohash-channel-service";
+import { getMeshService } from "@services/mesh-service";
+import { showAlert } from "@store/alert-store";
+import { useChannelMembersStore } from "@store/channel-members-store";
+import { useChatStore } from "@store/chat-store";
+import { useGeohashBookmarksStore } from "@store/geohash-bookmarks-store";
+import { useGroupStore } from "@store/group-store";
+import { usePeerStore } from "@store/peer-store";
+import { placeNameKey, usePlaceNamesStore } from "@store/place-names-store";
+import { useSettingsStore } from "@store/settings-store";
+import Avatar from "@ui/components/avatar";
+import BottomSheet from "@ui/components/bottom-sheet";
 import {
   DISABLED_OPACITY,
   FontFamily,
@@ -49,9 +35,19 @@ import {
   Radius,
   Spacing,
   useThemeColors,
-} from "../../ui/theme";
-import { acknowledged } from "../../utils/haptics";
-import { peerIDToUsername } from "../../utils/username";
+} from "@ui/theme";
+import { isManualGeoChannel, manualGeohashOf } from "@utils/channel-key";
+import { peerIDToUsername } from "@utils/username";
+import * as Clipboard from "expo-clipboard";
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import {
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from "react-native";
 
 // Protocol-defined default channels. Read-only, cannot be left.
 const DEFAULT_CHANNEL_NAMES = new Set([
@@ -293,8 +289,8 @@ export default function ChannelInfoSheet({
 
   // The three at-a-glance facts, computed once so the card below stays declarative:
   // privacy (is it encrypted), reach (which transports carry it), and location
-  // (the geohash, for geo channels). The old sheet spread these across two
-  // paragraph-heavy sections that restated the same thing.
+  // (the geohash, for geo channels), in one card rather than spread across
+  // paragraph-heavy sections restating the same thing.
   type IconName = React.ComponentProps<typeof Feather>["name"];
   // "unlock" for public (unencrypted), distinct from the reach row's "globe".
   const privacyIcon: IconName = encrypted ? "lock" : "unlock";
@@ -362,8 +358,8 @@ export default function ChannelInfoSheet({
           text: T("common.remove"),
           style: "destructive",
           onPress: () => {
-            // The result used to be discarded, so a refusal (not the creator,
-            // roster already changed) closed the sheet looking like a success.
+            // Discarding the result lets a refusal (not the creator, roster
+            // already changed) close the sheet looking like a success.
             const ok =
               getMeshService()?.removeGroupMember(groupIDHex, fingerprint) ===
               true;
@@ -393,7 +389,7 @@ export default function ChannelInfoSheet({
     if (addSelected.size === 0) return;
     // Same as remove: this returns false when we are not the creator, when none
     // of the picked peers has usable keys, or when the roster would pass 16, and
-    // all three used to look identical to success. Success needs nothing said:
+    // unreported all three look identical to success. Success needs nothing said:
     // the roster below is a live subscription, so the new members appear in it.
     const ok =
       getMeshService()?.addGroupMembers(groupIDHex, [...addSelected]) === true;
@@ -407,7 +403,7 @@ export default function ChannelInfoSheet({
   // One unified member list for all channel kinds. A group's signed roster, a
   // geo cell's active participants, a private channel's proven key-holders, or
   // the nearby BLE peers all normalise to the same shape and render identically
-  // (You row, chat action, search). Self is counted the way bitchat counts it —
+  // (You row, chat action, search). Self is counted the way bitchat counts it,
   // included in the total. A group roster already lists you, so it is not
   // re-added; the other lists are others-only, so you appear as a "You" row and
   // add one to the count.
@@ -663,7 +659,7 @@ export default function ChannelInfoSheet({
         </View>
 
         {/* Members: a group's signed roster, a geo cell's active
-                participants, or the nearby BLE peers — one layout for all three,
+                participants, or the nearby BLE peers, one layout for all three,
                 with a "You" row, a search toggle, and a chat action per member. */}
         <View style={styles.section}>
           <View style={styles.memberHeaderRow}>
@@ -912,7 +908,6 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
     sheet: {
       maxHeight: "85%",
     },
-    // ---- Header (centered) ----------------------------------------------------
     headerCenter: {
       alignItems: "center",
       paddingHorizontal: Spacing.xl,
@@ -921,7 +916,6 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       gap: Spacing.sm,
     },
     cornerBtn: {
-      // Top-right corner of the sheet, mirroring the pencil on the contact sheet.
       position: "absolute",
       top: Spacing.base,
       end: Spacing.base,
@@ -957,7 +951,6 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       marginHorizontal: Spacing.xl,
       marginBottom: Spacing.xs,
     },
-    // ---- Body ------------------------------------------------------------------
     body: {
       paddingHorizontal: Spacing.xl,
       paddingTop: Spacing.lg,
@@ -979,7 +972,6 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       color: Colors.textSecondary,
       lineHeight: 22,
     },
-    // ---- At-a-glance facts card ------------------------------------------------
     factsWrap: {
       gap: Spacing.sm,
     },
@@ -1016,7 +1008,6 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       fontFamily: FontFamily.mono,
       letterSpacing: 1,
     },
-    // Relay count on the disclosure row, muted so the label leads.
     factCount: {
       fontSize: FontSize.base,
       fontWeight: FontWeight.medium,
@@ -1035,15 +1026,12 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       alignItems: "center",
       gap: Spacing.sm,
     },
-    // Mono, matching how the geohash above is treated: both are technical
-    // identifiers the user may want to read character by character.
     relayHost: {
       flex: 1,
       fontSize: FontSize.sm,
       color: Colors.textSecondary,
       fontFamily: FontFamily.mono,
     },
-    // "custom" marker, same weight as the member row's "teleported" tag.
     relayTag: {
       fontSize: FontSize.xs,
       lineHeight: 16,
@@ -1062,13 +1050,11 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       alignItems: "center",
       justifyContent: "center",
     },
-    // Single adaptive caveat under the facts card.
     factHint: {
       fontSize: FontSize.sm,
       color: Colors.textMuted,
       lineHeight: 18,
     },
-    // ---- Members ---------------------------------------------------------------
     memberList: {
       gap: 2,
     },
@@ -1091,20 +1077,17 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       lineHeight: 16,
       color: Colors.textMuted,
     },
-    // "You" marker on your own member row.
     memberYou: {
       fontSize: FontSize.xs,
       lineHeight: 16,
       fontWeight: FontWeight.semibold,
       color: Colors.textMuted,
     },
-    // Section label + search icon share one row.
     memberHeaderRow: {
       flexDirection: "row",
       alignItems: "center",
       justifyContent: "space-between",
     },
-    // Matches the app's top search bar: a pill with a border, same padding.
     memberSearchInput: {
       backgroundColor: Colors.surfaceRaised,
       borderRadius: Radius.full,
@@ -1120,15 +1103,11 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       color: Colors.textMuted,
       fontStyle: "italic",
     },
-    // ---- Add members (creator only) --------------------------------------------
     addMembersText: {
       fontSize: FontSize.sm,
       fontWeight: FontWeight.medium,
       color: Colors.textSecondary,
     },
-    // The picker needs its own sheet style. It used to share `sheet`, which is
-    // only a height cap: the info sheet pads its inner scroll body instead, and
-    // this sheet has no inner body to pad, so its content sat flush to the edges.
     addSheet: {
       paddingHorizontal: Spacing.xl,
       paddingBottom: Spacing.xl,
@@ -1178,9 +1157,6 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       fontWeight: FontWeight.semibold,
       color: Colors.textInverse,
     },
-    // ---- Actions ---------------------------------------------------------------
-    // One stack of identical full-width pills, a single marginTop apart. Same
-    // pattern as the Wipe now / Cancel pair in the profile screen.
     actions: {
       width: "100%",
       marginTop: Spacing.sm,
@@ -1204,7 +1180,6 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       fontWeight: FontWeight.medium,
       color: Colors.danger,
     },
-    // ---- Default channel notice -----------------------------------------------
     defaultNotice: {
       flexDirection: "row",
       alignItems: "flex-start",

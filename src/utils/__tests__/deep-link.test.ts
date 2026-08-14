@@ -1,6 +1,13 @@
 /**
  * @jest-environment node
  */
+// What an airhop:// link is allowed to mean.
+//
+// A link arrives from outside the app, so it is attacker-controlled input that
+// ends in a join, a contact card, or a channel key. Parsing has to be total:
+// every malformed shape resolves to nothing rather than a half-built target,
+// and the builders round-trip so a link this app hands out is one it can read
+// back.
 import {
   channelInviteLink,
   parseAirhopLink,

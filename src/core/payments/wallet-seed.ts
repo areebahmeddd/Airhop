@@ -1,7 +1,6 @@
 // Wallet recovery phrase: 12 BIP-39 words that can rebuild the ecash balance.
 //
 // Why this exists
-// ---------------
 // A Cashu proof is a secret plus the mint's signature on it. By default every
 // secret is fresh random bytes, which means the only copy that has ever existed
 // is the one on this phone. Lose the phone and the money is unreachable
@@ -14,7 +13,6 @@
 // mint answers from its own records and the balance reassembles.
 //
 // What it does NOT cover
-// ----------------------
 //   * The Airhop identity itself. That is a separate key and a separate
 //     decision; these words restore money only.
 //   * Which mints you used. Recovery has to ask a specific mint, so the mint
@@ -45,8 +43,6 @@ const PHRASE_ITEM = KEYCHAIN_ITEMS.walletRecoveryPhrase;
 const ENTROPY_BITS = 128;
 
 export const RECOVERY_WORD_COUNT = 12;
-
-// ---- Phrase handling --------------------------------------------------------
 
 // A fresh 12-word phrase. Uses the platform CSPRNG via @scure/bip39.
 export function generateRecoveryPhrase(): string {
@@ -100,8 +96,6 @@ export function recoveryPhraseToSeed(raw: string): Uint8Array {
   return mnemonicToSeedSync(phrase);
 }
 
-// ---- Secure storage ---------------------------------------------------------
-
 export async function loadStoredPhrase(): Promise<string | null> {
   try {
     const stored = await readSecret(PHRASE_ITEM);
@@ -127,8 +121,6 @@ export async function storePhrase(raw: string): Promise<void> {
 // There is deliberately no "forget phrase" here. Once coins are derived from a
 // phrase, deleting it is the same as deleting the coins, so the only thing that
 // removes it is the panic wipe, which destroys every keychain item at once.
-
-// ---- Verification helper ----------------------------------------------------
 
 // Pick `count` distinct word positions to quiz the user on after showing them
 // the phrase. Randomised per setup so screenshotting one verification screen

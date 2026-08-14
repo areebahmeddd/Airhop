@@ -3,7 +3,7 @@
 // Used for courier envelopes: the sender seals a message to a known recipient
 // static key. The recipient can decrypt and verify the sender's identity.
 //
-// Single-message pattern: → e, es, s, ss
+// Single-message pattern: -> e, es, s, ss
 //
 // Wire format: [32 e_pub][48 enc_s+tag][payload_len+16 enc_payload+tag]
 //

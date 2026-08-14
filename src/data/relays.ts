@@ -3,8 +3,8 @@
 // Generated from assets/data/nostr_relays.csv, vendored in this repo:
 //   https://github.com/areebahmeddd/airhop/blob/main/assets/data/nostr_relays.csv
 // It lives here as a TypeScript module rather than being read from the CSV at
-// runtime because Metro does not bundle .csv as an asset, so the file was
-// unreachable from the app, which is why GeoRelayDirectory was never wired up.
+// runtime because Metro does not bundle .csv as an asset, which would leave the
+// file unreachable from the app.
 //
 // Regenerate with: node scripts/generate-relays.js
 //

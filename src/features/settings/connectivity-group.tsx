@@ -1,8 +1,7 @@
 // The connectivity toggles: live voice, Tor, the internet gateway, and the
 // mesh bridge. These sat inside Privacy & Security, one drill-in away, which
-// buried the four switches people actually reach for. They live on the
-// settings hub itself now, in the box the feature list used to occupy, so the
-// whole group is one scroll from opening Settings.
+// buried the four switches people actually reach for. They live on the settings
+// hub itself, so the whole group is one scroll from opening Settings.
 //
 // It stays its own component rather than being inlined into the hub: the Tor
 // toggle owns an async start and an Orbot install sheet, all four toggles
@@ -17,23 +16,23 @@
 // is exactly what the sheet spells out: what turning it on costs, or what you
 // lose by turning it off.
 
+import { useT, type TranslationKey } from "@i18n";
+import { requestLocationPermission } from "@services/location-service";
+import { getMeshService } from "@services/mesh-service";
+import { setTorRouting } from "@services/tor-routing";
+import { showAlert } from "@store/alert-store";
+import { useMeshStateStore } from "@store/mesh-state-store";
+import { useSettingsStore } from "@store/settings-store";
+import BottomSheet from "@ui/components/bottom-sheet";
+import { HIT_SLOP, useThemeColors } from "@ui/theme";
 import React, { useState } from "react";
 import { Linking, Platform, Pressable, Text, View } from "react-native";
-import { setTorRouting } from "../../core/nostr/tor-routing";
-import { useT, type TranslationKey } from "../../i18n";
-import { requestLocationPermission } from "../../services/location-service";
-import { getMeshService } from "../../services/mesh-service";
-import { showAlert } from "../../store/alert-store";
-import { useMeshStateStore } from "../../store/mesh-state-store";
-import { useSettingsStore } from "../../store/settings-store";
-import BottomSheet from "../../ui/components/bottom-sheet";
-import { HIT_SLOP, useThemeColors } from "../../ui/theme";
 import {
   GroupDivider,
   SettingRow,
   SettingSwitch,
   useSharedStyles,
-} from "./shared";
+} from "./settings-primitives";
 
 type ToggleKey = "liveVoice" | "background" | "tor" | "gateway" | "bridge";
 

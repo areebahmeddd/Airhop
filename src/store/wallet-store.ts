@@ -7,14 +7,12 @@
 // touches the network; every mint call lives in `src/services/wallet-service.ts`.
 //
 // Shape
-// -----
 // State is keyed by *account*, meaning a (mint URL, unit) pair. A mint can issue
 // sat, usd and eur from the same host, and those are different currencies: they
 // must never be summed into one balance. `accountKey()` builds the composite key
 // and `parseAccountKey()` splits it back (mint URLs cannot contain `|`).
 //
 // Proof lifecycle
-// ---------------
 //   spendable + verified    swapped at the mint, or minted by us. Known good.
 //   spendable + unverified  received offline (BLE/QR/paste). Cryptographically
 //                           well-formed, and DLEQ-checked when we hold the mint
@@ -34,7 +32,6 @@
 // so the user can re-share or reclaim it after a restart.
 //
 // Backup
-// ------
 // Off by default. When the user sets up a recovery phrase, proof secrets stop
 // being random and are derived from it instead (NUT-13), which is what lets a
 // new device rebuild the balance by asking the mint which of those secrets it
@@ -47,17 +44,13 @@
 // The phrase itself is never stored here. It lives in the keychain alongside
 // the identity keys (see `core/payments/wallet-seed.ts`).
 
+import { KEYCHAIN_ITEMS, readSecret, writeSecret } from "@core/crypto/keychain";
+import { bytesToBase64 } from "@core/encoding/base64";
 import { createMMKV } from "react-native-mmkv";
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
-import {
-  KEYCHAIN_ITEMS,
-  readSecret,
-  writeSecret,
-} from "../core/crypto/keychain";
-import { bytesToBase64 } from "../core/encoding/base64";
 
-// ---- Constants --------------------------------------------------------------
+// ---- Constants ----
 
 export const WALLET_STORAGE_ID = "wallet-store";
 
@@ -71,7 +64,7 @@ const ENCRYPTION_KEY_BYTES = 24;
 // Separator between mint URL and unit in an account key.
 const ACCOUNT_SEP = "|";
 
-// ---- Types ------------------------------------------------------------------
+// ---- Types ----
 
 export interface SerializedDleq {
   e: string;
@@ -148,6 +141,21 @@ export interface WalletTx {
   // unrecoverable. Persisting them first lets `reconcile` rebuild it later.
   // Cleared once the change has been credited.
   meltOutputs?: unknown;
+  // Swap only: the prepared swap (inputs plus blinded outputs), serialised by
+  // `core/payments/swap-preview.ts`, written before the /v1/swap request goes
+  // out and cleared once the outputs are in hand.
+  //
+  // A swap is the one mint operation with no quote to ask about afterwards. If
+  // the response is lost the mint has spent the inputs while the outputs exist
+  // nowhere, because the blinding factors that unblind them were only ever in
+  // memory. Persisting the preview first lets `reconcile` send the identical
+  // request again (NUT-19 returns the same signatures) or, failing that, ask
+  // the mint whether it ever signed those blinded messages (NUT-09).
+  swapPreview?: unknown;
+  // Nutzap only: the kind 9321 event this transaction settles. Held so a swap
+  // replayed long after the watcher moved on can still mark the zap redeemed,
+  // and so a redemption already in flight is not started a second time.
+  nutzapEventId?: string;
   // Populated on `failed`, shown verbatim in the transaction detail sheet.
   error?: string;
 }
@@ -301,7 +309,7 @@ const MAX_REDEEMED_NUTZAPS = 1000;
 // reports "already claimed" as it did before.
 const MAX_CLAIMED_TOKENS = 1000;
 
-// ---- Account keys -----------------------------------------------------------
+// ---- Account keys ----
 
 // Normalise a mint URL so `https://m.example.com/` and `https://m.example.com`
 // are one mint. Lowercases the host (case-insensitive per RFC 3986) but leaves
@@ -333,7 +341,7 @@ export function parseAccountKey(key: string): {
   return { mintUrl: key.slice(0, idx), unit: key.slice(idx + 1) };
 }
 
-// ---- Encrypted storage bootstrap --------------------------------------------
+// ---- Encrypted storage bootstrap ----
 
 // MMKV needs its encryption key at construction time, but reading the Keychain
 // is async, so the instance cannot exist at module scope. Every persist call is
@@ -460,10 +468,10 @@ export function isWalletStorageReady(): boolean {
 export function whenWalletHydrated(): Promise<void> {
   if (hydrationSettled) return Promise.resolve();
   return new Promise((resolve) => {
-    // Cleared when hydration lands, which is the normal case. The timer used to
-    // be armed and forgotten, so every caller left one running for the full
-    // fifteen seconds after the wallet was already open. Harmless, because
-    // settleHydration is idempotent, but it is fifteen seconds of a timer per
+    // Cleared when hydration lands, which is the normal case. Armed and
+    // forgotten, every caller leaves one running for the full fifteen seconds
+    // after the wallet is already open. Harmless, because settleHydration is
+    // idempotent, but it is fifteen seconds of a timer per
     // call holding this closure for no reason.
     const timer = setTimeout(() => {
       settleHydration(false);
@@ -490,7 +498,7 @@ const asyncMMKVStorage = {
   },
 };
 
-// ---- Selectors --------------------------------------------------------------
+// ---- Selectors ----
 
 // The persisted half of the store. Selectors take this rather than the full
 // `WalletState` so a component can hand them the exact slices it subscribed to,
@@ -579,6 +587,38 @@ export function selectUnits(
   return [...units].sort();
 }
 
+// Every full keyset id this device has cached, across every mint it knows.
+//
+// A V4 token carries SHORT keyset ids. The v2 form (ids beginning "01") cannot
+// be decoded without the full id to map it back to: cashu-ts throws rather than
+// guessing, which is what NUT-00 requires, because an unresolved id means we
+// cannot tell which keyset signed the proof and therefore cannot verify it or
+// price its fee. Decoding happens offline, so the answer has to come from here
+// rather than from the mint.
+//
+// Lives on the store because both the wallet service and the chat renderer need
+// it, and a message can carry a token from any mint. Returned flat: cashu-ts
+// matches by id, so grouping by mint would only be thrown away.
+// Split from the selector so a component can memoise on `mints` alone: the
+// return value is a fresh array, and subscribing to it directly would re-render
+// on every store write.
+export function keysetIdsOf(mints: Record<string, StoredMint>): string[] {
+  const out: string[] = [];
+  for (const record of Object.values(mints)) {
+    const cache = record.keysetCache as
+      { keysets?: { id?: unknown }[] } | undefined;
+    if (cache?.keysets === undefined) continue;
+    for (const keyset of cache.keysets) {
+      if (typeof keyset.id === "string") out.push(keyset.id);
+    }
+  }
+  return out;
+}
+
+export function selectKeysetIds(state: WalletState): string[] {
+  return keysetIdsOf(state.mints);
+}
+
 export function selectSecrets(
   state: Pick<WalletData, "proofs">,
   key: string,
@@ -586,7 +626,7 @@ export function selectSecrets(
   return new Set((state.proofs[key] ?? []).map((p) => p.secret));
 }
 
-// ---- Store ------------------------------------------------------------------
+// ---- Store ----
 
 export const useWalletStore = create<WalletState>()(
   persist(
@@ -916,6 +956,13 @@ export const useWalletStore = create<WalletState>()(
           mints: state.mints,
           history: state.history,
           redeemedNutzaps: state.redeemedNutzaps,
+          // Persisted because the thing it answers to outlives the process. A
+          // payment chip lives in a chat message, and messages survive a
+          // restart, so a marker that does not leaves the chip offering Claim on
+          // a token already taken in: the tap swaps proofs the wallet holds, or
+          // reaches a mint that says they are spent. Either way the user is
+          // shown an error for doing exactly what the button asked.
+          claimedTokens: state.claimedTokens,
           nutzapPubkey: state.nutzapPubkey,
           backupEnabled: state.backupEnabled,
           backupVerified: state.backupVerified,

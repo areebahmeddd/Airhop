@@ -6,7 +6,31 @@
 // four honest outcomes (up to date, update available, offline, unexpected),
 // and never a spinner that hangs forever.
 
+import {
+  APP_STORE_URL,
+  APP_VERSION,
+  AUTHOR_NAME,
+  AUTHOR_URL,
+  LATEST_RELEASE_API,
+  LATEST_RELEASE_PAGE,
+  LICENSE_NAME,
+  LICENSE_URL,
+  PLAY_STORE_URL,
+} from "@data/app-info";
+import { birdForVersion } from "@data/releases";
 import Feather from "@expo/vector-icons/Feather";
+import { t, useT } from "@i18n";
+import { useRichText } from "@i18n/rich-text";
+import { useSettingsStore } from "@store/settings-store";
+import PrimaryButton from "@ui/components/primary-button";
+import {
+  FontFamily,
+  FontSize,
+  FontWeight,
+  Spacing,
+  TAB_BAR_CLEARANCE,
+  useThemeColors,
+} from "@ui/theme";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
@@ -20,31 +44,7 @@ import {
   Text,
   View,
 } from "react-native";
-import {
-  APP_STORE_URL,
-  APP_VERSION,
-  AUTHOR_NAME,
-  AUTHOR_URL,
-  LATEST_RELEASE_API,
-  LATEST_RELEASE_PAGE,
-  LICENSE_NAME,
-  LICENSE_URL,
-  PLAY_STORE_URL,
-} from "../../../data/app-info";
-import { birdForVersion } from "../../../data/releases";
-import { t, useT } from "../../../i18n";
-import { useRichText } from "../../../i18n/rich-text";
-import { useSettingsStore } from "../../../store/settings-store";
-import PrimaryButton from "../../../ui/components/primary-button";
-import {
-  FontFamily,
-  FontSize,
-  FontWeight,
-  Spacing,
-  TAB_BAR_CLEARANCE,
-  useThemeColors,
-} from "../../../ui/theme";
-import { SubHeader, useSharedStyles } from "../shared";
+import { SubHeader, useSharedStyles } from "../settings-primitives";
 
 interface Props {
   onBack: () => void;
@@ -470,9 +470,6 @@ function PixelHeart({ color }: { color: string }): React.JSX.Element {
 
 function createStyles(Colors: ReturnType<typeof useThemeColors>) {
   return StyleSheet.create({
-    // The credit is pinned to the foot of the page (marginTop auto), so it
-    // lands wherever the content ends: without tab-bar clearance it ends up
-    // behind the floating pill instead of above it.
     content: {
       flexGrow: 1,
       padding: Spacing.base,
@@ -499,9 +496,6 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       color: Colors.textMuted,
       fontFamily: FontFamily.mono,
     },
-    // The release codename as a labeled value: a small uppercase "Codename"
-    // tag beside the name, the same label idiom as the settings section
-    // titles. Reads as intentional rather than a stray word.
     codenameRow: {
       flexDirection: "row",
       alignItems: "center",
@@ -540,9 +534,6 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       color: Colors.textPrimary,
       textDecorationLine: "underline",
     },
-    // Pinned to the foot of the page: flexGrow on the content plus this auto
-    // top margin pushes the credit down even when the page is short. Two
-    // stacked, centered lines: the heart credit, then the license line.
     credit: {
       marginTop: "auto",
       paddingTop: Spacing["2xl"],

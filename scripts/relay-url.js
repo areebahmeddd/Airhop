@@ -7,7 +7,7 @@
 //
 // The upstream feed lists many hosts twice, bare and with an explicit :443.
 // Those are one relay, and bitchat collapses them before picking a cell's
-// relays, so we do too or our picks diverge from theirs.
+// relays, so Airhop does too, or its picks diverge from theirs.
 
 // Returns "wss://host[:port]" or null. Mirrors bitchat's
 // GeoRelayDirectory.validatedDirectoryAddress: ASCII only, wss/https scheme,

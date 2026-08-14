@@ -2,7 +2,7 @@
 //
 // Without this, "Bluetooth is switched off", "you denied the permission",
 // "location is off" and "nobody is nearby" all render identically, as an empty
-// peer list and a radar spinning "Scanning for nearby peers…" forever. That is
+// peer list and a radar spinning "Scanning for nearby peers..." forever. That is
 // impossible for a user to diagnose and was the single most confusing gap in
 // the Mesh tab.
 //
@@ -13,12 +13,12 @@
 // Not persisted: every field is live device state that must be re-read on
 // launch, never restored from disk.
 
-import { create } from "zustand";
-import { t, useLanguage } from "../i18n";
+import { t, useLanguage } from "@i18n";
 import {
   getDeviceBrand,
   needsBatteryOptimizationPrompt,
-} from "../utils/battery-optimization";
+} from "@platform/battery-optimization";
+import { create } from "zustand";
 import { usePeerStore } from "./peer-store";
 import { useSettingsStore } from "./settings-store";
 
@@ -31,13 +31,13 @@ export type PresenceStatus = "online" | "away" | "invisible";
 // A banner's semantic tone, which the status bar maps to a hue. Each names a
 // distinct network state rather than a generic weight, so the Mesh tab reads at
 // a glance:
-//   danger   a hard blocker to fix now (red)          — Bluetooth off, permission
-//   caution  a feature is unavailable (amber)         — location off
-//   relay    traffic carried over the internet (blue) — Nostr relay
-//   tor      internet traffic onion-routed (purple)   — Tor on
-//   gateway  this device relaying for others (teal)   — internet gateway
-//   bridge   islands stitched over the internet (indigo) — mesh bridge
-//   neutral  a calm, intentional pause (muted)        — Away
+//   danger   a hard blocker to fix now (red), Bluetooth off, permission
+//   caution  a feature is unavailable (amber), location off
+//   relay    traffic carried over the internet (blue), Nostr relay
+//   tor      internet traffic onion-routed (purple), Tor on
+//   gateway  this device relaying for others (teal), internet gateway
+//   bridge   islands stitched over the internet (indigo), mesh bridge
+//   neutral  a calm, intentional pause (muted), Away
 export type BannerTone =
   "danger" | "caution" | "relay" | "tor" | "gateway" | "bridge" | "neutral";
 
@@ -64,11 +64,11 @@ export type WifiFastPath =
 
 // The single reason the BLE mesh cannot run right now, or "none".
 //
-// This replaces the three independent booleans (adapterEnabled,
-// permissionGranted, locationServices) that used to stand in for it. Three
-// booleans describe eight states, five of which are impossible, and nothing
-// stopped them being mutually contradictory - which is how "permission granted,
-// Bluetooth on, radios dead" became a state the UI had no vocabulary for. One
+// One value rather than three independent booleans (adapterEnabled,
+// permissionGranted, locationServices). Three booleans describe eight states,
+// five of which are impossible, and nothing stops them contradicting each other,
+// which is how "permission granted, Bluetooth on, radios dead" becomes a state
+// the UI has no vocabulary for. One
 // value, set from one place, cannot disagree with itself.
 //
 // Ordered loosely by how early it stops us:

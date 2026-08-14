@@ -2,7 +2,7 @@
 //
 // iOS counterpart of AirhopVoiceModule.kt, with the same contract: the mic
 // becomes a stream of AAC-LC frames, and a stream of AAC-LC frames becomes
-// sound. No protocol, no routing, no buffering policy — those live in
+// sound. No protocol, no routing, no buffering policy: those live in
 // voice-capture.ts, flood-router.ts, and voice-player.ts respectively.
 //
 // Format is fixed by the wire protocol (VoiceBurstCodec.aacLC16kMono = 0x01,

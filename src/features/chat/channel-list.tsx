@@ -8,6 +8,38 @@
 // both Chats sub-tabs, so App.tsx mounts the chooser alongside this list.
 
 import { Feather, MaterialCommunityIcons } from "@expo/vector-icons";
+import { t, tPlural, type TranslationKey, useT, useTPlural } from "@i18n";
+import { useRichText } from "@i18n/rich-text";
+import { held } from "@platform/haptics";
+import {
+  geohashLevelName,
+  isGeoChannel,
+} from "@services/geohash-channel-service";
+import { getMeshService } from "@services/mesh-service";
+import { showAlert } from "@store/alert-store";
+import { useChatStore } from "@store/chat-store";
+import { useGroupStore } from "@store/group-store";
+import { usePeerStore } from "@store/peer-store";
+import { placeNameKey, usePlaceNamesStore } from "@store/place-names-store";
+import BottomSheet from "@ui/components/bottom-sheet";
+import EmptyState from "@ui/components/empty-state";
+import { usePullRefreshColors } from "@ui/hooks/use-pull-refresh";
+import {
+  Duration,
+  FontSize,
+  FontWeight,
+  MaxFontScale,
+  MIN_TOUCH,
+  Radius,
+  Spacing,
+  TAB_BAR_CLEARANCE,
+  useThemeColors,
+} from "@ui/theme";
+import { isManualGeoChannel, manualGeohashOf } from "@utils/channel-key";
+import { sortConversationsByActivity } from "@utils/conversation-order";
+import { formatListTimestamp } from "@utils/format";
+import { messagePreviewText } from "@utils/message-preview";
+import { sumUnread } from "@utils/unread";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   Pressable,
@@ -21,61 +53,18 @@ import ReanimatedSwipeable, {
   type SwipeableMethods,
 } from "react-native-gesture-handler/ReanimatedSwipeable";
 import Animated, { FadeIn, LinearTransition } from "react-native-reanimated";
-import { t, tPlural, type TranslationKey, useT, useTPlural } from "../../i18n";
-import { useRichText } from "../../i18n/rich-text";
-import {
-  geohashLevelName,
-  isGeoChannel,
-  isManualGeoChannel,
-  manualGeohashOf,
-} from "../../services/geohash-channel-service";
-import { getMeshService } from "../../services/mesh-service";
-import { showAlert } from "../../store/alert-store";
-import { useChatStore } from "../../store/chat-store";
-import { useGroupStore } from "../../store/group-store";
-import { usePeerStore } from "../../store/peer-store";
-import {
-  placeNameKey,
-  usePlaceNamesStore,
-} from "../../store/place-names-store";
-import BottomSheet from "../../ui/components/bottom-sheet";
-import EmptyState from "../../ui/components/empty-state";
-import {
-  Duration,
-  FontSize,
-  FontWeight,
-  MaxFontScale,
-  MIN_TOUCH,
-  Radius,
-  Spacing,
-  TAB_BAR_CLEARANCE,
-  useThemeColors,
-} from "../../ui/theme";
-import { usePullRefreshColors } from "../../ui/use-pull-refresh";
-import { sortConversationsByActivity } from "../../utils/conversation-order";
-import { formatListTimestamp } from "../../utils/format";
-import { held } from "../../utils/haptics";
-import { messagePreviewText } from "../../utils/message-preview";
-import { sumUnread } from "../../utils/unread";
 import ChannelInfoSheet from "./channel-info-sheet";
 
-// ---------------------------------------------------------------------------
-// Constants
-// ---------------------------------------------------------------------------
-
-// How long the pull-to-refresh spinner stays up. The refresh itself (BLE
-// rescan kick) returns instantly, but a flash-then-gone spinner reads as
-// broken, so hold it briefly for legible feedback.
-const REFRESH_SPINNER_MS = 700;
+// ---- Constants ----
 
 // How often to re-read geohash channel participant counts. They change off a
 // Nostr subscription, so a slow poll keeps the list live without a per-event
 // re-render of the whole screen.
 const GEO_COUNT_POLL_MS = 5000;
 
-// Per-channel transport and visibility options used to live here. They were
-// removed because nothing in the send path ever read them. See the note in the
-// create-channel modal below.
+// There are deliberately no per-channel transport or visibility options here:
+// nothing in the send path reads them. See the note in the create-channel modal
+// below.
 
 // The 6 bitchat-compatible default channels. Always present, cannot be
 // removed: they are part of the mesh protocol.
@@ -139,9 +128,7 @@ const CHANNEL_SCOPE: Record<
   },
 };
 
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
+// ---- Types ----
 
 interface ChannelSection {
   title: string;
@@ -168,9 +155,7 @@ function channelLabel(channel: string): string {
   return channel;
 }
 
-// ---------------------------------------------------------------------------
-// Component
-// ---------------------------------------------------------------------------
+// ---- Component ----
 
 export default function ChannelList({
   onSelectChannel,
@@ -274,7 +259,7 @@ export default function ChannelList({
     swipeableRefs.get(channel)?.close();
   }
 
-  // ---- Derived channel lists ----------------------------------------------
+  // ---- Derived channel lists ----
 
   // Public channels only (exclude dm: and group: prefixed channels).
   const publicChannels = channels.filter(
@@ -331,12 +316,12 @@ export default function ChannelList({
     },
   ];
 
-  // ---- Handlers ------------------------------------------------------------
+  // ---- Handlers ----
 
   function handleRefresh(): void {
     setRefreshing(true);
     getMeshService()?.refresh();
-    setTimeout(() => setRefreshing(false), REFRESH_SPINNER_MS);
+    setTimeout(() => setRefreshing(false), Duration.refreshSpinner);
   }
 
   function toggleSection(title: string): void {
@@ -348,7 +333,7 @@ export default function ChannelList({
     });
   }
 
-  // ---- Your channels swipe / more-options actions -----------------------------
+  // ---- Your channels swipe / more-options actions ----
 
   function handleSwipeMore(channel: string): void {
     closeSwipeable(channel);
@@ -392,7 +377,7 @@ export default function ChannelList({
     );
   }
 
-  // ---- Row rendering ---------------------------------------------------
+  // ---- Row rendering ----
 
   function renderChannelRow(
     item: string,
@@ -598,7 +583,7 @@ export default function ChannelList({
     );
   }
 
-  // ---- Render ---------------------------------------------------------
+  // ---- Render ----
 
   return (
     <View style={styles.container}>
@@ -832,9 +817,7 @@ export default function ChannelList({
   );
 }
 
-// ---------------------------------------------------------------------------
-// Styles
-// ---------------------------------------------------------------------------
+// ---- Styles ----
 
 function createStyles(Colors: ReturnType<typeof useThemeColors>) {
   return StyleSheet.create({
@@ -846,8 +829,6 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       flexGrow: 1,
       paddingBottom: TAB_BAR_CLEARANCE,
     },
-
-    // ---- Section headers -------------------------------------------------
 
     // No justifyContent: "space-between". With a variable number of children
     // (title, optional badge, chevron) space-between would spread space across
@@ -874,7 +855,6 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
     sectionHeaderSpacer: {
       flex: 1,
     },
-    // Section-level unread aggregate, same visual language as the per-row badge.
     sectionBadge: {
       backgroundColor: Colors.accent,
       borderRadius: Radius.full,
@@ -891,15 +871,12 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       color: Colors.textInverse,
       fontVariant: ["tabular-nums"],
     },
-    // Shared 20x20 trailing-icon slot for the section collapse chevron.
     trailingIconBtn: {
       width: 20,
       height: 20,
       alignItems: "center",
       justifyContent: "center",
     },
-
-    // ---- Channel rows ------------------------------------------------------
 
     // Same ROW_INSET as sectionHeader (above), applied directly on this
     // full-bleed Pressable so its background spans edge to edge while its
@@ -995,8 +972,6 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       backgroundColor: Colors.border,
     },
 
-    // ---- Your channels: swipe actions ------------------------------------------
-
     swipeActions: {
       flexDirection: "row",
       height: "100%",
@@ -1013,8 +988,6 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       color: Colors.textSecondary,
       fontWeight: FontWeight.medium,
     },
-
-    // ---- Your channels: "More" sheet --------------------------------------------
 
     // Tight, boxed group, not spread out with the sheet's default gap, which
     // reads as loose and disconnected for a same-purpose action list. Rows are
@@ -1058,8 +1031,6 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       color: Colors.danger,
     },
 
-    // ---- Default channels show more/less -----------------------------------
-
     showMoreBtn: {
       flexDirection: "row",
       alignItems: "center",
@@ -1075,11 +1046,6 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       color: Colors.textMuted,
     },
 
-    // ---- Your channels empty state ---------------------------------------------
-
-    // The container, the icon and the title all moved to <EmptyState/>. Only the
-    // hint survives locally, because it is the one empty state in the app whose
-    // sentence has an inline accent glyph in the middle of it.
     ownEmptyHint: {
       fontSize: FontSize.sm,
       color: Colors.textMuted,
@@ -1089,8 +1055,6 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       color: Colors.accent,
       fontWeight: FontWeight.semibold,
     },
-
-    // ---- Sheets --------------------------------------------------------------
 
     modalSheet: {
       paddingHorizontal: Spacing.xl,

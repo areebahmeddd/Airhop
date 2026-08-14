@@ -2,11 +2,8 @@
 // Shows the user their deterministic human-readable username derived from the
 // generated peer ID. Communicates that this is permanent and unique to them.
 
-import React, { useMemo } from "react";
-import { ScrollView, StyleSheet, Text, View } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
-import { useT, type Translator } from "../../i18n";
-import PrimaryButton from "../../ui/components/primary-button";
+import { useT, type Translator } from "@i18n";
+import PrimaryButton from "@ui/components/primary-button";
 import {
   avatarColor,
   FontFamily,
@@ -16,8 +13,11 @@ import {
   Spacing,
   useThemeColors,
   withAlpha,
-} from "../../ui/theme";
-import { peerIDToUsername } from "../../utils/username";
+} from "@ui/theme";
+import { peerIDToUsername } from "@utils/username";
+import React, { useMemo } from "react";
+import { ScrollView, StyleSheet, Text, View } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 
 // Diameter of the identity card's avatar. Named so its border radius stays a
 // circle if the size is ever tuned.
@@ -178,7 +178,6 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       // content is taller than the viewport and `flex: 1` has nothing to give.
       paddingVertical: Spacing.xl,
     },
-    // Card
     card: {
       backgroundColor: Colors.surface,
       borderRadius: Radius.lg,
@@ -249,7 +248,6 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       color: Colors.textSecondary,
       fontWeight: FontWeight.medium,
     },
-    // Explanation
     explanation: {
       fontSize: FontSize.sm,
       color: Colors.textMuted,
@@ -257,8 +255,6 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       lineHeight: FontSize.sm * 1.6,
       paddingHorizontal: Spacing.md,
     },
-    // Footer: same horizontal margin as the app's floating tab bar
-    // (Spacing.base) so the CTA width matches once onboarding hands off.
     footer: {
       paddingHorizontal: Spacing.base,
       paddingBottom: Spacing.md,

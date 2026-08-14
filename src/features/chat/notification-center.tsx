@@ -7,6 +7,26 @@
 // activity-store, which logs one entry per inbound message or notice.
 
 import { Feather } from "@expo/vector-icons";
+import { t, useT } from "@i18n";
+import { chevronBack, textAlignEnd } from "@i18n/layout";
+import { useActivityStore, type ActivityEntry } from "@store/activity-store";
+import { showAlert } from "@store/alert-store";
+import { useChatStore } from "@store/chat-store";
+import Avatar from "@ui/components/avatar";
+import EmptyState from "@ui/components/empty-state";
+import {
+  Duration,
+  FontSize,
+  FontWeight,
+  HIT_SLOP,
+  MIN_TOUCH,
+  Radius,
+  Spacing,
+  useThemeColors,
+} from "@ui/theme";
+import { channelLabel } from "@utils/conversation-display-name";
+import { formatListTimestamp } from "@utils/format";
+import { resolveDisplayName } from "@utils/peer-display-name";
 import React, { useMemo } from "react";
 import {
   FlatList,
@@ -18,29 +38,6 @@ import {
 } from "react-native";
 import Animated, { FadeIn, LinearTransition } from "react-native-reanimated";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { t, useT } from "../../i18n";
-import { chevronBack, textAlignEnd } from "../../i18n/layout";
-import {
-  useActivityStore,
-  type ActivityEntry,
-} from "../../store/activity-store";
-import { showAlert } from "../../store/alert-store";
-import { useChatStore } from "../../store/chat-store";
-import Avatar from "../../ui/components/avatar";
-import EmptyState from "../../ui/components/empty-state";
-import {
-  Duration,
-  FontSize,
-  FontWeight,
-  HIT_SLOP,
-  MIN_TOUCH,
-  Radius,
-  Spacing,
-  useThemeColors,
-} from "../../ui/theme";
-import { channelLabel } from "../../utils/chat-display-name";
-import { resolveDisplayName } from "../../utils/display-name";
-import { formatListTimestamp } from "../../utils/format";
 
 interface Props {
   visible: boolean;
@@ -173,10 +170,10 @@ function Row({
   const room = entry.isDM ? "" : channelLabel(entry.channel);
   // Formatted once for both the visible time and the row label below.
   const timeLabel = formatListTimestamp(entry.timestampMs);
-  // The row's whole content, in reading order, then where the tap goes. The
-  // label used to be only the destination ("Open #city"), so the sender, the
-  // preview, the time and the unseen dot were all silent: a screen reader user
-  // heard a list of identical "Open" buttons.
+  // The row's whole content, in reading order, then where the tap goes. A label
+  // of only the destination ("Open #city") leaves the sender, the preview, the
+  // time and the unseen dot silent, and a screen reader user hears a list of
+  // identical "Open" buttons.
   const a11y = [
     entry.seen ? null : T("chat.notif.new"),
     name,
@@ -265,7 +262,6 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       paddingVertical: Spacing.md,
       minHeight: 68,
     },
-    // A whisper of accent so unread activity is scannable without shouting.
     rowUnseen: {
       backgroundColor: Colors.accentGhost,
     },

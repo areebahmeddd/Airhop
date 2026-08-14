@@ -9,9 +9,9 @@
 // makes a crowd of people look like a crowd; equipment should recede instead.
 
 import { Feather } from "@expo/vector-icons";
+import { useThemeColors } from "@ui/theme";
 import React, { useMemo } from "react";
 import { StyleSheet, View } from "react-native";
-import { useThemeColors } from "../../ui/theme";
 
 interface Props {
   size?: number;

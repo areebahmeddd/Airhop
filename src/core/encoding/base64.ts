@@ -1,18 +1,12 @@
 // Base64 and base64url, in one place.
 //
-// These had grown into twelve separate implementations across the app: five
-// encoders, five decoders, and three base64url variants, each written where it
-// was needed. They were not equivalent, which is the reason this file exists
-// rather than a tidiness argument:
+// One implementation, because the variants that matter here are not
+// interchangeable and a second copy diverges silently:
 //
-//   * base64url decoding re-padded the input in two places and not in the
-//     third, so the same string could decode in a Nostr envelope and fail in a
-//     private-channel key.
-//   * base64 decoding threw on malformed input in four places and returned null
-//     in the fifth, so a caller's error handling depended on which copy it
-//     happened to reach.
-//   * one encoder hand-rolled the alphabet to avoid `btoa`, a caution the rest
-//     of the codebase had already dropped.
+//   * base64url decoding always re-pads. Skip it and the same string decodes in
+//     a Nostr envelope but fails in a private-channel key.
+//   * decoding returns null on malformed input and never throws, so a caller's
+//     error handling does not depend on which path it reached.
 //
 // Several of these sit directly on crypto paths (contact cards, channel keys,
 // Nostr envelopes, courier drops), where a padding disagreement reads as a

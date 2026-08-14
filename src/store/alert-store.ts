@@ -1,4 +1,4 @@
-// Backing store for the custom alert modal (src/ui/components/custom-alert.tsx),
+// Backing store for the custom alert modal (src/ui/components/alert-modal.tsx),
 // a drop-in replacement for React Native's native `Alert.alert` so every
 // notice/confirm dialog in the app matches its own design language instead
 // of the OS-default alert box. Not persisted, purely transient UI state.

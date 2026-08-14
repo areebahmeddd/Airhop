@@ -67,18 +67,18 @@ For each non-MAINTENANCE change, identify:
 
 Use these standard mappings:
 
-| Upstream (Swift/Kotlin)                              | Airhop TypeScript equivalent                                       |
-| ---------------------------------------------------- | ------------------------------------------------------------------ |
-| `BLEService.swift` / `BluetoothGattClientManager.kt` | `android/`, `ios/` native module + `src/core/mesh/flood-router.ts` |
-| `NoiseSession.swift`                                 | `src/core/crypto/noise-xx.ts`                                      |
-| `BLEFragmentHandler.swift` / `FragmentManager.kt`    | `src/core/mesh/fragment-manager.ts`                                |
-| `GossipSyncManager.swift`                            | `src/core/mesh/gossip-sync.ts`                                     |
-| `CourierStore.swift` / `StoreForwardManager.kt`      | `src/core/mesh/courier-store.ts`                                   |
-| `MessageDeduplicator.swift` / `SecurityManager.kt`   | `src/core/mesh/deduplicator.ts`                                    |
-| `PacketEncoder.swift` / `PacketDecoder.swift`        | `src/core/mesh/packet-codec.ts`                                    |
-| `GeoRelayDirectory.swift`                            | `src/core/nostr/geo-relay.ts`                                      |
-| `GeohashPresenceService.swift`                       | `src/core/nostr/presence.ts`                                       |
-| `TransportConfig.swift`                              | `docs/spec/PROTOCOLS.md` (constants)                               |
+| Upstream (Swift/Kotlin)                              | Airhop TypeScript equivalent                                               |
+| ---------------------------------------------------- | -------------------------------------------------------------------------- |
+| `BLEService.swift` / `BluetoothGattClientManager.kt` | `android/`, `ios/` native module + `src/core/mesh/routing/flood-router.ts` |
+| `NoiseSession.swift`                                 | `src/core/crypto/noise-xx.ts`                                              |
+| `BLEFragmentHandler.swift` / `FragmentManager.kt`    | `src/core/mesh/routing/fragment-manager.ts`                                |
+| `GossipSyncManager.swift`                            | `src/core/mesh/sync/gossip-sync.ts`                                        |
+| `CourierStore.swift` / `StoreForwardManager.kt`      | `src/core/mesh/courier/courier-store.ts`                                   |
+| `MessageDeduplicator.swift` / `SecurityManager.kt`   | `src/core/mesh/routing/deduplicator.ts`                                    |
+| `PacketEncoder.swift` / `PacketDecoder.swift`        | `src/core/mesh/wire/packet-codec.ts`                                       |
+| `GeoRelayDirectory.swift`                            | `src/core/nostr/geo-relay.ts`                                              |
+| `GeohashPresenceService.swift`                       | `src/core/nostr/geohash-presence.ts`                                       |
+| `TransportConfig.swift`                              | `docs/spec/PROTOCOLS.md` (constants)                                       |
 
 ### Step 4: Produce Integration Checklist
 
@@ -94,14 +94,14 @@ Output the checklist in this format:
 
 ### 🔴 PROTOCOL Changes: Evaluate Immediately
 
-- [ ] **[Change title]**: `[upstream file]` → `[airhop equivalent]`  
+- [ ] **[Change title]**: `[upstream file]` -> `[airhop equivalent]`  
       Summary: [what changed]  
       Impact: [does this break Airhop ↔ bitchat compatibility?]  
       Action: [adopt / reject / evaluate, and why]
 
 ### 🟠 SECURITY Patches: Adopt Within 48 Hours
 
-- [ ] **[Change title]**: `[upstream file]` → `[airhop equivalent]`  
+- [ ] **[Change title]**: `[upstream file]` -> `[airhop equivalent]`  
       Summary: [what was fixed]  
       Action: apply to `[airhop file]`
 

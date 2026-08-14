@@ -23,8 +23,8 @@
 // A 6 or 7 char cell is 1.2 km / 150 m wide, so asserting those would only be
 // testing how well we guessed someone's street corner.
 
-import { GEO_CHANNEL_PRECISION } from "../../../services/geohash-channel-service";
-import { encodeGeohash } from "../presence";
+import { GEO_CHANNEL_PRECISION } from "@services/geohash-channel-service";
+import { encodeGeohash } from "../geohash-presence";
 
 // A point in Kumaraswamy Layout, Bengaluru.
 const BLR_LAT = 12.9082;

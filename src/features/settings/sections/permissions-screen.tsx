@@ -17,6 +17,17 @@
 // it is not, the only honest action left is to open Settings.
 
 import Feather from "@expo/vector-icons/Feather";
+import {
+  ensureBlePermissions,
+  hasBlePermissions,
+} from "@platform/ble-permissions";
+import {
+  locationPermissionState,
+  requestLocationPermission,
+} from "@services/location-service";
+import { getMeshService } from "@services/mesh-service";
+import { useMeshStateStore } from "@store/mesh-state-store";
+import { HIT_SLOP } from "@ui/theme";
 import { Camera } from "expo-camera";
 import * as MediaLibrary from "expo-media-library";
 import * as Notifications from "expo-notifications";
@@ -31,25 +42,14 @@ import {
   View,
 } from "react-native";
 import {
-  locationPermissionState,
-  requestLocationPermission,
-} from "../../../services/location-service";
-import { getMeshService } from "../../../services/mesh-service";
-import { useMeshStateStore } from "../../../store/mesh-state-store";
-import { HIT_SLOP } from "../../../ui/theme";
-import {
-  ensureBlePermissions,
-  hasBlePermissions,
-} from "../../../utils/ble-permissions";
-import {
   GroupDivider,
   SettingRow,
   SettingSwitch,
   SubHeader,
   useSharedStyles,
-} from "../shared";
+} from "../settings-primitives";
 
-import { useT, type TranslationKey } from "../../../i18n";
+import { useT, type TranslationKey } from "@i18n";
 interface Props {
   onBack: () => void;
 }

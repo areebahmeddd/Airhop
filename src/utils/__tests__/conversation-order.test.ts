@@ -3,7 +3,7 @@
  */
 // Conversation ordering: pinned first, then most recent activity.
 
-import type { ChatMessage } from "../../store/chat-store";
+import type { ChatMessage } from "@store/chat-store";
 import {
   lastActivityMs,
   sortConversationsByActivity,

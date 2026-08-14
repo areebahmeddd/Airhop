@@ -10,9 +10,10 @@
 //
 // Properties:
 //   - Deterministic: same peerID always gives the same username.
-//   - Collision-resistant: 128 × 128 × 65536 ≈ 1 billion unique names.
+//   - Collision-resistant: 128 x 128 x 65536, about 1 billion unique names.
 //   - Human-readable: common English words, no offensive terms.
-//   - Consistent with ARCHITECTURE.md §2 Identity ("Adjective + Noun + 4-digit suffix").
+//   - Consistent with ARCHITECTURE.md section 2, Identity
+//     ("Adjective + Noun + 4-digit suffix").
 
 // 128 adjectives. Selection: byte[0] % 128.
 const ADJECTIVES: readonly string[] = [
@@ -288,8 +289,6 @@ if (_adjLen !== 128 || _nounLen !== 128) {
   );
 }
 
-// ---- Nostr identities -------------------------------------------------------
-
 // A peer reachable only over the Nostr internet bridge is keyed by its Nostr
 // public key, prefixed to distinguish it from a 16-hex mesh peer ID.
 export const NOSTR_ID_PREFIX = "nostr_";
@@ -305,8 +304,6 @@ export function isNostrId(id: string): boolean {
 export function nostrShortLabel(id: string): string {
   return `npub…${id.slice(-6)}`;
 }
-
-// ---- Public API -------------------------------------------------------------
 
 // Derive a human-readable username from a 16-hex-char peer ID.
 //

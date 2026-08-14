@@ -107,7 +107,7 @@ describe("forwarding an attachment", () => {
 // A screenshot notice is worth sending to the people who could already read the
 // thread, and is a beacon anywhere else. On a location cell the notice is
 // published to Nostr relays as a signed event, which permanently records that
-// this nickname was in this cell at this moment — the opposite of what somebody
+// this nickname was in this cell at this moment, the opposite of what somebody
 // screenshotting police conduct or a threat needs.
 describe("notifiesOnScreenshot", () => {
   it("tells the peer in a direct message", () => {

@@ -1,7 +1,7 @@
 // Bound a promise that has no business taking forever.
 //
-// Every await on the launch path used to be unbounded, and each one was a way
-// for the app to never open. The two that mattered:
+// An unbounded await on the launch path is a way for the app to never open. Two
+// that must always be bounded:
 //
 //   * `readSecret` for the identity, which gates the whole first
 //     render. A Keystore that stalls left a bare background-coloured screen with

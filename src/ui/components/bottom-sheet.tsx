@@ -1,13 +1,11 @@
 // The one bottom sheet in the app.
 //
-// Every sheet - channel info, contact info, the attach picker, the wallet's
-// send/receive panels - used to be a hand-rolled `<Modal animationType="slide">`
-// with its own overlay and a decorative grab handle that did nothing. They all
-// behaved slightly differently and none of them could be dragged, which reads as
-// broken: a grabber is an affordance, and an affordance that ignores your finger
-// is worse than no affordance at all.
+// Every sheet in the app goes through this one: channel info, contact info, the
+// attach picker, the wallet's send and receive panels. A hand-rolled Modal per
+// sheet drifts in behaviour and usually ships a grab handle that ignores the
+// finger, and an affordance that does nothing reads as broken.
 //
-// This owns the parts that should never differ between sheets:
+// This owns the parts that must never differ between sheets:
 //
 //   * the scrim, whose opacity tracks the sheet's position so a half-dragged
 //     sheet shows a half-lit backdrop rather than a full one,
@@ -29,6 +27,7 @@
 // file only - every other file in the app keeps them.
 /* eslint-disable react-hooks/immutability, react-hooks/refs */
 
+import { useT } from "@i18n";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   Keyboard,
@@ -55,9 +54,8 @@ import Animated, {
 } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { scheduleOnRN } from "react-native-worklets";
-import { useT } from "../../i18n";
+import { useKeyboardHeight } from "../hooks/use-keyboard";
 import { Duration, Radius, Spacing, useThemeColors } from "../theme";
-import { useKeyboardHeight } from "../use-keyboard";
 
 // Pull further than this share of the sheet's own height and letting go
 // dismisses instead of springing back. A third is the familiar iOS/Material
@@ -79,10 +77,10 @@ const CLOSE_TIMING = {
 // How long after a slide-out should have finished before the sheet unmounts
 // itself regardless of what the animation reported.
 //
-// The Modal used to be unmounted ONLY from withTiming's completion callback,
-// which runs on the UI thread. That thread stops producing frames the moment
-// the activity is paused, and a paused activity is the single most common thing
-// to happen immediately after a sheet closes: the permission primer's Continue
+// The Modal must not be unmounted only from withTiming's completion callback,
+// which runs on the UI thread. That thread stops producing frames the moment the
+// activity is paused, and a paused activity is the single most common thing to
+// happen immediately after a sheet closes: the permission primer's Continue
 // button resolves startMeshWithPermissions, which opens the OS permission
 // dialog on the next tick. The animation was left mid-flight, the callback
 // never fired with `finished: true`, and `mounted` stayed true forever.
@@ -164,10 +162,10 @@ export default function BottomSheet({
   // presentation it was started for, so a sheet asked for again mid-close is
   // left alone rather than torn down by the previous close.
   //
-  // This used to be a plain "is `visible` still true?" test, which is only
-  // correct for callers that DRIVE the prop. Every caller that mounts the sheet
-  // conditionally passes a constant `visible` instead - channel info, the
-  // message action sheet, the add-members picker, the token scanner - and there
+  // Not a plain "is `visible` still true?" test, which is correct only for
+  // callers that DRIVE the prop. Every caller that mounts the sheet conditionally
+  // passes a constant `visible` instead (channel info, the message action sheet,
+  // the add-members picker, the token scanner) and there
   // the prop is true for the sheet's entire life. So a dismissal the user
   // performed (backdrop tap, drag, system back) found `visible` still true,
   // returned early, and never ran setMounted(false) or onClose().
@@ -426,16 +424,12 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
     scrim: {
       backgroundColor: Colors.overlay,
     },
-    // Base every sheet shares. The caller's own style lands on top of this, so
-    // a sheet that wants a different padding or a maxHeight still gets it.
     sheet: {
       maxHeight: "100%",
       backgroundColor: Colors.surface,
       borderTopLeftRadius: Radius["2xl"],
       borderTopRightRadius: Radius["2xl"],
     },
-    // The grabber owns the space above the sheet's content, so a converted
-    // sheet drops its own paddingTop rather than stacking one on the other.
     handle: {
       width: 36,
       height: 4,

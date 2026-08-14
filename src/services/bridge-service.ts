@@ -17,33 +17,33 @@
 // Boundary-neighbor coverage (subscribing to adjacent cells) is a future
 // refinement; two islands in the same ~1.2 km cell meet today.
 
-import { verifyEvent, type Event as NostrEvent } from "nostr-tools";
 import {
   CarrierDirection,
   encodeNostrCarrier,
   type NostrCarrierPacket,
-} from "../core/mesh/nostr-carrier";
+} from "@core/mesh/wire/nostr-carrier";
 import {
   bridgeStableID,
   createBridgeMeshEvent,
   createBridgePresenceEvent,
   parseBridgeEvent,
-} from "../core/nostr/bridge-event";
+} from "@core/nostr/bridge-event";
 import {
   GEO_RELAY_COUNT,
   GeoRelayDirectory,
   mergeGeoRelays,
-} from "../core/nostr/geo-relay";
-import { loadGeoRelays } from "../core/nostr/geo-relay-source";
+} from "@core/nostr/geo-relay";
+import { loadGeoRelays } from "@core/nostr/geo-relay-source";
 import {
   deriveGeohashIdentity,
   deriveGeohashSeed,
   geohashDisplayName,
   type GeohashIdentity,
-} from "../core/nostr/geohash-identity";
-import type { NostrClient } from "../core/nostr/nostr-client";
-import { decodeGeohash, encodeGeohash } from "../core/nostr/presence";
-import { useSettingsStore } from "../store/settings-store";
+} from "@core/nostr/geohash-identity";
+import { decodeGeohash, encodeGeohash } from "@core/nostr/geohash-presence";
+import type { NostrClient } from "@core/nostr/nostr-client";
+import { useSettingsStore } from "@store/settings-store";
+import { verifyEvent, type Event as NostrEvent } from "nostr-tools";
 import { getCoarseLocation } from "./location-service";
 
 // Geohash precision of the rendezvous cell (~1.2 km neighborhood), matching
@@ -134,7 +134,7 @@ export class BridgeService {
     this.relayDirectory.loadEntries(loadGeoRelays());
   }
 
-  // ---- Lifecycle ------------------------------------------------------------
+  // ---- Lifecycle ----
 
   setEnabled(enabled: boolean): void {
     if (enabled === this.enabled) return;
@@ -187,8 +187,8 @@ export class BridgeService {
     // from, for as long as their ten-minute presence TTL had left to run.
     this.participants.clear();
     // And let the first heartbeat into the new cell go out immediately rather
-    // than waiting out the rate limit from the old one, which left the device in
-    // a cell nobody there could see it in for up to half a minute.
+    // than waiting out the rate limit from the previous one, which leaves the
+    // device in a cell nobody there can see it in for up to half a minute.
     this.lastPresenceAtMs = 0;
     if (cell === null) return;
     const relays = this.relaysForCell(cell);
@@ -237,7 +237,7 @@ export class BridgeService {
     return undefined;
   }
 
-  // ---- Outgoing (sender role) ----------------------------------------------
+  // ---- Outgoing (sender role) ----
 
   // Compose and ship the bridged copy of an outgoing public #bluetooth message.
   // Call AFTER the radio send. `timestampMs` must equal the radio packet's
@@ -280,7 +280,7 @@ export class BridgeService {
     if (payload !== null) this.hooks.sendCarrierToBridge(payload, peer.peerID);
   }
 
-  // ---- Radio-copy accounting -----------------------------------------------
+  // ---- Radio-copy accounting ----
 
   // Record a public #bluetooth radio message so a bridged copy of the same
   // message (same origin sender/timestamp/content) is not rendered twice.
@@ -296,7 +296,7 @@ export class BridgeService {
     );
   }
 
-  // ---- Subscription ingress (internet role) --------------------------------
+  // ---- Subscription ingress (internet role) ----
 
   private handleRendezvousEvent(event: NostrEvent): void {
     if (!this.enabled) return;
@@ -356,7 +356,7 @@ export class BridgeService {
     this.downlinkSendTimes.push(now);
   }
 
-  // ---- Mesh carrier ingress (both roles) -----------------------------------
+  // ---- Mesh carrier ingress (both roles) ----
 
   handleMeshCarrier(
     carrier: NostrCarrierPacket,
@@ -417,7 +417,7 @@ export class BridgeService {
     this.recordParticipant(event.pubkey);
   }
 
-  // ---- Presence + participants ---------------------------------------------
+  // ---- Presence + participants ----
 
   private publishPresence(): void {
     if (!this.enabled || this.activeCell === null) return;
@@ -465,7 +465,7 @@ export class BridgeService {
     return this.participants.size;
   }
 
-  // ---- Helpers --------------------------------------------------------------
+  // ---- Helpers ----
 
   private injectRemote(
     event: NostrEvent,

@@ -18,16 +18,16 @@
 // OS is two flows to reason about and two to keep compliant, for no benefit to
 // anyone using it.
 
+import { useT } from "@i18n";
+import { FontSize, Radius, Spacing, useThemeColors } from "@ui/theme";
 import React, { useMemo } from "react";
 import { Linking, ScrollView, StyleSheet, Text, View } from "react-native";
-import { useT } from "../../../i18n";
-import { FontSize, Radius, Spacing, useThemeColors } from "../../../ui/theme";
 import {
   GroupDivider,
   SettingLinkRow,
   SubHeader,
   useSharedStyles,
-} from "../shared";
+} from "../settings-primitives";
 
 interface Props {
   onBack: () => void;
@@ -84,8 +84,6 @@ export default function SupportScreen({ onBack }: Props): React.JSX.Element {
 
 function createLocalStyles(Colors: ReturnType<typeof useThemeColors>) {
   return StyleSheet.create({
-    // A small personal note, set in its own soft card so it reads as an aside
-    // rather than a plea tacked under the payment rows.
     note: {
       marginTop: Spacing.xs,
       backgroundColor: Colors.surface,

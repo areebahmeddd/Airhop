@@ -16,27 +16,22 @@
 // Every number is live. Peers come from the same store the Mesh tab renders, so
 // what is shown here and what is shown there can never disagree.
 
+import { GCS_MAX_BYTES, GCS_TARGET_FPR } from "@core/mesh/sync/gossip-sync";
+import { t, useT } from "@i18n";
+import { getMeshService } from "@services/mesh-service";
+import { useMeshStateStore } from "@store/mesh-state-store";
+import { REACHABLE_TTL_MS, usePeerStore } from "@store/peer-store";
+import { FontFamily, FontSize, Spacing, useThemeColors } from "@ui/theme";
+import { formatNumber } from "@utils/format";
+import { resolveDisplayName } from "@utils/peer-display-name";
 import React, { useEffect, useMemo, useState } from "react";
 import { ScrollView, Text, View } from "react-native";
-import { GCS_MAX_BYTES, GCS_TARGET_FPR } from "../../../core/mesh/gossip-sync";
-import { t, useT } from "../../../i18n";
-import { getMeshService } from "../../../services/mesh-service";
-import { useMeshStateStore } from "../../../store/mesh-state-store";
-import { REACHABLE_TTL_MS, usePeerStore } from "../../../store/peer-store";
-import {
-  FontFamily,
-  FontSize,
-  Spacing,
-  useThemeColors,
-} from "../../../ui/theme";
-import { resolveDisplayName } from "../../../utils/display-name";
-import { formatNumber } from "../../../utils/format";
 import {
   GroupDivider,
   SettingRow,
   SubHeader,
   useSharedStyles,
-} from "../shared";
+} from "../settings-primitives";
 
 interface Props {
   onBack: () => void;

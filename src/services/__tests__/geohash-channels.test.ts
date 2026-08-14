@@ -13,17 +13,19 @@
 // Both failures are invisible in local testing, since the sender sees their own
 // message fine, so they're pinned here.
 
-import { GeoRelayDirectory } from "../../core/nostr/geo-relay";
-import { decodeGeohash, encodeGeohash } from "../../core/nostr/presence";
-import { GEO_RELAYS } from "../../data/relays";
+import { GeoRelayDirectory } from "@core/nostr/geo-relay";
+import { decodeGeohash, encodeGeohash } from "@core/nostr/geohash-presence";
+import { GEO_RELAYS } from "@data/relays";
+import {
+  geohashChannel,
+  isManualGeoChannel,
+  manualGeohashOf,
+} from "@utils/channel-key";
 import {
   GEO_CHANNEL_PRECISION,
-  geohashChannel,
   geohashLevelName,
   isGeoChannel,
-  isManualGeoChannel,
   isValidGeohash,
-  manualGeohashOf,
   normalizeGeohash,
 } from "../geohash-channel-service";
 
@@ -34,7 +36,7 @@ const LONDON = { lat: 51.5074, lng: -0.1278 };
 const LONDON_NEARBY = { lat: 51.5145, lng: -0.127 };
 const TOKYO = { lat: 35.6762, lng: 139.6503 };
 
-describe("channel → precision mapping", () => {
+describe("channel -> precision mapping", () => {
   it("matches bitchat's level table", () => {
     // block=7, neighborhood=6, city=5, province=4, region=2.
     expect(GEO_CHANNEL_PRECISION["#block"]).toBe(7);

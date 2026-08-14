@@ -29,19 +29,18 @@ const ts = require("typescript");
 
 const ROOT = path.join(__dirname, "..");
 
-/**
- * Translations evaluated at module load, which freeze in whichever language the
- * app started in.
- *
- * This is the one i18n bug the type system cannot see and a screenshot will not
- * show you: `const SCOPES = { tag: t("chat.scope.mesh") }` type-checks, renders
- * correctly, and is simply wrong the moment somebody changes language, because
- * the module was evaluated once at import. It has to be a key table the
- * component translates on render instead.
- *
- * Found 25 of these the first time it ran, across four files, all written by
- * hand and all invisible in review.
- */
+// Translations evaluated at module load, which freeze in whichever language the
+// app started in.
+//
+// This is the one i18n bug the type system cannot see and a screenshot will not
+// show you: `const SCOPES = { tag: t("chat.scope.mesh") }` type-checks, renders
+// correctly, and is simply wrong the moment somebody changes language, because
+// the module was evaluated once at import. It has to be a key table the
+// component translates on render instead.
+//
+// Found 25 of these the first time it ran, across four files, all written by
+// hand and all invisible in review.
+// /
 function frozenTranslations(files) {
   const found = [];
   for (const file of files) {
@@ -134,13 +133,16 @@ const IGNORE = new Set([
   // The transmitted /slap payload. This one must NEVER be extracted: bitchat
   // recognises an incoming emote by matching these exact English words, so a
   // translated variant stops the two apps understanding each other. See the
-  // do-not-translate table in .github/skills/localization.md.
+  // do-not-translate table in .github/skills/i18n.md.
   "around a bit with a large trout",
   // An invariant breach in the offline coin selector, thrown at a stack trace
   // and never rendered. Same rule as the `src/core/` skip above: translating
   // exception text makes a field report harder to read, not easier.
   "offline selection did not map back to stored proofs (matched",
   ", covering",
+  // The same invariant on the melt side, thrown where a short selection would
+  // otherwise under-fund a Lightning payment.
+  "melt selection did not map back to stored proofs",
 ]);
 
 // JSX text, anchored on a closing tag. Without requiring the `</`, a generic
@@ -150,17 +152,16 @@ const IGNORE = new Set([
 // "Version", "Appearance", "Close". Anchoring here is exact instead of clever.
 const JSX_TEXT = />\s*([A-Z][^<>{}\n]{2,200}?)\s*<\//g;
 
-/**
- * The string and template literals on a line, plus the line with any trailing
- * `//` comment removed.
- *
- * A regex cannot do this. `<Feather name="x" size={22} color="#FFF" />` makes
- * /"([^"]{2,})"/ match the gap *between* two literals (` size={22} color=`),
- * because the engine is free to start at the closing quote of the first one.
- * Every such false positive looked like real copy and had to be explained away
- * by hand. Scanning left to right, tracking whether we are inside a literal,
- * is both correct and simpler to reason about.
- */
+// The string and template literals on a line, plus the line with any trailing
+// `//` comment removed.
+//
+// A regex cannot do this. `<Feather name="x" size={22} color="#FFF" />` makes
+// /"([^"]{2,})"/ match the gap *between* two literals (` size={22} color=`),
+// because the engine is free to start at the closing quote of the first one.
+// Every such false positive looked like real copy and had to be explained away
+// by hand. Scanning left to right, tracking whether the scanner is inside a literal,
+// is both correct and simpler to reason about.
+// /
 function scanLiterals(line) {
   const literals = [];
   let code = "";
@@ -257,19 +258,18 @@ function collect(file) {
   return hits.map((h) => ({ ...h, file: rel }));
 }
 
-/**
- * The two shapes the line scanner above cannot see, found on the AST instead.
- *
- *   1. JSX text that wraps. JSX_TEXT is applied per line and forbids a newline
- *      inside the match, and prettier wraps at 80 columns, so any sentence long
- *      enough to be worth translating is exactly the one that escapes it.
- *   2. Template literals. The line scanner bails on any line containing `${`,
- *      which is right for a continuation line and wrong for the literal itself.
- *
- * A node knows its own extent, so neither problem exists here. Additive:
- * everything still passes looksLikeCopy and SKIP_FILES, and results are deduped
- * against the line scanner.
- */
+// The two shapes the line scanner above cannot see, found on the AST instead.
+//
+//   1. JSX text that wraps. JSX_TEXT is applied per line and forbids a newline
+//      inside the match, and prettier wraps at 80 columns, so any sentence long
+//      enough to be worth translating is exactly the one that escapes it.
+//   2. Template literals. The line scanner bails on any line containing `${`,
+//      which is right for a continuation line and wrong for the literal itself.
+//
+// A node knows its own extent, so neither problem exists here. Additive:
+// everything still passes looksLikeCopy and SKIP_FILES, and results are deduped
+// against the line scanner.
+// /
 function collectAst(file) {
   const rel = path.relative(ROOT, file);
   if (shouldSkip(rel)) return [];

@@ -12,16 +12,14 @@
 // payment can still be pulled back. All this does is collect an amount and
 // report that answer in the same words every time.
 
-import React, { useMemo, useState } from "react";
-import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
-import { useT } from "../../i18n";
+import { useT } from "@i18n";
 import {
   describePayResult,
   payPerson,
   type PayResult,
-} from "../../services/ecash-transfer";
-import { showAlert } from "../../store/alert-store";
-import BottomSheet from "../../ui/components/bottom-sheet";
+} from "@services/payment-router";
+import { showAlert } from "@store/alert-store";
+import BottomSheet from "@ui/components/bottom-sheet";
 import {
   DISABLED_OPACITY,
   FontSize,
@@ -29,7 +27,9 @@ import {
   Radius,
   Spacing,
   useThemeColors,
-} from "../../ui/theme";
+} from "@ui/theme";
+import React, { useMemo, useState } from "react";
+import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 
 interface Props {
   visible: boolean;
@@ -216,9 +216,6 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       alignItems: "center",
       justifyContent: "center",
     },
-    // Dismiss actions read at full contrast, matching the wallet sheets, the
-    // scanner and the alert buttons: a muted label on a filled pill reads as
-    // disabled rather than as the quieter of two choices.
     cancelText: {
       fontSize: FontSize.base,
       color: Colors.textPrimary,

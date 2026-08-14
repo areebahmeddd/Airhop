@@ -4,7 +4,7 @@
 // loads: relays silently double-counted or dropped, changing which relays a
 // geohash cell converges on.
 
-import { GEO_RELAYS } from "../../../data/relays";
+import { GEO_RELAYS } from "@data/relays";
 import { validateRelayUrl } from "../geo-relay";
 
 const { canonicalRelayUrl } = require("../../../../scripts/relay-url.js") as {

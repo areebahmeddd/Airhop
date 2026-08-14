@@ -6,6 +6,26 @@
 // cell.
 
 import { Feather } from "@expo/vector-icons";
+import { t, useT } from "@i18n";
+import {
+  geohashLevelName,
+  isValidGeohash,
+  normalizeGeohash,
+} from "@services/geohash-channel-service";
+import { getMeshService } from "@services/mesh-service";
+import { useGeohashBookmarksStore } from "@store/geohash-bookmarks-store";
+import { usePlaceNamesStore } from "@store/place-names-store";
+import BottomSheet from "@ui/components/bottom-sheet";
+import {
+  FontFamily,
+  FontSize,
+  FontWeight,
+  HIT_SLOP,
+  Radius,
+  Spacing,
+  useThemeColors,
+} from "@ui/theme";
+import { geohashNeighbours } from "@utils/geohash-grid";
 import { useEffect, useMemo, useState } from "react";
 import {
   Pressable,
@@ -15,26 +35,6 @@ import {
   TextInput,
   View,
 } from "react-native";
-import { t, useT } from "../../i18n";
-import {
-  geohashLevelName,
-  isValidGeohash,
-  normalizeGeohash,
-} from "../../services/geohash-channel-service";
-import { getMeshService } from "../../services/mesh-service";
-import { useGeohashBookmarksStore } from "../../store/geohash-bookmarks-store";
-import { usePlaceNamesStore } from "../../store/place-names-store";
-import BottomSheet from "../../ui/components/bottom-sheet";
-import {
-  FontFamily,
-  FontSize,
-  FontWeight,
-  HIT_SLOP,
-  Radius,
-  Spacing,
-  useThemeColors,
-} from "../../ui/theme";
-import { geohashNeighbours } from "../../utils/geohash-grid";
 
 // How long typing has to stop before the cell's name is looked up. Long enough
 // that a six-character geohash costs one lookup rather than six.
@@ -42,9 +42,9 @@ const NAME_LOOKUP_DEBOUNCE_MS = 500;
 
 interface Props {
   visible: boolean;
-  /** Dismiss entirely: backdrop tap or system back. */
+  // Dismiss entirely: backdrop tap or system back.
   onClose: () => void;
-  /** Step back to whatever opened this sheet, for the Back button. */
+  // Step back to whatever opened this sheet, for the Back button.
   onBack: () => void;
   onJoined: (channel: string) => void;
 }
@@ -338,8 +338,7 @@ export function GeohashJumpSheet({
           disabled={!valid}
           accessibilityRole="button"
           accessibilityLabel={T("chat.jump.go")}
-          // Without this the button announces as plain text and a
-          // reader user taps into nothing.
+          // Without this a reader user taps into what sounds like plain text.
           accessibilityState={{ disabled: !valid }}
         >
           <Text style={styles.confirmText}>{T("chat.jump.go")}</Text>
@@ -415,7 +414,7 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       fontSize: FontSize.sm,
       color: Colors.danger,
     },
-    // ---- Saved places (bookmarks) ----------------------------------------------
+    // ---- Saved places (bookmarks) ----
     // flexShrink so the saved-places list yields height when the sheet is
     // squeezed (keyboard up on a short screen) rather than pushing the Back/Go
     // row past the sheet's maxHeight, where it would be clipped and unreachable.
@@ -453,8 +452,6 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       fontSize: FontSize.xs,
       color: Colors.textMuted,
     },
-    // Nearby cells: a wrapped row of small chips, direction over geohash, so
-    // eight of them fit without a horizontal scroller to discover.
     nearbyWrap: {
       flexDirection: "row",
       flexWrap: "wrap",
@@ -501,9 +498,6 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       alignItems: "center",
       justifyContent: "center",
     },
-    // Dismiss actions read at full contrast, matching the wallet sheets,
-    // the scanner and the alert buttons: a muted label on a filled pill
-    // reads as disabled rather than as the quieter of two choices.
     cancelText: {
       fontSize: FontSize.base,
       color: Colors.textPrimary,

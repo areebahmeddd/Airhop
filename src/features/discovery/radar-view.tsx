@@ -1,10 +1,24 @@
-﻿// Proximity map for the Mesh tab.
+// Proximity map for the Mesh tab.
 // Peers are placed on distance-calibrated rings based on BLE signal recency.
 // Distance is estimated from packet age; once the BLE service exposes RSSI
 // that value will replace the recency proxy.
 // Compass N is decorative: BLE gives proximity only, not bearing.
 
 import { Feather } from "@expo/vector-icons";
+import { useMeshStateStore, type BleBlocker } from "@store/mesh-state-store";
+import { REACHABLE_TTL_MS, type NearbyPeer } from "@store/peer-store";
+import Avatar from "@ui/components/avatar";
+import StatusDot from "@ui/components/status-dot";
+import { useReducedMotion } from "@ui/hooks/use-reduced-motion";
+import {
+  FontSize,
+  FontWeight,
+  hitSlopFor,
+  MaxFontScale,
+  Radius,
+  Spacing,
+  useThemeColors,
+} from "@ui/theme";
 import * as Haptics from "expo-haptics";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -15,34 +29,17 @@ import {
   Text,
   View,
 } from "react-native";
-import {
-  useMeshStateStore,
-  type BleBlocker,
-} from "../../store/mesh-state-store";
-import { REACHABLE_TTL_MS, type NearbyPeer } from "../../store/peer-store";
-import Avatar from "../../ui/components/avatar";
-import StatusDot from "../../ui/components/status-dot";
-import {
-  FontSize,
-  FontWeight,
-  hitSlopFor,
-  MaxFontScale,
-  Radius,
-  Spacing,
-  useThemeColors,
-} from "../../ui/theme";
-import { useReducedMotion } from "../../ui/use-reduced-motion";
 import RelayGlyph from "./relay-glyph";
 
-import { t, useT, useTPlural, type TranslationKey } from "../../i18n";
-import { resolveDisplayName } from "../../utils/display-name";
+import { t, useT, useTPlural, type TranslationKey } from "@i18n";
+import { resolveDisplayName } from "@utils/peer-display-name";
 
 // What the dial says when there are no peers, per reason.
 //
 // The banner above the radar carries the button that fixes each of these; this
 // is the same fact restated where the user is actually looking. It must never
-// say "Scanning…" over a radio that is not scanning, which is what happened for
-// every blocker the old two-boolean version could not represent.
+// say "Scanning..." over a radio that is not scanning, which is what happened for
+// every blocker, including those a two-boolean version cannot represent.
 function blockerHeadline(blocker: BleBlocker): string {
   switch (blocker) {
     case "none":
@@ -85,9 +82,7 @@ function blockerHint(blocker: BleBlocker): string {
   }
 }
 
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
+// ---- Types ----
 
 interface Props {
   peers: NearbyPeer[];
@@ -95,9 +90,7 @@ interface Props {
   onSelectPeer: (peer: NearbyPeer) => void;
 }
 
-// ---------------------------------------------------------------------------
-// Constants
-// ---------------------------------------------------------------------------
+// ---- Constants ----
 
 // Ring assignment is signal-based when RSSI is known, and falls back to
 // recency when it isn't (a peer heard via a multi-hop relay has no RSSI of its
@@ -160,9 +153,7 @@ const MAX_CANVAS = 420;
 const TAP_WINDOW_MS = 2500;
 const EGG_TAPS = 5;
 
-// ---------------------------------------------------------------------------
-// Component
-// ---------------------------------------------------------------------------
+// ---- Component ----
 
 // Memoised, because its props are now stable.
 //
@@ -340,10 +331,10 @@ function RadarView({ peers, now, onSelectPeer }: Props): React.JSX.Element {
 
   // Stable angle derived from the peer ID.
   //
-  // This was previously `indexInRing / countInRing`, which meant a peer's
-  // position was a function of how many OTHER peers happened to share its ring:
-  // anyone joining or leaving made every existing dot jump to a new angle, and
-  // the list re-sorts on every announce. Hashing the ID instead keeps each peer
+  // Not `indexInRing / countInRing`, which makes a peer's position a function of
+  // how many OTHER peers share its ring: anyone joining or leaving sends every
+  // existing dot to a new angle, and the list re-sorts on every announce. Hashing
+  // the ID instead keeps each peer
   // parked in one spot for as long as it's visible.
   function peerAngle(peerID: string): number {
     let hash = 0;
@@ -517,10 +508,10 @@ function RadarView({ peers, now, onSelectPeer }: Props): React.JSX.Element {
               onPress={handleCenterPress}
               accessibilityRole="button"
               accessibilityLabel={T("mesh.radar.you_centre")}
-              // The label used to promise a rescan. It does not do one: BLE
-              // scanning runs continuously and peers arrive on announce events,
-              // as the comment on handleCenterPress says. Naming it "rescan"
-              // meant a screen reader user was told the one control on this
+              // The label must not promise a rescan. There is none: BLE scanning
+              // runs continuously and peers arrive on announce events, as the
+              // comment on handleCenterPress says. Naming it "rescan" tells a
+              // screen reader user the one control on this
               // screen would fetch peers, and it never did.
               accessibilityHint={T("mesh.radar.sonar_hint")}
               hitSlop={hitSlopFor(SELF_SIZE)}
@@ -581,9 +572,7 @@ function RadarView({ peers, now, onSelectPeer }: Props): React.JSX.Element {
   );
 }
 
-// ---------------------------------------------------------------------------
-// Peer node
-// ---------------------------------------------------------------------------
+// ---- Peer node ----
 
 interface PeerNodeProps {
   peer: NearbyPeer;
@@ -644,9 +633,7 @@ function PeerNode({
 
 export default React.memo(RadarView);
 
-// ---------------------------------------------------------------------------
-// Styles
-// ---------------------------------------------------------------------------
+// ---- Styles ----
 
 function createStyles(Colors: ReturnType<typeof useThemeColors>) {
   return StyleSheet.create({
@@ -719,8 +706,6 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       padding: 1,
     },
     peerLabel: {
-      // Was `FontSize.xs - 1`, arithmetic on a token to reach a size the scale
-      // did not have. It has one now.
       fontSize: FontSize["2xs"],
       color: Colors.textMuted,
       textAlign: "center",

@@ -11,8 +11,8 @@
 // language list) is mocked in tests and falls back to English if it throws. The
 // decisions above it stay independent of it either way.
 
-import { t, tPlural } from "../i18n";
-import type { ChatAttachment, ChatMessage } from "../store/chat-store";
+import { t, tPlural } from "@i18n";
+import type { ChatAttachment, ChatMessage } from "@store/chat-store";
 
 // A DM channel is keyed "dm:<peerID>" (see chat-store). Everything else is a
 // public channel like "#city".
@@ -137,9 +137,7 @@ export function shouldHapticPing(p: {
   );
 }
 
-// ---------------------------------------------------------------------------
 // Nearby peers
-// ---------------------------------------------------------------------------
 
 // The floor between two nearby notices. The mesh finding someone is worth
 // knowing about; it is not worth knowing about every time a radio flaps or a

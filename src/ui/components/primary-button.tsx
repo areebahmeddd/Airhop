@@ -49,8 +49,9 @@ export default function PrimaryButton({
   return (
     <Pressable
       // A static style array with the press held in state, which is how every
-      // other button surface in this app is written (see settings/shared.tsx and
-      // the sheet action pairs). Pressable's `style={({ pressed }) => ...}`
+      // other button surface in this app is written (see
+      // settings/settings-primitives.tsx and the sheet action pairs).
+      // Pressable's `style={({ pressed }) => ...}`
       // callback form is the leaner idiom and is available again now that the
       // NativeWind JSX wrapper is gone, but it is deliberately not used here:
       // one consistent way to write a button beats a lone exception, and the
@@ -86,8 +87,6 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       backgroundColor: Colors.accent,
       borderRadius: Radius.full,
       paddingVertical: Spacing.md + 2,
-      // Padding alone already clears the floor at the default text size; the
-      // explicit minimum is what holds it there if the label ever shrinks.
       minHeight: MIN_TOUCH,
       alignItems: "center",
       justifyContent: "center",

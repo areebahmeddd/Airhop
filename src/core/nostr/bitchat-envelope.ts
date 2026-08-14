@@ -14,14 +14,14 @@ import {
   encodeNoisePrivateMessage,
   encodeNoiseReceipt,
   NoisePayloadType,
-} from "../mesh/noise-payload";
+} from "../mesh/wire/noise-payload";
 import {
   BROADCAST_ID,
   decodePacket,
   encodePacket,
   PacketType,
   type Packet,
-} from "../mesh/packet-codec";
+} from "../mesh/wire/packet-codec";
 
 const PREFIX = "bitchat1:";
 

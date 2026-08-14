@@ -26,13 +26,13 @@ When the user shows you a file, diff, or describes a change, evaluate it against
 
 ### 2. Layer Boundary Violations
 
-- Native code in `android/` or `ios/`: Does it contain routing logic, crypto decisions, or packet interpretation? If yes → violation. It must only expose raw bytes.
+- Native code in `android/` or `ios/`: Does it contain routing logic, crypto decisions, or packet interpretation? If yes -> violation. It must only expose raw bytes.
 - TypeScript importing from `android/` or `ios/` directly? Violation.
 - `src/core/` importing from `src/features/` or `src/ui/`? Violation (dependency inversion).
 
 ### 3. Protocol Compatibility
 
-- Any change to `src/core/mesh/packet-codec.ts`? Run through PROTOCOLS.md, section 2, byte-by-byte.
+- Any change to `src/core/mesh/wire/packet-codec.ts`? Run through PROTOCOLS.md, section 2, byte-by-byte.
   - Is the byte layout identical to the spec?
   - Is the version byte unchanged (still `2`) if this is a compatible change?
   - If the layout changed: was the version byte bumped, and is there a v2 decode fallback?

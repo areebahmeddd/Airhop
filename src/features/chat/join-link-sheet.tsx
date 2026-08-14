@@ -10,15 +10,12 @@
 // valid peer or contact link because the sheet is named "join" would be a
 // dead end for no reason. What the link will do is stated before you commit.
 
+import { isValidChannelKey } from "@core/mesh/rooms/channel-crypto";
 import { Feather } from "@expo/vector-icons";
-import * as Clipboard from "expo-clipboard";
-import { useMemo, useState } from "react";
-import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
-import { isValidChannelKey } from "../../core/mesh/channel-crypto";
-import { t, useT } from "../../i18n";
-import { applyAirhopLink } from "../../services/link-router";
-import { showAlert } from "../../store/alert-store";
-import BottomSheet from "../../ui/components/bottom-sheet";
+import { t, useT } from "@i18n";
+import { applyAirhopLink } from "@services/link-router";
+import { showAlert } from "@store/alert-store";
+import BottomSheet from "@ui/components/bottom-sheet";
 import {
   FontFamily,
   FontSize,
@@ -27,15 +24,18 @@ import {
   Radius,
   Spacing,
   useThemeColors,
-} from "../../ui/theme";
-import { parseAirhopLink } from "../../utils/deep-link";
-import { resolveDisplayName } from "../../utils/display-name";
+} from "@ui/theme";
+import { parseAirhopLink } from "@utils/deep-link";
+import { resolveDisplayName } from "@utils/peer-display-name";
+import * as Clipboard from "expo-clipboard";
+import { useMemo, useState } from "react";
+import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 
 interface Props {
   visible: boolean;
-  /** Dismiss entirely: backdrop tap or system back. */
+  // Dismiss entirely: backdrop tap or system back.
   onClose: () => void;
-  /** Step back to whatever opened this sheet, for the Back button. */
+  // Step back to whatever opened this sheet, for the Back button.
   onBack: () => void;
   onJoined: (channel: string) => void;
 }
@@ -238,8 +238,7 @@ export function JoinLinkSheet({
           disabled={link === null}
           accessibilityRole="button"
           accessibilityLabel={T("chat.join.join")}
-          // Without this the button announces as plain text and a
-          // reader user taps into nothing.
+          // Without this a reader user taps into what sounds like plain text.
           accessibilityState={{ disabled: link === null }}
         >
           <Text style={styles.confirmText}>{T("chat.join.join")}</Text>
@@ -323,9 +322,6 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       alignItems: "center",
       justifyContent: "center",
     },
-    // Dismiss actions read at full contrast, matching the wallet sheets,
-    // the scanner and the alert buttons: a muted label on a filled pill
-    // reads as disabled rather than as the quieter of two choices.
     cancelText: {
       fontSize: FontSize.base,
       color: Colors.textPrimary,

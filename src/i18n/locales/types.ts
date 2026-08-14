@@ -4,10 +4,9 @@
 // are derived from it. Any locale added later is annotated `Strings` /
 // `Plurals`, so a missing key, a stray key, or a typo is a compile error under
 // the `npm run typecheck` that CI already runs. A partial locale is
-// unrepresentable here, which is why Airhop needs no runtime fallback and no
-// coverage test of the kind bitchat carries
-// (`bitchatTests/LocalizationCoverageTests.swift`): the .xcstrings format
-// permits partial locales, this one does not.
+// unrepresentable here, which is why Airhop needs neither a runtime fallback nor
+// a localization coverage test: the .xcstrings format bitchat uses permits
+// partial locales, this one does not.
 //
 // So a locale ships once it is complete, and adding an English key breaks every
 // incomplete locale at compile time rather than degrading it at runtime in

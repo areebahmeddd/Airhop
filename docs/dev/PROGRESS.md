@@ -12,7 +12,7 @@ private-group wire and epoch keys, gateway carrier codec, mesh ping/pong,
 outbox delivery, contact-card binding, geohash derivation + relay determinism,
 geohash DM round trip, Nostr gift-wrap and the bitchat envelope, proof selection.
 
-**Verified by the multi-device simulation** (`src/services/__tests__/sim/`):
+**Verified by the multi-device simulation** (`src/__tests__/simulation/`):
 multi-hop delivery across a chain of phones that cannot hear each other, a
 25-phone room converging on one channel, a live mixed Airhop/bitchat mesh in both
 directions, parallel attachment transfers, live push-to-talk sharing a radio with
@@ -31,21 +31,6 @@ vendored `bitchat/ios` and `bitchat/android` sources as the protocol source of
 truth. The multi-device simulation, the adversarial scenarios, and the security
 review below were produced the same way. Every claim here is meant to be
 checkable against the code rather than taken on trust.
-
-## Documentation Status
-
-| Document                                                                   | Status      | Purpose                                          |
-| -------------------------------------------------------------------------- | ----------- | ------------------------------------------------ |
-| [`docs/design/VISION.md`](../design/VISION.md)                             | ✅ Complete | Why + principles + build order                   |
-| [`docs/design/ROADMAP.md`](../design/ROADMAP.md)                           | ✅ Complete | Version targets, milestones, gap analysis        |
-| [`docs/spec/ARCHITECTURE.md`](../spec/ARCHITECTURE.md)                     | ✅ Complete | Architecture, stack, code snippets               |
-| [`docs/spec/PROTOCOLS.md`](../spec/PROTOCOLS.md)                           | ✅ Complete | Wire format, constants, compat table             |
-| [`docs/dev/REFERENCE.md`](REFERENCE.md)                                    | ✅ Complete | bitchat codebase knowledge transfer              |
-| [`docs/dev/PROGRESS.md`](PROGRESS.md)                                      | ✅ Active   | Current implementation progress                  |
-| [`docs/dev/GLOSSARY.md`](GLOSSARY.md)                                      | ✅ Complete | Definitions for all technical terms              |
-| [`CONTRIBUTING.md`](../../CONTRIBUTING.md)                                 | ✅ Complete | Standards for contributors + AI agents           |
-| [`.github/copilot-instructions.md`](../../.github/copilot-instructions.md) | ✅ Complete | VS Code Copilot workspace context                |
-| [`.github/agents/`](../../.github/agents)                                  | ✅ Complete | Architect, Upstream Sync, Security Review agents |
 
 ## v0.5.0: Foundation ✅
 
@@ -75,10 +60,10 @@ checkable against the code rather than taken on trust.
 
 ### Core mesh engine
 
-- [x] `src/core/mesh/packet-codec.ts`: binary encode/decode, matches PROTOCOLS.md exactly
-- [x] `src/core/mesh/flood-router.ts`: TTL flood, jitter, dedup
-- [x] `src/core/mesh/deduplicator.ts`: LRU 1000-entry seen-set
-- [x] `src/core/mesh/announce-manager.ts`: signed presence broadcasts
+- [x] `src/core/mesh/wire/packet-codec.ts`: binary encode/decode, matches PROTOCOLS.md exactly
+- [x] `src/core/mesh/routing/flood-router.ts`: TTL flood, jitter, dedup
+- [x] `src/core/mesh/routing/deduplicator.ts`: LRU 1000-entry seen-set
+- [x] `src/core/mesh/discovery/announce-manager.ts`: signed presence broadcasts
 - [x] `src/core/crypto/identity.ts`: key generation, Keychain storage, peer ID
 
 ### Tests
@@ -92,9 +77,9 @@ checkable against the code rather than taken on trust.
 - [x] `src/core/crypto/noise-xx.ts`: Noise XX handshake using `@noble/curves` + `@noble/ciphers` (full XX pattern, transport encrypt/decrypt, replay window)
 - [x] Cross-language Noise XX test: JS client ↔ bitchat-ios Swift server (MUST PASS before v1.0.0 ship; requires a live device test harness, deferred to v1.0.0 integration testing)
 - [x] `src/core/crypto/noise-x.ts`: one-way Noise X for courier sealing
-- [x] `src/core/mesh/fragment-manager.ts`: split/reassemble, 30s timeout, 128-slot concurrent cap
-- [x] `src/core/mesh/gossip-sync.ts`: GCS filter reconciliation (Golomb-Rice encoding, TLV wire format)
-- [x] `src/core/mesh/courier-store.ts`: sealed envelopes, trust tiers, spray-and-wait, daily recipient tags
+- [x] `src/core/mesh/routing/fragment-manager.ts`: split/reassemble, 30s timeout, 128-slot concurrent cap
+- [x] `src/core/mesh/sync/gossip-sync.ts`: GCS filter reconciliation (Golomb-Rice encoding, TLV wire format)
+- [x] `src/core/mesh/courier/courier-store.ts`: sealed envelopes, trust tiers, spray-and-wait, daily recipient tags
 - [x] `src/core/router/message-router.ts`: transport selection (BLE mesh broadcast / unicast, courier fallback)
 - [x] Basic UI: channel list, message thread, peer list (minimal, functional)
 
@@ -103,10 +88,10 @@ checkable against the code rather than taken on trust.
 - [x] `src/core/nostr/nostr-client.ts`: SimplePool, auto-reconnect, Tor proxy config
 - [x] `src/core/nostr/gift-wrap.ts`: NIP-17/59 gift-wrap DMs (HKDF key derivation, round-trip tested)
 - [x] `src/core/nostr/geo-relay.ts`: load `assets/data/nostr_relays.csv`, Haversine nearest relay
-- [x] `src/core/nostr/presence.ts`: kind 20001 geohash heartbeats
+- [x] `src/core/nostr/geohash-presence.ts`: kind 20001 geohash heartbeats
 - [x] `src/core/nostr/courier-relay.ts`: Nostr bridge courier drops (kind 1401, tested)
 - [x] `src/core/router/message-router.ts`: Nostr added as priority-2 transport (BLE > Nostr > Courier)
-- [x] PTT voice: `src/core/mesh/voice-capture.ts` + `src/core/mesh/voice-player.ts`
+- [x] PTT voice: `src/core/mesh/voice/voice-capture.ts` + `src/core/mesh/voice/voice-player.ts`
 - [x] iOS: `AirhopTorManager.swift`: full Arti lifecycle management (FFI, bootstrap, SOCKS probe)
 - [x] iOS: `AirhopTorSession.swift`: URLSession SOCKS5 proxy factory (port 39050)
 - [x] iOS: `AirhopTorModule.swift` + `AirhopTorModule.mm`: RN native module exposing Tor to JS
@@ -123,7 +108,7 @@ checkable against the code rather than taken on trust.
       The root key is derived from the Noise XX **exporter secret** (a third
       HKDF output of `split()`, descending from the chaining key), so it cannot
       be reconstructed from long-lived keys OR from the public handshake bytes
-- [x] One-time prekey bundles (`src/core/mesh/prekey-bundle.ts`, `prekey-store.ts`)
+- [x] One-time prekey bundles (`src/core/mesh/wire/prekey-bundle.ts`, `prekey-store.ts`)
       gossiped over the mesh as `0x24`. **X3DH is deliberately not used**: the
       handshake already seeds the ratchet, which made a separate key agreement
       redundant (see ARCHITECTURE.md section 5)
@@ -144,10 +129,10 @@ checkable against the code rather than taken on trust.
 - [x] QR contact exchange (`src/core/crypto/contact-exchange.ts`: ContactCard binary format, QR URI scheme)
 - [x] QR code scanner for peer verification (encodeQRContent/decodeQRContent in contact-exchange.ts)
 - [x] Human-readable usernames (`src/utils/username.ts`: deterministic adjective-noun-suffix from peer ID, 128-entry word lists)
-- [x] Panic wipe (`src/utils/panic-wipe.ts`: clears every keychain item, all MMKV partitions, the media cache, the notification tray and Arti's data directory, and reports whether the keys were destroyed)
-- [x] Battery optimization flow (`src/utils/battery-optimization.ts`: OEM deep links for 10 skins + standard Android fallback)
+- [x] Panic wipe (`src/services/panic-wipe.ts`: clears every keychain item, all MMKV partitions, the media cache, the notification tray and Arti's data directory, and reports whether the keys were destroyed)
+- [x] Battery optimization flow (`src/platform/battery-optimization.ts`: OEM deep links for 10 skins + standard Android fallback)
 - [x] Georelays in-app relay map (`GeoRelayDirectory.nearestRelaysWithDistance()` added to geo-relay.ts)
-- [x] Full cross-platform compat test (`src/core/mesh/__tests__/compat.test.ts`: peer ID derivation, packet byte offsets, signature relay compat, ANNOUNCE TLV, fragment constants, BLE UUIDs)
+- [x] Full cross-platform compat test (`src/core/mesh/wire/__tests__/packet-frame-vectors.test.ts`: peer ID derivation, packet byte offsets, signature relay compat, ANNOUNCE TLV, fragment constants, BLE UUIDs)
 
 ## v0.9.5: Cashu Wallet ✅
 
@@ -156,7 +141,7 @@ checkable against the code rather than taken on trust.
 - [x] `src/core/payments/wallet-seed.ts`: BIP-39 recovery phrase, kept in the keychain
 - [x] `src/store/wallet-store.ts`: AES-256 encrypted proofs, per (mint, unit) accounts, reserved bucket, history, NUT-13 counters
 - [x] `src/services/wallet-service.ts`: the only module that talks to a mint
-- [x] `src/services/ecash-transfer.ts`: `payPerson`, one payment ladder (radio, nutzap, token, manual) shared by all four entry points: DM attach, contact sheet, Mesh peer sheet and Wallet Zap
+- [x] `src/services/payment-router.ts`: `payPerson`, one payment ladder (radio, nutzap, token, manual) shared by all four entry points: DM attach, contact sheet, Mesh peer sheet and Wallet Zap
 - [x] Send that reserves rather than deletes, so an undelivered token is reclaimable
 - [x] Lightning deposit and withdrawal (NUT-04 / NUT-05)
 - [x] Opt-in recovery phrase (NUT-13 / NUT-09), off by default
@@ -283,7 +268,7 @@ XX, or SHA-256 preimage resistance. Everything below is written against that.
 
 ### Attacks run against a live mesh
 
-Each row is an executable scenario in `src/services/__tests__/sim/`, run against
+Each row is an executable scenario in `src/__tests__/simulation/`, run against
 fully isolated copies of the app over a modelled radio - not a unit test of the
 check itself. "Refused" means the app rejected it _and_ told the user nothing
 false while refusing.
@@ -302,6 +287,10 @@ false while refusing.
 | M03 | File lying about its type (magic bytes vs extension)          | Refused                                                                    |
 | W03 | Same ecash token redeemed twice                               | Refused by a real BDHKE mint                                               |
 | W05 | Mint dies mid-swap                                            | Input proofs not destroyed                                                 |
+| W17 | Swap response lost, then the process is killed                | Replayed from the persisted preview against the mint's NUT-19 cache        |
+| W18 | Same, against a mint that does not cache responses            | Outputs recovered by NUT-09 from the exact blinded messages                |
+| W19 | Paying 100 out of a single 512 sat coin                       | Only the payment's own coins are tied up while Lightning routes            |
+| W20 | A mint charging NUT-02 input fees                             | "Send 100" still means they get 100; a melt is funded for the fee too      |
 | F01 | Outsider standing next to a private group                     | Ciphertext only; no metadata leak                                          |
 | F03 | Store-and-forward carrier inspecting what it carries          | Sealed; the carrier cannot read it                                         |
 | F04 | Tor unavailable                                               | Fails closed; never silently falls back to clearnet                        |

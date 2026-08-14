@@ -7,11 +7,17 @@
     "noImplicitReturns": true,
     "types": ["jest"],
     "paths": {
+      "@app/*": ["./src/app/*"],
       "@bridge/*": ["./src/bridge/*"],
       "@core/*": ["./src/core/*"],
+      "@data/*": ["./src/data/*"],
       "@features/*": ["./src/features/*"],
-      "@ui/*": ["./src/ui/*"],
+      "@i18n": ["./src/i18n"],
+      "@i18n/*": ["./src/i18n/*"],
+      "@platform/*": ["./src/platform/*"],
+      "@services/*": ["./src/services/*"],
       "@store/*": ["./src/store/*"],
+      "@ui/*": ["./src/ui/*"],
       "@utils/*": ["./src/utils/*"]
     }
   },

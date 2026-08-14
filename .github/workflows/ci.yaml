@@ -60,6 +60,9 @@ jobs:
       - name: Run type check
         run: npm run typecheck
 
+      - name: Check no invisible characters
+        run: npm run verify:invisibles
+
       - name: Check no hardcoded strings
         run: npm run i18n:audit -- --max 0
 

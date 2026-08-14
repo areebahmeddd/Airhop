@@ -3,7 +3,44 @@
 // sub-screens (src/features/settings/sections/*). Panic wipe stays here,
 // at the very bottom, outside every section.
 
+import { encodeQRContent } from "@core/crypto/contact-exchange";
 import Feather from "@expo/vector-icons/Feather";
+import {
+  LANGUAGES,
+  PLANNED_LANGUAGES,
+  t,
+  useT,
+  type TranslationKey,
+} from "@i18n";
+import { acknowledged } from "@platform/haptics";
+import { ensurePermission } from "@platform/permissions";
+import { destroyMeshService, getMeshService } from "@services/mesh-service";
+import { panicWipe } from "@services/panic-wipe";
+import { applyPresence } from "@services/presence-service";
+import { showAlert } from "@store/alert-store";
+import {
+  useMeshStateStore,
+  type PresenceStatus,
+} from "@store/mesh-state-store";
+import { useSettingsStore } from "@store/settings-store";
+import Avatar from "@ui/components/avatar";
+import BottomSheet from "@ui/components/bottom-sheet";
+import { MONO_FONT_ORDER, MONO_FONTS } from "@ui/fonts";
+import {
+  FontFamily,
+  FontSize,
+  FontWeight,
+  HIT_SLOP,
+  MIN_TOUCH,
+  Radius,
+  Spacing,
+  TAB_BAR_CLEARANCE,
+  useResolvedTheme,
+  useThemeColors,
+  withAlpha,
+  type ResolvedTheme,
+} from "@ui/theme";
+import { peerInviteLink } from "@utils/deep-link";
 import * as Clipboard from "expo-clipboard";
 import * as FileSystem from "expo-file-system";
 import * as Haptics from "expo-haptics";
@@ -26,46 +63,6 @@ import {
   View,
 } from "react-native";
 import QRCode from "react-native-qrcode-svg";
-import { encodeQRContent } from "../../core/crypto/contact-exchange";
-import {
-  LANGUAGES,
-  PLANNED_LANGUAGES,
-  t,
-  useT,
-  type TranslationKey,
-} from "../../i18n";
-import {
-  destroyMeshService,
-  getMeshService,
-} from "../../services/mesh-service";
-import { applyPresence } from "../../services/presence";
-import { showAlert } from "../../store/alert-store";
-import {
-  useMeshStateStore,
-  type PresenceStatus,
-} from "../../store/mesh-state-store";
-import { useSettingsStore } from "../../store/settings-store";
-import Avatar from "../../ui/components/avatar";
-import BottomSheet from "../../ui/components/bottom-sheet";
-import { MONO_FONT_ORDER, MONO_FONTS } from "../../ui/fonts";
-import {
-  FontFamily,
-  FontSize,
-  FontWeight,
-  HIT_SLOP,
-  MIN_TOUCH,
-  Radius,
-  Spacing,
-  TAB_BAR_CLEARANCE,
-  useResolvedTheme,
-  useThemeColors,
-  withAlpha,
-  type ResolvedTheme,
-} from "../../ui/theme";
-import { peerInviteLink } from "../../utils/deep-link";
-import { acknowledged } from "../../utils/haptics";
-import { panicWipe } from "../../utils/panic-wipe";
-import { ensurePermission } from "../../utils/permissions";
 import ConnectivityGroup from "./connectivity-group";
 import AboutScreen from "./sections/about-screen";
 import DiagnosticsScreen from "./sections/diagnostics-screen";
@@ -80,7 +77,11 @@ import StorageScreen from "./sections/storage-screen";
 import SupportScreen from "./sections/support-screen";
 import TermsScreen from "./sections/terms-screen";
 import VersionScreen from "./sections/version-screen";
-import { GroupDivider, SettingLinkRow, useSharedStyles } from "./shared";
+import {
+  GroupDivider,
+  SettingLinkRow,
+  useSharedStyles,
+} from "./settings-primitives";
 
 // Share sheets are fire-and-forget: a rejection (the OS refusing to present, a
 // provider crash) is not something the user can act on, and leaving it
@@ -141,9 +142,9 @@ const STATUS_DOT_SIZE = 18;
 
 // The code and the mark in its middle.
 //
-// 220 rather than the old 200 because the card now carries a full contact card
-// at error-correction H, which is a denser grid than before; the extra points
-// keep each module comfortably above the size a camera needs. It still clears
+// 220 rather than 200 because the card carries a full contact card at
+// error-correction H, which is a dense grid, and the extra points keep each
+// module comfortably above the size a camera needs. It still clears
 // the sheet's padding on the narrowest phone we support.
 //
 // The mark is capped at a fifth of the code. Past roughly 30% the occluded area
@@ -268,10 +269,10 @@ export default function ProfileScreen({
   const STATUS_META = useMemo(() => getStatusMeta(Colors), [Colors]);
   const [view, setView] = useState<SettingsView>("root");
   const [showQRModal, setShowQRModal] = useState(false);
-  // Sharing your ID used to open the OS share sheet straight from the pill, so
-  // the one moment worth explaining what you are handing over had nowhere to say
-  // it. Both share actions are sheets now, and each carries the one sentence
-  // that stops it being the wrong choice.
+  // Both share actions are sheets rather than the OS share sheet straight from
+  // the pill, because the one moment worth explaining what you are handing over
+  // then has nowhere to say it. Each carries the one sentence that stops it being
+  // the wrong choice.
   const [showPeerIDModal, setShowPeerIDModal] = useState(false);
   const [idCopied, setIdCopied] = useState(false);
   const idCopiedTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -366,10 +367,10 @@ export default function ProfileScreen({
     destroyMeshService();
     // Never leaves the app mid-wipe.
     //
-    // `await panicWipe()` used to be unwrapped, and both callers invoke this as
-    // `void handleConfirmWipe()`. A rejection therefore skipped the two lines
-    // below: the confirm sheet stayed open over a half-wiped app, the shell was
-    // never told to drop to onboarding, and the only thing the user had seen was
+    // `await panicWipe()` must stay wrapped: both callers invoke this as
+    // `void handleConfirmWipe()`, so a rejection skips the two lines below. The
+    // confirm sheet then stays open over a half-wiped app, the shell is never told
+    // to drop to onboarding, and the only thing the user has seen is
     // the triple-tap's warning haptic - which fires BEFORE any of this runs. The
     // one irreversible action in the app reported its own failure by doing
     // nothing at all.
@@ -544,10 +545,10 @@ export default function ProfileScreen({
   async function handleShareQR(): Promise<void> {
     // Share the CODE, not a link to a bare peer ID.
     //
-    // This used to send `airhop://peer/<id>` and nothing else, which is the one
-    // artifact that cannot reach the person: an ID is a hash of the Noise key
-    // and carries no keys at all, so the recipient could only ever message back
-    // from inside Bluetooth range. The button said "Share QR" and handed over
+    // Never `airhop://peer/<id>` alone, which is the one artifact that cannot
+    // reach the person: an ID is a hash of the Noise key and carries no keys at
+    // all, so the recipient can only message back from inside Bluetooth range.
+    // A button saying "Share QR" that hands over
     // the weakest thing the app has. The image carries the whole contact card.
     const uri = await writeQRToCache();
     if (uri !== null && (await Sharing.isAvailableAsync())) {
@@ -559,7 +560,7 @@ export default function ProfileScreen({
         return;
       } catch {
         // Fall through: a refused share sheet should still leave a way to send
-        // something, and the link below is what used to be sent anyway.
+        // something, and the link below carries the same payload.
       }
     }
     await shareOrIgnore({
@@ -568,7 +569,7 @@ export default function ProfileScreen({
     });
   }
 
-  // ---- Sub-screens --------------------------------------------------------
+  // ---- Sub-screens ----
 
   if (view === "general") {
     return <GeneralScreen onBack={() => setView("root")} />;
@@ -622,7 +623,7 @@ export default function ProfileScreen({
     return <LicensesScreen onBack={() => setView("about")} />;
   }
 
-  // ---- Root hub -------------------------------------------------------------
+  // ---- Root hub ----
 
   return (
     <ScrollView
@@ -1312,7 +1313,6 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       gap: Spacing.md,
       paddingBottom: TAB_BAR_CLEARANCE,
     },
-    // Header row above the identity block: status edit pencil, top-right
     header: {
       flexDirection: "row",
       justifyContent: "flex-end",
@@ -1324,7 +1324,6 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       alignItems: "center",
       justifyContent: "center",
     },
-    // Identity block: large centered avatar, name, peer ID, no card background
     identityBlock: {
       alignItems: "center",
       paddingTop: Spacing.xs,
@@ -1354,13 +1353,6 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       color: Colors.textMuted,
       marginTop: 2,
     },
-    // The sheet centers its children, so both the box and its header need to be
-    // stretched to full width or they collapse to their content and the rows
-    // wrap and overlap.
-    // Above each group inside the Appearance sheet, so three pickers in one
-    // scroll are told apart without reading their options.
-    // Matched to `sectionTitle` in shared.tsx rather than styled separately, so
-    // a group heading reads the same here as on every sub-screen.
     appearanceGroupLabel: {
       fontSize: FontSize.xs,
       color: Colors.textMuted,
@@ -1371,9 +1363,6 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
     },
     appearanceGroup: {
       width: "100%",
-      // Stands in for the `gap` a `section` wrapper would give: these are
-      // direct children of a ScrollView, so nothing else separates a box from
-      // the next heading.
       marginBottom: Spacing.lg,
     },
     // Small group header inside the Appearance sheet (theme / font / language).
@@ -1392,17 +1381,12 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
     appearanceScrollContent: {
       paddingBottom: Spacing.sm,
     },
-    // Leading column of a language row: the code in mono, standing in for the
-    // icon the theme and font rows carry. A flag would be wrong (a language is
-    // not a country) and a globe on all ten would say nothing.
     languageCode: {
       fontFamily: FontFamily.mono,
       fontSize: FontSize.xs,
       fontWeight: FontWeight.semibold,
       color: Colors.textMuted,
     },
-    // The nine without a catalog yet: dimmed and inert, so the group reads as
-    // one list rather than as a selectable box with disabled strays in it.
     languageRowSoon: {
       opacity: 0.55,
     },
@@ -1411,8 +1395,6 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       color: Colors.textMuted,
       flexShrink: 0,
     },
-    // One row inside the Appearance box (no per-row border; the box + dividers
-    // group them, matching the settings and room-actions sheets).
     optionRowGrouped: {
       flexDirection: "row",
       alignItems: "center",
@@ -1447,7 +1429,6 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       fontFamily: FontFamily.mono,
       letterSpacing: 0.8,
     },
-    // Share actions: bordered pill buttons below the identity block
     sharePills: {
       flexDirection: "row",
       gap: Spacing.sm,
@@ -1473,11 +1454,9 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       fontWeight: FontWeight.medium,
       marginStart: Spacing.xs,
     },
-    // Danger zone, uses settingsGroup box for consistency with other sections
     dangerGroup: {
       borderColor: withAlpha(Colors.danger, 0.2),
     },
-    // Pressable fills the cell; inner View owns the row direction.
     dangerRow: {
       overflow: "hidden",
     },
@@ -1512,9 +1491,6 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
     qrSheetTitle: {
       textAlign: "center",
     },
-    // The one sentence each share sheet needs, in the same quiet box both use so
-    // neither reads as the more serious of the two. Muted rather than amber:
-    // nothing here is a warning, it is the thing worth knowing before choosing.
     noteBox: {
       flexDirection: "row",
       alignItems: "flex-start",
@@ -1532,8 +1508,6 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       lineHeight: FontSize.xs * 1.5,
       color: Colors.textMuted,
     },
-    // The ID itself, tappable to copy. Mono and roomy: it is meant to be read
-    // aloud or checked against another screen.
     idBox: {
       flexDirection: "row",
       alignItems: "center",
@@ -1546,9 +1520,6 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       borderWidth: 1,
       borderColor: Colors.border,
     },
-    // The glyph sits at the right edge, so centering the ID inside the leftover
-    // space would push it off the box's centre. The matching left inset gives it
-    // back the width the glyph took.
     idBoxValue: {
       flex: 1,
       textAlign: "center",
@@ -1558,8 +1529,6 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       fontFamily: FontFamily.mono,
       letterSpacing: 1,
     },
-    // The peer ID box's shape, left-aligned: a short token is worth centring, a
-    // truncated blob reads better as a value under a label.
     codeBox: {
       flexDirection: "row",
       alignItems: "center",
@@ -1573,8 +1542,6 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       borderWidth: 1,
       borderColor: Colors.border,
     },
-    // Bounds the truncation. Without it the mono line sizes to its full width
-    // and pushes the glyph off the box.
     codeBoxText: {
       flex: 1,
       gap: 2,
@@ -1596,9 +1563,6 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       borderWidth: 1,
       borderColor: Colors.border,
     },
-    // Share / Download: stacked full-width buttons, same bounded-pill
-    // pattern as the panic-wipe actions. Share is the solid primary action;
-    // Download is a bordered secondary pill underneath it.
     qrActions: {
       width: "100%",
       marginTop: Spacing.sm,
@@ -1636,9 +1600,6 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       fontWeight: FontWeight.semibold,
       color: Colors.textPrimary,
     },
-    // Wipe now / Cancel: stacked full-width buttons. Wipe now is a solid red
-    // pill (the one unmistakable destructive action on the whole screen);
-    // Cancel is a plain, clearly-tappable button underneath it.
     wipeActions: {
       width: "100%",
       marginTop: Spacing.sm,

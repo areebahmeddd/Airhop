@@ -1,14 +1,13 @@
-// Mock for expo-audio used in Jest test environments.
+// Jest mock for expo-audio.
 //
 // The real module reaches for a native audio session at import time, which is
-// fatal rather than merely unavailable under jest-expo: `ExpoAudio.ts` reads a
+// fatal rather than merely unavailable under jest-expo: ExpoAudio.ts reads a
 // prototype off a native class that does not exist in node, so anything that
 // transitively imports it throws before a single test runs. mesh-service does,
-// through services/audio-session, which is how the live-voice pipeline hands
-// the session back when the speaker goes quiet.
+// through services/audio-session.
 //
-// The surface here is only what the app imports. Nothing asserts on audio, so
-// these are inert: the point is that importing the modules under test works.
+// The surface is only what the app imports, and it is inert: nothing asserts on
+// audio, so the point is that importing the modules under test works.
 const setAudioModeAsync = jest.fn(async () => undefined);
 
 const recorderState = {
@@ -21,12 +20,12 @@ const recorderState = {
 
 const recorder = {
   record: jest.fn(),
-  stop: jest.fn(async () => undefined),
   pause: jest.fn(),
+  stop: jest.fn(async () => undefined),
   prepareToRecordAsync: jest.fn(async () => undefined),
   getStatus: jest.fn(() => ({ ...recorderState })),
-  uri: null,
   isRecording: false,
+  uri: null,
 };
 
 module.exports = {

@@ -14,7 +14,7 @@
 // Interop with bitchat comes from canonicalizing rows the same way they do, in
 // GeoRelayDirectory.loadEntries, not from tracking an identical file.
 
-import { GEO_RELAYS } from "../../data/relays";
+import { GEO_RELAYS } from "@data/relays";
 import type { RelayEntry } from "./geo-relay";
 
 // The vendored geo-relay directory. Never empty.

@@ -26,17 +26,17 @@ describe("Noise XX handshake", () => {
     const initiator = NoiseHandshake.createInitiator(iKeys.priv);
     const responder = NoiseHandshake.createResponder(rKeys.priv);
 
-    // Message 1: initiator → responder
+    // Message 1: initiator -> responder
     const msg1 = initiator.writeMsg1();
     expect(msg1).toHaveLength(32);
     responder.readMsg1(msg1);
 
-    // Message 2: responder → initiator
+    // Message 2: responder -> initiator
     const msg2 = responder.writeMsg2();
     expect(msg2).toHaveLength(96); // 32 e + 48 enc_s + 16 mac
     initiator.readMsg2(msg2);
 
-    // Message 3: initiator → responder
+    // Message 3: initiator -> responder
     const msg3 = initiator.writeMsg3();
     expect(msg3).toHaveLength(64); // 48 enc_s + 16 mac (no payload)
     responder.readMsg3(msg3);

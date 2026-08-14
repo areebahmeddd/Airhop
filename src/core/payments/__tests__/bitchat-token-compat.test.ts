@@ -29,7 +29,7 @@
 // and its `CBORReader`, kept deliberately literal so it can be diffed against
 // the Swift. If this test fails, Airhop and bitchat have diverged on payments.
 
-import type { StoredProof } from "../../../store/wallet-store";
+import type { StoredProof } from "@store/wallet-store";
 import { buildToken } from "../cashu";
 
 const MINT = "https://mint.airhop.example";
@@ -42,8 +42,6 @@ function proof(amount: number, n: number): StoredProof {
     C: "02" + "bb".repeat(32),
   };
 }
-
-// ---- Port of bitchat's CashuTokenDecoder -----------------------------------
 
 type CBOR =
   | { k: "uint"; v: number }
@@ -218,8 +216,6 @@ function decodeLikeBitchat(raw: string): Chip | null {
     memo,
   };
 }
-
-// ---- The contract -----------------------------------------------------------
 
 describe("a token Airhop sends renders as money in bitchat", () => {
   it("decodes to the right amount, unit and mint under bitchat's reader", () => {

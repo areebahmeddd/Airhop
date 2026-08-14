@@ -29,7 +29,7 @@ beforeEach(() => {
   useWalletStore.getState().clearAll();
 });
 
-// ---- Helpers ----------------------------------------------------------------
+// ---- Helpers ----
 
 let secretCounter = 0;
 function makeProof(amount: number, secret?: string): StoredProof {
@@ -60,7 +60,7 @@ function tx(overrides: Partial<WalletTx> = {}): WalletTx {
   };
 }
 
-// ---- Account keys -----------------------------------------------------------
+// ---- Account keys ----
 
 describe("account keys", () => {
   it("normalises trailing slashes and host case to one mint", () => {
@@ -83,7 +83,7 @@ describe("account keys", () => {
   });
 });
 
-// ---- addProofs --------------------------------------------------------------
+// ---- addProofs ----
 
 describe("addProofs", () => {
   it("adds proofs under the (mint, unit) account", () => {
@@ -130,7 +130,7 @@ describe("addProofs", () => {
   });
 });
 
-// ---- Verification state -----------------------------------------------------
+// ---- Verification state ----
 
 describe("verification", () => {
   it("reports offline-received proofs as unverified until marked", () => {
@@ -148,7 +148,7 @@ describe("verification", () => {
   });
 });
 
-// ---- Reservations -----------------------------------------------------------
+// ---- Reservations ----
 
 describe("reservations", () => {
   it("moves proofs out of the spendable balance without deleting them", () => {
@@ -238,9 +238,27 @@ describe("reservations", () => {
     expect(state().reserveProofs("tx-a", MINT, "sat", [proof])).toBe(false);
     expect(state().reserved["tx-a"].proofs).toHaveLength(1);
   });
+
+  it("never lets a reused id replace a reservation with different coins", () => {
+    // The case the check above cannot reach. Retrying with the SAME coins is
+    // refused either way, because those coins are no longer spendable. Retrying
+    // with DIFFERENT ones is only refused by the id check, and without it the
+    // reservation is overwritten: the first coins are then in neither the
+    // spendable pool nor any reservation, so the balance simply loses them.
+    const first = makeProof(32, "first");
+    const second = makeProof(8, "second");
+    state().addProofs(MINT, "sat", [first, second]);
+
+    expect(state().reserveProofs("tx-a", MINT, "sat", [first])).toBe(true);
+    expect(state().reserveProofs("tx-a", MINT, "sat", [second])).toBe(false);
+
+    expect(state().reserved["tx-a"].proofs).toEqual([first]);
+    // The 8 was never taken, so it is still spendable and nothing vanished.
+    expect(selectBalanceForUnit(state(), "sat")).toBe(8);
+  });
 });
 
-// ---- removeProofs / replaceProofs -------------------------------------------
+// ---- removeProofs / replaceProofs ----
 
 describe("removeProofs", () => {
   it("removes by secret and leaves the rest", () => {
@@ -273,7 +291,7 @@ describe("replaceProofs", () => {
   });
 });
 
-// ---- Mints ------------------------------------------------------------------
+// ---- Mints ----
 
 describe("mints", () => {
   it("keeps addedAtMs stable across patches", () => {
@@ -299,7 +317,7 @@ describe("mints", () => {
   });
 });
 
-// ---- History ----------------------------------------------------------------
+// ---- History ----
 
 describe("history", () => {
   it("prepends newest first and updates in place", () => {
@@ -312,7 +330,7 @@ describe("history", () => {
   });
 });
 
-// ---- Nutzap replay guard ----------------------------------------------------
+// ---- Nutzap replay guard ----
 
 describe("redeemed nutzaps", () => {
   it("records an event id once so a relay replay cannot re-credit it", () => {
@@ -322,7 +340,50 @@ describe("redeemed nutzaps", () => {
   });
 });
 
-// ---- Selectors --------------------------------------------------------------
+// ---- What survives a restart ----
+
+// `partialize` decides what is written to disk, and a field left out of it is
+// silently reset on every launch. Nothing else catches that: the field is
+// declared, typed and written to all session long, and only a restart shows it
+// was never kept.
+//
+// The key list is asserted as a whole on purpose. Adding a field to the store
+// should require a deliberate answer to "does this need to outlive the process",
+// and a test that has to be updated is how the question gets asked.
+describe("persistence", () => {
+  function persisted(): Record<string, unknown> {
+    const partialize = useWalletStore.persist.getOptions().partialize;
+    if (partialize === undefined) throw new Error("no partialize configured");
+    return partialize(state()) as unknown as Record<string, unknown>;
+  }
+
+  it("writes exactly the state the wallet cannot rebuild for itself", () => {
+    expect(Object.keys(persisted()).sort()).toEqual(
+      [
+        "backupEnabled",
+        "backupVerified",
+        "claimedTokens",
+        "counters",
+        "history",
+        "mints",
+        "nutzapPubkey",
+        "proofs",
+        "redeemedNutzaps",
+        "reserved",
+      ].sort(),
+    );
+  });
+
+  it("keeps claimed-token markers, which outlive the process that made them", () => {
+    // A payment chip lives in a chat message and messages survive a restart, so
+    // a marker that does not leaves the chip offering a tap whose only possible
+    // outcome is an error.
+    state().markTokenClaimed("first-proof-secret");
+    expect(persisted().claimedTokens).toEqual(["first-proof-secret"]);
+  });
+});
+
+// ---- Selectors ----
 
 describe("selectors", () => {
   it("sums a unit across mints but never across units", () => {
@@ -362,7 +423,7 @@ describe("selectors", () => {
   });
 });
 
-// ---- Backup coverage --------------------------------------------------------
+// ---- Backup coverage ----
 
 describe("backup coverage", () => {
   it("reports nothing as unbacked while backup is off", () => {
@@ -390,7 +451,7 @@ describe("backup coverage", () => {
   });
 });
 
-// ---- NUT-13 counters --------------------------------------------------------
+// ---- NUT-13 counters ----
 
 describe("counters", () => {
   const KEYSET = "00ad268c4d1f5826";
@@ -440,7 +501,7 @@ describe("counters", () => {
   });
 });
 
-// ---- clearAll ---------------------------------------------------------------
+// ---- clearAll ----
 
 describe("clearAll", () => {
   it("empties proofs, reservations, mints and history", () => {

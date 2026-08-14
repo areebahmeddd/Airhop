@@ -1,11 +1,11 @@
 #!/usr/bin/env node
 // Writes a SHA-256 manifest of every git-tracked file, for publishing with a
-// release so anyone can prove the source they hold is the source we shipped.
+// release so anyone can prove the source they hold is the source that shipped.
 //
 //   node scripts/source-manifest.js --output airhop-v1.0.0-sources.sha256
 //                                   [--tag v1.0.0]
 //
-// Output is plain `sha256sum` format, so verification needs no tooling from us:
+// Output is plain `sha256sum` format, so verification needs no tooling from here:
 //
 //   sha256sum -c airhop-v1.0.0-sources.sha256
 //

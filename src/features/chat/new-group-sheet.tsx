@@ -7,6 +7,19 @@
 // roster and deliver the invite). Peers we lack keys for cannot be added yet.
 
 import { Feather } from "@expo/vector-icons";
+import { t, useT } from "@i18n";
+import { getMeshService } from "@services/mesh-service";
+import { groupChannel } from "@store/group-store";
+import { usePeerStore } from "@store/peer-store";
+import Avatar from "@ui/components/avatar";
+import BottomSheet from "@ui/components/bottom-sheet";
+import {
+  FontSize,
+  FontWeight,
+  Radius,
+  Spacing,
+  useThemeColors,
+} from "@ui/theme";
 import { useMemo, useState } from "react";
 import {
   Pressable,
@@ -16,25 +29,12 @@ import {
   TextInput,
   View,
 } from "react-native";
-import { t, useT } from "../../i18n";
-import { getMeshService } from "../../services/mesh-service";
-import { groupChannel } from "../../store/group-store";
-import { usePeerStore } from "../../store/peer-store";
-import Avatar from "../../ui/components/avatar";
-import BottomSheet from "../../ui/components/bottom-sheet";
-import {
-  FontSize,
-  FontWeight,
-  Radius,
-  Spacing,
-  useThemeColors,
-} from "../../ui/theme";
 
 interface Props {
   visible: boolean;
-  /** Dismiss entirely: backdrop tap or system back. */
+  // Dismiss entirely: backdrop tap or system back.
   onClose: () => void;
-  /** Step back to whatever opened this sheet, for the Back button. */
+  // Step back to whatever opened this sheet, for the Back button.
   onBack: () => void;
   onCreated: (channel: string) => void;
 }
@@ -215,8 +215,7 @@ export function NewGroupSheet({ visible, onClose, onBack, onCreated }: Props) {
           disabled={!canCreate}
           accessibilityRole="button"
           accessibilityLabel={T("chat.group.create")}
-          // Without this the button announces as plain text and a
-          // reader user taps into nothing.
+          // Without this a reader user taps into what sounds like plain text.
           accessibilityState={{ disabled: !canCreate }}
         >
           <Text style={styles.confirmText}>{T("chat.group.create")}</Text>
@@ -331,9 +330,6 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       alignItems: "center",
       justifyContent: "center",
     },
-    // Dismiss actions read at full contrast, matching the wallet sheets,
-    // the scanner and the alert buttons: a muted label on a filled pill
-    // reads as disabled rather than as the quieter of two choices.
     cancelText: {
       fontSize: FontSize.base,
       color: Colors.textPrimary,

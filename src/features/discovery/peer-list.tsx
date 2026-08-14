@@ -6,6 +6,38 @@
 // service (wired in v0.7+).
 
 import { Feather } from "@expo/vector-icons";
+import { t, useT } from "@i18n";
+import { arrowForward } from "@i18n/layout";
+import { acknowledged } from "@platform/haptics";
+import { describePayResult, payPerson } from "@services/payment-router";
+import { showAlert } from "@store/alert-store";
+import { useBlockedStore } from "@store/blocked-store";
+import { useChatStore } from "@store/chat-store";
+import { useContactsStore } from "@store/contacts-store";
+import {
+  type NearbyPeer,
+  REACHABLE_TTL_MS,
+  usePeerStore,
+} from "@store/peer-store";
+import Avatar from "@ui/components/avatar";
+import BottomSheet from "@ui/components/bottom-sheet";
+import EmptyState from "@ui/components/empty-state";
+import StatusDot from "@ui/components/status-dot";
+import {
+  DISABLED_OPACITY,
+  FontFamily,
+  FontSize,
+  FontWeight,
+  HIT_SLOP,
+  Radius,
+  Spacing,
+  TAB_BAR_CLEARANCE,
+  useThemeColors,
+} from "@ui/theme";
+import {
+  resolveDisplayName,
+  resolvePeerOwnName,
+} from "@utils/peer-display-name";
 import * as Clipboard from "expo-clipboard";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -17,39 +49,7 @@ import {
   TextInput,
   View,
 } from "react-native";
-import { t, useT } from "../../i18n";
-import { arrowForward } from "../../i18n/layout";
-import { describePayResult, payPerson } from "../../services/ecash-transfer";
-import { showAlert } from "../../store/alert-store";
-import { useBlockedStore } from "../../store/blocked-store";
-import { useChatStore } from "../../store/chat-store";
-import { useContactsStore } from "../../store/contacts-store";
-import {
-  type NearbyPeer,
-  REACHABLE_TTL_MS,
-  usePeerStore,
-} from "../../store/peer-store";
-import Avatar from "../../ui/components/avatar";
-import BottomSheet from "../../ui/components/bottom-sheet";
-import EmptyState from "../../ui/components/empty-state";
-import StatusDot from "../../ui/components/status-dot";
-import {
-  DISABLED_OPACITY,
-  FontFamily,
-  FontSize,
-  FontWeight,
-  HIT_SLOP,
-  Radius,
-  Spacing,
-  TAB_BAR_CLEARANCE,
-  useThemeColors,
-} from "../../ui/theme";
-import {
-  resolveDisplayName,
-  resolvePeerOwnName,
-} from "../../utils/display-name";
-import { acknowledged } from "../../utils/haptics";
-import QrScanScreen from "../contacts/qr-scan-screen";
+import AddContactScreen from "../contacts/add-contact-screen";
 import RadarView from "./radar-view";
 import RelayGlyph from "./relay-glyph";
 
@@ -220,10 +220,11 @@ export default function PeerList({
 
   // The typed amount as a number, or null when it is not a spendable one.
   //
-  // handleSendSats used to parse this itself and silently `return` on anything
-  // invalid, while the confirm button only greyed out on an EMPTY field. So a
-  // "0", a stray "-" or a pasted "12.5" left an enabled arrow that did nothing
-  // at all when tapped: the worst class of dead control, because the user has
+  // Parsed here rather than inside handleSendSats, which can only silently
+  // `return` on anything invalid while the confirm button greys out on an EMPTY
+  // field alone. A "0", a stray "-" or a pasted "12.5" then leaves an enabled
+  // arrow that does nothing when tapped: the worst class of dead control, since
+  // the user has
   // no way to tell it from a failed send. One source of validity now drives
   // both the button's disabled state and the send.
   const parsedSats = useMemo(() => {
@@ -527,7 +528,7 @@ export default function PeerList({
       </BottomSheet>
 
       {/* QR scanner */}
-      <QrScanScreen
+      <AddContactScreen
         visible={showQRScan}
         onClose={() => setShowQRScan(false)}
         onPeerFound={handleQRScanned}
@@ -542,19 +543,13 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       flex: 1,
       backgroundColor: Colors.bg,
     },
-    // Add-contact button and the list/radar toggle both live in App.tsx's
-    // shared header.
-    // List view: rows match dm-list.tsx / channel-list.tsx's shape so all
-    // three list surfaces in the app feel like one consistent system.
     list: {
       flexGrow: 1,
-      // Clear the floating tab bar so the last peer row can scroll above it.
       paddingBottom: TAB_BAR_CLEARANCE,
     },
-    // No row background. The header comment claims these rows match dm-list and
-    // channel-list, and in every respect but this they did: those two are flat
-    // on the screen background with only a hairline between them, while this one
-    // filled each row with `surface`. On the same screen as the radar the two
+    // No row background, matching dm-list and channel-list: flat on the screen
+    // background with only a hairline between rows. On the same screen as the
+    // radar the two
     // Mesh views therefore had different canvases, and switching Radar/List
     // changed the page colour as well as the content.
     row: {
@@ -596,8 +591,6 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       fontFamily: FontFamily.mono,
       letterSpacing: 0.8,
     },
-    // Sits where the peer ID would, so the two row shapes stay the same height.
-    // Not mono: it is a word, not an identifier.
     rowRelay: {
       fontSize: FontSize.xs,
       color: Colors.textMuted,
@@ -613,7 +606,6 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       // inset the DM list uses, so the two read as one list style.
       marginStart: 62,
     },
-    // Peer detail sheet
     sheet: {
       paddingHorizontal: Spacing.xl,
       paddingBottom: Spacing.xl,
@@ -628,13 +620,10 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       fontWeight: FontWeight.bold,
       color: Colors.textPrimary,
     },
-    // Their own name, under a title the user renamed. Quiet: it is a reference,
-    // not the label anyone is meant to read them by from now on.
     sheetOwnName: {
       fontSize: FontSize.xs,
       color: Colors.textMuted,
     },
-    // Peer ID + its copy glyph, kept on one centered line.
     sheetPeerIDRow: {
       flexDirection: "row",
       alignItems: "center",
@@ -659,9 +648,6 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       width: "100%",
       gap: Spacing.sm,
     },
-    // Takes the place of the action pills, so it carries their width and the
-    // same rounded, bordered surface. Reads as a card of information rather
-    // than a control the user is failing to find.
     relayNote: {
       width: "100%",
       gap: Spacing.xs,
@@ -716,10 +702,6 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       alignItems: "center",
       gap: Spacing.sm,
     },
-    // The amount row replaces the Message/Send sats pills in place, so it keeps
-    // their shape: everything in it is fully rounded and one height, which makes
-    // the two 40x40 icon buttons circles rather than the rounded squares that
-    // read as a different control set from the pills above them.
     sendSatsInput: {
       flex: 1,
       height: SEND_SATS_ROW_HEIGHT,
