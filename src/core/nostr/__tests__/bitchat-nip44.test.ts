@@ -10,7 +10,7 @@ import {
   bitchatNip44Encrypt,
   normalizeSecretKeyEvenY,
   xOnlyPublicKey,
-} from "../bitchat-nostr-crypto";
+} from "../bitchat-nip44";
 
 describe("bitchat-nostr-crypto", () => {
   it("round-trips a message between sender and recipient", () => {

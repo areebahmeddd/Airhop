@@ -12,7 +12,7 @@ import {
   encodeBitchatAckEnvelope,
   encodeBitchatDmEnvelope,
 } from "../bitchat-envelope";
-import { xOnlyPublicKey } from "../bitchat-nostr-crypto";
+import { xOnlyPublicKey } from "../bitchat-nip44";
 import { unwrapDm, wrapDm } from "../gift-wrap";
 
 const SENDER_PEER = "aabbccdd00112233";

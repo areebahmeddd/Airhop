@@ -34,10 +34,7 @@ import {
   type Event,
   type UnsignedEvent,
 } from "nostr-tools";
-import {
-  bitchatNip44Decrypt,
-  bitchatNip44Encrypt,
-} from "./bitchat-nostr-crypto";
+import { bitchatNip44Decrypt, bitchatNip44Encrypt } from "./bitchat-nip44";
 
 // Event kinds per PROTOCOLS.md section 8.
 const KIND_DM_RUMOR = 14;

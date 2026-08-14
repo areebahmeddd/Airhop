@@ -24,7 +24,7 @@
 // testing how well we guessed someone's street corner.
 
 import { GEO_CHANNEL_PRECISION } from "@services/geohash-channel-service";
-import { encodeGeohash } from "../presence";
+import { encodeGeohash } from "../geohash-presence";
 
 // A point in Kumaraswamy Layout, Bengaluru.
 const BLR_LAT = 12.9082;

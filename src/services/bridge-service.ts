@@ -40,8 +40,8 @@ import {
   geohashDisplayName,
   type GeohashIdentity,
 } from "@core/nostr/geohash-identity";
+import { decodeGeohash, encodeGeohash } from "@core/nostr/geohash-presence";
 import type { NostrClient } from "@core/nostr/nostr-client";
-import { decodeGeohash, encodeGeohash } from "@core/nostr/presence";
 import { useSettingsStore } from "@store/settings-store";
 import { verifyEvent, type Event as NostrEvent } from "nostr-tools";
 import { getCoarseLocation } from "./location-service";

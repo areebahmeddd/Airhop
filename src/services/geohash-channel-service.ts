@@ -43,8 +43,6 @@ import {
   geohashDisplayName,
   type GeohashIdentity,
 } from "@core/nostr/geohash-identity";
-import { unwrapDm, wrapDm } from "@core/nostr/gift-wrap";
-import type { NostrClient } from "@core/nostr/nostr-client";
 import {
   decodeGeohash,
   decorrelationDelayMs,
@@ -54,7 +52,9 @@ import {
   mayBroadcastPresence,
   nextHeartbeatDelayMs,
   TAG_MESSAGE_ID,
-} from "@core/nostr/presence";
+} from "@core/nostr/geohash-presence";
+import { unwrapDm, wrapDm } from "@core/nostr/gift-wrap";
+import type { NostrClient } from "@core/nostr/nostr-client";
 import { t } from "@i18n";
 import { useActivityStore } from "@store/activity-store";
 import { useBlockedStore } from "@store/blocked-store";

@@ -7,7 +7,7 @@ import {
   encodeGeohash,
   mayBroadcastPresence,
   nextHeartbeatDelayMs,
-} from "../presence";
+} from "../geohash-presence";
 
 describe("presence", () => {
   describe("encodeGeohash", () => {
