@@ -79,6 +79,9 @@ Gemfile text eol=lf
 *.gz binary
 *.tar binary
 
+# Office documents (zip containers)
+*.pptx binary
+
 # Compiled and packaged files
 *.a binary
 *.aar binary

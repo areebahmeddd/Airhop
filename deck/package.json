@@ -1,0 +1,15 @@
+{
+  "name": "airhop-deck",
+  "private": true,
+  "type": "module",
+  "description": "Pitch deck generator. Not part of the app build.",
+  "scripts": {
+    "build": "node build.mjs && node tools/check.mjs",
+    "screens": "node tools/render-screens.mjs",
+    "preview": "node tools/preview.mjs --contact",
+    "check": "node tools/check.mjs"
+  },
+  "dependencies": {
+    "pptxgenjs": "^4.0.1"
+  }
+}
