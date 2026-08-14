@@ -18,16 +18,16 @@ export const PANELS = [
     sub: "Noise XX and Double Ratchet, on by default. The phones relaying your message carry it blind.",
   },
   {
-    id: "03-no-accounts",
-    screen: "profile",
-    headline: ["No sign up.", "No phone number."],
-    sub: "Your identity is a key made on this phone and kept on it. Nothing registers anywhere.",
-  },
-  {
-    id: "04-channels",
+    id: "03-channels",
     screen: "chats",
     headline: ["A room for", "wherever you are"],
     sub: "Public channels scoped to your block, your city or your region. Bridged over the internet when there is one.",
+  },
+  {
+    id: "04-no-accounts",
+    screen: "profile",
+    headline: ["No sign up.", "No phone number."],
+    sub: "Your identity is a key made on this phone and kept on it. Nothing registers anywhere.",
   },
   {
     id: "05-payments",

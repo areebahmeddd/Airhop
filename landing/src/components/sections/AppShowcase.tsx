@@ -17,7 +17,7 @@ const SCREENS = [
     alt: "A direct message conversation in Airhop during a power cut, relayed across three phones.",
   },
   {
-    base: "04-channels",
+    base: "03-channels",
     title: "Channels",
     caption: "Public rooms as small as one block or as wide as a region, open to anyone there.",
     alt: "The Chats screen of the Airhop app, listing public channels scoped to a block, neighborhood, city, and region.",
@@ -29,7 +29,7 @@ const SCREENS = [
     alt: "The wallet screen of the Airhop app, showing an ecash balance that can be sent over Bluetooth.",
   },
   {
-    base: "03-no-accounts",
+    base: "04-no-accounts",
     title: "Identity",
     caption: "No sign up, no phone number, no email. Just a key that never leaves this phone.",
     alt: "The profile screen of the Airhop app, showing an identity generated on the device with no account.",

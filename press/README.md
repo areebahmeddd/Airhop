@@ -18,8 +18,8 @@ Each image is an HTML page screenshot by headless Chrome at 2x. Pages stay in
 | --- | --------------------- | --------------------------------- |
 | 01  | Mesh, radar           | Works when the network doesn't    |
 | 02  | Direct message thread | Nobody in the middle can read it  |
-| 03  | You                   | No sign up. No phone number.      |
-| 04  | Chats, channels       | A room for wherever you are       |
+| 03  | Chats, channels       | A room for wherever you are       |
+| 04  | You                   | No sign up. No phone number.      |
 | 05  | Wallet                | Send money with no signal         |
 | 06  | Globe                 | Bluetooth ends. The mesh doesn't. |
 
