@@ -11,7 +11,7 @@ import {
   acknowledgePermissionPrimer,
   showPermissionPrimer,
   usePrimerStore,
-} from "../primer-store";
+} from "../permission-primer-store";
 
 describe("permission primer", () => {
   beforeEach(() => {

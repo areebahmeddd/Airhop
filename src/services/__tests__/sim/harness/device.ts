@@ -62,7 +62,7 @@ const P = {
   blockedStore: "@store/blocked-store",
   transferStore: "@store/transfer-store",
   activityStore: "@store/activity-store",
-  noticesStore: "@store/notices-store",
+  noticesStore: "@store/location-notes-store",
   nostrPool: "nostr-tools/pool",
   fileSystem: "expo-file-system",
   location: "expo-location",

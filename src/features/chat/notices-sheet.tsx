@@ -24,7 +24,7 @@ import {
   noticeAuthor,
   useNoticesStore,
   type LocationNote,
-} from "@store/notices-store";
+} from "@store/location-notes-store";
 import BottomSheet from "@ui/components/bottom-sheet";
 import {
   FontSize,

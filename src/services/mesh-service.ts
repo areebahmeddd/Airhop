@@ -168,7 +168,7 @@ import {
   evictExpiredOwedGroupStates,
   queueOwedGroupState,
   takeOwedGroupStates,
-} from "@store/group-invite-outbox";
+} from "@store/group-invite-outbox-store";
 import { groupChannel, useGroupStore } from "@store/group-store";
 import { useMeshStateStore } from "@store/mesh-state-store";
 import { useOutboxStore, type PendingMessage } from "@store/outbox-store";

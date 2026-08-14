@@ -12,7 +12,7 @@ import {
   matchesBridged,
   useNoticesStore,
   type LocationNote,
-} from "../notices-store";
+} from "../location-notes-store";
 
 const GEOHASH = "tdr1w";
 

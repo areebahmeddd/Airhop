@@ -12,7 +12,7 @@ import { geohashChannel } from "@services/geohash-channel-service";
 import { getMeshService } from "@services/mesh-service";
 import { useBoardStore } from "@store/board-store";
 import { useChatStore } from "@store/chat-store";
-import { useNoticesStore } from "@store/notices-store";
+import { useNoticesStore } from "@store/location-notes-store";
 import Avatar from "@ui/components/avatar";
 import EmptyState from "@ui/components/empty-state";
 import {

@@ -27,7 +27,7 @@ import {
 import { bytesToHex } from "@noble/hashes/utils.js";
 import { createMMKV } from "react-native-mmkv";
 import { create } from "zustand";
-import { noticeAuthor, useNoticesStore } from "./notices-store";
+import { noticeAuthor, useNoticesStore } from "./location-notes-store";
 
 export type BoardIngestResult = "accepted" | "duplicate" | "rejected";
 

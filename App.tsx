@@ -89,7 +89,7 @@ import {
   acknowledgePermissionPrimer,
   showPermissionPrimer,
   usePrimerStore,
-} from "@store/primer-store";
+} from "@store/permission-primer-store";
 import { useSettingsStore } from "@store/settings-store";
 import { useTransferStore } from "@store/transfer-store";
 import { useWalletStore } from "@store/wallet-store";
