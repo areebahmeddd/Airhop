@@ -5,6 +5,7 @@ All notable changes are documented here. The format follows [Keep a Changelog](h
 
 ## What's New
 
+- feat: update app showcase images and restructure screen references (by @areebahmeddd) [d49b035]
 - refactor(app): fix code documentation (by @areebahmeddd) [24a9c8c]
 - docs: sync every path reference to the new structure (by @areebahmeddd) [7bda42d]
 - refactor(app): move the root component under src/ (by @areebahmeddd) [4e5dde0]
