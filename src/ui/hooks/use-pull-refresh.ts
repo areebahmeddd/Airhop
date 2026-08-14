@@ -25,7 +25,7 @@
 // each call site, which is the only shape that clone is safe with.
 
 import { useMemo } from "react";
-import { useThemeColors } from "./theme";
+import { useThemeColors } from "../theme";
 
 export interface PullRefreshColors {
   tintColor: string;

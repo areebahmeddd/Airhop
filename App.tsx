@@ -93,8 +93,8 @@ import {
 import { useSettingsStore } from "@store/settings-store";
 import { useTransferStore } from "@store/transfer-store";
 import { useWalletStore } from "@store/wallet-store";
+import CustomAlert from "@ui/components/alert-modal";
 import Avatar from "@ui/components/avatar";
-import CustomAlert from "@ui/components/custom-alert";
 import {
   ErrorBoundary,
   installGlobalErrorHandler,

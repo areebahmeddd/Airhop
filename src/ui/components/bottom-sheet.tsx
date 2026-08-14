@@ -56,8 +56,8 @@ import Animated, {
 } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { scheduleOnRN } from "react-native-worklets";
+import { useKeyboardHeight } from "../hooks/use-keyboard";
 import { Duration, Radius, Spacing, useThemeColors } from "../theme";
-import { useKeyboardHeight } from "../use-keyboard";
 
 // Pull further than this share of the sheet's own height and letting go
 // dismisses instead of springing back. A third is the familiar iOS/Material

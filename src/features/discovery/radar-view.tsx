@@ -9,6 +9,7 @@ import { useMeshStateStore, type BleBlocker } from "@store/mesh-state-store";
 import { REACHABLE_TTL_MS, type NearbyPeer } from "@store/peer-store";
 import Avatar from "@ui/components/avatar";
 import StatusDot from "@ui/components/status-dot";
+import { useReducedMotion } from "@ui/hooks/use-reduced-motion";
 import {
   FontSize,
   FontWeight,
@@ -18,7 +19,6 @@ import {
   Spacing,
   useThemeColors,
 } from "@ui/theme";
-import { useReducedMotion } from "@ui/use-reduced-motion";
 import * as Haptics from "expo-haptics";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {

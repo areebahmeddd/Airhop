@@ -16,6 +16,7 @@ import { REACHABLE_TTL_MS, usePeerStore } from "@store/peer-store";
 import Avatar from "@ui/components/avatar";
 import BottomSheet from "@ui/components/bottom-sheet";
 import EmptyState from "@ui/components/empty-state";
+import { usePullRefreshColors } from "@ui/hooks/use-pull-refresh";
 import {
   Duration,
   FontSize,
@@ -27,7 +28,6 @@ import {
   TAB_BAR_CLEARANCE,
   useThemeColors,
 } from "@ui/theme";
-import { usePullRefreshColors } from "@ui/use-pull-refresh";
 import { sortConversationsByActivity } from "@utils/conversation-order";
 import { formatListTimestamp } from "@utils/format";
 import { messagePreviewText } from "@utils/message-preview";

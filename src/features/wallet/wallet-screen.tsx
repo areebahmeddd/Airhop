@@ -84,6 +84,7 @@ import {
 } from "@store/wallet-store";
 import Avatar from "@ui/components/avatar";
 import BottomSheet from "@ui/components/bottom-sheet";
+import { usePullRefreshColors } from "@ui/hooks/use-pull-refresh";
 import {
   DISABLED_OPACITY,
   FontFamily,
@@ -96,7 +97,6 @@ import {
   TAB_BAR_CLEARANCE,
   useThemeColors,
 } from "@ui/theme";
-import { usePullRefreshColors } from "@ui/use-pull-refresh";
 import { formatListTimestamp, formatNumber } from "@utils/format";
 import { nostrShortLabel, peerIDToUsername } from "@utils/username";
 import * as Clipboard from "expo-clipboard";

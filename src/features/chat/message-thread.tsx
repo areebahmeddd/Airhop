@@ -64,6 +64,7 @@ import { useWalletStore } from "@store/wallet-store";
 import Avatar from "@ui/components/avatar";
 import BottomSheet from "@ui/components/bottom-sheet";
 import Toast from "@ui/components/toast";
+import { useKeyboardInset } from "@ui/hooks/use-keyboard";
 import {
   DISABLED_OPACITY,
   Duration,
@@ -79,7 +80,6 @@ import {
   Spacing,
   useThemeColors,
 } from "@ui/theme";
-import { useKeyboardInset } from "@ui/use-keyboard";
 import { channelInviteLink } from "@utils/deep-link";
 import { unconfirmedSince } from "@utils/delivery-silence";
 import {
