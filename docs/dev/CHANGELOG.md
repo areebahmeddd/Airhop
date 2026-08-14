@@ -5,6 +5,29 @@ All notable changes are documented here. The format follows [Keep a Changelog](h
 
 ## What's New
 
+- refactor(app): fix code documentation (by @areebahmeddd) [24a9c8c]
+- docs: sync every path reference to the new structure (by @areebahmeddd) [7bda42d]
+- refactor(app): move the root component under src/ (by @areebahmeddd) [4e5dde0]
+- test(structure): app-level suites move out from under services/ (by @areebahmeddd) [22ee168]
+- refactor(core/mesh): split 25 flat modules into seven concerns (by @areebahmeddd) [a5b45d7]
+- refactor(core): say which presence, and which NIP-44 (by @areebahmeddd) [4be2aa6]
+- refactor(services): one suffix rule, and panic-wipe moves to services (by @areebahmeddd) [1c87871]
+- refactor(features): name each surface for what it presents (by @areebahmeddd) [076416c]
+- refactor(ui): group the hooks, name the alert for what it is (by @areebahmeddd) [2ab1ab0]
+- refactor(store): name three stores for what they hold (by @areebahmeddd) [1897f36]
+- refactor(structure): separate OS wrappers from pure utils (by @areebahmeddd) [920dba0]
+- refactor(imports): use path aliases for cross-layer imports (by @areebahmeddd) [0edfbdd]
+- chore(build): wire up TypeScript path aliases (by @areebahmeddd) [d110a68]
+- feat: introduce relay node functionality in mesh network (by @areebahmeddd) [8a4ad9d]
+- fix(ci): ios builds + audio fixes (by @areebahmeddd) [849e5cc]
+- chore: update dependencies (by @areebahmeddd) [f9162c3]
+- feat: add diagnostics screen for real-time radio status and peer connections (by @areebahmeddd) [4053f6f]
+- feat: implement lift-to-lock functionality for hands-free voice recording (by @areebahmeddd) [a795098]
+
+**Full changelog:** [v0.9.15..v1.0.0](https://github.com/areebahmeddd/airhop/compare/v0.9.15..v1.0.0)
+
+## What's New
+
 - feat: enhance haptic feedback and notification handling (by @areebahmeddd) [bc755c2]
 - feat: enhance QR scan and contact management with verification and copy functionality (by @areebahmeddd) [4af924c]
 
