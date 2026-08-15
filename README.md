@@ -268,7 +268,7 @@ Airhop would not exist without the work of the bitchat community. Thank you to e
 
 ## Support
 
-Help keep the project going by donating via the website, sponsoring on GitHub, or simply giving this repository a star.
+Help keep the project going by donating via the website, sponsoring on GitHub, or simply giving this repository a star. What the project needs funding for is published as a [`funding.json`](https://airhop.1mindlabs.org/funding.json) manifest, following the [funding.json](https://fundingjson.org) standard.
 
 <a href="https://www.star-history.com/?repos=areebahmeddd%2Fairhop&type=date&legend=top-left">
  <picture>

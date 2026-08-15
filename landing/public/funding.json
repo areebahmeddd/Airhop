@@ -1,0 +1,91 @@
+{
+  "$schema": "https://fundingjson.org/schema/v1.1.0.json",
+  "version": "v1.1.0",
+  "entity": {
+    "type": "individual",
+    "role": "owner",
+    "name": "Areeb Ahmed",
+    "email": "hi@areeb.dev",
+    "description": "Independent developer and final-year computer science student in India. I build and maintain Airhop on my own, in the open, under the MIT licence. The project has received no grants, investment or institutional funding to date.",
+    "webpageUrl": {
+      "url": "https://airhop.1mindlabs.org"
+    }
+  },
+  "projects": [
+    {
+      "guid": "airhop",
+      "name": "Airhop",
+      "description": "Airhop is a private messaging app for Android and iOS, with desktop, browser and terminal clients in development, that works with no internet, no accounts and no central servers. Messages relay directly between phones over a Bluetooth Low Energy mesh, up to seven hops, so people stay in contact when the network is unavailable, saturated, surveilled or shut down. It is wire-compatible with bitchat, so devices running either app join the same mesh with zero setup. Identity is an Ed25519 key pair held only on the device, live sessions use the Noise XX handshake with Double Ratchet forward secrecy, and Nostr relays over Tor carry traffic when a connection is available. It also carries offline Cashu ecash payments that settle between two phones with no internet on either side.",
+      "webpageUrl": {
+        "url": "https://airhop.1mindlabs.org"
+      },
+      "repositoryUrl": {
+        "url": "https://github.com/areebahmeddd/airhop",
+        "wellKnown": "https://github.com/areebahmeddd/airhop/blob/main/.well-known/funding-manifest-urls"
+      },
+      "licenses": ["spdx:MIT"],
+      "tags": [
+        "messaging",
+        "privacy",
+        "encryption",
+        "bluetooth-mesh",
+        "offline-first",
+        "peer-to-peer",
+        "censorship-resistance",
+        "nostr",
+        "cashu",
+        "mobile"
+      ]
+    }
+  ],
+  "funding": {
+    "channels": [
+      {
+        "guid": "github-sponsors",
+        "type": "payment-provider",
+        "address": "https://github.com/sponsors/areebahmeddd",
+        "description": "GitHub Sponsors. One-time donations and recurring sponsorships, billed in USD."
+      }
+    ],
+    "plans": [
+      {
+        "guid": "supporter",
+        "status": "active",
+        "name": "Supporter",
+        "description": "Any amount, one time or recurring. Covers day to day maintenance: releases, bug fixes, and keeping bitchat interoperability working as both protocols evolve.",
+        "amount": 0,
+        "currency": "USD",
+        "frequency": "monthly",
+        "channels": ["github-sponsors"]
+      },
+      {
+        "guid": "device-lab",
+        "status": "active",
+        "name": "Device lab",
+        "description": "A few used low-end Android handsets and a pair of ESP32 boards with 915 MHz LoRa radios. Real Bluetooth discovery timing, background execution and OEM battery manager behaviour cannot be verified any other way.",
+        "amount": 500,
+        "currency": "USD",
+        "frequency": "one-time",
+        "channels": ["github-sponsors"]
+      },
+      {
+        "guid": "security-audit",
+        "status": "active",
+        "name": "External review of the cryptography",
+        "description": "A scoped independent review of the Noise XX handshake and Double Ratchet implementation by someone other than me, with findings published. A full two-scope audit costs far more than this; this funds a first external pair of eyes on the parts that matter most. Ahead of v1.9.0.",
+        "amount": 2000,
+        "currency": "USD",
+        "frequency": "one-time",
+        "channels": ["github-sponsors"]
+      }
+    ],
+    "history": [
+      {
+        "year": 2026,
+        "income": 0,
+        "currency": "USD",
+        "description": "No grants, investment or institutional funding received to date. Developer accounts, test devices and hosting have been paid for personally."
+      }
+    ]
+  }
+}
