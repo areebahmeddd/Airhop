@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import type { Plugin } from "vite";
@@ -56,12 +57,37 @@ function sitemap(pages: PageSeo[]): string {
 
 const STYLESHEET = /<link rel="stylesheet"[^>]*href="([^"]+\.css)"[^>]*>/;
 
+const BOOT_SCRIPT = /<script src="(\/[^"]+\.js)"><\/script>/;
+
+const CSP_SCRIPT_SRC = "script-src 'self'";
+
 async function inlineStylesheet(root: string, shell: string): Promise<string> {
   const match = STYLESHEET.exec(shell);
   if (!match) return shell;
 
   const css = await readFile(path.join(root, match[1].replace(/^\//, "")), "utf8");
   return shell.replace(match[0], `<style>${css}</style>`);
+}
+
+async function inlineBootScript(
+  root: string,
+  shell: string,
+): Promise<{ shell: string; hash: string | null }> {
+  const match = BOOT_SCRIPT.exec(shell);
+  if (!match) return { shell, hash: null };
+
+  const js = await readFile(path.join(root, match[1].replace(/^\//, "")), "utf8");
+  const hash = createHash("sha256").update(js, "utf8").digest("base64");
+  return { shell: shell.replace(match[0], `<script>${js}</script>`), hash: `sha256-${hash}` };
+}
+
+async function allowInlineBoot(root: string, hash: string) {
+  const file = path.join(root, "_headers");
+  const headers = await readFile(file, "utf8");
+  if (!headers.includes(CSP_SCRIPT_SRC)) {
+    throw new Error(`static-html: _headers has no "${CSP_SCRIPT_SRC}" to extend`);
+  }
+  await writeFile(file, headers.replace(CSP_SCRIPT_SRC, `${CSP_SCRIPT_SRC} '${hash}'`), "utf8");
 }
 
 export function staticHtml(): Plugin {
@@ -81,7 +107,10 @@ export function staticHtml(): Plugin {
         this.error("static-html: index.html is missing the <!-- seo:start --> block");
       }
 
-      const shell = await inlineStylesheet(root, built);
+      const withStyles = await inlineStylesheet(root, built);
+      const { shell, hash } = await inlineBootScript(root, withStyles);
+
+      if (hash) await allowInlineBoot(root, hash);
 
       for (const page of PAGES) {
         const html = shell.replace(BLOCK, headBlock(page));

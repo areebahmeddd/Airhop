@@ -83,10 +83,10 @@ export default function LanguagePicker() {
         onClick={() => setOpen(!open)}
         aria-expanded={open}
         aria-controls={panelId}
-        aria-label={T("settings.language.label")}
         className="border-line bg-inner text-secondary hover:border-line-strong hover:text-ink flex h-7 items-center gap-1.5 rounded-full border pr-1.5 pl-2.5 font-mono text-[10px] font-semibold tracking-[0.18em] transition-colors duration-150"
       >
         <Languages size={12} aria-hidden="true" />
+        <span className="sr-only">{T("settings.language.label")}</span>
         {LANGUAGES.en.shortCode}
         <ChevronDown
           size={12}

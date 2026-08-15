@@ -102,13 +102,15 @@ interface GitHubRelease {
 
 interface Release {
   version: string;
-  meta: string | null;
+  bird: string | null;
+  date: string | null;
   url: string;
 }
 
 const RELEASE_FALLBACK: Release = {
   version: "v0.9.12",
-  meta: null,
+  bird: null,
+  date: null,
   url: RELEASES_URL,
 };
 
@@ -116,21 +118,15 @@ function buildRelease(tag: string, publishedAt: string | null, url: string | nul
   const version = tag.replace(/^v/, "").trim();
   if (!version) return null;
 
-  const parts: string[] = [];
-
-  const bird = RELEASE_BIRDS[version.split(".")[0]];
-  if (bird) parts.push(bird);
-
   const date = publishedAt ? new Date(publishedAt) : null;
-  if (date && !Number.isNaN(date.getTime())) {
-    parts.push(
-      date.toLocaleDateString("en-US", { month: "short", day: "2-digit", year: "numeric" }),
-    );
-  }
+  const hasDate = date && !Number.isNaN(date.getTime());
 
   return {
     version: `v${version}`,
-    meta: parts.length ? parts.join(" · ") : null,
+    bird: RELEASE_BIRDS[version.split(".")[0]] || null,
+    date: hasDate
+      ? date.toLocaleDateString("en-US", { month: "short", day: "2-digit", year: "numeric" })
+      : null,
     url: url || RELEASES_URL,
   };
 }
@@ -317,10 +313,11 @@ export default function Hero() {
                 <span className="bg-ok relative inline-flex h-1.5 w-1.5 rounded-full" />
               </span>
               {release.version}
+              {release.bird ? <span className="text-secondary">{release.bird}</span> : null}
             </span>
-            {release.meta ? (
+            {release.date ? (
               <span className="text-secondary font-mono text-[10px] tracking-wide whitespace-nowrap">
-                {release.meta}
+                {release.date}
               </span>
             ) : null}
             <ArrowRight
