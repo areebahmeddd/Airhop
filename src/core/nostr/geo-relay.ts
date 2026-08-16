@@ -73,23 +73,13 @@ export function parseRelaysCsv(csv: string): RelayEntry[] {
   return entries;
 }
 
-// The relays Airhop falls back on when it cannot pick something better.
+// bitchat's four built-in relays, matched host for host: widely reachable and
+// reliable carriers of NIP-59 gift-wraps. One literal for the two roles below,
+// because two hand-kept copies give nothing to catch an edit landing on one.
 //
-// These serve two roles that want the same hosts for the same reason (widely
-// reachable, and reliably carrying NIP-59 gift-wraps): the geo fallback below,
-// and NostrClient's default DM pool. Declared once because two hand-maintained
-// literals of the same four hosts give nothing to catch an edit landing on only
-// one of them.
-//
-// Coordinates matter only to the geo role. The DM role reads the URLs.
-//
-// Ordered alphabetically by host, which is also the order the Message relays
-// list shows them in. Deliberately NOT ordered by distance: in the geo role
-// nearestRelays re-sorts by distance from the query point anyway, so the
-// literal's order cannot matter there, and in the DM role every client opens
-// all of these at once no matter where it is, so a distance order would dress a
-// fixed global set up as a ranking it does not have. Alphabetical is stable,
-// obviously not a preference, and keeps additions easy to place.
+// Alphabetical, not by distance: nearestRelays re-sorts by the query point
+// anyway, and every client opens all four wherever it is, so a distance order
+// would dress a fixed global set up as a ranking it does not have.
 const WELL_KNOWN_RELAYS: RelayEntry[] = [
   { url: "wss://nos.lol", lat: 40.7128, lng: -74.006 },
   { url: "wss://offchain.pub", lat: 51.5074, lng: -0.1278 },
@@ -97,12 +87,13 @@ const WELL_KNOWN_RELAYS: RelayEntry[] = [
   { url: "wss://relay.primal.net", lat: 40.7128, lng: -74.006 },
 ];
 
-// Geo role: used when the directory has no nearby entries or GPS is unavailable.
+// Geo role: the directory has no nearby entries, or there is no GPS fix. Reads
+// the coordinates, which matter to nothing else here.
 const FALLBACK_RELAYS: RelayEntry[] = WELL_KNOWN_RELAYS;
 
-// DM role: NostrClient's default pool. Carries gift-wrapped DMs, private
-// channels and wallet lookups, and is deliberately NOT affected by the user's
-// custom relays, which scope to location channels and the mesh bridge.
+// DM role: NostrClient's default pool for gift-wrapped DMs, private channels and
+// wallet lookups. Deliberately NOT affected by the user's custom relays, which
+// scope to location channels and the mesh bridge.
 export const DEFAULT_DM_RELAYS: readonly string[] = WELL_KNOWN_RELAYS.map(
   (r) => r.url,
 );
@@ -110,18 +101,13 @@ export const DEFAULT_DM_RELAYS: readonly string[] = WELL_KNOWN_RELAYS.map(
 export class GeoRelayDirectory {
   private entries: RelayEntry[] = [];
 
-  // Load from CSV string (typically from
-  // require('../../../assets/data/nostr_relays.csv'), which Metro bundles as a
-  // static asset). Call once at startup.
+  // For the CSV form of the directory, which only tests and regeneration see:
+  // Metro does not bundle .csv, so the app loads the generated TypeScript module
+  // (src/data/relays.ts) through loadEntries instead.
   load(csv: string): void {
     this.loadEntries(parseRelaysCsv(csv));
   }
 
-  // Load from an already-parsed list. This is the path the app actually uses:
-  // the relay table ships as a generated TypeScript module (src/data/relays.ts)
-  // because Metro does not bundle .csv, so there is no CSV string to parse at
-  // runtime. The CSV path above remains for tests and for regeneration.
-  //
   // validateRelayUrl canonicalizes, so "host" and "host:443" collapse to one
   // relay. nearestRelays returns a fixed count, so a surviving duplicate would
   // take a slot and push out the relay bitchat picks last, splitting the cell.
@@ -136,8 +122,8 @@ export class GeoRelayDirectory {
     }
   }
 
-  // Return the N nearest relays to (lat, lng). Falls back to the global
-  // fallback set if the directory is empty or has fewer than `count` entries.
+  // The N nearest relays to (lat, lng), or the well-known set when the directory
+  // is empty, so a cell is never left with nowhere to publish.
   nearestRelays(lat: number, lng: number, count: number = 5): string[] {
     const pool = this.entries.length > 0 ? this.entries : FALLBACK_RELAYS;
 
@@ -174,16 +160,14 @@ export class GeoRelayDirectory {
   }
 }
 
-// Combine a cell's auto-discovered nearest relays with the user's custom relays,
-// per the Geo-relay discovery toggle. Pure so it is trivially unit-testable.
+// The relay set for a cell, per the Geo-relay discovery toggle. On keeps the
+// `count` nearest intact, because converging on them is what makes location
+// channels interoperate with bitchat, and appends the custom relays. Off uses
+// the custom relays alone, trading interop for control.
 //
-//   discovery on  -> the `count` nearest relays (kept intact: converging on them
-//                    is what makes location channels interoperate with bitchat)
-//                    PLUS any custom relays, deduped and additive.
-//   discovery off -> only the custom relays (the user's explicit choice, which
-//                    trades interop for control), unless none are set, in which
-//                    case fall back to the nearest so a channel is never
-//                    left with zero relays.
+// Off with none is unreachable while the store holds RELAY_SOURCE_INVARIANT; the
+// branch stays as the last defence against a cell with no relays, which fails
+// silently.
 export function mergeGeoRelays(
   nearest: readonly string[],
   custom: readonly string[],
@@ -270,9 +254,17 @@ export function validateRelayUrl(raw: string): string | null {
 
 // The host to show a user for a relay URL. Every relay reaching the UI is
 // wss:// (validateRelayUrl normalizes to it, and the directory is wss-only), so
-// the scheme is the same noise on every row. Shared by both screens that list
+// the scheme is the same noise on every row. Shared by every screen that lists
 // relays so they never diverge on how a relay looks. Display only: the full URL
 // stays the identity everywhere else, including as the key for removal.
 export function relayDisplayHost(url: string): string {
   return url.replace(/^wss:\/\//, "");
+}
+
+// The scheme to show in front of relayDisplayHost, for the one list that wants
+// it (see the Message relays rows). Read off the URL rather than written as a
+// literal, so the two halves of a row cannot disagree.
+export function relayDisplayScheme(url: string): string {
+  const scheme = /^[a-z][a-z0-9+.-]*:\/\//i.exec(url);
+  return scheme === null ? "" : scheme[0];
 }

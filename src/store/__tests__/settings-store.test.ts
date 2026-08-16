@@ -83,6 +83,127 @@ describe("customRelays", () => {
     expect(state().customRelays).toContain("wss://late.example.com");
     expect(state().customRelays).toHaveLength(MAX_CUSTOM_RELAYS);
   });
+
+  it("removes a relay named the way it was typed", () => {
+    // The list stores the canonical form, but the user typed a bare host and
+    // may quote it back that way.
+    state().addCustomRelay("relay.example.com");
+    state().removeCustomRelay("relay.example.com:443");
+    expect(state().customRelays).toEqual([]);
+  });
+});
+
+// RELAY_SOURCE_INVARIANT. The Network screen explains the rule to the user;
+// these pin the store half, which is what holds it for every other writer.
+describe("geoRelayDiscovery", () => {
+  beforeEach(() => {
+    for (const url of state().customRelays) state().removeCustomRelay(url);
+    state().setGeoRelayDiscovery(true);
+  });
+
+  it("refuses to turn off with no custom relay to fall back to", () => {
+    state().setGeoRelayDiscovery(false);
+    expect(state().geoRelayDiscovery).toBe(true);
+  });
+
+  it("turns off once a relay is pinned", () => {
+    state().addCustomRelay("relay.example.com");
+    state().setGeoRelayDiscovery(false);
+    expect(state().geoRelayDiscovery).toBe(false);
+  });
+
+  it("comes back on when the last relay is removed", () => {
+    state().addCustomRelay("relay.example.com");
+    state().setGeoRelayDiscovery(false);
+    state().removeCustomRelay("wss://relay.example.com");
+    expect(state().customRelays).toEqual([]);
+    expect(state().geoRelayDiscovery).toBe(true);
+  });
+
+  it("stays off while another relay remains", () => {
+    state().addCustomRelay("one.example.com");
+    state().addCustomRelay("two.example.com");
+    state().setGeoRelayDiscovery(false);
+    state().removeCustomRelay("wss://one.example.com");
+    expect(state().geoRelayDiscovery).toBe(false);
+  });
+
+  it("is restored by the panic wipe along with the relay list", () => {
+    state().addCustomRelay("relay.example.com");
+    state().setGeoRelayDiscovery(false);
+    state().reset();
+    expect(state().customRelays).toEqual([]);
+    expect(state().geoRelayDiscovery).toBe(true);
+  });
+});
+
+// MMKV is plain storage, and this is the one persisted setting that reaches a
+// socket. bitchat re-normalizes its stored relays on read for the same reason.
+describe("customRelays rehydration", () => {
+  function rehydrateState(persisted: object) {
+    const merge = useSettingsStore.persist.getOptions().merge;
+    if (merge === undefined) throw new Error("persist has no merge hook");
+    return merge(persisted, state());
+  }
+
+  function rehydrate(customRelays: unknown): string[] {
+    return rehydrateState({ customRelays }).customRelays;
+  }
+
+  it("drops an entry that no longer validates", () => {
+    expect(
+      rehydrate([
+        "wss://good.example.com",
+        "wss://localhost",
+        "wss://10.0.0.1",
+        "not a relay",
+        "",
+      ]),
+    ).toEqual(["wss://good.example.com"]);
+  });
+
+  it("collapses two spellings of one relay", () => {
+    // Two entries for one endpoint would each take a slot and hold a socket.
+    expect(
+      rehydrate([
+        "relay.example.com",
+        "wss://relay.example.com:443",
+        "wss://relay.example.com/",
+      ]),
+    ).toEqual(["wss://relay.example.com"]);
+  });
+
+  it("trims a list that is over the cap", () => {
+    const stored = Array.from(
+      { length: MAX_CUSTOM_RELAYS + 4 },
+      (_, i) => `relay${i}.example.com`,
+    );
+    expect(rehydrate(stored)).toHaveLength(MAX_CUSTOM_RELAYS);
+  });
+
+  it("turns discovery back on when sanitizing empties the list", () => {
+    // Discovery was legitimately off against relays that no longer validate.
+    const merged = rehydrateState({
+      customRelays: ["wss://localhost"],
+      geoRelayDiscovery: false,
+    });
+    expect(merged.customRelays).toEqual([]);
+    expect(merged.geoRelayDiscovery).toBe(true);
+  });
+
+  it("leaves discovery off when a stored relay survives", () => {
+    const merged = rehydrateState({
+      customRelays: ["relay.example.com"],
+      geoRelayDiscovery: false,
+    });
+    expect(merged.customRelays).toEqual(["wss://relay.example.com"]);
+    expect(merged.geoRelayDiscovery).toBe(false);
+  });
+
+  it("survives a value that is not a list of strings", () => {
+    expect(rehydrate(undefined)).toEqual([]);
+    expect(rehydrate([null, 42, { url: "wss://a.example.com" }])).toEqual([]);
+  });
 });
 
 // Two settings whose defaults are the load-bearing part. Both are the kind of

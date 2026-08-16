@@ -141,10 +141,12 @@ export class NostrClient {
     }
   }
 
-  // Resolve an optional per-call relay override to a concrete relay list.
-  // Bare hostnames (as stored in the geo-relay directory) are normalized to
-  // wss:// URLs. An empty or all-invalid override falls back to the default
-  // pool so a caller can never accidentally publish to nothing.
+  // Resolve an optional per-call relay override. Everything reaching here is
+  // already a wss:// URL (the geo directory and the custom list both come
+  // through validateRelayUrl); normalizeRelayUrl is the backstop for a caller
+  // passing a bare hostname, the shape bitchat stores its directory in. An empty
+  // or all-invalid override falls back to the default pool, so no caller can
+  // accidentally publish to nothing.
   private resolveRelays(relays?: string[]): string[] {
     if (relays === undefined || relays.length === 0) return this.relays;
     const normalized = relays
@@ -345,7 +347,10 @@ export class NostrClient {
   }
 }
 
-// Normalize relay URL: ensure it starts with wss:// or ws://, strip trailing slash.
+// Ensure a relay URL starts with wss:// or ws://, and strip a trailing slash.
+// Looser than validateRelayUrl by design, not a second copy of it: this is the
+// last step before a socket, where the only question is whether there is a URL
+// to open. Whether a host may be pinned at all is answered once, at entry.
 function normalizeRelayUrl(url: string): string | null {
   const trimmed = url.trim().replace(/\/$/, "");
   if (trimmed.startsWith("wss://") || trimmed.startsWith("ws://")) {

@@ -105,9 +105,13 @@ interface SettingsState {
   // default. Off makes Airhop pure Bluetooth: no relay is contacted at all, and
   // the internet-dependent features are inert (and shown disabled).
   internetEnabled: boolean;
-  // Whether the app auto-selects the nearest relays for a location cell from its
-  // vendored directory. On by default. Off uses only the custom relays below (a
-  // power-user choice); with neither, location channels have no relays.
+  // Whether the app auto-selects the nearest relays for a cell from its vendored
+  // directory. On by default; off uses only the custom relays.
+  //
+  // RELAY_SOURCE_INVARIANT: never off with an empty customRelays. Held by
+  // setGeoRelayDiscovery, removeCustomRelay and the merge hook, because "off
+  // with nothing pinned" leaves the switch claiming the app does not
+  // auto-select relays while mergeGeoRelays falls back to doing exactly that.
   geoRelayDiscovery: boolean;
   // User-added relay URLs (wss://...), always tried for location channels in
   // addition to discovery, and the sole source when discovery is off. Capped at
@@ -234,13 +238,18 @@ export const useSettingsStore = create<SettingsState>()(
         set({ internetEnabled: enabled });
       },
       setGeoRelayDiscovery(enabled) {
-        set({ geoRelayDiscovery: enabled });
+        // Refused where it would break RELAY_SOURCE_INVARIANT. The screen blocks
+        // this with an explanation; here it is the backstop for every other
+        // writer.
+        set((s) =>
+          !enabled && s.customRelays.length === 0
+            ? s
+            : { geoRelayDiscovery: enabled },
+        );
       },
       addCustomRelay(url) {
-        // Validate + normalize to wss://host[:port] and de-duplicate. Invalid or
-        // unsupported entries (bad host, IP, loopback, credentials, etc.) are
-        // rejected, matching bitchat's relay bar. The UI validates first for
-        // feedback; this is the defensive backstop.
+        // The screen validates first, for feedback. This is the backstop: a
+        // relay that never met validateRelayUrl must not reach a socket.
         const normalized = validateRelayUrl(url);
         if (normalized === null) return;
         set((s) =>
@@ -251,9 +260,18 @@ export const useSettingsStore = create<SettingsState>()(
         );
       },
       removeCustomRelay(url) {
-        set((s) => ({
-          customRelays: s.customRelays.filter((r) => r !== url),
-        }));
+        // Normalized as the add was, so a relay can be removed as it was typed.
+        const normalized = validateRelayUrl(url) ?? url;
+        set((s) => {
+          // Replaced only when something actually left: the transport watches
+          // this array by reference, and filter() returns a fresh one either
+          // way, so a removal that removed nothing would rebuild every live cell.
+          if (!s.customRelays.includes(normalized)) return s;
+          const customRelays = s.customRelays.filter((r) => r !== normalized);
+          return customRelays.length === 0
+            ? { customRelays, geoRelayDiscovery: true }
+            : { customRelays };
+        });
       },
       setTorEnabled(enabled) {
         set({ torEnabled: enabled });
@@ -284,6 +302,29 @@ export const useSettingsStore = create<SettingsState>()(
       name: "settings-store",
       storage: createJSONStorage(() => mmkvStorage),
       version: 1,
+      // Re-validate the custom relays coming off disk. MMKV is plain storage,
+      // and unlike every other persisted field these are hostnames rehydration
+      // hands to a socket, so one written by a looser build (or edited on disk)
+      // would arrive having never met validateRelayUrl. Sanitizing can empty the
+      // list, the one path that could rehydrate past RELAY_SOURCE_INVARIANT.
+      merge: (persisted, current) => {
+        const state = (persisted ?? {}) as Partial<SettingsState>;
+        const seen = new Set<string>();
+        const customRelays: string[] = [];
+        for (const raw of state.customRelays ?? []) {
+          const url = typeof raw === "string" ? validateRelayUrl(raw) : null;
+          if (url === null || seen.has(url)) continue;
+          seen.add(url);
+          customRelays.push(url);
+        }
+        const merged = {
+          ...current,
+          ...state,
+          customRelays: customRelays.slice(0, MAX_CUSTOM_RELAYS),
+        };
+        if (merged.customRelays.length === 0) merged.geoRelayDiscovery = true;
+        return merged;
+      },
       // v1 dropped Fira Code. A persisted "firacode" would miss the MONO_FONTS
       // table entirely, and FontFamily.mono reads that table on every style
       // build, so the stale value has to be retired on load rather than guarded

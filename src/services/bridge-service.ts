@@ -165,6 +165,19 @@ export class BridgeService {
     this.publishPresence();
   }
 
+  // Reopen the rendezvous subscription against the current relay set. See the
+  // matching method on GeohashChannelService for why.
+  //
+  // Not resubscribe(), which is for a cell change and clears the participants
+  // and presence rate limit with it. The cell here is the same, so clearing them
+  // would blink the "across the bridge" count to zero for nothing.
+  applyRelayChange(): void {
+    const cell = this.subscribedCell;
+    if (!this.enabled || cell === null) return;
+    this.subscription?.close();
+    this.subscription = this.openCellSubscription(cell);
+  }
+
   private async resolveCell(): Promise<string | null> {
     const coords = await getCoarseLocation();
     if (coords !== null) {
@@ -191,9 +204,14 @@ export class BridgeService {
     // device in a cell nobody there can see it in for up to half a minute.
     this.lastPresenceAtMs = 0;
     if (cell === null) return;
-    const relays = this.relaysForCell(cell);
     this.subscribedCell = cell;
-    this.subscription = this.client.subscribe(
+    this.subscription = this.openCellSubscription(cell);
+  }
+
+  // Shared by the cell-change and relay-change paths, which differ only in what
+  // they tear down first. The relay set is read as the socket opens.
+  private openCellSubscription(cell: string): { close: () => void } {
+    return this.client.subscribe(
       [
         {
           kinds: [20000, 20001],
@@ -203,7 +221,7 @@ export class BridgeService {
       ],
       (event) => this.handleRendezvousEvent(event),
       undefined,
-      relays,
+      this.relaysForCell(cell),
     );
   }
 

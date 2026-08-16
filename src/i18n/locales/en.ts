@@ -1663,8 +1663,9 @@ export const strings = {
   "settings.network.add_short": "Add",
   "settings.network.relay_limit":
     "You can add {count} relays. Remove one to add another.",
+  "settings.network.relay_duplicate": "That relay is already in your list.",
   "settings.network.relay_invalid":
-    "Enter a valid relay host, e.g. relay.example.com. IP addresses and local names are not allowed.",
+    "Enter a valid relay host, e.g. relay.example.com. A port is only needed if the relay does not use the default. IP addresses and local names are not allowed.",
   "settings.network.bitchat": "bitchat compatibility",
   "settings.network.bitchat_desc":
     "Same BLE mesh as bitchat, fully interoperable. This is always on, and cannot be disabled.",

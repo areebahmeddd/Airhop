@@ -380,6 +380,27 @@ export class GeohashChannelService {
     this.publishLiveCells();
   }
 
+  // Reopen every live cell subscription against the relay set as it stands now.
+  // relaysForGeohash is read per publish, but a subscription reads it only as it
+  // opens, so without this the two split: messages go out on a relay nothing is
+  // listening to, and keep arriving from one no longer published to. bitchat
+  // reconciles its live relay connections on the same event.
+  //
+  // Not folded into refresh(), which skips a channel whose geohash is unchanged.
+  // Here the geohash is always unchanged and the relays are what moved.
+  applyRelayChange(): void {
+    for (const channel of [...this.subscriptions.keys()]) {
+      const geohash = this.channelGeohash.get(channel);
+      if (geohash === undefined) continue;
+      // Note authors go with the subscription and repopulate as it replays.
+      // Restoring them would be worse: rememberNoteAuthor re-arms the deletion
+      // filter only for an author it has not seen.
+      this.unsubscribeChannel(channel);
+      this.channelGeohash.set(channel, geohash);
+      this.subscribeChannel(channel, geohash);
+    }
+  }
+
   // The geohash a joined channel should subscribe to right now. Teleported
   // channels use their fixed key geohash; named channels derive it from the
   // current position, or null when there is no fix (BLE-only).

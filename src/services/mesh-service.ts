@@ -432,6 +432,7 @@ export class MeshService {
   // Unsubscribe for the settings listener that toggles the bridge on/off.
   private bridgeUnsub: (() => void) | null = null;
   private internetUnsub: (() => void) | null = null;
+  private relayPrefsUnsub: (() => void) | null = null;
   // Unsubscribe for the settings listener that tears live voice down when the
   // user switches it off mid-burst.
   private liveVoiceUnsub: (() => void) | null = null;
@@ -843,6 +844,22 @@ export class MeshService {
       if (state.internetEnabled !== prev.internetEnabled) {
         this.applyInternetEnabled(state.internetEnabled);
       }
+    });
+
+    // The relay preferences. The publish path re-reads them per event, a
+    // subscription only as it opens, so without this the two drift: after adding
+    // a relay you publish to it and never hear it. customRelays compares by
+    // reference, which the store guarantees by never mutating it in place.
+    this.relayPrefsUnsub?.();
+    this.relayPrefsUnsub = useSettingsStore.subscribe((state, prev) => {
+      if (
+        state.customRelays === prev.customRelays &&
+        state.geoRelayDiscovery === prev.geoRelayDiscovery
+      ) {
+        return;
+      }
+      this.geoChannels?.applyRelayChange();
+      this.bridgeService?.applyRelayChange();
     });
 
     // Turning live voice off has to take effect now, not at the end of whatever
@@ -5897,6 +5914,8 @@ export class MeshService {
     this.bridgeUnsub = null;
     this.internetUnsub?.();
     this.internetUnsub = null;
+    this.relayPrefsUnsub?.();
+    this.relayPrefsUnsub = null;
     this.contactsUnsub?.();
     this.contactsUnsub = null;
     if (this.outboxSweepTimer !== null) {

@@ -5,6 +5,7 @@ import {
   DEFAULT_DM_RELAYS,
   MAX_CUSTOM_RELAYS,
   relayDisplayHost,
+  relayDisplayScheme,
   validateRelayUrl,
 } from "@core/nostr/geo-relay";
 import Feather from "@expo/vector-icons/Feather";
@@ -27,6 +28,10 @@ interface Props {
   onBack: () => void;
 }
 
+// The three ways addCustomRelay declines a relay, so the screen can never report
+// success for one the store dropped.
+type RelayError = "invalid" | "duplicate" | "full";
+
 export default function NetworkScreen({ onBack }: Props): React.JSX.Element {
   const Colors = useThemeColors();
   const styles = useSharedStyles();
@@ -48,7 +53,7 @@ export default function NetworkScreen({ onBack }: Props): React.JSX.Element {
     ...DEFAULT_DM_RELAYS,
   ];
   const [relayInput, setRelayInput] = useState("");
-  const [relayError, setRelayError] = useState<"invalid" | "full" | null>(null);
+  const [relayError, setRelayError] = useState<RelayError | null>(null);
 
   // Master internet switch: persist the preference AND build/tear down the Nostr
   // transport immediately so the change takes effect without a restart. Turning
@@ -84,12 +89,14 @@ export default function NetworkScreen({ onBack }: Props): React.JSX.Element {
       setRelayError("invalid");
       return;
     }
-    // The store caps the list. Say so, because otherwise the add is a no-op that
-    // clears the field and reads as success.
-    if (
-      customRelays.length >= MAX_CUSTOM_RELAYS &&
-      !customRelays.includes(normalized)
-    ) {
+    // The store ignores a repeat and a full list silently, so both are named
+    // here or the add is a no-op that reads as success. Compared on the
+    // canonical form, since "example.com" and "example.com:443" are one relay.
+    if (customRelays.includes(normalized)) {
+      setRelayError("duplicate");
+      return;
+    }
+    if (customRelays.length >= MAX_CUSTOM_RELAYS) {
       setRelayError("full");
       return;
     }
@@ -98,10 +105,17 @@ export default function NetworkScreen({ onBack }: Props): React.JSX.Element {
     setRelayError(null);
   }
 
-  // Turning geo-relay discovery OFF only makes sense with at least one custom
-  // relay to fall back to, so block it (with a nudge) when the list is empty,
-  // and confirm the reach/interop trade-off when it is not. Turning it on never
-  // prompts. This keeps the invariant "discovery off implies a custom relay".
+  function relayErrorMessage(reason: RelayError): string {
+    if (reason === "duplicate") return T("settings.network.relay_duplicate");
+    if (reason === "full") {
+      return T("settings.network.relay_limit", { count: MAX_CUSTOM_RELAYS });
+    }
+    return T("settings.network.relay_invalid");
+  }
+
+  // Off needs at least one custom relay to fall back to (RELAY_SOURCE_INVARIANT,
+  // which the store enforces), so block it with a nudge when the list is empty
+  // and confirm the reach/interop trade-off when it is not. On never prompts.
   function handleGeoRelayToggle(value: boolean): void {
     if (value) {
       setGeoRelayDiscovery(true);
@@ -130,18 +144,15 @@ export default function NetworkScreen({ onBack }: Props): React.JSX.Element {
     );
   }
 
-  // Removing the last custom relay while discovery is off would leave no relays,
-  // so re-enable discovery to keep location channels working. Say so: the user
-  // deliberately turned that switch off, and flipping it back silently means
-  // they watch a control they set change itself with no explanation. The toggle
-  // path already explains this invariant before blocking, so the removal path
-  // explaining it after the fact keeps the two consistent.
+  // Removing the last relay while discovery is off turns discovery back on in
+  // the store (RELAY_SOURCE_INVARIANT). Say so, rather than let a switch the
+  // user deliberately set change itself with no explanation.
   function handleRemoveRelay(url: string): void {
+    const wasLast = !geoRelayDiscovery && customRelays.length === 1;
     removeCustomRelay(url);
     // A "list full" error is stale the moment a slot frees up.
     setRelayError(null);
-    if (!geoRelayDiscovery && customRelays.length <= 1) {
-      setGeoRelayDiscovery(true);
+    if (wasLast) {
       showAlert(
         T("settings.network.discovery_back_on"),
         T("settings.network.discovery_back_on_body"),
@@ -306,11 +317,7 @@ export default function NetworkScreen({ onBack }: Props): React.JSX.Element {
                       },
                     ]}
                   >
-                    {relayError === "full"
-                      ? T("settings.network.relay_limit", {
-                          count: MAX_CUSTOM_RELAYS,
-                        })
-                      : T("settings.network.relay_invalid")}
+                    {relayErrorMessage(relayError)}
                   </Text>
                 )}
               </>
@@ -363,6 +370,9 @@ export default function NetworkScreen({ onBack }: Props): React.JSX.Element {
                         style={[styles.settingLabel, { flex: 1 }]}
                         numberOfLines={1}
                       >
+                        <Text style={{ color: Colors.textMuted }}>
+                          {relayDisplayScheme(url)}
+                        </Text>
                         {relayDisplayHost(url)}
                       </Text>
                     </View>
