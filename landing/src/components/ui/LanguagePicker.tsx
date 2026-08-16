@@ -1,17 +1,27 @@
-import { LANGUAGES, PLANNED_LANGUAGES, useT, type LanguageSpec } from "@/i18n";
+import {
+  LANGUAGE_ORDER,
+  languageName,
+  LANGUAGES,
+  localizedPath,
+  useLanguage,
+  useT,
+  type LanguageSpec,
+} from "@/i18n";
+import { rememberLanguage } from "@/lib/language-hint";
 import { Check, ChevronDown, Languages } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useId, useRef, useState } from "react";
+import { useLocation } from "react-router-dom";
 
-function Row({ language, active }: { language: LanguageSpec; active?: boolean }) {
-  const T = useT();
+const ROW = "flex w-full items-center gap-3 rounded-[9px] px-2.5 py-2";
+
+function Label({ language, active }: { language: LanguageSpec; active: boolean }) {
+  const current = useLanguage();
 
   return (
-    <li
-      className={`flex items-center gap-3 rounded-[10px] px-2.5 py-2 ${active ? "bg-inner" : ""}`}
-    >
+    <>
       <span
-        className={`w-5 shrink-0 font-mono text-[10px] font-semibold tracking-[0.14em] ${
+        className={`w-8 shrink-0 font-mono text-[10px] font-semibold tracking-[0.14em] ${
           active ? "text-ink" : "text-mute"
         }`}
       >
@@ -19,25 +29,21 @@ function Row({ language, active }: { language: LanguageSpec; active?: boolean })
       </span>
       <span className="min-w-0 flex-1">
         <span className={`block truncate text-[13px] ${active ? "text-ink" : "text-secondary"}`}>
-          {T(language.nameKey)}
+          {languageName(current, language.code)}
         </span>
-        <span className="text-mute block truncate text-[11px]" lang={language.code}>
-          {language.endonym}
+        <span className="text-mute block truncate text-[11px]">
+          <bdi lang={language.code}>{language.endonym}</bdi>
         </span>
       </span>
-      {active ? (
-        <Check size={14} className="text-ink shrink-0" aria-hidden="true" />
-      ) : (
-        <span className="text-mute shrink-0 font-mono text-[9px] tracking-[0.16em] uppercase">
-          {T("settings.language.soon")}
-        </span>
-      )}
-    </li>
+      {active ? <Check size={14} className="text-ink shrink-0" aria-hidden="true" /> : null}
+    </>
   );
 }
 
 export default function LanguagePicker() {
   const T = useT();
+  const language = useLanguage();
+  const { pathname } = useLocation();
   const [open, setOpen] = useState(false);
   const wrapper = useRef<HTMLDivElement>(null);
   const toggleRef = useRef<HTMLButtonElement>(null);
@@ -83,11 +89,11 @@ export default function LanguagePicker() {
         onClick={() => setOpen(!open)}
         aria-expanded={open}
         aria-controls={panelId}
-        className="border-line bg-inner text-secondary hover:border-line-strong hover:text-ink flex h-7 items-center gap-1.5 rounded-full border pr-1.5 pl-2.5 font-mono text-[10px] font-semibold tracking-[0.18em] transition-colors duration-150"
+        className="border-line bg-inner text-secondary hover:border-line-strong hover:text-ink flex h-7 items-center gap-1.5 rounded-full border ps-2.5 pe-1.5 font-mono text-[10px] font-semibold tracking-[0.18em] transition-colors duration-150"
       >
         <Languages size={12} aria-hidden="true" />
         <span className="sr-only">{T("settings.language.label")}</span>
-        {LANGUAGES.en.shortCode}
+        {LANGUAGES[language].shortCode}
         <ChevronDown
           size={12}
           aria-hidden="true"
@@ -103,13 +109,31 @@ export default function LanguagePicker() {
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 4 }}
             transition={{ duration: 0.15, ease: "easeOut" }}
-            className="border-line bg-card absolute right-0 bottom-full z-40 mb-2 w-64 rounded-2xl border p-1.5"
+            className="border-line bg-card absolute end-0 bottom-full z-40 mb-2 w-64 overflow-hidden rounded-2xl border p-1.5"
           >
-            <ul className="no-scrollbar max-h-60 overflow-y-auto">
-              <Row language={LANGUAGES.en} active />
-              {PLANNED_LANGUAGES.map((language) => (
-                <Row key={language.code} language={language} />
-              ))}
+            <ul className="no-scrollbar max-h-60 space-y-0.5 overflow-x-hidden overflow-y-auto">
+              {LANGUAGE_ORDER.map((code) => {
+                const spec = LANGUAGES[code];
+                const active = code === language;
+                return (
+                  <li key={code}>
+                    {active ? (
+                      <span className={`${ROW} bg-inner`} aria-current="true">
+                        <Label language={spec} active />
+                      </span>
+                    ) : (
+                      <a
+                        href={localizedPath(code, pathname)}
+                        hrefLang={code}
+                        onClick={() => rememberLanguage(code)}
+                        className={`${ROW} hover:bg-hover transition-colors duration-150`}
+                      >
+                        <Label language={spec} active={false} />
+                      </a>
+                    )}
+                  </li>
+                );
+              })}
             </ul>
           </motion.div>
         )}

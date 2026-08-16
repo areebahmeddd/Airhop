@@ -1,3 +1,5 @@
+import { formatShortDate, useLanguage, useT, type LanguageCode, type TranslationKey } from "@/i18n";
+import { useRichText } from "@/i18n/rich-text";
 import { REPO_LINKS, STORE_LINKS } from "@/lib/links";
 import {
   ArrowRight,
@@ -13,23 +15,24 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { motion } from "motion/react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 interface DownloadOption {
   label: string;
-  description: string;
+  description?: string;
+  descriptionKey?: TranslationKey;
   icon: LucideIcon;
   href?: string;
 }
 
 interface DownloadGroup {
-  heading: string;
+  headingKey: TranslationKey;
   options: DownloadOption[];
 }
 
 const DOWNLOAD_GROUPS: DownloadGroup[] = [
   {
-    heading: "Mobile",
+    headingKey: "home.hero.group.mobile",
     options: [
       {
         label: "App Store",
@@ -45,47 +48,31 @@ const DOWNLOAD_GROUPS: DownloadGroup[] = [
       },
       {
         label: "F-Droid",
-        description: "Open source catalog",
+        descriptionKey: "home.hero.option.f_droid",
         icon: Boxes,
         href: STORE_LINKS.fDroid,
       },
       {
         label: "APK",
-        description: "Direct download",
+        descriptionKey: "home.hero.option.apk",
         icon: Download,
         href: REPO_LINKS.apk,
       },
     ],
   },
   {
-    heading: "Desktop",
+    headingKey: "home.hero.group.desktop",
     options: [
-      {
-        label: "macOS",
-        description: "Coming soon",
-        icon: Laptop,
-      },
-      {
-        label: "Windows",
-        description: "Coming soon",
-        icon: Monitor,
-      },
-      {
-        label: "Web",
-        description: "Coming soon",
-        icon: Globe,
-      },
-      {
-        label: "CLI",
-        description: "Coming soon",
-        icon: Terminal,
-      },
+      { label: "macOS", descriptionKey: "home.hero.option.soon", icon: Laptop },
+      { label: "Windows", descriptionKey: "home.hero.option.soon", icon: Monitor },
+      { label: "Web", descriptionKey: "home.hero.option.soon", icon: Globe },
+      { label: "CLI", descriptionKey: "home.hero.option.soon", icon: Terminal },
     ],
   },
 ];
 
 const DOWNLOAD_ROW =
-  "flex min-h-13 items-center gap-2.5 rounded-lg px-2 py-2 text-left sm:gap-3 sm:px-3";
+  "flex min-h-13 items-center gap-2.5 rounded-lg px-2 py-2 text-start sm:gap-3 sm:px-3";
 
 const RELEASE_BIRDS: Record<string, string> = {
   "1": "Albatross",
@@ -114,7 +101,12 @@ const RELEASE_FALLBACK: Release = {
   url: RELEASES_URL,
 };
 
-function buildRelease(tag: string, publishedAt: string | null, url: string | null): Release | null {
+function buildRelease(
+  tag: string,
+  publishedAt: string | null,
+  url: string | null,
+  language: LanguageCode,
+): Release | null {
   const version = tag.replace(/^v/, "").trim();
   if (!version) return null;
 
@@ -124,9 +116,7 @@ function buildRelease(tag: string, publishedAt: string | null, url: string | nul
   return {
     version: `v${version}`,
     bird: RELEASE_BIRDS[version.split(".")[0]] || null,
-    date: hasDate
-      ? date.toLocaleDateString("en-US", { month: "short", day: "2-digit", year: "numeric" })
-      : null,
+    date: hasDate ? formatShortDate(language, date) : null,
     url: url || RELEASES_URL,
   };
 }
@@ -159,6 +149,7 @@ function Underlined({ delay, children }: { delay: number; children: React.ReactN
 const DOWNLOAD_PANEL_ID = "download-options";
 
 function DownloadDropdown() {
+  const T = useT();
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
@@ -192,9 +183,9 @@ function DownloadDropdown() {
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
         aria-controls={DOWNLOAD_PANEL_ID}
-        className="bg-ink text-canvas flex h-12 items-center gap-3 rounded-full pr-2 pl-7 text-sm font-medium transition-opacity duration-150 select-none hover:opacity-90"
+        className="bg-ink text-canvas flex h-12 items-center gap-3 rounded-full ps-7 pe-2 text-sm font-medium transition-opacity duration-150 select-none hover:opacity-90"
       >
-        Download the app
+        {T("home.hero.download")}
         <span className="bg-canvas/15 flex h-8 w-8 shrink-0 items-center justify-center rounded-full">
           <ChevronDown
             size={14}
@@ -215,14 +206,17 @@ function DownloadDropdown() {
         >
           {DOWNLOAD_GROUPS.map((group, gi) => (
             <div
-              key={group.heading}
-              className={`min-w-0 ${gi > 0 ? "border-line border-l pl-2 sm:pl-4" : ""}`}
+              key={group.headingKey}
+              className={`min-w-0 ${gi > 0 ? "border-line border-s ps-2 sm:ps-4" : ""}`}
             >
-              <p className="text-secondary px-2 pt-1.5 pb-2 text-left font-mono text-[10px] font-semibold tracking-[0.18em] uppercase sm:px-3">
-                {group.heading}
+              <p className="label text-secondary px-2 pt-1.5 pb-2 text-start text-[10px] font-semibold tracking-[0.18em] sm:px-3">
+                {T(group.headingKey)}
               </p>
               {group.options.map((option) => {
                 const Icon = option.icon;
+                const description = option.descriptionKey
+                  ? T(option.descriptionKey)
+                  : (option.description ?? "");
                 const body = (
                   <>
                     <Icon
@@ -238,9 +232,9 @@ function DownloadDropdown() {
                         {option.label}
                       </span>
                       <span
-                        className={`block truncate font-mono text-[11px] leading-4 ${option.href ? "text-secondary" : "text-mute"}`}
+                        className={`mono block truncate text-[11px] leading-4 ${option.href ? "text-secondary" : "text-mute"}`}
                       >
-                        {option.description}
+                        {description}
                       </span>
                     </span>
                   </>
@@ -271,7 +265,23 @@ function DownloadDropdown() {
   );
 }
 
+function HeroBody() {
+  const T = useT();
+  const nodes = useMemo(
+    () => ({
+      no_servers: <Underlined delay={0.7}>{T("home.hero.body.no_servers")}</Underlined>,
+      no_accounts: <Underlined delay={1.0}>{T("home.hero.body.no_accounts")}</Underlined>,
+      no_tracking: <Underlined delay={1.3}>{T("home.hero.body.no_tracking")}</Underlined>,
+    }),
+    [T],
+  );
+
+  return <>{useRichText("home.hero.body", nodes)}</>;
+}
+
 export default function Hero() {
+  const T = useT();
+  const language = useLanguage();
   const [release, setRelease] = useState<Release>(RELEASE_FALLBACK);
 
   useEffect(() => {
@@ -285,11 +295,12 @@ export default function Hero() {
           tag,
           typeof data.published_at === "string" ? data.published_at : null,
           typeof data.html_url === "string" ? data.html_url : null,
+          language,
         );
         if (next) setRelease(next);
       })
       .catch(() => {});
-  }, []);
+  }, [language]);
 
   return (
     <section className="px-6 md:px-10">
@@ -304,10 +315,13 @@ export default function Hero() {
             href={release.url}
             target="_blank"
             rel="noopener noreferrer"
-            className="group border-line bg-card-subtle hover:border-line-strong flex h-7 items-center gap-2 rounded-full border pr-2.5 pl-1 transition-colors duration-150"
+            className="group border-line bg-card-subtle hover:border-line-strong flex h-7 items-center gap-2 rounded-full border ps-1 pe-2.5 transition-colors duration-150"
           >
-            <span className="sr-only">Latest release</span>
-            <span className="bg-inner text-ink flex h-[22px] items-center gap-1.5 rounded-full px-2.5 font-mono text-[10px] font-medium">
+            <span className="sr-only">{T("home.hero.release")}</span>
+            <span
+              className="bg-inner text-ink flex h-[22px] items-center gap-1.5 rounded-full px-2.5 font-mono text-[10px] font-medium"
+              dir="ltr"
+            >
               <span className="relative flex h-1.5 w-1.5" aria-hidden="true">
                 <span className="bg-ok absolute inline-flex h-full w-full animate-ping rounded-full opacity-50" />
                 <span className="bg-ok relative inline-flex h-1.5 w-1.5 rounded-full" />
@@ -316,36 +330,33 @@ export default function Hero() {
               {release.bird ? <span className="text-secondary">{release.bird}</span> : null}
             </span>
             {release.date ? (
-              <span className="text-secondary font-mono text-[10px] tracking-wide whitespace-nowrap">
+              <span className="text-secondary mono text-[10px] tracking-wide whitespace-nowrap">
                 {release.date}
               </span>
             ) : null}
             <ArrowRight
               size={11}
               strokeWidth={2}
-              className="text-mute flex-shrink-0 transition-transform duration-150 group-hover:translate-x-0.5"
+              className="text-mute flex-shrink-0 transition-transform duration-150 group-hover:translate-x-0.5 rtl:rotate-180 rtl:group-hover:-translate-x-0.5"
               aria-hidden="true"
             />
           </a>
         </div>
 
         <h1 className="text-ink text-4xl leading-[1.06] font-semibold tracking-tight text-balance sm:text-5xl lg:text-[64px]">
-          Messaging that works without the internet.
+          {T("home.hero.title")}
         </h1>
 
         <p className="text-secondary mt-6 max-w-xl text-base leading-relaxed sm:text-lg">
-          Nearby phones form a Bluetooth mesh and relay your messages up to seven hops, end to end
-          encrypted. <Underlined delay={0.7}>No servers</Underlined>,{" "}
-          <Underlined delay={1.0}>no accounts</Underlined>,{" "}
-          <Underlined delay={1.3}>no tracking</Underlined>.
+          <HeroBody />
         </p>
 
         <div className="mt-8 flex justify-center">
           <DownloadDropdown />
         </div>
 
-        <p className="text-secondary mt-7 font-mono text-[11px] tracking-wider uppercase">
-          MIT licensed · Free and open source · Works with bitchat
+        <p className="label text-secondary mt-7 text-[11px] tracking-wider">
+          {T("home.hero.badges")}
         </p>
       </motion.div>
     </section>

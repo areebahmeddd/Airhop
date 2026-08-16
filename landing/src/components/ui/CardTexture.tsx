@@ -22,7 +22,7 @@ export default function CardTexture({
       />
       {Icon ? (
         <span
-          className={`${GHOST} -right-5 ${corner === "top" ? "-top-5" : "-bottom-5"}`}
+          className={`${GHOST} -end-5 ${corner === "top" ? "-top-5" : "-bottom-5"}`}
           aria-hidden="true"
         >
           <Icon size={112} strokeWidth={1} />
@@ -30,7 +30,7 @@ export default function CardTexture({
       ) : null}
       {numeral ? (
         <span
-          className={`${GHOST} -top-8 -right-4 font-mono text-[140px] leading-none font-semibold`}
+          className={`${GHOST} -end-4 -top-8 font-mono text-[140px] leading-none font-semibold`}
           aria-hidden="true"
         >
           {numeral}

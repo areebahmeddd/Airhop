@@ -1,4 +1,6 @@
 import { RELAY_COUNT, RELAY_SITES, type RelaySite } from "@/data/relays";
+import { useT, useTPlural } from "@/i18n";
+import { useRichText } from "@/i18n/rich-text";
 import {
   geoBounds,
   geoContains,
@@ -118,7 +120,51 @@ function formatCoordinates(lat: number, lng: number): string {
   return `${ns} ${ew}`;
 }
 
+interface SiteDetailData {
+  place: string;
+  relays: number;
+  hosts: string;
+  others: number;
+}
+
+function MapSummary() {
+  const T = useT();
+  const TPlural = useTPlural();
+
+  return (
+    <>
+      {T("home.map.summary", {
+        relays: TPlural("home.map.relays", RELAY_COUNT),
+        locations: TPlural("home.map.locations", RELAY_SITES.length),
+      })}
+    </>
+  );
+}
+
+function SiteDetail({ detail }: { detail: SiteDetailData }) {
+  const TPlural = useTPlural();
+  const nodes = useMemo(
+    () => ({
+      hosts: (
+        <span className="normal-case">
+          {detail.hosts}
+          {detail.others > 0 ? ` +${detail.others}` : ""}
+        </span>
+      ),
+    }),
+    [detail.hosts, detail.others],
+  );
+  const vars = useMemo(
+    () => ({ place: detail.place, relays: TPlural("home.map.relays", detail.relays) }),
+    [detail.place, detail.relays, TPlural],
+  );
+
+  return <>{useRichText("home.map.detail", nodes, vars)}</>;
+}
+
 export default function RelayMap() {
+  const T = useT();
+  const TPlural = useTPlural();
   const [land, setLand] = useState<ExtendedFeature[] | null>(null);
   const [active, setActive] = useState<number | null>(null);
 
@@ -236,32 +282,21 @@ export default function RelayMap() {
   return (
     <div className="px-6 pt-5 pb-3">
       <p
-        className="text-secondary mb-2 h-4 truncate font-mono text-[10px] leading-4 font-bold tracking-widest uppercase"
+        className="label text-secondary mb-2 h-4 truncate text-[10px] leading-4 font-bold tracking-widest"
         aria-live="polite"
         aria-atomic="true"
       >
         <span aria-hidden="true">&#9679;</span>{" "}
-        {detail ? (
-          <>
-            {detail.place} &middot; {detail.relays} {detail.relays === 1 ? "relay" : "relays"}{" "}
-            &middot; <span className="normal-case">{detail.hosts}</span>
-            {detail.others > 0 ? ` +${detail.others}` : ""}
-          </>
-        ) : (
-          <>
-            Nostr bridge &middot; {RELAY_COUNT} relays across {RELAY_SITES.length} locations
-            worldwide
-          </>
-        )}
+        {detail ? <SiteDetail detail={detail} /> : <MapSummary />}
       </p>
 
-      <div style={{ width: "100%", aspectRatio: `${WIDTH} / ${HEIGHT}` }}>
+      <div style={{ width: "100%", aspectRatio: `${WIDTH} / ${HEIGHT}` }} dir="ltr">
         <svg
           viewBox={`0 0 ${WIDTH} ${HEIGHT}`}
           style={{ width: "100%", height: "100%" }}
           className="select-none"
           role="group"
-          aria-label="World map of Nostr relay locations"
+          aria-label={T("home.map.aria")}
           onPointerLeave={endHover}
           onKeyDown={onKeyDown}
           onBlur={onBlur}
@@ -346,9 +381,10 @@ export default function RelayMap() {
                 fill="transparent"
                 tabIndex={i === (active ?? 0) ? 0 : -1}
                 role="button"
-                aria-label={`${site.hosts[0]}, ${site.relays} ${
-                  site.relays === 1 ? "relay" : "relays"
-                }`}
+                aria-label={T("home.map.site_aria", {
+                  host: site.hosts[0],
+                  relays: TPlural("home.map.relays", site.relays),
+                })}
                 onPointerEnter={() => setActive(i)}
                 onPointerLeave={endHover}
                 onFocus={() => setActive(i)}

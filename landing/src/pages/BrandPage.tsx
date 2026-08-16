@@ -1,3 +1,4 @@
+import EnglishContent from "@/components/ui/EnglishContent";
 import PageHeader from "@/components/ui/PageHeader";
 import Mark from "@/components/ui/PixelBird";
 import TextLink from "@/components/ui/TextLink";
@@ -141,7 +142,7 @@ export default function BrandPage() {
           meta={T("page.brand.meta")}
         />
 
-        <div className="mt-14 space-y-12">
+        <EnglishContent className="mt-14 space-y-12">
           <Panel title="The mark">
             <div className="grid grid-cols-2 gap-3">
               <div
@@ -358,7 +359,7 @@ export default function BrandPage() {
               <TextLink href="mailto:hi@areeb.dev">hi@areeb.dev</TextLink>.
             </p>
           </Panel>
-        </div>
+        </EnglishContent>
       </div>
     </main>
   );

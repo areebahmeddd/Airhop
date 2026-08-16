@@ -26,6 +26,10 @@ Airhop is MIT-licensed and has no accounts, no ads, no telemetry, and no company
 - [Privacy policy](https://airhop.1mindlabs.org/privacy-policy): What stays on the device, what each optional feature exposes to peers and relays, and how long anything is kept
 - [Blogs](https://airhop.1mindlabs.org/blogs): Writing on mesh networking, privacy and offline-first software
 
+## Languages
+
+The site chrome and the home page are available in thirty languages, addressed by a path prefix, with English at the root and `hreflang` alternates on every page: English (`/`), Amharic (`/am`), Arabic (`/ar`), Burmese (`/my`), Simplified Chinese (`/zh-hans`), Traditional Chinese (`/zh-hant`), Dutch (`/nl`), Filipino (`/fil`), French (`/fr`), German (`/de`), Hindi (`/hi`), Indonesian (`/id`), Italian (`/it`), Japanese (`/ja`), Korean (`/ko`), Malay (`/ms`), Nepali (`/ne`), Persian (`/fa`), Polish (`/pl`), Brazilian Portuguese (`/pt-br`), Russian (`/ru`), Spanish (`/es`), Swahili (`/sw`), Swedish (`/sv`), Tamil (`/ta`), Thai (`/th`), Turkish (`/tr`), Ukrainian (`/uk`), Urdu (`/ur`), Vietnamese (`/vi`). Arabic, Persian and Urdu render right to left. The architecture, FAQ, brand, terms and privacy pages are English only and are marked `lang="en"` wherever they appear under a translated prefix.
+
 ## Specifications
 
 - [Architecture specification](https://github.com/areebahmeddd/airhop/blob/main/docs/spec/ARCHITECTURE.md): Design decisions behind the protocol and the app

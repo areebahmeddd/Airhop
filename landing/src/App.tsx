@@ -1,5 +1,6 @@
 import Footer from "@/components/layout/Footer";
 import Navbar from "@/components/layout/Navbar";
+import LanguageSuggestion from "@/components/ui/LanguageSuggestion";
 import { useT } from "@/i18n";
 import HomePage from "@/pages/HomePage";
 import NotFoundPage from "@/pages/NotFoundPage";
@@ -61,6 +62,7 @@ export default function App() {
       >
         {T("nav.skip")}
       </a>
+      <LanguageSuggestion />
       <Navbar />
       <div className="flex flex-1 flex-col">
         <Suspense fallback={<div className="bg-canvas flex-1" />}>

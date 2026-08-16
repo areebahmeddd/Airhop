@@ -1,12 +1,14 @@
+import EnglishContent from "@/components/ui/EnglishContent";
 import PageHeader from "@/components/ui/PageHeader";
 import TextLink from "@/components/ui/TextLink";
 import { useSEO } from "@/hooks/useSEO";
-import { useT } from "@/i18n";
+import { formatDate, useLanguage, useT } from "@/i18n";
 import { REPO_LINKS, REPO_URL } from "@/lib/links";
-import { LAST_UPDATED_DISPLAY, SEO } from "@/lib/seo";
+import { LAST_UPDATED, SEO } from "@/lib/seo";
 
 export default function TermsPage() {
   const T = useT();
+  const language = useLanguage();
 
   useSEO(SEO["/terms-of-service"]);
 
@@ -16,10 +18,10 @@ export default function TermsPage() {
         <PageHeader
           eyebrow={T("page.legal.eyebrow")}
           title={T("page.terms.title")}
-          meta={T("common.last_updated", { date: LAST_UPDATED_DISPLAY })}
+          meta={T("common.last_updated", { date: formatDate(language, LAST_UPDATED) })}
         />
 
-        <div className="text-secondary mt-14">
+        <EnglishContent className="text-secondary mt-14">
           <section className="border-line space-y-4 border-t pt-12 first:border-t-0 first:pt-0">
             <h2 className="text-ink text-base font-semibold">About Airhop</h2>
             <p className="text-[15px] leading-[1.75]">
@@ -173,7 +175,7 @@ export default function TermsPage() {
               .
             </p>
           </section>
-        </div>
+        </EnglishContent>
       </div>
     </main>
   );

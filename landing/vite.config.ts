@@ -6,6 +6,9 @@ import { staticHtml } from "./plugins/static-html.ts";
 
 export default defineConfig({
   plugins: [react(), tailwindcss(), staticHtml()],
+  build: {
+    manifest: true,
+  },
   resolve: {
     alias: {
       "@": path.resolve(import.meta.dirname, "src"),

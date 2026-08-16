@@ -1,45 +1,48 @@
 import CardTexture from "@/components/ui/CardTexture";
 import LeaderLabel from "@/components/ui/LeaderLabel";
 import SectionHeader from "@/components/ui/SectionHeader";
+import { useT, type TranslationKey } from "@/i18n";
 import { LifeBuoy, Megaphone, Mountain, Tent } from "lucide-react";
 import { motion } from "motion/react";
 
-const SITUATIONS = [
+const SITUATIONS: { labelKey: TranslationKey; lineKey: TranslationKey; Icon: typeof LifeBuoy }[] = [
   {
-    label: "Disaster",
+    labelKey: "home.situations.disaster.label",
+    lineKey: "home.situations.disaster.line",
     Icon: LifeBuoy,
-    line: "Towers are down. A notice on the board reaches whoever walks past.",
   },
   {
-    label: "Off-grid",
+    labelKey: "home.situations.offgrid.label",
+    lineKey: "home.situations.offgrid.line",
     Icon: Mountain,
-    line: "Two days into the trail. The last bar disappeared yesterday.",
   },
   {
-    label: "Protest",
+    labelKey: "home.situations.protest.label",
+    lineKey: "home.situations.protest.line",
     Icon: Megaphone,
-    line: "A QR code on a flyer opens an encrypted channel for the march.",
   },
   {
-    label: "Festival",
+    labelKey: "home.situations.festival.label",
+    lineKey: "home.situations.festival.line",
     Icon: Tent,
-    line: "No signal at the grounds. Messages hop through strangers' phones.",
   },
 ];
 
 export default function Situations() {
+  const T = useT();
+
   return (
     <section className="px-6 py-12 md:px-10 md:py-16">
       <div className="mx-auto max-w-7xl">
         <SectionHeader
-          eyebrow="When you need it"
-          title="For the day the network goes down."
-          sub="Natural disasters, internet blackouts, mass protests, or an ordinary weekend out of range."
+          eyebrow={T("home.situations.eyebrow")}
+          title={T("home.situations.title")}
+          sub={T("home.situations.sub")}
         />
         <div className="mx-auto mt-10 grid max-w-6xl grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {SITUATIONS.map((s, i) => (
             <motion.div
-              key={s.label}
+              key={s.labelKey}
               initial={{ opacity: 0, y: 8 }}
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true, margin: "-60px" }}
@@ -49,10 +52,10 @@ export default function Situations() {
               <CardTexture Icon={s.Icon} />
 
               <div className="relative mt-auto">
-                <LeaderLabel as="h3" index={i + 1} label={s.label} />
+                <LeaderLabel as="h3" index={i + 1} label={T(s.labelKey)} />
               </div>
 
-              <p className="text-secondary relative mt-3 text-sm leading-relaxed">{s.line}</p>
+              <p className="text-secondary relative mt-3 text-sm leading-relaxed">{T(s.lineKey)}</p>
             </motion.div>
           ))}
         </div>

@@ -2,6 +2,8 @@ import CardTexture from "@/components/ui/CardTexture";
 import Chip from "@/components/ui/Chip";
 import SectionHeader from "@/components/ui/SectionHeader";
 import TextLink from "@/components/ui/TextLink";
+import { useT, type TranslationKey } from "@/i18n";
+import { useRichText } from "@/i18n/rich-text";
 import { REPO_LINKS, REPO_URL } from "@/lib/links";
 import type { LucideIcon } from "lucide-react";
 import {
@@ -15,63 +17,88 @@ import {
   ShieldAlert,
 } from "lucide-react";
 import { motion } from "motion/react";
+import { useMemo } from "react";
 import { Link } from "react-router-dom";
 
 const LINKS: {
-  title: string;
-  desc: string;
+  titleKey: TranslationKey;
+  descKey: TranslationKey;
   href: string;
   internal?: boolean;
   Icon: LucideIcon;
 }[] = [
   {
-    title: "Source code",
+    titleKey: "home.explore.source.title",
+    descKey: "home.explore.source.desc",
     Icon: Code,
-    desc: "Everything on GitHub under MIT. Issues, pull requests, and discussions open.",
     href: REPO_URL,
   },
   {
-    title: "Protocol spec",
+    titleKey: "home.explore.protocol.title",
+    descKey: "home.explore.protocol.desc",
     Icon: FileText,
-    desc: "The exact wire format, BLE UUIDs, and constants, shared with bitchat.",
     href: REPO_LINKS.protocolsDoc,
   },
   {
-    title: "Architecture",
+    titleKey: "home.explore.architecture.title",
+    descKey: "home.explore.architecture.desc",
     Icon: Layers,
-    desc: "The full technical breakdown, from tapping send to the bytes on the radio.",
     href: "/architecture",
     internal: true,
   },
   {
-    title: "Roadmap",
+    titleKey: "home.explore.roadmap.title",
+    descKey: "home.explore.roadmap.desc",
     Icon: Map,
-    desc: "Version targets from v0.5.0 to v2.0.0, including the planned audit.",
     href: REPO_LINKS.roadmapDoc,
   },
   {
-    title: "Vision",
+    titleKey: "home.explore.vision.title",
+    descKey: "home.explore.vision.desc",
     Icon: Compass,
-    desc: "Why Airhop exists, and the principles that do not change under pressure.",
     href: REPO_LINKS.visionDoc,
   },
   {
-    title: "Brand kit",
+    titleKey: "home.explore.brand.title",
+    descKey: "home.explore.brand.desc",
     Icon: Palette,
-    desc: "The pixel bird, color and type tokens, press assets and boilerplate.",
     href: "/brand",
     internal: true,
   },
 ];
 
+function AuditNotice() {
+  const T = useT();
+  const nodes = useMemo(
+    () => ({
+      headline: (
+        <strong className="text-ink font-semibold">{T("home.explore.audit.headline")}</strong>
+      ),
+      review: (
+        <TextLink href={REPO_LINKS.securityReview} tone="quiet">
+          {T("home.explore.audit.link.review")}
+        </TextLink>
+      ),
+      version: (
+        <TextLink href={`${REPO_LINKS.roadmapDoc}#v190-security-hardening`}>v1.9.0</TextLink>
+      ),
+    }),
+    [T],
+  );
+
+  return <>{useRichText("home.explore.audit.body", nodes)}</>;
+}
+
 export default function Explore() {
+  const T = useT();
+
   return (
     <section id="explore" className="scroll-mt-8 px-6 py-12 md:px-10 md:py-16">
       <div className="mx-auto max-w-7xl">
         <SectionHeader
-          eyebrow="Open and honest"
-          title="Every claim here is checkable."
-          sub="The code, protocol, and plans are public. So are the limitations. Check them yourself before taking our word for it."
+          eyebrow={T("home.explore.eyebrow")}
+          title={T("home.explore.title")}
+          sub={T("home.explore.sub")}
         />
 
         <motion.div
@@ -84,20 +111,10 @@ export default function Explore() {
           <CardTexture Icon={ShieldAlert} />
 
           <div className="relative mb-4 flex justify-center">
-            <Chip label="Audit pending" />
+            <Chip label={T("home.explore.audit.chip")} />
           </div>
           <p className="text-secondary relative mx-auto max-w-3xl text-center text-sm leading-relaxed">
-            <strong className="text-ink font-semibold">
-              Airhop has not yet had an external security audit.
-            </strong>{" "}
-            All code is personally reviewed and run through a{" "}
-            <TextLink href={REPO_LINKS.securityReview} tone="quiet">
-              security review agent
-            </TextLink>{" "}
-            before shipping, and the cryptographic library it uses is Cure53 audited, but that is
-            not a substitute for a formal audit of the app itself. One is planned for{" "}
-            <TextLink href={`${REPO_LINKS.roadmapDoc}#v190-security-hardening`}>v1.9.0</TextLink>.
-            Do not rely on it for sensitive use cases until then.
+            <AuditNotice />
           </p>
         </motion.div>
 
@@ -110,9 +127,9 @@ export default function Explore() {
                 <CardTexture Icon={item.Icon} corner="bottom" />
 
                 <span className="relative min-w-0">
-                  <span className="text-ink block text-sm font-medium">{item.title}</span>
+                  <span className="text-ink block text-sm font-medium">{T(item.titleKey)}</span>
                   <span className="text-secondary mt-1.5 block text-[13px] leading-snug">
-                    {item.desc}
+                    {T(item.descKey)}
                   </span>
                 </span>
                 <ArrowUpRight
@@ -124,7 +141,7 @@ export default function Explore() {
             );
             return (
               <motion.div
-                key={item.title}
+                key={item.titleKey}
                 initial={{ opacity: 0, y: 8 }}
                 whileInView={{ opacity: 1, y: 0 }}
                 viewport={{ once: true, margin: "-60px" }}

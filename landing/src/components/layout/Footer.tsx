@@ -152,7 +152,7 @@ export default function Footer() {
               <div key={col.headingKey} className="min-w-0">
                 <p
                   id={`${headingId}-${col.headingKey}`}
-                  className="text-secondary mb-4 flex h-4 items-center font-mono text-[10px] leading-4 font-semibold tracking-[0.18em] uppercase"
+                  className="label text-secondary mb-4 flex h-4 items-center text-[10px] leading-4 font-semibold tracking-[0.18em]"
                 >
                   {T(col.headingKey)}
                 </p>
@@ -185,7 +185,7 @@ export default function Footer() {
         </div>
 
         <div className="border-line mt-10 flex flex-wrap items-center justify-between gap-x-6 gap-y-3 border-t py-4">
-          <p className="text-secondary font-mono text-[10px] select-none">
+          <p className="text-secondary mono text-[10px] select-none">
             <Credit />
           </p>
 

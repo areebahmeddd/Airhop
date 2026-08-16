@@ -47,19 +47,30 @@ React landing page for [airhop.1mindlabs.org](https://airhop.1mindlabs.org).
 - **Mobile LCP is above the 2.5 s target at 3.28 s.** The page is client-rendered and the main entry chunk must download and execute before the hero can paint. Cloudflare improved FCP from 2.11 s to 1.74 s, but LCP remained almost unchanged at 3.28 s. The current bottleneck is client-side execution. Prerendering the hero or deferring below-the-fold sections would address this, but neither is currently implemented. Desktop LCP is 0.92 s.
 - **Best Practices is 92 because of Cloudflare Bot Fight Mode.** Its injected bot-detection script is blocked by the site's `script-src 'self'` CSP, producing a console error. The script uses a per-request token, so it cannot be safely allowlisted with a fixed hash. Disabling Bot Fight Mode restores the score to 100. Adding `'unsafe-inline'` to the CSP is not recommended.
 
+## Internationalization
+
+Thirty languages, alphabetically: Amharic, Arabic, Burmese, Chinese (Simplified), Chinese (Traditional), Dutch, English, Filipino, French, German, Hindi, Indonesian, Italian, Japanese, Korean, Malay, Nepali, Persian, Polish, Portuguese (Brazil), Russian, Spanish, Swahili, Swedish, Tamil, Thai, Turkish, Ukrainian, Urdu, Vietnamese. No library: catalogs are TypeScript modules in `src/i18n/locales/`, and `en.ts` is the source of truth. Same design as the app, in [`.github/skills/i18n.md`](../.github/skills/i18n.md).
+
+- **Completeness is a type.** Every locale is annotated `Strings`, derived from `en.ts`, so a missing or stray key fails `tsc` and nothing falls back at runtime. Adding a language is a catalog plus entries in `languages.ts` and `LOADERS`; the compiler names whatever is left out.
+- **Language names come from `Intl.DisplayNames`**, not the catalogs. Hand-writing every language's name in every language is CLDR data the platform already ships, and the cost is quadratic in the number of languages.
+- **The URL is the language.** English at the root, the rest behind a prefix (`/es`, `/pt-br`, `/zh-hans`). `main.tsx` reads it once and hands it to `BrowserRouter` as a `basename`, so links stay in-locale and each route is declared once. Switching is a full page load, so only one catalog is ever downloaded.
+- **The device language is suggested, never forced.** Redirecting on a perceived language hides the other versions from users and crawlers, so `LanguageSuggestion` offers a dismissible strip instead. A pick or a dismissal is remembered and it never returns.
+- **Plurals go through `useTPlural`.** `Intl.PluralRules` selects the CLDR category, so Arabic gets six categories, Polish and Ukrainian four, and Japanese one. Appending a suffix is correct in English and wrong everywhere else.
+- **Logical properties only**: `ps-`, `pe-`, `ms-`, `me-`, `start-`, `end-`, `text-start`. Physical ones do not flip, and nothing catches that until an Arabic build. Diagrams, the relay map and version strings are pinned `dir="ltr"`; they are data, not prose.
+- **Mono is Latin-only.** JetBrains Mono carries no Arabic, Devanagari or Han, and letter-spacing breaks Arabic joining, so translated labels take `.label` and translated mono text takes `.mono`, both falling back to sans for every script except Latin and Cyrillic. Written that way round, a new script needs no stylesheet change. Raw `font-mono` is for machine data. Arabic, Persian, Urdu, Burmese and Nepali pin `Intl` to Latin digits so counts read against neighbouring version strings.
+- **Deep pages stay English.** Architecture, FAQ, brand and legal bodies are wrapped in `EnglishContent`: legal text is authoritative in English and the specs track `docs/spec/`. Their chrome and metadata are still translated.
+
 ## SEO and crawlers
 
-Route metadata is defined in `src/lib/seo.ts` and used in two places:
+Route metadata lives once in `src/lib/seo.ts` and is emitted twice: by `useSEO` during client-side navigation, and by `plugins/static-html.ts` at build time. Neither owns the data, because the two have to agree.
 
-- `useSEO` updates the title, description, canonical URL, and social tags during client-side navigation.
-- `plugins/static-html.ts` generates a static `dist/<route>/index.html` for each route with the correct metadata, `BreadcrumbList` structured data, and generates `sitemap.xml`.
-
-The static route files are required because the site is a SPA using a `/* /index.html 200` rewrite. Without them, every route would serve the homepage's `<head>`, causing crawlers that do not execute JavaScript to see the same canonical URL for every page.
+- **The static files are not optional.** The site is a SPA behind a `/* /index.html 200` rewrite, so without a real file per route every route serves the homepage's `<head>`, and crawlers that do not execute JavaScript see one canonical URL for the whole site. The build therefore writes `dist/<locale>/<route>/index.html` for every route in every language.
+- **`hreflang` is generated, never hand-kept.** Google discards annotations that are not reciprocal, so every page has to name every other. `x-default` points at the English root for readers no version matches.
 
 When adding a route:
 
-1. Add its metadata to `SEO` in `src/lib/seo.ts`.
-2. Add the route to `ROUTES` in `src/App.tsx`.
+1. Add its metadata to `SEO` in `src/lib/seo.ts`. It is emitted in every language, so its `titleKey` and `descriptionKey` must exist in every catalog, which `tsc` enforces.
+2. Add the route to `ROUTES` in `src/App.tsx`. If its body is English, wrap that body in `EnglishContent`.
 3. Update `public/llms.txt` if the route should be included there.
 
 ## Getting Started

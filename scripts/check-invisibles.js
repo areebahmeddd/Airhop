@@ -19,6 +19,8 @@
 //
 // Escape sequences are unaffected. Written in source, an escape is a backslash
 // followed by printable characters. Only the literal byte is refused.
+//
+// Translation catalogs carry one narrow exemption, set out at LOCALE_ALLOWED.
 
 const { execFileSync } = require("child_process");
 const fs = require("fs");
@@ -32,6 +34,15 @@ const TEXT_FILE =
 // Paths holding third-party or generated content this repository does not
 // author and must not rewrite.
 const SKIPPED = [/^ios\/Frameworks\//, /^assets\/data\//];
+
+// Translation catalogs, the one place a zero-width character is spelling
+// rather than a hiding place. Unanchored to cover the landing site too.
+const LOCALE_FILE = /(^|\/)i18n\/locales\//;
+
+// Joiners and direction marks. Persian and Devanagari spell words with them,
+// and unlike the bidi overrides they reorder nothing. Nothing else in
+// FORBIDDEN is relaxed.
+const LOCALE_ALLOWED = new Set([0x200c, 0x200d, 0x200e, 0x200f]);
 
 // Ranges are numeric because this file is subject to its own rule: written
 // literally the characters would be invisible here, leaving the check itself
@@ -55,7 +66,8 @@ const FORBIDDEN = [
   },
 ];
 
-function forbiddenName(codePoint) {
+function forbiddenName(codePoint, allowLinguistic) {
+  if (allowLinguistic && LOCALE_ALLOWED.has(codePoint)) return null;
   for (const { name, ranges } of FORBIDDEN) {
     for (const [low, high = low] of ranges) {
       if (codePoint >= low && codePoint <= high) return name;
@@ -86,10 +98,11 @@ function findingsIn(file) {
     return [];
   }
 
+  const allowLinguistic = LOCALE_FILE.test(file);
   const findings = [];
   text.split(/\r?\n/).forEach((line, index) => {
     for (let column = 0; column < line.length; column++) {
-      const name = forbiddenName(line.charCodeAt(column));
+      const name = forbiddenName(line.charCodeAt(column), allowLinguistic);
       if (!name) continue;
       const hex = line.charCodeAt(column).toString(16).toUpperCase();
       findings.push({

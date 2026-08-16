@@ -1,9 +1,14 @@
-import { t, type TranslationKey } from "../i18n/index.ts";
+import {
+  getT,
+  LANGUAGE_ORDER,
+  LANGUAGES,
+  localizedPath,
+  type LanguageCode,
+} from "../i18n/index.ts";
+import type { TranslationKey } from "../i18n/locales/types.ts";
 import { SITE_URL } from "./links.ts";
 
 export const LAST_UPDATED = "2026-08-01";
-
-export const LAST_UPDATED_DISPLAY = "August 01, 2026";
 
 export interface PageSeo {
   path: string;
@@ -84,18 +89,42 @@ export const NOT_FOUND_SEO: PageSeo = {
 
 export const PAGES: PageSeo[] = Object.values(SEO);
 
-export function breadcrumbSchema(page: PageSeo) {
+export function canonicalUrl(language: LanguageCode, path: string): string {
+  const localized = localizedPath(language, path);
+  return localized === "/" ? SITE_URL : `${SITE_URL}${localized}`;
+}
+
+export interface Alternate {
+  hrefLang: string;
+  href: string;
+}
+
+export function alternates(path: string): Alternate[] {
+  const links = LANGUAGE_ORDER.map((code) => ({
+    hrefLang: LANGUAGES[code].code,
+    href: canonicalUrl(code, path),
+  }));
+  return [...links, { hrefLang: "x-default", href: canonicalUrl("en", path) }];
+}
+
+export function breadcrumbSchema(page: PageSeo, language: LanguageCode) {
   if (!page.breadcrumbKey) return null;
+  const T = getT(language);
   return {
     "@context": "https://schema.org",
     "@type": "BreadcrumbList",
     itemListElement: [
-      { "@type": "ListItem", position: 1, name: t("seo.breadcrumb.home"), item: SITE_URL },
+      {
+        "@type": "ListItem",
+        position: 1,
+        name: T("seo.breadcrumb.home"),
+        item: canonicalUrl(language, "/"),
+      },
       {
         "@type": "ListItem",
         position: 2,
-        name: t(page.breadcrumbKey),
-        item: `${SITE_URL}${page.path}`,
+        name: T(page.breadcrumbKey),
+        item: canonicalUrl(language, page.path),
       },
     ],
   };

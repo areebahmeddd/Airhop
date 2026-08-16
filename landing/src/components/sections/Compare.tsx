@@ -1,48 +1,47 @@
 import SectionHeader from "@/components/ui/SectionHeader";
+import { useT, type TranslationKey, type Translator } from "@/i18n";
 import { REPO_URL } from "@/lib/links";
 import { motion } from "motion/react";
 
-function Yes() {
+function Yes({ T }: { T: Translator }) {
   return (
     <span className="text-ink font-mono text-sm">
       <span aria-hidden="true">&#10003;</span>
-      <span className="sr-only">Yes</span>
+      <span className="sr-only">{T("home.compare.mark.yes")}</span>
     </span>
   );
 }
 
-function No() {
+function No({ T }: { T: Translator }) {
   return (
     <span className="text-mute font-mono text-sm">
       <span aria-hidden="true">&#10005;</span>
-      <span className="sr-only">No</span>
+      <span className="sr-only">{T("home.compare.mark.no")}</span>
     </span>
   );
 }
 
-function Partial() {
+function Partial({ T }: { T: Translator }) {
   return (
-    <span
-      className="text-secondary font-mono text-sm"
-      title="Clients are open source, servers are not"
-    >
+    <span className="text-secondary font-mono text-sm" title={T("home.compare.mark.partial_hint")}>
       <span aria-hidden="true">~</span>
-      <span className="sr-only">Partial, clients are open source, servers are not</span>
+      <span className="sr-only">{T("home.compare.mark.partial")}</span>
     </span>
   );
 }
 
 type Support = boolean | "partial";
 
-function Mark({ value }: { value: Support }) {
-  if (value === "partial") return <Partial />;
-  return value ? <Yes /> : <No />;
+function Mark({ value, T }: { value: Support; T: Translator }) {
+  if (value === "partial") return <Partial T={T} />;
+  return value ? <Yes T={T} /> : <No T={T} />;
 }
 
 const ROWS: {
   name: string;
   href: string;
-  transport: string;
+  transportKey?: TranslationKey;
+  transport?: string;
   encryption: string;
   offline: Support;
   hardwareFree: Support;
@@ -52,7 +51,7 @@ const ROWS: {
   {
     name: "Signal",
     href: "https://signal.org",
-    transport: "Centralized servers",
+    transportKey: "home.compare.transport.servers",
     encryption: "Signal protocol",
     offline: false,
     hardwareFree: true,
@@ -61,7 +60,7 @@ const ROWS: {
   {
     name: "Threema",
     href: "https://threema.ch",
-    transport: "Centralized servers",
+    transportKey: "home.compare.transport.servers",
     encryption: "NaCl + Ibex",
     offline: false,
     hardwareFree: true,
@@ -70,7 +69,7 @@ const ROWS: {
   {
     name: "Session",
     href: "https://getsession.org",
-    transport: "Onion routing (service nodes)",
+    transportKey: "home.compare.transport.onion",
     encryption: "Session protocol",
     offline: false,
     hardwareFree: true,
@@ -79,7 +78,7 @@ const ROWS: {
   {
     name: "White Noise",
     href: "https://whitenoise.chat",
-    transport: "Nostr relays",
+    transportKey: "home.compare.transport.nostr",
     encryption: "MLS (Marmot)",
     offline: false,
     hardwareFree: true,
@@ -88,7 +87,7 @@ const ROWS: {
   {
     name: "Meshtastic",
     href: "https://meshtastic.org",
-    transport: "LoRa radio",
+    transportKey: "home.compare.transport.lora",
     encryption: "AES-256 + Curve25519 PKI",
     offline: true,
     hardwareFree: false,
@@ -97,7 +96,7 @@ const ROWS: {
   {
     name: "goTenna",
     href: "https://gotenna.com",
-    transport: "Proprietary sub-GHz radio",
+    transportKey: "home.compare.transport.sub_ghz",
     encryption: "AES-256 + ECC-384 PKI",
     offline: true,
     hardwareFree: false,
@@ -151,23 +150,25 @@ const ROWS: {
   },
 ];
 
-const HEAD = [
-  "Project",
-  "Transport",
-  "Encryption",
-  "Works offline",
-  "Hardware-free",
-  "Open source",
+const HEAD: TranslationKey[] = [
+  "home.compare.col.project",
+  "home.compare.col.transport",
+  "home.compare.col.encryption",
+  "home.compare.col.offline",
+  "home.compare.col.hardware_free",
+  "home.compare.col.open_source",
 ];
 
 export default function Compare() {
+  const T = useT();
+
   return (
     <section id="compare" className="scroll-mt-8 px-6 py-12 md:px-10 md:py-16">
       <div className="mx-auto max-w-7xl">
         <SectionHeader
-          eyebrow="How it compares"
-          title="Offline, hardware-free, and open."
-          sub="Every app here is good at something. Only some of them still work when the network does not."
+          eyebrow={T("home.compare.eyebrow")}
+          title={T("home.compare.title")}
+          sub={T("home.compare.sub")}
         />
 
         <motion.div
@@ -179,16 +180,16 @@ export default function Compare() {
         >
           <div className="border-line bg-card overflow-hidden rounded-2xl border">
             <div className="overflow-x-auto [contain:layout]">
-              <table className="w-full min-w-[720px] border-collapse text-left">
+              <table className="w-full min-w-[720px] border-collapse text-start">
                 <thead>
                   <tr className="border-line border-b">
-                    {HEAD.map((h) => (
+                    {HEAD.map((key) => (
                       <th
-                        key={h}
+                        key={key}
                         scope="col"
-                        className="text-secondary px-5 py-3.5 font-mono text-[10px] font-semibold tracking-[0.14em] whitespace-nowrap uppercase"
+                        className="label text-secondary px-5 py-3.5 text-[10px] font-semibold tracking-[0.14em] whitespace-nowrap"
                       >
-                        {h}
+                        {T(key)}
                       </th>
                     ))}
                   </tr>
@@ -199,7 +200,7 @@ export default function Compare() {
                       key={row.name}
                       className={i % 2 === 1 ? "bg-card-subtle" : "bg-transparent"}
                     >
-                      <th scope="row" className="px-5 py-3.5 text-left font-normal">
+                      <th scope="row" className="px-5 py-3.5 text-start font-normal">
                         {row.self ? (
                           <a
                             href={row.href}
@@ -220,18 +221,20 @@ export default function Compare() {
                           </a>
                         )}
                       </th>
-                      <td className="text-secondary px-5 py-3.5 text-[13px]">{row.transport}</td>
-                      <td className="text-secondary px-5 py-3.5 font-mono text-xs">
+                      <td className="text-secondary px-5 py-3.5 text-[13px]">
+                        {row.transportKey ? T(row.transportKey) : row.transport}
+                      </td>
+                      <td className="text-secondary px-5 py-3.5 font-mono text-xs" dir="ltr">
                         {row.encryption}
                       </td>
                       <td className="px-5 py-3.5">
-                        <Mark value={row.offline} />
+                        <Mark value={row.offline} T={T} />
                       </td>
                       <td className="px-5 py-3.5">
-                        <Mark value={row.hardwareFree} />
+                        <Mark value={row.hardwareFree} T={T} />
                       </td>
                       <td className="px-5 py-3.5">
-                        <Mark value={row.openSource} />
+                        <Mark value={row.openSource} T={T} />
                       </td>
                     </tr>
                   ))}

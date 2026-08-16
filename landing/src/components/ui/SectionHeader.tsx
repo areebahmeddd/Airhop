@@ -17,7 +17,7 @@ export default function SectionHeader({
       transition={{ duration: 0.25, ease: "easeOut" }}
       className="mx-auto flex max-w-2xl flex-col items-center gap-4 text-center"
     >
-      <span className="text-secondary font-mono text-[11px] font-semibold tracking-[0.2em] uppercase">
+      <span className="label text-secondary text-[11px] font-semibold tracking-[0.2em]">
         {eyebrow}
       </span>
       <h2 className="text-ink text-3xl font-semibold tracking-tight text-balance sm:text-4xl">

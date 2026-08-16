@@ -1,9 +1,10 @@
+import EnglishContent from "@/components/ui/EnglishContent";
 import PageHeader from "@/components/ui/PageHeader";
 import TextLink from "@/components/ui/TextLink";
 import { useSEO } from "@/hooks/useSEO";
-import { useT, type Translator } from "@/i18n";
-import { AUTHOR_NAME, REPO_LINKS, SITE_URL } from "@/lib/links";
-import { LAST_UPDATED, LAST_UPDATED_DISPLAY, SEO } from "@/lib/seo";
+import { formatDate, useLanguage, useT, type LanguageCode, type Translator } from "@/i18n";
+import { AUTHOR_NAME, REPO_LINKS } from "@/lib/links";
+import { canonicalUrl, LAST_UPDATED, SEO } from "@/lib/seo";
 import { useEffect, useMemo, useState } from "react";
 import {
   FloodPropagation,
@@ -205,7 +206,7 @@ function Note({ label, children }: { label: string; children: React.ReactNode })
   );
 }
 
-function articleSchema(T: Translator) {
+function articleSchema(T: Translator, language: LanguageCode) {
   return {
     "@context": "https://schema.org",
     "@type": "TechArticle",
@@ -213,14 +214,19 @@ function articleSchema(T: Translator) {
     description: T("seo.architecture.summary"),
     dateModified: LAST_UPDATED,
     author: { "@type": "Person", name: AUTHOR_NAME },
-    url: `${SITE_URL}/architecture`,
+    url: canonicalUrl(language, "/architecture"),
+    inLanguage: "en",
   };
 }
 
 export default function ArchitecturePage() {
   const T = useT();
+  const language = useLanguage();
   const active = useActiveSection();
-  const schema = useMemo(() => JSON.stringify(articleSchema(T)).replace(/</g, "\\u003c"), [T]);
+  const schema = useMemo(
+    () => JSON.stringify(articleSchema(T, language)).replace(/</g, "\\u003c"),
+    [T, language],
+  );
 
   useSEO(SEO["/architecture"]);
 
@@ -232,10 +238,10 @@ export default function ArchitecturePage() {
         <PageHeader
           eyebrow={T("page.architecture.eyebrow")}
           title={T("page.architecture.title")}
-          meta={T("common.last_updated", { date: LAST_UPDATED_DISPLAY })}
+          meta={T("common.last_updated", { date: formatDate(language, LAST_UPDATED) })}
         />
 
-        <div className="mt-14 lg:grid lg:grid-cols-[176px_1fr] lg:gap-14">
+        <EnglishContent className="mt-14 lg:grid lg:grid-cols-[176px_1fr] lg:gap-14">
           <nav aria-label={T("page.architecture.toc")} className="mb-12 lg:mb-0">
             <div className="-mx-1 px-1 lg:sticky lg:top-24 lg:max-h-[calc(100vh-7rem)] lg:overflow-y-auto">
               <div className="text-mute font-mono text-[10px] font-semibold tracking-[0.18em] uppercase">
@@ -1699,7 +1705,7 @@ export default function ArchitecturePage() {
               </p>
             </div>
           </div>
-        </div>
+        </EnglishContent>
       </div>
     </main>
   );

@@ -39,9 +39,10 @@ export const LANGUAGES: Record<LanguageCode, LanguageSpec> = {
 // name, so the ordering is stable regardless of the active UI language.
 export const LANGUAGE_ORDER: LanguageCode[] = ["en"];
 
-// The nine that follow English in v1.3.0, chosen to cover every script class and
-// layout hazard. Kept out of LANGUAGES on purpose: that table is the gate a code
-// passes only once its catalog compiles, and nothing here has a catalog yet.
+// The twenty-nine that follow English, matching the set the landing page already
+// serves so the two surfaces name the same languages. Kept out of LANGUAGES on
+// purpose: that table is the gate a code passes only once its catalog compiles,
+// and nothing here has a catalog yet.
 // This list exists so the Appearance sheet can name what is coming instead of
 // showing a picker with one entry.
 //
@@ -57,16 +58,52 @@ export interface PlannedLanguageSpec {
 
 export const PLANNED_LANGUAGES: PlannedLanguageSpec[] = [
   {
+    code: "am",
+    shortCode: "AM",
+    endonym: "አማርኛ",
+    nameKey: "settings.language.am",
+  },
+  {
     code: "ar",
     shortCode: "AR",
     endonym: "العربية",
     nameKey: "settings.language.ar",
   },
   {
+    code: "my",
+    shortCode: "MY",
+    endonym: "မြန်မာ",
+    nameKey: "settings.language.my",
+  },
+  {
     code: "zh-Hans",
-    shortCode: "ZH",
+    shortCode: "ZHS",
     endonym: "简体中文",
     nameKey: "settings.language.zh_hans",
+  },
+  {
+    code: "zh-Hant",
+    shortCode: "ZHT",
+    endonym: "繁體中文",
+    nameKey: "settings.language.zh_hant",
+  },
+  {
+    code: "nl",
+    shortCode: "NL",
+    endonym: "nederlands",
+    nameKey: "settings.language.nl",
+  },
+  {
+    code: "fil",
+    shortCode: "FIL",
+    endonym: "filipino",
+    nameKey: "settings.language.fil",
+  },
+  {
+    code: "fr",
+    shortCode: "FR",
+    endonym: "français",
+    nameKey: "settings.language.fr",
   },
   {
     code: "de",
@@ -87,10 +124,46 @@ export const PLANNED_LANGUAGES: PlannedLanguageSpec[] = [
     nameKey: "settings.language.id",
   },
   {
+    code: "it",
+    shortCode: "IT",
+    endonym: "italiano",
+    nameKey: "settings.language.it",
+  },
+  {
+    code: "ja",
+    shortCode: "JA",
+    endonym: "日本語",
+    nameKey: "settings.language.ja",
+  },
+  {
+    code: "ko",
+    shortCode: "KO",
+    endonym: "한국어",
+    nameKey: "settings.language.ko",
+  },
+  {
+    code: "ms",
+    shortCode: "MS",
+    endonym: "bahasa melayu",
+    nameKey: "settings.language.ms",
+  },
+  {
+    code: "ne",
+    shortCode: "NE",
+    endonym: "नेपाली",
+    nameKey: "settings.language.ne",
+  },
+  {
     code: "fa",
     shortCode: "FA",
     endonym: "فارسی",
     nameKey: "settings.language.fa",
+  },
+  {
+    code: "pl",
+    shortCode: "PL",
+    endonym: "polski",
+    nameKey: "settings.language.pl",
   },
   {
     code: "pt-BR",
@@ -109,6 +182,54 @@ export const PLANNED_LANGUAGES: PlannedLanguageSpec[] = [
     shortCode: "ES",
     endonym: "español",
     nameKey: "settings.language.es",
+  },
+  {
+    code: "sw",
+    shortCode: "SW",
+    endonym: "kiswahili",
+    nameKey: "settings.language.sw",
+  },
+  {
+    code: "sv",
+    shortCode: "SV",
+    endonym: "svenska",
+    nameKey: "settings.language.sv",
+  },
+  {
+    code: "ta",
+    shortCode: "TA",
+    endonym: "தமிழ்",
+    nameKey: "settings.language.ta",
+  },
+  {
+    code: "th",
+    shortCode: "TH",
+    endonym: "ไทย",
+    nameKey: "settings.language.th",
+  },
+  {
+    code: "tr",
+    shortCode: "TR",
+    endonym: "türkçe",
+    nameKey: "settings.language.tr",
+  },
+  {
+    code: "uk",
+    shortCode: "UK",
+    endonym: "українська",
+    nameKey: "settings.language.uk",
+  },
+  {
+    code: "ur",
+    shortCode: "UR",
+    endonym: "اردو",
+    nameKey: "settings.language.ur",
+  },
+  {
+    code: "vi",
+    shortCode: "VI",
+    endonym: "tiếng việt",
+    nameKey: "settings.language.vi",
   },
 ];
 

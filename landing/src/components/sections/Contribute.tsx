@@ -1,6 +1,7 @@
 import CardTexture from "@/components/ui/CardTexture";
 import Chip from "@/components/ui/Chip";
 import SectionHeader from "@/components/ui/SectionHeader";
+import { useT } from "@/i18n";
 import { REPO_URL, SITE_URL, SPONSOR_URL } from "@/lib/links";
 import { ArrowUpRight, GitPullRequest, Heart } from "lucide-react";
 import { motion } from "motion/react";
@@ -20,13 +21,15 @@ const BUTTON_ARROW =
   "transition-transform duration-150 group-hover/btn:translate-x-0.5 group-hover/btn:-translate-y-0.5";
 
 export default function Contribute() {
+  const T = useT();
+
   return (
     <section id="support" className="scroll-mt-8 px-6 py-12 md:px-10 md:py-16">
       <div className="mx-auto max-w-7xl">
         <SectionHeader
-          eyebrow="Support this project"
-          title="Independent, and in the open."
-          sub="There are no investors, no ads, and no paid tier. Every feature stays free either way, and the work is funded by the people who find it useful."
+          eyebrow={T("home.contribute.eyebrow")}
+          title={T("home.contribute.title")}
+          sub={T("home.contribute.sub")}
         />
 
         <div className="mx-auto mt-10 grid max-w-6xl grid-cols-1 gap-4 md:grid-cols-2">
@@ -40,11 +43,10 @@ export default function Contribute() {
             <CardTexture Icon={GitPullRequest} />
 
             <div className="relative">
-              <Chip as="h3" label="Contribute" />
+              <Chip as="h3" label={T("home.contribute.contribute.chip")} />
             </div>
             <p className="text-secondary relative flex-1 text-sm leading-relaxed">
-              Star the repo, open issues, and submit pull requests. Bug reports, feature proposals,
-              and code contributions are all welcome.
+              {T("home.contribute.contribute.body")}
             </p>
             <a
               href={REPO_URL}
@@ -52,7 +54,7 @@ export default function Contribute() {
               rel="noopener noreferrer"
               className={`${BUTTON_QUIET} relative w-fit`}
             >
-              View on GitHub
+              {T("home.contribute.contribute.cta")}
               <ArrowUpRight size={14} aria-hidden="true" className={BUTTON_ARROW} />
             </a>
           </motion.div>
@@ -67,11 +69,10 @@ export default function Contribute() {
             <CardTexture Icon={Heart} />
 
             <div className="relative">
-              <Chip as="h3" label="Sponsor" />
+              <Chip as="h3" label={T("home.contribute.sponsor.chip")} />
             </div>
             <p className="text-secondary relative flex-1 text-sm leading-relaxed">
-              If Airhop is useful to you, a one-time donation or a recurring sponsorship goes a long
-              way toward keeping development active.
+              {T("home.contribute.sponsor.body")}
             </p>
             <div className="relative flex flex-wrap gap-3">
               <a
@@ -80,7 +81,7 @@ export default function Contribute() {
                 rel="noopener noreferrer"
                 className={BUTTON_PRIMARY}
               >
-                Donate once
+                {T("home.contribute.sponsor.donate")}
                 <ArrowUpRight size={14} aria-hidden="true" className={BUTTON_ARROW} />
               </a>
               <a
@@ -89,7 +90,7 @@ export default function Contribute() {
                 rel="noopener noreferrer"
                 className={BUTTON_QUIET}
               >
-                Sponsor on GitHub
+                {T("home.contribute.sponsor.github")}
                 <ArrowUpRight size={14} aria-hidden="true" className={BUTTON_ARROW} />
               </a>
             </div>

@@ -60,8 +60,8 @@ export default function ThemeToggle() {
     >
       <span
         aria-hidden="true"
-        className={`theme-knob bg-canvas pointer-events-none absolute top-px left-px h-6 w-6 rounded-full transition-transform duration-200 ease-out ${
-          theme === "dark" ? "translate-x-6" : "translate-x-0"
+        className={`theme-knob bg-canvas pointer-events-none absolute start-px top-px h-6 w-6 rounded-full transition-transform duration-200 ease-out ${
+          theme === "dark" ? "translate-x-6 rtl:-translate-x-6" : "translate-x-0"
         }`}
       />
       {OPTIONS.map(({ value, labelKey, active, mark, glyph }) => (

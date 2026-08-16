@@ -1,12 +1,20 @@
 import { createHash } from "node:crypto";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import type { Plugin } from "vite";
-import { t } from "../src/i18n/index.ts";
-import { SITE_URL } from "../src/lib/links.ts";
-import { breadcrumbSchema, PAGES, type PageSeo } from "../src/lib/seo.ts";
+import {
+  getT,
+  LANGUAGE_ORDER,
+  LANGUAGES,
+  loadCatalog,
+  localizedPath,
+  type LanguageCode,
+} from "../src/i18n/index.ts";
+import { alternates, breadcrumbSchema, canonicalUrl, PAGES, type PageSeo } from "../src/lib/seo.ts";
 
 const BLOCK = /<!-- seo:start -->[\s\S]*?<!-- seo:end -->/;
+
+const ROOT_TAG = /<html[^>]*>/;
 
 function escapeAttr(value: string): string {
   return value
@@ -16,11 +24,18 @@ function escapeAttr(value: string): string {
     .replace(/"/g, "&quot;");
 }
 
-function headBlock(page: PageSeo): string {
-  const url = page.path === "/" ? SITE_URL : `${SITE_URL}${page.path}`;
-  const title = escapeAttr(t(page.titleKey));
-  const description = escapeAttr(t(page.descriptionKey));
-  const crumbs = breadcrumbSchema(page);
+function rootTag(language: LanguageCode): string {
+  const spec = LANGUAGES[language];
+  return `<html lang="${spec.code}" dir="${spec.direction}" data-script="${spec.script}">`;
+}
+
+function headBlock(page: PageSeo, language: LanguageCode): string {
+  const T = getT(language);
+  const spec = LANGUAGES[language];
+  const url = canonicalUrl(language, page.path);
+  const title = escapeAttr(T(page.titleKey));
+  const description = escapeAttr(T(page.descriptionKey));
+  const crumbs = breadcrumbSchema(page, language);
 
   const lines = [
     "<!-- seo:start -->",
@@ -31,9 +46,21 @@ function headBlock(page: PageSeo): string {
     `<meta property="og:title" content="${title}" />`,
     `<meta property="og:description" content="${description}" />`,
     `<meta property="og:url" content="${url}" />`,
+    `<meta property="og:locale" content="${spec.ogLocale}" />`,
     `<meta name="twitter:title" content="${title}" />`,
     `<meta name="twitter:description" content="${description}" />`,
   ];
+
+  for (const code of LANGUAGE_ORDER) {
+    if (code === language) continue;
+    lines.push(`<meta property="og:locale:alternate" content="${LANGUAGES[code].ogLocale}" />`);
+  }
+
+  for (const link of alternates(page.path)) {
+    lines.push(
+      `<link rel="alternate" hreflang="${link.hrefLang}" href="${escapeAttr(link.href)}" />`,
+    );
+  }
 
   if (crumbs) {
     lines.push(
@@ -46,13 +73,39 @@ function headBlock(page: PageSeo): string {
 }
 
 function sitemap(pages: PageSeo[]): string {
-  const entries = pages
-    .map((page) => {
-      const url = page.path === "/" ? `${SITE_URL}/` : `${SITE_URL}${page.path}`;
-      return `  <url>\n    <loc>${url}</loc>\n    <lastmod>${page.lastmod}</lastmod>\n  </url>`;
-    })
-    .join("\n");
-  return `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${entries}\n</urlset>\n`;
+  const entries = pages.flatMap((page) =>
+    LANGUAGE_ORDER.map((language) => {
+      const url = canonicalUrl(language, page.path);
+      const loc = page.path === "/" && language === "en" ? `${url}/` : url;
+      const links = alternates(page.path)
+        .map(
+          (link) =>
+            `    <xhtml:link rel="alternate" hreflang="${link.hrefLang}" href="${escapeAttr(link.href)}" />`,
+        )
+        .join("\n");
+      return `  <url>\n    <loc>${loc}</loc>\n    <lastmod>${page.lastmod}</lastmod>\n${links}\n  </url>`;
+    }),
+  );
+
+  return `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:xhtml="http://www.w3.org/1999/xhtml">\n${entries.join("\n")}\n</urlset>\n`;
+}
+
+const HEAD_END = "</head>";
+
+const MANIFEST = path.join(".vite", "manifest.json");
+
+async function catalogPreloads(root: string): Promise<Map<LanguageCode, string>> {
+  const file = path.join(root, MANIFEST);
+  const manifest = JSON.parse(await readFile(file, "utf8")) as Record<string, { file: string }>;
+  const preloads = new Map<LanguageCode, string>();
+
+  for (const language of LANGUAGE_ORDER) {
+    const entry = manifest[`src/i18n/locales/${language}.ts`];
+    if (entry) preloads.set(language, `/${entry.file}`);
+  }
+
+  await rm(path.join(root, ".vite"), { recursive: true, force: true });
+  return preloads;
 }
 
 const STYLESHEET = /<link rel="stylesheet"[^>]*href="([^"]+\.css)"[^>]*>/;
@@ -107,20 +160,42 @@ export function staticHtml(): Plugin {
         this.error("static-html: index.html is missing the <!-- seo:start --> block");
       }
 
+      if (!ROOT_TAG.test(built)) {
+        this.error("static-html: index.html is missing an <html> tag to localize");
+      }
+
+      await Promise.all(LANGUAGE_ORDER.map((code) => loadCatalog(code)));
+
+      const preloads = await catalogPreloads(root);
       const withStyles = await inlineStylesheet(root, built);
       const { shell, hash } = await inlineBootScript(root, withStyles);
 
       if (hash) await allowInlineBoot(root, hash);
 
-      for (const page of PAGES) {
-        const html = shell.replace(BLOCK, headBlock(page));
-        if (page.path === "/") {
-          await writeFile(path.join(root, "index.html"), html, "utf8");
-          continue;
+      for (const language of LANGUAGE_ORDER) {
+        const preload = preloads.get(language);
+        const localized = preload
+          ? shell.replace(
+              HEAD_END,
+              `  <link rel="modulepreload" crossorigin href="${preload}" />\n  ${HEAD_END}`,
+            )
+          : shell;
+
+        for (const page of PAGES) {
+          const html = localized
+            .replace(ROOT_TAG, rootTag(language))
+            .replace(BLOCK, headBlock(page, language));
+          const route = localizedPath(language, page.path);
+
+          if (route === "/") {
+            await writeFile(path.join(root, "index.html"), html, "utf8");
+            continue;
+          }
+
+          const dir = path.join(root, route);
+          await mkdir(dir, { recursive: true });
+          await writeFile(path.join(dir, "index.html"), html, "utf8");
         }
-        const dir = path.join(root, page.path);
-        await mkdir(dir, { recursive: true });
-        await writeFile(path.join(dir, "index.html"), html, "utf8");
       }
 
       await writeFile(path.join(root, "sitemap.xml"), sitemap(PAGES), "utf8");

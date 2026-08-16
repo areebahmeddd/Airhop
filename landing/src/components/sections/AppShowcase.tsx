@@ -1,42 +1,49 @@
 import SectionHeader from "@/components/ui/SectionHeader";
 import { useTheme } from "@/hooks/useTheme";
+import { useT, type TranslationKey } from "@/i18n";
 import { motion, useReducedMotion } from "motion/react";
 import { useState } from "react";
 
-const SCREENS = [
+const SCREENS: {
+  base: string;
+  titleKey: TranslationKey;
+  captionKey: TranslationKey;
+  altKey: TranslationKey;
+}[] = [
   {
     base: "01-offline-mesh",
-    title: "Mesh",
-    caption: "Everyone in range, placed by how close they are. Nobody has to be added first.",
-    alt: "The Mesh screen of the Airhop app, showing four nearby peers arranged on a radar by signal strength.",
+    titleKey: "home.showcase.mesh.title",
+    captionKey: "home.showcase.mesh.caption",
+    altKey: "home.showcase.mesh.alt",
   },
   {
     base: "02-encrypted",
-    title: "Chats",
-    caption: "Ordinary conversations. The phones that pass each message along cannot open it.",
-    alt: "A direct message conversation in Airhop during a power cut, relayed across three phones.",
+    titleKey: "home.showcase.chats.title",
+    captionKey: "home.showcase.chats.caption",
+    altKey: "home.showcase.chats.alt",
   },
   {
     base: "03-channels",
-    title: "Channels",
-    caption: "Public rooms as small as one block or as wide as a region, open to anyone there.",
-    alt: "The Chats screen of the Airhop app, listing public channels scoped to a block, neighborhood, city, and region.",
+    titleKey: "home.showcase.channels.title",
+    captionKey: "home.showcase.channels.caption",
+    altKey: "home.showcase.channels.alt",
   },
   {
     base: "05-payments",
-    title: "Wallet",
-    caption: "Hand ecash to the person beside you over Bluetooth, with neither phone online.",
-    alt: "The wallet screen of the Airhop app, showing an ecash balance that can be sent over Bluetooth.",
+    titleKey: "home.showcase.wallet.title",
+    captionKey: "home.showcase.wallet.caption",
+    altKey: "home.showcase.wallet.alt",
   },
   {
     base: "04-no-accounts",
-    title: "Identity",
-    caption: "No sign up, no phone number, no email. Just a key that never leaves this phone.",
-    alt: "The profile screen of the Airhop app, showing an identity generated on the device with no account.",
+    titleKey: "home.showcase.identity.title",
+    captionKey: "home.showcase.identity.caption",
+    altKey: "home.showcase.identity.alt",
   },
 ];
 
 export default function AppShowcase() {
+  const T = useT();
   const [active, setActive] = useState(0);
   const [loaded, setLoaded] = useState<number[]>([0]);
   const reduceMotion = useReducedMotion();
@@ -51,9 +58,9 @@ export default function AppShowcase() {
     <section id="app" className="scroll-mt-8 px-6 py-12 md:px-10 md:py-16">
       <div className="mx-auto max-w-7xl">
         <SectionHeader
-          eyebrow="See the app"
-          title="An ordinary messenger, offline."
-          sub="Chats, channels, a wallet, and an identity. Familiar on the surface, with a mesh underneath doing the work."
+          eyebrow={T("home.showcase.eyebrow")}
+          title={T("home.showcase.title")}
+          sub={T("home.showcase.sub")}
         />
 
         <div className="mx-auto mt-10 grid max-w-5xl grid-cols-1 items-center gap-8 lg:grid-cols-12">
@@ -64,7 +71,7 @@ export default function AppShowcase() {
                 type="button"
                 aria-pressed={i === active}
                 onClick={() => select(i)}
-                className={`relative flex min-h-11 flex-col items-start gap-1 rounded-2xl border p-5 text-left transition-colors duration-200 ${
+                className={`relative flex min-h-11 flex-col items-start gap-1 rounded-2xl border p-5 text-start transition-colors duration-200 ${
                   i === active
                     ? "border-line bg-inner"
                     : "hover:bg-card-subtle border-transparent bg-transparent"
@@ -74,16 +81,16 @@ export default function AppShowcase() {
                   <motion.span
                     layoutId="showcase-indicator"
                     aria-hidden="true"
-                    className="bg-ink absolute top-5 bottom-5 left-0 w-[3px] rounded-full"
+                    className="bg-ink absolute start-0 top-5 bottom-5 w-[3px] rounded-full"
                     transition={
                       reduceMotion ? { duration: 0 } : { duration: 0.25, ease: "easeOut" }
                     }
                   />
                 ) : null}
-                <span className="text-ink font-mono text-[11px] font-semibold tracking-widest uppercase">
-                  {screen.title}
+                <span className="label text-ink text-[11px] font-semibold tracking-widest">
+                  {T(screen.titleKey)}
                 </span>
-                <span className="text-secondary text-sm leading-snug">{screen.caption}</span>
+                <span className="text-secondary text-sm leading-snug">{T(screen.captionKey)}</span>
               </button>
             ))}
           </div>
@@ -104,7 +111,7 @@ export default function AppShowcase() {
                   <img
                     key={screen.base}
                     src={`/screens/${screen.base}-${theme}.png`}
-                    alt={i === active ? screen.alt : ""}
+                    alt={i === active ? T(screen.altKey) : ""}
                     width={1290}
                     height={2796}
                     loading="lazy"

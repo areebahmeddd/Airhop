@@ -1,126 +1,174 @@
 import CardTexture from "@/components/ui/CardTexture";
 import Chip from "@/components/ui/Chip";
 import SectionHeader from "@/components/ui/SectionHeader";
+import { useT, type TranslationKey } from "@/i18n";
 import type { LucideIcon } from "lucide-react";
 import { Bluetooth, Globe, KeyRound, MessageCircle, SlidersHorizontal } from "lucide-react";
 import { motion } from "motion/react";
 
 interface FeatureGroup {
-  title: string;
-  summary: string;
+  titleKey: TranslationKey;
+  summaryKey: TranslationKey;
   span: string;
   cols: string;
   Icon: LucideIcon;
-  items: { name: string; line: string }[];
+  items: { nameKey: TranslationKey; lineKey: TranslationKey }[];
 }
 
 const GROUPS: FeatureGroup[] = [
   {
-    title: "Messaging",
-    summary: "Everything a messenger has, with zero infrastructure behind it.",
+    titleKey: "home.features.messaging.title",
+    summaryKey: "home.features.messaging.summary",
     span: "lg:col-span-12",
     cols: "sm:grid-cols-2 lg:grid-cols-4",
     Icon: MessageCircle,
     items: [
-      { name: "Private DMs", line: "End to end encrypted, with delivery and read receipts." },
-      { name: "Location channels", line: "Rooms tied to a place, from one block to a region." },
       {
-        name: "Private channels and groups",
-        line: "Invite links for a room, or a signed list of up to 16.",
+        nameKey: "home.features.messaging.dms.name",
+        lineKey: "home.features.messaging.dms.line",
       },
-      { name: "Bulletin board", line: "Notices pinned to an area for up to seven days." },
       {
-        name: "Live voice",
-        line: "Hold the mic and talk to anyone in range, walkie-talkie style.",
+        nameKey: "home.features.messaging.location.name",
+        lineKey: "home.features.messaging.location.line",
       },
-      { name: "Voice notes", line: "Recorded audio, faster than typing directions." },
-      { name: "Photos, video and files", line: "Any format, up to 1 MB, with no signal needed." },
       {
-        name: "Store-and-forward",
-        line: "Sealed and carried by a nearby phone until it reaches them.",
+        nameKey: "home.features.messaging.groups.name",
+        lineKey: "home.features.messaging.groups.line",
+      },
+      {
+        nameKey: "home.features.messaging.board.name",
+        lineKey: "home.features.messaging.board.line",
+      },
+      {
+        nameKey: "home.features.messaging.voice.name",
+        lineKey: "home.features.messaging.voice.line",
+      },
+      {
+        nameKey: "home.features.messaging.notes.name",
+        lineKey: "home.features.messaging.notes.line",
+      },
+      {
+        nameKey: "home.features.messaging.files.name",
+        lineKey: "home.features.messaging.files.line",
+      },
+      {
+        nameKey: "home.features.messaging.forward.name",
+        lineKey: "home.features.messaging.forward.line",
       },
     ],
   },
   {
-    title: "Identity",
-    summary: "Nothing to register, nothing to seize.",
+    titleKey: "home.features.identity.title",
+    summaryKey: "home.features.identity.summary",
     span: "lg:col-span-6",
     cols: "sm:grid-cols-2",
     Icon: KeyRound,
     items: [
       {
-        name: "Key pair identity",
-        line: "Made on this phone, stored in the OS keychain.",
+        nameKey: "home.features.identity.keys.name",
+        lineKey: "home.features.identity.keys.line",
       },
-      { name: "Human-readable names", line: "Derived from your key, so nobody can take yours." },
-      { name: "QR contacts", line: "One scan carries their keys, not just their name." },
-      { name: "Panic wipe", line: "Every key and message destroyed in under a second." },
+      {
+        nameKey: "home.features.identity.names.name",
+        lineKey: "home.features.identity.names.line",
+      },
+      { nameKey: "home.features.identity.qr.name", lineKey: "home.features.identity.qr.line" },
+      {
+        nameKey: "home.features.identity.panic.name",
+        lineKey: "home.features.identity.panic.line",
+      },
     ],
   },
   {
-    title: "Networking",
-    summary: "The phones are the network.",
+    titleKey: "home.features.networking.title",
+    summaryKey: "home.features.networking.summary",
     span: "lg:col-span-6",
     cols: "sm:grid-cols-2",
     Icon: Bluetooth,
     items: [
-      { name: "Bluetooth mesh", line: "No internet, no router, on phones people already own." },
-      { name: "Mesh bridge", line: "Links your public chat with a nearby crowd out of range." },
-      { name: "WiFi fast path", line: "Faster transfers between two Androids or two iPhones." },
-      { name: "bitchat compatible", line: "Both apps join the same mesh with no setup." },
+      {
+        nameKey: "home.features.networking.mesh.name",
+        lineKey: "home.features.networking.mesh.line",
+      },
+      {
+        nameKey: "home.features.networking.bridge.name",
+        lineKey: "home.features.networking.bridge.line",
+      },
+      {
+        nameKey: "home.features.networking.wifi.name",
+        lineKey: "home.features.networking.wifi.line",
+      },
+      {
+        nameKey: "home.features.networking.bitchat.name",
+        lineKey: "home.features.networking.bitchat.line",
+      },
     ],
   },
   {
-    title: "Internet",
-    summary: "An extension, never a requirement.",
+    titleKey: "home.features.internet.title",
+    summaryKey: "home.features.internet.summary",
     span: "lg:col-span-7",
     cols: "sm:grid-cols-2",
     Icon: Globe,
     items: [
       {
-        name: "Nostr fallback",
-        line: "DMs and location channels keep flowing beyond radio range.",
-      },
-      { name: "Geo-relay discovery", line: "300+ independent public relays, none of them ours." },
-      {
-        name: "Internet gateway",
-        line: "Lend your connection so a nearby offline phone reaches location channels.",
+        nameKey: "home.features.internet.nostr.name",
+        lineKey: "home.features.internet.nostr.line",
       },
       {
-        name: "Tor integration",
-        line: "Routed on both platforms, so relays never see your IP.",
+        nameKey: "home.features.internet.relays.name",
+        lineKey: "home.features.internet.relays.line",
+      },
+      {
+        nameKey: "home.features.internet.gateway.name",
+        lineKey: "home.features.internet.gateway.line",
+      },
+      {
+        nameKey: "home.features.internet.tor.name",
+        lineKey: "home.features.internet.tor.line",
       },
     ],
   },
   {
-    title: "Optional",
-    summary: "Off by default. On when you want it.",
+    titleKey: "home.features.optional.title",
+    summaryKey: "home.features.optional.summary",
     span: "lg:col-span-5",
     cols: "sm:grid-cols-2",
     Icon: SlidersHorizontal,
     items: [
-      { name: "Cashu ecash", line: "Pay the person beside you with neither phone online." },
-      { name: "Lightning", line: "Top up or cash out in bitcoin over the Lightning network." },
-      { name: "Local AI", line: "On-device answers, nothing leaves the phone." },
-      { name: "Social bridges", line: "Bluesky and Mastodon with the same identity." },
+      {
+        nameKey: "home.features.optional.cashu.name",
+        lineKey: "home.features.optional.cashu.line",
+      },
+      {
+        nameKey: "home.features.optional.lightning.name",
+        lineKey: "home.features.optional.lightning.line",
+      },
+      { nameKey: "home.features.optional.ai.name", lineKey: "home.features.optional.ai.line" },
+      {
+        nameKey: "home.features.optional.social.name",
+        lineKey: "home.features.optional.social.line",
+      },
     ],
   },
 ];
 
 export default function Features() {
+  const T = useT();
+
   return (
     <section id="features" className="scroll-mt-8 px-6 py-12 md:px-10 md:py-16">
       <div className="mx-auto max-w-7xl">
         <SectionHeader
-          eyebrow="What it does"
-          title="A real messenger, not a demo."
-          sub="Chat, identity, networking, and money. All of it built to work with no signal, no account, and nothing in the middle."
+          eyebrow={T("home.features.eyebrow")}
+          title={T("home.features.title")}
+          sub={T("home.features.sub")}
         />
 
         <div className="mx-auto mt-10 grid max-w-6xl grid-cols-1 gap-4 lg:grid-cols-12">
           {GROUPS.map((group, gi) => (
             <motion.div
-              key={group.title}
+              key={group.titleKey}
               initial={{ opacity: 0, y: 8 }}
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true, margin: "-60px" }}
@@ -130,16 +178,18 @@ export default function Features() {
               <CardTexture Icon={group.Icon} />
 
               <div className="relative">
-                <Chip as="h3" label={group.title} />
-                <p className="text-secondary mt-3 text-[13px] leading-snug">{group.summary}</p>
+                <Chip as="h3" label={T(group.titleKey)} />
+                <p className="text-secondary mt-3 text-[13px] leading-snug">
+                  {T(group.summaryKey)}
+                </p>
               </div>
               <dl
                 className={`border-line relative mt-5 grid flex-1 gap-x-10 gap-y-4 border-t pt-5 ${group.cols}`}
               >
                 {group.items.map((item) => (
-                  <div key={item.name} className="flex flex-col gap-0.5">
-                    <dt className="text-ink text-sm font-medium">{item.name}</dt>
-                    <dd className="text-secondary text-[13px] leading-snug">{item.line}</dd>
+                  <div key={item.nameKey} className="flex flex-col gap-0.5">
+                    <dt className="text-ink text-sm font-medium">{T(item.nameKey)}</dt>
+                    <dd className="text-secondary text-[13px] leading-snug">{T(item.lineKey)}</dd>
                   </div>
                 ))}
               </dl>

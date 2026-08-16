@@ -2,6 +2,7 @@ import CardTexture from "@/components/ui/CardTexture";
 import LeaderLabel from "@/components/ui/LeaderLabel";
 import SectionHeader from "@/components/ui/SectionHeader";
 import { useInView } from "@/hooks/useInView";
+import { useT, type TranslationKey } from "@/i18n";
 import { ArrowRight } from "lucide-react";
 import { motion, useReducedMotion } from "motion/react";
 import { lazy, Suspense } from "react";
@@ -16,25 +17,21 @@ const RELAY_MAP_FALLBACK = (
   </div>
 );
 
-const STEPS = [
-  {
-    n: "01",
-    title: "Discover",
-    line: "Phones running Airhop or bitchat find each other automatically over Bluetooth. No pairing, no setup.",
-  },
-  {
-    n: "02",
-    title: "Relay",
-    line: "A message hops phone to phone, up to seven hops. The phones in between never see what they carry.",
-  },
-  {
-    n: "03",
-    title: "Reach further",
-    line: "When there is internet, Nostr relays carry the same conversation further, optionally routed through Tor.",
-  },
+const STEPS: { n: string; titleKey: TranslationKey; lineKey: TranslationKey }[] = [
+  { n: "01", titleKey: "home.how.discover.title", lineKey: "home.how.discover.line" },
+  { n: "02", titleKey: "home.how.relay.title", lineKey: "home.how.relay.line" },
+  { n: "03", titleKey: "home.how.reach.title", lineKey: "home.how.reach.line" },
+];
+
+const LEGEND_KEYS: TranslationKey[] = [
+  "home.how.legend.node",
+  "home.how.legend.relay",
+  "home.how.legend.bitchat",
+  "home.how.legend.nostr",
 ];
 
 export default function HowItWorks() {
+  const T = useT();
   const reduceMotion = useReducedMotion();
   const { ref: relayMapRef, inView: relayMapInView } = useInView<HTMLDivElement>();
 
@@ -48,20 +45,20 @@ export default function HowItWorks() {
     <section id="how-it-works" className="scroll-mt-8 px-6 py-12 md:px-10 md:py-16">
       <div className="mx-auto max-w-7xl">
         <SectionHeader
-          eyebrow="How it works"
-          title="The mesh forms itself."
-          sub="Nearby nodes form a self-healing mesh over Bluetooth. When there is internet, Nostr relays extend it, with no infrastructure anyone controls."
+          eyebrow={T("home.how.eyebrow")}
+          title={T("home.how.title")}
+          sub={T("home.how.sub")}
         />
 
         <div className="mt-6 flex justify-center">
           <Link
             to="/architecture"
-            className="group border-line bg-card-subtle text-secondary hover:border-line-strong hover:bg-inner hover:text-ink inline-flex h-11 items-center gap-2 rounded-full border pr-4 pl-5 font-mono text-[11px] font-semibold tracking-widest uppercase transition-colors duration-150"
+            className="label group border-line bg-card-subtle text-secondary hover:border-line-strong hover:bg-inner hover:text-ink inline-flex h-11 items-center gap-2 rounded-full border ps-5 pe-4 text-[11px] font-semibold tracking-widest transition-colors duration-150"
           >
-            Read the full architecture
+            {T("home.how.cta")}
             <ArrowRight
               size={13}
-              className="flex-shrink-0 transition-transform duration-150 group-hover:translate-x-0.5"
+              className="flex-shrink-0 transition-transform duration-150 group-hover:translate-x-0.5 rtl:rotate-180"
               aria-hidden="true"
             />
           </Link>
@@ -80,10 +77,12 @@ export default function HowItWorks() {
               <CardTexture numeral={step.n} />
 
               <div className="relative mt-auto">
-                <LeaderLabel as="h3" label={step.title} />
+                <LeaderLabel as="h3" label={T(step.titleKey)} />
               </div>
 
-              <p className="text-secondary relative mt-3 text-sm leading-relaxed">{step.line}</p>
+              <p className="text-secondary relative mt-3 text-sm leading-relaxed">
+                {T(step.lineKey)}
+              </p>
             </motion.div>
           ))}
         </div>
@@ -95,18 +94,18 @@ export default function HowItWorks() {
           transition={{ duration: 0.25, ease: "easeOut" }}
           className="mx-auto mt-4 max-w-6xl select-none"
         >
-          <p className="text-secondary mb-2 text-center font-mono text-[10px] font-semibold tracking-widest uppercase lg:hidden">
-            &#8592; swipe to explore &#8594;
+          <p className="label text-secondary mb-2 text-center text-[10px] font-semibold tracking-widest lg:hidden">
+            &#8592; {T("home.how.swipe")} &#8594;
           </p>
 
           <div className="border-line bg-card overflow-hidden rounded-2xl border">
             <div className="border-line border-b px-6 py-3 select-none">
-              <p className="text-secondary font-mono text-[10px] font-bold tracking-widest uppercase">
-                &#9679; BLE mesh &middot; local peer-to-peer network
+              <p className="label text-secondary text-[10px] font-bold tracking-widest">
+                &#9679; {T("home.how.diagram")}
               </p>
             </div>
 
-            <div className="overflow-x-auto p-6 [contain:layout] sm:p-8">
+            <div className="overflow-x-auto p-6 [contain:layout] sm:p-8" dir="ltr" lang="en">
               <svg
                 width="850"
                 height="380"
@@ -372,11 +371,11 @@ export default function HowItWorks() {
             </div>
 
             <div className="divide-line border-line grid grid-cols-2 divide-x divide-y border-t select-none sm:grid-cols-4 sm:divide-y-0">
-              <div className="text-secondary flex items-center justify-center gap-2.5 px-4 py-4 font-mono text-[11px]">
+              <div className="text-secondary mono flex items-center justify-center gap-2.5 px-4 py-4 text-[11px]">
                 <span className="border-ink bg-card h-3 w-3 flex-shrink-0 rounded-full border-2" />
-                <span>BLE mesh node (offline)</span>
+                <span>{T(LEGEND_KEYS[0])}</span>
               </div>
-              <div className="text-secondary flex items-center justify-center gap-2.5 px-4 py-4 font-mono text-[11px]">
+              <div className="text-secondary mono flex items-center justify-center gap-2.5 px-4 py-4 text-[11px]">
                 <svg width="32" height="8" className="flex-shrink-0" aria-hidden="true">
                   <line
                     x1="0"
@@ -388,9 +387,9 @@ export default function HowItWorks() {
                     strokeDasharray="5 3"
                   />
                 </svg>
-                <span>Multi-hop relay (Noise XX encrypted)</span>
+                <span>{T(LEGEND_KEYS[1])}</span>
               </div>
-              <div className="text-secondary flex items-center justify-center gap-2.5 px-4 py-4 font-mono text-[11px]">
+              <div className="text-secondary mono flex items-center justify-center gap-2.5 px-4 py-4 text-[11px]">
                 <svg width="32" height="8" className="flex-shrink-0" aria-hidden="true">
                   <line
                     x1="0"
@@ -402,9 +401,9 @@ export default function HowItWorks() {
                     strokeDasharray="3 6"
                   />
                 </svg>
-                <span>bitchat compatible on the same mesh</span>
+                <span>{T(LEGEND_KEYS[2])}</span>
               </div>
-              <div className="text-secondary flex items-center justify-center gap-2.5 px-4 py-4 font-mono text-[11px]">
+              <div className="text-secondary mono flex items-center justify-center gap-2.5 px-4 py-4 text-[11px]">
                 <svg width="32" height="8" className="flex-shrink-0" aria-hidden="true">
                   <line
                     x1="0"
@@ -417,7 +416,7 @@ export default function HowItWorks() {
                     opacity="0.7"
                   />
                 </svg>
-                <span>Nostr bridge (internet, when online)</span>
+                <span>{T(LEGEND_KEYS[3])}</span>
               </div>
             </div>
           </div>

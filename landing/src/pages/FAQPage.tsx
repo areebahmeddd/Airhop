@@ -1,3 +1,4 @@
+import EnglishContent from "@/components/ui/EnglishContent";
 import PageHeader from "@/components/ui/PageHeader";
 import TextLink from "@/components/ui/TextLink";
 import { useSEO } from "@/hooks/useSEO";
@@ -72,7 +73,7 @@ export default function FAQPage() {
           meta={T("page.faq.meta")}
         />
 
-        <div className="mt-12 space-y-8">
+        <EnglishContent className="mt-12 space-y-8">
           {FAQ_SECTIONS.map((section) => (
             <section key={section.heading}>
               <h2 className="text-mute mb-3 font-mono text-[11px] font-semibold tracking-[0.2em] uppercase">
@@ -96,7 +97,7 @@ export default function FAQPage() {
               </div>
             </section>
           ))}
-        </div>
+        </EnglishContent>
 
         <div className="border-line mt-14 border-t pt-8">
           <p className="text-secondary text-sm">
