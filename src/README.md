@@ -5,24 +5,24 @@ architectural layer.
 
 ## Directory layout
 
-| Directory        | Responsibility                                                                    |
-| ---------------- | --------------------------------------------------------------------------------- |
-| `app/`           | The root component and the tab state machine                                      |
-| `bridge/`        | React Native TurboModule TypeScript specifications (Codegen input only)           |
-| `core/crypto/`   | Identity, Noise XX/X, Double Ratchet, and contact exchange                        |
-| `core/encoding/` | Binary and base64 encoding helpers shared across the protocol                     |
-| `core/mesh/`     | The BLE mesh protocol, split by concern (see below)                               |
-| `core/nostr/`    | Nostr client, NIP-59 gift-wrap, geohash relay discovery, and presence             |
-| `core/payments/` | Cashu tokens, DLEQ, proof selection, NIP-61 events, and BIP-39 seed handling      |
-| `core/router/`   | Transport selection through `PeerRegistry` and `MessageRouter`                    |
-| `services/`      | Runtime services including mesh, wallet, and transfer orchestration               |
-| `features/`      | Screen-level logic that connects services to the UI                               |
-| `store/`         | Zustand state slices with MMKV persistence                                        |
-| `ui/`            | Shared components, hooks, and theme tokens                                        |
-| `platform/`      | Thin wrappers over OS APIs: permissions, haptics, OEM battery settings            |
-| `data/`          | Static application data such as relay lists, licenses, and release notes          |
-| `i18n/`          | Translation catalog, locale loading, and right-to-left layout support             |
-| `utils/`         | Stateless, side-effect-free helpers such as formatting and username generation    |
+| Directory        | Responsibility                                                                 |
+| ---------------- | ------------------------------------------------------------------------------ |
+| `app/`           | The root component and the tab state machine                                   |
+| `bridge/`        | React Native TurboModule TypeScript specifications (Codegen input only)        |
+| `core/crypto/`   | Identity, Noise XX/X, Double Ratchet, and contact exchange                     |
+| `core/encoding/` | Binary and base64 encoding helpers shared across the protocol                  |
+| `core/mesh/`     | The BLE mesh protocol, split by concern (see below)                            |
+| `core/nostr/`    | Nostr client, NIP-59 gift-wrap, geohash relay discovery, and presence          |
+| `core/payments/` | Cashu tokens, DLEQ, proof selection, NIP-61 events, and BIP-39 seed handling   |
+| `core/router/`   | Transport selection through `PeerRegistry` and `MessageRouter`                 |
+| `services/`      | Runtime services including mesh, wallet, and transfer orchestration            |
+| `features/`      | Screen-level logic that connects services to the UI                            |
+| `store/`         | Zustand state slices with MMKV persistence                                     |
+| `ui/`            | Shared components, hooks, and theme tokens                                     |
+| `platform/`      | Thin wrappers over OS APIs: permissions, haptics, OEM battery settings         |
+| `data/`          | Static application data such as relay lists, licenses, and release notes       |
+| `i18n/`          | Translation catalog, locale loading, and right-to-left layout support          |
+| `utils/`         | Stateless, side-effect-free helpers such as formatting and username generation |
 
 ### `core/mesh/`
 

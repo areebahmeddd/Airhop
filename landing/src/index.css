@@ -74,12 +74,12 @@
 
 .theme-mark-light {
   view-transition-name: theme-mark-light;
-  --spin-from: -180deg;
+  --spin-step: 180deg;
 }
 
 .theme-mark-dark {
   view-transition-name: theme-mark-dark;
-  --spin-from: -720deg;
+  --spin-step: 360deg;
 }
 
 :root[data-theme-sweep]::view-transition-group(theme-knob) {
@@ -108,19 +108,9 @@
   transition: color 0.3s ease-out !important;
 }
 
-@keyframes themeSpin {
-  from {
-    rotate: var(--spin-from, -360deg);
-  }
-  to {
-    rotate: 0deg;
-  }
-}
-
 .theme-spin {
   transform-box: fill-box;
   transform-origin: center;
-  animation: themeSpin 1.3s var(--ease-settle);
 }
 
 @supports (interpolate-size: allow-keywords) {

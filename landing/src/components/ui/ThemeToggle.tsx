@@ -1,7 +1,9 @@
 import { useTheme } from "@/hooks/useTheme";
 import { useT, type TranslationKey } from "@/i18n";
 import { setTheme, type Theme } from "@/lib/theme";
-import { useState, type ReactNode } from "react";
+import { useRef, type ReactNode } from "react";
+
+const SPIN_DEG_PER_MS = 180 / 1300;
 
 const SUN = (
   <>
@@ -42,13 +44,29 @@ const OPTIONS: {
   },
 ];
 
+function spin(node: SVGGElement | null) {
+  if (!node || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+
+  const step = getComputedStyle(node).getPropertyValue("--spin-step").trim();
+  const easing = getComputedStyle(document.documentElement)
+    .getPropertyValue("--ease-settle")
+    .trim();
+  const degrees = Number.parseFloat(step);
+  if (!degrees || !easing) return;
+
+  node.animate(
+    { rotate: ["0deg", step] },
+    { duration: degrees / SPIN_DEG_PER_MS, easing, composite: "add" },
+  );
+}
+
 export default function ThemeToggle() {
   const T = useT();
   const theme = useTheme();
-  const [spins, setSpins] = useState(false);
+  const marks = useRef<Record<Theme, SVGGElement | null>>({ light: null, dark: null });
 
   const pick = (value: Theme) => {
-    setSpins(true);
+    spin(marks.current[value]);
     setTheme(value);
   };
 
@@ -87,7 +105,14 @@ export default function ThemeToggle() {
             strokeLinejoin="round"
             aria-hidden="true"
           >
-            <g className={spins && theme === value ? "theme-spin" : undefined}>{glyph}</g>
+            <g
+              className="theme-spin"
+              ref={(node) => {
+                marks.current[value] = node;
+              }}
+            >
+              {glyph}
+            </g>
           </svg>
         </button>
       ))}
