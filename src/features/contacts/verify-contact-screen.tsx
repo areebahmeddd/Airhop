@@ -1,27 +1,40 @@
-// Verify an existing contact by scanning their QR in person.
+// Confirm that an existing contact's keys really are theirs.
 //
 // Unlike the add-contact scanner, this never starts a conversation: the person
-// is already in your DMs. It confirms that whoever is in front of you actually
-// owns the identity you have been chatting with, then marks THAT one contact
-// verified. A scan whose identity doesn't match the contact is rejected, so
-// "verified" always means "I checked this exact person", never "I scanned some
-// code once".
+// is already in your DMs. A scan whose identity does not match the contact is
+// rejected, so "verified" always means "I checked this exact person".
+//
+// Two ways in, because verification is a claim about a channel rather than
+// about a camera:
+//
+//   Scan their code     they are here, and the camera witnesses the exchange.
+//                       Imports keys as well as confirming them, which is why
+//                       it alone may re-pin (addVerifiedContact)
+//   Compare a code      both parties read the same six words over a channel
+//                       they trust. The app witnesses nothing, the human does.
+//                       Imports nothing, so it grants no re-pinning power
+//
+// Both earn the same shield, and differ only in what else they may do.
 
 import { decodeQRContent } from "@core/crypto/contact-exchange";
+import { peerFingerprint, safetyNumber } from "@core/crypto/fingerprint";
 import { Feather } from "@expo/vector-icons";
 import { useT } from "@i18n";
-import { bytesToHex } from "@noble/hashes/utils.js";
+import { bytesToHex, hexToBytes } from "@noble/hashes/utils.js";
 import { rejected, succeeded } from "@platform/haptics";
 import { getMeshService } from "@services/mesh-service";
 import { useContactsStore } from "@store/contacts-store";
 import {
+  FontFamily,
   FontSize,
   FontWeight,
   HIT_SLOP,
+  MIN_TOUCH,
   Radius,
   Spacing,
   useThemeColors,
 } from "@ui/theme";
+import { safetyNumberWords } from "@utils/username";
 import { CameraView, useCameraPermissions } from "expo-camera";
 import React, { useMemo, useRef, useState } from "react";
 import {
@@ -36,12 +49,16 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 interface Props {
   visible: boolean;
-  // The contact being verified. Always a 16-hex mesh peer ID: verification is an
-  // in-person act, so it only applies to peers you can physically meet.
+  // The contact being verified. Always a 16-hex mesh peer ID: a per-cell
+  // geohash pseudonym has no lasting identity to confirm.
   peerID: string;
   name: string;
   onClose: () => void;
 }
+
+// Every session starts at `choose`, so neither method is the default and a tap
+// meaning "how do I verify somebody" does not open a camera.
+type Stage = "choose" | "camera" | "compare";
 
 // Outcome of a single scan. `match` has already written the verified contact by
 // the time it is set, so the sheet behind us is updated the moment we land here.
@@ -57,23 +74,65 @@ export default function VerifyContactScreen({
   const Colors = useThemeColors();
   const styles = useMemo(() => createStyles(Colors), [Colors]);
   const [permission, requestPermission] = useCameraPermissions();
+  const [stage, setStage] = useState<Stage>("choose");
   const [outcome, setOutcome] = useState<Outcome | null>(null);
+  const [compared, setCompared] = useState(false);
   // Only the first read per scan session counts, so a code lingering in frame
   // can't fire the handler repeatedly.
   const scannedRef = useRef(false);
 
-  // Fresh session each time the scanner is shown, and the permission ask lives
-  // here too. Doing it on the Modal's onShow event rather than in an effect
-  // keeps it off the render path, and awaiting the answer before `permission`
-  // flips to granted is what stops CameraView mounting against a camera it
-  // isn't allowed to open (which expo-camera never retries, leaving a black
-  // preview behind an already-granted permission).
+  const contact = useContactsStore((s) => s.contacts[peerID]);
+
+  // The six words both phones show, identical on each side. Memoised because
+  // the words must not flicker while somebody is reading them aloud.
+  const words = useMemo(() => {
+    const ourCard = getMeshService()?.getContactCard();
+    if (
+      ourCard === undefined ||
+      contact === undefined ||
+      contact.noisePubKeyHex.length !== 64 ||
+      contact.signingPubKeyHex.length !== 64
+    ) {
+      return null;
+    }
+    try {
+      const ours = peerFingerprint(ourCard.noisePubKey, ourCard.signingPubKey);
+      const theirs = peerFingerprint(
+        hexToBytes(contact.noisePubKeyHex),
+        hexToBytes(contact.signingPubKeyHex),
+      );
+      return safetyNumberWords(safetyNumber(ours, theirs));
+    } catch {
+      // Stored hex that will not decode. No code beats a wrong one.
+      return null;
+    }
+  }, [contact]);
+
+  // Fresh session each time the sheet is shown.
+  //
+  // The camera permission belongs to the camera stage, not here. Opening this
+  // screen does not mean opening a camera, and prompting for one the user may
+  // never reach is the kind of ask that gets denied by reflex.
   function handleShow(): void {
     scannedRef.current = false;
     setOutcome(null);
+    setCompared(false);
+    setStage("choose");
+  }
+
+  function handleChooseCamera(): void {
+    setStage("camera");
     if (!permission?.granted && permission?.canAskAgain !== false) {
       void requestPermission();
     }
+  }
+
+  // Nothing is imported: the comparison confirms keys already stored, so this
+  // records only that a human checked.
+  function handleCodesMatch(): void {
+    useContactsStore.getState().markVerified(peerID);
+    succeeded();
+    setCompared(true);
   }
 
   function handleScanned(data: string): void {
@@ -100,22 +159,26 @@ export default function VerifyContactScreen({
       setOutcome("tampered");
       return;
     }
-    // Upgrade the record to verified without disturbing anything already saved
-    // (a chosen nickname, the first-seen date, a learned Nostr key).
-    const prior = useContactsStore.getState().getContact(peerID);
+    // Upgrade the record to verified. Nothing already saved needs defending
+    // here: addContact merges, keeps the earliest added date, and never lets a
+    // write drop a chosen nickname or a learned Nostr key.
+    //
+    // `verifiedAtMs` is the one thing this screen has to say, because it is the
+    // only screen that witnesses the moment. It drives the "Verified since"
+    // line, which is about trust established now rather than when the two of
+    // you first met on the mesh.
+    const now = Date.now();
     useContactsStore.getState().addContact({
-      ...prior,
       peerID: card.peerID,
       noisePubKeyHex: bytesToHex(card.noisePubKey),
       signingPubKeyHex: bytesToHex(card.signingPubKey),
-      nickname: prior?.nickname.trim() ? prior.nickname : card.nickname,
-      // Stamp the verification moment: this date drives the "Verified since"
-      // line, which is about trust established now, not when we first met them.
-      addedAtMs: Date.now(),
+      nickname: card.nickname,
+      addedAtMs: now,
+      verifiedAtMs: now,
       source: "qr",
-      nostrPubkeyHex: card.nostrPubKey
-        ? bytesToHex(card.nostrPubKey)
-        : prior?.nostrPubkeyHex,
+      ...(card.nostrPubKey !== undefined
+        ? { nostrPubkeyHex: bytesToHex(card.nostrPubKey) }
+        : {}),
     });
     succeeded();
     setOutcome("match");
@@ -143,7 +206,7 @@ export default function VerifyContactScreen({
     >
       <View style={styles.root}>
         {/* Live camera, only while we're still waiting for a scan. */}
-        {outcome === null && granted && (
+        {stage === "camera" && outcome === null && granted && (
           <CameraView
             style={StyleSheet.absoluteFill}
             facing="back"
@@ -169,8 +232,133 @@ export default function VerifyContactScreen({
             <View style={styles.iconBtn} />
           </View>
 
+          {/* Both confirm the same thing, and differ in which channel does
+              the confirming. */}
+          {stage === "choose" && (
+            <View style={styles.resultCard}>
+              <Text style={styles.resultTitle}>
+                {T("contacts.verify.choose_title")}
+              </Text>
+              <Text style={styles.resultBody}>
+                {T("contacts.verify.choose_body", { name })}
+              </Text>
+              <Pressable
+                style={styles.methodRow}
+                onPress={handleChooseCamera}
+                accessibilityRole="button"
+                accessibilityLabel={T("contacts.verify.method_scan")}
+              >
+                <Feather name="camera" size={20} color="#FFFFFF" />
+                <View style={styles.methodText}>
+                  <Text style={styles.methodTitle}>
+                    {T("contacts.verify.method_scan")}
+                  </Text>
+                  <Text style={styles.methodSub}>
+                    {T("contacts.verify.method_scan_sub")}
+                  </Text>
+                </View>
+              </Pressable>
+              {/* Offered only when there is something to compare: a contact
+                  saved from a typed peer ID has no keys and so no code. */}
+              {words !== null ? (
+                <Pressable
+                  style={styles.methodRow}
+                  onPress={() => setStage("compare")}
+                  accessibilityRole="button"
+                  accessibilityLabel={T("contacts.verify.method_compare")}
+                >
+                  <Feather name="hash" size={20} color="#FFFFFF" />
+                  <View style={styles.methodText}>
+                    <Text style={styles.methodTitle}>
+                      {T("contacts.verify.method_compare")}
+                    </Text>
+                    <Text style={styles.methodSub}>
+                      {T("contacts.verify.method_compare_sub")}
+                    </Text>
+                  </View>
+                </Pressable>
+              ) : (
+                <Text style={styles.resultBody}>
+                  {T("contacts.verify.no_keys")}
+                </Text>
+              )}
+            </View>
+          )}
+
+          {/* The code, before either answer. */}
+          {stage === "compare" && !compared && words !== null && (
+            <View style={styles.resultCard}>
+              <Text style={styles.resultTitle}>
+                {T("contacts.verify.compare_title")}
+              </Text>
+              <Text style={styles.resultBody}>
+                {T("contacts.verify.compare_body", { name })}
+              </Text>
+              {/* Two rows of three. One line wraps unpredictably across font
+                  scales, and a reader needs the same shape on both phones to
+                  keep their place. */}
+              <View style={styles.wordGrid}>
+                {words.map((word, index) => (
+                  <Text key={`${index}-${word}`} style={styles.word}>
+                    {word}
+                  </Text>
+                ))}
+              </View>
+              <Pressable
+                style={styles.primaryBtn}
+                onPress={handleCodesMatch}
+                accessibilityRole="button"
+                accessibilityLabel={T("contacts.verify.codes_match")}
+              >
+                <Text style={styles.primaryBtnText}>
+                  {T("contacts.verify.codes_match")}
+                </Text>
+              </Pressable>
+              <Pressable
+                onPress={() => {
+                  // A mismatch is the finding, not a failure to retry: the
+                  // words are the same next time, so a retry would only invite
+                  // tapping until it passed.
+                  rejected();
+                  setStage("choose");
+                }}
+                accessibilityRole="button"
+                accessibilityLabel={T("contacts.verify.codes_differ")}
+              >
+                <Text style={styles.secondaryText}>
+                  {T("contacts.verify.codes_differ")}
+                </Text>
+              </Pressable>
+            </View>
+          )}
+
+          {/* Compared and matched. */}
+          {stage === "compare" && compared && (
+            <View style={styles.resultCard}>
+              <View style={[styles.resultIcon, styles.iconOk]}>
+                <Feather name="check" size={26} color="#FFFFFF" />
+              </View>
+              <Text style={styles.resultTitle}>
+                {T("contacts.verify.verified")}
+              </Text>
+              <Text style={styles.resultBody}>
+                {T("contacts.verify.compared_body", { name })}
+              </Text>
+              <Pressable
+                style={styles.primaryBtn}
+                onPress={onClose}
+                accessibilityRole="button"
+                accessibilityLabel={T("contacts.verify.done")}
+              >
+                <Text style={styles.primaryBtnText}>
+                  {T("contacts.verify.done")}
+                </Text>
+              </Pressable>
+            </View>
+          )}
+
           {/* Scanning */}
-          {outcome === null && granted && (
+          {stage === "camera" && outcome === null && granted && (
             <>
               <View style={styles.frameWrap} pointerEvents="none">
                 <View style={styles.frame} />
@@ -182,7 +370,7 @@ export default function VerifyContactScreen({
 
           {/* The OS prompt is up, or its answer hasn't landed yet. A word beats
               a blank screen for the second it takes. */}
-          {outcome === null && awaitingAnswer && (
+          {stage === "camera" && outcome === null && awaitingAnswer && (
             <View style={styles.resultCard}>
               <Text style={styles.resultBody}>
                 {T("contacts.verify.waiting_camera")}
@@ -191,7 +379,7 @@ export default function VerifyContactScreen({
           )}
 
           {/* Camera unavailable */}
-          {outcome === null && denied && (
+          {stage === "camera" && outcome === null && denied && (
             <View style={styles.resultCard}>
               <View style={[styles.resultIcon, styles.iconNeutral]}>
                 <Feather name="camera-off" size={26} color="#FFFFFF" />
@@ -422,6 +610,52 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       fontWeight: FontWeight.medium,
       color: "rgba(255,255,255,0.75)",
       paddingVertical: Spacing.sm,
+    },
+    // Full width so the two rows read as equals rather than a primary action
+    // with an alternative under it.
+    methodRow: {
+      width: "100%",
+      flexDirection: "row",
+      alignItems: "center",
+      gap: Spacing.md,
+      minHeight: MIN_TOUCH,
+      paddingVertical: Spacing.md,
+      paddingHorizontal: Spacing.lg,
+      borderRadius: Radius.lg,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: "rgba(255,255,255,0.25)",
+      backgroundColor: "rgba(255,255,255,0.06)",
+    },
+    methodText: {
+      flex: 1,
+      gap: 2,
+    },
+    methodTitle: {
+      fontSize: FontSize.base,
+      fontWeight: FontWeight.medium,
+      color: "#FFFFFF",
+    },
+    methodSub: {
+      fontSize: FontSize.xs,
+      color: "rgba(255,255,255,0.6)",
+    },
+    // Three to a row rather than left to wrap: a wrap that differs by font
+    // scale gives the two readers different shapes to follow.
+    wordGrid: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      justifyContent: "center",
+      rowGap: Spacing.sm,
+      columnGap: Spacing.md,
+      marginVertical: Spacing.sm,
+    },
+    word: {
+      width: "30%",
+      textAlign: "center",
+      fontFamily: FontFamily.mono,
+      fontSize: FontSize.lg,
+      color: "#FFFFFF",
+      letterSpacing: 0.5,
     },
   });
 }
