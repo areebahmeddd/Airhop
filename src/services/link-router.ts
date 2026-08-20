@@ -63,10 +63,11 @@ export function applyAirhopLink(link: DeepLink): string | null {
     addedAtMs: Date.now(),
     // "link", not "qr". The card is self-consistent, but a link proves only
     // that someone put it somewhere the user tapped: a web page, an SMS, a
-    // message in another app. Recording it as a scan would have shown the
-    // verified shield and "Scanned their QR code" for a person the user has
-    // never met, under a nickname the sender chose. Verification is an
-    // in-person act, and this is the one path that cannot witness it.
+    // message in another app. This is the one path that can witness nothing
+    // about who produced it.
+    //
+    // Safe to state flatly for a contact already verified: addContact merges
+    // and never lowers a source.
     source: "link",
     // The card carries the peer's Nostr pubkey (internet reachability). An
     // `airhop:v1/` link always has one; the guard is for the type, not the

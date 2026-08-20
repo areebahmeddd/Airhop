@@ -63,7 +63,7 @@ const strings: Strings = {
   "home.about.link.mesh": "Bluetooth Low Energy mesh ağı",
   "home.about.link.wire_protocol": "iletim protokolü",
   "home.about.body.built":
-    "Airhop, {mesh} üzerinden özel eşler arası mesajlaşma için iOS ve Android'e yönelik açık kaynaklı bir uygulamadır. {bitchat} temeli üzerine kurulmuştur; onun {wire_protocol} ve güvenlik modelini yeniden kullanır, ardından bunları Tor, çevrimdışı {ecash} ödemeleri ve çevrimdışı yapay zekâ ile genişletir. Hiçbir internet bağlantısı olmadan çalışır ve mesajlar yakındaki cihazlar arasında otomatik olarak iletilir (iç mekânda sekme başına yaklaşık 10 ila 30 metre, açık alanda daha fazla), 7 sekmeye kadar.",
+    "Airhop, {mesh} üzerinden özel eşler arası mesajlaşma için iOS ve Android'e yönelik açık kaynaklı bir uygulamadır. {bitchat} temeli üzerine kurulmuştur; onun {wire_protocol} ve güvenlik modelini yeniden kullanır, ardından bunları çevrimdışı {ecash} ödemeleri ve çevrimdışı yapay zekâ ile genişletir. Hiçbir internet bağlantısı olmadan çalışır ve mesajlar yakındaki cihazlar arasında otomatik olarak iletilir (iç mekânda sekme başına yaklaşık 10 ila 30 metre, açık alanda daha fazla), 7 sekmeye kadar.",
   "home.about.body.identity":
     "Kimliğiniz, cihazınızda üretilen ve {ios_keychain} ya da {android_keystore} içinde saklanan bir {ed25519} anahtar çiftidir. Hesap yok, kayıt yok ve herhangi bir sunucuya dokunan hiçbir şey yok; yani silindikten sonra size geri götürecek hiçbir iz bırakmayan tek kullanımlık bir uygulama olarak kullanılabilir.",
   "home.about.body.crypto":

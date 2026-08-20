@@ -161,8 +161,10 @@ import MessageActionSheet from "./message-action-sheet";
 import MessageBubble from "./message-bubble";
 import MessageInfoSheet from "./message-info-sheet";
 import { NoticesSheet } from "./notices-sheet";
+import SendLocationSheet from "./send-location-sheet";
 
-type AttachAction = "camera" | "library" | "document" | "voice" | "ecash";
+type AttachAction =
+  "camera" | "library" | "document" | "voice" | "location" | "ecash";
 
 // A picked attachment staged for the caption composer before it is sent.
 interface PendingAttachment {
@@ -178,10 +180,15 @@ const ATTACH_OPTIONS: {
   icon: React.ComponentProps<typeof Feather>["name"];
   labelKey: TranslationKey;
   descKey: TranslationKey;
-  // Only offered inside a DM: sending ecash to a broadcast channel isn't
-  // a peer-to-peer payment, so it doesn't belong in a public channel's
-  // attach sheet.
+  // Only offered inside a DM. Ecash to a broadcast channel is not a
+  // peer-to-peer payment, and a location posted to one puts your position in
+  // front of everybody in range.
   dmOnly?: boolean;
+  // Narrower again: needs a durable mesh identity, not a per-cell geohash
+  // pseudonym. A pin travels inside a Noise session, and a pseudonym has none,
+  // so offering it there is a control that can only ever fail. Ecash does not
+  // need this, since `payPerson` can reach a Nostr key by nutzap.
+  meshOnly?: boolean;
 }[] = [
   {
     action: "camera",
@@ -206,6 +213,16 @@ const ATTACH_OPTIONS: {
     icon: "mic",
     labelKey: "chat.attach.voice",
     descKey: "chat.attach.voice_desc",
+  },
+  {
+    action: "location",
+    icon: "map-pin",
+    labelKey: "chat.attach.location",
+    descKey: "chat.attach.location_desc",
+    // Addressed to a person, never broadcast: a pin in a public channel puts
+    // your position in front of everybody in range.
+    dmOnly: true,
+    meshOnly: true,
   },
   {
     action: "ecash",
@@ -1750,6 +1767,7 @@ export default function MessageThread({
   const bridgeEnabled = useSettingsStore((s) => s.bridgeEnabled);
   const undoSendSeconds = useSettingsStore((s) => s.undoSendSeconds);
   const [showAttachMenu, setShowAttachMenu] = useState(false);
+  const [showSendLocation, setShowSendLocation] = useState(false);
   const [showSendEcash, setShowSendEcash] = useState(false);
   // Raw string of the token currently being claimed, so its button can show
   // progress and a double tap cannot start two swaps for the same proofs.
@@ -1861,6 +1879,9 @@ export default function MessageThread({
 
   const msgs = useMemo(() => messages[channel] ?? [], [messages, channel]);
   const isDM = channel.startsWith("dm:");
+  // A DM with a durable mesh identity rather than a per-cell geohash
+  // pseudonym. Gates the attach options that need a Noise session to exist.
+  const isMeshDM = isDM && dmPeerID !== null && !isNostrId(dmPeerID);
 
   // How long this conversation has been going out with nothing coming back.
   //
@@ -2571,6 +2592,9 @@ export default function MessageThread({
           if (started) setHandsFreeRecording(true);
         });
         break;
+      case "location":
+        setShowSendLocation(true);
+        break;
       case "ecash":
         setShowSendEcash(true);
         break;
@@ -2714,6 +2738,17 @@ export default function MessageThread({
   // the reader where they are instead of walking them into a thread to look at
   // a message that never arrived.
   function forwardMessage(source: ChatMessage, targetChannel: string): boolean {
+    // A place is addressed to one person, so it does not travel on. Forwarding
+    // would send the summary text with no pin attached, and would become a real
+    // leak the day somebody extends this to carry one. Passing on where a
+    // friend is standing is not a long-press away.
+    if (source.locationPin) {
+      showAlert(
+        t("chat.location.no_forward"),
+        t("chat.location.no_forward_body"),
+      );
+      return false;
+    }
     if (source.attachment) {
       // Attachments live in a cache that is swept after a week and can be
       // cleared by hand. The bubble already reads "no longer available"; say
@@ -5264,27 +5299,27 @@ export default function MessageThread({
         sheetStyle={styles.attachSheet}
       >
         <Text style={styles.attachSheetTitle}>{T("chat.attach.title")}</Text>
-        {ATTACH_OPTIONS.filter((o) => !o.dmOnly || isDM).map(
-          ({ action, icon, labelKey, descKey }, i) => (
-            <React.Fragment key={action}>
-              {i > 0 && <View style={styles.attachSeparator} />}
-              <Pressable
-                style={styles.attachOption}
-                onPress={() => handleAttachAction(action)}
-                accessibilityRole="button"
-                accessibilityLabel={T(labelKey)}
-              >
-                <View style={styles.attachOptionIcon}>
-                  <Feather name={icon} size={20} color={Colors.textSecondary} />
-                </View>
-                <View style={styles.attachOptionBody}>
-                  <Text style={styles.attachOptionLabel}>{T(labelKey)}</Text>
-                  <Text style={styles.attachOptionDesc}>{T(descKey)}</Text>
-                </View>
-              </Pressable>
-            </React.Fragment>
-          ),
-        )}
+        {ATTACH_OPTIONS.filter(
+          (o) => (!o.dmOnly || isDM) && (!o.meshOnly || isMeshDM),
+        ).map(({ action, icon, labelKey, descKey }, i) => (
+          <React.Fragment key={action}>
+            {i > 0 && <View style={styles.attachSeparator} />}
+            <Pressable
+              style={styles.attachOption}
+              onPress={() => handleAttachAction(action)}
+              accessibilityRole="button"
+              accessibilityLabel={T(labelKey)}
+            >
+              <View style={styles.attachOptionIcon}>
+                <Feather name={icon} size={20} color={Colors.textSecondary} />
+              </View>
+              <View style={styles.attachOptionBody}>
+                <Text style={styles.attachOptionLabel}>{T(labelKey)}</Text>
+                <Text style={styles.attachOptionDesc}>{T(descKey)}</Text>
+              </View>
+            </Pressable>
+          </React.Fragment>
+        ))}
         <View style={styles.attachNote}>
           <Feather name="bluetooth" size={12} color={Colors.textMuted} />
           <Text style={styles.attachNoteText}>
@@ -5299,6 +5334,16 @@ export default function MessageThread({
           <Text style={styles.attachCancelText}>{T("common.cancel")}</Text>
         </Pressable>
       </BottomSheet>
+
+      {/* One point, no live updates. Mesh DMs only, see ATTACH_OPTIONS. */}
+      {isMeshDM && dmPeerID !== null && (
+        <SendLocationSheet
+          visible={showSendLocation}
+          onClose={() => setShowSendLocation(false)}
+          peerID={dmPeerID}
+          displayName={displayName}
+        />
+      )}
 
       {/* Send ecash: DM-only attach option. The sheet is shared with the
           contact sheet, the Mesh tab and the Wallet tab, so the rail chosen and

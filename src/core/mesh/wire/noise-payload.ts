@@ -42,6 +42,17 @@ export const NoisePayloadType = {
   // not know, which is exactly the right outcome for a client that has no
   // concept of keeping someone from a geohash.
   CONTACT_CARD: 0x22,
+  // A place, sent once, to one person. Body is a LocationPin (location-pin.ts).
+  //
+  // 0x50, and the gap below it is deliberate: PROTOCOLS.md section 3 starts
+  // Airhop's packet types at 0x50 so bitchat keeps room to allocate forward, and
+  // the same applies here. CONTACT_CARD holds 0x22 from before that rule reached
+  // this enum and cannot move without breaking shipped builds, so new Airhop
+  // payloads start at 0x50 instead.
+  //
+  // bitchat drops a payload type it does not know, which is correct for a
+  // client with no concept of a location pin.
+  LOCATION_PIN: 0x50,
 } as const;
 export type NoisePayloadTypeValue =
   (typeof NoisePayloadType)[keyof typeof NoisePayloadType];

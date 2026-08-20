@@ -23,26 +23,27 @@ Every layer and the reasoning behind it. For what is being built and when, see
 
 ## 1. Feature Matrix
 
-| Feature                   | Offline (BLE)            | Online (Nostr)      | Notes                                                                                                                                          |
-| ------------------------- | ------------------------ | ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
-| Peer discovery            | Yes, announce broadcasts | Yes, kind 20001     | Peers show on the mesh radar and in the location cell                                                                                          |
-| Public channels           | Yes, TTL flood           | Yes, kind 20000     | `#bluetooth` stays local; `#block` to `#region` also bridge                                                                                    |
-| Private channels          | Yes, sealed `0x50`       | Optional, same blob | Airhop only. Key rides an invite link, no member cap                                                                                           |
-| Private groups            | Yes, sealed `0x25`       | No                  | bitchat compatible. Creator-signed roster, max 16, Bluetooth only                                                                              |
-| Private DMs               | Yes, Noise XX (+DR)      | Yes, NIP-17 wrap    | Receipts on every path. DR only between Airhop peers                                                                                           |
-| Bulletin board            | Yes, signed `0x23`       | Yes, kind 1 mirror  | Public and signed, 1 to 7 day expiry, gossip catch-up                                                                                          |
-| Voice notes               | Yes, as a file           | No                  | Recorded AAC, not live                                                                                                                         |
-| Video sharing             | Yes, as a file           | No                  | Recorded and played inline. Live streaming is not possible across platforms                                                                    |
-| File transfer             | Yes, per-type caps       | No                  | 512 KiB photos and voice, 1 MiB otherwise. Enforced by bitchat's decoder, so not ours to raise                                                 |
-| Store-and-forward courier | Yes, sealed envelope     | Yes, parked drop    | 24 hour life, as bitchat carriers enforce. Sealed to a one-time prekey for forward secrecy                                                     |
-| Live push-to-talk         | Yes, `0x29` bursts       | No                  | AAC-LC 16 kHz mono, 350 ms jitter buffer. Also shipped by bitchat, so it works between the two                                                 |
-| Payments (Cashu)          | Yes, token in a message  | Yes, NIP-61 nutzap  | Transfer works offline, redemption needs internet                                                                                              |
-| Contact verification      | Yes, QR exchange         | n/a                 | The card carries public keys, checked against the noise key. Source is `qr`, `link` or `manual`; only an in-person camera scan may re-pin keys |
-| Panic wipe                | Yes                      | Yes                 | Panic button on Profile. Destroys keys, messages, groups, board, prekeys                                                                       |
-| Internet gateway          | Relays for others        | Yes                 | Off by default. Carries public location traffic for offline peers                                                                              |
-| Tor routing               | n/a                      | Yes                 | Arti on iOS, Orbot on Android. BLE is local, so nothing to route                                                                               |
-| Relay discovery           | n/a                      | Yes                 | Bundled CSV, refreshed from the georelays repo                                                                                                 |
-| bitchat compatibility     | Yes                      | Yes                 | Same wire format both directions. Airhop-only types are ignored by bitchat                                                                     |
+| Feature                   | Offline (BLE)            | Online (Nostr)      | Notes                                                                                                                                                                                            |
+| ------------------------- | ------------------------ | ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Peer discovery            | Yes, announce broadcasts | Yes, kind 20001     | Peers show on the mesh radar and in the location cell                                                                                                                                            |
+| Public channels           | Yes, TTL flood           | Yes, kind 20000     | `#bluetooth` stays local; `#block` to `#region` also bridge                                                                                                                                      |
+| Private channels          | Yes, sealed `0x50`       | Optional, same blob | Airhop only. Key rides an invite link, no member cap                                                                                                                                             |
+| Private groups            | Yes, sealed `0x25`       | No                  | bitchat compatible. Creator-signed roster, max 16, Bluetooth only                                                                                                                                |
+| Private DMs               | Yes, Noise XX (+DR)      | Yes, NIP-17 wrap    | Receipts on every path. DR only between Airhop peers                                                                                                                                             |
+| Bulletin board            | Yes, signed `0x23`       | Yes, kind 1 mirror  | Public and signed, 1 to 7 day expiry, gossip catch-up                                                                                                                                            |
+| Voice notes               | Yes, as a file           | No                  | Recorded AAC, not live                                                                                                                                                                           |
+| Location pin              | Yes, sealed `0x50`       | No                  | One point in a DM, sent once. No live sharing, no map, never couriered                                                                                                                           |
+| Video sharing             | Yes, as a file           | No                  | Recorded and played inline. Live streaming is not possible across platforms                                                                                                                      |
+| File transfer             | Yes, per-type caps       | No                  | 512 KiB photos and voice, 1 MiB otherwise. Enforced by bitchat's decoder, so not ours to raise                                                                                                   |
+| Store-and-forward courier | Yes, sealed envelope     | Yes, parked drop    | 24 hour life, as bitchat carriers enforce. Sealed to a one-time prekey for forward secrecy                                                                                                       |
+| Live push-to-talk         | Yes, `0x29` bursts       | No                  | AAC-LC 16 kHz mono, 350 ms jitter buffer. Also shipped by bitchat, so it works between the two                                                                                                   |
+| Payments (Cashu)          | Yes, token in a message  | Yes, NIP-61 nutzap  | Transfer works offline, redemption needs internet                                                                                                                                                |
+| Contact verification      | Yes, QR or safety number | n/a                 | Two ways in: a camera scan, or reading a six-word safety number to each other. `source` records how keys arrived, `verification` whether a human checked. Only an in-person scan may re-pin keys |
+| Panic wipe                | Yes                      | Yes                 | Panic button on Profile. Destroys keys, messages, groups, board, prekeys                                                                                                                         |
+| Internet gateway          | Relays for others        | Yes                 | Off by default. Carries public location traffic for offline peers                                                                                                                                |
+| Tor routing               | n/a                      | Yes                 | Arti on iOS, Orbot on Android. BLE is local, so nothing to route                                                                                                                                 |
+| Relay discovery           | n/a                      | Yes                 | Bundled CSV, refreshed from the georelays repo                                                                                                                                                   |
+| bitchat compatibility     | Yes                      | Yes                 | Same wire format both directions. Airhop-only types are ignored by bitchat                                                                                                                       |
 
 Optional, shipped but switchable:
 
@@ -83,14 +84,30 @@ Usernames are derived from the public key, never chosen:
 peerID 3a9f2c1b -> "swift-falcon-3a9f"
 ```
 
-This makes impersonation and name squatting impossible, since a name cannot be
-claimed without the key it comes from. Real identity is confirmed by scanning a
-contact QR code.
+A name cannot be claimed without the key it comes from, so no Airhop user can
+take another's. It does not make impersonation impossible on the mesh: a bitchat
+peer chooses its own nickname freely and Airhop renders what it announces, which
+is why a public-channel sender is always shown with a `#last4` suffix taken from
+the peer ID.
 
-Your generated nickname is fixed after setup to prevent impersonation. After two
-people verify each other by scanning QR codes, either person may assign the other
-a local nickname for their conversations; this changes only the local display
-label, never the cryptographic identity.
+Your generated nickname is fixed after setup. Real identity is confirmed
+separately, two ways:
+
+- **Scanning their QR in person.** The camera witnesses the exchange, so this is
+  also the only route allowed to re-pin keys already bound to a peer ID.
+- **Comparing a safety number.** Six words derived from both parties' Noise and
+  signing keys, identical on both phones, read to each other over a channel they
+  trust. Confirms keys already held rather than importing any, so it grants no
+  re-pinning power and needs none. This is what lets somebody you can only reach
+  by call or radio be verified at all.
+
+Both earn the same badge. `source` records how the keys arrived (`qr`, `link` or
+`manual`), `verification` records whether a human has checked them; they are
+independent, so a contact learned from a link can be verified on a call.
+
+Either person may assign the other a local nickname once their keys are held.
+That label never leaves the device and never touches the cryptographic identity,
+and the sheet keeps showing the name the peer chose beside it.
 
 ### Anti-impersonation
 
@@ -653,6 +670,7 @@ cannot break Ed25519, X25519, ChaCha20-Poly1305, or SHA-256 preimage resistance.
 ### Out of scope
 
 - **Physical proximity.** BLE mesh reveals that you are near certain peers.
+- **A location you chose to send.** A location pin carries real coordinates. It is encrypted inside the recipient's Noise session, so no relay can read it, but the recipient holds it and can do what they like with it, including screenshotting it. Sent only on an explicit tap, to one contact, never automatically, never as a reply in kind, and never forwarded onward by the app.
 - **A stable peer ID.** It derives from the long-term Noise key and does not rotate, so the same device is linkable across sessions until the identity is regenerated. Only per-cell geohash identities are ephemeral.
 - **Attachment confidentiality in a public room.** A photo posted to `#bluetooth` is signed but not encrypted, exactly like the text beside it. A private attachment is sealed inside the recipient's Noise session (payload `0x20`) whenever they have proven they can read one; the signed cleartext form survives only for peers that have not, and it is the wire form bitchat is retiring. Media stays restricted to `#bluetooth` and mesh DMs, and is never bridged.
 - **The fact that Tor is in use.** There are no bridges or pluggable transports on either platform, so the first hop is a direct connection and deep packet inspection sees it. See [section 8](#8-privacy-and-tor).

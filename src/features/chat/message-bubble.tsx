@@ -34,6 +34,7 @@ import {
   type StyleProp,
   type TextStyle,
 } from "react-native";
+import LocationCard from "./location-card";
 
 // Drawn size of a sender's avatar in a channel thread. Tapping it (or the name
 // beside it) opens that sender's profile, so both carry hitSlopFor() to reach the
@@ -274,7 +275,14 @@ function MessageBubble({
 
             {item.attachment && renderAttachment(item.attachment)}
 
-            {item.text.length > 0 && !isPureToken && (
+            {/* The message text is the one-line summary the conversation list
+                and notifications read, so it is suppressed here where the card
+                says the same thing better. */}
+            {item.locationPin && (
+              <LocationCard pin={item.locationPin} isMine={item.isMine} />
+            )}
+
+            {item.text.length > 0 && !isPureToken && !item.locationPin && (
               <Text
                 style={[
                   styles.messageText,

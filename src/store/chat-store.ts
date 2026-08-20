@@ -73,6 +73,22 @@ export interface ChatMessage {
   // True when this public message arrived from another mesh island across the
   // mesh bridge (rendered with a network glyph), rather than over Bluetooth.
   viaBridge?: boolean;
+  // A place somebody sent, rendered as a card instead of a bubble.
+  //
+  // On the message rather than in a store of its own because a pin is a
+  // message: one point, one moment, no updates, so it lives and dies with the
+  // row it arrived in and the panic wipe takes it with everything else. See
+  // core/mesh/wire/location-pin.ts.
+  //
+  // `takenAtMs` is separate from the message timestamp: a pin that waited in a
+  // composer is older than the message carrying it, and the card reports the
+  // age of the fix rather than of the delivery.
+  locationPin?: {
+    lat: number;
+    lng: number;
+    accuracyM?: number;
+    takenAtMs: number;
+  };
   // Delivery status (own outgoing messages only). Undefined on received
   // messages and legacy rows. See MessageStatus.
   status?: MessageStatus;

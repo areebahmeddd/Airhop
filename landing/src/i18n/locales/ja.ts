@@ -63,7 +63,7 @@ const strings: Strings = {
   "home.about.link.mesh": "Bluetooth Low Energy メッシュ",
   "home.about.link.wire_protocol": "ワイヤプロトコル",
   "home.about.body.built":
-    "Airhop は、{mesh} 上でのプライベートなピアツーピア通信のための iOS・Android 向けオープンソースアプリです。{bitchat} を土台とし、その {wire_protocol} とセキュリティモデルを再利用したうえで、Tor、オフラインの {ecash} 決済、オフライン AI を加えています。インターネット接続がまったくなくても動作し、メッセージは近くの端末を経由して自動的に中継されます (屋内では 1 ホップあたりおよそ 10〜30 メートル、屋外ではさらに遠く)。最大 7 ホップです。",
+    "Airhop は、{mesh} 上でのプライベートなピアツーピア通信のための iOS・Android 向けオープンソースアプリです。{bitchat} を土台とし、その {wire_protocol} とセキュリティモデルを再利用したうえで、オフラインの {ecash} 決済とオフライン AI を加えています。インターネット接続がまったくなくても動作し、メッセージは近くの端末を経由して自動的に中継されます (屋内では 1 ホップあたりおよそ 10〜30 メートル、屋外ではさらに遠く)。最大 7 ホップです。",
   "home.about.body.identity":
     "あなたの識別情報は端末上で生成される {ed25519} の鍵ペアで、{ios_keychain} または {android_keystore} に保存されます。アカウントも登録もなく、サーバーに触れるものは何もありません。つまり、削除すればあなたにつながる痕跡が何も残らない使い捨てアプリとしても使えます。",
   "home.about.body.crypto":

@@ -63,7 +63,7 @@ const strings: Strings = {
   "home.about.link.mesh": "Bluetooth-Low-Energy-Mesh",
   "home.about.link.wire_protocol": "Übertragungsprotokoll",
   "home.about.body.built":
-    "Airhop ist eine quelloffene iOS- und Android-App für private Peer-to-Peer-Nachrichten über {mesh}. Sie baut auf {bitchat} auf, übernimmt dessen {wire_protocol} und Sicherheitsmodell und erweitert beides um Tor, {ecash}-Zahlungen offline und KI offline. Sie funktioniert ganz ohne Internetverbindung, und Nachrichten werden automatisch über Geräte in der Nähe weitergeleitet (etwa 10 bis 30 Meter pro Hop in Gebäuden, im Freien weiter), über bis zu 7 Hops.",
+    "Airhop ist eine quelloffene iOS- und Android-App für private Peer-to-Peer-Nachrichten über {mesh}. Sie baut auf {bitchat} auf, übernimmt dessen {wire_protocol} und Sicherheitsmodell und erweitert beides um {ecash}-Zahlungen offline und KI offline. Sie funktioniert ganz ohne Internetverbindung, und Nachrichten werden automatisch über Geräte in der Nähe weitergeleitet (etwa 10 bis 30 Meter pro Hop in Gebäuden, im Freien weiter), über bis zu 7 Hops.",
   "home.about.body.identity":
     "Deine Identität ist ein {ed25519}-Schlüsselpaar, das auf deinem Gerät erzeugt und in {ios_keychain} oder {android_keystore} gespeichert wird. Es gibt keine Konten, keine Registrierung und nichts, was einen Server berührt, das heißt, die App lässt sich als Wegwerf-App nutzen, die nach dem Löschen nichts hinterlässt, was auf dich zurückführt.",
   "home.about.body.crypto":

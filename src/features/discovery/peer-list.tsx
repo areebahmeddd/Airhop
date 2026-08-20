@@ -6,9 +6,10 @@
 // service (wired in v0.7+).
 
 import { Feather } from "@expo/vector-icons";
-import { t, useT } from "@i18n";
+import { t, useT, useTPlural } from "@i18n";
 import { arrowForward } from "@i18n/layout";
 import { acknowledged } from "@platform/haptics";
+import { getMeshService, type MeshPingResult } from "@services/mesh-service";
 import { describePayResult, payPerson } from "@services/payment-router";
 import { showAlert } from "@store/alert-store";
 import { useBlockedStore } from "@store/blocked-store";
@@ -55,6 +56,11 @@ import RelayGlyph from "./relay-glyph";
 
 type ViewMode = "list" | "radar";
 
+// `no-reply` is its own value rather than a null result: the service resolves
+// null on timeout, null already means "not asked", and collapsing the two would
+// render a silent peer as an untouched button after a ten-second wait.
+type ProbeState = MeshPingResult | "pending" | "no-reply" | null;
+
 // One height for every control in the send-sats row: the amount field and both
 // icon buttons. Referenced once each, so the row cannot drift out of alignment.
 const SEND_SATS_ROW_HEIGHT = 44;
@@ -96,6 +102,15 @@ export default function PeerList({
   // reports a confusing "those coins were just used" instead of doing nothing.
   const [sendingSats, setSendingSats] = useState(false);
   const [copiedPeerID, setCopiedPeerID] = useState(false);
+  // Outcome of a mesh ping against the open peer.
+  //
+  // Keyed by peer ID because this sheet is mounted once and reused: a bare
+  // result would show the previous person's hop count until the next probe
+  // answered.
+  const [probe, setProbe] = useState<{
+    peerID: string;
+    result: ProbeState;
+  } | null>(null);
   // Held so the "copied" tick can be cancelled if the sheet closes first.
   // Without this the timer fired into an unmounted component.
   const copyResetRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -181,6 +196,31 @@ export default function PeerList({
     setSelectedPeer(null);
     setShowSendSats(false);
     setSendSatsAmount("");
+    setProbe(null);
+  }
+
+  // How far away a peer is, in hops rather than metres.
+  //
+  // Hops is the honest measure. RSSI swings tens of dB with orientation, bodies
+  // and walls, which is why the radar labels its rings by signal; a hop count is
+  // a fact about the network and means the same in a field and in a crowd.
+  //
+  // Only ever run on request. A ping floods at TTL 7, so firing one per sheet
+  // open would put a packet across the whole mesh per tap, which is the airtime
+  // a crowded room cannot spare. Never run for a direct neighbour: `isDirect` is
+  // bound to a GATT link we hold, so the answer is one hop without asking.
+  async function handleCheckDistance(peerID: string): Promise<void> {
+    if (probe?.peerID === peerID && probe.result === "pending") return;
+    setProbe({ peerID, result: "pending" });
+    const answer = await getMeshService()?.sendMeshPing(peerID);
+    // Nothing inside the timeout, or no mesh service. Both are "asked and got
+    // nothing", which is an answer and has to read as one.
+    const result: ProbeState = answer ?? "no-reply";
+    // The sheet may have moved on or been dismissed during the round trip.
+    // A stale answer on the wrong person is worse than none.
+    setProbe((current) =>
+      current?.peerID === peerID ? { peerID, result } : current,
+    );
   }
 
   // Ecash hand-off to a peer standing next to you. All of the proof handling
@@ -402,6 +442,23 @@ export default function PeerList({
                       })}
                 </Text>
               </View>
+              {/* In range only: a peer nobody has heard from in a minute has
+                  nothing to answer a ping with, and a relay is a box on a pole
+                  rather than somebody you are trying to find. */}
+              {selectedPeer.isInfrastructure !== true &&
+                isOnline(selectedPeer) && (
+                  <DistanceRow
+                    isDirect={selectedPeer.isDirect === true}
+                    probe={
+                      probe?.peerID === selectedPeer.peerID
+                        ? probe.result
+                        : null
+                    }
+                    onCheck={() =>
+                      void handleCheckDistance(selectedPeer.peerID)
+                    }
+                  />
+                )}
             </View>
 
             {/* A relay gets an explanation where a person gets actions. Both
@@ -535,6 +592,130 @@ export default function PeerList({
       />
     </View>
   );
+}
+
+// "How far away is this person", answered in hops.
+//
+// The split between the first two states is the design: a direct neighbour is
+// answered from what the radio already holds, and only a relayed peer costs a
+// packet. See handleCheckDistance.
+//
+//   direct     a GATT link we hold. One hop, stated, nothing sent
+//   idle       relayed, offers to ask
+//   pending    a ping is out, up to ten seconds before it gives up
+//   answered   a hop count and a round trip, or no reply
+function DistanceRow({
+  isDirect,
+  probe,
+  onCheck,
+}: {
+  isDirect: boolean;
+  probe: ProbeState;
+  onCheck: () => void;
+}): React.JSX.Element {
+  const T = useT();
+  const TP = useTPlural();
+  const Colors = useThemeColors();
+  const styles = useMemo(() => createDistanceStyles(Colors), [Colors]);
+
+  if (isDirect) {
+    return (
+      <View style={styles.row}>
+        <Feather name="zap" size={12} color={Colors.online} />
+        <Text style={styles.text}>{T("mesh.peer.direct")}</Text>
+      </View>
+    );
+  }
+
+  if (probe === "pending") {
+    return (
+      <View style={styles.row}>
+        <ActivityIndicator size="small" color={Colors.textMuted} />
+        <Text style={styles.text}>{T("mesh.peer.checking")}</Text>
+      </View>
+    );
+  }
+
+  // Asked, heard nothing. bitchat-android answers no ping at all, so silence is
+  // as likely to be which app they run as how far away they are. Tapping
+  // retries.
+  if (probe === "no-reply") {
+    return (
+      <Pressable
+        style={styles.row}
+        onPress={onCheck}
+        hitSlop={HIT_SLOP}
+        accessibilityRole="button"
+        accessibilityLabel={T("mesh.peer.check_distance")}
+      >
+        <Feather name="help-circle" size={12} color={Colors.textMuted} />
+        <Text style={styles.text}>{T("mesh.peer.no_reply")}</Text>
+        <Text style={styles.detail}>{T("mesh.peer.no_reply_hint")}</Text>
+      </Pressable>
+    );
+  }
+
+  if (probe !== null) {
+    return (
+      <Pressable
+        style={styles.row}
+        onPress={onCheck}
+        hitSlop={HIT_SLOP}
+        accessibilityRole="button"
+        accessibilityLabel={T("mesh.peer.check_distance")}
+      >
+        <Feather name="git-commit" size={12} color={Colors.textMuted} />
+        <Text style={styles.text}>
+          {/* Hops is null when the pong's TTL arithmetic does not resolve, so
+              the round trip carries the row rather than the row vanishing. */}
+          {probe.hops !== null
+            ? TP("mesh.peer.hops_away", probe.hops)
+            : t("mesh.peer.rtt", { ms: String(probe.rttMs) })}
+        </Text>
+        {probe.hops !== null && (
+          <Text style={styles.detail}>
+            {t("mesh.peer.rtt", { ms: String(probe.rttMs) })}
+          </Text>
+        )}
+      </Pressable>
+    );
+  }
+
+  return (
+    <Pressable
+      style={styles.row}
+      onPress={onCheck}
+      hitSlop={HIT_SLOP}
+      accessibilityRole="button"
+    >
+      <Feather name="git-commit" size={12} color={Colors.accent} />
+      <Text style={styles.action}>{T("mesh.peer.check_distance")}</Text>
+    </Pressable>
+  );
+}
+
+function createDistanceStyles(Colors: ReturnType<typeof useThemeColors>) {
+  return StyleSheet.create({
+    row: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: Spacing.xs,
+      minHeight: 20,
+    },
+    text: {
+      fontSize: FontSize.sm,
+      color: Colors.textMuted,
+    },
+    detail: {
+      fontSize: FontSize.xs,
+      color: Colors.textMuted,
+      fontFamily: FontFamily.mono,
+    },
+    action: {
+      fontSize: FontSize.sm,
+      color: Colors.accent,
+    },
+  });
 }
 
 function createStyles(Colors: ReturnType<typeof useThemeColors>) {

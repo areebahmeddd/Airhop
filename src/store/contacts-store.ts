@@ -31,19 +31,36 @@ export interface Contact {
   signingPubKeyHex: string; // 32-byte Ed25519, hex
   nickname: string;
   addedAtMs: number;
-  // How this contact was learned, which is what "Verified" is allowed to mean.
+  // How this contact's keys reached us. NOT whether they have been confirmed:
+  // that is `verification` below, and keeping the two apart is the point.
   //
-  // "qr"     scanned off the other person's screen with the camera. The keys are
-  //          real AND the user was standing there, so this is the only source
-  //          that earns the verified shield.
-  // "link"   the same card, but delivered as an airhop:// link. The keys are
-  //          equally real and equally self-consistent - what is missing is any
+  // "qr"     scanned off the other person's screen with the camera
+  // "link"   the same card delivered some other way: an airhop:// link, the
+  //          photo roll, a card handed over inside a geohash DM. The keys are
+  //          equally real and equally self-consistent; what is missing is any
   //          evidence about WHO sent it, since a link can be posted on a web
-  //          page or pasted into a message by anyone. Treated as a convenience,
-  //          never as verification.
-  // "manual" only a peer ID was typed in, so the keys are unknown and the
-  //          identity is unverified until their first ANNOUNCE arrives.
+  //          page or pasted into a message by anyone
+  // "manual" only a peer ID was typed in, so no keys at all until their first
+  //          ANNOUNCE arrives
   source: "qr" | "link" | "manual";
+  // Whether a human has confirmed the keys above are this person's, and how.
+  // Absent means nobody has checked.
+  //
+  // Separate from `source` because the two change under opposite rules: how
+  // keys arrived may be rewritten by any later write, confirmation may not.
+  //
+  // "in-person"   camera scan of their live screen. The app witnessed the
+  //               exchange, which is also the only thing that earns the right
+  //               to re-pin keys (see MeshService.addVerifiedContact)
+  // "fingerprint" both parties read the same safety number to each other over a
+  //               channel they trust. Confirms keys already held rather than
+  //               importing any, so it grants no re-pinning power
+  //
+  // Equally strong as verification. They differ in what else they may do.
+  //
+  // Absent on records predating the field; `isVerified` reads `source === "qr"`
+  // as in-person for those, so no migration is required.
+  verification?: "in-person" | "fingerprint";
   // The peer's Nostr public key (secp256k1 hex), once we've learned it from a
   // v2 QR card or their ANNOUNCE. This is what makes an out-of-range contact
   // reachable over the internet: the registry forgets a peer's npub 60s after
@@ -61,14 +78,76 @@ export interface Contact {
   // Never leaves the device. It is not announced, not carried in a card, and
   // not what anyone else sees.
   //
-  // Set only on a contact verified in person - see setLocalNickname for why
-  // that gate is a security property rather than a formality.
+  // Available for any contact whose keys we hold, see setLocalNickname.
   localNickname?: string;
+  // When the confirmation happened, which is not when the contact was saved.
+  // Holding them apart is what lets `addContact` keep the earliest `addedAtMs`
+  // unconditionally.
+  //
+  // Absent on records predating the field; readers fall back to `addedAtMs`,
+  // which those records were stamped with at confirmation time.
+  verifiedAtMs?: number;
+}
+
+// Ordering for the merge, so a write can never lower a contact's standing. A
+// camera scan witnessed the exchange, a link witnessed nothing, and a typed
+// peer ID carries no keys at all.
+const SOURCE_RANK: Readonly<Record<Contact["source"], number>> = {
+  manual: 0,
+  link: 1,
+  qr: 2,
+};
+
+// Has a human confirmed this identity, by any means. The one place that
+// question is answered, so no two surfaces can disagree about one contact.
+//
+// The `source` fallback carries records predating `verification`, where a `qr`
+// source could only have come from the camera.
+export function isVerified(contact: Contact | undefined): boolean {
+  if (contact === undefined) return false;
+  return contact.verification !== undefined || contact.source === "qr";
+}
+
+// Which means was used, for the line under the shield. Same fallback.
+export function verificationMethod(
+  contact: Contact | undefined,
+): Contact["verification"] | undefined {
+  if (contact === undefined) return undefined;
+  if (contact.verification !== undefined) return contact.verification;
+  return contact.source === "qr" ? "in-person" : undefined;
+}
+
+// Do we hold enough of this identity to reach them and to label them.
+//
+// The Noise key is the test rather than the signing key: it is what a session
+// opens against, so a contact without one is a peer ID and nothing more.
+// A predicate rather than a boolean so a caller that has checked can reach the
+// fields it just proved are present.
+export function hasKeys(contact: Contact | undefined): contact is Contact {
+  return contact !== undefined && contact.noisePubKeyHex.length > 0;
 }
 
 interface ContactsState {
   contacts: Record<string, Contact>;
 
+  // Save or update a contact. Merges onto an existing record and can never
+  // weaken one, whichever of the four screens calls it. The policy lives here
+  // rather than in the callers, because a rule several of them have to remember
+  // is not a rule:
+  //
+  //   source           never decreases (see SOURCE_RANK)
+  //   verification     kept once earned; only a write carrying one may set it
+  //   addedAtMs        earliest wins; a re-add is not a new acquaintance
+  //   verifiedAtMs     kept once set
+  //   localNickname    kept unless the caller supplies one
+  //   nickname         a name already on file wins over one arriving now
+  //   nostrPubkeyHex   first key wins, matching setNostrPubkey
+  //   noise/signing    filled when absent, replaced only by an in-person scan
+  //
+  // The last is the security-relevant one. `signingPubKeyHex` is not a display
+  // field: `leaveIsAuthentic` falls back to it to check a LEAVE when the live
+  // registry holds no pin, which is every restart. The registry already refuses
+  // an over-the-air re-pin, and this holds the durable copy to the same rule.
   addContact: (contact: Contact) => void;
   // Save a peer as an unverified contact if not already saved. The one entry
   // point for the Signal-style "people you message are kept" behaviour, so
@@ -85,17 +164,25 @@ interface ContactsState {
   // as suspect, not authoritative). No-op when no contact exists for the peer,
   // so we never manufacture a contact for a stranger just because we heard them.
   setNostrPubkey: (peerID: string, nostrPubkeyHex: string) => void;
-  // Give a verified contact a name only you see. An empty string clears it and
-  // hands the peer their own name back.
+  // Record that the safety number was compared and matched. The other half of
+  // verification, beside the camera scan.
   //
-  // Refused for anyone not verified in person, and that is the point rather
-  // than a formality. A local name is what you will recognise them by from then
-  // on - it replaces the generated username in the DM list, in the radar, in
-  // channel messages and in notifications. If any stranger could be relabelled,
-  // somebody who announced a familiar-looking nickname could be filed under
-  // "Mum" and the label would be doing the identifying from that moment on.
-  // Requiring a scanned card means the name is anchored to a fingerprint the
-  // user checked while standing in front of the person.
+  // Touches no keys, which is what makes it safe for a contact whose keys
+  // arrived by link: it confirms what is already stored, and a substituted key
+  // would have produced words that did not match. Nothing is imported, so there
+  // is no re-pinning power to gate.
+  //
+  // Refused without keys, since there would be nothing to have compared.
+  markVerified: (peerID: string) => void;
+  // Give a contact a name only you see. An empty string clears it and hands the
+  // peer their own name back.
+  //
+  // Gated on holding their keys, not on verification, matching bitchat's
+  // `canEditLocalAlias`. The label is typed against one specific peer ID and
+  // never leaves the device, so no attacker can cause one, and the sheet keeps
+  // `ownNicknameFor` beside it so the claimed identity stays checkable after a
+  // rename. A label on an identity the app cannot address is a label on
+  // nothing, which is the case the gate still refuses.
   setLocalNickname: (peerID: string, nickname: string) => void;
   getContact: (peerID: string) => Contact | undefined;
   // Display name for a peer ID, or undefined to fall back to a generated one.
@@ -105,6 +192,65 @@ interface ContactsState {
   ownNicknameFor: (peerID: string) => string | undefined;
   all: () => Contact[];
   clearAll: () => void;
+}
+
+// Fold an incoming record onto what is stored, per the rules on `addContact`.
+// Pure, so the policy is one testable function rather than four conventions.
+function mergeContact(prior: Contact | undefined, next: Contact): Contact {
+  if (prior === undefined) {
+    // A camera scan confirms as it imports, so stamp both here rather than
+    // asking every caller to remember.
+    if (next.source !== "qr") return next;
+    return {
+      ...next,
+      verification: next.verification ?? "in-person",
+      verifiedAtMs: next.verifiedAtMs ?? next.addedAtMs,
+    };
+  }
+
+  const source =
+    SOURCE_RANK[next.source] > SOURCE_RANK[prior.source]
+      ? next.source
+      : prior.source;
+  // Only an in-person write may replace keys already held. Anything else fills
+  // an empty slot and nothing more. See addContact for why the signing key is
+  // not merely cosmetic.
+  const mayReplaceKeys = next.source === "qr";
+  const pick = (priorKey: string, nextKey: string): string => {
+    if (priorKey.length === 0) return nextKey;
+    return mayReplaceKeys && nextKey.length > 0 ? nextKey : priorKey;
+  };
+
+  return {
+    peerID: prior.peerID,
+    noisePubKeyHex: pick(prior.noisePubKeyHex, next.noisePubKeyHex),
+    signingPubKeyHex: pick(prior.signingPubKeyHex, next.signingPubKeyHex),
+    // A name already on file wins, so re-adding somebody never replaces what
+    // they called themselves at first contact.
+    nickname: prior.nickname.trim().length > 0 ? prior.nickname : next.nickname,
+    addedAtMs: Math.min(prior.addedAtMs, next.addedAtMs),
+    source,
+    // Set only by a write that carries one: a camera scan states "in-person",
+    // `markVerified` states "fingerprint". A link carries neither, so it can
+    // neither remove nor invent it. `verificationMethod` supplies the reading
+    // for records predating the field.
+    verification:
+      verificationMethod(prior) ??
+      (next.source === "qr" ? "in-person" : next.verification),
+    verifiedAtMs:
+      prior.verifiedAtMs ??
+      (next.source === "qr" || next.verification !== undefined
+        ? (next.verifiedAtMs ?? next.addedAtMs)
+        : undefined),
+    // First key wins, matching setNostrPubkey: a new npub for a known peer is
+    // suspect rather than authoritative.
+    nostrPubkeyHex:
+      prior.nostrPubkeyHex !== undefined && prior.nostrPubkeyHex.length > 0
+        ? prior.nostrPubkeyHex
+        : next.nostrPubkeyHex,
+    // Never dropped by a write that did not set one.
+    localNickname: next.localNickname ?? prior.localNickname,
+  };
 }
 
 const storage = createMMKV({ id: "contacts-store" });
@@ -124,7 +270,13 @@ export const useContactsStore = create<ContactsState>()(
 
       addContact(contact) {
         set((state) => ({
-          contacts: { ...state.contacts, [contact.peerID]: contact },
+          contacts: {
+            ...state.contacts,
+            [contact.peerID]: mergeContact(
+              state.contacts[contact.peerID],
+              contact,
+            ),
+          },
         }));
       },
 
@@ -176,13 +328,32 @@ export const useContactsStore = create<ContactsState>()(
         });
       },
 
+      markVerified(peerID) {
+        set((state) => {
+          const existing = state.contacts[peerID];
+          // Nothing to confirm without keys, and a second comparison of the
+          // same words must not move "Verified since" to today.
+          if (!hasKeys(existing) || isVerified(existing)) return state;
+          return {
+            contacts: {
+              ...state.contacts,
+              [peerID]: {
+                ...existing,
+                verification: "fingerprint",
+                verifiedAtMs: Date.now(),
+              },
+            },
+          };
+        });
+      },
+
       setLocalNickname(peerID, nickname) {
         set((state) => {
           const existing = state.contacts[peerID];
           if (!existing) return state;
-          // The gate lives here rather than in the sheet, so the rule holds
-          // however the store is reached. See the interface for why.
-          if (existing.source !== "qr") return state;
+          // Here rather than in the sheet, so the rule holds however the store
+          // is reached. See the interface for why.
+          if (!hasKeys(existing)) return state;
           const trimmed = nickname.trim().slice(0, MAX_NICKNAME_LENGTH);
           return {
             contacts: {

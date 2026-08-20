@@ -317,8 +317,8 @@ export default function AddContactScreen({
     if (!foundPeerID) return;
     const peerID = foundPeerID;
     const card = foundCard;
-    // Read fresh: never clobber an existing contact's saved fields (nickname,
-    // added date, learned Nostr key) just because we saw them again.
+    // Only to decide whether the bare-ID branch below has anything to write.
+    // Protecting an existing record is addContact's job.
     const prior = useContactsStore.getState().getContact(peerID);
 
     if (card) {
@@ -336,22 +336,21 @@ export default function AddContactScreen({
         setStage("entry");
         return;
       }
-      // Scanning in person upgrades a known peer to verified without disturbing
-      // a name they chose. Any other route records "link". A prior stronger
-      // source wins, since downgrading a verified contact would be its own lie.
-      const source = foundInPerson || prior?.source === "qr" ? "qr" : "link";
+      // State only what this scan witnessed. Whether that is an upgrade, a
+      // no-op, or something a stronger prior record outranks is addContact's
+      // decision, and it cannot weaken anything already saved.
+      const now = Date.now();
       useContactsStore.getState().addContact({
-        ...prior,
         peerID: card.peerID,
         noisePubKeyHex: bytesToHex(card.noisePubKey),
         signingPubKeyHex: bytesToHex(card.signingPubKey),
-        nickname: prior?.nickname.trim() ? prior.nickname : card.nickname,
-        addedAtMs: prior?.addedAtMs ?? Date.now(),
-        source,
-        // Their Nostr pubkey, which makes them reachable over the internet even
-        // if we never meet on Bluetooth. Absent only for a bitchat QR whose
-        // owner has no Nostr identity, which leaves a mesh-only contact rather
-        // than a broken one - and never clears a key a previous scan learned.
+        nickname: card.nickname,
+        addedAtMs: now,
+        source: foundInPerson ? "qr" : "link",
+        ...(foundInPerson ? { verifiedAtMs: now } : {}),
+        // Reachability over the internet without ever meeting on Bluetooth.
+        // Absent only for a bitchat QR whose owner has no Nostr identity, which
+        // leaves a mesh-only contact rather than a broken one.
         ...(card.nostrPubKey !== undefined
           ? { nostrPubkeyHex: bytesToHex(card.nostrPubKey) }
           : {}),

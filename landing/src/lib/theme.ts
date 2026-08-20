@@ -92,7 +92,7 @@ export function setTheme(theme: Theme) {
     return;
   }
 
-  root.dataset.themeSweep = "";
+  root.dataset.themeSweep = theme;
   const transition = document.startViewTransition(() => {
     publish(theme);
   });
