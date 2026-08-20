@@ -11,7 +11,12 @@ import { useT } from "@i18n";
 import { acknowledged } from "@platform/haptics";
 import { getMeshService } from "@services/mesh-service";
 import { useChatStore } from "@store/chat-store";
-import { useContactsStore } from "@store/contacts-store";
+import {
+  hasKeys,
+  isVerified,
+  useContactsStore,
+  verificationMethod,
+} from "@store/contacts-store";
 import { useMeshStateStore } from "@store/mesh-state-store";
 import { REACHABLE_TTL_MS, usePeerStore } from "@store/peer-store";
 import Avatar from "@ui/components/avatar";
@@ -85,10 +90,10 @@ export default function ContactInfoSheet({
     peer !== undefined && nowMs - peer.lastSeenMs < REACHABLE_TTL_MS;
   const firstMessage =
     messages && messages.length > 0 ? messages[0] : undefined;
-  const verified = contact?.source === "qr";
-  // Verifying is an in-person act, so it only applies to a peer you could meet:
-  // one with a real mesh identity (a 16-hex peer ID). A remote, nostr-only
-  // contact has no scannable in-person code, so we don't offer it there.
+  const verified = isVerified(contact);
+  // Applies to a lasting identity, so a 16-hex mesh peer ID and not a per-cell
+  // geohash pseudonym. Being able to meet is not required: the screen offers a
+  // scan for somebody present and a code comparison for somebody on a call.
   const canVerify = !!peerID && !verified && /^[0-9a-f]{16}$/i.test(peerID);
   // A Nostr/geohash peer is an anonymous, per-cell pseudonym, there is no
   // lasting identity to verify, so the sheet says "Anonymous" rather than the
@@ -107,13 +112,15 @@ export default function ContactInfoSheet({
   // and explained, the same tap teaches both - and the Verify button that fixes
   // it is already on screen underneath.
   //
-  // Offered on a location-channel pseudonym too, where it cannot be used either
-  // - a per-cell name changes when someone moves, so a label pinned to it would
+  // Offered on a location-channel pseudonym too, where it cannot be used - a
+  // per-cell name changes when someone moves, so a label pinned to it would
   // outlive the thing it names. But hiding it there left the sheet with no
   // answer to "can I call them something else", and the answer is a real path
-  // rather than a no: keep them, verify them when you meet, then rename. The
-  // note below names whichever step comes next.
+  // rather than a no: swap cards, then rename. The note below names the step.
   const canRename = peerID !== null;
+  // Renaming needs their keys, not their verification, matching bitchat's
+  // `canEditLocalAlias`. See setLocalNickname for why that is the whole gate.
+  const renameable = hasKeys(contact);
   // Held as "which peer is this about" rather than a bare boolean, and derived
   // back below.
   //
@@ -237,12 +244,22 @@ export default function ContactInfoSheet({
             key: "verify",
             icon: "shield",
             iconColor: Colors.verified,
+            // When the check happened, not when the contact was saved. Absent
+            // on records predating the field, which stamped the same date into
+            // `addedAtMs`, so the fallback is exact rather than a guess.
             label: contact
               ? T("chat.contact.verified_since", {
-                  date: formatLongDate(contact.addedAtMs),
+                  date: formatLongDate(
+                    contact.verifiedAtMs ?? contact.addedAtMs,
+                  ),
                 })
               : T("chat.contact.verified"),
-            sub: T("chat.contact.verified_desc"),
+            // Which channel did the confirming. Equally strong either way; the
+            // line is so somebody can tell later how they checked.
+            sub:
+              verificationMethod(contact) === "fingerprint"
+                ? T("chat.contact.verified_desc_compared")
+                : T("chat.contact.verified_desc"),
           }
         : {
             key: "verify",
@@ -269,7 +286,7 @@ export default function ContactInfoSheet({
               <Pressable
                 style={styles.cornerBtn}
                 onPress={() => {
-                  if (!verified) {
+                  if (!renameable) {
                     setBlockedFor(peerID);
                     return;
                   }
@@ -328,14 +345,14 @@ export default function ContactInfoSheet({
               )}
               {/* The reason, on the tap that asked for it. Verify sits a few
                   rows below, so the explanation and the fix are on one screen. */}
-              {renameBlocked && !verified && (
+              {renameBlocked && !renameable && (
                 <Text style={styles.renameBlockedNote}>
-                  {/* A pseudonym cannot be verified at all, so pointing at the
-                      scanner there would be a dead end. Name the step that
-                      actually comes first. */}
+                  {/* A pseudonym has no durable identity to label, so the
+                      answer is "swap cards first". A mesh peer we hold no keys
+                      for has a nearer fix. */}
                   {isAnonymous
                     ? T("chat.contact.rename_needs_contact")
-                    : T("chat.contact.rename_needs_verify")}
+                    : T("chat.contact.rename_needs_keys")}
                 </Text>
               )}
               {/* A Nostr peer has no short mesh ID, its identifier IS a
