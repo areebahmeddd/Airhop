@@ -11,6 +11,8 @@
 :root {
   color-scheme: light dark;
   --ease-settle: cubic-bezier(0.3, 0.3, 0.5, 1);
+  --ease-sweep: cubic-bezier(0.4, 0, 0.2, 1);
+  --sweep-time: 0.7s;
   --t-canvas: light-dark(#ffffff, #0c0d0e);
   --t-card: light-dark(#fcfcfd, #17181a);
   --t-card-subtle: light-dark(#f9f9fb, #1e2022);
@@ -49,9 +51,18 @@
   transition: none !important;
 }
 
-@keyframes themeSweep {
+@keyframes themeSweepDown {
   from {
     clip-path: inset(0 0 100% 0);
+  }
+  to {
+    clip-path: inset(0 0 0 0);
+  }
+}
+
+@keyframes themeSweepUp {
+  from {
+    clip-path: inset(100% 0 0 0);
   }
   to {
     clip-path: inset(0 0 0 0);
@@ -64,8 +75,15 @@
 }
 
 :root[data-theme-sweep]::view-transition-new(root) {
-  animation: themeSweep 0.42s cubic-bezier(0.65, 0, 0.35, 1);
   mix-blend-mode: normal;
+}
+
+:root[data-theme-sweep="dark"]::view-transition-new(root) {
+  animation: themeSweepDown var(--sweep-time) var(--ease-sweep);
+}
+
+:root[data-theme-sweep="light"]::view-transition-new(root) {
+  animation: themeSweepUp var(--sweep-time) var(--ease-sweep);
 }
 
 .theme-knob {
