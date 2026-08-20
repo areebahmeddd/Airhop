@@ -5,6 +5,17 @@ All notable changes are documented here. The format follows [Keep a Changelog](h
 
 ## What's New
 
+- chore: update dependencies and improve relay validation (by @areebahmeddd) [cccb3c7]
+- chore: minor fixes (by @areebahmeddd) [88ae3a3]
+- feat(landing): add support for 30 languages (by @areebahmeddd) [4396db4]
+- feat: enhance relay management and discovery features (by @areebahmeddd) [6d217a4]
+- feat: add funding.json and manifest files (by @areebahmeddd) [73c5493]
+- fix:  static HTML plugin with inline boot script and CSP support (by @areebahmeddd) [a06ff32]
+
+**Full changelog:** [v1.0.0..v1.0.1](https://github.com/areebahmeddd/airhop/compare/v1.0.0..v1.0.1)
+
+## What's New
+
 - feat: update app showcase images and restructure screen references (by @areebahmeddd) [d49b035]
 - refactor(app): fix code documentation (by @areebahmeddd) [24a9c8c]
 - docs: sync every path reference to the new structure (by @areebahmeddd) [7bda42d]
