@@ -101,6 +101,11 @@ import {
   encodeDmReceipt,
 } from "@core/mesh/wire/dm-payload";
 import {
+  decodeLocationPin,
+  encodeLocationPin,
+  type LocationPin,
+} from "@core/mesh/wire/location-pin";
+import {
   decodeMeshPing,
   encodeMeshPing,
   newPingNonce,
@@ -2160,6 +2165,84 @@ export class MeshService {
     );
   }
 
+  // Hand one place to one person, once. Returns the message id, or null when no
+  // session can carry it.
+  //
+  // Narrower than `sendDm`, which falls back to Nostr, a courier and the outbox.
+  // A position is worth something only while it is current, and one delivered
+  // six hours later by a passing carrier points at where somebody used to be:
+  // the reasoning the spec gives for never gossiping voice frames. A pin that
+  // cannot go now does not go at all, and the sheet says so.
+  sendLocationPin(peerID: string, pin: LocationPin): string | null {
+    let body: Uint8Array;
+    try {
+      body = encodeLocationPin(pin);
+    } catch {
+      // A coordinate outside the world. Never from the OS geocoder, so this
+      // guards the caller rather than an expected path.
+      return null;
+    }
+    const sent = this.router.sendNoisePayload(
+      peerID,
+      NoisePayloadType.LOCATION_PIN,
+      body,
+    );
+    if (!sent) {
+      // Still not queued, for the reason above, but the handshake starts so a
+      // retry a few seconds later succeeds. Without it, a pin as the first act
+      // in a fresh conversation fails until the user sends a text, which does
+      // start one, and nothing on screen explains the difference.
+      this.ensureNoiseSession(peerID);
+      return null;
+    }
+
+    const id = newMessageId();
+    const channel = `dm:${peerID}`;
+    useChatStore.getState().addChannel(channel);
+    useChatStore.getState().addMessage({
+      id,
+      channel,
+      senderID: this.identity.peerID,
+      senderNickname: this.nickname,
+      // The card carries the place. The text is what a notification and a
+      // conversation row show, where there is no room for one.
+      text: t("chat.location.sent_summary"),
+      timestampMs: Date.now(),
+      isMine: true,
+      locationPin: pin,
+      status: "sent",
+    });
+    return id;
+  }
+
+  // A place arrived from a peer we have a session with.
+  private onLocationPin(
+    senderID: string,
+    channel: string,
+    body: Uint8Array,
+  ): void {
+    const pin = decodeLocationPin(body);
+    // Malformed, wrong version, or a coordinate that is not on Earth. Rendering
+    // nothing beats an arrow pointing at a place that cannot exist.
+    if (pin === null) return;
+
+    const peer = this.registry.get(senderID);
+    const nickname = peer?.nickname ?? senderID.slice(0, 8);
+    useChatStore.getState().addChannel(channel);
+    useChatStore.getState().addMessage({
+      // Derived from the sender and the fix rather than random, so a pin that
+      // arrives over two links collapses to one card instead of stacking.
+      id: `pin-${senderID}-${pin.takenAtMs}`,
+      channel,
+      senderID,
+      senderNickname: nickname,
+      text: t("chat.location.received_summary"),
+      timestampMs: Date.now(),
+      isMine: false,
+      locationPin: pin,
+    });
+  }
+
   // Send our capabilities and signing key inside an established session.
   //
   // Emitted after every completed handshake by both roles. The initiator
@@ -2284,6 +2367,10 @@ export class MeshService {
       payload.type === NoisePayloadType.GROUP_KEY_UPDATE
     ) {
       this.onGroupState(payload.body, senderID);
+      return;
+    }
+    if (payload.type === NoisePayloadType.LOCATION_PIN) {
+      this.onLocationPin(senderID, channel, payload.body);
       return;
     }
     if (payload.type !== NoisePayloadType.PRIVATE_MESSAGE) return;
@@ -3560,9 +3647,11 @@ export class MeshService {
       nickname: decoded.nickname,
       addedAtMs: Date.now(),
       // "link", not a source of its own: the trust is identical. The keys are
-      // real and self-consistent, and nothing proves the sender owns them - a
-      // card can be forwarded as easily as a URL. So it introduces a contact and
-      // never earns the verified shield, which is exactly what "link" means.
+      // real and self-consistent, and nothing proves the sender owns them, since
+      // a card forwards as easily as a URL.
+      //
+      // Safe to state flatly for someone already verified: addContact merges
+      // and refuses to lower a source.
       source: "link",
       nostrPubkeyHex,
     });
