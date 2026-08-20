@@ -789,6 +789,66 @@ test("W11 a withdrawal whose answer never arrives is resolved, not guessed", asy
   s.assert(true);
 });
 
+test("W21 a withdrawal whose change is unreachable is not read as a refusal", async () => {
+  const s = (scenario = new Scenario({
+    id: "W21",
+    title: "melt paid, change signed on a keyset the wallet cannot resolve",
+    seed: 121,
+  }));
+  const mint = new MintFabric(s.world);
+  mint.install();
+  // The reading of the error is what decides whether money survives here. The
+  // invoice is paid and the inputs are burned, so handing the proofs back the
+  // way an ordinary melt failure demands would show a balance the mint has
+  // already spent, and drop the blanks that are the only route to the reserve.
+  mint.setConditions({
+    meltFeeReserve: 16,
+    meltActualFee: 3,
+    meltChangeKeysetUnknown: true,
+  });
+  const { devices } = room(s, [android("alice", 21)]);
+  const [alice] = devices;
+  await alice.walletReady();
+  await alice.addMint(mint.url);
+  await alice.depositSats(500);
+
+  const before = alice.totalHeld();
+  const result = await alice.withdraw(simInvoice(100));
+  s.check("the withdrawal could not report success", result === null);
+
+  s.check(
+    "the coins the mint burned are not handed back as spendable",
+    alice.reservedBalance() > 0,
+    `reserved=${alice.reservedBalance()} spendable=${alice.balance()}`,
+  );
+  s.check(
+    "and nothing has been written off yet",
+    alice.totalHeld() === before,
+    `before=${before} after=${alice.totalHeld()}`,
+  );
+
+  // The quote is the authority, exactly as it is for a lost response. It says
+  // PAID, so the transaction closes on what the mint actually did.
+  await alice.reconcile();
+
+  s.check(
+    "reconcile closed it out against the quote",
+    alice.reservedBalance() === 0,
+    `reserved=${alice.reservedBalance()}`,
+  );
+  // The full 116 leaves: the invoice, plus a reserve whose change is signed
+  // against keys that do not exist anywhere. Unrecoverable is a real outcome
+  // and the honest one to record - what matters is that the 384 still held was
+  // never at risk while the wallet worked that out.
+  s.check(
+    "the payment is accounted for and the balance is not double-counted",
+    alice.totalHeld() === before - 116,
+    `held=${alice.totalHeld()} expected=${before - 116}`,
+  );
+  s.expectNone("process health", noCrashes(devices));
+  s.assert(true);
+});
+
 test("W12 a balance split across two mints can be moved onto one", async () => {
   const s = (scenario = new Scenario({
     id: "W12",

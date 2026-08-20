@@ -587,6 +587,7 @@ export function reportWalletError(err: unknown): void {
       "invalid-token": t("wallet.err.unreadable"),
       "forged-token": t("wallet.err.rejected"),
       "already-spent": t("wallet.err.already_spent"),
+      "change-pending": t("wallet.err.change_pending"),
     };
     showAlert(
       titles[err.code] ?? t("wallet.xfer.could_not_send"),

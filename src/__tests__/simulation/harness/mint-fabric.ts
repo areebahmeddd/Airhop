@@ -152,6 +152,16 @@ export interface MintConditions {
   // proofs would double-count money that is gone, dropping them would throw away
   // the unused routing reserve the mint is holding for it.
   meltVanishes: boolean;
+  // The mint pays and signs the change against a keyset it does not list, so
+  // the wallet cannot fetch the keys to unblind it.
+  //
+  // A rotation landing between the quote and the settlement, and a trap rather
+  // than a failure: the invoice is PAID and the inputs are burned, but the one
+  // call the wallet made came back as an error. Every other melt failure leaves
+  // the inputs untouched, so reading this one the same way restores proofs the
+  // mint has already spent and discards the blanks that are the only route to
+  // the change.
+  meltChangeKeysetUnknown: boolean;
 }
 
 const DEFAULT_CONDITIONS: MintConditions = {
@@ -167,7 +177,14 @@ const DEFAULT_CONDITIONS: MintConditions = {
   meltActualFee: 0,
   meltFails: false,
   meltVanishes: false,
+  meltChangeKeysetUnknown: false,
 };
+
+// A well-formed keyset id (NUT-02 version byte + 14 hex) that no fabric will
+// ever serve keys for, so a signature stamped with it is unresolvable rather
+// than malformed. Getting refused at parse time would exercise a different path
+// entirely.
+const UNLISTED_KEYSET_ID = "00ffffffffffffff";
 
 interface Keyset {
   id: string;
@@ -787,7 +804,12 @@ export class MintFabric {
       // few coins as the blanks allow.
       const denom = DENOMINATIONS.filter((d) => d <= remaining).pop();
       if (denom === undefined) break;
-      change.push(this.blindSign({ ...blank, amount: denom }));
+      const signature = this.blindSign({ ...blank, amount: denom });
+      change.push(
+        this.conditions.meltChangeKeysetUnknown
+          ? { ...signature, id: UNLISTED_KEYSET_ID }
+          : signature,
+      );
       remaining -= denom;
     }
     if (change.length > 0) {

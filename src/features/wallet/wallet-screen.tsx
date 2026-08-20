@@ -495,6 +495,7 @@ export default function WalletScreen({
         "invalid-token": t("wallet.err.unreadable"),
         "forged-token": t("wallet.err.rejected"),
         "already-spent": t("wallet.err.already_spent"),
+        "change-pending": t("wallet.err.change_pending"),
       };
       showAlert(
         titles[err.code] ?? fallbackTitle,
@@ -1745,10 +1746,11 @@ export default function WalletScreen({
         </View>
       </View>
 
-      {/* Backup. Off by default, because turning it on is a commitment: the
-          user has to write twelve words down and keep them, and a phrase
-          nobody wrote down is worse than none at all (it implies a safety net
-          that is not there). */}
+      {/* Backup. Starts off, because what the user accepts here is a commitment
+          rather than a setting: the phrase already exists and already covers
+          their coins, and what is missing is twelve words written down and
+          kept. A phrase nobody wrote down is worse than none at all, since it
+          implies a safety net that is not there. */}
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>{T("wallet.backup.title")}</Text>
         <View style={styles.backupCard}>

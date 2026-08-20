@@ -32,10 +32,12 @@
 // so the user can re-share or reclaim it after a restart.
 //
 // Backup
-// Off by default. When the user sets up a recovery phrase, proof secrets stop
-// being random and are derived from it instead (NUT-13), which is what lets a
-// new device rebuild the balance by asking the mint which of those secrets it
-// signed (NUT-09). `counters` is the per-keyset derivation cursor that makes
+// Proof secrets are derived from a twelve-word phrase (NUT-13) rather than
+// generated randomly, which is what lets a new device rebuild the balance by
+// asking the mint which of those secrets it signed (NUT-09). The phrase is
+// generated with the wallet, so this holds from the first proof onwards, and
+// `backupEnabled` is the separate question of whether the user has seen and
+// accepted the words. `counters` is the per-keyset derivation cursor that makes
 // that ordering reproducible; it must only ever move forward, because reusing a
 // counter recreates a secret the mint has already seen. `StoredProof.derived`
 // records which proofs are actually covered, since anything received from
@@ -194,8 +196,9 @@ export interface AccountBalance {
   // Subset of `balance` the mint has not confirmed as unspent.
   unverified: number;
   // Subset of `balance` that the recovery phrase could not rebuild, because
-  // those secrets were not derived from it. Zero when backup is off, since
-  // nothing is covered then and the distinction would be noise.
+  // those secrets were not derived from it. Zero until the user has accepted
+  // the phrase, because a split saying most of the balance is covered promises
+  // a safety net that only written-down words deliver.
   unbacked: number;
   // Sum of proofs held in the reserved bucket, not spendable.
   reserved: number;
@@ -224,9 +227,11 @@ interface WalletState {
   // instead of offering a button that can only produce a confusing error.
   claimedTokens: string[];
 
-  // Whether a recovery phrase has been set up. Off by default: until the user
-  // opts in, proof secrets are random and nothing is restorable. The phrase
-  // itself lives in the keychain, never here.
+  // Whether the user has seen and accepted their recovery phrase, which is not
+  // the same as whether one exists: a phrase is generated with the wallet, so
+  // secrets are derived from the first proof onwards regardless of this flag.
+  // What it gates is the claim made to the user, because words nobody has read
+  // cannot rebuild anything. The phrase lives in the keychain, never here.
   backupEnabled: boolean;
   // Whether the user proved they wrote the phrase down. A phrase that exists
   // but was never copied out is the worst state to be in, because the wallet

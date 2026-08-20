@@ -58,11 +58,10 @@ Built on the foundation of [bitchat](https://bitchat.free), using the same [BLE 
 |                   | Private channels          | Invite-only encrypted rooms. A shared key travels in the invite link, so anyone with the link joins and reads; there is no member cap          |
 |                   | Private groups            | Fixed-roster encrypted group chats. The creator signs the member list (up to 16) and shares the key over Noise; only listed members can read   |
 |                   | Bulletin board            | Signed notices that outlive chat: pin a post to your mesh or location for 1 to 7 days, with urgent flags. Late arrivals catch up automatically |
-|                   | Photo sharing             | Send a photo over the mesh (PNG, JPEG, GIF, WebP), up to 512 KB                                                                                |
-|                   | Video sharing             | Send a video over the mesh (MP4, MOV), up to 1 MB                                                                                              |
-|                   | Voice notes               | Send a voice message over the mesh (AAC, 16 kHz mono), up to 512 KB                                                                            |
-|                   | Live voice                | Hold the mic to talk to people in range, walkie-talkie style. Arrives in about half a second, then lands in the chat as a voice note           |
-|                   | File transfer             | Send any file format over the mesh (documents, archives, anything else), up to 1 MB per file                                                   |
+| 📎 **Sharing**    | Photos & videos           | Send photos and videos over the mesh. Photos support PNG, JPEG, GIF and WebP up to 512 KB; videos support MP4 and MOV up to 1 MB               |
+|                   | Voice messages            | Send a recorded voice message over the mesh in AAC, 16 kHz mono, up to 512 KB                                                                  |
+|                   | Live voice                | Hold the mic to talk to people in range, walkie-talkie style; recordings land in chat as voice messages                                        |
+|                   | File transfer             | Send any file format over the mesh, including documents and archives, up to 1 MB per file                                                      |
 |                   | Store-and-forward courier | Messages are delivered automatically when a route becomes available, sealed to a one-time prekey for forward secrecy                           |
 | 🔒 **Identity**   | No-account identity       | Identity is an Ed25519 key pair stored only on your device                                                                                     |
 |                   | Human-readable names      | Deterministic usernames derived from your public key                                                                                           |
@@ -154,19 +153,19 @@ Offline and private messengers generally fall into three categories:
 
 Airhop belongs to the third category and extends it with a Nostr-based internet layer for long-distance communication when connectivity is available. The table is grouped in that order, starting with the apps most people already measure private messaging against.
 
-| Project                                | Transport                      | Encryption                | Works offline | Hardware-free | Open source | Platforms                       |
-| -------------------------------------- | ------------------------------ | ------------------------- | ------------- | ------------- | ----------- | ------------------------------- |
-| [Signal](https://signal.org)           | Centralized servers            | Signal protocol           | ❌            | ✅            | ✅          | iOS, Android, Desktop           |
-| [Threema](https://threema.ch)          | Centralized servers            | NaCl + Ibex               | ❌            | ✅            | ⚠️          | iOS, Android, Desktop           |
-| [Session](https://getsession.org)      | Onion routing (service nodes)  | Session protocol          | ❌            | ✅            | ✅          | iOS, Android, Desktop           |
-| [White Noise](https://whitenoise.chat) | Nostr relays                   | MLS (Marmot)              | ❌            | ✅            | ✅          | iOS, Android                    |
-| [Meshtastic](https://meshtastic.org)   | LoRa radio                     | AES-256 + Curve25519 PKI  | ✅            | ❌            | ✅          | iOS, Android, Web + hardware    |
-| [goTenna](https://gotenna.com)         | Proprietary sub-GHz radio      | AES-256 + ECC-384 PKI     | ✅            | ❌            | ❌          | iOS, Android + hardware         |
-| [Bridgefy](https://bridgefy.me)        | Bluetooth + WiFi               | Signal (libsignal)        | ✅            | ✅            | ❌          | iOS, Android                    |
-| [Berty](https://berty.tech)            | Bluetooth + mDNS               | Scuttlebutt + Ratchet     | ✅            | ✅            | ✅          | iOS, Android                    |
-| [Briar](https://briarproject.org)      | Bluetooth + WiFi + Tor         | Bramble                   | ✅            | ✅            | ✅          | Android, Desktop                |
-| [bitchat](https://bitchat.free)        | Bluetooth + Nostr + Tor        | Noise XX                  | ✅            | ✅            | ✅          | iOS, Android                    |
-| [Airhop](https://airhop.1mindlabs.org) | Bluetooth + Nostr + WiFi + Tor | Noise XX + Double Ratchet | ✅            | ✅            | ✅          | iOS, Android, Desktop, Web, CLI |
+| Project                                | Transport                             | Encryption                | Works offline | Hardware-free | Open source | Platforms                       |
+| -------------------------------------- | ------------------------------------- | ------------------------- | ------------- | ------------- | ----------- | ------------------------------- |
+| [Signal](https://signal.org)           | Centralized servers                   | Signal protocol           | ❌            | ✅            | ✅          | iOS, Android, Desktop           |
+| [Threema](https://threema.ch)          | Centralized servers                   | NaCl + Ibex               | ❌            | ✅            | ⚠️          | iOS, Android, Desktop           |
+| [Session](https://getsession.org)      | Onion routing (service nodes)         | Session protocol          | ❌            | ✅            | ✅          | iOS, Android, Desktop           |
+| [White Noise](https://whitenoise.chat) | Nostr relays                          | MLS (Marmot)              | ❌            | ✅            | ✅          | iOS, Android                    |
+| [Meshtastic](https://meshtastic.org)   | LoRa radio                            | AES-256 + Curve25519 PKI  | ✅            | ❌            | ✅          | iOS, Android, Web + hardware    |
+| [goTenna](https://gotenna.com)         | Proprietary sub-GHz radio             | AES-256 + ECC-384 PKI     | ✅            | ❌            | ❌          | iOS, Android + hardware         |
+| [Bridgefy](https://bridgefy.me)        | Bluetooth + WiFi                      | Signal (libsignal)        | ✅            | ✅            | ❌          | iOS, Android                    |
+| [Berty](https://berty.tech)            | Bluetooth + mDNS                      | Scuttlebutt + Ratchet     | ✅            | ✅            | ✅          | iOS, Android                    |
+| [Briar](https://briarproject.org)      | Bluetooth + WiFi + Tor                | Bramble                   | ✅            | ✅            | ✅          | Android, Desktop                |
+| [bitchat](https://bitchat.free)        | Bluetooth + Nostr + Tor               | Noise XX                  | ✅            | ✅            | ✅          | iOS, Android                    |
+| [Airhop](https://airhop.1mindlabs.org) | Bluetooth + Nostr + mDNS + WiFi + Tor | Noise XX + Double Ratchet | ✅            | ✅            | ✅          | iOS, Android, Desktop, Web, CLI |
 
 ⚠️ Threema's client apps are open source, but its servers are not, and the app is a paid one-time purchase.
 

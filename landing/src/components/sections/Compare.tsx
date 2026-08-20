@@ -141,7 +141,7 @@ const ROWS: {
   {
     name: "Airhop",
     href: REPO_URL,
-    transport: "Bluetooth + Nostr + WiFi + Tor",
+    transport: "Bluetooth + Nostr + mDNS + WiFi + Tor",
     encryption: "Noise XX + Double Ratchet",
     offline: true,
     hardwareFree: true,

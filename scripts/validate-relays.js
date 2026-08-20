@@ -3,6 +3,9 @@
 // copy at assets/data/nostr_relays.csv. The directory is compiled into the app
 // bundle, so a bad row ships to every user. Fails closed.
 //
+// It also reports which hosts entered and left, because the counts alone cannot
+// show a hostile row arriving in the pull request.
+//
 //   node scripts/validate-relays.js --input <candidate.csv>
 //                                   [--baseline assets/data/nostr_relays.csv]
 //                                   [--github-output $GITHUB_OUTPUT]
@@ -21,6 +24,9 @@ const MAX_BYTES = 1024 * 1024;
 // Upstream swings ~6% day to day, so a double-digit delta is normal.
 const MAX_COUNT_DELTA = 0.2;
 const MIN_RETAINED = 0.7;
+
+// Hosts named per direction before the list is summarised instead.
+const MAX_LISTED_HOSTS = 40;
 
 // RFC 1123 host. Rejects schemes, paths, credentials, wildcards and non-ASCII,
 // and requires at least one dot so a bare name like "localhost" cannot pass.
@@ -221,8 +227,8 @@ function main() {
   const { hosts, duplicates } = validateRows(rows);
 
   // Skipped on a first run so the directory can still be seeded.
-  let added = null;
-  let removed = null;
+  let addedHosts = null;
+  let removedHosts = null;
   if (args.baseline && fs.existsSync(args.baseline)) {
     const baselineRows = parseCsv(
       fs.readFileSync(args.baseline, "utf8"),
@@ -254,8 +260,9 @@ function main() {
         );
       }
 
-      added = [...hosts].filter((h) => !before.has(h)).length;
-      removed = before.size - retained;
+      // Sorted so the reported list is stable when upstream reorders rows.
+      addedHosts = [...hosts].filter((h) => !before.has(h)).sort();
+      removedHosts = [...before].filter((h) => !hosts.has(h)).sort();
     }
   }
 
@@ -269,7 +276,11 @@ function main() {
   console.log(`Rows           : ${rows.length}`);
   console.log(`Unique relays  : ${hosts.size}`);
   console.log(`Exact repeats  : ${duplicates}`);
-  if (added !== null) console.log(`Added/removed  : +${added} / -${removed}`);
+  if (addedHosts !== null) {
+    console.log(
+      `Added/removed  : +${addedHosts.length} / -${removedHosts.length}`,
+    );
+  }
   console.log(`SHA-256        : ${sha256}`);
 
   if (args["github-output"]) {
@@ -278,13 +289,32 @@ function main() {
       [
         `rows=${rows.length}`,
         `unique_relays=${hosts.size}`,
-        `added=${added ?? 0}`,
-        `removed=${removed ?? 0}`,
+        `added=${addedHosts?.length ?? 0}`,
+        `removed=${removedHosts?.length ?? 0}`,
         `sha256=${sha256}`,
+        hostList("added_hosts", addedHosts),
+        hostList("removed_hosts", removedHosts),
         "",
       ].join("\n"),
     );
   }
+}
+
+// A multi-line GITHUB_OUTPUT value, one host per line. Every listed host has
+// passed the RFC 1123 pattern above, so none can collide with the delimiter.
+function hostList(name, hosts) {
+  let lines;
+  if (hosts === null) {
+    lines = ["(no baseline to compare against)"];
+  } else if (hosts.length === 0) {
+    lines = ["(none)"];
+  } else {
+    lines = hosts.slice(0, MAX_LISTED_HOSTS);
+    if (hosts.length > MAX_LISTED_HOSTS) {
+      lines.push(`... and ${hosts.length - MAX_LISTED_HOSTS} more`);
+    }
+  }
+  return [`${name}<<RELAY_HOST_LIST`, ...lines, "RELAY_HOST_LIST"].join("\n");
 }
 
 main();

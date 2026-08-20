@@ -24,7 +24,9 @@
 import {
   getTokenMetadata,
   isMintOperationError,
+  MeltChangeError,
   Mint,
+  NetworkError,
   OutputData,
   setGlobalRequestOptions,
   Wallet,
@@ -167,7 +169,13 @@ export type WalletErrorCode =
   // A DLEQ witness failed: the mint did not sign this. Do not credit it.
   | "forged-token"
   // The mint says these proofs are already spent.
-  | "already-spent";
+  | "already-spent"
+  // A melt whose invoice is PAID and whose NUT-08 change could not be
+  // unblinded yet. Not a failure: the payment stands and the unused routing
+  // reserve is recovered by `reconcile`. It is its own code because every other
+  // way of reporting it is a lie - "the mint refused" is wrong, and reporting
+  // success would claim a balance the transaction has not settled yet.
+  | "change-pending";
 
 export class WalletError extends Error {
   readonly code: WalletErrorCode;
@@ -193,6 +201,36 @@ function isAlreadySpentError(err: WalletError): boolean {
   return /spent|already|TOKEN_ALREADY/i.test(err.detail ?? err.message);
 }
 
+// Whether a failure is the radio rather than the mint, read from the whole
+// cause chain and not from the error in hand.
+//
+// cashu-ts nests its failures. An operation that meets a keyset id its snapshot
+// has never seen refreshes first, and a refresh that fails is reported as
+// `UnknownKeysetError: ... mint refresh failed` with the transport error
+// underneath as `cause`. Nothing in that top line says network, so reading the
+// message alone calls a dead zone a mint refusal. The receive path branches on
+// exactly that distinction, and the cost of getting it wrong is a good token
+// refused outright where it should have been stored offline to redeem later.
+function isNetworkFailure(err: unknown): boolean {
+  // Bounded because a cycle in `cause` would hang the error path rather than
+  // report it, and nothing needs to look further than this to decide.
+  let current: unknown = err;
+  for (let depth = 0; current != null && depth < 8; depth += 1) {
+    // The mint answered, so the request got there and back whatever it said.
+    // Its wording is not evidence about the transport either way: a mint is
+    // free to reject a melt with "payment timeout" and mean the Lightning
+    // route, not the socket.
+    if (isMintOperationError(current)) return false;
+    if (current instanceof NetworkError) return true;
+    const message =
+      current instanceof Error ? current.message : String(current);
+    // fetch failures in React Native surface as a bare "Network request failed".
+    if (/network|fetch|timeout|abort/i.test(message)) return true;
+    current = current instanceof Error ? current.cause : undefined;
+  }
+  return false;
+}
+
 // Turn anything thrown by cashu-ts or fetch into a WalletError, so callers only
 // ever branch on our own codes.
 function asWalletError(err: unknown, fallback: WalletErrorCode): WalletError {
@@ -201,8 +239,7 @@ function asWalletError(err: unknown, fallback: WalletErrorCode): WalletError {
     return new WalletError("mint-error", err.message, String(err));
   }
   const message = err instanceof Error ? err.message : String(err);
-  // fetch failures in React Native surface as a bare "Network request failed".
-  if (/network|fetch|timeout|abort/i.test(message)) {
+  if (isNetworkFailure(err)) {
     return new WalletError(
       "offline",
       t("wallet.svc.mint_unreachable"),
@@ -273,8 +310,10 @@ export function isMintNetworkBlocked(): boolean {
 // ---- Recovery phrase (NUT-13 deterministic secrets) ----
 
 // The seed derived from the user's recovery phrase, held in memory for the
-// process lifetime once loaded. Null means backup is off and proof secrets are
-// random, which is the default: nothing is restorable until the user opts in.
+// process lifetime once loaded. A seed is the steady state, generated with the
+// wallet rather than at opt-in. Null means either that the bootstrap has not
+// run yet, or that the keychain refused to hold a phrase and random secrets
+// are the honest fallback.
 //
 // This is the *only* thing that decides whether new proofs are recoverable, so
 // it is read at wallet construction and every wallet is rebuilt when it flips.
@@ -354,6 +393,35 @@ function storedMint(mintUrl: string): StoredMint | undefined {
   return useWalletStore.getState().mints[normalizeMintUrl(mintUrl)];
 }
 
+// Build a Wallet whose repairs make it back to disk.
+//
+// An operation that meets evidence of a keyset rotation (a proof naming a
+// keyset the snapshot has never seen, or the mint rejecting one the snapshot
+// still calls active) refreshes the snapshot itself and then throws. So the
+// wallet in the map heals and the copy in the store does not, and left alone
+// the repair lasts exactly as long as the process: the next cold start reloads
+// the pre-rotation cache, finds it inside `KEYSET_TTL_MS`, and buys the same
+// refresh again. Until it does, `verifyTokenOffline` has no key for a proof on
+// the new keyset, so a perfectly good token is stored unverified in a dead
+// zone.
+//
+// `keychainUpdated` is a local emitter rather than a subscription to the mint,
+// so this costs nothing on a wallet that never rotates. It fires only for
+// refreshes the library made on its own: an explicit `loadMint` or
+// `ensureOperableKeysets` persists at its own call site instead.
+function newWallet(url: string, unit: string): Wallet {
+  const wallet = new Wallet(new Mint(url), walletOptions(unit));
+  const epoch = walletEpoch;
+  wallet.on.keychainUpdated(() => {
+    // A panic wipe replaced the identity these keysets belong to, and an
+    // operation still in flight can carry its wallet past the reset. Writing
+    // then would put part of the snapshot the wipe deleted back on disk.
+    if (walletEpoch !== epoch || !isWalletStorageReady()) return;
+    persistMintSnapshot(url, unit, wallet);
+  });
+  return wallet;
+}
+
 // Build a Wallet for this account.
 //
 // `offline: true` never touches the network: it either returns a wallet built
@@ -376,7 +444,7 @@ async function getWallet(
     record.infoResponse !== undefined &&
     Date.now() - (record.keysetCacheAtMs ?? 0) < KEYSET_TTL_MS;
 
-  const wallet = new Wallet(new Mint(url), walletOptions(unit));
+  const wallet = newWallet(url, unit);
 
   if (!opts.forceRefresh && cacheFresh) {
     try {
@@ -865,7 +933,7 @@ export async function addMint(rawUrl: string): Promise<AddMintResult> {
 
   assertMintNetworkAllowed();
 
-  const wallet = new Wallet(new Mint(url), walletOptions("sat"));
+  const wallet = newWallet(url, "sat");
   try {
     await wallet.loadMint(true);
   } catch (err) {
@@ -2353,6 +2421,45 @@ export async function claimLightningDeposit(
   return minted;
 }
 
+// ---- Lightning: withdraw (melt) ----
+
+// Rebuild the change of a melt whose payment stands but whose blanks cashu-ts
+// could not unblind.
+//
+// The recovery the library documents for `MeltChangeError`: resolve the keysets
+// the change was signed against, then rebuild from the blanks it handed back. A
+// permissive mint may sign change across several keysets, so every id in the
+// signatures is covered rather than just the one the wallet is bound to.
+//
+// Returning empty is a legitimate answer and never an assertion that the melt
+// failed. The caller keeps the transaction pending with its blanks intact so
+// `recoverMeltChange` can try again from the quote once the keys are reachable.
+async function rebuildMeltChange(
+  wallet: Wallet,
+  mintUrl: string,
+  unit: string,
+  err: MeltChangeError,
+): Promise<Proof[]> {
+  const signatures = err.quote.change ?? [];
+  if (signatures.length === 0) return [];
+  try {
+    await wallet.ensureOperableKeysets(signatures.map((sig) => sig.id));
+  } catch {
+    // Keys that did land are kept even when the call throws, so the rebuild is
+    // still worth attempting; it is the one that decides.
+  }
+  // `ensureOperableKeysets` is an explicit call, so it deliberately emits no
+  // `keychainUpdated` and nothing else will write what it fetched to disk.
+  persistMintSnapshot(mintUrl, unit, wallet);
+  try {
+    return wallet.createMeltChangeProofs(err.outputData, signatures);
+  } catch {
+    // An invalid DLEQ or a signature count the blanks cannot account for. Not
+    // transient, but a NUT-09 restore is the path out of it, not this one.
+    return [];
+  }
+}
+
 // Settle a melt whose response was lost, using the blank outputs saved before
 // the request went out.
 //
@@ -2391,6 +2498,17 @@ async function recoverMeltChange(tx: WalletTx): Promise<void> {
       const outputs = (tx.meltOutputs as SerializedOutputData[]).map((entry) =>
         OutputData.deserialize(entry),
       );
+      // The blanks were signed whenever the mint got round to paying, which may
+      // be a rotation later than the snapshot this wallet was built from. Ask
+      // for the keys behind every id in the signatures first, or a recoverable
+      // reserve is written off for want of a key fetch.
+      try {
+        await wallet.ensureOperableKeysets(signatures.map((sig) => sig.id));
+        persistMintSnapshot(tx.mintUrl, tx.unit, wallet);
+      } catch {
+        // Unresolvable, or the mint is unreachable again. The rebuild below
+        // decides; keys that did land are kept either way.
+      }
       const change = wallet.createMeltChangeProofs(outputs, signatures);
       if (change.length > 0) {
         creditProofs(tx.mintUrl, tx.unit, change, { verified: true });
@@ -2410,8 +2528,6 @@ async function recoverMeltChange(tx: WalletTx): Promise<void> {
     ...(recovered > 0 ? { fee: Math.max(0, (tx.fee ?? 0) - recovered) } : {}),
   });
 }
-
-// ---- Lightning: withdraw (melt) ----
 
 export interface MeltQuote {
   quoteId: string;
@@ -2716,10 +2832,42 @@ export async function payLightningInvoice(quote: MeltQuote): Promise<{
       ),
     });
 
-    const result = await withMeltTimeout(() => wallet.completeMelt(preview));
+    let change: Proof[];
+    let preimage: string | undefined;
+    try {
+      const result = await withMeltTimeout(() => wallet.completeMelt(preview));
+      change = result.change;
+      preimage = result.quote.payment_preimage ?? undefined;
+    } catch (err) {
+      if (!(err instanceof MeltChangeError)) throw err;
+      // The one failure here that is not a failure. NUT-08 blanks are signed
+      // after the mint has already taken the inputs, so a melt that cannot
+      // rebuild its change is a PAID invoice whose refund of the unused routing
+      // reserve is stuck behind keys the wallet cannot resolve, most often a
+      // keyset that rotated between the quote and the settlement.
+      change = await rebuildMeltChange(wallet, quote.mintUrl, quote.unit, err);
+      // Change was signed and is still not in hand. Do not close the
+      // transaction: leaving it pending with its blanks is what lets
+      // `recoverMeltChange` finish the job once the keys are reachable.
+      //
+      // Raised as a wallet code rather than passed on, because the catch below
+      // branches on codes and because this one reaches the user. The library's
+      // message is written for whoever is integrating it, and a `mint-error`
+      // would put it under a "Mint refused" title, telling somebody whose
+      // invoice was just paid that it was not.
+      if (change.length === 0 && (err.quote.change ?? []).length > 0) {
+        throw new WalletError(
+          "change-pending",
+          t("wallet.svc.melt_change_pending"),
+          t("wallet.svc.melt_change_pending_body"),
+        );
+      }
+      // Only the bolt11 response carries a preimage, and this path has the
+      // base quote. The payment stands; the receipt just has no proof to show.
+      preimage = undefined;
+    }
 
     // Unused routing reserve comes back as change proofs.
-    const change = result.change;
     if (change.length > 0) {
       creditProofs(quote.mintUrl, quote.unit, change, { verified: true });
     }
@@ -2737,7 +2885,7 @@ export async function payLightningInvoice(quote: MeltQuote): Promise<{
       paid: quote.amount,
       fee: spent - quote.amount,
       changeReturned,
-      preimage: result.quote.payment_preimage ?? undefined,
+      preimage,
     };
   } catch (err) {
     const walletErr = asWalletError(err, "mint-error");
@@ -2752,6 +2900,11 @@ export async function payLightningInvoice(quote: MeltQuote): Promise<{
     // reservation, shows a balance the mint has already burned, and clears the
     // blank outputs so the unused routing reserve can never be recovered. It
     // belongs with the ambiguous case, where the quote decides.
+    //
+    // `change-pending` is the same trap with a better disguise, because there
+    // the mint refused nothing at all: the invoice is paid and only the NUT-08
+    // change is outstanding. It is not a `mint-error`, so it falls to the same
+    // side as the quote, which is where it belongs.
     if (walletErr.code === "mint-error" && !isAlreadySpentError(walletErr)) {
       store.releaseReserved(txId);
       store.updateTx(txId, {
@@ -2760,10 +2913,15 @@ export async function payLightningInvoice(quote: MeltQuote): Promise<{
         meltOutputs: undefined,
       });
     } else {
-      // Ambiguous: the mint may have paid. The blanks stay on the transaction
-      // so `reconcile` can recover the change once the quote's state is known.
+      // The mint may have paid, so the blanks stay on the transaction and
+      // `reconcile` settles it once the quote's state is known. `change-pending`
+      // is the one case where that is already known, so it says so rather than
+      // telling somebody their paid invoice is in doubt.
       store.updateTx(txId, {
-        error: `${walletErr.message} ${t("wallet.svc.payment_unknown")}`,
+        error:
+          walletErr.code === "change-pending"
+            ? walletErr.message
+            : `${walletErr.message} ${t("wallet.svc.payment_unknown")}`,
       });
     }
     throw walletErr;

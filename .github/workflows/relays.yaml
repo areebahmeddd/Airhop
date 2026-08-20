@@ -20,25 +20,28 @@ env:
   SOURCE_OWNER_REPO: permissionlesstech/georelays
   SOURCE_PATH: nostr_relays.csv
   STALE_AFTER_DAYS: 7
+  UPDATE_BRANCH: automation/relays
+  PR_TITLE: "chore(relays): sync relay directory from upstream"
+  RELAY_FILES: assets/data/nostr_relays.csv src/data/relays.ts landing/src/data/relays.ts
 
 jobs:
   sync:
-    name: Sync from upstream
+    name: Propose sync from upstream
     runs-on: ubuntu-24.04
-    timeout-minutes: 10
+    timeout-minutes: 15
     permissions:
       contents: write
+      pull-requests: write
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          ref: main
           persist-credentials: false
 
-      - name: Set up Node.js
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        with:
-          node-version: "22"
+      - name: Set up JavaScript toolchain
+        uses: ./.github/actions/setup-js
 
       - name: Fetch candidate at a pinned commit
         id: upstream
@@ -80,11 +83,17 @@ jobs:
       - name: Regenerate relay modules
         run: node scripts/generate-relays.js
 
+      - name: Test the regenerated directory
+        run: |
+          npm test -- --ci \
+            src/core/nostr/__tests__/relay-url-parity.test.ts \
+            src/services/__tests__/geohash-channels.test.ts
+
       - name: Check for changes
         id: changes
         run: |
           set -euo pipefail
-          git add assets/data/nostr_relays.csv src/data/relays.ts landing/src/data/relays.ts
+          git add $RELAY_FILES
           if git diff --cached --quiet; then
             echo "changed=false" >> "$GITHUB_OUTPUT"
             echo "Relay directory already up to date." >> "$GITHUB_STEP_SUMMARY"
@@ -93,7 +102,7 @@ jobs:
             git diff --cached --stat
           fi
 
-      - name: Commit and push
+      - name: Open or update the proposal
         if: steps.changes.outputs.changed == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
@@ -101,24 +110,88 @@ jobs:
           UNIQUE_RELAYS: ${{ steps.validation.outputs.unique_relays }}
           ADDED: ${{ steps.validation.outputs.added }}
           REMOVED: ${{ steps.validation.outputs.removed }}
+          ADDED_HOSTS: ${{ steps.validation.outputs.added_hosts }}
+          REMOVED_HOSTS: ${{ steps.validation.outputs.removed_hosts }}
           DATA_SHA256: ${{ steps.validation.outputs.sha256 }}
         run: |
           set -euo pipefail
           gh auth setup-git
 
+          pr_number=$(gh pr list --repo "$GITHUB_REPOSITORY" --state open \
+            --base main --head "$UPDATE_BRANCH" --json number --jq '.[0].number // empty')
+
+          if [[ -n "$pr_number" ]] \
+            && git fetch --no-tags --depth=1 origin "refs/heads/$UPDATE_BRANCH" 2> /dev/null \
+            && git diff --quiet FETCH_HEAD -- $RELAY_FILES; then
+            echo "Proposal #$pr_number already carries this directory." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git commit -m "chore(relays): sync relay directory from upstream" \
+          git switch -C "$UPDATE_BRANCH"
+
+          git commit -m "$PR_TITLE" \
             -m "Upstream: $SOURCE_OWNER_REPO/$SOURCE_PATH" \
             -m "Upstream-commit: $SOURCE_COMMIT" \
             -m "Relays: $UNIQUE_RELAYS (+$ADDED / -$REMOVED)" \
             -m "SHA-256: $DATA_SHA256"
-          git push origin HEAD:main
+          git push --force origin "HEAD:refs/heads/$UPDATE_BRANCH"
 
-          {
-            echo "Synced $UNIQUE_RELAYS relays (+$ADDED / -$REMOVED)."
-            echo "Upstream commit: $SOURCE_COMMIT"
-          } >> "$GITHUB_STEP_SUMMARY"
+          body_file="$RUNNER_TEMP/relay-pr-body.md"
+          cat > "$body_file" <<EOF
+          Automated proposal. Not auto-merged: this directory is compiled into
+          the app bundle, so every row here ships to users.
+
+          - Upstream: $SOURCE_OWNER_REPO/$SOURCE_PATH
+          - Upstream commit: $SOURCE_COMMIT
+          - Relays: $UNIQUE_RELAYS (+$ADDED / -$REMOVED)
+          - SHA-256: $DATA_SHA256
+
+          ### Added ($ADDED)
+
+          ~~~
+          $ADDED_HOSTS
+          ~~~
+
+          ### Removed ($REMOVED)
+
+          ~~~
+          $REMOVED_HOSTS
+          ~~~
+          EOF
+
+          if [[ -n "$pr_number" ]]; then
+            gh pr edit "$pr_number" --repo "$GITHUB_REPOSITORY" \
+              --title "$PR_TITLE" --body-file "$body_file"
+            pr_url=$(gh pr view "$pr_number" --repo "$GITHUB_REPOSITORY" --json url --jq .url)
+          else
+            pr_url=$(gh pr create --repo "$GITHUB_REPOSITORY" --base main \
+              --head "$UPDATE_BRANCH" --title "$PR_TITLE" --body-file "$body_file")
+          fi
+
+          echo "$UNIQUE_RELAYS relays (+$ADDED / -$REMOVED) proposed in $pr_url" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Retire an obsolete proposal
+        if: steps.changes.outputs.changed == 'false'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh auth setup-git
+
+          pr_number=$(gh pr list --repo "$GITHUB_REPOSITORY" --state open \
+            --base main --head "$UPDATE_BRANCH" --json number --jq '.[0].number // empty')
+
+          if [[ -n "$pr_number" ]]; then
+            gh pr close "$pr_number" --repo "$GITHUB_REPOSITORY" \
+              --comment "Upstream now matches main; closing this obsolete proposal."
+            echo "Closed obsolete proposal #$pr_number." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+          if git ls-remote --exit-code --heads origin "refs/heads/$UPDATE_BRANCH" > /dev/null; then
+            git push origin --delete "$UPDATE_BRANCH"
+          fi
 
       - name: Check upstream freshness
         if: steps.changes.outputs.changed == 'false'
@@ -127,16 +200,16 @@ jobs:
         run: |
           set -euo pipefail
 
-          last=$(gh api "repos/${GITHUB_REPOSITORY}/commits?path=assets/data/nostr_relays.csv&per_page=1" \
+          last=$(gh api "repos/${SOURCE_OWNER_REPO}/commits?path=${SOURCE_PATH}&per_page=1" \
             --jq '.[0].commit.committer.date // empty')
           if [[ -z "$last" ]]; then
-            echo "No commit history for the relay directory yet."
+            echo "::warning::Could not read the upstream commit history for $SOURCE_PATH"
             exit 0
           fi
 
           age_days=$(( ( $(date -u +%s) - $(date -u -d "$last" +%s) ) / 86400 ))
-          echo "Relay directory last changed $age_days day(s) ago ($last)."
+          echo "Upstream last changed $SOURCE_PATH $age_days day(s) ago ($last)."
 
           if (( age_days > STALE_AFTER_DAYS )); then
-            echo "::warning::Relay directory has not changed for $age_days days. Check https://github.com/$SOURCE_OWNER_REPO/commits/main/$SOURCE_PATH"
+            echo "::warning::Upstream has not changed for $age_days days. Check https://github.com/$SOURCE_OWNER_REPO/commits/main/$SOURCE_PATH"
           fi

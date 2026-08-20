@@ -87,6 +87,11 @@ This makes impersonation and name squatting impossible, since a name cannot be
 claimed without the key it comes from. Real identity is confirmed by scanning a
 contact QR code.
 
+Your generated nickname is fixed after setup to prevent impersonation. After two
+people verify each other by scanning QR codes, either person may assign the other
+a local nickname for their conversations; this changes only the local display
+label, never the cryptographic identity.
+
 ### Anti-impersonation
 
 - Every packet carries an Ed25519 signature from the sender.

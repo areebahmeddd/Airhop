@@ -626,6 +626,12 @@ export default function ArchitecturePage() {
                 their QR code: the card carries their real public keys, and the peer ID is checked
                 against the Noise key it claims to derive from.
               </p>
+              <p>
+                Your generated nickname is fixed after setup to prevent impersonation. After two
+                people verify each other by scanning QR codes, either person may assign the other a
+                local nickname for their conversations. It changes only the local display label,
+                never the cryptographic identity.
+              </p>
             </Section>
 
             <Section

@@ -12,8 +12,8 @@
 // first launch, no third party learning who is asking for relays, and no fetch
 // to fail offline (which is exactly when this app matters most).
 //
-// Upstream: .github/workflows/relays.yaml refreshes the vendored CSV daily from
-// permissionlesstech/georelays.
+// Upstream: .github/workflows/relays.yaml proposes a daily refresh of the
+// vendored CSV from permissionlesstech/georelays, as a pull request for review.
 //
 // Rows are canonicalized, not copied: the feed lists many hosts twice, bare and
 // with an explicit :443, and those are one relay. The CSV stays byte-identical
@@ -74,10 +74,10 @@ for (const line of lines) {
 }
 
 // JSON.stringify, not a bare "${...}". The URL comes from a CSV this repo syncs
-// from upstream and auto-commits, so it is untrusted input that ends up inside a
-// TypeScript source file that gets bundled into the app. validate-relays.js gates
-// the sync and currently rejects anything with a quote in it, but escaping here
-// means a regression in that validator cannot turn a relay hostname into code.
+// from upstream, so it is untrusted input that ends up inside a TypeScript
+// source file that gets bundled into the app. validate-relays.js gates the sync
+// and currently rejects anything with a quote in it, but escaping here means a
+// regression in that validator cannot turn a relay hostname into code.
 // The landing-page path below does the same.
 const body = relays
   .map(
