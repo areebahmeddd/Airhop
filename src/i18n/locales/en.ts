@@ -496,7 +496,46 @@ export const strings = {
   "chat.attach.voice_desc": "Record and send a voice message",
   "chat.attach.ecash": "Send ecash",
   "chat.attach.ecash_desc": "Send Cashu sats from your wallet",
+  "chat.attach.location": "Location",
+  "chat.attach.location_desc": "Send where you are right now",
   "chat.attach.title": "Attach",
+
+  // ---- Chat: location pin ----
+  // Shown wherever a card cannot be: the conversation list, a notification.
+  "chat.location.sent_summary": "Shared a location",
+  "chat.location.received_summary": "Shared their location",
+  "chat.location.title": "Location",
+  // Distance and direction from where the reader is standing.
+  "chat.location.away": "{distance} {direction}",
+  "chat.location.accuracy": "Within {meters} m",
+  "chat.location.taken": "Taken {ago} ago",
+  "chat.location.open_maps": "Open in Maps",
+  "chat.location.no_forward": "Locations are not forwarded",
+  "chat.location.no_forward_body":
+    "A location is sent to one person. Share your own instead if you want somebody else to have it.",
+  // The reader has not allowed location, so there is nothing to measure from.
+  // States it instead of prompting: a pin is theirs to read, not a reason to
+  // ask for a permission.
+  "chat.location.no_fix": "Allow location to see how far away this is",
+  "chat.location.send_title": "Send your location",
+  "chat.location.send_body":
+    "{name} will see one point: where you are now. It does not keep updating.",
+  "chat.location.send": "Send location",
+  "chat.location.finding": "Finding your location…",
+  "chat.location.no_location": "Could not get your location",
+  "chat.location.no_location_body":
+    "Allow location access and make sure location services are on, then try again.",
+  "chat.location.not_delivered": "Could not send your location",
+  "chat.location.not_delivered_body":
+    "A location is only worth sending while it is current, so it is not queued for later. Try again when {name} is reachable.",
+  "chat.location.direction.n": "north",
+  "chat.location.direction.ne": "north-east",
+  "chat.location.direction.e": "east",
+  "chat.location.direction.se": "south-east",
+  "chat.location.direction.s": "south",
+  "chat.location.direction.sw": "south-west",
+  "chat.location.direction.w": "west",
+  "chat.location.direction.nw": "north-west",
   "chat.attach.send_anyway": "Send anyway",
   "chat.attach.bitchat_too_big": "This may not arrive",
   "chat.attach.bitchat_too_big_body":
@@ -661,9 +700,10 @@ export const strings = {
     "A geohash pseudonym with no lasting identity to verify",
   "chat.contact.verified": "Verified",
   "chat.contact.verified_desc": "Scanned their QR code",
+  "chat.contact.verified_desc_compared": "Compared codes with them",
   "chat.contact.not_verified": "Not verified",
   "chat.contact.not_verified_desc":
-    "Scan their QR code to confirm this is really them",
+    "Scan their code, or compare one on a call, to confirm this is really them",
   "chat.contact.e2ee": "End-to-end encrypted",
   "chat.contact.e2ee_nostr": "NIP-17 gift-wrapped, so relays cannot read it",
   "chat.contact.e2ee_mesh":
@@ -676,9 +716,9 @@ export const strings = {
   "chat.contact.peer_id": "Peer ID",
   "chat.contact.rename": "Rename",
   "chat.contact.rename_needs_contact":
-    "You can rename people you have verified in person. Keep this person first, then verify them when you meet.",
-  "chat.contact.rename_needs_verify":
-    "You can rename people you have verified in person. Scan their code to verify them first.",
+    "You can rename people whose keys you hold. Swap contact cards first, then this becomes a name only you see.",
+  "chat.contact.rename_needs_keys":
+    "No keys for this contact yet. Message them, or scan their code, and you can give them a name only you see.",
   "chat.contact.renamed_by_you": "Your name for them",
   "chat.contact.copy_peer_id": "Copy peer ID",
   "chat.contact.verify": "Verify contact",
@@ -854,6 +894,12 @@ export const strings = {
   "mesh.peer.view_peer_online": "View peer {name}, online",
   "mesh.peer.last_seen": "Last seen {ago} ago",
   "mesh.peer.send_amount": "Send {amount} sats",
+  "mesh.peer.direct": "Direct connection",
+  "mesh.peer.check_distance": "Check distance",
+  "mesh.peer.checking": "Checking",
+  "mesh.peer.no_reply": "No reply",
+  "mesh.peer.no_reply_hint": "They may have moved, or their app may not answer",
+  "mesh.peer.rtt": "{ms} ms",
 
   // ---- Mesh: coverage level names ----
   "mesh.level.region": "Region",
@@ -1307,7 +1353,7 @@ export const strings = {
     "Saves the mint that issues and redeems your ecash, and caches its public keys so tokens from it can be verified offline. Choose a mint you would trust with the balance you keep there.",
   "wallet.explain.phrase": "Recovery phrase",
   "wallet.explain.phrase_desc":
-    "Off by default. Turn it on and your coins are derived from twelve words instead of random numbers, so a new phone can rebuild the balance by asking your mints which coins they signed. Without it, losing the phone loses the money.",
+    "Your coins are derived from twelve words the wallet generates at the start, so a new phone can rebuild the balance by asking your mints which coins they signed. Until you view and write them down, they exist only on this phone.",
 
   // ---- Wallet: failures ----
   "wallet.err.locked": "Wallet locked",
@@ -1321,6 +1367,7 @@ export const strings = {
   "wallet.err.unreadable": "Unreadable token",
   "wallet.err.rejected": "Token rejected",
   "wallet.err.already_spent": "Already spent",
+  "wallet.err.change_pending": "Paid, change pending",
   "wallet.svc.mint_unreachable": "Could not reach the mint.",
   "wallet.svc.tor_ios": "Mint requests do not go through Tor on iOS.",
   "wallet.svc.tor_ios_body":
@@ -1370,6 +1417,9 @@ export const strings = {
   "wallet.svc.invoice_unpaid": "The invoice has not been paid yet.",
   "wallet.svc.payment_unknown":
     "Payment status unknown; checked again on next refresh.",
+  "wallet.svc.melt_change_pending": "Your invoice was paid.",
+  "wallet.svc.melt_change_pending_body":
+    "The mint has not returned the unused routing fee yet. It is claimed automatically on the next refresh, and nothing is lost in the meantime.",
   "wallet.svc.mint_did_not_pay":
     "The mint did not pay this invoice. Your balance is unchanged.",
   "wallet.svc.not_an_invoice": "That is not a Lightning invoice.",
@@ -1479,6 +1529,22 @@ export const strings = {
     "This QR belongs to someone else. Ask {name} to show their own code.",
   "contacts.verify.tampered_body":
     "This QR looks tampered with: its ID doesn’t match its key.",
+  "contacts.verify.choose_title": "How do you want to check?",
+  "contacts.verify.choose_body":
+    "Both confirm that the keys on this phone really belong to {name}.",
+  "contacts.verify.method_scan": "Scan their code",
+  "contacts.verify.method_scan_sub": "They’re here with you",
+  "contacts.verify.method_compare": "Compare a code",
+  "contacts.verify.method_compare_sub": "Read it to each other on a call",
+  "contacts.verify.no_keys":
+    "No keys for this contact yet. Message them, or scan their code when you meet.",
+  "contacts.verify.compare_title": "Read these to each other",
+  "contacts.verify.compare_body":
+    "{name} sees the same six words. If they match, you both know the keys are real.",
+  "contacts.verify.codes_match": "These match",
+  "contacts.verify.codes_differ": "They don’t match",
+  "contacts.verify.compared_body":
+    "You and {name} confirmed the same code. This contact is verified.",
 
   // ---- Settings: shared chrome ----
   "settings.back": "Go back",
@@ -2050,6 +2116,10 @@ export const plurals = {
   "mesh.peers_in_range": {
     one: "{count} peer in range",
     other: "{count} peers in range",
+  },
+  "mesh.peer.hops_away": {
+    one: "{count} hop away",
+    other: "{count} hops away",
   },
   "chat.presence.active": {
     one: "{count} active",
