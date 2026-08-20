@@ -224,6 +224,7 @@ The plaintext inside a `NOISE_ENCRYPTED` packet is `[type: u8][body]`. Values ma
 | `0x20` | PRIVATE_FILE             | `BitchatFilePacket` TLV ([section 3.2](#32-file-packet-payload)), encrypted before fragmenting |
 | `0x21` | AUTHENTICATED_PEER_STATE | `[version=0x01][TLV…]`: `0x01` capabilities, `0x02` Ed25519 key                                |
 | `0x22` | CONTACT_CARD             | Contact card binary, same encoding as the QR card                                              |
+| `0x50` | LOCATION_PIN             | One place, sent once, to one person. 19-byte fixed layout ([section 3.8](#38-location-pin))    |
 
 **`0x20` is how a DM attachment travels.** The cleartext directed `FILE_TRANSFER` is signed, so a relay cannot forge it, but it is not confidential, and every node it crosses can read the whole file. bitchat classifies that form as the legacy migration fallback and has scheduled its removal. Airhop seals to `0x20` whenever the recipient has **proven** capability bit 8, and falls back to the signed cleartext form only for peers that have not.
 
@@ -232,6 +233,12 @@ The plaintext inside a `NOISE_ENCRYPTED` packet is `[type: u8][body]`. Values ma
 - A proven signing key **may correct** a TOFU pin. An announce **may never** overwrite a proven one.
 - Capabilities from `0x21` are authoritative; announced bits are a discovery hint and never authorise a change in how we send.
 - Decoding is all-or-nothing: unknown version, missing or duplicated required fields, a non-minimal capability encoding, or malformed lengths all change no state.
+
+**Airhop's own Noise payloads start at `0x50`.** bitchat holds `0x01`-`0x03`,
+`0x06`-`0x09`, `0x10`-`0x12` and `0x20`-`0x21` and allocates forward, so the
+same reasoning that puts Airhop's packet types at `0x50` (see [section 3](#3-packet-type-registry))
+applies here. `0x22` predates the rule reaching this table and stays where it
+is, since moving it would break every shipped build for no gain.
 
 **`0x22` links a geohash pseudonym to a durable identity.** A per-cell pubkey and a peer ID are unlinkable by construction, so only the holder can assert they are the same person. `0x22` carries that assertion as a contact card, sent inside an existing geohash DM. Airhop extension; bitchat has no `0x22` and drops it on the unknown type.
 
@@ -407,6 +414,37 @@ three-node scenario in `services/__tests__/sim/conformance.test.ts`.
 Catch-up is preserved by giving the type its own sync bit
 ([section 5.2](#52-sync-type-bits)); without one, moving these messages off
 `0x02` would drop location channels out of gossip sync silently.
+
+### 3.8 Location pin
+
+One place, sent once, to one person. Body of `NoisePayloadType.LOCATION_PIN`
+(`0x50`). Airhop only; bitchat drops the unknown payload type.
+
+```
+[0]        u8      version = 1
+[1 to 4]   i32-BE  latitude,  microdegrees (degrees x 1e6)
+[5 to 8]   i32-BE  longitude, microdegrees
+[9 to 10]  u16-BE  horizontal accuracy in metres, 0xFFFF = unknown
+[11 to 18] u64-BE  when the fix was taken, Unix milliseconds
+```
+
+19 bytes fixed, so it never approaches a fragment boundary. Microdegrees rather
+than a float: 1e-6 degrees is about 11 cm, far finer than any phone fix, and an
+integer encodes identically everywhere a float's last bits do not.
+
+The timestamp is the **fix**, not the send. A pin that waited in a composer or
+crossed several hops is older than the message carrying it, and the receiver has
+to be able to say so.
+
+Two rules the routing layer enforces rather than the format:
+
+- **Never couriered and never gossiped.** A position delivered six hours later
+  by a passing carrier points at where somebody used to be. Same reasoning as
+  live voice ([section 5.2](#52-sync-type-bits)). A pin with no session to carry
+  it is refused outright rather than queued.
+- **Coordinates are refused, not clamped.** A sender chooses these bytes, and
+  clamping an out-of-range value would turn nonsense into a plausible point
+  somebody would then walk towards.
 
 ## 4. Routing Constants
 
