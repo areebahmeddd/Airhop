@@ -15,6 +15,8 @@
 //   - Consistent with ARCHITECTURE.md section 2, Identity
 //     ("Adjective + Noun + 4-digit suffix").
 
+import { safetyNumberIndices } from "@core/crypto/fingerprint";
+
 // 128 adjectives. Selection: byte[0] % 128.
 const ADJECTIVES: readonly string[] = [
   "amber",
@@ -327,4 +329,24 @@ export function peerIDToUsername(peerID: string): string {
   const noun = NOUNS[b1 % NOUNS.length];
   const suffix = peerID.slice(0, 4).toLowerCase();
   return `${adj}-${noun}-${suffix}`;
+}
+
+// Render a safety number as words, for two people to read to each other.
+//
+// Same lists the generated usernames come from, and never translated for the
+// same reason: both sides must land on identical words, and a localized code
+// means two people reading different strings and concluding they were attacked.
+//
+// Adjective and noun alternate rather than drawing from one list. Six nouns
+// read as a list to memorise; "swift falcon amber river" reads as a phrase, and
+// the pairs are what someone repeats back.
+//
+// Bit extraction lives in core/crypto/fingerprint.ts, where the two devices have
+// to agree on it. This only maps indices to strings.
+export function safetyNumberWords(digest: Uint8Array): string[] {
+  return safetyNumberIndices(digest).map((index, position) =>
+    position % 2 === 0
+      ? (ADJECTIVES[index % ADJECTIVES.length] as string)
+      : (NOUNS[index % NOUNS.length] as string),
+  );
 }
