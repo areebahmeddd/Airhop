@@ -63,7 +63,7 @@ const strings: Strings = {
   "home.about.link.mesh": "Bluetooth Low Energy mesh",
   "home.about.link.wire_protocol": "protokol ng paghahatid",
   "home.about.body.built":
-    "Ang Airhop ay open source na app para sa iOS at Android para sa pribadong pagmemensahe nang direkta sa pagitan ng mga device sa pamamagitan ng {mesh}. Nakabatay ito sa pundasyon ng {bitchat}, ginagamit muli ang {wire_protocol} at modelo ng seguridad nito, at pinalalawak ang mga ito gamit ang Tor, offline na bayad na {ecash}, at offline na AI. Gumagana ito nang walang anumang koneksyon sa internet, at ang mga mensahe ay awtomatikong ipinapasa sa mga device na malapit (humigit-kumulang 10 hanggang 30 metro bawat hakbang sa loob ng gusali, mas malayo sa labas), hanggang 7 hakbang.",
+    "Ang Airhop ay open source na app para sa iOS at Android para sa pribadong pagmemensahe nang direkta sa pagitan ng mga device sa pamamagitan ng {mesh}. Nakabatay ito sa pundasyon ng {bitchat}, ginagamit muli ang {wire_protocol} at modelo ng seguridad nito, at pinalalawak ang mga ito gamit ang offline na bayad na {ecash} at offline na AI. Gumagana ito nang walang anumang koneksyon sa internet, at ang mga mensahe ay awtomatikong ipinapasa sa mga device na malapit (humigit-kumulang 10 hanggang 30 metro bawat hakbang sa loob ng gusali, mas malayo sa labas), hanggang 7 hakbang.",
   "home.about.body.identity":
     "Ang iyong pagkakakilanlan ay isang pares ng susing {ed25519} na nilikha sa iyong device at nakaimbak sa {ios_keychain} o {android_keystore}. Walang account, walang pagpaparehistro, at walang anumang dumadaan sa server, ibig sabihin puwede itong gamitin bilang pansamantalang app na walang naiiwang anumang makakaugnay sa iyo matapos itong burahin.",
   "home.about.body.crypto":

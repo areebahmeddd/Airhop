@@ -63,7 +63,7 @@ const strings: Strings = {
   "home.about.link.mesh": "sieć mesh Bluetooth Low Energy",
   "home.about.link.wire_protocol": "protokół transmisji",
   "home.about.body.built":
-    "Airhop to otwartoźródłowa aplikacja na iOS i Androida do prywatnych wiadomości bezpośrednio między urządzeniami przez {mesh}. Powstała na fundamencie {bitchat}, wykorzystuje jego {wire_protocol} i model bezpieczeństwa, a następnie rozszerza je o Tor, płatności {ecash} offline i sztuczną inteligencję offline. Działa całkowicie bez internetu, a wiadomości są automatycznie przekazywane między urządzeniami w pobliżu (około 10 do 30 metrów na przeskok w budynku, dalej na otwartej przestrzeni), nawet przez 7 przeskoków.",
+    "Airhop to otwartoźródłowa aplikacja na iOS i Androida do prywatnych wiadomości bezpośrednio między urządzeniami przez {mesh}. Powstała na fundamencie {bitchat}, wykorzystuje jego {wire_protocol} i model bezpieczeństwa, a następnie rozszerza je o płatności {ecash} offline i sztuczną inteligencję offline. Działa całkowicie bez internetu, a wiadomości są automatycznie przekazywane między urządzeniami w pobliżu (około 10 do 30 metrów na przeskok w budynku, dalej na otwartej przestrzeni), nawet przez 7 przeskoków.",
   "home.about.body.identity":
     "Twoja tożsamość to para kluczy {ed25519} generowana na twoim urządzeniu i przechowywana w {ios_keychain} albo {android_keystore}. Nie ma kont, rejestracji ani niczego, co dotyka serwera, czyli można używać aplikacji jak jednorazowej, która po usunięciu nie zostawia nic, co prowadziłoby do ciebie.",
   "home.about.body.crypto":

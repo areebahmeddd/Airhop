@@ -8,8 +8,8 @@
 // exactly when this app matters most.
 //
 // Freshness comes from a daily CI sync (.github/workflows/relays.yaml) that
-// pulls permissionlesstech/georelays into the vendored CSV and regenerates this
-// module.
+// pulls permissionlesstech/georelays, validates it, and opens a pull request:
+// the directory ships inside the bundle, so a human approves what lands.
 //
 // Interop with bitchat comes from canonicalizing rows the same way they do, in
 // GeoRelayDirectory.loadEntries, not from tracking an identical file.

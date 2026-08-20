@@ -63,7 +63,7 @@ const strings: Strings = {
   "home.about.link.mesh": "mesh ya Bluetooth Low Energy",
   "home.about.link.wire_protocol": "itifaki ya upitishaji",
   "home.about.body.built":
-    "Airhop ni programu ya chanzo huria kwa iOS na Android kwa ujumbe wa faragha kati ya vifaa moja kwa moja kupitia {mesh}. Imejengwa juu ya msingi wa {bitchat}, ikitumia tena {wire_protocol} na muundo wake wa usalama, kisha ikiviongeza kwa Tor, malipo ya {ecash} nje ya mtandao, na AI nje ya mtandao. Inafanya kazi bila muunganisho wowote wa intaneti, na ujumbe hupitishwa kiotomatiki kati ya vifaa vilivyo karibu (takriban mita 10 hadi 30 kwa kila hatua ndani ya jengo, zaidi nje), hadi hatua 7.",
+    "Airhop ni programu ya chanzo huria kwa iOS na Android kwa ujumbe wa faragha kati ya vifaa moja kwa moja kupitia {mesh}. Imejengwa juu ya msingi wa {bitchat}, ikitumia tena {wire_protocol} na muundo wake wa usalama, kisha ikiviongeza kwa malipo ya {ecash} nje ya mtandao na AI nje ya mtandao. Inafanya kazi bila muunganisho wowote wa intaneti, na ujumbe hupitishwa kiotomatiki kati ya vifaa vilivyo karibu (takriban mita 10 hadi 30 kwa kila hatua ndani ya jengo, zaidi nje), hadi hatua 7.",
   "home.about.body.identity":
     "Utambulisho wako ni jozi ya funguo za {ed25519} inayotengenezwa kwenye kifaa chako na kuhifadhiwa katika {ios_keychain} au {android_keystore}. Hakuna akaunti, hakuna usajili, wala kitu chochote kinachogusa seva, yaani inaweza kutumika kama programu ya matumizi ya mara moja isiyoacha chochote kinachokuelekea baada ya kufutwa.",
   "home.about.body.crypto":

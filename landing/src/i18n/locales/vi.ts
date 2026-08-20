@@ -63,7 +63,7 @@ const strings: Strings = {
   "home.about.link.mesh": "mạng mesh Bluetooth Low Energy",
   "home.about.link.wire_protocol": "giao thức truyền",
   "home.about.body.built":
-    "Airhop là ứng dụng mã nguồn mở cho iOS và Android, dùng để nhắn tin riêng tư ngang hàng qua {mesh}. Ứng dụng được xây trên nền tảng của {bitchat}, tái sử dụng {wire_protocol} và mô hình bảo mật của nó, rồi mở rộng thêm Tor, thanh toán {ecash} ngoại tuyến và AI ngoại tuyến. Nó hoạt động khi hoàn toàn không có internet, và tin nhắn được chuyển tiếp tự động giữa các thiết bị ở gần (khoảng 10 đến 30 mét mỗi chặng trong nhà, xa hơn ở ngoài trời), tối đa 7 chặng.",
+    "Airhop là ứng dụng mã nguồn mở cho iOS và Android, dùng để nhắn tin riêng tư ngang hàng qua {mesh}. Ứng dụng được xây trên nền tảng của {bitchat}, tái sử dụng {wire_protocol} và mô hình bảo mật của nó, rồi mở rộng thêm thanh toán {ecash} ngoại tuyến và AI ngoại tuyến. Nó hoạt động khi hoàn toàn không có internet, và tin nhắn được chuyển tiếp tự động giữa các thiết bị ở gần (khoảng 10 đến 30 mét mỗi chặng trong nhà, xa hơn ở ngoài trời), tối đa 7 chặng.",
   "home.about.body.identity":
     "Danh tính của bạn là một cặp khóa {ed25519} được tạo trên thiết bị của bạn và lưu trong {ios_keychain} hoặc {android_keystore}. Không có tài khoản, không đăng ký, và không có gì chạm tới máy chủ nào, tức là có thể dùng như một ứng dụng dùng một lần, sau khi xóa không để lại gì dẫn ngược về bạn.",
   "home.about.body.crypto":

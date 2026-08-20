@@ -61,7 +61,7 @@ export const strings = {
   "home.about.link.mesh": "Bluetooth Low Energy mesh",
   "home.about.link.wire_protocol": "wire protocol",
   "home.about.body.built":
-    "Airhop is an open-source iOS and Android app for private, peer-to-peer messaging over {mesh}. It is built on the foundation of {bitchat}, reusing its {wire_protocol} and security model, then extending it with Tor, offline {ecash} payments, and offline AI. It works with zero internet connectivity, and messages relay automatically across nearby devices (roughly 10 to 30 meters per hop indoors, further in the open), up to 7 hops.",
+    "Airhop is an open-source iOS and Android app for private, peer-to-peer messaging over {mesh}. It is built on the foundation of {bitchat}, reusing its {wire_protocol} and security model, then extending it with offline {ecash} payments and offline AI. It works with zero internet connectivity, and messages relay automatically across nearby devices (roughly 10 to 30 meters per hop indoors, further in the open), up to 7 hops.",
   "home.about.body.identity":
     "Your identity is an {ed25519} key pair generated on your device and stored in {ios_keychain} or {android_keystore}. There are no accounts, no registrations, and nothing that touches any server, i.e. it can be used as a burner app that leaves nothing linking back to you once deleted.",
   "home.about.body.crypto":

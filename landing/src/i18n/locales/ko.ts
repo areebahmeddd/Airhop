@@ -63,7 +63,7 @@ const strings: Strings = {
   "home.about.link.mesh": "Bluetooth Low Energy 메시",
   "home.about.link.wire_protocol": "전송 프로토콜",
   "home.about.body.built":
-    "Airhop은 {mesh}를 통해 기기 간에 사적으로 메시지를 주고받기 위한 iOS·Android용 오픈소스 앱입니다. {bitchat}의 기반 위에 세워졌고, 그 {wire_protocol}과 보안 모델을 다시 사용한 뒤 Tor, 오프라인 {ecash} 결제, 오프라인 AI로 확장했습니다. 인터넷 연결이 전혀 없어도 작동하며, 메시지는 주변 기기를 거쳐 자동으로 전달됩니다 (실내에서는 홉당 대략 10~30미터, 야외에서는 더 멀리). 최대 7홉입니다.",
+    "Airhop은 {mesh}를 통해 기기 간에 사적으로 메시지를 주고받기 위한 iOS·Android용 오픈소스 앱입니다. {bitchat}의 기반 위에 세워졌고, 그 {wire_protocol}과 보안 모델을 다시 사용한 뒤 오프라인 {ecash} 결제와 오프라인 AI로 확장했습니다. 인터넷 연결이 전혀 없어도 작동하며, 메시지는 주변 기기를 거쳐 자동으로 전달됩니다 (실내에서는 홉당 대략 10~30미터, 야외에서는 더 멀리). 최대 7홉입니다.",
   "home.about.body.identity":
     "당신의 신원은 기기에서 생성되어 {ios_keychain} 또는 {android_keystore}에 저장되는 {ed25519} 키 쌍입니다. 계정도 가입도 없고 서버에 닿는 것도 없습니다. 즉 삭제하면 당신으로 이어지는 흔적이 남지 않는 일회용 앱처럼 쓸 수 있습니다.",
   "home.about.body.crypto":
