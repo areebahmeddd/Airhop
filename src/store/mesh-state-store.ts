@@ -57,8 +57,12 @@ export type TorBootstrapPhase = "idle" | "starting" | "blocked";
 //                the one the user can undo, and the difference it makes (a
 //                video that arrives in seconds rather than minutes) is otherwise
 //                invisible.
-//   permission   NEARBY_WIFI_DEVICES missing. Not surfaced: the app never asks
-//                for it, so a banner would name a fix with no way to take it.
+//   permission   NEARBY_WIFI_DEVICES missing. Not surfaced, but not because it
+//                could not be: from API 33 that permission shares a group with
+//                the BLUETOOTH_* ones, so the single dialog that grants
+//                Bluetooth grants it too and this state is close to
+//                unreachable. A banner for it would carry more weight than the
+//                situation has.
 export type WifiFastPath =
   "unknown" | "unsupported" | "active" | "unavailable" | "permission";
 
@@ -549,9 +553,12 @@ export function computeMeshBanners(inputs: MeshBannerInputs): MeshBanner[] {
   // Neutral, and with no button, because nothing is broken. Every message, photo
   // and file still goes over BLE; what is lost is speed, and a video that takes
   // minutes instead of seconds is otherwise an unexplained slowness the user
-  // would reasonably read as the app being bad at its job. Only "unavailable"
-  // says anything: hardware that never had the fast path, and a permission the
-  // app never asks for, are both notes with no action behind them.
+  // would reasonably read as the app being bad at its job.
+  //
+  // Only "unavailable" says anything. "unsupported" is hardware that never had
+  // the fast path, and "permission" is near-unreachable, since the permission
+  // shares an OS group with the Bluetooth ones and is granted by the same
+  // dialog. Neither is a note the user can act on.
   if (inputs.wifiFastPath === "unavailable") {
     banners.push({
       key: "wifi-fast-path",

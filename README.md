@@ -40,7 +40,7 @@
 
 Airhop is an iOS + Android app (macOS and Windows coming soon) for private, offline-first peer-to-peer communication over [Bluetooth mesh](https://en.wikipedia.org/wiki/Mesh_networking) networks, with [Nostr](https://nostr.org) internet bridging and [Cashu](https://cashu.space) [ecash](https://en.wikipedia.org/wiki/Ecash) payments. **Our mission is to make censorship-resistant communication available to anyone: during natural disasters, internet blackouts, mass protests, or any situation where networks are unavailable, surveilled, or shut down.**
 
-Built on the foundation of [bitchat](https://bitchat.free), using the same [BLE wire protocol](docs/spec/PROTOCOLS.md), and [service UUIDs](docs/spec/PROTOCOLS.md#1-ble-identifiers), meaning Airhop-installed devices can automatically discover and join the same mesh as nearby Bitchat-installed devices, relay messages, and exchange DMs with zero setup. Airhop also extends the protocol with [Double Ratchet](https://signal.org/docs/specifications/doubleratchet) forward secrecy, offline ecash payments, and offline AI (not present in bitchat _at the time of writing_).
+I built this at a 24-hour hackathon (July 2026) during my final year of undergrad, on top of the foundation of [bitchat](https://bitchat.free). It uses the same [BLE wire protocol](docs/spec/PROTOCOLS.md) and [service UUIDs](docs/spec/PROTOCOLS.md#1-ble-identifiers), meaning Airhop-installed devices can automatically discover and join the same mesh as nearby bitchat-installed devices, relay messages, and exchange DMs with zero setup. It also extends the protocol with [Double Ratchet](https://signal.org/docs/specifications/doubleratchet) forward secrecy, offline ecash payments, and offline AI (not present in bitchat _at the time_).
 
 > [!NOTE]
 > Airhop is an independent side project built and maintained by [Areeb Ahmed](https://github.com/areebahmeddd) in his free time. It is not backed by any company or organization, not affiliated with or endorsed by permissionlesstech or the bitchat project, and not an impersonation of any existing app or service.
@@ -80,8 +80,6 @@ Built on the foundation of [bitchat](https://bitchat.free), using the same [BLE 
 |                   | Internet gateway          | Lend your connection to a nearby offline phone so it can still reach the location (geohash) channels. Off by default                           |
 |                   | Tor integration           | Route Nostr traffic through Tor (Arti on iOS, Orbot on Android)                                                                                |
 
-**TL;DR: No internet required. No central servers. No accounts. No tracking.**
-
 ## Optional Features
 
 | Category        | Feature         | Description                                                                                                                                                                                                                                                                                                                                       |
@@ -110,17 +108,17 @@ Built on the foundation of [bitchat](https://bitchat.free), using the same [BLE 
 
 ## Transports
 
-Airhop chooses a transport per message. Bluetooth is the only one that needs no internet and the only one that works across iOS and Android. WiFi and Nostr are used when they are available.
+Airhop chooses a transport per message. Bluetooth is the only one that needs no internet and no network at all, which is why it is the default. The others are used when they are available, and courier is what runs when none of them are.
 
-|                         | Bluetooth LE mesh                                                  | WiFi (same platform)                     | Nostr relays                     |
-| ----------------------- | ------------------------------------------------------------------ | ---------------------------------------- | -------------------------------- |
-| Carries                 | Channel messages, DMs, files, ecash                                | DMs and files, when a link exists        | DMs and geohash channel messages |
-| Needs internet          | No                                                                 | No                                       | Yes                              |
-| Works iPhone to Android | Yes                                                                | No                                       | Yes                              |
-| Range                   | ~10-30 m indoors, up to ~100 m line of sight, extended by each hop | ~30 m                                    | Global                           |
-| Max hops                | 7                                                                  | 1                                        | 1                                |
-| Speed                   | ~19 KB/s to one peer, ~16 KB/s to a channel                        | ~19 KB/s (shared with Bluetooth for now) | Not used for files               |
-| Latency per hop         | 10-220 ms (randomised to avoid collisions)                         | n/a                                      | Relay round trip; more over Tor  |
+|                   | Bluetooth LE mesh                                                  | WiFi (same platform)                     | LAN (mDNS + TCP)                        | Nostr relays                     | Courier (store-and-forward)              |
+| ----------------- | ------------------------------------------------------------------ | ---------------------------------------- | --------------------------------------- | -------------------------------- | ---------------------------------------- |
+| Carries           | Channel messages, DMs, files, ecash                                | DMs and files, when a link exists        | Everything Bluetooth carries            | DMs and geohash channel messages | Sealed text envelopes, up to 16 KB each  |
+| Needs internet    | No                                                                 | No                                       | No, but everyone must be on one network | Yes                              | No                                       |
+| iPhone to Android | Yes                                                                | No                                       | Yes                                     | Yes                              | Yes                                      |
+| Range             | ~10-30 m indoors, up to ~100 m line of sight, extended by each hop | ~30 m                                    | Wherever the network reaches            | Global                           | Wherever the carrier walks               |
+| Max hops          | 7                                                                  | 1                                        | 1                                       | 1                                | 1 carrier, but unbounded in time         |
+| Speed             | ~19 KB/s to one peer, ~16 KB/s to a channel                        | ~19 KB/s (shared with Bluetooth for now) | Network speed, with no radio pacing     | Not used for files               | Not used for files                       |
+| Latency per hop   | 10-220 ms (randomized to avoid collisions)                         | n/a                                      | Network round trip                      | Relay round trip; more over Tor  | Whenever the carrier meets the recipient |
 
 Notes on the numbers:
 
@@ -129,8 +127,10 @@ Notes on the numbers:
 - A channel attachment paces at 30 ms instead (**~16 KB/s**), since each broadcast fragment requires one radio write per connected peer, increasing airtime usage as the room grows.
 - WiFi currently shares that same paced queue, so it runs at the same speed as Bluetooth for now. [ Lifting the cap is planned ]
 - A 1 MB file (the per-file cap) takes about 56 seconds to one peer. Attachments are capped at 1 MB for bitchat compatibility and to keep transfers short. [ Increasing the cap is planned ]
+- LAN needs no such pacing, since the 25 ms delay is a Bluetooth requirement rather than a protocol one. The 467-byte fragment size stays regardless: the receiver reassembles by index and a peer may be relaying to Bluetooth next.
 - Android WiFi Aware and iOS MultipeerConnectivity are different protocols and cannot connect to each other, so the WiFi path only works Android to Android or iPhone to iPhone.
-- Nostr relays carry small signed events, not file bytes. Files can be shared over Nostr only by uploading them to a separate HTTP host and posting a link ([NIP-96](https://github.com/nostr-protocol/nips/blob/master/96.md)). Airhop does not do this: that host is a central server that can log, throttle, or take down your files, which is exactly what this app avoids. Attachments therefore travel only over Bluetooth or WiFi.
+- Courier is the fallback when no other transport can reach the recipient. The envelope is sealed to a one-time prekey before it leaves, so the carrier holding it cannot read it, and it is dropped after 24 hours if nobody meets the recipient. Text only: media is never couriered.
+- Nostr relays carry small signed events, not file bytes. Files can be shared over Nostr only by uploading them to a separate HTTP host and posting a link ([NIP-96](https://github.com/nostr-protocol/nips/blob/master/96.md)). Airhop does not do this: that host is a central server that can log, throttle, or take down your files, which is exactly what this app avoids. Attachments therefore travel only over Bluetooth, WiFi or LAN.
 
 Timing intervals:
 
@@ -140,7 +140,7 @@ Timing intervals:
 | Gossip sync                | 15 s                | Lets a peer returning from out of range catch up on missed messages |
 | Direct peer timeout        | 45 s                | Handles unreported link drops beyond broadcast                      |
 | Mesh peer timeout          | 60 s                | Relayed peers get longer, since multi-hop packets arrive late       |
-| Geohash presence heartbeat | 40-80 s, randomised | Randomised so devices in one cell do not announce in lockstep       |
+| Geohash presence heartbeat | 40-80 s, randomized | Randomized so devices in one cell do not announce in lockstep       |
 | Geohash participant window | 5 min               | How long a pubkey stays listed as present after its last event      |
 
 ## How Airhop Compares

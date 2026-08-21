@@ -61,15 +61,15 @@ export default function TermsPage() {
                 There is no central server, so we cannot moderate, edit, or delete what you or
                 anyone else sends.
               </strong>{" "}
-              Deleting your own notice broadcasts a signed retraction that other devices honour, and
+              Deleting your own notice broadcasts a signed retraction that other devices honor, and
               notices expire on their own, but a copy that has already reached another device may
               remain there.
             </p>
             <p className="text-[15px] leading-[1.75]">
               If you turn on the internet gateway or the mesh bridge, your device relays other
-              people&apos;s public messages over the internet: location-channel traffic for the
-              gateway, public #bluetooth chat for the bridge. You do not author that content and
-              cannot control it.
+              people's public messages over the internet: location-channel traffic for the gateway,
+              public #bluetooth chat for the bridge. You do not author that content and cannot
+              control it.
             </p>
           </section>
 
@@ -88,7 +88,7 @@ export default function TermsPage() {
               that issues and redeems ecash and holds the bitcoin backing it. Airhop ships with no
               default mint and does not endorse, vet, or monitor any of them. Adding a mint means
               trusting that operator with whatever balance you keep there. A mint may go offline,
-              refuse service, change its fees, or fail to honour its tokens, and any loss that
+              refuse service, change its fees, or fail to honor its tokens, and any loss that
               follows is between you and that operator.
             </p>
             <p className="text-[15px] leading-[1.75]">
@@ -117,8 +117,8 @@ export default function TermsPage() {
           <section className="border-line space-y-4 border-t pt-12 first:border-t-0 first:pt-0">
             <h2 className="text-ink text-base font-semibold">No warranty</h2>
             <p className="text-[15px] leading-[1.75]">
-              Airhop is provided &quot;as is&quot; without any warranty of any kind. We make no
-              guarantees about reliability, availability, or fitness for a particular purpose.
+              Airhop is provided "as is" without any warranty of any kind. We make no guarantees
+              about reliability, availability, or fitness for a particular purpose.
             </p>
             <p className="text-[15px] leading-[1.75]">
               The app has not been formally security-audited by an external firm. An audit is

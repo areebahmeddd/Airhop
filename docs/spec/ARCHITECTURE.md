@@ -240,6 +240,30 @@ Identical to bitchat's design:
 - Same `Transport` interface as BLE, so the mesh engine does not know which radio it has
 - Carries what BLE cannot: live video, large files, high-quality voice
 
+### LAN transport
+
+WiFi Aware is a radio protocol rather than a way of using a network: two phones
+on the same router cannot reach each other over it, and Apple does not
+implement it. So an iPhone and an Android sharing a WiFi network have no local
+path between them, which is the gap on a ship, in a hotel, at a conference, or
+anywhere with WiFi and no route out.
+
+mDNS discovery on `_airhop-mesh._tcp` plus TCP links closes it. The links carry
+the same packet frames BLE carries, so the mesh engine needs no new concept and
+the wire format does not move. Being ordinary IP, it is platform-neutral, and
+it carries the whole mesh rather than only the parts Nostr can express.
+Tracked in [#38](https://github.com/areebahmeddd/airhop/issues/38).
+
+It sits beside WiFi Aware rather than replacing it. Aware needs no network at
+all, which mDNS structurally cannot do; mDNS reaches everyone on a network,
+which Aware cannot. Neither is a superset of the other.
+
+| Constraint       | Consequence                                                                                                                                                                       |
+| ---------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Client isolation | Most guest and venue WiFi blocks peer-to-peer traffic at the access point, and it cannot be detected before trying. The UI has to say "no peers on this network" rather than spin |
+| mDNS filtering   | Common even where ordinary traffic works. A manual join by address covers it                                                                                                      |
+| iOS background   | A TCP socket has no equivalent of `bluetooth-central`, so a locked iPhone drops the link. A foreground accelerator, as WiFi Aware already is                                      |
+
 ### Nostr
 
 - 300+ public relays from the georelays dataset, bundled as `assets/data/nostr_relays.csv`
@@ -918,6 +942,22 @@ service keeps it advertising normally.
 - TLS requires CAs and server certificates, which a serverless system cannot have
 - X3DH alone does not mutually authenticate: the receiver does not authenticate the sender in the handshake
 - Noise XX gives mutual authentication and forward secrecy with no CAs, is proven in WireGuard, and is what bitchat uses
+
+### Relay URLs stay strict
+
+`validateRelayUrl` refuses `ws://`, bare IP addresses, `.local`, `localhost`,
+`.internal` and single-label hosts. That is deliberate and stays.
+
+Relaxing it would compromise two things at once. Android blocks cleartext from
+API 28 and its network security config cannot scope an exception to an address
+range, so permitting `ws://` to a user-typed address means permitting cleartext
+for the whole app, including the mint URLs that carry bearer ecash. And a
+`ws://` public host would put gift-wrapped DMs on the open internet unencrypted,
+which is worse than anything the change would buy.
+
+A relay reachable only on a local network is served by the LAN transport in
+[section 3](#lan-transport), which needs no cleartext exception because it does
+not go through the HTTP stack at all.
 
 ### Cashu over Lightning alone
 

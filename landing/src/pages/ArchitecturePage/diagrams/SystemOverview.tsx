@@ -61,13 +61,14 @@ export function SystemOverview() {
       <Caption x={352} y={26}>
         TRANSPORT
       </Caption>
-      <Box x={348} y={54} w={200} h={56} label="BLE mesh" sub="no internet · 7 hops" strong />
-      <Box x={348} y={126} w={200} h={56} label="WiFi direct" sub="no internet · same OS only" />
-      <Box x={348} y={198} w={200} h={56} label="Nostr relays" sub="internet · optional Tor" />
-      <Box x={348} y={270} w={200} h={56} label="Courier" sub="no internet · carried by peers" />
+      <Box x={348} y={54} w={200} h={48} label="BLE mesh" sub="no internet · 7 hops" strong />
+      <Box x={348} y={114} w={200} h={48} label="WiFi direct" sub="no internet · same OS only" />
+      <Box x={348} y={174} w={200} h={48} label="LAN (mDNS)" sub="no internet · one network" />
+      <Box x={348} y={234} w={200} h={48} label="Nostr relays" sub="internet · optional Tor" />
+      <Box x={348} y={294} w={200} h={48} label="Courier" sub="no internet · carried by peers" />
       <Box
         x={348}
-        y={342}
+        y={354}
         w={200}
         h={48}
         label="Mint HTTPS"
@@ -82,38 +83,46 @@ export function SystemOverview() {
         x={624}
         y={54}
         w={272}
-        h={56}
+        h={48}
         label="Nearby devices"
         sub="Airhop and bitchat, one mesh"
         strong
       />
       <Box
         x={624}
-        y={126}
+        y={114}
         w={272}
-        h={56}
+        h={48}
         label="Nearby same-platform device"
         sub="faster path for large files"
       />
       <Box
         x={624}
-        y={198}
+        y={174}
         w={272}
-        h={56}
+        h={48}
+        label="Everyone on this network"
+        sub="either platform, router speed"
+      />
+      <Box
+        x={624}
+        y={234}
+        w={272}
+        h={48}
         label="Anyone online, anywhere"
         sub="DMs and location channels"
       />
       <Box
         x={624}
-        y={270}
+        y={294}
         w={272}
-        h={56}
+        h={48}
         label="Someone not here yet"
         sub="delivered when paths meet"
       />
       <Box
         x={624}
-        y={342}
+        y={354}
         w={272}
         h={48}
         label="Your ecash balance"
@@ -121,7 +130,7 @@ export function SystemOverview() {
         dashed
       />
 
-      {[82, 154, 226, 298, 366].map((y, i) => (
+      {[78, 138, 198, 258, 318, 378].map((y, i) => (
         <line
           key={`l-${i}`}
           x1={280}
@@ -133,7 +142,7 @@ export function SystemOverview() {
           markerEnd="url(#ov-arrow)"
         />
       ))}
-      {[82, 154, 226, 298, 366].map((y, i) => (
+      {[78, 138, 198, 258, 318, 378].map((y, i) => (
         <line
           key={`r-${i}`}
           x1={552}

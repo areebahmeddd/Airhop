@@ -63,9 +63,9 @@ export const strings = {
   "home.about.body.built":
     "Airhop is an open-source iOS and Android app for private, peer-to-peer messaging over {mesh}. It is built on the foundation of {bitchat}, reusing its {wire_protocol} and security model, then extending it with offline {ecash} payments and offline AI. It works with zero internet connectivity, and messages relay automatically across nearby devices (roughly 10 to 30 meters per hop indoors, further in the open), up to 7 hops.",
   "home.about.body.identity":
-    "Your identity is an {ed25519} key pair generated on your device and stored in {ios_keychain} or {android_keystore}. There are no accounts, no registrations, and nothing that touches any server, i.e. it can be used as a burner app that leaves nothing linking back to you once deleted.",
+    "Your identity is an {ed25519} key pair generated on your device and stored in {ios_keychain} or {android_keystore}. There are no accounts, no registrations, and nothing that touches any server, so it can be used as a burner app that leaves nothing linking back to you once deleted.",
   "home.about.body.crypto":
-    "Every session uses the {noise} protocol for an authenticated handshake. Stored messages use the {ratchet} algorithm, i.e. even if your device is compromised later, your past messages stay unreadable. Panic wipe destroys all keys and messages in under one second.",
+    "Every session uses the {noise} protocol for an authenticated handshake. Stored messages use the {ratchet} algorithm, so even if your device is compromised later, your past messages stay unreadable. Panic wipe destroys all keys and messages in under one second.",
   "home.about.body.internet":
     "When you and a contact are out of Bluetooth range, {nostr} relays serve as an internet bridge, using {nip17}-shaped gift-wrapped direct messages, so the mesh extends globally whenever both of you are online. {tor} support is also available on both iOS (via {arti}) and Android (via {orbot}).",
   "home.about.optional.title": "Airhop has optional features you can enable:",
@@ -337,7 +337,7 @@ export const strings = {
 
   "seo.brand.title": "Brand Kit — Airhop",
   "seo.brand.description":
-    "The Airhop brand kit: the pixel bird mark, the wordmark, colour and type tokens, press assets and boilerplate.",
+    "The Airhop brand kit: the pixel bird mark, the wordmark, color and type tokens, press assets and boilerplate.",
   "seo.brand.breadcrumb": "Brand Kit",
 
   "seo.privacy.title": "Privacy Policy — Airhop",
