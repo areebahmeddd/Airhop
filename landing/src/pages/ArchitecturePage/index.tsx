@@ -497,7 +497,7 @@ export default function ArchitecturePage() {
                   [
                     "Relay",
                     "A simple server that accepts signed events and hands them out again",
-                    "Over 350 independent ones, several queried at once, and none of them ours",
+                    "Over 300 independent ones, several queried at once, and none of them ours",
                   ],
                   [
                     "Event kind",
