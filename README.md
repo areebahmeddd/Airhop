@@ -80,8 +80,6 @@ Built on the foundation of [bitchat](https://bitchat.free), using the same [BLE 
 |                   | Internet gateway          | Lend your connection to a nearby offline phone so it can still reach the location (geohash) channels. Off by default                           |
 |                   | Tor integration           | Route Nostr traffic through Tor (Arti on iOS, Orbot on Android)                                                                                |
 
-**TL;DR: No internet required. No central servers. No accounts. No tracking.**
-
 ## Optional Features
 
 | Category        | Feature         | Description                                                                                                                                                                                                                                                                                                                                       |

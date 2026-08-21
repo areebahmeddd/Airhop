@@ -96,7 +96,7 @@ jobs:
           git add $RELAY_FILES
           if git diff --cached --quiet; then
             echo "changed=false" >> "$GITHUB_OUTPUT"
-            echo "Relay directory already up to date." >> "$GITHUB_STEP_SUMMARY"
+            echo "Relay directory already matches [$SOURCE_OWNER_REPO/$SOURCE_PATH](https://github.com/$SOURCE_OWNER_REPO/blob/main/$SOURCE_PATH)." >> "$GITHUB_STEP_SUMMARY"
           else
             echo "changed=true" >> "$GITHUB_OUTPUT"
             git diff --cached --stat
@@ -123,7 +123,7 @@ jobs:
           if [[ -n "$pr_number" ]] \
             && git fetch --no-tags --depth=1 origin "refs/heads/$UPDATE_BRANCH" 2> /dev/null \
             && git diff --quiet FETCH_HEAD -- $RELAY_FILES; then
-            echo "Proposal #$pr_number already carries this directory." >> "$GITHUB_STEP_SUMMARY"
+            echo "[Proposal #$pr_number](https://github.com/$GITHUB_REPOSITORY/pull/$pr_number) already carries this directory." >> "$GITHUB_STEP_SUMMARY"
             exit 0
           fi
 
@@ -143,8 +143,9 @@ jobs:
           Automated proposal. Not auto-merged: this directory is compiled into
           the app bundle, so every row here ships to users.
 
-          - Upstream: $SOURCE_OWNER_REPO/$SOURCE_PATH
-          - Upstream commit: $SOURCE_COMMIT
+          - Upstream: [$SOURCE_OWNER_REPO/$SOURCE_PATH](https://github.com/$SOURCE_OWNER_REPO/blob/$SOURCE_COMMIT/$SOURCE_PATH)
+          - Upstream commit: [\`${SOURCE_COMMIT:0:7}\`](https://github.com/$SOURCE_OWNER_REPO/commit/$SOURCE_COMMIT)
+          - History: [recent changes](https://github.com/$SOURCE_OWNER_REPO/commits/main/$SOURCE_PATH)
           - Relays: $UNIQUE_RELAYS (+$ADDED / -$REMOVED)
           - SHA-256: $DATA_SHA256
 
@@ -186,7 +187,7 @@ jobs:
           if [[ -n "$pr_number" ]]; then
             gh pr close "$pr_number" --repo "$GITHUB_REPOSITORY" \
               --comment "Upstream now matches main; closing this obsolete proposal."
-            echo "Closed obsolete proposal #$pr_number." >> "$GITHUB_STEP_SUMMARY"
+            echo "Closed obsolete [proposal #$pr_number](https://github.com/$GITHUB_REPOSITORY/pull/$pr_number)." >> "$GITHUB_STEP_SUMMARY"
           fi
 
           if git ls-remote --exit-code --heads origin "refs/heads/$UPDATE_BRANCH" > /dev/null; then
@@ -208,8 +209,9 @@ jobs:
           fi
 
           age_days=$(( ( $(date -u +%s) - $(date -u -d "$last" +%s) ) / 86400 ))
-          echo "Upstream last changed $SOURCE_PATH $age_days day(s) ago ($last)."
+          history_url="https://github.com/$SOURCE_OWNER_REPO/commits/main/$SOURCE_PATH"
+          echo "Upstream [$SOURCE_PATH]($history_url) last changed $age_days day(s) ago ($last)." >> "$GITHUB_STEP_SUMMARY"
 
           if (( age_days > STALE_AFTER_DAYS )); then
-            echo "::warning::Upstream has not changed for $age_days days. Check https://github.com/$SOURCE_OWNER_REPO/commits/main/$SOURCE_PATH"
+            echo "::warning::Upstream has not changed for $age_days days. Check $history_url"
           fi
