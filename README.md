@@ -80,8 +80,6 @@ Built on the foundation of [bitchat](https://bitchat.free), using the same [BLE 
 |                   | Internet gateway          | Lend your connection to a nearby offline phone so it can still reach the location (geohash) channels. Off by default                           |
 |                   | Tor integration           | Route Nostr traffic through Tor (Arti on iOS, Orbot on Android)                                                                                |
 
-**TL;DR: No internet required. No central servers. No accounts. No tracking.**
-
 ## Optional Features
 
 | Category        | Feature         | Description                                                                                                                                                                                                                                                                                                                                       |
@@ -112,15 +110,15 @@ Built on the foundation of [bitchat](https://bitchat.free), using the same [BLE 
 
 Airhop chooses a transport per message. Bluetooth is the only one that needs no internet and the only one that works across iOS and Android. WiFi and Nostr are used when they are available.
 
-|                         | Bluetooth LE mesh                                                  | WiFi (same platform)                     | Nostr relays                     |
-| ----------------------- | ------------------------------------------------------------------ | ---------------------------------------- | -------------------------------- |
-| Carries                 | Channel messages, DMs, files, ecash                                | DMs and files, when a link exists        | DMs and geohash channel messages |
-| Needs internet          | No                                                                 | No                                       | Yes                              |
-| Works iPhone to Android | Yes                                                                | No                                       | Yes                              |
-| Range                   | ~10-30 m indoors, up to ~100 m line of sight, extended by each hop | ~30 m                                    | Global                           |
-| Max hops                | 7                                                                  | 1                                        | 1                                |
-| Speed                   | ~19 KB/s to one peer, ~16 KB/s to a channel                        | ~19 KB/s (shared with Bluetooth for now) | Not used for files               |
-| Latency per hop         | 10-220 ms (randomised to avoid collisions)                         | n/a                                      | Relay round trip; more over Tor  |
+|                         | Bluetooth LE mesh                                                  | WiFi (same platform)                     | LAN (mDNS + TCP)                        | Nostr relays                     |
+| ----------------------- | ------------------------------------------------------------------ | ---------------------------------------- | --------------------------------------- | -------------------------------- |
+| Carries                 | Channel messages, DMs, files, ecash                                | DMs and files, when a link exists        | Everything Bluetooth carries            | DMs and geohash channel messages |
+| Needs internet          | No                                                                 | No                                       | No, but everyone must be on one network | Yes                              |
+| Works iPhone to Android | Yes                                                                | No                                       | Yes                                     | Yes                              |
+| Range                   | ~10-30 m indoors, up to ~100 m line of sight, extended by each hop | ~30 m                                    | Wherever the network reaches            | Global                           |
+| Max hops                | 7                                                                  | 1                                        | 1                                       | 1                                |
+| Speed                   | ~19 KB/s to one peer, ~16 KB/s to a channel                        | ~19 KB/s (shared with Bluetooth for now) | Network speed, with no radio pacing     | Not used for files               |
+| Latency per hop         | 10-220 ms (randomised to avoid collisions)                         | n/a                                      | Network round trip                      | Relay round trip; more over Tor  |
 
 Notes on the numbers:
 
@@ -129,6 +127,7 @@ Notes on the numbers:
 - A channel attachment paces at 30 ms instead (**~16 KB/s**), since each broadcast fragment requires one radio write per connected peer, increasing airtime usage as the room grows.
 - WiFi currently shares that same paced queue, so it runs at the same speed as Bluetooth for now. [ Lifting the cap is planned ]
 - A 1 MB file (the per-file cap) takes about 56 seconds to one peer. Attachments are capped at 1 MB for bitchat compatibility and to keep transfers short. [ Increasing the cap is planned ]
+- LAN needs no such pacing, since the 25 ms delay is a Bluetooth requirement rather than a protocol one. The 467-byte fragment size stays regardless: the receiver reassembles by index and a peer may be relaying to Bluetooth next.
 - Android WiFi Aware and iOS MultipeerConnectivity are different protocols and cannot connect to each other, so the WiFi path only works Android to Android or iPhone to iPhone.
 - Nostr relays carry small signed events, not file bytes. Files can be shared over Nostr only by uploading them to a separate HTTP host and posting a link ([NIP-96](https://github.com/nostr-protocol/nips/blob/master/96.md)). Airhop does not do this: that host is a central server that can log, throttle, or take down your files, which is exactly what this app avoids. Attachments therefore travel only over Bluetooth or WiFi.
 

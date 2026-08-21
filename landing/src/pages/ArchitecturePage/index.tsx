@@ -497,7 +497,7 @@ export default function ArchitecturePage() {
                   [
                     "Relay",
                     "A simple server that accepts signed events and hands them out again",
-                    "Over 350 independent ones, several queried at once, and none of them ours",
+                    "Over 300 independent ones, several queried at once, and none of them ours",
                   ],
                   [
                     "Event kind",
@@ -677,6 +677,31 @@ export default function ArchitecturePage() {
                 Bluetooth speed today. Lifting that cap is planned, and nothing in the protocol
                 stands in the way.
               </p>
+
+              <p>
+                There is a second thing the word WiFi hides. WiFi direct is a{" "}
+                <strong className="text-ink">radio protocol</strong>: two phones talk to each other
+                with no router involved, which is why it works in an empty field and why the two
+                platforms cannot meet on it. Being on the same WiFi network is a different question
+                entirely, and today the answer is that it buys you nothing. Two phones joined to one
+                router still fall back to Bluetooth.
+              </p>
+              <p>
+                <TextLink href="https://en.wikipedia.org/wiki/Multicast_DNS">mDNS</TextLink>{" "}
+                discovery, with ordinary TCP links behind it, closes that. The links carry the same
+                packet frames Bluetooth carries, so nothing about the wire format moves, and because
+                it is plain IP it does not care which phone you own. That matters most where
+                Bluetooth struggles and a network already exists: a ship with steel between decks, a
+                hotel, a conference floor. Tracked in{" "}
+                <TextLink href={`${REPO_LINKS.issues}/38`}>issue 38</TextLink>.
+              </p>
+
+              <Note label="Two WiFi paths, neither replacing the other">
+                WiFi direct needs no network at all, which mDNS structurally cannot do. mDNS reaches
+                everyone on a network, which WiFi direct cannot. The honest limits on the second one
+                are worth stating early: a lot of guest WiFi blocks phones from reaching each other
+                at the access point, and there is no way to detect that before trying.
+              </Note>
 
               <Note label="Why Nostr never carries files">
                 Relays carry small signed events, not file bytes. The usual workaround is to upload
@@ -1170,6 +1195,17 @@ export default function ArchitecturePage() {
                   Haversine
                 </TextLink>{" "}
                 distance, connecting to several at once so no single operator is load-bearing.
+              </p>
+              <p>
+                That choice is not fixed. Any relay can be pinned by hand, and discovery can be
+                turned off entirely so only the pinned ones are used. A relay has to be a public
+                host reached over TLS, which is deliberate:{" "}
+                <strong className="text-ink">
+                  allowing an unencrypted relay would mean allowing unencrypted traffic across the
+                  whole app,
+                </strong>{" "}
+                including the mint requests that move ecash, because the platform cannot scope that
+                permission to one address.
               </p>
 
               <Figure
