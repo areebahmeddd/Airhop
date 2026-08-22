@@ -151,6 +151,8 @@ const RULES = {
   vi: otherOnly,
   "zh-Hans": otherOnly,
   "zh-Hant": otherOnly,
+  // The pseudolocale derives from English, so it plurals like English.
+  "qps-ploc": oneIsOne,
 } satisfies Record<string, Rule>;
 
 // The categories a language actually uses, derived rather than declared so the
@@ -187,6 +189,7 @@ export const PLURAL_CATEGORIES: Record<string, PluralCategory[]> = {
   vi: ["other"],
   "zh-Hans": ["other"],
   "zh-Hant": ["other"],
+  "qps-ploc": ["one", "other"],
 };
 
 // Which plural form a count selects, in a given language.

@@ -26,6 +26,7 @@ import {
   LANGUAGE_ORDER,
   LANGUAGES,
 } from "../languages";
+import { PSEUDO_LANGUAGE } from "../pseudo";
 
 afterEach(() => {
   useSettingsStore.setState({ language: "system" });
@@ -37,7 +38,15 @@ describe("language table", () => {
     // progress, so it does not grow as catalogs land.
     expect(LANGUAGE_ORDER).toHaveLength(30);
     expect(new Set(LANGUAGE_ORDER).size).toBe(30);
-    expect(Object.keys(LANGUAGES)).toHaveLength(30);
+  });
+
+  it("keeps the pseudolocale out of the language list", () => {
+    // It is a debugging instrument, so it has a spec like a language but never
+    // sorts in among them. PICKER_LANGUAGES is where it is appended, in debug
+    // builds only.
+    expect(LANGUAGES[PSEUDO_LANGUAGE]).toBeDefined();
+    expect(LANGUAGE_ORDER).not.toContain(PSEUDO_LANGUAGE);
+    expect(Object.keys(LANGUAGES)).toHaveLength(LANGUAGE_ORDER.length + 1);
   });
 
   it("puts the source language first and the rest in a stable order", () => {

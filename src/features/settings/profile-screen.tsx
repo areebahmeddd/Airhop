@@ -7,9 +7,9 @@ import { encodeQRContent } from "@core/crypto/contact-exchange";
 import Feather from "@expo/vector-icons/Feather";
 import {
   isShipped,
-  LANGUAGE_ORDER,
   LANGUAGES,
   needsRelaunch,
+  PICKER_LANGUAGES,
   t,
   useT,
   type TranslationKey,
@@ -1216,7 +1216,7 @@ export default function ProfileScreen({
             {T("settings.group.language")}
           </Text>
           <View style={[shared.settingsGroup, styles.appearanceGroup]}>
-            {LANGUAGE_ORDER.map((code, i) => {
+            {PICKER_LANGUAGES.map((code, i) => {
               const spec = LANGUAGES[code];
               const shipped = isShipped(code);
               // Ticked against what is on screen, not against the preference,

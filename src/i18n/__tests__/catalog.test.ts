@@ -29,6 +29,7 @@ import type { LanguageCode } from "../languages";
 import { en } from "../locales/en";
 import type { Locale } from "../locales/types";
 import { PLURAL_CATEGORIES } from "../plurals";
+import { PSEUDO_LANGUAGE } from "../pseudo";
 
 // Every catalog that ships, read from the same registry the runtime uses, so a
 // language cannot reach a user without passing everything below. A catalog is
@@ -126,7 +127,15 @@ describe("terminal punctuation", () => {
   // after it.
   const TERMINATED = /([.!?…]["'”)]?|\{\w+\})$/;
 
-  it.each(CODES)("%s finishes every sentence it starts", (code) => {
+  // The pseudolocale is exempt, and only from this rule. It brackets every
+  // string so that truncation is visible on screen, which necessarily puts a
+  // ⟧ after the full stop. That is the instrument working, not prose that stops
+  // mid-thought, and this rule is about prose. Every other rule in this file
+  // still applies to it, including the two it could actually break:
+  // placeholder parity and protocol tokens carried through verbatim.
+  const PROSE = CODES.filter((code) => code !== PSEUDO_LANGUAGE);
+
+  it.each(PROSE)("%s finishes every sentence it starts", (code) => {
     const unfinished: string[] = [];
     const strings: Record<string, string> = {
       ...catalog(code).strings,

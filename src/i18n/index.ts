@@ -31,12 +31,14 @@ import {
   DEFAULT_LANGUAGE,
   isLanguageCode,
   isRTL,
+  LANGUAGE_ORDER,
   LANGUAGES,
   type LanguageCode,
 } from "./languages";
 import { en } from "./locales/en";
 import type { Locale, PluralKey, TranslationKey } from "./locales/types";
 import { selectPlural } from "./plurals";
+import { PSEUDO_LANGUAGE, pseudoLocale } from "./pseudo";
 
 export type { LanguageCode } from "./languages";
 export type { TranslationKey } from "./locales/types";
@@ -55,6 +57,10 @@ export type { TranslationKey } from "./locales/types";
 // `catalogFor` is unreachable rather than a fallback anyone relies on.
 export const CATALOGS: Partial<Record<LanguageCode, Locale>> = {
   en,
+  // Debug builds only, and generated rather than stored: it is English run
+  // through `pseudoLocale`, so it costs no repo and nothing in a release
+  // bundle, and it can never drift from the source catalog. See ./pseudo.ts.
+  ...(__DEV__ ? { [PSEUDO_LANGUAGE]: pseudoLocale(en) } : {}),
 };
 
 // The languages a user can actually choose, in display order.
@@ -67,6 +73,13 @@ export const SHIPPED_LANGUAGES: LanguageCode[] = (
       ? 1
       : LANGUAGES[a].englishName.localeCompare(LANGUAGES[b].englishName, "en"),
 );
+
+// What the picker lists: the thirty real languages, plus the pseudolocale at
+// the bottom in debug builds. Kept out of LANGUAGE_ORDER rather than filtered
+// back out of it, so a release build has no code path that could show it.
+export const PICKER_LANGUAGES: LanguageCode[] = __DEV__
+  ? [...LANGUAGE_ORDER, PSEUDO_LANGUAGE]
+  : LANGUAGE_ORDER;
 
 export function isShipped(code: LanguageCode): boolean {
   return CATALOGS[code] !== undefined;
@@ -121,7 +134,9 @@ function getDeviceLanguage(): LanguageCode {
       // "pt-BR" matches before "pt", and a bare "zh" is not matched at all: the
       // script matters more than the language there, and guessing Simplified
       // for a Traditional reader is worse than English.
-      if (isLanguageCode(tag)) deviceLanguage = tag;
+      // A device can be set to the pseudolocale tag on a debug build; it is
+      // a debugging instrument, so it is never inferred, only chosen.
+      if (tag !== PSEUDO_LANGUAGE && isLanguageCode(tag)) deviceLanguage = tag;
       else {
         const base = tag.split("-")[0];
         if (base !== undefined && base !== "zh" && isLanguageCode(base)) {

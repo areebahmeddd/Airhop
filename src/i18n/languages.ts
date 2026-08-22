@@ -50,7 +50,11 @@ export type LanguageCode =
   | "tr"
   | "uk"
   | "ur"
-  | "vi";
+  | "vi"
+  // The pseudolocale. Not a language, and never listed beside them: see
+  // `PSEUDO_LANGUAGE` in ./pseudo.ts, and PICKER_LANGUAGES in ./index.ts, which
+  // appends it in debug builds only.
+  | "qps-ploc";
 
 // What a language is written in, which is the axis that predicts rendering
 // trouble far better than the language itself. Latin scripts differ in how long
@@ -362,6 +366,18 @@ export const LANGUAGES: Record<LanguageCode, LanguageSpec> = {
     direction: "ltr",
     script: "latin",
   },
+  // Deliberately last, and deliberately not in LANGUAGE_ORDER below. It is a
+  // debugging instrument rather than a language, so it never appears in a
+  // release build and never sorts in among real ones.
+  "qps-ploc": {
+    code: "qps-ploc",
+    shortCode: "QPS",
+    endonym: "pseudo",
+    englishName: "Pseudolocale",
+    nameKey: "settings.language.pseudo",
+    direction: "ltr",
+    script: "latin",
+  },
 };
 
 // English first as the source language, then the rest alphabetically by English
@@ -371,7 +387,7 @@ export const LANGUAGES: Record<LanguageCode, LanguageSpec> = {
 export const LANGUAGE_ORDER: LanguageCode[] = [
   "en",
   ...(Object.keys(LANGUAGES) as LanguageCode[])
-    .filter((code) => code !== "en")
+    .filter((code) => code !== "en" && code !== "qps-ploc")
     .sort((a, b) =>
       LANGUAGES[a].englishName.localeCompare(LANGUAGES[b].englishName, "en"),
     ),

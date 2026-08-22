@@ -1893,6 +1893,10 @@ export const strings = {
   "settings.language.uk": "Ukrainian",
   "settings.language.ur": "Urdu",
   "settings.language.vi": "Vietnamese",
+  // Debug builds only. Not a language, so it takes no endonym and is named for
+  // what it is: English stretched, accented and bracketed, to find the screens
+  // that cannot hold a longer string before any real translation inherits them.
+  "settings.language.pseudo": "Pseudolocale",
   "settings.language.soon": "Coming soon",
   "settings.language.soon_a11y": "{value}, coming soon",
   "settings.language.set_a11y": "Set language to {value}",
