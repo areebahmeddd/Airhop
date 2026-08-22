@@ -24,18 +24,27 @@
 // keep their value when a second language lands: point CATALOGS at both and
 // every rule below applies to both.
 
+import { CATALOGS } from "../index";
+import type { LanguageCode } from "../languages";
 import { en } from "../locales/en";
 import type { Locale } from "../locales/types";
+import { PLURAL_CATEGORIES } from "../plurals";
 
-const CATALOGS: Record<string, Locale> = { en };
-const CODES = Object.keys(CATALOGS);
+// Every catalog that ships, read from the same registry the runtime uses, so a
+// language cannot reach a user without passing everything below. A catalog is
+// present here only if it compiled, and it compiles only if it is complete.
+const CODES = Object.keys(CATALOGS) as LanguageCode[];
+
+function catalog(code: LanguageCode): Locale {
+  return CATALOGS[code] as Locale;
+}
 
 function placeholders(value: string): string[] {
   return [...value.matchAll(/\{(\w+)\}/g)].map((m) => m[1]).sort();
 }
 
 describe.each(CODES)("%s", (code) => {
-  const locale = CATALOGS[code];
+  const locale = catalog(code);
 
   it("has no empty strings", () => {
     const empty = Object.entries(locale.strings)
@@ -120,11 +129,11 @@ describe("terminal punctuation", () => {
   it.each(CODES)("%s finishes every sentence it starts", (code) => {
     const unfinished: string[] = [];
     const strings: Record<string, string> = {
-      ...CATALOGS[code].strings,
+      ...catalog(code).strings,
       // Plural forms are prose too, and `wallet.backup.already_spent` is the
       // longest string in the catalog.
       ...Object.fromEntries(
-        Object.entries(CATALOGS[code].plurals).flatMap(([key, forms]) =>
+        Object.entries(catalog(code).plurals).flatMap(([key, forms]) =>
           Object.entries(forms)
             .filter((form): form is [string, string] => form[1] !== undefined)
             .map(([category, value]) => [`${key}.${category}`, value]),
@@ -140,11 +149,30 @@ describe("terminal punctuation", () => {
   });
 });
 
-describe("English plural categories", () => {
-  it("are exactly one and other", () => {
-    // English is the language the runtime's `count === 1` rule is written for.
-    // A key carrying `few` or `many` would be a form nothing ever selects, and
-    // a key missing `one` would read "1 peers in range".
+describe("plural categories", () => {
+  // The rule a translator is most likely to get wrong, and the one a type
+  // cannot catch: `PluralForms` requires `other` and makes the rest optional,
+  // because the set is per-language. So the type accepts a Russian catalog with
+  // only `one` and `other`, which reads "5 сообщение" for every count from 5 up.
+  //
+  // Checked against `PLURAL_CATEGORIES`, which is itself checked against CLDR
+  // in plurals.test.ts. So the chain runs: CLDR -> PLURAL_CATEGORIES -> every
+  // catalog, with no link taken on trust.
+  it.each(CODES)("%s supplies exactly the forms its language uses", (code) => {
+    const expected = [...PLURAL_CATEGORIES[code]].sort();
+    const wrong: string[] = [];
+    for (const [key, forms] of Object.entries(catalog(code).plurals)) {
+      const actual = Object.keys(forms).sort();
+      if (actual.join(",") !== expected.join(",")) {
+        wrong.push(
+          `${key}: expected [${expected.join(", ")}], got [${actual.join(", ")}]`,
+        );
+      }
+    }
+    expect(wrong).toEqual([]);
+  });
+
+  it("English is one and other, which the source catalog is written for", () => {
     for (const [key, forms] of Object.entries(en.plurals)) {
       expect([key, Object.keys(forms).sort()]).toEqual([key, ["one", "other"]]);
     }
@@ -216,7 +244,7 @@ describe("do not translate", () => {
 
   it.each(CODES)("%s does not translate the emote verbs", (code) => {
     const offenders: string[] = [];
-    for (const [key, value] of Object.entries(CATALOGS[code].strings)) {
+    for (const [key, value] of Object.entries(catalog(code).strings)) {
       for (const word of MUST_BE_ABSENT) {
         if (new RegExp(`(^|\\s)${word}(\\s|$)`).test(value)) {
           offenders.push(`${key}: ${word}`);
@@ -229,7 +257,7 @@ describe("do not translate", () => {
   it.each(CODES)("%s carries protocol identifiers through verbatim", (code) => {
     const offenders: string[] = [];
     for (const [key, source] of Object.entries(en.strings)) {
-      const translated: string = CATALOGS[code].strings[key as never];
+      const translated: string = catalog(code).strings[key as never];
       for (const token of MUST_BE_VERBATIM) {
         const inEnglish = source.split(token).length - 1;
         const inTranslation = translated.split(token).length - 1;
@@ -246,7 +274,7 @@ describe("do not translate", () => {
   it.each(CODES)("%s keeps proper nouns untranslated", (code) => {
     const offenders: string[] = [];
     for (const [key, source] of Object.entries(en.strings)) {
-      const translated: string = CATALOGS[code].strings[key as never];
+      const translated: string = catalog(code).strings[key as never];
       for (const token of MUST_SURVIVE) {
         // Word-boundary so "Tor" does not match inside "Torch", and
         // case-sensitive so it does not match "tor" inside a translated word.

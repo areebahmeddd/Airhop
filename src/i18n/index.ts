@@ -53,7 +53,7 @@ export type { TranslationKey } from "./locales/types";
 // partial translations. `SHIPPED_LANGUAGES` below derives the selectable set
 // from this map, and the picker only ever offers those, so the `?? en` in
 // `catalogFor` is unreachable rather than a fallback anyone relies on.
-const CATALOGS: Partial<Record<LanguageCode, Locale>> = {
+export const CATALOGS: Partial<Record<LanguageCode, Locale>> = {
   en,
 };
 
