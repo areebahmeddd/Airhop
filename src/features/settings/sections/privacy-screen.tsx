@@ -37,7 +37,7 @@ const SECTIONS: LegalSection[] = [
           "**Private group state.** Group names, member lists, and the current group key are stored locally so you can keep reading the group. They are removed by panic wipe or by removing the app.",
           "**Bulletin board notices.** Signed public notices, and the deletion markers that retract them, persist until the author's chosen expiry, at most seven days. These are public to the mesh or area they were posted to, not private messages.",
           "**Media attachments.** Photos, videos, and voice notes you send or receive are written to the app's cache so they stay viewable. They are deleted automatically once they pass the retention window set in Privacy (seven days by default), and also by panic wipe, by clearing the cache in settings, or by removing the app.",
-          "**Queued outgoing messages.** A private message that has not yet been delivered may remain in an encrypted local queue. It is **dropped after 24 hours** if unacknowledged.",
+          "**Queued outgoing messages.** A private message that has not yet been delivered stays in a local queue on your device so it can be sent once the recipient is reachable again. It is **dropped after seven days** if it never goes through.",
           "**Courier envelopes.** If your device acts as a mesh courier for another user, it may hold an opaque end-to-end encrypted envelope for up to 24 hours. **The courier cannot read the contents.**",
           "**Ecash wallet.** Cashu tokens are bearer instruments, so they are kept in a separate file encrypted with AES-256 under a key held in your device's secure storage. The same file holds the mints you added, their public keys, and your transaction history (amounts, timestamps, and the mint involved). If a recovery phrase is set up, the twelve words live in secure storage alongside your identity keys, never in the wallet file. **No payment backend is involved and none of this is transmitted to us.**",
         ],
@@ -84,7 +84,7 @@ const SECTIONS: LegalSection[] = [
       "Location channels let you talk to people in the same area. Location permission is optional and only requested when you use them.",
       {
         bullets: [
-          "**Exact coordinates never leave your device** and are never stored. Your position is truncated to a grid cell, and the smallest cell we ever publish is roughly 150 metres across.",
+          "**Exact coordinates never leave your device** and are never stored. Your position is truncated to a grid cell, and the smallest cell we ever publish is roughly 150 meters across.",
           "A cell still reveals an approximate area to peers and relays. A finer cell reveals a smaller area.",
           "Each cell uses a separate identity derived on your device, so your activity in one area cannot be linked to another, or to your main identity.",
           "Revoking location permission stops the app resolving your cell. Location channels then fall back to Bluetooth range only.",

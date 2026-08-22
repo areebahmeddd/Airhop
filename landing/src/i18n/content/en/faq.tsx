@@ -226,11 +226,11 @@ export const FAQ_SECTIONS: FaqSection[] = [
       },
       {
         q: "How does the mesh relay messages?",
-        a: "Every phone listens and announces at the same time, so each one is both a receiver and a relay. When a message arrives, your phone checks its signature, drops it if it has already seen it, and passes it on with one of its 7 hops used up. It waits a random fraction of a second first, somewhere between 10 and 220 milliseconds, so that a room full of phones does not all speak at once and drown each other out. Each phone forwards to a fixed handful of nearby devices rather than everyone in range, which is why a crowded mesh does not carry more traffic than a quiet one.",
+        a: "Every phone listens and announces at the same time, so each one is both a receiver and a relay. When a message arrives, your phone checks its signature, drops it if it has already seen it, and passes it on with one of its 7 hops used up. It waits a random fraction of a second first, somewhere between 10 and 220 milliseconds, so that a room full of phones does not all speak at once and drown each other out. Each phone forwards to a sample of nearby devices rather than everyone in range, which is why a crowded mesh does not carry more traffic than a quiet one.",
       },
       {
         q: "How far can messages travel?",
-        a: "Each hop covers roughly 30 to 50 meters, and a message is allowed 7 of them, so it can cross 105 to 350 meters in the open before it stops. The more people around you have Airhop, the further it reaches, because every one of their phones is another relay. Messages held for someone who is not around have no range limit at all: your phone simply carries them until a path to that person exists, however long that takes. That applies to text. An attachment is not carried this way and needs a live link at the moment you send it.",
+        a: "Each hop covers roughly 10 to 30 meters indoors and up to 100 in the open, and a message is allowed 7 of them, so it can cross a few hundred meters before it stops. The more people around you have Airhop, the further it reaches, because every one of their phones is another relay. Messages held for someone who is not around have no range limit at all: your phone simply carries them until a path to that person exists, however long that takes. That applies to text. An attachment is not carried this way and needs a live link at the moment you send it.",
       },
       {
         q: "What media can I send?",
@@ -243,7 +243,7 @@ export const FAQ_SECTIONS: FaqSection[] = [
             Two reasons, and neither of them is a to-do.
             <br />
             <br />
-            <strong>Bandwidth.</strong> Bluetooth Low Energy moves roughly 15 KB/s on a link. Live
+            <strong>Bandwidth.</strong> Bluetooth Low Energy moves roughly 19 KB/s on a link. Live
             voice fits inside that at about 2 KB/s, which is exactly why holding the mic works.
             Video does not fit at any quality worth watching, so a call would have to ride the fast
             transports instead.
@@ -393,9 +393,9 @@ export const FAQ_SECTIONS: FaqSection[] = [
         q: "Can I run my own Nostr relay?",
         a: (
           <>
-            Yes, and Airhop's custom relays are built for it. A relay is just a small always-on
-            server, and a 1 GB VPS runs a personal or small-community one for a few dollars a month.
-            Popular open-source options are{" "}
+            Yes, and Airhop's custom relay support is built for it. A relay is just a small
+            always-on server, and a 1 GB VPS runs a personal or small-community one for a few
+            dollars a month. Popular open-source options are{" "}
             <TextLink href="https://github.com/hoytech/strfry">strfry</TextLink> (fast, C++),
             nostr-rs-relay (lightweight, Rust and SQLite), and{" "}
             <TextLink href="https://github.com/fiatjaf/khatru">khatru</TextLink> (a Go framework
@@ -577,7 +577,7 @@ export const FAQ_SECTIONS: FaqSection[] = [
         q: "Is anything stored unencrypted on my phone?",
         a: (
           <>
-            No. Your private keys live in the{" "}
+            Your private keys never sit in ordinary app storage. They live in the{" "}
             <TextLink href="https://developer.apple.com/documentation/security/storing-keys-in-the-keychain">
               iOS Keychain
             </TextLink>{" "}
@@ -585,8 +585,14 @@ export const FAQ_SECTIONS: FaqSection[] = [
             <TextLink href="https://developer.android.com/privacy-and-security/keystore">
               Android Keystore
             </TextLink>
-            , hardware-backed on modern devices, and never in ordinary app storage. Message history
-            sits in an encrypted local database. <strong>No plaintext ever touches disk.</strong>
+            , hardware-backed on modern devices.
+            <br />
+            <br />
+            <strong>Message history is different.</strong> It sits in the app's own storage,
+            protected by the operating system sandbox and whole-device encryption rather than a
+            separate app-level cipher, so somebody holding your unlocked phone can read your chats
+            the way they could read any other app's. Delete a conversation at any time, or empty
+            everything with panic wipe.
             <br />
             <br />
             The wallet is stricter still, because coins are bearer instruments: its storage is a
@@ -717,7 +723,7 @@ export const FAQ_SECTIONS: FaqSection[] = [
             <strong>It also works less hard when you are not watching:</strong> put your phone in
             your pocket and Airhop drops to a short look around every half a minute instead of
             listening continuously, and it turns down further as the battery gets low. Plug the
-            phone in and it goes back to full speed. That is where almost all of a day&apos;s saving
+            phone in and it goes back to full speed. That is where almost all of a day's saving
             comes from, and none of it changes how the mesh works: messages still arrive, people are
             still found, the radio just looks less often.{" "}
             <strong>If you want it to stop entirely, set your status to Away in Profile:</strong>{" "}
@@ -772,8 +778,8 @@ export const FAQ_SECTIONS: FaqSection[] = [
                 <strong>Notifications:</strong> so a message can reach you when the app is closed.
               </li>
               <li>
-                <strong>Camera:</strong> only to scan a contact&rsquo;s QR code, or to take a photo
-                or video you are attaching.
+                <strong>Camera:</strong> only to scan a contact's QR code, or to take a photo or
+                video you are attaching.
               </li>
               <li>
                 <strong>Photos:</strong> only when you attach or save one.
@@ -1008,7 +1014,7 @@ export const FAQ_SECTIONS: FaqSection[] = [
             <br />
             <br />
             <strong>Mints:</strong> usually a small fee when coins are swapped. Airhop covers it on
-            your behalf when you send, so &ldquo;send 100&rdquo; means they can claim 100, not 97.
+            your behalf when you send, so "send 100" means they can claim 100, not 97.
             <br />
             <br />
             <strong>Lightning:</strong> deposits and withdrawals pay normal routing fees. You see

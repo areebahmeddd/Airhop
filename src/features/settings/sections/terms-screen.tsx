@@ -30,7 +30,7 @@ const SECTIONS: LegalSection[] = [
     heading: "Content you post",
     paragraphs: [
       "Public channels, location channels, and bulletin-board notices are visible to anyone in range or in the same area, including people using other compatible apps. Treat anything posted there as public. You are responsible for what you post.",
-      "**There is no central server, so we cannot moderate, edit, or delete what you or anyone else sends.** Deleting your own notice broadcasts a signed retraction that other devices honour, and notices expire on their own, but a copy that has already reached another device may remain there.",
+      "**There is no central server, so we cannot moderate, edit, or delete what you or anyone else sends.** Deleting your own notice broadcasts a signed retraction that other devices honor, and notices expire on their own, but a copy that has already reached another device may remain there.",
       "If you turn on the internet gateway or the mesh bridge, your device relays other people's public messages over the internet: location-channel traffic for the gateway, public #bluetooth chat for the bridge. You do not author that content and cannot control it.",
     ],
   },
@@ -38,7 +38,7 @@ const SECTIONS: LegalSection[] = [
     heading: "Payments",
     paragraphs: [
       "Airhop includes an optional Cashu ecash wallet. **We do not operate any payment infrastructure. We are not a financial institution, payment processor, money services business, or custodian of your funds.** We have no ability to reverse, recover, freeze, or mediate any transaction.",
-      "**Mints are third parties you choose.** A mint is an independent server that issues and redeems ecash and holds the bitcoin backing it. Airhop ships with no default mint and does not endorse, vet, or monitor any of them. Adding a mint means trusting that operator with whatever balance you keep there. A mint may go offline, refuse service, change its fees, or fail to honour its tokens, and any loss that follows is between you and that operator.",
+      "**Mints are third parties you choose.** A mint is an independent server that issues and redeems ecash and holds the bitcoin backing it. Airhop ships with no default mint and does not endorse, vet, or monitor any of them. Adding a mint means trusting that operator with whatever balance you keep there. A mint may go offline, refuse service, change its fees, or fail to honor its tokens, and any loss that follows is between you and that operator.",
       "**Ecash is a bearer instrument.** Whoever holds a token can spend it. A token sent to the wrong person, posted to a public channel, or read by someone over your shoulder is gone. Transfers over the mesh are final and cannot be reversed by anyone.",
       "**Recovery is your responsibility.** The optional recovery phrase is the only way to rebuild a balance on another device. It is stored on your device and nowhere else. We cannot recover it, reset it, or help you if it is lost, and anyone who obtains it can spend your balance.",
       "**Lightning deposits and withdrawals** are performed by your chosen mint and the wider Lightning Network, not by us. Routing fees, failed payments, and settlement delays are outside our control.",

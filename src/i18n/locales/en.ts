@@ -337,7 +337,7 @@ export const strings = {
   // ---- Chats: coverage and transport ----
   "chat.scope.mesh": "Local mesh · Bluetooth only",
   "chat.scope.mesh_desc":
-    "Reaches devices within Bluetooth range (roughly 10 to 100 metres). No internet required. Ideal for local coordination.",
+    "Reaches devices within Bluetooth range (roughly 10 to 100 meters). No internet required. Ideal for local coordination.",
   "chat.scope.block": "City block · ~100m",
   "chat.scope.block_desc":
     "City-block level coverage. Messages are bridged over the internet so peers outside Bluetooth range but nearby can participate.",
@@ -349,7 +349,7 @@ export const strings = {
     "City-wide channel. Uses geo-located internet relays to reach peers across the metro area.",
   "chat.scope.province": "Province or state · ~100km",
   "chat.scope.province_desc":
-    "Provincial or state coverage. Bridged over the internet for regional reach across hundreds of kilometres.",
+    "Provincial or state coverage. Bridged over the internet for regional reach across hundreds of kilometers.",
   "chat.scope.country": "Country or region · ~1000km",
   "chat.scope.country_desc":
     "Country-wide coverage. Any Airhop or bitchat user in the region can join and read messages.",
