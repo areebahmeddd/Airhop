@@ -91,11 +91,21 @@ describe("what ships", () => {
 });
 
 describe("which language is on screen", () => {
-  it("follows an explicit preference", () => {
+  it("follows an explicit preference, unless it crosses the direction boundary", () => {
+    // The exception is the whole right-to-left policy, and Arabic is the first
+    // language to exercise it: layout direction is fixed when the process
+    // starts, so choosing Arabic from a left-to-right boot keeps rendering the
+    // boot language until the next launch rather than putting Arabic prose in a
+    // left-to-right frame. Everything sharing the boot direction switches now.
     for (const code of SHIPPED_LANGUAGES) {
       useSettingsStore.setState({ language: code });
-      expect(getLanguage()).toBe(code);
+      expect(getLanguage()).toBe(needsRelaunch(code) ? DEFAULT_LANGUAGE : code);
     }
+  });
+
+  it("defers exactly the right-to-left languages and no others", () => {
+    const deferred = SHIPPED_LANGUAGES.filter(needsRelaunch);
+    expect(deferred).toEqual(SHIPPED_LANGUAGES.filter(isRTL));
   });
 
   it("resolves 'system' to something shipped", () => {

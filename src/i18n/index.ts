@@ -35,6 +35,7 @@ import {
   LANGUAGES,
   type LanguageCode,
 } from "./languages";
+import { ar } from "./locales/ar";
 import { de } from "./locales/de";
 import { en } from "./locales/en";
 import type { Locale, PluralKey, TranslationKey } from "./locales/types";
@@ -58,6 +59,7 @@ export type { TranslationKey } from "./locales/types";
 // `catalogFor` is unreachable rather than a fallback anyone relies on.
 export const CATALOGS: Partial<Record<LanguageCode, Locale>> = {
   en,
+  ar,
   de,
   // Debug builds only, and generated rather than stored: it is English run
   // through `pseudoLocale`, so it costs no repo and nothing in a release

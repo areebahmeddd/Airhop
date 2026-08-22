@@ -394,7 +394,22 @@ function RadarView({ peers, now, onSelectPeer }: Props): React.JSX.Element {
               therefore hidden as a whole and the individual peers and the centre
               button opt back in below, which leaves a screen reader with
               exactly the actionable elements plus the status line. */}
-          <View style={{ width: canvasSize, height: canvasSize }}>
+          {/* `direction: "ltr"` is load-bearing, not decoration.
+              Everything inside this canvas is placed by absolute `left` against
+              a coordinate system this file computes itself: the compass letters,
+              the guide rings, and every peer, whose x is `C + cos(angle) * r`.
+              Under an app-wide right-to-left direction Yoga resolves those
+              against the inherited direction and mirrors the whole dial, which
+              put East on the left and moved every peer to the opposite side of
+              the screen from where they physically are.
+
+              The radar is a polar plot of physical space, so it must never
+              mirror. Pinning the direction here says that once, in the one place
+              the geometry is decided, rather than asking every `left` inside to
+              remember. Found by running the app in Arabic. */}
+          <View
+            style={{ width: canvasSize, height: canvasSize, direction: "ltr" }}
+          >
             {/* Pulse rings: expand from center to outer ring boundary */}
             {([ring1, ring2, ring3] as Animated.Value[]).map((val, i) => {
               const d = outerR * 2;
