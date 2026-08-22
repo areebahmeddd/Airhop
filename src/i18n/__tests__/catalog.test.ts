@@ -120,12 +120,26 @@ describe("terminal punctuation", () => {
   //
   // Ellipsis counts as terminal ("Sending..."), and so does the question mark
   // every confirm title ends with.
-  const SENTENCE_BREAK = /[.!?]["'”)]?\s/;
+  // Sentence-final punctuation is per script, and assuming ASCII here would
+  // have failed most of the catalogs this rule is meant to protect. Arabic ends
+  // a question with ؟ and Urdu a sentence with ۔; Devanagari uses the danda ।,
+  // Amharic ።, Burmese ॥-like ။, and CJK the ideographic 。！？.
+  //
+  // Two shapes, because the scripts differ in whether a space follows. A
+  // space-delimited script needs the whitespace to tell "one sentence, then
+  // another" apart from "3.5" and "e.g."; CJK writes no space at all, and its
+  // terminators are unambiguous punctuation that never appears inside a number
+  // or an abbreviation, so they stand alone.
+  //
+  // Thai deliberately matches neither. It has no sentence-final punctuation,
+  // marking boundaries with spaces instead, so a Thai catalog is never flagged
+  // rather than being held to a rule its writing system does not have.
+  const SENTENCE_BREAK = /[.!?؟۔।።။]["'”»)]?\s|[。！？]/u;
   // A trailing placeholder is terminated by whatever fills it: "Private channel
   // {name}. {reach}" ends in a stop once `reach` is substituted. Only the final
   // position counts; a placeholder mid-string still needs real punctuation
   // after it.
-  const TERMINATED = /([.!?…]["'”)]?|\{\w+\})$/;
+  const TERMINATED = /([.!?…؟۔।።။。！？]["'”»)]?|\{\w+\})$/u;
 
   // The pseudolocale is exempt, and only from this rule. It brackets every
   // string so that truncation is visible on screen, which necessarily puts a
