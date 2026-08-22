@@ -1548,7 +1548,7 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
     idBoxValue: {
       flex: 1,
       textAlign: "center",
-      marginLeft: COPY_GLYPH + Spacing.sm,
+      marginStart: COPY_GLYPH + Spacing.sm,
       fontSize: FontSize.base,
       color: Colors.textPrimary,
       fontFamily: FontFamily.mono,

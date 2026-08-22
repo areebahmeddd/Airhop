@@ -245,8 +245,8 @@ function MessageBubble({
             style={[
               styles.bubble,
               item.isMine ? styles.bubbleMine : styles.bubbleTheirs,
-              !item.isMine && isFirstFromSender && styles.bubbleTailLeft,
-              item.isMine && styles.bubbleTailRight,
+              !item.isMine && isFirstFromSender && styles.bubbleTailTheirs,
+              item.isMine && styles.bubbleTailMine,
               highlighted && styles.bubbleHighlighted,
             ]}
           >
@@ -543,8 +543,15 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
     },
     bubbleMine: { backgroundColor: Colors.myBubble },
     bubbleTheirs: { backgroundColor: Colors.theirBubble },
-    bubbleTailLeft: { borderBottomLeftRadius: Radius.sm },
-    bubbleTailRight: { borderBottomRightRadius: Radius.sm },
+    // The squared-off corner that points the bubble at its sender. It has to
+    // follow the side the bubble is actually on, and bubbleWrapperMine /
+    // bubbleWrapperTheirs above put that on the trailing / leading edge through
+    // alignItems, which Yoga resolves against the writing direction. So these
+    // are logical too: in Arabic the whole conversation swaps sides, and a
+    // physical borderBottomLeftRadius would leave every tail pointing away from
+    // the person who sent it.
+    bubbleTailTheirs: { borderBottomStartRadius: Radius.sm },
+    bubbleTailMine: { borderBottomEndRadius: Radius.sm },
     bubbleHighlighted: {
       borderWidth: 2,
       borderColor: Colors.accent,

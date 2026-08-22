@@ -8,6 +8,7 @@
 
 import { Feather } from "@expo/vector-icons";
 import { useT } from "@i18n";
+import { textAlignEnd } from "@i18n/layout";
 import { acknowledged } from "@platform/haptics";
 import { getMeshService } from "@services/mesh-service";
 import { useChatStore } from "@store/chat-store";
@@ -603,13 +604,13 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
     },
     identityValue: {
       flex: 1,
-      textAlign: "right",
+      textAlign: textAlignEnd,
       fontSize: FontSize.sm,
       color: Colors.textPrimary,
     },
     identityMono: {
       flex: 1,
-      textAlign: "right",
+      textAlign: textAlignEnd,
       fontSize: FontSize.xs,
       color: Colors.textSecondary,
       fontFamily: FontFamily.mono,

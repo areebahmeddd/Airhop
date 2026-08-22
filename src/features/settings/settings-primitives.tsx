@@ -356,14 +356,14 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
     },
     sheetTitle: {
       alignSelf: "stretch",
-      textAlign: "left",
+      textAlign: "auto",
       fontSize: FontSize.md,
       fontWeight: FontWeight.bold,
       color: Colors.textPrimary,
     },
     sheetSubtitle: {
       alignSelf: "stretch",
-      textAlign: "left",
+      textAlign: "auto",
       fontSize: FontSize.sm,
       color: Colors.textMuted,
       lineHeight: FontSize.sm * 1.5,

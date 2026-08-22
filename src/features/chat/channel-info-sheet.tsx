@@ -1018,7 +1018,7 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
     // gap, so the hosts hang off the same left edge as "Relays" above them.
     relayList: {
       paddingBottom: Spacing.md,
-      paddingLeft: 16 + Spacing.md,
+      paddingStart: 16 + Spacing.md,
       gap: 6,
     },
     relayRow: {

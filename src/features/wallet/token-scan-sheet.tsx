@@ -292,8 +292,8 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
     },
     sheet: {
       backgroundColor: Colors.surface,
-      borderTopLeftRadius: Radius["2xl"],
-      borderTopRightRadius: Radius["2xl"],
+      borderTopStartRadius: Radius["2xl"],
+      borderTopEndRadius: Radius["2xl"],
       paddingHorizontal: Spacing.xl,
       paddingBottom: Spacing["2xl"],
       gap: Spacing.md,

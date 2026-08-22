@@ -427,8 +427,8 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
     sheet: {
       maxHeight: "100%",
       backgroundColor: Colors.surface,
-      borderTopLeftRadius: Radius["2xl"],
-      borderTopRightRadius: Radius["2xl"],
+      borderTopStartRadius: Radius["2xl"],
+      borderTopEndRadius: Radius["2xl"],
     },
     handle: {
       width: 36,

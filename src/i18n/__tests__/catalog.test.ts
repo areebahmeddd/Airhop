@@ -349,10 +349,16 @@ describe("English source conventions", () => {
       // one country, and the protocol documentation, are metric.
     };
     const offenders: string[] = [];
+    // Widened to `string` before iterating: `en.plurals` carries literal types,
+    // which a [string, string] predicate cannot narrow to.
+    const plurals: Record<
+      string,
+      Record<string, string | undefined>
+    > = en.plurals;
     const strings: Record<string, string> = {
       ...en.strings,
       ...Object.fromEntries(
-        Object.entries(en.plurals).flatMap(([key, forms]) =>
+        Object.entries(plurals).flatMap(([key, forms]) =>
           Object.entries(forms)
             .filter((form): form is [string, string] => form[1] !== undefined)
             .map(([category, value]) => [`${key}.${category}`, value]),

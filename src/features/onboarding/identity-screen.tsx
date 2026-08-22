@@ -217,6 +217,12 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       // The border token, never a hardcoded rgba(0,0,0,0.08): black on black
       // leaves the ring's trailing arc invisible in dark mode, and the spinner
       // reads as a single floating tick.
+      //
+      // Physical, and deliberately not logical. This ring is artwork that spins
+      // continuously, so which side of it carries the muted arc is a starting
+      // rotation and nothing more. `borderEndColor` would claim the choice
+      // means something in Arabic, and it does not.
+      // eslint-disable-next-line no-restricted-syntax
       borderRightColor: Colors.border,
     },
     spinnerDot: {
