@@ -55,7 +55,31 @@ module.exports = defineConfig([
           message:
             'textAlign has no logical form in React Native. Use textAlignEnd from @i18n/layout for the trailing edge, or "auto" for the leading edge.',
         },
+        {
+          // A bare toLocaleString() asks the DEVICE for its locale, which is
+          // not the same thing as the language the app is being read in, and
+          // diverges the moment there is a picker. It was already wrong before
+          // that: on a phone set to Arabic or Hindi it rendered wallet balances
+          // in Arabic-Indic or Devanagari digits, inside the monospace face,
+          // next to a Latin "sat".
+          //
+          // src/utils/format.ts is the one place that decides this, and it
+          // pins machine data to Latin digits with the app language's grouping
+          // separator. Everything else goes through it.
+          selector:
+            "CallExpression > MemberExpression[property.name=/^toLocale(String|DateString|TimeString)$/]",
+          message:
+            "Reads the device locale, not the app's language. Use formatNumber, formatAmount or one of the date formatters from @utils/format.",
+        },
       ],
+    },
+  },
+  {
+    // format.ts owns the decision, and the benchmarks print to a terminal
+    // rather than to a user.
+    files: ["src/utils/format.ts", "src/**/__benchmarks__/**/*.{ts,tsx}"],
+    rules: {
+      "no-restricted-syntax": "off",
     },
   },
   {

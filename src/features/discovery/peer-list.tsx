@@ -35,6 +35,7 @@ import {
   TAB_BAR_CLEARANCE,
   useThemeColors,
 } from "@ui/theme";
+import { formatNumber } from "@utils/format";
 import {
   resolveDisplayName,
   resolvePeerOwnName,
@@ -249,7 +250,7 @@ export default function PeerList({
     if (result.rail !== "mesh") {
       showAlert(
         t("wallet.pay.sent_title", {
-          amount: result.amount.toLocaleString(),
+          amount: formatNumber(result.amount),
           unit: result.unit,
           name: peer.nickname,
         }),

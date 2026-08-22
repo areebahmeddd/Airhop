@@ -29,6 +29,7 @@ import { useChatStore, type ChatMessage } from "@store/chat-store";
 import { useContactsStore } from "@store/contacts-store";
 import { useOutboxStore } from "@store/outbox-store";
 import { useWalletStore } from "@store/wallet-store";
+import { formatNumber } from "@utils/format";
 import { isNostrId, NOSTR_ID_PREFIX } from "@utils/username";
 import { getMeshService, type MeshService } from "./mesh-service";
 import {
@@ -349,7 +350,7 @@ function noteNutzapInThread(
     senderID: getMeshService()?.getPeerID() ?? "",
     senderNickname: "",
     text: t("wallet.pay.thread_receipt", {
-      amount: amount.toLocaleString(),
+      amount: formatNumber(amount),
       unit,
     }),
     timestampMs: Date.now(),
@@ -374,12 +375,12 @@ async function payAsToken(params: {
     const confirmed = await confirm(
       t("wallet.err.exact_amount"),
       t("wallet.xfer.inexact_body", {
-        amount: params.amount.toLocaleString(),
+        amount: formatNumber(params.amount),
         unit: params.unit,
-        spend: quote.spend.toLocaleString(),
-        extra: (quote.spend - params.amount).toLocaleString(),
+        spend: formatNumber(quote.spend),
+        extra: formatNumber(quote.spend - params.amount),
       }),
-      t("wallet.xfer.send_amount", { amount: quote.spend.toLocaleString() }),
+      t("wallet.xfer.send_amount", { amount: formatNumber(quote.spend) }),
     );
     if (!confirmed) return null;
   }

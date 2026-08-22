@@ -25,6 +25,11 @@
 // unit reads worse than either alone. Prose numbers, the ones inside a
 // translated sentence, get no such override and follow the locale.
 
+import {
+  satsToBtc,
+  type BitcoinUnit,
+  type TokenInfo,
+} from "@core/payments/cashu";
 import { getLanguage, t } from "@i18n";
 
 // Milliseconds in a day, for the calendar-distance arithmetic below.
@@ -182,6 +187,50 @@ function formatFixed(value: number, fractionDigits: number): string {
     maximumFractionDigits: fractionDigits,
     useGrouping: false,
   }).format(value);
+}
+
+// ---- Money ----
+//
+// These two live here rather than beside the Cashu protocol code they describe,
+// and the reason is the import in this file's header.
+//
+// `src/core/` is the protocol in pure TypeScript and imports no display layer at
+// all, which is what lets it target the planned Node CLI and web builds without
+// dragging React Native's i18n runtime along. A formatter has to know the app's
+// language to pick a grouping separator, so a formatter cannot live there. The
+// dependency runs the other way instead: this file reaches into core for
+// `satsToBtc`, which is exact integer arithmetic on money and belongs there.
+//
+// Both previously called a bare `toLocaleString()`, which asks the device rather
+// than the app.
+
+// Render an amount in the denomination the user picked.
+//
+// Only `sat` amounts have a bitcoin denomination to switch to. Every other unit
+// is the mint's own (a mint may issue usd or eur directly), and those are
+// already the thing they say they are: reformatting them as bitcoin would
+// invent an exchange rate nobody supplied.
+//
+// Returns the number and its label separately so the caller can style them
+// apart, which the balance card does.
+export function formatAmount(
+  amount: number,
+  unit: string,
+  display: BitcoinUnit,
+): { value: string; label: string } {
+  if (unit !== "sat" || display === "sat") {
+    return { value: formatNumber(amount), label: unit };
+  }
+  // Not grouped: satsToBtc returns a decimal fraction ("0.000215"), and
+  // grouping a value whose digits are almost all after the point adds nothing.
+  return { value: satsToBtc(amount), label: "BTC" };
+}
+
+// "500 sat" / "500 sat - coffee money", for chat search previews and
+// accessibility labels.
+export function formatTokenSummary(info: TokenInfo): string {
+  const amount = `${formatNumber(info.amount)} ${info.unit}`;
+  return info.memo ? `${amount} - ${info.memo}` : amount;
 }
 
 // Elapsed or remaining seconds as m:ss, for recordings and transfer ETAs.

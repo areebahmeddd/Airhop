@@ -87,6 +87,7 @@ import {
   formatDateSeparator,
   formatDuration,
   formatLongDate,
+  formatNumber,
 } from "@utils/format";
 import {
   BRIDGE_CHANNEL,
@@ -2179,7 +2180,7 @@ export default function MessageThread({
         return;
       }
       showAlert(
-        `+${result.amount.toLocaleString()} ${result.unit}`,
+        `+${formatNumber(result.amount)} ${result.unit}`,
         result.outcome === "swapped"
           ? t("wallet.receive.redeemed_at", { mint: hostOf(result.mintUrl) })
           : t("wallet.receive.stored_pending", {
@@ -4104,7 +4105,7 @@ export default function MessageThread({
         <View style={styles.paymentCardHeader}>
           <Feather name="zap" size={17} color={Colors.accent} />
           <Text style={styles.paymentCardAmount}>
-            {token.info.amount.toLocaleString()} {token.info.unit}
+            {formatNumber(token.info.amount)} {token.info.unit}
           </Text>
         </View>
         <Text style={styles.paymentCardMint} numberOfLines={1}>
@@ -4144,7 +4145,7 @@ export default function MessageThread({
               onPress={() => void claimToken(token)}
               accessibilityRole="button"
               accessibilityLabel={t("chat.ecash.claim_amount", {
-                amount: token.info.amount.toLocaleString(),
+                amount: formatNumber(token.info.amount),
                 unit: token.info.unit,
               })}
             >

@@ -554,15 +554,6 @@ export function selectProofsForAmount(
   return describe(covering);
 }
 
-// ---- Display ----
-
-// "500 sat" / "500 sat - coffee money", for chat search previews and
-// accessibility labels.
-export function formatTokenSummary(info: TokenInfo): string {
-  const amount = `${info.amount.toLocaleString()} ${info.unit}`;
-  return info.memo ? `${amount} - ${info.memo}` : amount;
-}
-
 // ---- QR hand-off ----
 
 // Most characters a token can have and still fit in one QR code.
@@ -650,26 +641,6 @@ export function tokenQrPayload(token: string): string {
 export type BitcoinUnit = "sat" | "btc";
 
 const SATS_PER_BTC_DIGITS = 8;
-
-// Render an amount for display, in the denomination the user picked.
-//
-// Only `sat` amounts have a bitcoin denomination to switch to. Every other unit
-// is the mint's own (a mint may issue usd or eur directly), and those are
-// already the thing they say they are: reformatting them as bitcoin would
-// invent an exchange rate nobody supplied.
-//
-// Returns the number and its label separately so the caller can style them
-// apart, which the balance card does.
-export function formatAmount(
-  amount: number,
-  unit: string,
-  display: BitcoinUnit,
-): { value: string; label: string } {
-  if (unit !== "sat" || display === "sat") {
-    return { value: amount.toLocaleString(), label: unit };
-  }
-  return { value: satsToBtc(amount), label: "BTC" };
-}
 
 // Exact sat -> BTC rendering, done on the digits rather than by dividing.
 //

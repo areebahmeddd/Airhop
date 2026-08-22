@@ -31,7 +31,7 @@ describe("computeMeshBanners", () => {
     expect(banners).toEqual([
       {
         key: "paused",
-        label: "Mesh paused · you're away",
+        label: "Mesh paused · you’re away",
         tone: "neutral",
         action: { label: "Resume", kind: "resume" },
       },

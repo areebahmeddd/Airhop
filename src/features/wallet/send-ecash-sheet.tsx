@@ -28,6 +28,7 @@ import {
   Spacing,
   useThemeColors,
 } from "@ui/theme";
+import { formatNumber } from "@utils/format";
 import React, { useMemo, useState } from "react";
 import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 
@@ -91,7 +92,7 @@ export default function SendEcashSheet({
     onClose();
     showAlert(
       T("wallet.pay.sent_title", {
-        amount: result.amount.toLocaleString(),
+        amount: formatNumber(result.amount),
         unit: result.unit,
         name: displayName,
       }),

@@ -6,15 +6,12 @@
 // matching, no external dependency: this is what the query actually needs
 // to read as "top hits" instead of a raw chronological dump.
 
-import {
-  findTokensInText,
-  formatTokenSummary,
-  mayContainToken,
-} from "@core/payments/cashu";
+import { findTokensInText, mayContainToken } from "@core/payments/cashu";
 import { t } from "@i18n";
 import type { AttachmentType, ChatMessage } from "@store/chat-store";
 import { selectKeysetIds, useWalletStore } from "@store/wallet-store";
 import { conversationDisplayName } from "./conversation-display-name";
+import { formatTokenSummary } from "./format";
 import { messagePreviewText } from "./message-preview";
 
 // Message results are capped so the results view never renders an unbounded

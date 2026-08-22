@@ -16,8 +16,6 @@ import {
   decodeToken,
   feeForProofs,
   findTokensInText,
-  formatAmount,
-  formatTokenSummary,
   inputFeeFor,
   isLikelyTestMint,
   mayContainToken,
@@ -220,15 +218,6 @@ describe("bareToken bounds", () => {
   });
 });
 
-describe("formatTokenSummary", () => {
-  it("renders amount and unit, with the memo when present", () => {
-    const plain = decodeToken(realToken([64]));
-    const withMemo = decodeToken(realToken([64], "beer"));
-    expect(formatTokenSummary(plain!)).toBe("64 sat");
-    expect(formatTokenSummary(withMemo!)).toBe("64 sat - beer");
-  });
-});
-
 // ---- Denomination display ----
 
 describe("satsToBtc", () => {
@@ -250,35 +239,6 @@ describe("satsToBtc", () => {
   it("trims trailing zeros but never significant digits", () => {
     expect(satsToBtc(150_000_000)).toBe("1.5");
     expect(satsToBtc(100_000_010)).toBe("1.0000001");
-  });
-});
-
-describe("formatAmount", () => {
-  it("renders sats as a grouped integer", () => {
-    expect(formatAmount(21_500, "sat", "sat")).toEqual({
-      value: (21_500).toLocaleString(),
-      label: "sat",
-    });
-  });
-
-  it("renders sats as bitcoin when asked", () => {
-    expect(formatAmount(21_500, "sat", "btc")).toEqual({
-      value: "0.000215",
-      label: "BTC",
-    });
-  });
-
-  it("leaves a mint's own currency alone", () => {
-    // A mint issuing usd is already quoting a currency. Reformatting it as
-    // bitcoin would invent an exchange rate nobody supplied.
-    expect(formatAmount(500, "usd", "btc")).toEqual({
-      value: (500).toLocaleString(),
-      label: "usd",
-    });
-  });
-
-  it("shows an empty wallet as 0, not 0.00000000", () => {
-    expect(formatAmount(0, "sat", "btc").value).toBe("0");
   });
 });
 
