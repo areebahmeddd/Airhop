@@ -76,38 +76,38 @@ export function JoinLinkSheet({
   const preview = useMemo(() => {
     if (input.trim().length === 0) return null;
     if (link === null) {
-      return { ok: false, text: t("chat.join.not_airhop") };
+      return { ok: false, text: T("chat.join.not_airhop") };
     }
     if (link.kind === "channel") {
       if (link.key === undefined) {
         return {
           ok: true,
-          text: t("chat.join.public_channel", { name: link.channel }),
+          text: T("chat.join.public_channel", { name: link.channel }),
         };
       }
       return {
         ok: true,
-        text: t("chat.join.private_channel", {
+        text: T("chat.join.private_channel", {
           name: link.channel,
           reach: link.overNostr
-            ? t("chat.join.reach_internet")
-            : t("chat.join.reach_mesh"),
+            ? T("chat.join.reach_internet")
+            : T("chat.join.reach_mesh"),
         }),
       };
     }
     if (link.kind === "peer") {
       return {
         ok: true,
-        text: t("chat.join.dm_with", {
+        text: T("chat.join.dm_with", {
           name: resolveDisplayName(link.peerID),
         }),
       };
     }
     return {
       ok: true,
-      text: t("chat.join.contact_card"),
+      text: T("chat.join.contact_card"),
     };
-  }, [input, link]);
+  }, [input, link, T]);
 
   function reset(): void {
     setInput("");

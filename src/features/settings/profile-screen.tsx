@@ -13,6 +13,7 @@ import {
   t,
   useT,
   type TranslationKey,
+  type Translator,
 } from "@i18n";
 import { acknowledged } from "@platform/haptics";
 import { ensurePermission } from "@platform/permissions";
@@ -103,9 +104,17 @@ async function shareOrIgnore(
 // entirely, Invisible keeps scanning but stops advertising our presence.
 type Status = PresenceStatus;
 
-// Colors passed in so the dot colors track light/dark instead of being
-// baked in once at module load.
-function getStatusMeta(Colors: ReturnType<typeof useThemeColors>): Record<
+// Colors and the translator are both passed in, and both for the same reason:
+// this table is built inside a useMemo, so anything it closes over has to be a
+// value the memo can be keyed on. Reading the module-level `t` here instead
+// looked correct and was not: `t` is not a reactive value, so
+// react-hooks/exhaustive-deps cannot ask for it in the dependency array, and
+// the memo went on returning English labels after the language changed while
+// every other string on the screen had switched. Found with the pseudolocale.
+function getStatusMeta(
+  Colors: ReturnType<typeof useThemeColors>,
+  T: Translator,
+): Record<
   Status,
   {
     label: string;
@@ -116,20 +125,20 @@ function getStatusMeta(Colors: ReturnType<typeof useThemeColors>): Record<
 > {
   return {
     online: {
-      label: t("settings.status.online"),
-      description: t("settings.status.online_desc"),
+      label: T("settings.status.online"),
+      description: T("settings.status.online_desc"),
       color: Colors.online,
       icon: "wifi",
     },
     away: {
-      label: t("settings.status.away"),
-      description: t("settings.status.away_desc"),
+      label: T("settings.status.away"),
+      description: T("settings.status.away_desc"),
       color: Colors.offline,
       icon: "moon",
     },
     invisible: {
-      label: t("settings.status.invisible"),
-      description: t("settings.status.invisible_desc"),
+      label: T("settings.status.invisible"),
+      description: T("settings.status.invisible_desc"),
       color: Colors.danger,
       icon: "eye-off",
     },
@@ -274,7 +283,7 @@ export default function ProfileScreen({
   const T = useT();
   const shared = useSharedStyles();
   const styles = useMemo(() => createStyles(Colors), [Colors]);
-  const STATUS_META = useMemo(() => getStatusMeta(Colors), [Colors]);
+  const STATUS_META = useMemo(() => getStatusMeta(Colors, T), [Colors, T]);
   const [view, setView] = useState<SettingsView>("root");
   const [showQRModal, setShowQRModal] = useState(false);
   // Both share actions are sheets rather than the OS share sheet straight from

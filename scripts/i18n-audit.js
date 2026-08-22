@@ -439,6 +439,43 @@ if (list) {
   }
 }
 
+function memoizedTranslations(files) {
+  const found = [];
+  for (const file of files) {
+    const src = fs.readFileSync(file, "utf8");
+    if (!/useMemo/.test(src)) continue;
+    const sf = ts.createSourceFile(file, src, ts.ScriptTarget.Latest, true);
+    (function visit(node) {
+      if (
+        ts.isCallExpression(node) &&
+        ts.isIdentifier(node.expression) &&
+        node.expression.text === "useMemo" &&
+        node.arguments.length === 2 &&
+        ts.isArrayLiteralExpression(node.arguments[1])
+      ) {
+        const body = node.arguments[0].getText(sf);
+        // A translator call, or a helper whose name says it builds a table of
+        // them (getStatusMeta was exactly that shape).
+        const translates = /(^|[^\w.])[tT]\(/.test(body) || /Meta\(/.test(body);
+        if (translates) {
+          const deps = node.arguments[1].elements.map((e) => e.getText(sf));
+          const keyed = deps.some((d) => /^[tT]$|Plural|[Ll]anguage/.test(d));
+          if (!keyed) {
+            const { line } = sf.getLineAndCharacterOfPosition(
+              node.getStart(sf),
+            );
+            found.push(
+              `${path.relative(ROOT, file)}:${String(line + 1)}  deps=[${deps.join(", ")}]`,
+            );
+          }
+        }
+      }
+      ts.forEachChild(node, visit);
+    })(sf);
+  }
+  return found;
+}
+
 console.log(
   `\n${String(all.length)} hardcoded string(s) across ${String(byFile.size)} file(s).`,
 );
@@ -453,6 +490,35 @@ if (frozen.length > 0) {
       "translates on render (see CHANNEL_SCOPE in features/chat/channel-list.tsx):\n",
   );
   for (const f of frozen) console.error(`  ${f}`);
+  process.exit(1);
+}
+
+// The same bug one level in: a translation memoized without the translator in
+// its dependency array.
+//
+// `frozenTranslations` above catches `t()` at module scope. This catches
+// `useMemo(() => ({ label: t("x") }), [Colors])`. The factory reruns only when
+// a listed dependency changes, and the module-level `t` is not a reactive
+// value, so react-hooks/exhaustive-deps cannot ask for it. The memo goes on
+// returning the old language's text after a switch while every other string on
+// the same screen has changed.
+//
+// Found on a real screen by the pseudolocale rather than by review: the profile
+// header's status label stayed "Online" in English while the rows around it
+// had switched.
+//
+// The rule is about the dependency, not the call. Use the `T` from `useT()`
+// inside a memo and list it, and the linter can see it too. A `useCallback`
+// whose body calls the module-level `t` at invocation time is correct and is
+// deliberately not reported: `t` resolves the current language on every call.
+const memoized = memoizedTranslations(files);
+if (memoized.length > 0) {
+  console.error(
+    `\n${String(memoized.length)} translation(s) memoized without the translator in the\n` +
+      "dependency array, so they freeze in the language the component mounted in.\n" +
+      "Use the `T` from useT() inside the memo and add it to the deps:\n",
+  );
+  for (const m of memoized) console.error(`  ${m}`);
   process.exit(1);
 }
 
