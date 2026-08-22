@@ -38,6 +38,7 @@ import {
 import { ar } from "./locales/ar";
 import { de } from "./locales/de";
 import { en } from "./locales/en";
+import { ru } from "./locales/ru";
 import type { Locale, PluralKey, TranslationKey } from "./locales/types";
 import { selectPlural } from "./plurals";
 import { PSEUDO_LANGUAGE, pseudoLocale } from "./pseudo";
@@ -65,6 +66,7 @@ const REAL: Partial<Record<LanguageCode, Locale>> = {
   en,
   ar,
   de,
+  ru,
 };
 
 export const CATALOGS: Partial<Record<LanguageCode, Locale>> = {
