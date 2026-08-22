@@ -24,6 +24,7 @@ import {
   Spacing,
   useThemeColors,
 } from "@ui/theme";
+import { messageText } from "@utils/message-text";
 import React, { useMemo } from "react";
 import {
   Linking,
@@ -238,7 +239,7 @@ function MessageBubble({
           }
           accessibilityLabel={T("chat.bubble.a11y", {
             sender: item.isMine ? T("chat.you") : item.senderNickname,
-            body: item.text || T("chat.bubble.attachment"),
+            body: messageText(item) || T("chat.bubble.attachment"),
           })}
         >
           <View
@@ -292,7 +293,7 @@ function MessageBubble({
                 ]}
               >
                 {renderMessageText(
-                  item.text,
+                  messageText(item),
                   item.isMine
                     ? styles.messageMentionMine
                     : styles.messageMentionTheirs,

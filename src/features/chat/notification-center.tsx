@@ -26,6 +26,7 @@ import {
 } from "@ui/theme";
 import { channelLabel } from "@utils/conversation-display-name";
 import { formatListTimestamp } from "@utils/format";
+import { activityPreview } from "@utils/message-text";
 import { resolveDisplayName } from "@utils/peer-display-name";
 import React, { useMemo } from "react";
 import {
@@ -182,7 +183,7 @@ function Row({
       : entry.kind === "notice"
         ? t("chat.notif.notice_in", { channel: room })
         : room,
-    entry.preview,
+    activityPreview(entry),
     timeLabel,
   ]
     .filter((part) => part !== null)
@@ -209,7 +210,7 @@ function Row({
             <Text style={styles.time}>{timeLabel}</Text>
           </View>
           <Text style={styles.preview} numberOfLines={2}>
-            {entry.preview}
+            {activityPreview(entry)}
           </Text>
         </View>
         {!entry.seen && <View style={styles.unseenDot} />}

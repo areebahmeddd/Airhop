@@ -3,6 +3,7 @@
 
 import { t } from "@i18n";
 import type { ChatAttachment, ChatMessage } from "@store/chat-store";
+import { messageText } from "./message-text";
 
 function attachmentPreviewText(attachment: ChatAttachment): string {
   switch (attachment.type) {
@@ -18,7 +19,8 @@ function attachmentPreviewText(attachment: ChatAttachment): string {
 }
 
 export function messagePreviewText(message: ChatMessage): string {
-  if (message.text) return message.text;
+  const text = messageText(message);
+  if (text) return text;
   if (message.attachment) return attachmentPreviewText(message.attachment);
   return "";
 }

@@ -353,6 +353,15 @@ function noteNutzapInThread(
       amount: formatNumber(amount),
       unit,
     }),
+    systemKey: "wallet.pay.thread_receipt",
+    // The amount is stored already grouped rather than as a raw number,
+    // because interpolation stringifies a number plainly and would drop the
+    // separator. So switching language re-translates the sentence but leaves
+    // the separator as it was written: "21,500" stays "21,500" in a language
+    // that would have written "21.500". The digits are Latin either way, and a
+    // stale separator is a far smaller thing than a receipt stuck in a
+    // language its reader does not have.
+    systemVars: { amount: formatNumber(amount), unit },
     timestampMs: Date.now(),
     isMine: true,
     isSystem: true,

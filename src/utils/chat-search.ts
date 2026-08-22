@@ -13,6 +13,7 @@ import { selectKeysetIds, useWalletStore } from "@store/wallet-store";
 import { conversationDisplayName } from "./conversation-display-name";
 import { formatTokenSummary } from "./format";
 import { messagePreviewText } from "./message-preview";
+import { messageText } from "./message-text";
 
 // Message results are capped so the results view never renders an unbounded
 // list. The underlying scan is cheap (messages are capped per-channel at
@@ -189,7 +190,10 @@ export function searchableMessageText(message: ChatMessage): string {
   }
 
   const parts: string[] = [];
-  if (message.text) parts.push(message.text);
+  // Resolved, so a system row is searchable by the words currently on screen
+  // rather than by whatever language it was written in.
+  const text = messageText(message);
+  if (text) parts.push(text);
   if (message.attachment) {
     if (message.attachment.name) parts.push(message.attachment.name);
     parts.push(attachmentKindWord(message.attachment.type));

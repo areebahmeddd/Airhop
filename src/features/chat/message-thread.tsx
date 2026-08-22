@@ -96,6 +96,7 @@ import {
   notifiesOnScreenshot,
 } from "@utils/media-policy";
 import { activeMentionQuery, applyMention } from "@utils/mentions";
+import { messageText } from "@utils/message-text";
 import { resolveDisplayName } from "@utils/peer-display-name";
 import {
   resolveLandingSettle,
@@ -4412,7 +4413,9 @@ export default function MessageThread({
                   )}
                   <View style={styles.systemRow}>
                     <Feather name="camera" size={12} color={Colors.textMuted} />
-                    <Text style={styles.systemRowText}>{item.text}</Text>
+                    <Text style={styles.systemRowText}>
+                      {messageText(item)}
+                    </Text>
                   </View>
                 </View>
               );

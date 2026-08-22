@@ -2207,6 +2207,7 @@ export class MeshService {
       // The card carries the place. The text is what a notification and a
       // conversation row show, where there is no room for one.
       text: t("chat.location.sent_summary"),
+      systemKey: "chat.location.sent_summary",
       timestampMs: Date.now(),
       isMine: true,
       locationPin: pin,
@@ -2237,6 +2238,7 @@ export class MeshService {
       senderID,
       senderNickname: nickname,
       text: t("chat.location.received_summary"),
+      systemKey: "chat.location.received_summary",
       timestampMs: Date.now(),
       isMine: false,
       locationPin: pin,
@@ -3595,6 +3597,7 @@ export class MeshService {
       senderID: peerID,
       senderNickname: resolveDisplayName(peerID),
       text: t("chat.geo.exchange_complete"),
+      systemKey: "chat.geo.exchange_complete",
       timestampMs: Date.now(),
       isMine: false,
       isSystem: true,
@@ -3674,6 +3677,10 @@ export class MeshService {
       text: t("chat.geo.card_received", {
         name: resolveDisplayName(decoded.peerID),
       }),
+      systemKey: "chat.geo.card_received",
+      // Resolved once, on purpose. The line records who sent the card at the
+      // time, so a later nickname change must not rewrite history.
+      systemVars: { name: resolveDisplayName(decoded.peerID) },
       timestampMs: Date.now(),
       isMine: false,
       isSystem: true,
@@ -3773,6 +3780,10 @@ export class MeshService {
       preview: t(isUrgent(post) ? "notif.notice_urgent" : "notif.notice", {
         content: post.content,
       }),
+      previewKey: isUrgent(post) ? "notif.notice_urgent" : "notif.notice",
+      // The notice body is the author's own words and is stored as written.
+      // Only the sentence around it is Airhop's.
+      previewVars: { content: post.content },
       timestampMs: post.createdAt,
       kind: "notice",
       geohash: post.geohash,
@@ -4291,6 +4302,8 @@ export class MeshService {
         senderID: "",
         senderNickname: "",
         text: t("chat.group.you_were_removed", { name }),
+        systemKey: "chat.group.you_were_removed",
+        systemVars: { name },
         timestampMs: nowMs,
         isMine: false,
         isSystem: true,
@@ -4302,6 +4315,8 @@ export class MeshService {
         senderID: state.creatorFingerprint.slice(0, 16),
         senderNickname: name,
         preview: t("chat.group.removed_you", { name }),
+        previewKey: "chat.group.removed_you",
+        previewVars: { name },
         timestampMs: nowMs,
       });
       return;
@@ -4320,6 +4335,8 @@ export class MeshService {
         senderID: "",
         senderNickname: "",
         text: t("chat.group.you_were_added", { name: state.name }),
+        systemKey: "chat.group.you_were_added",
+        systemVars: { name: state.name },
         timestampMs: nowMs,
         isMine: false,
         isSystem: true,
@@ -4335,6 +4352,8 @@ export class MeshService {
         senderID: state.creatorFingerprint.slice(0, 16),
         senderNickname: creator?.nickname ?? state.name,
         preview: t("chat.group.added_you", { name: state.name }),
+        previewKey: "chat.group.added_you",
+        previewVars: { name: state.name },
         timestampMs: nowMs,
       });
     }
