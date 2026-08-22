@@ -611,7 +611,7 @@ function TransferProgressList({
             : t.status === "failed"
               ? T("chat.status.failed")
               : t.status === "cancelled"
-                ? T("chat.status.cancelled")
+                ? T("chat.status.canceled")
                 : t.status === "stalled"
                   ? T("chat.status.waiting")
                   : t.direction === "send"

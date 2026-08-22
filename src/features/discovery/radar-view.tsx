@@ -507,7 +507,7 @@ function RadarView({ peers, now, onSelectPeer }: Props): React.JSX.Element {
               ]}
               onPress={handleCenterPress}
               accessibilityRole="button"
-              accessibilityLabel={T("mesh.radar.you_centre")}
+              accessibilityLabel={T("mesh.radar.you_center")}
               // The label must not promise a rescan. There is none: BLE scanning
               // runs continuously and peers arrive on announce events, as the
               // comment on handleCenterPress says. Naming it "rescan" tells a

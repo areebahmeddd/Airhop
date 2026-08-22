@@ -178,7 +178,41 @@ describe("do not translate", () => {
   // must carry the same token through untouched. A translator who localises
   // "#bluetooth" or "/hug" produces a sentence that names a channel or command
   // that does not exist.
-  const MUST_BE_VERBATIM = ["#bluetooth", "/hug", "/slap", "/who", "/msg"];
+  const MUST_BE_VERBATIM = [
+    "#bluetooth",
+    "/hug",
+    "/slap",
+    "/who",
+    "/msg",
+    "airhop://",
+    "npub1",
+  ];
+
+  // SURVIVES: proper nouns and cryptosystem names. A weaker rule than VERBATIM
+  // on purpose.
+  //
+  // "Lightning" is the one that will actually be broken. It is a protocol name
+  // that is also an ordinary noun in every language on the list, it appears in
+  // 24 strings, and a translator working through a spreadsheet will render it
+  // as their word for the weather. So will a model. Same shape, lower volume,
+  // for "Tor".
+  //
+  // Exact count parity is the wrong test here. English says "Airhop" 41 times,
+  // and a language that drops the subject or repeats it for agreement will
+  // legitimately differ. What is never legitimate is the noun disappearing
+  // entirely, so the rule is presence, not count: if English names it, the
+  // translation names it.
+  const MUST_SURVIVE = [
+    "Airhop",
+    "bitchat",
+    "Nostr",
+    "Cashu",
+    "Lightning",
+    "Tor",
+    "GitHub",
+    "Ed25519",
+    "X25519",
+  ];
 
   it.each(CODES)("%s does not translate the emote verbs", (code) => {
     const offenders: string[] = [];
@@ -203,6 +237,132 @@ describe("do not translate", () => {
           offenders.push(
             `${key}: expected ${String(inEnglish)}x "${token}", got ${String(inTranslation)}`,
           );
+        }
+      }
+    }
+    expect(offenders).toEqual([]);
+  });
+
+  it.each(CODES)("%s keeps proper nouns untranslated", (code) => {
+    const offenders: string[] = [];
+    for (const [key, source] of Object.entries(en.strings)) {
+      const translated: string = CATALOGS[code].strings[key as never];
+      for (const token of MUST_SURVIVE) {
+        // Word-boundary so "Tor" does not match inside "Torch", and
+        // case-sensitive so it does not match "tor" inside a translated word.
+        const boundary = new RegExp(`\\b${token}\\b`);
+        if (boundary.test(source) && !boundary.test(translated)) {
+          offenders.push(`${key}: "${token}" did not survive`);
+        }
+      }
+    }
+    expect(offenders).toEqual([]);
+  });
+});
+
+// The rules below apply to English alone.
+//
+// Every other locale sets its own typography and spelling. German quotes with
+// „ and “, French with « » around no-break spaces, Japanese with 「 」. A rule
+// that forced English's conventions onto them would be wrong in most of the
+// catalog, so these are scoped to the source language, where they exist to stop
+// 29 translators copying an inconsistency out of the file they work from.
+describe("English source conventions", () => {
+  it("uses typographic apostrophes and quotes, never straight ones", () => {
+    // Apple's HIG, the Microsoft Style Guide and Chicago all specify the
+    // typographic forms for interface prose, and the catalog was already
+    // written that way in its most-read strings. It was not written that way
+    // everywhere: "Couldn’t create your keys" and "Couldn't start the camera"
+    // both shipped, which is the same word spelled two ways one screen apart.
+    //
+    // Ellipsis is not checked here because it never drifted: the catalog is
+    // already 29 uses of … and zero of three dots.
+    const offenders: string[] = [];
+    for (const [key, value] of Object.entries(en.strings)) {
+      if (value.includes("'")) offenders.push(`${key}: straight apostrophe`);
+      if (value.includes('"')) offenders.push(`${key}: straight quote`);
+    }
+    expect(offenders).toEqual([]);
+  });
+
+  it("spells in US English", () => {
+    // US spelling is the house standard, so this is the source language's
+    // dictionary rather than a preference. Scoped tightly to words that can
+    // plausibly appear in this app's copy: a full British-to-American list
+    // would be mostly dead weight.
+    //
+    // Note "cancellation" keeps its double L in US English and is deliberately
+    // absent below, so only the verb forms are caught.
+    const BRITISH: Record<string, string> = {
+      cancelled: "canceled",
+      cancelling: "canceling",
+      centre: "center",
+      centres: "centers",
+      centred: "centered",
+      colour: "color",
+      colours: "colors",
+      behaviour: "behavior",
+      favourite: "favorite",
+      neighbour: "neighbor",
+      neighbourhood: "neighborhood",
+      licence: "license",
+      defence: "defense",
+      organise: "organize",
+      organised: "organized",
+      organisation: "organization",
+      recognise: "recognize",
+      recognised: "recognized",
+      authorise: "authorize",
+      authorised: "authorized",
+      synchronise: "synchronize",
+      synchronised: "synchronized",
+      customise: "customize",
+      customised: "customized",
+      minimise: "minimize",
+      maximise: "maximize",
+      optimise: "optimize",
+      initialise: "initialize",
+      analyse: "analyze",
+      labelled: "labeled",
+      labelling: "labeling",
+      signalled: "signaled",
+      dialled: "dialed",
+      travelling: "traveling",
+      fulfil: "fulfill",
+      instalment: "installment",
+      grey: "gray",
+      greyed: "grayed",
+      catalogue: "catalog",
+      dialogue: "dialog",
+      programme: "program",
+      judgement: "judgment",
+      acknowledgement: "acknowledgment",
+      whilst: "while",
+      amongst: "among",
+      learnt: "learned",
+      spelt: "spelled",
+      metre: "meter",
+      metres: "meters",
+      // Kept out on purpose: the catalog measures distance in metric ("~100m",
+      // "roughly 10 to 100 meters") and that stays. US English here means
+      // spelling and grammar, not a US measurement locale. Every user outside
+      // one country, and the protocol documentation, are metric.
+    };
+    const offenders: string[] = [];
+    const strings: Record<string, string> = {
+      ...en.strings,
+      ...Object.fromEntries(
+        Object.entries(en.plurals).flatMap(([key, forms]) =>
+          Object.entries(forms)
+            .filter((form): form is [string, string] => form[1] !== undefined)
+            .map(([category, value]) => [`${key}.${category}`, value]),
+        ),
+      ),
+    };
+    for (const [key, value] of Object.entries(strings)) {
+      for (const [british, american] of Object.entries(BRITISH)) {
+        if (new RegExp(`\\b${british}\\b`, "i").test(value)) {
+          offenders.push(`${key}: "${british}" should be "${american}"`);
         }
       }
     }
