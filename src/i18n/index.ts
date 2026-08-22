@@ -38,6 +38,7 @@ import {
 import { ar } from "./locales/ar";
 import { de } from "./locales/de";
 import { en } from "./locales/en";
+import { ja } from "./locales/ja";
 import { ru } from "./locales/ru";
 import type { Locale, PluralKey, TranslationKey } from "./locales/types";
 import { selectPlural } from "./plurals";
@@ -66,6 +67,7 @@ const REAL: Partial<Record<LanguageCode, Locale>> = {
   en,
   ar,
   de,
+  ja,
   ru,
 };
 
