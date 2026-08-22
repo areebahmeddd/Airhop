@@ -21,7 +21,6 @@ import { WALLET_STORAGE_ID } from "@store/wallet-store";
 import { formatBytes } from "@utils/format";
 import React, { useCallback, useMemo, useState } from "react";
 import { ScrollView, Text, View } from "react-native";
-import { createMMKV } from "react-native-mmkv";
 import {
   GroupDivider,
   SettingLinkRow,
@@ -31,6 +30,7 @@ import {
 } from "../settings-primitives";
 
 import { t, useT } from "@i18n";
+import { getStorage } from "@store/mmkv";
 interface Props {
   onBack: () => void;
 }
@@ -41,7 +41,7 @@ function readStorageStats() {
   // separately. `byteSize` reads the file length and needs no decryption key,
   // which is why opening it without one is fine here.
   const messagesBytes = [...MMKV_STORE_IDS, WALLET_STORAGE_ID].reduce(
-    (sum, id) => sum + createMMKV({ id }).byteSize,
+    (sum, id) => sum + getStorage(id).byteSize,
     0,
   );
   const cacheBytes = getAttachmentCacheBytes();

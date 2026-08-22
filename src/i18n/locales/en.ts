@@ -1945,6 +1945,9 @@ export const strings = {
   "settings.wipe.desc": "Instantly destroy all keys, messages, and proofs",
   "settings.wipe.body":
     "This will instantly destroy all your keys, messages, and wallet proofs. This cannot be undone.",
+  "settings.wipe.in_progress": "Wiping",
+  "settings.wipe.in_progress_body":
+    "Destroying your keys, messages and files. This takes a few seconds, and finishes on its own if the app is closed.",
   "settings.wipe.got_it": "Got it",
   "settings.wipe.keys_failed": "Keys could not be destroyed",
   "settings.wipe.keys_failed_body":

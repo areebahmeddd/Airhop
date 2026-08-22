@@ -48,7 +48,7 @@
 
 import { KEYCHAIN_ITEMS, readSecret, writeSecret } from "@core/crypto/keychain";
 import { bytesToBase64 } from "@core/encoding/base64";
-import { createMMKV } from "react-native-mmkv";
+import { createMMKV, deleteMMKV } from "react-native-mmkv";
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 
@@ -419,6 +419,39 @@ export function bootstrapWalletStorage(): Promise<MMKVLike> {
 // Deliberately does not close the handle. The file is already unlinked, the
 // process is about to drop to onboarding, and a close racing an in-flight
 // persist would be a crash where this is merely a forgotten reference.
+// Destroy the wallet partition, through the handle this module owns.
+//
+// `deleteMMKV` destroys the native instance while this module still holds it,
+// and the adapter above is asynchronous, so a write scheduled by the store's
+// own clearAll lands afterwards on freed memory and locks a null mutex. That is
+// a SIGSEGV no JS catch can see.
+//
+// References go first, so no new write can find a handle, and only then is the
+// data cleared through the one already open. Emptying rather than unlinking
+// reaches the same end state: the AES key goes with the rest of the keychain,
+// so what stays on disk is ciphertext under a key that no longer exists.
+//
+// `deleteMMKV` is still right when nothing ever opened the partition: no handle,
+// no race.
+export function wipeWalletStorage(): void {
+  const open = instance;
+  resetWalletStorage();
+  if (open === null) {
+    try {
+      deleteMMKV(WALLET_STORAGE_ID);
+    } catch {
+      // Never opened on this device, or already gone.
+    }
+    return;
+  }
+  try {
+    open.clearAll();
+  } catch {
+    // Locked or already emptied. The keychain copy of its key is gone either
+    // way, so what stays on disk is unreadable.
+  }
+}
+
 export function resetWalletStorage(): void {
   instance = null;
   ready = null;

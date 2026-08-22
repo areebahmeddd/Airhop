@@ -2,11 +2,11 @@
 // MMKV-persisted so messages survive app restarts.
 
 import { MAX_CHANNEL_NAME } from "@utils/deep-link";
-import { createMMKV } from "react-native-mmkv";
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 import { useActivityStore } from "./activity-store";
 import { useChannelMembersStore } from "./channel-members-store";
+import { getStorage } from "./mmkv";
 
 export type AttachmentType = "image" | "voice" | "document" | "video";
 
@@ -335,7 +335,7 @@ export function freeChannelLabel(
   return channel;
 }
 
-const storage = createMMKV({ id: "chat-store" });
+const storage = getStorage("chat-store");
 
 // How long a burst of writes is allowed to collapse into one. See below.
 const PERSIST_THROTTLE_MS = 400;

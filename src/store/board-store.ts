@@ -25,9 +25,9 @@ import {
   type BoardWire,
 } from "@core/mesh/wire/board-packet";
 import { bytesToHex } from "@noble/hashes/utils.js";
-import { createMMKV } from "react-native-mmkv";
 import { create } from "zustand";
 import { noticeAuthor, useLocationNotesStore } from "./location-notes-store";
+import { getStorage } from "./mmkv";
 
 export type BoardIngestResult = "accepted" | "duplicate" | "rejected";
 
@@ -66,7 +66,7 @@ interface BoardState {
 const STORAGE_ID = "board-store";
 const STORAGE_KEY = "entries";
 
-const storage = createMMKV({ id: STORAGE_ID });
+const storage = getStorage(STORAGE_ID);
 
 interface PersistedEntry {
   w: string; // base64 of encodeBoardWire

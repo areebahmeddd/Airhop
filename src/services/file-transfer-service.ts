@@ -267,15 +267,71 @@ export function clearAttachmentCache(): number {
 // regenerable, so a wipe should take all of it rather than chase prefixes that
 // will drift again the next time an attachment path is added. Recursive, and
 // best-effort per entry: one locked file must not abort the rest.
-export function wipeCacheDirectory(): void {
+//
+// Async on purpose, not incidentally. See WIPE_YIELD_EVERY.
+export async function wipeCacheDirectory(): Promise<void> {
   const dir = new FileSystem.Directory(FileSystem.Paths.cache);
   if (!dir.exists) return;
-  for (const entry of dir.list()) {
+  // The root is emptied, not removed. It is where the next attachment lands,
+  // and a wipe that deletes it outright leaves the first write after
+  // re-onboarding to fail on a directory nothing recreated.
+  await emptyDirectory(dir, { deleted: 0 }, 0);
+}
+
+// How many entries to remove before handing the thread back.
+//
+// Every File and Directory call in expo-file-system is synchronous, so an
+// unbroken walk owns the JS thread: no frame drawn, no touch handled, no timer
+// fired until it returns. Over a whole cache directory that is long enough to
+// read as a hung app. sweepExpiredAttachments bounds itself for the same reason.
+//
+// Roughly one frame of synchronous deletes. Bounds how long the thread is held,
+// not how much is destroyed: no entry is skipped.
+const WIPE_YIELD_EVERY = 32;
+
+function yieldToEventLoop(): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, 0));
+}
+
+// How deep the walk goes before handing a subtree to a single delete.
+//
+// Far past a real cache tree, which is flat. An unbounded recursive walk is one
+// directory cycle away from a stack overflow, and a throw out of here leaves the
+// wipe marker set, replaying the wipe on every launch thereafter.
+//
+// Falls back rather than skips: past this depth one `delete()` takes the
+// subtree, so only the yielding stops.
+const WIPE_MAX_DEPTH = 8;
+
+// Depth-first, rather than handing a subdirectory to one `delete()`: the
+// expensive case is a directory of thousands of files, and deleting it as one
+// call is one synchronous operation with nowhere to yield inside. Costs one
+// extra listing per directory.
+async function emptyDirectory(
+  dir: FileSystem.Directory,
+  progress: { deleted: number },
+  depth: number,
+): Promise<void> {
+  let entries: (FileSystem.Directory | FileSystem.File)[];
+  try {
+    entries = dir.list();
+  } catch {
+    // Unreadable, or reclaimed by the OS mid-walk.
+    return;
+  }
+  for (const entry of entries) {
+    // Emptied first, so its own delete below is the cheap case. Past
+    // WIPE_MAX_DEPTH that delete does the recursion instead.
+    if (entry instanceof FileSystem.Directory && depth < WIPE_MAX_DEPTH) {
+      await emptyDirectory(entry, progress, depth + 1);
+    }
     try {
       entry.delete();
     } catch {
       // Mid-write, already gone, or not ours to remove.
     }
+    progress.deleted++;
+    if (progress.deleted % WIPE_YIELD_EVERY === 0) await yieldToEventLoop();
   }
 }
 

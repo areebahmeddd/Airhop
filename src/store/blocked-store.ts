@@ -13,9 +13,9 @@
 //   - peer-list filters the rendered list (radar receives the already-filtered
 //     array rather than filtering independently).
 
-import { createMMKV } from "react-native-mmkv";
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
+import { getStorage } from "./mmkv";
 
 interface BlockedState {
   blockedPeerIDs: string[];
@@ -24,7 +24,7 @@ interface BlockedState {
   isBlocked: (peerID: string) => boolean;
 }
 
-const storage = createMMKV({ id: "blocked-store" });
+const storage = getStorage("blocked-store");
 
 const mmkvStorage = {
   getItem: (name: string): string | null => storage.getString(name) ?? null,

@@ -16,9 +16,9 @@
 // pins the identity so a later ANNOUNCE claiming that peer ID with different
 // keys can be recognised as an impersonation attempt.
 
-import { createMMKV } from "react-native-mmkv";
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
+import { getStorage } from "./mmkv";
 
 // Cap on a local nickname, matching the 32 bytes a contact card carries for the
 // peer's own name. A label the user types has no wire format of its own, but
@@ -253,7 +253,7 @@ function mergeContact(prior: Contact | undefined, next: Contact): Contact {
   };
 }
 
-const storage = createMMKV({ id: "contacts-store" });
+const storage = getStorage("contacts-store");
 
 const mmkvStorage = {
   getItem: (name: string): string | null => storage.getString(name) ?? null,

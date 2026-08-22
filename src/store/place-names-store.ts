@@ -14,9 +14,9 @@
 
 import { decodeGeohash } from "@core/nostr/geohash-presence";
 import * as Location from "expo-location";
-import { createMMKV } from "react-native-mmkv";
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
+import { getStorage } from "./mmkv";
 
 // The device's language, resolved on first use and then reused.
 //
@@ -94,7 +94,7 @@ function pickName(
   return trimmed && trimmed.length > 0 ? trimmed : null;
 }
 
-const storage = createMMKV({ id: "place-names-store" });
+const storage = getStorage("place-names-store");
 
 const mmkvStorage = {
   getItem: (name: string): string | null => storage.getString(name) ?? null,

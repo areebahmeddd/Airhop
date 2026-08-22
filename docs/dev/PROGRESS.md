@@ -129,7 +129,7 @@ checkable against the code rather than taken on trust.
 - [x] QR contact exchange (`src/core/crypto/contact-exchange.ts`: ContactCard binary format, QR URI scheme)
 - [x] QR code scanner for peer verification (encodeQRContent/decodeQRContent in contact-exchange.ts)
 - [x] Human-readable usernames (`src/utils/username.ts`: deterministic adjective-noun-suffix from peer ID, 128-entry word lists)
-- [x] Panic wipe (`src/services/panic-wipe.ts`: clears every keychain item, all MMKV partitions, the media cache, the notification tray and Arti's data directory, and reports whether the keys were destroyed)
+- [x] Panic wipe (`src/services/panic-wipe.ts`: clears every keychain item, all MMKV partitions, the media cache, the notification tray and Arti's data directory, and reports whether the keys were destroyed). Resumable: `src/services/wipe-marker.ts` records the intent before the first destructive step, so a wipe interrupted by a force-stop or an OS kill is replayed and finished by the next launch
 - [x] Battery optimization flow (`src/platform/battery-optimization.ts`: OEM deep links for 10 skins + standard Android fallback)
 - [x] Georelays in-app relay map (`GeoRelayDirectory.nearestRelaysWithDistance()` added to geo-relay.ts)
 - [x] Full cross-platform compat test (`src/core/mesh/wire/__tests__/packet-frame-vectors.test.ts`: peer ID derivation, packet byte offsets, signature relay compat, ANNOUNCE TLV, fragment constants, BLE UUIDs)
@@ -307,25 +307,28 @@ Automated security review over the whole codebase, by domain: crypto and key
 lifecycle, radio-facing wire parsing, Nostr and payments, native BLE, and the
 app layer. Ordered by severity.
 
-| #   | Finding                                                                   | Severity | Status                                                                                                   |
-| --- | ------------------------------------------------------------------------- | -------- | -------------------------------------------------------------------------------------------------------- |
-| 1   | Double Ratchet root key seeded from the PUBLIC handshake transcript hash  | Critical | Fixed - seeded from the Noise exporter secret instead                                                    |
-| 2   | ANNOUNCE accepted unsigned, unbound to its key, and could re-pin a peer's | High     | Fixed - mandatory signature, sender/key binding, TOFU pin                                                |
-| 3   | Attachments never signature-checked, so any peer could forge the sender   | High     | Fixed - `FILE_TRANSFER` goes through `senderIsAuthentic`, as bitchat does                                |
-| 4   | Attachments rendered by every relay, not only the addressee               | High     | Fixed - a directed file is relayed but not rendered unless it is for us                                  |
-| 5   | Nutzap redeemed from any mint an incoming event named                     | High     | Fixed - the mint must be one the wallet already holds, which is what NIP-61 assumes                      |
-| 6   | `airhop://` contact-card link minted a "Verified" contact                 | High     | Fixed - a linked card records `source: "link"`, never `"qr"`, and may not re-pin keys                    |
-| 7   | ANNOUNCE replayable forever, so a departed peer kept looking present      | Medium   | Fixed - 15 min symmetric freshness window                                                                |
-| 8   | Attachment channel tag auto-joined arbitrary rooms                        | Medium   | Fixed - the tag must name a joined room that `canSendMedia` allows                                       |
-| 9   | Malformed compressed frame threw out of the decoder                       | Medium   | Fixed - missing bounds guard; 24 attacker-chosen bytes raised `RangeError` into the native BLE callback  |
-| 10  | `VOICE_FRAME` had no freshness window, so a burst replayed verbatim       | Medium   | Fixed - 30 s bound plus a broadcast requirement, matching bitchat                                        |
-| 11  | Group creator not pinned, so a higher epoch could replace it              | Medium   | Fixed - a group keeps its original creator. Also fixed upstream                                          |
-| 12  | Nutzap watcher race against a wipe during startup                         | Medium   | Fixed - startup captures a wipe generation before its first await and re-checks it before installing     |
-| 13  | Gateway downlink accepted any event kind or age                           | Low      | Fixed - kind, freshness and cell gates, the same three the uplink already applied                        |
-| 14  | Relay URL interpolated unescaped into generated source                    | Low      | Fixed - `JSON.stringify`; generator output byte-identical                                                |
-| 15  | iOS `want*` latch set before validation                                   | Low      | Fixed - the latch is set per state branch; transient states keep it, refusals no longer arm the radio    |
-| 16  | `forceStopRadios()` leaves the duty-cycle timer armed                     | Low      | Fixed - calls `stopScanCycle()`, so the queued toggle cannot restart the scanner after the service stops |
-| 17  | Outbox receipts not scoped to the receipt's sender                        | Info     | Accepted - message IDs are 8 bytes of CSPRNG never sent in cleartext; availability-only impact           |
+| #   | Finding                                                                   | Severity | Status                                                                                                                                                |
+| --- | ------------------------------------------------------------------------- | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | Double Ratchet root key seeded from the PUBLIC handshake transcript hash  | Critical | Fixed - seeded from the Noise exporter secret instead                                                                                                 |
+| 2   | ANNOUNCE accepted unsigned, unbound to its key, and could re-pin a peer's | High     | Fixed - mandatory signature, sender/key binding, TOFU pin                                                                                             |
+| 3   | Attachments never signature-checked, so any peer could forge the sender   | High     | Fixed - `FILE_TRANSFER` goes through `senderIsAuthentic`, as bitchat does                                                                             |
+| 4   | Attachments rendered by every relay, not only the addressee               | High     | Fixed - a directed file is relayed but not rendered unless it is for us                                                                               |
+| 5   | Nutzap redeemed from any mint an incoming event named                     | High     | Fixed - the mint must be one the wallet already holds, which is what NIP-61 assumes                                                                   |
+| 6   | `airhop://` contact-card link minted a "Verified" contact                 | High     | Fixed - a linked card records `source: "link"`, never `"qr"`, and may not re-pin keys                                                                 |
+| 7   | ANNOUNCE replayable forever, so a departed peer kept looking present      | Medium   | Fixed - 15 min symmetric freshness window                                                                                                             |
+| 8   | Attachment channel tag auto-joined arbitrary rooms                        | Medium   | Fixed - the tag must name a joined room that `canSendMedia` allows                                                                                    |
+| 9   | Malformed compressed frame threw out of the decoder                       | Medium   | Fixed - missing bounds guard; 24 attacker-chosen bytes raised `RangeError` into the native BLE callback                                               |
+| 10  | `VOICE_FRAME` had no freshness window, so a burst replayed verbatim       | Medium   | Fixed - 30 s bound plus a broadcast requirement, matching bitchat                                                                                     |
+| 11  | Group creator not pinned, so a higher epoch could replace it              | Medium   | Fixed - a group keeps its original creator. Also fixed upstream                                                                                       |
+| 12  | Nutzap watcher race against a wipe during startup                         | Medium   | Fixed - startup captures a wipe generation before its first await and re-checks it before installing                                                  |
+| 13  | Gateway downlink accepted any event kind or age                           | Low      | Fixed - kind, freshness and cell gates, the same three the uplink already applied                                                                     |
+| 14  | Relay URL interpolated unescaped into generated source                    | Low      | Fixed - `JSON.stringify`; generator output byte-identical                                                                                             |
+| 15  | iOS `want*` latch set before validation                                   | Low      | Fixed - the latch is set per state branch; transient states keep it, refusals no longer arm the radio                                                 |
+| 16  | `forceStopRadios()` leaves the duty-cycle timer armed                     | Low      | Fixed - calls `stopScanCycle()`, so the queued toggle cannot restart the scanner after the service stops                                              |
+| 17  | Outbox receipts not scoped to the receipt's sender                        | Info     | Accepted - message IDs are 8 bytes of CSPRNG never sent in cleartext; availability-only impact                                                        |
+| 18  | Panic wipe was neither resumable nor non-blocking                         | High     | Fixed - a durable marker replays an interrupted wipe at launch; the cache walk yields instead of freezing the thread; the keychain step is time-boxed |
+| 19  | Two MMKV handles per partition, so the wipe segfaulted mid-sequence       | High     | Fixed - handles come from `store/mmkv`; clearing through a second handle corrupted the first and killed the process in `MMKV::loadMetaInfoAndCheck`   |
+| 20  | `deleteMMKV` on the wallet raced its own async persist write              | High     | Fixed - `wipeWalletStorage` drops the module's references, then clears through the handle it owns; deleting under a live handle locked a null mutex   |
 
 ## Known Issues
 

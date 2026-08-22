@@ -18,7 +18,7 @@
 // this adds no exposure that was not already there, and panic wipe clears both.
 
 import { bytesToHex, hexToBytes } from "@noble/hashes/utils.js";
-import { createMMKV } from "react-native-mmkv";
+import { getStorage } from "./mmkv";
 
 export interface OwedGroupState {
   // NoisePayloadType: GROUP_INVITE (0x06) or GROUP_KEY_UPDATE (0x07). Carried
@@ -40,7 +40,7 @@ const MAX_PER_PEER = 8;
 
 const STORAGE_ID = "group-invite-outbox";
 const STORAGE_KEY = "owed";
-const storage = createMMKV({ id: STORAGE_ID });
+const storage = getStorage(STORAGE_ID);
 
 type Owed = Record<string, OwedGroupState[]>;
 

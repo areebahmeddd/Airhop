@@ -60,6 +60,7 @@ import {
   setNutzapRebinder,
   setNutzapWatcher,
 } from "@services/nutzap-watcher-handle";
+import { panicWipe } from "@services/panic-wipe";
 import { applyPresence } from "@services/presence-service";
 import {
   primeTorRoutingOnStartup,
@@ -76,6 +77,7 @@ import {
   currentWipeGeneration,
   isCurrentWipeGeneration,
 } from "@services/wipe-generation";
+import { isPanicWipePending } from "@services/wipe-marker";
 import { useActivityStore } from "@store/activity-store";
 import { showAlert } from "@store/alert-store";
 import {
@@ -569,6 +571,20 @@ function AppContent(): React.JSX.Element {
   // appReady guards against a flash of the welcome screen on every launch.
   // The identity check is async, so we render nothing until it resolves.
   const [appReady, setAppReady] = useState(false);
+  // A wipe is destroying this device's data right now. Two ways in, one screen:
+  // triggered from Profile, or resumed at launch after the last session died
+  // partway through one.
+  //
+  // Seeded in the initialiser rather than an effect, so a launch with a wipe to
+  // finish renders the wiping screen on its first frame.
+  const [wipeInProgress, setWipeInProgress] = useState(() =>
+    isPanicWipePending(),
+  );
+  // The same answer, where the mount effect can read it. Seeded from the state
+  // above so the marker is consulted once per launch rather than from two places
+  // that could disagree, and a ref so the effect stays mount-only instead of
+  // carrying a dependency it must never re-run on.
+  const resumingWipe = useRef(wipeInProgress);
   // Load JetBrains Mono in the background so it is ready the instant a user
   // picks it under Appearance. Startup is NOT gated on it: the app defaults to
   // the system monospace, so there is nothing to wait for and a missing/unlinked
@@ -654,90 +670,122 @@ function AppContent(): React.JSX.Element {
   // On mount: check for an existing persisted identity. If found, skip
   // onboarding and start the BLE mesh service immediately.
   useEffect(() => {
-    // Time-boxed, because this one promise decides whether the app renders at
-    // all. `readSecret` reaches the Keystore, and a Keystore that
-    // stalls never rejects - it simply does not answer. The `.catch` below
-    // covers a refusal; nothing covered silence, so the app sat on the blank
-    // background-coloured view above forever, which reads as a hung splash.
-    //
-    // Timing out yields `null`, which is the same answer a first install gives,
-    // so the user lands on onboarding rather than on nothing. That is the right
-    // failure: a device whose keychain is unreachable cannot load an identity
-    // this launch either way, and IdentityScreen surfaces the write failure
-    // where it can be read. IDENTITY_LOAD_TIMEOUT_MS is far longer than a
-    // healthy read (single-digit milliseconds) so a slow-but-working device is
-    // never sent to onboarding by mistake.
-    withTimeout(loadIdentity(), IDENTITY_LOAD_TIMEOUT_MS, null)
-      .then((existing) => {
-        if (existing) {
-          setGeneratedPeerID(existing.peerID);
-          setOnboardingStep(null);
-          // Android can destroy the Activity while the foreground service keeps
-          // the process (and the JS runtime, and the mesh) alive. Reopening then
-          // remounts this component with everything already set up, and tearing
-          // that down just to rebuild it is what made a reopen feel like a hang:
-          // a full stop() says goodbye to every peer, drops the relay pool, and
-          // bounces the foreground service, all to arrive back where we started.
-          //
-          // So a cold start is exactly: no mesh at all, or one belonging to a
-          // different identity (a wipe re-onboarded as someone else). An
-          // existing mesh is left alone whatever state it is in - including
-          // stopped, because the only things that stop it are the user choosing
-          // Away and the notification's "Stop mesh". Restarting it here would
-          // undo a decision they just made, from an event they didn't trigger.
-          const existingMesh = getMeshService();
-          if (existingMesh?.peerID !== existing.peerID) {
-            void startMeshWithPermissions(
-              existing,
-              peerIDToUsername(existing.peerID),
-            );
+    // Wrapped so the launch can be held behind an unfinished wipe below. The
+    // body is unchanged; only who calls it, and when, is new.
+    const startBoot = (): void => {
+      // Time-boxed, because this one promise decides whether the app renders at
+      // all. `readSecret` reaches the Keystore, and a Keystore that
+      // stalls never rejects - it simply does not answer. The `.catch` below
+      // covers a refusal; nothing covered silence, so the app sat on the blank
+      // background-coloured view above forever, which reads as a hung splash.
+      //
+      // Timing out yields `null`, which is the same answer a first install gives,
+      // so the user lands on onboarding rather than on nothing. That is the right
+      // failure: a device whose keychain is unreachable cannot load an identity
+      // this launch either way, and IdentityScreen surfaces the write failure
+      // where it can be read. IDENTITY_LOAD_TIMEOUT_MS is far longer than a
+      // healthy read (single-digit milliseconds) so a slow-but-working device is
+      // never sent to onboarding by mistake.
+      withTimeout(loadIdentity(), IDENTITY_LOAD_TIMEOUT_MS, null)
+        .then((existing) => {
+          if (existing) {
+            setGeneratedPeerID(existing.peerID);
+            setOnboardingStep(null);
+            // Android can destroy the Activity while the foreground service keeps
+            // the process (and the JS runtime, and the mesh) alive. Reopening then
+            // remounts this component with everything already set up, and tearing
+            // that down just to rebuild it is what made a reopen feel like a hang:
+            // a full stop() says goodbye to every peer, drops the relay pool, and
+            // bounces the foreground service, all to arrive back where we started.
+            //
+            // So a cold start is exactly: no mesh at all, or one belonging to a
+            // different identity (a wipe re-onboarded as someone else). An
+            // existing mesh is left alone whatever state it is in - including
+            // stopped, because the only things that stop it are the user choosing
+            // Away and the notification's "Stop mesh". Restarting it here would
+            // undo a decision they just made, from an event they didn't trigger.
+            const existingMesh = getMeshService();
+            if (existingMesh?.peerID !== existing.peerID) {
+              void startMeshWithPermissions(
+                existing,
+                peerIDToUsername(existing.peerID),
+              );
+            }
+            // Restore the last open thread after an OS-kill-and-reopen. The
+            // channel name is persisted by setLastThread and cleared by closeThread.
+            const { lastThread } = useChatStore.getState();
+            if (lastThread) {
+              if (lastThread.startsWith("dm:")) setChatSubTab("dms");
+              setChatView({ kind: "thread", channel: lastThread });
+            }
+          } else {
+            // First launch: show the welcome/onboarding flow.
+            setOnboardingStep("welcome");
+            // No identity means nothing on this device owns a wallet secret, so
+            // anything still in the keychain is a leftover - in practice, a panic
+            // wipe the Keystore refused while the phone was locked. Sweeping here
+            // is what makes that wipe retry itself instead of failing once and
+            // staying failed.
+            //
+            // Deliberately not awaited: it is a keychain round trip and the
+            // welcome screen must not wait on it. That is also why the sweep
+            // leaves the identity item alone - the very next thing onboarding does
+            // is write one, and a delete still in flight would take it with it.
+            // See sweepOrphanedSecrets. A first install finds nothing and this is
+            // three no-op deletes.
+            void sweepOrphanedSecrets()
+              .then((leftovers) => {
+                // Only ever raises the banner. Clearing is not this call's to do:
+                // a wipe in THIS session sets the flag from its own result, and it
+                // could still be in flight - the primer, the OS dialogs and the
+                // mesh start all sit between. Every launch re-derives it from
+                // scratch, which is what makes it self-clearing.
+                if (leftovers) {
+                  useMeshStateStore.getState().setWipeIncomplete(true);
+                }
+              })
+              .catch(() => {
+                // Unreachable keychain. It said nothing about data at rest, so
+                // neither do we.
+              });
           }
-          // Restore the last open thread after an OS-kill-and-reopen. The
-          // channel name is persisted by setLastThread and cleared by closeThread.
-          const { lastThread } = useChatStore.getState();
-          if (lastThread) {
-            if (lastThread.startsWith("dm:")) setChatSubTab("dms");
-            setChatView({ kind: "thread", channel: lastThread });
-          }
-        } else {
-          // First launch: show the welcome/onboarding flow.
+          setAppReady(true);
+        })
+        .catch(() => {
+          // Keychain unavailable (e.g. simulator without secure enclave).
+          // Fall through to onboarding so identity can be generated and stored later.
           setOnboardingStep("welcome");
-          // No identity means nothing on this device owns a wallet secret, so
-          // anything still in the keychain is a leftover - in practice, a panic
-          // wipe the Keystore refused while the phone was locked. Sweeping here
-          // is what makes that wipe retry itself instead of failing once and
-          // staying failed.
-          //
-          // Deliberately not awaited: it is a keychain round trip and the
-          // welcome screen must not wait on it. That is also why the sweep
-          // leaves the identity item alone - the very next thing onboarding does
-          // is write one, and a delete still in flight would take it with it.
-          // See sweepOrphanedSecrets. A first install finds nothing and this is
-          // three no-op deletes.
-          void sweepOrphanedSecrets()
-            .then((leftovers) => {
-              // Only ever raises the banner. Clearing is not this call's to do:
-              // a wipe in THIS session sets the flag from its own result, and it
-              // could still be in flight - the primer, the OS dialogs and the
-              // mesh start all sit between. Every launch re-derives it from
-              // scratch, which is what makes it self-clearing.
-              if (leftovers) {
-                useMeshStateStore.getState().setWipeIncomplete(true);
-              }
-            })
-            .catch(() => {
-              // Unreachable keychain. It said nothing about data at rest, so
-              // neither do we.
-            });
-        }
-        setAppReady(true);
-      })
-      .catch(() => {
-        // Keychain unavailable (e.g. simulator without secure enclave).
-        // Fall through to onboarding so identity can be generated and stored later.
-        setOnboardingStep("welcome");
-        setAppReady(true);
-      });
+          setAppReady(true);
+        });
+    };
+
+    // Finish a wipe the last session did not. See services/wipe-marker.
+    //
+    // Ahead of everything, including the identity read: nothing may start under
+    // an identity this launch is about to destroy, and the mesh must not
+    // advertise one. No teardown first, unlike the in-session wipe, because
+    // `startBoot` is what builds the mesh and has not run yet.
+    if (!resumingWipe.current) {
+      startBoot();
+      return;
+    }
+    void (async () => {
+      let keysDestroyed = false;
+      try {
+        ({ keysDestroyed } = await panicWipe());
+      } catch {
+        // The marker is still set, so the next launch tries again. This one
+        // still has to open: an app that will not start is not a safer place to
+        // be stuck than one wiped twice.
+      }
+      // Set AFTER panicWipe, whose own store reset would otherwise clear it.
+      // The banner then stands until a launch shows it is no longer true.
+      if (!keysDestroyed) {
+        useMeshStateStore.getState().setWipeIncomplete(true);
+      }
+      setWipeInProgress(false);
+      startBoot();
+    })();
   }, []);
 
   // Aggregate unread for the badges, muted conversations excluded (their
@@ -1286,6 +1334,33 @@ function AppContent(): React.JSX.Element {
   }, [tab, canGoBackInTab, goBackInTab, navigateToTab]);
 
   // ---- Render ----
+
+  // A wipe is running. Say so, and say nothing else.
+  //
+  // No controls, deliberately: there is nothing to cancel, and the sequence
+  // resumes if the process dies here. All the user needs is the difference
+  // between working and hung.
+  //
+  // Ahead of the appReady gate because a resumed wipe runs before the identity
+  // is read, while appReady is still false. Rendered without the tab shell, so
+  // the tree under it unmounts: nothing is left rendering the identity being
+  // destroyed, or holding a timer over it.
+  if (wipeInProgress) {
+    return (
+      <GestureHandlerRootView style={{ flex: 1 }}>
+        <SafeAreaProvider initialMetrics={initialWindowMetrics}>
+          <View style={styles.wiping}>
+            <Text style={styles.wipingTitle} accessibilityRole="header">
+              {T("settings.wipe.in_progress")}
+            </Text>
+            <Text style={styles.wipingBody}>
+              {T("settings.wipe.in_progress_body")}
+            </Text>
+          </View>
+        </SafeAreaProvider>
+      </GestureHandlerRootView>
+    );
+  }
 
   // Render nothing until the identity check resolves (and the bundled font is
   // ready). This prevents a flash of the welcome screen for returning users on
@@ -1910,11 +1985,15 @@ function AppContent(): React.JSX.Element {
                       username={username}
                       onCanGoBackChange={setProfileCanGoBack}
                       popSignal={profilePopSignal}
+                      // Before the first byte is destroyed, so the wiping
+                      // screen covers the whole of it.
+                      onWipeStart={() => setWipeInProgress(true)}
                       onWipe={() => {
                         // The mesh is already down and its keys released: the
                         // wipe does that first, before it clears anything.
                         // All that is left here is putting the shell back to
                         // a first-run state.
+                        setWipeInProgress(false);
                         setGeneratedPeerID(FALLBACK_PEER_ID);
                         // Reset navigation to the fresh-start landing tab.
                         // Panic wipe is triggered from Profile, so without this
@@ -2097,6 +2176,26 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
     },
     flexFill: {
       flex: 1,
+    },
+    wiping: {
+      flex: 1,
+      alignItems: "center",
+      justifyContent: "center",
+      paddingHorizontal: Spacing.xl,
+      gap: Spacing.sm,
+      backgroundColor: Colors.bg,
+    },
+    wipingTitle: {
+      fontSize: FontSize.lg,
+      fontWeight: FontWeight.semibold,
+      color: Colors.textPrimary,
+      textAlign: "center",
+    },
+    wipingBody: {
+      fontSize: FontSize.sm,
+      color: Colors.textSecondary,
+      textAlign: "center",
+      lineHeight: FontSize.sm * 1.6,
     },
     header: {
       flexDirection: "row",

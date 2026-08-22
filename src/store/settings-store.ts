@@ -5,9 +5,9 @@
 
 import { MAX_CUSTOM_RELAYS, validateRelayUrl } from "@core/nostr/geo-relay";
 import type { BitcoinUnit } from "@core/payments/cashu";
-import { createMMKV } from "react-native-mmkv";
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
+import { getStorage } from "./mmkv";
 
 // "system" is the unset state, not a listed choice: until you pick a side the
 // app is whichever the phone is, and follows it when the phone changes. The
@@ -192,7 +192,7 @@ const DEFAULTS = {
   backgroundLimitsAcknowledged: false,
 } satisfies Partial<SettingsState>;
 
-const storage = createMMKV({ id: "settings-store" });
+const storage = getStorage("settings-store");
 
 const mmkvStorage = {
   getItem: (name: string): string | null => storage.getString(name) ?? null,

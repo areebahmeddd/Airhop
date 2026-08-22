@@ -9,9 +9,9 @@
 //
 // Panic wipe clears this, since a bookmark reveals a place the user cares about.
 
-import { createMMKV } from "react-native-mmkv";
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
+import { getStorage } from "./mmkv";
 
 interface GeohashBookmarksState {
   // Geohash cells, newest first.
@@ -22,7 +22,7 @@ interface GeohashBookmarksState {
   clearAll: () => void;
 }
 
-const storage = createMMKV({ id: "geohash-bookmarks-store" });
+const storage = getStorage("geohash-bookmarks-store");
 
 const mmkvStorage = {
   getItem: (name: string): string | null => storage.getString(name) ?? null,

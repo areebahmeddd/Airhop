@@ -7,8 +7,9 @@
 //   3. Deletes received media files from the cache (photos, videos, voice
 //      notes), which live on disk, not in MMKV, and would otherwise survive.
 //
-// The function is intentionally synchronous where possible and completes
-// in well under 1 second on all supported devices.
+// This takes real time on a device with real data on it, and two rules follow
+// from that: every step that can stall is time-boxed, and the sequence is
+// resumable if the process dies partway through (see ./wipe-marker).
 //
 // After this call the app is left in an empty, first-run state.
 // A restart will trigger key regeneration at next launch.
@@ -27,6 +28,7 @@ import { clearOwedGroupStates } from "@store/group-invite-outbox-store";
 import { useGroupStore } from "@store/group-store";
 import { useLocationNotesStore } from "@store/location-notes-store";
 import { useMeshStateStore } from "@store/mesh-state-store";
+import { getStorage } from "@store/mmkv";
 import { useOutboxStore } from "@store/outbox-store";
 import { usePeerStore } from "@store/peer-store";
 import { usePlaceNamesStore } from "@store/place-names-store";
@@ -35,21 +37,30 @@ import { useTransferStore } from "@store/transfer-store";
 import {
   resetWalletStorage,
   useWalletStore,
-  WALLET_STORAGE_ID,
+  wipeWalletStorage,
 } from "@store/wallet-store";
-import { settleOr } from "@utils/with-timeout";
-import { createMMKV, deleteMMKV } from "react-native-mmkv";
+import { settleOr, withTimeout } from "@utils/with-timeout";
 import { wipeCacheDirectory } from "./file-transfer-service";
 import { clearLocationCache } from "./location-service";
 import { dismissAllNotifications } from "./notification-service";
 import { setNutzapRebinder, stopNutzapWatcher } from "./nutzap-watcher-handle";
 import { resetWalletService } from "./wallet-service";
 import { bumpWipeGeneration } from "./wipe-generation";
+import { beginPanicWipe, endPanicWipe } from "./wipe-marker";
 
 // Ceiling on the two best-effort steps that run after the data is destroyed.
 // Long enough for a normal native round trip, short enough that the confirm
 // sheet never looks stuck on the one gesture that has to feel instant.
 const BEST_EFFORT_TIMEOUT_MS = 2_000;
+
+// Ceiling on the keychain wipe, the one step everything else waits behind.
+//
+// A Keystore that stalls does not reject, it never answers, so only a deadline
+// separates it from one about to succeed. `keysDestroyed: false` already carries
+// that answer to the alert, the wipeIncomplete banner and the next launch's
+// retry. Generous, because a healthy delete is a few milliseconds: past this the
+// binder is wedged rather than the device slow.
+const KEY_WIPE_TIMEOUT_MS = 5_000;
 
 // The IDs used by all MMKV storage instances in src/store/ and src/core/.
 // peer-store is intentionally absent: it uses in-memory Zustand with no MMKV
@@ -59,6 +70,10 @@ const BEST_EFFORT_TIMEOUT_MS = 2_000;
 // blocked-store records who this identity has blocked, which is tied to this
 // identity's relationships, same as chat data, so it goes too.
 // If a new persisted store is added, add its MMKV ID here.
+// One exception, and it is not an oversight: the wipe marker's partition
+// (services/wipe-marker) must never appear here. It records that this wipe is
+// running, so clearing it halfway through destroys the only thing that could
+// finish the job after a crash.
 // outbox-store holds undelivered plaintext DMs awaiting a route, exactly the
 // kind of content a panic wipe exists to destroy, so it must be cleared too.
 // contacts-store holds who this identity knows, plus their public keys, the
@@ -94,14 +109,6 @@ export const MMKV_STORE_IDS = [
   "place-names-store",
 ] as const;
 
-// The wallet store is handled separately from MMKV_STORE_IDS above: its file is
-// AES-256 encrypted, so opening it with `createMMKV({ id })` (no key) to call
-// clearAll() is not reliable. `deleteMMKV` removes the instance and its backing
-// file outright, which works whatever the encryption state. The key itself is
-// already destroyed by clearKeys() wiping the Keychain/Keystore, so even a
-// failed delete leaves ciphertext nobody can open.
-const WALLET_STORE_IDS = [WALLET_STORAGE_ID] as const;
-
 // What the wipe managed to do. Only the one claim the caller must not make
 // falsely: everything else is best-effort and its failure changes nothing the
 // user needs to decide about.
@@ -113,6 +120,11 @@ export interface PanicWipeResult {
 }
 
 export async function panicWipe(): Promise<PanicWipeResult> {
+  // 0. Record the intent BEFORE anything is destroyed. Everything below is a
+  //    sequence, not a transaction, and the process can die anywhere in it.
+  //    See ./wipe-marker.
+  beginPanicWipe();
+
   // 0a. Invalidate startup work still in flight. Stopping the watcher below
   //     only reaches one already installed; a startup mid-relay-publish would
   //     install its replacement afterwards. See wipe-generation.ts.
@@ -154,24 +166,29 @@ export async function panicWipe(): Promise<PanicWipeResult> {
   //    wipeAllSecrets walks the item registry (expo-secure-store has no
   //    clear-all), attempting each even after one fails and throwing only if
   //    something was left behind.
-  let keysDestroyed = true;
+  //
+  //    Time-boxed as well as guarded: the try/catch covers a keychain that
+  //    refuses, the deadline one that goes quiet. See KEY_WIPE_TIMEOUT_MS.
+  let keysDestroyed = false;
   try {
-    await wipeAllSecrets();
+    keysDestroyed = await withTimeout(
+      wipeAllSecrets().then(() => true),
+      KEY_WIPE_TIMEOUT_MS,
+      false,
+    );
   } catch {
     keysDestroyed = false;
   }
 
-  // 2. Clear every MMKV partition.
+  // 2. Clear every MMKV partition, through the one handle each is persisted
+  //    through. See store/mmkv for why a second handle is fatal.
   for (const id of MMKV_STORE_IDS) {
-    createMMKV({ id }).clearAll();
+    getStorage(id).clearAll();
   }
-  for (const id of WALLET_STORE_IDS) {
-    try {
-      deleteMMKV(id);
-    } catch {
-      // Instance never opened on this device, or already gone.
-    }
-  }
+  // The wallet is encrypted and asynchronously persisted, so it destroys
+  // itself through the handle it owns rather than being deleted from here.
+  // See wipeWalletStorage.
+  wipeWalletStorage();
 
   // 3. Reset Zustand in-memory state so stale data does not appear after wipe.
   //    MMKV clearing above only affects persistence; live store state is separate.
@@ -261,6 +278,7 @@ export async function panicWipe(): Promise<PanicWipeResult> {
   // Time-boxed: both remaining steps are best-effort and run after every byte
   // is already gone, but the caller holds the confirm sheet until this resolves,
   // and wipeTorState polls for Arti to exit before deleting its directory.
+  setTimeout(() => {}, 1000);
   await settleOr(dismissAllNotifications(), BEST_EFFORT_TIMEOUT_MS, undefined);
 
   // Stop Arti and destroy its data directory (iOS only; null elsewhere).
@@ -300,11 +318,21 @@ export async function panicWipe(): Promise<PanicWipeResult> {
   //    card all live under other names or in the pickers' own subdirectories and
   //    survived every wipe. See wipeCacheDirectory. Best-effort: a failure here
   //    must not abort the wipe, the keys and stores are already gone.
+  //
+  //    Awaited: it yields between batches rather than holding the thread, and
+  //    awaiting it is what keeps step 5 honest.
   try {
-    wipeCacheDirectory();
+    await wipeCacheDirectory();
   } catch {
     // Cache directory missing or unreadable: nothing to clear.
   }
+
+  // 5. The sequence finished, so the next launch has nothing to resume.
+  //
+  //    Not in a `finally`, and not conditional on `keysDestroyed`: a throw on
+  //    the way here means it did NOT finish, and the marker surviving is what
+  //    makes the next launch pick it up. See endPanicWipe.
+  endPanicWipe();
 
   // Whether the secrets themselves actually went. Everything else above is
   // best-effort and reported as done; this one the caller has to be able to tell

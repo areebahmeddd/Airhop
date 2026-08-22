@@ -245,6 +245,11 @@ const SETTINGS_PARENT_VIEW: Partial<Record<SettingsView, SettingsView>> = {
 interface Props {
   peerID: string;
   username: string;
+  // Raised before anything is destroyed, so the shell can put its wiping screen
+  // up. Separate from `onWipe`, which lands when the wipe has FINISHED: the gap
+  // between them is seconds on a phone with a full cache, and the sheet has no
+  // way to say so.
+  onWipeStart?: () => void;
   onWipe?: () => void;
   // This screen owns a navigation stack the shell cannot see: its sections are
   // early returns, not routes. The shell needs its depth so a horizontal swipe
@@ -258,6 +263,7 @@ interface Props {
 export default function ProfileScreen({
   peerID,
   username,
+  onWipeStart,
   onWipe,
   onCanGoBackChange,
   popSignal = 0,
@@ -357,7 +363,17 @@ export default function ProfileScreen({
     goBack();
   }, [popSignal, goBack]);
 
+  // See the guard at the top of handleConfirmWipe.
+  const wipeInFlight = useRef(false);
+
   async function handleConfirmWipe(): Promise<void> {
+    // One wipe at a time. A ref rather than state, because both entry points
+    // call this synchronously and a state update would not land in time to stop
+    // the second. Never lowered: every path out ends with the shell replacing
+    // this screen, so there is no state to return to.
+    if (wipeInFlight.current) return;
+    wipeInFlight.current = true;
+
     // Order matters. The mesh comes down FIRST: it is a live process with radios
     // open and relay subscriptions running, and anything that lands while the
     // wipe is in flight would be written straight back into the stores the wipe
@@ -365,15 +381,25 @@ export default function ProfileScreen({
     // identity that is about to cease existing, which is the last honest moment
     // to send it. Destroying rather than stopping releases the key material too.
     destroyMeshService();
+
+    // Then hand the screen over, before the first destructive step rather than
+    // after the last. Both calls are synchronous and neither can fail, so the
+    // tap is answered immediately whatever the wipe does next. An irreversible
+    // action that looks like a tap that never registered invites the user to
+    // kill the app, which is how a wipe ends up half-finished.
+    setShowWipeModal(false);
+    onWipeStart?.();
+
     // Never leaves the app mid-wipe.
     //
     // `await panicWipe()` must stay wrapped: both callers invoke this as
-    // `void handleConfirmWipe()`, so a rejection skips the two lines below. The
-    // confirm sheet then stays open over a half-wiped app, the shell is never told
-    // to drop to onboarding, and the only thing the user has seen is
-    // the triple-tap's warning haptic - which fires BEFORE any of this runs. The
-    // one irreversible action in the app reported its own failure by doing
-    // nothing at all.
+    // `void handleConfirmWipe()`, so an unwrapped rejection skips everything
+    // below and `onWipe` is never called, stranding the shell on the wiping
+    // screen for the rest of the session.
+    //
+    // Catching does not paper over the failure. panicWipe leaves its marker set
+    // when it throws, so the next launch finishes the wipe; this only makes
+    // sure the user can reach that launch.
     let keysDestroyed = false;
     try {
       ({ keysDestroyed } = await panicWipe());
@@ -382,7 +408,6 @@ export default function ProfileScreen({
       // something outside it threw. The app still drops to onboarding below,
       // because a half-wiped app the user cannot leave is the worse end state.
     }
-    setShowWipeModal(false);
     onWipe?.();
     // The one claim that must not be made falsely. Everything else is gone
     // either way; if the OS refused to release the keys, the user has to know,

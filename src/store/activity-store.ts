@@ -9,9 +9,9 @@
 // themselves live in chat-store. Persisted so the history survives a restart,
 // and capped so a busy channel can't grow it without bound.
 
-import { createMMKV } from "react-native-mmkv";
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
+import { getStorage } from "./mmkv";
 
 export interface ActivityEntry {
   // The originating message id, so the same message is never logged twice.
@@ -58,7 +58,7 @@ interface ActivityState {
   clearAll: () => void;
 }
 
-const storage = createMMKV({ id: "activity-store" });
+const storage = getStorage("activity-store");
 
 const mmkvStorage = {
   getItem: (name: string): string | null => storage.getString(name) ?? null,

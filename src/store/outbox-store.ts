@@ -15,9 +15,9 @@
 // the case that actually matters day to day, the recipient becoming reachable
 // again, without trusting intermediates to carry ciphertext.
 
-import { createMMKV } from "react-native-mmkv";
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
+import { getStorage } from "./mmkv";
 
 export interface PendingMessage {
   // Mirrors the ChatMessage id so the UI can reconcile delivery state.
@@ -78,7 +78,7 @@ interface OutboxState {
   clearAll: () => void;
 }
 
-const storage = createMMKV({ id: "outbox-store" });
+const storage = getStorage("outbox-store");
 
 const mmkvStorage = {
   getItem: (name: string): string | null => storage.getString(name) ?? null,

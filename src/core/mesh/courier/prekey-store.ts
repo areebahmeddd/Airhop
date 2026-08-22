@@ -19,7 +19,7 @@
 
 import { x25519 } from "@noble/curves/ed25519.js";
 import { bytesToHex, hexToBytes } from "@noble/hashes/utils.js";
-import { createMMKV } from "react-native-mmkv";
+import { getStorage } from "@store/mmkv";
 import {
   PREKEY_MAX_PREKEYS,
   signPrekeyBundle,
@@ -54,7 +54,7 @@ export class LocalPrekeyStore {
   private state: LocalState;
 
   constructor(mmkvId = "prekey-store") {
-    this.storage = createMMKV({ id: mmkvId });
+    this.storage = getStorage(mmkvId);
     this.state = this.load();
     this.ensure();
   }
@@ -165,7 +165,7 @@ export class PeerPrekeyStore {
   private peers: Record<string, StoredPeerBundle>;
 
   constructor(mmkvId = "prekey-store") {
-    this.storage = createMMKV({ id: mmkvId });
+    this.storage = getStorage(mmkvId);
     this.peers = this.load();
   }
 

@@ -13,8 +13,8 @@ import {
   type GroupStatePayload,
 } from "@core/mesh/rooms/group-protocol";
 import { bytesToHex, hexToBytes } from "@noble/hashes/utils.js";
-import { createMMKV } from "react-native-mmkv";
 import { create } from "zustand";
+import { getStorage } from "./mmkv";
 
 interface StoredMember {
   fingerprint: string;
@@ -52,7 +52,7 @@ interface GroupState {
 
 const STORAGE_ID = "group-store";
 const STORAGE_KEY = "groups";
-const storage = createMMKV({ id: STORAGE_ID });
+const storage = getStorage(STORAGE_ID);
 
 function toStoredMember(m: GroupMember): StoredMember {
   return {

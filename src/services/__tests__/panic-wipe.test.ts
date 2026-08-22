@@ -6,7 +6,11 @@
 import { wipeAllSecrets } from "@core/crypto/keychain";
 import { useChatStore } from "@store/chat-store";
 import { useMeshStateStore } from "@store/mesh-state-store";
-import { WALLET_STORAGE_ID } from "@store/wallet-store";
+import {
+  bootstrapWalletStorage,
+  resetWalletStorage,
+  WALLET_STORAGE_ID,
+} from "@store/wallet-store";
 import { wipeCacheDirectory } from "../file-transfer-service";
 import { dismissAllNotifications } from "../notification-service";
 import { setNutzapWatcher } from "../nutzap-watcher-handle";
@@ -15,6 +19,7 @@ import {
   currentWipeGeneration,
   isCurrentWipeGeneration,
 } from "../wipe-generation";
+import { endPanicWipe, isPanicWipePending } from "../wipe-marker";
 
 // wipeAllSecrets reaches the Keychain/Keystore; mock it out in tests. Only that
 // one export: KEYCHAIN_ITEMS is read at module scope by wallet-store and
@@ -28,7 +33,7 @@ jest.mock("@core/crypto/keychain", () => ({
 // The cache wipe touches expo-file-system; mock the whole module so the test
 // stays a pure unit and can assert the wipe was invoked.
 jest.mock("../file-transfer-service", () => ({
-  wipeCacheDirectory: jest.fn(),
+  wipeCacheDirectory: jest.fn().mockResolvedValue(undefined),
 }));
 
 // Dismissing the tray reaches expo-notifications, which registers push
@@ -43,13 +48,26 @@ jest.mock("../notification-service", () => ({
 // shared clearAll spy so tests can assert on it.
 jest.mock("react-native-mmkv", () => {
   const clearAll = jest.fn();
+  const opened: string[] = [];
 
   class MockMMKV {
-    private _store = new Map<string, string>();
-    getString(key: string): string | undefined {
-      return this._store.get(key);
+    // A plain field, not a constructor parameter property: Babel hoists this
+    // factory above the imports and reads the shorthand's `id` as an
+    // out-of-scope variable.
+    readonly id: string;
+    constructor(id: string) {
+      this.id = id;
     }
-    set(key: string, value: string): void {
+    private _store = new Map<string, unknown>();
+    getString(key: string): string | undefined {
+      return this._store.get(key) as string | undefined;
+    }
+    // The wipe marker is a boolean, and it is the one value in the app read
+    // back through this rather than through Zustand's persist middleware.
+    getBoolean(key: string): boolean | undefined {
+      return this._store.get(key) as boolean | undefined;
+    }
+    set(key: string, value: string | boolean): void {
       this._store.set(key, value);
     }
     remove(key: string): void {
@@ -57,37 +75,58 @@ jest.mock("react-native-mmkv", () => {
     }
     clearAll(): void {
       this._store.clear();
-      clearAll();
+      clearAll(this.id);
     }
   }
 
   const instances = new Map<string, MockMMKV>();
   return {
     createMMKV: ({ id = "default" }: { id?: string } = {}) => {
-      if (!instances.has(id)) instances.set(id, new MockMMKV());
+      // Every call, not every distinct id: a second handle to a partition
+      // another module holds is the failure worth asserting on.
+      opened.push(id);
+      if (!instances.has(id)) instances.set(id, new MockMMKV(id));
       return instances.get(id)!;
     },
-    // The encrypted wallet store is removed with deleteMMKV, not clearAll, so
-    // the mock has to expose it for the wipe to be assertable.
+    // Only reached for a wallet partition nothing ever opened; an open one is
+    // cleared through its own handle instead.
     deleteMMKV: jest.fn(() => true),
     __mockClearAll: clearAll,
+    __mockOpened: opened,
   };
 });
 
 const mockClearKeys = wipeAllSecrets as jest.Mock;
 const mmkvMock = jest.requireMock("react-native-mmkv") as {
   __mockClearAll: jest.Mock;
+  __mockOpened: string[];
   deleteMMKV: jest.Mock;
 };
 const mockClearAll = mmkvMock.__mockClearAll;
 const deleteMMKV = mmkvMock.deleteMMKV;
+
+function clearedPartitions(): string[] {
+  return mockClearAll.mock.calls.map((call) => String(call[0]));
+}
 
 beforeEach(() => {
   mockClearKeys.mockClear();
   mockClearAll.mockClear();
   deleteMMKV.mockClear();
   (wipeCacheDirectory as jest.Mock).mockClear();
+  (wipeCacheDirectory as jest.Mock).mockResolvedValue(undefined);
   mockClearKeys.mockResolvedValue(undefined);
+  // The mock MMKV keeps one instance per id for the whole file, so the marker
+  // outlives a test the way it outlives a process. Each case starts from "no
+  // wipe was interrupted".
+  endPanicWipe();
+});
+
+// One case below drives the keychain timeout with fake timers. Restored here
+// rather than in that test: a mid-test failure skips the rest of its body, and
+// leaked fake timers then fail every case after it for an unrelated reason.
+afterEach(() => {
+  jest.useRealTimers();
 });
 
 describe("panicWipe", () => {
@@ -96,13 +135,32 @@ describe("panicWipe", () => {
     expect(mockClearKeys).toHaveBeenCalledTimes(1);
   });
 
-  test("clears all MMKV partitions", async () => {
+  test("clears every persisted partition, by name", async () => {
     await panicWipe();
-    // One clearAll call per persisted store: chat-store + wallet-store + blocked-store.
-    // Derived from the constant, not hardcoded: adding a persisted store must
-    // extend the wipe, and this assertion should follow it automatically rather
-    // than failing and inviting someone to just bump the number.
-    expect(mockClearAll).toHaveBeenCalledTimes(MMKV_STORE_IDS.length);
+    // Asserted by id rather than by count. Derived from the constant, so adding
+    // a persisted store extends this automatically rather than failing and
+    // inviting someone to bump a number.
+    expect(clearedPartitions()).toEqual(
+      expect.arrayContaining([...MMKV_STORE_IDS]),
+    );
+    // And the wallet, which is encrypted and clears itself through the handle
+    // it owns rather than being deleted from under one.
+    expect(clearedPartitions()).toContain(WALLET_STORAGE_ID);
+  });
+
+  test("opens one handle per partition, never a second", async () => {
+    // Two handles over one file do not share its cached meta info, so clearing
+    // through one and writing through the other segfaults the process. Nothing
+    // in JS catches that, so the wipe dies partway and the marker replays it.
+    mmkvMock.__mockOpened.length = 0;
+
+    await panicWipe();
+
+    const counts = new Map<string, number>();
+    for (const id of mmkvMock.__mockOpened) {
+      counts.set(id, (counts.get(id) ?? 0) + 1);
+    }
+    expect([...counts.entries()].filter(([, n]) => n > 1)).toEqual([]);
   });
 
   test("clears keys before MMKV (order: secure first)", async () => {
@@ -118,7 +176,7 @@ describe("panicWipe", () => {
     await panicWipe();
 
     expect(callOrder[0]).toBe("keys");
-    expect(callOrder.filter((x) => x === "mmkv").length).toBe(
+    expect(callOrder.filter((x) => x === "mmkv").length).toBeGreaterThanOrEqual(
       MMKV_STORE_IDS.length,
     );
   });
@@ -134,6 +192,78 @@ describe("panicWipe", () => {
     await expect(panicWipe()).resolves.toEqual({ keysDestroyed: true });
   });
 
+  test("reports the keys as not destroyed when the keychain never answers", async () => {
+    // A Keystore that stalls does not reject, it goes quiet, which the
+    // try/catch cannot see. Only the deadline separates it from a slow success.
+    jest.useFakeTimers();
+    mockClearKeys.mockReturnValue(new Promise(() => undefined));
+
+    const wipe = panicWipe();
+    await jest.advanceTimersByTimeAsync(10_000);
+    const result = await wipe;
+
+    expect(result.keysDestroyed).toBe(false);
+    // And the rest of the sequence still ran, rather than waiting behind it.
+    expect(clearedPartitions()).toEqual(
+      expect.arrayContaining([...MMKV_STORE_IDS]),
+    );
+    expect(wipeCacheDirectory).toHaveBeenCalledTimes(1);
+  });
+
+  test("marks a wipe as pending before it destroys anything", async () => {
+    // Written before the first destructive step or it guarantees nothing: a
+    // process that dies between the keys going and the stores going is exactly
+    // the case it exists for.
+    let pendingWhenKeysWent = false;
+    mockClearKeys.mockImplementation(() => {
+      pendingWhenKeysWent = isPanicWipePending();
+      return Promise.resolve();
+    });
+
+    await panicWipe();
+
+    expect(pendingWhenKeysWent).toBe(true);
+  });
+
+  test("clears the marker only once the last step has finished", async () => {
+    // After the media cache, not after the stores: the cache walk is the
+    // longest step and the likeliest to be interrupted.
+    let pendingDuringCacheWipe = false;
+    (wipeCacheDirectory as jest.Mock).mockImplementation(() => {
+      pendingDuringCacheWipe = isPanicWipePending();
+      return Promise.resolve();
+    });
+
+    await panicWipe();
+
+    expect(pendingDuringCacheWipe).toBe(true);
+    expect(isPanicWipePending()).toBe(false);
+  });
+
+  test("leaves the marker set when the wipe is interrupted", async () => {
+    // Storage failing partway stands in for the real case, a killed process.
+    // Either way the sequence did not finish, so the flag must survive.
+    mockClearAll.mockImplementationOnce(() => {
+      throw new Error("storage went away");
+    });
+
+    await expect(panicWipe()).rejects.toThrow();
+
+    expect(isPanicWipePending()).toBe(true);
+  });
+
+  test("clears the marker even when the keychain refused the keys", async () => {
+    // The marker means "the sequence did not finish", not "the keys are gone".
+    // Holding it for surviving keys, which retry separately, would replay the
+    // wipe over the identity the user creates next and destroy it.
+    mockClearKeys.mockRejectedValue(new Error("keychain locked"));
+
+    const result = await panicWipe();
+
+    expect(result.keysDestroyed).toBe(false);
+    expect(isPanicWipePending()).toBe(false);
+  });
+
   test("finishes the wipe even when the keychain refuses, and says so", async () => {
     // A locked Keychain is the seizure case this gesture exists for. The bare
     // await here used to abandon every step below it, leaving all thirteen MMKV
@@ -144,8 +274,9 @@ describe("panicWipe", () => {
     const result = await panicWipe();
 
     expect(result.keysDestroyed).toBe(false);
-    expect(mockClearAll).toHaveBeenCalledTimes(MMKV_STORE_IDS.length);
-    expect(deleteMMKV).toHaveBeenCalledWith(WALLET_STORAGE_ID);
+    expect(clearedPartitions()).toEqual(
+      expect.arrayContaining([...MMKV_STORE_IDS]),
+    );
     expect(wipeCacheDirectory).toHaveBeenCalledTimes(1);
   });
 
@@ -171,14 +302,29 @@ describe("panicWipe", () => {
     }
   });
 
-  test("deletes the encrypted wallet store rather than clearing it", async () => {
-    // The wallet file is AES-256 encrypted, so reopening it without the key to
-    // call clearAll() is unreliable. It is removed with deleteMMKV instead.
+  test("destroys an open wallet through its own handle, not by deleting it", async () => {
+    // Deleting the file frees the native instance while the async persist
+    // adapter still holds it, and the write its own clearAll schedules then
+    // lands on freed memory.
+    await bootstrapWalletStorage();
+
     await panicWipe();
-    expect(deleteMMKV).toHaveBeenCalledWith(WALLET_STORAGE_ID);
+
+    expect(clearedPartitions()).toContain(WALLET_STORAGE_ID);
+    expect(deleteMMKV).not.toHaveBeenCalled();
     // It must never appear in the plain clearAll list, or the wipe would depend
     // on being able to decrypt what it is trying to destroy.
     expect(MMKV_STORE_IDS).not.toContain(WALLET_STORAGE_ID);
+  });
+
+  test("deletes the wallet partition when nothing ever opened it", async () => {
+    // No handle, no race, and deleting is the only option for a wallet that was
+    // never unlocked on this device.
+    resetWalletStorage();
+
+    await panicWipe();
+
+    expect(deleteMMKV).toHaveBeenCalledWith(WALLET_STORAGE_ID);
   });
 
   test("stops the live nutzap subscription", async () => {
