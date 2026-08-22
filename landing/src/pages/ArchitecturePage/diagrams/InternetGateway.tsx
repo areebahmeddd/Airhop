@@ -65,11 +65,11 @@ export function InternetGateway() {
       <line x1={724} y1={128} x2={766} y2={128} stroke={LINE} markerEnd="url(#gw-arrow)" />
       <Box x={770} y={92} w={136} h={72} label="The world" sub="location channels" />
       <text x={16} y={216} fontFamily={MONO} fontSize={10} fill={MUTED}>
-        Off by default. When you turn it on, your phone carries a neighbor&rsquo;s public location
-        traffic to Nostr as packet type 0x28,
+        Off by default. When you turn it on, your phone carries a neighbor's public location traffic
+        to Nostr as packet type 0x28,
       </text>
       <text x={16} y={234} fontFamily={MONO} fontSize={10} fill={MUTED}>
-        verified against its own Schnorr signature first. It never carries anyone&rsquo;s private
+        verified against its own Schnorr signature first. It never carries anyone's private
         messages, because it could not read them anyway.
       </text>
     </svg>

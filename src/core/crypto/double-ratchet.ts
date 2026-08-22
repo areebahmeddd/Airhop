@@ -6,9 +6,12 @@
 // direct messages between two Airhop peers (packet type DR_ENCRYPTED); offline
 // courier mail takes the one-way Noise X + one-time prekey path instead.
 //
-// The root key comes from the completed Noise XX handshake's transcript hash,
-// which commits to both parties' ephemeral keys, so it cannot be reconstructed
-// from long-term keys after the fact. See tryInitDR in mesh-service.ts.
+// The root key comes from the completed Noise XX handshake's exporter secret,
+// which descends from a chaining key that absorbed both parties' ephemeral DH
+// outputs, so it cannot be reconstructed from long-term keys after the fact.
+// Not the transcript hash: mixHash absorbs only bytes that went over the wire,
+// so that value is public to anyone who captured the handshake. See tryInitDR
+// in mesh-service.ts.
 //
 // The ratchet has two interleaved components:
 //   Symmetric-key ratchet: derives sending/receiving message keys from chain keys

@@ -85,8 +85,9 @@ export default function PrivacyPage() {
               </li>
               <li>
                 <strong>Queued outgoing messages.</strong> A private message that has not yet been
-                delivered may remain in an encrypted local queue. It is{" "}
-                <strong>dropped after 24 hours</strong> if unacknowledged.
+                delivered stays in a local queue on your device so it can be sent once the recipient
+                is reachable again. It is <strong>dropped after seven days</strong> if it never goes
+                through.
               </li>
               <li>
                 <strong>Courier envelopes.</strong> If your device acts as a mesh courier for
@@ -133,7 +134,7 @@ export default function PrivacyPage() {
               <li>
                 Live voice, if you turn it on. Holding the mic streams your voice to everyone in
                 Bluetooth range as you speak. A public burst is signed but not encrypted, the same
-                as an attachment. In a direct message it stays inside that peer&apos;s encrypted
+                as a room attachment. In a direct message it stays inside that peer's encrypted
                 session. Nothing is recorded on either device.
               </li>
               <li>
@@ -154,12 +155,15 @@ export default function PrivacyPage() {
             </p>
             <p className="text-[15px] leading-[1.75]">
               <strong>
-                Attachments are an exception: photos, videos, voice notes, and files are signed but
-                not encrypted.
+                Attachments are a partial exception: a photo, video, voice note, or file posted to
+                the public Bluetooth room is signed but not encrypted.
               </strong>{" "}
-              This is the format bitchat uses, and matching it is what lets the two apps exchange
-              media at all. Because attachments relay hop by hop, any device carrying one can read
-              it. Treat an attachment as visible to the mesh, not private.
+              That is the format bitchat reads, and matching it is what lets the two apps exchange
+              media at all. Because attachments relay hop by hop, any device carrying a room
+              attachment can read it, so treat one as visible to the mesh rather than private. A
+              direct attachment is sealed inside that person's encrypted session, so no relay can
+              read it. An app that cannot open a sealed attachment receives the readable form
+              instead.
             </p>
             <p className="text-[15px] leading-[1.75]">
               Nearby mesh devices are not limited to Airhop.{" "}
@@ -205,7 +209,7 @@ export default function PrivacyPage() {
               <li>
                 <strong>Exact coordinates never leave your device</strong> and are never stored.
                 Your position is truncated to a grid cell, and the smallest cell we ever publish is
-                roughly 150 metres across.
+                roughly 150 meters across.
               </li>
               <li>
                 A cell still reveals an approximate area to peers and relays. A finer cell reveals a
@@ -277,13 +281,13 @@ export default function PrivacyPage() {
           <section className="border-line space-y-4 border-t pt-12 first:border-t-0 first:pt-0">
             <h2 className="text-ink text-base font-semibold">Mesh bridge (optional)</h2>
             <p className="text-[15px] leading-[1.75]">
-              A device with the mesh bridge enabled links your area&apos;s public #bluetooth channel
-              with another Bluetooth crowd out of radio range, carrying that public chat between
-              them over the internet. It only ever touches public #bluetooth traffic, never your
-              private messages, and every bridged message stays signed by its original author, so
-              the bridge cannot read private content or alter what it carries. A per-message
-              &quot;nearby only&quot; control keeps any single message off the internet. Enabling it
-              uses your own data connection and battery. Mesh bridge is off by default.
+              A device with the mesh bridge enabled links your area's public #bluetooth channel with
+              another Bluetooth crowd out of radio range, carrying that public chat between them
+              over the internet. It only ever touches public #bluetooth traffic, never your private
+              messages, and every bridged message stays signed by its original author, so the bridge
+              cannot read private content or alter what it carries. A per-message "nearby only"
+              control keeps any single message off the internet. Enabling it uses your own data
+              connection and battery. Mesh bridge is off by default.
             </p>
           </section>
 

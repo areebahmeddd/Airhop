@@ -69,7 +69,7 @@ const BOILERPLATE_SHORT =
   "Airhop is a free, open-source messenger that works with no internet: nearby phones form a Bluetooth mesh and relay messages for each other.";
 
 const BOILERPLATE_LONG =
-  "Airhop is a free, open-source messenger for iOS and Android that keeps working when the network does not. Phones near each other form a Bluetooth mesh and pass messages along, up to seven hops deep, with no towers, no servers and no accounts. Identity is a key pair generated on the device, direct messages are end-to-end encrypted with Noise XX and Double Ratchet, and Cashu ecash can move device to device with neither phone online. When the internet is available, Nostr relays extend location channels beyond Bluetooth range. Airhop is wire-compatible with bitchat and is maintained independently by Areeb Ahmed under the MIT licence.";
+  "Airhop is a free, open-source messenger for iOS and Android that keeps working when the network does not. Phones near each other form a Bluetooth mesh and pass messages along, up to seven hops deep, with no towers, no servers and no accounts. Identity is a key pair generated on the device, direct messages are end-to-end encrypted with Noise XX and Double Ratchet, and Cashu ecash can move device to device with neither phone online. When the internet is available, Nostr relays extend location channels beyond Bluetooth range. Airhop is wire-compatible with bitchat and is maintained independently by Areeb Ahmed under the MIT license.";
 
 function CopyRow({ value, children }: { value: string; children: React.ReactNode }) {
   const [copied, setCopied] = useState(false);
@@ -193,13 +193,13 @@ export default function BrandPage() {
               </div>
             </div>
             <p className="text-secondary mt-4 text-sm leading-relaxed">
-              Mark left, wordmark right, centred on the wordmark's cap height, gap about a quarter
+              Mark left, wordmark right, centered on the wordmark's cap height, gap about a quarter
               of the mark's width. The wordmark is always capitals, JetBrains Mono Bold, 0.34em
               tracking. Where the mark alone is understood, use the mark alone.
             </p>
           </Panel>
 
-          <Panel title="Colour">
+          <Panel title="Color">
             <p className="text-secondary text-sm leading-relaxed">
               Slightly cool layered neutrals, shared by the app and this site: one ramp, light and
               dark, with depth from stepping surfaces rather than shadows. These values are the
@@ -355,7 +355,7 @@ export default function BrandPage() {
               or the bitchat project.
             </p>
             <p className="text-secondary mt-4 text-sm leading-relaxed">
-              For anything not covered here, or if you need an asset that isn't included, contact{" "}
+              For anything not covered here, or if you need an asset that is not included, contact{" "}
               <TextLink href="mailto:hi@areeb.dev">hi@areeb.dev</TextLink>.
             </p>
           </Panel>

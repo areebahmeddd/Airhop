@@ -5,7 +5,7 @@ export function RouterLadder() {
     {
       n: "1",
       label: "Direct link",
-      note: "BLE mesh, or WiFi if a link exists",
+      note: "BLE mesh, WiFi or LAN if linked",
       cond: "a Noise session with them is already open",
       res: "encrypted and sent straight to them",
     },

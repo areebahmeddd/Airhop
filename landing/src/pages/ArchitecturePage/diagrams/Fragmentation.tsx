@@ -9,7 +9,7 @@ export function Fragmentation() {
       aria-label="File fragmentation and reassembly"
     >
       <Arrow id="fr-arrow" />
-      <Box x={16} y={96} w={150} h={64} label="1 MiB file" sub="image, voice, any type" strong />
+      <Box x={16} y={96} w={150} h={64} label="1 MB file" sub="image, voice, any type" strong />
       <line x1={170} y1={128} x2={214} y2={128} stroke={LINE} markerEnd="url(#fr-arrow)" />
       <Box x={218} y={96} w={140} h={64} label="split" sub="467 bytes each" />
       {[0, 1, 2, 3, 4].map((i) => (
@@ -49,8 +49,8 @@ export function Fragmentation() {
         the transfer never completes.
       </text>
       <text x={16} y={230} fontFamily={MONO} fontSize={10} fill={MUTED}>
-        467 payload bytes every 25 ms is where the ~19 KB/s figure comes from, so 1 MiB takes
-        roughly 56 seconds.
+        467 payload bytes every 25 ms is where the ~19 KB/s figure comes from, so 1 MB takes roughly
+        56 seconds.
       </text>
     </svg>
   );
