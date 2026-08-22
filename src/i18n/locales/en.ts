@@ -1889,6 +1889,18 @@ export const strings = {
   "settings.language.vi": "Vietnamese",
   "settings.language.soon": "Coming soon",
   "settings.language.soon_a11y": "{value}, coming soon",
+  "settings.language.set_a11y": "Set language to {value}",
+  // Shown on the row for a right-to-left language the user has chosen but that
+  // has not taken effect yet. See the direction note in src/i18n/index.ts: React
+  // Native fixes layout direction when the process starts, and Airhop will not
+  // restart itself to force it, because a relaunch drops every Noise session and
+  // empties the peer table.
+  "settings.language.pending": "On next open",
+  "settings.language.pending_a11y":
+    "{value}, applies the next time you open Airhop",
+  "settings.language.rtl_title": "Reopen Airhop to finish",
+  "settings.language.rtl_body":
+    "{value} reads right to left, and Airhop can only change direction when it starts. Close it and open it again to finish switching. Nothing is lost, and your mesh stays connected until you do.",
   "settings.theme.light": "Light",
   "settings.theme.light_desc": "Always use the light palette",
   "settings.theme.dark": "Dark",

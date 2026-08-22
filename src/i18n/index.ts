@@ -2,38 +2,162 @@
 //
 // Design, in one line: translations are plain TypeScript modules compiled into
 // the bundle, so the text a user reads is byte-identical on every device
-// running a given build. Nothing is fetched, nothing is negotiated, nothing
-// depends on the device. A translation fetch would be a network call and a
-// fingerprint, in an app whose whole point is making neither.
+// running a given build. Nothing is fetched, nothing is negotiated with a
+// server, nothing depends on a network. A translation fetch would be a network
+// call and a fingerprint, in an app whose whole point is making neither, and it
+// would fail in exactly the conditions Airhop exists for.
 //
 // There is no i18n library on purpose. i18next and react-intl bring namespaces,
 // lazy network backends and runtime string keys with no type safety, none of
 // which an offline-first app with a bundled catalog can use. Completeness comes
-// from `tsc` instead; see `locales/types.ts`.
+// from `tsc` instead; see `locales/types.ts`. Plural selection is nine rules in
+// `plurals.ts`, verified against CLDR, rather than a polyfill plus thirty
+// locale-data modules; see that file for why.
 //
-// English ships today, with ten languages scheduled for v1.3.0. One catalog
-// means nothing to resolve and nothing to negotiate, so there is no locale store
-// and no `Intl` polyfill yet; each arrives with the language that needs it.
+// What is where:
 //
-// This file is the seam that keeps that a small change. Screens call
-// `useT("some.key")` rather than writing a literal, `layout.ts` uses logical
-// properties rather than physical ones, and `utils/format.ts` formats through
-// the active language rather than the device locale. A second language is a
-// store behind these hooks and a second catalog, not an edit to sixty screens.
+//   languages.ts  facts about languages. All thirty, always.
+//   CATALOGS      below. The gate: a language is selectable iff it has a
+//                 catalog here, and a catalog cannot be partial.
+//   plurals.ts    CLDR category selection.
+//   layout.ts     the two right-to-left cases React Native has no logical
+//                 form for.
+//   utils/format  dates, byte counts and money, formatted in the app's
+//                 language rather than the device's.
 
+import { useSettingsStore } from "@store/settings-store";
 import { I18nManager } from "react-native";
-import { DEFAULT_LANGUAGE, isRTL, type LanguageCode } from "./languages";
+import {
+  DEFAULT_LANGUAGE,
+  isLanguageCode,
+  isRTL,
+  LANGUAGES,
+  type LanguageCode,
+} from "./languages";
 import { en } from "./locales/en";
 import type { Locale, PluralKey, TranslationKey } from "./locales/types";
+import { selectPlural } from "./plurals";
 
 export type { LanguageCode } from "./languages";
 export type { TranslationKey } from "./locales/types";
 
-// The active catalog and language. Constants rather than store state while
-// there is one of each; the accessors below exist so that call sites already
-// read them the way they would read a store.
-const locale: Locale = en;
-const language: LanguageCode = DEFAULT_LANGUAGE;
+// ---- The catalogs ----
+//
+// Adding a language is this line plus its file. The value must be a `Locale`,
+// which is `Record<TranslationKey, string>` derived from `en.ts`, so a catalog
+// missing a single key does not compile. That is the whole completeness story:
+// there is no coverage threshold, no partial state, and no runtime fallback for
+// a missing string, because a locale missing a string cannot be constructed.
+//
+// `Partial` covers the languages whose translations have not landed yet, not
+// partial translations. `SHIPPED_LANGUAGES` below derives the selectable set
+// from this map, and the picker only ever offers those, so the `?? en` in
+// `catalogFor` is unreachable rather than a fallback anyone relies on.
+const CATALOGS: Partial<Record<LanguageCode, Locale>> = {
+  en,
+};
+
+// The languages a user can actually choose, in display order.
+export const SHIPPED_LANGUAGES: LanguageCode[] = (
+  Object.keys(CATALOGS) as LanguageCode[]
+).sort((a, b) =>
+  a === DEFAULT_LANGUAGE
+    ? -1
+    : b === DEFAULT_LANGUAGE
+      ? 1
+      : LANGUAGES[a].englishName.localeCompare(LANGUAGES[b].englishName, "en"),
+);
+
+export function isShipped(code: LanguageCode): boolean {
+  return CATALOGS[code] !== undefined;
+}
+
+function catalogFor(code: LanguageCode): Locale {
+  return CATALOGS[code] ?? en;
+}
+
+// ---- Layout direction, and why a language change is not always immediate ----
+//
+// `I18nManager` sets a native flag that Yoga reads once, when the process
+// starts. React Native's own documentation advises against forcing it in
+// production for this reason, and the New Architecture still requires a full
+// termination for a direction change to take effect. There is no way around it
+// short of flipping every style in JavaScript, which would throw away the
+// logical properties the whole codebase is written in.
+//
+// Most apps treat that as a mild annoyance and restart themselves. Airhop
+// cannot. A relaunch here destroys every Noise session, empties the peer table
+// (presence is 4s alone, then 15-30s, so rediscovery is tens of seconds),
+// drops any fragment transfer in flight, and cuts live voice. Asking somebody
+// in a blackout to restart their only working radio in order to read it in
+// their own language is exactly the trade this app exists to refuse.
+//
+// So: direction is pinned at launch, and a language whose direction differs
+// from the pinned one is stored as a preference and applied on the next launch.
+// The UI keeps rendering the boot language until then. That is deliberate and
+// is the better of the two honest options, because the alternative, switching
+// the text now and the layout later, puts Arabic prose in a left-to-right frame
+// with the back arrow on the wrong side.
+//
+// The other twenty-six languages share English's direction and switch instantly,
+// which is almost every switch anyone will make.
+
+let bootLanguage: LanguageCode = DEFAULT_LANGUAGE;
+let bootDirection: "ltr" | "rtl" = "ltr";
+
+// A stored preference, which is either a language or "follow the device".
+export type LanguagePreference = LanguageCode | "system";
+
+// The device's language, sampled once. `Intl.DateTimeFormat` is present on
+// Hermes on both platforms and needs no dependency, which is the same way
+// `place-names-store` reads it.
+let deviceLanguage: LanguageCode | null = null;
+
+function getDeviceLanguage(): LanguageCode {
+  if (deviceLanguage === null) {
+    deviceLanguage = DEFAULT_LANGUAGE;
+    try {
+      const tag = Intl.DateTimeFormat().resolvedOptions().locale;
+      // "pt-BR" matches before "pt", and a bare "zh" is not matched at all: the
+      // script matters more than the language there, and guessing Simplified
+      // for a Traditional reader is worse than English.
+      if (isLanguageCode(tag)) deviceLanguage = tag;
+      else {
+        const base = tag.split("-")[0];
+        if (base !== undefined && base !== "zh" && isLanguageCode(base)) {
+          deviceLanguage = base;
+        } else if (tag.startsWith("zh")) {
+          // Hant for the places that write it, Hans otherwise.
+          deviceLanguage = /Hant|TW|HK|MO/i.test(tag) ? "zh-Hant" : "zh-Hans";
+        }
+      }
+    } catch {
+      deviceLanguage = DEFAULT_LANGUAGE;
+    }
+  }
+  return deviceLanguage;
+}
+
+// What a preference means right now, before the direction rule is applied.
+export function resolvePreference(pref: LanguagePreference): LanguageCode {
+  const code = pref === "system" ? getDeviceLanguage() : pref;
+  // A device language, or a preference written by a build that shipped more
+  // languages than this one, may name a code with no catalog.
+  return isShipped(code) ? code : DEFAULT_LANGUAGE;
+}
+
+// The language actually being rendered. Differs from the preference only while
+// a direction change is waiting for the next launch.
+export function activeLanguage(pref: LanguagePreference): LanguageCode {
+  const wanted = resolvePreference(pref);
+  return LANGUAGES[wanted].direction === bootDirection ? wanted : bootLanguage;
+}
+
+// Whether the chosen language is waiting for a relaunch to take effect, so the
+// picker can say so instead of looking broken.
+export function needsRelaunch(pref: LanguagePreference): boolean {
+  return activeLanguage(pref) !== resolvePreference(pref);
+}
 
 export type TranslationVars = Record<string, string | number>;
 
@@ -63,89 +187,139 @@ export interface PluralTranslator {
   (key: PluralKey, count: number, vars?: TranslationVars): string;
 }
 
-const translator: Translator = Object.assign(
-  (key: TranslationKey, vars?: TranslationVars): string =>
-    interpolate(locale.strings[key], vars),
-  { language },
-);
-
-// The only sanctioned `count === 1` in the codebase, and the one piece of this
-// runtime that does not generalise.
+// A count inside a translated sentence, formatted in that language.
 //
-// English has exactly two plural categories and this is their rule. Other
-// languages do not work this way: Russian needs one/few/many/other and Arabic
-// needs all six, so a second language means real CLDR selection, which means
-// `Intl.PluralRules`. Hermes implements `DateTimeFormat`, `NumberFormat` and
-// `Collator` but not `PluralRules`, on either platform, so that day also means
-// `@formatjs/intl-pluralrules`. Both land in v1.3.0 with the catalogs.
-//
-// Callers still go through `tPlural`. The rule lives here, once, where the next
-// language replaces it. Writing `n === 1 ? "" : "s"` at a call site is a
-// different thing and stays a build failure: `npm run i18n:audit` reports it.
-const pluralTranslator: PluralTranslator = (key, count, vars) => {
-  const forms = locale.plurals[key];
-  // `other` is required by `PluralForms` and is the category CLDR guarantees
-  // exists in every language, so this is a real fallback rather than a hopeful
-  // one.
-  const template = (count === 1 ? forms.one : forms.other) ?? forms.other;
-  return interpolate(template, { count, ...vars });
-};
+// This is the one place numerals are NOT pinned to Latin, and the split is
+// deliberate: `utils/format.ts` pins machine data (byte counts, clock times,
+// wallet balances) because those sit in the monospace face beside Latin units,
+// where a run of Arabic-Indic digits next to "MB" reads worse than either
+// alone. A count inside prose is prose, and Arabic written with Western digits
+// is as jarring to an Arabic reader as the reverse would be here.
+const COUNT_FORMATS = new Map<LanguageCode, Intl.NumberFormat>();
 
-// The hook every screen uses. It reads a constant, so it subscribes to nothing
-// and its identity is stable, which is what components memoized on `T` want. A
-// hook rather than a plain import so that when language becomes state, the
-// subscription lands here and no screen changes.
-export function useT(): Translator {
+function formatCount(language: LanguageCode, count: number): string {
+  let format = COUNT_FORMATS.get(language);
+  if (format === undefined) {
+    try {
+      format = new Intl.NumberFormat(language);
+    } catch {
+      // Hermes carries a partial Intl and an OEM may carry less. A plain
+      // decimal is a worse number than a grouped one, and far better than a
+      // screen that throws while rendering a list.
+      format = { format: (n: number) => String(n) } as Intl.NumberFormat;
+    }
+    COUNT_FORMATS.set(language, format);
+  }
+  return format.format(count);
+}
+
+// Translators are cached per language so their identity is stable. Components
+// pass `T` in dependency arrays and memo comparators; a fresh function each
+// render would defeat every one of them.
+const TRANSLATORS = new Map<LanguageCode, Translator>();
+
+function getT(language: LanguageCode): Translator {
+  let translator = TRANSLATORS.get(language);
+  if (translator === undefined) {
+    translator = Object.assign(
+      (key: TranslationKey, vars?: TranslationVars): string =>
+        interpolate(catalogFor(language).strings[key], vars),
+      { language },
+    );
+    TRANSLATORS.set(language, translator);
+  }
   return translator;
 }
 
-export function useTPlural(): PluralTranslator {
-  return pluralTranslator;
+const PLURAL_TRANSLATORS = new Map<LanguageCode, PluralTranslator>();
+
+function getTPlural(language: LanguageCode): PluralTranslator {
+  let translator = PLURAL_TRANSLATORS.get(language);
+  if (translator === undefined) {
+    translator = (key, count, vars) => {
+      const forms = catalogFor(language).plurals[key];
+      // `other` is required by `PluralForms` and is the category CLDR
+      // guarantees exists in every language, so this is a real fallback rather
+      // than a hopeful one. It catches the Romance `many`, which selects only
+      // for round millions and which several catalogs legitimately omit.
+      const template = forms[selectPlural(language, count)] ?? forms.other;
+      return interpolate(template, {
+        count: formatCount(language, count),
+        ...vars,
+      });
+    };
+    PLURAL_TRANSLATORS.set(language, translator);
+  }
+  return translator;
 }
 
-// The active language, for components that need the code itself (formatting,
-// `Intl`) rather than a translated string.
+// ---- Hooks ----
+//
+// These subscribe to the language preference, so changing it re-renders the
+// tree. Everything below the root reads through them, which is why adding
+// twenty-nine languages moved no screen.
+
 export function useLanguage(): LanguageCode {
-  return language;
+  return activeLanguage(useSettingsStore((s) => s.language));
 }
 
-// Services, stores and notification builders run outside the component tree
-// and cannot use a hook. They read the same catalog, so they are never out of
-// step with what is on screen.
+export function useT(): Translator {
+  return getT(useLanguage());
+}
+
+export function useTPlural(): PluralTranslator {
+  return getTPlural(useLanguage());
+}
+
+// ---- Outside the component tree ----
+//
+// Services, stores and notification builders cannot use a hook. They read the
+// same store, so they are never out of step with what is on screen.
 //
 // Rule for callers: translate at the moment of display, never at the moment of
-// storage. A notification body is translated when it is posted; a message, a
-// contact name, or anything persisted to MMKV is stored untranslated, or the
-// user's history freezes in whichever language it was written in.
-export const t: Translator = translator;
-
-export const tPlural: PluralTranslator = pluralTranslator;
+// storage. A notification body is translated when it is posted. Anything
+// persisted to MMKV stores the key instead and is translated on render; see
+// `systemKey` in `@store/chat-store` and `@utils/message-text`.
 
 export function getLanguage(): LanguageCode {
-  return language;
+  return activeLanguage(useSettingsStore.getState().language);
 }
+
+export const t: Translator = Object.assign(
+  (key: TranslationKey, vars?: TranslationVars): string =>
+    getT(getLanguage())(key, vars),
+  {
+    get language(): LanguageCode {
+      return getLanguage();
+    },
+  },
+) as Translator;
+
+export const tPlural: PluralTranslator = (key, count, vars) =>
+  getTPlural(getLanguage())(key, count, vars);
 
 // `I18nManager.forceRTL` sets a native flag that is only read when the app
 // starts, so a direction change cannot take effect until the next launch.
 //
-// Pinning it to the active language matters even while that language is always
-// English: React Native otherwise mirrors the entire layout on a device set to
-// Arabic or Hebrew, which puts English text in a right-to-left frame. Pinned,
-// the app looks the same on every device, which is the same guarantee the
-// bundled catalog gives the text.
+// Pinning it to the app's language matters even while every shipped language is
+// left-to-right: React Native otherwise mirrors the entire layout on a device
+// set to Arabic or Hebrew, which puts English text in a right-to-left frame.
+// Pinned, the app looks the same on every device, which is the same guarantee
+// the bundled catalog gives the text.
 export function applyLayoutDirection(code: LanguageCode): void {
   const shouldBeRTL = isRTL(code);
   I18nManager.allowRTL(shouldBeRTL);
   if (I18nManager.isRTL !== shouldBeRTL) I18nManager.forceRTL(shouldBeRTL);
 }
 
-// Called once from App.tsx before the first render, so the first frame is
-// already laid out correctly.
+// Called once from the root before the first render, so the first frame is
+// already laid out correctly and the direction is fixed for the process.
 export function initI18n(): void {
-  applyLayoutDirection(language);
+  const wanted = resolvePreference(useSettingsStore.getState().language);
+  bootLanguage = wanted;
+  bootDirection = LANGUAGES[wanted].direction;
+  applyLayoutDirection(wanted);
 }
 
-// The language picker's data, re-exported so a screen imports it alongside
-// `useT`. DEFAULT_LANGUAGE, isRTL and LANGUAGE_ORDER are not: they are model
-// details, and their callers import them from ./languages directly.
-export { LANGUAGES, PLANNED_LANGUAGES } from "./languages";
+// The picker's data, re-exported so a screen imports it alongside `useT`.
+export { LANGUAGE_ORDER, LANGUAGES } from "./languages";

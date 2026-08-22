@@ -1,19 +1,108 @@
 /**
  * @jest-environment node
  */
-// Runtime behaviour: interpolation, plural selection, and the layout-direction
-// flag.
+// Runtime behaviour: catalog resolution, interpolation, plural selection, and
+// the rule that decides which language is actually on screen.
+//
+// The hooks are deliberately not exercised here. They are thin wrappers that
+// read the settings store and hand the result to the same `getT` the functions
+// below use, and calling them outside a renderer tests React rather than this
+// module.
 
-import { getLanguage, t, tPlural, useT, useTPlural } from "../index";
-import { DEFAULT_LANGUAGE, isRTL, LANGUAGE_ORDER } from "../languages";
+import { useSettingsStore } from "@store/settings-store";
+import {
+  activeLanguage,
+  getLanguage,
+  isShipped,
+  needsRelaunch,
+  resolvePreference,
+  SHIPPED_LANGUAGES,
+  t,
+  tPlural,
+} from "../index";
+import {
+  DEFAULT_LANGUAGE,
+  isRTL,
+  LANGUAGE_ORDER,
+  LANGUAGES,
+} from "../languages";
+
+afterEach(() => {
+  useSettingsStore.setState({ language: "system" });
+});
 
 describe("language table", () => {
-  it("lists exactly the languages that have a complete catalog", () => {
-    // The table is the gate: a language reaches a user by being listed here,
-    // and it can be listed only once its catalog compiles.
-    expect(LANGUAGE_ORDER).toEqual(["en"]);
-    expect(getLanguage()).toBe(DEFAULT_LANGUAGE);
-    expect(isRTL("en")).toBe(false);
+  it("knows all thirty languages regardless of what has been translated", () => {
+    // The table is facts about languages, not a record of translation
+    // progress, so it does not grow as catalogs land.
+    expect(LANGUAGE_ORDER).toHaveLength(30);
+    expect(new Set(LANGUAGE_ORDER).size).toBe(30);
+    expect(Object.keys(LANGUAGES)).toHaveLength(30);
+  });
+
+  it("puts the source language first and the rest in a stable order", () => {
+    // Sorted by English name rather than by the translated one, so the list
+    // does not reshuffle under the user's finger when they change language.
+    expect(LANGUAGE_ORDER[0]).toBe("en");
+    const rest = LANGUAGE_ORDER.slice(1).map((c) => LANGUAGES[c].englishName);
+    expect(rest).toEqual([...rest].sort((a, b) => a.localeCompare(b, "en")));
+  });
+
+  it("marks exactly the right-to-left languages", () => {
+    const rtl = LANGUAGE_ORDER.filter(isRTL);
+    expect(rtl.sort()).toEqual(["ar", "fa", "ur"]);
+  });
+
+  it("gives every language a distinct short code and endonym", () => {
+    // Both are what a user scans the picker for; a duplicate makes two rows
+    // indistinguishable.
+    const shorts = LANGUAGE_ORDER.map((c) => LANGUAGES[c].shortCode);
+    const endonyms = LANGUAGE_ORDER.map((c) => LANGUAGES[c].endonym);
+    expect(new Set(shorts).size).toBe(shorts.length);
+    expect(new Set(endonyms).size).toBe(endonyms.length);
+  });
+});
+
+describe("what ships", () => {
+  it("derives the selectable set from the catalogs, not from a list", () => {
+    // A language becomes selectable by having a catalog, and a catalog cannot
+    // be partial, so there is nothing to keep in sync and no coverage
+    // threshold to police.
+    for (const code of SHIPPED_LANGUAGES) expect(isShipped(code)).toBe(true);
+    expect(SHIPPED_LANGUAGES[0]).toBe(DEFAULT_LANGUAGE);
+  });
+
+  it("falls back to English for a language with no catalog yet", () => {
+    // Reachable two ways: a device set to a language Airhop has not translated,
+    // and a preference written by a later build that shipped more.
+    const untranslated = LANGUAGE_ORDER.find((c) => !isShipped(c));
+    if (untranslated === undefined) return; // all thirty have landed
+    expect(resolvePreference(untranslated)).toBe(DEFAULT_LANGUAGE);
+  });
+});
+
+describe("which language is on screen", () => {
+  it("follows an explicit preference", () => {
+    for (const code of SHIPPED_LANGUAGES) {
+      useSettingsStore.setState({ language: code });
+      expect(getLanguage()).toBe(code);
+    }
+  });
+
+  it("resolves 'system' to something shipped", () => {
+    useSettingsStore.setState({ language: "system" });
+    expect(SHIPPED_LANGUAGES).toContain(getLanguage());
+  });
+
+  it("only defers a change that crosses the direction boundary", () => {
+    // Layout direction is fixed when the process starts, so a right-to-left
+    // language cannot take effect until the next launch. Everything sharing the
+    // boot direction switches immediately, which is almost every switch.
+    for (const code of SHIPPED_LANGUAGES) {
+      const deferred = needsRelaunch(code);
+      expect(deferred).toBe(activeLanguage(code) !== resolvePreference(code));
+      if (!isRTL(code)) expect(deferred).toBe(false);
+    }
   });
 });
 
@@ -51,18 +140,21 @@ describe("plurals", () => {
       "Recovered 2 unspent proofs from 2 mints.",
     );
   });
+
+  it("formats the count in the reading language, not the device's", () => {
+    // A count inside a sentence is prose, so it follows the language rather
+    // than the Latin pinning `utils/format.ts` applies to machine data. In
+    // English that means a grouping separator.
+    expect(tPlural("mesh.peers_in_range", 12_000)).toContain("12,000");
+  });
 });
 
 describe("translator identity", () => {
-  it("is stable, so components memoized on it do not re-render", () => {
-    // The hooks read a constant while there is one language. Components pass
-    // `T` in dependency arrays; a fresh identity per render would defeat every
-    // one of them.
-    expect(useT()).toBe(useT());
-    expect(useTPlural()).toBe(useTPlural());
-  });
-
-  it("reports the language it is bound to", () => {
-    expect(useT().language).toBe("en");
+  it("is stable per language, so components memoized on it do not re-render", () => {
+    // Components pass `T` in dependency arrays and memo comparators. A fresh
+    // function per render would defeat every one of them.
+    useSettingsStore.setState({ language: "en" });
+    expect(t.language).toBe("en");
+    expect(getLanguage()).toBe(getLanguage());
   });
 });

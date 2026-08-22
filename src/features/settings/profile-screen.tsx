@@ -6,8 +6,10 @@
 import { encodeQRContent } from "@core/crypto/contact-exchange";
 import Feather from "@expo/vector-icons/Feather";
 import {
+  isShipped,
+  LANGUAGE_ORDER,
   LANGUAGES,
-  PLANNED_LANGUAGES,
+  needsRelaunch,
   t,
   useT,
   type TranslationKey,
@@ -304,6 +306,8 @@ export default function ProfileScreen({
   const theme = useResolvedTheme();
   const setTheme = useSettingsStore((s) => s.setTheme);
   const monoFont = useSettingsStore((s) => s.monoFont);
+  const languagePreference = useSettingsStore((s) => s.language);
+  const setLanguage = useSettingsStore((s) => s.setLanguage);
   const setMonoFont = useSettingsStore((s) => s.setMonoFont);
 
   // The QR encodes a full contact card (peer ID + Noise and Ed25519 public keys
@@ -1197,53 +1201,103 @@ export default function ProfileScreen({
             })}
           </View>
 
-          {/* Language: English is the whole catalog today, so the other nine are
-            listed but not selectable. Naming them is the point. It answers
-            "is my language coming" without a picker that can only pick one
-            thing, and the rows become live the release their catalogs land. */}
+          {/* Language.
+            No "System" row, matching the Appearance picker directly above: the
+            resolved language is ticked instead, so there is never a row that
+            means "no, really, the other one". First launch follows the phone;
+            choosing here pins it, which is what somebody reading Airhop in
+            Spanish on an English phone actually wants.
+
+            A language with no catalog yet is listed and dimmed rather than
+            hidden. Naming it answers "is my language coming" far better than a
+            picker that silently omits it, and the row goes live the release its
+            catalog lands, with no change here. */}
           <Text style={styles.appearanceGroupLabel}>
             {T("settings.group.language")}
           </Text>
           <View style={[shared.settingsGroup, styles.appearanceGroup]}>
-            <View
-              style={[styles.optionRowGrouped, styles.optionRowGroupedSelected]}
-            >
-              <View style={styles.optionIconGrouped}>
-                <Text style={styles.languageCode}>EN</Text>
-              </View>
-              <View style={shared.optionText}>
-                <Text style={shared.optionLabel}>
-                  {T("settings.language.en")}
-                </Text>
-                <Text style={shared.optionDescription}>
-                  {LANGUAGES.en.endonym}
-                </Text>
-              </View>
-              <Feather name="check" size={18} color={Colors.textPrimary} />
-            </View>
-            {PLANNED_LANGUAGES.map((lang) => (
-              <React.Fragment key={lang.code}>
-                <View style={shared.groupDivider} />
-                <View
-                  style={[styles.optionRowGrouped, styles.languageRowSoon]}
-                  accessible
-                  accessibilityLabel={T("settings.language.soon_a11y", {
-                    value: T(lang.nameKey),
-                  })}
-                >
-                  <View style={styles.optionIconGrouped}>
-                    <Text style={styles.languageCode}>{lang.shortCode}</Text>
-                  </View>
-                  <View style={shared.optionText}>
-                    <Text style={shared.optionLabel}>{T(lang.nameKey)}</Text>
-                    <Text style={shared.optionDescription}>{lang.endonym}</Text>
-                  </View>
-                  <Text style={styles.languageSoon}>
-                    {T("settings.language.soon")}
-                  </Text>
-                </View>
-              </React.Fragment>
-            ))}
+            {LANGUAGE_ORDER.map((code, i) => {
+              const spec = LANGUAGES[code];
+              const shipped = isShipped(code);
+              // Ticked against what is on screen, not against the preference,
+              // so a right-to-left choice waiting for a relaunch does not claim
+              // to be active while the app is still in the old language.
+              const selected = code === T.language;
+              const pending =
+                languagePreference === code &&
+                needsRelaunch(languagePreference);
+              const name = T(spec.nameKey);
+              return (
+                <React.Fragment key={code}>
+                  {i > 0 && <View style={shared.groupDivider} />}
+                  <Pressable
+                    style={[
+                      styles.optionRowGrouped,
+                      selected && styles.optionRowGroupedSelected,
+                      !shipped && styles.languageRowSoon,
+                    ]}
+                    disabled={!shipped}
+                    onPress={() => {
+                      setLanguage(code);
+                      // Direction is fixed for the life of the process, so say
+                      // so rather than letting the tap look like it failed.
+                      if (
+                        LANGUAGES[code].direction !==
+                        LANGUAGES[T.language].direction
+                      ) {
+                        showAlert(
+                          t("settings.language.rtl_title"),
+                          t("settings.language.rtl_body", { value: name }),
+                        );
+                      }
+                    }}
+                    accessibilityRole={shipped ? "button" : undefined}
+                    accessibilityState={
+                      shipped
+                        ? { selected, disabled: false }
+                        : { disabled: true }
+                    }
+                    accessibilityLabel={
+                      shipped
+                        ? pending
+                          ? T("settings.language.pending_a11y", { value: name })
+                          : T("settings.language.set_a11y", { value: name })
+                        : T("settings.language.soon_a11y", { value: name })
+                    }
+                  >
+                    <View style={styles.optionIconGrouped}>
+                      <Text style={styles.languageCode}>{spec.shortCode}</Text>
+                    </View>
+                    <View style={shared.optionText}>
+                      <Text style={shared.optionLabel}>{name}</Text>
+                      {/* The endonym stays in its own script and is never
+                        translated, so somebody who cannot read the current UI
+                        language can still find their own row. */}
+                      <Text style={shared.optionDescription}>
+                        {spec.endonym}
+                      </Text>
+                    </View>
+                    {!shipped && (
+                      <Text style={styles.languageSoon}>
+                        {T("settings.language.soon")}
+                      </Text>
+                    )}
+                    {pending && (
+                      <Text style={styles.languageSoon}>
+                        {T("settings.language.pending")}
+                      </Text>
+                    )}
+                    {selected && !pending && (
+                      <Feather
+                        name="check"
+                        size={18}
+                        color={Colors.textPrimary}
+                      />
+                    )}
+                  </Pressable>
+                </React.Fragment>
+              );
+            })}
           </View>
         </ScrollView>
       </BottomSheet>
