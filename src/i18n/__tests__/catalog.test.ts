@@ -426,3 +426,59 @@ describe("English source conventions", () => {
     expect(offenders).toEqual([]);
   });
 });
+
+describe("the pseudolocale bounds every real translation", () => {
+  // The property that makes the pseudolocale worth running at all.
+  //
+  // Its first version padded a flat 40%, which sounded safe and was not: 98
+  // German strings came out LONGER than their pseudo counterparts. A screen
+  // that passed the pseudolocale could still break in a language that shipped,
+  // which makes the instrument worse than having none, because it reports safe.
+  //
+  // It now pads past the longest shipped translation of each key, so this holds
+  // by construction. The test is here because "by construction" stops being
+  // true the moment somebody changes the padding, and the failure is silent.
+  const REAL = CODES.filter((code) => code !== PSEUDO_LANGUAGE);
+
+  it("is at least as long as the longest real string, key by key", () => {
+    const pseudo = CATALOGS[PSEUDO_LANGUAGE];
+    if (pseudo === undefined) return; // release build, nothing to check
+    const short: string[] = [];
+    for (const key of Object.keys(en.strings) as (keyof typeof en.strings)[]) {
+      const longest = Math.max(
+        ...REAL.map((code) => catalog(code).strings[key].length),
+      );
+      if (pseudo.strings[key].length < longest) {
+        short.push(`${key}: pseudo ${pseudo.strings[key].length} < ${longest}`);
+      }
+    }
+    expect(short).toEqual([]);
+  });
+
+  it("is at least as long as the widest real plural form", () => {
+    // Compared across every category rather than the matching one: Arabic's
+    // `many` runs far longer than English's `other`, and the widest form is
+    // what a row actually has to hold.
+    const pseudo = CATALOGS[PSEUDO_LANGUAGE];
+    if (pseudo === undefined) return;
+    const short: string[] = [];
+    for (const key of Object.keys(en.plurals) as (keyof typeof en.plurals)[]) {
+      const longest = Math.max(
+        ...REAL.flatMap((code) =>
+          Object.values(catalog(code).plurals[key]).map(
+            (form) => (form as string | undefined)?.length ?? 0,
+          ),
+        ),
+      );
+      const widestPseudo = Math.max(
+        ...Object.values(pseudo.plurals[key]).map(
+          (form) => (form as string | undefined)?.length ?? 0,
+        ),
+      );
+      if (widestPseudo < longest) {
+        short.push(`${key}: pseudo ${widestPseudo} < ${longest}`);
+      }
+    }
+    expect(short).toEqual([]);
+  });
+});

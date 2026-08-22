@@ -105,10 +105,25 @@ const ACCENTS: Record<string, string> = {
 const PRESERVED =
   /(\{\w+\}|airhop:\/\/|#bluetooth|npub1|\/hug|\/slap|\/who|\/msg|Ed25519|X25519|Lightning|bitchat|Airhop|Cashu|Nostr|GitHub|Tor)/g;
 
-// Roughly the width a European translation adds. Applied as a run of middle
-// dots rather than repeated words: it is unmistakably padding, so nobody reads
-// a screenshot and wonders whether the copy really says that.
-const EXPANSION = 0.4;
+// How much longer a pseudo string is than its English source.
+//
+// A flat ratio was the first version and it is not good enough. Measured across
+// the catalog, German averages 1.26x English while a flat 40% pad averages
+// 1.61x, which sounds safe until you count the other end: 98 German strings are
+// LONGER than their pseudo counterparts. A screen that survives the
+// pseudolocale can still break in a real language, which makes the instrument
+// worse than useless, because it reports safe.
+//
+// So the pad is a floor, not the answer. `pseudoLocale` takes the catalogs that
+// have actually shipped and pads each string past the longest real translation
+// of that same key, which makes the pseudolocale a genuine upper bound on
+// everything known rather than a guess. It also gets sharper as catalogs land:
+// with thirty of them, a screen that holds here holds everywhere.
+const MIN_EXPANSION = 0.4;
+
+// Clearance over the longest real translation seen. Enough that a screen has to
+// be comfortable rather than exactly wide enough.
+const HEADROOM = 1.15;
 
 function accent(text: string): string {
   let out = "";
@@ -116,15 +131,28 @@ function accent(text: string): string {
   return out;
 }
 
-function pad(length: number): string {
-  const extra = Math.round(length * EXPANSION);
+// The width to pad to: never less than the flat floor, and always past the
+// longest real translation of the same string that has shipped.
+function targetWidth(source: number, longestReal: number): number {
+  return Math.max(
+    Math.round(source * (1 + MIN_EXPANSION)),
+    Math.round(longestReal * HEADROOM),
+  );
+}
+
+function pad(source: number, longestReal: number): string {
+  const extra = targetWidth(source, longestReal) - source;
   if (extra <= 0) return "";
   return ` ${"·".repeat(extra)}`;
 }
 
 // Accents the prose, leaves the preserved tokens alone, then brackets the whole
 // thing so truncation and concatenation are both visible.
-export function pseudo(source: string): string {
+//
+// `longestReal` is the length of the longest shipped translation of this same
+// key, so the result is wider than anything a user will actually see. Zero when
+// nothing has been translated yet, which falls back to the flat floor.
+export function pseudo(source: string, longestReal = 0): string {
   const parts = source.split(PRESERVED);
   let out = "";
   for (let i = 0; i < parts.length; i++) {
@@ -133,23 +161,46 @@ export function pseudo(source: string): string {
   }
   // Newlines are load-bearing in a few strings (the identity screen splits two
   // sentences across lines), so the padding goes at the end rather than inside.
-  return `⟦${out}${pad(source.length)}⟧`;
+  return `⟦${out}${pad(source.length, longestReal)}⟧`;
 }
 
-export function pseudoLocale(source: Locale): Locale {
+// `others` is every catalog that has shipped, English included. Each string is
+// padded past the longest of them for its key, so a screen that holds under the
+// pseudolocale holds in every language the app actually carries.
+export function pseudoLocale(source: Locale, others: Locale[] = []): Locale {
+  const longestString = (key: string): number =>
+    others.reduce(
+      (max, locale) =>
+        Math.max(max, (locale.strings as Record<string, string>)[key].length),
+      0,
+    );
+
   const strings = {} as Record<string, string>;
   for (const [key, value] of Object.entries(source.strings)) {
-    strings[key] = pseudo(value);
+    strings[key] = pseudo(value, longestString(key));
   }
+  // Plural forms are compared across every category, not just the matching one:
+  // Arabic's `many` can be far longer than English's `other`, and the widest
+  // form is what a row has to hold.
+  const longestPlural = (key: string): number =>
+    others.reduce((max, locale) => {
+      const forms = (locale.plurals as Record<string, PluralForms>)[key];
+      return Object.values(forms).reduce(
+        (inner, value) => Math.max(inner, value?.length ?? 0),
+        max,
+      );
+    }, 0);
+
   const plurals = {} as Record<string, PluralForms>;
   for (const [key, forms] of Object.entries(source.plurals)) {
+    const widest = longestPlural(key);
     // `other` is the one category CLDR guarantees in every language, so it is
     // required on `PluralForms` and always present on the source. Seeding the
     // result with it keeps the shape provably complete rather than asserted.
-    const out: PluralForms = { other: pseudo(forms.other) };
+    const out: PluralForms = { other: pseudo(forms.other, widest) };
     for (const [category, value] of Object.entries(forms)) {
       if (category !== "other" && value !== undefined) {
-        out[category as keyof PluralForms] = pseudo(value);
+        out[category as keyof PluralForms] = pseudo(value, widest);
       }
     }
     plurals[key] = out;

@@ -1528,6 +1528,7 @@ function AppContent(): React.JSX.Element {
                                 chatSubTab === "channels" &&
                                   styles.segTextActive,
                               ]}
+                              numberOfLines={1}
                               maxFontSizeMultiplier={MaxFontScale.chrome}
                             >
                               {T("chat.subtab.channels")}
@@ -1582,6 +1583,7 @@ function AppContent(): React.JSX.Element {
                                 styles.segText,
                                 chatSubTab === "dms" && styles.segTextActive,
                               ]}
+                              numberOfLines={1}
                               maxFontSizeMultiplier={MaxFontScale.chrome}
                             >
                               {T("chat.subtab.direct")}
@@ -1702,6 +1704,7 @@ function AppContent(): React.JSX.Element {
                                 meshViewMode === "radar" &&
                                   styles.segTextActive,
                               ]}
+                              numberOfLines={1}
                               maxFontSizeMultiplier={MaxFontScale.chrome}
                             >
                               {T("mesh.view.radar_short")}
@@ -1734,6 +1737,7 @@ function AppContent(): React.JSX.Element {
                                 styles.segText,
                                 meshViewMode === "list" && styles.segTextActive,
                               ]}
+                              numberOfLines={1}
                               maxFontSizeMultiplier={MaxFontScale.chrome}
                             >
                               {T("mesh.view.list_short")}
@@ -2245,10 +2249,24 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       fontWeight: FontWeight.semibold,
       color: Colors.textPrimary,
       letterSpacing: -0.2,
-      // The Wallet header packs four action pills beside this title. On a narrow
-      // device at a large text size the row overflows unless the title gives up
-      // its width first.
-      flexShrink: 1,
+      // The Wallet header packs four action pills beside this title, and on a
+      // narrow device at a large text size the row overflows.
+      //
+      // flexShrink 2 against the controls' 1: the title still gives up width
+      // first, which is the right priority, but it no longer absorbs the whole
+      // overflow on its own. Before this it did, and Arabic showed what that
+      // costs: "الشبكة" rendered as "الشب.." while the segmented control beside
+      // it kept every pixel it asked for. Sharing the loss keeps the screen
+      // name readable at the width where one of them has to give.
+      flexShrink: 2,
+      // And grow, which is the half that was missing. With `space-between` and
+      // an intrinsically-sized title, the free space lands BETWEEN the title and
+      // the controls, so the title sat at its measured width with a gap beside
+      // it and ellipsized anyway. Arabic showed it plainly: "الشبكة" rendered as
+      // "الشب.." with half the row empty. Growing into the gap first means the
+      // title only truncates when the row is genuinely out of room, which is
+      // when flexShrink above decides how the loss is shared.
+      flexGrow: 1,
       marginEnd: Spacing.sm,
     },
     searchRow: {
@@ -2285,12 +2303,20 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       flexDirection: "row",
       alignItems: "center",
       gap: Spacing.sm,
+      // minWidth 0 is required, not decorative: a flex item's default minimum
+      // is its content size, so without it the row cannot shrink below the
+      // segment labels no matter what flexShrink says, and the title is left
+      // absorbing everything again.
+      flexShrink: 1,
+      minWidth: 0,
     },
     segmented: {
       flexDirection: "row",
       backgroundColor: Colors.surfaceRaised,
       borderRadius: Radius.full,
       padding: 2,
+      flexShrink: 1,
+      minWidth: 0,
     },
     // 9 vertical padding, not 7: at 7 the segment measures ~30pt tall, under
     // the 44pt floor. hitSlop is not an option, since slop on adjacent segments
@@ -2299,6 +2325,8 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       paddingHorizontal: Spacing.md,
       paddingVertical: 9,
       borderRadius: Radius.full,
+      flexShrink: 1,
+      minWidth: 0,
     },
     segIconText: {
       flexDirection: "row",
@@ -2313,6 +2341,7 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       fontSize: FontSize.sm,
       fontWeight: FontWeight.medium,
       color: Colors.textMuted,
+      flexShrink: 1,
     },
     segTextActive: {
       color: Colors.textPrimary,

@@ -57,14 +57,24 @@ export type { TranslationKey } from "./locales/types";
 // partial translations. `SHIPPED_LANGUAGES` below derives the selectable set
 // from this map, and the picker only ever offers those, so the `?? en` in
 // `catalogFor` is unreachable rather than a fallback anyone relies on.
-export const CATALOGS: Partial<Record<LanguageCode, Locale>> = {
+// The catalogs that have actually been translated. Kept separate from the
+// exported registry below only so the pseudolocale can measure them: it pads
+// every string past the longest real translation of that key, which is what
+// makes it an upper bound rather than a guess.
+const REAL: Partial<Record<LanguageCode, Locale>> = {
   en,
   ar,
   de,
+};
+
+export const CATALOGS: Partial<Record<LanguageCode, Locale>> = {
+  ...REAL,
   // Debug builds only, and generated rather than stored: it is English run
   // through `pseudoLocale`, so it costs no repo and nothing in a release
   // bundle, and it can never drift from the source catalog. See ./pseudo.ts.
-  ...(__DEV__ ? { [PSEUDO_LANGUAGE]: pseudoLocale(en) } : {}),
+  ...(__DEV__
+    ? { [PSEUDO_LANGUAGE]: pseudoLocale(en, Object.values(REAL)) }
+    : {}),
 };
 
 // The languages a user can actually choose, in display order.
