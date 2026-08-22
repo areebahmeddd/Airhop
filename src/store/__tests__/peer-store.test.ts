@@ -9,6 +9,8 @@
 
 import {
   countReachablePeers,
+  hasUnseenPeers,
+  REACHABLE_TTL_MS,
   usePeerStore,
   type NearbyPeer,
 } from "../peer-store";
@@ -109,5 +111,54 @@ describe("countReachablePeers", () => {
 
   it("counts an empty map as an empty mesh", () => {
     expect(countReachablePeers(new Map(), 1_000_000)).toBe(0);
+  });
+});
+
+describe("unseen peers", () => {
+  it("reports a peer nobody has looked at yet", () => {
+    state().upsertPeer(makePeer());
+    expect(hasUnseenPeers(state())).toBe(true);
+  });
+
+  it("goes quiet once the Mesh screen has been looked at", () => {
+    state().upsertPeer(makePeer());
+    state().markPeersSeen();
+    expect(hasUnseenPeers(state())).toBe(false);
+  });
+
+  it("reports a newcomer arriving after that", () => {
+    state().upsertPeer(makePeer());
+    state().markPeersSeen();
+    state().upsertPeer(makePeer({ peerID: "ffeeddcc99887766" }));
+    expect(hasUnseenPeers(state())).toBe(true);
+  });
+
+  it("reports a swap that leaves the count unchanged", () => {
+    const first = makePeer();
+    state().upsertPeer(first);
+    state().markPeersSeen();
+    state().removePeer(first.peerID);
+    state().upsertPeer(makePeer({ peerID: "ffeeddcc99887766" }));
+    expect(hasUnseenPeers(state())).toBe(true);
+  });
+
+  it("ignores a peer who has gone stale", () => {
+    state().upsertPeer(makePeer());
+    state().markPeersSeen();
+    state().upsertPeer(
+      makePeer({ peerID: "ffeeddcc99887766", lastSeenMs: Date.now() }),
+    );
+    expect(hasUnseenPeers(state(), Date.now() + REACHABLE_TTL_MS + 1)).toBe(
+      false,
+    );
+  });
+
+  it("forgets peers who are no longer here", () => {
+    const first = makePeer();
+    state().upsertPeer(first);
+    state().markPeersSeen();
+    state().removePeer(first.peerID);
+    state().markPeersSeen();
+    expect(state().seenPeerIDs.has(first.peerID)).toBe(false);
   });
 });

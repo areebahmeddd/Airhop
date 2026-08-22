@@ -2851,6 +2851,13 @@ export default function MessageThread({
     });
   }
 
+  // A DM has one other person in it, so the avatar opens the same card the
+  // header does. The per-message sender sheet would state that one identity in
+  // a second shape.
+  function handlePressDMSender(): void {
+    setShowDMInfo(true);
+  }
+
   // How the sender sheet names whoever it was opened for.
   //
   // The sheet is opened FROM a message, so it has to say what the label above
@@ -4492,7 +4499,7 @@ export default function MessageThread({
                   selected={selectedIds.has(item.id)}
                   onToggleSelect={toggleSelected}
                   onRetry={handleRetryMessage}
-                  onPressSender={isDM ? undefined : handlePressSender}
+                  onPressSender={isDM ? handlePressDMSender : handlePressSender}
                   highlighted={item.id === highlightedMessageId}
                 />
               </View>

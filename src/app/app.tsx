@@ -90,7 +90,11 @@ import {
   useMeshStateStore,
   type BannerAction,
 } from "@store/mesh-state-store";
-import { countReachablePeers, usePeerStore } from "@store/peer-store";
+import {
+  countReachablePeers,
+  hasUnseenPeers,
+  usePeerStore,
+} from "@store/peer-store";
 import {
   acknowledgePermissionPrimer,
   showPermissionPrimer,
@@ -622,6 +626,10 @@ function AppContent(): React.JSX.Element {
   // Counter-based trigger: incrementing (with an action) tells WalletScreen
   // to open the matching modal, same pattern as startNewTrigger/meshAddCounter.
   const [walletAction, setWalletAction] = useState<WalletAction | null>(null);
+  // Selected as a boolean so the tab bar re-renders when the answer flips
+  // rather than on every ANNOUNCE.
+  const meshHasNewPeers = usePeerStore(hasUnseenPeers);
+
   // Whether there is any ecash at all to spend. Selected as a boolean so the
   // header only re-renders when the answer flips, not on every proof change.
   const hasSpendableEcash = useWalletStore((s) =>
@@ -1122,6 +1130,19 @@ function AppContent(): React.JSX.Element {
       void dismissNotificationsFor(reading);
     }
   }, [openThread, appActive, setActiveChannel, markChannelRead]);
+
+  // The same rule for the Mesh screen: looking at it is what "seen" means, so
+  // the gate is the app being in front and past onboarding rather than the tab
+  // alone.
+  //
+  // `meshHasNewPeers` is a dependency as well as an output, so a peer arriving
+  // while the screen is open flips it, re-runs this, and is marked seen without
+  // the dot ever being drawn. It settles: the second pass finds nothing changed
+  // and markPeersSeen returns the state untouched.
+  useEffect(() => {
+    if (!appActive || onboardingStep !== null || tab !== "mesh") return;
+    usePeerStore.getState().markPeersSeen();
+  }, [tab, appActive, onboardingStep, meshHasNewPeers]);
 
   // Keep the app icon badge in step with total unread across channels and DMs.
   useEffect(() => {
@@ -2055,6 +2076,9 @@ function AppContent(): React.JSX.Element {
                       {TABS.map(({ id, labelKey, icon }) => {
                         const active = tab === id;
                         const unread = id === "chats" ? chatsUnread : 0;
+                        // A dot rather than a count: a number here would read
+                        // as unread messages.
+                        const dot = id === "mesh" && meshHasNewPeers;
                         const label = T(labelKey);
                         return (
                           <Pressable
@@ -2065,7 +2089,9 @@ function AppContent(): React.JSX.Element {
                             accessibilityLabel={
                               unread > 0
                                 ? TP("a11y.unread_count", unread, { label })
-                                : label
+                                : dot
+                                  ? T("a11y.tab.new_peers", { label })
+                                  : label
                             }
                             accessibilityState={{ selected: active }}
                           >
@@ -2094,6 +2120,13 @@ function AppContent(): React.JSX.Element {
                                   color={
                                     active ? Colors.accent : Colors.textMuted
                                   }
+                                />
+                              )}
+                              {dot && (
+                                <View
+                                  style={styles.tabDot}
+                                  importantForAccessibility="no-hide-descendants"
+                                  accessibilityElementsHidden
                                 />
                               )}
                               {unread > 0 && (
@@ -2376,6 +2409,19 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       height: 22,
       alignItems: "center",
       justifyContent: "center",
+    },
+    // Same ring and anchor as the count badge below, sized so a bare circle
+    // sits on the icon the way a one-digit badge does.
+    tabDot: {
+      position: "absolute",
+      top: -1,
+      right: -5,
+      width: 10,
+      height: 10,
+      borderRadius: Radius.full,
+      backgroundColor: Colors.accent,
+      borderWidth: 1.5,
+      borderColor: Colors.surface,
     },
     tabBadge: {
       position: "absolute",

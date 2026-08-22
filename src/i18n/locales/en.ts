@@ -67,6 +67,7 @@ export const strings = {
   "nav.tab.mesh": "Mesh",
   "nav.tab.wallet": "Wallet",
   "nav.tab.profile": "You",
+  "a11y.tab.new_peers": "{label}, someone new nearby",
   "nav.notifications": "Notifications",
   "chat.subtab.channels": "Channels",
   "chat.subtab.direct": "Direct",

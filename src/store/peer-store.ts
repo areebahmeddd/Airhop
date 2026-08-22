@@ -23,6 +23,10 @@ export interface NearbyPeer {
 
 interface PeerState {
   peers: Map<string, NearbyPeer>;
+  // Who was reachable when the user last looked at the Mesh screen. Not
+  // persisted, like the peers themselves: a relaunch opens on Mesh, so
+  // everyone in range is marked seen a moment later anyway.
+  seenPeerIDs: Set<string>;
 
   upsertPeer: (peer: NearbyPeer) => void;
   // Record a fresh RSSI reading for an already-known peer. No-op for unknown
@@ -36,6 +40,9 @@ interface PeerState {
   evictStale: (ttlMs?: number) => void;
   getPeer: (peerID: string) => NearbyPeer | undefined;
   reachablePeers: () => NearbyPeer[];
+  // Replaces the set rather than adding to it, so it stays bounded and drops
+  // peers who have since left.
+  markPeersSeen: () => void;
   clearAll: () => void;
 }
 
@@ -92,6 +99,7 @@ export function reachablePeerIDs(
 
 export const usePeerStore = create<PeerState>()((set, get) => ({
   peers: new Map(),
+  seenPeerIDs: new Set(),
 
   upsertPeer(peer: NearbyPeer) {
     set((state) => {
@@ -174,7 +182,32 @@ export const usePeerStore = create<PeerState>()((set, get) => ({
     return [...get().peers.values()].filter((p) => p.lastSeenMs >= cutoff);
   },
 
+  markPeersSeen() {
+    set((state) => {
+      const seen = reachablePeerIDs(state.peers);
+      const unchanged =
+        seen.size === state.seenPeerIDs.size &&
+        [...seen].every((id) => state.seenPeerIDs.has(id));
+      return unchanged ? state : { seenPeerIDs: seen };
+    });
+  },
+
   clearAll() {
-    set({ peers: new Map() });
+    set({ peers: new Map(), seenPeerIDs: new Set() });
   },
 }));
+
+// Whether anyone reachable has arrived since the user last looked at the Mesh
+// screen.
+//
+// By peer ID, not by count: a count cannot tell a newcomer from a swap, so one
+// person leaving as another arrives would report nothing changed.
+export function hasUnseenPeers(state: PeerState, nowMs = Date.now()): boolean {
+  const cutoff = nowMs - REACHABLE_TTL_MS;
+  for (const peer of state.peers.values()) {
+    if (peer.lastSeenMs >= cutoff && !state.seenPeerIDs.has(peer.peerID)) {
+      return true;
+    }
+  }
+  return false;
+}
