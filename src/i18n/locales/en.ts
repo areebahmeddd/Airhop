@@ -5,9 +5,15 @@
 // elsewhere until it is filled in. There is no runtime fallback.
 //
 // Sections follow the app: shell, onboarding, chats, mesh, wallet, contacts,
-// settings. Keys are flat and dotted, `<area>.<screen>.<thing>`, and match
-// bitchat's where the concept does, so its 30 public-domain translations can be
-// lifted rather than commissioned.
+// settings. Keys are flat and dotted, `<area>.<screen>.<thing>`.
+//
+// A note on the vendored bitchat catalog, because the assumption is tempting and
+// wrong: it is a terminology reference, not a source. 5 of these 1,528 keys
+// match its key names and 69 match its English values, all single words like
+// Cancel and OK. It carries no plural data, uses positional placeholders, reads
+// in a lowercase register this catalog does not use, and covers a different
+// thirty languages. Cross-check mesh and Nostr vocabulary against it; do not
+// budget as though it translates anything.
 //
 // Rules, all enforced by `__tests__/catalog.test.ts` unless noted:
 //

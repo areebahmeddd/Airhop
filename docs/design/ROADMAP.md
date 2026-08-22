@@ -276,7 +276,8 @@ No new features ship in this range. The mesh backend gets battle-tested across a
 - [ ] Race conditions in the BLE and crypto state machines
 - [ ] UI iteration from real user feedback
 - [ ] Extended cross-device battery and compatibility testing
-- [ ] Ten languages (`en ar de es fa hi id pt-BR ru zh-Hans`), chosen to cover every script class and layout hazard in bitchat/ios's thirty. Keys are named after bitchat's, so much of the catalog can be lifted from its public-domain `Localizable.xcstrings`
+- [ ] Thirty languages, matching the set the landing site already serves so the two surfaces name the same languages. Sequenced by hazard class rather than by market size: `ar de ru ja` first (right-to-left with six plural categories, worst Latin overflow, four plural categories, and no plurals with no word spacing), then batched by script. `am my sw` last, having no upstream translation anywhere
+- [ ] Native review before release, prioritised `ar fa ur` for direction, then `hi ta th my am` for rendering, then the wallet's 400 keys wherever there are real users
 - [ ] Runtime a second language needs: locale store, CLDR plurals via `@formatjs/intl-pluralrules`, device language negotiation, in-app picker
 - [ ] Right-to-left pass on device in Arabic
 - [ ] Translated iOS permission dialogs and Android service notification

@@ -6,7 +6,7 @@
 //
 // Why this exists rather than hand-writing the file.
 //
-// A catalog is 1,523 strings and 27 plural keys. Hand-writing that thirty times
+// A catalog is 1,528 strings and 27 plural keys. Hand-writing that twenty-nine times
 // puts every mechanical property of the file, key completeness, key ordering,
 // escaping, section structure, at the mercy of care, and care over 45,000 lines
 // is not a control. `tsc` catches a missing key, but only after the fact, and it
