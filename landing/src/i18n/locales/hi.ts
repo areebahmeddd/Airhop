@@ -175,7 +175,7 @@ const strings: Strings = {
   "home.features.messaging.notes.name": "वॉइस नोट",
   "home.features.messaging.notes.line": "रिकॉर्ड किया गया ऑडियो, रास्ता टाइप करने से तेज़।",
   "home.features.messaging.files.name": "फ़ोटो, वीडियो और फ़ाइलें",
-  "home.features.messaging.files.line": "कोई भी फ़ॉर्मैट, 1 MB तक, बिना किसी सिग्नल के।",
+  "home.features.messaging.files.line": "कोई भी फ़ॉर्मैट, 1 MiB तक, बिना किसी सिग्नल के।",
   "home.features.messaging.forward.name": "स्टोर-एंड-फ़ॉरवर्ड",
   "home.features.messaging.forward.line":
     "सील किया हुआ और पास के फ़ोन द्वारा तब तक ले जाया गया जब तक वह उन तक न पहुँचे।",

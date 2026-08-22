@@ -145,7 +145,7 @@ describe("outbound pacing", () => {
     const tooBig = new Uint8Array(512 * 1024 + 1);
 
     expect(() => service.sendBytes(tooBig, META, "#test")).toThrow(
-      /over the 512 KB limit/i,
+      /over the 512 KiB limit/i,
     );
     expect(service.pendingCount).toBe(0);
     expect(broadcast).not.toHaveBeenCalled();
@@ -163,7 +163,7 @@ describe("outbound pacing", () => {
 
     expect(() =>
       service.sendBytes(new Uint8Array(1024 * 1024 + 1), doc, "#test"),
-    ).toThrow(/over the 1024 KB limit/i);
+    ).toThrow(/over the 1024 KiB limit/i);
   });
 });
 

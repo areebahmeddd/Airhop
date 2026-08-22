@@ -177,7 +177,7 @@ const strings: Strings = {
   "home.features.messaging.notes.name": "Spraakberichten",
   "home.features.messaging.notes.line": "Opgenomen audio, sneller dan een route uittypen.",
   "home.features.messaging.files.name": "Foto's, video en bestanden",
-  "home.features.messaging.files.line": "Elk formaat, tot 1 MB, zonder bereik nodig.",
+  "home.features.messaging.files.line": "Elk formaat, tot 1 MiB, zonder bereik nodig.",
   "home.features.messaging.forward.name": "Opslaan en doorsturen",
   "home.features.messaging.forward.line":
     "Verzegeld en meegedragen door een telefoon in de buurt tot het aankomt.",

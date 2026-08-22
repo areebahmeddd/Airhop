@@ -337,7 +337,7 @@ export const strings = {
   // ---- Chats: coverage and transport ----
   "chat.scope.mesh": "Local mesh · Bluetooth only",
   "chat.scope.mesh_desc":
-    "Reaches devices within Bluetooth range (roughly 10 to 100 metres). No internet required. Ideal for local coordination.",
+    "Reaches devices within Bluetooth range (roughly 10 to 100 meters). No internet required. Ideal for local coordination.",
   "chat.scope.block": "City block · ~100m",
   "chat.scope.block_desc":
     "City-block level coverage. Messages are bridged over the internet so peers outside Bluetooth range but nearby can participate.",
@@ -349,7 +349,7 @@ export const strings = {
     "City-wide channel. Uses geo-located internet relays to reach peers across the metro area.",
   "chat.scope.province": "Province or state · ~100km",
   "chat.scope.province_desc":
-    "Provincial or state coverage. Bridged over the internet for regional reach across hundreds of kilometres.",
+    "Provincial or state coverage. Bridged over the internet for regional reach across hundreds of kilometers.",
   "chat.scope.country": "Country or region · ~1000km",
   "chat.scope.country_desc":
     "Country-wide coverage. Any Airhop or bitchat user in the region can join and read messages.",
@@ -539,7 +539,7 @@ export const strings = {
   "chat.attach.send_anyway": "Send anyway",
   "chat.attach.bitchat_too_big": "This may not arrive",
   "chat.attach.bitchat_too_big_body":
-    "{name} is on bitchat, which gives up on a large file part-way through. Under about 350 KB is reliable. Sending it to an Airhop contact has no such limit.",
+    "{name} is on bitchat, which gives up on a large file part-way through. Under about 350 KiB is reliable. Sending it to an Airhop contact has no such limit.",
   "chat.attach.bitchat_unopenable": "They may not be able to open this",
   "chat.attach.bitchat_unopenable_body":
     "{name} is on bitchat, which shows photos and voice notes but lists anything else as a file it cannot open. It will arrive, they just may not be able to view it.",
@@ -588,9 +588,9 @@ export const strings = {
   "media.blocked.nostr_only":
     "You only know this person through a relay. Only text is available. Photos, files, and voice notes require Bluetooth.",
   "media.blocked.private_channel":
-    "An attachment is signed but not encrypted, so sending one into a private channel would broadcast it in the clear while the text here stays encrypted.",
+    "A broadcast attachment is signed but not encrypted, so sending one into a private channel would put it in the clear while the text here stays encrypted.",
   "media.blocked.private_group":
-    "An attachment is signed but not encrypted, so sending one into a private group would broadcast it in the clear while the text here stays encrypted.",
+    "A broadcast attachment is signed but not encrypted, so sending one into a private group would put it in the clear while the text here stays encrypted.",
   "media.blocked.location_channel":
     "A location channel reaches people over the internet, and photos, files and voice notes travel over Bluetooth, so they would never arrive.",
 
@@ -2006,7 +2006,7 @@ export const strings = {
     "Could not check for updates. Check your connection and try again.",
 
   // ---- Transfers: attachment kinds and the floating badge ----
-  "transfer.too_large": "{kind} is {size} KB, over the {cap} KB limit.",
+  "transfer.too_large": "{kind} is {size} KiB, over the {cap} KiB limit.",
   "transfer.failed.malformed":
     "An attachment arrived damaged and could not be opened. Ask them to send it again.",
   "transfer.failed.unsupported_type":

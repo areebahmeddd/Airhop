@@ -169,7 +169,7 @@ const strings: Strings = {
   "home.features.messaging.notes.name": "ข้อความเสียง",
   "home.features.messaging.notes.line": "เสียงที่บันทึกไว้ เร็วกว่าพิมพ์บอกทาง",
   "home.features.messaging.files.name": "รูป วิดีโอ และไฟล์",
-  "home.features.messaging.files.line": "รูปแบบใดก็ได้ ไม่เกิน 1 MB โดยไม่ต้องมีสัญญาณ",
+  "home.features.messaging.files.line": "รูปแบบใดก็ได้ ไม่เกิน 1 MiB โดยไม่ต้องมีสัญญาณ",
   "home.features.messaging.forward.name": "เก็บแล้วส่งต่อ",
   "home.features.messaging.forward.line":
     "ถูกผนึกไว้และให้โทรศัพท์ที่อยู่ใกล้พาไปจนกว่าจะถึงผู้รับ",

@@ -180,7 +180,7 @@ const strings: Strings = {
   "home.features.messaging.notes.line":
     "பதிவு செய்யப்பட்ட ஒலி, வழியைத் தட்டச்சு செய்வதைவிட வேகமானது.",
   "home.features.messaging.files.name": "படங்கள், காணொலி, கோப்புகள்",
-  "home.features.messaging.files.line": "எந்த வடிவமும், 1 MB வரை, சமிக்ஞை தேவையில்லை.",
+  "home.features.messaging.files.line": "எந்த வடிவமும், 1 MiB வரை, சமிக்ஞை தேவையில்லை.",
   "home.features.messaging.forward.name": "சேமித்துக் கடத்துதல்",
   "home.features.messaging.forward.line":
     "முத்திரையிடப்பட்டு, சேர வேண்டியவரிடம் சேரும் வரை அருகிலுள்ள தொலைபேசி சுமந்து செல்கிறது.",

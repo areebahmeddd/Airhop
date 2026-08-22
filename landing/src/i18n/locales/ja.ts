@@ -173,7 +173,7 @@ const strings: Strings = {
   "home.features.messaging.notes.name": "ボイスメモ",
   "home.features.messaging.notes.line": "録音した音声。道順を打ち込むより速い。",
   "home.features.messaging.files.name": "写真・動画・ファイル",
-  "home.features.messaging.files.line": "形式は自由、1 MB まで、電波は不要。",
+  "home.features.messaging.files.line": "形式は自由、1 MiB まで、電波は不要。",
   "home.features.messaging.forward.name": "蓄積して転送",
   "home.features.messaging.forward.line":
     "封をしたまま近くの端末が運び、相手に届くまで預かります。",

@@ -176,7 +176,7 @@ const strings: Strings = {
   "home.features.messaging.notes.name": "आवाज सन्देश",
   "home.features.messaging.notes.line": "रेकर्ड गरिएको आवाज, बाटो टाइप गर्नुभन्दा छिटो।",
   "home.features.messaging.files.name": "फोटो, भिडियो र फाइल",
-  "home.features.messaging.files.line": "जुनसुकै ढाँचा, 1 MB सम्म, सिग्नल नचाहिने।",
+  "home.features.messaging.files.line": "जुनसुकै ढाँचा, 1 MiB सम्म, सिग्नल नचाहिने।",
   "home.features.messaging.forward.name": "राखेर पठाउने",
   "home.features.messaging.forward.line":
     "छाप लगाइएको र प्राप्तकर्तासम्म नपुगुन्जेल नजिकको फोनले बोकेको।",

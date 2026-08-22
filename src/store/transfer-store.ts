@@ -1,9 +1,10 @@
 // Live attachment transfer progress.
 //
-// Files move slowly over Bluetooth (~22 KB/s), so a 50 MB transfer can run for
-// half an hour. Without visible progress the user has no way to tell a working
-// transfer from a stuck one. This store holds the in-flight transfers so the
-// chat UI can show a progress card with percentage, speed and ETA.
+// Files move slowly over Bluetooth (~18 KiB/s), so a transfer at the 1 MiB cap
+// runs for the better part of a minute. Without visible progress the user has
+// no way to tell a working transfer from a stuck one. This store holds the
+// in-flight transfers so the chat UI can show a progress card with percentage,
+// speed and ETA.
 //
 // Two honesties to keep in mind when reading these numbers:
 //   - Send progress reflects bytes handed to the radio, not bytes the far side
@@ -80,9 +81,9 @@ const SPEED_ALPHA = 0.4;
 // user sees the "done" state briefly rather than the card just vanishing.
 const SETTLE_MS = 4000;
 
-// No progress for this long flips an in-flight transfer to "stalled". Over BLE a
-// single 64 KB chunk takes a few seconds and receive samples arrive chunk by
-// chunk, so a gap this long is a genuine gap, not the normal cadence.
+// No progress for this long flips an in-flight transfer to "stalled". A healthy
+// transfer lands a fragment every 25 ms, so a gap this long is a genuine gap
+// rather than the normal cadence.
 const STALL_AFTER_MS = 12_000;
 
 // A transfer that stays silent this long is declared failed: the peer is out of

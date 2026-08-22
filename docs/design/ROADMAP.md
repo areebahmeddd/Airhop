@@ -13,7 +13,7 @@ bitchat is an excellent foundation. Airhop fills the gaps it left open.
 
 ### Gap 2: WiFi Direct / WiFi Aware Transport
 
-**bitchat problem:** BLE-only (~15 KB/s). Android WiFi Aware support exists but is experimental/unshipped.  
+**bitchat problem:** BLE-only (~18 KiB/s). Android WiFi Aware support exists but is experimental/unshipped.  
 **Airhop:** Android WiFi Aware and iOS MultipeerConnectivity, selected automatically when available with BLE as fallback. Important limitation: these two protocols cannot talk to each other, so this only accelerates Android-to-Android or iPhone-to-iPhone transfers. Every cross-platform path stays on Bluetooth or Nostr.
 
 ### Gap 3: Tor on iOS and Android
@@ -29,7 +29,7 @@ bitchat is an excellent foundation. Airhop fills the gaps it left open.
 ### Gap 5: File Transfers
 
 **bitchat position:** Per-type caps in `FileTransferLimits`, enforced at the binary-protocol decode layer. 1 MiB is the ceiling for general files; photos and voice notes are capped at 512 KiB.  
-**Airhop:** Matches it. An earlier plan for 64 KB chunked streaming with no protocol cap was dropped: the cap is enforced when bitchat _decodes_ a packet, so anything larger is rejected outright and would have broken interop in both directions. Airhop sends one `BitchatFilePacket` per file (512 KiB photos and voice, 1 MiB otherwise, MIME allow-list, magic-byte validation) and lets the fragment layer split it for the radio. A larger Airhop-only path remains possible later, but it cannot be the default without losing bitchat compatibility.
+**Airhop:** Matches it. An earlier plan for 64 KiB chunked streaming with no protocol cap was dropped: the cap is enforced when bitchat _decodes_ a packet, so anything larger is rejected outright and would have broken interop in both directions. Airhop sends one `BitchatFilePacket` per file (512 KiB photos and voice, 1 MiB otherwise, MIME allow-list, magic-byte validation) and lets the fragment layer split it for the radio. A larger Airhop-only path remains possible later, but it cannot be the default without losing bitchat compatibility.
 
 ### Gap 6: Video Support
 

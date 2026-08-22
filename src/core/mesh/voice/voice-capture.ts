@@ -62,8 +62,8 @@ const MAX_FRAMES_PER_PACKET = 8;
 // Past this the session stays open but stops encoding: the gesture belongs to
 // the user, so releasing still ends the burst normally with an END packet and
 // still produces the voice note. Nothing is torn down under their finger. What
-// stops is airtime, which matters because a burst is ~2 KB/s of a link that
-// carries ~15 KB/s in total, and because every listener now cuts a burst off at
+// stops is airtime, which matters because a burst is ~2 KiB/s of a link that
+// carries ~18 KiB/s in total, and because every listener now cuts a burst off at
 // its own inbound ceiling anyway. Enforcing it here means one sender stops
 // sending, rather than every receiver independently deciding to stop listening.
 export const MAX_BURST_MS = 120_000;
@@ -356,7 +356,7 @@ export class VoiceCaptureSession {
   private retract(): void {
     // Nobody was ever told about this burst, so there is nothing to take back.
     // Saying so anyway costs three signed packets on a link that carries about
-    // 15 KB/s, and every receiver would drop them as control packets for a
+    // 18 KiB/s, and every receiver would drop them as control packets for a
     // burst they never saw.
     if (!this.startSent) return;
     this.emit(encodeBurstCanceled(this.burstID, this.seq));

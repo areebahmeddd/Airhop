@@ -220,8 +220,8 @@ import { WiFiController } from "./wifi-controller";
 // ---- Constants ----
 
 // HKDF info string used to derive the Double Ratchet root key from the Noise XX
-// handshake transcript hash. Airhop-to-Airhop only: bitchat nodes never receive
-// DR_ENCRYPTED packets.
+// handshake's exporter secret. Airhop-to-Airhop only: bitchat nodes never
+// receive DR_ENCRYPTED packets.
 const DR_SEED_INFO = new TextEncoder().encode("airhop-dr-seed-v1");
 
 // How often to sweep the outbox for queued DMs that can now go over Nostr.
@@ -1334,7 +1334,7 @@ export class MeshService {
       // directed at exactly one device. Relaying anyway meant the RECEIVER
       // re-fragmented every byte it had just been handed and pushed it back out
       // over its other links: a photo takes the WiFi link one way and is then
-      // echoed over Bluetooth at ~22 KB/s, spending seconds of radio time and
+      // echoed over Bluetooth at ~18 KiB/s, spending seconds of radio time and
       // both devices' battery on a copy for the sender. Scenario W-F09 measures
       // each radio rather than assuming the faster one was chosen.
       //
@@ -5180,9 +5180,10 @@ export class MeshService {
     this.unicastFn(peerID, pkt);
   }
 
-  // Send a file attachment over the mesh. Chunks the bytes into 64 KB FILE_TRANSFER
-  // packets, fragments each to 469 bytes, and routes via unicast (DM) or broadcast
-  // (channel). The receiver reconstructs, saves to cache, and adds a ChatMessage.
+  // Send a file attachment over the mesh. One FILE_TRANSFER packet per file,
+  // which the fragment layer splits into 467-byte fragments, routed via unicast
+  // (DM) or broadcast (channel). The receiver reassembles, saves to cache, and
+  // adds a ChatMessage.
   //
   // Media rides BLE only (never Nostr), so returns whether a route exists right
   // now: for a DM, a direct link to that peer; for a channel, any live link.

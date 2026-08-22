@@ -159,7 +159,7 @@ const strings: Strings = {
   "home.features.messaging.notes.name": "የድምጽ መልእክቶች",
   "home.features.messaging.notes.line": "የተቀዳ ድምጽ፣ አቅጣጫ ከመተየብ ይፈጥናል።",
   "home.features.messaging.files.name": "ፎቶዎች፣ ቪዲዮና ፋይሎች",
-  "home.features.messaging.files.line": "ማንኛውም ቅርጸት፣ እስከ 1 MB፣ ምልክት ሳያስፈልግ።",
+  "home.features.messaging.files.line": "ማንኛውም ቅርጸት፣ እስከ 1 MiB፣ ምልክት ሳያስፈልግ።",
   "home.features.messaging.forward.name": "አስቀምጦ ማስተላለፍ",
   "home.features.messaging.forward.line": "ታሽጎ በአቅራቢያ ባለ ስልክ ተይዞ ወደ ተቀባዩ እስኪደርስ ድረስ ይጓዛል።",
 

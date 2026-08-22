@@ -21,7 +21,7 @@
 // Digits: month and weekday names come from Intl and are correct per locale for
 // free. Numerals are pinned to Latin here on purpose. A byte count, a duration
 // and a clock time are machine data, they sit in `FontFamily.mono` next to
-// Latin units ("MB", "sats"), and a run of Arabic-Indic digits beside a Latin
+// Latin units ("MiB", "sats"), and a run of Arabic-Indic digits beside a Latin
 // unit reads worse than either alone. Prose numbers, the ones inside a
 // translated sentence, get no such override and follow the locale.
 
@@ -164,15 +164,16 @@ export function formatNumber(value: number): string {
   return numberFormatter({}).format(value);
 }
 
-// Byte count for a file row or a storage figure, e.g. "1.4 MB".
+// Byte count for a file row or a storage figure, e.g. "1.4 MiB". Binary
+// units throughout: the divisor is 1024, so the label has to be the IEC one.
 export function formatBytes(bytes: number): string {
   // Grouping is off throughout: the largest value any branch can produce is
-  // 1023 (bytes and kilobytes are promoted past that) and a grouped "1,023 B"
+  // 1023 (bytes and kibibytes are promoted past that) and a grouped "1,023 B"
   // is noise. Latin digits and a locale decimal separator, so German reads
-  // "1,4 MB" without the digits changing script.
+  // "1,4 MiB" without the digits changing script.
   if (bytes < 1024) return `${formatFixed(bytes, 0)} B`;
-  if (bytes < 1024 * 1024) return `${formatFixed(bytes / 1024, 0)} KB`;
-  return `${formatFixed(bytes / (1024 * 1024), 1)} MB`;
+  if (bytes < 1024 * 1024) return `${formatFixed(bytes / 1024, 0)} KiB`;
+  return `${formatFixed(bytes / (1024 * 1024), 1)} MiB`;
 }
 
 function formatFixed(value: number, fractionDigits: number): string {

@@ -114,8 +114,8 @@ const IGNORE = new Set([
   // Byte-size unit symbols. Not words: they are the same in every locale the
   // app ships, and format.ts already localises the digits and the decimal
   // separator around them, which is the part that actually varies.
-  "KB",
-  "MB",
+  "KiB",
+  "MiB",
   "Ed25519 + X25519",
   "AES-256",
   "GitHub",

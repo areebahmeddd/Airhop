@@ -402,9 +402,11 @@ describe("the WiFi fast-path note", () => {
     }
   });
 
-  // The app never requests NEARBY_WIFI_DEVICES, so a note about it would name a
-  // problem with no way to act on it.
-  it("says nothing about a permission it never asks for", () => {
+  // NEARBY_WIFI_DEVICES shares an OS permission group with the Bluetooth ones
+  // from API 33, so the dialog that grants Bluetooth grants it too and this
+  // state is close to unreachable. A banner would carry more weight than the
+  // situation has.
+  it("says nothing about a near-unreachable permission state", () => {
     expect(
       computeMeshBanners({ ...HEALTHY, wifiFastPath: "permission" }),
     ).toEqual([]);

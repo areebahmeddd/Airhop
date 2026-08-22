@@ -9,11 +9,12 @@ export function ProtectionStack() {
     ["Private group", "ChaCha20-Poly1305 under an epoch key", "yes", "yes"],
     ["Public channel", "signed only, readable by design", "no", "yes"],
     ["Location channel", "signed only, readable by design", "no", "yes"],
-    ["Attachment", "signed only, for bitchat compatibility", "no", "yes"],
+    ["Direct attachment", "sealed in the recipient's Noise session", "yes", "yes"],
+    ["Room attachment", "signed only, readable by design", "no", "yes"],
   ];
   return (
     <svg
-      viewBox="0 0 920 340"
+      viewBox="0 0 920 376"
       className="h-auto w-full"
       role="img"
       aria-label="What is encrypted and what is only signed"

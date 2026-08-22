@@ -167,7 +167,7 @@ const strings: Strings = {
   "home.features.messaging.notes.name": "رسائل صوتية",
   "home.features.messaging.notes.line": "صوت مسجّل، أسرع من كتابة الاتجاهات.",
   "home.features.messaging.files.name": "صور وفيديو وملفات",
-  "home.features.messaging.files.line": "أي صيغة، حتى 1 MB، بلا حاجة إلى إشارة.",
+  "home.features.messaging.files.line": "أي صيغة، حتى 1 MiB، بلا حاجة إلى إشارة.",
   "home.features.messaging.forward.name": "التخزين وإعادة الإرسال",
   "home.features.messaging.forward.line": "مختومة ويحملها هاتف قريب حتى تصل إلى صاحبها.",
 

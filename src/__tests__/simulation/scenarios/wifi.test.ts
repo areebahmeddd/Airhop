@@ -585,7 +585,7 @@ test("W-F08 losing WiFi mid-conversation falls back to Bluetooth", async () => {
 // link when the recipient has been mapped to one, which is the whole reason the
 // mapping exists (ARCHITECTURE.md, "Transport Stack"). If that mapping never
 // populates in practice, or the BLE path wins the race, every attachment
-// quietly fragments over Bluetooth at ~22 KB/s while a 250 Mbps radio sits idle
+// quietly fragments over Bluetooth at ~18 KiB/s while a 250 Mbps radio sits idle
 // beside it. The symptom is "photos are slow", which is indistinguishable from
 // the way they have always been.
 test("W-F09 with both radios up, a DM attachment still takes the fast path", async () => {

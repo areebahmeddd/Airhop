@@ -177,7 +177,7 @@ const strings: Strings = {
   "home.features.messaging.notes.name": "Ujumbe wa sauti",
   "home.features.messaging.notes.line": "Sauti iliyorekodiwa, haraka kuliko kuandika maelekezo.",
   "home.features.messaging.files.name": "Picha, video na faili",
-  "home.features.messaging.files.line": "Muundo wowote, hadi MB 1, bila kuhitaji mtandao.",
+  "home.features.messaging.files.line": "Muundo wowote, hadi MiB 1, bila kuhitaji mtandao.",
   "home.features.messaging.forward.name": "Hifadhi na upitishe",
   "home.features.messaging.forward.line":
     "Umefungwa na kubebwa na simu iliyo karibu hadi ufike kwa mhusika.",

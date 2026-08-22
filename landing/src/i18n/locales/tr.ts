@@ -174,7 +174,7 @@ const strings: Strings = {
   "home.features.messaging.notes.name": "Sesli notlar",
   "home.features.messaging.notes.line": "Kaydedilmiş ses, tarif yazmaktan daha hızlı.",
   "home.features.messaging.files.name": "Fotoğraf, video ve dosyalar",
-  "home.features.messaging.files.line": "Her biçim, 1 MB'a kadar, sinyale gerek olmadan.",
+  "home.features.messaging.files.line": "Her biçim, 1 MiB'a kadar, sinyale gerek olmadan.",
   "home.features.messaging.forward.name": "Sakla ve ilet",
   "home.features.messaging.forward.line":
     "Mühürlenir ve alıcısına ulaşana dek yakındaki bir telefon tarafından taşınır.",

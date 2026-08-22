@@ -174,7 +174,7 @@ const strings: Strings = {
   "home.features.messaging.notes.name": "Röstmeddelanden",
   "home.features.messaging.notes.line": "Inspelat ljud, snabbare än att skriva en vägbeskrivning.",
   "home.features.messaging.files.name": "Foton, video och filer",
-  "home.features.messaging.files.line": "Alla format, upp till 1 MB, utan att täckning behövs.",
+  "home.features.messaging.files.line": "Alla format, upp till 1 MiB, utan att täckning behövs.",
   "home.features.messaging.forward.name": "Lagra och vidarebefordra",
   "home.features.messaging.forward.line":
     "Förseglat och buret av en telefon i närheten tills det kommer fram.",

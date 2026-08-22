@@ -157,7 +157,7 @@ const strings: Strings = {
   "home.features.messaging.notes.name": "语音留言",
   "home.features.messaging.notes.line": "录好的音频，比打字描述路线更快。",
   "home.features.messaging.files.name": "照片、视频和文件",
-  "home.features.messaging.files.line": "任意格式，最大 1 MB，无需信号。",
+  "home.features.messaging.files.line": "任意格式，最大 1 MiB，无需信号。",
   "home.features.messaging.forward.name": "存储转发",
   "home.features.messaging.forward.line": "封装后由附近的手机携带，直到送达对方。",
 

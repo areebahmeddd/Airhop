@@ -202,7 +202,7 @@ function headerSizeFor(version: number): number | null {
 // decides, mirroring bitchat's BLEOutboundPacketPolicy.padsBLEFrame.
 //
 // Padding hides plaintext length behind ciphertext length. On a type whose size
-// is already public it buys nothing and costs airtime on a ~15 KB/s radio: a
+// is already public it buys nothing and costs airtime on a ~18 KiB/s radio: a
 // 30-byte PING becomes 256 bytes, and a ~309-byte voice burst becomes 512, past
 // the fragment frame budget and most negotiated MTUs. Voice is the one type where
 // that cost is a broken feature rather than wasted bytes, since the 210-byte

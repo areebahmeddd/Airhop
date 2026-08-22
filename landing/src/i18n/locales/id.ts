@@ -178,7 +178,7 @@ const strings: Strings = {
   "home.features.messaging.notes.line":
     "Audio terekam, lebih cepat daripada mengetik petunjuk arah.",
   "home.features.messaging.files.name": "Foto, video, dan berkas",
-  "home.features.messaging.files.line": "Format apa pun, hingga 1 MB, tanpa perlu sinyal.",
+  "home.features.messaging.files.line": "Format apa pun, hingga 1 MiB, tanpa perlu sinyal.",
   "home.features.messaging.forward.name": "Simpan dan teruskan",
   "home.features.messaging.forward.line":
     "Disegel dan dibawa ponsel di sekitar sampai tiba di tujuan.",

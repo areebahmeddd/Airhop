@@ -170,7 +170,7 @@ const strings: Strings = {
   "home.features.messaging.notes.name": "음성 메모",
   "home.features.messaging.notes.line": "녹음된 음성. 길 안내를 입력하는 것보다 빠릅니다.",
   "home.features.messaging.files.name": "사진, 영상, 파일",
-  "home.features.messaging.files.line": "형식은 자유롭게, 최대 1 MB, 신호 없이도.",
+  "home.features.messaging.files.line": "형식은 자유롭게, 최대 1 MiB, 신호 없이도.",
   "home.features.messaging.forward.name": "저장 후 전달",
   "home.features.messaging.forward.line":
     "봉인된 채 가까운 휴대폰이 상대에게 닿을 때까지 지니고 갑니다.",

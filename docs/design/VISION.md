@@ -48,7 +48,7 @@ What each feature is for, and when someone would actually reach for it.
 - Bulletin board. Signed notices that outlive a conversation, pinned to your mesh or your area for one to seven days, with an urgent flag. "Water station at the south entrance," left for whoever walks past an hour later.
 - Voice notes. Recorded audio sent as a file, faster than typing directions.
 - Video sharing. Recorded clips that play inline. There is no live video, because the two platforms' direct-WiFi stacks cannot talk to each other.
-- File transfer. Any format, up to 1 MB, which is bitchat's limit and takes about 45 seconds over Bluetooth.
+- File transfer. Any format, up to 1 MiB, which is bitchat's limit and takes about 56 seconds over Bluetooth.
 - Store-and-forward courier. When nothing can reach the recipient now, a nearby phone carries the sealed message and hands it over when they eventually meet. The carrier cannot read it.
 
 ### Identity
@@ -97,7 +97,7 @@ Do not open a PR for a UI component until the underlying `src/core/` service bac
 
 ## What We Are Not Building
 
-- **A video call app.** BLE bandwidth (~15 KB/s) cannot carry live video, and the two platforms' direct-WiFi stacks do not interoperate, so cross-platform video calling is not achievable today. Videos are shared as files instead.
+- **A video call app.** BLE bandwidth (~18 KiB/s) cannot carry live video, and the two platforms' direct-WiFi stacks do not interoperate, so cross-platform video calling is not achievable today. Videos are shared as files instead.
 - **A server.** We operate no relays, mints, or infrastructure. Ever.
 - **A centralized social network.** No profiles hosted on our servers. No search index we control.
 - **A KYC product.** No phone number. No email. No government ID.

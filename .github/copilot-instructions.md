@@ -107,6 +107,7 @@ Full constant table: [`docs/spec/PROTOCOLS.md`](docs/spec/PROTOCOLS.md)
 - Comment intent, assumptions, constraints, or non-obvious decisions, not the implementation.
 - Prefer clear names over unnecessary comments.
 - Do not use em dashes (`—`) or double hyphens (`--`) in comments or documentation. Avoid AI-style, robotic wording. Keep the language natural and human.
+- Byte sizes follow IEC 80000-13: `KiB` / `MiB` for 1024-based values, which is every size this project controls, `KB` / `MB` only for genuinely decimal figures. The label must match the arithmetic.
 
 ## Agents Available
 

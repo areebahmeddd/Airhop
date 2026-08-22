@@ -293,7 +293,7 @@ const COMPOSER_SCRIM = "rgba(0,0,0,0.85)";
 // high, and a panorama would be a letterbox slit. Beyond the clamp the photo is
 // centre-cropped to fit, which is what every messenger does, and tapping still
 // opens the untouched original full screen.
-// A voice note is speech on a ~22 KB/s radio, so it is recorded as speech:
+// A voice note is speech on a ~18 KiB/s radio, so it is recorded as speech:
 // mono, 16 kHz (the band a voice actually occupies), 32 kbps. The stock
 // HIGH_QUALITY preset is 44.1 kHz stereo at 128 kbps, four times the bytes for
 // nothing anyone can hear on a phone speaker, which put a one-minute note over
@@ -560,9 +560,9 @@ function createUndoStyles(Colors: ReturnType<typeof useThemeColors>) {
 }
 
 // Progress cards for the attachments currently moving through this thread.
-// Files crawl over Bluetooth (~22 KB/s), so a large one can take many minutes;
-// showing live percent, speed and ETA is the difference between "working" and
-// "frozen" from the user's side.
+// Files crawl over Bluetooth (~18 KiB/s), so one at the 1 MiB cap takes about a
+// minute; showing live percent, speed and ETA is the difference between
+// "working" and "frozen" from the user's side.
 function TransferProgressList({
   channel,
 }: {
@@ -713,7 +713,7 @@ function TransferProgressList({
   );
 }
 
-// Document subtitle in the WhatsApp style, e.g. "PDF · 2.3 MB". Returns null
+// Document subtitle in the WhatsApp style, e.g. "PDF · 2.3 MiB". Returns null
 // when neither an extension nor a size is known.
 function docSubtitle(attachment: ChatAttachment): string | null {
   const parts: string[] = [];
@@ -2768,7 +2768,7 @@ export default function MessageThread({
         source.attachment.durationMs,
         // Carry the caption (it lives on the message text) so a forwarded photo
         // keeps its caption, the way it arrived. The size comes along too, or
-        // the copy loses the "PDF · 412 KB" line the original had for no reason
+        // the copy loses the "PDF · 412 KiB" line the original had for no reason
         // the reader can see.
         {
           targetChannel,

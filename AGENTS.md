@@ -64,6 +64,7 @@ rather than drifting quietly, so a change to either has to be deliberate.
 - English is the shipping language and `en.ts` is the whole catalog. Ten languages land in v1.3.0, which the extraction makes a set of new files rather than a sweep of every screen.
 - Placeholders are named (`{count}`), never positional. Plurals go through `tPlural`, never `count === 1` at a call site.
 - **No em dashes**, in copy or in comments. Use a comma, parentheses or a full stop.
+- **Byte sizes follow IEC 80000-13, everywhere, copy included.** `KiB` / `MiB` are 1024-based, `KB` / `MB` are 1000-based, and the label must match the arithmetic. Every size we control is a power of two (the 1 MiB file cap, the 512 KiB photo budget, the 16 KiB envelope) and `formatBytes` divides by 1024, so all of it reads `KiB` / `MiB` in specs, `docs/`, skills, comments, `en.ts` and `landing/` alike. Decimal units stay only for genuinely decimal figures, such as an observed camera file size. Never label a 1024-based value `KB`.
 - Layout uses logical properties (`marginStart`, `start`, `textAlignEnd`), never `marginLeft` / `left` / `textAlign: "right"`, so right-to-left works when a catalog for it ships.
 - **Some strings must never be translated** because they cross the wire: the `username.ts` word lists, the transmitted `/hug` and `/slap` text (bitchat matches it as an English substring), slash command tokens, channel names. Read [`i18n.md`](.github/skills/i18n.md) before touching any of them.
 

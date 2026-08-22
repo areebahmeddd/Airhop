@@ -175,7 +175,7 @@ const strings: Strings = {
   "home.features.messaging.notes.name": "Tin nhắn thoại",
   "home.features.messaging.notes.line": "Âm thanh đã ghi, nhanh hơn gõ chỉ đường.",
   "home.features.messaging.files.name": "Ảnh, video và tệp",
-  "home.features.messaging.files.line": "Mọi định dạng, tối đa 1 MB, không cần sóng.",
+  "home.features.messaging.files.line": "Mọi định dạng, tối đa 1 MiB, không cần sóng.",
   "home.features.messaging.forward.name": "Lưu và chuyển tiếp",
   "home.features.messaging.forward.line":
     "Được niêm phong và mang theo bởi một điện thoại ở gần cho tới khi đến nơi.",

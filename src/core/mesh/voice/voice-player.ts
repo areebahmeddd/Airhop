@@ -45,7 +45,7 @@ const MAX_CONCURRENT_SESSIONS = 8;
 // range can hold the floor indefinitely, streaming into whichever room the
 // listener happens to be looking at, and an honest client's own 120-second limit
 // is no help because a hostile one simply does not have it. Real speech arrives
-// at about 2 KB/s, so the rate ceiling is generous enough that a burst crossing
+// at about 2 KiB/s, so the rate ceiling is generous enough that a burst crossing
 // it is not speech.
 const MAX_BURST_BYTES = 384 * 1024;
 const MAX_BYTES_PER_SECOND = 6_000;

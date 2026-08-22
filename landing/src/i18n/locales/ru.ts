@@ -175,7 +175,7 @@ const strings: Strings = {
   "home.features.messaging.notes.name": "Голосовые заметки",
   "home.features.messaging.notes.line": "Запись голоса, быстрее, чем набирать указания.",
   "home.features.messaging.files.name": "Фото, видео и файлы",
-  "home.features.messaging.files.line": "Любой формат, до 1 МБ, сигнал не нужен.",
+  "home.features.messaging.files.line": "Любой формат, до 1 МиБ, сигнал не нужен.",
   "home.features.messaging.forward.name": "Сохранить и передать",
   "home.features.messaging.forward.line":
     "Запечатано и перенесено телефоном поблизости, пока не дойдёт до адресата.",

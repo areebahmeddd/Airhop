@@ -180,7 +180,7 @@ const strings: Strings = {
   "home.features.messaging.notes.line":
     "Aufgenommenes Audio, schneller als eine Wegbeschreibung zu tippen.",
   "home.features.messaging.files.name": "Fotos, Video und Dateien",
-  "home.features.messaging.files.line": "Jedes Format, bis 1 MB, ganz ohne Empfang.",
+  "home.features.messaging.files.line": "Jedes Format, bis 1 MiB, ganz ohne Empfang.",
   "home.features.messaging.forward.name": "Store-and-Forward",
   "home.features.messaging.forward.line":
     "Versiegelt und von einem Handy in der Nähe getragen, bis sie ankommt.",

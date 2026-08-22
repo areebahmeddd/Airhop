@@ -173,7 +173,7 @@ const strings: Strings = {
   "home.features.messaging.notes.name": "Голосові нотатки",
   "home.features.messaging.notes.line": "Записаний звук, швидше, ніж набирати вказівки.",
   "home.features.messaging.files.name": "Фото, відео та файли",
-  "home.features.messaging.files.line": "Будь-який формат, до 1 МБ, без сигналу.",
+  "home.features.messaging.files.line": "Будь-який формат, до 1 МіБ, без сигналу.",
   "home.features.messaging.forward.name": "Зберегти й передати",
   "home.features.messaging.forward.line":
     "Запечатане й перенесене телефоном поблизу, доки не дійде до адресата.",

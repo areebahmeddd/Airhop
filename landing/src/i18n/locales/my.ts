@@ -179,7 +179,7 @@ const strings: Strings = {
   "home.features.messaging.notes.name": "အသံမှတ်စု",
   "home.features.messaging.notes.line": "အသံသွင်းထားသောအရာ၊ လမ်းညွှန်ရိုက်ထည့်ရသည်ထက် မြန်သည်။",
   "home.features.messaging.files.name": "ဓာတ်ပုံ၊ ဗီဒီယိုနှင့် ဖိုင်များ",
-  "home.features.messaging.files.line": "မည်သည့်ပုံစံမဆို၊ ၁ MB အထိ၊ လိုင်းမလိုဘဲ။",
+  "home.features.messaging.files.line": "မည်သည့်ပုံစံမဆို၊ ၁ MiB အထိ၊ လိုင်းမလိုဘဲ။",
   "home.features.messaging.forward.name": "သိမ်းပြီးဆက်ပို့ခြင်း",
   "home.features.messaging.forward.line":
     "ချိပ်ပိတ်ထားပြီး လက်ခံသူထံရောက်သည်အထိ အနီးအနားရှိဖုန်းက သယ်ဆောင်သွားသည်။",

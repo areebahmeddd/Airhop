@@ -6,7 +6,7 @@
 //
 // The two media rows sat under Storage & Data before, borrowed from where
 // WhatsApp and Signal keep theirs. Theirs gate downloads and bandwidth; these
-// do not. Upload quality picks how much detail to keep inside a fixed 512 KB
+// do not. Upload quality picks how much detail to keep inside a fixed 512 KiB
 // budget, and Show media automatically only decides whether a photo already on
 // disk renders by itself. Neither saves a byte, so neither belongs on a screen
 // that reports usage.
@@ -80,7 +80,7 @@ const QUALITY_META: Record<
   UploadQuality,
   { labelKey: TranslationKey; descriptionKey: TranslationKey }
 > = {
-  // Every photo is fitted to the same 512 KB budget before it is sent, so this
+  // Every photo is fitted to the same 512 KiB budget before it is sent, so this
   // is not a size dial: it is how much detail to try to keep inside that
   // budget. Low reaches a sendable file in one pass and gets moving sooner,
   // High holds on to detail and may take a couple of passes to fit.

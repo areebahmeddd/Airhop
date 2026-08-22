@@ -176,7 +176,8 @@ const strings: Strings = {
   "home.features.messaging.notes.name": "Note vocali",
   "home.features.messaging.notes.line": "Audio registrato, più veloce che scrivere indicazioni.",
   "home.features.messaging.files.name": "Foto, video e file",
-  "home.features.messaging.files.line": "Qualsiasi formato, fino a 1 MB, senza bisogno di segnale.",
+  "home.features.messaging.files.line":
+    "Qualsiasi formato, fino a 1 MiB, senza bisogno di segnale.",
   "home.features.messaging.forward.name": "Memorizza e inoltra",
   "home.features.messaging.forward.line":
     "Sigillato e trasportato da un telefono vicino finché non arriva a destinazione.",

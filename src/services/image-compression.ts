@@ -2,7 +2,7 @@
 //
 // A phone camera produces several megabytes. The wire limit is 512 KiB
 // (bitchat's FileTransferLimits, mirrored in bitchat-file-packet), and at
-// Bluetooth's ~22 KB/s even a file that fits takes half a minute, so sending
+// Bluetooth's ~18 KiB/s even a file that fits takes half a minute, so sending
 // the original is not something anyone wants even where it would be allowed.
 // Every messenger resizes before sending for exactly this reason; this is that
 // step, and nothing more.

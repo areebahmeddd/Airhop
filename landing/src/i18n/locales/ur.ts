@@ -173,7 +173,7 @@ const strings: Strings = {
   "home.features.messaging.notes.name": "صوتی پیغامات",
   "home.features.messaging.notes.line": "ریکارڈ شدہ آواز، راستہ ٹائپ کرنے سے تیز۔",
   "home.features.messaging.files.name": "تصاویر، ویڈیو اور فائلیں",
-  "home.features.messaging.files.line": "کوئی بھی فارمیٹ، 1 MB تک، بغیر کسی سگنل کے۔",
+  "home.features.messaging.files.line": "کوئی بھی فارمیٹ، 1 MiB تک، بغیر کسی سگنل کے۔",
   "home.features.messaging.forward.name": "محفوظ کر کے آگے بھیجنا",
   "home.features.messaging.forward.line":
     "مہربند اور قریبی فون کے ذریعے اٹھایا گیا، جب تک وہ اپنے وصول کنندہ تک نہ پہنچ جائے۔",

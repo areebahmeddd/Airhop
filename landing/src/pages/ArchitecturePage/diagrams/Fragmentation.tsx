@@ -49,8 +49,8 @@ export function Fragmentation() {
         the transfer never completes.
       </text>
       <text x={16} y={230} fontFamily={MONO} fontSize={10} fill={MUTED}>
-        467 payload bytes every 25 ms is where the ~19 KB/s figure comes from, so 1 MiB takes
-        roughly 56 seconds.
+        467 payload bytes every 25 ms is where the ~18 KiB/s figure comes from, so 1 MiB takes 56
+        seconds.
       </text>
     </svg>
   );

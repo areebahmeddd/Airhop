@@ -179,7 +179,7 @@ const strings: Strings = {
   "home.features.messaging.notes.name": "Voice note",
   "home.features.messaging.notes.line": "Naitalang audio, mas mabilis kaysa mag-type ng direksyon.",
   "home.features.messaging.files.name": "Larawan, video at file",
-  "home.features.messaging.files.line": "Anumang format, hanggang 1 MB, walang kailangang signal.",
+  "home.features.messaging.files.line": "Anumang format, hanggang 1 MiB, walang kailangang signal.",
   "home.features.messaging.forward.name": "Itago at ipasa",
   "home.features.messaging.forward.line":
     "Nakaselyo at dala ng kalapit na telepono hanggang makarating ito.",

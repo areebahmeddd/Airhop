@@ -77,7 +77,7 @@ Padding appears twice and the two uses are not the same rule. Conflating them br
 | **Signing preimage**   | Every type, always                                                                       | bitchat's `toBinaryDataForSigning()` encodes with padding on, so pad bytes are inside the signed material of every signed packet. Any deviation means no other implementation can verify anything we send. |
 | **Outbound BLE frame** | `NOISE_ENCRYPTED`, `NOISE_HANDSHAKE`, and the Airhop-only `DR_ENCRYPTED` / `CHANNEL_ENC` | Only where ciphertext length reveals plaintext length. Matches bitchat's `BLEOutboundPacketPolicy.padsBLEFrame`, extended to the two Airhop private types bitchat never interprets.                        |
 
-Padding every frame is not a safe default. It buys nothing for a type whose size is already public and costs real airtime on a ~15 KB/s radio: a 30-byte `PING` becomes 256 bytes, and a ~309-byte live voice burst becomes 512, past both the 512-byte fragment frame budget and most negotiated MTUs, the outcome the 210-byte burst budget exists to prevent.
+Padding every frame is not a safe default. It buys nothing for a type whose size is already public and costs real airtime on a ~18 KiB/s radio: a 30-byte `PING` becomes 256 bytes, and a ~309-byte live voice burst becomes 512, past both the 512-byte fragment frame budget and most negotiated MTUs, the outcome the 210-byte burst budget exists to prevent.
 
 Decoders accept both forms (decode as-is, then retry after stripping PKCS#7), so an implementation that pads more than we do stays readable.
 

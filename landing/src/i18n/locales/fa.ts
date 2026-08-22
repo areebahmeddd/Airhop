@@ -173,7 +173,7 @@ const strings: Strings = {
   "home.features.messaging.notes.name": "پیام صوتی",
   "home.features.messaging.notes.line": "صدای ضبط‌شده، سریع‌تر از تایپ کردن مسیر.",
   "home.features.messaging.files.name": "عکس، ویدیو و فایل",
-  "home.features.messaging.files.line": "هر قالبی، تا ۱ مگابایت، بدون نیاز به آنتن.",
+  "home.features.messaging.files.line": "هر قالبی، تا ۱ MiB، بدون نیاز به آنتن.",
   "home.features.messaging.forward.name": "ذخیره و ارسال",
   "home.features.messaging.forward.line":
     "مهر و موم‌شده و حمل‌شده توسط گوشی‌ای نزدیک تا به دستشان برسد.",

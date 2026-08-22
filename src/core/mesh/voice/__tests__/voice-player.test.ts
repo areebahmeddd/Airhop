@@ -270,8 +270,8 @@ describe("VoicePlayer inbound burst caps", () => {
     player.handlePacket(makeStartPacket(1), "aabbccdd00112233");
     expect(player.activeSessions).toHaveLength(1);
 
-    // 6 KB/s with 2s of startup slack means ~12 KB is the most a brand-new
-    // burst may deliver. Firing 30 KB of well-formed packets back to back is
+    // 6 KiB/s with 2s of startup slack means ~12 KiB is the most a brand-new
+    // burst may deliver. Firing 30 KiB of well-formed packets back to back is
     // not speech, it is someone holding the floor.
     for (let seq = 1; seq <= 200; seq++) {
       player.handlePacket(
@@ -287,7 +287,7 @@ describe("VoicePlayer inbound burst caps", () => {
     const player = track(new VoicePlayer(makeBackend()));
     player.handlePacket(makeStartPacket(2), "aabbccdd00112233");
 
-    // Real speech is ~2 KB/s; a few hundred bytes per packet is normal.
+    // Real speech is ~2 KiB/s; a few hundred bytes per packet is normal.
     for (let seq = 1; seq <= 10; seq++) {
       player.handlePacket(
         makeDataPacket(2, seq, new Uint8Array(200)),

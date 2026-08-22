@@ -85,15 +85,15 @@ describe("formatBytes", () => {
   it("scales through the units", () => {
     expect(formatBytes(0)).toBe("0 B");
     expect(formatBytes(512)).toBe("512 B");
-    expect(formatBytes(2048)).toBe("2 KB");
-    expect(formatBytes(1_500_000)).toBe("1.4 MB");
+    expect(formatBytes(2048)).toBe("2 KiB");
+    expect(formatBytes(1_500_000)).toBe("1.4 MiB");
   });
 
   it("switches unit exactly at the boundary", () => {
     expect(formatBytes(1023)).toBe("1023 B");
-    expect(formatBytes(1024)).toBe("1 KB");
-    expect(formatBytes(1024 * 1024 - 1)).toContain("KB");
-    expect(formatBytes(1024 * 1024)).toBe("1.0 MB");
+    expect(formatBytes(1024)).toBe("1 KiB");
+    expect(formatBytes(1024 * 1024 - 1)).toContain("KiB");
+    expect(formatBytes(1024 * 1024)).toBe("1.0 MiB");
   });
 });
 

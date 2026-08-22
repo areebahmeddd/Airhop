@@ -461,11 +461,11 @@ Scopes, as designed and now shipped:
 
 - Packet type `0x29` (`voiceFrame`) for public broadcasts.
 - `NoisePayloadType.voiceFrame = 0x08` for DMs.
-- AAC-LC at 16 kHz, ~2 KB/s, ~1 frame/packet, ~15.6 pkt/s.
+- AAC-LC at 16 kHz, ~2 KiB/s, ~1 frame/packet, ~15.6 pkt/s.
 - Each burst shares an 8-byte random `burstID`; sequence numbers allow gap detection.
 - Jitter buffer: 350 ms before playback starts.
 - **No delivery acks, no retransmit** for individual frames (live audio; reliability is the fallback voice note).
-- Bandwidth math: BLE mesh moves ~15 KB/s per link; voice needs ~2 KB/s; fits with margin.
+- Bandwidth math: BLE mesh moves ~18 KiB/s per link; voice needs ~2 KiB/s; fits with margin.
 
 `VoiceRecorder` and `VoiceVisualizer` cover the recorded voice-note fallback. Live push-to-talk ships on both bitchat platforms: `voiceFrame` (`0x29`) is one of the few types above `0x22` that the Android `MessageType` registry implements, so a live burst crosses between them.
 
@@ -473,7 +473,7 @@ Scopes, as designed and now shipped:
 
 **Status: Not implemented. Not planned.**
 
-There is no design document, no code, and no packet type for video calling. The BLE mesh's ~15 KB/s per link capacity makes real-time video impractical. This is an architectural constraint, not just a roadmap gap.
+There is no design document, no code, and no packet type for video calling. The BLE mesh's ~18 KiB/s per link capacity makes real-time video impractical. This is an architectural constraint, not just a roadmap gap.
 
 ## 9. Voice: Current State & Push-to-Talk Design
 
@@ -490,7 +490,7 @@ The design is in bitchat's own `PUSH-TO-TALK-DESIGN.md` and the code is in `bitc
 
 - `AVAudioEngine` input tap -> `PTTInputResampler` -> `PTTFrameEncoder` -> packetizer -> BLE.
 - Simultaneously writes to `.m4a` for finalized note delivery (no remux needed).
-- 8 concurrent receive assemblies max, 256 KB per burst cap, 30 s stale cleanup.
+- 8 concurrent receive assemblies max, 384 KiB per burst cap, 30 s stale cleanup.
 - Flood protection: drop inbound frames beyond ~2× realtime per sender.
 - Playback: `VoiceBurstAssembler` feeding `PTTBurstPlayer` with 350 ms jitter buffer.
 
@@ -809,7 +809,7 @@ No forensic recovery is possible after panic wipe without the Keychain, which is
 
 | Gap                                     | Severity | Notes                                                                   |
 | --------------------------------------- | -------- | ----------------------------------------------------------------------- |
-| **No video support**                    | High     | No packet type, no codec, BLE bandwidth insufficient (~15 KB/s)         |
+| **No video support**                    | High     | No packet type, no codec, BLE bandwidth insufficient (~18 KiB/s)        |
 | **No video calling**                    | High     | Architecturally infeasible over BLE; would require internet path        |
 | **Courier envelopes = text only**       | Medium   | 16 KiB cap; images cannot be physically relayed                         |
 | **Nostr path = text only**              | Medium   | Media does not ride Nostr                                               |
