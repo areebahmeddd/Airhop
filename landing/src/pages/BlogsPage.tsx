@@ -10,6 +10,7 @@ export default function BlogsPage() {
   return (
     <main
       id="main-content"
+      tabIndex={-1}
       className="flex flex-1 flex-col items-center justify-center px-6 py-24 text-center"
     >
       <div className="flex flex-col items-center gap-4">

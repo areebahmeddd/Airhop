@@ -134,7 +134,7 @@ export default function BrandPage() {
   useSEO(SEO["/brand"]);
 
   return (
-    <main id="main-content">
+    <main id="main-content" tabIndex={-1}>
       <div className="mx-auto max-w-3xl px-6 py-16">
         <PageHeader
           eyebrow={T("page.brand.eyebrow")}

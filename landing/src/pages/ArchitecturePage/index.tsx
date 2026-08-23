@@ -231,7 +231,7 @@ export default function ArchitecturePage() {
   useSEO(SEO["/architecture"]);
 
   return (
-    <main id="main-content">
+    <main id="main-content" tabIndex={-1}>
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: schema }} />
 
       <div className="mx-auto max-w-6xl px-6 py-16 md:px-10">

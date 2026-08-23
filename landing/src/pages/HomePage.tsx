@@ -14,7 +14,7 @@ export default function HomePage() {
   useSEO(SEO["/"]);
 
   return (
-    <main id="main-content">
+    <main id="main-content" tabIndex={-1}>
       <Hero />
       <About />
       <Situations />

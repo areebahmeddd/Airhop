@@ -326,9 +326,6 @@ app layer. Ordered by severity.
 | 15  | iOS `want*` latch set before validation                                   | Low      | Fixed - the latch is set per state branch; transient states keep it, refusals no longer arm the radio                                                 |
 | 16  | `forceStopRadios()` leaves the duty-cycle timer armed                     | Low      | Fixed - calls `stopScanCycle()`, so the queued toggle cannot restart the scanner after the service stops                                              |
 | 17  | Outbox receipts not scoped to the receipt's sender                        | Info     | Accepted - message IDs are 8 bytes of CSPRNG never sent in cleartext; availability-only impact                                                        |
-| 18  | Panic wipe was neither resumable nor non-blocking                         | High     | Fixed - a durable marker replays an interrupted wipe at launch; the cache walk yields instead of freezing the thread; the keychain step is time-boxed |
-| 19  | Two MMKV handles per partition, so the wipe segfaulted mid-sequence       | High     | Fixed - handles come from `store/mmkv`; clearing through a second handle corrupted the first and killed the process in `MMKV::loadMetaInfoAndCheck`   |
-| 20  | `deleteMMKV` on the wallet raced its own async persist write              | High     | Fixed - `wipeWalletStorage` drops the module's references, then clears through the handle it owns; deleting under a live handle locked a null mutex   |
 
 ## Known Issues
 
