@@ -32,15 +32,11 @@ const ROOT = path.join(__dirname, "..");
 // Translations evaluated at module load, which freeze in whichever language the
 // app started in.
 //
-// This is the one i18n bug the type system cannot see and a screenshot will not
-// show you: `const SCOPES = { tag: t("chat.scope.mesh") }` type-checks, renders
-// correctly, and is simply wrong the moment somebody changes language, because
-// the module was evaluated once at import. It has to be a key table the
-// component translates on render instead.
-//
-// Found 25 of these the first time it ran, across four files, all written by
-// hand and all invisible in review.
-// /
+// The type system cannot see this and a screenshot will not show it:
+// `const SCOPES = { tag: t("chat.scope.mesh") }` type-checks and renders
+// correctly, and is wrong the moment somebody changes language, because the
+// module was evaluated once at import. It has to be a key table the component
+// translates on render instead.
 function frozenTranslations(files) {
   const found = [];
   for (const file of files) {
@@ -493,24 +489,18 @@ if (frozen.length > 0) {
   process.exit(1);
 }
 
-// The same bug one level in: a translation memoized without the translator in
-// its dependency array.
+// A translation memoized without the translator in its dependency array.
 //
-// `frozenTranslations` above catches `t()` at module scope. This catches
-// `useMemo(() => ({ label: t("x") }), [Colors])`. The factory reruns only when
-// a listed dependency changes, and the module-level `t` is not a reactive
-// value, so react-hooks/exhaustive-deps cannot ask for it. The memo goes on
-// returning the old language's text after a switch while every other string on
-// the same screen has changed.
+// `frozenTranslations` above catches `t()` at module scope; this catches
+// `useMemo(() => ({ label: t("x") }), [Colors])`. The factory reruns only when a
+// listed dependency changes, and the module-level `t` is not a reactive value,
+// so react-hooks/exhaustive-deps cannot ask for it. The memo keeps returning the
+// old language's text after a switch.
 //
-// Found on a real screen by the pseudolocale rather than by review: the profile
-// header's status label stayed "Online" in English while the rows around it
-// had switched.
-//
-// The rule is about the dependency, not the call. Use the `T` from `useT()`
+// The rule is about the dependency, not the call: use the `T` from `useT()`
 // inside a memo and list it, and the linter can see it too. A `useCallback`
-// whose body calls the module-level `t` at invocation time is correct and is
-// deliberately not reported: `t` resolves the current language on every call.
+// whose body calls the module-level `t` at invocation time is correct and is not
+// reported, because `t` resolves the current language on every call.
 const memoized = memoizedTranslations(files);
 if (memoized.length > 0) {
   console.error(

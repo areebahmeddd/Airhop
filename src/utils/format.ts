@@ -191,18 +191,11 @@ function formatFixed(value: number, fractionDigits: number): string {
 
 // ---- Money ----
 //
-// These two live here rather than beside the Cashu protocol code they describe,
-// and the reason is the import in this file's header.
-//
-// `src/core/` is the protocol in pure TypeScript and imports no display layer at
-// all, which is what lets it target the planned Node CLI and web builds without
-// dragging React Native's i18n runtime along. A formatter has to know the app's
-// language to pick a grouping separator, so a formatter cannot live there. The
-// dependency runs the other way instead: this file reaches into core for
-// `satsToBtc`, which is exact integer arithmetic on money and belongs there.
-//
-// Both previously called a bare `toLocaleString()`, which asks the device rather
-// than the app.
+// These live here rather than beside the Cashu code they describe because
+// `src/core/` imports no display layer, which is what lets it target the planned
+// Node CLI and web builds. A formatter has to know the app's language, so it
+// cannot live there. The dependency runs the other way: this file reaches into
+// core for `satsToBtc`, which is exact integer arithmetic on money.
 
 // Render an amount in the denomination the user picked.
 //

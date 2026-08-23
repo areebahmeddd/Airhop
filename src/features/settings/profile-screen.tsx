@@ -106,11 +106,9 @@ type Status = PresenceStatus;
 
 // Colors and the translator are both passed in, and both for the same reason:
 // this table is built inside a useMemo, so anything it closes over has to be a
-// value the memo can be keyed on. Reading the module-level `t` here instead
-// looked correct and was not: `t` is not a reactive value, so
-// react-hooks/exhaustive-deps cannot ask for it in the dependency array, and
-// the memo went on returning English labels after the language changed while
-// every other string on the screen had switched. Found with the pseudolocale.
+// value the memo can be keyed on. The module-level `t` is not reactive, so
+// react-hooks/exhaustive-deps cannot ask for it, and the memo would go on
+// returning the old language's labels after a switch.
 function getStatusMeta(
   Colors: ReturnType<typeof useThemeColors>,
   T: Translator,

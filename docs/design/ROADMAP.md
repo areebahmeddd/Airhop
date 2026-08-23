@@ -180,22 +180,21 @@ Cashu is the primary rail because its tokens are plain strings, so value moves d
 
 **Milestone:** A user sends and receives Cashu ecash entirely offline over BLE, tops up and cashes out over Lightning, and can rebuild the balance on a new device from twelve words.
 
-### v0.9.6: String Extraction ✅
+### v0.9.6: Localization ✅
 
-**Goal:** Every user-facing string in one catalog, with the compiler enforcing it.
-
-English ships. The other languages land in v1.3.0, and because the extraction is complete they are catalog files rather than screen work.
+**Goal:** Thirty languages, with the compiler enforcing completeness.
 
 - [x] Translation runtime with no library (`src/i18n/`): `t` / `useT` / `tPlural`, named-placeholder interpolation
 - [x] Completeness enforced by `tsc`: every locale is a `Record<TranslationKey, string>` derived from `en.ts`, so a partial locale does not compile and there is no runtime fallback
 - [x] Every user-facing string in the catalog, zero hardcoded, enforced in CI
-- [x] Plurals through `tPlural`, never concatenation
-- [x] Terminal punctuation checked by `catalog.test.ts`
-- [x] Right-to-left groundwork (`src/i18n/layout.ts`): logical properties app-wide, mirrored chevrons; `radar-view.tsx` exempt as a polar plot of physical space
-- [x] Layout direction pinned at startup, so a device set to Arabic does not mirror an English UI
-- [x] CI guards: a hardcoded-string ceiling of zero, and module-load-time translations
+- [x] Thirty catalogs, matching the set the landing site serves
+- [x] Locale store, in-app picker, and device language negotiation through `Intl`
+- [x] CLDR plurals for all thirty (`src/i18n/plurals.ts`), checked against Node's ICU
+- [x] Right to left for Arabic, Persian and Urdu: logical properties app-wide, mirrored chevrons, direction pinned at startup; `radar-view.tsx` exempt as a polar plot of physical space
+- [x] Terminal punctuation checked per script by `catalog.test.ts`
+- [x] CI guards: a hardcoded-string ceiling of zero, translations frozen at module load or in a memo, and physical style properties
 
-**Milestone:** Every screen reads from the catalog, and CI cannot regress it.
+**Milestone:** Every screen reads from the catalogs, and CI cannot regress it.
 
 ### v1.0.0: UI + App Store Release ✅
 
@@ -266,23 +265,22 @@ Airhop's identity model (Ed25519 keypairs, no accounts) maps onto both the [AT P
 
 **Milestone:** An Airhop identity linked to a Bluesky DID and a Mastodon actor, cross-posting to both. Indian users initiate UPI payments from a contact's profile when online.
 
-### v1.3.0: Stabilization
+### v1.3.0: Stabilization and Relay Hardware
 
-**Goal:** Harden the shipped release before expanding to new platforms, and ship the catalog in ten languages.
+**Goal:** Harden the shipped release, and run the relay path against real nodes.
 
-No new features ship in this range. The mesh backend gets battle-tested across as many device and OS combinations as possible, and the extraction from v0.9.6 becomes translations.
+No new features ship in this range. The mesh backend gets battle-tested across as many device and OS combinations as possible. Relay support is written and simulated but has never met hardware; see [`PROTOCOLS.md`](../spec/PROTOCOLS.md) section 10.
 
 - [ ] Production bugs found after launch
 - [ ] Race conditions in the BLE and crypto state machines
 - [ ] UI iteration from real user feedback
 - [ ] Extended cross-device battery and compatibility testing
-- [ ] Thirty languages, matching the set the landing site already serves so the two surfaces name the same languages. Sequenced by hazard class rather than by market size: `ar de ru ja` first (right-to-left with six plural categories, worst Latin overflow, four plural categories, and no plurals with no word spacing), then batched by script. `am my sw` last, having no upstream translation anywhere
-- [ ] Native review before release, prioritised `ar fa ur` for direction, then `hi ta th my am` for rendering, then the wallet's 400 keys wherever there are real users
-- [ ] Runtime a second language needs: locale store, CLDR plurals via `@formatjs/intl-pluralrules`, device language negotiation, in-app picker
-- [ ] Right-to-left pass on device in Arabic
 - [ ] Translated iOS permission dialogs and Android service notification
+- [ ] [Bitle](https://bitle.org) firmware on the mesh: Noise XX, courier mailbox, gossip sync, and the `0xB1` relay flag read off a real announce
+- [ ] The LoRa trunk carrying traffic between two nodes with no phone bridging the gap
+- [ ] The same runs against bitchat, so one deployed node serves both clients
 
-**Milestone:** Zero open P0/P1 bugs. BLE state machine stable across Pixel, Samsung, and Xiaomi device classes. Ten complete catalogs, each compiling against English. Ready to expand to new platforms.
+**Milestone:** Zero open P0/P1 bugs. BLE state machine stable across Pixel, Samsung, and Xiaomi device classes. A Bitle node relays between an Airhop phone and a bitchat phone. Ready to expand to new platforms.
 
 ### v1.4.0: Web / Browser
 

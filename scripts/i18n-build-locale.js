@@ -6,7 +6,7 @@
 //
 // Why this exists rather than hand-writing the file.
 //
-// A catalog is 1,528 strings and 27 plural keys. Hand-writing that twenty-nine times
+// A catalog is 1,528 strings and 27 plural keys. Hand-writing that thirty times
 // puts every mechanical property of the file, key completeness, key ordering,
 // escaping, section structure, at the mercy of care, and care over 45,000 lines
 // is not a control. `tsc` catches a missing key, but only after the fact, and it
@@ -147,21 +147,15 @@ function readPluralCategories() {
   return out;
 }
 
-// Characters that belong to a script no language on the list writes in, which
-// in practice means a stray glyph from another translation.
-//
-// Caught a real one: a Russian string that read "Самое长 окно", where a single
-// Han character had landed in the middle of a Cyrillic sentence. Nothing else
-// could see it. It is not a placeholder, not a protocol token, not a spelling
-// mistake in any dictionary, and it renders as a perfectly ordinary glyph
-// beside the Cyrillic. Across thirty catalogs and 45,000 strings, "somebody
-// will notice" is not a control.
+// Characters from a script the language does not write in, which in practice
+// means a glyph that strayed in from another translation. Invisible to every
+// other check: not a placeholder, not a protocol token, not a spelling mistake
+// in any dictionary, and it renders as an ordinary glyph beside the rest.
 //
 // Only the CJK and Ethiopic blocks are checked, and only for languages that do
-// not use them. Those are the ones a stray character actually comes from, and
-// restricting the rule that way keeps it free of false positives on the Latin,
-// Cyrillic, Arabic and Indic catalogs that legitimately mix scripts with Latin
-// protocol names.
+// not use them. That keeps the rule free of false positives on the Latin,
+// Cyrillic, Arabic and Indic catalogs, which legitimately carry Latin protocol
+// names.
 const FOREIGN_SCRIPT = /[぀-ヿ㐀-䶿一-鿿가-힯ሀ-፿]/u;
 
 // The languages that legitimately contain those blocks.

@@ -1,36 +1,19 @@
-// The pseudolocale: English, made to look like a translation before there is one.
+// A generated locale that exaggerates what a translation does to a layout, so
+// a screen can be checked before any real one exists. Debug builds only.
 //
-// Twenty-nine catalogs are about to be written against 49 screens. Every screen
-// that cannot hold a longer string will break in all twenty-nine of them, and
-// the honest way to find that out is not to translate first and discover it
-// twenty-nine times.
+//   Length      Padded past the longest shipped translation of the same key, so
+//               a screen that holds here holds in every language the app
+//               carries.
+//   Glyphs      Latin letters replaced by accented ones outside ASCII, which
+//               catches a font never asked for a diacritic and a line height
+//               computed from the ascender of a bare "a".
+//   Boundaries  Every string wrapped in brackets. A missing bracket on screen
+//               means the string was truncated; two opening brackets in one
+//               sentence mean two translations were concatenated.
 //
-// So this generates a fake language from `en` at startup, in debug builds only,
-// and it exaggerates the three things a real translation actually does to a
-// layout:
-//
-//   Length      Every string grows by roughly 40%. That is the usual
-//               English-to-German figure, and it is close to what Tamil and
-//               Burmese cost in rendered width too. Anything with a fixed
-//               width, a `numberOfLines`, or a row that assumes two labels fit
-//               side by side gives way here.
-//   Glyphs      Latin letters are replaced by accented ones outside ASCII.
-//               This catches a font that was never asked for a diacritic, and a
-//               line height computed from the ascender of a bare "a".
-//   Boundaries  Every string is wrapped in ⟦ ⟧. If a bracket is missing on
-//               screen, the string was truncated. If two open brackets appear
-//               in one sentence, somebody concatenated two translations and the
-//               sentence will not survive a language that reorders it.
-//
-// It is deliberately still readable, so a screenshot can be reviewed by
-// somebody who does not speak anything but English.
-//
-// What it must not touch, and why the exclusion list is the important part of
-// this file: a placeholder, a protocol token or a proper noun that got accented
-// would be a bug this file invented rather than one it found. `{count}` must
-// still interpolate, `#bluetooth` must still name the channel that exists, and
-// `catalog.test.ts` holds the pseudolocale to exactly the same rules as a real
-// one so that stays true.
+// Placeholders, protocol tokens and proper nouns pass through untouched. One
+// that got accented would be a bug this file invented rather than one it found,
+// and `catalog.test.ts` holds it to the same rules as a real catalog.
 
 import type { Locale, PluralForms, Strings } from "./locales/types";
 
@@ -39,9 +22,9 @@ import type { Locale, PluralForms, Strings } from "./locales/types";
 // device set to it resolves to English like any other unknown tag.
 export const PSEUDO_LANGUAGE = "qps-ploc";
 
-// Latin letters that carry an obvious diacritic and exist in the fonts both
-// platforms ship. Deliberately legible: swapping "e" for "€" would find the
-// same layout bugs and make the screenshot unreadable.
+// Latin letters carrying an obvious diacritic, present in the fonts both
+// platforms ship. Legible on purpose: swapping "e" for "€" would find the same
+// layout bugs and make the screenshot unreadable.
 const ACCENTS: Record<string, string> = {
   a: "á",
   b: "ƀ",
@@ -105,20 +88,9 @@ const ACCENTS: Record<string, string> = {
 const PRESERVED =
   /(\{\w+\}|airhop:\/\/|#bluetooth|npub1|\/hug|\/slap|\/who|\/msg|Ed25519|X25519|Lightning|bitchat|Airhop|Cashu|Nostr|GitHub|Tor)/g;
 
-// How much longer a pseudo string is than its English source.
-//
-// A flat ratio was the first version and it is not good enough. Measured across
-// the catalog, German averages 1.26x English while a flat 40% pad averages
-// 1.61x, which sounds safe until you count the other end: 98 German strings are
-// LONGER than their pseudo counterparts. A screen that survives the
-// pseudolocale can still break in a real language, which makes the instrument
-// worse than useless, because it reports safe.
-//
-// So the pad is a floor, not the answer. `pseudoLocale` takes the catalogs that
-// have actually shipped and pads each string past the longest real translation
-// of that same key, which makes the pseudolocale a genuine upper bound on
-// everything known rather than a guess. It also gets sharper as catalogs land:
-// with thirty of them, a screen that holds here holds everywhere.
+// A floor, not the answer: a flat ratio can still come out shorter than a real
+// translation, and an instrument that reports safe when it is not is worse than
+// none. `pseudoLocale` pads past the longest shipped translation of each key.
 const MIN_EXPANSION = 0.4;
 
 // Clearance over the longest real translation seen. Enough that a screen has to

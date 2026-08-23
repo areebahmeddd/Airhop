@@ -6,6 +6,7 @@
 
 import { Feather, MaterialCommunityIcons } from "@expo/vector-icons";
 import { t, tPlural, useT } from "@i18n";
+import { trailingSwipeActions } from "@i18n/layout";
 import { held } from "@platform/haptics";
 import { getMeshService } from "@services/mesh-service";
 import { showAlert } from "@store/alert-store";
@@ -345,8 +346,7 @@ export default function DmList({ onSelectDM }: Props): React.JSX.Element {
                   if (ref) swipeableRefs.set(item, ref);
                   else swipeableRefs.delete(item);
                 }}
-                overshootRight={false}
-                renderRightActions={() => (
+                {...trailingSwipeActions(() => (
                   <View style={styles.swipeActions}>
                     <Pressable
                       style={styles.swipeAction}
@@ -366,7 +366,7 @@ export default function DmList({ onSelectDM }: Props): React.JSX.Element {
                       </Text>
                     </Pressable>
                   </View>
-                )}
+                ))}
               >
                 {row}
               </ReanimatedSwipeable>

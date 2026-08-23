@@ -1,22 +1,13 @@
-// The languages Airhop knows about.
+// The languages Airhop ships.
 //
-// This table is facts about languages: what a language calls itself, which way
-// it reads, what script it is written in. None of that depends on whether a
-// translation exists yet, so none of it waits for one. The table lists all
-// thirty from the start.
+// This table is facts about a language: what it calls itself, which way it
+// reads, what script it is written in. None of that depends on a translation
+// existing, so the gate lives elsewhere: `CATALOGS` in `index.ts` maps a code to
+// a compiled `Locale`, and a language is selectable only if it has an entry
+// there.
 //
-// What a language DOES wait for is its catalog, and that gate lives in
-// `index.ts`, where `CATALOGS` maps a code to a compiled `Locale`. A language is
-// selectable when, and only when, it has an entry there, because a `Locale` is
-// `Record<TranslationKey, string>` and cannot be constructed incomplete. So
-// "shipped" is derived from the catalog registry rather than declared here, and
-// landing a translation is one file plus one line, with nothing to keep in sync.
-//
-// The set matches the thirty the landing site serves, and the metadata is lifted
-// from `landing/src/i18n/languages.ts` so the two surfaces name, order and spell
-// the same languages.
-//
-// See `.github/skills/i18n.md` for the full checklist.
+// The set and its metadata match `landing/src/i18n/languages.ts`, so the two
+// surfaces name, order and spell the same languages.
 
 import type { TranslationKey } from "./locales/types";
 
@@ -56,13 +47,10 @@ export type LanguageCode =
   // appends it in debug builds only.
   | "qps-ploc";
 
-// What a language is written in, which is the axis that predicts rendering
-// trouble far better than the language itself. Latin scripts differ in how long
-// the words get; the others differ in whether the glyphs exist on the device at
-// all, how tall a line has to be, and whether a line can break at a space.
-//
-// Carried so the review pass can be organized by the thing that actually breaks,
-// and so a font note has somewhere to hang.
+// What a language is written in. This predicts rendering trouble better than
+// the language itself: Latin scripts differ in how long words get, the others in
+// whether the glyphs exist on the device, how tall a line has to be, and whether
+// a line can break at a space.
 export type ScriptClass =
   | "latin"
   | "cyrillic"
@@ -79,13 +67,12 @@ export type ScriptClass =
 export interface LanguageSpec {
   code: LanguageCode;
   // Printed in the picker's leading column, where a flag would otherwise go.
-  // Deliberately not a flag: a language is not a country, and picking one flag
-  // per language gets somebody's identity wrong every time.
+  // Not a flag: a language is not a country, and one flag per language gets
+  // somebody's identity wrong every time.
   shortCode: string;
   // The language's name in its own script, lowercased to match Airhop's terse
-  // copy. Needs no translation and reads the same whichever language the app is
-  // in, which is the point: somebody who cannot read the current UI language can
-  // still find their own.
+  // copy. Never translated: somebody who cannot read the current UI language
+  // still has to find their own row.
   endonym: string;
   // For stable ordering, which must not shuffle when the UI language changes.
   englishName: string;
@@ -381,9 +368,8 @@ export const LANGUAGES: Record<LanguageCode, LanguageSpec> = {
 };
 
 // English first as the source language, then the rest alphabetically by English
-// name, so the ordering is stable regardless of the active UI language. A list
-// that re-sorted itself when you changed language would move the row you just
-// tapped out from under your finger.
+// name. Sorting by the translated name would move the row you just tapped out
+// from under your finger.
 export const LANGUAGE_ORDER: LanguageCode[] = [
   "en",
   ...(Object.keys(LANGUAGES) as LanguageCode[])

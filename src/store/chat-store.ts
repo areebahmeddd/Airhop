@@ -71,24 +71,13 @@ export interface ChatMessage {
   isSystem?: boolean;
   // The catalog key `text` was rendered from, for rows the app writes itself:
   // a location card's summary, a group membership notice, a payment receipt.
-  //
   // These are the only rows whose words belong to Airhop rather than to a
-  // person, and they are the only ones that may be re-translated. Everything
-  // else in `text` is user content and is stored exactly as it was written, in
-  // whatever language its author used.
+  // person, and so the only ones that may be re-translated.
   //
-  // The problem this solves: a store row is written once and read for as long
-  // as the conversation lasts, so translating at write time freezes it. Send a
-  // place in English, switch the app to Hindi, and that card still reads
-  // English a year later, because `t()` ran the day it was stored.
-  //
-  // `text` is still written, and still holds the rendering from the moment the
-  // row was created. It is the fallback for every row saved before this field
-  // existed, it is what the wire paths and the full-text search read, and it
-  // means a display path that has not been moved onto `messageText()` renders
-  // exactly what it rendered before rather than a blank line. Read both through
-  // `messageText()` in `@utils/message-text`; never read `text` directly to put
-  // words on screen.
+  // `text` is still written and holds the rendering from the moment the row was
+  // created. It is the fallback for rows saved before this field existed, and
+  // what the wire paths read. Read both through `messageText()` in
+  // `@utils/message-text`; never read `text` directly to put words on screen.
   systemKey?: TranslationKey;
   systemVars?: TranslationVars;
   // Set only on the sender's own outgoing copy of a forwarded message.

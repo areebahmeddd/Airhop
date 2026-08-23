@@ -1,11 +1,10 @@
 /** @jest-environment node */
-// The rule this file exists to hold: a row Airhop wrote is re-rendered in the
-// language the reader has chosen, and a row a person wrote is never touched.
+// The rule: a row Airhop wrote is re-rendered in the language the reader has
+// chosen, and a row a person wrote is never touched.
 //
-// The bug it guards against is invisible in a screenshot. `t()` at write time
-// produces exactly the right string on the day it runs, stores it, and the
-// screen looks perfect. It only goes wrong later, for a user who switches
-// language and finds their history did not.
+// The bug this guards is invisible in a screenshot. `t()` at write time produces
+// the right string on the day it runs and stores it; it only goes wrong later,
+// for a user who switches language and finds their history did not.
 
 import { en } from "@i18n/locales/en";
 import type { ActivityEntry } from "@store/activity-store";
@@ -41,15 +40,13 @@ function entry(fields: Partial<ActivityEntry>): ActivityEntry {
 
 describe("messageText", () => {
   it("returns user content untouched", () => {
-    // The overwhelmingly common case, and the one that must never change:
-    // somebody typed this, possibly in a language the app is not even in.
+    // The common case, and the one that must never change.
     expect(messageText(message({ text: "meet me at the north gate" }))).toBe(
       "meet me at the north gate",
     );
   });
 
   it("falls back to text for rows stored before systemKey existed", () => {
-    // Every row already in a user's MMKV store on the day this shipped.
     expect(
       messageText(message({ text: "Shared a place", isSystem: true })),
     ).toBe("Shared a place");
@@ -63,8 +60,8 @@ describe("messageText", () => {
       isSystem: true,
       systemKey: "chat.location.sent_summary",
     });
-    // Asserted against the catalog rather than a copy of the English, so
-    // rewording the string does not fail a test about resolution.
+    // Against the catalog rather than a copy of the English, so rewording the
+    // string does not fail a test about resolution.
     expect(messageText(row)).toBe(en.strings["chat.location.sent_summary"]);
     expect(messageText(row)).not.toBe(row.text);
   });

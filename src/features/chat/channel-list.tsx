@@ -9,6 +9,7 @@
 
 import { Feather, MaterialCommunityIcons } from "@expo/vector-icons";
 import { t, tPlural, type TranslationKey, useT, useTPlural } from "@i18n";
+import { trailingSwipeActions } from "@i18n/layout";
 import { useRichText } from "@i18n/rich-text";
 import { held } from "@platform/haptics";
 import {
@@ -556,8 +557,7 @@ export default function ChannelList({
             if (ref) swipeableRefs.set(item, ref);
             else swipeableRefs.delete(item);
           }}
-          overshootRight={false}
-          renderRightActions={() => (
+          {...trailingSwipeActions(() => (
             <View style={styles.swipeActions}>
               <Pressable
                 style={styles.swipeAction}
@@ -575,7 +575,7 @@ export default function ChannelList({
                 <Text style={styles.swipeActionText}>{T("chat.more")}</Text>
               </Pressable>
             </View>
-          )}
+          ))}
         >
           {row}
         </ReanimatedSwipeable>

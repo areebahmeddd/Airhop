@@ -218,10 +218,8 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       // leaves the ring's trailing arc invisible in dark mode, and the spinner
       // reads as a single floating tick.
       //
-      // Physical, and deliberately not logical. This ring is artwork that spins
-      // continuously, so which side of it carries the muted arc is a starting
-      // rotation and nothing more. `borderEndColor` would claim the choice
-      // means something in Arabic, and it does not.
+      // Physical on purpose: this ring is artwork that spins, so which side
+      // carries the muted arc is a starting rotation and nothing more.
       // eslint-disable-next-line no-restricted-syntax
       borderRightColor: Colors.border,
     },

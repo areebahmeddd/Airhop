@@ -1,39 +1,19 @@
-// CLDR plural category selection, for the thirty languages Airhop ships.
+// CLDR plural category selection.
 //
-// Why this is hand-written, when the obvious answer is a polyfill.
+// Hermes has no `Intl.PluralRules` on either platform. The usual answer is
+// `@formatjs/intl-pluralrules`, and this is deliberately not that: across the
+// thirty languages there are exactly nine distinct rule shapes, so nine
+// functions replace a dependency, thirty locale-data modules, a patched global
+// `Intl`, and the Android startup cost FormatJS documents for its own detection
+// path.
 //
-// Hermes implements `Intl.DateTimeFormat`, `NumberFormat` and `Collator` but
-// not `Intl.PluralRules`, on either platform. The standard fix is
-// `@formatjs/intl-pluralrules`, and this file is deliberately not that, for
-// four reasons:
+// Node ships full ICU, so `__tests__/plurals.test.ts` checks every rule below
+// against `Intl.PluralRules` itself.
 //
-//   1. There are exactly nine distinct rule shapes across the thirty languages,
-//      not thirty. Nine `if` statements is a smaller thing to own than a
-//      dependency plus thirty locale-data modules.
-//   2. FormatJS's own documentation warns that its conditional detection path
-//      "runs very slowly on Android" and costs seconds of startup, which is why
-//      it ships a separate `polyfill-force` entry point. Airhop starts a
-//      foreground service and a BLE scan on launch; startup is not spare.
-//   3. The polyfill patches the global `Intl`. Nothing else in the bundle asks
-//      for `PluralRules`, so the only thing that global buys is a way for a
-//      future dependency to silently start depending on our polyfill.
-//   4. The correctness argument that usually settles this is answered better
-//      here than by trust: Node ships full ICU, so `__tests__/plurals.test.ts`
-//      checks every rule below against `Intl.PluralRules` itself, for every
-//      integer from 0 to 2000 plus the large and boundary values, in all thirty
-//      languages. The rules are not believed, they are verified against the
-//      same CLDR data the polyfill would have bundled.
-//
-// This is the same call the rest of `src/i18n/` already makes, and for the same
-// reason: a bundled catalog needs a fraction of what a general i18n library
-// carries, and the fraction is small enough to read.
-//
-// Integers only. Every count in this app is a countable thing (peers in range,
-// hops away, unread messages, sats, days of retention), and CLDR's fractional
-// rules depend on the number of visible decimal places, which is a property of
-// how a number was formatted rather than of the number itself. Passing a
-// fraction returns `other`, which is the category CLDR guarantees exists in
-// every language. See the test for the assertion that pins this.
+// Integers only. Every count in this app is a countable thing, and CLDR's
+// fractional rules depend on the number of visible decimal places, which is a
+// property of the formatting rather than of the value. A fraction returns
+// `other`, the category CLDR guarantees in every language.
 
 import type { LanguageCode } from "./languages";
 

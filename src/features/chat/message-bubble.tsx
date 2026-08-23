@@ -544,13 +544,10 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
     },
     bubbleMine: { backgroundColor: Colors.myBubble },
     bubbleTheirs: { backgroundColor: Colors.theirBubble },
-    // The squared-off corner that points the bubble at its sender. It has to
-    // follow the side the bubble is actually on, and bubbleWrapperMine /
-    // bubbleWrapperTheirs above put that on the trailing / leading edge through
-    // alignItems, which Yoga resolves against the writing direction. So these
-    // are logical too: in Arabic the whole conversation swaps sides, and a
-    // physical borderBottomLeftRadius would leave every tail pointing away from
-    // the person who sent it.
+    // The squared-off corner that points a bubble at its sender. bubbleWrapper
+    // places bubbles by alignItems, which Yoga resolves against the writing
+    // direction, so the tail has to be logical too or it points away from the
+    // sender in Arabic.
     bubbleTailTheirs: { borderBottomStartRadius: Radius.sm },
     bubbleTailMine: { borderBottomEndRadius: Radius.sm },
     bubbleHighlighted: {

@@ -1,28 +1,23 @@
 /**
  * @jest-environment node
  */
-// Structural integrity of the translation catalog.
+// Structural integrity of every translation catalog.
 //
-// Key completeness is already guaranteed by the type system (every locale is
-// annotated `Strings`, which is `Record<TranslationKey, string>` derived from
-// en.ts), so these tests deliberately do NOT re-check what `tsc` checks. They
-// cover what a type cannot:
+// Key completeness is guaranteed by the type system, so these tests do not
+// re-check what `tsc` checks. They cover what a type cannot:
 //
 //   1. Emptiness. `""` type-checks and renders as a missing label.
-//   2. Plural shape. English has exactly one/other, and the runtime's plural
-//      selection is written against that. A key with a stray `few` would be
-//      dead weight nothing selects.
-//   3. Placeholder sanity. A placeholder nothing will fill renders as literal
+//   2. Plural shape. `PluralForms` makes every category but `other` optional,
+//      so a catalog missing the forms its language needs still compiles.
+//   3. Placeholder sanity. A placeholder nothing fills renders as literal
 //      "{peer}" on someone's lock screen.
 //   4. The do-not-translate list. Some strings cross the wire or derive an
 //      identity, and translating them breaks interop rather than the layout.
-//   5. Terminal punctuation on multi-sentence strings. A string that stops
-//      mid-thought reads as truncated text, and runs the two halves together
-//      on a screen reader.
+//   5. Terminal punctuation. A string that stops mid-thought reads as truncated
+//      and runs the two halves together on a screen reader.
 //
-// These are written against the catalog rather than against English, so they
-// keep their value when a second language lands: point CATALOGS at both and
-// every rule below applies to both.
+// Written against the registry rather than against English, so every rule
+// applies to every catalog automatically.
 
 import { CATALOGS } from "../index";
 import type { LanguageCode } from "../languages";
@@ -31,9 +26,8 @@ import type { Locale } from "../locales/types";
 import { PLURAL_CATEGORIES } from "../plurals";
 import { PSEUDO_LANGUAGE } from "../pseudo";
 
-// Every catalog that ships, read from the same registry the runtime uses, so a
-// language cannot reach a user without passing everything below. A catalog is
-// present here only if it compiled, and it compiles only if it is complete.
+// Read from the same registry the runtime uses, so a language cannot reach a
+// user without passing everything below.
 const CODES = Object.keys(CATALOGS) as LanguageCode[];
 
 function catalog(code: LanguageCode): Locale {
@@ -114,26 +108,19 @@ describe("terminal punctuation", () => {
   // correctly end in a stop. So this is one-directional: having started a
   // second sentence, finish it.
   //
-  // That shape is unambiguously wrong rather than merely inconsistent. A stop
-  // in the middle and none at the end reads as text that got cut off, and a
-  // screen reader runs the two halves together as one clause.
-  //
-  // Ellipsis counts as terminal ("Sending..."), and so does the question mark
+  // Ellipsis counts as terminal ("Sending…"), and so does the question mark
   // every confirm title ends with.
-  // Sentence-final punctuation is per script, and assuming ASCII here would
-  // have failed most of the catalogs this rule is meant to protect. Arabic ends
-  // a question with ؟ and Urdu a sentence with ۔; Devanagari uses the danda ।,
-  // Amharic ።, Burmese ॥-like ။, and CJK the ideographic 。！？.
+  //
+  // Sentence-final punctuation is per script: ؟ in Arabic, ۔ in Urdu, the danda
+  // । in Devanagari, ። in Amharic, ။ in Burmese, and 。！？ in CJK.
   //
   // Two shapes, because the scripts differ in whether a space follows. A
   // space-delimited script needs the whitespace to tell "one sentence, then
-  // another" apart from "3.5" and "e.g."; CJK writes no space at all, and its
-  // terminators are unambiguous punctuation that never appears inside a number
-  // or an abbreviation, so they stand alone.
+  // another" apart from "1.5" and "e.g."; CJK writes no space, and its
+  // terminators never appear inside a number or an abbreviation.
   //
-  // Thai deliberately matches neither. It has no sentence-final punctuation,
-  // marking boundaries with spaces instead, so a Thai catalog is never flagged
-  // rather than being held to a rule its writing system does not have.
+  // Thai matches neither on purpose. It has no sentence-final punctuation, so a
+  // Thai catalog is never held to a rule its writing system does not have.
   const SENTENCE_BREAK = /[.!?؟۔।።။]["'”»)]?\s|[。！？]/u;
   // A trailing placeholder is terminated by whatever fills it: "Private channel
   // {name}. {reach}" ends in a stop once `reach` is substituted. Only the final
@@ -141,12 +128,6 @@ describe("terminal punctuation", () => {
   // after it.
   const TERMINATED = /([.!?…؟۔।።။。！？]["'”»)]?|\{\w+\})$/u;
 
-  // The pseudolocale is exempt, and only from this rule. It brackets every
-  // string so that truncation is visible on screen, which necessarily puts a
-  // ⟧ after the full stop. That is the instrument working, not prose that stops
-  // mid-thought, and this rule is about prose. Every other rule in this file
-  // still applies to it, including the two it could actually break:
-  // placeholder parity and protocol tokens carried through verbatim.
   const PROSE = CODES.filter((code) => code !== PSEUDO_LANGUAGE);
 
   it.each(PROSE)("%s finishes every sentence it starts", (code) => {
@@ -173,14 +154,11 @@ describe("terminal punctuation", () => {
 });
 
 describe("plural categories", () => {
-  // The rule a translator is most likely to get wrong, and the one a type
-  // cannot catch: `PluralForms` requires `other` and makes the rest optional,
-  // because the set is per-language. So the type accepts a Russian catalog with
-  // only `one` and `other`, which reads "5 сообщение" for every count from 5 up.
-  //
-  // Checked against `PLURAL_CATEGORIES`, which is itself checked against CLDR
-  // in plurals.test.ts. So the chain runs: CLDR -> PLURAL_CATEGORIES -> every
-  // catalog, with no link taken on trust.
+  // A type cannot catch this: `PluralForms` requires `other` and makes the rest
+  // optional, because the set is per-language. The type therefore accepts a
+  // Russian catalog with only `one` and `other`, which reads "5 сообщение" from
+  // five up. Checked against `PLURAL_CATEGORIES`, which plurals.test.ts checks
+  // against CLDR.
   it.each(CODES)("%s supplies exactly the forms its language uses", (code) => {
     const expected = [...PLURAL_CATEGORIES[code]].sort();
     const wrong: string[] = [];
@@ -239,20 +217,14 @@ describe("do not translate", () => {
     "npub1",
   ];
 
-  // SURVIVES: proper nouns and cryptosystem names. A weaker rule than VERBATIM
-  // on purpose.
+  // SURVIVES: proper nouns and cryptosystem names. Weaker than VERBATIM on
+  // purpose. "Lightning" and "Tor" are protocol names that are also ordinary
+  // nouns in most languages on the list, so they get translated unless a rule
+  // stops it.
   //
-  // "Lightning" is the one that will actually be broken. It is a protocol name
-  // that is also an ordinary noun in every language on the list, it appears in
-  // 24 strings, and a translator working through a spreadsheet will render it
-  // as their word for the weather. So will a model. Same shape, lower volume,
-  // for "Tor".
-  //
-  // Exact count parity is the wrong test here. English says "Airhop" 41 times,
-  // and a language that drops the subject or repeats it for agreement will
-  // legitimately differ. What is never legitimate is the noun disappearing
-  // entirely, so the rule is presence, not count: if English names it, the
-  // translation names it.
+  // Presence, not count: a language that drops a subject or repeats it for
+  // agreement will legitimately differ from English's count. What is never
+  // legitimate is the noun disappearing.
   const MUST_SURVIVE = [
     "Airhop",
     "bitchat",
@@ -428,16 +400,10 @@ describe("English source conventions", () => {
 });
 
 describe("the pseudolocale bounds every real translation", () => {
-  // The property that makes the pseudolocale worth running at all.
-  //
-  // Its first version padded a flat 40%, which sounded safe and was not: 98
-  // German strings came out LONGER than their pseudo counterparts. A screen
-  // that passed the pseudolocale could still break in a language that shipped,
-  // which makes the instrument worse than having none, because it reports safe.
-  //
-  // It now pads past the longest shipped translation of each key, so this holds
-  // by construction. The test is here because "by construction" stops being
-  // true the moment somebody changes the padding, and the failure is silent.
+  // A screen that passes the pseudolocale must not break in a language that
+  // ships, so its padding has to exceed the longest real translation of every
+  // key. That holds by construction, and stops holding silently the moment
+  // somebody changes the padding.
   const REAL = CODES.filter((code) => code !== PSEUDO_LANGUAGE);
 
   it("is at least as long as the longest real string, key by key", () => {
@@ -458,7 +424,7 @@ describe("the pseudolocale bounds every real translation", () => {
   it("is at least as long as the widest real plural form", () => {
     // Compared across every category rather than the matching one: Arabic's
     // `many` runs far longer than English's `other`, and the widest form is
-    // what a row actually has to hold.
+    // what a row has to hold.
     const pseudo = CATALOGS[PSEUDO_LANGUAGE];
     if (pseudo === undefined) return;
     const short: string[] = [];

@@ -485,7 +485,6 @@ export const strings: Strings = {
   "chat.location.received_summary": "位置情報を共有しました",
   "chat.location.title": "位置情報",
   "chat.location.away": "{distance} {direction}",
-  "chat.location.accuracy": "誤差{meters}m以内",
   "chat.location.taken": "{ago}前に取得",
   "chat.location.open_maps": "マップで開く",
   "chat.location.no_forward": "位置情報は転送されません",

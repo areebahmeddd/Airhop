@@ -715,53 +715,30 @@ uplinks.
 
 ## 10. Localization
 
-Airhop ships in English. Every user-facing string lives in one catalog,
-`src/i18n/locales/en.ts`, and a second language is a second file. Working
+Airhop ships in thirty languages. Every user-facing string lives in one catalog
+per language under `src/i18n/locales/`, compiled into the bundle. Working
 reference: [`.github/skills/i18n.md`](../../.github/skills/i18n.md).
 
 ### Why this is a protocol concern
 
-The app is scoped to blackouts, protests and disasters. The languages that
-matters in are Persian, Arabic, Urdu, Bengali, Hindi, Tamil, Indonesian,
-Filipino, Nepali, Ukrainian and Russian. An English-only UI during a network
-shutdown in Tehran or Dhaka does not work for the person it was built for, and
-every other feature in this document is downstream of someone being able to read
-the join button.
-
-Ten languages land in v1.3.0 (see [ROADMAP.md](../design/ROADMAP.md)). The work
-in this release is the part that touches screens, so that one touches none.
-
-### Scope
-
-| This release                                                     | v1.3.0                                                    |
-| ---------------------------------------------------------------- | --------------------------------------------------------- |
-| Every user-facing string in one catalog                          | Nine more catalogs                                        |
-| Zero hardcoded strings, enforced in CI (`i18n:audit -- --max 0`) | Locale store and in-app picker                            |
-| Plurals through `tPlural`, never concatenation                   | CLDR plural rules beyond English's one/other              |
-| Stylesheets on logical properties, so RTL is a catalog away      | Device language negotiation                               |
-| Formatting centralised in `src/utils/format.ts`                  | Translated OS permission dialogs and service notification |
-
-A language reaches a user by being listed in `src/i18n/languages.ts`, and it can
-be listed only once its catalog compiles, which requires every key. There is no
-coverage threshold and no partial state to manage.
+The app is scoped to blackouts, protests and disasters. The languages spoken
+there are Persian, Arabic, Urdu, Hindi, Tamil, Indonesian, Filipino, Nepali,
+Ukrainian and Russian. An English-only UI during a network shutdown in Tehran
+or Dhaka does not reach the person it was built for.
 
 ### Decisions
 
-| Decision                                                   | Rationale                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
-| ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Bundled catalogs, never fetched                            | A translation download is a network call and a fingerprint, and it would fail in exactly the conditions this app exists for. Every locale compiles into the bundle, so text is byte-identical on every device running a given build                                                                                                                                                                                                                                                                                                              |
-| No i18n library                                            | i18next and react-intl bring namespaces, lazy network backends and untyped runtime keys, none of which suits an offline-first app with a bundled catalog. The codebase already hand-rolls its sheet, alert, toast and theme layers                                                                                                                                                                                                                                                                                                               |
-| Completeness enforced by `tsc` rather than a test          | Every locale is `Record<TranslationKey, string>` derived from `en.ts`, so a partial locale does not compile. bitchat needs `LocalizationCoverageTests.swift` because `.xcstrings` permits partial locales; here one cannot be constructed                                                                                                                                                                                                                                                                                                        |
-| The runtime carries what the shipped catalog needs         | One language needs no locale store, plural polyfill, device negotiation or picker. Each arrives with the language that requires it, listed in the skill file                                                                                                                                                                                                                                                                                                                                                                                     |
-| Strings the OS renders stay where the OS reads them        | iOS permission dialogs live in `app.json` and the Android service notification in Kotlin. Routing them through the catalog costs a generated per-locale bundle or a bridge call, and both arrive with the second language                                                                                                                                                                                                                                                                                                                        |
-| Prose numerals follow the locale, machine data stays Latin | A byte count, a clock time and a wallet balance sit in the monospace face next to Latin units. Numbers inside a translated sentence get no override                                                                                                                                                                                                                                                                                                                                                                                              |
-| bitchat's catalog is a reference, not a source             | Measured against the vendored `Localizable.xcstrings`: 5 of Airhop's 1,528 keys match theirs by name and 69 match by English value, all single words like Cancel and OK. It carries no plural data at all, uses positional `%@` placeholders against Airhop's named ones, is 84% lowercase against Airhop's 7%, and lacks Amharic, Burmese and Swahili entirely. Useful for cross-checking mesh and Nostr vocabulary in 26 languages. Not a cost lever, and planning as though it were produces a schedule that misses                           |
-| Plural rules hand-written, not polyfilled                  | Hermes has no `Intl.PluralRules`. Across the thirty languages there are exactly nine distinct CLDR rule shapes, so `src/i18n/plurals.ts` is nine functions rather than `@formatjs/intl-pluralrules` plus thirty locale-data modules. It avoids patching the global `Intl` and avoids the Android startup cost FormatJS documents for its own detection path. Correctness is checked rather than trusted: Node ships full ICU, so `plurals.test.ts` compares every rule to `Intl.PluralRules` for every integer 0 to 2000 in all thirty languages |
-| Device language read through `Intl`, not a dependency      | `Intl.DateTimeFormat().resolvedOptions().locale` is present on Hermes on both platforms and is already how `place-names-store` samples the device. Adding `expo-localization` would mean a config plugin against `ios/` and `android/` trees that are hand-modified and must never see `prebuild`                                                                                                                                                                                                                                                |
-| A right-to-left switch waits for the next launch           | React Native fixes layout direction when the process starts. Most apps restart themselves; Airhop must not, because a relaunch destroys every Noise session, empties the peer table for tens of seconds of rediscovery, drops any transfer in flight and cuts live voice. The preference is stored and applied on next launch, and the UI keeps the boot language until then rather than putting right-to-left prose in a left-to-right frame                                                                                                    |
-| Counts go through `tPlural`, never concatenation           | `"item" + "s"` is untranslatable: no language outside English pluralises by appending to the stem, Russian needs four forms and Arabic six. Eight were found and fixed during extraction. The English one/other rule lives in the runtime, where CLDR selection will replace it                                                                                                                                                                                                                                                                  |
-| Translation never happens at module load                   | A module constant holding `t("key")` type-checks, renders correctly, and freezes in whichever language the app started in. Constants hold `TranslationKey`s and the component translates on render. `npm run i18n:audit` fails the build on it and found 25 on its first run                                                                                                                                                                                                                                                                     |
-| Terminal punctuation is checked, not reviewed              | A string that starts a second sentence must finish it. A stop in the middle and none at the end reads as truncated, and a screen reader runs the two halves together. Translators copy English punctuation, so it is settled before nine more catalogs inherit it                                                                                                                                                                                                                                                                                |
+| Decision                                                   | Rationale                                                                                                                                                                                                                                       |
+| ---------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Bundled catalogs, never fetched                            | A translation download is a network call and a fingerprint, and it would fail in exactly the conditions this app exists for                                                                                                                     |
+| No i18n library                                            | i18next and react-intl bring namespaces, lazy network backends and untyped runtime keys, none of which suits an offline-first app with a bundled catalog                                                                                        |
+| Completeness enforced by `tsc`                             | Every locale is `Record<TranslationKey, string>` derived from `en.ts`, so a partial locale does not compile and needs no runtime fallback                                                                                                       |
+| Plural rules hand-written, not polyfilled                  | Hermes has no `Intl.PluralRules`. Thirty languages reduce to nine CLDR rule shapes, so `src/i18n/plurals.ts` is nine functions rather than a dependency plus thirty locale-data modules. `plurals.test.ts` checks every rule against Node's ICU |
+| Device language read through `Intl`                        | `Intl.DateTimeFormat().resolvedOptions().locale` is present on Hermes on both platforms. `expo-localization` would mean a config plugin against native trees that must never see `prebuild`                                                     |
+| A right-to-left switch waits for the next launch           | React Native fixes layout direction at process start. A forced restart would destroy every Noise session, empty the peer table and cut live voice, so the preference is stored and applied on next launch                                       |
+| Prose numerals follow the locale, machine data stays Latin | A byte count, a clock time and a wallet balance sit in the monospace face next to Latin units. Numbers inside a translated sentence get no override                                                                                             |
+| Strings the OS renders stay where the OS reads them        | iOS permission dialogs live in `app.json`, the Android service notification in Kotlin. Both are selected by device language, not app language                                                                                                   |
+| Translation happens at display, never at storage           | A `t()` result written into MMKV freezes in the language of the day it was stored. Persisted rows keep a `systemKey` and translate on render                                                                                                    |
 
 ### What never gets translated
 
@@ -770,23 +747,20 @@ interop bug rather than a cosmetic one. The full list is in the skill file and
 `catalog.test.ts` enforces it. The two that matter most:
 
 - **The username word lists** (`src/utils/username.ts`). A generated name must resolve identically on every device and in bitchat.
-- **The transmitted `/hug` and `/slap` text.** It is sent as message content, and bitchat/ios recognises an incoming emote by matching the English substrings in `ChatPublicConversationCoordinator.swift`. bitchat is fully localized and still keeps these as English literals for the same reason.
+- **The transmitted `/hug` and `/slap` text.** bitchat/ios recognises an incoming emote by matching the English substrings in `ChatPublicConversationCoordinator.swift`.
 
 Terms of Service and Privacy Policy stay in English with the reader chrome around
-them translated. English is the authoritative version, and a machine-translated
-liability clause is not something to ship.
+them translated. English is the authoritative version.
 
 ### Consistency across devices
 
 Text is identical everywhere because it is compiled in. What varies:
 
-| Varies                                        | Handling                                                                                                                                                                                                                                                                                                                                                    |
-| --------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `Intl` date and number output, per OS and OEM | Centralised in `src/utils/format.ts`, formatted in the app's language rather than the device's, with cached formatters and Latin numerals for machine data                                                                                                                                                                                                  |
-| Font glyph coverage for non-Latin scripts     | Monospace is restricted to machine data, so translated prose never uses it                                                                                                                                                                                                                                                                                  |
-| `Intl` availability across engines            | Hermes ships a partial Intl: `DateTimeFormat`, `NumberFormat` and `Collator` are present, `PluralRules` is not, on either platform. Nothing calls the missing one. Plural selection is English's one/other, decided in `src/i18n/index.ts`. A second language needs `@formatjs/intl-pluralrules`                                                            |
-| Cached reverse-geocoded place names           | These come from the OS geocoder, which answers in the device's language and takes no locale argument on either platform. `place-names-store.ts` keys its cache on that language, sampled once at startup, so changing the phone's language re-resolves rather than leaving channels labelled in the old one. This is the only place device language is read |
-| Layout direction on an RTL device             | React Native mirrors the whole layout when the device is set to Arabic or Hebrew, which would put English text in a right-to-left frame. `initI18n()` pins direction to the app's language at startup. It becomes language-driven the day an RTL catalog ships                                                                                              |
+| Varies                                        | Handling                                                                                                                                                                             |
+| --------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `Intl` date and number output, per OS and OEM | Centralised in `src/utils/format.ts`, formatted in the app's language rather than the device's, with cached formatters and Latin numerals for machine data                           |
+| Font glyph coverage for non-Latin scripts     | Monospace is restricted to machine data, so translated prose never uses it                                                                                                           |
+| Cached reverse-geocoded place names           | These come from the OS geocoder, which answers in the device's language and takes no locale argument. `place-names-store.ts` keys its cache on that language so a change re-resolves |
 
 ## 11. Codebase Layout
 

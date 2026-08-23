@@ -1,22 +1,11 @@
 /**
  * @jest-environment node
  */
-// Verifies `plurals.ts` against the real thing.
+// Checks every hand-written rule in `plurals.ts` against CLDR itself.
 //
-// `src/i18n/plurals.ts` hand-writes CLDR plural selection because Hermes has no
-// `Intl.PluralRules` and the usual polyfill costs a dependency, thirty
-// locale-data modules and Android startup time. That trade is only worth taking
-// if the hand-written version is provably identical to the data it replaces,
-// and this file is the proof.
-//
-// Node ships full ICU, so `Intl.PluralRules` here IS the CLDR data the polyfill
-// would have bundled. Every rule is checked against it exhaustively, for every
-// integer from 0 to 2000 plus the boundaries and large values where the rules
-// actually differ, in all thirty languages. If CLDR ever changes a rule, or a
-// hand-written one drifts, this fails with the exact language and number.
-//
-// Note this only works in Node. On device the assertion is impossible, which is
-// the whole reason plurals.ts exists.
+// Node ships full ICU, so `Intl.PluralRules` here IS the data a polyfill would
+// have bundled. Hermes has neither, which is why plurals.ts exists; this is
+// where the two are reconciled.
 
 import { LANGUAGES } from "../languages";
 import { PLURAL_CATEGORIES, selectPlural } from "../plurals";
@@ -37,8 +26,8 @@ function everyInteger(): number[] {
 
 describe("plural rules match CLDR", () => {
   it("covers every language in the picker", () => {
-    // A language reaching a user without a rule here would silently take the
-    // `other` fallback and misplural every count on every screen.
+    // A language with no rule takes the `other` fallback and mispluralises
+    // every count on every screen.
     const missing = Object.keys(LANGUAGES).filter(
       (code) => !CODES.includes(code),
     );
@@ -80,7 +69,7 @@ describe("plural rules match CLDR", () => {
 
   it.each(CODES)("%s declares exactly the categories CLDR reports", (code) => {
     // PLURAL_CATEGORIES drives what a translator must supply, so a wrong entry
-    // means either a form nothing selects or a missing form at runtime.
+    // means a form nothing selects, or a missing form at runtime.
     const reference = new Intl.PluralRules(code).resolvedOptions()
       .pluralCategories;
     expect([code, [...PLURAL_CATEGORIES[code]].sort()]).toEqual([
@@ -102,10 +91,9 @@ describe("plural rules match CLDR", () => {
 
 describe("selectPlural", () => {
   it("treats a fraction as other", () => {
-    // Documented limitation rather than an oversight: CLDR's fractional rules
-    // key off the number of visible decimal places, which is a property of the
-    // formatting rather than of the value, and nothing in this app counts in
-    // fractions. `other` exists in every language, so this is a real answer.
+    // CLDR's fractional rules key off the number of visible decimal places,
+    // which is a property of the formatting rather than the value. Nothing here
+    // counts in fractions, and `other` exists in every language.
     expect(selectPlural("en", 1.5)).toBe("other");
     expect(selectPlural("en", 0.5)).toBe("other");
   });
@@ -116,8 +104,6 @@ describe("selectPlural", () => {
   });
 
   it("distinguishes the shapes it exists to distinguish", () => {
-    // A spot check that reads as documentation: these are the four answers a
-    // single `count === 1` would have got wrong.
     expect(selectPlural("en", 0)).toBe("other");
     expect(selectPlural("en", 1)).toBe("one");
   });

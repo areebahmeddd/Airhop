@@ -45,7 +45,7 @@ Apply these to every suggestion, every file, every PR:
 
 8. **Polyfill at entry point.** `import 'react-native-get-random-values'` must be the first import in `src/app/app.tsx` before any `@noble` import.
 
-9. **Never hardcode user-facing text.** Add a key to `src/i18n/locales/en.ts` and use `T("your.key")` (component) or `t("your.key")` (outside React). English is the shipping language and ten land in v1.3.0, so the catalog is both what keeps copy reviewable in one diff today and what makes that a new file rather than a sweep of every screen. CI fails on any hardcoded string. See [`i18n.md`](.github/skills/i18n.md).
+9. **Never hardcode user-facing text.** Add a key to `src/i18n/locales/en.ts` and use `T("your.key")` (component) or `t("your.key")` (outside React). The catalog keeps copy reviewable in one diff and is what makes a thirtieth language a new file rather than a sweep of every screen. CI fails on any hardcoded string. See [`i18n.md`](.github/skills/i18n.md).
 
 10. **Never translate anything that crosses the wire.** The `username.ts` adjective/noun lists derive identity. The transmitted `/hug` and `/slap` text is matched as an **English substring** by bitchat on receipt. Slash command tokens, channel names (`#bluetooth`) and geohashes are protocol. Translate the hint that describes a command, never the command. Enforced by `src/i18n/__tests__/catalog.test.ts`.
 

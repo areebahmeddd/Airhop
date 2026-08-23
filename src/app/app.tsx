@@ -2249,24 +2249,15 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       fontWeight: FontWeight.semibold,
       color: Colors.textPrimary,
       letterSpacing: -0.2,
-      // The Wallet header packs four action pills beside this title, and on a
-      // narrow device at a large text size the row overflows.
+      // The Wallet header packs four action pills beside this title, so a long
+      // translation overflows the row on a narrow device.
       //
-      // flexShrink 2 against the controls' 1: the title still gives up width
-      // first, which is the right priority, but it no longer absorbs the whole
-      // overflow on its own. Before this it did, and Arabic showed what that
-      // costs: "الشبكة" rendered as "الشب.." while the segmented control beside
-      // it kept every pixel it asked for. Sharing the loss keeps the screen
-      // name readable at the width where one of them has to give.
-      flexShrink: 2,
-      // And grow, which is the half that was missing. With `space-between` and
-      // an intrinsically-sized title, the free space lands BETWEEN the title and
-      // the controls, so the title sat at its measured width with a gap beside
-      // it and ellipsized anyway. Arabic showed it plainly: "الشبكة" rendered as
-      // "الشب.." with half the row empty. Growing into the gap first means the
-      // title only truncates when the row is genuinely out of room, which is
-      // when flexShrink above decides how the loss is shared.
+      // Grow, because under `space-between` free space lands between the title
+      // and the controls, and an intrinsically-sized title would ellipsize with
+      // a gap beside it. Shrink 2 against the controls' 1, so an overflow costs
+      // the title more than the segment labels.
       flexGrow: 1,
+      flexShrink: 2,
       marginEnd: Spacing.sm,
     },
     searchRow: {
@@ -2305,8 +2296,7 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       gap: Spacing.sm,
       // minWidth 0 is required, not decorative: a flex item's default minimum
       // is its content size, so without it the row cannot shrink below the
-      // segment labels no matter what flexShrink says, and the title is left
-      // absorbing everything again.
+      // segment labels whatever flexShrink says.
       flexShrink: 1,
       minWidth: 0,
     },

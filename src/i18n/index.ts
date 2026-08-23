@@ -1,29 +1,14 @@
 // The translation runtime.
 //
-// Design, in one line: translations are plain TypeScript modules compiled into
-// the bundle, so the text a user reads is byte-identical on every device
-// running a given build. Nothing is fetched, nothing is negotiated with a
-// server, nothing depends on a network. A translation fetch would be a network
-// call and a fingerprint, in an app whose whole point is making neither, and it
-// would fail in exactly the conditions Airhop exists for.
+// Catalogs are TypeScript modules compiled into the bundle, so the text a user
+// reads is byte-identical on every device running a given build. A translation
+// fetch would be a network call and a fingerprint, and it would fail in exactly
+// the conditions this app exists for.
 //
-// There is no i18n library on purpose. i18next and react-intl bring namespaces,
-// lazy network backends and runtime string keys with no type safety, none of
-// which an offline-first app with a bundled catalog can use. Completeness comes
-// from `tsc` instead; see `locales/types.ts`. Plural selection is nine rules in
-// `plurals.ts`, verified against CLDR, rather than a polyfill plus thirty
-// locale-data modules; see that file for why.
-//
-// What is where:
-//
-//   languages.ts  facts about languages. All thirty, always.
-//   CATALOGS      below. The gate: a language is selectable iff it has a
-//                 catalog here, and a catalog cannot be partial.
-//   plurals.ts    CLDR category selection.
-//   layout.ts     the two right-to-left cases React Native has no logical
-//                 form for.
-//   utils/format  dates, byte counts and money, formatted in the app's
-//                 language rather than the device's.
+// There is no i18n library. i18next and react-intl bring namespaces, lazy
+// network backends and untyped runtime keys, none of which an offline-first app
+// with a bundled catalog can use. Completeness comes from `tsc` instead; see
+// `locales/types.ts`.
 
 import { useSettingsStore } from "@store/settings-store";
 import { I18nManager } from "react-native";
@@ -49,20 +34,10 @@ export type { TranslationKey } from "./locales/types";
 
 // ---- The catalogs ----
 //
-// Adding a language is this line plus its file. The value must be a `Locale`,
-// which is `Record<TranslationKey, string>` derived from `en.ts`, so a catalog
-// missing a single key does not compile. That is the whole completeness story:
-// there is no coverage threshold, no partial state, and no runtime fallback for
-// a missing string, because a locale missing a string cannot be constructed.
-//
-// `Partial` covers the languages whose translations have not landed yet, not
-// partial translations. `SHIPPED_LANGUAGES` below derives the selectable set
-// from this map, and the picker only ever offers those, so the `?? en` in
-// `catalogFor` is unreachable rather than a fallback anyone relies on.
-// The catalogs that have actually been translated. Kept separate from the
-// exported registry below only so the pseudolocale can measure them: it pads
-// every string past the longest real translation of that key, which is what
-// makes it an upper bound rather than a guess.
+// Adding a language is one line here plus its file. The value must be a
+// `Locale`, which is `Record<TranslationKey, string>` derived from `en.ts`, so
+// a catalog missing a key does not compile. That is the whole completeness
+// story: no coverage threshold, no partial state, no runtime fallback.
 const REAL: Partial<Record<LanguageCode, Locale>> = {
   en,
   ar,
@@ -73,15 +48,12 @@ const REAL: Partial<Record<LanguageCode, Locale>> = {
 
 export const CATALOGS: Partial<Record<LanguageCode, Locale>> = {
   ...REAL,
-  // Debug builds only, and generated rather than stored: it is English run
-  // through `pseudoLocale`, so it costs no repo and nothing in a release
-  // bundle, and it can never drift from the source catalog. See ./pseudo.ts.
   ...(__DEV__
     ? { [PSEUDO_LANGUAGE]: pseudoLocale(en, Object.values(REAL)) }
     : {}),
 };
 
-// The languages a user can actually choose, in display order.
+// The languages a user can choose, in display order.
 export const SHIPPED_LANGUAGES: LanguageCode[] = (
   Object.keys(CATALOGS) as LanguageCode[]
 ).sort((a, b) =>
@@ -92,9 +64,6 @@ export const SHIPPED_LANGUAGES: LanguageCode[] = (
       : LANGUAGES[a].englishName.localeCompare(LANGUAGES[b].englishName, "en"),
 );
 
-// What the picker lists: the thirty real languages, plus the pseudolocale at
-// the bottom in debug builds. Kept out of LANGUAGE_ORDER rather than filtered
-// back out of it, so a release build has no code path that could show it.
 export const PICKER_LANGUAGES: LanguageCode[] = __DEV__
   ? [...LANGUAGE_ORDER, PSEUDO_LANGUAGE]
   : LANGUAGE_ORDER;
@@ -107,31 +76,17 @@ function catalogFor(code: LanguageCode): Locale {
   return CATALOGS[code] ?? en;
 }
 
-// ---- Layout direction, and why a language change is not always immediate ----
+// ---- Layout direction ----
 //
-// `I18nManager` sets a native flag that Yoga reads once, when the process
-// starts. React Native's own documentation advises against forcing it in
-// production for this reason, and the New Architecture still requires a full
-// termination for a direction change to take effect. There is no way around it
-// short of flipping every style in JavaScript, which would throw away the
-// logical properties the whole codebase is written in.
+// `I18nManager` sets a native flag Yoga reads once, at process start, so a
+// direction change cannot take effect until the next launch. Airhop does not
+// restart itself to force it: a relaunch destroys every Noise session, empties
+// the peer table, drops any transfer in flight and cuts live voice.
 //
-// Most apps treat that as a mild annoyance and restart themselves. Airhop
-// cannot. A relaunch here destroys every Noise session, empties the peer table
-// (presence is 4s alone, then 15-30s, so rediscovery is tens of seconds),
-// drops any fragment transfer in flight, and cuts live voice. Asking somebody
-// in a blackout to restart their only working radio in order to read it in
-// their own language is exactly the trade this app exists to refuse.
-//
-// So: direction is pinned at launch, and a language whose direction differs
-// from the pinned one is stored as a preference and applied on the next launch.
-// The UI keeps rendering the boot language until then. That is deliberate and
-// is the better of the two honest options, because the alternative, switching
-// the text now and the layout later, puts Arabic prose in a left-to-right frame
-// with the back arrow on the wrong side.
-//
-// The other twenty-six languages share English's direction and switch instantly,
-// which is almost every switch anyone will make.
+// So direction is pinned at launch, and a language whose direction differs from
+// the pinned one is stored as a preference and applied next launch. The UI keeps
+// the boot language until then; switching the text now and the layout later
+// would put right-to-left prose in a left-to-right frame.
 
 let bootLanguage: LanguageCode = DEFAULT_LANGUAGE;
 let bootDirection: "ltr" | "rtl" = "ltr";

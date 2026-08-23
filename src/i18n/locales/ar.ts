@@ -472,7 +472,6 @@ export const strings: Strings = {
   "chat.location.received_summary": "شارك موقعه",
   "chat.location.title": "الموقع",
   "chat.location.away": "{distance} {direction}",
-  "chat.location.accuracy": "بدقة {meters} م",
   "chat.location.taken": "التُقط قبل {ago}",
   "chat.location.open_maps": "فتح في الخرائط",
   "chat.location.no_forward": "لا تُعاد المواقع توجيهًا",

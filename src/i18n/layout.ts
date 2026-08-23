@@ -14,11 +14,6 @@
 // startup, and `applyLayoutDirection` in ./index.ts pins it to the active
 // language there. So these are module constants rather than hooks. Nothing
 // here re-renders, and nothing needs to.
-//
-// They resolve to their left-to-right values while English is the language
-// shipping. They are what makes the first right-to-left language a catalog
-// rather than a sweep of every stylesheet in the app, and a physical
-// `marginLeft` added meanwhile would not be noticed until then.
 
 import { I18nManager } from "react-native";
 
@@ -74,4 +69,21 @@ export const arrowForward: "arrow-left" | "arrow-right" = isRTLLayout
  */
 export function mirrorX(value: number): number {
   return isRTLLayout ? -value : value;
+}
+
+// Row swipe actions, assigned to the trailing edge.
+//
+// ReanimatedSwipeable names its two panels by physical side and mirrors only
+// the order of buttons inside them, so the drag itself stays physical:
+// `renderRightActions` opens from the right in every language. On a mirrored
+// row that is the leading edge, which is where neither platform puts a row
+// action, so the prop has to be chosen rather than hardcoded.
+export function trailingSwipeActions<T>(
+  render: T,
+):
+  | { renderLeftActions: T; overshootLeft: false }
+  | { renderRightActions: T; overshootRight: false } {
+  return isRTLLayout
+    ? { renderLeftActions: render, overshootLeft: false }
+    : { renderRightActions: render, overshootRight: false };
 }

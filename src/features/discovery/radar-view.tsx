@@ -720,14 +720,11 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       borderRadius: Radius.full,
       padding: 1,
     },
-    // Physical marginLeft on purpose, and it must stay physical.
-    //
-    // The radar is a polar plot of where people actually are, so it never
-    // mirrors: north stays north in every language. Everything positioned
-    // inside it is therefore positioned in screen space, including this label,
-    // which is 16pt wider than the avatar it names and pulled back by half that
-    // to sit centred over it. A logical marginStart would flip in Arabic and
-    // push every name 8pt off its peer.
+    // Physical marginLeft on purpose. The radar is a polar plot of where people
+    // actually are, so it never mirrors and everything inside it is positioned
+    // in screen space. This label is 16pt wider than the avatar it names and
+    // pulled back by half that to centre over it; marginStart would flip in
+    // Arabic and push every name 8pt off its peer.
     peerLabel: {
       fontSize: FontSize["2xs"],
       color: Colors.textMuted,

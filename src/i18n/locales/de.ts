@@ -494,7 +494,6 @@ export const strings: Strings = {
   "chat.location.received_summary": "Hat den Standort geteilt",
   "chat.location.title": "Standort",
   "chat.location.away": "{distance} {direction}",
-  "chat.location.accuracy": "Auf {meters} m genau",
   "chat.location.taken": "Vor {ago} aufgenommen",
   "chat.location.open_maps": "In Karten öffnen",
   "chat.location.no_forward": "Standorte werden nicht weitergeleitet",

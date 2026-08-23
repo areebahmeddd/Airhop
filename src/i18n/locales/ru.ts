@@ -489,7 +489,6 @@ export const strings: Strings = {
   "chat.location.received_summary": "Поделился геопозицией",
   "chat.location.title": "Геопозиция",
   "chat.location.away": "{distance} {direction}",
-  "chat.location.accuracy": "С точностью до {meters} м",
   "chat.location.taken": "Снято {ago} назад",
   "chat.location.open_maps": "Открыть в картах",
   "chat.location.no_forward": "Геопозиция не пересылается",

@@ -26,18 +26,14 @@ module.exports = defineConfig([
     },
   },
   {
-    // Right-to-left safety, enforced rather than reviewed.
+    // Right-to-left safety.
     //
-    // Ten physical properties had accumulated across 49 screens by the time the
-    // first RTL catalog was written. That is a good ratio for a hand-followed
-    // rule and a bad one for a rule nothing checks, because each of them is
-    // invisible until somebody opens the app in Arabic: a badge on the wrong
-    // side of a glyph, a message tail pointing away from its sender.
-    //
-    // React Native flips the logical forms on its own, so the fix is always to
-    // name the edge logically. `textAlign` is the exception: it has no logical
-    // "end", so the trailing edge comes from `textAlignEnd` in i18n/layout.ts
-    // and the leading edge is "auto", which follows the text's own direction.
+    // A physical property is invisible until somebody opens the app in Arabic,
+    // where it puts a badge on the wrong side of a glyph or a message tail
+    // pointing away from its sender. React Native flips the logical forms on its
+    // own, so the fix is always to name the edge logically. `textAlign` is the
+    // exception: it has no logical "end", so the trailing edge comes from
+    // `textAlignEnd` in i18n/layout.ts and the leading edge is "auto".
     files: ["src/**/*.{ts,tsx}"],
     ignores: ["src/i18n/layout.ts", "src/features/discovery/radar-view.tsx"],
     rules: {
@@ -56,16 +52,13 @@ module.exports = defineConfig([
             'textAlign has no logical form in React Native. Use textAlignEnd from @i18n/layout for the trailing edge, or "auto" for the leading edge.',
         },
         {
-          // A bare toLocaleString() asks the DEVICE for its locale, which is
-          // not the same thing as the language the app is being read in, and
-          // diverges the moment there is a picker. It was already wrong before
-          // that: on a phone set to Arabic or Hindi it rendered wallet balances
-          // in Arabic-Indic or Devanagari digits, inside the monospace face,
-          // next to a Latin "sat".
+          // A bare toLocaleString() asks the DEVICE for its locale, not the
+          // language the app is being read in. On a phone set to Arabic it
+          // renders a wallet balance in Arabic-Indic digits inside the monospace
+          // face, next to a Latin "sat".
           //
-          // src/utils/format.ts is the one place that decides this, and it
-          // pins machine data to Latin digits with the app language's grouping
-          // separator. Everything else goes through it.
+          // src/utils/format.ts is the one place that decides this, pinning
+          // machine data to Latin digits with the app language's separator.
           selector:
             "CallExpression > MemberExpression[property.name=/^toLocale(String|DateString|TimeString)$/]",
           message:

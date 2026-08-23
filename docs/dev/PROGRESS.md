@@ -150,21 +150,22 @@ checkable against the code rather than taken on trust.
 - [x] Tap the balance to read it in sats or bitcoin (display only, no price feed)
 - [x] QR display and scan for tokens
 
-## v0.9.6: String Extraction ✅
-
-English ships. The other languages land in v1.3.0, and because the extraction is complete they are catalog files rather than screen work.
+## v0.9.6: Localization ✅
 
 - [x] Translation runtime, no library (`src/i18n/index.ts`: `t` / `useT` / `tPlural`, named-placeholder interpolation)
 - [x] Completeness enforced by `tsc` (`src/i18n/locales/types.ts`: every locale is `Record<TranslationKey, string>` derived from `en.ts`, so a partial locale does not compile and no runtime fallback exists)
 - [x] Full extraction: every user-facing string in the catalog, zero hardcoded, enforced in CI
-- [x] Plurals through `tPlural`, never concatenation. Eight concatenated plurals found and fixed; the English one/other rule lives in one function, where CLDR selection replaces it
-- [x] Right-to-left groundwork (`src/i18n/layout.ts`: `textAlignEnd`, mirrored chevrons; logical properties app-wide; `radar-view.tsx` exempt as a polar plot of physical space)
-- [x] Layout direction pinned at startup, so a device set to Arabic does not mirror an English UI
+- [x] Thirty catalogs, matching the set the landing site serves
+- [x] Locale store, in-app picker, and device language negotiation through `Intl`
+- [x] CLDR plurals for all thirty (`src/i18n/plurals.ts`), checked against Node's ICU for every integer 0 to 2000
+- [x] Right to left for Arabic, Persian and Urdu (`src/i18n/layout.ts`: `textAlignEnd`, mirrored chevrons; logical properties app-wide; `radar-view.tsx` exempt as a polar plot of physical space)
+- [x] Layout direction pinned at startup, and a direction change applied on next launch rather than by restarting the process
+- [x] Persisted rows carry a catalog key and translate on render, so history follows a language change
 - [x] Formatting centralised in `src/utils/format.ts`, cached formatters, Latin numerals for machine data
-- [x] `scripts/i18n-audit.js`: hardcoded strings, unreferenced keys, and translations frozen at module load. Reads the TypeScript AST, so wrapped JSX text and template literals are in scope
-- [x] CI guards: hardcoded-string ceiling at zero, and module-load-time translations
-- [x] i18n tests (`src/i18n/__tests__/`: placeholder parity, plural shape, do-not-translate enforcement, terminal punctuation)
-- [x] Terminal punctuation checked by `catalog.test.ts`: a string that starts a second sentence must finish it
+- [x] `scripts/i18n-build-locale.js`: builds a catalog from a translation map, refusing one with a missing key, a dropped placeholder, a wrong plural category, a localised protocol token or a stray script
+- [x] `scripts/i18n-audit.js`: hardcoded strings, unreferenced keys, and frozen translations. Reads the TypeScript AST, so wrapped JSX text and template literals are in scope
+- [x] CI guards: hardcoded-string ceiling at zero, translations frozen at module load or in a memo, and physical style properties
+- [x] i18n tests (`src/i18n/__tests__/`: placeholder parity, plural categories, do-not-translate enforcement, terminal punctuation per script)
 - [x] Catalog ordered by screen (shell, onboarding, chats, mesh, wallet, contacts, settings), so one screen's copy is one contiguous block
 
 ## v1.0.0: UI + App Store Release ✅
@@ -198,16 +199,18 @@ English ships. The other languages land in v1.3.0, and because the extraction is
 - [ ] UPI Payment Plugin: deep link initiation, opt-in only, KYC disclosure required
 - [ ] Plugin registry, per-plugin opt-in, strict data boundary and capability model
 
-## v1.3.0: Stabilization
+## v1.3.0: Stabilization and Relay Hardware
+
+Relay support is written and simulated but has never met hardware (`docs/spec/PROTOCOLS.md` section 10).
 
 - [ ] Production bugs found after launch
 - [ ] Race conditions in the BLE and crypto state machines
 - [ ] UI iteration from user feedback
 - [ ] Extended cross-device battery and compatibility testing
-- [ ] Ten languages (`en ar de es fa hi id pt-BR ru zh-Hans`), chosen to cover every script class and layout hazard in bitchat/ios's thirty. Keys are named after bitchat's, so much of the catalog can be lifted from its public-domain `Localizable.xcstrings`
-- [ ] Runtime a second language needs: locale store, CLDR plurals via `@formatjs/intl-pluralrules`, device language negotiation, in-app picker
-- [ ] Right-to-left pass on device in Arabic
 - [ ] Translated iOS permission dialogs and Android service notification
+- [ ] [Bitle](https://bitle.org) firmware on the mesh: Noise XX, courier mailbox, gossip sync, and the `0xB1` relay flag read off a real announce
+- [ ] The LoRa trunk carrying traffic between two nodes with no phone bridging the gap
+- [ ] The same runs against bitchat, so one deployed node serves both clients
 
 ## v1.4.0: Web / Browser
 
@@ -307,25 +310,25 @@ Automated security review over the whole codebase, by domain: crypto and key
 lifecycle, radio-facing wire parsing, Nostr and payments, native BLE, and the
 app layer. Ordered by severity.
 
-| #   | Finding                                                                   | Severity | Status                                                                                                                                                |
-| --- | ------------------------------------------------------------------------- | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1   | Double Ratchet root key seeded from the PUBLIC handshake transcript hash  | Critical | Fixed - seeded from the Noise exporter secret instead                                                                                                 |
-| 2   | ANNOUNCE accepted unsigned, unbound to its key, and could re-pin a peer's | High     | Fixed - mandatory signature, sender/key binding, TOFU pin                                                                                             |
-| 3   | Attachments never signature-checked, so any peer could forge the sender   | High     | Fixed - `FILE_TRANSFER` goes through `senderIsAuthentic`, as bitchat does                                                                             |
-| 4   | Attachments rendered by every relay, not only the addressee               | High     | Fixed - a directed file is relayed but not rendered unless it is for us                                                                               |
-| 5   | Nutzap redeemed from any mint an incoming event named                     | High     | Fixed - the mint must be one the wallet already holds, which is what NIP-61 assumes                                                                   |
-| 6   | `airhop://` contact-card link minted a "Verified" contact                 | High     | Fixed - a linked card records `source: "link"`, never `"qr"`, and may not re-pin keys                                                                 |
-| 7   | ANNOUNCE replayable forever, so a departed peer kept looking present      | Medium   | Fixed - 15 min symmetric freshness window                                                                                                             |
-| 8   | Attachment channel tag auto-joined arbitrary rooms                        | Medium   | Fixed - the tag must name a joined room that `canSendMedia` allows                                                                                    |
-| 9   | Malformed compressed frame threw out of the decoder                       | Medium   | Fixed - missing bounds guard; 24 attacker-chosen bytes raised `RangeError` into the native BLE callback                                               |
-| 10  | `VOICE_FRAME` had no freshness window, so a burst replayed verbatim       | Medium   | Fixed - 30 s bound plus a broadcast requirement, matching bitchat                                                                                     |
-| 11  | Group creator not pinned, so a higher epoch could replace it              | Medium   | Fixed - a group keeps its original creator. Also fixed upstream                                                                                       |
-| 12  | Nutzap watcher race against a wipe during startup                         | Medium   | Fixed - startup captures a wipe generation before its first await and re-checks it before installing                                                  |
-| 13  | Gateway downlink accepted any event kind or age                           | Low      | Fixed - kind, freshness and cell gates, the same three the uplink already applied                                                                     |
-| 14  | Relay URL interpolated unescaped into generated source                    | Low      | Fixed - `JSON.stringify`; generator output byte-identical                                                                                             |
-| 15  | iOS `want*` latch set before validation                                   | Low      | Fixed - the latch is set per state branch; transient states keep it, refusals no longer arm the radio                                                 |
-| 16  | `forceStopRadios()` leaves the duty-cycle timer armed                     | Low      | Fixed - calls `stopScanCycle()`, so the queued toggle cannot restart the scanner after the service stops                                              |
-| 17  | Outbox receipts not scoped to the receipt's sender                        | Info     | Accepted - message IDs are 8 bytes of CSPRNG never sent in cleartext; availability-only impact                                                        |
+| #   | Finding                                                                   | Severity | Status                                                                                                   |
+| --- | ------------------------------------------------------------------------- | -------- | -------------------------------------------------------------------------------------------------------- |
+| 1   | Double Ratchet root key seeded from the PUBLIC handshake transcript hash  | Critical | Fixed - seeded from the Noise exporter secret instead                                                    |
+| 2   | ANNOUNCE accepted unsigned, unbound to its key, and could re-pin a peer's | High     | Fixed - mandatory signature, sender/key binding, TOFU pin                                                |
+| 3   | Attachments never signature-checked, so any peer could forge the sender   | High     | Fixed - `FILE_TRANSFER` goes through `senderIsAuthentic`, as bitchat does                                |
+| 4   | Attachments rendered by every relay, not only the addressee               | High     | Fixed - a directed file is relayed but not rendered unless it is for us                                  |
+| 5   | Nutzap redeemed from any mint an incoming event named                     | High     | Fixed - the mint must be one the wallet already holds, which is what NIP-61 assumes                      |
+| 6   | `airhop://` contact-card link minted a "Verified" contact                 | High     | Fixed - a linked card records `source: "link"`, never `"qr"`, and may not re-pin keys                    |
+| 7   | ANNOUNCE replayable forever, so a departed peer kept looking present      | Medium   | Fixed - 15 min symmetric freshness window                                                                |
+| 8   | Attachment channel tag auto-joined arbitrary rooms                        | Medium   | Fixed - the tag must name a joined room that `canSendMedia` allows                                       |
+| 9   | Malformed compressed frame threw out of the decoder                       | Medium   | Fixed - missing bounds guard; 24 attacker-chosen bytes raised `RangeError` into the native BLE callback  |
+| 10  | `VOICE_FRAME` had no freshness window, so a burst replayed verbatim       | Medium   | Fixed - 30 s bound plus a broadcast requirement, matching bitchat                                        |
+| 11  | Group creator not pinned, so a higher epoch could replace it              | Medium   | Fixed - a group keeps its original creator. Also fixed upstream                                          |
+| 12  | Nutzap watcher race against a wipe during startup                         | Medium   | Fixed - startup captures a wipe generation before its first await and re-checks it before installing     |
+| 13  | Gateway downlink accepted any event kind or age                           | Low      | Fixed - kind, freshness and cell gates, the same three the uplink already applied                        |
+| 14  | Relay URL interpolated unescaped into generated source                    | Low      | Fixed - `JSON.stringify`; generator output byte-identical                                                |
+| 15  | iOS `want*` latch set before validation                                   | Low      | Fixed - the latch is set per state branch; transient states keep it, refusals no longer arm the radio    |
+| 16  | `forceStopRadios()` leaves the duty-cycle timer armed                     | Low      | Fixed - calls `stopScanCycle()`, so the queued toggle cannot restart the scanner after the service stops |
+| 17  | Outbox receipts not scoped to the receipt's sender                        | Info     | Accepted - message IDs are 8 bytes of CSPRNG never sent in cleartext; availability-only impact           |
 
 ## Known Issues
 

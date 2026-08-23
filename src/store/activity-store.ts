@@ -25,11 +25,9 @@ export interface ActivityEntry {
   // One-line preview (text, or a media summary like "Photo").
   preview: string;
   // The catalog key `preview` was rendered from, when the app wrote the line
-  // rather than a person. Entries are persisted and read for as long as they
-  // stay in the bell, so rendering them at write time freezes them in whichever
-  // language was active then. Same contract as `systemKey` on ChatMessage:
-  // `preview` remains the fallback, and `activityPreview()` in
-  // `@utils/message-text` is what callers read.
+  // rather than a person. Same contract as `systemKey` on ChatMessage:
+  // `preview` remains the fallback, and callers read `activityPreview()` from
+  // `@utils/message-text`.
   previewKey?: TranslationKey;
   previewVars?: TranslationVars;
   timestampMs: number;
