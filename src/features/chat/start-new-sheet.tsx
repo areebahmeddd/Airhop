@@ -17,6 +17,7 @@ import { useT } from "@i18n";
 import { useChatStore } from "@store/chat-store";
 import BottomSheet from "@ui/components/bottom-sheet";
 import {
+  BUTTON_HEIGHT,
   DISABLED_OPACITY,
   FontSize,
   FontWeight,
@@ -535,7 +536,7 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
     },
     modalCancel: {
       flex: 1,
-      minHeight: 50,
+      minHeight: BUTTON_HEIGHT,
       backgroundColor: Colors.surfaceRaised,
       borderRadius: Radius.full,
       paddingVertical: Spacing.md,
@@ -549,7 +550,7 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
     },
     modalConfirm: {
       flex: 1,
-      minHeight: 50,
+      minHeight: BUTTON_HEIGHT,
       backgroundColor: Colors.accent,
       borderRadius: Radius.full,
       paddingVertical: Spacing.md,

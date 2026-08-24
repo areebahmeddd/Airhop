@@ -173,6 +173,7 @@
 
 html {
   scroll-behavior: smooth;
+  scroll-padding-top: 5rem;
 }
 
 body {
@@ -185,6 +186,10 @@ body {
 :focus-visible {
   outline: 2px solid var(--t-ink);
   outline-offset: 2px;
+}
+
+#main-content:focus-visible {
+  outline: none;
 }
 
 .bg-card {

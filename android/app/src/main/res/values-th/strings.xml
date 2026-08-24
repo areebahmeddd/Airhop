@@ -1,0 +1,7 @@
+<resources>
+  <string name="mesh_channel_name">เครือข่ายเมช</string>
+  <string name="mesh_channel_description">ทำให้เมชของ Airhop ทำงานอยู่เบื้องหลัง</string>
+  <string name="mesh_notification_title">เมชของ Airhop กำลังทำงาน</string>
+  <string name="mesh_notification_text">กำลังค้นหาและส่งต่อข้อความใกล้เคียง</string>
+  <string name="mesh_notification_stop">หยุดเมช</string>
+</resources>

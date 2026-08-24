@@ -1,0 +1,7 @@
+<resources>
+  <string name="mesh_channel_name">मेश नेटवर्क</string>
+  <string name="mesh_channel_description">Airhop मेश को बैकग्राउंड में चालू रखता है</string>
+  <string name="mesh_notification_title">Airhop मेश चालू है</string>
+  <string name="mesh_notification_text">आस-पास के संदेश खोजना और आगे भेजना</string>
+  <string name="mesh_notification_stop">मेश रोकें</string>
+</resources>

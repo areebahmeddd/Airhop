@@ -170,6 +170,15 @@ function writeTlv(buf: number[], type: number, value: Uint8Array): void {
 // The nickname TLV budget, in BYTES of UTF-8 (see the layout note at the top).
 const NICKNAME_MAX_BYTES = 32;
 
+// Code points that cannot end a name, so the cut lands before them: a mark
+// without its base renders on a dotted circle, a joiner splits an emoji. 32
+// bytes is about ten Devanagari characters, so the budget is reached most often
+// in exactly the scripts that write with marks.
+//
+// Duplicated from `truncateToUtf8Bytes` in `@utils/utf8-budget` rather than
+// imported, because `src/core/` depends on nothing above it. Keep them in step.
+const DANGLING_NICKNAME = /[\p{M}\u200D\uFE0E\uFE0F]/u;
+
 // Fit a nickname into the TLV, canonicalized first.
 //
 // Truncation counts UTF-8 bytes and drops whole code points. Slicing the string
@@ -183,6 +192,17 @@ function fitNickname(nickname: string): Uint8Array {
   let bytes = encoder.encode(codePoints.join(""));
   while (bytes.length > NICKNAME_MAX_BYTES) {
     codePoints.pop();
+    bytes = encoder.encode(codePoints.join(""));
+  }
+  // Only once it fits, and only if something was dropped: a name already inside
+  // the budget is the user's own.
+  if (bytes.length < encoder.encode(normalizeNickname(nickname)).length) {
+    while (
+      codePoints.length > 0 &&
+      DANGLING_NICKNAME.test(codePoints[codePoints.length - 1])
+    ) {
+      codePoints.pop();
+    }
     bytes = encoder.encode(codePoints.join(""));
   }
   return bytes;

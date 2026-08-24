@@ -1,0 +1,7 @@
+<resources>
+  <string name="mesh_channel_name">メッシュネットワーク</string>
+  <string name="mesh_channel_description">Airhopのメッシュをバックグラウンドで動かし続けます</string>
+  <string name="mesh_notification_title">Airhopのメッシュが稼働中</string>
+  <string name="mesh_notification_text">近くのメッセージを見つけて中継しています</string>
+  <string name="mesh_notification_stop">メッシュを停止</string>
+</resources>

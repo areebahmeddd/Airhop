@@ -62,6 +62,7 @@ import { useChatStore } from "@store/chat-store";
 import { useLocationNotesStore } from "@store/location-notes-store";
 import { useMeshStateStore } from "@store/mesh-state-store";
 import { useSettingsStore } from "@store/settings-store";
+import { systemPreview } from "@utils/message-text";
 import { finalizeEvent, type Event as NostrEvent } from "nostr-tools";
 import { getCoarseLocation, type Coords } from "./location-service";
 
@@ -1229,17 +1230,21 @@ export class GeohashChannelService {
     // Log a live note on the bell + the room's board badge. Own notes are
     // already filtered above; the recency gate skips replayed history.
     if (Date.now() - createdAtMs <= NOTICE_BELL_WINDOW_MS) {
+      // Same shape as the mesh board's bell entry in mesh-service. An absent
+      // nickname is stored empty rather than resolved, so the bell renders
+      // "someone" in the language being read now.
       useActivityStore.getState().record({
         id: event.id,
         channel:
           this.namedChannelForGeohash(geohash) ?? geohashChannel(geohash),
         isDM: false,
         senderID: event.pubkey,
-        senderNickname:
-          nickname !== undefined && nickname.length > 0
-            ? nickname
-            : t("notif.someone"),
-        preview: `${isUrgent ? "Urgent notice · " : "Notice · "}${event.content}`,
+        senderNickname: nickname ?? "",
+        // The note is the author's own words and is stored as written. Only the
+        // sentence around it belongs to Airhop.
+        ...systemPreview(isUrgent ? "notif.notice_urgent" : "notif.notice", {
+          content: event.content,
+        }),
         timestampMs: createdAtMs,
         kind: "notice",
         geohash,

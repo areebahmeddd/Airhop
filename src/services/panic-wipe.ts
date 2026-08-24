@@ -95,6 +95,12 @@ export const MMKV_STORE_IDS = [
   // prekey-store holds our one-time prekey private keys and peers' bundles;
   // both are identity-linked key material and must be destroyed on panic.
   "prekey-store",
+  // courier-store holds sealed envelopes carried for other people. Unreadable
+  // here (each is Noise X to a key this device does not hold), but a bag of a
+  // neighbour's mail is evidence this phone stood next to whoever deposited it,
+  // and a recipient tag names who it is for to anyone who heard that person
+  // announce.
+  "courier-store",
   // group-store holds private-group epoch keys, which decrypt every group
   // message; destroy them on panic like any other conversation key material.
   "group-store",
@@ -222,6 +228,12 @@ export async function panicWipe(): Promise<PanicWipeResult> {
     // promising onion routing that was no longer running. A security indicator
     // that over-claims is worse than none.
     torActive: false,
+    torBootstrap: "idle",
+    // The gate holding the Nostr transport down while Android waits on Orbot.
+    // The wipe turns Tor off, so a gate left shut would leave a fresh install
+    // with no internet half and a banner about a Tor nobody asked for.
+    // teardownTorState clears it too; this covers either ordering.
+    nostrBlockedByTor: false,
     bridgeActive: false,
     bridgePeopleAcross: 0,
     // Also a claim rather than cosmetic state, drawn from traffic that no

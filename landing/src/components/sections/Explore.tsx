@@ -93,7 +93,7 @@ export default function Explore() {
   const T = useT();
 
   return (
-    <section id="explore" className="scroll-mt-8 px-6 py-12 md:px-10 md:py-16">
+    <section id="explore" className="px-6 py-12 md:px-10 md:py-16">
       <div className="mx-auto max-w-7xl">
         <SectionHeader
           eyebrow={T("home.explore.eyebrow")}

@@ -29,6 +29,8 @@ import { useChatStore, type ChatMessage } from "@store/chat-store";
 import { useContactsStore } from "@store/contacts-store";
 import { useOutboxStore } from "@store/outbox-store";
 import { useWalletStore } from "@store/wallet-store";
+import { formatNumber } from "@utils/format";
+import { systemRow } from "@utils/message-text";
 import { isNostrId, NOSTR_ID_PREFIX } from "@utils/username";
 import { getMeshService, type MeshService } from "./mesh-service";
 import {
@@ -348,8 +350,15 @@ function noteNutzapInThread(
     channel,
     senderID: getMeshService()?.getPeerID() ?? "",
     senderNickname: "",
-    text: t("wallet.pay.thread_receipt", {
-      amount: amount.toLocaleString(),
+    // The amount is stored already grouped rather than as a raw number,
+    // because interpolation stringifies a number plainly and would drop the
+    // separator. So switching language re-translates the sentence but leaves
+    // the separator as it was written: "21,500" stays "21,500" in a language
+    // that would have written "21.500". The digits are Latin either way, and a
+    // stale separator is a far smaller thing than a receipt stuck in a
+    // language its reader does not have.
+    ...systemRow("wallet.pay.thread_receipt", {
+      amount: formatNumber(amount),
       unit,
     }),
     timestampMs: Date.now(),
@@ -374,12 +383,12 @@ async function payAsToken(params: {
     const confirmed = await confirm(
       t("wallet.err.exact_amount"),
       t("wallet.xfer.inexact_body", {
-        amount: params.amount.toLocaleString(),
+        amount: formatNumber(params.amount),
         unit: params.unit,
-        spend: quote.spend.toLocaleString(),
-        extra: (quote.spend - params.amount).toLocaleString(),
+        spend: formatNumber(quote.spend),
+        extra: formatNumber(quote.spend - params.amount),
       }),
-      t("wallet.xfer.send_amount", { amount: quote.spend.toLocaleString() }),
+      t("wallet.xfer.send_amount", { amount: formatNumber(quote.spend) }),
     );
     if (!confirmed) return null;
   }

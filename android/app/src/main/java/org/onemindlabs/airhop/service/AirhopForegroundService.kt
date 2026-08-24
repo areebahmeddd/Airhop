@@ -114,10 +114,10 @@ class AirhopForegroundService : Service() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val channel = NotificationChannel(
                 CHANNEL_ID,
-                "Mesh Network",
+                getString(R.string.mesh_channel_name),
                 NotificationManager.IMPORTANCE_LOW, // silent but persistent
             ).apply {
-                description = "Keeps Airhop mesh active in the background"
+                description = getString(R.string.mesh_channel_description)
                 setShowBadge(false)
             }
             val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
@@ -144,20 +144,17 @@ class AirhopForegroundService : Service() {
         )
 
         return NotificationCompat.Builder(this, CHANNEL_ID)
-            .setContentTitle("Airhop mesh active")
-            .setContentText("Discovering and relaying nearby messages")
-            // The Airhop mark, and the same drawable expo-notifications is
-            // pointed at from the manifest, so the notice that sits in the shade
-            // all day and a notice about a message are recognisably one app.
-            // This was android.R.drawable.ic_menu_share behind a comment
-            // claiming the build replaced it; nothing did, and the persistent
-            // notification shipped with the stock Android share glyph.
+            .setContentTitle(getString(R.string.mesh_notification_title))
+            .setContentText(getString(R.string.mesh_notification_text))
+            // The same drawable the manifest points expo-notifications at, so
+            // the notice sitting in the shade all day and a notice about a
+            // message are recognisably one app.
             .setSmallIcon(R.drawable.notification_icon)
             .setColor(ContextCompat.getColor(this, R.color.notification_icon_color))
             .setOngoing(true)
             .setSilent(true)
             .setContentIntent(pendingIntent)
-            .addAction(0, "Stop mesh", stopIntent)
+            .addAction(0, getString(R.string.mesh_notification_stop), stopIntent)
             .build()
     }
 

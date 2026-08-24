@@ -1,0 +1,7 @@
+<resources>
+  <string name="mesh_channel_name">Mesh network</string>
+  <string name="mesh_channel_description">Pinapanatiling aktibo ang mesh ng Airhop sa background</string>
+  <string name="mesh_notification_title">Aktibo ang mesh ng Airhop</string>
+  <string name="mesh_notification_text">Naghahanap at nagpapasa ng mga mensaheng malapit</string>
+  <string name="mesh_notification_stop">Ihinto ang mesh</string>
+</resources>

@@ -7,12 +7,14 @@ import Feather from "@expo/vector-icons/Feather";
 import { useT } from "@i18n";
 import { chevronBack, chevronForward } from "@i18n/layout";
 import {
+  BUTTON_HEIGHT,
   DISABLED_OPACITY,
   FontFamily,
   FontSize,
   FontWeight,
   HIT_SLOP,
   MIN_TOUCH,
+  PRESSED_OPACITY,
   Radius,
   Spacing,
   TAB_BAR_CLEARANCE,
@@ -27,6 +29,15 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 // Named so their radii cannot drift off centre.
 const SHEET_ICON_SIZE = 48;
 const OPTION_DOT_SIZE = 34;
+
+// The fixed leading column every row reserves for its icon, with or without
+// one, so labels line up down the group.
+const SETTING_ICON_WIDTH = 22;
+
+// Where a row's label starts. A group's hairline is inset to exactly this:
+// UIKit's separatorInset and Material's divider keyline both align to the
+// label, never to the icon.
+const ROW_LABEL_INSET = SETTING_ICON_WIDTH + Spacing.base + Spacing.sm;
 
 // One theme-reactive StyleSheet shared by the settings hub and every
 // sub-screen, so light/dark mode stays pixel-for-pixel consistent across
@@ -119,7 +130,7 @@ export function SettingLinkRow({
   const styles = useSharedStyles();
   return (
     <Pressable
-      style={styles.settingRow}
+      style={({ pressed }) => [styles.settingRow, pressed && styles.rowPressed]}
       onPress={onPress}
       accessibilityRole="button"
       accessibilityLabel={
@@ -259,8 +270,11 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       color: Colors.textPrimary,
       textAlign: "center",
     },
+    // Mirrors subHeaderBack, negative margin included, or the title's flex box
+    // is asymmetric and its centred text lands 2pt off centre.
     subHeaderSpacer: {
       width: 32,
+      marginEnd: -Spacing.xs,
     },
     section: {
       gap: Spacing.sm,
@@ -283,7 +297,7 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
     groupDivider: {
       height: StyleSheet.hairlineWidth,
       backgroundColor: Colors.border,
-      marginStart: Spacing.base,
+      marginStart: ROW_LABEL_INSET,
     },
     // A row with a description is comfortably past the touch floor already; one
     // without (a bare label plus a switch, which is most of Network and General)
@@ -297,8 +311,12 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       minHeight: MIN_TOUCH,
       gap: Spacing.sm,
     },
+    // Shared by the settings rows and the grouped option lists.
+    rowPressed: {
+      backgroundColor: Colors.surfacePressed,
+    },
     settingIcon: {
-      width: 22,
+      width: SETTING_ICON_WIDTH,
       flexShrink: 0,
     },
     settingLabelGroup: {
@@ -315,9 +333,20 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       color: Colors.textMuted,
       lineHeight: FontSize.xs * 1.5,
     },
+    // The trailing value on a settings row, in the prose face by default.
+    //
+    // Most of what sits here is words rather than data ("Grant", "High",
+    // "7 days"), and JetBrains Mono covers three of the thirteen scripts Airhop
+    // ships. Prose by default means a value added later cannot land in a face
+    // with no glyphs for it unless somebody chooses to put it there.
     settingValue: {
       fontSize: FontSize.sm,
       color: Colors.textMuted,
+    },
+    // For the rows whose value really is machine data: a version, a byte count,
+    // a peer tally, an SPDX identifier. Digits are pinned to Latin everywhere
+    // (see `@utils/format`), so tabular figures are the whole point here.
+    settingValueMono: {
       fontFamily: FontFamily.mono,
     },
     settingValueMuted: {
@@ -356,14 +385,14 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
     },
     sheetTitle: {
       alignSelf: "stretch",
-      textAlign: "left",
+      textAlign: "auto",
       fontSize: FontSize.md,
       fontWeight: FontWeight.bold,
       color: Colors.textPrimary,
     },
     sheetSubtitle: {
       alignSelf: "stretch",
-      textAlign: "left",
+      textAlign: "auto",
       fontSize: FontSize.sm,
       color: Colors.textMuted,
       lineHeight: FontSize.sm * 1.5,
@@ -374,7 +403,7 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
     },
     sheetBtn: {
       width: "100%",
-      minHeight: 50,
+      minHeight: BUTTON_HEIGHT,
       marginTop: Spacing.sm,
       paddingVertical: Spacing.md,
       borderRadius: Radius.full,
@@ -386,7 +415,7 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
     },
     sheetBtnPrimary: {
       width: "100%",
-      minHeight: 50,
+      minHeight: BUTTON_HEIGHT,
       paddingVertical: Spacing.md,
       borderRadius: Radius.full,
       backgroundColor: Colors.accent,
@@ -402,6 +431,14 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       fontSize: FontSize.base,
       fontWeight: FontWeight.bold,
       color: Colors.textInverse,
+    },
+    // Applied by the screens that use the pair: the styles live here, the
+    // Pressables do not.
+    sheetBtnPressed: {
+      backgroundColor: Colors.surfacePressed,
+    },
+    sheetBtnPrimaryPressed: {
+      opacity: PRESSED_OPACITY,
     },
     // A sheet whose option list is longer than the sheet. The language picker
     // ships with ten entries and targets thirty, so it scrolls from the start

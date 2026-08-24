@@ -11,6 +11,9 @@ import { avatarColor, FontWeight, useThemeColors, withAlpha } from "../theme";
 // list does not read as a wall of colour.
 const TINT_ALPHA = 0.13;
 
+// So a pair like "IL" does not read as one glyph at the sizes drawn here.
+const INITIALS_TRACKING = 0.5;
+
 interface Props {
   username: string;
   peerID: string;
@@ -102,7 +105,11 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
     },
     initials: {
       fontWeight: FontWeight.semibold,
-      letterSpacing: 0.5,
+      letterSpacing: INITIALS_TRACKING,
+      // Tracking is applied after the last glyph too, so the text box measures
+      // wider than it draws and centring it leaves the glyphs half a track
+      // short. Cancelling the trailing space puts them back on centre.
+      marginEnd: -INITIALS_TRACKING,
     },
   });
 }

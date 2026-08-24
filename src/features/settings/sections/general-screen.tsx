@@ -347,9 +347,10 @@ export default function GeneralScreen({ onBack }: Props): React.JSX.Element {
               <React.Fragment key={opt.value}>
                 {i > 0 && <GroupDivider />}
                 <Pressable
-                  style={[
+                  style={({ pressed }) => [
                     styles.optionRowGrouped,
                     selected && styles.optionRowGroupedSelected,
+                    pressed && styles.rowPressed,
                   ]}
                   onPress={() => {
                     setUndoSendSeconds(opt.value);
@@ -402,9 +403,10 @@ export default function GeneralScreen({ onBack }: Props): React.JSX.Element {
               <React.Fragment key={days}>
                 {i > 0 && <GroupDivider />}
                 <Pressable
-                  style={[
+                  style={({ pressed }) => [
                     styles.optionRowGrouped,
                     selected && styles.optionRowGroupedSelected,
+                    pressed && styles.rowPressed,
                   ]}
                   onPress={() => {
                     useSettingsStore.getState().setMediaRetentionDays(days);
@@ -456,9 +458,10 @@ export default function GeneralScreen({ onBack }: Props): React.JSX.Element {
               <React.Fragment key={key}>
                 {i > 0 && <GroupDivider />}
                 <Pressable
-                  style={[
+                  style={({ pressed }) => [
                     styles.optionRowGrouped,
                     selected && styles.optionRowGroupedSelected,
+                    pressed && styles.rowPressed,
                   ]}
                   onPress={() => {
                     setUploadQuality(key);

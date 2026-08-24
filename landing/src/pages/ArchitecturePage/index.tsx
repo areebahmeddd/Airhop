@@ -231,7 +231,7 @@ export default function ArchitecturePage() {
   useSEO(SEO["/architecture"]);
 
   return (
-    <main id="main-content">
+    <main id="main-content" tabIndex={-1}>
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: schema }} />
 
       <div className="mx-auto max-w-6xl px-6 py-16 md:px-10">
@@ -641,30 +641,30 @@ export default function ArchitecturePage() {
               lede="Five ways a message can move. Bluetooth is the only one that needs no internet and no network at all, which is why it is the default."
             >
               <Table
-                head={["", "BLE mesh", "WiFi direct", "LAN (mDNS)", "Nostr relays", "Courier"]}
+                head={["", "BLE mesh", "LAN (mDNS)", "WiFi direct", "Nostr relays", "Courier"]}
                 rows={[
                   [
                     "Carries",
                     "Everything, including live voice",
-                    "DMs and files",
                     "Everything BLE carries",
+                    "DMs and files",
                     "DMs, location channels",
                     "Sealed text envelopes",
                   ],
                   [
                     "Needs internet",
                     "No",
-                    "No",
                     "No, but everyone must be on one network",
+                    "No",
                     "Yes",
                     "No",
                   ],
-                  ["iPhone to Android", "Yes", "No", "Yes", "Yes", "Yes"],
+                  ["iPhone to Android", "Yes", "Yes", "No", "Yes", "Yes"],
                   [
                     "Range",
                     "10 to 100 m per hop",
-                    "~30 m",
                     "Wherever the network reaches",
+                    "~30 m",
                     "Global",
                     "Wherever the carrier walks",
                   ],
@@ -672,16 +672,16 @@ export default function ArchitecturePage() {
                   [
                     "Speed",
                     "~18 KiB/s",
-                    "~18 KiB/s",
                     "Network speed, no radio pacing",
+                    "~18 KiB/s",
                     "Not used for files",
                     "Not used for files",
                   ],
                   [
                     "Latency per hop",
                     "10 to 220 ms, randomized",
-                    "n/a",
                     "Network round trip",
+                    "n/a",
                     "Relay round trip, more over Tor",
                     "Whenever the carrier meets the recipient",
                   ],
@@ -737,7 +737,7 @@ export default function ArchitecturePage() {
                 Relays carry small signed events, not file bytes. The usual workaround is to upload
                 the file to an HTTP host and post a link. That host is a central server that can
                 log, throttle or take down your files, which is the thing this project exists to
-                avoid. So attachments travel over Bluetooth, WiFi or LAN, or they do not travel.
+                avoid. So attachments travel over Bluetooth, LAN or WiFi, or they do not travel.
               </Note>
             </Section>
 

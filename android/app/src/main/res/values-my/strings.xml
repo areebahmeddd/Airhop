@@ -1,0 +1,7 @@
+<resources>
+  <string name="mesh_channel_name">မက်ရှ်ကွန်ရက်</string>
+  <string name="mesh_channel_description">Airhop မက်ရှ်ကို နောက်ခံတွင် ဆက်လက်လည်ပတ်စေသည်</string>
+  <string name="mesh_notification_title">Airhop မက်ရှ် လည်ပတ်နေသည်</string>
+  <string name="mesh_notification_text">အနီးအနားက စာများကို ရှာဖွေပြီး ဆက်လက်ပို့နေသည်</string>
+  <string name="mesh_notification_stop">မက်ရှ်ကို ရပ်ရန်</string>
+</resources>

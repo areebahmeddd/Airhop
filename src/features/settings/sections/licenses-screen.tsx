@@ -62,7 +62,11 @@ export default function LicensesScreen({ onBack }: Props): React.JSX.Element {
                         v{entry.version}
                       </Text>
                     </View>
-                    <Text style={styles.settingValue}>{entry.license}</Text>
+                    <Text
+                      style={[styles.settingValue, styles.settingValueMono]}
+                    >
+                      {entry.license}
+                    </Text>
                   </Pressable>
                 </React.Fragment>
               ))}

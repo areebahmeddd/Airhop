@@ -91,7 +91,7 @@ export const strings = {
   "home.situations.protest.line": "A QR code on a flyer opens an encrypted channel for the march.",
   "home.situations.festival.label": "Festival",
   "home.situations.festival.line":
-    "No signal at the grounds. Messages hop through strangers' phones.",
+    "No signal at the grounds. Messages hop through strangers’ phones.",
 
   "home.showcase.eyebrow": "See the app",
   "home.showcase.title": "An ordinary messenger, offline.",
@@ -328,7 +328,7 @@ export const strings = {
 
   "seo.faq.title": "Frequently Asked Questions — Airhop",
   "seo.faq.description":
-    "Answers about Airhop's Bluetooth mesh messaging, encryption, offline payments, the Nostr internet layer, and bitchat compatibility.",
+    "Answers about Airhop’s Bluetooth mesh messaging, encryption, offline payments, the Nostr internet layer, and bitchat compatibility.",
   "seo.faq.breadcrumb": "FAQ",
 
   "seo.blogs.title": "Blog — Airhop",

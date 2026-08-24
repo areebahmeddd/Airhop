@@ -6,6 +6,7 @@
 
 import { Feather, MaterialCommunityIcons } from "@expo/vector-icons";
 import { t, tPlural, useT } from "@i18n";
+import { trailingSwipeActions } from "@i18n/layout";
 import { held } from "@platform/haptics";
 import { getMeshService } from "@services/mesh-service";
 import { showAlert } from "@store/alert-store";
@@ -21,6 +22,7 @@ import {
   Duration,
   FontSize,
   FontWeight,
+  LONG_PRESS_MS,
   MaxFontScale,
   MIN_TOUCH,
   Radius,
@@ -245,7 +247,10 @@ export default function DmList({ onSelectDM }: Props): React.JSX.Element {
 
           const row = (
             <Pressable
-              style={styles.row}
+              style={({ pressed }) => [
+                styles.row,
+                pressed && styles.rowPressed,
+              ]}
               onPress={() => onSelectDM(item)}
               // Long-press opens the same sheet the swipe does.
               //
@@ -257,6 +262,7 @@ export default function DmList({ onSelectDM }: Props): React.JSX.Element {
                 held();
                 handleSwipeMore(item);
               }}
+              delayLongPress={LONG_PRESS_MS}
               accessibilityRole="button"
               accessibilityLabel={rowLabel}
               accessibilityHint={t("chat.dm.row_hint")}
@@ -345,8 +351,7 @@ export default function DmList({ onSelectDM }: Props): React.JSX.Element {
                   if (ref) swipeableRefs.set(item, ref);
                   else swipeableRefs.delete(item);
                 }}
-                overshootRight={false}
-                renderRightActions={() => (
+                {...trailingSwipeActions(() => (
                   <View style={styles.swipeActions}>
                     <Pressable
                       style={styles.swipeAction}
@@ -366,7 +371,7 @@ export default function DmList({ onSelectDM }: Props): React.JSX.Element {
                       </Text>
                     </Pressable>
                   </View>
-                )}
+                ))}
               >
                 {row}
               </ReanimatedSwipeable>
@@ -413,7 +418,10 @@ export default function DmList({ onSelectDM }: Props): React.JSX.Element {
             {/* Everyday actions, grouped in one box. */}
             <View style={styles.moreRowsGroup}>
               <Pressable
-                style={styles.moreRow}
+                style={({ pressed }) => [
+                  styles.moreRow,
+                  pressed && styles.rowPressed,
+                ]}
                 onPress={() => handleContactInfo(moreOptionsDM)}
                 accessibilityRole="button"
               >
@@ -425,7 +433,10 @@ export default function DmList({ onSelectDM }: Props): React.JSX.Element {
 
               <View style={styles.moreDivider} />
               <Pressable
-                style={styles.moreRow}
+                style={({ pressed }) => [
+                  styles.moreRow,
+                  pressed && styles.rowPressed,
+                ]}
                 onPress={() => handlePinDM(moreOptionsDM)}
                 accessibilityRole="button"
               >
@@ -445,7 +456,10 @@ export default function DmList({ onSelectDM }: Props): React.JSX.Element {
 
               <View style={styles.moreDivider} />
               <Pressable
-                style={styles.moreRow}
+                style={({ pressed }) => [
+                  styles.moreRow,
+                  pressed && styles.rowPressed,
+                ]}
                 onPress={() => handleMuteDM(moreOptionsDM)}
                 accessibilityRole="button"
               >
@@ -465,7 +479,10 @@ export default function DmList({ onSelectDM }: Props): React.JSX.Element {
 
               <View style={styles.moreDivider} />
               <Pressable
-                style={styles.moreRow}
+                style={({ pressed }) => [
+                  styles.moreRow,
+                  pressed && styles.rowPressed,
+                ]}
                 onPress={() => handleClearDM(moreOptionsDM)}
                 accessibilityRole="button"
               >
@@ -481,7 +498,10 @@ export default function DmList({ onSelectDM }: Props): React.JSX.Element {
             {/* Destructive actions in their own red box. */}
             <View style={styles.moreRowsGroup}>
               <Pressable
-                style={styles.moreRow}
+                style={({ pressed }) => [
+                  styles.moreRow,
+                  pressed && styles.rowPressed,
+                ]}
                 onPress={() => handleRemoveContactDM(moreOptionsDM)}
                 accessibilityRole="button"
               >
@@ -493,7 +513,10 @@ export default function DmList({ onSelectDM }: Props): React.JSX.Element {
 
               <View style={styles.moreDivider} />
               <Pressable
-                style={styles.moreRow}
+                style={({ pressed }) => [
+                  styles.moreRow,
+                  pressed && styles.rowPressed,
+                ]}
                 onPress={() => handleBlockDM(moreOptionsDM)}
                 accessibilityRole="button"
               >
@@ -505,7 +528,10 @@ export default function DmList({ onSelectDM }: Props): React.JSX.Element {
 
               <View style={styles.moreDivider} />
               <Pressable
-                style={styles.moreRow}
+                style={({ pressed }) => [
+                  styles.moreRow,
+                  pressed && styles.rowPressed,
+                ]}
                 onPress={() => handleDeleteDM(moreOptionsDM)}
                 accessibilityRole="button"
               >
@@ -547,6 +573,11 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       paddingVertical: Spacing.md,
       gap: Spacing.md,
       minHeight: 72,
+    },
+    // The one press treatment for a row, shared by this list's conversation
+    // rows and its action sheet. See PRESSED_OPACITY in ui/theme.
+    rowPressed: {
+      backgroundColor: Colors.surfacePressed,
     },
     rowContent: {
       flex: 1,

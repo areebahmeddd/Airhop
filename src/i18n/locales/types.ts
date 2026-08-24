@@ -9,7 +9,7 @@
 // partial locales, this one does not.
 //
 // So a locale ships once it is complete, and adding an English key breaks every
-// incomplete locale at compile time rather than degrading it at runtime in
+// incomplete locale at compile time instead of degrading it at runtime in
 // front of a user.
 
 import type { plurals, strings } from "./en";

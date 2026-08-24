@@ -3,6 +3,7 @@
 // notice/confirm dialog in the app matches its own design language instead
 // of the OS-default alert box. Not persisted, purely transient UI state.
 
+import { t } from "@i18n";
 import { create } from "zustand";
 
 export interface AlertButtonConfig {
@@ -35,7 +36,19 @@ export const useAlertStore = create<AlertState>((set) => ({
       visible: true,
       title,
       message,
-      buttons: buttons && buttons.length > 0 ? buttons : [{ text: "OK" }],
+      // Translated here rather than held as a module constant, because `show`
+      // runs at the moment the alert is raised and `t` resolves the language
+      // then. A default button built once at import would freeze in whichever
+      // language the app started in.
+      //
+      // This was a hardcoded "OK" and shipped English into every alert that
+      // does not pass its own buttons, in all thirty languages. `i18n:audit`
+      // could not see it: its copy heuristic wants a capitalised word or a run
+      // of words, and "OK" is two characters. Found by running the
+      // pseudolocale, where every string around it was bracketed and this one
+      // was not.
+      buttons:
+        buttons && buttons.length > 0 ? buttons : [{ text: t("common.ok") }],
     });
   },
 

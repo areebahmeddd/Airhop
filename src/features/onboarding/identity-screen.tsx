@@ -6,8 +6,9 @@
 import { generateIdentity, saveIdentity } from "@core/crypto/identity";
 import { useT, type TranslationKey } from "@i18n";
 import PrimaryButton from "@ui/components/primary-button";
+import { useReducedMotion } from "@ui/hooks/use-reduced-motion";
 import {
-  FontFamily,
+  Duration,
   FontSize,
   FontWeight,
   Radius,
@@ -30,6 +31,21 @@ interface Props {
 // underlying keygen/storage write actually completes.
 const MIN_DISPLAY_MS = 5000;
 
+// The steps fade in one after another rather than arriving as a block, so the
+// screen has a pulse over the seconds it is held rather than being four static
+// lines and a spinner.
+//
+// Decoration only. It never gates the transition, which waits on the real work
+// and MIN_DISPLAY_MS alone, so a sequence still in flight cannot hold the user
+// here and a Keystore slower than the sequence is unaffected by it.
+//
+// The last line lands at 300 + 3 x 1000 + one fade, leaving about a second and
+// a half to read it before MIN_DISPLAY_MS elapses. Widening the stagger past
+// ~1500 spends that margin, which means lengthening MIN_DISPLAY_MS too: this
+// screen is also what a panic wipe returns to.
+const STEP_FIRST_MS = 300;
+const STEP_STAGGER_MS = 1000;
+
 function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -41,6 +57,11 @@ export default function IdentityScreen({
   const T = useT();
   const styles = useMemo(() => createStyles(Colors), [Colors]);
   const [spinAnim] = useState(() => new Animated.Value(0));
+  const [stepAnims] = useState(() =>
+    STEP_KEYS.map(() => new Animated.Value(0)),
+  );
+  const reducedMotion = useReducedMotion();
+
   const steps = STEP_KEYS.map((key) => T(key));
   // The work either produced a key pair on disk or it did not.
   //
@@ -51,17 +72,42 @@ export default function IdentityScreen({
   // Bumped by Try again to re-run the effect below. A Keystore refuses for
   // reasons that pass: locked mid-write, or storage momentarily full.
   const [attempt, setAttempt] = useState(0);
+  // Held apart from the work below so that toggling reduce-motion restarts the
+  // reveal and nothing else. Folded in, it would be a dependency of the effect
+  // that generates the keys, and flipping the switch mid-screen would run
+  // keygen a second time.
+  useEffect(() => {
+    for (const value of stepAnims) value.setValue(0);
+    const reveal = Animated.sequence([
+      Animated.delay(STEP_FIRST_MS),
+      Animated.stagger(
+        STEP_STAGGER_MS,
+        stepAnims.map((value) =>
+          Animated.timing(value, {
+            toValue: 1,
+            // Reduce-motion keeps the sequence and drops the fade: the pacing
+            // is what says the work has stages, the fade is only how it lands.
+            duration: reducedMotion ? 0 : Duration.base,
+            useNativeDriver: true,
+          }),
+        ),
+      ),
+    ]);
+    reveal.start();
+    return () => reveal.stop();
+  }, [stepAnims, reducedMotion, attempt]);
 
   useEffect(() => {
     // Spin the ring indicator.
-    Animated.loop(
+    const spinner = Animated.loop(
       Animated.timing(spinAnim, {
         toValue: 1,
         duration: 1800,
         easing: Easing.linear,
         useNativeDriver: true,
       }),
-    ).start();
+    );
+    spinner.start();
 
     // Generate and persist real Ed25519 + X25519 key pairs.
     //
@@ -89,6 +135,7 @@ export default function IdentityScreen({
 
     return () => {
       cancelled = true;
+      spinner.stop();
     };
   }, [onComplete, spinAnim, attempt]);
 
@@ -168,11 +215,14 @@ export default function IdentityScreen({
             steps: steps.join(". "),
           })}
         >
-          {steps.map((step) => (
-            <View key={step} style={styles.step}>
+          {steps.map((step, i) => (
+            <Animated.View
+              key={step}
+              style={[styles.step, { opacity: stepAnims[i] }]}
+            >
               <View style={styles.stepDot} />
               <Text style={styles.stepText}>{step}</Text>
-            </View>
+            </Animated.View>
           ))}
         </View>
       </View>
@@ -217,6 +267,10 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       // The border token, never a hardcoded rgba(0,0,0,0.08): black on black
       // leaves the ring's trailing arc invisible in dark mode, and the spinner
       // reads as a single floating tick.
+      //
+      // Physical on purpose: this ring is artwork that spins, so which side
+      // carries the muted arc is a starting rotation and nothing more.
+      // eslint-disable-next-line no-restricted-syntax
       borderRightColor: Colors.border,
     },
     spinnerDot: {
@@ -263,10 +317,11 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       borderRadius: Radius.xs,
       backgroundColor: Colors.textMuted,
     },
+    // Catalog sentences, so prose. Also the first screen a new install shows,
+    // the worst place for a script the monospace has no glyphs for.
     stepText: {
       fontSize: FontSize.xs,
       color: Colors.textMuted,
-      fontFamily: FontFamily.mono,
     },
   });
 }

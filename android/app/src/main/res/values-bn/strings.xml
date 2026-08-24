@@ -1,0 +1,7 @@
+<resources>
+  <string name="mesh_channel_name">মেশ নেটওয়ার্ক</string>
+  <string name="mesh_channel_description">Airhop-এর মেশ পটভূমিতে সক্রিয় রাখে</string>
+  <string name="mesh_notification_title">Airhop মেশ সক্রিয়</string>
+  <string name="mesh_notification_text">কাছের বার্তা খুঁজছে আর রিলে করছে</string>
+  <string name="mesh_notification_stop">মেশ বন্ধ করুন</string>
+</resources>

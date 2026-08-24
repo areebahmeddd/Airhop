@@ -23,60 +23,6 @@ You must read these four documents before making any code suggestions:
 3. [`docs/spec/PROTOCOLS.md`](docs/spec/PROTOCOLS.md): the wire format you must not break
 4. [`docs/dev/PROGRESS.md`](docs/dev/PROGRESS.md): what exists, what's next, what's blocked
 
-## Rules Every Agent Must Follow
-
-### Crypto
-
-- **`@noble/curves`, `@noble/ciphers`, `@noble/hashes` only.** No other crypto library. No `Math.random()` for security. No `crypto-js`, no `elliptic`, no `tweetnacl`.
-- `react-native-get-random-values` must be the **first import** in `src/app/app.tsx`. The root `App.tsx` is a one-line re-export that Expo's AppEntry resolves.
-
-### Native Code
-
-- Swift lives in `ios/`. Kotlin lives in `android/`. They expose **raw bytes** to TypeScript.
-- **No protocol logic in native code.** No routing decisions. No crypto in Swift or Kotlin.
-- Native modules: `AirhopBLEModule` and `AirhopVoiceModule` (Swift + Kotlin), `AirhopForegroundService` and `AirhopWiFiModule` (Kotlin), `AirhopTorModule` and `AirhopTorSocket` (Swift).
-
-### Build Order
-
-```
-src/core/ -> Native modules -> src/features/ -> src/ui/
-```
-
-Never suggest UI code for a feature whose `src/core/` service isn't tested.
-
-### Protocol Compatibility
-
-- Never change `packet-codec.ts` byte layout without bumping the protocol version.
-- Never change BLE Service UUID (`F47B5E2D...`) or Characteristic UUID (`A1B2C3D4...`).
-- Never change peer ID derivation (`hex(SHA-256(noiseStaticPubKey)).slice(0, 16)`).
-
-### Pinned Artifacts
-
-Two things in the tree are pinned by hash and checked in CI. Both fail the build
-rather than drifting quietly, so a change to either has to be deliberate.
-
-- **Vendored binaries** (`ios/Frameworks/`, the Arti xcframework). Prebuilt, not compiled here, and nobody reviews a binary diff. If you genuinely need to update one, re-record it in the same commit: `node scripts/verify-vendored.js --write`. CI runs `npm run verify:vendored`.
-- **Gradle dependencies** (`android/app/gradle.lockfile`). Adding or bumping an npm package with an Android side can change what Gradle resolves. Regenerate in the same commit: `./gradlew dependencies --write-locks` then `./gradlew :app:dependencies --write-locks`.
-
-### User-Facing Copy
-
-- **Never hardcode a user-facing string.** Add a key to `src/i18n/locales/en.ts`, use `T("your.key")`. CI fails on any hardcoded string (`npm run i18n:audit`).
-- English is the shipping language and `en.ts` is the whole catalog. Ten languages land in v1.3.0, which the extraction makes a set of new files rather than a sweep of every screen.
-- Placeholders are named (`{count}`), never positional. Plurals go through `tPlural`, never `count === 1` at a call site.
-- **No em dashes**, in copy or in comments. Use a comma, parentheses or a full stop.
-- **Byte sizes follow IEC 80000-13, everywhere, copy included.** `KiB` / `MiB` are 1024-based, `KB` / `MB` are 1000-based, and the label must match the arithmetic. Every size we control is a power of two (the 1 MiB file cap, the 512 KiB photo budget, the 16 KiB envelope) and `formatBytes` divides by 1024, so all of it reads `KiB` / `MiB` in specs, `docs/`, skills, comments, `en.ts` and `landing/` alike. Decimal units stay only for genuinely decimal figures, such as an observed camera file size. Never label a 1024-based value `KB`.
-- Layout uses logical properties (`marginStart`, `start`, `textAlignEnd`), never `marginLeft` / `left` / `textAlign: "right"`, so right-to-left works when a catalog for it ships.
-- **Some strings must never be translated** because they cross the wire: the `username.ts` word lists, the transmitted `/hug` and `/slap` text (bitchat matches it as an English substring), slash command tokens, channel names. Read [`i18n.md`](.github/skills/i18n.md) before touching any of them.
-
-### Storage
-
-- Private keys: `src/core/crypto/keychain.ts` only, never `expo-secure-store`
-  directly. It holds the registry the panic wipe deletes (SecureStore has no
-  clear-all), so a secret written outside it survives a wipe. Add new ones to
-  `KEYCHAIN_ITEMS`.
-- Non-secret state: `react-native-mmkv` (JSI, synchronous)
-- Never store private keys in MMKV, AsyncStorage, SQLite, or filesystem
-
 ## Where Things Live
 
 | Thing                                                         | Location                   |
@@ -104,29 +50,60 @@ rather than drifting quietly, so a change to either has to be deliberate.
 | Android native                                                | `android/`                 |
 | All protocol constants                                        | `docs/spec/PROTOCOLS.md`   |
 
-## Specialized Agents
+## Rules Every Agent Must Follow
 
-Invoke these when needed (via VS Code Copilot chat):
+### Crypto
 
-| Agent              | When to invoke                                                |
-| ------------------ | ------------------------------------------------------------- |
-| `@architect`       | Before merging any `src/core/`, `android/`, or `ios/` change  |
-| `@upstream-sync`   | When bitchat releases a new version                           |
-| `@security-review` | Before any PR touching crypto, key storage, or packet signing |
+- **`@noble/curves`, `@noble/ciphers`, `@noble/hashes` only.** No other crypto library. No `Math.random()` for security. No `crypto-js`, no `elliptic`, no `tweetnacl`.
+- `react-native-get-random-values` must be the **first import** in `src/app/app.tsx`. The root `App.tsx` is a one-line re-export that Expo's AppEntry resolves.
 
-## Skills
+### Storage
 
-Skills are reference files in `.github/skills/`. Read the relevant one before working on a subsystem. They contain dense, accurate reference material cross-checked against the source code and the bitchat implementations.
+- Private keys: `src/core/crypto/keychain.ts` only, never `expo-secure-store`
+  directly. It holds the registry the panic wipe deletes (SecureStore has no
+  clear-all), so a secret written outside it survives a wipe. Add new ones to
+  `KEYCHAIN_ITEMS`.
+- Non-secret state: `react-native-mmkv` (JSI, synchronous)
+- Never store private keys in MMKV, AsyncStorage, SQLite, or filesystem
 
-| Skill                                                             | Read before working on                                                        |
-| ----------------------------------------------------------------- | ----------------------------------------------------------------------------- |
-| [`bitchat-wire-format.md`](.github/skills/bitchat-wire-format.md) | `packet-codec.ts`, BLE native modules, any packet encoding or decoding        |
-| [`noise-sessions.md`](.github/skills/noise-sessions.md)           | `noise-xx.ts`, `noise-x.ts`, handshake logic, transport encryption            |
-| [`native-boundary.md`](.github/skills/native-boundary.md)         | `android/`, `ios/`, `src/bridge/`, TurboModule specs                          |
-| [`mesh-routing.md`](.github/skills/mesh-routing.md)               | `flood-router.ts`, `deduplicator.ts`, `fragment-manager.ts`, `gossip-sync.ts` |
-| [`nostr-gift-wrap.md`](.github/skills/nostr-gift-wrap.md)         | `gift-wrap.ts`, `courier-relay.ts`, any Nostr DM or event handling            |
-| [`courier-envelopes.md`](.github/skills/courier-envelopes.md)     | `prekey-bundle.ts`, `prekey-store.ts`, `courier-store.ts`, offline mail       |
-| [`i18n.md`](.github/skills/i18n.md)                               | `src/i18n/`, any user-facing copy anywhere, right-to-left layout              |
+### Protocol Compatibility
+
+- Never change `packet-codec.ts` byte layout without bumping the protocol version.
+- Never change BLE Service UUID (`F47B5E2D...`) or Characteristic UUID (`A1B2C3D4...`).
+- Never change peer ID derivation (`hex(SHA-256(noiseStaticPubKey)).slice(0, 16)`).
+
+### Native Code
+
+- Swift lives in `ios/`. Kotlin lives in `android/`. They expose **raw bytes** to TypeScript.
+- **No protocol logic in native code.** No routing decisions. No crypto in Swift or Kotlin.
+- Native modules: `AirhopBLEModule` and `AirhopVoiceModule` (Swift + Kotlin), `AirhopForegroundService` and `AirhopWiFiModule` (Kotlin), `AirhopTorModule` and `AirhopTorSocket` (Swift).
+
+### Build Order
+
+```
+src/core/ -> Native modules -> src/features/ -> src/ui/
+```
+
+Never suggest UI code for a feature whose `src/core/` service isn't tested.
+
+### Pinned Artifacts
+
+Two things in the tree are pinned by hash and checked in CI. Both fail the build
+rather than drifting quietly, so a change to either has to be deliberate.
+
+- **Vendored binaries** (`ios/Frameworks/`, the Arti xcframework). Prebuilt, not compiled here, and nobody reviews a binary diff. If you genuinely need to update one, re-record it in the same commit: `node scripts/verify-vendored.js --write`. CI runs `npm run verify:vendored`.
+- **Gradle dependencies** (`android/app/gradle.lockfile`). Adding or bumping an npm package with an Android side can change what Gradle resolves. Regenerate in the same commit: `./gradlew dependencies --write-locks` then `./gradlew :app:dependencies --write-locks`.
+
+### User-Facing Copy
+
+- **Never hardcode a user-facing string.** Add a key to `src/i18n/locales/en.ts`, use `T("your.key")`. CI fails on any hardcoded string (`npm run i18n:audit`).
+- `en.ts` is the source catalog; every other locale is generated from a translation map and checked against it. Adding one is a new file, never a sweep of every screen.
+- Placeholders are named (`{count}`), never positional. Plurals go through `tPlural`, never `count === 1` at a call site.
+- **Some strings must never be translated** because they cross the wire: the `username.ts` word lists, the transmitted `/hug` and `/slap` text (bitchat matches it as an English substring), slash command tokens, channel names. Read [`i18n.md`](.github/skills/i18n.md) before touching any of them.
+- **Text is not ASCII.** `t()` wraps every substituted value in a directional isolate, so build sentences with a placeholder rather than concatenation, and strip with `stripIsolates` before comparing its output. Normalise to NFC before matching, match a word boundary with `[^\p{L}\p{N}_]`, and never call `toLocaleString`.
+- Layout uses logical properties (`marginStart`, `start`, `textAlignEnd`), never `marginLeft` / `left` / `textAlign: "right"`. Arabic, Persian and Urdu ship, so a physical side is a visible bug rather than a latent one.
+- **No em dashes**, in copy or in comments. Use a comma, parentheses or a full stop.
+- **Byte sizes follow IEC 80000-13, everywhere, copy included.** `KiB` / `MiB` are 1024-based, `KB` / `MB` are 1000-based, and the label must match the arithmetic. Every size we control is a power of two (the 1 MiB file cap, the 512 KiB photo budget, the 16 KiB envelope) and `formatBytes` divides by 1024, so all of it reads `KiB` / `MiB` in specs, `docs/`, skills, comments, `en.ts` and `landing/` alike. Decimal units stay only for genuinely decimal figures, such as an observed camera file size. Never label a 1024-based value `KB`.
 
 ## TypeScript Conventions
 
@@ -175,3 +152,28 @@ Comments here are dense on purpose. The bar for keeping one is that it says some
 | Writing a user-facing string inline         | Add a key to `src/i18n/locales/en.ts` and use `T("key")`         |
 | Using `marginLeft` / `left` in a stylesheet | Use `marginStart` / `start`, so right-to-left flips              |
 | Changing packet byte layout "to fix a bug"  | Understand the wire format in `docs/spec/PROTOCOLS.md` first     |
+
+## Specialized Agents
+
+Invoke these when needed (via VS Code Copilot chat):
+
+| Agent              | When to invoke                                                |
+| ------------------ | ------------------------------------------------------------- |
+| `@architect`       | Before merging any `src/core/`, `android/`, or `ios/` change  |
+| `@upstream-sync`   | When bitchat releases a new version                           |
+| `@security-review` | Before any PR touching crypto, key storage, or packet signing |
+
+## Skills
+
+Skills are reference files in `.github/skills/`. Read the relevant one before working on a subsystem. They contain dense, accurate reference material cross-checked against the source code and the bitchat implementations.
+
+| Skill                                                             | Read before working on                                                        |
+| ----------------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| [`bitchat-wire-format.md`](.github/skills/bitchat-wire-format.md) | `packet-codec.ts`, BLE native modules, any packet encoding or decoding        |
+| [`native-boundary.md`](.github/skills/native-boundary.md)         | `android/`, `ios/`, `src/bridge/`, TurboModule specs                          |
+| [`mesh-routing.md`](.github/skills/mesh-routing.md)               | `flood-router.ts`, `deduplicator.ts`, `fragment-manager.ts`, `gossip-sync.ts` |
+| [`noise-sessions.md`](.github/skills/noise-sessions.md)           | `noise-xx.ts`, `noise-x.ts`, handshake logic, transport encryption            |
+| [`courier-envelopes.md`](.github/skills/courier-envelopes.md)     | `prekey-bundle.ts`, `prekey-store.ts`, `courier-store.ts`, offline mail       |
+| [`nostr-gift-wrap.md`](.github/skills/nostr-gift-wrap.md)         | `gift-wrap.ts`, `courier-relay.ts`, any Nostr DM or event handling            |
+| [`i18n.md`](.github/skills/i18n.md)                               | `src/i18n/`, any user-facing copy anywhere, right-to-left layout              |
+| [`ui-ux.md`](.github/skills/ui-ux.md)                             | `src/ui/`, any style block, component, tappable surface or dark-mode work     |

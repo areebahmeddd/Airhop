@@ -25,6 +25,7 @@ import { rejected, succeeded } from "@platform/haptics";
 import { getMeshService } from "@services/mesh-service";
 import { useContactsStore } from "@store/contacts-store";
 import {
+  BUTTON_HEIGHT,
   FontFamily,
   FontSize,
   FontWeight,
@@ -591,7 +592,7 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
     },
     primaryBtn: {
       minWidth: 200,
-      minHeight: 50,
+      minHeight: BUTTON_HEIGHT,
       marginTop: Spacing.sm,
       backgroundColor: "#FFFFFF",
       borderRadius: Radius.full,

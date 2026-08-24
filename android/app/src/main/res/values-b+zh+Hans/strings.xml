@@ -1,0 +1,7 @@
+<resources>
+  <string name="mesh_channel_name">网状网络</string>
+  <string name="mesh_channel_description">让 Airhop 网状网络在后台保持运行</string>
+  <string name="mesh_notification_title">Airhop 网状网络运行中</string>
+  <string name="mesh_notification_text">正在发现并中继附近的消息</string>
+  <string name="mesh_notification_stop">停止网状网络</string>
+</resources>

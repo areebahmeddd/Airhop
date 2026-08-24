@@ -14,6 +14,7 @@ import { usePeerStore } from "@store/peer-store";
 import Avatar from "@ui/components/avatar";
 import BottomSheet from "@ui/components/bottom-sheet";
 import {
+  BUTTON_HEIGHT,
   FontSize,
   FontWeight,
   Radius,
@@ -324,7 +325,7 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
     },
     cancel: {
       flex: 1,
-      minHeight: 50,
+      minHeight: BUTTON_HEIGHT,
       backgroundColor: Colors.surfaceRaised,
       borderRadius: Radius.full,
       alignItems: "center",
@@ -337,7 +338,7 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
     },
     confirm: {
       flex: 1,
-      minHeight: 50,
+      minHeight: BUTTON_HEIGHT,
       backgroundColor: Colors.accent,
       borderRadius: Radius.full,
       alignItems: "center",

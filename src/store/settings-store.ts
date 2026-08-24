@@ -5,6 +5,7 @@
 
 import { MAX_CUSTOM_RELAYS, validateRelayUrl } from "@core/nostr/geo-relay";
 import type { BitcoinUnit } from "@core/payments/cashu";
+import type { LanguageCode, LanguagePreference } from "@i18n";
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 import { getStorage } from "./mmkv";
@@ -42,6 +43,31 @@ export type MediaRetentionDays = (typeof MEDIA_RETENTION_DAY_OPTIONS)[number];
 
 interface SettingsState {
   theme: ThemePreference;
+  // The language the app is read in.
+  //
+  // "system" is the unset state rather than a listed choice, the same shape as
+  // `theme` above: until you pick one, Airhop is whichever language the phone
+  // is, falling back to English when the phone's language is one Airhop does
+  // not ship. Picking explicitly pins it, so a user reading Airhop in Spanish
+  // on an English phone keeps Spanish.
+  //
+  // Stored as a preference, not as the language being rendered. The two differ
+  // for exactly one case: Arabic, Persian and Urdu read right to left, and
+  // React Native fixes layout direction when the process starts, so choosing
+  // one of those takes effect on the next launch. See the direction note in
+  // `@i18n`.
+  language: LanguagePreference;
+  // The language the native layout flag is currently set for.
+  //
+  // Not a preference and never shown: Airhop's record of a value living outside
+  // its stores, in NSUserDefaults and SharedPreferences. At boot
+  // `I18nManager.isRTL` gives the frame's direction and this names the language
+  // it was built for, which a bare direction cannot: three shipped languages are
+  // right to left.
+  //
+  // Written by `applyLayoutDirection`, read once by `initI18n`, and survives
+  // `reset()` because the native flag survives a panic wipe.
+  frameLanguage: LanguageCode | null;
   autoDownloadMedia: boolean;
   // Whether holding the mic streams live to everyone in Bluetooth range
   // (walkie-talkie) or just records a voice note to send on release. On by
@@ -140,6 +166,8 @@ interface SettingsState {
   // there is no reliable way to detect an OEM autostart whitelist.
   backgroundLimitsAcknowledged: boolean;
   setTheme: (theme: ThemePreference) => void;
+  setLanguage: (language: LanguagePreference) => void;
+  setFrameLanguage: (code: LanguageCode) => void;
   setAutoDownloadMedia: (enabled: boolean) => void;
   setLiveVoiceEnabled: (enabled: boolean) => void;
   setBackgroundMeshEnabled: (enabled: boolean) => void;
@@ -167,6 +195,10 @@ const DEFAULTS = {
   // Follow the OS appearance by default so a new user gets whichever of light or
   // dark their phone is already set to, rather than being forced into dark.
   theme: "system",
+  language: "system",
+  // Unknown until the first `applyLayoutDirection`. A fresh install has never
+  // called `forceRTL`, so its frame is left to right regardless.
+  frameLanguage: null as LanguageCode | null,
   autoDownloadMedia: true,
   liveVoiceEnabled: true,
   backgroundMeshEnabled: true,
@@ -204,11 +236,17 @@ const mmkvStorage = {
 
 export const useSettingsStore = create<SettingsState>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       ...DEFAULTS,
 
       setTheme(theme) {
         set({ theme });
+      },
+      setLanguage(language) {
+        set({ language });
+      },
+      setFrameLanguage(code) {
+        set({ frameLanguage: code });
       },
       setAutoDownloadMedia(enabled) {
         set({ autoDownloadMedia: enabled });
@@ -295,7 +333,10 @@ export const useSettingsStore = create<SettingsState>()(
         set({ backgroundLimitsAcknowledged: true });
       },
       reset() {
-        set({ ...DEFAULTS });
+        // `frameLanguage` is carried through, not defaulted: it describes a
+        // native flag a wipe cannot clear, so losing the record would leave the
+        // next launch unable to name the direction it woke up in.
+        set({ ...DEFAULTS, frameLanguage: get().frameLanguage });
       },
     }),
     {

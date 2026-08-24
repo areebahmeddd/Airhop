@@ -37,7 +37,7 @@ const strings: Strings = {
   "settings.theme.light": "Tema claro",
   "settings.theme.dark": "Tema escuro",
   "settings.language.label": "Idioma",
-  "settings.language.suggestion": "Ver esta página em português",
+  "settings.language.suggestion": "Ver esta página em português (Brasil)",
   "settings.language.dismiss": "Fechar",
 
   "home.hero.release": "Versão mais recente",

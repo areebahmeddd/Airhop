@@ -1,0 +1,7 @@
+<resources>
+  <string name="mesh_channel_name">ਮੈਸ਼ ਨੈੱਟਵਰਕ</string>
+  <string name="mesh_channel_description">Airhop ਦਾ ਮੈਸ਼ ਪਿਛੋਕੜ ਵਿੱਚ ਚੱਲਦਾ ਰੱਖਦਾ ਹੈ</string>
+  <string name="mesh_notification_title">Airhop ਮੈਸ਼ ਚਾਲੂ</string>
+  <string name="mesh_notification_text">ਨੇੜਲੇ ਸੁਨੇਹੇ ਲੱਭ ਅਤੇ ਅੱਗੇ ਭੇਜ ਰਿਹਾ ਹੈ</string>
+  <string name="mesh_notification_stop">ਮੈਸ਼ ਰੋਕੋ</string>
+</resources>

@@ -1,14 +1,11 @@
-// Reads the translation catalog from outside TypeScript.
+// Reads the translation catalog from outside TypeScript, for
+// `i18n-audit.js --unused` and `i18n-build-locale.js`.
 //
-// The catalog is TypeScript rather than JSON so `en.ts` can carry the section
-// markers that make a 1,400-key file navigable, and so any locale added later is
-// type-checked against the source language by the `npm run typecheck` CI already
-// runs. The cost is that a script cannot simply `require()` it, so it is read
-// through the TypeScript compiler API. `typescript` is already a devDependency,
-// so this adds nothing, and unlike a regex it cannot be confused by an
-// apostrophe, a brace inside a string, or a multi-line value.
-//
-// Used by `i18n-audit.js --unused`.
+// The catalog is TypeScript, not JSON, so `en.ts` can carry section
+// markers and so every locale is type-checked against it. The cost is that a
+// script cannot `require()` it, so it goes through the compiler API, which
+// unlike a regex cannot be confused by an apostrophe, a brace inside a string,
+// or a multi-line value.
 
 const fs = require("fs");
 const path = require("path");
@@ -100,7 +97,7 @@ function findExportedObject(source, name) {
   return found;
 }
 
-// A missing locale reads as empty rather than throwing, so `--unused` still
+// A missing locale reads as empty instead of throwing, so `--unused` still
 // reports against the languages that do exist.
 function readLocale(code) {
   const file = path.join(LOCALES_DIR, `${code}.ts`);

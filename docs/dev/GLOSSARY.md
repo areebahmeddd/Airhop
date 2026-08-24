@@ -90,7 +90,7 @@
 
 **[BCP 47](https://www.rfc-editor.org/info/bcp47)**: The standard for language tags (`en`, `pt-BR`, `zh-Hans`). `src/i18n/languages.ts` is keyed on these.
 
-**[CLDR plural category](https://cldr.unicode.org/index/cldr-spec/plural-rules)**: The set of grammatical number forms a language uses. English has `one` and `other`, Russian four, Arabic six, Chinese only `other`. `tPlural` selects one per call; English's rule is the only one implemented, and a second language means selecting through `Intl.PluralRules` instead.
+**[CLDR plural category](https://cldr.unicode.org/index/cldr-spec/plural-rules)**: The set of grammatical number forms a language uses. English has `one` and `other`, Russian four, Arabic six, Chinese only `other`. `tPlural` selects one per call, through the rules in `src/i18n/plurals.ts`.
 
 **Endonym**: A language's name in its own script (`فارسی`, `русский`, `简体中文`). What a language picker lists, matching bitchat's `AppLanguageSettings.endonym(for:)`.
 

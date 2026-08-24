@@ -87,3 +87,52 @@ describe("the budget matches what the wire actually accepts", () => {
     expect(encode("😀".repeat(64))).toBeNull();
   });
 });
+
+// A cut that fits the budget can still land somewhere no script writes across.
+// Whole code points avoid a lone surrogate but not an orphaned vowel sign: a
+// Devanagari syllable is a consonant plus a mark, and the emoji version is a
+// joiner with nothing left to join.
+describe("truncateToUtf8Bytes cuts on a boundary a script can survive", () => {
+  // The consonant HA and the vowel sign II that hangs off it, three bytes each.
+  // The sign is meaningless without the consonant.
+  const HA = "ह";
+  const II = "ी";
+  const SYLLABLE = HA + II;
+
+  it("keeps a bare consonant but never a bare vowel sign", () => {
+    const text = "a" + SYLLABLE;
+    expect(utf8ByteLength(text)).toBe(7);
+    // Six bytes fits "a" and the consonant; the vowel sign is what goes. A bare
+    // consonant is ordinary text in every Indic script.
+    expect(truncateToUtf8Bytes(text, 6)).toBe("a" + HA);
+    // Three fits "a" alone, the consonant being three bytes on its own.
+    expect(truncateToUtf8Bytes(text, 3)).toBe("a");
+  });
+
+  it("never ends on a combining mark, at any budget that forces a cut", () => {
+    const text = SYLLABLE + SYLLABLE;
+    // One short of the full length: a string already inside its budget is
+    // returned untouched, marks and all.
+    for (let budget = 1; budget < utf8ByteLength(text); budget++) {
+      const cut = truncateToUtf8Bytes(text, budget);
+      expect(utf8ByteLength(cut)).toBeLessThanOrEqual(budget);
+      if (cut.length > 0) {
+        expect(/\p{M}/u.test([...cut][[...cut].length - 1])).toBe(false);
+      }
+    }
+  });
+
+  it("does not leave a dangling joiner mid-emoji", () => {
+    // One glyph from three code points. Cut short it must not end on the
+    // joiner, which renders as a woman and a gap.
+    const ZWJ = "\u200D";
+    const astronaut = `\u{1F469}${ZWJ}\u{1F680}`;
+    expect(utf8ByteLength(astronaut)).toBe(11);
+    expect(truncateToUtf8Bytes(astronaut, 8).endsWith(ZWJ)).toBe(false);
+  });
+
+  it("leaves text that already fits exactly as written", () => {
+    // Backing off runs only after something was dropped.
+    expect(truncateToUtf8Bytes(SYLLABLE, 64)).toBe(SYLLABLE);
+  });
+});

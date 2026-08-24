@@ -1,0 +1,10 @@
+/* Keys mirror ios/Airhop/Info.plist, the English copy. Guarded by npm run i18n:native. */
+
+"NSBluetoothAlwaysUsageDescription" = "Airhop ਮੈਸ਼ ’ਤੇ ਨੇੜਲੇ ਡੀਵਾਈਸਾਂ ਨਾਲ ਗੱਲ ਕਰਨ ਲਈ ਬਲੂਟੁੱਥ ਵਰਤਦਾ ਹੈ।";
+"NSBluetoothPeripheralUsageDescription" = "Airhop ਨੇੜਲੇ ਪੀਅਰਾਂ ਨੂੰ ਤੁਹਾਡੀ ਹਾਜ਼ਰੀ ਦੱਸਣ ਲਈ ਬਲੂਟੁੱਥ ਵਰਤਦਾ ਹੈ।";
+"NSLocalNetworkUsageDescription" = "Airhop ਵੱਡੇ ਤਬਾਦਲਿਆਂ (ਵੀਡੀਓ, ਵੱਡੀਆਂ ਫ਼ਾਈਲਾਂ) ਲਈ ਨੇੜਲੇ ਡੀਵਾਈਸਾਂ ਨਾਲ ਸਿੱਧਾ ਜੁੜਨ ਵਾਸਤੇ ਸਥਾਨਕ ਨੈੱਟਵਰਕ ਵਰਤਦਾ ਹੈ।";
+"NSCameraUsageDescription" = "Airhop ਕਿਸੇ ਸੰਪਰਕ ਦਾ QR ਕੋਡ ਸਕੈਨ ਕਰਨ ਲਈ, ਅਤੇ ਨੇੜਲੇ ਪੀਅਰਾਂ ਨਾਲ ਸਾਂਝੀਆਂ ਕਰਨ ਲਈ ਫ਼ੋਟੋਆਂ ਤੇ ਵੀਡੀਓ ਖਿੱਚਣ ਲਈ ਕੈਮਰਾ ਵਰਤਦਾ ਹੈ।";
+"NSMicrophoneUsageDescription" = "Airhop ਵੌਇਸ ਨੋਟ ਰਿਕਾਰਡ ਕਰਨ ਲਈ ਅਤੇ ਨੇੜਲੇ ਪੀਅਰਾਂ ਤੱਕ ਸਿੱਧੀ ਆਵਾਜ਼ ਪਹੁੰਚਾਉਣ ਲਈ ਮਾਈਕ੍ਰੋਫ਼ੋਨ ਵਰਤਦਾ ਹੈ।";
+"NSPhotoLibraryUsageDescription" = "Airhop ਮੈਸ਼ ’ਤੇ ਤਸਵੀਰਾਂ ਅਤੇ ਵੀਡੀਓ ਸਾਂਝੇ ਕਰਨ ਲਈ ਤੁਹਾਡੀ ਫ਼ੋਟੋ ਲਾਇਬ੍ਰੇਰੀ ਵਰਤਦਾ ਹੈ।";
+"NSPhotoLibraryAddUsageDescription" = "ਜਦੋਂ ਤੁਸੀਂ ਕੋਈ ਫ਼ੋਟੋ ਜਾਂ ਵੀਡੀਓ ਸੰਭਾਲਣੀ ਚੁਣਦੇ ਹੋ, ਅਤੇ ਜਦੋਂ ਤੁਸੀਂ ਆਪਣਾ QR ਕੋਡ ਡਾਊਨਲੋਡ ਕਰਦੇ ਹੋ, ਤਾਂ Airhop ਉਹ ਤੁਹਾਡੀ ਫ਼ੋਟੋ ਲਾਇਬ੍ਰੇਰੀ ਵਿੱਚ ਸੰਭਾਲ ਦਿੰਦਾ ਹੈ।";
+"NSLocationWhenInUseUsageDescription" = "Airhop ਤੁਹਾਨੂੰ ਨੇੜਲੇ ਇਲਾਕੇ ਦੇ ਚੈਨਲਾਂ (ਬਲਾਕ, ਸ਼ਹਿਰ, ਖੇਤਰ) ਵਿੱਚ ਰੱਖਣ ਲਈ ਤੁਹਾਡਾ ਲਗਭਗ ਟਿਕਾਣਾ ਵਰਤਦਾ ਹੈ। ਤੁਹਾਡੀ ਸਹੀ ਥਾਂ ਕਦੇ ਵੀ ਤੁਹਾਡੇ ਡੀਵਾਈਸ ਤੋਂ ਬਾਹਰ ਨਹੀਂ ਜਾਂਦੀ।";

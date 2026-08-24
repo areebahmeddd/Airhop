@@ -53,13 +53,20 @@ export default function Toast({
     if (message === null) return;
     opacity.value = withTiming(1, { duration: FADE_MS });
     lift.value = withTiming(0, { duration: FADE_MS });
-    const timer = setTimeout(() => {
+    // Both timers are tracked. Untracked, a message arriving during the
+    // fade-out left the previous pill's onHide in flight, and it landed ~180ms
+    // later and cleared the message that had just replaced it.
+    let fade: ReturnType<typeof setTimeout> | null = null;
+    const hold = setTimeout(() => {
       opacity.value = withTiming(0, { duration: FADE_MS });
       lift.value = withTiming(8, { duration: FADE_MS });
       // Unmount after the fade, not with it, or the pill vanishes mid-animation.
-      setTimeout(onHide, FADE_MS);
+      fade = setTimeout(onHide, FADE_MS);
     }, VISIBLE_MS);
-    return () => clearTimeout(timer);
+    return () => {
+      clearTimeout(hold);
+      if (fade !== null) clearTimeout(fade);
+    };
   }, [message, onHide, opacity, lift]);
 
   const anim = useAnimatedStyle(() => ({

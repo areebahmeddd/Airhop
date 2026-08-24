@@ -89,7 +89,7 @@ export default function ThemeToggle() {
           onClick={() => pick(value)}
           aria-pressed={theme === value}
           aria-label={T(labelKey)}
-          className={`theme-option relative flex h-6 w-6 items-center justify-center rounded-full transition-colors duration-150 ${
+          className={`theme-option relative flex h-6 w-6 items-center justify-center rounded-full transition-colors duration-150 after:absolute after:inset-x-0 after:top-1/2 after:h-11 after:-translate-y-1/2 after:content-[''] ${
             theme === value ? active : "text-mute hover:text-secondary"
           }`}
         >

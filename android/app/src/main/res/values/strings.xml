@@ -1,4 +1,11 @@
 <resources>
   <string name="app_name">Airhop</string>
   <string name="expo_system_ui_user_interface_style" translatable="false">automatic</string>
+  <!-- The notice Android requires while the mesh runs in the background.
+       Resolved against the system locale, not the in-app language picker. -->
+  <string name="mesh_channel_name">Mesh network</string>
+  <string name="mesh_channel_description">Keeps the Airhop mesh active in the background</string>
+  <string name="mesh_notification_title">Airhop mesh active</string>
+  <string name="mesh_notification_text">Discovering and relaying nearby messages</string>
+  <string name="mesh_notification_stop">Stop mesh</string>
 </resources>

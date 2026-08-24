@@ -6,13 +6,18 @@
 import { encodeQRContent } from "@core/crypto/contact-exchange";
 import Feather from "@expo/vector-icons/Feather";
 import {
+  applyLayoutDirection,
+  isShipped,
   LANGUAGES,
-  PLANNED_LANGUAGES,
+  needsRelaunch,
+  PICKER_LANGUAGES,
+  resolvePreference,
   t,
   useT,
   type TranslationKey,
+  type Translator,
 } from "@i18n";
-import { acknowledged } from "@platform/haptics";
+import { warned } from "@platform/haptics";
 import { ensurePermission } from "@platform/permissions";
 import { destroyMeshService, getMeshService } from "@services/mesh-service";
 import { panicWipe } from "@services/panic-wipe";
@@ -25,8 +30,11 @@ import {
 import { useSettingsStore } from "@store/settings-store";
 import Avatar from "@ui/components/avatar";
 import BottomSheet from "@ui/components/bottom-sheet";
+import CopyGlyph from "@ui/components/copy-glyph";
 import { MONO_FONT_ORDER, MONO_FONTS } from "@ui/fonts";
+import { useCopy } from "@ui/hooks/use-copy";
 import {
+  BUTTON_HEIGHT,
   FontFamily,
   FontSize,
   FontWeight,
@@ -41,9 +49,7 @@ import {
   type ResolvedTheme,
 } from "@ui/theme";
 import { peerInviteLink } from "@utils/deep-link";
-import * as Clipboard from "expo-clipboard";
 import * as FileSystem from "expo-file-system";
-import * as Haptics from "expo-haptics";
 import * as MediaLibrary from "expo-media-library";
 import * as Sharing from "expo-sharing";
 import React, {
@@ -101,9 +107,15 @@ async function shareOrIgnore(
 // entirely, Invisible keeps scanning but stops advertising our presence.
 type Status = PresenceStatus;
 
-// Colors passed in so the dot colors track light/dark instead of being
-// baked in once at module load.
-function getStatusMeta(Colors: ReturnType<typeof useThemeColors>): Record<
+// Colors and the translator are both passed in, and both for the same reason:
+// this table is built inside a useMemo, so anything it closes over has to be a
+// value the memo can be keyed on. The module-level `t` is not reactive, so
+// react-hooks/exhaustive-deps cannot ask for it, and the memo would go on
+// returning the old language's labels after a switch.
+function getStatusMeta(
+  Colors: ReturnType<typeof useThemeColors>,
+  T: Translator,
+): Record<
   Status,
   {
     label: string;
@@ -114,20 +126,20 @@ function getStatusMeta(Colors: ReturnType<typeof useThemeColors>): Record<
 > {
   return {
     online: {
-      label: t("settings.status.online"),
-      description: t("settings.status.online_desc"),
+      label: T("settings.status.online"),
+      description: T("settings.status.online_desc"),
       color: Colors.online,
       icon: "wifi",
     },
     away: {
-      label: t("settings.status.away"),
-      description: t("settings.status.away_desc"),
+      label: T("settings.status.away"),
+      description: T("settings.status.away_desc"),
       color: Colors.offline,
       icon: "moon",
     },
     invisible: {
-      label: t("settings.status.invisible"),
-      description: t("settings.status.invisible_desc"),
+      label: T("settings.status.invisible"),
+      description: T("settings.status.invisible_desc"),
       color: Colors.danger,
       icon: "eye-off",
     },
@@ -272,7 +284,7 @@ export default function ProfileScreen({
   const T = useT();
   const shared = useSharedStyles();
   const styles = useMemo(() => createStyles(Colors), [Colors]);
-  const STATUS_META = useMemo(() => getStatusMeta(Colors), [Colors]);
+  const STATUS_META = useMemo(() => getStatusMeta(Colors, T), [Colors, T]);
   const [view, setView] = useState<SettingsView>("root");
   const [showQRModal, setShowQRModal] = useState(false);
   // Both share actions are sheets rather than the OS share sheet straight from
@@ -280,16 +292,10 @@ export default function ProfileScreen({
   // then has nowhere to say it. Each carries the one sentence that stops it being
   // the wrong choice.
   const [showPeerIDModal, setShowPeerIDModal] = useState(false);
-  const [idCopied, setIdCopied] = useState(false);
-  const idCopiedTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const [codeCopied, setCodeCopied] = useState(false);
-  const codeCopiedTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  useEffect(() => {
-    return () => {
-      if (idCopiedTimer.current) clearTimeout(idCopiedTimer.current);
-      if (codeCopiedTimer.current) clearTimeout(codeCopiedTimer.current);
-    };
-  }, []);
+  // Two independent ticks: copying the ID must not put a tick on the contact
+  // code as well.
+  const { copied: idCopied, copy: copyPeerID } = useCopy();
+  const { copied: codeCopied, copy: copyContactCode } = useCopy();
   // Presence lives in the app-level mesh-state store, not local state, so it
   // survives this screen unmounting on a tab switch and never drifts out of sync
   // with the actual mesh (which stays stopped/hidden until changed again).
@@ -304,6 +310,8 @@ export default function ProfileScreen({
   const theme = useResolvedTheme();
   const setTheme = useSettingsStore((s) => s.setTheme);
   const monoFont = useSettingsStore((s) => s.monoFont);
+  const languagePreference = useSettingsStore((s) => s.language);
+  const setLanguage = useSettingsStore((s) => s.setLanguage);
   const setMonoFont = useSettingsStore((s) => s.setMonoFont);
 
   // The QR encodes a full contact card (peer ID + Noise and Ed25519 public keys
@@ -446,16 +454,9 @@ export default function ProfileScreen({
     if (wipeTapTimer.current) clearTimeout(wipeTapTimer.current);
     if (wipeTapCount.current >= 3) {
       wipeTapCount.current = 0;
-      // The triple tap skips every dialog by design: it exists for the moment
-      // when there is no time to read one. That makes it the only irreversible
-      // action in the app with no visual confirmation at all, so it gets the
-      // one unmistakable non-visual one. A warning notification, not an impact:
-      // it is the OS pattern for "something serious just happened", and it is
-      // the only signal a user gets that the wipe fired rather than that they
-      // merely mistapped.
-      void Haptics.notificationAsync(
-        Haptics.NotificationFeedbackType.Warning,
-      ).catch(() => {});
+      // Skips every dialog by design, so the buzz is the only confirmation
+      // there is. See warned() for why it is a warning and not an impact.
+      warned();
       void handleConfirmWipe();
       return;
     }
@@ -483,22 +484,14 @@ export default function ProfileScreen({
   // contact sheet uses for a peer's ID, with the tick replacing the glyph in
   // place rather than a dialog over a sheet.
   function handleCopyPeerID(): void {
-    void Clipboard.setStringAsync(peerID).catch(() => {});
-    acknowledged();
-    setIdCopied(true);
-    if (idCopiedTimer.current) clearTimeout(idCopiedTimer.current);
-    idCopiedTimer.current = setTimeout(() => setIdCopied(false), 1600);
+    copyPeerID(peerID);
   }
 
   // The same card the QR encodes, as text, for when there is no camera between
   // the two people. Copy only: the string is ~180 characters, so the box shows
   // enough to recognise and the glyph does the work.
   function handleCopyContactCode(): void {
-    void Clipboard.setStringAsync(qrValue).catch(() => {});
-    acknowledged();
-    setCodeCopied(true);
-    if (codeCopiedTimer.current) clearTimeout(codeCopiedTimer.current);
-    codeCopiedTimer.current = setTimeout(() => setCodeCopied(false), 1600);
+    copyContactCode(qrValue);
   }
 
   // The QRCode component exposes an SVG ref whose toDataURL() returns the
@@ -927,10 +920,10 @@ export default function ProfileScreen({
               {qrValue}
             </Text>
           </View>
-          <Feather
-            name={codeCopied ? "check" : "copy"}
+          <CopyGlyph
+            copied={codeCopied}
             size={COPY_GLYPH}
-            color={codeCopied ? Colors.online : Colors.textMuted}
+            color={Colors.textMuted}
           />
         </Pressable>
         <View style={styles.noteBox}>
@@ -981,10 +974,10 @@ export default function ProfileScreen({
           accessibilityLabel={T("settings.peer_id_sheet.copy")}
         >
           <Text style={styles.idBoxValue}>{peerID}</Text>
-          <Feather
-            name={idCopied ? "check" : "copy"}
+          <CopyGlyph
+            copied={idCopied}
             size={COPY_GLYPH}
-            color={idCopied ? Colors.online : Colors.textMuted}
+            color={Colors.textMuted}
           />
         </Pressable>
         <View style={styles.noteBox}>
@@ -1038,9 +1031,10 @@ export default function ProfileScreen({
               <React.Fragment key={key}>
                 {i > 0 && <View style={shared.groupDivider} />}
                 <Pressable
-                  style={[
+                  style={({ pressed }) => [
                     styles.optionRowGrouped,
                     selected && styles.optionRowGroupedSelected,
+                    pressed && shared.rowPressed,
                   ]}
                   onPress={() => handleSelectStatus(key)}
                   accessibilityRole="button"
@@ -1102,9 +1096,10 @@ export default function ProfileScreen({
                 <React.Fragment key={key}>
                   {i > 0 && <View style={shared.groupDivider} />}
                   <Pressable
-                    style={[
+                    style={({ pressed }) => [
                       styles.optionRowGrouped,
                       selected && styles.optionRowGroupedSelected,
+                      pressed && shared.rowPressed,
                     ]}
                     onPress={() => {
                       setTheme(key);
@@ -1154,9 +1149,10 @@ export default function ProfileScreen({
                 <React.Fragment key={key}>
                   {i > 0 && <View style={shared.groupDivider} />}
                   <Pressable
-                    style={[
+                    style={({ pressed }) => [
                       styles.optionRowGrouped,
                       selected && styles.optionRowGroupedSelected,
+                      pressed && shared.rowPressed,
                     ]}
                     onPress={() => setMonoFont(key)}
                     accessibilityRole="button"
@@ -1197,53 +1193,101 @@ export default function ProfileScreen({
             })}
           </View>
 
-          {/* Language: English is the whole catalog today, so the other nine are
-            listed but not selectable. Naming them is the point. It answers
-            "is my language coming" without a picker that can only pick one
-            thing, and the rows become live the release their catalogs land. */}
+          {/* Language.
+            No "System" row, matching the Appearance picker directly above: the
+            resolved language is ticked instead, so there is never a row that
+            means "no, really, the other one". First launch follows the phone;
+            choosing here pins it, which is what somebody reading Airhop in
+            Spanish on an English phone actually wants.
+
+            A language with no catalog yet is listed and dimmed rather than
+            hidden. Naming it answers "is my language coming" far better than a
+            picker that silently omits it, and the row goes live the release its
+            catalog lands, with no change here. */}
           <Text style={styles.appearanceGroupLabel}>
             {T("settings.group.language")}
           </Text>
           <View style={[shared.settingsGroup, styles.appearanceGroup]}>
-            <View
-              style={[styles.optionRowGrouped, styles.optionRowGroupedSelected]}
-            >
-              <View style={styles.optionIconGrouped}>
-                <Text style={styles.languageCode}>EN</Text>
-              </View>
-              <View style={shared.optionText}>
-                <Text style={shared.optionLabel}>
-                  {T("settings.language.en")}
-                </Text>
-                <Text style={shared.optionDescription}>
-                  {LANGUAGES.en.endonym}
-                </Text>
-              </View>
-              <Feather name="check" size={18} color={Colors.textPrimary} />
-            </View>
-            {PLANNED_LANGUAGES.map((lang) => (
-              <React.Fragment key={lang.code}>
-                <View style={shared.groupDivider} />
-                <View
-                  style={[styles.optionRowGrouped, styles.languageRowSoon]}
-                  accessible
-                  accessibilityLabel={T("settings.language.soon_a11y", {
-                    value: T(lang.nameKey),
-                  })}
-                >
-                  <View style={styles.optionIconGrouped}>
-                    <Text style={styles.languageCode}>{lang.shortCode}</Text>
-                  </View>
-                  <View style={shared.optionText}>
-                    <Text style={shared.optionLabel}>{T(lang.nameKey)}</Text>
-                    <Text style={shared.optionDescription}>{lang.endonym}</Text>
-                  </View>
-                  <Text style={styles.languageSoon}>
-                    {T("settings.language.soon")}
-                  </Text>
-                </View>
-              </React.Fragment>
-            ))}
+            {PICKER_LANGUAGES.map((code, i) => {
+              const spec = LANGUAGES[code];
+              const shipped = isShipped(code);
+              // Ticked against what is on screen, not against the preference,
+              // so a right-to-left choice waiting for a relaunch does not claim
+              // to be active while the app is still in the old language.
+              const selected = code === T.language;
+              const pending =
+                languagePreference === code &&
+                needsRelaunch(languagePreference);
+              const name = T(spec.nameKey);
+              return (
+                <React.Fragment key={code}>
+                  {i > 0 && <View style={shared.groupDivider} />}
+                  <Pressable
+                    style={({ pressed }) => [
+                      styles.optionRowGrouped,
+                      selected && styles.optionRowGroupedSelected,
+                      !shipped && styles.languageRowSoon,
+                      pressed && shared.rowPressed,
+                    ]}
+                    disabled={!shipped}
+                    onPress={() => {
+                      setLanguage(code);
+                      // Written now rather than at the next `initI18n`: either
+                      // way it lands on the following launch, but setting it
+                      // here is what makes a single restart enough.
+                      //
+                      // App raises the restart notice, not this row: direction
+                      // can change without anyone touching the list. The
+                      // "pending" tag below is the in-place half.
+                      applyLayoutDirection(resolvePreference(code));
+                    }}
+                    accessibilityRole={shipped ? "button" : undefined}
+                    accessibilityState={
+                      shipped
+                        ? { selected, disabled: false }
+                        : { disabled: true }
+                    }
+                    accessibilityLabel={
+                      shipped
+                        ? pending
+                          ? T("settings.language.pending_a11y", { value: name })
+                          : T("settings.language.set_a11y", { value: name })
+                        : T("settings.language.soon_a11y", { value: name })
+                    }
+                  >
+                    <View style={styles.optionIconGrouped}>
+                      <Text style={styles.languageCode}>{spec.shortCode}</Text>
+                    </View>
+                    <View style={shared.optionText}>
+                      <Text style={shared.optionLabel}>{name}</Text>
+                      {/* The endonym stays in its own script and is never
+                        translated, so somebody who cannot read the current UI
+                        language can still find their own row. */}
+                      <Text style={shared.optionDescription}>
+                        {spec.endonym}
+                      </Text>
+                    </View>
+                    {!shipped && (
+                      <Text style={styles.languageSoon}>
+                        {T("settings.language.soon")}
+                      </Text>
+                    )}
+                    {pending && (
+                      <Text style={styles.languageSoon}>
+                        {T("settings.language.pending")}
+                      </Text>
+                    )}
+                    {selected && !pending && (
+                      <Feather
+                        name="check"
+                        size={18}
+                        color={Colors.textPrimary}
+                      />
+                    )}
+                  </Pressable>
+                </React.Fragment>
+              );
+            })}
           </View>
         </ScrollView>
       </BottomSheet>
@@ -1283,7 +1327,10 @@ export default function ProfileScreen({
         </View>
         <View style={shared.sheetActions}>
           <Pressable
-            style={shared.sheetBtnPrimary}
+            style={({ pressed }) => [
+              shared.sheetBtnPrimary,
+              pressed && shared.sheetBtnPrimaryPressed,
+            ]}
             onPress={() => setShowTransferModal(false)}
             accessibilityRole="button"
             accessibilityLabel={T("settings.wipe.got_it")}
@@ -1538,7 +1585,7 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       alignItems: "center",
       gap: Spacing.sm,
       alignSelf: "stretch",
-      minHeight: 50,
+      minHeight: BUTTON_HEIGHT,
       paddingHorizontal: Spacing.base,
       borderRadius: Radius.md,
       backgroundColor: Colors.surfaceRaised,
@@ -1548,7 +1595,7 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
     idBoxValue: {
       flex: 1,
       textAlign: "center",
-      marginLeft: COPY_GLYPH + Spacing.sm,
+      marginStart: COPY_GLYPH + Spacing.sm,
       fontSize: FontSize.base,
       color: Colors.textPrimary,
       fontFamily: FontFamily.mono,
@@ -1559,7 +1606,7 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       alignItems: "center",
       gap: Spacing.sm,
       alignSelf: "stretch",
-      minHeight: 50,
+      minHeight: BUTTON_HEIGHT,
       paddingHorizontal: Spacing.base,
       paddingVertical: Spacing.sm,
       borderRadius: Radius.md,
@@ -1594,7 +1641,7 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
     },
     qrShareBtn: {
       width: "100%",
-      minHeight: 50,
+      minHeight: BUTTON_HEIGHT,
       flexDirection: "row",
       alignItems: "center",
       justifyContent: "center",
@@ -1609,7 +1656,7 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
     },
     qrDownloadBtn: {
       width: "100%",
-      minHeight: 50,
+      minHeight: BUTTON_HEIGHT,
       marginTop: Spacing.sm,
       flexDirection: "row",
       alignItems: "center",
@@ -1631,7 +1678,7 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
     },
     wipeConfirmBtn: {
       width: "100%",
-      minHeight: 50,
+      minHeight: BUTTON_HEIGHT,
       paddingVertical: Spacing.md,
       borderRadius: Radius.full,
       backgroundColor: Colors.surfaceRaised,
@@ -1645,7 +1692,7 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
     },
     wipeCancelBtn: {
       width: "100%",
-      minHeight: 50,
+      minHeight: BUTTON_HEIGHT,
       paddingVertical: Spacing.md,
       marginTop: Spacing.sm,
       borderRadius: Radius.full,

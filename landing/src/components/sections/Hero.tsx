@@ -72,7 +72,7 @@ const DOWNLOAD_GROUPS: DownloadGroup[] = [
 ];
 
 const DOWNLOAD_ROW =
-  "flex min-h-13 items-center gap-2.5 rounded-lg px-2 py-2 text-start sm:gap-3 sm:px-3";
+  "flex min-h-13 items-center gap-2.5 rounded-lg px-2 py-2 text-start sm:gap-3 sm:rounded-sm sm:px-3";
 
 const RELEASE_BIRDS: Record<string, string> = {
   "1": "Albatross",
@@ -183,7 +183,7 @@ function DownloadDropdown() {
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
         aria-controls={DOWNLOAD_PANEL_ID}
-        className="bg-ink text-canvas flex h-12 items-center gap-3 rounded-full ps-7 pe-2 text-sm font-medium transition-opacity duration-150 select-none hover:opacity-90"
+        className="bg-ink text-canvas flex h-12 items-center gap-3 rounded-full ps-7 pe-2 text-sm font-medium transition-opacity duration-150 select-none hover:opacity-90 active:opacity-80"
       >
         {T("home.hero.download")}
         <span className="bg-canvas/15 flex h-8 w-8 shrink-0 items-center justify-center rounded-full">
@@ -247,7 +247,7 @@ function DownloadDropdown() {
                     target="_blank"
                     rel="noopener noreferrer"
                     onClick={() => setOpen(false)}
-                    className={`${DOWNLOAD_ROW} hover:bg-inner transition-colors duration-150`}
+                    className={`${DOWNLOAD_ROW} hover:bg-inner active:bg-hover transition-colors duration-150`}
                   >
                     {body}
                   </a>
@@ -285,10 +285,12 @@ export default function Hero() {
   const [release, setRelease] = useState<Release>(RELEASE_FALLBACK);
 
   useEffect(() => {
+    let cancelled = false;
+
     fetch(REPO_LINKS.releasesApi)
       .then((res) => (res.ok ? (res.json() as Promise<GitHubRelease>) : null))
       .then((data) => {
-        if (!data) return;
+        if (cancelled || !data) return;
         const tag = data.tag_name || data.name;
         if (typeof tag !== "string" || !tag) return;
         const next = buildRelease(
@@ -300,6 +302,10 @@ export default function Hero() {
         if (next) setRelease(next);
       })
       .catch(() => {});
+
+    return () => {
+      cancelled = true;
+    };
   }, [language]);
 
   return (
@@ -315,7 +321,7 @@ export default function Hero() {
             href={release.url}
             target="_blank"
             rel="noopener noreferrer"
-            className="group border-line bg-card-subtle hover:border-line-strong flex h-7 items-center gap-2 rounded-full border ps-1 pe-2.5 transition-colors duration-150"
+            className="group border-line bg-card-subtle hover:border-line-strong active:bg-inner flex h-7 items-center gap-2 rounded-full border ps-0.5 pe-2.5 transition-colors duration-150"
           >
             <span className="sr-only">{T("home.hero.release")}</span>
             <span

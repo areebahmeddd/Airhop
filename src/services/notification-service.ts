@@ -13,10 +13,10 @@
 // foregrounded, and which conversation is currently open.
 
 import { t } from "@i18n";
+import { succeeded } from "@platform/haptics";
 import type { ChatMessage } from "@store/chat-store";
 import { useSettingsStore } from "@store/settings-store";
 import { channelLabel } from "@utils/conversation-display-name";
-import * as Haptics from "expo-haptics";
 import * as Notifications from "expo-notifications";
 import { Platform } from "react-native";
 import {
@@ -213,9 +213,7 @@ export async function handleInboundMessage(
       activeChannel,
     })
   ) {
-    void Haptics.notificationAsync(
-      Haptics.NotificationFeedbackType.Success,
-    ).catch(() => undefined);
+    succeeded();
   }
 
   if (

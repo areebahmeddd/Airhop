@@ -13,7 +13,7 @@ export default function TermsPage() {
   useSEO(SEO["/terms-of-service"]);
 
   return (
-    <main id="main-content">
+    <main id="main-content" tabIndex={-1}>
       <div className="mx-auto max-w-2xl px-6 py-16">
         <PageHeader
           eyebrow={T("page.legal.eyebrow")}

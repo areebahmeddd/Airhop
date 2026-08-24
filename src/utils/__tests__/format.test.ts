@@ -1,11 +1,15 @@
 /** @jest-environment node */
 
+import type { TokenInfo } from "@core/payments/cashu";
 import {
+  formatAmount,
   formatBytes,
   formatClockTime,
   formatDateSeparator,
   formatDuration,
   formatListTimestamp,
+  formatNumber,
+  formatTokenSummary,
 } from "../format";
 
 // A fixed "now" so the calendar-distance branches are deterministic. Midday on
@@ -109,5 +113,60 @@ describe("formatDuration", () => {
     // A transfer ETA can go momentarily negative as the last fragment lands.
     expect(formatDuration(-4)).toBe("0:00");
     expect(formatDuration(30.6)).toBe("0:31");
+  });
+});
+
+// ---- Money ----
+//
+// These moved here from core/payments/cashu.ts, which cannot hold a formatter:
+// it is the protocol layer and imports no display code, so it had no way to ask
+// what language the app is in and was calling a bare `toLocaleString()`, which
+// asks the device instead.
+
+describe("formatAmount", () => {
+  it("renders sats as a grouped integer in the app's language", () => {
+    // Grouped through formatNumber, so the separator follows the app's language
+    // rather than the phone's, and the digits stay Latin beside a Latin unit.
+    expect(formatAmount(21_500, "sat", "sat")).toEqual({
+      value: formatNumber(21_500),
+      label: "sat",
+    });
+    expect(formatAmount(21_500, "sat", "sat").value).toBe("21,500");
+  });
+
+  it("renders sats as bitcoin when asked", () => {
+    expect(formatAmount(21_500, "sat", "btc")).toEqual({
+      value: "0.000215",
+      label: "BTC",
+    });
+  });
+
+  it("leaves a mint's own currency alone", () => {
+    // A mint issuing usd is already quoting a currency. Reformatting it as
+    // bitcoin would invent an exchange rate nobody supplied.
+    expect(formatAmount(500, "usd", "btc")).toEqual({
+      value: formatNumber(500),
+      label: "usd",
+    });
+  });
+
+  it("shows an empty wallet as 0, not 0.00000000", () => {
+    expect(formatAmount(0, "sat", "btc").value).toBe("0");
+  });
+});
+
+describe("formatTokenSummary", () => {
+  // Only the three fields the summary reads. Decoding a real token is
+  // decodeToken's test, not this one.
+  const info = (amount: number, unit: string, memo?: string): TokenInfo =>
+    ({ amount, unit, memo }) as TokenInfo;
+
+  it("renders amount and unit, with the memo when present", () => {
+    expect(formatTokenSummary(info(64, "sat"))).toBe("64 sat");
+    expect(formatTokenSummary(info(64, "sat", "beer"))).toBe("64 sat - beer");
+  });
+
+  it("groups a large amount", () => {
+    expect(formatTokenSummary(info(21_500, "sat"))).toBe("21,500 sat");
   });
 });

@@ -3,7 +3,7 @@
 // confirmations). Near-black fill + inverse text, matching the same
 // iMessage-style inversion used for outgoing message bubbles.
 
-import React, { useMemo, useState } from "react";
+import React, { useMemo } from "react";
 import {
   Pressable,
   StyleSheet,
@@ -12,9 +12,10 @@ import {
   type ViewStyle,
 } from "react-native";
 import {
+  BUTTON_HEIGHT,
   FontSize,
   FontWeight,
-  MIN_TOUCH,
+  PRESSED_OPACITY,
   Radius,
   Spacing,
   useThemeColors,
@@ -45,25 +46,17 @@ export default function PrimaryButton({
 }: Props): React.JSX.Element {
   const Colors = useThemeColors();
   const styles = useMemo(() => createStyles(Colors), [Colors]);
-  const [pressed, setPressed] = useState(false);
   return (
     <Pressable
-      // A static style array with the press held in state, which is how every
-      // other button surface in this app is written (see
-      // settings/settings-primitives.tsx and the sheet action pairs).
-      // Pressable's `style={({ pressed }) => ...}`
-      // callback form is the leaner idiom and is available again now that the
-      // NativeWind JSX wrapper is gone, but it is deliberately not used here:
-      // one consistent way to write a button beats a lone exception, and the
-      // saving is two renders on a tap of a single onboarding CTA.
-      style={[
+      // Pressable's style callback, the one form every tappable surface here
+      // uses: holding the press in state re-renders twice per tap, which a list
+      // row cannot afford.
+      style={({ pressed }) => [
         styles.button,
         style,
         disabled && styles.disabled,
         !disabled && pressed && styles.pressed,
       ]}
-      onPressIn={() => setPressed(true)}
-      onPressOut={() => setPressed(false)}
       onPress={onPress}
       disabled={disabled}
       accessibilityRole="button"
@@ -87,7 +80,7 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       backgroundColor: Colors.accent,
       borderRadius: Radius.full,
       paddingVertical: Spacing.md + 2,
-      minHeight: MIN_TOUCH,
+      minHeight: BUTTON_HEIGHT,
       alignItems: "center",
       justifyContent: "center",
       // A transparent hairline in the enabled state, so switching to `disabled`
@@ -98,7 +91,7 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       borderColor: "transparent",
     },
     pressed: {
-      opacity: 0.85,
+      opacity: PRESSED_OPACITY,
     },
     // A disabled CTA still has to read as a button, just plainly not yours yet.
     // `surfaceRaised` (#F0F0F0) on the onboarding background (#F8F8F8) is a

@@ -1,0 +1,10 @@
+/* Keys mirror ios/Airhop/Info.plist, the English copy. Guarded by npm run i18n:native. */
+
+"NSBluetoothAlwaysUsageDescription" = "Airhop dùng Bluetooth để liên lạc với các thiết bị ở gần trên mạng lưới.";
+"NSBluetoothPeripheralUsageDescription" = "Airhop dùng Bluetooth để báo sự hiện diện của bạn cho các nút mạng ở gần.";
+"NSLocalNetworkUsageDescription" = "Airhop dùng mạng nội bộ để kết nối trực tiếp với các thiết bị ở gần khi truyền dữ liệu lớn (video, tệp lớn).";
+"NSCameraUsageDescription" = "Airhop dùng máy ảnh để quét mã QR của một liên hệ, và để chụp ảnh cùng quay video chia sẻ với các nút mạng ở gần.";
+"NSMicrophoneUsageDescription" = "Airhop dùng micrô để ghi tin nhắn thoại và để truyền giọng nói trực tiếp tới các nút mạng ở gần.";
+"NSPhotoLibraryUsageDescription" = "Airhop truy cập thư viện ảnh của bạn để chia sẻ hình ảnh và video qua mạng lưới.";
+"NSPhotoLibraryAddUsageDescription" = "Airhop lưu ảnh và video vào thư viện ảnh của bạn khi bạn chọn lưu một mục, và khi bạn tải mã QR của mình về.";
+"NSLocationWhenInUseUsageDescription" = "Airhop dùng vị trí gần đúng của bạn để đặt bạn vào các kênh khu vực ở gần (khu phố, thành phố, vùng). Vị trí chính xác của bạn không bao giờ rời khỏi thiết bị.";

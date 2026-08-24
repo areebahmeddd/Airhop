@@ -13,7 +13,7 @@ import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useId, useRef, useState } from "react";
 import { useLocation } from "react-router-dom";
 
-const ROW = "flex w-full items-center gap-3 rounded-[9px] px-2.5 py-2";
+const ROW = "flex w-full items-center gap-3 rounded-[10px] px-2.5 py-2";
 
 function Label({ language, active }: { language: LanguageSpec; active: boolean }) {
   const current = useLanguage();
@@ -89,7 +89,7 @@ export default function LanguagePicker() {
         onClick={() => setOpen(!open)}
         aria-expanded={open}
         aria-controls={panelId}
-        className="border-line bg-inner text-secondary hover:border-line-strong hover:text-ink flex h-7 items-center gap-1.5 rounded-full border ps-2.5 pe-1.5 font-mono text-[10px] font-semibold tracking-[0.18em] transition-colors duration-150"
+        className="border-line bg-inner text-secondary hover:border-line-strong hover:text-ink active:bg-hover flex h-7 items-center gap-1.5 rounded-full border ps-2.5 pe-1.5 font-mono text-[10px] font-semibold tracking-[0.18em] transition-colors duration-150"
       >
         <Languages size={12} aria-hidden="true" />
         <span className="sr-only">{T("settings.language.label")}</span>
@@ -126,7 +126,7 @@ export default function LanguagePicker() {
                         href={localizedPath(code, pathname)}
                         hrefLang={code}
                         onClick={() => rememberLanguage(code)}
-                        className={`${ROW} hover:bg-hover transition-colors duration-150`}
+                        className={`${ROW} hover:bg-inner active:bg-hover transition-colors duration-150`}
                       >
                         <Label language={spec} active={false} />
                       </a>

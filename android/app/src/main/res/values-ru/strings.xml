@@ -1,0 +1,7 @@
+<resources>
+  <string name="mesh_channel_name">Mesh-сеть</string>
+  <string name="mesh_channel_description">Держит сеть Airhop активной в фоне</string>
+  <string name="mesh_notification_title">Сеть Airhop работает</string>
+  <string name="mesh_notification_text">Поиск и передача сообщений поблизости</string>
+  <string name="mesh_notification_stop">Остановить сеть</string>
+</resources>

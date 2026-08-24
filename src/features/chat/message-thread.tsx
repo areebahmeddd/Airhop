@@ -16,9 +16,9 @@ import {
   type EmbeddedToken,
 } from "@core/payments/cashu";
 import { Feather, MaterialCommunityIcons } from "@expo/vector-icons";
-import { t, useT, useTPlural, type TranslationKey } from "@i18n";
+import { stripIsolates, t, useT, useTPlural, type TranslationKey } from "@i18n";
 import { chevronBack, isRTLLayout, textAlignEnd } from "@i18n/layout";
-import { acknowledged, held } from "@platform/haptics";
+import { acknowledged, armed, held, released } from "@platform/haptics";
 import { ensurePermission } from "@platform/permissions";
 import {
   setAudioForPlayback,
@@ -61,9 +61,12 @@ import {
 import { keysetIdsOf, useWalletStore } from "@store/wallet-store";
 import Avatar from "@ui/components/avatar";
 import BottomSheet from "@ui/components/bottom-sheet";
+import CopyGlyph from "@ui/components/copy-glyph";
 import Toast from "@ui/components/toast";
+import { useCopy } from "@ui/hooks/use-copy";
 import { useKeyboardInset } from "@ui/hooks/use-keyboard";
 import {
+  BUTTON_HEIGHT,
   DISABLED_OPACITY,
   Duration,
   FontFamily,
@@ -73,6 +76,7 @@ import {
   hitSlopFor,
   MaxFontScale,
   MIN_TOUCH,
+  PRESSED_OPACITY,
   Radius,
   Shadow,
   Spacing,
@@ -87,6 +91,7 @@ import {
   formatDateSeparator,
   formatDuration,
   formatLongDate,
+  formatNumber,
 } from "@utils/format";
 import {
   BRIDGE_CHANNEL,
@@ -95,6 +100,7 @@ import {
   notifiesOnScreenshot,
 } from "@utils/media-policy";
 import { activeMentionQuery, applyMention } from "@utils/mentions";
+import { messageText, systemRow } from "@utils/message-text";
 import { resolveDisplayName } from "@utils/peer-display-name";
 import {
   resolveLandingSettle,
@@ -113,7 +119,6 @@ import {
 import * as Clipboard from "expo-clipboard";
 import * as DocumentPicker from "expo-document-picker";
 import * as FileSystem from "expo-file-system";
-import * as Haptics from "expo-haptics";
 import * as ImagePicker from "expo-image-picker";
 import * as MediaLibrary from "expo-media-library";
 import * as ScreenCapture from "expo-screen-capture";
@@ -611,7 +616,7 @@ function TransferProgressList({
             : t.status === "failed"
               ? T("chat.status.failed")
               : t.status === "cancelled"
-                ? T("chat.status.cancelled")
+                ? T("chat.status.canceled")
                 : t.status === "stalled"
                   ? T("chat.status.waiting")
                   : t.direction === "send"
@@ -1794,17 +1799,9 @@ export default function MessageThread({
   } | null>(null);
   // Copy affordance for the sender profile sheet's Nostr key, same tap-to-copy
   // behavior as the contact-info sheet.
-  const [senderKeyCopied, setSenderKeyCopied] = useState(false);
+  const { copied: senderKeyCopied, copy: copySenderKey } = useCopy();
   function handleCopySenderKey(peerID: string): void {
-    void Clipboard.setStringAsync(peerID.slice(NOSTR_ID_PREFIX.length)).catch(
-      () => {},
-    );
-    acknowledged();
-    setSenderKeyCopied(true);
-    // Reffed and cleared on unmount, like every other timer in this file. A bare
-    // setTimeout here fires setState against a thread the user has already left.
-    if (copiedTimer.current) clearTimeout(copiedTimer.current);
-    copiedTimer.current = setTimeout(() => setSenderKeyCopied(false), 1500);
+    copySenderKey(peerID.slice(NOSTR_ID_PREFIX.length));
   }
   // Channel members list: currently-reachable peers, tap one to open the
   // same profile sheet as tapping their avatar on a message.
@@ -1864,15 +1861,13 @@ export default function MessageThread({
   >(null);
   const highlightTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const prevScrollTrigger = useRef(targetMessageTrigger ?? 0);
-  // Clears the "copied" pill on the sender-key row.
-  const copiedTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Clean up recording timer, DM status timer, and any active sound on unmount.
   useEffect(() => {
     return () => {
       if (recordingTimerRef.current) clearInterval(recordingTimerRef.current);
       if (dmStatusTimerRef.current) clearTimeout(dmStatusTimerRef.current);
-      if (copiedTimer.current) clearTimeout(copiedTimer.current);
+
       void audioRecorder.stop().catch(() => {});
     };
   }, [audioRecorder]);
@@ -2179,7 +2174,7 @@ export default function MessageThread({
         return;
       }
       showAlert(
-        `+${result.amount.toLocaleString()} ${result.unit}`,
+        `+${formatNumber(result.amount)} ${result.unit}`,
         result.outcome === "swapped"
           ? t("wallet.receive.redeemed_at", { mint: hostOf(result.mintUrl) })
           : t("wallet.receive.stored_pending", {
@@ -2266,16 +2261,19 @@ export default function MessageThread({
           service.sendChannelMessage(channel, text);
         }
       }
+      // Say which of the two happened. Claiming the room was told when it was
+      // not is the same class of mistake as the broadcast itself.
+      const screenshotKey = tellsPeersOnScreenshot
+        ? "chat.screenshot.you_took"
+        : "chat.screenshot.you_took_private";
       addMessage({
         id: `${localPeerID}-${Date.now()}-${Math.random().toString(36).slice(2)}`,
         channel,
         senderID: localPeerID,
         senderNickname: localNickname,
-        // Say which of the two happened. Claiming the room was told when it was
-        // not is the same class of mistake as the broadcast itself.
-        text: tellsPeersOnScreenshot
-          ? t("chat.screenshot.you_took")
-          : t("chat.screenshot.you_took_private"),
+        // Airhop's words, so the row re-reads them in whatever language the
+        // thread is opened in later.
+        ...systemRow(screenshotKey),
         timestampMs: Date.now(),
         isMine: true,
         isSystem: true,
@@ -3461,19 +3459,14 @@ export default function MessageThread({
   // medium on open (the mic is live), rigid at the cancel threshold (releasing
   // now does something different), light on close.
   const beginTalk = useCallback((): void => {
-    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(
-      () => {},
-    );
+    held();
     void talkRef.current.start();
   }, []);
 
-  const reportCancelArmed = useCallback((armed: boolean): void => {
-    setCancelArmed(armed);
-    void Haptics.impactAsync(
-      armed
-        ? Haptics.ImpactFeedbackStyle.Rigid
-        : Haptics.ImpactFeedbackStyle.Light,
-    ).catch(() => {});
+  const reportCancelArmed = useCallback((isArmed: boolean): void => {
+    setCancelArmed(isArmed);
+    if (isArmed) armed();
+    else released();
   }, []);
 
   // The hold became hands-free. The microphone is already open and stays open;
@@ -3489,7 +3482,7 @@ export default function MessageThread({
 
   const finishTalk = useCallback((cancelled: boolean): void => {
     setCancelArmed(false);
-    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+    released();
     void (cancelled ? talkRef.current.cancel() : talkRef.current.end());
   }, []);
 
@@ -3541,12 +3534,12 @@ export default function MessageThread({
           cancelSlide.value = slid;
           // Arming takes the full distance, disarming needs most of the way
           // back. See CANCEL_SLIDE_DISARM.
-          const armed = cancelArmedShared.value
+          const nextArmed = cancelArmedShared.value
             ? slid > CANCEL_SLIDE_DISARM
             : slid >= CANCEL_SLIDE_DISTANCE;
-          if (armed === cancelArmedShared.value) return;
-          cancelArmedShared.value = armed;
-          scheduleOnRN(reportCancelArmed, armed);
+          if (nextArmed === cancelArmedShared.value) return;
+          cancelArmedShared.value = nextArmed;
+          scheduleOnRN(reportCancelArmed, nextArmed);
         })
         .onFinalize(() => {
           // A locked hold has already handed the recording to the bar, so
@@ -4104,7 +4097,7 @@ export default function MessageThread({
         <View style={styles.paymentCardHeader}>
           <Feather name="zap" size={17} color={Colors.accent} />
           <Text style={styles.paymentCardAmount}>
-            {token.info.amount.toLocaleString()} {token.info.unit}
+            {formatNumber(token.info.amount)} {token.info.unit}
           </Text>
         </View>
         <Text style={styles.paymentCardMint} numberOfLines={1}>
@@ -4144,7 +4137,7 @@ export default function MessageThread({
               onPress={() => void claimToken(token)}
               accessibilityRole="button"
               accessibilityLabel={t("chat.ecash.claim_amount", {
-                amount: token.info.amount.toLocaleString(),
+                amount: formatNumber(token.info.amount),
                 unit: token.info.unit,
               })}
             >
@@ -4411,7 +4404,9 @@ export default function MessageThread({
                   )}
                   <View style={styles.systemRow}>
                     <Feather name="camera" size={12} color={Colors.textMuted} />
-                    <Text style={styles.systemRowText}>{item.text}</Text>
+                    <Text style={styles.systemRowText}>
+                      {messageText(item)}
+                    </Text>
                   </View>
                 </View>
               );
@@ -4950,7 +4945,10 @@ export default function MessageThread({
       {selecting && (
         <View style={styles.selectBar}>
           <Pressable
-            style={styles.selectForward}
+            style={({ pressed }) => [
+              styles.selectForward,
+              pressed && styles.selectForwardPressed,
+            ]}
             onPress={() => setShowBulkForward(true)}
             accessibilityRole="button"
             accessibilityLabel={TP("chat.select.forward", selectedIds.size)}
@@ -5495,12 +5493,10 @@ export default function MessageThread({
                       <Text style={styles.keyBoxValue}>
                         {senderInfoTarget.peerID.slice(NOSTR_ID_PREFIX.length)}
                       </Text>
-                      <Feather
-                        name={senderKeyCopied ? "check" : "copy"}
+                      <CopyGlyph
+                        copied={senderKeyCopied}
                         size={15}
-                        color={
-                          senderKeyCopied ? Colors.online : Colors.textMuted
-                        }
+                        color={Colors.textMuted}
                       />
                     </View>
                     {/* The same note the contact sheet carries. Both are places
@@ -5563,7 +5559,13 @@ export default function MessageThread({
         }}
         onCopy={() => {
           if (!actionSheet) return;
-          void Clipboard.setStringAsync(actionSheet.text).catch(() => {});
+          // What is on screen, not what is in the store: for a row Airhop wrote,
+          // `text` holds the rendering from the moment it was saved, so copying
+          // it hands over the previous language after a switch. Stripped because
+          // a clipboard is somewhere else's input.
+          void Clipboard.setStringAsync(
+            stripIsolates(messageText(actionSheet)),
+          ).catch(() => {});
           acknowledged();
         }}
         onInfo={() => {
@@ -5901,6 +5903,9 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       borderRadius: Radius.full,
       backgroundColor: Colors.accent,
     },
+    selectForwardPressed: {
+      opacity: PRESSED_OPACITY,
+    },
     selectForwardText: {
       fontSize: FontSize.base,
       fontWeight: FontWeight.semibold,
@@ -6107,7 +6112,7 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       color: Colors.textMuted,
     },
     attachCancel: {
-      minHeight: 50,
+      minHeight: BUTTON_HEIGHT,
       backgroundColor: Colors.surfaceRaised,
       borderRadius: Radius.full,
       paddingVertical: Spacing.md,
@@ -6533,7 +6538,7 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
     },
     senderInfoMessageBtn: {
       width: "100%",
-      minHeight: 50,
+      minHeight: BUTTON_HEIGHT,
       flexDirection: "row",
       alignItems: "center",
       justifyContent: "center",

@@ -21,7 +21,6 @@
 import {
   bareToken,
   canEncodeTokenQr,
-  formatAmount,
   isLikelyTestMint,
   TOKEN_QR_ERROR_CORRECTION,
   TOKEN_QR_MAX_CHARS,
@@ -85,8 +84,11 @@ import {
 } from "@store/wallet-store";
 import Avatar from "@ui/components/avatar";
 import BottomSheet from "@ui/components/bottom-sheet";
+import CopyGlyph from "@ui/components/copy-glyph";
+import { useCopy } from "@ui/hooks/use-copy";
 import { usePullRefreshColors } from "@ui/hooks/use-pull-refresh";
 import {
+  BUTTON_HEIGHT,
   DISABLED_OPACITY,
   FontFamily,
   FontSize,
@@ -98,7 +100,7 @@ import {
   TAB_BAR_CLEARANCE,
   useThemeColors,
 } from "@ui/theme";
-import { formatListTimestamp, formatNumber } from "@utils/format";
+import { formatAmount, formatListTimestamp, formatNumber } from "@utils/format";
 import { nostrShortLabel, peerIDToUsername } from "@utils/username";
 import * as Clipboard from "expo-clipboard";
 import { nip19 } from "nostr-tools";
@@ -286,6 +288,10 @@ export default function WalletScreen({
   // The token produced by the most recent send, still reserved and reclaimable.
   const [pending, setPending] = useState<PreparedSend | null>(null);
   const [deposit, setDeposit] = useState<LightningDeposit | null>(null);
+  // The widest control in the panel, so the confirmation is a word rather than
+  // only a glyph swap.
+  const { copied: invoiceCopied, copy: copyInvoice } = useCopy();
+
   const [depositClock, setDepositClock] = useState(0);
   const depositExpiresAtMs = deposit?.expiresAtMs;
   const depositExpired =
@@ -534,7 +540,7 @@ export default function WalletScreen({
       const where = hostOf(result.mintUrl);
       if (result.outcome === "swapped") {
         showAlert(
-          `+${result.amount.toLocaleString()} ${result.unit}`,
+          `+${formatNumber(result.amount)} ${result.unit}`,
           t("wallet.receive.redeemed_here", { mint: where }) +
             (result.memo
               ? t("wallet.receive.memo_quoted", { memo: result.memo })
@@ -542,7 +548,7 @@ export default function WalletScreen({
         );
       } else {
         showAlert(
-          `+${result.amount.toLocaleString()} ${result.unit}`,
+          `+${formatNumber(result.amount)} ${result.unit}`,
           // Three sentences assembled at runtime, each its own key so a
           // translator can reword or reorder them. The joining space lives
           // here rather than being baked onto the front of the copy.
@@ -634,16 +640,16 @@ export default function WalletScreen({
         showAlert(
           t("wallet.err.exact_amount"),
           t("wallet.send.inexact_body", {
-            amount: amount.toLocaleString(),
+            amount: formatNumber(amount),
             unit: quote.unit,
-            spend: quote.spend.toLocaleString(),
-            extra: (quote.spend - amount).toLocaleString(),
+            spend: formatNumber(quote.spend),
+            extra: formatNumber(quote.spend - amount),
           }),
           [
             { text: T("common.cancel"), style: "cancel" },
             {
               text: t("wallet.send.send_amount", {
-                amount: quote.spend.toLocaleString(),
+                amount: formatNumber(quote.spend),
               }),
               style: "destructive",
               onPress: () => void commit(true),
@@ -672,7 +678,7 @@ export default function WalletScreen({
       t("wallet.delivered.title"),
       tx !== undefined
         ? t("wallet.delivered.body", {
-            amount: tx.amount.toLocaleString(),
+            amount: formatNumber(tx.amount),
             unit: tx.unit,
           })
         : t("wallet.delivered.body_generic"),
@@ -699,7 +705,7 @@ export default function WalletScreen({
     showAlert(
       t("wallet.reclaim.title"),
       t("wallet.reclaim.body", {
-        amount: tx.amount.toLocaleString(),
+        amount: formatNumber(tx.amount),
         unit: tx.unit,
       }),
       [
@@ -755,7 +761,7 @@ export default function WalletScreen({
     setPending(null);
     showAlert(
       t("wallet.send.sent_to", {
-        amount: amount.toLocaleString(),
+        amount: formatNumber(amount),
         unit,
         name: peerIDToUsername(peerID),
       }),
@@ -836,7 +842,7 @@ export default function WalletScreen({
       }
       showAlert(
         t("wallet.pay.sent_title", {
-          amount: result.amount.toLocaleString(),
+          amount: formatNumber(result.amount),
           unit: result.unit,
           name: zapRecipientLabel(recipientPubkey),
         }),
@@ -934,7 +940,7 @@ export default function WalletScreen({
       if (result.swapped > 0) {
         parts.push(
           t("wallet.refresh.swapped", {
-            amount: result.swapped.toLocaleString(),
+            amount: formatNumber(result.swapped),
             unit,
           }),
         );
@@ -947,7 +953,7 @@ export default function WalletScreen({
       if (result.securedForBackup > 0) {
         parts.push(
           t("wallet.refresh.secured", {
-            amount: result.securedForBackup.toLocaleString(),
+            amount: formatNumber(result.securedForBackup),
             unit,
           }),
         );
@@ -1186,10 +1192,10 @@ export default function WalletScreen({
         [
           moved > 0
             ? t("wallet.mint.moved_body", {
-                amount: moved.toLocaleString(),
+                amount: formatNumber(moved),
                 unit: primary.unit,
                 mint: hostOf(target),
-                fees: fees.toLocaleString(),
+                fees: formatNumber(fees),
               })
             : null,
           failures.length > 0 ? failures.join("\n") : null,
@@ -1259,9 +1265,9 @@ export default function WalletScreen({
           setDeposit(null);
           setShowDeposit(false);
           showAlert(
-            `+${minted.toLocaleString()} ${deposit.unit}`,
+            `+${formatNumber(minted)} ${deposit.unit}`,
             t("wallet.ln.deposit_credited", {
-              amount: minted.toLocaleString(),
+              amount: formatNumber(minted),
               unit: deposit.unit,
               mint: hostOf(deposit.mintUrl),
             }),
@@ -1312,9 +1318,9 @@ export default function WalletScreen({
             ? "wallet.ln.withdrawn_with_change"
             : "wallet.ln.withdrawn",
           {
-            paid: result.paid.toLocaleString(),
-            fee: result.fee.toLocaleString(),
-            change: result.changeReturned.toLocaleString(),
+            paid: formatNumber(result.paid),
+            fee: formatNumber(result.fee),
+            change: formatNumber(result.changeReturned),
           },
         ),
       );
@@ -1465,7 +1471,7 @@ export default function WalletScreen({
                     color={Colors.textSecondary}
                   />
                   <Text style={styles.pendingAmount}>
-                    {tx.amount.toLocaleString()} {tx.unit}
+                    {formatNumber(tx.amount)} {tx.unit}
                   </Text>
                   <Text style={styles.pendingTime}>
                     {relativeTime(tx.createdAtMs)}
@@ -1833,7 +1839,7 @@ export default function WalletScreen({
                   />
                   <Text style={styles.backupWarnText}>
                     {T("wallet.backup.not_covered", {
-                      amount: `${unbackedBalance.toLocaleString()} ${primary.unit}`,
+                      amount: `${formatNumber(unbackedBalance)} ${primary.unit}`,
                     })}
                   </Text>
                 </View>
@@ -1954,7 +1960,7 @@ export default function WalletScreen({
                     ]}
                   >
                     {isVoided(tx) ? "" : isCredit(tx) ? "+" : "−"}
-                    {tx.amount.toLocaleString()}
+                    {formatNumber(tx.amount)}
                   </Text>
                 </View>
               </View>
@@ -2286,7 +2292,7 @@ export default function WalletScreen({
           <Feather name="check-circle" size={28} color={Colors.online} />
           <View style={styles.generatedAmountRow}>
             <Text style={styles.generatedAmount}>
-              {pending?.amount.toLocaleString()}
+              {pending === null ? "" : formatNumber(pending.amount)}
             </Text>
             <Text style={styles.generatedUnit}>{pending?.unit}</Text>
           </View>
@@ -2296,9 +2302,9 @@ export default function WalletScreen({
           {pending && pending.fee > 0 && (
             <Text style={styles.generatedMint}>
               {T("wallet.send.fee_note", {
-                spend: pending.spend.toLocaleString(),
+                spend: formatNumber(pending.spend),
                 unit: pending.unit,
-                fee: pending.fee.toLocaleString(),
+                fee: formatNumber(pending.fee),
               })}
             </Text>
           )}
@@ -2468,7 +2474,7 @@ export default function WalletScreen({
           <>
             <Text style={styles.modalSubtitle}>
               {T("wallet.ln.pay_invoice_for", {
-                amount: deposit.amount.toLocaleString(),
+                amount: formatNumber(deposit.amount),
                 unit: deposit.unit,
               })}
             </Text>
@@ -2523,17 +2529,23 @@ export default function WalletScreen({
                 </Text>
               </Pressable>
               <Pressable
-                style={styles.generatedActionBtn}
-                onPress={() => {
-                  void Clipboard.setStringAsync(deposit.invoice);
-                  acknowledged();
-                }}
+                style={({ pressed }) => [
+                  styles.generatedActionBtn,
+                  pressed && styles.generatedActionBtnPressed,
+                ]}
+                onPress={() => copyInvoice(deposit.invoice)}
                 accessibilityRole="button"
                 accessibilityLabel={T("wallet.ln.copy_invoice")}
               >
-                <Feather name="copy" size={18} color={Colors.accent} />
+                <CopyGlyph
+                  copied={invoiceCopied}
+                  size={18}
+                  color={Colors.accent}
+                />
                 <Text style={styles.generatedActionText}>
-                  {T("wallet.ln.copy_invoice")}
+                  {invoiceCopied
+                    ? T("common.copied")
+                    : T("wallet.ln.copy_invoice")}
                 </Text>
               </Pressable>
             </View>
@@ -2635,7 +2647,7 @@ export default function WalletScreen({
           options={splitAccounts.map((a) => ({
             mintUrl: a.mintUrl,
             sub: t("wallet.mint.available_amount", {
-              amount: a.balance.toLocaleString(),
+              amount: formatNumber(a.balance),
               unit: a.unit,
             }),
           }))}
@@ -2652,13 +2664,13 @@ export default function WalletScreen({
             <QuoteRow
               styles={styles}
               label={T("wallet.ln.invoice")}
-              value={`${withdrawQuote.amount.toLocaleString()} ${withdrawQuote.unit}`}
+              value={`${formatNumber(withdrawQuote.amount)} ${withdrawQuote.unit}`}
             />
             <QuoteRow
               styles={styles}
               label={T("wallet.ln.routing_reserve")}
               value={T("wallet.ln.up_to", {
-                amount: withdrawQuote.feeReserve.toLocaleString(),
+                amount: formatNumber(withdrawQuote.feeReserve),
                 unit: withdrawQuote.unit,
               })}
             />
@@ -2666,7 +2678,7 @@ export default function WalletScreen({
               styles={styles}
               label={T("wallet.ln.reserved")}
               value={T("wallet.ln.amount_unit", {
-                amount: withdrawQuote.total.toLocaleString(),
+                amount: formatNumber(withdrawQuote.total),
                 unit: withdrawQuote.unit,
               })}
             />
@@ -2679,7 +2691,7 @@ export default function WalletScreen({
               ? busy === "withdrawPay"
                 ? T("wallet.ln.paying")
                 : T("wallet.ln.pay_amount", {
-                    amount: withdrawQuote.amount.toLocaleString(),
+                    amount: formatNumber(withdrawQuote.amount),
                     unit: withdrawQuote.unit,
                   })
               : busy === "withdrawQuote"
@@ -2910,9 +2922,7 @@ export default function WalletScreen({
               />
               <View style={styles.generatedAmountRow}>
                 <Text style={styles.generatedAmount}>
-                  {(
-                    restoreResult.recovered[primary.unit] ?? 0
-                  ).toLocaleString()}
+                  {formatNumber(restoreResult.recovered[primary.unit] ?? 0)}
                 </Text>
                 <Text style={styles.generatedUnit}>{primary.unit}</Text>
               </View>
@@ -2987,7 +2997,7 @@ export default function WalletScreen({
               <View style={styles.pickInfo}>
                 <Text style={styles.pickTitle}>{hostOf(account.mintUrl)}</Text>
                 <Text style={styles.pickSub}>
-                  {account.balance.toLocaleString()} {account.unit}
+                  {formatNumber(account.balance)} {account.unit}
                   {isTarget
                     ? ` ${t("wallet.mint.destination")}`
                     : ` ${t("wallet.mint.will_move")}`}
@@ -3024,7 +3034,7 @@ export default function WalletScreen({
       >
         <Text style={styles.modalTitle}>
           {qrToken
-            ? `${qrToken.amount.toLocaleString()} ${qrToken.unit}`
+            ? `${formatNumber(qrToken.amount)} ${qrToken.unit}`
             : T("wallet.token")}
         </Text>
         <Text style={styles.modalSubtitle}>{T("wallet.send.scan_note")}</Text>
@@ -3430,7 +3440,7 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       lineHeight: FontSize.sm * 1.5,
     },
     balanceCard: {
-      backgroundColor: Colors.surface,
+      backgroundColor: Colors.surfaceRaised,
       borderRadius: Radius.lg,
       borderWidth: 1,
       borderColor: Colors.border,
@@ -4143,7 +4153,7 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
     },
     modalCancel: {
       width: "100%",
-      minHeight: 50,
+      minHeight: BUTTON_HEIGHT,
       paddingVertical: Spacing.md,
       backgroundColor: Colors.surfaceRaised,
       borderWidth: 1,
@@ -4159,7 +4169,7 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
     },
     modalDismiss: {
       width: "100%",
-      minHeight: 50,
+      minHeight: BUTTON_HEIGHT,
       paddingVertical: Spacing.md,
       borderRadius: Radius.full,
       backgroundColor: Colors.surfaceRaised,
@@ -4173,7 +4183,7 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
     },
     modalConfirm: {
       width: "100%",
-      minHeight: 50,
+      minHeight: BUTTON_HEIGHT,
       paddingVertical: Spacing.md,
       backgroundColor: Colors.accent,
       borderRadius: Radius.full,
@@ -4266,7 +4276,7 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
     },
     generatedActionBtn: {
       width: "100%",
-      minHeight: 50,
+      minHeight: BUTTON_HEIGHT,
       paddingVertical: Spacing.md,
       flexDirection: "row",
       alignItems: "center",
@@ -4277,6 +4287,9 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       borderWidth: 1,
       borderColor: Colors.border,
     },
+    generatedActionBtnPressed: {
+      backgroundColor: Colors.surfacePressed,
+    },
     generatedActionText: {
       fontSize: FontSize.sm,
       fontWeight: FontWeight.semibold,
@@ -4284,7 +4297,7 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
     },
     generatedPrimaryBtn: {
       width: "100%",
-      minHeight: 50,
+      minHeight: BUTTON_HEIGHT,
       paddingVertical: Spacing.md,
       flexDirection: "row",
       alignItems: "center",

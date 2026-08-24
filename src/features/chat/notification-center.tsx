@@ -26,6 +26,7 @@ import {
 } from "@ui/theme";
 import { channelLabel } from "@utils/conversation-display-name";
 import { formatListTimestamp } from "@utils/format";
+import { activityPreview } from "@utils/message-text";
 import { resolveDisplayName } from "@utils/peer-display-name";
 import React, { useMemo } from "react";
 import {
@@ -164,9 +165,11 @@ function Row({
   const T = useT();
   // DMs read best under the peer's resolved contact name; a channel message or
   // notice keeps the sender's nickname and tags which room it came from.
+  // An empty nickname means the sender announced none. Resolved here rather
+  // than at record time so the stand-in is in the language being read now.
   const name = entry.isDM
     ? resolveDisplayName(entry.senderID)
-    : entry.senderNickname;
+    : entry.senderNickname || T("notif.someone");
   const room = entry.isDM ? "" : channelLabel(entry.channel);
   // Formatted once for both the visible time and the row label below.
   const timeLabel = formatListTimestamp(entry.timestampMs);
@@ -182,7 +185,7 @@ function Row({
       : entry.kind === "notice"
         ? t("chat.notif.notice_in", { channel: room })
         : room,
-    entry.preview,
+    activityPreview(entry),
     timeLabel,
   ]
     .filter((part) => part !== null)
@@ -209,7 +212,7 @@ function Row({
             <Text style={styles.time}>{timeLabel}</Text>
           </View>
           <Text style={styles.preview} numberOfLines={2}>
-            {entry.preview}
+            {activityPreview(entry)}
           </Text>
         </View>
         {!entry.seen && <View style={styles.unseenDot} />}

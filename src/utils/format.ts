@@ -19,12 +19,22 @@
 // are re-run. No formatter needs to be a hook.
 //
 // Digits: month and weekday names come from Intl and are correct per locale for
-// free. Numerals are pinned to Latin here on purpose. A byte count, a duration
-// and a clock time are machine data, they sit in `FontFamily.mono` next to
-// Latin units ("MiB", "sats"), and a run of Arabic-Indic digits beside a Latin
-// unit reads worse than either alone. Prose numbers, the ones inside a
-// translated sentence, get no such override and follow the locale.
+// free. Numerals are pinned to Latin here and everywhere else: `formatCount` in
+// `@i18n` pins prose counts the same way and `catalog.test.ts` forbids a catalog
+// its own, so the app renders one digit system rather than three sources of two.
+// Grouping still follows the locale, which is the half that helps: Hindi and
+// Tamil group by lakh, Georgian by thin space.
+//
+// Clock width: `hour: "2-digit"` gives "20:02" in a 24-hour locale and
+// "08:02 PM" in a 12-hour one. Both are right for their reader, so a row
+// carrying a timestamp sizes for the wider rather than forcing a format. The
+// pseudolocale exercises it: `qps-ploc` negotiates to a 12-hour English.
 
+import {
+  satsToBtc,
+  type BitcoinUnit,
+  type TokenInfo,
+} from "@core/payments/cashu";
 import { getLanguage, t } from "@i18n";
 
 // Milliseconds in a day, for the calendar-distance arithmetic below.
@@ -182,6 +192,43 @@ function formatFixed(value: number, fractionDigits: number): string {
     maximumFractionDigits: fractionDigits,
     useGrouping: false,
   }).format(value);
+}
+
+// ---- Money ----
+//
+// These live here rather than beside the Cashu code they describe because
+// `src/core/` imports no display layer, which is what lets it target the planned
+// Node CLI and web builds. A formatter has to know the app's language, so it
+// cannot live there. The dependency runs the other way: this file reaches into
+// core for `satsToBtc`, which is exact integer arithmetic on money.
+
+// Render an amount in the denomination the user picked.
+//
+// Only `sat` amounts have a bitcoin denomination to switch to. Every other unit
+// is the mint's own (a mint may issue usd or eur directly), and those are
+// already the thing they say they are: reformatting them as bitcoin would
+// invent an exchange rate nobody supplied.
+//
+// Returns the number and its label separately so the caller can style them
+// apart, which the balance card does.
+export function formatAmount(
+  amount: number,
+  unit: string,
+  display: BitcoinUnit,
+): { value: string; label: string } {
+  if (unit !== "sat" || display === "sat") {
+    return { value: formatNumber(amount), label: unit };
+  }
+  // Not grouped: satsToBtc returns a decimal fraction ("0.000215"), and
+  // grouping a value whose digits are almost all after the point adds nothing.
+  return { value: satsToBtc(amount), label: "BTC" };
+}
+
+// "500 sat" / "500 sat - coffee money", for chat search previews and
+// accessibility labels.
+export function formatTokenSummary(info: TokenInfo): string {
+  const amount = `${formatNumber(info.amount)} ${info.unit}`;
+  return info.memo ? `${amount} - ${info.memo}` : amount;
 }
 
 // Elapsed or remaining seconds as m:ss, for recordings and transfer ETAs.

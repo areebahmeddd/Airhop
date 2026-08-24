@@ -2,23 +2,28 @@ export type LanguageCode =
   | "en"
   | "am"
   | "ar"
+  | "bn"
   | "my"
   | "zh-Hans"
   | "zh-Hant"
   | "nl"
   | "fil"
   | "fr"
+  | "ka"
   | "de"
   | "hi"
   | "id"
   | "it"
   | "ja"
   | "ko"
+  | "mg"
   | "ms"
   | "ne"
   | "fa"
   | "pl"
   | "pt-BR"
+  | "pt-PT"
+  | "pa"
   | "ru"
   | "es"
   | "sw"
@@ -41,7 +46,10 @@ export type ScriptClass =
   | "thai"
   | "myanmar"
   | "ethiopic"
-  | "tamil";
+  | "tamil"
+  | "bengali"
+  | "gurmukhi"
+  | "georgian";
 
 export interface LanguageSpec {
   code: LanguageCode;
@@ -139,13 +147,33 @@ export const LANGUAGES: Record<LanguageCode, LanguageSpec> = {
   },
   "pt-BR": {
     code: "pt-BR",
-    shortCode: "PT",
-    endonym: "português",
+    shortCode: "PTB",
+    endonym: "português (brasil)",
     direction: "ltr",
     script: "latin",
     ogLocale: "pt_BR",
     intlLocale: "pt-BR",
     segment: "pt-br",
+  },
+  "pt-PT": {
+    code: "pt-PT",
+    shortCode: "PTP",
+    endonym: "português (portugal)",
+    direction: "ltr",
+    script: "latin",
+    ogLocale: "pt_PT",
+    intlLocale: "pt-PT",
+    segment: "pt-pt",
+  },
+  pa: {
+    code: "pa",
+    shortCode: "PA",
+    endonym: "ਪੰਜਾਬੀ",
+    direction: "ltr",
+    script: "gurmukhi",
+    ogLocale: "pa_IN",
+    intlLocale: "pa-u-nu-latn",
+    segment: "pa",
   },
   ru: {
     code: "ru",
@@ -357,29 +385,64 @@ export const LANGUAGES: Record<LanguageCode, LanguageSpec> = {
     intlLocale: "ta",
     segment: "ta",
   },
+  bn: {
+    code: "bn",
+    shortCode: "BN",
+    endonym: "বাংলা",
+    direction: "ltr",
+    script: "bengali",
+    ogLocale: "bn_BD",
+    intlLocale: "bn-u-nu-latn",
+    segment: "bn",
+  },
+  ka: {
+    code: "ka",
+    shortCode: "KA",
+    endonym: "ქართული",
+    direction: "ltr",
+    script: "georgian",
+    ogLocale: "ka_GE",
+    intlLocale: "ka",
+    segment: "ka",
+  },
+  mg: {
+    code: "mg",
+    shortCode: "MG",
+    endonym: "malagasy",
+    direction: "ltr",
+    script: "latin",
+    ogLocale: "mg_MG",
+    intlLocale: "mg",
+    segment: "mg",
+  },
 };
 
 export const LANGUAGE_ORDER: LanguageCode[] = [
   "en",
   "am",
   "ar",
+  "bn",
   "my",
   "zh-Hans",
   "zh-Hant",
   "nl",
   "fil",
   "fr",
+  "ka",
   "de",
   "hi",
   "id",
   "it",
   "ja",
   "ko",
+  "mg",
   "ms",
   "ne",
   "fa",
   "pl",
   "pt-BR",
+  "pt-PT",
+  "pa",
   "ru",
   "es",
   "sw",
@@ -423,6 +486,8 @@ const TAG_ALIASES: [string, LanguageCode][] = [
   ["zh-hk", "zh-Hant"],
   ["zh-mo", "zh-Hant"],
   ["pt", "pt-BR"],
+  ["pt-ao", "pt-PT"],
+  ["pt-mz", "pt-PT"],
   ["in", "id"],
   ["tl", "fil"],
 ];

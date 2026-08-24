@@ -119,7 +119,10 @@
        profile back handler would close the app on Android 13, 14 and 15.
 
        Revisit when React Native registers its callback unconditionally. -->
-  <application android:name=".MainApplication" android:label="@string/app_name" android:icon="@mipmap/ic_launcher" android:roundIcon="@mipmap/ic_launcher_round" android:allowBackup="false" android:theme="@style/AppTheme" android:supportsRtl="true" android:enableOnBackInvokedCallback="false" android:requestLegacyExternalStorage="true">
+  <!-- Puts Airhop under Settings > Apps > Airhop > Language on Android 13, so
+       someone whose system language Airhop does not ship can still pick one it
+       does. Reaches only the strings the OS renders. Inert below API 33. -->
+  <application android:name=".MainApplication" android:label="@string/app_name" android:icon="@mipmap/ic_launcher" android:roundIcon="@mipmap/ic_launcher_round" android:allowBackup="false" android:theme="@style/AppTheme" android:supportsRtl="true" android:enableOnBackInvokedCallback="false" android:requestLegacyExternalStorage="true" android:localeConfig="@xml/locales_config" tools:targetApi="33">
     <!-- Android 16 ignores screenOrientation, resizability and aspect-ratio
          restrictions on any display at least 600dp wide, so the portrait lock on
          MainActivity below stops applying on a foldable's inner screen, a tablet

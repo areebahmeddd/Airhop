@@ -6,15 +6,25 @@
 //
 // On Android there is no per-socket SOCKS shim: Orbot's VPN mode routes all app
 // traffic transparently at the OS level, so the default WebSocket already goes
-// through Tor when Orbot is active. There the WebSocket swap is a no-op and we
-// only record intent and rebuild the transport (so connections re-open, in case
-// Orbot came up after the pool first connected).
+// through Tor when Orbot is active. There the WebSocket swap is a no-op.
 //
-// This is the single choke point for the Tor decision. The security screen and
-// the app-startup path both go through here, so the socket factory and the
-// persisted preference never drift apart.
+// That difference decides where each platform fails closed. iOS fails closed at
+// the socket, because every relay connection is dialled through Arti's proxy and
+// simply fails until a circuit exists. Android cannot: the moment Orbot's VPN
+// goes away the very same sockets keep working, in the clear. So Android fails
+// closed one layer up, refusing to have a Nostr transport at all while Tor is
+// wanted and not routing - see the gate section below. Bluetooth is untouched on
+// both, so the mesh keeps working and only the internet half pauses.
+//
+// This is the single choke point for the Tor decision. The security screen, the
+// app-startup path, the app-foreground re-check and the VPN edges all go through
+// here, so the socket factory, the gate and the persisted preference never drift
+// apart.
 
-import NativeAirhopBLE, { subscribeVpnLost } from "@bridge/NativeAirhopBLE";
+import NativeAirhopBLE, {
+  subscribeVpnAvailable,
+  subscribeVpnLost,
+} from "@bridge/NativeAirhopBLE";
 import NativeAirhopTor, { subscribeTorStatus } from "@bridge/NativeAirhopTor";
 import { isTorSocketNativeAvailable } from "@bridge/NativeAirhopTorSocket";
 import { setTorTeardown } from "@core/nostr/tor-teardown-handle";
@@ -99,42 +109,176 @@ export function isTorRoutingActive(): boolean {
   return torActive;
 }
 
-let vpnLostSub: EventSubscription | null = null;
-
 // Single writer for the active flag, mirrored into the mesh store so the Mesh
 // banner reacts the instant Tor is toggled (or primed at startup).
 //
-// The VPN watch is bound here rather than to the setting: the setting is what
-// the user asked for, this is what is actually carrying traffic.
-//
-// Android-only in effect (both native calls resolve immediately on iOS, where
-// Arti reports its own state) and idempotent on both sides.
+// The claim and nothing else. The VPN watch belongs to the preference instead,
+// because it has to survive the drop it reports. See setAndroidVpnWatch.
 function setTorActive(active: boolean): void {
   torActive = active;
   useMeshStateStore.getState().setTorActive(active);
-  if (active) {
-    // Listener first, so a VPN dropping between the two calls is not missed.
-    //
-    // It re-probes rather than acting on the event: a user can be on a corporate
-    // VPN and Orbot at once, so "a VPN went away" is not "Orbot went away".
-    // revalidateTorRouting no-ops if Tor is still routing.
-    vpnLostSub ??= subscribeVpnLost(() => {
-      void revalidateTorRouting();
-    });
-    // Optional on the method as well as the module: a JS-only update can land on
-    // an older native binary that has neither call. A device that refuses the
-    // registration falls back to the foreground re-check, which catches a drop
-    // later.
-    void NativeAirhopBLE?.startVpnWatch?.().catch(() => {});
-  } else {
-    void NativeAirhopBLE?.stopVpnWatch?.().catch(() => {});
-    vpnLostSub?.remove();
-    vpnLostSub = null;
-  }
 }
 
 function setTorBootstrap(phase: TorBootstrapPhase): void {
   useMeshStateStore.getState().setTorBootstrap(phase);
+}
+
+// ---- Android: the fail-closed gate ----
+//
+// iOS fails closed at the socket: the Tor WebSocket factory is installed before
+// any circuit exists, so a relay connection is dialled through Arti's SOCKS
+// proxy and fails until it is up. Nothing can reach the clear net even in
+// principle.
+//
+// Android has no per-socket SOCKS shim - Orbot routes transparently at the OS
+// level - so the same sockets keep working the instant its VPN goes away, in
+// the clear, for a user who asked for Tor. Nothing there can fail, so the only
+// place to fail closed is one layer up: refusing to have a Nostr transport at
+// all. That is this gate.
+//
+// Bluetooth is untouched throughout. The mesh keeps working and only the
+// internet half pauses, which is the same trade iOS already makes.
+
+let vpnLostSub: EventSubscription | null = null;
+let vpnAvailableSub: EventSubscription | null = null;
+
+// Bound to the PREFERENCE, not the claim. The window in which a VPN moving
+// matters opens when the user asks for Tor and closes when they stop asking,
+// and it spans the blocked state in between - which is precisely when the
+// arrival edge is the only thing that can recover the session.
+//
+// Android-only in effect (both native calls resolve immediately on iOS, where
+// Arti reports its own state) and idempotent on both sides.
+function setAndroidVpnWatch(enabled: boolean): void {
+  if (Platform.OS !== "android") return;
+  if (enabled) {
+    // Listeners first, so an edge landing between these calls is not missed.
+    //
+    // Both re-probe rather than acting on the event. A user can be on a
+    // corporate VPN and Orbot at once, so "a VPN went away" is not "Orbot went
+    // away" - and equally "a VPN arrived" is not "Orbot is back".
+    vpnLostSub ??= subscribeVpnLost(() => {
+      void applyAndroidTorRouting();
+    });
+    vpnAvailableSub ??= subscribeVpnAvailable(() => {
+      void applyAndroidTorRouting();
+    });
+    // Optional on the method as well as the module: a JS-only update can land on
+    // an older native binary that has neither call. A device that refuses the
+    // registration falls back to the foreground re-check, which catches a drop
+    // (and a recovery) later.
+    void NativeAirhopBLE?.startVpnWatch?.().catch(() => {});
+    return;
+  }
+  void NativeAirhopBLE?.stopVpnWatch?.().catch(() => {});
+  vpnLostSub?.remove();
+  vpnLostSub = null;
+  vpnAvailableSub?.remove();
+  vpnAvailableSub = null;
+}
+
+// Record the gate, without touching the transport.
+//
+// Split from applyTorGate for the two callers that rebuild anyway (the toggle,
+// both directions): writing then rebuilding once is one teardown, where letting
+// the setter rebuild first costs a second that drops the sockets it just
+// opened. Returns whether it moved, so a caller can tell a change from a
+// re-assert.
+function writeTorGate(blocked: boolean): boolean {
+  const store = useMeshStateStore.getState();
+  if (store.nostrBlockedByTor === blocked) return false;
+  store.setNostrBlockedByTor(blocked);
+  return true;
+}
+
+// Open or close the gate, and make the transport match.
+//
+// `restartNostr` is the whole mechanism: it tears the pool down and then
+// rebuilds only if every gate is open, so one call does the right thing in both
+// directions and mesh-service needs no notion of Tor. Before the mesh exists it
+// is a no-op and `start()` reads the gate itself, so startup ordering does not
+// matter.
+//
+// Skipped when nothing moves: restartNostr destroys and re-opens every relay
+// socket, geohash subscription and the DM inbox, and the probe below resolves
+// with the same answer whenever a VPN edge and an app foreground land together.
+function applyTorGate(blocked: boolean): void {
+  if (!writeTorGate(blocked)) return;
+  getMeshService()?.restartNostr();
+}
+
+// What a panic wipe has to undo on Android: two native listeners, the native
+// watch, the claim, and any gate still holding the transport down. Registered
+// rather than called for the reason tor-teardown-handle exists - panic-wipe
+// stays loadable without a native host, and this module reaches the mesh service
+// at import time. iOS registers its equivalent from watchTorBootstrap.
+//
+// The wipe clears torEnabled a few steps earlier, so opening the gate here
+// restores what the preference now asks for rather than overriding it.
+function registerAndroidTorTeardown(): void {
+  if (Platform.OS !== "android") return;
+  setTorTeardown(() => {
+    setAndroidVpnWatch(false);
+    setTorActive(false);
+    setTorBootstrap("idle");
+    // Written, not applied: the mesh service is destroyed before this runs, so
+    // there is no transport to rebuild and restartNostr would be a no-op with a
+    // misleading name at the call site.
+    writeTorGate(false);
+    setTorTeardown(null);
+  });
+}
+
+// Serialises overlapping probes. A VPN drop, a VPN arrival and an app
+// foreground can all land within a few hundred milliseconds of each other, and
+// each probe takes up to the native 500 ms connect timeout, so results can
+// resolve out of order. Only the newest may write, or a stale "not routing" can
+// close the gate over a session that has already recovered - the same rule
+// WiFiController's generation counter enforces for a stale attach.
+let androidProbeGeneration = 0;
+
+// Re-probe Orbot and bring the claim, the banner and the transport into line.
+//
+// The one Android writer. Every trigger - the toggle, startup, a VPN edge, an
+// app foreground - goes through here, so there is exactly one description of
+// what "Tor is on" means on this platform and the four paths cannot disagree.
+async function applyAndroidTorRouting(): Promise<boolean> {
+  if (Platform.OS !== "android") return false;
+  // The user is not asking for Tor, so there is nothing to enforce and nothing
+  // to hold down. Reached when an edge fires between a disable and the watch
+  // being torn down.
+  if (!useSettingsStore.getState().torEnabled) {
+    applyTorGate(false);
+    return false;
+  }
+
+  const generation = ++androidProbeGeneration;
+  const { routing } = await probeAndroidTorProxy();
+  // A newer probe is already in flight, or has already answered. Its result is
+  // the current one; this is history.
+  if (generation !== androidProbeGeneration) return routing;
+  // And consent can move during the probe - a toggle off, or a panic wipe - in
+  // which case this answer is about a question nobody is asking any more.
+  if (!useSettingsStore.getState().torEnabled) {
+    applyTorGate(false);
+    return false;
+  }
+
+  if (routing) {
+    setTorBootstrap("idle");
+    setTorActive(true);
+    // Opened AFTER the claim, so the banner never shows relays coming up under
+    // a Tor indicator that is still down.
+    applyTorGate(false);
+    return true;
+  }
+
+  // Closed BEFORE the claim is lowered, so there is no instant in which the UI
+  // says Tor is off while the sockets it was covering are still open.
+  applyTorGate(true);
+  setTorActive(false);
+  setTorBootstrap("blocked");
+  return false;
 }
 
 // Live bootstrap reporting for iOS, where Airhop embeds Arti and therefore owns
@@ -244,13 +388,27 @@ async function enableTorRouting(): Promise<TorRoutingResult> {
   if (Platform.OS === "android") {
     const probe = await probeAndroidTorProxy();
     if (!probe.routing) {
+      // Refused rather than accepted-into-blocked: declining and saying so is
+      // a better answer to "Orbot is not running" than switching on and pausing
+      // every internet feature, and the sheet can offer the install or the
+      // nudge. The blocked state is for a routing path that was working and
+      // went away, which is a different event.
       return {
         ok: false,
         reason: probe.orbotInstalled ? "orbot-inactive" : "orbot-missing",
       };
     }
-    setTorActive(true);
+    // Persist first, so the watch and the gate below both read a preference
+    // that already says what the user asked for.
     useSettingsStore.getState().setTorEnabled(true);
+    registerAndroidTorTeardown();
+    setAndroidVpnWatch(true);
+    setTorBootstrap("idle");
+    setTorActive(true);
+    // Opened explicitly: an earlier pass in this process may have left the gate
+    // closed, and the restart below is what puts the pool back on the path the
+    // user has just chosen.
+    writeTorGate(false);
     getMeshService()?.restartNostr();
     return { ok: true };
   }
@@ -327,8 +485,21 @@ async function disableTorRouting(): Promise<void> {
     installDirectSocket();
     await NativeAirhopTor?.stopTor().catch(() => {});
   }
-  setTorActive(false);
+  // The preference goes down first, so anything still racing - a probe in
+  // flight, a VPN edge arriving as the watch is torn down - sees consent
+  // withdrawn and stands down instead of writing over this.
   useSettingsStore.getState().setTorEnabled(false);
+  setTorActive(false);
+  setTorBootstrap("idle");
+  if (Platform.OS === "android") {
+    setAndroidVpnWatch(false);
+    // Nobody is asking for Tor, so nothing may be held down in its name. This
+    // is also the way out of the blocked state, which is why that state needs no
+    // rescue of its own: turning Tor off brings the internet features back.
+    // Ordered before the restart so one rebuild covers both.
+    writeTorGate(false);
+    setTorTeardown(null);
+  }
   getMeshService()?.restartNostr();
 }
 
@@ -342,23 +513,36 @@ export function primeTorRoutingOnStartup(): void {
   if (!useSettingsStore.getState().torEnabled) return;
 
   if (Platform.OS === "android") {
-    // The preference is on, but Orbot may have been uninstalled or stopped since
-    // we last ran. Re-verify before claiming Tor is active, so the toggle does
-    // not show green when nothing is routing. Done async (the mesh has not
-    // started yet); the settings switch is driven by the persisted preference,
-    // which we clear if Tor is no longer actually routing. Clearing it is the
-    // point: leaving it set would show an "on" switch over clear-net traffic,
-    // which is the exact thing this path exists to prevent.
-    void probeAndroidTorProxy()
-      .then(({ routing }) => {
-        if (routing) {
-          setTorActive(true);
-          return;
-        }
-        setTorActive(false);
-        useSettingsStore.getState().setTorEnabled(false);
-      })
-      .catch(() => {});
+    // Closed FIRST, synchronously, before anything can open a socket.
+    //
+    // The preference is on, but Orbot may have been uninstalled or stopped
+    // since the last launch, and the probe that answers takes up to half a
+    // second.
+    // Assuming it is routing for that half second is a clear-net window in the
+    // one state that must not have one - and it is the window a cold start on a
+    // hostile network lands in. The mesh has not started yet, so `start()` will
+    // read this gate and simply build no transport until the probe says it may;
+    // the cost on a healthy device is relay connections a few hundred
+    // milliseconds later than before, which nothing is waiting on.
+    //
+    // The preference is NOT cleared when the probe fails. Clearing it would
+    // quietly revert a user who asked for Tor onto the clear net and leave them
+    // to notice; keeping it on and holding the transport down is the answer iOS
+    // already gives a bootstrap that never completes. The way out is the same on
+    // both: the banner says Tor could not connect, and turning Tor off restores
+    // the internet half at once.
+    writeTorGate(true);
+    // "starting", not "blocked". The gate is shut either way, but the banner is
+    // a statement about the world and "Tor could not connect" is not yet true
+    // half a second into a launch. Blocked is what the probe concludes.
+    setTorBootstrap("starting");
+    registerAndroidTorTeardown();
+    // The watch goes up before the probe, not after: Orbot may finish starting
+    // during it (a phone that boots both apps at once), and the arrival edge is
+    // what turns that into a recovery instead of a wait for the next
+    // foreground.
+    setAndroidVpnWatch(true);
+    void applyAndroidTorRouting();
     return;
   }
 
@@ -381,6 +565,28 @@ export function primeTorRoutingOnStartup(): void {
   setTorBootstrap("starting");
   // Start Arti in the background; relays retry over Tor until it is ready.
   void NativeAirhopTor.startTor().catch(() => {});
+}
+
+// Tell Arti which side of the screen the app is on, so it can recover from a
+// suspension.
+//
+// iOS only, and not advisory. The process is suspended in the background, which
+// kills circuits and guard connections, while the manager stops polling once
+// bootstrap reaches 100% and never re-probes the SOCKS port. `isReady` stays
+// latched, so a resume reports Tor ready over dead circuits and the restart path
+// declines for the same reason - leaving relay sockets failing closed with
+// nothing to trigger a recovery. bitchat drives the same two calls from its
+// scene-phase handler.
+//
+// Ungated on the preference: the native side revokes auto-start consent on any
+// explicit stop, so the restart half is already a no-op for a user with Tor off.
+// Optional-chained for Android and for any build without Arti.
+export function notifyTorAppForeground(foreground: boolean): void {
+  if (Platform.OS !== "ios") return;
+  void NativeAirhopTor?.setAppForeground?.(foreground).catch(() => {
+    // An older native binary without the method. The foreground re-check below
+    // still corrects the claim; what is lost is the restart behind it.
+  });
 }
 
 // Re-check Android's Tor path and stand the flag down if it has gone away.
@@ -407,17 +613,30 @@ export function primeTorRoutingOnStartup(): void {
 // never completes: the banner reads "Tor on" over a Nostr layer that silently
 // never connects, and nothing ever corrected it.
 //
-// iOS status does not arrive over `TorStatusChanged`: nothing subscribes to that
-// event. Rather than add a subscription and its lifecycle, this reads the status
-// snapshot the native module already exposes, on the same foreground
-// trigger Android uses.
+// A status snapshot rather than the `TorStatusChanged` feed, even though
+// watchTorBootstrap subscribes to that too. The feed reports transitions; this
+// answers "what is true right now", which is the question a resume asks after a
+// suspension the feed could not report during.
 //
 // `isStarting` is treated as still-fine: a bootstrap in progress is the normal
 // state for the first seconds after launch, and standing the flag down there
 // would flicker the banner on every cold start.
 //
-// No-ops when Tor is already off.
+// No-ops when Tor is off.
 export async function revalidateTorRouting(): Promise<void> {
+  if (Platform.OS === "android") {
+    // Guarded on the PREFERENCE, not the claim. `torActive` is false throughout
+    // the blocked state, so an early return on it would make foreground the one
+    // trigger that can never recover a session. Consent says whether the check
+    // is wanted; the claim is one of the things it recomputes.
+    if (!useSettingsStore.getState().torEnabled) return;
+    // Re-asserted here as well as at startup: on a native binary too old to
+    // emit the VPN edges, a foreground round trip is the only signal there is.
+    setAndroidVpnWatch(true);
+    await applyAndroidTorRouting();
+    return;
+  }
+
   if (!torActive) return;
 
   if (Platform.OS === "ios") {
@@ -434,20 +653,12 @@ export async function revalidateTorRouting(): Promise<void> {
     // the clear net that a user who asked for Tor never agreed to. Failing
     // closed and stopping the claim is the honest pair.
     //
-    // The persisted preference also stays on, which is where iOS and Android
-    // differ. Arti is ours and a failed bootstrap is usually transient (no
-    // signal yet), so the next launch should retry rather than making the user
-    // re-enable Tor by hand. Orbot is not ours: if it has gone, only the user
-    // can bring it back, so Android clears the preference to match.
+    // The preference stays on, on both platforms. A transport that has gone is
+    // usually transient (no signal yet, Orbot not restarted), so the next launch
+    // retries rather than making the user re-enable Tor they were never told was
+    // switched off for them.
     setTorActive(false);
+    setTorBootstrap("blocked");
     return;
   }
-
-  if (Platform.OS !== "android") return;
-
-  const { routing } = await probeAndroidTorProxy();
-  if (routing) return;
-
-  setTorActive(false);
-  useSettingsStore.getState().setTorEnabled(false);
 }

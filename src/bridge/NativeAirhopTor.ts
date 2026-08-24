@@ -39,6 +39,19 @@ export interface Spec extends TurboModule {
   // that this device used Tor and roughly when.
   wipeTorState(): Promise<void>;
 
+  // Tell Arti which side of the screen the app is on.
+  //
+  // Not advisory. iOS suspends the process in the background, so circuits and
+  // guard connections do not survive it - while the bootstrap poll stops at
+  // 100% and the SOCKS probe never runs again, leaving `isReady` latched true.
+  // The background edge clears that latch; the foreground edge restarts against
+  // it. Without both, a resume reports Tor ready over dead circuits and nothing
+  // ever triggers a recovery.
+  //
+  // Safe to call whatever the Tor preference says: the restart half gates on
+  // auto-start consent, which only `startTor` grants.
+  setAppForeground(foreground: boolean): Promise<void>;
+
   getTorStatus(): Promise<TorStatus>;
 
   // Resolves true once bootstrapped and SOCKS-ready, false on timeout.

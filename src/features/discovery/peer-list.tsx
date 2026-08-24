@@ -8,7 +8,6 @@
 import { Feather } from "@expo/vector-icons";
 import { t, useT, useTPlural } from "@i18n";
 import { arrowForward } from "@i18n/layout";
-import { acknowledged } from "@platform/haptics";
 import { getMeshService, type MeshPingResult } from "@services/mesh-service";
 import { describePayResult, payPerson } from "@services/payment-router";
 import { showAlert } from "@store/alert-store";
@@ -22,8 +21,10 @@ import {
 } from "@store/peer-store";
 import Avatar from "@ui/components/avatar";
 import BottomSheet from "@ui/components/bottom-sheet";
+import CopyGlyph from "@ui/components/copy-glyph";
 import EmptyState from "@ui/components/empty-state";
 import StatusDot from "@ui/components/status-dot";
+import { useCopy } from "@ui/hooks/use-copy";
 import {
   DISABLED_OPACITY,
   FontFamily,
@@ -35,11 +36,11 @@ import {
   TAB_BAR_CLEARANCE,
   useThemeColors,
 } from "@ui/theme";
+import { formatNumber } from "@utils/format";
 import {
   resolveDisplayName,
   resolvePeerOwnName,
 } from "@utils/peer-display-name";
-import * as Clipboard from "expo-clipboard";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
@@ -101,7 +102,8 @@ export default function PeerList({
   // double tap starts two sends; the second now loses the reservation race and
   // reports a confusing "those coins were just used" instead of doing nothing.
   const [sendingSats, setSendingSats] = useState(false);
-  const [copiedPeerID, setCopiedPeerID] = useState(false);
+  const { copied: copiedPeerID, copy } = useCopy();
+
   // Outcome of a mesh ping against the open peer.
   //
   // Keyed by peer ID because this sheet is mounted once and reused: a bare
@@ -111,24 +113,6 @@ export default function PeerList({
     peerID: string;
     result: ProbeState;
   } | null>(null);
-  // Held so the "copied" tick can be cancelled if the sheet closes first.
-  // Without this the timer fired into an unmounted component.
-  const copyResetRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  useEffect(() => {
-    return () => {
-      if (copyResetRef.current !== null) clearTimeout(copyResetRef.current);
-    };
-  }, []);
-
-  function handleCopyPeerID(id: string): void {
-    void Clipboard.setStringAsync(id).catch(() => {});
-    // A copy is silent and the glyph swap is easy to miss mid-tap, so the
-    // confirmation is also felt. Every copy in the app goes through this.
-    acknowledged();
-    setCopiedPeerID(true);
-    if (copyResetRef.current !== null) clearTimeout(copyResetRef.current);
-    copyResetRef.current = setTimeout(() => setCopiedPeerID(false), 1500);
-  }
 
   // Refresh "last seen" every 10 seconds and evict stale peers.
   useEffect(() => {
@@ -249,7 +233,7 @@ export default function PeerList({
     if (result.rail !== "mesh") {
       showAlert(
         t("wallet.pay.sent_title", {
-          amount: result.amount.toLocaleString(),
+          amount: formatNumber(result.amount),
           unit: result.unit,
           name: peer.nickname,
         }),
@@ -296,7 +280,10 @@ export default function PeerList({
 
             return (
               <Pressable
-                style={styles.row}
+                style={({ pressed }) => [
+                  styles.row,
+                  pressed && styles.rowPressed,
+                ]}
                 onPress={() => setSelectedPeer(item)}
                 accessibilityRole="button"
                 // Relay appended rather than substituted: whether the box on the
@@ -410,7 +397,7 @@ export default function PeerList({
                   would fight this sheet's pan-to-dismiss gesture. */}
               <Pressable
                 style={styles.sheetPeerIDRow}
-                onPress={() => handleCopyPeerID(selectedPeer.peerID)}
+                onPress={() => copy(selectedPeer.peerID)}
                 hitSlop={HIT_SLOP}
                 accessibilityRole="button"
                 // The ID itself is 16 characters of hex, which a screen reader
@@ -423,10 +410,10 @@ export default function PeerList({
                 }
               >
                 <Text style={styles.sheetPeerID}>{selectedPeer.peerID}</Text>
-                <Feather
-                  name={copiedPeerID ? "check" : "copy"}
+                <CopyGlyph
+                  copied={copiedPeerID}
                   size={13}
-                  color={copiedPeerID ? Colors.online : Colors.textMuted}
+                  color={Colors.textMuted}
                 />
               </Pressable>
               <View style={styles.sheetStatusRow}>
@@ -706,10 +693,12 @@ function createDistanceStyles(Colors: ReturnType<typeof useThemeColors>) {
       fontSize: FontSize.sm,
       color: Colors.textMuted,
     },
+    // Prose, not data: both users of this are catalog sentences. The monospace
+    // has glyphs for three of the thirteen scripts Airhop ships, and digits are
+    // pinned to Latin anyway (see `@utils/format`).
     detail: {
       fontSize: FontSize.xs,
       color: Colors.textMuted,
-      fontFamily: FontFamily.mono,
     },
     action: {
       fontSize: FontSize.sm,
@@ -740,6 +729,10 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       paddingVertical: Spacing.md,
       gap: Spacing.md,
       minHeight: 72,
+    },
+    // The one press treatment for a row. See PRESSED_OPACITY in ui/theme.
+    rowPressed: {
+      backgroundColor: Colors.surfacePressed,
     },
     avatarWrapper: {
       position: "relative",

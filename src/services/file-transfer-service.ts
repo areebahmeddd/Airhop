@@ -42,11 +42,12 @@ import { bytesToHex, hexToBytes } from "@noble/hashes/utils.js";
 import { useChatStore, type ChatAttachment } from "@store/chat-store";
 import { useTransferStore } from "@store/transfer-store";
 import {
-  attachmentFailureMessage,
+  attachmentFailureKey,
   AttachmentFailureNotifier,
   type AttachmentFailure,
 } from "@utils/attachment-failure";
 import { BRIDGE_CHANNEL, canSendMedia } from "@utils/media-policy";
+import { systemRow } from "@utils/message-text";
 import * as FileSystem from "expo-file-system";
 
 // ---- Types ----
@@ -779,7 +780,9 @@ export class FileTransferService {
       senderID: senderPeerID,
       senderNickname:
         this.resolveNickname?.(senderPeerID) ?? senderPeerID.slice(0, 8),
-      text: attachmentFailureMessage(reason),
+      // Airhop's words, so the row re-reads them in the language it is opened
+      // in later.
+      ...systemRow(attachmentFailureKey(reason)),
       timestampMs: Date.now(),
       isMine: false,
       isSystem: true,

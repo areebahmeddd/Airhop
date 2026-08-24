@@ -5,16 +5,15 @@
 // elsewhere until it is filled in. There is no runtime fallback.
 //
 // Sections follow the app: shell, onboarding, chats, mesh, wallet, contacts,
-// settings. Keys are flat and dotted, `<area>.<screen>.<thing>`, and match
-// bitchat's where the concept does, so its 30 public-domain translations can be
-// lifted rather than commissioned.
+// settings. Keys are flat and dotted, `<area>.<screen>.<thing>`.
 //
 // Rules, all enforced by `__tests__/catalog.test.ts` unless noted:
 //
 //   Punctuation      Having started a second sentence, finish it. Titles,
 //                    buttons and one-line row subtitles take no full stop;
 //                    modal bodies and anything reaching two sentences take one
-//                    on every sentence.
+//                    on every sentence. Every catalog follows this in its own
+//                    script's punctuation.
 //   Placeholders     Named (`{count}`), never positional. Anything inside them
 //                    is user content and is never translated.
 //   Plurals          Through `tPlural`, never by appending to a stem. Counts
@@ -29,6 +28,8 @@
 //                    brand mark and is never translated or transliterated, and
 //                    the endonyms in src/i18n/languages.ts stay in their own
 //                    script.
+//   US English       Spelling and grammar, not units: distances stay metric.
+//   Typography       Typographic apostrophes and quotes, never straight ones.
 //   Never claim      That Android needs location to find Bluetooth devices (the
 //                    manifest asserts neverForLocation on BLUETOOTH_SCAN), or
 //                    that clearing the cache can retrieve a file again (there is
@@ -127,9 +128,9 @@ export const strings = {
   // ---- Onboarding: the author's note ----
   "onboarding.hello.title": "Welcome to Airhop",
   "onboarding.hello.p1":
-    "Hey there. Airhop is built on top of bitchat as an independent, open source side project. It's not affiliated with or endorsed by the bitchat project or permissionless tech, just something I enjoy building and sharing with the community.",
+    "Hey there. Airhop is built on top of bitchat as an independent, open source side project. It’s not affiliated with or endorsed by the bitchat project or permissionless tech, just something I enjoy building and sharing with the community.",
   "onboarding.hello.p2":
-    "This is the first iOS and Android release, so while I've tested it with friends, you'll probably run into a few bugs. If you do, or if you have an idea for a feature, I'd love to hear from you. Open an issue on {github} or send me an email at {email}.",
+    "This is the first iOS and Android release, so while I’ve tested it with friends, you’ll probably run into a few bugs. If you do, or if you have an idea for a feature, I’d love to hear from you. Open an issue on {github} or send me an email at {email}.",
   "onboarding.hello.p3":
     "If Airhop is useful to you, consider leaving a star on {github} or a review on the {store}. It helps more people discover the project. Thanks for giving it a try!",
 
@@ -179,7 +180,7 @@ export const strings = {
   "chat.channels.leave": "Leave channel",
   "chat.channels.leave_confirm": "Leave",
   "chat.channels.clear_body":
-    "Delete all messages in {name}? This can't be undone.",
+    "Delete all messages in {name}? This can’t be undone.",
   "chat.channels.leave_body":
     "Leave {name}? You will stop receiving its messages, and its history is removed from this device.",
   "chat.channels.more_options": "More options for {name}",
@@ -206,11 +207,11 @@ export const strings = {
   "chat.dm.mute": "Mute chat",
   "chat.dm.unmute": "Unmute chat",
   "chat.dm.clear_body":
-    "Delete all messages with {name}? This can't be undone.",
+    "Delete all messages with {name}? This can’t be undone.",
   "chat.dm.remove_contact_body":
     "Remove {name}? This deletes the conversation and forgets the contact. They can still reach you if they message again.",
   "chat.dm.block_body":
-    "Block {name}? You won't see them on the Mesh tab or receive messages from them, even if they're nearby.",
+    "Block {name}? You won’t see them on the Mesh tab or receive messages from them, even if they’re nearby.",
   "chat.dm.more_options": "More options for {name}",
   "chat.dm.remove_contact_short": "Remove contact",
   "chat.dm.block_short": "Block contact",
@@ -310,7 +311,7 @@ export const strings = {
 
   // ---- Chats: private groups ----
   "chat.group.unreachable":
-    "Could not reach every member. Try again while they're nearby.",
+    "Could not reach every member. Try again while they’re nearby.",
   "chat.group.you_were_added": "You were added to {name}.",
   "chat.group.added_you": "Added you to {name}",
   "chat.group.you_were_removed":
@@ -368,7 +369,7 @@ export const strings = {
   "chat.status.sent": "Sent",
   "chat.status.received": "Received",
   "chat.status.failed": "Failed",
-  "chat.status.cancelled": "Cancelled",
+  "chat.status.canceled": "Canceled",
   "chat.status.waiting": "Waiting",
   "chat.status.sending_short": "Sending",
   "chat.status.receiving": "Receiving",
@@ -381,28 +382,28 @@ export const strings = {
   "chat.thread.not_in_range":
     "Not in Bluetooth range. Delivering over the internet.",
   "chat.thread.not_nearby":
-    "Not nearby. We'll deliver when they're back in range or online.",
+    "Not nearby. We’ll deliver when they’re back in range or online.",
   "chat.thread.no_keys":
-    "You'll need to be in Bluetooth range, or scan their code, to message them.",
+    "You’ll need to be in Bluetooth range, or scan their code, to message them.",
   "chat.geo.card_received":
     "{name} shared their contact. Share yours back to keep talking after either of you moves.",
   "chat.geo.exchange_complete":
     "Contacts exchanged. You can reach each other from anywhere now.",
   "chat.geo.keep_person": "Keep this person",
   "chat.geo.keep_person_desc":
-    "Share your contact so you can keep talking after either of you moves. They'll learn your permanent identity.",
+    "Share your contact so you can keep talking after either of you moves. They’ll learn your permanent identity.",
   "chat.geo.card_sent": "Shared · waiting for theirs",
   "chat.thread.left_cell":
-    "You've left this area, so they can't reach you here. Swap codes to keep talking anywhere.",
+    "You’ve left this area, so they can’t reach you here. Swap codes to keep talking anywhere.",
   "chat.thread.no_route":
-    "Can't reach them right now. Message will send when a route is available.",
+    "Can’t reach them right now. Message will send when a route is available.",
   "chat.thread.empty": "No messages yet",
   "chat.thread.empty_desc": "Start an encrypted conversation.",
   "chat.thread.jump_latest": "Jump to latest message",
   "chat.thread.back_to_members": "Back to members",
   "chat.thread.nostr_key": "Nostr public key",
   "chat.thread.in_range": "In range",
-  "chat.voice.not_recorded": "Voice note didn't record",
+  "chat.voice.not_recorded": "Voice note didn’t record",
   "chat.thread.message": "Message",
   "chat.thread.message_placeholder": "Message…",
   "chat.thread.length_full": "Message is full",
@@ -413,7 +414,7 @@ export const strings = {
   "chat.thread.across_bridge": "{count} across bridge",
   "chat.thread.bridged": "bridged",
   "chat.thread.invite_body":
-    "Join me in {channel} on Airhop - offline-first, private mesh messaging.",
+    "Join me in {channel} on Airhop — offline-first, private mesh messaging.",
   "chat.thread.go_back_unread": "Go back, {count} unread",
   "chat.thread.view_info": "View info for {name}",
   "chat.thread.notices_new": "Notices for this channel, {count} new",
@@ -508,7 +509,6 @@ export const strings = {
   "chat.location.title": "Location",
   // Distance and direction from where the reader is standing.
   "chat.location.away": "{distance} {direction}",
-  "chat.location.accuracy": "Within {meters} m",
   "chat.location.taken": "Taken {ago} ago",
   "chat.location.open_maps": "Open in Maps",
   "chat.location.no_forward": "Locations are not forwarded",
@@ -581,7 +581,7 @@ export const strings = {
   "chat.media.saved_videos": "Saved to your videos",
   "chat.media.saved_photos": "Saved to your photos",
   "chat.media.not_saved": "Not saved",
-  "chat.media.cant_open": "Can't open file",
+  "chat.media.cant_open": "Can’t open file",
   "chat.media.no_app":
     "This device has no app available to open or share this file.",
   "chat.media.open_failed":
@@ -769,7 +769,7 @@ export const strings = {
   "chat.search.notice_a11y": "Notice in {chat} from {author}: {snippet}",
   "chat.search.urgent": "Urgent ·",
 
-  // ---- Chats: notification centre ----
+  // ---- Chats: notification center ----
   "chat.notif.actions_body":
     "{count} in this list. Clearing removes them from here only, and the messages stay unread in their conversations. Marking all read clears both.",
   "chat.notif.mark_all_read": "Mark all read",
@@ -787,8 +787,8 @@ export const strings = {
   // ---- Chats: forward ----
   "chat.forward.title": "Forward to…",
   "chat.forward.to": "Forward to {name}",
-  "chat.forward.cant_send_here": "Can't forward here",
-  "chat.forward.cant_send_to": "Can't forward to {name}",
+  "chat.forward.cant_send_here": "Can’t forward here",
+  "chat.forward.cant_send_to": "Can’t forward to {name}",
   "chat.forward.channels": "Channels",
   "chat.forward.groups": "Groups",
   "chat.forward.locations": "Locations",
@@ -806,7 +806,7 @@ export const strings = {
     "This phone can see others but cannot be discovered",
   "mesh.banner.location_off_android":
     "Location off · Android needs it to find peers",
-  "mesh.banner.paused": "Mesh paused · you're away",
+  "mesh.banner.paused": "Mesh paused · you’re away",
   "mesh.banner.location_off": "Location off · location channels unavailable",
   "mesh.banner.battery_saver": "Battery saver · scanning less often",
   "mesh.banner.wipe_incomplete":
@@ -832,9 +832,9 @@ export const strings = {
   "mesh.banner.hint.enable_bluetooth": "Asks Android to switch Bluetooth on",
   "mesh.banner.hint.location_settings": "Opens the system location settings",
   "mesh.banner.hint.app_settings":
-    "Opens Airhop's permissions in system settings",
+    "Opens Airhop’s permissions in system settings",
   "mesh.banner.hint.battery_settings":
-    "Opens this phone's background activity settings",
+    "Opens this phone’s background activity settings",
   "mesh.banner.dismiss": "Dismiss: {label}",
   "mesh.banner.hint.dismiss": "Hides this note for good",
 
@@ -861,10 +861,10 @@ export const strings = {
   "mesh.radar.signal_strong": "Strong",
   "mesh.radar.signal_medium": "Medium",
   "mesh.radar.signal_weak": "Weak",
-  "mesh.radar.you_centre": "You, at the centre of the mesh",
+  "mesh.radar.you_center": "You, at the center of the mesh",
   "mesh.radar.sonar_hint":
     "Plays a sonar sweep. Scanning is already continuous.",
-  "mesh.radar.paused": "Mesh paused · you're away",
+  "mesh.radar.paused": "Mesh paused · you’re away",
   "mesh.radar.ring_hint":
     "Ring position reflects signal strength, not distance",
   "mesh.radar.set_online":
@@ -960,7 +960,7 @@ export const strings = {
   "wallet.send.building": "Building…",
   "wallet.send.build": "Build token",
   "wallet.send.inexact_body":
-    "Your proofs can't make exactly {amount} {unit} offline. The smallest token you can build is {spend} {unit}, and offline there is no change: the extra {extra} {unit} goes to the recipient.\n\nRefreshing at the mint while online would split your proofs into denominations that make this exact.",
+    "Your proofs can’t make exactly {amount} {unit} offline. The smallest token you can build is {spend} {unit}, and offline there is no change: the extra {extra} {unit} goes to the recipient.\n\nRefreshing at the mint while online would split your proofs into denominations that make this exact.",
   "wallet.send.send_amount": "Send {amount}",
   "wallet.send.sent_to": "{amount} {unit} sent to {name}",
   "wallet.send.sent_to_body":
@@ -988,18 +988,18 @@ export const strings = {
     "Stored from {mint}, but not yet confirmed with the mint ({reason}).",
   "wallet.receive.offline": "offline",
   "wallet.receive.redeemed_here":
-    "Redeemed at {mint}. These proofs are now yours alone: the sender's copy no longer works.",
+    "Redeemed at {mint}. These proofs are now yours alone: the sender’s copy no longer works.",
   "wallet.receive.memo_quoted": "\n\n\u201c{memo}\u201d",
   "wallet.receive.redeemed_at":
-    "Redeemed at {mint}. It is provably yours now: the sender's copy of this token no longer works.",
+    "Redeemed at {mint}. It is provably yours now: the sender’s copy of this token no longer works.",
   "wallet.receive.stored_pending":
     "Stored from {mint}, but the mint has not confirmed it is unspent yet{dleq}. Refresh from the Wallet tab once you are online.",
   "wallet.receive.dleq_inline":
     " (its signature does check out, so the token is genuine)",
   "wallet.receive.dleq_ok":
-    "The mint's signature checks out, so the token is genuine.",
+    "The mint’s signature checks out, so the token is genuine.",
   "wallet.receive.dleq_uncached":
-    "The mint's keys are not cached here, so the signature could not be checked offline.",
+    "The mint’s keys are not cached here, so the signature could not be checked offline.",
   "wallet.receive.dleq_warning":
     "Until you refresh online, the sender could in principle have spent it elsewhere.",
   "wallet.receive.failed": "Could not receive",
@@ -1238,7 +1238,7 @@ export const strings = {
   "wallet.pending.reserved_desc":
     "Built and reserved, delivery unconfirmed. The proofs are held out of your balance so they cannot be spent twice.",
   "wallet.pending.locked_desc":
-    "Already locked to the recipient's key, so only they can spend it. It just has not reached them yet. Share the token to finish.",
+    "Already locked to the recipient’s key, so only they can spend it. It just has not reached them yet. Share the token to finish.",
   "wallet.pending.show_qr": "Show this token as a QR code",
   "wallet.pending.copy_again": "Copy the token again",
   "wallet.pending.share_again": "Share the token again",
@@ -1284,7 +1284,7 @@ export const strings = {
     "The mesh service is not running, so there is no way to hand the token over. Nothing has been deducted.",
   "wallet.xfer.could_not_send": "Could not send",
   "wallet.xfer.inexact_body":
-    "Your proofs can't make exactly {amount} {unit} offline. The smallest token you can build is {spend} {unit}, and the extra {extra} {unit} goes to them with no way to get it back.\n\nRefreshing at the mint while online splits your proofs into denominations that make this exact.",
+    "Your proofs can’t make exactly {amount} {unit} offline. The smallest token you can build is {spend} {unit}, and the extra {extra} {unit} goes to them with no way to get it back.\n\nRefreshing at the mint while online splits your proofs into denominations that make this exact.",
   "wallet.xfer.send_amount": "Send {amount}",
   "wallet.xfer.mesh_offline": "Mesh offline",
 
@@ -1319,7 +1319,7 @@ export const strings = {
   "wallet.scan.no_invoice": "No Lightning invoice found in that image.",
   "wallet.scan.unreadable": "Could not read that image.",
   "wallet.scan.camera_failed":
-    "Couldn't start the camera. Close other camera apps and try again.",
+    "Couldn’t start the camera. Close other camera apps and try again.",
   "wallet.scan.close": "Close scanner",
   "wallet.scan.on_device":
     "It is read on this device; nothing is sent anywhere.",
@@ -1361,9 +1361,9 @@ export const strings = {
   "wallet.err.mint_unreachable": "Mint unreachable",
   "wallet.err.tor_blocked": "Blocked while Tor is on",
   "wallet.err.insufficient": "Not enough balance",
-  "wallet.err.exact_amount": "Can't send that exact amount",
+  "wallet.err.exact_amount": "Can’t send that exact amount",
   "wallet.err.no_mint": "No mint",
-  "wallet.err.mint_unsupported": "Mint can't do that",
+  "wallet.err.mint_unsupported": "Mint can’t do that",
   "wallet.err.mint_refused": "Mint refused",
   "wallet.err.unreadable": "Unreadable token",
   "wallet.err.rejected": "Token rejected",
@@ -1373,7 +1373,10 @@ export const strings = {
   "wallet.svc.tor_ios": "Mint requests do not go through Tor on iOS.",
   "wallet.svc.tor_ios_body":
     "Arti only wraps Nostr WebSockets, so this request would reach the mint over the clear net and link your IP to these proofs. Allow it under Settings > Security, or turn Tor off first. Sending and receiving ecash over the mesh still works.",
-  "wallet.svc.keys_uncached": "This mint's keys are not cached on this device.",
+  "wallet.svc.tor_paused": "Tor is on but not connected.",
+  "wallet.svc.tor_paused_body":
+    "Orbot has stopped routing, so this request would reach the mint over the clear net and link your IP to these proofs. Start Orbot again, or turn Tor off. Sending and receiving ecash over the mesh still works.",
+  "wallet.svc.keys_uncached": "This mint’s keys are not cached on this device.",
   "wallet.svc.keys_uncached_body":
     "Open the wallet once while online to fetch them.",
   "wallet.svc.phrase_invalid": "That recovery phrase is not valid.",
@@ -1494,21 +1497,21 @@ export const strings = {
   "contacts.scan.invalid_id":
     "Paste a 16-character peer ID, an airhop://peer/… link, or a contact code.",
   "contacts.scan.camera_label": "Camera access",
-  "contacts.scan.camera_purpose": "scan a contact's QR code",
+  "contacts.scan.camera_purpose": "scan a contact’s QR code",
   "contacts.scan.camera_needed":
     "Camera access is needed to scan. You can still add by peer ID.",
   "contacts.scan.camera_failed":
-    "Couldn't start the camera. Close other camera apps and try again.",
+    "Couldn’t start the camera. Close other camera apps and try again.",
   "contacts.scan.photo_label": "Photo access",
-  "contacts.scan.photo_purpose": "scan a QR code you've saved",
+  "contacts.scan.photo_purpose": "scan a QR code you’ve saved",
   "contacts.scan.photo_needed":
     "Photo access is needed to pick an image. You can still add by peer ID.",
   "contacts.scan.no_qr": "No Airhop QR code found in that image.",
-  "contacts.scan.unreadable": "Couldn't read a QR code from that image.",
+  "contacts.scan.unreadable": "Couldn’t read a QR code from that image.",
   "contacts.scan.bitchat_expired":
     "That bitchat code has expired. Ask them to open their QR again.",
   "contacts.scan.tampered":
-    "This QR code is invalid: its peer ID doesn't match its keys. It may have been tampered with.",
+    "This QR code is invalid: its peer ID doesn’t match its keys. It may have been tampered with.",
   "contacts.scan.already_added": "Already in your contacts",
 
   // ---- Contacts: verifying by QR ----
@@ -1518,7 +1521,7 @@ export const strings = {
   "contacts.verify.verified": "Verified",
   "contacts.verify.different": "Different contact",
   "contacts.verify.scan_again": "Scan again",
-  "contacts.verify.failed": "Couldn't verify",
+  "contacts.verify.failed": "Couldn’t verify",
   "contacts.verify.done": "Done",
   "contacts.verify.title": "Verify {name}",
   "contacts.verify.aim": "Point your camera at their QR code",
@@ -1666,7 +1669,7 @@ export const strings = {
   "settings.general.media_retention_desc":
     "Photos, videos and voice notes are deleted after the selected time",
   "settings.general.media_retention_sheet":
-    "Choose how long media stays on this device. Deleted media can't be recovered.",
+    "Choose how long media stays on this device. Deleted media can’t be recovered.",
   "settings.general.retention_7_desc":
     "Least left behind. Best if the phone itself is the risk.",
   "settings.general.retention_14_desc":
@@ -1691,7 +1694,7 @@ export const strings = {
     "Keeps the sender and message off your lock screen, which shows them without unlocking",
   "settings.security.no_blocked": "No blocked peers",
   "settings.security.no_blocked_desc":
-    "Blocked peers can't message you or appear on the Mesh tab",
+    "Blocked peers can’t message you or appear on the Mesh tab",
   "settings.security.unblock_title": "Unblock this peer",
   "settings.security.unblock": "Unblock",
   "settings.security.unblock_peer": "Unblock {name}",
@@ -1786,10 +1789,10 @@ export const strings = {
     "Nearby offline phones stop reaching the location channels through yours. Your own messages are unaffected.",
   "settings.conn.bridge": "Mesh bridge",
   "settings.conn.bridge_desc":
-    "Link this area's public #bluetooth chat with another out-of-range Bluetooth crowd over the internet",
+    "Link this area’s public #bluetooth chat with another out-of-range Bluetooth crowd over the internet",
   "settings.conn.bridge_on_title": "Turn on the mesh bridge?",
   "settings.conn.bridge_on_body":
-    "Your public #bluetooth messages will be published to your neighborhood over the internet, so people beyond Bluetooth range can read them. Private messages are never bridged, and 'nearby only' keeps any single message local.",
+    "Your public #bluetooth messages will be published to your neighborhood over the internet, so people beyond Bluetooth range can read them. Private messages are never bridged, and “nearby only” keeps any single message local.",
   "settings.conn.bridge_off_title": "Turn off the mesh bridge?",
   "settings.conn.bridge_off_body":
     "Your public #bluetooth messages stay in Bluetooth range again, and messages from the bridged crowd stop arriving here.",
@@ -1827,7 +1830,7 @@ export const strings = {
     "Send photos from your library and save received media. Without it, you can still take and send new photos with the camera.",
   "settings.permissions.microphone": "Microphone",
   "settings.permissions.microphone_desc":
-    "Record and send voice messages or use live voice. Without it, voice messages and live voice won't work.",
+    "Record and send voice messages or use live voice. Without it, voice messages and live voice won’t work.",
   "settings.permissions.allow": "Allow this permission",
   "settings.permissions.open_settings":
     "Open system settings to change this permission",
@@ -1854,29 +1857,34 @@ export const strings = {
   "settings.theme.set_a11y": "Set appearance to {value}",
   "settings.font.set_a11y": "Set monospace font to {value}",
   "settings.font.system": "System",
-  "settings.font.system_desc": "Uses your device's default monospace font",
+  "settings.font.system_desc": "Uses your device’s default monospace font",
   "settings.font.jetbrains": "JetBrains Mono",
   "settings.font.jetbrains_desc": "Modern and easy to read",
   "settings.language.en": "English",
   "settings.language.am": "Amharic",
   "settings.language.ar": "Arabic",
+  "settings.language.bn": "Bengali",
   "settings.language.my": "Burmese",
   "settings.language.zh_hans": "Chinese (Simplified)",
   "settings.language.zh_hant": "Chinese (Traditional)",
   "settings.language.nl": "Dutch",
   "settings.language.fil": "Filipino",
   "settings.language.fr": "French",
+  "settings.language.ka": "Georgian",
   "settings.language.de": "German",
   "settings.language.hi": "Hindi",
   "settings.language.id": "Indonesian",
   "settings.language.it": "Italian",
   "settings.language.ja": "Japanese",
   "settings.language.ko": "Korean",
+  "settings.language.mg": "Malagasy",
   "settings.language.ms": "Malay",
   "settings.language.ne": "Nepali",
   "settings.language.fa": "Persian",
   "settings.language.pl": "Polish",
   "settings.language.pt_br": "Portuguese (Brazil)",
+  "settings.language.pt_pt": "Portuguese (Portugal)",
+  "settings.language.pa": "Punjabi",
   "settings.language.ru": "Russian",
   "settings.language.es": "Spanish",
   "settings.language.sw": "Swahili",
@@ -1887,8 +1895,24 @@ export const strings = {
   "settings.language.uk": "Ukrainian",
   "settings.language.ur": "Urdu",
   "settings.language.vi": "Vietnamese",
+  // Debug builds only. Not a language, so it takes no endonym and is named for
+  // what it is: English stretched, accented and bracketed, to find the screens
+  // that cannot hold a longer string before any real translation inherits them.
+  "settings.language.pseudo": "Pseudolocale",
   "settings.language.soon": "Coming soon",
   "settings.language.soon_a11y": "{value}, coming soon",
+  "settings.language.set_a11y": "Set language to {value}",
+  // Shown on the row for a right-to-left language the user has chosen but that
+  // has not taken effect yet. See the direction note in src/i18n/index.ts: React
+  // Native fixes layout direction when the process starts, and Airhop will not
+  // restart itself to force it, because a relaunch drops every Noise session and
+  // empties the peer table.
+  "settings.language.pending": "On next open",
+  "settings.language.pending_a11y":
+    "{value}, applies the next time you open Airhop",
+  "settings.language.rtl_title": "Reopen Airhop to finish",
+  "settings.language.rtl_body":
+    "{value} reads right to left, and Airhop can only change direction when it starts. Close it and open it again to finish switching. Nothing is lost, and your mesh stays connected until you do.",
   "settings.theme.light": "Light",
   "settings.theme.light_desc": "Always use the light palette",
   "settings.theme.dark": "Dark",
@@ -1922,11 +1946,11 @@ export const strings = {
   "settings.qr.permission_purpose": "save your QR code",
   "settings.qr.saved": "Saved",
   "settings.qr.saved_body": "QR code saved to your photo library.",
-  "settings.qr.save_failed": "Couldn't save",
+  "settings.qr.save_failed": "Couldn’t save",
   "settings.qr.save_failed_body": "The QR code could not be saved. Try again.",
   "settings.qr.share_message": "Add me on Airhop",
   "settings.qr.share_body":
-    "Add me on Airhop - offline-first, private mesh messaging.",
+    "Add me on Airhop — offline-first, private mesh messaging.",
   "settings.qr.show_short": "Show QR",
   "settings.qr.title": "Your QR code",
   "settings.qr.note":
@@ -1965,7 +1989,7 @@ export const strings = {
   "settings.help.faq_a11y": "Open FAQ",
   "settings.help.terms_desc": "How Airhop can be used",
   "settings.help.terms_a11y": "Open Terms of Service",
-  "settings.help.privacy_desc": "What we don't collect",
+  "settings.help.privacy_desc": "What we don’t collect",
   "settings.help.privacy_a11y": "Open Privacy Policy",
 
   // ---- Settings: support ----
@@ -1983,7 +2007,7 @@ export const strings = {
   "settings.about.version_desc": "Current release",
   "settings.about.version_a11y": "View version and check for updates",
   "settings.about.release_notes": "Release notes",
-  "settings.about.release_notes_desc": "What's new in the latest release",
+  "settings.about.release_notes_desc": "What’s new in the latest release",
   "settings.about.release_notes_a11y":
     "Open the latest release notes on GitHub",
   "settings.about.source": "Source code",

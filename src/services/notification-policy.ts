@@ -13,6 +13,7 @@
 
 import { t, tPlural } from "@i18n";
 import type { ChatAttachment, ChatMessage } from "@store/chat-store";
+import { messageText } from "@utils/message-text";
 
 // A DM channel is keyed "dm:<peerID>" (see chat-store). Everything else is a
 // public channel like "#city".
@@ -41,7 +42,7 @@ export function attachmentSummary(attachment: ChatAttachment): string {
 // summary when there is no text.
 export function messagePreview(msg: ChatMessage): string {
   if (msg.attachment) return attachmentSummary(msg.attachment);
-  return msg.text;
+  return messageText(msg);
 }
 
 // Title/body for a message notification. DMs read as "<sender>: <preview>";

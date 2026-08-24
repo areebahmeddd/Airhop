@@ -21,6 +21,7 @@ import {
 import { showAlert } from "@store/alert-store";
 import BottomSheet from "@ui/components/bottom-sheet";
 import {
+  BUTTON_HEIGHT,
   DISABLED_OPACITY,
   FontSize,
   FontWeight,
@@ -28,6 +29,7 @@ import {
   Spacing,
   useThemeColors,
 } from "@ui/theme";
+import { formatNumber } from "@utils/format";
 import React, { useMemo, useState } from "react";
 import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 
@@ -91,7 +93,7 @@ export default function SendEcashSheet({
     onClose();
     showAlert(
       T("wallet.pay.sent_title", {
-        amount: result.amount.toLocaleString(),
+        amount: formatNumber(result.amount),
         unit: result.unit,
         name: displayName,
       }),
@@ -191,7 +193,7 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
     },
     confirm: {
       width: "100%",
-      minHeight: 50,
+      minHeight: BUTTON_HEIGHT,
       backgroundColor: Colors.accent,
       borderRadius: Radius.full,
       alignItems: "center",
@@ -207,7 +209,7 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
     },
     cancel: {
       width: "100%",
-      minHeight: 50,
+      minHeight: BUTTON_HEIGHT,
       marginTop: Spacing.sm,
       backgroundColor: Colors.surfaceRaised,
       borderWidth: 1,

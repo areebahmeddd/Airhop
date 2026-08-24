@@ -1,0 +1,7 @@
+<resources>
+  <string name="mesh_channel_name">شبکهٔ مش</string>
+  <string name="mesh_channel_description">مش Airhop را در پس‌زمینه فعال نگه می‌دارد</string>
+  <string name="mesh_notification_title">مش Airhop فعال است</string>
+  <string name="mesh_notification_text">یافتن و بازپخش پیام‌های نزدیک</string>
+  <string name="mesh_notification_stop">توقف مش</string>
+</resources>

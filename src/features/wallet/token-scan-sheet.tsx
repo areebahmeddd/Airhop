@@ -21,6 +21,7 @@ import { t, useT } from "@i18n";
 import { ensurePermission } from "@platform/permissions";
 import BottomSheet from "@ui/components/bottom-sheet";
 import {
+  BUTTON_HEIGHT,
   FontSize,
   FontWeight,
   HIT_SLOP,
@@ -292,8 +293,8 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
     },
     sheet: {
       backgroundColor: Colors.surface,
-      borderTopLeftRadius: Radius["2xl"],
-      borderTopRightRadius: Radius["2xl"],
+      borderTopStartRadius: Radius["2xl"],
+      borderTopEndRadius: Radius["2xl"],
       paddingHorizontal: Spacing.xl,
       paddingBottom: Spacing["2xl"],
       gap: Spacing.md,
@@ -314,7 +315,7 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
     },
     action: {
       width: "100%",
-      minHeight: 50,
+      minHeight: BUTTON_HEIGHT,
       flexDirection: "row",
       alignItems: "center",
       justifyContent: "center",
@@ -331,7 +332,7 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
     },
     cancel: {
       width: "100%",
-      minHeight: 50,
+      minHeight: BUTTON_HEIGHT,
       alignItems: "center",
       justifyContent: "center",
       borderRadius: Radius.full,

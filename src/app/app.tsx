@@ -25,9 +25,20 @@ import ProfileScreen from "@features/settings/profile-screen";
 import WalletScreen, {
   type WalletAction,
 } from "@features/wallet/wallet-screen";
-import { initI18n, t, useT, useTPlural, type TranslationKey } from "@i18n";
+import {
+  initI18n,
+  LANGUAGES,
+  needsRelaunch,
+  refreshDeviceLanguage,
+  resolvePreference,
+  t,
+  translatorFor,
+  useT,
+  useTPlural,
+  type TranslationKey,
+} from "@i18n";
 import { arrowBack, isRTLLayout } from "@i18n/layout";
-import { getBatteryOptimizationSettingsURI } from "@platform/battery-optimization";
+import { getBatterySettingsTargets } from "@platform/battery-optimization";
 import {
   ensureBlePermissions,
   hasBlePermissions,
@@ -63,6 +74,7 @@ import {
 import { panicWipe } from "@services/panic-wipe";
 import { applyPresence } from "@services/presence-service";
 import {
+  notifyTorAppForeground,
   primeTorRoutingOnStartup,
   revalidateTorRouting,
 } from "@services/tor-routing";
@@ -117,6 +129,7 @@ import {
   FontWeight,
   hitSlopFor,
   MaxFontScale,
+  PRESSED_OPACITY,
   Radius,
   Shadow,
   Spacing,
@@ -126,7 +139,7 @@ import {
 import { parseAirhopLink } from "@utils/deep-link";
 import { formatNumber } from "@utils/format";
 import { mentionsNickname } from "@utils/mentions";
-import { messagePreviewText } from "@utils/message-preview";
+import { messagePreviewEntry } from "@utils/message-preview";
 import { sumUnread } from "@utils/unread";
 import { peerIDToUsername } from "@utils/username";
 import { settleOr, withTimeout } from "@utils/with-timeout";
@@ -498,29 +511,40 @@ async function handleBannerAction(
       break;
 
     case "open-background-limits": {
-      // Deep-link straight into the OEM's own background/autostart screen -
-      // Xiaomi's autostart list, Samsung's sleeping-apps list, and so on. There
-      // is no common Android surface for this, which is exactly why describing
+      // Walk the ladder for this device and stop at the first screen that
+      // opens: the OEM's own autostart list where one is known (Xiaomi's,
+      // Oppo's, vivo's), then the standard battery-optimization list, which
+      // exists everywhere and is where the whitelist actually lives. There is
+      // no single Android surface for this, which is exactly why describing
       // where to tap does not work: the path differs on every skin.
+      //
+      // The two kinds dispatch differently and cannot be swapped: an ACTION
+      // goes through sendIntent, which builds Intent(action) and pre-resolves
+      // it, while a URL goes through openURL, which builds ACTION_VIEW on the
+      // parsed URI. An action posted as an `intent:` URL resolves to nothing.
       //
       // Acknowledged either way. The whitelist itself is not readable back, so
       // "did it work" is unanswerable; taking the user to the right screen is
       // the whole of what the app can do, and repeating the advice afterwards
       // would be nagging someone who has already acted on it.
       useSettingsStore.getState().markBackgroundLimitsAcknowledged();
-      const uri = getBatteryOptimizationSettingsURI();
-      if (uri !== null) {
-        const opened = await Linking.openURL(uri).then(
+      let opened = false;
+      for (const target of getBatterySettingsTargets()) {
+        opened = await (
+          target.kind === "intent"
+            ? Linking.sendIntent(target.action)
+            : Linking.openURL(target.uri)
+        ).then(
           () => true,
           () => false,
         );
-        // OEM deep links are undocumented and disappear between skin versions.
-        // The app's own settings page always exists, and battery controls are
-        // reachable from it, so it is a landing place rather than a dead end.
-        if (!opened) await Linking.openSettings().catch(() => undefined);
-      } else {
-        await Linking.openSettings().catch(() => undefined);
+        if (opened) break;
       }
+      // Nothing on the ladder resolved: an OEM that has moved its screens and a
+      // stripped build with no battery settings activity. The app's own
+      // settings page always exists and battery controls are reachable from it,
+      // so it is a landing place rather than a dead end.
+      if (!opened) await Linking.openSettings().catch(() => undefined);
       // Nothing about the radios changed, so there is nothing to re-read.
       return;
     }
@@ -571,6 +595,30 @@ function AppContent(): React.JSX.Element {
   // the language at call time instead of each being a hook.
   const T = useT();
   const TP = useTPlural();
+
+  // The restart notice, and the only place it is raised.
+  //
+  // A right-to-left language is a preference until the next launch (see
+  // `@i18n`), and two routes arrive there: the picker, and a first launch on a
+  // right-to-left phone. One owner, so both say the same thing once.
+  //
+  // Written in the language being waited for, not the one on screen: its reader
+  // is by definition somebody who cannot read the current UI language.
+  const languagePreference = useSettingsStore((s) => s.language);
+  const noticeShownFor = useRef<string | null>(null);
+  useEffect(() => {
+    if (!needsRelaunch(languagePreference)) return;
+    const target = resolvePreference(languagePreference);
+    if (noticeShownFor.current === target) return;
+    noticeShownFor.current = target;
+    const inTarget = translatorFor(target);
+    showAlert(
+      inTarget("settings.language.rtl_title"),
+      inTarget("settings.language.rtl_body", {
+        value: inTarget(LANGUAGES[target].nameKey),
+      }),
+    );
+  }, [languagePreference]);
 
   // appReady guards against a flash of the welcome screen on every launch.
   // The identity check is async, so we render nothing until it resolves.
@@ -997,6 +1045,11 @@ function AppContent(): React.JSX.Element {
       // chat state should be flushed, and the privacy cover should be up,
       // because the user genuinely is not reading the screen.
       getMeshService()?.setAppForeground(next !== "background");
+      // Arti needs the same signal, and needs it on the "background" boundary
+      // rather than on "active": an app switcher or a permission dialog does not
+      // suspend the process, so treating those as a suspension would restart Tor
+      // for nothing. iOS only; a no-op everywhere else.
+      notifyTorAppForeground(next !== "background");
       if (next !== "active") {
         // Chat persistence is throttled, so leaving the foreground is the last
         // safe moment to force whatever is still inside that window to disk.
@@ -1005,6 +1058,10 @@ function AppContent(): React.JSX.Element {
       }
       if (next === "active") {
         syncPermissions();
+        // The trip away may have been to Settings. Both Android language
+        // pickers recreate the Activity and keep the JS context, so the sampled
+        // language is what a return can silently invalidate.
+        refreshDeviceLanguage();
         // The Mesh tab is a tap away now, so a "someone nearby" from earlier is
         // stale the moment the app is open.
         void dismissNearbyNotification();
@@ -1079,7 +1136,9 @@ function AppContent(): React.JSX.Element {
             isDM: msg.channel.startsWith("dm:"),
             senderID: msg.senderID,
             senderNickname: msg.senderNickname,
-            preview: messagePreviewText(msg),
+            // Spread, so an attachment with no caption logs its key too and the
+            // bell reads in the current language rather than the arrival one.
+            ...messagePreviewEntry(msg),
             timestampMs: msg.timestampMs,
           });
         }
@@ -1489,10 +1548,11 @@ function AppContent(): React.JSX.Element {
                           accessibilityRole="tablist"
                         >
                           <Pressable
-                            style={[
+                            style={({ pressed }) => [
                               styles.seg,
                               styles.segIconText,
                               chatSubTab === "channels" && styles.segActive,
+                              pressed && styles.chromePressed,
                             ]}
                             onPress={() => setChatSubTab("channels")}
                             accessibilityRole="tab"
@@ -1528,6 +1588,7 @@ function AppContent(): React.JSX.Element {
                                 chatSubTab === "channels" &&
                                   styles.segTextActive,
                               ]}
+                              numberOfLines={1}
                               maxFontSizeMultiplier={MaxFontScale.chrome}
                             >
                               {T("chat.subtab.channels")}
@@ -1550,10 +1611,11 @@ function AppContent(): React.JSX.Element {
                             )}
                           </Pressable>
                           <Pressable
-                            style={[
+                            style={({ pressed }) => [
                               styles.seg,
                               styles.segIconText,
                               chatSubTab === "dms" && styles.segActive,
+                              pressed && styles.chromePressed,
                             ]}
                             onPress={() => setChatSubTab("dms")}
                             accessibilityRole="tab"
@@ -1582,6 +1644,7 @@ function AppContent(): React.JSX.Element {
                                 styles.segText,
                                 chatSubTab === "dms" && styles.segTextActive,
                               ]}
+                              numberOfLines={1}
                               maxFontSizeMultiplier={MaxFontScale.chrome}
                             >
                               {T("chat.subtab.direct")}
@@ -1606,7 +1669,10 @@ function AppContent(): React.JSX.Element {
                             and Direct sub-tabs, badged with unseen activity.
                             Same filled circle as the + beside it. */}
                         <Pressable
-                          style={styles.headerIconBtn}
+                          style={({ pressed }) => [
+                            styles.headerIconBtn,
+                            pressed && styles.headerPillPressed,
+                          ]}
                           onPress={openActivityCenter}
                           hitSlop={hitSlopFor(HEADER_ICON_SIZE)}
                           accessibilityRole="button"
@@ -1642,7 +1708,10 @@ function AppContent(): React.JSX.Element {
                             chooser either way, so the header keeps its shape
                             when you switch between Channels and Direct. */}
                         <Pressable
-                          style={styles.newChannelPill}
+                          style={({ pressed }) => [
+                            styles.newChannelPill,
+                            pressed && styles.headerPillPressed,
+                          ]}
                           onPress={() => setStartNewTrigger((c) => c + 1)}
                           hitSlop={hitSlopFor(HEADER_ICON_SIZE)}
                           accessibilityRole="button"
@@ -1675,10 +1744,11 @@ function AppContent(): React.JSX.Element {
                           accessibilityRole="tablist"
                         >
                           <Pressable
-                            style={[
+                            style={({ pressed }) => [
                               styles.seg,
                               styles.segIconText,
                               meshViewMode === "radar" && styles.segActive,
+                              pressed && styles.chromePressed,
                             ]}
                             onPress={() => setMeshViewMode("radar")}
                             accessibilityRole="tab"
@@ -1702,16 +1772,18 @@ function AppContent(): React.JSX.Element {
                                 meshViewMode === "radar" &&
                                   styles.segTextActive,
                               ]}
+                              numberOfLines={1}
                               maxFontSizeMultiplier={MaxFontScale.chrome}
                             >
                               {T("mesh.view.radar_short")}
                             </Text>
                           </Pressable>
                           <Pressable
-                            style={[
+                            style={({ pressed }) => [
                               styles.seg,
                               styles.segIconText,
                               meshViewMode === "list" && styles.segActive,
+                              pressed && styles.chromePressed,
                             ]}
                             onPress={() => setMeshViewMode("list")}
                             accessibilityRole="tab"
@@ -1734,6 +1806,7 @@ function AppContent(): React.JSX.Element {
                                 styles.segText,
                                 meshViewMode === "list" && styles.segTextActive,
                               ]}
+                              numberOfLines={1}
                               maxFontSizeMultiplier={MaxFontScale.chrome}
                             >
                               {T("mesh.view.list_short")}
@@ -1741,7 +1814,10 @@ function AppContent(): React.JSX.Element {
                           </Pressable>
                         </View>
                         <Pressable
-                          style={styles.newChannelPill}
+                          style={({ pressed }) => [
+                            styles.newChannelPill,
+                            pressed && styles.headerPillPressed,
+                          ]}
                           onPress={() => setMeshAddCounter((c) => c + 1)}
                           hitSlop={hitSlopFor(HEADER_ICON_SIZE)}
                           accessibilityRole="button"
@@ -1774,9 +1850,10 @@ function AppContent(): React.JSX.Element {
                             wallet starts. A dim glyph does not say why, so the
                             reason rides in the accessibility label. */}
                         <Pressable
-                          style={[
+                          style={({ pressed }) => [
                             styles.newChannelPill,
                             !hasSpendableEcash && styles.headerPillDisabled,
+                            pressed && styles.headerPillPressed,
                           ]}
                           disabled={!hasSpendableEcash}
                           onPress={() => triggerWalletAction("send")}
@@ -1796,7 +1873,10 @@ function AppContent(): React.JSX.Element {
                           />
                         </Pressable>
                         <Pressable
-                          style={styles.newChannelPill}
+                          style={({ pressed }) => [
+                            styles.newChannelPill,
+                            pressed && styles.headerPillPressed,
+                          ]}
                           onPress={() => triggerWalletAction("receive")}
                           hitSlop={hitSlopFor(HEADER_ICON_SIZE)}
                           accessibilityRole="button"
@@ -1809,9 +1889,10 @@ function AppContent(): React.JSX.Element {
                           />
                         </Pressable>
                         <Pressable
-                          style={[
+                          style={({ pressed }) => [
                             styles.newChannelPill,
                             !hasSpendableEcash && styles.headerPillDisabled,
+                            pressed && styles.headerPillPressed,
                           ]}
                           disabled={!hasSpendableEcash}
                           onPress={() => triggerWalletAction("zap")}
@@ -1831,7 +1912,10 @@ function AppContent(): React.JSX.Element {
                           />
                         </Pressable>
                         <Pressable
-                          style={styles.newChannelPill}
+                          style={({ pressed }) => [
+                            styles.newChannelPill,
+                            pressed && styles.headerPillPressed,
+                          ]}
                           onPress={() => triggerWalletAction("addMint")}
                           hitSlop={hitSlopFor(HEADER_ICON_SIZE)}
                           accessibilityRole="button"
@@ -2083,7 +2167,10 @@ function AppContent(): React.JSX.Element {
                         return (
                           <Pressable
                             key={id}
-                            style={styles.tabItem}
+                            style={({ pressed }) => [
+                              styles.tabItem,
+                              pressed && styles.chromePressed,
+                            ]}
                             onPress={() => navigateToTab(id as MainTab)}
                             accessibilityRole="tab"
                             accessibilityLabel={
@@ -2199,6 +2286,17 @@ const EDGE_BACK_ZONE = 44;
 // the header stays light; hitSlopFor() makes up the difference for the thumb.
 const HEADER_ICON_SIZE = 32;
 
+// Shared by the three count badges (tab, bell, segment), which are the same
+// 16pt circle holding the same 10pt digit and must centre it identically.
+//
+// includeFontPadding is Android-only and on by default: the box reserves
+// ascender and descender room a digit never uses, so a numeral that centres on
+// iOS sits low on Android.
+const BADGE_DIGIT = {
+  includeFontPadding: false,
+  lineHeight: FontSize["2xs"] + 2,
+} as const;
+
 // ---- Styles ----
 
 function createStyles(Colors: ReturnType<typeof useThemeColors>) {
@@ -2245,10 +2343,15 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       fontWeight: FontWeight.semibold,
       color: Colors.textPrimary,
       letterSpacing: -0.2,
-      // The Wallet header packs four action pills beside this title. On a narrow
-      // device at a large text size the row overflows unless the title gives up
-      // its width first.
-      flexShrink: 1,
+      // The Wallet header packs four action pills beside this title, so a long
+      // translation overflows the row on a narrow device.
+      //
+      // Grow, because under `space-between` free space lands between the title
+      // and the controls, and an intrinsically-sized title would ellipsize with
+      // a gap beside it. Shrink 2 against the controls' 1, so an overflow costs
+      // the title more than the segment labels.
+      flexGrow: 1,
+      flexShrink: 2,
       marginEnd: Spacing.sm,
     },
     searchRow: {
@@ -2285,12 +2388,19 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       flexDirection: "row",
       alignItems: "center",
       gap: Spacing.sm,
+      // minWidth 0 is required, not decorative: a flex item's default minimum
+      // is its content size, so without it the row cannot shrink below the
+      // segment labels whatever flexShrink says.
+      flexShrink: 1,
+      minWidth: 0,
     },
     segmented: {
       flexDirection: "row",
       backgroundColor: Colors.surfaceRaised,
       borderRadius: Radius.full,
       padding: 2,
+      flexShrink: 1,
+      minWidth: 0,
     },
     // 9 vertical padding, not 7: at 7 the segment measures ~30pt tall, under
     // the 44pt floor. hitSlop is not an option, since slop on adjacent segments
@@ -2299,20 +2409,32 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       paddingHorizontal: Spacing.md,
       paddingVertical: 9,
       borderRadius: Radius.full,
+      flexShrink: 1,
+      minWidth: 0,
+      // Transparent when inactive so switching segments changes the border's
+      // colour and never the control's geometry.
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: "transparent",
     },
+
     segIconText: {
       flexDirection: "row",
       alignItems: "center",
       gap: 4,
     },
+    // On dark the shadow is invisible and `surface` is darker than the
+    // `surfaceRaised` track, so the lift inverts and the thumb recedes. The
+    // hairline carries the shape there, as it does for the tab bar.
     segActive: {
       backgroundColor: Colors.surface,
+      borderColor: Colors.border,
       ...Shadow.low,
     },
     segText: {
       fontSize: FontSize.sm,
       fontWeight: FontWeight.medium,
       color: Colors.textMuted,
+      flexShrink: 1,
     },
     segTextActive: {
       color: Colors.textPrimary,
@@ -2328,6 +2450,15 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
     headerPillDisabled: {
       opacity: DISABLED_OPACITY,
     },
+    headerPillPressed: {
+      backgroundColor: Colors.surfacePressed,
+    },
+    // A tab and a segment have no fill of their own to darken, and the
+    // segmented thumb already owns the background. See PRESSED_OPACITY.
+    chromePressed: {
+      opacity: PRESSED_OPACITY,
+    },
+
     headerIconBtn: {
       width: HEADER_ICON_SIZE,
       height: HEADER_ICON_SIZE,
@@ -2357,6 +2488,7 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       // Fixed-width digits so a count ticking 9 -> 10 -> 11 does not make the
       // badge breathe. Same on all three badge styles below.
       fontVariant: ["tabular-nums"],
+      ...BADGE_DIGIT,
     },
     content: {
       flex: 1,
@@ -2441,8 +2573,8 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       fontSize: FontSize["2xs"],
       fontWeight: FontWeight.bold,
       color: Colors.textInverse,
-      lineHeight: 12,
       fontVariant: ["tabular-nums"],
+      ...BADGE_DIGIT,
     },
     // Unread badge on the Channels/Direct segmented control, the same visual
     // language as tabBadge, just anchored to a smaller pill instead of a tab icon.
@@ -2467,8 +2599,8 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       fontSize: FontSize["2xs"],
       fontWeight: FontWeight.bold,
       color: Colors.textInverse,
-      lineHeight: 11,
       fontVariant: ["tabular-nums"],
+      ...BADGE_DIGIT,
     },
     tabLabel: {
       fontSize: FontSize["2xs"],

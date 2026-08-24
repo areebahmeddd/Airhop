@@ -58,7 +58,7 @@ export default function App() {
       <ScrollManager />
       <a
         href="#main-content"
-        className="focus:bg-ink focus:text-canvas sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 focus:z-[60] focus:rounded-full focus:px-4 focus:py-2 focus:text-sm focus:font-bold"
+        className="focus:bg-ink focus:text-canvas sr-only focus:not-sr-only focus:absolute focus:start-4 focus:top-4 focus:z-[60] focus:rounded-full focus:px-4 focus:py-2 focus:text-sm focus:font-bold"
       >
         {T("nav.skip")}
       </a>

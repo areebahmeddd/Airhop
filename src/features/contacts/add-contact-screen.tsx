@@ -36,6 +36,7 @@ import { useContactsStore } from "@store/contacts-store";
 import Avatar from "@ui/components/avatar";
 import BottomSheet from "@ui/components/bottom-sheet";
 import {
+  BUTTON_HEIGHT,
   DISABLED_OPACITY,
   FontFamily,
   FontSize,
@@ -800,7 +801,7 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
     },
     primaryBtn: {
       width: "100%",
-      minHeight: 50,
+      minHeight: BUTTON_HEIGHT,
       backgroundColor: Colors.accent,
       borderRadius: Radius.full,
       paddingVertical: Spacing.md,

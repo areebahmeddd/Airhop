@@ -1,0 +1,10 @@
+/* Keys mirror ios/Airhop/Info.plist, the English copy. Guarded by npm run i18n:native. */
+
+"NSBluetoothAlwaysUsageDescription" = "Mampiasa ny Bluetooth ny Airhop mba hifandray amin'ny fitaovana akaiky eo amin'ny harato.";
+"NSBluetoothPeripheralUsageDescription" = "Mampiasa ny Bluetooth ny Airhop mba hanambara ny fisianao amin'ny teboka akaiky.";
+"NSLocalNetworkUsageDescription" = "Mampiasa ny tambajotra eo an-toerana ny Airhop mba hifandray mivantana amin'ny fitaovana akaiky rehefa mamindra zavatra lehibe (horonan-tsary, rakitra vaventy).";
+"NSCameraUsageDescription" = "Mampiasa ny fakan-tsary ny Airhop mba haka sary ny kaody QR-n'ny fifandraisana, sy haka sary sy horonan-tsary hozaraina amin'ny teboka akaiky.";
+"NSMicrophoneUsageDescription" = "Mampiasa ny mikrô ny Airhop mba handraikitra naoty feo sy hitondra feo mivantana amin'ny teboka akaiky.";
+"NSPhotoLibraryUsageDescription" = "Midira amin'ny tahirin-tsarinao ny Airhop mba hizara sary sy horonan-tsary amin'ny harato.";
+"NSPhotoLibraryAddUsageDescription" = "Mitahiry sary sy horonan-tsary ao amin'ny tahirinao ny Airhop rehefa mifidy hitahiry iray ianao, sy rehefa maka ny kaody QR-nao.";
+"NSLocationWhenInUseUsageDescription" = "Mampiasa ny toerana manodidina anao ny Airhop mba hametrahana anao amin'ny fantsonan'ny faritra akaiky (bloka, tanàna, faritra). Tsy mivoaka ny fitaovanao mihitsy ny toeranao marina.";

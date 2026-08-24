@@ -9,6 +9,7 @@
 
 import { Feather, MaterialCommunityIcons } from "@expo/vector-icons";
 import { t, tPlural, type TranslationKey, useT, useTPlural } from "@i18n";
+import { trailingSwipeActions } from "@i18n/layout";
 import { useRichText } from "@i18n/rich-text";
 import { held } from "@platform/haptics";
 import {
@@ -28,6 +29,7 @@ import {
   Duration,
   FontSize,
   FontWeight,
+  LONG_PRESS_MS,
   MaxFontScale,
   MIN_TOUCH,
   Radius,
@@ -459,7 +461,10 @@ export default function ChannelList({
 
     const row = (
       <Pressable
-        style={styles.channelRow}
+        style={({ pressed }) => [
+          styles.channelRow,
+          pressed && styles.rowPressed,
+        ]}
         onPress={() => onSelectChannel(item)}
         // Long-press opens the same sheet the swipe does. Swipe alone is both
         // unfamiliar as the only route and unreachable with a screen reader,
@@ -468,6 +473,7 @@ export default function ChannelList({
           held();
           handleSwipeMore(item);
         }}
+        delayLongPress={LONG_PRESS_MS}
         accessibilityRole="button"
         accessibilityLabel={rowLabel}
         accessibilityHint={t("chat.channels.row_hint")}
@@ -556,8 +562,7 @@ export default function ChannelList({
             if (ref) swipeableRefs.set(item, ref);
             else swipeableRefs.delete(item);
           }}
-          overshootRight={false}
-          renderRightActions={() => (
+          {...trailingSwipeActions(() => (
             <View style={styles.swipeActions}>
               <Pressable
                 style={styles.swipeAction}
@@ -575,7 +580,7 @@ export default function ChannelList({
                 <Text style={styles.swipeActionText}>{T("chat.more")}</Text>
               </Pressable>
             </View>
-          )}
+          ))}
         >
           {row}
         </ReanimatedSwipeable>
@@ -707,7 +712,10 @@ export default function ChannelList({
             {/* Everyday actions, grouped in one box. */}
             <View style={styles.moreRowsGroup}>
               <Pressable
-                style={styles.moreRow}
+                style={({ pressed }) => [
+                  styles.moreRow,
+                  pressed && styles.rowPressed,
+                ]}
                 onPress={() => {
                   setInfoChannel(moreOptionsChannel);
                   setMoreOptionsChannel(null);
@@ -724,7 +732,10 @@ export default function ChannelList({
                 <>
                   <View style={styles.moreDivider} />
                   <Pressable
-                    style={styles.moreRow}
+                    style={({ pressed }) => [
+                      styles.moreRow,
+                      pressed && styles.rowPressed,
+                    ]}
                     onPress={() => {
                       togglePinChannel(moreOptionsChannel);
                       setMoreOptionsChannel(null);
@@ -751,7 +762,10 @@ export default function ChannelList({
 
               <View style={styles.moreDivider} />
               <Pressable
-                style={styles.moreRow}
+                style={({ pressed }) => [
+                  styles.moreRow,
+                  pressed && styles.rowPressed,
+                ]}
                 onPress={() => handleMuteChat(moreOptionsChannel)}
                 accessibilityRole="button"
               >
@@ -773,7 +787,10 @@ export default function ChannelList({
 
               <View style={styles.moreDivider} />
               <Pressable
-                style={styles.moreRow}
+                style={({ pressed }) => [
+                  styles.moreRow,
+                  pressed && styles.rowPressed,
+                ]}
                 onPress={() => handleClearChat(moreOptionsChannel)}
                 accessibilityRole="button"
               >
@@ -793,7 +810,10 @@ export default function ChannelList({
             {!DEFAULT_CHANNEL_NAMES.has(moreOptionsChannel) && (
               <View style={styles.moreRowsGroup}>
                 <Pressable
-                  style={styles.moreRow}
+                  style={({ pressed }) => [
+                    styles.moreRow,
+                    pressed && styles.rowPressed,
+                  ]}
                   onPress={() => handleLeaveChannel(moreOptionsChannel)}
                   accessibilityRole="button"
                 >
@@ -890,6 +910,11 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       paddingHorizontal: ROW_INSET,
       paddingVertical: Spacing.md + 2,
       minHeight: 72,
+    },
+    // The one press treatment for a row, shared by this list's channel rows
+    // and its action sheet. See PRESSED_OPACITY in ui/theme.
+    rowPressed: {
+      backgroundColor: Colors.surfacePressed,
     },
     // Single child of channelRow, so no `gap` here: it would be a no-op.
     channelRowBody: {

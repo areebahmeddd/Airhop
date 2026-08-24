@@ -49,7 +49,7 @@ React landing page for [airhop.1mindlabs.org](https://airhop.1mindlabs.org).
 
 ## Internationalization
 
-Thirty languages, alphabetically: Amharic, Arabic, Burmese, Chinese (Simplified), Chinese (Traditional), Dutch, English, Filipino, French, German, Hindi, Indonesian, Italian, Japanese, Korean, Malay, Nepali, Persian, Polish, Portuguese (Brazil), Russian, Spanish, Swahili, Swedish, Tamil, Thai, Turkish, Ukrainian, Urdu, Vietnamese. No library: catalogs are TypeScript modules in `src/i18n/locales/`, and `en.ts` is the source of truth. Same design as the app, in [`.github/skills/i18n.md`](../.github/skills/i18n.md).
+35 languages, alphabetically: Amharic, Arabic, Bengali, Burmese, Chinese (Simplified), Chinese (Traditional), Dutch, English, Filipino, French, Georgian, German, Hindi, Indonesian, Italian, Japanese, Korean, Malagasy, Malay, Nepali, Persian, Polish, Portuguese (Brazil), Portuguese (Portugal), Punjabi, Russian, Spanish, Swahili, Swedish, Tamil, Thai, Turkish, Ukrainian, Urdu, Vietnamese. No library: catalogs are TypeScript modules in `src/i18n/locales/`, and `en.ts` is the source of truth. Same design as the app, in [`.github/skills/i18n.md`](../.github/skills/i18n.md).
 
 - **Completeness is a type.** Every locale is annotated `Strings`, derived from `en.ts`, so a missing or stray key fails `tsc` and nothing falls back at runtime. Adding a language is a catalog plus entries in `languages.ts` and `LOADERS`; the compiler names whatever is left out.
 - **Language names come from `Intl.DisplayNames`**, not the catalogs. Hand-writing every language's name in every language is CLDR data the platform already ships, and the cost is quadratic in the number of languages.

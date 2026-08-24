@@ -1,0 +1,7 @@
+<resources>
+  <string name="mesh_channel_name">메시 네트워크</string>
+  <string name="mesh_channel_description">Airhop 메시를 백그라운드에서 계속 실행합니다</string>
+  <string name="mesh_notification_title">Airhop 메시 실행 중</string>
+  <string name="mesh_notification_text">근처 메시지를 찾아 중계하는 중</string>
+  <string name="mesh_notification_stop">메시 중지</string>
+</resources>

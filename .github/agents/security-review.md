@@ -95,7 +95,7 @@ Check for:
 - Ratchet key reuse (each ratchet step must derive a fresh chain key): **FAIL**
 - Missing out-of-order message key caching: **WARN**
 
-### 6b. One-time Prekeys (`0x24`)
+### 7. One-time Prekeys (`0x24`)
 
 Prekey bundles carry only **public** prekeys and are broadcast in the clear, signed, exactly as bitchat does. Do not flag an unencrypted bundle: publishing the public halves is the design. Check instead for:
 
@@ -105,7 +105,7 @@ Prekey bundles carry only **public** prekeys and are broadcast in the clear, sig
 - A consumed one-time prekey being reused to open a second envelope: **FAIL** (defeats the forward secrecy the prekey exists for)
 - Consumed private prekeys retained beyond the grace window without being dropped: **WARN**
 
-### 7. Cashu / Payments
+### 8. Cashu / Payments
 
 Check for:
 
@@ -114,7 +114,7 @@ Check for:
 - Redemption result not verified (mint signature check): **FAIL**
 - NIP-60 wallet state not encrypted before Nostr publication: **FAIL**
 
-### 8. OWASP Mobile Top 10 Spot Check
+### 9. OWASP Mobile Top 10 Spot Check
 
 | Risk                                | Check                                                                           |
 | ----------------------------------- | ------------------------------------------------------------------------------- |
@@ -153,6 +153,9 @@ Check for:
 ✅ / ⚠️ / ❌: [finding]  (skip if not applicable)
 
 ### Double Ratchet
+✅ / ⚠️ / ❌: [finding]  (skip if not applicable)
+
+### One-time Prekeys
 ✅ / ⚠️ / ❌: [finding]  (skip if not applicable)
 
 ### Payments

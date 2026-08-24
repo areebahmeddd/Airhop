@@ -9,6 +9,7 @@
 // themselves live in chat-store. Persisted so the history survives a restart,
 // and capped so a busy channel can't grow it without bound.
 
+import type { TranslationKey, TranslationVars } from "@i18n";
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 import { getStorage } from "./mmkv";
@@ -20,9 +21,18 @@ export interface ActivityEntry {
   channel: string;
   isDM: boolean;
   senderID: string;
+  // Empty when the sender announced no nickname. The renderer supplies the
+  // stand-in, so it is not frozen in the language the entry arrived in. Same
+  // rule as `previewKey` below.
   senderNickname: string;
   // One-line preview (text, or a media summary like "Photo").
   preview: string;
+  // The catalog key `preview` was rendered from, when the app wrote the line
+  // rather than a person. Same contract as `systemKey` on ChatMessage:
+  // `preview` remains the fallback, and callers read `activityPreview()` from
+  // `@utils/message-text`.
+  previewKey?: TranslationKey;
+  previewVars?: TranslationVars;
   timestampMs: number;
   // False until the user has opened the bell screen and seen it.
   seen: boolean;

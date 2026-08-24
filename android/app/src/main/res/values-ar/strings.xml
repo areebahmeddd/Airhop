@@ -1,0 +1,7 @@
+<resources>
+  <string name="mesh_channel_name">شبكة Airhop</string>
+  <string name="mesh_channel_description">يبقي شبكة Airhop نشطة في الخلفية</string>
+  <string name="mesh_notification_title">شبكة Airhop نشطة</string>
+  <string name="mesh_notification_text">اكتشاف الرسائل القريبة وترحيلها</string>
+  <string name="mesh_notification_stop">إيقاف الشبكة</string>
+</resources>

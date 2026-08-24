@@ -1,6 +1,7 @@
 // Chat state: channels and messages.
 // MMKV-persisted so messages survive app restarts.
 
+import type { TranslationKey, TranslationVars } from "@i18n";
 import { MAX_CHANNEL_NAME } from "@utils/deep-link";
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
@@ -68,6 +69,17 @@ export interface ChatMessage {
   // Local-only notice rendered as centered muted text instead of a bubble
   // (e.g. "you took a screenshot"). Never sent over the mesh.
   isSystem?: boolean;
+  // The catalog key `text` was rendered from, for rows the app writes itself:
+  // a location card's summary, a group membership notice, a payment receipt.
+  // These are the only rows whose words belong to Airhop rather than to a
+  // person, and so the only ones that may be re-translated.
+  //
+  // `text` is still written and holds the rendering from the moment the row was
+  // created. It is the fallback for rows saved before this field existed, and
+  // what the wire paths read. Read both through `messageText()` in
+  // `@utils/message-text`; never read `text` directly to put words on screen.
+  systemKey?: TranslationKey;
+  systemVars?: TranslationVars;
   // Set only on the sender's own outgoing copy of a forwarded message.
   forwarded?: boolean;
   // True when this public message arrived from another mesh island across the

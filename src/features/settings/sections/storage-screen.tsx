@@ -108,7 +108,7 @@ export default function StorageScreen({ onBack }: Props): React.JSX.Element {
                 received: formatBytes(stats.network.received),
               })}
               control={
-                <Text style={styles.settingValue}>
+                <Text style={[styles.settingValue, styles.settingValueMono]}>
                   {formatBytes(stats.network.sent + stats.network.received)}
                 </Text>
               }
@@ -119,7 +119,7 @@ export default function StorageScreen({ onBack }: Props): React.JSX.Element {
               label={T("settings.storage.storage_usage")}
               description={T("settings.storage.storage_usage_desc")}
               control={
-                <Text style={styles.settingValue}>
+                <Text style={[styles.settingValue, styles.settingValueMono]}>
                   {formatBytes(totalBytes)}
                 </Text>
               }

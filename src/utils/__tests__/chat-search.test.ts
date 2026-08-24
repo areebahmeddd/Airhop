@@ -205,3 +205,53 @@ describe("messageMatchesFilter", () => {
     );
   });
 });
+
+// A snippet is shown to the reader, so it is cut from the text as written.
+// Matching folds case and normalizes encoding; showing must not. Cutting from
+// the folded string renders every result lowercase, which a test that only
+// checks the hit was found cannot see.
+describe("snippets read as written", () => {
+  it("keeps the capitals of the message it came from", () => {
+    const hits = searchMessages("north", {
+      "#city": [msg({ id: "a", text: "Meet at the North Gate at 8" })],
+    });
+    expect(hits).toHaveLength(1);
+    expect(hits[0].snippet).toContain("North Gate");
+    expect(hits[0].snippet).not.toContain("north gate");
+  });
+
+  it("highlights the characters it says it does", () => {
+    const text = "Meet at the North Gate at 8";
+    const hits = searchMessages("north", { "#city": [msg({ id: "a", text })] });
+    const { snippet, matchStart, matchEnd } = hits[0];
+    // The offsets are into the snippet and must land on the match.
+    expect(snippet.slice(matchStart, matchEnd).toLowerCase()).toBe("north");
+  });
+
+  it("finds a decomposed message from a composed query", () => {
+    // Vietnamese and Korean have two encodings for nearly every syllable, and
+    // which arrives depends on the sender's keyboard.
+    const composed = "café at noon";
+    const decomposed = "café at noon";
+    const hits = searchMessages(composed.slice(0, 4), {
+      "#city": [msg({ id: "a", text: decomposed })],
+    });
+    expect(hits).toHaveLength(1);
+  });
+
+  it("still highlights correctly when folding changes the length", () => {
+    // Turkish "İ" folds to two code points, so the folded string is longer and
+    // an offset into one is wrong in the other. The snippet is cut from
+    // whichever form the match ran in.
+    //
+    // Not claimed: that "istanbul" finds "İSTANBUL". Unicode default case
+    // folding says otherwise, and `toLocaleLowerCase` would make two devices
+    // disagree about whether a message matched.
+    const hits = searchMessages("stanbul", {
+      "#city": [msg({ id: "a", text: "İSTANBUL plan" })],
+    });
+    expect(hits).toHaveLength(1);
+    const { snippet, matchStart, matchEnd } = hits[0];
+    expect(snippet.slice(matchStart, matchEnd)).toBe("stanbul");
+  });
+});

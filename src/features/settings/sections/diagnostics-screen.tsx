@@ -115,7 +115,7 @@ export default function DiagnosticsScreen({
               label={T("settings.diag.ble_links")}
               description={T("settings.diag.ble_links_desc")}
               control={
-                <Text style={styles.settingValue}>
+                <Text style={[styles.settingValue, styles.settingValueMono]}>
                   {formatNumber(counters.links.ble)}
                 </Text>
               }
@@ -128,7 +128,7 @@ export default function DiagnosticsScreen({
                 wifiFastPath,
               )}`}
               control={
-                <Text style={styles.settingValue}>
+                <Text style={[styles.settingValue, styles.settingValueMono]}>
                   {formatNumber(counters.links.wifi)}
                 </Text>
               }
@@ -243,7 +243,7 @@ export default function DiagnosticsScreen({
               label={T("settings.diag.fpr")}
               description={T("settings.diag.fpr_desc")}
               control={
-                <Text style={styles.settingValue}>
+                <Text style={[styles.settingValue, styles.settingValueMono]}>
                   {`${formatNumber(GCS_TARGET_FPR * 100)}%`}
                 </Text>
               }

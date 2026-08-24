@@ -30,6 +30,7 @@ import {
   FontSize,
   FontWeight,
   MIN_TOUCH,
+  PRESSED_OPACITY,
   Radius,
   Spacing,
 } from "../theme";
@@ -85,16 +86,15 @@ export class ErrorBoundary extends React.Component<Props, State> {
 function Fallback({ onRetry }: { onRetry: () => void }): React.JSX.Element {
   const C: ThemeColors = useColorScheme() === "dark" ? DarkColors : Colors;
   const styles = createStyles(C);
-  const [pressed, setPressed] = React.useState(false);
-
   return (
     <View style={styles.root}>
       <Text style={styles.title}>{t("error.boundary.title")}</Text>
       <Text style={styles.body}>{t("error.boundary.body")}</Text>
       <Pressable
-        style={[styles.button, pressed && styles.buttonPressed]}
-        onPressIn={() => setPressed(true)}
-        onPressOut={() => setPressed(false)}
+        style={({ pressed }) => [
+          styles.button,
+          pressed && styles.buttonPressed,
+        ]}
         onPress={onRetry}
         accessibilityRole="button"
         accessibilityLabel={t("common.try_again")}
@@ -189,7 +189,7 @@ function createStyles(C: ThemeColors) {
       backgroundColor: C.accent,
     },
     buttonPressed: {
-      opacity: 0.85,
+      opacity: PRESSED_OPACITY,
     },
     buttonLabel: {
       fontSize: FontSize.base,

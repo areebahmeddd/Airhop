@@ -5,6 +5,7 @@
 import Feather from "@expo/vector-icons/Feather";
 import { useT } from "@i18n";
 import { useRichText } from "@i18n/rich-text";
+import { acknowledged } from "@platform/haptics";
 import PrimaryButton from "@ui/components/primary-button";
 import {
   FontSize,
@@ -14,7 +15,6 @@ import {
   Spacing,
   useThemeColors,
 } from "@ui/theme";
-import * as Haptics from "expo-haptics";
 import React, { useMemo, useState } from "react";
 import {
   Linking,
@@ -86,7 +86,7 @@ export default function WelcomeScreen({
   function toggleAgreed(): void {
     // A selection tick, the lightest feedback the OS offers, matching how a
     // native checkbox or picker feels. Not an impact: nothing happened yet.
-    void Haptics.selectionAsync().catch(() => {});
+    acknowledged();
     setAgreed((v) => !v);
   }
 

@@ -7,12 +7,18 @@
 // surface anyone in radio range can reach, so the throttle around it is as
 // load-bearing as the message.
 
+import { t } from "@i18n";
 import {
   ATTACHMENT_FAILURE_NOTICE_INTERVAL_MS,
   AttachmentFailureNotifier,
-  attachmentFailureMessage,
+  attachmentFailureKey,
   type AttachmentFailure,
 } from "../attachment-failure";
+
+// The receive path stores the key and the reader sees the rendering, so the
+// line under test is the key resolved through the catalog.
+const lineFor = (reason: AttachmentFailure): string =>
+  t(attachmentFailureKey(reason));
 
 const REASONS: AttachmentFailure[] = [
   "malformed",
@@ -21,9 +27,9 @@ const REASONS: AttachmentFailure[] = [
   "storage",
 ];
 
-describe("attachmentFailureMessage", () => {
+describe("attachmentFailureKey", () => {
   it("has a distinct, non-empty line for every reason", () => {
-    const lines = REASONS.map(attachmentFailureMessage);
+    const lines = REASONS.map(lineFor);
     for (const line of lines) expect(line.length).toBeGreaterThan(0);
     // Distinct, or the reasons collapse into one unhelpful string and the
     // enum stops earning its keep.
@@ -34,7 +40,7 @@ describe("attachmentFailureMessage", () => {
     // The reader gets a sentence, not an enum. A line that leaks
     // "type-mismatch" is a log line that escaped into the UI.
     for (const reason of REASONS) {
-      expect(attachmentFailureMessage(reason)).not.toContain(reason);
+      expect(lineFor(reason)).not.toContain(reason);
     }
   });
 });

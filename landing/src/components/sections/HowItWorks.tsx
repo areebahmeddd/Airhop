@@ -42,7 +42,7 @@ export default function HowItWorks() {
   const relay = "var(--relay)";
 
   return (
-    <section id="how-it-works" className="scroll-mt-8 px-6 py-12 md:px-10 md:py-16">
+    <section id="how-it-works" className="px-6 py-12 md:px-10 md:py-16">
       <div className="mx-auto max-w-7xl">
         <SectionHeader
           eyebrow={T("home.how.eyebrow")}

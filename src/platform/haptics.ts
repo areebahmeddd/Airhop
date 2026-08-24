@@ -35,6 +35,38 @@ export function succeeded(): void {
   ).catch(() => {});
 }
 
+// A drag crossed the point where letting go closes rather than springs back.
+// The sheet's dismiss threshold is invisible, so this is the only thing marking
+// it. Selection-style because neither outcome is destructive, unlike `armed`.
+// Entering the zone only, so a drag settling near the line does not chatter.
+export function crossedThreshold(): void {
+  void Haptics.selectionAsync().catch(() => {});
+}
+
+// A hold crossed into "let go now and this is thrown away": sliding a
+// push-to-talk recording back to cancel. Rigid rather than the tick
+// `crossedThreshold` uses, because push-to-talk is used without looking and the
+// destructive threshold has to be tellable apart by feel.
+export function armed(): void {
+  void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Rigid).catch(() => {});
+}
+
+// A hold ended, or backed out of an armed threshold. The light counterpart to
+// `held`, closing the pair a press-and-hold opens.
+export function released(): void {
+  void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+}
+
+// Something irreversible happened with no dialog in front of it. The panic
+// wipe's triple tap is the only one, and this is its only confirmation. A
+// warning notification, not an impact: the OS pattern for "something serious
+// just happened".
+export function warned(): void {
+  void Haptics.notificationAsync(
+    Haptics.NotificationFeedbackType.Warning,
+  ).catch(() => {});
+}
+
 // A check refused something. For failures the user must register rather than
 // ones already on screen: a card that does not match the contact, or whose keys
 // do not match its own peer ID. Not for "that wasn't a QR code".

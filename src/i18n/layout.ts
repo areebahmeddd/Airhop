@@ -1,50 +1,26 @@
-// Right-to-left layout helpers.
+// Right-to-left layout helpers: the cases React Native has no logical form for.
 //
-// Most of the work of supporting Arabic and Persian is not translation, it is
-// making sure nothing in the stylesheet is nailed to a physical side. React
-// Native already does the bulk of that: `flexDirection: "row"` flips on its
-// own, and the logical box properties (`marginStart`, `marginEnd`, `start`,
-// `end`) resolve per direction. Those are what the codebase uses. The physical
-// `marginLeft` and `right` forms do not flip, so a badge pinned to the trailing
-// corner stays on the visual right in Arabic and covers the wrong thing.
+// Everywhere else the codebase uses `marginStart`/`marginEnd`/`start`/`end`,
+// which resolve per direction on their own. The physical forms do not flip, so
+// a badge pinned with `right` stays on the visual right in Arabic.
 //
-// The two cases the platform has no logical form for are here.
-//
-// Direction is fixed for the lifetime of the process: I18nManager reads it at
-// startup, and `applyLayoutDirection` in ./index.ts pins it to the active
-// language there. So these are module constants rather than hooks. Nothing
-// here re-renders, and nothing needs to.
-//
-// They resolve to their left-to-right values while English is the language
-// shipping. They are what makes the first right-to-left language a catalog
-// rather than a sweep of every stylesheet in the app, and a physical
-// `marginLeft` added meanwhile would not be noticed until then.
+// Module constants, not hooks: I18nManager reads direction at startup and
+// `applyLayoutDirection` pins it there, so nothing here re-renders.
 
 import { I18nManager } from "react-native";
 
 // Whether the app is currently laid out right to left.
 export const isRTLLayout: boolean = I18nManager.isRTL;
 
-// `textAlign` for text that should sit at the trailing edge: a timestamp on a
-// conversation row, an amount in a ledger.
-//
-// React Native's `textAlign` accepts only physical values plus "auto", with no
-// logical "end", so this is the standard stand-in. Note that "auto" already
-// covers the leading-edge case correctly, which is why there is no
-// `textAlignStart` here: use `textAlign: "auto"` and let the text direction
-// decide.
+// `textAlign` for the trailing edge: a row timestamp, a ledger amount. React
+// Native offers no logical "end". There is no `textAlignStart` because "auto"
+// already resolves the leading edge correctly.
 export const textAlignEnd: "left" | "right" = isRTLLayout ? "left" : "right";
 
-// Directional glyphs.
-//
-// Neither platform mirrors icon artwork, and Feather has no logical
-// equivalents, so a chevron meaning "forward" has to be picked per direction.
-// Getting this wrong is subtle and awful: in Arabic every drill-in row would
-// point back the way you came.
-//
-// Only the glyphs that encode reading direction are here. `arrow-up-right`,
-// which marks a row that leaves the app, is deliberately not: it means
-// "outward", not "rightward", and both platforms leave it alone.
+// Neither platform mirrors icon artwork and Feather has no logical names, so a
+// chevron meaning "forward" is picked per direction: otherwise every drill-in
+// row in Arabic points back the way you came. Only glyphs that encode reading
+// direction belong here. `arrow-up-right` does not, since it means "outward".
 export const chevronForward: "chevron-left" | "chevron-right" = isRTLLayout
   ? "chevron-left"
   : "chevron-right";
@@ -61,17 +37,25 @@ export const arrowForward: "arrow-left" | "arrow-right" = isRTLLayout
   ? "arrow-left"
   : "arrow-right";
 
-// Mirrors a horizontal offset, for the rare value that has to stay a number.
-//
-// Use a logical property instead wherever one exists. This is for things like a
-// translateX in an animation, where there is no `start`/`end` form and the sign
-// is the direction.
+// Mirrors a horizontal offset, for a value that has to stay a number: a
+// translateX, where the sign is the direction and there is no `start`/`end`.
 /**
- * @public No call site yet: every current animation has a logical form. Kept as
- * the escape hatch for the first one that does not. The tag is load-bearing:
- * knip reads it and stops proposing this as dead code, so it must stay a JSDoc
- * block rather than a line comment.
+ * @public No call site yet, kept as the escape hatch for the first animation
+ * without a logical form. knip reads the tag, so it stays a JSDoc block.
  */
 export function mirrorX(value: number): number {
   return isRTLLayout ? -value : value;
+}
+
+// Row swipe actions on the trailing edge. ReanimatedSwipeable names its panels
+// by physical side, so `renderRightActions` opens from the right in every
+// language, which on a mirrored row is the leading edge.
+export function trailingSwipeActions<T>(
+  render: T,
+):
+  | { renderLeftActions: T; overshootLeft: false }
+  | { renderRightActions: T; overshootRight: false } {
+  return isRTLLayout
+    ? { renderLeftActions: render, overshootLeft: false }
+    : { renderRightActions: render, overshootRight: false };
 }

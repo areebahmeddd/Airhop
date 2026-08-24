@@ -8,7 +8,6 @@ import { GROUP_MAX_MEMBERS } from "@core/mesh/rooms/group-protocol";
 import { relayDisplayHost } from "@core/nostr/geo-relay";
 import { Feather, MaterialCommunityIcons } from "@expo/vector-icons";
 import { t, useT, useTPlural, type TranslationKey } from "@i18n";
-import { acknowledged } from "@platform/haptics";
 import {
   geohashLevelName,
   isGeoChannel,
@@ -25,7 +24,10 @@ import { placeNameKey, usePlaceNamesStore } from "@store/place-names-store";
 import { useSettingsStore } from "@store/settings-store";
 import Avatar from "@ui/components/avatar";
 import BottomSheet from "@ui/components/bottom-sheet";
+import CopyGlyph from "@ui/components/copy-glyph";
+import { useCopy } from "@ui/hooks/use-copy";
 import {
+  BUTTON_HEIGHT,
   DISABLED_OPACITY,
   FontFamily,
   FontSize,
@@ -38,7 +40,6 @@ import {
 } from "@ui/theme";
 import { isManualGeoChannel, manualGeohashOf } from "@utils/channel-key";
 import { peerIDToUsername } from "@utils/username";
-import * as Clipboard from "expo-clipboard";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   Pressable,
@@ -140,7 +141,7 @@ export default function ChannelInfoSheet({
   const privateMembers =
     channel !== null ? (privateMembersByChannel[channel] ?? []) : [];
 
-  const [copied, setCopied] = useState(false);
+  const { copied, copy } = useCopy();
   // Member-list search, revealed by the search icon next to the section label.
   const [memberSearch, setMemberSearch] = useState("");
   const [searching, setSearching] = useState(false);
@@ -331,10 +332,7 @@ export default function ChannelInfoSheet({
 
   function handleCopyGeohash(): void {
     if (geohash === null) return;
-    void Clipboard.setStringAsync(geohash).catch(() => {});
-    acknowledged();
-    setCopied(true);
-    setTimeout(() => setCopied(false), 1500);
+    copy(geohash);
   }
 
   function handleLeave(): void {
@@ -599,10 +597,10 @@ export default function ChannelInfoSheet({
                     accessibilityRole="button"
                     accessibilityLabel={T("chat.info.copy_geohash")}
                   >
-                    <Feather
-                      name={copied ? "check" : "copy"}
+                    <CopyGlyph
+                      copied={copied}
                       size={15}
-                      color={copied ? Colors.online : Colors.textMuted}
+                      color={Colors.textMuted}
                     />
                   </Pressable>
                 </View>
@@ -1018,7 +1016,7 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
     // gap, so the hosts hang off the same left edge as "Relays" above them.
     relayList: {
       paddingBottom: Spacing.md,
-      paddingLeft: 16 + Spacing.md,
+      paddingStart: 16 + Spacing.md,
       gap: 6,
     },
     relayRow: {
@@ -1143,7 +1141,7 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
     },
     addConfirm: {
       width: "100%",
-      minHeight: 50,
+      minHeight: BUTTON_HEIGHT,
       borderRadius: Radius.full,
       backgroundColor: Colors.accent,
       alignItems: "center",
@@ -1163,7 +1161,7 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
     },
     actionBtn: {
       width: "100%",
-      minHeight: 50,
+      minHeight: BUTTON_HEIGHT,
       flexDirection: "row",
       alignItems: "center",
       justifyContent: "center",

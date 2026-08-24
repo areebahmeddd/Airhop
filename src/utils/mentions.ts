@@ -34,25 +34,27 @@ export function applyMention(draft: string, nickname: string): string {
   );
 }
 
-// Whether `text` mentions `nickname` as a whole @token (case-insensitive). The
-// token must end at whitespace, punctuation, or end of string, so a mention of
-// a longer name does not count as a mention of a prefix of it.
+// Whether `text` mentions `nickname` as a whole @token (case-insensitive).
 //
 // Drives two things from App.tsx's inbound subscription: a mention is the only
-// message allowed past a muted conversation, and it is rendered with its own
-// notification copy rather than the room's.
+// message allowed past a muted conversation, and it gets its own notification
+// copy rather than the room's.
 //
-// The NFC normalization is load-bearing. An announced nickname is canonical
-// (announce-manager normalizes at decode) but typed text is whatever the
-// sender's keyboard produced, and an iOS keyboard and an Android one can emit
-// the same accented name differently. Comparing raw meant a cross-platform
-// mention silently never matched.
+// The closing boundary is every script's punctuation, not ASCII's: Japanese
+// writes "。", Arabic "،", Hindi "।", Burmese "။". Inverting `\p{L}\p{N}_`
+// covers all of them and still refuses a prefix, since the character after
+// "@ana" in "@anabelle" is a letter.
+//
+// The opening boundary stays whitespace-or-start. Relaxing it would read
+// "ali@example.com" as a mention of "example", and nothing separates that from a
+// mention typed mid-sentence. The cost is that Chinese and Japanese need the
+// mention at a word start; Slack and Discord draw the same line.
 export function mentionsNickname(text: string, nickname: string): boolean {
   const target = normalizeNickname(nickname);
   if (target.length === 0) return false;
   const re = new RegExp(
-    `(?:^|\\s)@${escapeRegExp(target)}(?=$|[\\s.,!?;:])`,
-    "i",
+    `(?:^|\\s)@${escapeRegExp(target)}(?=$|[^\\p{L}\\p{N}_])`,
+    "iu",
   );
   // The text is normalized but NOT trimmed: only its encoding needs
   // canonicalizing, and trimming a message body is not this function's business.

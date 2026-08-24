@@ -5,6 +5,7 @@
 // Compass N is decorative: BLE gives proximity only, not bearing.
 
 import { Feather } from "@expo/vector-icons";
+import { acknowledged } from "@platform/haptics";
 import { useMeshStateStore, type BleBlocker } from "@store/mesh-state-store";
 import { REACHABLE_TTL_MS, type NearbyPeer } from "@store/peer-store";
 import Avatar from "@ui/components/avatar";
@@ -19,7 +20,6 @@ import {
   Spacing,
   useThemeColors,
 } from "@ui/theme";
-import * as Haptics from "expo-haptics";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   Animated,
@@ -214,7 +214,7 @@ function RadarView({ peers, now, onSelectPeer }: Props): React.JSX.Element {
       // touch still has to land somewhere. A selection tick is the quietest
       // acknowledgement the OS offers, which suits an action that is
       // deliberately cosmetic anyway.
-      void Haptics.selectionAsync().catch(() => {});
+      acknowledged();
       return;
     }
     waveAnimRef.current?.stop();
@@ -394,7 +394,22 @@ function RadarView({ peers, now, onSelectPeer }: Props): React.JSX.Element {
               therefore hidden as a whole and the individual peers and the centre
               button opt back in below, which leaves a screen reader with
               exactly the actionable elements plus the status line. */}
-          <View style={{ width: canvasSize, height: canvasSize }}>
+          {/* `direction: "ltr"` is load-bearing, not decoration.
+              Everything inside this canvas is placed by absolute `left` against
+              a coordinate system this file computes itself: the compass letters,
+              the guide rings, and every peer, whose x is `C + cos(angle) * r`.
+              Under an app-wide right-to-left direction Yoga resolves those
+              against the inherited direction and mirrors the whole dial, which
+              put East on the left and moved every peer to the opposite side of
+              the screen from where they physically are.
+
+              The radar is a polar plot of physical space, so it must never
+              mirror. Pinning the direction here says that once, in the one place
+              the geometry is decided, rather than asking every `left` inside to
+              remember. Found by running the app in Arabic. */}
+          <View
+            style={{ width: canvasSize, height: canvasSize, direction: "ltr" }}
+          >
             {/* Pulse rings: expand from center to outer ring boundary */}
             {([ring1, ring2, ring3] as Animated.Value[]).map((val, i) => {
               const d = outerR * 2;
@@ -507,7 +522,7 @@ function RadarView({ peers, now, onSelectPeer }: Props): React.JSX.Element {
               ]}
               onPress={handleCenterPress}
               accessibilityRole="button"
-              accessibilityLabel={T("mesh.radar.you_centre")}
+              accessibilityLabel={T("mesh.radar.you_center")}
               // The label must not promise a rescan. There is none: BLE scanning
               // runs continuously and peers arrive on announce events, as the
               // comment on handleCenterPress says. Naming it "rescan" tells a
@@ -705,6 +720,11 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       borderRadius: Radius.full,
       padding: 1,
     },
+    // Physical marginLeft on purpose. The radar is a polar plot of where people
+    // actually are, so it never mirrors and everything inside it is positioned
+    // in screen space. This label is 16pt wider than the avatar it names and
+    // pulled back by half that to centre over it; marginStart would flip in
+    // Arabic and push every name 8pt off its peer.
     peerLabel: {
       fontSize: FontSize["2xs"],
       color: Colors.textMuted,

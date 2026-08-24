@@ -18,6 +18,10 @@ RCT_EXTERN_METHOD(stopTor:(RCTPromiseResolveBlock)resolve
 RCT_EXTERN_METHOD(wipeTorState:(RCTPromiseResolveBlock)resolve
                   rejecter:(RCTPromiseRejectBlock)reject)
 
+RCT_EXTERN_METHOD(setAppForeground:(BOOL)foreground
+                  resolver:(RCTPromiseResolveBlock)resolve
+                  rejecter:(RCTPromiseRejectBlock)reject)
+
 RCT_EXTERN_METHOD(getTorStatus:(RCTPromiseResolveBlock)resolve
                   rejecter:(RCTPromiseRejectBlock)reject)
 

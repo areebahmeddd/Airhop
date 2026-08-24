@@ -7,6 +7,11 @@
 // the truth table matters: notify in the background, stay quiet on the chat you
 // are reading, never notify for your own messages or local system notices.
 
+// Notification copy substitutes a sender, a room and a count, so it carries the
+// directional isolates `interpolate` adds. A lock screen is where those matter
+// most, being the one surface that shows a stranger's nickname inside Airhop's
+// own sentence, so the isolation is asserted rather than stripped.
+import { stripIsolates } from "@i18n";
 import type { ChatMessage } from "@store/chat-store";
 import {
   attachmentSummary,
@@ -19,6 +24,14 @@ import {
   shouldNotifyNearby,
   shouldSystemNotify,
 } from "../notification-policy";
+
+// A value wrapped the way `interpolate` wraps every substitution. Composed with
+// `fromCodePoint` because the literal characters are refused in source and
+// Prettier rewrites the escape back into them.
+const FIRST_STRONG_ISOLATE = String.fromCodePoint(0x2068);
+const POP_ISOLATE = String.fromCodePoint(0x2069);
+const isolated = (value: string): string =>
+  FIRST_STRONG_ISOLATE + value + POP_ISOLATE;
 
 function msg(overrides: Partial<ChatMessage>): ChatMessage {
   return {
@@ -96,7 +109,10 @@ describe("notificationContentFor", () => {
   it("leads with the channel and names the sender in the body", () => {
     expect(
       notificationContentFor(msg({ channel: "#city", text: "hi all" })),
-    ).toEqual({ title: "#city", body: "alice: hi all" });
+    ).toEqual({
+      title: "#city",
+      body: isolated("alice") + ": " + isolated("hi all"),
+    });
   });
 
   it("uses the resolved channel label for the title when provided", () => {
@@ -105,7 +121,10 @@ describe("notificationContentFor", () => {
         msg({ channel: "group:abc123", text: "meet up" }),
         "Weekend Crew",
       ),
-    ).toEqual({ title: "Weekend Crew", body: "alice: meet up" });
+    ).toEqual({
+      title: "Weekend Crew",
+      body: isolated("alice") + ": " + isolated("meet up"),
+    });
   });
 
   it("falls back to the raw channel key when no label is given", () => {
@@ -253,7 +272,9 @@ describe("shouldNotifyNearby", () => {
 describe("nearbyNotificationContent", () => {
   it("counts people and never names them", () => {
     expect(nearbyNotificationContent(1).title).toBe("Someone nearby");
-    expect(nearbyNotificationContent(4).title).toBe("4 people nearby");
+    expect(stripIsolates(nearbyNotificationContent(4).title)).toBe(
+      "4 people nearby",
+    );
     expect(nearbyNotificationContent(1).body).toBe(
       "In Bluetooth range now. Tap to open the mesh.",
     );
@@ -271,7 +292,10 @@ describe("notificationContentFor a mention", () => {
         false,
         true,
       ),
-    ).toEqual({ title: "alice mentioned you", body: "@bob look at this" });
+    ).toEqual({
+      title: isolated("alice") + " mentioned you",
+      body: "@bob look at this",
+    });
   });
 
   it("still says it was a mention when previews are hidden", () => {
@@ -291,7 +315,10 @@ describe("notificationContentFor a mention", () => {
   it("leaves an ordinary channel message alone", () => {
     expect(
       notificationContentFor(msg({ channel: "#city", text: "hi" }), "#city"),
-    ).toEqual({ title: "#city", body: "alice: hi" });
+    ).toEqual({
+      title: "#city",
+      body: isolated("alice") + ": " + isolated("hi"),
+    });
   });
 
   it("does not apply to a DM, which already names the sender", () => {

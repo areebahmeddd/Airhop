@@ -15,7 +15,7 @@
 // the expiration timestamp.
 
 import { bytesToHex, hexToBytes } from "@noble/hashes/utils.js";
-import { finalizeEvent, type Event } from "nostr-tools";
+import { finalizeEvent, generateSecretKey, type Event } from "nostr-tools";
 import { base64ToBytes, bytesToBase64 } from "../encoding/base64";
 import {
   encodeEnvelopePayload,
@@ -26,16 +26,24 @@ import type { NostrClient } from "./nostr-client";
 // Event kind per PROTOCOLS.md section 8 / bitchat NostrProtocol.swift.
 const KIND_COURIER_DROP = 1401;
 
-// Subscription limit: fetch at most this many pending drops per poll.
+// Ceiling on the backfill a relay may replay when the subscription opens.
+// Nobody accumulates more than a handful of parked messages inside one envelope
+// lifetime, so past this is a noisy relay rather than missed mail.
 const MAX_FETCH_PER_POLL = 20;
 
 // Publish a sealed courier envelope to Nostr as a kind 1401 event.
 // The envelope's expiryMs is used as the NIP-40 expiration tag.
+//
+// Signed with a throwaway key minted here, and deliberately not a parameter so
+// no caller can pass the device identity. The envelope authenticates its sender
+// internally through Noise X, so a stable publisher key adds nothing and makes
+// every drop attributable to one npub. bitchat mints per publish too
+// (BridgeCourierService).
 export async function publishCourierDrop(
   envelope: SealedEnvelope,
-  nostrPrivKey: Uint8Array,
   client: NostrClient,
 ): Promise<void> {
+  const throwawayKey = generateSecretKey();
   const tagHex = bytesToHex(envelope.recipientTag);
   const expiryUnixSec = Math.floor(envelope.expiryMs / 1000).toString();
 
@@ -53,7 +61,7 @@ export async function publishCourierDrop(
       ],
       content,
     },
-    nostrPrivKey,
+    throwawayKey,
   );
 
   await client.publish(event);
@@ -61,7 +69,12 @@ export async function publishCourierDrop(
 
 // Subscribe to incoming courier drops addressed to the given recipient tags.
 // Returns a closer function. The callback receives raw SealedEnvelope objects
-// ready for CourierStore.open().
+// for the caller to open with the recipient's static key, or with the one-time
+// prekey named by `prekeyID` on a v2 envelope.
+//
+// The one way in. `since` makes a relay replay everything still parked before
+// EOSE, so this covers backfill as well as live arrivals; a second one-shot
+// fetch beside it would only drift out of step with the format.
 export function subscribeCourierDrops(
   recipientTags: Uint8Array[],
   client: NostrClient,
@@ -83,29 +96,6 @@ export function subscribeCourierDrops(
   });
 
   return () => closer.close();
-}
-
-// Fetch all pending courier drops for the given recipient tags and return them.
-export async function fetchCourierDrops(
-  recipientTags: Uint8Array[],
-  client: NostrClient,
-): Promise<SealedEnvelope[]> {
-  if (recipientTags.length === 0) return [];
-
-  const tagHexes = recipientTags.map(bytesToHex);
-  const events = await client.queryEvents({
-    kinds: [KIND_COURIER_DROP],
-    "#x": tagHexes,
-    since: Math.floor(Date.now() / 1000) - 86400,
-    limit: MAX_FETCH_PER_POLL,
-  });
-
-  const envelopes: SealedEnvelope[] = [];
-  for (const event of events) {
-    const parsed = parseCourierDropEvent(event);
-    if (parsed) envelopes.push(parsed);
-  }
-  return envelopes;
 }
 
 function parseCourierDropEvent(event: Event): SealedEnvelope | null {

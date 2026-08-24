@@ -1,3 +1,6 @@
+// The count is substituted, so the banner carries directional isolates.
+// Compared without them: pinning them here would test `interpolate`.
+import { stripIsolates } from "@i18n";
 import { computeMeshBanners, type MeshBannerInputs } from "../mesh-state-store";
 
 // A healthy, fully-online baseline. Individual tests override one field.
@@ -31,7 +34,7 @@ describe("computeMeshBanners", () => {
     expect(banners).toEqual([
       {
         key: "paused",
-        label: "Mesh paused · you're away",
+        label: "Mesh paused · you’re away",
         tone: "neutral",
         action: { label: "Resume", kind: "resume" },
       },
@@ -142,7 +145,9 @@ describe("computeMeshBanners", () => {
       bridgeActive: true,
       bridgePeopleAcross: 4,
     });
-    expect(withCount[0].label).toBe("Mesh bridge on · 4 across the bridge");
+    expect(stripIsolates(withCount[0].label)).toBe(
+      "Mesh bridge on · 4 across the bridge",
+    );
   });
 
   it("shows only the internet-off note and suppresses relay/tor/gateway/bridge", () => {

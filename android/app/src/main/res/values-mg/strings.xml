@@ -1,0 +1,7 @@
+<resources>
+  <string name="mesh_channel_name">Tambajotra harato</string>
+  <string name="mesh_channel_description">Mitazona ny haraton\'ny Airhop mavitrika any aoriana</string>
+  <string name="mesh_notification_title">Mandeha ny haraton\'ny Airhop</string>
+  <string name="mesh_notification_text">Mitady sy mampita ny hafatra akaiky</string>
+  <string name="mesh_notification_stop">Ajanony ny harato</string>
+</resources>
