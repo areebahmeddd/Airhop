@@ -5,6 +5,15 @@ All notable changes are documented here. The format follows [Keep a Changelog](h
 
 ## What's New
 
+- release: v1.0.2 (#48) (by @Areeb Ahmed) [c6efeb6]
+- feat: add unseen peers tracking and update Mesh screen behavior (by @areebahmeddd) [cb5fb41]
+- feat: implement panic wipe functionality with progress indication (by @areebahmeddd) [c04c5dd]
+- chore: fix stale docs (by @areebahmeddd) [5f9fa9d]
+
+**Full changelog:** [v1.0.1..v1.0.2](https://github.com/areebahmeddd/airhop/compare/v1.0.1..v1.0.2)
+
+## What's New
+
 - chore: update dependencies and improve relay validation (by @areebahmeddd) [cccb3c7]
 - chore: minor fixes (by @areebahmeddd) [88ae3a3]
 - feat(landing): add support for 30 languages (by @areebahmeddd) [4396db4]
