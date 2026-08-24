@@ -5,6 +5,7 @@ All notable changes are documented here. The format follows [Keep a Changelog](h
 
 ## What's New
 
+- fix: revert breaking deps (by @areebahmeddd) [6e25a01]
 - release: v1.0.2 (#48) (by @Areeb Ahmed) [c6efeb6]
 - feat: add unseen peers tracking and update Mesh screen behavior (by @areebahmeddd) [cb5fb41]
 - feat: implement panic wipe functionality with progress indication (by @areebahmeddd) [c04c5dd]
