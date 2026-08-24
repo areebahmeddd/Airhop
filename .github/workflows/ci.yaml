@@ -54,7 +54,6 @@ jobs:
       - name: Check no invisible characters
         run: npm run verify:invisibles
 
-      # Require explicit acknowledgement for changes to vendored binaries.
       - name: Verify vendored binaries
         run: npm run verify:vendored
 
