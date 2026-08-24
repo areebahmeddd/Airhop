@@ -19,18 +19,16 @@ import React, { useMemo } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
+  BUTTON_HEIGHT,
   FontSize,
   FontWeight,
+  PRESSED_OPACITY,
   Radius,
   Spacing,
   useThemeColors,
 } from "../theme";
-import BottomSheet from "./bottom-sheet";
 
-// Height of a dialog button. Comfortably past the 44pt floor because these are
-// the app's confirm/cancel pairs, several of them destructive, and they are
-// stacked so there is no adjacency to worry about.
-const ALERT_BUTTON_HEIGHT = 50;
+import BottomSheet from "./bottom-sheet";
 
 export default function AlertModal(): React.JSX.Element {
   const Colors = useThemeColors();
@@ -59,31 +57,35 @@ export default function AlertModal(): React.JSX.Element {
       <Text style={styles.title}>{title}</Text>
       {message ? <Text style={styles.message}>{message}</Text> : null}
       <View style={styles.actions}>
-        {ordered.map((button, i) => (
-          <Pressable
-            key={`${button.text}-${i}`}
-            style={
-              button.style === "default" || button.style === undefined
-                ? styles.btnDefault
-                : styles.btnOutline
-            }
-            onPress={() => handlePress(button)}
-            accessibilityRole="button"
-            accessibilityLabel={button.text}
-          >
-            <Text
-              style={
-                button.style === "destructive"
-                  ? styles.btnDestructiveText
-                  : button.style === "cancel"
-                    ? styles.btnCancelText
-                    : styles.btnDefaultText
-              }
+        {ordered.map((button, i) => {
+          const filled =
+            button.style === "default" || button.style === undefined;
+          return (
+            <Pressable
+              key={`${button.text}-${i}`}
+              style={({ pressed }) => [
+                filled ? styles.btnDefault : styles.btnOutline,
+                pressed &&
+                  (filled ? styles.btnFilledPressed : styles.btnOutlinePressed),
+              ]}
+              onPress={() => handlePress(button)}
+              accessibilityRole="button"
+              accessibilityLabel={button.text}
             >
-              {button.text}
-            </Text>
-          </Pressable>
-        ))}
+              <Text
+                style={
+                  button.style === "destructive"
+                    ? styles.btnDestructiveText
+                    : button.style === "cancel"
+                      ? styles.btnCancelText
+                      : styles.btnDefaultText
+                }
+              >
+                {button.text}
+              </Text>
+            </Pressable>
+          );
+        })}
       </View>
     </BottomSheet>
   );
@@ -113,7 +115,7 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
     },
     btnDefault: {
       width: "100%",
-      minHeight: ALERT_BUTTON_HEIGHT,
+      minHeight: BUTTON_HEIGHT,
       borderRadius: Radius.full,
       backgroundColor: Colors.accent,
       alignItems: "center",
@@ -126,13 +128,21 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
     },
     btnOutline: {
       width: "100%",
-      minHeight: ALERT_BUTTON_HEIGHT,
+      minHeight: BUTTON_HEIGHT,
       borderRadius: Radius.full,
       backgroundColor: Colors.surfaceRaised,
       borderWidth: 1,
       borderColor: Colors.border,
       alignItems: "center",
       justifyContent: "center",
+    },
+    // A destructive confirm that does not acknowledge the tap reads as "it
+    // didn't take", which is how a wipe gets tapped twice.
+    btnFilledPressed: {
+      opacity: PRESSED_OPACITY,
+    },
+    btnOutlinePressed: {
+      backgroundColor: Colors.surfacePressed,
     },
     btnDestructiveText: {
       fontSize: FontSize.base,

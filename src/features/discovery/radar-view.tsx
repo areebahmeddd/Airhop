@@ -5,6 +5,7 @@
 // Compass N is decorative: BLE gives proximity only, not bearing.
 
 import { Feather } from "@expo/vector-icons";
+import { acknowledged } from "@platform/haptics";
 import { useMeshStateStore, type BleBlocker } from "@store/mesh-state-store";
 import { REACHABLE_TTL_MS, type NearbyPeer } from "@store/peer-store";
 import Avatar from "@ui/components/avatar";
@@ -19,7 +20,6 @@ import {
   Spacing,
   useThemeColors,
 } from "@ui/theme";
-import * as Haptics from "expo-haptics";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   Animated,
@@ -214,7 +214,7 @@ function RadarView({ peers, now, onSelectPeer }: Props): React.JSX.Element {
       // touch still has to land somewhere. A selection tick is the quietest
       // acknowledgement the OS offers, which suits an action that is
       // deliberately cosmetic anyway.
-      void Haptics.selectionAsync().catch(() => {});
+      acknowledged();
       return;
     }
     waveAnimRef.current?.stop();

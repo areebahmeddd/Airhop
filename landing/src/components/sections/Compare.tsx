@@ -163,7 +163,7 @@ export default function Compare() {
   const T = useT();
 
   return (
-    <section id="compare" className="scroll-mt-8 px-6 py-12 md:px-10 md:py-16">
+    <section id="compare" className="px-6 py-12 md:px-10 md:py-16">
       <div className="mx-auto max-w-7xl">
         <SectionHeader
           eyebrow={T("home.compare.eyebrow")}

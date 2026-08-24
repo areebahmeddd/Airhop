@@ -1,0 +1,7 @@
+<resources>
+  <string name="mesh_channel_name">Mtandao wa mesh</string>
+  <string name="mesh_channel_description">Huweka mesh ya Airhop ikiendelea chinichini</string>
+  <string name="mesh_notification_title">Mesh ya Airhop inaendelea</string>
+  <string name="mesh_notification_text">Kugundua na kupitisha ujumbe ulio karibu</string>
+  <string name="mesh_notification_stop">Simamisha mesh</string>
+</resources>

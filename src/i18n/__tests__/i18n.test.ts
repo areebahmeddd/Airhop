@@ -4,16 +4,15 @@
 // Runtime behaviour: catalog resolution, interpolation, plural selection, and
 // the rule that decides which language is actually on screen.
 //
-// The hooks are deliberately not exercised here. They are thin wrappers that
-// read the settings store and hand the result to the same `getT` the functions
-// below use, and calling them outside a renderer tests React rather than this
-// module.
+// The hooks are not exercised here: they are thin wrappers over the same `getT`
+// the functions below use, so calling them outside a renderer tests React.
 
 import { useSettingsStore } from "@store/settings-store";
 import {
   activeLanguage,
   getLanguage,
   isShipped,
+  languageForTag,
   needsRelaunch,
   resolvePreference,
   SHIPPED_LANGUAGES,
@@ -33,11 +32,12 @@ afterEach(() => {
 });
 
 describe("language table", () => {
-  it("knows all thirty languages regardless of what has been translated", () => {
-    // The table is facts about languages, not a record of translation
-    // progress, so it does not grow as catalogs land.
-    expect(LANGUAGE_ORDER).toHaveLength(30);
-    expect(new Set(LANGUAGE_ORDER).size).toBe(30);
+  it("knows every language regardless of what has been translated", () => {
+    // Facts about languages, not a record of translation progress, so the table
+    // does not grow as catalogs land. The literal is the tripwire: adding a
+    // language is meant to fail here once.
+    expect(LANGUAGE_ORDER).toHaveLength(35);
+    expect(new Set(LANGUAGE_ORDER).size).toBe(35);
   });
 
   it("keeps the pseudolocale out of the language list", () => {
@@ -50,7 +50,7 @@ describe("language table", () => {
   });
 
   it("puts the source language first and the rest in a stable order", () => {
-    // Sorted by English name rather than by the translated one, so the list
+    // Sorted by English name, not the translated one, so the list
     // does not reshuffle under the user's finger when they change language.
     expect(LANGUAGE_ORDER[0]).toBe("en");
     const rest = LANGUAGE_ORDER.slice(1).map((c) => LANGUAGES[c].englishName);
@@ -85,16 +85,15 @@ describe("what ships", () => {
     // Reachable two ways: a device set to a language Airhop has not translated,
     // and a preference written by a later build that shipped more.
     const untranslated = LANGUAGE_ORDER.find((c) => !isShipped(c));
-    if (untranslated === undefined) return; // all thirty have landed
+    if (untranslated === undefined) return; // every language has landed
     expect(resolvePreference(untranslated)).toBe(DEFAULT_LANGUAGE);
   });
 });
 
 describe("which language is on screen", () => {
   it("follows an explicit preference, unless it crosses the direction boundary", () => {
-    // The exception is the whole right-to-left policy, and Arabic is the first
-    // language to exercise it: layout direction is fixed when the process
-    // starts, so choosing Arabic from a left-to-right boot keeps rendering the
+    // The exception is the right-to-left policy: direction is fixed at process
+    // start, so choosing Arabic from a left-to-right boot keeps rendering the
     // boot language until the next launch rather than putting Arabic prose in a
     // left-to-right frame. Everything sharing the boot direction switches now.
     for (const code of SHIPPED_LANGUAGES) {
@@ -121,6 +120,72 @@ describe("which language is on screen", () => {
       const deferred = needsRelaunch(code);
       expect(deferred).toBe(activeLanguage(code) !== resolvePreference(code));
       if (!isRTL(code)) expect(deferred).toBe(false);
+    }
+  });
+});
+
+describe("device language", () => {
+  // What real phones report, not what a spec says they ought to. Every tag
+  // resolving to English is somebody reading English beside a finished catalog.
+  it.each([
+    ["en-US", "en"],
+    ["en-GB", "en"],
+    ["pt-BR", "pt-BR"],
+    // Brazil is what a bare tag means; every other region follows the
+    // European orthography.
+    ["pt-PT", "pt-PT"],
+    ["pt", "pt-BR"],
+    ["pt-AO", "pt-PT"],
+    ["pt-MZ", "pt-PT"],
+    // Script decides Chinese, never region alone.
+    ["zh-Hans-CN", "zh-Hans"],
+    ["zh-Hant-TW", "zh-Hant"],
+    ["zh-TW", "zh-Hant"],
+    ["zh-HK", "zh-Hant"],
+    ["zh-MO", "zh-Hant"],
+    ["zh-CN", "zh-Hans"],
+    ["zh-SG", "zh-Hans"],
+    ["zh", "zh-Hans"],
+    // Retired and legacy codes some devices still report.
+    ["fil-PH", "fil"],
+    ["tl-PH", "fil"],
+    ["tl", "fil"],
+    ["id-ID", "id"],
+    ["in-ID", "id"],
+    ["ur-PK", "ur"],
+    ["ta-LK", "ta"],
+    ["ms-BN", "ms"],
+    // Not shipped, so falling back is the right answer.
+    ["nb-NO", "en"],
+    ["he-IL", "en"],
+    ["bn-BD", "bn"],
+    ["ka-GE", "ka"],
+    ["mg-MG", "mg"],
+    ["pa-IN", "pa"],
+    // Gurmukhi is the catalog; Pakistan reads Shahmukhi and cannot use it.
+    ["pa-PK", "en"],
+    ["pa-Arab-PK", "en"],
+    ["", "en"],
+  ])("resolves %s to %s", (tag, expected) => {
+    expect(languageForTag(tag)).toBe(expected);
+  });
+
+  it("never infers the pseudolocale, which is chosen and never detected", () => {
+    expect(languageForTag(PSEUDO_LANGUAGE)).toBe(DEFAULT_LANGUAGE);
+  });
+
+  it("only ever resolves to a language the app knows", () => {
+    for (const tag of ["pt-PT", "tl", "in", "zh-MO", "xx-YY", "qps-ploc"]) {
+      expect(LANGUAGE_ORDER).toContain(languageForTag(tag));
+    }
+  });
+
+  it("puts a known but untranslated language behind the shipping gate", () => {
+    // Declaring a language and translating it are separate steps, so detection
+    // may name one that has no catalog yet. What reaches the screen must still
+    // be something that ships.
+    for (const code of LANGUAGE_ORDER) {
+      expect(SHIPPED_LANGUAGES).toContain(resolvePreference(code));
     }
   });
 });

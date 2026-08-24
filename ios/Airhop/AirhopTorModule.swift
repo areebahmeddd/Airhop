@@ -17,7 +17,7 @@ final class AirhopTorModule: RCTEventEmitter {
     static let torStatusEvent = "TorStatusChanged"
 
     private var hasListeners = false
-    private var statusObserver: NSObjectProtocol?
+    private var statusObservers: [NSObjectProtocol] = []
 
     override init() {
         super.init()
@@ -76,6 +76,30 @@ final class AirhopTorModule: RCTEventEmitter {
         }
     }
 
+    /// Report an app foreground transition, and recover Arti on the way back.
+    ///
+    /// iOS suspends the process in the background, so Arti's circuits and guard
+    /// connections do not survive it, while nothing in the manager re-probes
+    /// after the first successful bootstrap. Both edges are needed: the
+    /// background one clears the latched readiness, the foreground one restarts
+    /// against it. Both are no-ops when Tor was never started, since
+    /// ensureRunningOnForeground() gates on auto-start consent.
+    @objc
+    func setAppForeground(_ foreground: Bool,
+                          resolver resolve: @escaping RCTPromiseResolveBlock,
+                          rejecter reject: @escaping RCTPromiseRejectBlock) {
+        Task { @MainActor in
+            let manager = AirhopTorManager.shared
+            manager.setAppForeground(foreground)
+            if foreground {
+                manager.ensureRunningOnForeground()
+            } else {
+                manager.goDormantOnBackground()
+            }
+            resolve(nil)
+        }
+    }
+
     /// Return the current Tor status synchronously as a JS object.
     @objc
     func getTorStatus(_ resolve: @escaping RCTPromiseResolveBlock,
@@ -106,46 +130,51 @@ final class AirhopTorModule: RCTEventEmitter {
 
     // MARK: - Status event relay
 
+    /// One observer per notification, never `forName: nil`.
+    ///
+    /// A catch-all block is invoked for every notification posted anywhere in
+    /// the process - UIKit alone posts keyboard, scene, screen and locale
+    /// changes constantly - to filter four of them out. Naming them lets
+    /// NotificationCenter do the matching.
+    ///
+    /// The four are the transitions JS cannot infer. Ready and stall are the
+    /// load-bearing pair: without the stall, a bootstrap that ran out its
+    /// deadline emits nothing, and JS cannot tell "still forming" from "gave
+    /// up" so it keeps claiming onion routing indefinitely.
     private func subscribeToTorNotifications() {
         let nc = NotificationCenter.default
-        statusObserver = nc.addObserver(
-            forName: nil,
-            object: nil,
-            queue: nil
-        ) { [weak self] notification in
-            guard let self else { return }
-            let relevant: Set<Notification.Name> = [
-                .AirhopTorWillStart,
-                .AirhopTorWillRestart,
-                .AirhopTorDidBecomeReady,
-                // The terminal one. Without it a bootstrap that ran out its
-                // deadline emitted nothing, so JS never learned the difference
-                // between "still forming" and "gave up" and went on claiming
-                // onion routing indefinitely.
-                .AirhopTorDidStall,
-            ]
-            guard relevant.contains(notification.name) else { return }
-            guard self.hasListeners else { return }
-
-            Task { @MainActor in
-                let m = AirhopTorManager.shared
-                self.sendEvent(
-                    withName: AirhopTorModule.torStatusEvent,
-                    body: [
-                        "isReady": m.isReady,
-                        "isStarting": m.isStarting,
-                        "port": m.isReady ? m.socksPort : 0,
-                        "progress": m.bootstrapProgress,
-                        "bootstrapSummary": m.bootstrapSummary,
-                    ]
-                )
+        let names: [Notification.Name] = [
+            .AirhopTorWillStart,
+            .AirhopTorWillRestart,
+            .AirhopTorDidBecomeReady,
+            .AirhopTorDidStall,
+        ]
+        statusObservers = names.map { name in
+            nc.addObserver(forName: name, object: nil, queue: nil) { [weak self] _ in
+                self?.emitStatus()
             }
         }
     }
 
-    deinit {
-        if let obs = statusObserver {
-            NotificationCenter.default.removeObserver(obs)
+    private func emitStatus() {
+        guard hasListeners else { return }
+        Task { @MainActor in
+            let m = AirhopTorManager.shared
+            self.sendEvent(
+                withName: AirhopTorModule.torStatusEvent,
+                body: [
+                    "isReady": m.isReady,
+                    "isStarting": m.isStarting,
+                    "port": m.isReady ? m.socksPort : 0,
+                    "progress": m.bootstrapProgress,
+                    "bootstrapSummary": m.bootstrapSummary,
+                ]
+            )
         }
+    }
+
+    deinit {
+        let nc = NotificationCenter.default
+        for obs in statusObservers { nc.removeObserver(obs) }
     }
 }

@@ -1,0 +1,7 @@
+<resources>
+  <string name="mesh_channel_name">Réseau maillé</string>
+  <string name="mesh_channel_description">Garde le maillage Airhop actif en arrière-plan</string>
+  <string name="mesh_notification_title">Maillage Airhop actif</string>
+  <string name="mesh_notification_text">Découverte et relais des messages proches</string>
+  <string name="mesh_notification_stop">Arrêter le maillage</string>
+</resources>

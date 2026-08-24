@@ -17,14 +17,12 @@
 
 import type { Locale, PluralForms, Strings } from "./locales/types";
 
-// A private-use tag, following the convention Windows and ICU use for exactly
-// this. It is never a real language, so it can never collide with one, and a
-// device set to it resolves to English like any other unknown tag.
+// The private-use tag Windows and ICU use for exactly this. Never a real
+// language, so a device set to it resolves to English like any unknown tag.
 export const PSEUDO_LANGUAGE = "qps-ploc";
 
-// Latin letters carrying an obvious diacritic, present in the fonts both
-// platforms ship. Legible on purpose: swapping "e" for "€" would find the same
-// layout bugs and make the screenshot unreadable.
+// Diacritics both platforms ship a glyph for. Legible on purpose: swapping "e"
+// for "€" finds the same layout bugs and makes the screenshot unreadable.
 const ACCENTS: Record<string, string> = {
   a: "á",
   b: "ƀ",
@@ -90,11 +88,11 @@ const PRESERVED =
 
 // A floor, not the answer: a flat ratio can still come out shorter than a real
 // translation, and an instrument that reports safe when it is not is worse than
-// none. `pseudoLocale` pads past the longest shipped translation of each key.
+// none. `pseudoLocale` pads past the longest shipped translation instead.
 const MIN_EXPANSION = 0.4;
 
-// Clearance over the longest real translation seen. Enough that a screen has to
-// be comfortable rather than exactly wide enough.
+// Clearance over the longest real translation, so a screen has to be
+// comfortable rather than exactly wide enough.
 const HEADROOM = 1.15;
 
 function accent(text: string): string {
@@ -118,12 +116,9 @@ function pad(source: number, longestReal: number): string {
   return ` ${"·".repeat(extra)}`;
 }
 
-// Accents the prose, leaves the preserved tokens alone, then brackets the whole
-// thing so truncation and concatenation are both visible.
-//
-// `longestReal` is the length of the longest shipped translation of this same
-// key, so the result is wider than anything a user will actually see. Zero when
-// nothing has been translated yet, which falls back to the flat floor.
+// Accents the prose, leaves preserved tokens alone, then brackets the whole
+// thing so truncation and concatenation are both visible. `longestReal` is zero
+// when nothing has been translated yet, which falls back to the flat floor.
 export function pseudo(source: string, longestReal = 0): string {
   const parts = source.split(PRESERVED);
   let out = "";
@@ -136,9 +131,8 @@ export function pseudo(source: string, longestReal = 0): string {
   return `⟦${out}${pad(source.length, longestReal)}⟧`;
 }
 
-// `others` is every catalog that has shipped, English included. Each string is
-// padded past the longest of them for its key, so a screen that holds under the
-// pseudolocale holds in every language the app actually carries.
+// `others` is every shipped catalog, English included. Padding past the longest
+// of them per key is what makes a screen that holds here hold everywhere.
 export function pseudoLocale(source: Locale, others: Locale[] = []): Locale {
   const longestString = (key: string): number =>
     others.reduce(
@@ -166,9 +160,8 @@ export function pseudoLocale(source: Locale, others: Locale[] = []): Locale {
   const plurals = {} as Record<string, PluralForms>;
   for (const [key, forms] of Object.entries(source.plurals)) {
     const widest = longestPlural(key);
-    // `other` is the one category CLDR guarantees in every language, so it is
-    // required on `PluralForms` and always present on the source. Seeding the
-    // result with it keeps the shape provably complete rather than asserted.
+    // `other` is the one category CLDR guarantees everywhere, so it is required
+    // on `PluralForms`. Seeding with it keeps the shape provably complete.
     const out: PluralForms = { other: pseudo(forms.other, widest) };
     for (const [category, value] of Object.entries(forms)) {
       if (category !== "other" && value !== undefined) {

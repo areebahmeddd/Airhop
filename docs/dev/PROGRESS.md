@@ -155,9 +155,9 @@ checkable against the code rather than taken on trust.
 - [x] Translation runtime, no library (`src/i18n/index.ts`: `t` / `useT` / `tPlural`, named-placeholder interpolation)
 - [x] Completeness enforced by `tsc` (`src/i18n/locales/types.ts`: every locale is `Record<TranslationKey, string>` derived from `en.ts`, so a partial locale does not compile and no runtime fallback exists)
 - [x] Full extraction: every user-facing string in the catalog, zero hardcoded, enforced in CI
-- [x] Thirty catalogs, matching the set the landing site serves
+- [x] 35 catalogs, matching the set the landing site serves
 - [x] Locale store, in-app picker, and device language negotiation through `Intl`
-- [x] CLDR plurals for all thirty (`src/i18n/plurals.ts`), checked against Node's ICU for every integer 0 to 2000
+- [x] CLDR plurals for all 35 (`src/i18n/plurals.ts`), checked against Node's ICU for every integer 0 to 2000
 - [x] Right to left for Arabic, Persian and Urdu (`src/i18n/layout.ts`: `textAlignEnd`, mirrored chevrons; logical properties app-wide; `radar-view.tsx` exempt as a polar plot of physical space)
 - [x] Layout direction pinned at startup, and a direction change applied on next launch rather than by restarting the process
 - [x] Persisted rows carry a catalog key and translate on render, so history follows a language change

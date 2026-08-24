@@ -29,15 +29,18 @@ const fs = require("fs");
 // generated formats are excluded rather than trusted: they legitimately hold
 // arbitrary bytes, and flagging them would train people to ignore this check.
 const TEXT_FILE =
-  /\.(ts|tsx|js|jsx|mjs|cjs|json|md|ya?ml|kt|swift|java|h|m|mm|rb|sh|gradle|pro|xml|plist|css|html)$/i;
+  /\.(ts|tsx|js|jsx|mjs|cjs|json|md|ya?ml|kt|swift|java|h|m|mm|rb|sh|gradle|pro|xml|plist|strings|css|html)$/i;
 
 // Paths holding third-party or generated content this repository does not
 // author and must not rewrite.
 const SKIPPED = [/^ios\/Frameworks\//, /^assets\/data\//];
 
-// Translation catalogs, the one place a zero-width character is spelling
-// rather than a hiding place. Unanchored to cover the landing site too.
-const LOCALE_FILE = /(^|\/)i18n\/locales\//;
+// Translated prose, the one place a zero-width character is spelling rather
+// than a hiding place. Persian spells with U+200C in all three surfaces that
+// carry it: the catalogs, the iOS prompts, and the Android overlays. Unanchored
+// to cover the landing site.
+const LOCALE_FILE =
+  /(^|\/)i18n\/locales\/|\.lproj\/|(^|\/)res\/values-[^/]+\/[^/]+\.xml$/;
 
 // Joiners and direction marks. Persian and Devanagari spell words with them,
 // and unlike the bidi overrides they reorder nothing. Nothing else in

@@ -43,6 +43,11 @@ const LOADERS: Record<Exclude<LanguageCode, "en">, () => Promise<{ locale: Local
   id: () => import("./locales/id.ts"),
   fa: () => import("./locales/fa.ts"),
   "pt-BR": () => import("./locales/pt-BR.ts"),
+  "pt-PT": () => import("./locales/pt-PT.ts"),
+  bn: () => import("./locales/bn.ts"),
+  ka: () => import("./locales/ka.ts"),
+  mg: () => import("./locales/mg.ts"),
+  pa: () => import("./locales/pa.ts"),
   ru: () => import("./locales/ru.ts"),
   es: () => import("./locales/es.ts"),
 };

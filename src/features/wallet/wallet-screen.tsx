@@ -84,8 +84,11 @@ import {
 } from "@store/wallet-store";
 import Avatar from "@ui/components/avatar";
 import BottomSheet from "@ui/components/bottom-sheet";
+import CopyGlyph from "@ui/components/copy-glyph";
+import { useCopy } from "@ui/hooks/use-copy";
 import { usePullRefreshColors } from "@ui/hooks/use-pull-refresh";
 import {
+  BUTTON_HEIGHT,
   DISABLED_OPACITY,
   FontFamily,
   FontSize,
@@ -285,6 +288,10 @@ export default function WalletScreen({
   // The token produced by the most recent send, still reserved and reclaimable.
   const [pending, setPending] = useState<PreparedSend | null>(null);
   const [deposit, setDeposit] = useState<LightningDeposit | null>(null);
+  // The widest control in the panel, so the confirmation is a word rather than
+  // only a glyph swap.
+  const { copied: invoiceCopied, copy: copyInvoice } = useCopy();
+
   const [depositClock, setDepositClock] = useState(0);
   const depositExpiresAtMs = deposit?.expiresAtMs;
   const depositExpired =
@@ -2522,17 +2529,23 @@ export default function WalletScreen({
                 </Text>
               </Pressable>
               <Pressable
-                style={styles.generatedActionBtn}
-                onPress={() => {
-                  void Clipboard.setStringAsync(deposit.invoice);
-                  acknowledged();
-                }}
+                style={({ pressed }) => [
+                  styles.generatedActionBtn,
+                  pressed && styles.generatedActionBtnPressed,
+                ]}
+                onPress={() => copyInvoice(deposit.invoice)}
                 accessibilityRole="button"
                 accessibilityLabel={T("wallet.ln.copy_invoice")}
               >
-                <Feather name="copy" size={18} color={Colors.accent} />
+                <CopyGlyph
+                  copied={invoiceCopied}
+                  size={18}
+                  color={Colors.accent}
+                />
                 <Text style={styles.generatedActionText}>
-                  {T("wallet.ln.copy_invoice")}
+                  {invoiceCopied
+                    ? T("common.copied")
+                    : T("wallet.ln.copy_invoice")}
                 </Text>
               </Pressable>
             </View>
@@ -3427,7 +3440,7 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       lineHeight: FontSize.sm * 1.5,
     },
     balanceCard: {
-      backgroundColor: Colors.surface,
+      backgroundColor: Colors.surfaceRaised,
       borderRadius: Radius.lg,
       borderWidth: 1,
       borderColor: Colors.border,
@@ -4140,7 +4153,7 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
     },
     modalCancel: {
       width: "100%",
-      minHeight: 50,
+      minHeight: BUTTON_HEIGHT,
       paddingVertical: Spacing.md,
       backgroundColor: Colors.surfaceRaised,
       borderWidth: 1,
@@ -4156,7 +4169,7 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
     },
     modalDismiss: {
       width: "100%",
-      minHeight: 50,
+      minHeight: BUTTON_HEIGHT,
       paddingVertical: Spacing.md,
       borderRadius: Radius.full,
       backgroundColor: Colors.surfaceRaised,
@@ -4170,7 +4183,7 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
     },
     modalConfirm: {
       width: "100%",
-      minHeight: 50,
+      minHeight: BUTTON_HEIGHT,
       paddingVertical: Spacing.md,
       backgroundColor: Colors.accent,
       borderRadius: Radius.full,
@@ -4263,7 +4276,7 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
     },
     generatedActionBtn: {
       width: "100%",
-      minHeight: 50,
+      minHeight: BUTTON_HEIGHT,
       paddingVertical: Spacing.md,
       flexDirection: "row",
       alignItems: "center",
@@ -4274,6 +4287,9 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       borderWidth: 1,
       borderColor: Colors.border,
     },
+    generatedActionBtnPressed: {
+      backgroundColor: Colors.surfacePressed,
+    },
     generatedActionText: {
       fontSize: FontSize.sm,
       fontWeight: FontWeight.semibold,
@@ -4281,7 +4297,7 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
     },
     generatedPrimaryBtn: {
       width: "100%",
-      minHeight: 50,
+      minHeight: BUTTON_HEIGHT,
       paddingVertical: Spacing.md,
       flexDirection: "row",
       alignItems: "center",

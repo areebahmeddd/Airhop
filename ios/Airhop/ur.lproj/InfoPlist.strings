@@ -1,0 +1,10 @@
+/* Keys mirror ios/Airhop/Info.plist, the English copy. Guarded by npm run i18n:native. */
+
+"NSBluetoothAlwaysUsageDescription" = "Airhop میش پر قریبی آلات سے رابطے کے لیے بلوٹوتھ استعمال کرتی ہے۔";
+"NSBluetoothPeripheralUsageDescription" = "Airhop قریبی پیئرز کو آپ کی موجودگی بتانے کے لیے بلوٹوتھ استعمال کرتی ہے۔";
+"NSLocalNetworkUsageDescription" = "Airhop بڑی منتقلیوں (ویڈیو، بڑی فائلیں) کے لیے قریبی آلات سے براہِ راست جڑنے کو مقامی نیٹ ورک استعمال کرتی ہے۔";
+"NSCameraUsageDescription" = "Airhop کسی رابطے کا QR کوڈ اسکین کرنے، اور قریبی پیئرز کے ساتھ شیئر کرنے کے لیے تصاویر و ویڈیوز بنانے کے لیے کیمرہ استعمال کرتی ہے۔";
+"NSMicrophoneUsageDescription" = "Airhop صوتی نوٹ ریکارڈ کرنے اور قریبی پیئرز تک براہِ راست آواز پہنچانے کے لیے مائیکروفون استعمال کرتی ہے۔";
+"NSPhotoLibraryUsageDescription" = "Airhop میش پر تصاویر اور ویڈیوز شیئر کرنے کے لیے آپ کی تصاویر کی گیلری تک رسائی لیتی ہے۔";
+"NSPhotoLibraryAddUsageDescription" = "Airhop اُس وقت تصاویر اور ویڈیوز آپ کی گیلری میں محفوظ کرتی ہے جب آپ محفوظ کرنا منتخب کریں، اور جب آپ اپنا QR کوڈ ڈاؤن لوڈ کریں۔";
+"NSLocationWhenInUseUsageDescription" = "Airhop آپ کو قریبی علاقے کے چینلز (شہری بلاک، شہر، خطہ) میں رکھنے کے لیے آپ کا تخمینی مقام استعمال کرتی ہے۔ آپ کا درست مقام کبھی آپ کے آلے سے باہر نہیں جاتا۔";

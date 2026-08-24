@@ -1,0 +1,7 @@
+<resources>
+  <string name="mesh_channel_name">Sieć mesh</string>
+  <string name="mesh_channel_description">Utrzymuje sieć mesh aplikacji Airhop w tle</string>
+  <string name="mesh_notification_title">Sieć mesh aplikacji Airhop działa</string>
+  <string name="mesh_notification_text">Wykrywanie i przekazywanie wiadomości w okolicy</string>
+  <string name="mesh_notification_stop">Zatrzymaj mesh</string>
+</resources>

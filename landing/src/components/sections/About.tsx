@@ -106,7 +106,7 @@ export default function About() {
   const T = useT();
 
   return (
-    <section id="about" className="scroll-mt-8 px-6 py-12 md:px-10 md:py-16">
+    <section id="about" className="px-6 py-12 md:px-10 md:py-16">
       <div className="mx-auto max-w-7xl">
         <SectionHeader
           eyebrow={T("home.about.eyebrow")}

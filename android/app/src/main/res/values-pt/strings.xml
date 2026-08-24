@@ -1,0 +1,7 @@
+<resources>
+  <string name="mesh_channel_name">Rede em malha</string>
+  <string name="mesh_channel_description">Mantém a malha do Airhop ativa em segundo plano</string>
+  <string name="mesh_notification_title">Malha do Airhop ativa</string>
+  <string name="mesh_notification_text">A descobrir e a retransmitir mensagens próximas</string>
+  <string name="mesh_notification_stop">Parar a malha</string>
+</resources>

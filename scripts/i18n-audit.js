@@ -5,23 +5,17 @@
 //   npm run i18n:audit -- --max 40  fail if more than N remain (CI ratchet)
 //   npm run i18n:audit -- --unused  keys in the catalog nothing references
 //
-// The two directions of the same question. `--max` counts copy that has not
-// reached the catalog; `--unused` counts catalog entries no longer reached by
-// any code. Both drift silently otherwise: the first leaves a screen unable to
-// be translated at all, the second leaves a translator working on a string
-// nobody will ever read.
+// Two directions of one question. `--max` counts copy that never reached the
+// catalog, `--unused` counts catalog entries no code reaches any more, and both
+// drift silently: the first leaves a screen untranslatable, the second leaves a
+// translator working on a string nobody reads. `--max` is a ratchet, so a commit
+// that adds a hardcoded string fails until it is extracted or the ceiling is
+// deliberately raised.
 //
-// Extraction across ~90 files is not one commit, and "how much is left" should
-// be a number in CI rather than a guess in a standup. `--max` is a ratchet:
-// set it to today's count, and any commit that adds a hardcoded string fails
-// until it is either extracted or the ceiling is deliberately raised.
-//
-// This is a heuristic, not a compiler. It looks for string literals and JSX
-// text that read like display copy: a capitalised word or a run of words. It
-// deliberately ignores the things that must NOT be translated, listed in
-// SKIP_FILES below, and anything that looks like an identifier, a URL, a style
-// value or a protocol constant. False positives are cheap (add to IGNORE);
-// false negatives are the reason this is a floor, not a guarantee.
+// A heuristic, not a compiler. It looks for literals and JSX text that read like
+// display copy and skips what must not be translated (SKIP_FILES), identifiers,
+// URLs, style values and protocol constants. False positives are cheap, so this
+// is a floor, not a guarantee.
 
 const fs = require("fs");
 const path = require("path");
@@ -30,13 +24,10 @@ const ts = require("typescript");
 const ROOT = path.join(__dirname, "..");
 
 // Translations evaluated at module load, which freeze in whichever language the
-// app started in.
-//
-// The type system cannot see this and a screenshot will not show it:
+// app started in. Neither the type system nor a screenshot shows it:
 // `const SCOPES = { tag: t("chat.scope.mesh") }` type-checks and renders
-// correctly, and is wrong the moment somebody changes language, because the
-// module was evaluated once at import. It has to be a key table the component
-// translates on render instead.
+// correctly, and is wrong the moment the language changes. Store keys and
+// translate on render.
 function frozenTranslations(files) {
   const found = [];
   for (const file of files) {
@@ -76,7 +67,7 @@ function frozenTranslations(files) {
   return found;
 }
 
-// Files whose strings are deliberately not translated. Each needs a reason.
+// Files whose strings are never translated. Each needs a reason.
 const SKIP_FILES = [
   // Identity derivation. The word lists are wire-visible: the same peer must
   // resolve to the same name on every device and in bitchat.
@@ -92,13 +83,9 @@ const SKIP_FILES = [
   "src/data/releases.ts",
   // The catalog itself.
   "src/i18n/",
-  // Protocol internals. Every string in these is a `throw new Error()` aimed at
-  // whoever is reading a stack trace ("Noise: replay detected",
-  // "contact-exchange: buffer truncated"), never at a user. Nothing renders
-  // them: the two places that do show a raw error string (wallet-screen,
-  // ecash-transfer) are showing a message authored by a remote mint, which is
-  // pass-through by policy. Translating exception text would make debugging a
-  // field report harder, not easier.
+  // Protocol internals: every string here is a `throw` aimed at a stack trace,
+  // never at a user. The two screens that do render a raw error string are
+  // passing through a remote mint's own wording.
   "src/core/",
   "src/bridge/",
 ];
@@ -107,9 +94,8 @@ const SKIP_DIRS = ["__tests__", "__mocks__", "node_modules"];
 
 // Literals that look like copy but are not.
 const IGNORE = new Set([
-  // Byte-size unit symbols. Not words: they are the same in every locale the
-  // app ships, and format.ts already localises the digits and the decimal
-  // separator around them, which is the part that actually varies.
+  // Unit symbols, not words. `format.ts` localises the digits and separator
+  // around them, which is the part that varies.
   "KiB",
   "MiB",
   "Ed25519 + X25519",
@@ -126,37 +112,25 @@ const IGNORE = new Set([
   // Error class names, assigned to `this.name` so a stack trace reads well.
   "WalletError",
   "AttachmentTooLargeError",
-  // The transmitted /slap payload. This one must NEVER be extracted: bitchat
-  // recognises an incoming emote by matching these exact English words, so a
-  // translated variant stops the two apps understanding each other. See the
-  // do-not-translate table in .github/skills/i18n.md.
+  // The transmitted /slap payload, which bitchat matches as an English
+  // substring. Extracting it stops the two apps understanding each other.
   "around a bit with a large trout",
-  // An invariant breach in the offline coin selector, thrown at a stack trace
-  // and never rendered. Same rule as the `src/core/` skip above: translating
-  // exception text makes a field report harder to read, not easier.
+  // Invariant breaches in the coin selector, thrown at a stack trace and never
+  // rendered. Same rule as the `src/core/` skip above.
   "offline selection did not map back to stored proofs (matched",
   ", covering",
-  // The same invariant on the melt side, thrown where a short selection would
-  // otherwise under-fund a Lightning payment.
   "melt selection did not map back to stored proofs",
 ]);
 
-// JSX text, anchored on a closing tag. Without requiring the `</`, a generic
-// type annotation (`Record<string, Promise<void>>`) reads as text between angle
-// brackets. Filtering those out afterwards with a "looks like a type name" rule
-// is what silently swallowed every single-word label in the app: "Codename",
-// "Version", "Appearance", "Close". Anchoring here is exact instead of clever.
+// Anchored on the closing tag: without the `</`, a generic annotation
+// (`Record<string, Promise<void>>`) reads as text between angle brackets, and
+// filtering those out afterwards swallowed every single-word label in the app.
 const JSX_TEXT = />\s*([A-Z][^<>{}\n]{2,200}?)\s*<\//g;
 
-// The string and template literals on a line, plus the line with any trailing
-// `//` comment removed.
-//
-// A regex cannot do this. `<Feather name="x" size={22} color="#FFF" />` makes
-// /"([^"]{2,})"/ match the gap *between* two literals (` size={22} color=`),
-// because the engine is free to start at the closing quote of the first one.
-// Every such false positive looked like real copy and had to be explained away
-// by hand. Scanning left to right, tracking whether the scanner is inside a literal,
-// is both correct and simpler to reason about.
+// The literals on a line, plus the line with any trailing `//` comment removed.
+// A regex cannot do this: `/"([^"]{2,})"/` matches the gap *between* two
+// literals in `<Feather name="x" size={22} color="#FFF" />`, because the engine
+// may start at the first closing quote. Scanning left to right is exact.
 // /
 function scanLiterals(line) {
   const literals = [];
@@ -254,16 +228,12 @@ function collect(file) {
   return hits.map((h) => ({ ...h, file: rel }));
 }
 
-// The two shapes the line scanner above cannot see, found on the AST instead.
-//
-//   1. JSX text that wraps. JSX_TEXT is applied per line and forbids a newline
-//      inside the match, and prettier wraps at 80 columns, so any sentence long
-//      enough to be worth translating is exactly the one that escapes it.
-//   2. Template literals. The line scanner bails on any line containing `${`,
-//      which is right for a continuation line and wrong for the literal itself.
-//
-// A node knows its own extent, so neither problem exists here. Additive:
-// everything still passes looksLikeCopy and SKIP_FILES, and results are deduped
+// The two shapes the line scanner cannot see, found on the AST instead: JSX
+// text that wraps (prettier breaks at 80 columns, so the sentences long enough
+// to be worth translating are exactly the ones that escape a per-line regex),
+// and template literals (the scanner bails on any line holding `${`). A node
+// knows its own extent. Additive: still filtered by looksLikeCopy and
+// SKIP_FILES, and deduped
 // against the line scanner.
 // /
 function collectAst(file) {
@@ -278,11 +248,10 @@ function collectAst(file) {
     const value = text.replace(/\s+/g, " ").trim();
     // The exemption list wins over every rule below, including `spaced`.
     if (IGNORE.has(value)) return;
-    // `spaced` means the raw chunk had whitespace against a word, which inside a
-    // template literal only happens when prose is being concatenated with an
-    // interpolated value. Without it a one-word chunk like " unconfirmed" is
-    // discarded by looksLikeCopy's identifier rule, which is what let
-    // `${n} unconfirmed`, `${n} added` and `${n} transfers` ship untranslated.
+    // `spaced` means whitespace sat against a word, which inside a template
+    // only happens when prose is concatenated with an interpolation. Without it
+    // looksLikeCopy's identifier rule discards " unconfirmed", which is how
+    // `${n} unconfirmed` and its siblings shipped untranslated.
     if (!(spaced && /[A-Za-z]{2}/.test(value)) && !looksLikeCopy(value)) return;
     const { line } = sf.getLineAndCharacterOfPosition(node.getStart(sf));
     hits.push({ line: line + 1, value, file: rel });
@@ -291,11 +260,9 @@ function collectAst(file) {
     if (ts.isJsxText(node)) {
       push(node, node.text);
     } else if (ts.isTemplateExpression(node)) {
-      // A message built for a stack trace is not copy. `t()` is for users,
-      // `Error` is for whoever reads the crash, and an invariant breach has no
-      // translation worth writing. Only checked here because the template case
-      // is the shape these take; a one-line Error string is caught by the line
-      // scanner and belongs in IGNORE if it is ever deliberate.
+      // A message built for a stack trace is not copy. Only checked here
+      // because that is the shape these take; a one-line Error string is caught
+      // by the line scanner and belongs in IGNORE.
       if (isDeveloperMessage(node)) {
         ts.forEachChild(node, visit);
         return;
@@ -315,7 +282,7 @@ function collectAst(file) {
 }
 
 // Whether this node sits inside `new Error(...)`, i.e. it is aimed at a
-// developer reading a stack trace rather than at a user reading a screen.
+// developer reading a stack trace, not at a user reading a screen.
 function isDeveloperMessage(node) {
   for (let p = node.parent; p; p = p.parent) {
     if (ts.isNewExpression(p) && ts.isIdentifier(p.expression)) {
@@ -362,7 +329,7 @@ if (unusedOnly) {
   // The catalog files themselves obviously mention every key, so they are not
   // evidence of use.
   // A key is used when it appears as a string literal, not when a comment
-  // mentions it, so this walks the AST rather than scanning raw text.
+  // mentions it, so this walks the AST instead of scanning raw text.
   //
   // Not by stripping comments with a regex: one `/*` inside a line comment
   // makes the block pattern run to the next `*/` anywhere later in the file,
@@ -489,18 +456,11 @@ if (frozen.length > 0) {
   process.exit(1);
 }
 
-// A translation memoized without the translator in its dependency array.
-//
-// `frozenTranslations` above catches `t()` at module scope; this catches
-// `useMemo(() => ({ label: t("x") }), [Colors])`. The factory reruns only when a
-// listed dependency changes, and the module-level `t` is not a reactive value,
-// so react-hooks/exhaustive-deps cannot ask for it. The memo keeps returning the
-// old language's text after a switch.
-//
-// The rule is about the dependency, not the call: use the `T` from `useT()`
-// inside a memo and list it, and the linter can see it too. A `useCallback`
-// whose body calls the module-level `t` at invocation time is correct and is not
-// reported, because `t` resolves the current language on every call.
+// `frozenTranslations` catches `t()` at module scope; this catches
+// `useMemo(() => ({ label: t("x") }), [Colors])`, which reruns only on a listed
+// dependency and so keeps returning the old language after a switch. The
+// module-level `t` is not a reactive value, so exhaustive-deps cannot ask for
+// it. A `useCallback` calling `t` at invocation time is fine and not reported.
 const memoized = memoizedTranslations(files);
 if (memoized.length > 0) {
   console.error(

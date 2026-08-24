@@ -1,0 +1,7 @@
+<resources>
+  <string name="mesh_channel_name">የሜሽ አውታረ መረብ</string>
+  <string name="mesh_channel_description">የAirhop ሜሽ በጀርባ እንዲሠራ ያደርጋል</string>
+  <string name="mesh_notification_title">የAirhop ሜሽ በሥራ ላይ ነው</string>
+  <string name="mesh_notification_text">በአቅራቢያ ያሉ መልእክቶችን ማግኘትና ማስተላለፍ</string>
+  <string name="mesh_notification_stop">ሜሹን አቁም</string>
+</resources>

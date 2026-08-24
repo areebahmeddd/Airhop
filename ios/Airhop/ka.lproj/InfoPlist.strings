@@ -1,0 +1,10 @@
+/* Keys mirror ios/Airhop/Info.plist, the English copy. Guarded by npm run i18n:native. */
+
+"NSBluetoothAlwaysUsageDescription" = "Airhop ბლუთუზს იყენებს მეშში ახლომდებარე მოწყობილობებთან კავშირისთვის.";
+"NSBluetoothPeripheralUsageDescription" = "Airhop ბლუთუზს იყენებს, რომ ახლომდებარე კვანძებს შენი აქ ყოფნა აცნობოს.";
+"NSLocalNetworkUsageDescription" = "Airhop ლოკალურ ქსელს იყენებს, რომ დიდი მოცულობის გადაცემისას (ვიდეო, დიდი ფაილები) ახლომდებარე მოწყობილობებს პირდაპირ დაუკავშირდეს.";
+"NSCameraUsageDescription" = "Airhop კამერას იყენებს კონტაქტის QR კოდის სკანირებისთვის და ახლომდებარე კვანძებთან გასაზიარებელი ფოტოებისა და ვიდეოების გადასაღებად.";
+"NSMicrophoneUsageDescription" = "Airhop მიკროფონს იყენებს ხმოვანი ჩანაწერების ჩასაწერად და ცოცხალი ხმის ახლომდებარე კვანძებამდე მისატანად.";
+"NSPhotoLibraryUsageDescription" = "Airhop შენს ფოტოების ბიბლიოთეკას იყენებს, რომ სურათები და ვიდეოები მეშით გააზიაროს.";
+"NSPhotoLibraryAddUsageDescription" = "Airhop ფოტოებსა და ვიდეოებს შენს ბიბლიოთეკაში ინახავს, როცა შენახვას ირჩევ და როცა შენს QR კოდს ჩამოტვირთავ.";
+"NSLocationWhenInUseUsageDescription" = "Airhop შენს სავარაუდო მდებარეობას იყენებს, რომ ახლომდებარე ზონის არხებში (კვარტალი, ქალაქი, რეგიონი) მოგაქციოს. შენი ზუსტი მდებარეობა მოწყობილობას არასდროს ტოვებს.";

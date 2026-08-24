@@ -20,6 +20,7 @@ import {
   FontWeight,
   HIT_SLOP,
   hitSlopFor,
+  LONG_PRESS_MS,
   Radius,
   Spacing,
   useThemeColors,
@@ -144,10 +145,16 @@ function MessageBubble({
       style={[
         styles.messageRow,
         item.isMine ? styles.messageRowMine : styles.messageRowTheirs,
-        selected === true && styles.messageRowSelected,
       ]}
       onPress={selecting === true ? handleToggle : undefined}
-      disabled={selecting !== true}
+      // The whole row holds, not just the bubble, which on a one-word message
+      // is a 40pt target in a full-width row.
+      onLongPress={handleLongPress}
+      delayLongPress={LONG_PRESS_MS}
+      // Only an accessibility element while it is a checkbox: a Pressable is
+      // `accessible` by default, which collapses its children into one node and
+      // would swallow the bubble's own sender-and-body label.
+      accessible={selecting === true}
       accessibilityRole={selecting === true ? "checkbox" : undefined}
       accessibilityState={
         selecting === true ? { checked: selected === true } : undefined
@@ -232,7 +239,7 @@ function MessageBubble({
         <Pressable
           onPress={selecting === true ? handleToggle : undefined}
           onLongPress={handleLongPress}
-          delayLongPress={320}
+          delayLongPress={LONG_PRESS_MS}
           accessibilityRole={selecting === true ? "checkbox" : "button"}
           accessibilityState={
             selecting === true ? { checked: selected === true } : undefined
@@ -246,8 +253,10 @@ function MessageBubble({
             style={[
               styles.bubble,
               item.isMine ? styles.bubbleMine : styles.bubbleTheirs,
+              // Both sides gate on the same run marker the avatar and sender
+              // name use, so a run carries exactly one tail either way.
               !item.isMine && isFirstFromSender && styles.bubbleTailTheirs,
-              item.isMine && styles.bubbleTailMine,
+              item.isMine && isFirstFromSender && styles.bubbleTailMine,
               highlighted && styles.bubbleHighlighted,
             ]}
           >
@@ -386,6 +395,9 @@ function renderMessageText(
             : trimmed;
           void Linking.openURL(href).catch(() => {});
         }}
+        // Holding a link opens the message actions rather than dead-ending.
+        // Text has no delayLongPress, so it crosses at the platform default
+        // rather than LONG_PRESS_MS.
         onLongPress={onLongPress}
         suppressHighlighting
         accessibilityRole="link"
@@ -503,16 +515,20 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       gap: Spacing.sm,
     },
     messageRowMine: { justifyContent: "flex-end" },
-    messageRowSelected: { backgroundColor: Colors.accentGhost },
     selectCheck: {
       width: 22,
       height: 22,
       borderRadius: Radius.full,
       borderWidth: 1.5,
-      borderColor: Colors.borderStrong,
+      // A text token doing border duty: a checkbox owes WCAG 1.4.11's 3:1, and
+      // borderStrong measures 1.58:1 on the page in light, 1.81:1 in dark.
+      borderColor: Colors.textMuted,
       alignItems: "center",
       justifyContent: "center",
       flexShrink: 0,
+      // The row aligns to flex-end so an avatar sits by its bubble's tail. A
+      // row control is not part of the message and opts out.
+      alignSelf: "center",
     },
     selectCheckLeading: {
       marginEnd: "auto",

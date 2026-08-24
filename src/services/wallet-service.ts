@@ -255,9 +255,15 @@ function asWalletError(err: unknown, fallback: WalletErrorCode): WalletError {
 // their traffic is anonymised.
 //
 // On Android, Orbot runs as a VPN and captures every socket, so a mint request
-// really does go through Tor and there is nothing to block. On iOS, Tor is Arti
-// behind a SOCKS5 proxy that we only wire into the Nostr WebSocket; plain fetch
-// bypasses it entirely. Silently making the request there would tell the mint
+// really does go through Tor - while Orbot is routing. When it is not, nothing
+// covers that socket and the request egresses in the clear with the real IP,
+// across a window where the switch still reads on. tor-routing publishes that
+// state as `nostrBlockedByTor` and holds the Nostr transport down for it; mint
+// HTTP has to answer to the same fact, or the gate protects the smaller half of
+// the traffic.
+//
+// On iOS, Tor is Arti behind a SOCKS5 proxy wired only into the Nostr
+// WebSocket; plain fetch bypasses it entirely. Silently making the request there would tell the mint
 // exactly who is swapping which proofs, which is the one thing a Tor user is
 // trying to avoid, so it is refused unless they have explicitly allowed it.
 // Gated on the user's PREFERENCE, not on whether a circuit happens to be up
@@ -283,17 +289,30 @@ function asWalletError(err: unknown, fallback: WalletErrorCode): WalletError {
 // tor-routing pulls in the BLE native module at import time, and this module is
 // reachable from the panic wipe, which must stay loadable without a native host.
 function assertMintNetworkAllowed(): void {
-  const torClaimed =
-    useMeshStateStore.getState().torActive ||
-    useSettingsStore.getState().torEnabled;
+  const mesh = useMeshStateStore.getState();
+  const settings = useSettingsStore.getState();
+  const torClaimed = mesh.torActive || settings.torEnabled;
   if (!torClaimed) return;
-  if (Platform.OS !== "ios") return;
-  if (useSettingsStore.getState().allowMintOverClearnet) return;
-  throw new WalletError(
-    "tor-blocked",
-    t("wallet.svc.tor_ios"),
-    t("wallet.svc.tor_ios_body"),
-  );
+  // The one escape hatch, checked before either platform's refusal so the
+  // preference means the same thing on both.
+  if (settings.allowMintOverClearnet) return;
+  if (Platform.OS === "ios") {
+    throw new WalletError(
+      "tor-blocked",
+      t("wallet.svc.tor_ios"),
+      t("wallet.svc.tor_ios_body"),
+    );
+  }
+  // Android, and only while Orbot is not carrying traffic. With Orbot routing,
+  // its VPN covers this socket like every other and there is nothing to refuse,
+  // which is why this is not the blanket iOS rule.
+  if (mesh.nostrBlockedByTor) {
+    throw new WalletError(
+      "tor-blocked",
+      t("wallet.svc.tor_paused"),
+      t("wallet.svc.tor_paused_body"),
+    );
+  }
 }
 
 // Whether a mint call would currently be refused, for disabling buttons ahead

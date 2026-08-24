@@ -32,6 +32,7 @@
     "test:watch": "jest --watchAll",
     "coverage": "jest --passWithNoTests --coverage",
     "i18n:audit": "node scripts/i18n-audit.js",
+    "i18n:native": "node scripts/i18n-check-native.js",
     "verify:vendored": "node scripts/verify-vendored.js",
     "verify:invisibles": "node scripts/check-invisibles.js",
     "deadcode": "npx --yes knip@6 --no-progress",

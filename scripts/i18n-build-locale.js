@@ -4,34 +4,17 @@
 //
 //   node scripts/i18n-build-locale.js <code> <translations.json>
 //
-// Why this exists rather than hand-writing the file.
+// The translator supplies `{ key: text }` and nothing else. Key order, section
+// markers and escaping come from `en.ts`, so the emitted file is complete and
+// ordered by construction and the only thing left to review is the words.
 //
-// A catalog is 1,528 strings and 27 plural keys. Hand-writing that thirty times
-// puts every mechanical property of the file, key completeness, key ordering,
-// escaping, section structure, at the mercy of care, and care over 45,000 lines
-// is not a control. `tsc` catches a missing key, but only after the fact, and it
-// says nothing about a placeholder that got dropped in translation or a protocol
-// token a translator localized.
+// Fatal: a missing or extra key, an empty string, a placeholder that does not
+// match English, a plural set that is not the language's CLDR categories, a
+// protocol token or proper noun that did not survive, a character from a script
+// the language does not write in.
 //
-// So the mechanical parts are mechanical. The translator supplies a flat
-// `{ key: text }` map and nothing else; this reads `en.ts` for the key order and
-// the section comments, checks the translation against it, and emits a file that
-// is complete and correctly ordered by construction. What it cannot check is
-// whether the words are right, which is the only thing a person should be
-// spending attention on.
-//
-// Checks, all fatal:
-//
-//   - every English key present, no extra keys
-//   - no empty strings
-//   - placeholders match English exactly (any order, since reordering is the
-//     whole point of naming them)
-//   - plural forms are exactly the CLDR categories the language uses
-//   - protocol identifiers carried through verbatim
-//
-// The emitted file is then formatted by prettier and checked by
-// `catalog.test.ts` like any other, so this is a first line rather than the
-// only one.
+// `catalog.test.ts` re-checks all of it on every later edit, so this is a first
+// line, not the only one.
 
 const fs = require("fs");
 const path = require("path");
@@ -41,10 +24,9 @@ const { LOCALES_DIR, readLocale } = require("./i18n-lib");
 const ROOT = path.join(__dirname, "..");
 
 // ---- Section structure, lifted from en.ts ----
-//
-// The section markers are what make a 2,200-line file navigable, so every
-// catalog carries the same ones in the same places. Read from the English
-// source rather than duplicated here, so they cannot drift.
+
+// Read out of the English source instead of restated here, so the markers that
+// make a catalog navigable cannot drift between languages.
 function readLayout() {
   const source = fs.readFileSync(path.join(LOCALES_DIR, "en.ts"), "utf8");
   const lines = source.split(/\r?\n/);
@@ -81,9 +63,8 @@ function placeholders(value) {
   return [...value.matchAll(/\{(\w+)\}/g)].map((m) => m[1]).sort();
 }
 
-// Machine tokens. Wherever English uses one, the translation must carry the
-// same token through the same number of times, or the sentence names a channel
-// or a command that does not exist.
+// Machine tokens. Carried through the same number of times, or the sentence
+// names a channel or a command that does not exist.
 const VERBATIM = [
   "#bluetooth",
   "/hug",
@@ -94,9 +75,8 @@ const VERBATIM = [
   "npub1",
 ];
 
-// Proper nouns. Presence rather than count, because a language may drop or
-// repeat a noun for agreement. "Lightning" is the one that actually gets
-// translated, being an ordinary word in every language on the list.
+// Proper nouns. Presence rather than count, since a language may drop or repeat
+// one for agreement. "Lightning" is the one that actually gets translated.
 const SURVIVES = [
   "Airhop",
   "bitchat",
@@ -109,8 +89,8 @@ const SURVIVES = [
   "X25519",
 ];
 
-// Read PLURAL_CATEGORIES out of plurals.ts rather than restating it, so this
-// and the runtime cannot disagree about what a language needs.
+// Read out of plurals.ts, never restated, so this and the runtime cannot
+// disagree about what a language needs.
 function readPluralCategories() {
   const file = path.join(ROOT, "src", "i18n", "plurals.ts");
   const source = ts.createSourceFile(
@@ -147,15 +127,11 @@ function readPluralCategories() {
   return out;
 }
 
-// Characters from a script the language does not write in, which in practice
-// means a glyph that strayed in from another translation. Invisible to every
-// other check: not a placeholder, not a protocol token, not a spelling mistake
-// in any dictionary, and it renders as an ordinary glyph beside the rest.
-//
-// Only the CJK and Ethiopic blocks are checked, and only for languages that do
-// not use them. That keeps the rule free of false positives on the Latin,
-// Cyrillic, Arabic and Indic catalogs, which legitimately carry Latin protocol
-// names.
+// A glyph that strayed in from another translation, invisible to every other
+// check: not a placeholder, not a protocol token, not a spelling mistake in any
+// dictionary, and it renders normally beside the rest. Only CJK and Ethiopic,
+// so the rule stays free of false positives on catalogs that legitimately carry
+// Latin protocol names.
 const FOREIGN_SCRIPT = /[぀-ヿ㐀-䶿一-鿿가-힯ሀ-፿]/u;
 
 // The languages that legitimately contain those blocks.
@@ -245,25 +221,17 @@ function quote(value) {
 
 function emit(code, layout, translated, categories) {
   const lines = [];
-  lines.push(`// ${code}: translated from src/i18n/locales/en.ts.`);
-  lines.push("//");
   lines.push(
-    "// Generated by scripts/i18n-build-locale.js, which guarantees the mechanical",
+    `// ${code}: translated from src/i18n/locales/en.ts, which carries`,
   );
   lines.push(
-    "// half: every key present, in English's order, under English's section markers,",
-  );
-  lines.push(
-    "// with placeholders and protocol tokens carried through. Edit it by hand from",
-  );
-  lines.push(
-    "// here on; `catalog.test.ts` enforces the same rules on every change.",
+    "// the reasoning behind each section and is meant to be read beside this.",
   );
   lines.push("//");
   lines.push(
-    "// The English file carries the reasoning behind each section. This one carries",
+    "// Scaffolded by scripts/i18n-build-locale.js, hand-edited from there on.",
   );
-  lines.push("// the words, and is meant to be read beside it.");
+  lines.push("// `catalog.test.ts` enforces the same rules on every change.");
   lines.push("");
   lines.push('import type { Plurals, Strings } from "./types";');
   lines.push("");

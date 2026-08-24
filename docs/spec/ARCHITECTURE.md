@@ -715,30 +715,30 @@ uplinks.
 
 ## 10. Localization
 
-Airhop ships in thirty languages. Every user-facing string lives in one catalog
+Airhop ships in 35 languages. Every user-facing string lives in one catalog
 per language under `src/i18n/locales/`, compiled into the bundle. Working
 reference: [`.github/skills/i18n.md`](../../.github/skills/i18n.md).
 
 ### Why this is a protocol concern
 
 The app is scoped to blackouts, protests and disasters. The languages spoken
-there are Persian, Arabic, Urdu, Hindi, Tamil, Indonesian, Filipino, Nepali,
-Ukrainian and Russian. An English-only UI during a network shutdown in Tehran
+there are Persian, Arabic, Urdu, Hindi, Bengali, Punjabi, Tamil, Indonesian,
+Filipino, Nepali, Ukrainian and Russian. An English-only UI during a network shutdown in Tehran
 or Dhaka does not reach the person it was built for.
 
 ### Decisions
 
-| Decision                                                   | Rationale                                                                                                                                                                                                                                       |
-| ---------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Bundled catalogs, never fetched                            | A translation download is a network call and a fingerprint, and it would fail in exactly the conditions this app exists for                                                                                                                     |
-| No i18n library                                            | i18next and react-intl bring namespaces, lazy network backends and untyped runtime keys, none of which suits an offline-first app with a bundled catalog                                                                                        |
-| Completeness enforced by `tsc`                             | Every locale is `Record<TranslationKey, string>` derived from `en.ts`, so a partial locale does not compile and needs no runtime fallback                                                                                                       |
-| Plural rules hand-written, not polyfilled                  | Hermes has no `Intl.PluralRules`. Thirty languages reduce to nine CLDR rule shapes, so `src/i18n/plurals.ts` is nine functions rather than a dependency plus thirty locale-data modules. `plurals.test.ts` checks every rule against Node's ICU |
-| Device language read through `Intl`                        | `Intl.DateTimeFormat().resolvedOptions().locale` is present on Hermes on both platforms. `expo-localization` would mean a config plugin against native trees that must never see `prebuild`                                                     |
-| A right-to-left switch waits for the next launch           | React Native fixes layout direction at process start. A forced restart would destroy every Noise session, empty the peer table and cut live voice, so the preference is stored and applied on next launch                                       |
-| Prose numerals follow the locale, machine data stays Latin | A byte count, a clock time and a wallet balance sit in the monospace face next to Latin units. Numbers inside a translated sentence get no override                                                                                             |
-| Strings the OS renders stay where the OS reads them        | iOS permission dialogs live in `app.json`, the Android service notification in Kotlin. Both are selected by device language, not app language                                                                                                   |
-| Translation happens at display, never at storage           | A `t()` result written into MMKV freezes in the language of the day it was stored. Persisted rows keep a `systemKey` and translate on render                                                                                                    |
+| Decision                                                   | Rationale                                                                                                                                                                                                                                                                                                                                 |
+| ---------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Bundled catalogs, never fetched                            | A translation download is a network call and a fingerprint, and it would fail in exactly the conditions this app exists for                                                                                                                                                                                                               |
+| No i18n library                                            | i18next and react-intl bring namespaces, lazy network backends and untyped runtime keys, none of which suits an offline-first app with a bundled catalog                                                                                                                                                                                  |
+| Completeness enforced by `tsc`                             | Every locale is `Record<TranslationKey, string>` derived from `en.ts`, so a partial locale does not compile and needs no runtime fallback                                                                                                                                                                                                 |
+| Plural rules hand-written, not polyfilled                  | Hermes has no `Intl.PluralRules`. 35 languages reduce to nine CLDR rule shapes, so `src/i18n/plurals.ts` is nine functions rather than a dependency plus one locale-data module per language. `plurals.test.ts` checks every rule against Node's ICU                                                                                      |
+| Device language read through `Intl`                        | `Intl.DateTimeFormat().resolvedOptions().locale` is present on Hermes on both platforms. `expo-localization` would mean a config plugin against native trees that must never see `prebuild`                                                                                                                                               |
+| A right-to-left switch waits for the next launch           | React Native fixes layout direction at process start. A forced restart would destroy every Noise session, empty the peer table and cut live voice, so the preference is stored and applied on next launch                                                                                                                                 |
+| Prose numerals follow the locale, machine data stays Latin | A byte count, a clock time and a wallet balance sit in the monospace face next to Latin units. Numbers inside a translated sentence get no override                                                                                                                                                                                       |
+| Strings the OS renders stay where the OS reads them        | iOS permission dialogs live in `<code>.lproj/InfoPlist.strings`, the Android service notification in `res/values-<qualifier>/strings.xml`, and `res/xml/locales_config.xml` lets Android 13 offer a per-app language for them. All selected by device language, not app language, and `npm run i18n:native` holds them to the shipped set |
+| Translation happens at display, never at storage           | A `t()` result written into MMKV freezes in the language of the day it was stored. Persisted rows keep a `systemKey` and translate on render                                                                                                                                                                                              |
 
 ### What never gets translated
 
@@ -843,7 +843,7 @@ Bridge specs live in `src/bridge/`, and React Native Codegen turns them into the
 native bridge for both platforms. Bytes cross base64-encoded, the only
 representation both runtimes agree on safely.
 
-`src/bridge/NativeAirhopBLE.ts` is the largest, at twelve methods:
+`src/bridge/NativeAirhopBLE.ts` is the largest, at fourteen methods:
 
 1. `startAdvertising` / `stopAdvertising`: GATT Peripheral
 2. `startScanning` / `stopScanning`: GATT Central
@@ -853,10 +853,12 @@ representation both runtimes agree on safely.
 6. `requestEnableBluetooth` / `openLocationSettings`: one-tap fixes for the Mesh banner
 7. `setBackgroundServiceEnabled`: hold the process up, independent of advertising
 8. `getTorProxyPort` / `getTorAvailability`: whether a SOCKS proxy is routing
+9. `startVpnWatch` / `stopVpnWatch`: watch the VPN carrying Orbot, while Tor is on
 
-Native calls back with seven events: `packetReceived`, `linkConnected`,
-`linkDisconnected`, `rssiUpdated`, `adapterStateChanged`, `powerStateChanged`
-and `scanFailed`.
+Native calls back with ten events: `packetReceived`, `linkConnected`,
+`linkDisconnected`, `rssiUpdated`, `adapterStateChanged`, `powerStateChanged`,
+`scanFailed`, `meshStopRequested`, `onVpnLost` and `onVpnAvailable`. The last
+two are unprefixed because JS subscribes to them by those exact names.
 
 `AirhopWiFiModule` mirrors the shape with four of its own: `packetReceived`,
 `linkConnected`, `linkDisconnected` and `availabilityChanged`. The last is what

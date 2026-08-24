@@ -15,7 +15,7 @@ import {
   type TranslationKey,
   type Translator,
 } from "@i18n";
-import { acknowledged } from "@platform/haptics";
+import { warned } from "@platform/haptics";
 import { ensurePermission } from "@platform/permissions";
 import { destroyMeshService, getMeshService } from "@services/mesh-service";
 import { panicWipe } from "@services/panic-wipe";
@@ -28,8 +28,11 @@ import {
 import { useSettingsStore } from "@store/settings-store";
 import Avatar from "@ui/components/avatar";
 import BottomSheet from "@ui/components/bottom-sheet";
+import CopyGlyph from "@ui/components/copy-glyph";
 import { MONO_FONT_ORDER, MONO_FONTS } from "@ui/fonts";
+import { useCopy } from "@ui/hooks/use-copy";
 import {
+  BUTTON_HEIGHT,
   FontFamily,
   FontSize,
   FontWeight,
@@ -44,9 +47,7 @@ import {
   type ResolvedTheme,
 } from "@ui/theme";
 import { peerInviteLink } from "@utils/deep-link";
-import * as Clipboard from "expo-clipboard";
 import * as FileSystem from "expo-file-system";
-import * as Haptics from "expo-haptics";
 import * as MediaLibrary from "expo-media-library";
 import * as Sharing from "expo-sharing";
 import React, {
@@ -289,16 +290,10 @@ export default function ProfileScreen({
   // then has nowhere to say it. Each carries the one sentence that stops it being
   // the wrong choice.
   const [showPeerIDModal, setShowPeerIDModal] = useState(false);
-  const [idCopied, setIdCopied] = useState(false);
-  const idCopiedTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const [codeCopied, setCodeCopied] = useState(false);
-  const codeCopiedTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  useEffect(() => {
-    return () => {
-      if (idCopiedTimer.current) clearTimeout(idCopiedTimer.current);
-      if (codeCopiedTimer.current) clearTimeout(codeCopiedTimer.current);
-    };
-  }, []);
+  // Two independent ticks: copying the ID must not put a tick on the contact
+  // code as well.
+  const { copied: idCopied, copy: copyPeerID } = useCopy();
+  const { copied: codeCopied, copy: copyContactCode } = useCopy();
   // Presence lives in the app-level mesh-state store, not local state, so it
   // survives this screen unmounting on a tab switch and never drifts out of sync
   // with the actual mesh (which stays stopped/hidden until changed again).
@@ -457,16 +452,9 @@ export default function ProfileScreen({
     if (wipeTapTimer.current) clearTimeout(wipeTapTimer.current);
     if (wipeTapCount.current >= 3) {
       wipeTapCount.current = 0;
-      // The triple tap skips every dialog by design: it exists for the moment
-      // when there is no time to read one. That makes it the only irreversible
-      // action in the app with no visual confirmation at all, so it gets the
-      // one unmistakable non-visual one. A warning notification, not an impact:
-      // it is the OS pattern for "something serious just happened", and it is
-      // the only signal a user gets that the wipe fired rather than that they
-      // merely mistapped.
-      void Haptics.notificationAsync(
-        Haptics.NotificationFeedbackType.Warning,
-      ).catch(() => {});
+      // Skips every dialog by design, so the buzz is the only confirmation
+      // there is. See warned() for why it is a warning and not an impact.
+      warned();
       void handleConfirmWipe();
       return;
     }
@@ -494,22 +482,14 @@ export default function ProfileScreen({
   // contact sheet uses for a peer's ID, with the tick replacing the glyph in
   // place rather than a dialog over a sheet.
   function handleCopyPeerID(): void {
-    void Clipboard.setStringAsync(peerID).catch(() => {});
-    acknowledged();
-    setIdCopied(true);
-    if (idCopiedTimer.current) clearTimeout(idCopiedTimer.current);
-    idCopiedTimer.current = setTimeout(() => setIdCopied(false), 1600);
+    copyPeerID(peerID);
   }
 
   // The same card the QR encodes, as text, for when there is no camera between
   // the two people. Copy only: the string is ~180 characters, so the box shows
   // enough to recognise and the glyph does the work.
   function handleCopyContactCode(): void {
-    void Clipboard.setStringAsync(qrValue).catch(() => {});
-    acknowledged();
-    setCodeCopied(true);
-    if (codeCopiedTimer.current) clearTimeout(codeCopiedTimer.current);
-    codeCopiedTimer.current = setTimeout(() => setCodeCopied(false), 1600);
+    copyContactCode(qrValue);
   }
 
   // The QRCode component exposes an SVG ref whose toDataURL() returns the
@@ -938,10 +918,10 @@ export default function ProfileScreen({
               {qrValue}
             </Text>
           </View>
-          <Feather
-            name={codeCopied ? "check" : "copy"}
+          <CopyGlyph
+            copied={codeCopied}
             size={COPY_GLYPH}
-            color={codeCopied ? Colors.online : Colors.textMuted}
+            color={Colors.textMuted}
           />
         </Pressable>
         <View style={styles.noteBox}>
@@ -992,10 +972,10 @@ export default function ProfileScreen({
           accessibilityLabel={T("settings.peer_id_sheet.copy")}
         >
           <Text style={styles.idBoxValue}>{peerID}</Text>
-          <Feather
-            name={idCopied ? "check" : "copy"}
+          <CopyGlyph
+            copied={idCopied}
             size={COPY_GLYPH}
-            color={idCopied ? Colors.online : Colors.textMuted}
+            color={Colors.textMuted}
           />
         </Pressable>
         <View style={styles.noteBox}>
@@ -1049,9 +1029,10 @@ export default function ProfileScreen({
               <React.Fragment key={key}>
                 {i > 0 && <View style={shared.groupDivider} />}
                 <Pressable
-                  style={[
+                  style={({ pressed }) => [
                     styles.optionRowGrouped,
                     selected && styles.optionRowGroupedSelected,
+                    pressed && shared.rowPressed,
                   ]}
                   onPress={() => handleSelectStatus(key)}
                   accessibilityRole="button"
@@ -1113,9 +1094,10 @@ export default function ProfileScreen({
                 <React.Fragment key={key}>
                   {i > 0 && <View style={shared.groupDivider} />}
                   <Pressable
-                    style={[
+                    style={({ pressed }) => [
                       styles.optionRowGrouped,
                       selected && styles.optionRowGroupedSelected,
+                      pressed && shared.rowPressed,
                     ]}
                     onPress={() => {
                       setTheme(key);
@@ -1165,9 +1147,10 @@ export default function ProfileScreen({
                 <React.Fragment key={key}>
                   {i > 0 && <View style={shared.groupDivider} />}
                   <Pressable
-                    style={[
+                    style={({ pressed }) => [
                       styles.optionRowGrouped,
                       selected && styles.optionRowGroupedSelected,
+                      pressed && shared.rowPressed,
                     ]}
                     onPress={() => setMonoFont(key)}
                     accessibilityRole="button"
@@ -1238,10 +1221,11 @@ export default function ProfileScreen({
                 <React.Fragment key={code}>
                   {i > 0 && <View style={shared.groupDivider} />}
                   <Pressable
-                    style={[
+                    style={({ pressed }) => [
                       styles.optionRowGrouped,
                       selected && styles.optionRowGroupedSelected,
                       !shipped && styles.languageRowSoon,
+                      pressed && shared.rowPressed,
                     ]}
                     disabled={!shipped}
                     onPress={() => {
@@ -1344,7 +1328,10 @@ export default function ProfileScreen({
         </View>
         <View style={shared.sheetActions}>
           <Pressable
-            style={shared.sheetBtnPrimary}
+            style={({ pressed }) => [
+              shared.sheetBtnPrimary,
+              pressed && shared.sheetBtnPrimaryPressed,
+            ]}
             onPress={() => setShowTransferModal(false)}
             accessibilityRole="button"
             accessibilityLabel={T("settings.wipe.got_it")}
@@ -1599,7 +1586,7 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       alignItems: "center",
       gap: Spacing.sm,
       alignSelf: "stretch",
-      minHeight: 50,
+      minHeight: BUTTON_HEIGHT,
       paddingHorizontal: Spacing.base,
       borderRadius: Radius.md,
       backgroundColor: Colors.surfaceRaised,
@@ -1620,7 +1607,7 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       alignItems: "center",
       gap: Spacing.sm,
       alignSelf: "stretch",
-      minHeight: 50,
+      minHeight: BUTTON_HEIGHT,
       paddingHorizontal: Spacing.base,
       paddingVertical: Spacing.sm,
       borderRadius: Radius.md,
@@ -1655,7 +1642,7 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
     },
     qrShareBtn: {
       width: "100%",
-      minHeight: 50,
+      minHeight: BUTTON_HEIGHT,
       flexDirection: "row",
       alignItems: "center",
       justifyContent: "center",
@@ -1670,7 +1657,7 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
     },
     qrDownloadBtn: {
       width: "100%",
-      minHeight: 50,
+      minHeight: BUTTON_HEIGHT,
       marginTop: Spacing.sm,
       flexDirection: "row",
       alignItems: "center",
@@ -1692,7 +1679,7 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
     },
     wipeConfirmBtn: {
       width: "100%",
-      minHeight: 50,
+      minHeight: BUTTON_HEIGHT,
       paddingVertical: Spacing.md,
       borderRadius: Radius.full,
       backgroundColor: Colors.surfaceRaised,
@@ -1706,7 +1693,7 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
     },
     wipeCancelBtn: {
       width: "100%",
-      minHeight: 50,
+      minHeight: BUTTON_HEIGHT,
       paddingVertical: Spacing.md,
       marginTop: Spacing.sm,
       borderRadius: Radius.full,

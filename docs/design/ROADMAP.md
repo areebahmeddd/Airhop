@@ -182,14 +182,14 @@ Cashu is the primary rail because its tokens are plain strings, so value moves d
 
 ### v0.9.6: Localization ✅
 
-**Goal:** Thirty languages, with the compiler enforcing completeness.
+**Goal:** 35 languages, with the compiler enforcing completeness.
 
 - [x] Translation runtime with no library (`src/i18n/`): `t` / `useT` / `tPlural`, named-placeholder interpolation
 - [x] Completeness enforced by `tsc`: every locale is a `Record<TranslationKey, string>` derived from `en.ts`, so a partial locale does not compile and there is no runtime fallback
 - [x] Every user-facing string in the catalog, zero hardcoded, enforced in CI
-- [x] Thirty catalogs, matching the set the landing site serves
+- [x] 35 catalogs, matching the set the landing site serves
 - [x] Locale store, in-app picker, and device language negotiation through `Intl`
-- [x] CLDR plurals for all thirty (`src/i18n/plurals.ts`), checked against Node's ICU
+- [x] CLDR plurals for all 35 (`src/i18n/plurals.ts`), checked against Node's ICU
 - [x] Right to left for Arabic, Persian and Urdu: logical properties app-wide, mirrored chevrons, direction pinned at startup; `radar-view.tsx` exempt as a polar plot of physical space
 - [x] Terminal punctuation checked per script by `catalog.test.ts`
 - [x] CI guards: a hardcoded-string ceiling of zero, translations frozen at module load or in a memo, and physical style properties

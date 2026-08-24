@@ -24,7 +24,7 @@ export default function Contribute() {
   const T = useT();
 
   return (
-    <section id="support" className="scroll-mt-8 px-6 py-12 md:px-10 md:py-16">
+    <section id="support" className="px-6 py-12 md:px-10 md:py-16">
       <div className="mx-auto max-w-7xl">
         <SectionHeader
           eyebrow={T("home.contribute.eyebrow")}

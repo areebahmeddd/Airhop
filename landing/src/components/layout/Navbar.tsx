@@ -41,7 +41,7 @@ export default function Navbar() {
   }, [isOpen]);
 
   const linkClass =
-    "flex min-h-11 items-center rounded-full px-3 text-[13px] font-medium text-secondary transition-colors duration-150 hover:text-ink";
+    "flex min-h-11 items-center rounded-full px-3 text-[13px] font-medium text-secondary transition-colors duration-150 hover:text-ink active:bg-inner";
 
   return (
     <header className="sticky top-0 z-50 px-3 pt-2">
@@ -74,7 +74,7 @@ export default function Navbar() {
         <button
           ref={toggleRef}
           onClick={() => setIsOpen(!isOpen)}
-          className="text-ink hover:bg-inner flex h-11 w-11 items-center justify-center justify-self-end rounded-full transition-colors duration-150 md:hidden"
+          className="text-ink hover:bg-inner active:bg-hover flex h-11 w-11 items-center justify-center rounded-full transition-colors duration-150 md:hidden"
           aria-label={isOpen ? T("nav.menu.close") : T("nav.menu.open")}
           aria-expanded={isOpen}
           aria-controls={MENU_ID}
@@ -91,14 +91,14 @@ export default function Navbar() {
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -4 }}
             transition={{ duration: 0.15, ease: "easeOut" }}
-            className="border-line bg-card absolute top-full right-3 left-3 z-40 mt-2 flex flex-col rounded-2xl border p-3 md:hidden"
+            className="border-line bg-card absolute top-full right-3 left-3 z-40 mt-2 flex flex-col rounded-2xl border p-2 md:hidden"
           >
             {NAV_ITEMS.map((item) => (
               <Link
                 key={item.href}
                 to={item.href}
                 onClick={() => setIsOpen(false)}
-                className="text-ink hover:bg-inner flex min-h-11 items-center rounded-[10px] px-3 text-[15px] font-medium transition-colors duration-150"
+                className="text-ink hover:bg-inner active:bg-hover flex min-h-11 items-center rounded-lg px-3 text-[15px] font-medium transition-colors duration-150"
               >
                 {T(item.labelKey)}
               </Link>

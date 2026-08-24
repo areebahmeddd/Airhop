@@ -1,0 +1,10 @@
+/* Keys mirror ios/Airhop/Info.plist, the English copy. Guarded by npm run i18n:native. */
+
+"NSBluetoothAlwaysUsageDescription" = "Airhop 使用藍牙與網狀網路上附近的裝置通訊。";
+"NSBluetoothPeripheralUsageDescription" = "Airhop 使用藍牙向附近的節點表明你的存在。";
+"NSLocalNetworkUsageDescription" = "Airhop 使用區域網路直接連線附近的裝置，用於傳輸大型檔案（影片、大型檔案）。";
+"NSCameraUsageDescription" = "Airhop 使用相機掃描聯絡人的 QR 碼，以及拍攝要分享給附近節點的照片和影片。";
+"NSMicrophoneUsageDescription" = "Airhop 使用麥克風錄製語音留言，並把即時語音傳給附近的節點。";
+"NSPhotoLibraryUsageDescription" = "Airhop 存取你的照片圖庫，以便透過網狀網路分享圖片和影片。";
+"NSPhotoLibraryAddUsageDescription" = "當你選擇儲存，以及下載自己的 QR 碼時，Airhop 會把照片和影片儲存到你的照片圖庫。";
+"NSLocationWhenInUseUsageDescription" = "Airhop 使用你的大致位置，把你放進附近的區域頻道（街廓、城市、地區）。你的精確位置永遠不會離開這台裝置。";

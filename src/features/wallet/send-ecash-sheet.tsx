@@ -21,6 +21,7 @@ import {
 import { showAlert } from "@store/alert-store";
 import BottomSheet from "@ui/components/bottom-sheet";
 import {
+  BUTTON_HEIGHT,
   DISABLED_OPACITY,
   FontSize,
   FontWeight,
@@ -192,7 +193,7 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
     },
     confirm: {
       width: "100%",
-      minHeight: 50,
+      minHeight: BUTTON_HEIGHT,
       backgroundColor: Colors.accent,
       borderRadius: Radius.full,
       alignItems: "center",
@@ -208,7 +209,7 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
     },
     cancel: {
       width: "100%",
-      minHeight: 50,
+      minHeight: BUTTON_HEIGHT,
       marginTop: Spacing.sm,
       backgroundColor: Colors.surfaceRaised,
       borderWidth: 1,

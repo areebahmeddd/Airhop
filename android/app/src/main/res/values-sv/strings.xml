@@ -1,0 +1,7 @@
+<resources>
+  <string name="mesh_channel_name">Mesh-nätverk</string>
+  <string name="mesh_channel_description">Håller Airhops mesh aktiv i bakgrunden</string>
+  <string name="mesh_notification_title">Airhops mesh är aktiv</string>
+  <string name="mesh_notification_text">Hittar och vidarebefordrar meddelanden i närheten</string>
+  <string name="mesh_notification_stop">Stoppa meshen</string>
+</resources>

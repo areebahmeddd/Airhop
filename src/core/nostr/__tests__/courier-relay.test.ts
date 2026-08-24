@@ -7,11 +7,7 @@
 import { bytesToHex } from "@noble/hashes/utils.js";
 import { finalizeEvent, generateSecretKey, type Event } from "nostr-tools";
 import type { SealedEnvelope } from "../../mesh/courier/courier-store";
-import {
-  fetchCourierDrops,
-  publishCourierDrop,
-  subscribeCourierDrops,
-} from "../courier-relay";
+import { publishCourierDrop, subscribeCourierDrops } from "../courier-relay";
 import type { NostrClient } from "../nostr-client";
 
 function makeEnvelope(overrides?: Partial<SealedEnvelope>): SealedEnvelope {
@@ -46,13 +42,17 @@ function base64ToUint8(b64: string): Uint8Array {
   return out;
 }
 
+// For the tests that hand-build a drop event to feed the receive path.
+// publishCourierDrop takes no key: it mints a throwaway per publish, so a
+// device's drops are not all attributable to one npub.
+const nostrPrivKey = generateSecretKey();
+
 describe("publishCourierDrop", () => {
   it("calls client.publish once", async () => {
     const client = makeClient();
     const envelope = makeEnvelope();
-    const nostrPrivKey = generateSecretKey();
 
-    await publishCourierDrop(envelope, nostrPrivKey, client);
+    await publishCourierDrop(envelope, client);
 
     expect(client.publish).toHaveBeenCalledTimes(1);
   });
@@ -66,9 +66,8 @@ describe("publishCourierDrop", () => {
       }),
     });
     const envelope = makeEnvelope();
-    const nostrPrivKey = generateSecretKey();
 
-    await publishCourierDrop(envelope, nostrPrivKey, client);
+    await publishCourierDrop(envelope, client);
 
     expect(published).not.toBeNull();
     expect(published!.kind).toBe(1401);
@@ -83,9 +82,8 @@ describe("publishCourierDrop", () => {
       }),
     });
     const envelope = makeEnvelope();
-    const nostrPrivKey = generateSecretKey();
 
-    await publishCourierDrop(envelope, nostrPrivKey, client);
+    await publishCourierDrop(envelope, client);
 
     const xTag = published!.tags.find(([t]) => t === "x");
     expect(xTag).toBeDefined();
@@ -101,9 +99,8 @@ describe("publishCourierDrop", () => {
       }),
     });
     const envelope = makeEnvelope();
-    const nostrPrivKey = generateSecretKey();
 
-    await publishCourierDrop(envelope, nostrPrivKey, client);
+    await publishCourierDrop(envelope, client);
 
     const bytes = base64ToUint8(published!.content);
     // The encoded TLV payload is at minimum 1 + 16 + 4 + len(ciphertext) bytes.
@@ -120,9 +117,8 @@ describe("publishCourierDrop", () => {
     });
     const expiryMs = Date.now() + 7_200_000; // 2 hours
     const envelope = makeEnvelope({ expiryMs });
-    const nostrPrivKey = generateSecretKey();
 
-    await publishCourierDrop(envelope, nostrPrivKey, client);
+    await publishCourierDrop(envelope, client);
 
     const expiryTag = published!.tags.find(([t]) => t === "expiration");
     expect(expiryTag).toBeDefined();
@@ -170,7 +166,6 @@ describe("subscribeCourierDrops", () => {
     });
 
     const recipientTag = crypto.getRandomValues(new Uint8Array(16));
-    const nostrPrivKey = generateSecretKey();
     const expiryFuture = Math.floor(Date.now() / 1000) + 3600;
     const ciphertext = new Uint8Array([1, 2, 3, 4]);
     const b64Content = btoa(String.fromCharCode(...ciphertext));
@@ -200,35 +195,19 @@ describe("subscribeCourierDrops", () => {
   });
 });
 
-describe("fetchCourierDrops", () => {
-  it("returns empty array for empty tag list", async () => {
-    const client = makeClient();
-
-    const envelopes = await fetchCourierDrops([], client);
-
-    expect(envelopes).toHaveLength(0);
-    expect(client.queryEvents).not.toHaveBeenCalled();
-  });
-
-  it("queries kind 1401 events for the given tags", async () => {
-    const client = makeClient();
-    const tag = crypto.getRandomValues(new Uint8Array(16));
-
-    await fetchCourierDrops([tag], client);
-
-    expect(client.queryEvents).toHaveBeenCalledTimes(1);
-    const filter = (client.queryEvents as jest.Mock).mock.calls[0][0] as {
-      kinds: number[];
-    };
-    expect(filter.kinds).toContain(1401);
-  });
-
-  it("parses a valid event returned by queryEvents", async () => {
-    const nostrPrivKey = generateSecretKey();
+// Nothing obliges a relay to prune, so it may replay a drop whose NIP-40
+// expiration has passed. Rendering that as live would put a day-old bubble at
+// the bottom of a thread.
+describe("expired drops", () => {
+  it("never surfaces a drop whose expiry has passed", () => {
     const recipientTag = crypto.getRandomValues(new Uint8Array(16));
-    const expiryFuture = Math.floor(Date.now() / 1000) + 3600;
-    const ciphertext = new Uint8Array([0xde, 0xad, 0xbe, 0xef]);
-    const b64Content = btoa(String.fromCharCode(...ciphertext));
+    let capturedCb: ((e: Event) => void) | null = null;
+    const client = makeClient({
+      subscribe: jest.fn().mockImplementation((_f, cb: (e: Event) => void) => {
+        capturedCb = cb;
+        return { close: jest.fn() };
+      }),
+    });
 
     const event = finalizeEvent(
       {
@@ -236,52 +215,17 @@ describe("fetchCourierDrops", () => {
         created_at: Math.floor(Date.now() / 1000),
         tags: [
           ["x", bytesToHex(recipientTag)],
-          ["expiration", expiryFuture.toString()],
+          ["expiration", (Math.floor(Date.now() / 1000) - 10).toString()],
         ],
-        content: b64Content,
+        content: btoa(String.fromCharCode(1)),
       },
       nostrPrivKey,
     );
 
-    const client = makeClient({
-      queryEvents: jest.fn().mockResolvedValue([event]),
-    });
+    const received: SealedEnvelope[] = [];
+    subscribeCourierDrops([recipientTag], client, (env) => received.push(env));
+    capturedCb!(event);
 
-    const envelopes = await fetchCourierDrops([recipientTag], client);
-
-    expect(envelopes).toHaveLength(1);
-    expect(bytesToHex(envelopes[0].recipientTag)).toBe(
-      bytesToHex(recipientTag),
-    );
-  });
-
-  it("drops events that are already expired", async () => {
-    const nostrPrivKey = generateSecretKey();
-    const recipientTag = crypto.getRandomValues(new Uint8Array(16));
-    // Expiry in the past.
-    const expiryPast = Math.floor(Date.now() / 1000) - 10;
-    const ciphertext = new Uint8Array([1]);
-    const b64Content = btoa(String.fromCharCode(...ciphertext));
-
-    const event = finalizeEvent(
-      {
-        kind: 1401,
-        created_at: Math.floor(Date.now() / 1000),
-        tags: [
-          ["x", bytesToHex(recipientTag)],
-          ["expiration", expiryPast.toString()],
-        ],
-        content: b64Content,
-      },
-      nostrPrivKey,
-    );
-
-    const client = makeClient({
-      queryEvents: jest.fn().mockResolvedValue([event]),
-    });
-
-    const envelopes = await fetchCourierDrops([recipientTag], client);
-
-    expect(envelopes).toHaveLength(0);
+    expect(received).toHaveLength(0);
   });
 });

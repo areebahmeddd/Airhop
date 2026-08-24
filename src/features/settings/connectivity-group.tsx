@@ -278,19 +278,36 @@ export default function ConnectivityGroup(): React.JSX.Element {
         )}
         {/* First, because it is the widest switch in the group: everything
             below decides how the mesh behaves, this one decides whether it is
-            running at all once the app is closed. */}
-        <SettingRow
-          icon="power"
-          label={T("settings.conn.background")}
-          description={T("settings.conn.background_desc")}
-          control={
-            <SettingSwitch
-              value={backgroundMeshEnabled}
-              onValueChange={(v) => requestToggle("background", v)}
+            running at all once the app is closed.
+
+            Android only. The switch drives `setBackgroundServiceEnabled`,
+            which starts or stops the foreground service holding the process up;
+            on iOS that call is a declared no-op, because background BLE there
+            comes from the `bluetooth-central` mode, a build-time entitlement no
+            runtime call can withdraw.
+
+            Hidden rather than reworded, and rather than faked by suspending the
+            radios on background: CoreBluetooth relaunches the app on a BLE
+            event through the restoration identifier, so a suspend is undone by
+            the platform at the moment it matters. A control that cannot be
+            honoured is worse than an absent one on the screen where people
+            decide what their phone does for other people. */}
+        {Platform.OS === "android" && (
+          <>
+            <SettingRow
+              icon="power"
+              label={T("settings.conn.background")}
+              description={T("settings.conn.background_desc")}
+              control={
+                <SettingSwitch
+                  value={backgroundMeshEnabled}
+                  onValueChange={(v) => requestToggle("background", v)}
+                />
+              }
             />
-          }
-        />
-        <GroupDivider />
+            <GroupDivider />
+          </>
+        )}
         {/* Above the internet toggles because it is not one of them: live
             voice never leaves Bluetooth, so it stays available when
             everything below is greyed out. */}
@@ -422,7 +439,10 @@ export default function ConnectivityGroup(): React.JSX.Element {
           <Text style={styles.sheetSubtitle}>{copy.body}</Text>
           <View style={styles.sheetActions}>
             <Pressable
-              style={styles.sheetBtnPrimary}
+              style={({ pressed }) => [
+                styles.sheetBtnPrimary,
+                pressed && styles.sheetBtnPrimaryPressed,
+              ]}
               onPress={applyPending}
               accessibilityRole="button"
               accessibilityLabel={copy.action}
@@ -430,7 +450,10 @@ export default function ConnectivityGroup(): React.JSX.Element {
               <Text style={styles.sheetBtnTextPrimary}>{copy.action}</Text>
             </Pressable>
             <Pressable
-              style={styles.sheetBtn}
+              style={({ pressed }) => [
+                styles.sheetBtn,
+                pressed && styles.sheetBtnPressed,
+              ]}
               onPress={() => setConfirmVisible(false)}
               accessibilityRole="button"
               accessibilityLabel={T("common.cancel")}
@@ -454,7 +477,10 @@ export default function ConnectivityGroup(): React.JSX.Element {
         </Text>
         <View style={styles.sheetActions}>
           <Pressable
-            style={styles.sheetBtnPrimary}
+            style={({ pressed }) => [
+              styles.sheetBtnPrimary,
+              pressed && styles.sheetBtnPrimaryPressed,
+            ]}
             onPress={handleGetOrbot}
             accessibilityRole="button"
             accessibilityLabel={T("settings.conn.get_orbot")}
@@ -464,7 +490,10 @@ export default function ConnectivityGroup(): React.JSX.Element {
             </Text>
           </Pressable>
           <Pressable
-            style={styles.sheetBtn}
+            style={({ pressed }) => [
+              styles.sheetBtn,
+              pressed && styles.sheetBtnPressed,
+            ]}
             onPress={() => setShowOrbotModal(false)}
             accessibilityRole="button"
             accessibilityLabel={T("settings.conn.later")}

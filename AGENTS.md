@@ -61,7 +61,7 @@ rather than drifting quietly, so a change to either has to be deliberate.
 ### User-Facing Copy
 
 - **Never hardcode a user-facing string.** Add a key to `src/i18n/locales/en.ts`, use `T("your.key")`. CI fails on any hardcoded string (`npm run i18n:audit`).
-- `en.ts` is the source catalog; the other twenty-nine are generated from a translation map and checked against it. Adding one is a new file, never a sweep of every screen.
+- `en.ts` is the source catalog; every other locale is generated from a translation map and checked against it. Adding one is a new file, never a sweep of every screen.
 - Placeholders are named (`{count}`), never positional. Plurals go through `tPlural`, never `count === 1` at a call site.
 - **No em dashes**, in copy or in comments. Use a comma, parentheses or a full stop.
 - **Byte sizes follow IEC 80000-13, everywhere, copy included.** `KiB` / `MiB` are 1024-based, `KB` / `MB` are 1000-based, and the label must match the arithmetic. Every size we control is a power of two (the 1 MiB file cap, the 512 KiB photo budget, the 16 KiB envelope) and `formatBytes` divides by 1024, so all of it reads `KiB` / `MiB` in specs, `docs/`, skills, comments, `en.ts` and `landing/` alike. Decimal units stay only for genuinely decimal figures, such as an observed camera file size. Never label a 1024-based value `KB`.
@@ -127,6 +127,7 @@ Skills are reference files in `.github/skills/`. Read the relevant one before wo
 | [`nostr-gift-wrap.md`](.github/skills/nostr-gift-wrap.md)         | `gift-wrap.ts`, `courier-relay.ts`, any Nostr DM or event handling            |
 | [`courier-envelopes.md`](.github/skills/courier-envelopes.md)     | `prekey-bundle.ts`, `prekey-store.ts`, `courier-store.ts`, offline mail       |
 | [`i18n.md`](.github/skills/i18n.md)                               | `src/i18n/`, any user-facing copy anywhere, right-to-left layout              |
+| [`ui-ux.md`](.github/skills/ui-ux.md)                             | `src/ui/`, any style block, component, tappable surface or dark-mode work     |
 
 ## TypeScript Conventions
 

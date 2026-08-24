@@ -34,10 +34,12 @@ import { NoiseHandshake, type NoiseSession } from "@core/crypto/noise-xx";
 import { base64ToBytes, bytesToBase64 } from "@core/encoding/base64";
 import {
   computeRecipientTag,
+  COURIER_INITIAL_COPIES,
   CourierStore,
   decodeEnvelopePayload,
   encodeEnvelopePayload,
   ENVELOPE_TTL_MS,
+  type SealedEnvelope,
 } from "@core/mesh/courier/courier-store";
 import {
   LocalPrekeyStore,
@@ -150,6 +152,13 @@ import {
   encodeBitchatDmEnvelope,
 } from "@core/nostr/bitchat-envelope";
 import { bridgeStableID } from "@core/nostr/bridge-event";
+import {
+  publishCourierDrop,
+  // Aliased: the class has a method of the same name that wraps it, and a bare
+  // identifier resolving to one while `this.` resolves to the other is exactly
+  // the sort of thing that reads correct and is not.
+  subscribeCourierDrops as subscribeCourierDropEvents,
+} from "@core/nostr/courier-relay";
 import { deriveNostrPrivKey, unwrapDm, wrapDm } from "@core/nostr/gift-wrap";
 import { NostrClient } from "@core/nostr/nostr-client";
 import {
@@ -920,7 +929,7 @@ export class MeshService {
     // unless the user turned internet connectivity off (pure Bluetooth mode).
     // Everything downstream is null-guarded, so leaving the transport unbuilt is
     // safe; the Internet fallback toggle builds it later via applyInternetEnabled.
-    if (useSettingsStore.getState().internetEnabled) {
+    if (this.internetTransportAllowed()) {
       this.buildNostrTransport();
     }
     this.chatUnsub = useChatStore.subscribe((state, prev) => {
@@ -964,10 +973,13 @@ export class MeshService {
     // reappear on BLE (the only trigger that existed before).
     this.outboxSweepTimer = setInterval(() => {
       this.expireQueuedMail();
+      this.refreshCourierDropsIfDayChanged();
     }, OUTBOX_SWEEP_INTERVAL_MS);
 
-    // Subscribe to gift-wrap events addressed to our Nostr pubkey.
+    // Subscribe to gift-wrap events addressed to our Nostr pubkey, and to
+    // courier mail parked for us on relays.
     this.subscribeNostrInbox();
+    this.subscribeCourierDrops();
     // And re-attach the nutzap watcher to the client just built. Coming back
     // from Away builds a fresh transport, and without this the watcher stayed
     // pointed at the destroyed one, so incoming payments silently stopped being
@@ -2789,8 +2801,21 @@ export class MeshService {
 
   // Courier: store-and-forward for peers we can't reach directly
 
-  // Initial spray budget: how many peers may carry a copy.
-  private static readonly COURIER_COPIES = 4;
+  // How many couriers one message is deposited with. Distinct from the spray
+  // budget stamped on the envelope (COURIER_INITIAL_COPIES), despite both being
+  // four: this bounds how many neighbours are asked to carry, that bounds how
+  // far each copy travels.
+  private static readonly MAX_COURIERS_PER_MESSAGE = 4;
+
+  // Message IDs already parked as a kind-1401 drop, so the outbox sweep does
+  // not republish one every time it runs. Cleared on a failed publish so the
+  // next pass retries. Per session: a drop carries its own 24h expiry, and a
+  // duplicate after a relaunch collapses on message id like any courier copy.
+  private readonly droppedToRelay = new Set<string>();
+
+  // The kind-1401 subscription and the UTC day its tag set was built for.
+  private courierDropSub: { close: () => void } | null = null;
+  private courierDropDay = -1;
 
   // Message IDs already opened out of a courier envelope, so the redundant
   // copies spray-and-wait exists to create collapse into one message. Bounded by
@@ -2831,8 +2856,16 @@ export class MeshService {
     const already = this.courieredTo.get(messageID) ?? new Set<string>();
     const couriers = this.courierCandidates()
       .filter((p) => !already.has(p))
-      .slice(0, MeshService.COURIER_COPIES);
-    if (couriers.length === 0) return false;
+      .slice(0, MeshService.MAX_COURIERS_PER_MESSAGE);
+    // A relay drop needs no courier, and matters most when nobody is in range,
+    // so it is decided independently of `couriers`. Captured rather than
+    // re-read at the publish below, so the two cannot disagree if anything is
+    // ever awaited between them.
+    const relayClient =
+      this.relaysConnected && !this.droppedToRelay.has(messageID)
+        ? this.nostrClient
+        : null;
+    if (couriers.length === 0 && relayClient === null) return false;
 
     // The envelope carries a typed private message, not raw text.
     //
@@ -2864,7 +2897,7 @@ export class MeshService {
         prekey?.publicKey ?? noisePub,
         inner,
       );
-      const payload = encodeEnvelopePayload({
+      const envelope: SealedEnvelope = {
         // Tag is derived from the recipient's STATIC key + today's epoch day, so
         // carriers can match deliveries without learning who it is for (v1 and
         // v2 share the same routing tag).
@@ -2875,25 +2908,61 @@ export class MeshService {
         // will carry at all. The outbox keeps retrying for 7 days regardless;
         // this only bounds how long a third party holds a copy for us.
         expiryMs: Date.now() + ENVELOPE_TTL_MS,
-        // Split across the couriers below, not replicated. Each gets its own
-        // directed envelope, so seeding all of them with the full budget would
-        // put four times the intended number of copies on the mesh, each of
-        // which then sprays half of ITS budget onward.
-        copies: Math.max(
-          1,
-          Math.floor(MeshService.COURIER_COPIES / couriers.length),
-        ),
+        // The FULL budget to every courier, matching bitchat
+        // (TransportConfig.courierInitialCopies, handed whole to each peer in
+        // sendCourierMessage). Splitting it across couriers instead looks
+        // conservative and is not: three couriers would get one copy each, a
+        // budget below two cannot be sprayed, and the busier the room the less
+        // the mail travels.
+        //
+        // Safe because CourierStore.deposit collapses identical ciphertext and
+        // raises a budget only before the first spray, so copies merge downward
+        // wherever carriers meet rather than multiplying. The two belong
+        // together; neither is correct alone.
+        copies: COURIER_INITIAL_COPIES,
         ciphertext,
         prekeyID: prekey?.id,
-      });
-      // One directed copy per courier, and remember each so a later sweep hands
-      // this message to somebody new rather than to the same carriers again.
-      for (const courier of couriers) {
-        this.sendCourierPayloadTo(payload, courier);
-        already.add(courier);
-      }
+      };
+      const payload = encodeEnvelopePayload(envelope);
+      // One directed copy per courier, remembered so a later sweep reaches
+      // somebody new rather than the same carriers. Recorded on ACCEPTANCE, not
+      // intent: marking a peer whose write was refused makes the sweep skip
+      // them forever and the copy is never placed with anybody.
       this.courieredTo.set(messageID, already);
-      return true;
+      for (const courier of couriers) {
+        void this.sendCourierPayloadTo(payload, courier).then((ok) => {
+          if (ok) already.add(courier);
+        });
+      }
+
+      // And park a copy on the relays, so delivery stops requiring a carrier to
+      // bump into the recipient. bitchat parks and polls these from
+      // BridgeCourierService, so this is also what makes mail parked FOR an
+      // Airhop user collectable.
+      //
+      // copies: 1. A relay copy is carry-only - it goes to the recipient, not
+      // to another carrier - so it must never arrive with a spray budget and
+      // start a second branch. Same routing tag as the mesh copy, and the
+      // recipient collapses both on the sender's message id.
+      if (relayClient !== null) {
+        // Capped like every other session set here: nothing else removes an
+        // entry, and a phone often out of range of its contacts keeps adding.
+        this.rememberEventID(this.droppedToRelay, messageID);
+        void publishCourierDrop({ ...envelope, copies: 1 }, relayClient).catch(
+          () => {
+            // No relay accepted it. Forget the record so the next sweep retries
+            // rather than treating an unsent drop as sent.
+            this.droppedToRelay.delete(messageID);
+          },
+        );
+      }
+
+      // TRUE means a courier took it, nothing else. The caller renders this as
+      // "Carried by a friend", which a parked drop has not earned: nobody
+      // carried that copy and it never touched the mesh. With no courier in
+      // range the queued notice is the accurate answer, since the drop stays
+      // best-effort and unacknowledged until a receipt returns.
+      return couriers.length > 0;
     } catch {
       return false;
     }
@@ -2908,7 +2977,15 @@ export class MeshService {
   //
   // Flood-originated as well as written down the direct link, because a courier
   // may be several hops away. The recipient field stops relays depositing it.
-  private sendCourierPayloadTo(payload: Uint8Array, peerID: string): void {
+  // Resolves TRUE only when the envelope went out over a link held to that
+  // exact peer and the transport accepted it. A speculative flood toward a peer
+  // several hops away resolves FALSE, which is not a failure but the signal to
+  // keep carrying: a multi-hop send has nothing to acknowledge it. bitchat draws
+  // the same line between handoverEnvelopes and envelopesForRemoteHandover.
+  private async sendCourierPayloadTo(
+    payload: Uint8Array,
+    peerID: string,
+  ): Promise<boolean> {
     const packet: Packet = {
       type: PacketType.COURIER_ENV,
       ttl: 7,
@@ -2928,20 +3005,26 @@ export class MeshService {
     const bleLink = this.peerToLink.get(peerID);
     const wifiLink = this.wifiPeerToLink.get(peerID);
     if (wifiLink !== undefined) {
-      this.sendWifi(wifiLink, b64).catch(() => {});
-      return;
+      return this.sendWifi(wifiLink, b64).then(
+        () => true,
+        () => false,
+      );
     }
     if (bleLink !== undefined) {
-      this.sendBle(bleLink, b64).catch(() => {});
-      return;
+      return this.sendBle(bleLink, b64).then(
+        () => true,
+        () => false,
+      );
     }
-    // No direct link: let the flood carry it to them.
+    // No direct link: let the flood carry it to them. Speculative, so it is
+    // never reported as a handover however many links took the bytes.
     for (const linkID of this.connectedLinks) {
       this.sendBle(linkID, b64).catch(() => {});
     }
     for (const linkID of this.wifiConnectedLinks) {
       this.sendWifi(linkID, b64).catch(() => {});
     }
+    return false;
   }
 
   // Peers that could carry mail for someone else right now: directly linked,
@@ -3001,87 +3084,7 @@ export class MeshService {
     );
 
     if (isForUs) {
-      // v2 envelopes seal to one of our one-time prekeys; v1 to our static key.
-      const openKey =
-        env.prekeyID !== undefined
-          ? this.localPrekeys.privForId(env.prekeyID)
-          : this.identity.noiseStaticPrivKey;
-      if (openKey === null) return; // prekey unknown/expired: cannot open
-      try {
-        const { plaintext, senderStaticPubKey } = noiseXOpen(
-          openKey,
-          env.ciphertext,
-        );
-        // Identify the sender from the key the envelope authenticates, not from
-        // the packet header, which names whoever relayed it to us.
-        const fromPeerID = bytesToHex(sha256(senderStaticPubKey)).slice(0, 16);
-        if (useBlockedStore.getState().isBlocked(fromPeerID)) return;
-
-        // The plaintext is a typed Noise payload, exactly as bitchat seals it.
-        // Anything else is from a build that predates this or is not a private
-        // message at all, and there is nothing useful to render either way.
-        const typed = decodeNoisePayload(plaintext);
-        if (typed === null || typed.type !== NoisePayloadType.PRIVATE_MESSAGE) {
-          return;
-        }
-        const pm = decodePrivateMessagePacket(typed.body);
-        if (pm === null) return;
-
-        // Dedupe on the message ID the SENDER chose, not on anything about this
-        // envelope.
-        //
-        // Spray-and-wait deliberately puts several copies on the mesh, each
-        // resealed by its carrier with a fresh timestamp, so no envelope-derived
-        // identity can collapse them. Building the id from the relaying
-        // carrier's clock gives four carriers four identical bubbles for one
-        // message, and never collapses a courier copy against the direct copy,
-        // which arrives under the sender's id. Both are one comparison here.
-        if (this.openedCourierIDs.has(pm.messageID)) return;
-        this.rememberEventID(this.openedCourierIDs, pm.messageID);
-
-        const channel = `dm:${fromPeerID}`;
-        useChatStore.getState().addChannel(channel);
-        useChatStore.getState().addMessage({
-          id: pm.messageID,
-          channel,
-          senderID: fromPeerID,
-          senderNickname: resolveDisplayName(fromPeerID),
-          text: pm.content,
-          timestampMs: packet.timestamp,
-          isMine: false,
-        });
-        // Acknowledge it.
-        //
-        // Couriered mail is the one path that could never resolve its sender's
-        // outbox entry, because there was no id to name in a receipt, so a
-        // message that really did arrive kept being re-sent on every sweep for
-        // as long as the entry lived. Both routes are tried because neither is
-        // reliable here: the mesh receipt needs a session with someone who is by
-        // definition out of range, and the Nostr one needs their npub and a
-        // relay. Whichever lands clears the sender's hourglass.
-        this.sendReceipt(fromPeerID, DmPayloadType.DELIVERED, pm.messageID);
-        const senderNpub =
-          this.registry.get(fromPeerID)?.nostrPubkey ??
-          useContactsStore.getState().getContact(fromPeerID)?.nostrPubkeyHex;
-        if (senderNpub !== undefined && senderNpub.length > 0) {
-          this.publishNostrAck(
-            senderNpub,
-            NoisePayloadType.DELIVERED,
-            pm.messageID,
-          );
-        }
-
-        // Burn the one-time prekey now that it has opened a message, then
-        // publish a fresh bundle so senders stop using the spent key.
-        if (env.prekeyID !== undefined) {
-          this.localPrekeys.consume(env.prekeyID);
-          // The held bundle now advertises a spent key, so this is the one path
-          // that must mint a new packet rather than re-send the current one.
-          this.emitPrekeyBundle(true);
-        }
-      } catch {
-        // Not actually decryptable by us: a tag collision. Drop it.
-      }
+      this.openCourierEnvelopeForUs(env, packet.timestamp);
       return;
     }
 
@@ -3111,42 +3114,154 @@ export class MeshService {
     );
   }
 
-  // Hand carried envelopes to a peer we just met. Spray-and-wait: each transfer
-  // gives away half the remaining copy budget, so delivery probability rises
-  // without the mesh being flooded by one message.
+  // Open an envelope addressed to us and render it, whichever way it arrived.
+  // Shared by the mesh path (a directed COURIER_ENV) and the relay path (a
+  // kind-1401 drop), because everything after "this one is ours" is identical:
+  // dedupe on the SENDER's message id, the block check against the key the
+  // envelope authenticates, the receipt over both transports, and the one-time
+  // prekey burn.
+  //
+  // `sentAtMs` only places the bubble in the thread.
+  private openCourierEnvelopeForUs(
+    env: SealedEnvelope,
+    sentAtMs: number,
+  ): void {
+    // v2 envelopes seal to one of our one-time prekeys; v1 to our static key.
+    const openKey =
+      env.prekeyID !== undefined
+        ? this.localPrekeys.privForId(env.prekeyID)
+        : this.identity.noiseStaticPrivKey;
+    if (openKey === null) return; // prekey unknown/expired: cannot open
+    try {
+      const { plaintext, senderStaticPubKey } = noiseXOpen(
+        openKey,
+        env.ciphertext,
+      );
+      // Identify the sender from the key the envelope authenticates, not from
+      // the packet header, which names whoever relayed it to us.
+      const fromPeerID = bytesToHex(sha256(senderStaticPubKey)).slice(0, 16);
+      if (useBlockedStore.getState().isBlocked(fromPeerID)) return;
+
+      // The plaintext is a typed Noise payload, exactly as bitchat seals it.
+      // Anything else is from a build that predates this or is not a private
+      // message at all, and there is nothing useful to render either way.
+      const typed = decodeNoisePayload(plaintext);
+      if (typed === null || typed.type !== NoisePayloadType.PRIVATE_MESSAGE) {
+        return;
+      }
+      const pm = decodePrivateMessagePacket(typed.body);
+      if (pm === null) return;
+
+      // Dedupe on the message ID the SENDER chose, not on anything about this
+      // envelope.
+      //
+      // Spray-and-wait deliberately puts several copies on the mesh, each
+      // resealed by its carrier with a fresh timestamp, so no envelope-derived
+      // identity can collapse them. Building the id from the relaying
+      // carrier's clock gives four carriers four identical bubbles for one
+      // message, and never collapses a courier copy against the direct copy,
+      // which arrives under the sender's id. Both are one comparison here.
+      if (this.openedCourierIDs.has(pm.messageID)) return;
+      this.rememberEventID(this.openedCourierIDs, pm.messageID);
+
+      const channel = `dm:${fromPeerID}`;
+      useChatStore.getState().addChannel(channel);
+      useChatStore.getState().addMessage({
+        id: pm.messageID,
+        channel,
+        senderID: fromPeerID,
+        senderNickname: resolveDisplayName(fromPeerID),
+        text: pm.content,
+        timestampMs: sentAtMs,
+        isMine: false,
+      });
+      // Acknowledge it.
+      //
+      // Couriered mail is the one path that could never resolve its sender's
+      // outbox entry, because there was no id to name in a receipt, so a
+      // message that really did arrive kept being re-sent on every sweep for
+      // as long as the entry lived. Both routes are tried because neither is
+      // reliable here: the mesh receipt needs a session with someone who is by
+      // definition out of range, and the Nostr one needs their npub and a
+      // relay. Whichever lands clears the sender's hourglass.
+      this.sendReceipt(fromPeerID, DmPayloadType.DELIVERED, pm.messageID);
+      const senderNpub =
+        this.registry.get(fromPeerID)?.nostrPubkey ??
+        useContactsStore.getState().getContact(fromPeerID)?.nostrPubkeyHex;
+      if (senderNpub !== undefined && senderNpub.length > 0) {
+        this.publishNostrAck(
+          senderNpub,
+          NoisePayloadType.DELIVERED,
+          pm.messageID,
+        );
+      }
+
+      // Burn the one-time prekey now that it has opened a message, then
+      // publish a fresh bundle so senders stop using the spent key.
+      if (env.prekeyID !== undefined) {
+        this.localPrekeys.consume(env.prekeyID);
+        // The held bundle now advertises a spent key, so this is the one path
+        // that must mint a new packet rather than re-send the current one.
+        this.emitPrekeyBundle(true);
+      }
+    } catch {
+      // Not actually decryptable by us: a tag collision. Drop it.
+    }
+  }
+
+  // Hand carried envelopes to a peer we just met.
+  //
+  // Two distinct operations, in this order and never merged:
+  //
+  //   1. HANDOVER  mail addressed to this peer. They are the destination, so
+  //      the copy carries no spray budget and the envelope is retired once it
+  //      lands. Budget-independent: an envelope down to its last copy is
+  //      exactly the one a carrier standing next to the recipient must still
+  //      hand over.
+  //   2. SPRAY     mail for somebody else, offered to them as another carrier.
+  //      Half the remaining budget, once per peer.
+  //
+  // Handover first is also why the spray pass needs no "addressed to this peer"
+  // exclusion of its own, which bitchat's transferSprayCopies carries: by then
+  // there are none left. Both commit only after the transport confirms, which is
+  // why neither loop mutates the store directly.
   private sprayCourierTo(peerID: string): void {
     const peer = this.registry.get(peerID);
     if (!peer?.noisePubKey) return;
-    this.courier.evictExpired();
+    const peerPub = peer.noisePubKey;
 
-    // FIRST: is any of this mail actually for them?
-    //
-    // This is the handover spray-and-wait exists to end with, and nothing was
-    // calling it. `deliverMatching` was written, tested, and wired to nothing,
-    // so the only way a carried envelope ever reached its recipient was if that
-    // recipient happened to overhear a spray meant for someone else, and an
-    // envelope whose budget reached 1 stopped being sprayed at all - so a
-    // carrier could sit next to the recipient holding mail it would never hand
-    // over, until the 24h expiry threw it away.
-    //
-    // Destructive and budget-independent, like bitchat's handoverEnvelopes: the
-    // recipient is the destination, not another carrier, so there is nothing
-    // left to spray afterwards and no reason to require copies >= 2.
-    // All three days, matching the receive gate. The tag is stamped by the
-    // SENDER at seal time and rotates on the UTC epoch day, while an envelope
-    // lives 24h - so any envelope carried across midnight carries yesterday's
-    // tag and would never match a today-only comparison. Checking one day meant
-    // the handover missed most of what a carrier actually holds.
+    // All three days. The tag is stamped by the SENDER at seal time and rotates
+    // on the UTC epoch day, while an envelope lives 24h - so anything carried
+    // across midnight bears yesterday's tag, and a sender whose clock runs ahead
+    // seals with tomorrow's. Checking one day missed most of what a carrier
+    // actually holds. Matches the receive gate and bitchat's candidateTags.
     const now = Date.now();
-    for (const dayOffset of [0, -86_400_000, 86_400_000]) {
-      const tag = computeRecipientTag(peer.noisePubKey, now + dayOffset);
-      for (const env of this.courier.deliverMatching(tag)) {
-        this.sendCourierPayloadTo(encodeEnvelopePayload(env), peerID);
-      }
+    const tags = [0, -86_400_000, 86_400_000].map((offset) =>
+      computeRecipientTag(peerPub, now + offset),
+    );
+
+    for (const env of this.courier.offerHandover(tags)) {
+      void this.sendCourierPayloadTo(encodeEnvelopePayload(env), peerID).then(
+        (delivered) => {
+          // Only a write accepted onto THIS peer's link retires the envelope. A
+          // refusal, or a speculative flood at a peer several hops away, leaves
+          // it carried for the next encounter.
+          if (delivered) this.courier.commitHandover(env.ciphertext);
+        },
+      );
     }
 
-    for (const env of this.courier.sprayTo(peer.noisePubKey)) {
-      this.sendCourierPayloadTo(encodeEnvelopePayload(env), peerID);
+    for (const env of this.courier.offerSpray(peerPub)) {
+      void this.sendCourierPayloadTo(encodeEnvelopePayload(env), peerID).then(
+        (delivered) => {
+          // Same rule for the budget: spent only if the copy left the device,
+          // so a full GATT queue costs this branch nothing and the peer stays
+          // eligible for the next encounter.
+          if (delivered) {
+            this.courier.commitSpray(peerPub, env.ciphertext, env.copies);
+          }
+        },
+      );
     }
   }
 
@@ -5878,17 +5993,82 @@ export class MeshService {
   // re-establishes over the selected path (Tor or direct). BLE links and the
   // durable store subscriptions are deliberately left untouched, because Tor is
   // an internet-only concern and must not disturb nearby Bluetooth chat.
+  // Whether the Nostr transport is allowed to exist right now.
+  //
+  // Two gates, both of which must be open. `internetEnabled` is the user asking
+  // for the internet at all; `nostrBlockedByTor` is Android refusing to use it
+  // in the clear while Tor is on and Orbot is not carrying it (see the field in
+  // mesh-state-store).
+  //
+  // A function rather than a cached flag, consulted at every build site, because
+  // both move while the mesh is up and all three sites must agree. A flag set at
+  // start() is how Tor on, then Away, then Online lands back on the clear net.
+  private internetTransportAllowed(): boolean {
+    if (!useSettingsStore.getState().internetEnabled) return false;
+    return !useMeshStateStore.getState().nostrBlockedByTor;
+  }
+
+  // Collect courier mail parked for us on relays (kind 1401). bitchat clients
+  // park these and subscribe for their own tags, so this is what makes mail a
+  // bitchat peer addressed to an Airhop user collectable at all.
+  //
+  // Three tags, the window the mesh path and bitchat's candidateTags both use:
+  // the tag rotates on the UTC epoch day and an envelope lives 24h, so anything
+  // sealed near midnight bears yesterday's and a fast clock seals tomorrow's.
+  //
+  // No new privacy surface: the DM inbox beside this subscribes on our npub,
+  // a stronger identifier than a tag only someone who heard our announce can
+  // compute.
+  private subscribeCourierDrops(): void {
+    const client = this.nostrClient;
+    if (client === null) return;
+    this.courierDropSub?.close();
+    this.courierDropSub = null;
+
+    const now = Date.now();
+    this.courierDropDay = Math.floor(now / 86_400_000);
+    const tags = [0, -86_400_000, 86_400_000].map((offset) =>
+      computeRecipientTag(
+        x25519.getPublicKey(this.identity.noiseStaticPrivKey),
+        now + offset,
+      ),
+    );
+
+    const close = subscribeCourierDropEvents(tags, client, (env) => {
+      // A tag can collide, so this takes the same open path as a mesh envelope,
+      // which fails closed on a ciphertext it cannot decrypt.
+      //
+      // Timestamped from the seal (expiry minus the envelope lifetime) rather
+      // than from the fetch, so a message parked yesterday sits where it was
+      // written. Clamped to now: expiry is attacker-supplied, and a future
+      // stamp would pin the row to the bottom of the thread.
+      const sentAtMs = Math.min(env.expiryMs - ENVELOPE_TTL_MS, Date.now());
+      this.openCourierEnvelopeForUs(env, sentAtMs);
+    });
+    this.courierDropSub = { close };
+  }
+
+  // Re-subscribe when the UTC day rolls over under a long-lived session, so the
+  // tag set never goes stale. Driven by the outbox sweep, which already runs on
+  // a slow cadence, rather than a timer of its own.
+  private refreshCourierDropsIfDayChanged(): void {
+    if (this.nostrClient === null || this.courierDropSub === null) return;
+    if (Math.floor(Date.now() / 86_400_000) === this.courierDropDay) return;
+    this.subscribeCourierDrops();
+  }
+
   restartNostr(): void {
-    // Before the first start(), or with internet off, there is nothing to
-    // rebuild: start() (or applyInternetEnabled) will build the transport.
+    // Before the first start(), there is nothing to rebuild: start() (or
+    // applyInternetEnabled) will build the transport once the gates are open.
     if (!this.running) return;
     this.teardownNostr();
-    if (!useSettingsStore.getState().internetEnabled) return;
+    if (!this.internetTransportAllowed()) return;
     // Fresh pool + channel services on the current socket factory, then re-open
     // the DM inbox. The chat/contacts store subscriptions and the outbox sweep
     // keep working: they reach the new instances through `this.` fields.
     this.buildNostrTransport();
     this.subscribeNostrInbox();
+    this.subscribeCourierDrops();
     // The nutzap watcher captured the client we just replaced, so it is now
     // subscribed to a closed pool. See nutzap-watcher-handle.
     rebindNutzapWatcher();
@@ -5899,6 +6079,12 @@ export class MeshService {
   // links and durable store subscriptions are untouched, so nearby Bluetooth
   // chat keeps working.
   private teardownNostr(): void {
+    // Closed with the pool it was opened on: a surviving drop subscription
+    // holds a filter naming this device's recipient tags against a relay the
+    // rest of the app has stopped using, and on the Tor path one still on the
+    // clear net.
+    this.courierDropSub?.close();
+    this.courierDropSub = null;
     this.geoChannels?.stop();
     this.geoChannels = null;
     this.privateChannels?.stop();
@@ -5916,9 +6102,18 @@ export class MeshService {
   applyInternetEnabled(enabled: boolean): void {
     if (!this.running) return;
     if (enabled) {
-      if (this.nostrClient === null) {
+      // `enabled` is the user's half; the Tor gate is the other half and it
+      // outranks this one, so switching the internet on while Android holds it
+      // down for a stopped Orbot must not open clear-net sockets. The Tor path
+      // reopens them through restartNostr once Orbot is back.
+      //
+      // Checked here rather than in the branch condition so this stays a no-op:
+      // nothing was switched off, and the teardown below drops parked uplinks
+      // belonging to a gateway the user has not withdrawn.
+      if (this.internetTransportAllowed() && this.nostrClient === null) {
         this.buildNostrTransport();
         this.subscribeNostrInbox();
+        this.subscribeCourierDrops();
         rebindNutzapWatcher();
       }
     } else {
@@ -6052,6 +6247,10 @@ export class MeshService {
       pending.resolve(null);
       this.pendingPings.delete(nonce);
     }
+    // Closed before the pool it rides on, as teardownNostr does: a live filter
+    // naming this device's recipient tags must not outlive its transport.
+    this.courierDropSub?.close();
+    this.courierDropSub = null;
     this.nostrClient?.close();
     this.nostrClient = null;
     // The watcher captured the client that just died. Drop it here rather than

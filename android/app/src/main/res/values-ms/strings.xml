@@ -1,0 +1,7 @@
+<resources>
+  <string name="mesh_channel_name">Rangkaian mesh</string>
+  <string name="mesh_channel_description">Mengekalkan mesh Airhop aktif di latar belakang</string>
+  <string name="mesh_notification_title">Mesh Airhop aktif</string>
+  <string name="mesh_notification_text">Menemui dan menyampaikan mesej berdekatan</string>
+  <string name="mesh_notification_stop">Hentikan mesh</string>
+</resources>

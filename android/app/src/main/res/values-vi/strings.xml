@@ -1,0 +1,7 @@
+<resources>
+  <string name="mesh_channel_name">Mạng lưới</string>
+  <string name="mesh_channel_description">Giữ mạng lưới Airhop chạy ở chế độ nền</string>
+  <string name="mesh_notification_title">Mạng lưới Airhop đang chạy</string>
+  <string name="mesh_notification_text">Đang tìm và chuyển tiếp tin nhắn ở gần</string>
+  <string name="mesh_notification_stop">Dừng mạng lưới</string>
+</resources>

@@ -26,6 +26,30 @@ module.exports = defineConfig([
     },
   },
   {
+    // One haptic vocabulary.
+    //
+    // src/platform/haptics.ts names every buzz by the situation that earns it,
+    // so two call sites meaning the same thing to the user cannot drift into
+    // two feedback types. That only holds while it is the one place that talks
+    // to the motor.
+    files: ["src/**/*.{ts,tsx}"],
+    ignores: ["src/platform/haptics.ts"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          paths: [
+            {
+              name: "expo-haptics",
+              message:
+                "Import a named verb from @platform/haptics instead (acknowledged, held, released, armed, crossedThreshold, succeeded, rejected, warned). If none of them fits, add one there with a comment saying which situation earns it.",
+            },
+          ],
+        },
+      ],
+    },
+  },
+  {
     // Right-to-left safety.
     //
     // A physical property is invisible until somebody opens the app in Arabic,

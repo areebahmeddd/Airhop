@@ -266,11 +266,28 @@ export const Radius = {
 // control also carries accessibilityState.disabled so it is never dim ALONE.
 export const DISABLED_OPACITY = 0.4;
 
+// The press treatment for a surface with nothing neutral to darken: an accent
+// button, whose fill IS the accent so darkening it would mean recolouring the
+// label too, and a bare icon and label such as a tab or a segment. Everything
+// else darkens to Colors.surfacePressed instead. Applied through Pressable's
+// style callback.
+export const PRESSED_OPACITY = 0.85;
+
+// Under RN's 500ms default, which is tuned for a rare secondary menu rather
+// than the message actions this opens. Callers pair it with haptics.held(): a
+// hold is the only gesture with no visible progress.
+export const LONG_PRESS_MS = 320;
+
 // The smallest tappable square either platform accepts: 44pt (Apple HIG) and
 // 48dp (Material) round to the same practical floor, and WCAG 2.2 AA asks for
 // 24x24 minimum with 44x44 as the AAA target. Every Pressable in the app either
 // measures at least this, or carries `hitSlopFor(visualSize)` to reach it.
 export const MIN_TOUCH = 44;
+
+// Full-width buttons: sheet confirm/cancel pairs, alert actions, the onboarding
+// CTA. Past MIN_TOUCH because these are stacked commitments, several of them
+// destructive, so there is no adjacency to resolve and the height is free.
+export const BUTTON_HEIGHT = 50;
 
 // The default padding around a control that is already comfortably sized and
 // only wants a little forgiveness (a row's trailing glyph, an inline link).

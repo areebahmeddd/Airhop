@@ -1,0 +1,10 @@
+/* Keys mirror ios/Airhop/Info.plist, the English copy. Guarded by npm run i18n:native. */
+
+"NSBluetoothAlwaysUsageDescription" = "Airhop በሜሹ ላይ ካሉ በአቅራቢያ ካሉ መሣሪያዎች ጋር ለመገናኘት ብሉቱዝን ይጠቀማል።";
+"NSBluetoothPeripheralUsageDescription" = "Airhop በአቅራቢያ ላሉ አቻዎች መገኘትዎን ለማሳወቅ ብሉቱዝን ይጠቀማል።";
+"NSLocalNetworkUsageDescription" = "Airhop ለከፍተኛ መጠን ማስተላለፎች (ቪዲዮ፣ ትላልቅ ፋይሎች) በአቅራቢያ ካሉ መሣሪያዎች ጋር በቀጥታ ለመገናኘት የአካባቢ አውታረ መረብን ይጠቀማል።";
+"NSCameraUsageDescription" = "Airhop የእውቂያን QR ኮድ ለመቃኘት እንዲሁም በአቅራቢያ ካሉ አቻዎች ጋር ለሚጋሩት ፎቶና ቪዲዮ ለማንሳት ካሜራውን ይጠቀማል።";
+"NSMicrophoneUsageDescription" = "Airhop የድምፅ መልእክቶችን ለመቅዳት እና በአቅራቢያ ላሉ አቻዎች ቀጥታ ድምፅ ለማድረስ ማይክሮፎኑን ይጠቀማል።";
+"NSPhotoLibraryUsageDescription" = "Airhop ምስሎችንና ቪዲዮዎችን በሜሹ ላይ ለመጋራት የፎቶ ቤተ-መጻሕፍትዎን ይጠቀማል።";
+"NSPhotoLibraryAddUsageDescription" = "Airhop እርስዎ ለማስቀመጥ ሲመርጡ እና የQR ኮድዎን ሲያወርዱ ፎቶዎችንና ቪዲዮዎችን ወደ ፎቶ ቤተ-መጻሕፍትዎ ያስቀምጣል።";
+"NSLocationWhenInUseUsageDescription" = "Airhop በአቅራቢያ ባሉ የአካባቢ ሰርጦች (ብሎክ፣ ከተማ፣ ክልል) ውስጥ ሊያስቀምጥዎ ግምታዊ አካባቢዎን ይጠቀማል። ትክክለኛ ቦታዎ ከመሣሪያዎ ፈጽሞ አይወጣም።";

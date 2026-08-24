@@ -1,0 +1,7 @@
+<resources>
+  <string name="mesh_channel_name">மெஷ் நெட்வொர்க்</string>
+  <string name="mesh_channel_description">Airhop மெஷைப் பின்னணியில் இயங்கிக்கொண்டே இருக்கச் செய்கிறது</string>
+  <string name="mesh_notification_title">Airhop மெஷ் இயங்குகிறது</string>
+  <string name="mesh_notification_text">அருகிலுள்ள செய்திகளைக் கண்டறிந்து அனுப்புகிறது</string>
+  <string name="mesh_notification_stop">மெஷை நிறுத்து</string>
+</resources>

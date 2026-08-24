@@ -85,6 +85,12 @@ private const val EVT_SCAN_FAILED       = "AirhopBLE.scanFailed"
 // the shutdown is the same one the Status picker performs.
 private const val EVT_MESH_STOP_REQUESTED = "AirhopBLE.meshStopRequested"
 
+// The VPN transport went away, or came back. Emitted only while Tor is on (see
+// startVpnWatch). Unprefixed, unlike the events above, because JS subscribes to
+// them by these exact names.
+private const val EVT_VPN_LOST      = "onVpnLost"
+private const val EVT_VPN_AVAILABLE = "onVpnAvailable"
+
 // Orbot SOCKS5 proxy defaults (Tor via Orbot, per ARCHITECTURE.md section 9).
 // Phase 1: detect existing Orbot session. Phase 2: embedded tor binary.
 private const val ORBOT_SOCKS5_PORT       = 9050
@@ -1436,14 +1442,22 @@ class AirhopBLEModule(
         }.start()
     }
 
-    // Watch for the VPN going away, so a Tor claim cannot outlive the thing
-    // carrying it.
+    // Watch the VPN transport while Tor is on, so a Tor claim cannot outlive the
+    // thing carrying it, and can be reinstated the moment that thing returns.
     //
-    // getTorAvailability only answers when asked, and the only caller was app
-    // foreground. Orbot can be stopped from its own notification without leaving
-    // Airhop, and a dropped VPN does not fail our sockets - they reconnect
-    // directly, so the relay pool came back on the clear net while the UI still
-    // said Tor was on.
+    // getTorAvailability only answers when asked, and app foreground is its only
+    // other caller. A dropped VPN does not fail the app's sockets - they
+    // reconnect directly - so without these edges the relay pool comes back on
+    // the clear net while the UI still says Tor is on.
+    //
+    // BOTH edges matter. Loss is the safety edge. Arrival is the recovery edge,
+    // and load-bearing because JS holds the Nostr transport down until Tor
+    // routes again: someone who stops and restarts Orbot from its own
+    // notification shade never leaves Airhop, so nothing else would ever ask.
+    //
+    // Neither edge is a conclusion. Any VPN raises them - a corporate tunnel
+    // dropping is not Orbot stopping - so both say only "the VPN transport
+    // moved, ask again" and JS re-probes before changing anything.
     //
     // Registered only while Tor is on: a permanent callback watching a feature
     // few enable is battery cost with no reader.
@@ -1461,11 +1475,16 @@ class AirhopBLEModule(
         if (vpnCallback != null) return
         val cm = connectivityManager() ?: return
         val callback = object : ConnectivityManager.NetworkCallback() {
-            // Only loss is reported. A VPN coming up is not evidence Tor is
-            // routing (it could be any VPN, and the user never asked to turn Tor
-            // back on), so JS re-validates rather than being handed a conclusion.
             override fun onLost(network: android.net.Network) {
-                emitEvent("onVpnLost", WritableNativeMap())
+                emitEvent(EVT_VPN_LOST, WritableNativeMap())
+            }
+
+            // onAvailable fires for a transport already up when the callback
+            // registers, not only for one arriving afterwards. That replay is
+            // what re-opens the gate on a relaunch into the blocked state,
+            // without waiting for Orbot to be cycled.
+            override fun onAvailable(network: android.net.Network) {
+                emitEvent(EVT_VPN_AVAILABLE, WritableNativeMap())
             }
         }
         try {

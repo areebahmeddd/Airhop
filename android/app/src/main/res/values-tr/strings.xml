@@ -1,0 +1,7 @@
+<resources>
+  <string name="mesh_channel_name">Mesh ağı</string>
+  <string name="mesh_channel_description">Airhop mesh\'ini arka planda etkin tutar</string>
+  <string name="mesh_notification_title">Airhop mesh\'i etkin</string>
+  <string name="mesh_notification_text">Yakındaki mesajlar bulunuyor ve aktarılıyor</string>
+  <string name="mesh_notification_stop">Mesh\'i durdur</string>
+</resources>

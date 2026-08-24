@@ -55,7 +55,7 @@ export default function AppShowcase() {
   }
 
   return (
-    <section id="app" className="scroll-mt-8 px-6 py-12 md:px-10 md:py-16">
+    <section id="app" className="px-6 py-12 md:px-10 md:py-16">
       <div className="mx-auto max-w-7xl">
         <SectionHeader
           eyebrow={T("home.showcase.eyebrow")}
@@ -74,7 +74,7 @@ export default function AppShowcase() {
                 className={`relative flex min-h-11 flex-col items-start gap-1 rounded-2xl border p-5 text-start transition-colors duration-200 ${
                   i === active
                     ? "border-line bg-inner"
-                    : "hover:bg-card-subtle border-transparent bg-transparent"
+                    : "hover:bg-card-subtle active:bg-inner border-transparent bg-transparent"
                 }`}
               >
                 {i === active ? (

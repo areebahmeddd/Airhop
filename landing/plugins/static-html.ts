@@ -10,7 +10,14 @@ import {
   localizedPath,
   type LanguageCode,
 } from "../src/i18n/index.ts";
-import { alternates, breadcrumbSchema, canonicalUrl, PAGES, type PageSeo } from "../src/lib/seo.ts";
+import {
+  alternates,
+  breadcrumbSchema,
+  canonicalUrl,
+  NOT_FOUND_SEO,
+  PAGES,
+  type PageSeo,
+} from "../src/lib/seo.ts";
 
 const BLOCK = /<!-- seo:start -->[\s\S]*?<!-- seo:end -->/;
 
@@ -41,7 +48,9 @@ function headBlock(page: PageSeo, language: LanguageCode): string {
     "<!-- seo:start -->",
     `<title>${title}</title>`,
     `<meta name="description" content="${description}" />`,
-    `<link rel="canonical" href="${url}" />`,
+    page.noIndex
+      ? `<meta name="robots" content="noindex, nofollow" />`
+      : `<link rel="canonical" href="${url}" />`,
     `<meta property="og:type" content="${page.type}" />`,
     `<meta property="og:title" content="${title}" />`,
     `<meta property="og:description" content="${description}" />`,
@@ -56,10 +65,12 @@ function headBlock(page: PageSeo, language: LanguageCode): string {
     lines.push(`<meta property="og:locale:alternate" content="${LANGUAGES[code].ogLocale}" />`);
   }
 
-  for (const link of alternates(page.path)) {
-    lines.push(
-      `<link rel="alternate" hreflang="${link.hrefLang}" href="${escapeAttr(link.href)}" />`,
-    );
+  if (!page.noIndex) {
+    for (const link of alternates(page.path)) {
+      lines.push(
+        `<link rel="alternate" hreflang="${link.hrefLang}" href="${escapeAttr(link.href)}" />`,
+      );
+    }
   }
 
   if (crumbs) {
@@ -196,6 +207,14 @@ export function staticHtml(): Plugin {
           await mkdir(dir, { recursive: true });
           await writeFile(path.join(dir, "index.html"), html, "utf8");
         }
+
+        const notFound = localized
+          .replace(ROOT_TAG, rootTag(language))
+          .replace(BLOCK, headBlock(NOT_FOUND_SEO, language));
+        const base = localizedPath(language, "/");
+        const notFoundDir = base === "/" ? root : path.join(root, base);
+        await mkdir(notFoundDir, { recursive: true });
+        await writeFile(path.join(notFoundDir, "404.html"), notFound, "utf8");
       }
 
       await writeFile(path.join(root, "sitemap.xml"), sitemap(PAGES), "utf8");

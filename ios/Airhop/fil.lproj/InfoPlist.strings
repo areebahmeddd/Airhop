@@ -1,0 +1,10 @@
+/* Keys mirror ios/Airhop/Info.plist, the English copy. Guarded by npm run i18n:native. */
+
+"NSBluetoothAlwaysUsageDescription" = "Gumagamit ang Airhop ng Bluetooth para makipag-usap sa mga kalapit na device sa mesh.";
+"NSBluetoothPeripheralUsageDescription" = "Gumagamit ang Airhop ng Bluetooth para ipaalam ang presensya mo sa mga kalapit na peer.";
+"NSLocalNetworkUsageDescription" = "Gumagamit ang Airhop ng lokal na network para direktang kumonekta sa mga kalapit na device para sa malalaking paglilipat (video, malalaking file).";
+"NSCameraUsageDescription" = "Gumagamit ang Airhop ng camera para i-scan ang QR code ng isang contact, at para kumuha ng mga larawan at video na ibabahagi sa mga kalapit na peer.";
+"NSMicrophoneUsageDescription" = "Gumagamit ang Airhop ng mikropono para mag-record ng voice note at para magdala ng live na boses sa mga kalapit na peer.";
+"NSPhotoLibraryUsageDescription" = "Ina-access ng Airhop ang photo library mo para makapagbahagi ng mga larawan at video sa mesh.";
+"NSPhotoLibraryAddUsageDescription" = "Sine-save ng Airhop ang mga larawan at video sa photo library mo kapag pinili mong mag-save, at kapag dina-download mo ang QR code mo.";
+"NSLocationWhenInUseUsageDescription" = "Gumagamit ang Airhop ng tinatayang lokasyon mo para ilagay ka sa mga channel ng lugar sa malapit (bloke, lungsod, rehiyon). Hindi kailanman umaalis sa device mo ang eksaktong posisyon mo.";

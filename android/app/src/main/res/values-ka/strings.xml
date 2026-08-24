@@ -1,0 +1,7 @@
+<resources>
+  <string name="mesh_channel_name">მეშ-ქსელი</string>
+  <string name="mesh_channel_description">Airhop-ის მეშს ფონურ რეჟიმში აქტიურად ინარჩუნებს</string>
+  <string name="mesh_notification_title">Airhop-ის მეში აქტიურია</string>
+  <string name="mesh_notification_text">პოულობს და გადასცემს ახლომდებარე შეტყობინებებს</string>
+  <string name="mesh_notification_stop">მეშის გაჩერება</string>
+</resources>

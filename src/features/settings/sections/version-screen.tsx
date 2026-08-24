@@ -21,6 +21,7 @@ import { birdForVersion } from "@data/releases";
 import Feather from "@expo/vector-icons/Feather";
 import { t, useT } from "@i18n";
 import { useRichText } from "@i18n/rich-text";
+import { useMeshStateStore } from "@store/mesh-state-store";
 import { useSettingsStore } from "@store/settings-store";
 import PrimaryButton from "@ui/components/primary-button";
 import {
@@ -171,11 +172,21 @@ export default function VersionScreen({ onBack }: Props): React.JSX.Element {
   }
 
   async function checkForUpdates() {
-    // On iOS the Tor tunnel only covers nostr-tools WebSockets, so this plain
-    // fetch to GitHub would egress over clearnet and reveal the real IP while Tor
-    // is on. Skip it rather than leak (same fail-closed choice as the wallet mint
-    // gate; the relay directory avoids the problem entirely by being vendored).
-    if (Platform.OS === "ios" && useSettingsStore.getState().torEnabled) {
+    // A plain fetch that Tor is not carrying reveals the real IP while the
+    // switch reads on, so it is skipped rather than leaked - the same
+    // fail-closed choice, and predicate, as the wallet mint gate. (The relay
+    // directory is vendored and avoids the question.)
+    //
+    // Two conditions because the platforms differ: on iOS the tunnel only ever
+    // covers nostr-tools WebSockets, so a fetch is outside it whether or not a
+    // circuit is up; on Android Orbot's VPN covers every socket, but only while
+    // it routes, and `nostrBlockedByTor` is exactly when it does not.
+    const torEnabled = useSettingsStore.getState().torEnabled;
+    const outsideTor =
+      Platform.OS === "ios"
+        ? torEnabled
+        : torEnabled && useMeshStateStore.getState().nostrBlockedByTor;
+    if (outsideTor) {
       setCheck({ status: "tor-blocked" });
       return;
     }

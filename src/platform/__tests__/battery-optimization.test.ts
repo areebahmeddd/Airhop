@@ -4,99 +4,101 @@
 
 // Tests for battery-optimization.ts.
 //
-// The public API (getBatteryOptimizationSettingsURI, needsBatteryOptimizationPrompt)
+// The public API (getBatterySettingsTargets, needsBatteryOptimizationPrompt)
 // reads Platform.OS and Platform.constants.Brand directly from react-native, which
 // cannot be cleanly mocked without breaking jest-expo's setup files.
 //
 // We test the pure logic through the exported internal helpers:
-//   resolveSettingsURI(os, brand) -> OEMSettingsURI
-//   isKnownAggressiveOEM(brand)   -> boolean
+//   resolveBatterySettingsTargets(os, brand) -> BatterySettingsTarget[]
+//   isKnownAggressiveOEM(brand)              -> boolean
 //
 // This covers every code path without any react-native imports in the test file.
 
 import {
-  ANDROID_STANDARD_BATTERY_URI,
+  AGGRESSIVE_OEMS,
+  ANDROID_BATTERY_SETTINGS_ACTION,
+  ANDROID_STANDARD_BATTERY_TARGET,
   OEM_DEEP_LINKS,
   isKnownAggressiveOEM,
-  resolveSettingsURI,
+  resolveBatterySettingsTargets,
 } from "../battery-optimization";
 
-describe("resolveSettingsURI", () => {
-  test("returns null on iOS regardless of brand", () => {
-    expect(resolveSettingsURI("ios", "Samsung")).toBeNull();
-    expect(resolveSettingsURI("ios", "Xiaomi")).toBeNull();
-    expect(resolveSettingsURI("ios", "")).toBeNull();
+describe("resolveBatterySettingsTargets", () => {
+  test("returns nothing on iOS regardless of brand", () => {
+    expect(resolveBatterySettingsTargets("ios", "Samsung")).toEqual([]);
+    expect(resolveBatterySettingsTargets("ios", "Xiaomi")).toEqual([]);
+    expect(resolveBatterySettingsTargets("ios", "")).toEqual([]);
   });
 
-  test("returns standard Android URI for unknown/stock brand", () => {
-    expect(resolveSettingsURI("android", "Google")).toBe(
-      ANDROID_STANDARD_BATTERY_URI,
-    );
-    expect(resolveSettingsURI("android", "")).toBe(
-      ANDROID_STANDARD_BATTERY_URI,
-    );
+  test("stock Android gets the standard battery list, and only that", () => {
+    expect(resolveBatterySettingsTargets("android", "Google")).toEqual([
+      ANDROID_STANDARD_BATTERY_TARGET,
+    ]);
+    expect(resolveBatterySettingsTargets("android", "")).toEqual([
+      ANDROID_STANDARD_BATTERY_TARGET,
+    ]);
   });
 
-  test("returns Xiaomi deep link for Xiaomi brand", () => {
-    expect(resolveSettingsURI("android", "Xiaomi")).toBe(
-      "miui://battery/autostart",
-    );
+  // Linking.openURL builds ACTION_VIEW on the parsed URI and never calls
+  // Intent.parseUri, so an `intent:` string resolves to nothing on every device
+  // it reaches. An action has to travel as an action.
+  test("the standard fallback is an intent action, never a URL", () => {
+    expect(ANDROID_STANDARD_BATTERY_TARGET).toEqual({
+      kind: "intent",
+      action: ANDROID_BATTERY_SETTINGS_ACTION,
+    });
+    expect(ANDROID_BATTERY_SETTINGS_ACTION).not.toContain("intent:");
   });
 
-  test("returns Xiaomi deep link for Redmi brand", () => {
-    expect(resolveSettingsURI("android", "Redmi")).toBe(
-      "miui://battery/autostart",
-    );
-  });
-
-  test("returns Xiaomi deep link for POCO brand", () => {
-    expect(resolveSettingsURI("android", "POCO")).toBe(
-      "miui://battery/autostart",
-    );
-  });
-
-  test("returns Samsung URI for Samsung brand", () => {
-    expect(resolveSettingsURI("android", "Samsung")).toBe(
-      "package:org.onemindlabs.airhop",
+  // Not the one-tap ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS dialog: that
+  // needs a Play-restricted permission Airhop is not eligible for.
+  test("uses the settings list action, not the request-exemption dialog", () => {
+    expect(ANDROID_BATTERY_SETTINGS_ACTION).toBe(
+      "android.settings.IGNORE_BATTERY_OPTIMIZATION_SETTINGS",
     );
   });
 
-  test("returns Huawei URI for HUAWEI brand", () => {
-    const uri = resolveSettingsURI("android", "HUAWEI");
-    expect(uri).toContain("hwappmarket");
+  test.each([
+    ["Xiaomi", "miui://battery/autostart"],
+    ["Redmi", "miui://battery/autostart"],
+    ["POCO", "miui://battery/autostart"],
+    ["OPPO", "opporinotoast://openintent/battery_optimize"],
+    ["realme", "opporinotoast://openintent/battery_optimize"],
+    ["OnePlus", "opporinotoast://openintent/battery_optimize"],
+    ["vivo", "vivostatistic://com.vivo.permissionmanager/autostart"],
+  ])("%s tries its own autostart screen first", (brand, uri) => {
+    const targets = resolveBatterySettingsTargets("android", brand);
+    expect(targets[0]).toEqual({ kind: "url", uri });
   });
 
-  test("returns Huawei URI for HONOR brand", () => {
-    const uri = resolveSettingsURI("android", "HONOR");
-    expect(uri).toContain("hwappmarket");
+  // OEM schemes are undocumented and disappear between skin versions, so one
+  // must never be the only thing tried.
+  test("an OEM deep link is always backed by the standard list", () => {
+    for (const { brand } of OEM_DEEP_LINKS) {
+      const targets = resolveBatterySettingsTargets("android", brand);
+      expect(targets).toHaveLength(2);
+      expect(targets[1]).toEqual(ANDROID_STANDARD_BATTERY_TARGET);
+    }
   });
 
-  test("returns Oppo URI for OPPO brand", () => {
-    const uri = resolveSettingsURI("android", "OPPO");
-    expect(uri).toContain("opporinotoast");
-  });
-
-  test("returns Oppo URI for OnePlus brand", () => {
-    const uri = resolveSettingsURI("android", "OnePlus");
-    expect(uri).toContain("opporinotoast");
-  });
-
-  test("returns Oppo URI for realme brand", () => {
-    const uri = resolveSettingsURI("android", "realme");
-    expect(uri).toContain("opporinotoast");
-  });
-
-  test("returns Vivo URI for vivo brand", () => {
-    const uri = resolveSettingsURI("android", "vivo");
-    expect(uri).toContain("vivostatistic");
-  });
+  // Samsung's sleeping-apps and Huawei's protected-apps screens live in their
+  // own system-manager packages with no public action, so there is nothing to
+  // deep-link to and the standard list is the whole of what the app can offer.
+  test.each(["Samsung", "HUAWEI", "HONOR"])(
+    "%s goes straight to the standard list rather than a wrong screen",
+    (brand) => {
+      expect(resolveBatterySettingsTargets("android", brand)).toEqual([
+        ANDROID_STANDARD_BATTERY_TARGET,
+      ]);
+    },
+  );
 
   test("brand matching is case-insensitive", () => {
-    expect(resolveSettingsURI("android", "XIAOMI")).toBe(
-      resolveSettingsURI("android", "xiaomi"),
+    expect(resolveBatterySettingsTargets("android", "XIAOMI")).toEqual(
+      resolveBatterySettingsTargets("android", "xiaomi"),
     );
-    expect(resolveSettingsURI("android", "samsung")).toBe(
-      resolveSettingsURI("android", "SAMSUNG"),
+    expect(resolveBatterySettingsTargets("android", "samsung")).toEqual(
+      resolveBatterySettingsTargets("android", "SAMSUNG"),
     );
   });
 });
@@ -108,39 +110,44 @@ describe("isKnownAggressiveOEM", () => {
     expect(isKnownAggressiveOEM("Motorola")).toBe(false);
   });
 
-  test("returns true for Xiaomi", () => {
-    expect(isKnownAggressiveOEM("Xiaomi")).toBe(true);
-  });
-
-  test("returns true for Samsung", () => {
-    expect(isKnownAggressiveOEM("Samsung")).toBe(true);
-  });
-
-  test("returns true for all entries in OEM_DEEP_LINKS", () => {
-    for (const { brand } of OEM_DEEP_LINKS) {
+  test("returns true for every warned brand", () => {
+    for (const brand of AGGRESSIVE_OEMS) {
       expect(isKnownAggressiveOEM(brand)).toBe(true);
     }
   });
+
+  // The note and the deep link are separate questions: tied together, a brand
+  // can only be warned about if a link happens to exist for it, and Samsung and
+  // Huawei are among the most aggressive skins there are.
+  test.each(["Samsung", "HUAWEI", "HONOR"])(
+    "%s is warned about even with no deep link of its own",
+    (brand) => {
+      expect(isKnownAggressiveOEM(brand)).toBe(true);
+      expect(
+        OEM_DEEP_LINKS.some((e) => brand.toLowerCase().includes(e.brand)),
+      ).toBe(false);
+    },
+  );
 });
 
-describe("OEM_DEEP_LINKS constant", () => {
+describe("the OEM tables", () => {
   test("no duplicate brand entries", () => {
     const brands = OEM_DEEP_LINKS.map((e) => e.brand);
-    const unique = new Set(brands);
-    expect(unique.size).toBe(brands.length);
+    expect(new Set(brands).size).toBe(brands.length);
+    expect(new Set(AGGRESSIVE_OEMS).size).toBe(AGGRESSIVE_OEMS.length);
   });
 
-  test("all URIs are non-empty strings", () => {
+  test("all deep links are non-empty and carry a scheme", () => {
     for (const { uri } of OEM_DEEP_LINKS) {
-      expect(typeof uri).toBe("string");
-      expect(uri.length).toBeGreaterThan(0);
+      expect(uri).toMatch(/^[a-z][a-z0-9+.-]*:\/\//);
     }
   });
 
-  test("ANDROID_STANDARD_BATTERY_URI is not in OEM_DEEP_LINKS", () => {
-    const found = OEM_DEEP_LINKS.some(
-      (e) => e.uri === ANDROID_STANDARD_BATTERY_URI,
-    );
-    expect(found).toBe(false);
+  // A brand with a deep link but no warning would open a screen nobody is ever
+  // sent to, since the note is the only entry point.
+  test("every deep-linked brand is also a warned brand", () => {
+    for (const { brand } of OEM_DEEP_LINKS) {
+      expect(isKnownAggressiveOEM(brand)).toBe(true);
+    }
   });
 });

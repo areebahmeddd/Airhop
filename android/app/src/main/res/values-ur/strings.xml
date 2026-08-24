@@ -1,0 +1,7 @@
+<resources>
+  <string name="mesh_channel_name">میش نیٹ ورک</string>
+  <string name="mesh_channel_description">Airhop میش کو پس منظر میں فعال رکھتی ہے</string>
+  <string name="mesh_notification_title">Airhop میش فعال ہے</string>
+  <string name="mesh_notification_text">قریبی پیغامات تلاش اور آگے منتقل کیے جا رہے ہیں</string>
+  <string name="mesh_notification_stop">میش روکیں</string>
+</resources>

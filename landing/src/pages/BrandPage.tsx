@@ -7,7 +7,7 @@ import { useT } from "@/i18n";
 import { REPO_LINKS, REPO_URL, SITE_URL } from "@/lib/links";
 import { SEO } from "@/lib/seo";
 import { Check, Copy, Download } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 const CORE_COLORS = [
   { name: "Ink", hex: "#1C2024", use: "Text, the mark, every interactive surface" },
@@ -71,8 +71,17 @@ const BOILERPLATE_SHORT =
 const BOILERPLATE_LONG =
   "Airhop is a free, open-source messenger for iOS and Android that keeps working when the network does not. Phones near each other form a Bluetooth mesh and pass messages along, up to seven hops deep, with no towers, no servers and no accounts. Identity is a key pair generated on the device, direct messages are end-to-end encrypted with Noise XX and Double Ratchet, and Cashu ecash can move device to device with neither phone online. When the internet is available, Nostr relays extend location channels beyond Bluetooth range. Airhop is wire-compatible with bitchat and is maintained independently by Areeb Ahmed under the MIT license.";
 
+const COPIED_MS = 1500;
+
 function CopyRow({ value, children }: { value: string; children: React.ReactNode }) {
   const [copied, setCopied] = useState(false);
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (timer.current !== null) clearTimeout(timer.current);
+    };
+  }, []);
 
   function copy() {
     if (!navigator.clipboard) return;
@@ -80,7 +89,8 @@ function CopyRow({ value, children }: { value: string; children: React.ReactNode
       .writeText(value)
       .then(() => {
         setCopied(true);
-        setTimeout(() => setCopied(false), 1400);
+        if (timer.current !== null) clearTimeout(timer.current);
+        timer.current = setTimeout(() => setCopied(false), COPIED_MS);
       })
       .catch(() => {});
   }
@@ -89,12 +99,17 @@ function CopyRow({ value, children }: { value: string; children: React.ReactNode
     <button
       type="button"
       onClick={copy}
-      className="group border-line hover:bg-card-subtle flex w-full items-center gap-3 border-b py-2.5 text-left transition-colors"
+      className="group border-line hover:bg-card-subtle active:bg-inner flex w-full items-center gap-3 border-b py-2.5 text-left transition-colors"
       aria-label={`Copy ${value}`}
     >
       {children}
-      <span className="text-mute group-hover:text-secondary shrink-0 transition-colors">
-        {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+      <span className="text-mute group-hover:text-secondary relative h-3.5 w-3.5 shrink-0 transition-colors">
+        <Copy
+          className={`absolute inset-0 h-3.5 w-3.5 transition-opacity duration-200 ${copied ? "opacity-0" : "opacity-100"}`}
+        />
+        <Check
+          className={`text-ok absolute inset-0 h-3.5 w-3.5 transition-opacity duration-200 ${copied ? "opacity-100" : "opacity-0"}`}
+        />
       </span>
     </button>
   );
@@ -187,7 +202,7 @@ export default function BrandPage() {
             <div className="border-line bg-canvas flex items-center justify-center rounded-2xl border px-6 py-10">
               <div className="flex items-center gap-5">
                 <Mark className="text-ink h-auto w-16" />
-                <span className="text-ink font-mono text-xl font-bold tracking-[0.34em]">
+                <span className="text-ink -me-[0.34em] font-mono text-xl font-bold tracking-[0.34em]">
                   AIRHOP
                 </span>
               </div>

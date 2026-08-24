@@ -1,23 +1,20 @@
 /**
  * @jest-environment node
  */
-// Structural integrity of every translation catalog.
+// Structural integrity of every translation catalog: what a type cannot cover.
+// `tsc` already guarantees key completeness, so none of this re-checks that.
 //
-// Key completeness is guaranteed by the type system, so these tests do not
-// re-check what `tsc` checks. They cover what a type cannot:
+//   Emptiness     `""` type-checks and renders as a missing label.
+//   Plural shape  Every category but `other` is optional on `PluralForms`, so a
+//                 catalog missing the forms its language needs compiles.
+//   Placeholders  One nothing fills renders as literal "{peer}" on a lock screen.
+//   Frozen text   Some strings cross the wire, so translating them breaks
+//                 interop, not layout.
+//   Punctuation   A string that stops mid-thought reads as truncated and runs
+//                 two halves together on a screen reader.
 //
-//   1. Emptiness. `""` type-checks and renders as a missing label.
-//   2. Plural shape. `PluralForms` makes every category but `other` optional,
-//      so a catalog missing the forms its language needs still compiles.
-//   3. Placeholder sanity. A placeholder nothing fills renders as literal
-//      "{peer}" on someone's lock screen.
-//   4. The do-not-translate list. Some strings cross the wire or derive an
-//      identity, and translating them breaks interop rather than the layout.
-//   5. Terminal punctuation. A string that stops mid-thought reads as truncated
-//      and runs the two halves together on a screen reader.
-//
-// Written against the registry rather than against English, so every rule
-// applies to every catalog automatically.
+// Written against the registry, not English, so every rule reaches every
+// catalog automatically.
 
 import { CATALOGS } from "../index";
 import type { LanguageCode } from "../languages";
@@ -51,8 +48,8 @@ describe.each(CODES)("%s", (code) => {
   it("uses the same placeholders as English in every string", () => {
     // The interpolation contract: `{amount}` in English must survive into every
     // translation, in any position, or the value silently never appears. Order
-    // is not checked on purpose: reordering is exactly what translators need to
-    // be free to do, and why placeholders are named rather than positional.
+    // goes unchecked: reordering is exactly what translators need to
+    // be free to do, and why placeholders are named, never positional.
     const mismatched: string[] = [];
     for (const [key, source] of Object.entries(en.strings)) {
       const expected = placeholders(source);
@@ -95,40 +92,27 @@ describe.each(CODES)("%s", (code) => {
 });
 
 describe("terminal punctuation", () => {
-  // The house rule:
+  // House rule: titles, buttons, labels and one-fragment subtitles take no full
+  // stop; modal bodies, empty states and anything running to two or more
+  // sentences take one on every sentence, the last included.
   //
-  //   Titles, buttons and labels take no full stop. A row subtitle that is one
-  //   fragment takes none either. Modal bodies, empty states, and any string
-  //   that runs to two or more sentences take one on every sentence, including
-  //   the last.
+  // Only that last clause is checked. Whether a lone string is a fragment or a
+  // sentence is a judgment call, so the rule is one-directional: having started
+  // a second sentence, finish it. Ellipsis and a question mark both count.
   //
-  // Only the last clause is checked, deliberately. Whether a lone string is a
-  // fragment or a sentence is a judgment call, and a test that guessed would
-  // fire on every modal body and empty state, which are single sentences that
-  // correctly end in a stop. So this is one-directional: having started a
-  // second sentence, finish it.
-  //
-  // Ellipsis counts as terminal ("Sending…"), and so does the question mark
-  // every confirm title ends with.
-  //
-  // Sentence-final punctuation is per script: ؟ in Arabic, ۔ in Urdu, the danda
-  // । in Devanagari, ። in Amharic, ။ in Burmese, and 。！？ in CJK.
-  //
-  // Two shapes, because the scripts differ in whether a space follows. A
-  // space-delimited script needs the whitespace to tell "one sentence, then
-  // another" apart from "1.5" and "e.g."; CJK writes no space, and its
-  // terminators never appear inside a number or an abbreviation.
-  //
-  // Thai matches neither on purpose. It has no sentence-final punctuation, so a
-  // Thai catalog is never held to a rule its writing system does not have.
+  // Two shapes, because scripts differ on whether a space follows a terminator.
+  // A space-delimited one needs the whitespace to tell a sentence break from
+  // "1.5" and "e.g."; CJK writes no space and its terminators never appear
+  // inside a number. Thai is exempt: it has no sentence-final punctuation at
+  // all, and the stops it does write are abbreviation markers.
   const SENTENCE_BREAK = /[.!?؟۔।።။]["'”»)]?\s|[。！？]/u;
-  // A trailing placeholder is terminated by whatever fills it: "Private channel
-  // {name}. {reach}" ends in a stop once `reach` is substituted. Only the final
-  // position counts; a placeholder mid-string still needs real punctuation
-  // after it.
+  // A trailing placeholder is terminated by whatever fills it. Only the final
+  // position counts; one mid-string still needs real punctuation after it.
   const TERMINATED = /([.!?…؟۔।።။。！？]["'”»)]?|\{\w+\})$/u;
 
-  const PROSE = CODES.filter((code) => code !== PSEUDO_LANGUAGE);
+  const PROSE = CODES.filter(
+    (code) => code !== PSEUDO_LANGUAGE && code !== "th",
+  );
 
   it.each(PROSE)("%s finishes every sentence it starts", (code) => {
     const unfinished: string[] = [];
@@ -181,32 +165,20 @@ describe("plural categories", () => {
 });
 
 describe("do not translate", () => {
-  // These strings are not copy. They cross the wire, or an identity is derived
-  // from them, so a translated variant is an interop bug rather than a cosmetic
-  // one. See docs/spec/ARCHITECTURE.md.
+  // These strings are not copy: they cross the wire, or an identity derives from
+  // them, so a translated variant is an interop bug. bitchat/ios matches an
+  // incoming emote by its English substring, and is itself fully localised while
+  // still keeping these as English literals. See docs/spec/ARCHITECTURE.md.
   //
-  //   - The transmitted /hug and /slap text. bitchat/ios detects an incoming
-  //     emote by matching the English substrings ("hugs <nick>", "slaps <nick>
-  //     around") in ChatPublicConversationCoordinator. Localising what is sent
-  //     means bitchat stops recognising it. Note bitchat is itself fully
-  //     localised and still keeps these as English literals, for this reason.
-  //   - Slash command tokens. The hint that describes a command is translated;
-  //     the token the parser matches is not.
-  //   - The public mesh channel name.
+  // Two rules, and the difference matters.
   //
-  // Two different rules, and the difference matters.
-  //
-  // ABSENT: the emote verbs Airhop transmits. These must never reach the
-  // catalog at all, because the moment one is translatable somebody will
-  // translate it, and bitchat stops recognising Airhop's emotes.
+  // ABSENT: never reaches the catalog at all, because the moment one is
+  // translatable somebody translates it.
   const MUST_BE_ABSENT = ["hugs", "slaps", "around a bit with a large trout"];
 
-  // VERBATIM: protocol identifiers that legitimately appear inside translated
-  // prose ("Link this area's public #bluetooth chat with..."). They are not
-  // forbidden, they are frozen: wherever English uses one, every translation
-  // must carry the same token through untouched. A translator who localises
-  // "#bluetooth" or "/hug" produces a sentence that names a channel or command
-  // that does not exist.
+  // VERBATIM: protocol identifiers that legitimately sit inside translated prose.
+  // Not forbidden, frozen. Localising "#bluetooth" or "/hug" produces a sentence
+  // naming a channel or command that does not exist.
   const MUST_BE_VERBATIM = [
     "#bluetooth",
     "/hug",
@@ -217,14 +189,10 @@ describe("do not translate", () => {
     "npub1",
   ];
 
-  // SURVIVES: proper nouns and cryptosystem names. Weaker than VERBATIM on
-  // purpose. "Lightning" and "Tor" are protocol names that are also ordinary
-  // nouns in most languages on the list, so they get translated unless a rule
-  // stops it.
-  //
-  // Presence, not count: a language that drops a subject or repeats it for
-  // agreement will legitimately differ from English's count. What is never
-  // legitimate is the noun disappearing.
+  // SURVIVES: proper nouns, and weaker than VERBATIM. "Lightning" and
+  // "Tor" are ordinary words in most of these languages and get translated
+  // unless a rule stops it. Presence, not count, since a language may drop or
+  // repeat a noun for agreement. The noun disappearing never is legitimate.
   const MUST_SURVIVE = [
     "Airhop",
     "bitchat",
@@ -285,21 +253,16 @@ describe("do not translate", () => {
 
 // The rules below apply to English alone.
 //
-// Every other locale sets its own typography and spelling. German quotes with
-// „ and “, French with « » around no-break spaces, Japanese with 「 」. A rule
-// that forced English's conventions onto them would be wrong in most of the
-// catalog, so these are scoped to the source language, where they exist to stop
-// 29 translators copying an inconsistency out of the file they work from.
+// Every other locale sets its own typography and spelling: German quotes with „
+// and “, French with « », Japanese with 「 」. Forcing English's conventions onto
+// them would be wrong in most of the catalog, so these are scoped to the source
+// language, where they stop a translator copying an inconsistency out of the
+// file they work from.
 describe("English source conventions", () => {
   it("uses typographic apostrophes and quotes, never straight ones", () => {
     // Apple's HIG, the Microsoft Style Guide and Chicago all specify the
-    // typographic forms for interface prose, and the catalog was already
-    // written that way in its most-read strings. It was not written that way
-    // everywhere: "Couldn’t create your keys" and "Couldn't start the camera"
-    // both shipped, which is the same word spelled two ways one screen apart.
-    //
-    // Ellipsis is not checked here because it never drifted: the catalog is
-    // already 29 uses of … and zero of three dots.
+    // typographic forms for interface prose. Ellipsis is not checked because it
+    // never drifted; the apostrophe did, one screen apart.
     const offenders: string[] = [];
     for (const [key, value] of Object.entries(en.strings)) {
       if (value.includes("'")) offenders.push(`${key}: straight apostrophe`);
@@ -309,13 +272,10 @@ describe("English source conventions", () => {
   });
 
   it("spells in US English", () => {
-    // US spelling is the house standard, so this is the source language's
-    // dictionary rather than a preference. Scoped tightly to words that can
-    // plausibly appear in this app's copy: a full British-to-American list
-    // would be mostly dead weight.
-    //
-    // Note "cancellation" keeps its double L in US English and is deliberately
-    // absent below, so only the verb forms are caught.
+    // The source language's dictionary, not a preference, scoped to words
+    // that can plausibly appear in this app's copy. "cancellation" keeps its
+    // double L in US English and is left out, so only the verb forms
+    // are caught.
     const BRITISH: Record<string, string> = {
       cancelled: "canceled",
       cancelling: "canceling",
@@ -447,4 +407,23 @@ describe("the pseudolocale bounds every real translation", () => {
     }
     expect(short).toEqual([]);
   });
+});
+
+// `latinLocale()` pins every formatted number to `latn`, so a catalog writing
+// its own numerals in a native script disagrees with the ones rendered beside
+// it: an undo-send picker listing "۲ ثانیه" above a rendered "5 ثانیه".
+describe("numerals", () => {
+  const NON_LATIN_DIGIT =
+    /[\u0660-\u0669\u06F0-\u06F9\u0966-\u096F\u09E6-\u09EF\u0BE6-\u0BEF\u0E50-\u0E59\u1040-\u1049\u1369-\u1371\uFF10-\uFF19]/u;
+
+  for (const code of CODES) {
+    it(`${code} writes numbers in the digits the app renders`, () => {
+      const stray: string[] = [];
+      for (const [key, value] of Object.entries(catalog(code).strings)) {
+        const found = NON_LATIN_DIGIT.exec(value);
+        if (found !== null) stray.push(`${key}: "${found[0]}"`);
+      }
+      expect(stray).toEqual([]);
+    });
+  }
 });

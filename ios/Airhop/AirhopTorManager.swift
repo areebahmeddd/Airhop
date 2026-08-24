@@ -158,8 +158,16 @@ public final class AirhopTorManager: ObservableObject {
         return await MainActor.run(body: { self.isReady })
     }
 
-    /// Called when the app enters the background. Marks as not ready so that
-    /// foreground recovery triggers a full restart.
+    /// Called when the app enters the background.
+    ///
+    /// Clears readiness so the resume path restarts rather than trusting a
+    /// latched flag. The bootstrap poll loop stops at 100% and the SOCKS probe
+    /// never runs again, so `isReady` stays true until something clears it -
+    /// and iOS suspends the process, during which guard connections die and the
+    /// network often changes. Without this a resume reports Tor ready over dead
+    /// circuits, and ensureRunningOnForeground() declines to restart for the
+    /// same reason, leaving the internet half failing closed with no trigger to
+    /// recover it.
     public func goDormantOnBackground() {
         Task { @MainActor in
             self.isReady = false
@@ -184,13 +192,37 @@ public final class AirhopTorManager: ObservableObject {
                 await MainActor.run { self.restarting = false }
                 return
             }
+            // Published before the restart rather than inside it. A resume runs
+            // this and the JS status re-check on the same tick, and between the
+            // claim above and restartArti()'s first hop the status would read
+            // neither ready nor starting, which JS reports as a stalled
+            // bootstrap. The decision to restart has already been made here, so
+            // saying so is both accurate and what stops the banner flickering
+            // through "Tor could not connect" on every foreground.
+            await MainActor.run { self.isStarting = true }
             await self.restartArti()
             await MainActor.run { self.restarting = false }
         }
     }
 
     /// Fully shuts down Arti. Safe to call from any context.
+    ///
+    /// Revokes auto-start consent, because a complete shutdown is only ever
+    /// reached by the user switching Tor off or by a panic wipe, and both are
+    /// withdrawals. Leaving the flag set keeps the path monitor's
+    /// ensureRunningOnForeground() eligible, so the next Wi-Fi to cellular
+    /// handover restarts Arti behind someone who turned it off - burning
+    /// battery and repopulating the data directory (cached consensus, chosen
+    /// guards) that wipeState() exists to destroy. `startTor` re-grants it.
     public func shutdownCompletely() {
+        allowAutoStart = false
+#if canImport(Network)
+        // The monitor has nothing left to recover, and its dispatch queue lives
+        // for the process otherwise. startIfNeeded() reinstalls it on the next
+        // start, so this costs nothing to reverse.
+        pathMonitor?.cancel()
+        pathMonitor = nil
+#endif
         startPendingAfterShutdown = false
         shutdownsInFlight += 1
         Task.detached { [weak self] in

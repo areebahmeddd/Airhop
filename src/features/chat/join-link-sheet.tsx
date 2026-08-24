@@ -17,6 +17,7 @@ import { applyAirhopLink } from "@services/link-router";
 import { showAlert } from "@store/alert-store";
 import BottomSheet from "@ui/components/bottom-sheet";
 import {
+  BUTTON_HEIGHT,
   FontFamily,
   FontSize,
   FontWeight,
@@ -316,7 +317,7 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
     },
     cancel: {
       flex: 1,
-      minHeight: 50,
+      minHeight: BUTTON_HEIGHT,
       backgroundColor: Colors.surfaceRaised,
       borderRadius: Radius.full,
       alignItems: "center",
@@ -329,7 +330,7 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
     },
     confirm: {
       flex: 1,
-      minHeight: 50,
+      minHeight: BUTTON_HEIGHT,
       backgroundColor: Colors.accent,
       borderRadius: Radius.full,
       alignItems: "center",

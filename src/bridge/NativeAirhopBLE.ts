@@ -111,9 +111,14 @@ export interface Spec extends TurboModule {
     vpnActive: boolean;
   }>;
 
-  // Watch the VPN transport while Tor is on, emitting 'onVpnLost' when it goes.
-  // getTorAvailability only answers when asked and is called on foreground alone,
-  // so without this the app keeps claiming Tor over clear-net traffic.
+  // Watch the VPN transport while Tor is on: 'onVpnLost' when it goes,
+  // 'onVpnAvailable' when one comes up. getTorAvailability only answers when
+  // asked, and app foreground is the only other caller, so these are what keep
+  // a Tor claim off clear-net traffic and what report Orbot coming back.
+  //
+  // Bound to the Tor PREFERENCE, not the claim: the window in which a VPN moving
+  // matters spans the blocked state, where the claim is already false. Binding
+  // to the claim tears the watch down at the drop it exists to recover from.
   //
   // Android only. iOS resolves immediately and emits nothing, since Arti is
   // in-process and reports its own state.
@@ -136,6 +141,7 @@ export interface Spec extends TurboModule {
 //   AirhopBLE.powerStateChanged { batteryPercent, charging }  Android
 //   AirhopBLE.meshStopRequested {}                    Android
 //   onVpnLost                   {}                    Android
+//   onVpnAvailable              {}                    Android
 //
 // Four of them carry a constraint worth stating:
 //
@@ -163,14 +169,32 @@ let emitter: NativeEventEmitter | null = null;
 
 // Returns null on iOS and wherever the module is absent, so callers need no
 // platform branch.
-export function subscribeVpnLost(
+function subscribeVpnEdge(
+  event: "onVpnLost" | "onVpnAvailable",
   listener: () => void,
 ): EventSubscription | null {
   const native = NativeModules.AirhopBLE as
     ConstructorParameters<typeof NativeEventEmitter>[0] | undefined;
   if (native == null) return null;
   emitter ??= new NativeEventEmitter(native);
-  return emitter.addListener("onVpnLost", listener);
+  return emitter.addListener(event, listener);
+}
+
+// The VPN carrying Tor went away. The safety edge.
+export function subscribeVpnLost(
+  listener: () => void,
+): EventSubscription | null {
+  return subscribeVpnEdge("onVpnLost", listener);
+}
+
+// A VPN transport came up. The recovery edge, and evidence of nothing on its
+// own: any VPN raises it, so the listener re-probes rather than concluding
+// Orbot is back. A native binary that never emits it degrades to the foreground
+// re-check.
+export function subscribeVpnAvailable(
+  listener: () => void,
+): EventSubscription | null {
+  return subscribeVpnEdge("onVpnAvailable", listener);
 }
 
 export default TurboModuleRegistry.getEnforcing<Spec>("AirhopBLE");

@@ -1,0 +1,10 @@
+/* Keys mirror ios/Airhop/Info.plist, the English copy. Guarded by npm run i18n:native. */
+
+"NSBluetoothAlwaysUsageDescription" = "Airhop gebruikt Bluetooth om met apparaten dichtbij op de mesh te communiceren.";
+"NSBluetoothPeripheralUsageDescription" = "Airhop gebruikt Bluetooth om je aanwezigheid kenbaar te maken aan peers dichtbij.";
+"NSLocalNetworkUsageDescription" = "Airhop gebruikt het lokale netwerk om bij grote overdrachten (video, grote bestanden) rechtstreeks verbinding te maken met apparaten dichtbij.";
+"NSCameraUsageDescription" = "Airhop gebruikt de camera om de QR-code van een contact te scannen en om foto's en video's te maken die je met peers dichtbij deelt.";
+"NSMicrophoneUsageDescription" = "Airhop gebruikt de microfoon om spraakberichten op te nemen en om live spraak naar peers dichtbij te dragen.";
+"NSPhotoLibraryUsageDescription" = "Airhop opent je fotogalerij om afbeeldingen en video's over de mesh te delen.";
+"NSPhotoLibraryAddUsageDescription" = "Airhop bewaart foto's en video's in je fotogalerij wanneer je iets wilt bewaren en wanneer je je QR-code downloadt.";
+"NSLocationWhenInUseUsageDescription" = "Airhop gebruikt je globale locatie om je in kanalen van gebieden dichtbij te plaatsen (huizenblok, stad, regio). Je exacte positie verlaat je apparaat nooit.";

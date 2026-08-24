@@ -1,19 +1,18 @@
 // CLDR plural category selection.
 //
 // Hermes has no `Intl.PluralRules` on either platform. The usual answer is
-// `@formatjs/intl-pluralrules`, and this is deliberately not that: across the
-// thirty languages there are exactly nine distinct rule shapes, so nine
-// functions replace a dependency, thirty locale-data modules, a patched global
-// `Intl`, and the Android startup cost FormatJS documents for its own detection
-// path.
+// `@formatjs/intl-pluralrules`, and this is not that: the shipped
+// languages reduce to nine distinct rule shapes, so nine functions replace a
+// dependency, a locale-data module per language, a patched global `Intl`, and
+// the Android startup cost FormatJS documents for its own detection path.
 //
 // Node ships full ICU, so `__tests__/plurals.test.ts` checks every rule below
 // against `Intl.PluralRules` itself.
 //
-// Integers only. Every count in this app is a countable thing, and CLDR's
-// fractional rules depend on the number of visible decimal places, which is a
-// property of the formatting rather than of the value. A fraction returns
-// `other`, the category CLDR guarantees in every language.
+// Integers only. CLDR's fractional rules key off the number of visible decimal
+// places, which is a property of the formatting rather than the value, and every
+// count here is a countable thing. A fraction returns `other`, which CLDR
+// guarantees in every language.
 
 import type { LanguageCode } from "./languages";
 
@@ -23,45 +22,47 @@ export type PluralCategory = "zero" | "one" | "two" | "few" | "many" | "other";
 type Rule = (i: number) => PluralCategory;
 
 // ---- The nine shapes ----
+//
+// Which language takes which is the table at the bottom, not these comments, so
+// adding a language never edits one.
 
-// Chinese, Japanese, Korean, Thai, Vietnamese, Indonesian, Malay, Burmese.
-// These languages do not inflect for number at all: one boat and five boats are
-// the same word, and the count in front of it is the only thing that changes.
+// No inflection for number at all: one boat and five boats are the same word,
+// and the count in front of it is the only thing that changes.
 const otherOnly: Rule = () => "other";
 
-// English, Dutch, German, Nepali, Swahili, Swedish, Tamil, Turkish, Urdu.
 // Singular is exactly one.
 const oneIsOne: Rule = (i) => (i === 1 ? "one" : "other");
 
-// Amharic, Hindi, Persian. Zero takes the singular too, which is the difference
-// that makes "0 messages" wrong in Hindi and right in English.
+// Zero takes the singular too, the difference that makes "0 messages" wrong in
+// Hindi and right in English.
 const oneIsZeroOrOne: Rule = (i) => (i === 0 || i === 1 ? "one" : "other");
 
-// Filipino. The rule is about the last digit rather than the magnitude: 4, 6
-// and 9 take the plural and everything else does not, so 24 and 25 differ.
+// Filipino: the last digit decides rather than the magnitude, so 4, 6 and 9
+// take the plural and 24 and 25 differ.
 const filipino: Rule = (i) => {
   if (i === 1 || i === 2 || i === 3) return "one";
   const last = i % 10;
   return last === 4 || last === 6 || last === 9 ? "other" : "one";
 };
 
-// French, Brazilian Portuguese. Zero is singular, and `many` exists only for
-// round millions, where the language says "million" rather than the digits.
+// Zero is singular, and `many` exists only for round millions, where the
+// language says "million" rather than the digits.
 const frenchLike: Rule = (i) => {
   if (i === 0 || i === 1) return "one";
   if (i !== 0 && i % 1_000_000 === 0) return "many";
   return "other";
 };
 
-// Italian, Spanish. As above but zero is plural.
+// As above but zero is plural, the single point where pt-PT parts company with
+// pt-BR.
 const spanishLike: Rule = (i) => {
   if (i === 1) return "one";
   if (i !== 0 && i % 1_000_000 === 0) return "many";
   return "other";
 };
 
-// Polish. Four categories, chosen by the last digit with a hole punched in it
-// for the teens, which behave as `many` regardless of how they end.
+// Polish: four categories chosen by the last digit, with a hole punched in it
+// for the teens, which are `many` regardless of how they end.
 const polish: Rule = (i) => {
   if (i === 1) return "one";
   const last = i % 10;
@@ -70,8 +71,8 @@ const polish: Rule = (i) => {
   return "many";
 };
 
-// Russian, Ukrainian. Same shape as Polish, except 21, 31, 101 are singular:
-// the last digit decides even for large numbers, so "21 message" is correct.
+// As Polish, except 21, 31 and 101 are singular: the last digit decides even
+// for large numbers, so "21 message" is correct.
 const russianLike: Rule = (i) => {
   const last = i % 10;
   const teens = i % 100;
@@ -80,8 +81,8 @@ const russianLike: Rule = (i) => {
   return "many";
 };
 
-// Arabic. All six categories, and the only language here that uses `zero` and
-// `two` as grammar rather than as a special case someone wrote by hand.
+// All six categories, and the only shape that uses `zero` and `two` as grammar
+// rather than as a hand-written special case.
 const arabic: Rule = (i) => {
   if (i === 0) return "zero";
   if (i === 1) return "one";
@@ -94,15 +95,13 @@ const arabic: Rule = (i) => {
 
 // ---- The table ----
 //
-// Every language Airhop plans to ship, whether or not its catalog exists yet.
-// This is a fact about the language rather than about the translation, so it
-// does not wait for one, and a catalog landing never has to touch this file.
-//
-// `__tests__/plurals.test.ts` asserts that every code in LANGUAGES appears here,
-// so a language cannot reach a user without its rule.
+// Every language Airhop plans to ship, catalog or not: the rule is a fact about
+// the language, so a catalog landing never touches this file.
+// `plurals.test.ts` asserts every code in LANGUAGES appears here.
 const RULES = {
   am: oneIsZeroOrOne,
   ar: arabic,
+  bn: oneIsZeroOrOne,
   de: oneIsOne,
   en: oneIsOne,
   es: spanishLike,
@@ -113,13 +112,17 @@ const RULES = {
   id: otherOnly,
   it: spanishLike,
   ja: otherOnly,
+  ka: oneIsOne,
   ko: otherOnly,
+  mg: oneIsZeroOrOne,
   ms: otherOnly,
   my: otherOnly,
   ne: oneIsOne,
   nl: oneIsOne,
   pl: polish,
+  pa: oneIsZeroOrOne,
   "pt-BR": frenchLike,
+  "pt-PT": spanishLike,
   ru: russianLike,
   sv: oneIsOne,
   sw: oneIsOne,
@@ -135,12 +138,13 @@ const RULES = {
   "qps-ploc": oneIsOne,
 } satisfies Record<string, Rule>;
 
-// The categories a language actually uses, derived rather than declared so the
+// The categories a language actually uses, derived, not declared, so the
 // two can never disagree. `catalog.test.ts` checks each locale's plural forms
 // against this.
 export const PLURAL_CATEGORIES: Record<string, PluralCategory[]> = {
   am: ["one", "other"],
   ar: ["zero", "one", "two", "few", "many", "other"],
+  bn: ["one", "other"],
   de: ["one", "other"],
   en: ["one", "other"],
   es: ["one", "many", "other"],
@@ -151,13 +155,17 @@ export const PLURAL_CATEGORIES: Record<string, PluralCategory[]> = {
   id: ["other"],
   it: ["one", "many", "other"],
   ja: ["other"],
+  ka: ["one", "other"],
   ko: ["other"],
+  mg: ["one", "other"],
   ms: ["other"],
   my: ["other"],
   ne: ["one", "other"],
   nl: ["one", "other"],
   pl: ["one", "few", "many", "other"],
+  pa: ["one", "other"],
   "pt-BR": ["one", "many", "other"],
+  "pt-PT": ["one", "many", "other"],
   ru: ["one", "few", "many", "other"],
   sv: ["one", "other"],
   sw: ["one", "other"],
@@ -182,7 +190,7 @@ export function selectPlural(
 ): PluralCategory {
   if (!Number.isInteger(count)) return "other";
   const rule: Rule | undefined = RULES[language];
-  // Unreachable while the test above holds. `other` rather than a throw
+  // Unreachable while the test above holds. `other` instead of a throw
   // because a wrong plural is a cosmetic bug and a crash in the middle of a
   // message list is not.
   if (rule === undefined) return "other";

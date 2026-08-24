@@ -7,6 +7,12 @@
 // the recipient later. Strict quotas prevent the device from being used as a
 // public mailbag.
 //
+// This module owns the envelope and the bag it sits in: wire format, routing
+// tag, trust tiers, pool bounds, spray budget. Sealing and packet building stay
+// in mesh-service, which seals ONCE per message and addresses the same bytes to
+// every courier. That is what lets `deposit` recognise the copies as one
+// envelope, so nothing here may re-seal.
+//
 // Envelope wire format (COURIER_ENV packet payload):
 //   [16 bytes: recipient tag]  HMAC-SHA256(recipientNoisePub, dayEpoch)[0:16]
 //   [8  bytes: expiry]         Unix milliseconds as u64 BE
@@ -16,13 +22,8 @@
 import { hmac } from "@noble/hashes/hmac.js";
 import { sha256 } from "@noble/hashes/sha2.js";
 import { bytesToHex, hexToBytes } from "@noble/hashes/utils.js";
-import { noiseXOpen, noiseXSeal } from "../../crypto/noise-x";
-import {
-  Flags,
-  PacketType,
-  signPacket,
-  type Packet,
-} from "../wire/packet-codec";
+import { getStorage } from "@store/mmkv";
+import { base64ToBytes, bytesToBase64 } from "../../encoding/base64";
 
 // Constants per PROTOCOLS.md section 6. Every value here matches bitchat's
 // CourierStore.Limits and CourierEnvelope, because a carrier applies its own
@@ -43,13 +44,15 @@ const MAX_ENVELOPE_BYTES = 16 * 1024; // 16 KiB plaintext cap
 const FAVORITE_QUOTA = 5;
 const VERIFIED_QUOTA = 2;
 
-// Spray-and-wait: initial copy budget per envelope.
-const INITIAL_COPIES = 4;
+// Spray-and-wait: initial copy budget per envelope, matching bitchat's
+// TransportConfig.courierInitialCopies. Exported so the sender stamps the same
+// number every carrier clamps against.
+export const COURIER_INITIAL_COPIES = 4;
 
 // Hard ceiling on a decoded spray budget, matching bitchat's
-// CourierEnvelope.maxCopies. An envelope is unauthenticated input and `copies`
-// decides how many times a carrier re-emits it, so an unclamped byte let a
-// hostile sender claim 255 and turn the courier network into an amplifier.
+// CourierEnvelope.maxCopies. `copies` is unauthenticated input deciding how
+// often a carrier re-emits, so an unclamped byte makes every carrier an
+// amplifier for whoever claims 255.
 const MAX_COPIES = 8;
 
 // ---- Recipient tag ----
@@ -95,6 +98,14 @@ const ENV_TLV_COPIES = 0x04;
 // v1 decoders skip it as unknown and still carry v2 envelopes opaquely.
 const ENV_TLV_PREKEY_ID = 0x05;
 const TAG_LENGTH = 16;
+
+// Not constant-time: every caller compares public routing material (recipient
+// tag, ciphertext, announced Noise public key), never a secret.
+function sameBytes(a: Uint8Array, b: Uint8Array): boolean {
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false;
+  return true;
+}
 
 function appendTlv(type: number, value: Uint8Array, into: number[]): void {
   into.push(type);
@@ -217,10 +228,100 @@ interface StoredEnvelope {
   sprayedTo: Set<string>;
 }
 
+// The on-disk shape. Separate from StoredEnvelope because JSON carries neither
+// a Uint8Array nor a Set, and both round-trip to `{}` without erroring.
+interface PersistedEnvelope {
+  tag: string; // hex
+  exp: number;
+  ct: string; // base64
+  dep: string; // hex
+  at: number;
+  tier: CourierTier;
+  copies: number;
+  pk?: number;
+  to: string[]; // sprayedTo, hex
+}
+
 // ---- CourierStore ----
 
 export class CourierStore {
-  private readonly envelopes: StoredEnvelope[] = [];
+  private envelopes: StoredEnvelope[] = [];
+  private readonly storage;
+  private readonly key = "envelopes";
+
+  // Persisted, because carriage spans hours and a React Native process does
+  // not: backgrounding, an OEM battery manager and a swipe away all end it, and
+  // an in-memory bag loses every envelope this device promised to carry while
+  // the depositor's outbox still believes a courier holds it. bitchat persists
+  // for the same reason (CourierStore.persistLocked, quotas re-applied on load).
+  //
+  // MMKV rather than the keychain: an envelope is someone else's ciphertext,
+  // sealed to a key this device does not hold. Wiped on panic all the same (see
+  // MMKV_STORE_IDS), since holding a neighbour's mail is evidence about who was
+  // standing near whom.
+  constructor(mmkvId = "courier-store") {
+    this.storage = getStorage(mmkvId);
+    this.envelopes = this.load();
+  }
+
+  private load(): StoredEnvelope[] {
+    const raw = this.storage.getString(this.key);
+    if (raw === undefined) return [];
+    let rows: PersistedEnvelope[];
+    try {
+      rows = JSON.parse(raw) as PersistedEnvelope[];
+    } catch {
+      return [];
+    }
+    if (!Array.isArray(rows)) return [];
+    const now = Date.now();
+    const restored: StoredEnvelope[] = [];
+    for (const r of rows) {
+      // Re-validated field by field: this is read after an upgrade, a crash
+      // mid-write or a restored partition, and a malformed row must cost one
+      // envelope rather than the whole bag.
+      try {
+        if (typeof r.exp !== "number" || r.exp < now) continue;
+        const tag = hexToBytes(r.tag);
+        const ct = base64ToBytes(r.ct);
+        const dep = hexToBytes(r.dep);
+        if (tag.length !== TAG_LENGTH) continue;
+        if (ct.length === 0 || ct.length > MAX_ENVELOPE_BYTES) continue;
+        restored.push({
+          recipientTag: tag,
+          expiryMs: r.exp,
+          ciphertext: ct,
+          depositorNoisePub: dep,
+          storedAt: typeof r.at === "number" ? r.at : now,
+          tier: r.tier === "favorite" ? "favorite" : "verified",
+          copies: Math.min(Math.max(r.copies | 0, 1), MAX_COPIES),
+          prekeyID: typeof r.pk === "number" ? r.pk : undefined,
+          sprayedTo: new Set(Array.isArray(r.to) ? r.to : []),
+        });
+      } catch {
+        // Unparseable hex or base64 in one row.
+      }
+      // The pool cap is re-applied on load as well as on deposit: a ceiling
+      // lowered in a later build must bind the mail already on disk.
+      if (restored.length >= POOL_SIZE) break;
+    }
+    return restored;
+  }
+
+  private persist(): void {
+    const rows: PersistedEnvelope[] = this.envelopes.map((e) => ({
+      tag: bytesToHex(e.recipientTag),
+      exp: e.expiryMs,
+      ct: bytesToBase64(e.ciphertext),
+      dep: bytesToHex(e.depositorNoisePub),
+      at: e.storedAt,
+      tier: e.tier,
+      copies: e.copies,
+      pk: e.prekeyID,
+      to: [...e.sprayedTo],
+    }));
+    this.storage.set(this.key, JSON.stringify(rows));
+  }
 
   // Deposit an incoming courier envelope. Returns true if accepted.
   deposit(
@@ -240,6 +341,29 @@ export class CourierStore {
     if (env.ciphertext.length > MAX_ENVELOPE_BYTES) return false;
 
     this.evictExpired();
+
+    // Identical ciphertext is the same envelope. Merging keeps spray-and-wait a
+    // splitting scheme rather than a minting one, and duplicates are guaranteed
+    // rather than exotic: a sender seals ONCE and hands the same bytes to every
+    // courier, so any two of them meeting already hold what the other offers.
+    // A second entry would carry its own budget and its own sprayedTo, letting
+    // one message fill the bag and the mesh-wide copy count grow per encounter.
+    //
+    // The budget rises only while nothing has been sprayed yet, as bitchat does
+    // it (CourierStore.deposit): before a spray a carry-only copy may arrive
+    // ahead of the original and the larger is right; after one, replaying the
+    // depositor's packet must never replenish what was spent, or the scheme
+    // never terminates.
+    const dupe = this.envelopes.find((e) =>
+      sameBytes(e.ciphertext, env.ciphertext),
+    );
+    if (dupe !== undefined) {
+      if (dupe.sprayedTo.size === 0 && env.copies > dupe.copies) {
+        dupe.copies = env.copies;
+        this.persist();
+      }
+      return true;
+    }
 
     // Check per-depositor quota by tier.
     const quota = tier === "favorite" ? FAVORITE_QUOTA : VERIFIED_QUOTA;
@@ -280,54 +404,82 @@ export class CourierStore {
       prekeyID: env.prekeyID,
       sprayedTo: new Set(),
     });
+    this.persist();
     return true;
   }
 
-  // Check if any carried envelopes match this recipient tag. Returns matching
-  // ciphertexts for delivery (and removes them from the store).
-  deliverMatching(tag: Uint8Array): SealedEnvelope[] {
-    const delivered: SealedEnvelope[] = [];
-    for (let i = this.envelopes.length - 1; i >= 0; i--) {
-      const e = this.envelopes[i];
-      if (e.recipientTag.every((b, j) => b === tag[j])) {
-        delivered.push({
-          recipientTag: e.recipientTag,
-          expiryMs: e.expiryMs,
-          copies: e.copies,
-          ciphertext: e.ciphertext,
-          prekeyID: e.prekeyID,
-        });
-        this.envelopes.splice(i, 1);
-      }
+  // Envelopes addressed to a peer just met. NON-DESTRUCTIVE: the caller hands
+  // each to the transport and calls `commitHandover` only once the write is
+  // accepted onto that peer's own link. Retiring before then loses the mail to
+  // a refused write, and refusals are ordinary here - this runs from
+  // `onAnnounce`, when the link is busiest with the announce, the prekey bundle
+  // and a gossip round, and a full GATT queue answers WRITE_BUSY. bitchat
+  // splits handover the same way.
+  //
+  // The copy carries a budget of 1: it is going to its destination, not to
+  // another carrier, so there is nothing left for it to spray.
+  offerHandover(tags: Uint8Array[]): SealedEnvelope[] {
+    this.evictExpired();
+    const offered: SealedEnvelope[] = [];
+    for (const e of this.envelopes) {
+      if (!tags.some((t) => sameBytes(e.recipientTag, t))) continue;
+      offered.push({
+        recipientTag: e.recipientTag,
+        expiryMs: e.expiryMs,
+        copies: 1,
+        ciphertext: e.ciphertext,
+        prekeyID: e.prekeyID,
+      });
     }
-    return delivered;
+    return offered;
   }
 
-  // Spray: when meeting a courier-eligible peer, hand half the copy budget.
-  // Returns packets to forward, decrementing the stored copies.
+  // Retire an envelope the transport confirmed. Re-finds the entry rather than
+  // trusting an index, so a concurrent handover or expiry sweep makes this a
+  // no-op instead of removing the wrong one.
+  commitHandover(ciphertext: Uint8Array): boolean {
+    const idx = this.envelopes.findIndex((e) =>
+      sameBytes(e.ciphertext, ciphertext),
+    );
+    if (idx < 0) return false;
+    this.envelopes.splice(idx, 1);
+    this.persist();
+    return true;
+  }
+
+  // Spray: when meeting another courier-eligible peer, offer half the copy
+  // budget. NON-DESTRUCTIVE, like offerHandover; `commitSpray` spends the budget
+  // once the write is accepted, so a refused one leaves this peer eligible to be
+  // sprayed again on the next encounter.
   //
-  // The peer key is what makes this once-per-peer rather than once-per-announce.
-  // It was ignored, and announces arrive continuously, so the budget was spent
-  // on the same neighbour over and over: an envelope decayed 4 -> 2 -> 1 within
-  // a few announce cycles without ever reaching a new carrier, which is the
-  // opposite of what spray-and-wait is for. bitchat tracks the same thing in
-  // `sprayedTo` for the same stated reason.
-  sprayTo(peerNoisePub: Uint8Array): SealedEnvelope[] {
-    const toSpray: SealedEnvelope[] = [];
+  // Three exclusions, and each is load-bearing:
+  //
+  //   copies < 2   nothing to halve; a carry-only copy is the end of its branch
+  //   sprayedTo    once per peer, not once per announce. Announces arrive
+  //                continuously, so without it a budget decays 4 -> 2 -> 1
+  //                against one neighbour without ever reaching a new carrier.
+  //                bitchat tracks the same set
+  //   depositor    they handed us this envelope, so they demonstrably hold it.
+  //                Spraying it back spends half a budget on a hop that delivers
+  //                nothing, and leaves a SENDER carrying their own outgoing mail
+  //                as third-party mail. bitchat excludes depositorNoiseKey too
+  //
+  // bitchat also excludes envelopes addressed TO this peer. Here that is
+  // structural instead: the caller runs offerHandover first, so anything for
+  // them has already been offered as a delivery rather than as a spray.
+  offerSpray(peerNoisePub: Uint8Array): SealedEnvelope[] {
+    this.evictExpired();
     const peerKey = bytesToHex(peerNoisePub);
+    const toSpray: SealedEnvelope[] = [];
 
     for (const e of this.envelopes) {
       if (e.copies < 2) continue;
-      // Already handed to this peer: they hold a copy, and giving them another
-      // costs budget that a peer who holds none should get.
       if (e.sprayedTo.has(peerKey)) continue;
-      e.sprayedTo.add(peerKey);
-      const half = Math.floor(e.copies / 2);
-      e.copies -= half;
+      if (sameBytes(e.depositorNoisePub, peerNoisePub)) continue;
       toSpray.push({
         recipientTag: e.recipientTag,
         expiryMs: e.expiryMs,
-        copies: half,
+        copies: Math.floor(e.copies / 2),
         ciphertext: e.ciphertext,
         prekeyID: e.prekeyID,
       });
@@ -335,70 +487,37 @@ export class CourierStore {
     return toSpray;
   }
 
-  // Seal a plaintext message into a courier envelope packet.
-  //
-  // Pass `prekey` to seal a forward-secret v2 envelope: the ciphertext targets
-  // the recipient's one-time prekey (Noise X) instead of their static key, and
-  // the envelope records the prekey id so the recipient opens it with the
-  // matching private prekey. The routing tag still derives from the recipient's
-  // STATIC key so delivery matching is unchanged.
-  static seal(
-    plaintext: Uint8Array,
-    senderStaticPrivKey: Uint8Array,
-    recipientNoisePubKey: Uint8Array,
-    senderPeerID: string,
-    signingPrivKey: Uint8Array,
-    // The courier this envelope is addressed to. Envelopes are directed:
-    // receivers refuse anything not addressed to them, so a packet built
-    // without one is a shape production never emits and would itself reject.
-    courierPeerID: string,
-    prekey?: { id: number; publicKey: Uint8Array },
-  ): Packet {
-    const sealTo = prekey?.publicKey ?? recipientNoisePubKey;
-    const ciphertext = noiseXSeal(senderStaticPrivKey, sealTo, plaintext);
-    const tag = computeRecipientTag(recipientNoisePubKey);
-    const expiryMs = Date.now() + ENVELOPE_TTL_MS;
-
-    const env: SealedEnvelope = {
-      recipientTag: tag,
-      expiryMs,
-      copies: INITIAL_COPIES,
-      ciphertext,
-      prekeyID: prekey?.id,
-    };
-
-    const senderIDBytes = new Uint8Array(8);
-    for (let i = 0; i < 8; i++) {
-      senderIDBytes[i] = parseInt(senderPeerID.slice(i * 2, i * 2 + 2), 16);
-    }
-
-    const packet: Packet = {
-      type: PacketType.COURIER_ENV,
-      ttl: 7,
-      flags: Flags.SIGNED,
-      senderID: senderIDBytes,
-      recipientID: hexToBytes(courierPeerID),
-      timestamp: Date.now(),
-      signature: new Uint8Array(64),
-      payload: encodeEnvelopePayload(env),
-    };
-    packet.signature = signPacket(packet, signingPrivKey);
-    return packet;
-  }
-
-  // Open a courier envelope addressed to us.
-  static open(
+  // Spend the budget that left the device, and mark the peer so the next
+  // encounter does not spend it again. Re-checks every precondition rather than
+  // trusting the offer, since the write is async and a concurrent spray or
+  // expiry sweep may have moved the entry: `copies > given` is what stops a
+  // stale commit driving the budget to zero.
+  commitSpray(
+    peerNoisePub: Uint8Array,
     ciphertext: Uint8Array,
-    recipientStaticPrivKey: Uint8Array,
-  ): { plaintext: Uint8Array; senderStaticPubKey: Uint8Array } {
-    return noiseXOpen(recipientStaticPrivKey, ciphertext);
+    given: number,
+  ): boolean {
+    const peerKey = bytesToHex(peerNoisePub);
+    const e = this.envelopes.find((x) => sameBytes(x.ciphertext, ciphertext));
+    if (e === undefined) return false;
+    if (e.sprayedTo.has(peerKey)) return false;
+    if (given < 1 || e.copies <= given) return false;
+    e.copies -= given;
+    e.sprayedTo.add(peerKey);
+    this.persist();
+    return true;
   }
 
   evictExpired(): void {
     const now = Date.now();
+    let removed = false;
     for (let i = this.envelopes.length - 1; i >= 0; i--) {
-      if (this.envelopes[i].expiryMs < now) this.envelopes.splice(i, 1);
+      if (this.envelopes[i].expiryMs < now) {
+        this.envelopes.splice(i, 1);
+        removed = true;
+      }
     }
+    if (removed) this.persist();
   }
 
   get size(): number {
@@ -407,6 +526,7 @@ export class CourierStore {
 
   reset(): void {
     this.envelopes.length = 0;
+    this.storage.remove(this.key);
   }
 
   // Returns index of best eviction candidate: prefer verified-tier, then oldest.

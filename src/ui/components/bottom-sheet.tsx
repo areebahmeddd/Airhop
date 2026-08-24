@@ -28,6 +28,8 @@
 /* eslint-disable react-hooks/immutability, react-hooks/refs */
 
 import { useT } from "@i18n";
+import { crossedThreshold } from "@platform/haptics";
+
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   Keyboard,
@@ -145,6 +147,10 @@ export default function BottomSheet({
   // expressed relative to it.
   const sheetHeight = useSharedValue(screenHeight);
   const dragStart = useSharedValue(0);
+  // Past the dismiss threshold, so the crossing is felt exactly once. A shared
+  // value because the gesture worklet reads and writes it on the UI thread.
+  const pastThreshold = useSharedValue(false);
+
   // Whether the open animation has already run for this presentation. The sheet
   // can't animate in until layout has told us how tall it is.
   const openedRef = useRef(false);
@@ -296,11 +302,20 @@ export default function BottomSheet({
     .failOffsetX([-24, 24])
     .onStart(() => {
       dragStart.value = translateY.value;
+      pastThreshold.value = false;
     })
     .onUpdate((e) => {
       // Clamped at 0: the sheet is anchored to the bottom, so pulling up has
       // nowhere to go and rubber-banding there would just look loose.
       translateY.value = Math.max(0, dragStart.value + e.translationY);
+      // The threshold is invisible: the scrim fades continuously and says
+      // nothing about where the line is, so the tick is what marks it.
+      const past =
+        translateY.value > sheetHeight.value * DISMISS_DISTANCE_RATIO;
+      if (past !== pastThreshold.value) {
+        pastThreshold.value = past;
+        if (past) scheduleOnRN(crossedThreshold);
+      }
     })
     .onEnd((e) => {
       const far = translateY.value > sheetHeight.value * DISMISS_DISTANCE_RATIO;

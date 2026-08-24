@@ -47,6 +47,7 @@ const mockRestartNostr = jest.fn();
 
 let torStatusListener: ((s: unknown) => void) | null = null;
 const mockRemoveListener = jest.fn();
+const mockSetAppForeground = jest.fn<Promise<void>, [boolean]>();
 
 jest.mock("react-native", () => ({
   Platform: { OS: "ios" },
@@ -76,6 +77,7 @@ jest.mock("@bridge/NativeAirhopTor", () => ({
     stopTor: () => mockStopTor(),
     getTorStatus: () => mockGetTorStatus(),
     awaitTorReady: (s: number) => mockAwaitTorReady(s),
+    setAppForeground: (f: boolean) => mockSetAppForeground(f),
     addListener: jest.fn(),
     removeListeners: jest.fn(),
   },
@@ -121,6 +123,7 @@ jest.mock("@store/settings-store", () => ({
 
 import {
   isTorRoutingActive,
+  notifyTorAppForeground,
   primeTorRoutingOnStartup,
   revalidateTorRouting,
   setTorRouting,
@@ -378,5 +381,63 @@ describe("bootstrap reporting on iOS", () => {
 
     expect(mockRemoveListener).toHaveBeenCalled();
     expect(mockSetTorBootstrap).toHaveBeenCalledWith("idle");
+  });
+});
+
+// iOS suspends the process in the background, so Arti's circuits and guard
+// connections do not survive it. Nothing in the manager notices: the bootstrap
+// poll stops at 100% and the SOCKS probe never runs again, so readiness stays
+// latched and both the status re-check and the restart path decline on the
+// strength of it. The two edges are what break that latch. bitchat drives the
+// same pair from its scene-phase handler.
+describe("app lifecycle on iOS", () => {
+  beforeEach(() => {
+    mockSetAppForeground.mockResolvedValue(undefined);
+  });
+
+  it("tells Arti about both edges", () => {
+    notifyTorAppForeground(false);
+    expect(mockSetAppForeground).toHaveBeenLastCalledWith(false);
+
+    notifyTorAppForeground(true);
+    expect(mockSetAppForeground).toHaveBeenLastCalledWith(true);
+  });
+
+  // Ungated on the preference: the native side revokes auto-start consent on an
+  // explicit stop, so the restart half is already a no-op for someone with Tor
+  // off, and gating here would only add a second source of truth.
+  it("reports the edge whether or not Tor is on", async () => {
+    await setTorRouting(false);
+    mockSetAppForeground.mockClear();
+
+    notifyTorAppForeground(true);
+
+    expect(mockSetAppForeground).toHaveBeenCalledWith(true);
+  });
+
+  // A resume runs this and revalidateTorRouting on the same tick. The native
+  // restart marks itself starting as it claims, so the re-check sees a forming
+  // circuit and leaves the claim alone rather than reporting a stall.
+  it("does not stand the claim down while a resume restart is forming", async () => {
+    mockAwaitTorReady.mockResolvedValue(true);
+    await setTorRouting(true);
+    expect(isTorRoutingActive()).toBe(true);
+
+    notifyTorAppForeground(true);
+    mockGetTorStatus.mockResolvedValue(
+      status({ isReady: false, isStarting: true }),
+    );
+    await revalidateTorRouting();
+
+    expect(isTorRoutingActive()).toBe(true);
+  });
+
+  // An older native binary without the method must not take the resume down
+  // with it.
+  it("survives a native module that does not implement it", () => {
+    mockSetAppForeground.mockRejectedValue(new Error("unrecognized selector"));
+    expect(() => {
+      notifyTorAppForeground(true);
+    }).not.toThrow();
   });
 });

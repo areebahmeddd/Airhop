@@ -9,7 +9,6 @@
 import { Feather } from "@expo/vector-icons";
 import { useT } from "@i18n";
 import { textAlignEnd } from "@i18n/layout";
-import { acknowledged } from "@platform/haptics";
 import { getMeshService } from "@services/mesh-service";
 import { useChatStore } from "@store/chat-store";
 import {
@@ -22,7 +21,10 @@ import { useMeshStateStore } from "@store/mesh-state-store";
 import { REACHABLE_TTL_MS, usePeerStore } from "@store/peer-store";
 import Avatar from "@ui/components/avatar";
 import BottomSheet from "@ui/components/bottom-sheet";
+import CopyGlyph from "@ui/components/copy-glyph";
+import { useCopy } from "@ui/hooks/use-copy";
 import {
+  BUTTON_HEIGHT,
   FontFamily,
   FontSize,
   FontWeight,
@@ -39,7 +41,6 @@ import {
   resolvePeerOwnName,
 } from "@utils/peer-display-name";
 import { isNostrId, NOSTR_ID_PREFIX, peerIDToUsername } from "@utils/username";
-import * as Clipboard from "expo-clipboard";
 import React, { useMemo, useState } from "react";
 import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import VerifyContactScreen from "../contacts/verify-contact-screen";
@@ -189,7 +190,7 @@ export default function ContactInfoSheet({
   // Selecting it by hand fights the sheet's pan-to-dismiss gesture, so copying
   // is a tap. The check replaces the glyph in place: no dialog on top of a
   // sheet for something this small.
-  const [copied, setCopied] = useState(false);
+  const { copied, copy } = useCopy();
   const idValue =
     peerID === null
       ? ""
@@ -198,11 +199,9 @@ export default function ContactInfoSheet({
         : peerID;
 
   function handleCopyID(): void {
-    void Clipboard.setStringAsync(idValue).catch(() => {});
-    acknowledged();
-    setCopied(true);
-    setTimeout(() => setCopied(false), 1500);
+    copy(idValue);
   }
+
   // The info card's rows, top to bottom. Relationship leads, then the
   // always-on encryption guarantee, then verification (the trust signal).
   const infoRows: {
@@ -371,10 +370,10 @@ export default function ContactInfoSheet({
                   </Text>
                   <View style={styles.keyBoxRow}>
                     <Text style={styles.keyBoxValue}>{idValue}</Text>
-                    <Feather
-                      name={copied ? "check" : "copy"}
+                    <CopyGlyph
+                      copied={copied}
                       size={15}
-                      color={copied ? Colors.online : Colors.textMuted}
+                      color={Colors.textMuted}
                     />
                   </View>
                   {/* Why this key is not a lasting handle. Said here, under the
@@ -412,10 +411,10 @@ export default function ContactInfoSheet({
                     <Text style={styles.identityMono} numberOfLines={1}>
                       {peerID}
                     </Text>
-                    <Feather
-                      name={copied ? "check" : "copy"}
+                    <CopyGlyph
+                      copied={copied}
                       size={13}
-                      color={copied ? Colors.online : Colors.textMuted}
+                      color={Colors.textMuted}
                     />
                   </Pressable>
                 </View>
@@ -702,7 +701,7 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       gap: Spacing.sm,
     },
     verifyBtn: {
-      minHeight: 50,
+      minHeight: BUTTON_HEIGHT,
       flexDirection: "row",
       alignItems: "center",
       justifyContent: "center",
@@ -720,7 +719,7 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       color: Colors.textInverse,
     },
     payBtn: {
-      minHeight: 50,
+      minHeight: BUTTON_HEIGHT,
       flexDirection: "row",
       alignItems: "center",
       justifyContent: "center",

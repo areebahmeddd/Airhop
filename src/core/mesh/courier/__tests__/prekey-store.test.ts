@@ -3,11 +3,16 @@
  */
 // Prekey stores + the forward-secret courier seal/open path they enable.
 import { ed25519, x25519 } from "@noble/curves/ed25519.js";
+import { noiseXOpen, noiseXSeal } from "../../../crypto/noise-x";
 import {
   PREKEY_MAX_PREKEYS,
   verifyPrekeyBundle,
 } from "../../wire/prekey-bundle";
-import { CourierStore, decodeEnvelopePayload } from "../courier-store";
+import {
+  computeRecipientTag,
+  decodeEnvelopePayload,
+  encodeEnvelopePayload,
+} from "../courier-store";
 import { LocalPrekeyStore, PeerPrekeyStore } from "../prekey-store";
 
 let counter = 0;
@@ -102,25 +107,30 @@ describe("forward-secret courier seal/open via prekey", () => {
     const prekey = senderPeers.assign(recipNoise.pub)!;
 
     const sender = x25519Keypair();
-    const senderSignPriv = ed25519.utils.randomSecretKey();
-    const packet = CourierStore.seal(
-      new TextEncoder().encode("secret handshake"),
-      sender.priv,
-      recipNoise.pub,
-      "aabbccdd00112233",
-      senderSignPriv,
-      "00112233445566aa",
-      prekey,
-    );
+    // Sealed as mesh-service does: Noise X to the ONE-TIME prekey rather than
+    // the static key, the prekey id on the envelope, and the routing tag still
+    // derived from the static key so carriers match a delivery without learning
+    // which key opens it.
+    const payload = encodeEnvelopePayload({
+      recipientTag: computeRecipientTag(recipNoise.pub),
+      expiryMs: Date.now() + 60_000,
+      copies: 4,
+      ciphertext: noiseXSeal(
+        sender.priv,
+        prekey.publicKey,
+        new TextEncoder().encode("secret handshake"),
+      ),
+      prekeyID: prekey.id,
+    });
 
-    const env = decodeEnvelopePayload(packet.payload)!;
+    const env = decodeEnvelopePayload(payload)!;
     expect(env.prekeyID).toBe(prekey.id);
 
     // Recipient opens with the matching one-time private prekey.
     const openKey = recipLocal.privForId(env.prekeyID!)!;
-    const { plaintext, senderStaticPubKey } = CourierStore.open(
-      env.ciphertext,
+    const { plaintext, senderStaticPubKey } = noiseXOpen(
       openKey,
+      env.ciphertext,
     );
     expect(new TextDecoder().decode(plaintext)).toBe("secret handshake");
     expect([...senderStaticPubKey]).toEqual([...sender.pub]);
@@ -128,6 +138,6 @@ describe("forward-secret courier seal/open via prekey", () => {
     // A different one-time key cannot open it (forward secrecy boundary).
     const otherId = bundle.prekeys.find((p) => p.id !== env.prekeyID)!.id;
     const wrongKey = recipLocal.privForId(otherId)!;
-    expect(() => CourierStore.open(env.ciphertext, wrongKey)).toThrow();
+    expect(() => noiseXOpen(wrongKey, env.ciphertext)).toThrow();
   });
 });

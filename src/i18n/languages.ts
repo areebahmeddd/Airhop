@@ -15,23 +15,28 @@ export type LanguageCode =
   | "en"
   | "am"
   | "ar"
+  | "bn"
   | "my"
   | "zh-Hans"
   | "zh-Hant"
   | "nl"
   | "fil"
   | "fr"
+  | "ka"
   | "de"
   | "hi"
   | "id"
   | "it"
   | "ja"
   | "ko"
+  | "mg"
   | "ms"
   | "ne"
   | "fa"
   | "pl"
   | "pt-BR"
+  | "pt-PT"
+  | "pa"
   | "ru"
   | "es"
   | "sw"
@@ -62,7 +67,10 @@ export type ScriptClass =
   | "thai"
   | "myanmar"
   | "ethiopic"
-  | "tamil";
+  | "tamil"
+  | "bengali"
+  | "gurmukhi"
+  | "georgian";
 
 export interface LanguageSpec {
   code: LanguageCode;
@@ -109,6 +117,15 @@ export const LANGUAGES: Record<LanguageCode, LanguageSpec> = {
     nameKey: "settings.language.ar",
     direction: "rtl",
     script: "arabic",
+  },
+  bn: {
+    code: "bn",
+    shortCode: "BN",
+    endonym: "বাংলা",
+    englishName: "Bengali",
+    nameKey: "settings.language.bn",
+    direction: "ltr",
+    script: "bengali",
   },
   my: {
     code: "my",
@@ -164,6 +181,15 @@ export const LANGUAGES: Record<LanguageCode, LanguageSpec> = {
     direction: "ltr",
     script: "latin",
   },
+  ka: {
+    code: "ka",
+    shortCode: "KA",
+    endonym: "ქართული",
+    englishName: "Georgian",
+    nameKey: "settings.language.ka",
+    direction: "ltr",
+    script: "georgian",
+  },
   de: {
     code: "de",
     shortCode: "DE",
@@ -218,6 +244,15 @@ export const LANGUAGES: Record<LanguageCode, LanguageSpec> = {
     direction: "ltr",
     script: "hangul",
   },
+  mg: {
+    code: "mg",
+    shortCode: "MG",
+    endonym: "malagasy",
+    englishName: "Malagasy",
+    nameKey: "settings.language.mg",
+    direction: "ltr",
+    script: "latin",
+  },
   ms: {
     code: "ms",
     shortCode: "MS",
@@ -256,12 +291,30 @@ export const LANGUAGES: Record<LanguageCode, LanguageSpec> = {
   },
   "pt-BR": {
     code: "pt-BR",
-    shortCode: "PT",
-    endonym: "português",
+    shortCode: "PTB",
+    endonym: "português (brasil)",
     englishName: "Portuguese (Brazil)",
     nameKey: "settings.language.pt_br",
     direction: "ltr",
     script: "latin",
+  },
+  "pt-PT": {
+    code: "pt-PT",
+    shortCode: "PTP",
+    endonym: "português (portugal)",
+    englishName: "Portuguese (Portugal)",
+    nameKey: "settings.language.pt_pt",
+    direction: "ltr",
+    script: "latin",
+  },
+  pa: {
+    code: "pa",
+    shortCode: "PA",
+    endonym: "ਪੰਜਾਬੀ",
+    englishName: "Punjabi",
+    nameKey: "settings.language.pa",
+    direction: "ltr",
+    script: "gurmukhi",
   },
   ru: {
     code: "ru",
@@ -353,8 +406,8 @@ export const LANGUAGES: Record<LanguageCode, LanguageSpec> = {
     direction: "ltr",
     script: "latin",
   },
-  // Deliberately last, and deliberately not in LANGUAGE_ORDER below. It is a
-  // debugging instrument rather than a language, so it never appears in a
+  // Last, and kept out of LANGUAGE_ORDER below. It is a
+  // debugging instrument, not a language, so it never appears in a
   // release build and never sorts in among real ones.
   "qps-ploc": {
     code: "qps-ploc",
