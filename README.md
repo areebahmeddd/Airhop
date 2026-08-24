@@ -72,7 +72,7 @@ I built this at a 24-hour hackathon (July 2026) during my final year of undergra
 | 🕸️ **Networking** | Bluetooth mesh            | Communicate with nearby devices without internet                                                                                             |
 |                   | LAN mesh                  | Run the whole mesh over a shared WiFi network, discovered by mDNS. Works iPhone to Android, unlike WiFi Aware                                |
 |                   | Mesh bridge               | Link this area's public #bluetooth chat with another out-of-range Bluetooth crowd over the internet. Off by default                          |
-|                   | WiFi high-bandwidth mode  | Faster file transfers between two Android devices, or two iPhones. Not across platforms                                                      |
+|                   | WiFi Aware                | Faster file transfers between two Android devices, or two iPhones. Not across platforms                                                      |
 |                   | Multi-hop routing         | Messages automatically relay across nearby devices (up to 7 hops)                                                                            |
 |                   | Relay nodes               | Third-party [Bitle](https://bitle.org) hardware extends the mesh where nobody stands. Requires an ESP32 board, plus LoRa to link nodes       |
 |                   | bitchat compatibility     | Airhop nodes communicate directly with bitchat on iOS and Android                                                                            |
