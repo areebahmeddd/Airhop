@@ -2,9 +2,9 @@ PODS:
   - Arti (1.0.0)
   - EXApplication (57.0.2):
     - ExpoModulesCore
-  - EXConstants (57.0.14):
+  - EXConstants (57.0.13):
     - ExpoModulesCore
-  - Expo (57.0.16):
+  - Expo (57.0.15):
     - ExpoModulesCore
     - ExpoModulesJSI
     - hermes-engine
@@ -30,7 +30,7 @@ PODS:
     - ReactCommon/turbomodule/core
     - ReactNativeDependencies
     - Yoga
-  - ExpoAsset (57.0.14):
+  - ExpoAsset (57.0.13):
     - ExpoModulesCore
   - ExpoAudio (57.0.4):
     - ExpoModulesCore
@@ -50,20 +50,20 @@ PODS:
     - ExpoModulesCore
   - ExpoHaptics (57.0.1):
     - ExpoModulesCore
-  - ExpoImageManipulator (57.0.13):
+  - ExpoImageManipulator (57.0.12):
     - ExpoModulesCore
-  - ExpoImagePicker (57.0.13):
+  - ExpoImagePicker (57.0.12):
     - ExpoModulesCore
   - ExpoKeepAwake (57.0.1):
     - ExpoModulesCore
-  - ExpoLocation (57.0.13):
+  - ExpoLocation (57.0.12):
     - ExpoModulesCore
   - ExpoLogBox (57.0.3):
     - React-Core
   - ExpoMediaLibrary (57.0.4):
     - ExpoModulesCore
     - React-Core
-  - ExpoModulesCore (57.0.13):
+  - ExpoModulesCore (57.0.12):
     - ExpoModulesJSI
     - hermes-engine
     - RCTRequired
@@ -90,21 +90,21 @@ PODS:
   - ExpoModulesJSI (57.0.5):
     - React-Core
     - ReactCommon
-  - ExpoModulesWorklets (57.0.13):
+  - ExpoModulesWorklets (57.0.12):
     - ExpoModulesCore
     - ExpoModulesJSI
-  - ExpoModulesWorkletsAdapter (57.0.13):
+  - ExpoModulesWorkletsAdapter (57.0.12):
     - ExpoModulesCore
     - ExpoModulesJSI
     - ExpoModulesWorklets
     - RNWorklets
-  - ExpoNotifications (57.0.14):
+  - ExpoNotifications (57.0.13):
     - ExpoModulesCore
   - ExpoScreenCapture (57.0.2):
     - ExpoModulesCore
   - ExpoSecureStore (57.0.1):
     - ExpoModulesCore
-  - ExpoSharing (57.0.15):
+  - ExpoSharing (57.0.14):
     - ExpoModulesCore
   - ExpoSystemUI (57.0.2):
     - ExpoModulesCore
@@ -2645,9 +2645,9 @@ EXTERNAL SOURCES:
 SPEC CHECKSUMS:
   Arti: a7face21346bcc3bcacce583acd01ab628dcd976
   EXApplication: bbd517d50878ca1d121fb3843392beb210181e28
-  EXConstants: 0023ccf3213a49042510a7a63e58a911cea6be8d
-  Expo: eecd9b51b1dc9da115fae1c6c1fc23fcabafd940
-  ExpoAsset: b8c66d7e07922d39f280e1a79b5f70ef8e238bbc
+  EXConstants: 1b9bb962f72de86540a5314f4bec2eb3fdeff515
+  Expo: 429d926f6dd4edcaab10ff1bac5e5bc63321c700
+  ExpoAsset: 2b03d46bfa5827ac7b11e22f812cf99995f2ed4b
   ExpoAudio: bd075db379c5a70b7f9a7b5b541d5c67f59b5dca
   ExpoCamera: 00a098da25adbc6013f051b5db47279cb10a716c
   ExpoCameraBarcodeScanning: 14c72e1f522eb69f7a672d757eb294c096756faa
@@ -2657,20 +2657,20 @@ SPEC CHECKSUMS:
   ExpoFileSystem: 0e74ed1536e1643f4a352d84ed55d311d795828d
   ExpoFont: 59e1faf66ba9bcd232ae1e2ce58d202a48b6f65e
   ExpoHaptics: 4503d2da51ff7109712ccdfe0e4939f66818183e
-  ExpoImageManipulator: 337cb364101ad43a9a9f9e803e9c420fb0f680d1
-  ExpoImagePicker: 6963584297308d729b08d04d84f9f6c1ac966561
+  ExpoImageManipulator: ac9553f6bcbbf0b58c0435777212cf1511e365f0
+  ExpoImagePicker: 09fafe2ab0257a41a0e6625ebbe56d73cb6611fa
   ExpoKeepAwake: c26f14275017370cc8a4b7b43a0e23361f2053a5
-  ExpoLocation: 487f2bacf1f333271f287d493ad3e9ca1943e40d
+  ExpoLocation: d5310d0d86e114aa2a7b66215aacd9841aa40128
   ExpoLogBox: 2c4225a62f1cfb943e6b2df4fa4fe2d136e06fb6
   ExpoMediaLibrary: 344f5b528a71f34794e9d7396e32589531df146e
-  ExpoModulesCore: 37ff141f77efc8496bdf657d8dabfd6dd5ec01ad
+  ExpoModulesCore: c60c8fc3d69319f43daabd09483f49a5c89e84ad
   ExpoModulesJSI: ea64813990c7650f3a2d469f176a54c3c7b2c66a
-  ExpoModulesWorklets: ba8252c1824dce38008bdbd1de28566c6591ab7b
-  ExpoModulesWorkletsAdapter: 6e8c680fe80f88dd9845e9f5822b0fca293c3daa
-  ExpoNotifications: 6c0393cf9fe8dd90e85dc51585aacbe93372b79b
+  ExpoModulesWorklets: 539791c19ac17aaa37632c7fa396ec17d91b3ad6
+  ExpoModulesWorkletsAdapter: 970a0961ae66725e0adef3756ac12f0ba4122b57
+  ExpoNotifications: 25e39e13c6c6f4bd599d3cf7992ca9e3b098d3e0
   ExpoScreenCapture: 6b82aba55db3ecc6f124ebd45163d6db9b916b2d
   ExpoSecureStore: 94793113049a2d7478dfe1a13aa15081e9f61755
-  ExpoSharing: 43205d4013f6f1f9e5be6288cb8b33ccc647121c
+  ExpoSharing: e4e2fbfafd062306474c3b8211319e40d86e9a7c
   ExpoSystemUI: ff3142b323ae7b4d11dc0b1dc4acfa30d92be7dc
   ExpoVideo: b1d9a325ddcd4f3ed8ccb374c01b688e98bc6a04
   FBLazyVector: 3c3be9a019176b5699455f7f66c5444b78a411c6
