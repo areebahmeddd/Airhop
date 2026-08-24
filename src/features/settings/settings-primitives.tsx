@@ -333,9 +333,20 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       color: Colors.textMuted,
       lineHeight: FontSize.xs * 1.5,
     },
+    // The trailing value on a settings row, in the prose face by default.
+    //
+    // Most of what sits here is words rather than data ("Grant", "High",
+    // "7 days"), and JetBrains Mono covers three of the thirteen scripts Airhop
+    // ships. Prose by default means a value added later cannot land in a face
+    // with no glyphs for it unless somebody chooses to put it there.
     settingValue: {
       fontSize: FontSize.sm,
       color: Colors.textMuted,
+    },
+    // For the rows whose value really is machine data: a version, a byte count,
+    // a peer tally, an SPDX identifier. Digits are pinned to Latin everywhere
+    // (see `@utils/format`), so tabular figures are the whole point here.
+    settingValueMono: {
       fontFamily: FontFamily.mono,
     },
     settingValueMuted: {

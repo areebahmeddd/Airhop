@@ -21,6 +21,9 @@ export interface ActivityEntry {
   channel: string;
   isDM: boolean;
   senderID: string;
+  // Empty when the sender announced no nickname. The renderer supplies the
+  // stand-in, so it is not frozen in the language the entry arrived in. Same
+  // rule as `previewKey` below.
   senderNickname: string;
   // One-line preview (text, or a media summary like "Photo").
   preview: string;

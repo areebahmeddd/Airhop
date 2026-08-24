@@ -87,34 +87,7 @@ These rules exist because a bug here breaks Airhop's interoperability with bitch
 
 Run tests: `npm test -- --testPathPattern=src/core`
 
-## 7. PR Checklist
-
-Before opening any pull request:
-
-- [ ] `npm run format` run (no uncommitted format changes)
-- [ ] `npm run lint` passes with zero errors
-- [ ] `npm run typecheck` passes with zero errors
-- [ ] `npm run i18n:audit -- --max 0` passes (no hardcoded user-facing strings)
-- [ ] `npm run verify:invisibles` passes (no literal control, bidirectional, or zero-width characters in source)
-- [ ] `npm run deadcode` reports nothing new (unused exports, files, and dependencies)
-- [ ] `npm run verify:vendored` passes (only if you changed a vendored binary)
-- [ ] `npm run coverage` passes with zero failures
-- [ ] `docs/dev/PROGRESS.md` updated if a milestone was completed or a decision was made
-- [ ] `docs/design/ROADMAP.md` updated if a feature was added, removed, or reprioritized
-- [ ] If touching `src/core/` or `android/` or `ios/`: invoke `@architect` agent for review
-- [ ] If touching `src/core/crypto/`, key storage, or packet signing: invoke `@security-review` agent
-
-## 8. Commit Sign-Off (DCO)
-
-All commits must include a `Signed-off-by` trailer. Use `git commit -s` to add it automatically:
-
-```
-Signed-off-by: Your Name <your@email.com>
-```
-
-This certifies that you agree to the [Developer Certificate of Origin](https://developercertificate.org/): that you wrote the contribution or have the right to submit it under this project's license.
-
-## 9. AI Agent Usage
+## 7. AI Agent Usage
 
 Three specialized agents are available in `.github/agents/`. Invoke them via VS Code Copilot chat.
 
@@ -132,3 +105,31 @@ Three specialized agents are available in `.github/agents/`. Invoke them via VS 
 
 **When:** Before any PR touching `src/core/crypto/`, key storage, or packet signing code.  
 **What it checks:** Crypto compliance, key storage, packet signing, OWASP Mobile Top 10.
+
+## 8. Commit Sign-Off (DCO)
+
+All commits must include a `Signed-off-by` trailer. Use `git commit -s` to add it automatically:
+
+```
+Signed-off-by: Your Name <your@email.com>
+```
+
+This certifies that you agree to the [Developer Certificate of Origin](https://developercertificate.org/): that you wrote the contribution or have the right to submit it under this project's license.
+
+## 9. PR Checklist
+
+Before opening any pull request:
+
+- [ ] `npm run verify:invisibles` passes (no literal control, bidirectional, or zero-width characters in source)
+- [ ] `npm run verify:vendored` passes (only if you changed a vendored binary)
+- [ ] `npm run i18n:audit -- --max 0` passes (no hardcoded user-facing strings)
+- [ ] `npm run i18n:native` passes (only if you changed a language, a permission string, or the service notice)
+- [ ] `npm run deadcode` reports nothing new (unused exports, files, and dependencies)
+- [ ] `npm run typecheck` passes with zero errors
+- [ ] `npm run format` run (no uncommitted format changes)
+- [ ] `npm run lint` passes with zero errors
+- [ ] `npm run coverage` passes with zero failures
+- [ ] `docs/dev/PROGRESS.md` updated if a milestone was completed or a decision was made
+- [ ] `docs/design/ROADMAP.md` updated if a feature was added, removed, or reprioritized
+- [ ] If touching `src/core/` or `android/` or `ios/`: invoke `@architect` agent for review
+- [ ] If touching `src/core/crypto/`, key storage, or packet signing: invoke `@security-review` agent

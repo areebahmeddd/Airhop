@@ -16,7 +16,7 @@ import {
   type EmbeddedToken,
 } from "@core/payments/cashu";
 import { Feather, MaterialCommunityIcons } from "@expo/vector-icons";
-import { t, useT, useTPlural, type TranslationKey } from "@i18n";
+import { stripIsolates, t, useT, useTPlural, type TranslationKey } from "@i18n";
 import { chevronBack, isRTLLayout, textAlignEnd } from "@i18n/layout";
 import { acknowledged, armed, held, released } from "@platform/haptics";
 import { ensurePermission } from "@platform/permissions";
@@ -100,7 +100,7 @@ import {
   notifiesOnScreenshot,
 } from "@utils/media-policy";
 import { activeMentionQuery, applyMention } from "@utils/mentions";
-import { messageText } from "@utils/message-text";
+import { messageText, systemRow } from "@utils/message-text";
 import { resolveDisplayName } from "@utils/peer-display-name";
 import {
   resolveLandingSettle,
@@ -2261,16 +2261,19 @@ export default function MessageThread({
           service.sendChannelMessage(channel, text);
         }
       }
+      // Say which of the two happened. Claiming the room was told when it was
+      // not is the same class of mistake as the broadcast itself.
+      const screenshotKey = tellsPeersOnScreenshot
+        ? "chat.screenshot.you_took"
+        : "chat.screenshot.you_took_private";
       addMessage({
         id: `${localPeerID}-${Date.now()}-${Math.random().toString(36).slice(2)}`,
         channel,
         senderID: localPeerID,
         senderNickname: localNickname,
-        // Say which of the two happened. Claiming the room was told when it was
-        // not is the same class of mistake as the broadcast itself.
-        text: tellsPeersOnScreenshot
-          ? t("chat.screenshot.you_took")
-          : t("chat.screenshot.you_took_private"),
+        // Airhop's words, so the row re-reads them in whatever language the
+        // thread is opened in later.
+        ...systemRow(screenshotKey),
         timestampMs: Date.now(),
         isMine: true,
         isSystem: true,
@@ -5556,7 +5559,13 @@ export default function MessageThread({
         }}
         onCopy={() => {
           if (!actionSheet) return;
-          void Clipboard.setStringAsync(actionSheet.text).catch(() => {});
+          // What is on screen, not what is in the store: for a row Airhop wrote,
+          // `text` holds the rendering from the moment it was saved, so copying
+          // it hands over the previous language after a switch. Stripped because
+          // a clipboard is somewhere else's input.
+          void Clipboard.setStringAsync(
+            stripIsolates(messageText(actionSheet)),
+          ).catch(() => {});
           acknowledged();
         }}
         onInfo={() => {

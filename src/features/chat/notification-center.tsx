@@ -165,9 +165,11 @@ function Row({
   const T = useT();
   // DMs read best under the peer's resolved contact name; a channel message or
   // notice keeps the sender's nickname and tags which room it came from.
+  // An empty nickname means the sender announced none. Resolved here rather
+  // than at record time so the stand-in is in the language being read now.
   const name = entry.isDM
     ? resolveDisplayName(entry.senderID)
-    : entry.senderNickname;
+    : entry.senderNickname || T("notif.someone");
   const room = entry.isDM ? "" : channelLabel(entry.channel);
   // Formatted once for both the visible time and the row label below.
   const timeLabel = formatListTimestamp(entry.timestampMs);

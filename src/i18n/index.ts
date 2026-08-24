@@ -10,6 +10,7 @@
 // `locales/types.ts`.
 
 import { useSettingsStore } from "@store/settings-store";
+import { useSyncExternalStore } from "react";
 import { I18nManager } from "react-native";
 import {
   DEFAULT_LANGUAGE,
@@ -136,15 +137,16 @@ function catalogFor(code: LanguageCode): Locale {
 
 // ---- Layout direction ----
 //
-// `I18nManager` sets a native flag Yoga reads once at process start, so a
-// direction change cannot land before the next launch, and Airhop will not force
-// a relaunch: that destroys every Noise session, empties the peer table, drops
-// transfers in flight and cuts live voice.
+// Yoga reads the direction flag once at process start, so a change lands on the
+// next launch. Forcing a relaunch is not an option: it destroys every Noise
+// session, empties the peer table and cuts live voice, and iOS has no sanctioned
+// self-restart anyway. A language disagreeing with the frame therefore waits as
+// a preference, and the UI keeps the boot language until then.
 //
-// So direction is pinned at launch and a language that disagrees with it waits
-// as a preference. The UI keeps the boot language meanwhile, since switching the
-// text now and the layout later puts right-to-left prose in a left-to-right
-// frame.
+// Both facts below are read, never assumed: `I18nManager.isRTL` for the
+// direction in force, `frameLanguage` for the language it belongs to. Assuming
+// puts right-to-left prose in a left-to-right frame on a first launch, with
+// `needsRelaunch` reporting false.
 
 let bootLanguage: LanguageCode = DEFAULT_LANGUAGE;
 let bootDirection: "ltr" | "rtl" = "ltr";
@@ -199,9 +201,13 @@ export function languageForTag(tag: string): LanguageCode {
   return DEFAULT_LANGUAGE;
 }
 
-// The device's language, sampled once. `Intl.DateTimeFormat` is present on
-// Hermes on both platforms and needs no dependency, which is the same way
-// `place-names-store` reads it.
+// The device's language, sampled and cached. `Intl.DateTimeFormat` needs no
+// dependency and is present on Hermes on both platforms, the same way
+// `place-names-store` reads it. On Android it reflects Android 13's per-app
+// language too, since both land in the app's own Configuration.
+//
+// Re-sampled on the foreground edge, not once per process: both Android pickers
+// recreate the Activity while the JS context survives.
 let deviceLanguage: LanguageCode | null = null;
 
 function getDeviceLanguage(): LanguageCode {
@@ -215,6 +221,33 @@ function getDeviceLanguage(): LanguageCode {
     }
   }
   return deviceLanguage;
+}
+
+// Bumped when the sampled device language changes. `useLanguage` subscribes,
+// because the store it otherwise watches holds the preference: on "system" that
+// value does not move when the OS language does, so nothing would re-render.
+let deviceEpoch = 0;
+const deviceListeners = new Set<() => void>();
+
+function subscribeDeviceLanguage(onChange: () => void): () => void {
+  deviceListeners.add(onChange);
+  return () => {
+    deviceListeners.delete(onChange);
+  };
+}
+
+function readDeviceEpoch(): number {
+  return deviceEpoch;
+}
+
+// Called on the foreground edge, the only moment the device language can change
+// without the process being replaced.
+export function refreshDeviceLanguage(): void {
+  const before = deviceLanguage;
+  deviceLanguage = null;
+  if (getDeviceLanguage() === before) return;
+  deviceEpoch++;
+  for (const notify of deviceListeners) notify();
 }
 
 // What a preference means right now, before the direction rule is applied.
@@ -245,11 +278,33 @@ export type TranslationVars = Record<string, string | number>;
 // verbatim instead of blanked, so the gap shows up in a screenshot.
 const PLACEHOLDER = /\{(\w+)\}/g;
 
+// A placeholder holds text Airhop does not author and cannot predict the
+// direction of. Unisolated, the bidirectional algorithm resolves the neutrals
+// around it against whichever way that text reads, so an Arabic nickname in an
+// English sentence drags the punctuation after it to the wrong side. No catalog
+// can fix that.
+//
+// The first-strong isolate and its pop stop the run leaking outward, and are
+// inert in a same-direction context, so English renders byte-identically.
+// Numbers are wrapped too: a digit run reorders the same way.
+//
+// Escapes, because `scripts/check-invisibles.js` forbids the literal characters
+// in source.
+const ISOLATE_FIRST = "\u2068";
+const ISOLATE_POP = "\u2069";
+
+// Strips the isolates back out, for callers that compare rendered text rather
+// than showing it. See `@utils/chat-search`.
+export function stripIsolates(text: string): string {
+  return text.replace(/[\u2068\u2069]/g, "");
+}
+
 function interpolate(template: string, vars?: TranslationVars): string {
   if (vars === undefined) return template;
   return template.replace(PLACEHOLDER, (match, name: string) => {
     const value = vars[name];
-    return value === undefined ? match : String(value);
+    if (value === undefined) return match;
+    return `${ISOLATE_FIRST}${String(value)}${ISOLATE_POP}`;
   });
 }
 
@@ -264,18 +319,25 @@ export interface PluralTranslator {
   (key: PluralKey, count: number, vars?: TranslationVars): string;
 }
 
-// The one place numerals are NOT pinned to Latin. `utils/format.ts` pins machine
-// data, which sits in the monospace face beside Latin units where Arabic-Indic
-// digits next to "MiB" read worse than either alone. A count inside prose is
-// prose, and Western digits there jar an Arabic reader as much as the reverse
-// would here.
+// Grouped by the locale's own rule, pinned to Latin digits like every other
+// number the app renders.
+//
+// The grouping is the useful half: Hindi, Punjabi and Tamil group by lakh,
+// Georgian by thin space. The digits are not, because `utils/format.ts` pins
+// machine data to Latin and `catalog.test.ts` forbids a catalog its own
+// numerals; a locale-native digit here would be the one source of a second digit
+// system in one sentence. Bengali, Burmese and Persian are the three affected.
+//
+// Requested through the BCP-47 extension rather than the `numberingSystem`
+// option, for the reason `latinLocale()` gives: Hermes ships a partial Intl, and
+// an unimplemented extension is ignored where an unimplemented option throws.
 const COUNT_FORMATS = new Map<LanguageCode, Intl.NumberFormat>();
 
 function formatCount(language: LanguageCode, count: number): string {
   let format = COUNT_FORMATS.get(language);
   if (format === undefined) {
     try {
-      format = new Intl.NumberFormat(language);
+      format = new Intl.NumberFormat(`${language}-u-nu-latn`);
     } catch {
       // Hermes carries a partial Intl and an OEM may carry less. A plain
       // decimal is a worse number than a grouped one, and far better than a
@@ -312,9 +374,10 @@ function getTPlural(language: LanguageCode): PluralTranslator {
   if (translator === undefined) {
     translator = (key, count, vars) => {
       const forms = catalogFor(language).plurals[key];
-      // `other` is required by `PluralForms` and guaranteed by CLDR, so this
-      // is a real fallback. It catches the Romance `many`, which selects only
-      // for round millions and which several catalogs legitimately omit.
+      // Unreachable while `catalog.test.ts` holds every catalog to
+      // `PLURAL_CATEGORIES`. Kept because the type cannot prove it: every
+      // category but `other` is optional, and `other` is the one CLDR
+      // guarantees everywhere.
       const template = forms[selectPlural(language, count)] ?? forms.other;
       return interpolate(template, {
         count: formatCount(language, count),
@@ -333,7 +396,15 @@ function getTPlural(language: LanguageCode): PluralTranslator {
 // language after the first moved no screen.
 
 export function useLanguage(): LanguageCode {
-  return activeLanguage(useSettingsStore((s) => s.language));
+  const preference = useSettingsStore((s) => s.language);
+  // Two sources: the picker writes the preference, the OS writes the device
+  // language underneath a preference of "system".
+  useSyncExternalStore(
+    subscribeDeviceLanguage,
+    readDeviceEpoch,
+    readDeviceEpoch,
+  );
+  return activeLanguage(preference);
 }
 
 export function useT(): Translator {
@@ -370,22 +441,63 @@ export const t: Translator = Object.assign(
 export const tPlural: PluralTranslator = (key, count, vars) =>
   getTPlural(getLanguage())(key, count, vars);
 
+// A translator bound to a language other than the one on screen. One caller:
+// the restart notice, whose reader is by definition somebody who cannot read the
+// current UI language. Everything else uses `t` / `useT`.
+export function translatorFor(code: LanguageCode): Translator {
+  return getT(code);
+}
+
+/**
+ * @public `catalog.test.ts` renders every catalog's plural forms in its own
+ * language, the only way to check the digits a count comes out in. knip reads
+ * the tag, so it stays a JSDoc block.
+ */
+export function pluralTranslatorFor(code: LanguageCode): PluralTranslator {
+  return getTPlural(code);
+}
+
 // Pinning direction to the app's language matters even for a left-to-right one:
 // React Native otherwise mirrors the whole layout on a device set to Arabic or
 // Hebrew, putting English text in a right-to-left frame. Pinned, the app looks
 // the same everywhere, the guarantee the bundled catalog gives the text.
+//
+// Takes effect on the next launch, so the language is recorded for `initI18n`
+// to read back. Called at boot and again the moment one is chosen, which is what
+// makes a single restart enough.
 export function applyLayoutDirection(code: LanguageCode): void {
   const shouldBeRTL = isRTL(code);
   I18nManager.allowRTL(shouldBeRTL);
   if (I18nManager.isRTL !== shouldBeRTL) I18nManager.forceRTL(shouldBeRTL);
+  // Only on a change: a zustand `set` persists the whole store, and this runs at
+  // every launch and every tap in the picker.
+  const store = useSettingsStore.getState();
+  if (store.frameLanguage !== code) store.setFrameLanguage(code);
 }
 
 // Called once from the root before the first render, so the first frame is
 // already laid out correctly and the direction is fixed for the process.
 export function initI18n(): void {
-  const wanted = resolvePreference(useSettingsStore.getState().language);
-  bootLanguage = wanted;
-  bootDirection = LANGUAGES[wanted].direction;
+  const store = useSettingsStore.getState();
+  const wanted = resolvePreference(store.language);
+
+  bootDirection = I18nManager.isRTL ? "rtl" : "ltr";
+
+  // The recorded language when it still agrees with the direction in force,
+  // otherwise one that does: `bootLanguage` is the UI's fallback, and prose in
+  // the wrong frame is what this mechanism prevents. `wanted` is tried before
+  // the default because a panic wipe clears the record while the native flag
+  // survives, and on a right-to-left phone the device language is right.
+  const recorded = store.frameLanguage;
+  bootLanguage =
+    recorded !== null &&
+    isShipped(recorded) &&
+    LANGUAGES[recorded].direction === bootDirection
+      ? recorded
+      : LANGUAGES[wanted].direction === bootDirection
+        ? wanted
+        : DEFAULT_LANGUAGE;
+
   applyLayoutDirection(wanted);
 }
 

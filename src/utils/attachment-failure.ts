@@ -15,7 +15,7 @@
 //     anyone in range can send repeatedly. A real failure repeats on retry, and
 //     one line conveys that as well as twenty.
 
-import { t } from "@i18n";
+import type { TranslationKey } from "@i18n";
 
 export type AttachmentFailure =
   // The TLV did not parse: truncated, bad lengths, or a length field that
@@ -30,19 +30,23 @@ export type AttachmentFailure =
   // Decoded and validated fine; the device could not write it.
   | "storage";
 
-// One line, in the reader's language, saying what happened without inviting
-// them to debug it. Deliberately does not name the sender: the line appears
-// inside that sender's thread, so naming them again is noise.
-export function attachmentFailureMessage(reason: AttachmentFailure): string {
+// Which line to show: what happened, without inviting the reader to debug it.
+// Does not name the sender, since the line appears inside that sender's thread.
+//
+// A key rather than text, because the caller stores it: these are Airhop's
+// words, so the row re-reads them in the language it is opened in later.
+export function attachmentFailureKey(
+  reason: AttachmentFailure,
+): TranslationKey {
   switch (reason) {
     case "malformed":
-      return t("transfer.failed.malformed");
+      return "transfer.failed.malformed";
     case "unsupported-type":
-      return t("transfer.failed.unsupported_type");
+      return "transfer.failed.unsupported_type";
     case "type-mismatch":
-      return t("transfer.failed.type_mismatch");
+      return "transfer.failed.type_mismatch";
     case "storage":
-      return t("transfer.failed.storage");
+      return "transfer.failed.storage";
   }
 }
 

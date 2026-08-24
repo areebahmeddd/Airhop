@@ -30,6 +30,7 @@ import { useContactsStore } from "@store/contacts-store";
 import { useOutboxStore } from "@store/outbox-store";
 import { useWalletStore } from "@store/wallet-store";
 import { formatNumber } from "@utils/format";
+import { systemRow } from "@utils/message-text";
 import { isNostrId, NOSTR_ID_PREFIX } from "@utils/username";
 import { getMeshService, type MeshService } from "./mesh-service";
 import {
@@ -349,11 +350,6 @@ function noteNutzapInThread(
     channel,
     senderID: getMeshService()?.getPeerID() ?? "",
     senderNickname: "",
-    text: t("wallet.pay.thread_receipt", {
-      amount: formatNumber(amount),
-      unit,
-    }),
-    systemKey: "wallet.pay.thread_receipt",
     // The amount is stored already grouped rather than as a raw number,
     // because interpolation stringifies a number plainly and would drop the
     // separator. So switching language re-translates the sentence but leaves
@@ -361,7 +357,10 @@ function noteNutzapInThread(
     // that would have written "21.500". The digits are Latin either way, and a
     // stale separator is a far smaller thing than a receipt stuck in a
     // language its reader does not have.
-    systemVars: { amount: formatNumber(amount), unit },
+    ...systemRow("wallet.pay.thread_receipt", {
+      amount: formatNumber(amount),
+      unit,
+    }),
     timestampMs: Date.now(),
     isMine: true,
     isSystem: true,

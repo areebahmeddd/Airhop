@@ -693,10 +693,12 @@ function createDistanceStyles(Colors: ReturnType<typeof useThemeColors>) {
       fontSize: FontSize.sm,
       color: Colors.textMuted,
     },
+    // Prose, not data: both users of this are catalog sentences. The monospace
+    // has glyphs for three of the thirteen scripts Airhop ships, and digits are
+    // pinned to Latin anyway (see `@utils/format`).
     detail: {
       fontSize: FontSize.xs,
       color: Colors.textMuted,
-      fontFamily: FontFamily.mono,
     },
     action: {
       fontSize: FontSize.sm,

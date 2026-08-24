@@ -9,7 +9,12 @@
 import { en } from "@i18n/locales/en";
 import type { ActivityEntry } from "@store/activity-store";
 import type { ChatMessage } from "@store/chat-store";
-import { activityPreview, messageText } from "../message-text";
+import {
+  activityPreview,
+  messageText,
+  systemPreview,
+  systemRow,
+} from "../message-text";
 
 function message(fields: Partial<ChatMessage>): ChatMessage {
   return {
@@ -103,5 +108,49 @@ describe("activityPreview", () => {
     });
     expect(activityPreview(row)).not.toBe("stale");
     expect(activityPreview(row)).toContain("north gate crew");
+  });
+});
+
+// What gets stored, as opposed to what gets shown. `text` is the fallback for a
+// build predating the key fields, and the field the wire reads: `forwardMessage`
+// puts it on the air. So the stored rendering is plain and the shown one carries
+// the isolates.
+describe("systemRow and systemPreview keep storage plain", () => {
+  const ISOLATES = new RegExp(
+    `[${String.fromCodePoint(0x2068)}${String.fromCodePoint(0x2069)}]`,
+  );
+
+  it("stores the key and its variables for a later render", () => {
+    const row = systemRow("chat.group.you_were_added", { name: "north gate" });
+    expect(row.systemKey).toBe("chat.group.you_were_added");
+    expect(row.systemVars).toEqual({ name: "north gate" });
+  });
+
+  it("stores a rendering with no isolates in it", () => {
+    const row = systemRow("chat.group.you_were_added", { name: "north gate" });
+    expect(row.text).toContain("north gate");
+    expect(ISOLATES.test(row.text)).toBe(false);
+  });
+
+  it("still renders WITH isolates, which is the point of stripping the stored copy", () => {
+    const row = systemRow("chat.group.you_were_added", { name: "north gate" });
+    expect(ISOLATES.test(messageText(message(row)))).toBe(true);
+  });
+
+  it("does the same for a bell entry", () => {
+    const line = systemPreview("chat.group.removed_you", {
+      name: "north gate",
+    });
+    expect(line.previewKey).toBe("chat.group.removed_you");
+    expect(line.preview).toContain("north gate");
+    expect(ISOLATES.test(line.preview)).toBe(false);
+    expect(ISOLATES.test(activityPreview(entry(line)))).toBe(true);
+  });
+
+  it("takes a key with no variables", () => {
+    const row = systemRow("chat.location.sent_summary");
+    expect(row.systemVars).toBeUndefined();
+    expect(row.text.length).toBeGreaterThan(0);
+    expect(ISOLATES.test(row.text)).toBe(false);
   });
 });

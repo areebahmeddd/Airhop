@@ -62,8 +62,8 @@ export function SystemOverview() {
         TRANSPORT
       </Caption>
       <Box x={348} y={54} w={200} h={48} label="BLE mesh" sub="no internet · 7 hops" strong />
-      <Box x={348} y={114} w={200} h={48} label="WiFi direct" sub="no internet · same OS only" />
-      <Box x={348} y={174} w={200} h={48} label="LAN (mDNS)" sub="no internet · one network" />
+      <Box x={348} y={114} w={200} h={48} label="LAN (mDNS)" sub="no internet · one network" />
+      <Box x={348} y={174} w={200} h={48} label="WiFi direct" sub="no internet · same OS only" />
       <Box x={348} y={234} w={200} h={48} label="Nostr relays" sub="internet · optional Tor" />
       <Box x={348} y={294} w={200} h={48} label="Courier" sub="no internet · carried by peers" />
       <Box
@@ -93,16 +93,16 @@ export function SystemOverview() {
         y={114}
         w={272}
         h={48}
-        label="Nearby same-platform device"
-        sub="faster path for large files"
+        label="Everyone on this network"
+        sub="either platform, router speed"
       />
       <Box
         x={624}
         y={174}
         w={272}
         h={48}
-        label="Everyone on this network"
-        sub="either platform, router speed"
+        label="Nearby same-platform device"
+        sub="faster path for large files"
       />
       <Box
         x={624}

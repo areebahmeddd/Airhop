@@ -194,6 +194,7 @@ import { useSettingsStore } from "@store/settings-store";
 import { useTransferStore } from "@store/transfer-store";
 import { geohashChannel, isManualGeoChannel } from "@utils/channel-key";
 import { BRIDGE_CHANNEL, canSendMedia } from "@utils/media-policy";
+import { systemPreview, systemRow } from "@utils/message-text";
 import {
   channelSenderName,
   resolveDisplayName,
@@ -2218,8 +2219,7 @@ export class MeshService {
       senderNickname: this.nickname,
       // The card carries the place. The text is what a notification and a
       // conversation row show, where there is no room for one.
-      text: t("chat.location.sent_summary"),
-      systemKey: "chat.location.sent_summary",
+      ...systemRow("chat.location.sent_summary"),
       timestampMs: Date.now(),
       isMine: true,
       locationPin: pin,
@@ -2249,8 +2249,7 @@ export class MeshService {
       channel,
       senderID,
       senderNickname: nickname,
-      text: t("chat.location.received_summary"),
-      systemKey: "chat.location.received_summary",
+      ...systemRow("chat.location.received_summary"),
       timestampMs: Date.now(),
       isMine: false,
       locationPin: pin,
@@ -3711,8 +3710,7 @@ export class MeshService {
       channel: to,
       senderID: peerID,
       senderNickname: resolveDisplayName(peerID),
-      text: t("chat.geo.exchange_complete"),
-      systemKey: "chat.geo.exchange_complete",
+      ...systemRow("chat.geo.exchange_complete"),
       timestampMs: Date.now(),
       isMine: false,
       isSystem: true,
@@ -3789,13 +3787,11 @@ export class MeshService {
       channel: chat.resolveChannel(`dm:nostr_${senderPubkey}`),
       senderID: `nostr_${senderPubkey}`,
       senderNickname: decoded.nickname,
-      text: t("chat.geo.card_received", {
+      // Resolved once: the line records who sent the card at the time, so a
+      // later nickname change must not rewrite history.
+      ...systemRow("chat.geo.card_received", {
         name: resolveDisplayName(decoded.peerID),
       }),
-      systemKey: "chat.geo.card_received",
-      // Resolved once, on purpose. The line records who sent the card at the
-      // time, so a later nickname change must not rewrite history.
-      systemVars: { name: resolveDisplayName(decoded.peerID) },
       timestampMs: Date.now(),
       isMine: false,
       isSystem: true,
@@ -3884,21 +3880,22 @@ export class MeshService {
       return;
     }
     if (Date.now() - post.createdAt > NOTICE_BELL_WINDOW_MS) return;
-    const nickname =
-      post.authorNickname.length > 0 ? post.authorNickname : t("notif.someone");
     useActivityStore.getState().record({
       id: bytesToHex(post.postID),
       channel: this.channelForNoticeGeohash(post.geohash),
       isDM: false,
       senderID: bytesToHex(post.authorSigningKey),
-      senderNickname: nickname,
-      preview: t(isUrgent(post) ? "notif.notice_urgent" : "notif.notice", {
-        content: post.content,
-      }),
-      previewKey: isUrgent(post) ? "notif.notice_urgent" : "notif.notice",
+      // Stored empty rather than resolved: a bell entry outlives the language
+      // it was written in, so the stand-in belongs to the renderer.
+      senderNickname: post.authorNickname,
       // The notice body is the author's own words and is stored as written.
       // Only the sentence around it is Airhop's.
-      previewVars: { content: post.content },
+      ...systemPreview(
+        isUrgent(post) ? "notif.notice_urgent" : "notif.notice",
+        {
+          content: post.content,
+        },
+      ),
       timestampMs: post.createdAt,
       kind: "notice",
       geohash: post.geohash,
@@ -4416,9 +4413,7 @@ export class MeshService {
         channel,
         senderID: "",
         senderNickname: "",
-        text: t("chat.group.you_were_removed", { name }),
-        systemKey: "chat.group.you_were_removed",
-        systemVars: { name },
+        ...systemRow("chat.group.you_were_removed", { name }),
         timestampMs: nowMs,
         isMine: false,
         isSystem: true,
@@ -4429,9 +4424,7 @@ export class MeshService {
         isDM: false,
         senderID: state.creatorFingerprint.slice(0, 16),
         senderNickname: name,
-        preview: t("chat.group.removed_you", { name }),
-        previewKey: "chat.group.removed_you",
-        previewVars: { name },
+        ...systemPreview("chat.group.removed_you", { name }),
         timestampMs: nowMs,
       });
       return;
@@ -4449,9 +4442,7 @@ export class MeshService {
         channel,
         senderID: "",
         senderNickname: "",
-        text: t("chat.group.you_were_added", { name: state.name }),
-        systemKey: "chat.group.you_were_added",
-        systemVars: { name: state.name },
+        ...systemRow("chat.group.you_were_added", { name: state.name }),
         timestampMs: nowMs,
         isMine: false,
         isSystem: true,
@@ -4466,9 +4457,7 @@ export class MeshService {
         isDM: false,
         senderID: state.creatorFingerprint.slice(0, 16),
         senderNickname: creator?.nickname ?? state.name,
-        preview: t("chat.group.added_you", { name: state.name }),
-        previewKey: "chat.group.added_you",
-        previewVars: { name: state.name },
+        ...systemPreview("chat.group.added_you", { name: state.name }),
         timestampMs: nowMs,
       });
     }

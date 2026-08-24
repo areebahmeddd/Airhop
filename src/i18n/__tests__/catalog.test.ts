@@ -16,7 +16,7 @@
 // Written against the registry, not English, so every rule reaches every
 // catalog automatically.
 
-import { CATALOGS } from "../index";
+import { CATALOGS, pluralTranslatorFor } from "../index";
 import type { LanguageCode } from "../languages";
 import { en } from "../locales/en";
 import type { Locale } from "../locales/types";
@@ -409,9 +409,15 @@ describe("the pseudolocale bounds every real translation", () => {
   });
 });
 
-// `latinLocale()` pins every formatted number to `latn`, so a catalog writing
-// its own numerals in a native script disagrees with the ones rendered beside
-// it: an undo-send picker listing "۲ ثانیه" above a rendered "5 ثانیه".
+// One digit system across the whole app.
+//
+// `@utils/format` pins machine data to `latn` and `formatCount` pins prose
+// counts the same way, so a catalog writing its own numerals is the one thing
+// left that could disagree with the number beside it: an undo-send picker
+// listing "۲ ثانیه" above a rendered "5 ثانیه".
+//
+// Both halves are checked, because a bare locale resolves to `beng` for Bengali,
+// `mymr` for Burmese and `arabext` for Persian.
 describe("numerals", () => {
   const NON_LATIN_DIGIT =
     /[\u0660-\u0669\u06F0-\u06F9\u0966-\u096F\u09E6-\u09EF\u0BE6-\u0BEF\u0E50-\u0E59\u1040-\u1049\u1369-\u1371\uFF10-\uFF19]/u;
@@ -426,4 +432,49 @@ describe("numerals", () => {
       expect(stray).toEqual([]);
     });
   }
+
+  // Rendered rather than reasoned about, so an ICU upgrade that moves the
+  // numbering system fails here.
+  const PLURAL_KEYS = Object.keys(en.plurals) as (keyof typeof en.plurals)[];
+
+  for (const code of CODES) {
+    it(`${code} renders plural counts in the same digits`, () => {
+      const stray: string[] = [];
+      for (const key of PLURAL_KEYS) {
+        // Reaches every category the shipped languages use, Arabic's six and
+        // the Romance round million included.
+        for (const count of [0, 1, 2, 5, 11, 21, 101, 1000, 1_000_000]) {
+          const rendered = pluralTranslatorFor(code)(key, count);
+          const found = NON_LATIN_DIGIT.exec(rendered);
+          if (found !== null) {
+            stray.push(`${key} @ ${String(count)}: "${found[0]}"`);
+          }
+        }
+      }
+      expect(stray).toEqual([]);
+    });
+  }
+});
+
+// Typographic consistency per locale, deliberately not a house style.
+//
+// English, French, Italian, Dutch and Ukrainian all write the typographic
+// apostrophe by their own conventions. Malagasy, Turkish, Filipino and Swahili
+// write the straight one, and in Swahili it is a letter rather than punctuation:
+// the apostrophe in "ng'ombe" spells a sound.
+//
+// What is always wrong is one catalog using both.
+describe("apostrophes", () => {
+  it.each(CODES)("%s does not mix straight and typographic", (code) => {
+    const locale = catalog(code);
+    const all = [
+      ...Object.values(locale.strings),
+      ...Object.values(locale.plurals).flatMap((forms) =>
+        Object.values(forms).filter((v): v is string => v !== undefined),
+      ),
+    ].join(" ");
+    const straight = all.includes("'");
+    const typographic = all.includes("’");
+    expect([code, straight && typographic]).toEqual([code, false]);
+  });
 });

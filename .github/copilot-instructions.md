@@ -25,34 +25,6 @@ Before working on any code, read in this order:
 3. [`docs/spec/PROTOCOLS.md`](docs/spec/PROTOCOLS.md): wire format and constants you must not break
 4. [`docs/dev/PROGRESS.md`](docs/dev/PROGRESS.md): current build state
 
-## Non-Negotiable Rules
-
-Apply these to every suggestion, every file, every PR:
-
-1. **All crypto = `@noble/*` only.** `@noble/curves` (X25519, Ed25519), `@noble/ciphers` (ChaCha20-Poly1305, XChaCha20), `@noble/hashes` (SHA-256, HMAC, HKDF). No other crypto library. No exceptions.
-
-2. **Native code boundary.** Swift lives in `ios/`. Kotlin lives in `android/`. These expose **raw bytes** to TypeScript. Protocol logic, routing, and crypto decisions live in TypeScript (`src/core/`).
-
-3. **Build order.** `src/core/` -> native modules -> `src/features/` -> `src/ui/`. Never write UI before core is unit-tested.
-
-4. **Protocol compatibility.** Never change the bitchat v2 packet byte layout (`src/core/mesh/wire/packet-codec.ts`) or the BLE Service UUID without a version bump and compat test. See `docs/spec/PROTOCOLS.md`.
-
-5. **Key storage.** Private keys via `src/core/crypto/keychain.ts` only (iOS Keychain / Android Keystore); never `expo-secure-store` directly, or the panic wipe cannot reach them. MMKV for non-secret state.
-
-6. **Packet signing.** Every outgoing packet is Ed25519-signed. Every incoming packet has its signature verified before relay or display. Drop unsigned/invalid packets silently.
-
-7. **No plaintext on disk.** Message content is encrypted at rest. Panic wipe destroys all keys, every database, the media cache and Tor state, and reports whether the keys actually went.
-
-8. **Polyfill at entry point.** `import 'react-native-get-random-values'` must be the first import in `src/app/app.tsx` before any `@noble` import.
-
-9. **Never hardcode user-facing text.** Add a key to `src/i18n/locales/en.ts` and use `T("your.key")` (component) or `t("your.key")` (outside React). The catalog keeps copy reviewable in one diff and is what makes a thirtieth language a new file rather than a sweep of every screen. CI fails on any hardcoded string. See [`i18n.md`](.github/skills/i18n.md).
-
-10. **Never translate anything that crosses the wire.** The `username.ts` adjective/noun lists derive identity. The transmitted `/hug` and `/slap` text is matched as an **English substring** by bitchat on receipt. Slash command tokens, channel names (`#bluetooth`) and geohashes are protocol. Translate the hint that describes a command, never the command. Enforced by `src/i18n/__tests__/catalog.test.ts`.
-
-11. **Never translate at module load.** `const X = { label: t("k") }` type-checks, renders fine, and freezes in whichever language the app started in. Module constants hold `TranslationKey`s; the component translates on render. Enforced by `npm run i18n:audit`.
-
-12. **Layout uses logical properties.** `marginStart` / `marginEnd` / `start` / `end`, never `marginLeft` / `left`. `textAlign: "right"` becomes `textAlignEnd` from `src/i18n/layout.ts`; directional chevrons come from there too. No right-to-left language ships yet, which is exactly why this needs enforcing: a physical `marginLeft` added now is not noticed until the first Arabic build.
-
 ## Project Folder Structure
 
 ```
@@ -80,6 +52,34 @@ docs/
 .github/agents/ # specialized Copilot agents
 .github/skills/ # domain reference files (read before working on a subsystem)
 ```
+
+## Non-Negotiable Rules
+
+Apply these to every suggestion, every file, every PR:
+
+1. **All crypto = `@noble/*` only.** `@noble/curves` (X25519, Ed25519), `@noble/ciphers` (ChaCha20-Poly1305, XChaCha20), `@noble/hashes` (SHA-256, HMAC, HKDF). No other crypto library. No exceptions.
+
+2. **Polyfill at entry point.** `import 'react-native-get-random-values'` must be the first import in `src/app/app.tsx` before any `@noble` import.
+
+3. **Key storage.** Private keys via `src/core/crypto/keychain.ts` only (iOS Keychain / Android Keystore); never `expo-secure-store` directly, or the panic wipe cannot reach them. MMKV for non-secret state.
+
+4. **Packet signing.** Every outgoing packet is Ed25519-signed. Every incoming packet has its signature verified before relay or display. Drop unsigned/invalid packets silently.
+
+5. **No plaintext on disk.** Message content is encrypted at rest. Panic wipe destroys all keys, every database, the media cache and Tor state, and reports whether the keys actually went.
+
+6. **Protocol compatibility.** Never change the bitchat v2 packet byte layout (`src/core/mesh/wire/packet-codec.ts`) or the BLE Service UUID without a version bump and compat test. See `docs/spec/PROTOCOLS.md`.
+
+7. **Native code boundary.** Swift lives in `ios/`. Kotlin lives in `android/`. These expose **raw bytes** to TypeScript. Protocol logic, routing, and crypto decisions live in TypeScript (`src/core/`).
+
+8. **Build order.** `src/core/` -> native modules -> `src/features/` -> `src/ui/`. Never write UI before core is unit-tested.
+
+9. **Never hardcode user-facing text.** Add a key to `src/i18n/locales/en.ts` and use `T("your.key")` (component) or `t("your.key")` (outside React). The catalog keeps copy reviewable in one diff and is what makes a thirtieth language a new file rather than a sweep of every screen. CI fails on any hardcoded string. See [`i18n.md`](.github/skills/i18n.md).
+
+10. **Never translate anything that crosses the wire.** The `username.ts` adjective/noun lists derive identity. The transmitted `/hug` and `/slap` text is matched as an **English substring** by bitchat on receipt. Slash command tokens, channel names (`#bluetooth`) and geohashes are protocol. Translate the hint that describes a command, never the command. Enforced by `src/i18n/__tests__/catalog.test.ts`.
+
+11. **Never translate at module load.** `const X = { label: t("k") }` type-checks, renders fine, and freezes in whichever language the app started in. Module constants hold `TranslationKey`s; the component translates on render. Enforced by `npm run i18n:audit`.
+
+12. **Layout uses logical properties.** `marginStart` / `marginEnd` / `start` / `end`, never `marginLeft` / `left`. `textAlign: "right"` becomes `textAlignEnd` from `src/i18n/layout.ts`; directional chevrons come from there too. Arabic, Persian and Urdu ship, so a physical side is wrong on screen today rather than latent. Eslint rejects every one of them.
 
 ## Key Protocol Constants (Never Change Without Version Bump)
 
@@ -122,10 +122,10 @@ Skills are reference files in `.github/skills/`. Read the relevant one before wo
 | Skill                                                             | Read before working on                                                        |
 | ----------------------------------------------------------------- | ----------------------------------------------------------------------------- |
 | [`bitchat-wire-format.md`](.github/skills/bitchat-wire-format.md) | `packet-codec.ts`, BLE native modules, any packet encoding or decoding        |
-| [`noise-sessions.md`](.github/skills/noise-sessions.md)           | `noise-xx.ts`, `noise-x.ts`, handshake logic, transport encryption            |
 | [`native-boundary.md`](.github/skills/native-boundary.md)         | `android/`, `ios/`, `src/bridge/`, TurboModule specs                          |
 | [`mesh-routing.md`](.github/skills/mesh-routing.md)               | `flood-router.ts`, `deduplicator.ts`, `fragment-manager.ts`, `gossip-sync.ts` |
-| [`nostr-gift-wrap.md`](.github/skills/nostr-gift-wrap.md)         | `gift-wrap.ts`, `courier-relay.ts`, any Nostr DM or event handling            |
+| [`noise-sessions.md`](.github/skills/noise-sessions.md)           | `noise-xx.ts`, `noise-x.ts`, handshake logic, transport encryption            |
 | [`courier-envelopes.md`](.github/skills/courier-envelopes.md)     | `prekey-bundle.ts`, `prekey-store.ts`, `courier-store.ts`, offline mail       |
+| [`nostr-gift-wrap.md`](.github/skills/nostr-gift-wrap.md)         | `gift-wrap.ts`, `courier-relay.ts`, any Nostr DM or event handling            |
 | [`i18n.md`](.github/skills/i18n.md)                               | `src/i18n/`, any user-facing copy anywhere, right-to-left layout              |
 | [`ui-ux.md`](.github/skills/ui-ux.md)                             | `src/ui/`, any style block, component, tappable surface or dark-mode work     |

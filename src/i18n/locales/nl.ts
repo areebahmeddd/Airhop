@@ -460,7 +460,7 @@ export const strings: Strings = {
   "chat.info.queued": "Wacht om verstuurd te worden",
   "chat.info.waiting": "Wachten…",
   "chat.action.info": "Berichtinfo",
-  "chat.action.save_photos": "Opslaan in foto's",
+  "chat.action.save_photos": "Opslaan in foto’s",
   "chat.action.save_copy": "Een kopie opslaan",
   "chat.action.forward": "Doorsturen",
   "chat.action.select": "Selecteren",
@@ -517,7 +517,7 @@ export const strings: Strings = {
     "{name} zit op bitchat, dat halverwege opgeeft bij een groot bestand. Onder ongeveer 350 KiB is betrouwbaar. Naar een Airhop-contact sturen kent die grens niet.",
   "chat.attach.bitchat_unopenable": "Ze kunnen dit misschien niet openen",
   "chat.attach.bitchat_unopenable_body":
-    "{name} zit op bitchat, dat foto's en spraakberichten laat zien maar al het andere als een bestand toont dat het niet kan openen. Het komt aan, ze kunnen het alleen misschien niet bekijken.",
+    "{name} zit op bitchat, dat foto’s en spraakberichten laat zien maar al het andere als een bestand toont dat het niet kan openen. Het komt aan, ze kunnen het alleen misschien niet bekijken.",
   "chat.attach.file": "Een bestand bijvoegen",
   "chat.attach.unavailable": "Bijlagen zijn hier niet mogelijk",
   "chat.attach.not_sent": "Bijlage niet verstuurd",
@@ -550,10 +550,10 @@ export const strings: Strings = {
   "chat.media.video": "Video",
   "chat.media.photo": "Foto",
   "chat.media.close_photo": "Foto sluiten",
-  "chat.media.save_photo": "Foto opslaan in je foto's",
+  "chat.media.save_photo": "Foto opslaan in je foto’s",
   "chat.media.share_photo": "Foto delen",
-  "chat.media.saved_videos": "Opgeslagen in je video's",
-  "chat.media.saved_photos": "Opgeslagen in je foto's",
+  "chat.media.saved_videos": "Opgeslagen in je video’s",
+  "chat.media.saved_photos": "Opgeslagen in je foto’s",
   "chat.media.not_saved": "Niet opgeslagen",
   "chat.media.cant_open": "Bestand kan niet worden geopend",
   "chat.media.no_app":
@@ -561,13 +561,13 @@ export const strings: Strings = {
   "chat.media.open_failed":
     "Het bestand kon niet worden geopend. Het is misschien uit de cache verwijderd.",
   "media.blocked.nostr_only":
-    "Je kent deze persoon alleen via een relay. Alleen tekst kan. Foto's, bestanden en spraakberichten hebben Bluetooth nodig.",
+    "Je kent deze persoon alleen via een relay. Alleen tekst kan. Foto’s, bestanden en spraakberichten hebben Bluetooth nodig.",
   "media.blocked.private_channel":
     "Een uitzendbijlage wordt wel ondertekend maar niet versleuteld, dus hem naar een privékanaal sturen zou hem in het open leggen terwijl de tekst hier versleuteld blijft.",
   "media.blocked.private_group":
     "Een uitzendbijlage wordt wel ondertekend maar niet versleuteld, dus hem naar een privégroep sturen zou hem in het open leggen terwijl de tekst hier versleuteld blijft.",
   "media.blocked.location_channel":
-    "Een locatiekanaal bereikt mensen via internet, en foto's, bestanden en spraakberichten gaan via Bluetooth, dus die zouden nooit aankomen.",
+    "Een locatiekanaal bereikt mensen via internet, en foto’s, bestanden en spraakberichten gaan via Bluetooth, dus die zouden nooit aankomen.",
 
   // ---- Chats: voice ----
   "chat.voice.unavailable": "Spraakberichten zijn hier niet mogelijk",
@@ -592,7 +592,7 @@ export const strings: Strings = {
   "chat.perm.camera_purpose": "een foto maken om te versturen",
   "chat.perm.photo_label": "Fototoegang",
   "chat.perm.photo_purpose": "een foto of video kiezen om te versturen",
-  "chat.perm.photo_save_purpose": "dit opslaan in je foto's",
+  "chat.perm.photo_save_purpose": "dit opslaan in je foto’s",
   "chat.perm.mic_label": "Microfoontoegang",
   "chat.perm.mic_live_purpose": "praten met mensen in de buurt",
   "chat.perm.mic_note_purpose": "een spraakbericht opnemen",
@@ -729,8 +729,8 @@ export const strings: Strings = {
     "Nog geen meldingen. Plaats er een zodat hij hier voor anderen blijft staan.",
 
   // ---- Chats: search results ----
-  "chat.search.photos": "Foto's",
-  "chat.search.videos": "Video's",
+  "chat.search.photos": "Foto’s",
+  "chat.search.videos": "Video’s",
   "chat.search.audio": "Audio",
   "chat.search.documents": "Documenten",
   "chat.search.links": "Links",
@@ -975,7 +975,7 @@ export const strings: Strings = {
     "Deze munten staan nog apart voor een verzending die je niet hebt afgerond, dus er valt niets op te eisen. Gebruik Terugnemen bij die betaling om ze meteen terug in je saldo te zetten.",
   "wallet.receive.already_have": "Zit al in je portemonnee",
   "wallet.receive.already_have_body":
-    "Elk bewijs in dit token staat hier al, dus er is niets bijgekomen. De saldo's zijn onveranderd.",
+    "Elk bewijs in dit token staat hier al, dus er is niets bijgekomen. De saldo’s zijn onveranderd.",
   "wallet.receive.stored_unconfirmed":
     "Opgeslagen van {mint}, maar nog niet bevestigd bij de mint ({reason}).",
   "wallet.receive.offline": "offline",
@@ -1047,7 +1047,7 @@ export const strings: Strings = {
   "wallet.mint.remove_with_balance": "Een mint met saldo weghalen?",
   "wallet.mint.remove": "Mint weghalen",
   "wallet.mint.delete_anyway": "Toch verwijderen",
-  "wallet.mint.consolidate": "Alle saldo's naar één mint verplaatsen",
+  "wallet.mint.consolidate": "Alle saldo’s naar één mint verplaatsen",
   "wallet.mint.confirm_with": "Bewijzen bevestigen bij {mint}",
   "wallet.mint.remove_a11y": "{mint} weghalen",
   "wallet.mint.available_amount": "{amount} {unit} beschikbaar",
@@ -1329,7 +1329,7 @@ export const strings: Strings = {
   "wallet.scan.use_camera": "Camera gebruiken",
   "wallet.scan.pick_image_a11y":
     "Een QR-code uit een opgeslagen afbeelding lezen",
-  "wallet.scan.pick_image": "Uit foto's kiezen",
+  "wallet.scan.pick_image": "Uit foto’s kiezen",
 
   // ---- Wallet: what is Cashu ----
   "wallet.explain.title": "Wat is Cashu?",
@@ -1447,7 +1447,7 @@ export const strings: Strings = {
   "wallet.svc.inexact_detail":
     "Het kleinste token dat je kunt sturen is {spend} {unit}. Offline bestaat er geen wisselgeld, dus de extra {extra} {unit} gaat naar de ontvanger.",
   "wallet.svc.no_single_mint":
-    "Geen enkele mint houdt in z'n eentje {amount} {unit}. Ecash van verschillende mints kan niet in één token worden samengevoegd: voeg het eerst bij één mint samen, of stuur het in aparte bedragen.",
+    "Geen enkele mint houdt in z’n eentje {amount} {unit}. Ecash van verschillende mints kan niet in één token worden samengevoegd: voeg het eerst bij één mint samen, of stuur het in aparte bedragen.",
   "wallet.svc.have_tried_send":
     "Je hebt {total} {unit} en probeerde {amount} te sturen.",
   "wallet.svc.invoice_needs":
@@ -1659,9 +1659,9 @@ export const strings: Strings = {
   "settings.general.undo_10_desc": "De langste marge",
   "settings.general.quality": "Uploadkwaliteit",
   "settings.general.quality_desc":
-    "Geldt voor foto's die je vanaf je camera of galerij stuurt. Hoe dan ook wordt elke foto op de mesh afgestemd.",
+    "Geldt voor foto’s die je vanaf je camera of galerij stuurt. Hoe dan ook wordt elke foto op de mesh afgestemd.",
   "settings.general.quality_low": "Laag",
-  "settings.general.quality_low_desc": "Kleinste foto's, snelst te versturen",
+  "settings.general.quality_low_desc": "Kleinste foto’s, snelst te versturen",
   "settings.general.quality_medium": "Gemiddeld",
   "settings.general.quality_medium_desc": "Evenwicht tussen detail en snelheid",
   "settings.general.quality_high": "Hoog",
@@ -1676,11 +1676,11 @@ export const strings: Strings = {
     "Lees en plaats berichten op Bluesky- en Mastodon-feeds",
   "settings.general.show_media": "Media automatisch tonen",
   "settings.general.show_media_desc":
-    "Foto's en video's verschijnen in de chat, of blijven achter een tik",
+    "Foto’s en video’s verschijnen in de chat, of blijven achter een tik",
   "settings.general.reset": "Instellingen resetten",
   "settings.general.media_retention": "Media bewaren gedurende",
   "settings.general.media_retention_desc":
-    "Foto's, video's en spraakberichten worden na de gekozen tijd verwijderd",
+    "Foto’s, video’s en spraakberichten worden na de gekozen tijd verwijderd",
   "settings.general.media_retention_sheet":
     "Kies hoe lang media op dit toestel blijft staan. Verwijderde media is niet terug te halen.",
   "settings.general.retention_7_desc":
@@ -1838,10 +1838,10 @@ export const strings: Strings = {
     "Krijg meldingen van nieuwe berichten, ook als de app dicht is. Zonder dit zie je ze pas als je Airhop opent.",
   "settings.permissions.camera": "Camera",
   "settings.permissions.camera_desc":
-    "Scan QR-codes en maak foto's of video's om te versturen. Zonder dit kun je nog steeds media uit je galerij delen.",
-  "settings.permissions.photos": "Foto's",
+    "Scan QR-codes en maak foto’s of video’s om te versturen. Zonder dit kun je nog steeds media uit je galerij delen.",
+  "settings.permissions.photos": "Foto’s",
   "settings.permissions.photos_desc":
-    "Stuur foto's uit je galerij en bewaar ontvangen media. Zonder dit kun je nog steeds nieuwe foto's maken en versturen met de camera.",
+    "Stuur foto’s uit je galerij en bewaar ontvangen media. Zonder dit kun je nog steeds nieuwe foto’s maken en versturen met de camera.",
   "settings.permissions.microphone": "Microfoon",
   "settings.permissions.microphone_desc":
     "Neem spraakberichten op en verstuur ze, of gebruik live spraak. Zonder dit werken spraakberichten en live spraak niet.",
@@ -1863,7 +1863,7 @@ export const strings: Strings = {
   "settings.storage.clear": "Leegmaken",
   "settings.storage.clear_title": "Media in de cache leegmaken?",
   "settings.storage.clear_body":
-    "Foto's, video's, spraakberichten en bestanden worden van dit toestel gehaald, zowel verstuurd als ontvangen. Ze zijn niet opnieuw te downloaden: hun ballonnen zeggen dat, en je kunt de afzender vragen ze opnieuw te sturen. Berichten en portemonnee blijven ongemoeid.",
+    "Foto’s, video’s, spraakberichten en bestanden worden van dit toestel gehaald, zowel verstuurd als ontvangen. Ze zijn niet opnieuw te downloaden: hun ballonnen zeggen dat, en je kunt de afzender vragen ze opnieuw te sturen. Berichten en portemonnee blijven ongemoeid.",
   "settings.storage.cleared": "Cache leeggemaakt",
   "settings.storage.freed": "{size} vrijgemaakt.",
 

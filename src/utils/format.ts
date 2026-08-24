@@ -19,11 +19,16 @@
 // are re-run. No formatter needs to be a hook.
 //
 // Digits: month and weekday names come from Intl and are correct per locale for
-// free. Numerals are pinned to Latin here on purpose. A byte count, a duration
-// and a clock time are machine data, they sit in `FontFamily.mono` next to
-// Latin units ("MiB", "sats"), and a run of Arabic-Indic digits beside a Latin
-// unit reads worse than either alone. Prose numbers, the ones inside a
-// translated sentence, get no such override and follow the locale.
+// free. Numerals are pinned to Latin here and everywhere else: `formatCount` in
+// `@i18n` pins prose counts the same way and `catalog.test.ts` forbids a catalog
+// its own, so the app renders one digit system rather than three sources of two.
+// Grouping still follows the locale, which is the half that helps: Hindi and
+// Tamil group by lakh, Georgian by thin space.
+//
+// Clock width: `hour: "2-digit"` gives "20:02" in a 24-hour locale and
+// "08:02 PM" in a 12-hour one. Both are right for their reader, so a row
+// carrying a timestamp sizes for the wider rather than forcing a format. The
+// pseudolocale exercises it: `qps-ploc` negotiates to a 12-hour English.
 
 import {
   satsToBtc,

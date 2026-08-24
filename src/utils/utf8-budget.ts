@@ -13,14 +13,25 @@
 
 const encoder = new TextEncoder();
 
+// Code points that cannot end a string, so a cut lands before them.
+//
+// A Devanagari or Bengali syllable is a consonant plus its vowel sign, and a cut
+// between the two orphans the sign onto a dotted circle. `\p{M}` is every such
+// mark, a trailing virama included. The joiner and variation selectors are the
+// emoji case: cut mid-sequence, a family renders as separate people.
+//
+// A character class rather than a grapheme walk, because Hermes has no
+// `Intl.Segmenter`. It covers the damage a budget cut can do.
+const DANGLING = /[\p{M}\u200D\uFE0E\uFE0F]/u;
+
 // Length of `text` in UTF-8 bytes.
 export function utf8ByteLength(text: string): number {
   return encoder.encode(text).length;
 }
 
-// The longest prefix of `text` that fits `maxBytes` of UTF-8, cut on a code
-// point boundary. Returns `text` unchanged when it already fits, so the common
-// path allocates nothing beyond the measurement.
+// The longest prefix of `text` that fits `maxBytes` of UTF-8, cut on a boundary
+// no script writes across. Returns `text` unchanged when it already fits, so the
+// common path allocates nothing beyond the measurement.
 export function truncateToUtf8Bytes(text: string, maxBytes: number): string {
   if (utf8ByteLength(text) <= maxBytes) return text;
   const codePoints = [...text];
@@ -29,8 +40,16 @@ export function truncateToUtf8Bytes(text: string, maxBytes: number): string {
   // applied on every keystroke.
   while (codePoints.length > 0) {
     codePoints.pop();
-    const candidate = codePoints.join("");
-    if (utf8ByteLength(candidate) <= maxBytes) return candidate;
+    if (utf8ByteLength(codePoints.join("")) > maxBytes) continue;
+    // Fits. Back off anything that cannot end a string: a mark whose base was
+    // just cut away, or a joiner with nothing left to join. See DANGLING.
+    while (
+      codePoints.length > 0 &&
+      DANGLING.test(codePoints[codePoints.length - 1])
+    ) {
+      codePoints.pop();
+    }
+    return codePoints.join("");
   }
   return "";
 }

@@ -51,24 +51,30 @@ jobs:
       - name: Set up JavaScript toolchain
         uses: ./.github/actions/setup-js
 
+      - name: Check no invisible characters
+        run: npm run verify:invisibles
+
+      # Require explicit acknowledgement for changes to vendored binaries.
+      - name: Verify vendored binaries
+        run: npm run verify:vendored
+
+      - name: Check no hardcoded strings
+        run: npm run i18n:audit -- --max 0
+
+      - name: Check native localized strings
+        run: npm run i18n:native
+
+      - name: Check no dead code
+        run: npm run deadcode
+
+      - name: Run type check
+        run: npm run typecheck
+
       - name: Check formatting
         run: npm run format:check
 
       - name: Run linter
         run: npm run lint
-
-      - name: Run type check
-        run: npm run typecheck
-
-      - name: Check no invisible characters
-        run: npm run verify:invisibles
-
-      - name: Check no hardcoded strings
-        run: npm run i18n:audit -- --max 0
-
-      # Require explicit acknowledgement for changes to vendored binaries.
-      - name: Verify vendored binaries
-        run: npm run verify:vendored
 
   test:
     name: Unit Tests

@@ -9,7 +9,6 @@ import PrimaryButton from "@ui/components/primary-button";
 import { useReducedMotion } from "@ui/hooks/use-reduced-motion";
 import {
   Duration,
-  FontFamily,
   FontSize,
   FontWeight,
   Radius,
@@ -318,10 +317,11 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       borderRadius: Radius.xs,
       backgroundColor: Colors.textMuted,
     },
+    // Catalog sentences, so prose. Also the first screen a new install shows,
+    // the worst place for a script the monospace has no glyphs for.
     stepText: {
       fontSize: FontSize.xs,
       color: Colors.textMuted,
-      fontFamily: FontFamily.mono,
     },
   });
 }

@@ -45,11 +45,16 @@ function getDeviceLocale(): string {
 // Cache keys fold in the language the name was resolved in.
 //
 // Reverse geocoding is done by the OS, and both platforms answer in the
-// device's language: iOS CLGeocoder follows the bundle's preferred
-// localization and Android's Geocoder follows the default Locale, and neither
-// takes a locale argument. So a cell resolved while the phone was in English
-// stays "Kumaraswamy Layout" and one resolved in Hindi comes back in
-// Devanagari.
+// DEVICE's language rather than the app's: iOS CLGeocoder follows the bundle's
+// preferred localization, Android's Geocoder the default Locale. So a cell
+// resolved in English stays "Kumaraswamy Layout" and one resolved in Hindi comes
+// back in Devanagari.
+//
+// The one surface that does not follow the in-app picker, and a limit of the
+// wrapper rather than the platforms: both native APIs take a locale,
+// `expo-location` exposes neither. A native shim for a room-header label is not
+// worth it, so keying on the language is the fix: a stale spelling cannot
+// outlive the setting that produced it.
 //
 // Keyed on the geohash alone the cache never expires, so changing the phone's
 // language leaves every seen channel labelled in the old one permanently. Keying

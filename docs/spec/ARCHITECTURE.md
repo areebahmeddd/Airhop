@@ -191,8 +191,8 @@ The interface is the same whichever radio carries the message.
 MessageRouter.ts - transport selection
 
 Local radios, used together:
-  WiFi Aware/Direct - both parties have it active and are in range (~30m, 250Mbps)
   BLE Mesh          - recipient is nearby, confirmed by announce
+  WiFi Aware/Direct - both parties have it active and are in range (~30m, 250Mbps)
 
 Ordered fallbacks, tried when no local radio reaches the recipient:
 1. Nostr Relay       - internet available, recipient confirmed offline
@@ -226,20 +226,6 @@ Identical to bitchat's design:
 - Up to 128 concurrent reassemblies
 - Range of roughly 30 to 50 m per hop, so 7 hops reaches about 350 m
 
-### Same-platform WiFi
-
-> [!IMPORTANT]
-> Android WiFi Aware and iOS MultipeerConnectivity are different protocols and
-> cannot talk to each other. This is an Android-to-Android or iPhone-to-iPhone
-> accelerator only; anything cross-platform uses Bluetooth or Nostr. Apple
-> shipped a standards-based Wi-Fi Aware framework in iOS 26 which could close
-> the gap, at the cost of making the feature iOS 26+ only.
-
-- Android: [`WifiAwareManager`](https://developer.android.com/develop/connectivity/wifi/wifi-aware), 250 Mbps, no internet or router. Discovery is API 26, but the data path needs API 29: the peer's address is a link-local IPv6 delivered in `WifiAwareNetworkInfo`, which does not exist before then, so below API 29 the transport reports itself unavailable and BLE carries everything. Android 17 additionally gates the socket behind `ACCESS_LOCAL_NETWORK`, declared already
-- iOS: [`MultipeerConnectivity`](https://developer.apple.com/documentation/multipeerconnectivity), 30 to 100 Mbps between nearby iOS devices
-- Same `Transport` interface as BLE, so the mesh engine does not know which radio it has
-- Carries what BLE cannot: live video, large files, high-quality voice
-
 ### LAN transport
 
 WiFi Aware is a radio protocol rather than a way of using a network: two phones
@@ -263,6 +249,20 @@ which Aware cannot. Neither is a superset of the other.
 | Client isolation | Most guest and venue WiFi blocks peer-to-peer traffic at the access point, and it cannot be detected before trying. The UI has to say "no peers on this network" rather than spin |
 | mDNS filtering   | Common even where ordinary traffic works. A manual join by address covers it                                                                                                      |
 | iOS background   | A TCP socket has no equivalent of `bluetooth-central`, so a locked iPhone drops the link. A foreground accelerator, as WiFi Aware already is                                      |
+
+### Same-platform WiFi
+
+> [!IMPORTANT]
+> Android WiFi Aware and iOS MultipeerConnectivity are different protocols and
+> cannot talk to each other. This is an Android-to-Android or iPhone-to-iPhone
+> accelerator only; anything cross-platform uses Bluetooth or Nostr. Apple
+> shipped a standards-based Wi-Fi Aware framework in iOS 26 which could close
+> the gap, at the cost of making the feature iOS 26+ only.
+
+- Android: [`WifiAwareManager`](https://developer.android.com/develop/connectivity/wifi/wifi-aware), 250 Mbps, no internet or router. Discovery is API 26, but the data path needs API 29: the peer's address is a link-local IPv6 delivered in `WifiAwareNetworkInfo`, which does not exist before then, so below API 29 the transport reports itself unavailable and BLE carries everything. Android 17 additionally gates the socket behind `ACCESS_LOCAL_NETWORK`, declared already
+- iOS: [`MultipeerConnectivity`](https://developer.apple.com/documentation/multipeerconnectivity), 30 to 100 Mbps between nearby iOS devices
+- Same `Transport` interface as BLE, so the mesh engine does not know which radio it has
+- Carries what BLE cannot: live video, large files, high-quality voice
 
 ### Nostr
 
@@ -715,52 +715,92 @@ uplinks.
 
 ## 10. Localization
 
-Airhop ships in 35 languages. Every user-facing string lives in one catalog
-per language under `src/i18n/locales/`, compiled into the bundle. Working
-reference: [`.github/skills/i18n.md`](../../.github/skills/i18n.md).
+Airhop ships in 35 languages. Every user-facing string lives in one catalog per
+language under `src/i18n/locales/`, compiled into the bundle: 1,535 strings and
+27 plural keys, byte-identical on every device. Working reference:
+[`.github/skills/i18n.md`](../../.github/skills/i18n.md).
 
-### Why this is a protocol concern
+### Why this sits in the spec
 
 The app is scoped to blackouts, protests and disasters. The languages spoken
 there are Persian, Arabic, Urdu, Hindi, Bengali, Punjabi, Tamil, Indonesian,
-Filipino, Nepali, Ukrainian and Russian. An English-only UI during a network shutdown in Tehran
-or Dhaka does not reach the person it was built for.
+Filipino, Nepali, Ukrainian and Russian. An English-only UI during a shutdown in
+Tehran or Dhaka does not reach the person it was built for.
+
+Three of those read right to left and several are written in scripts with
+rendering rules the code has to know about, so this is a correctness concern
+rather than a presentation one. A mention that never fires, a name that reorders
+the punctuation around it and a row frozen in last week's language are all
+silent: nothing looks broken, and the feature simply does not work.
 
 ### Decisions
 
-| Decision                                                   | Rationale                                                                                                                                                                                                                                                                                                                                 |
-| ---------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Bundled catalogs, never fetched                            | A translation download is a network call and a fingerprint, and it would fail in exactly the conditions this app exists for                                                                                                                                                                                                               |
-| No i18n library                                            | i18next and react-intl bring namespaces, lazy network backends and untyped runtime keys, none of which suits an offline-first app with a bundled catalog                                                                                                                                                                                  |
-| Completeness enforced by `tsc`                             | Every locale is `Record<TranslationKey, string>` derived from `en.ts`, so a partial locale does not compile and needs no runtime fallback                                                                                                                                                                                                 |
-| Plural rules hand-written, not polyfilled                  | Hermes has no `Intl.PluralRules`. 35 languages reduce to nine CLDR rule shapes, so `src/i18n/plurals.ts` is nine functions rather than a dependency plus one locale-data module per language. `plurals.test.ts` checks every rule against Node's ICU                                                                                      |
-| Device language read through `Intl`                        | `Intl.DateTimeFormat().resolvedOptions().locale` is present on Hermes on both platforms. `expo-localization` would mean a config plugin against native trees that must never see `prebuild`                                                                                                                                               |
-| A right-to-left switch waits for the next launch           | React Native fixes layout direction at process start. A forced restart would destroy every Noise session, empty the peer table and cut live voice, so the preference is stored and applied on next launch                                                                                                                                 |
-| Prose numerals follow the locale, machine data stays Latin | A byte count, a clock time and a wallet balance sit in the monospace face next to Latin units. Numbers inside a translated sentence get no override                                                                                                                                                                                       |
-| Strings the OS renders stay where the OS reads them        | iOS permission dialogs live in `<code>.lproj/InfoPlist.strings`, the Android service notification in `res/values-<qualifier>/strings.xml`, and `res/xml/locales_config.xml` lets Android 13 offer a per-app language for them. All selected by device language, not app language, and `npm run i18n:native` holds them to the shipped set |
-| Translation happens at display, never at storage           | A `t()` result written into MMKV freezes in the language of the day it was stored. Persisted rows keep a `systemKey` and translate on render                                                                                                                                                                                              |
+| Decision                                         | Rationale                                                                                                                                                                                                                                                                                               |
+| ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Bundled catalogs, never fetched                  | A translation download is a network call and a fingerprint, and it would fail in exactly the conditions this app exists for                                                                                                                                                                             |
+| No i18n library                                  | i18next and react-intl bring namespaces, lazy network backends and untyped runtime keys, none of which suits an offline-first app with a bundled catalog                                                                                                                                                |
+| Completeness enforced by `tsc`                   | Every locale is `Record<TranslationKey, string>` derived from `en.ts`, so a partial locale does not compile and needs no runtime fallback                                                                                                                                                               |
+| Plural rules hand-written, not polyfilled        | Hermes has no `Intl.PluralRules`. 35 languages reduce to nine CLDR rule shapes, so `plurals.ts` is nine functions rather than a dependency plus a locale-data module per language. `plurals.test.ts` checks every rule against Node's ICU                                                               |
+| Device language read through `Intl`              | `Intl.DateTimeFormat().resolvedOptions().locale` is present on Hermes on both platforms. `expo-localization` would mean a config plugin against native trees that must never see `prebuild`                                                                                                             |
+| Translation happens at display, never at storage | A `t()` result written into MMKV freezes in the language of the day it was stored. Persisted rows keep a `systemKey` and translate on render                                                                                                                                                            |
+| A right-to-left switch waits for the next launch | React Native fixes layout direction at process start and iOS has no sanctioned self-restart, so the preference is stored and applied next launch. Both facts it depends on are read rather than assumed: `I18nManager.isRTL` for the direction in force, `frameLanguage` for the language it belongs to |
+| Every substituted value is bidi-isolated         | A placeholder holds text of unknown direction. Unisolated, the bidirectional algorithm resolves the punctuation around it against whichever way that text reads, so an Arabic name in an English sentence drags the comma to the wrong side. One wrap in `interpolate` covers every key                 |
+| Word boundaries are Unicode, not ASCII           | A closing `[\s.,!?;:]` is the punctuation of a third of these languages, so "@name。" has to count as a mention or it passes no mute and raises no notification. Comparisons normalise to NFC, since two keyboards spell the same accented character differently                                        |
+| One digit system, locale grouping                | Every number the app renders uses Latin digits, prose counts included, and `catalog.test.ts` forbids a catalog its own. Grouping still follows the locale, which is the half that helps: Hindi and Tamil group by lakh                                                                                  |
+| Strings the OS renders stay where it reads them  | Passing them through the app would mean a native shim on both platforms for a permission dialog and a notification. `npm run i18n:native` holds them to the shipped set instead                                                                                                                         |
+| A generated pseudolocale, debug builds only      | `qps-ploc` accents every string, brackets it and pads it past the longest real translation of the same key, so a layout can be proven against all 35 languages at once without reading any of them                                                                                                      |
+
+### Which language each surface follows
+
+Both platforms offer a per-app language of their own: Android 13's picker, which
+`res/xml/locales_config.xml` opts into, and iOS's, which appears once a bundle
+carries more than one localization. Airhop ships its own as well, because
+neither exists below Android 13 and because changing a system setting is not
+something to ask of somebody using this app under duress.
+
+Two settings for one question, so the split is deliberate:
+
+| Surface                                             | Follows              |
+| --------------------------------------------------- | -------------------- |
+| Everything rendered by React Native                 | The in-app picker    |
+| iOS permission dialogs, Android's foreground notice | The OS per-app value |
+| Reverse-geocoded place names                        | The OS per-app value |
+
+On the default "system" preference the two agree, because the device language is
+re-sampled on every foreground edge. Android needs that: it recreates the
+Activity for a language change while keeping the JS context alive.
+
+Picking a language explicitly pins the app and leaves the OS-rendered strings on
+the system value. Writing through to `LocaleManager.setApplicationLocales` would
+close that gap and is not done: it recreates the Activity underneath a live
+mesh, in-flight transfers and possibly live voice, for five notification
+strings.
 
 ### What never gets translated
 
 Some strings cross the wire or derive an identity, so a translated variant is an
-interop bug rather than a cosmetic one. The full list is in the skill file and
-`catalog.test.ts` enforces it. The two that matter most:
+interop bug rather than a cosmetic one. `catalog.test.ts` enforces the full
+list, which lives in the skill file. The two that matter here:
 
-- **The username word lists** (`src/utils/username.ts`). A generated name must resolve identically on every device and in bitchat.
-- **The transmitted `/hug` and `/slap` text.** bitchat/ios recognises an incoming emote by matching the English substrings in `ChatPublicConversationCoordinator.swift`.
+- **The username word lists** (`src/utils/username.ts`). A generated name must resolve identically on every device, and in bitchat.
+- **The transmitted `/hug` and `/slap` text.** bitchat/ios recognises an incoming emote by matching the English substrings.
 
-Terms of Service and Privacy Policy stay in English with the reader chrome around
-them translated. English is the authoritative version.
+Terms of Service and Privacy Policy stay in English, with the reader chrome
+around them translated. English is the authoritative version.
 
-### Consistency across devices
+Nothing on the wire carries a language, a locale or a script. A Persian reader
+and an English one are indistinguishable at the protocol layer, and a courier
+holding sealed mail for either cannot tell them apart.
 
-Text is identical everywhere because it is compiled in. What varies:
+### What varies between devices
 
-| Varies                                        | Handling                                                                                                                                                                             |
-| --------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `Intl` date and number output, per OS and OEM | Centralised in `src/utils/format.ts`, formatted in the app's language rather than the device's, with cached formatters and Latin numerals for machine data                           |
-| Font glyph coverage for non-Latin scripts     | Monospace is restricted to machine data, so translated prose never uses it                                                                                                           |
-| Cached reverse-geocoded place names           | These come from the OS geocoder, which answers in the device's language and takes no locale argument. `place-names-store.ts` keys its cache on that language so a change re-resolves |
+Text is identical everywhere because it is compiled in. Three things are not:
+
+| Varies                                        | Handling                                                                                                                                                                                                                                                     |
+| --------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `Intl` date and number output, per OS and OEM | Centralised in `src/utils/format.ts`, formatted in the app's language rather than the device's, with cached formatters and Latin digits throughout                                                                                                           |
+| Font glyph coverage for non-Latin scripts     | JetBrains Mono covers Latin, Greek and Cyrillic and none of the other ten scripts shipped, so the monospace face is reserved for machine data: a value from a formatter or a constant may use it, a value through a catalog key is prose                     |
+| Cached reverse-geocoded place names           | The OS geocoder answers in the device's language. Both native APIs accept a locale and `expo-location` exposes neither, and a native shim for a room-header label is not worth it, so `place-names-store.ts` keys its cache on that language and re-resolves |
 
 ## 11. Codebase Layout
 

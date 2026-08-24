@@ -228,13 +228,20 @@ function collect(file) {
   return hits.map((h) => ({ ...h, file: rel }));
 }
 
-// The two shapes the line scanner cannot see, found on the AST instead: JSX
-// text that wraps (prettier breaks at 80 columns, so the sentences long enough
-// to be worth translating are exactly the ones that escape a per-line regex),
-// and template literals (the scanner bails on any line holding `${`). A node
-// knows its own extent. Additive: still filtered by looksLikeCopy and
-// SKIP_FILES, and deduped
-// against the line scanner.
+// The three shapes the line scanner cannot see, found on the AST instead, where
+// a node knows its own extent:
+//
+//   JSX text that wraps, since prettier breaks at 80 columns and the sentences
+//   worth translating are the ones long enough to escape a per-line regex.
+//
+//   Template literals, since the scanner bails on any line holding `${`.
+//
+//   String literals INSIDE an interpolation, the blind spot that bail creates.
+//   Prose in a conditional between two spans sits on a line already given up on:
+//   `${urgent ? "Urgent notice · " : "Notice · "}${content}`.
+//
+// Additive: still filtered by looksLikeCopy and SKIP_FILES, and deduped against
+// the line scanner.
 // /
 function collectAst(file) {
   const rel = path.relative(ROOT, file);
@@ -256,8 +263,25 @@ function collectAst(file) {
     const { line } = sf.getLineAndCharacterOfPosition(node.getStart(sf));
     hits.push({ line: line + 1, value, file: rel });
   };
+  // The lines the line scanner declined, so this pass covers its gap exactly
+  // and reports nothing twice.
+  const skippedLines = new Set();
+  src.split(/\r?\n/).forEach((line, index) => {
+    if (/\$\{/.test(line)) skippedLines.add(index + 1);
+  });
+  const onSkippedLine = (node) =>
+    skippedLines.has(
+      sf.getLineAndCharacterOfPosition(node.getStart(sf)).line + 1,
+    );
+
   (function visit(node) {
     if (ts.isJsxText(node)) {
+      push(node, node.text);
+    } else if (
+      (ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node)) &&
+      onSkippedLine(node) &&
+      !isDeveloperMessage(node)
+    ) {
       push(node, node.text);
     } else if (ts.isTemplateExpression(node)) {
       // A message built for a stack trace is not copy. Only checked here

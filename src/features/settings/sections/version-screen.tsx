@@ -25,7 +25,6 @@ import { useMeshStateStore } from "@store/mesh-state-store";
 import { useSettingsStore } from "@store/settings-store";
 import PrimaryButton from "@ui/components/primary-button";
 import {
-  FontFamily,
   FontSize,
   FontWeight,
   Spacing,
@@ -502,10 +501,12 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       alignItems: "center",
       gap: Spacing.xs,
     },
+    // The number is machine data, "Version {version}" is a sentence around it,
+    // and the sentence is what the face renders. Same call as `settingValue`: a
+    // value through a catalog key is prose.
     version: {
       fontSize: FontSize.sm,
       color: Colors.textMuted,
-      fontFamily: FontFamily.mono,
     },
     codenameRow: {
       flexDirection: "row",

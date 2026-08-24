@@ -16,6 +16,7 @@ import {
   needsRelaunch,
   resolvePreference,
   SHIPPED_LANGUAGES,
+  stripIsolates,
   t,
   tPlural,
 } from "../index";
@@ -122,6 +123,20 @@ describe("which language is on screen", () => {
       if (!isRTL(code)) expect(deferred).toBe(false);
     }
   });
+
+  it("reports a deferred language rather than rendering it in the wrong frame", () => {
+    // The runner boots left to right, which is the first-launch frame on an
+    // Arabic phone: `forceRTL(true)` has not taken effect yet. Taking the wanted
+    // language's direction on trust there renders right-to-left prose into a
+    // left-to-right frame and reports `needsRelaunch` as false, which is the one
+    // combination with no way out and nothing on screen saying so.
+    for (const code of SHIPPED_LANGUAGES.filter(isRTL)) {
+      useSettingsStore.setState({ language: code });
+      expect(needsRelaunch(code)).toBe(true);
+      // Rendering a language whose direction matches the frame in force.
+      expect(isRTL(getLanguage())).toBe(false);
+    }
+  });
 });
 
 describe("device language", () => {
@@ -192,9 +207,9 @@ describe("device language", () => {
 
 describe("interpolation", () => {
   it("substitutes named placeholders", () => {
-    expect(t("settings.opens_externally", { label: "About" })).toBe(
-      "About, opens outside the app",
-    );
+    expect(
+      stripIsolates(t("settings.opens_externally", { label: "About" })),
+    ).toBe("About, opens outside the app");
   });
 
   it("leaves an unfilled placeholder visible rather than blanking it", () => {
@@ -206,13 +221,32 @@ describe("interpolation", () => {
   it("ignores extra variables", () => {
     expect(t("common.cancel", { unused: 1 })).toBe("Cancel");
   });
+
+  // A name with a direction of its own, so the isolates have work to do.
+  const ARABIC_NAME = "أحمد";
+
+  it("isolates every substituted value", () => {
+    // Unisolated, the bidirectional algorithm resolves the punctuation around a
+    // substituted name against whichever way that name reads. See
+    // `interpolate`.
+    const rendered = t("settings.opens_externally", { label: ARABIC_NAME });
+    expect(rendered).toBe(`\u2068${ARABIC_NAME}\u2069, opens outside the app`);
+  });
+
+  it("leaves a string with no placeholders untouched", () => {
+    // Added per substitution, never around the sentence, so a string with no
+    // placeholders is byte-identical to its catalog entry.
+    expect(t("common.cancel")).toBe("Cancel");
+  });
 });
 
 describe("plurals", () => {
   it("selects the English categories", () => {
-    expect(tPlural("mesh.peers_in_range", 1)).toBe("1 peer in range");
-    expect(tPlural("mesh.peers_in_range", 0)).toBe("0 peers in range");
-    expect(tPlural("mesh.peers_in_range", 7)).toBe("7 peers in range");
+    const rendered = (n: number): string =>
+      stripIsolates(tPlural("mesh.peers_in_range", n));
+    expect(rendered(1)).toBe("1 peer in range");
+    expect(rendered(0)).toBe("0 peers in range");
+    expect(rendered(7)).toBe("7 peers in range");
   });
 
   it("provides {count} without the caller passing it", () => {
@@ -220,16 +254,24 @@ describe("plurals", () => {
   });
 
   it("still takes other variables alongside the count", () => {
-    expect(tPlural("wallet.backup.recovered", 2, { mints: "2 mints" })).toBe(
-      "Recovered 2 unspent proofs from 2 mints.",
-    );
+    expect(
+      stripIsolates(
+        tPlural("wallet.backup.recovered", 2, { mints: "2 mints" }),
+      ),
+    ).toBe("Recovered 2 unspent proofs from 2 mints.");
   });
 
-  it("formats the count in the reading language, not the device's", () => {
-    // A count inside a sentence is prose, so it follows the language rather
-    // than the Latin pinning `utils/format.ts` applies to machine data. In
-    // English that means a grouping separator.
+  it("groups the count in the reading language, not the device's", () => {
+    // Grouping follows the language (English by thousand, Hindi by lakh); the
+    // digits do not, so the app never renders two numbering systems at once.
+    useSettingsStore.setState({ language: "en" });
     expect(tPlural("mesh.peers_in_range", 12_000)).toContain("12,000");
+    useSettingsStore.setState({ language: "hi" });
+    expect(tPlural("mesh.peers_in_range", 1_234_567)).toContain("12,34,567");
+    useSettingsStore.setState({ language: "bn" });
+    // Bengali resolves to `beng` digits without the pin.
+    expect(tPlural("mesh.peers_in_range", 5)).toContain("5");
+    useSettingsStore.setState({ language: "en" });
   });
 });
 

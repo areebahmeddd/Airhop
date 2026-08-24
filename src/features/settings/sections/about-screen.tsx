@@ -47,7 +47,11 @@ export default function AboutScreen({
               icon="tag"
               label={T("settings.about.version")}
               description={T("settings.about.version_desc")}
-              control={<Text style={styles.settingValue}>{APP_VERSION}</Text>}
+              control={
+                <Text style={[styles.settingValue, styles.settingValueMono]}>
+                  {APP_VERSION}
+                </Text>
+              }
               onPress={onOpenVersion}
               accessibilityLabel={T("settings.about.version_a11y")}
             />

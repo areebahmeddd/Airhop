@@ -25,7 +25,18 @@ import ProfileScreen from "@features/settings/profile-screen";
 import WalletScreen, {
   type WalletAction,
 } from "@features/wallet/wallet-screen";
-import { initI18n, t, useT, useTPlural, type TranslationKey } from "@i18n";
+import {
+  initI18n,
+  LANGUAGES,
+  needsRelaunch,
+  refreshDeviceLanguage,
+  resolvePreference,
+  t,
+  translatorFor,
+  useT,
+  useTPlural,
+  type TranslationKey,
+} from "@i18n";
 import { arrowBack, isRTLLayout } from "@i18n/layout";
 import { getBatterySettingsTargets } from "@platform/battery-optimization";
 import {
@@ -128,7 +139,7 @@ import {
 import { parseAirhopLink } from "@utils/deep-link";
 import { formatNumber } from "@utils/format";
 import { mentionsNickname } from "@utils/mentions";
-import { messagePreviewText } from "@utils/message-preview";
+import { messagePreviewEntry } from "@utils/message-preview";
 import { sumUnread } from "@utils/unread";
 import { peerIDToUsername } from "@utils/username";
 import { settleOr, withTimeout } from "@utils/with-timeout";
@@ -585,6 +596,30 @@ function AppContent(): React.JSX.Element {
   const T = useT();
   const TP = useTPlural();
 
+  // The restart notice, and the only place it is raised.
+  //
+  // A right-to-left language is a preference until the next launch (see
+  // `@i18n`), and two routes arrive there: the picker, and a first launch on a
+  // right-to-left phone. One owner, so both say the same thing once.
+  //
+  // Written in the language being waited for, not the one on screen: its reader
+  // is by definition somebody who cannot read the current UI language.
+  const languagePreference = useSettingsStore((s) => s.language);
+  const noticeShownFor = useRef<string | null>(null);
+  useEffect(() => {
+    if (!needsRelaunch(languagePreference)) return;
+    const target = resolvePreference(languagePreference);
+    if (noticeShownFor.current === target) return;
+    noticeShownFor.current = target;
+    const inTarget = translatorFor(target);
+    showAlert(
+      inTarget("settings.language.rtl_title"),
+      inTarget("settings.language.rtl_body", {
+        value: inTarget(LANGUAGES[target].nameKey),
+      }),
+    );
+  }, [languagePreference]);
+
   // appReady guards against a flash of the welcome screen on every launch.
   // The identity check is async, so we render nothing until it resolves.
   const [appReady, setAppReady] = useState(false);
@@ -1023,6 +1058,10 @@ function AppContent(): React.JSX.Element {
       }
       if (next === "active") {
         syncPermissions();
+        // The trip away may have been to Settings. Both Android language
+        // pickers recreate the Activity and keep the JS context, so the sampled
+        // language is what a return can silently invalidate.
+        refreshDeviceLanguage();
         // The Mesh tab is a tap away now, so a "someone nearby" from earlier is
         // stale the moment the app is open.
         void dismissNearbyNotification();
@@ -1097,7 +1136,9 @@ function AppContent(): React.JSX.Element {
             isDM: msg.channel.startsWith("dm:"),
             senderID: msg.senderID,
             senderNickname: msg.senderNickname,
-            preview: messagePreviewText(msg),
+            // Spread, so an attachment with no caption logs its key too and the
+            // bell reads in the current language rather than the arrival one.
+            ...messagePreviewEntry(msg),
             timestampMs: msg.timestampMs,
           });
         }

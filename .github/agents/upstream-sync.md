@@ -113,6 +113,10 @@ Output the checklist in this format:
 
 - [ ] ...
 
+### ⚪ MAINTENANCE: Note Only
+
+- [count] changes (deps, refactors, tests, docs, CI). List one only if it moves a pinned artifact.
+
 **Recommended additions to docs/dev/PROGRESS.md decision log:**
 
 | Date    | Decision                | Rationale |

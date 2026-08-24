@@ -7,7 +7,7 @@
 // to read as "top hits" instead of a raw chronological dump.
 
 import { findTokensInText, mayContainToken } from "@core/payments/cashu";
-import { t } from "@i18n";
+import { getLanguage, stripIsolates, t } from "@i18n";
 import type { AttachmentType, ChatMessage } from "@store/chat-store";
 import { selectKeysetIds, useWalletStore } from "@store/wallet-store";
 import { conversationDisplayName } from "./conversation-display-name";
@@ -108,27 +108,27 @@ export function filterMessages(
   query: string,
   messages: Record<string, ChatMessage[]>,
 ): MessageHit[] {
-  const q = query.trim().toLowerCase();
+  const q = searchKey(query.trim());
   const hits: MessageHit[] = [];
   for (const [channel, list] of Object.entries(messages)) {
     for (const message of list) {
       if (message.isSystem) continue;
       if (!messageMatchesFilter(message, filter)) continue;
 
-      const searchable = searchableMessageText(message);
-      let snippet = searchable;
+      const { hay, display } = searchable(searchableMessageText(message));
+      let snippet = display;
       let matchStart = 0;
       let matchEnd = 0;
       let score = 0;
 
       if (q) {
-        const index = searchable.toLowerCase().indexOf(q);
+        const index = hay.indexOf(q);
         if (index === -1) continue; // must also match the typed text
-        const built = buildSnippet(searchable, index, q.length);
+        const built = buildSnippet(display, index, q.length);
         snippet = built.snippet;
         matchStart = built.matchStart;
         matchEnd = built.matchEnd;
-        score = scoreMatch(searchable, index);
+        score = scoreMatch(hay, index);
       }
 
       hits.push({
@@ -201,6 +201,35 @@ export function searchableMessageText(message: ChatMessage): string {
   return parts.join(" ").trim() || messagePreviewText(message);
 }
 
+// One canonical form for matching, one for showing, from the same text.
+//
+// NFC for the reason `mentionsNickname` gives: two keyboards emit the same
+// accented character differently, which Vietnamese and Korean hit hardest.
+// Isolates stripped because a system row is searched through `messageText`, and
+// a query never contains them.
+//
+// Both come back together because `buildSnippet` slices by index, so a snippet
+// cut from a different string than the one matched highlights the wrong
+// characters. Lowercasing is length-preserving except for Turkish "İ", where
+// `display` steps down to the folded form to keep every offset valid.
+interface Searchable {
+  // Matched against. Never rendered.
+  hay: string;
+  // Rendered. Same length as `hay`, so an index into one is an index into both.
+  display: string;
+}
+
+function searchable(text: string): Searchable {
+  const display = stripIsolates(text.normalize("NFC"));
+  const hay = display.toLowerCase();
+  return { hay, display: hay.length === display.length ? display : hay };
+}
+
+// The needle. Only ever compared, so it needs no display form.
+function searchKey(text: string): string {
+  return stripIsolates(text.normalize("NFC")).toLowerCase();
+}
+
 // matchIndex === 0: prefix match. Match starts right after whitespace: word
 // boundary. Anything else: mid-word substring match.
 function scoreMatch(text: string, matchIndex: number): number {
@@ -225,17 +254,24 @@ function buildSnippet(
 }
 
 export function searchChats(query: string, channels: string[]): ChatHit[] {
-  const q = query.trim().toLowerCase();
+  const q = searchKey(query.trim());
   if (!q) return [];
   const hits: ChatHit[] = [];
   for (const channel of channels) {
     const name = conversationDisplayName(channel);
-    const index = name.toLowerCase().indexOf(q);
+    const { hay } = searchable(name);
+    const index = hay.indexOf(q);
     if (index === -1) continue;
-    hits.push({ channel, displayName: name, score: scoreMatch(name, index) });
+    // The row still shows the name as written; only the match ran on the key.
+    hits.push({ channel, displayName: name, score: scoreMatch(hay, index) });
   }
   return hits.sort(
-    (a, b) => b.score - a.score || a.displayName.localeCompare(b.displayName),
+    // Ordered in the language being read, not the runner's: `localeCompare`
+    // with no locale asks the engine for its default, which is the device's and
+    // therefore the one value that differs from the app's.
+    (a, b) =>
+      b.score - a.score ||
+      a.displayName.localeCompare(b.displayName, getLanguage()),
   );
 }
 
@@ -246,14 +282,15 @@ export function searchNotices(
   query: string,
   notices: SearchableNotice[],
 ): NoticeHit[] {
-  const q = query.trim().toLowerCase();
+  const q = searchKey(query.trim());
   if (!q) return [];
   const hits: NoticeHit[] = [];
   for (const n of notices) {
-    const contentIndex = n.content.toLowerCase().indexOf(q);
+    const content = searchable(n.content);
+    const contentIndex = content.hay.indexOf(q);
     if (contentIndex !== -1) {
       const { snippet, matchStart, matchEnd } = buildSnippet(
-        n.content,
+        content.display,
         contentIndex,
         q.length,
       );
@@ -266,12 +303,13 @@ export function searchNotices(
         snippet,
         matchStart,
         matchEnd,
-        score: scoreMatch(n.content, contentIndex),
+        score: scoreMatch(content.hay, contentIndex),
       });
       continue;
     }
     // Author-name match: show the content as context, no in-content highlight.
-    const authorIndex = n.author.toLowerCase().indexOf(q);
+    const author = searchable(n.author);
+    const authorIndex = author.hay.indexOf(q);
     if (authorIndex === -1) continue;
     const snippet =
       n.content.length > SNIPPET_RADIUS * 2
@@ -286,7 +324,7 @@ export function searchNotices(
       snippet,
       matchStart: 0,
       matchEnd: 0,
-      score: scoreMatch(n.author, authorIndex),
+      score: scoreMatch(author.hay, authorIndex),
     });
   }
   hits.sort((a, b) => b.score - a.score || b.timestampMs - a.timestampMs);
@@ -297,18 +335,18 @@ export function searchMessages(
   query: string,
   messages: Record<string, ChatMessage[]>,
 ): MessageHit[] {
-  const q = query.trim().toLowerCase();
+  const q = searchKey(query.trim());
   if (!q) return [];
   const hits: MessageHit[] = [];
   for (const [channel, list] of Object.entries(messages)) {
     for (const message of list) {
       if (message.isSystem) continue;
-      const text = searchableMessageText(message);
-      if (!text) continue;
-      const index = text.toLowerCase().indexOf(q);
+      const { hay, display } = searchable(searchableMessageText(message));
+      if (!hay) continue;
+      const index = hay.indexOf(q);
       if (index === -1) continue;
       const { snippet, matchStart, matchEnd } = buildSnippet(
-        text,
+        display,
         index,
         q.length,
       );
@@ -321,7 +359,7 @@ export function searchMessages(
         snippet,
         matchStart,
         matchEnd,
-        score: scoreMatch(text, index),
+        score: scoreMatch(hay, index),
       });
     }
   }

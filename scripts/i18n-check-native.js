@@ -9,10 +9,12 @@
 // system dialog, silently. Swift needs no equivalent: its `reject()` messages are
 // error codes JS branches on, not copy.
 //
-// Android picks `values-*` by system locale rather than by the in-app picker, so
-// a phone set to English shows an English notice under a Thai UI. The per-app
-// picker is the way out of that; aligning the two on their own would mean passing
-// the strings through the service start intent.
+// Both platforms resolve these by the OS locale rather than the in-app picker,
+// so a phone set to English shows an English notice under a Thai UI. On the
+// default "system" preference the two agree, since the app re-samples the device
+// language on every foreground edge; pinning a language in the app leaves these
+// on the OS value deliberately. The localization section of
+// docs/spec/ARCHITECTURE.md has why.
 
 const fs = require("fs");
 const path = require("path");

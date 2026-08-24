@@ -5,7 +5,7 @@
 
 import { MAX_CUSTOM_RELAYS, validateRelayUrl } from "@core/nostr/geo-relay";
 import type { BitcoinUnit } from "@core/payments/cashu";
-import type { LanguagePreference } from "@i18n";
+import type { LanguageCode, LanguagePreference } from "@i18n";
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 import { getStorage } from "./mmkv";
@@ -57,6 +57,17 @@ interface SettingsState {
   // one of those takes effect on the next launch. See the direction note in
   // `@i18n`.
   language: LanguagePreference;
+  // The language the native layout flag is currently set for.
+  //
+  // Not a preference and never shown: Airhop's record of a value living outside
+  // its stores, in NSUserDefaults and SharedPreferences. At boot
+  // `I18nManager.isRTL` gives the frame's direction and this names the language
+  // it was built for, which a bare direction cannot: three shipped languages are
+  // right to left.
+  //
+  // Written by `applyLayoutDirection`, read once by `initI18n`, and survives
+  // `reset()` because the native flag survives a panic wipe.
+  frameLanguage: LanguageCode | null;
   autoDownloadMedia: boolean;
   // Whether holding the mic streams live to everyone in Bluetooth range
   // (walkie-talkie) or just records a voice note to send on release. On by
@@ -156,6 +167,7 @@ interface SettingsState {
   backgroundLimitsAcknowledged: boolean;
   setTheme: (theme: ThemePreference) => void;
   setLanguage: (language: LanguagePreference) => void;
+  setFrameLanguage: (code: LanguageCode) => void;
   setAutoDownloadMedia: (enabled: boolean) => void;
   setLiveVoiceEnabled: (enabled: boolean) => void;
   setBackgroundMeshEnabled: (enabled: boolean) => void;
@@ -184,6 +196,9 @@ const DEFAULTS = {
   // dark their phone is already set to, rather than being forced into dark.
   theme: "system",
   language: "system",
+  // Unknown until the first `applyLayoutDirection`. A fresh install has never
+  // called `forceRTL`, so its frame is left to right regardless.
+  frameLanguage: null as LanguageCode | null,
   autoDownloadMedia: true,
   liveVoiceEnabled: true,
   backgroundMeshEnabled: true,
@@ -221,7 +236,7 @@ const mmkvStorage = {
 
 export const useSettingsStore = create<SettingsState>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       ...DEFAULTS,
 
       setTheme(theme) {
@@ -229,6 +244,9 @@ export const useSettingsStore = create<SettingsState>()(
       },
       setLanguage(language) {
         set({ language });
+      },
+      setFrameLanguage(code) {
+        set({ frameLanguage: code });
       },
       setAutoDownloadMedia(enabled) {
         set({ autoDownloadMedia: enabled });
@@ -315,7 +333,10 @@ export const useSettingsStore = create<SettingsState>()(
         set({ backgroundLimitsAcknowledged: true });
       },
       reset() {
-        set({ ...DEFAULTS });
+        // `frameLanguage` is carried through, not defaulted: it describes a
+        // native flag a wipe cannot clear, so losing the record would leave the
+        // next launch unable to name the direction it woke up in.
+        set({ ...DEFAULTS, frameLanguage: get().frameLanguage });
       },
     }),
     {

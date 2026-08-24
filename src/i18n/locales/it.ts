@@ -60,9 +60,9 @@ export const strings: Strings = {
   "onboarding.welcome.cta": "Inizia",
   "onboarding.welcome.cta_hint": "Accetta i termini qui sotto per continuare",
   "onboarding.welcome.consent_a11y":
-    "Accetta i Termini di servizio e l'Informativa sulla privacy",
+    "Accetta i Termini di servizio e l’Informativa sulla privacy",
   "onboarding.welcome.open_terms": "Apri i Termini di servizio",
-  "onboarding.welcome.open_privacy": "Apri l'Informativa sulla privacy",
+  "onboarding.welcome.open_privacy": "Apri l’Informativa sulla privacy",
   "onboarding.welcome.consent":
     "Toccando {cta} accetti i nostri {terms} e la nostra {privacy}.",
 
@@ -81,7 +81,7 @@ export const strings: Strings = {
     "Creazione della coppia di chiavi di firma Ed25519",
   "onboarding.identity.step.keychain":
     "Salvataggio delle chiavi nel portachiavi di sistema",
-  "onboarding.identity.step.peer_id": "Derivazione dell'ID peer",
+  "onboarding.identity.step.peer_id": "Derivazione dell’ID peer",
 
   // ---- Onboarding: your identity ----
   "onboarding.username.label": "Il tuo nome sulla mesh",
@@ -102,7 +102,7 @@ export const strings: Strings = {
   "onboarding.hello.p1":
     "Ciao. Airhop è costruito su bitchat come progetto parallelo indipendente e open source. Non è affiliato né approvato dal progetto bitchat o da permissionless tech: è semplicemente qualcosa che mi piace costruire e condividere con la comunità.",
   "onboarding.hello.p2":
-    "Questa è la prima versione per iOS e Android, quindi anche se l'ho provata con degli amici probabilmente incontrerai qualche errore. Se succede, o se hai un'idea per una funzione, mi farebbe piacere saperlo. Apri una segnalazione su {github} oppure scrivimi a {email}.",
+    "Questa è la prima versione per iOS e Android, quindi anche se l’ho provata con degli amici probabilmente incontrerai qualche errore. Se succede, o se hai un’idea per una funzione, mi farebbe piacere saperlo. Apri una segnalazione su {github} oppure scrivimi a {email}.",
   "onboarding.hello.p3":
     "Se Airhop ti è utile, valuta di lasciare una stella su {github} o una recensione su {store}. Aiuta più persone a scoprire il progetto. Grazie per averlo provato!",
 
@@ -115,7 +115,7 @@ export const strings: Strings = {
     "Trova i dispositivi vicini e inoltra i messaggi tra loro. È così che nasce la mesh, e funziona senza connessione a internet.",
   "onboarding.primer.location.title": "Posizione",
   "onboarding.primer.location.body":
-    "Ti colloca nei canali delle zone vicine, dall'isolato alla regione. Airhop non ti traccia mai e non invia la tua posizione precisa fuori dal dispositivo.",
+    "Ti colloca nei canali delle zone vicine, dall’isolato alla regione. Airhop non ti traccia mai e non invia la tua posizione precisa fuori dal dispositivo.",
   "onboarding.primer.notifications.title": "Notifiche",
   "onboarding.primer.notifications.body":
     "Ricevi avvisi per i nuovi messaggi anche ad app chiusa. Le notifiche vengono create sul tuo dispositivo, senza alcun server coinvolto.",
@@ -143,14 +143,14 @@ export const strings: Strings = {
   "chat.channels.none_hint":
     "Tocca {plus} qui sopra per unirti a uno o crearne uno.",
   "chat.channels.none_desc":
-    "Ancora nessun canale. Usa il pulsante di aggiunta nell'intestazione per unirti a uno o crearne uno.",
+    "Ancora nessun canale. Usa il pulsante di aggiunta nell’intestazione per unirti a uno o crearne uno.",
   "chat.channels.show_fewer": "Mostra meno canali predefiniti",
   "chat.channels.show_less": "Mostra meno",
   "chat.channels.info": "Informazioni sul canale",
   "chat.channels.pin": "Fissa il canale",
   "chat.channels.unpin": "Togli il canale dai fissati",
   "chat.channels.mute": "Silenzia il canale",
-  "chat.channels.unmute": "Riattiva l'audio del canale",
+  "chat.channels.unmute": "Riattiva l’audio del canale",
   "chat.channels.leave": "Lascia il canale",
   "chat.channels.leave_confirm": "Lascia",
   "chat.channels.clear_body":
@@ -179,7 +179,7 @@ export const strings: Strings = {
   "chat.dm.pin": "Fissa la chat",
   "chat.dm.unpin": "Togli la chat dai fissati",
   "chat.dm.mute": "Silenzia la chat",
-  "chat.dm.unmute": "Riattiva l'audio della chat",
+  "chat.dm.unmute": "Riattiva l’audio della chat",
   "chat.dm.clear_body":
     "Eliminare tutti i messaggi con {name}? Non si può annullare.",
   "chat.dm.remove_contact_body":
@@ -231,7 +231,7 @@ export const strings: Strings = {
   "chat.new.name_taken": "Quel nome è già in uso",
   "chat.new.create": "Crea",
   "chat.new.e2ee":
-    "Cifrato da un capo all'altro. Solo i membri possono leggere i messaggi.",
+    "Cifrato da un capo all’altro. Solo i membri possono leggere i messaggi.",
   "chat.new.invite_only":
     "Solo su invito. Può unirsi chiunque riceva il link da te. Resta nascosto a tutti gli altri, anche ai peer vicini.",
   "chat.new.name_exists": "Esiste già un canale con questo nome.",
@@ -262,9 +262,9 @@ export const strings: Strings = {
   "chat.join.paste_hint":
     "Incolla un invito che inizia con airhop://. Anche toccarne uno funziona; questo serve per un link che non puoi toccare.",
   "chat.join.key_note":
-    "L'invito a un canale privato porta con sé la chiave, quindi l'ingresso è immediato e a nessun altro viene chiesto nulla.",
+    "L’invito a un canale privato porta con sé la chiave, quindi l’ingresso è immediato e a nessun altro viene chiesto nulla.",
   "chat.join.offline_note":
-    "Funziona offline. Il link viene letto su questo dispositivo, e il canale arriva fin dove l'ha impostato chi l'ha creato.",
+    "Funziona offline. Il link viene letto su questo dispositivo, e il canale arriva fin dove l’ha impostato chi l’ha creato.",
 
   // ---- Chats: go to a place ----
   "chat.jump.failed":
@@ -301,14 +301,14 @@ export const strings: Strings = {
   "chat.group.remove_failed_body":
     "Non è cambiato nulla. Solo chi ha creato il gruppo può cambiarne i membri.",
   "chat.group.e2ee":
-    "Cifrato da un capo all'altro. Solo i membri possono leggere i messaggi.",
+    "Cifrato da un capo all’altro. Solo i membri possono leggere i messaggi.",
   "chat.group.cap":
-    "Fino a 16 persone, scelte da te. Non c'è un link di invito, quindi nessuno entra perché gliel'hanno inoltrato.",
+    "Fino a 16 persone, scelte da te. Non c’è un link di invito, quindi nessuno entra perché gliel’hanno inoltrato.",
   "chat.group.bluetooth":
     "Solo Bluetooth. I membri fuori portata ricevono i messaggi quando tornano.",
   "chat.group.members_label": "MEMBRI",
   "chat.group.none_in_range":
-    "Non c'è nessuno nel raggio. I membri devono essere vicini quando crei il gruppo.",
+    "Non c’è nessuno nel raggio. I membri devono essere vicini quando crei il gruppo.",
   "chat.group.create_title": "Crea un gruppo",
   "chat.group.name_placeholder": "Nome del gruppo",
   "chat.group.create": "Crea",
@@ -322,10 +322,10 @@ export const strings: Strings = {
     "Copertura a livello di isolato. I messaggi passano anche da internet così possono partecipare i peer vicini ma fuori dal raggio del Bluetooth.",
   "chat.scope.neighborhood": "Quartiere · ~1 km",
   "chat.scope.neighborhood_desc":
-    "Copertura di quartiere. Con l'aiuto dei relay si raggiungono i peer di tutta la zona anche senza un collegamento Bluetooth diretto.",
+    "Copertura di quartiere. Con l’aiuto dei relay si raggiungono i peer di tutta la zona anche senza un collegamento Bluetooth diretto.",
   "chat.scope.city": "Città · ~10 km",
   "chat.scope.city_desc":
-    "Canale per tutta la città. Usa relay internet geolocalizzati per raggiungere i peer dell'intera area metropolitana.",
+    "Canale per tutta la città. Usa relay internet geolocalizzati per raggiungere i peer dell’intera area metropolitana.",
   "chat.scope.province": "Provincia o regione · ~100 km",
   "chat.scope.province_desc":
     "Copertura provinciale o regionale. Collegata via internet per una portata di centinaia di chilometri.",
@@ -341,7 +341,7 @@ export const strings: Strings = {
   "chat.cmd.hug_hint": "Manda un abbraccio",
   "chat.cmd.slap_hint": "Dai uno schiaffo con una grossa trota",
   "chat.status.sending": "Invio…",
-  "chat.status.undo_send": "Annulla l'invio",
+  "chat.status.undo_send": "Annulla l’invio",
   "chat.status.undo": "Annulla",
   "chat.status.sent": "Inviato",
   "chat.status.received": "Ricevuto",
@@ -376,7 +376,7 @@ export const strings: Strings = {
     "Al momento non si riesce a raggiungerli. Il messaggio partirà quando ci sarà un percorso disponibile.",
   "chat.thread.empty": "Ancora nessun messaggio",
   "chat.thread.empty_desc": "Avvia una conversazione cifrata.",
-  "chat.thread.jump_latest": "Vai all'ultimo messaggio",
+  "chat.thread.jump_latest": "Vai all’ultimo messaggio",
   "chat.thread.back_to_members": "Torna ai membri",
   "chat.thread.nostr_key": "Chiave pubblica Nostr",
   "chat.thread.in_range": "Nel raggio",
@@ -388,18 +388,18 @@ export const strings: Strings = {
   "chat.thread.peer": "peer",
   "chat.thread.cancel_transfer": "Annulla {name}",
   "chat.thread.queued_more": "Altri {count} in attesa di partire",
-  "chat.thread.across_bridge": "{count} dall'altra parte del ponte",
+  "chat.thread.across_bridge": "{count} dall’altra parte del ponte",
   "chat.thread.bridged": "via ponte",
   "chat.thread.invite_body":
-    "Raggiungimi in {channel} su Airhop — messaggistica mesh privata, pensata prima di tutto per l'offline.",
+    "Raggiungimi in {channel} su Airhop — messaggistica mesh privata, pensata prima di tutto per l’offline.",
   "chat.thread.go_back_unread": "Torna indietro, {count} non letti",
   "chat.thread.view_info": "Vedi le informazioni di {name}",
   "chat.thread.notices_new": "Avvisi di questo canale, {count} nuovi",
-  "chat.thread.say_something": "Di' qualcosa in {channel}.",
-  "chat.thread.jump_latest_new": "Vai all'ultimo messaggio, {count} nuovi",
+  "chat.thread.say_something": "Di’ qualcosa in {channel}.",
+  "chat.thread.jump_latest_new": "Vai all’ultimo messaggio, {count} nuovi",
   "chat.thread.unconfirmed_since": "Nessuna consegna confermata dal {date}",
   "chat.thread.no_reach":
-    "Nessun peer nelle vicinanze · finora non l'ha ricevuto nessuno",
+    "Nessun peer nelle vicinanze · finora non l’ha ricevuto nessuno",
   "chat.thread.channel_needs_internet":
     "Internet disattivato · questo canale raggiunge solo chi è nel raggio del Bluetooth",
   "chat.thread.cell_needs_internet":
@@ -413,7 +413,7 @@ export const strings: Strings = {
   "chat.thread.no_group_key":
     "Non fai più parte di questo gruppo, quindi non si può inviare",
   "chat.thread.no_reach_offline":
-    "Internet disattivato e nessun peer nelle vicinanze · finora non l'ha ricevuto nessuno",
+    "Internet disattivato e nessun peer nelle vicinanze · finora non l’ha ricevuto nessuno",
   "chat.thread.mention": "Menziona {name}",
   "chat.thread.someone_talking": "{hold}. {name} sta parlando.",
   "chat.thread.attach_note":
@@ -491,7 +491,7 @@ export const strings: Strings = {
   "chat.location.open_maps": "Apri in Maps",
   "chat.location.no_forward": "Le posizioni non si inoltrano",
   "chat.location.no_forward_body":
-    "Una posizione si invia a una sola persona. Condividi la tua se vuoi che l'abbia anche qualcun altro.",
+    "Una posizione si invia a una sola persona. Condividi la tua se vuoi che l’abbia anche qualcun altro.",
   "chat.location.no_fix": "Consenti la posizione per vedere quanto dista",
   "chat.location.send_title": "Invia la tua posizione",
   "chat.location.send_body":
@@ -501,7 +501,7 @@ export const strings: Strings = {
   "chat.location.no_location":
     "Non è stato possibile ottenere la tua posizione",
   "chat.location.no_location_body":
-    "Consenti l'accesso alla posizione e verifica che i servizi di localizzazione siano attivi, poi riprova.",
+    "Consenti l’accesso alla posizione e verifica che i servizi di localizzazione siano attivi, poi riprova.",
   "chat.location.not_delivered":
     "Non è stato possibile inviare la tua posizione",
   "chat.location.not_delivered_body":
@@ -527,7 +527,7 @@ export const strings: Strings = {
   "chat.attach.read_failed":
     "Qualcosa è andato storto nella lettura di quel file. Provane un altro.",
   "chat.attach.caption": "Aggiungi una didascalia…",
-  "chat.attach.send": "Invia l'allegato",
+  "chat.attach.send": "Invia l’allegato",
   "chat.attach.generic": "Allegato",
   "chat.media.view_full": "Vedi la foto a schermo intero",
   "chat.media.gone_photo": "La foto non è su questo dispositivo",
@@ -561,7 +561,7 @@ export const strings: Strings = {
   "chat.media.not_saved": "Non salvato",
   "chat.media.cant_open": "Non si riesce ad aprire il file",
   "chat.media.no_app":
-    "Questo dispositivo non ha un'app per aprire o condividere questo file.",
+    "Questo dispositivo non ha un’app per aprire o condividere questo file.",
   "chat.media.open_failed":
     "Non è stato possibile aprire il file. Potrebbe essere stato svuotato dalla cache.",
   "media.blocked.nostr_only":
@@ -586,7 +586,7 @@ export const strings: Strings = {
     "Raggiunto il limite di due minuti, rilascia per inviare",
   "chat.voice.limit_sent": "Raggiunto il limite di due minuti, nota inviata",
   "chat.voice.stop_send": "Interrompi la registrazione e invia",
-  "chat.voice.lift_lock": "Scorri verso l'alto per registrare a mani libere",
+  "chat.voice.lift_lock": "Scorri verso l’alto per registrare a mani libere",
   "chat.voice.live_speaking": "{name} sta parlando",
   "voice.unavailable": "Voce in diretta non disponibile",
   "voice.recording_stopped": "Registrazione interrotta",
@@ -618,18 +618,18 @@ export const strings: Strings = {
   "chat.info.courier_desc":
     "Affidato alla mesh perché faccia del suo meglio per consegnarlo",
   "chat.info.queued_desc":
-    "Trattenuto su questo telefono finché non c'è un percorso fino a loro",
+    "Trattenuto su questo telefono finché non c’è un percorso fino a loro",
   "chat.info.reclaimed": "Recuperato",
   "chat.info.reclaimed_desc":
     "Hai riportato questo pagamento nel tuo portafoglio, quindi non verrà consegnato",
   "chat.info.about": "Informazioni",
   "chat.info.group_desc":
-    "Un gruppo privato. Possono leggerlo solo i membri aggiunti da chi l'ha creato, e resta sul Bluetooth.",
+    "Un gruppo privato. Possono leggerlo solo i membri aggiunti da chi l’ha creato, e resta sul Bluetooth.",
   "chat.info.teleported_desc":
     "Un canale di posizione pubblico per questa cella geohash. Chiunque si trovi nella cella, con Airhop o con bitchat, lo condivide via internet. Sei teletrasportato, non fisicamente qui.",
   "chat.info.custom_desc":
     "Un canale personalizzato. Chiunque conosca il nome può unirsi da qualsiasi dispositivo con Airhop o bitchat.",
-  "chat.info.private_e2ee": "Privato · cifrato da un capo all'altro",
+  "chat.info.private_e2ee": "Privato · cifrato da un capo all’altro",
   "chat.info.public_plain": "Pubblico · non cifrato",
   "chat.info.group_privacy":
     "Solo i membri elencati qui sotto possono leggere questo gruppo. I messaggi restano sul Bluetooth, quindi i membri fuori portata li ricevono al ritorno.",
@@ -640,7 +640,7 @@ export const strings: Strings = {
   "chat.info.invite_privacy":
     "Possono leggerlo solo le persone che inviti tramite il link. Resta nascosto a tutti gli altri, anche ai peer vicini.",
   "chat.info.public_privacy":
-    "Chiunque si unisca può leggere ogni messaggio. Per parlare in privato usa un messaggio diretto; i messaggi diretti sono cifrati da un capo all'altro.",
+    "Chiunque si unisca può leggere ogni messaggio. Per parlare in privato usa un messaggio diretto; i messaggi diretti sono cifrati da un capo all’altro.",
   "chat.info.remove_member": "Rimuovi il membro",
   "chat.info.remove_member_body":
     "Rimuovere {name} dal gruppo? La chiave del gruppo ruota, così non potrà più leggere i nuovi messaggi.",
@@ -681,14 +681,14 @@ export const strings: Strings = {
   "chat.contact.verified_since": "Verificato dal {date}",
   "chat.contact.anonymous": "Anonimo",
   "chat.contact.anonymous_desc":
-    "Uno pseudonimo geohash senza un'identità duratura da verificare",
+    "Uno pseudonimo geohash senza un’identità duratura da verificare",
   "chat.contact.verified": "Verificato",
   "chat.contact.verified_desc": "Hai scansionato il suo codice QR",
   "chat.contact.verified_desc_compared": "Avete confrontato i codici",
   "chat.contact.not_verified": "Non verificato",
   "chat.contact.not_verified_desc":
     "Scansiona il suo codice, o confrontatene uno durante una chiamata, per confermare che sia davvero lui",
-  "chat.contact.e2ee": "Cifrato da un capo all'altro",
+  "chat.contact.e2ee": "Cifrato da un capo all’altro",
   "chat.contact.e2ee_nostr":
     "Impacchettato con NIP-17, così i relay non possono leggerlo",
   "chat.contact.e2ee_mesh":
@@ -705,7 +705,7 @@ export const strings: Strings = {
   "chat.contact.rename_needs_keys":
     "Non ci sono ancora chiavi per questo contatto. Scrivigli, oppure scansiona il suo codice, e potrai dargli un nome che vedi solo tu.",
   "chat.contact.renamed_by_you": "Il nome che gli hai dato",
-  "chat.contact.copy_peer_id": "Copia l'ID peer",
+  "chat.contact.copy_peer_id": "Copia l’ID peer",
   "chat.contact.verify": "Verifica il contatto",
 
   // ---- Chats: bulletin board notices ----
@@ -713,9 +713,9 @@ export const strings: Strings = {
   "chat.notices.post_area": "Pubblica un avviso in questa zona",
   "chat.notices.post_mesh": "Pubblica un avviso sulla mesh",
   "chat.notices.mark_urgent": "Segna come urgente",
-  "chat.notices.post": "Pubblica l'avviso",
+  "chat.notices.post": "Pubblica l’avviso",
   "chat.notices.post_short": "Pubblica",
-  "chat.notices.delete": "Elimina l'avviso",
+  "chat.notices.delete": "Elimina l’avviso",
   "chat.notices.just_now": "proprio ora",
   "chat.notices.fades_soon": "svanisce presto",
   "chat.notices.1_day": "1 giorno",
@@ -759,7 +759,7 @@ export const strings: Strings = {
   "chat.notif.actions_body":
     "In questo elenco ce ne sono {count}. Svuotarlo le toglie solo da qui, e i messaggi restano non letti nelle rispettive conversazioni. Segnare tutto come letto libera entrambi.",
   "chat.notif.mark_all_read": "Segna tutto come letto",
-  "chat.notif.clear_list": "Svuota l'elenco",
+  "chat.notif.clear_list": "Svuota l’elenco",
   "chat.notif.clear_all_a11y": "Svuota tutte le {count} notifiche",
   "chat.notif.title": "Notifiche",
   "chat.notif.clear_short": "Svuota",
@@ -779,7 +779,7 @@ export const strings: Strings = {
   "chat.forward.groups": "Gruppi",
   "chat.forward.locations": "Posizioni",
   "chat.forward.dms": "Messaggi diretti",
-  "chat.forward.none": "Ancora nessun'altra chat",
+  "chat.forward.none": "Ancora nessun’altra chat",
 
   // ---- Mesh: status banner ----
   "mesh.banner.starting": "Avvio della mesh…",
@@ -803,7 +803,7 @@ export const strings: Strings = {
   "mesh.banner.wifi_off":
     "Wi-Fi disattivato · i file grandi partono più lentamente",
   "mesh.banner.clock_skew":
-    "L'orologio di questo telefono è sbagliato · imposta data e ora su automatico",
+    "L’orologio di questo telefono è sbagliato · imposta data e ora su automatico",
   "mesh.banner.internet_off": "Internet disattivato · solo Bluetooth",
   "mesh.banner.relaying": "Nessun peer nelle vicinanze · inoltro tramite Nostr",
   "mesh.banner.tor": "Tor attivo · traffico internet instradato",
@@ -815,12 +815,12 @@ export const strings: Strings = {
   "mesh.banner.background_limits":
     "{brand} può mettere in pausa la mesh in background",
   "mesh.banner.bridge_across":
-    "Ponte mesh attivo · {count} dall'altra parte del ponte",
+    "Ponte mesh attivo · {count} dall’altra parte del ponte",
   "mesh.banner.action.turn_on": "Attiva",
   "mesh.banner.action.allow": "Consenti",
   "mesh.banner.action.resume": "Riprendi",
   "mesh.banner.action.fix": "Risolvi",
-  "mesh.banner.hint.resume": "Riattiva l'annuncio e la scansione Bluetooth",
+  "mesh.banner.hint.resume": "Riattiva l’annuncio e la scansione Bluetooth",
   "mesh.banner.hint.enable_bluetooth":
     "Chiede ad Android di attivare il Bluetooth",
   "mesh.banner.hint.location_settings":
@@ -861,7 +861,7 @@ export const strings: Strings = {
     "Riproduce una spazzata sonar. La scansione è già continua.",
   "mesh.radar.paused": "Mesh in pausa · sei assente",
   "mesh.radar.ring_hint":
-    "La posizione dell'anello riflette la potenza del segnale, non la distanza",
+    "La posizione dell’anello riflette la potenza del segnale, non la distanza",
   "mesh.radar.set_online":
     "Imposta il tuo stato su Online nel profilo per trovare i peer",
   "mesh.radar.in_range": "nel raggio",
@@ -874,18 +874,18 @@ export const strings: Strings = {
   "mesh.peer.none_desc":
     "Qui compaiono gli altri dispositivi con Airhop o bitchat che si trovano nel raggio del Bluetooth.",
   "mesh.peer.id_copied": "ID peer copiato",
-  "mesh.peer.copy_id": "Copia l'ID peer",
+  "mesh.peer.copy_id": "Copia l’ID peer",
   "mesh.peer.their_name": "Si fa chiamare {name}",
   "mesh.peer.in_range": "Nel raggio",
   "mesh.peer.relay": "Nodo relay",
   "mesh.peer.relay_body":
-    "Una radio che qualcuno ha lasciato accesa per allargare la mesh. Trasporta messaggi che non può leggere. Qui non c'è nessuno a cui scrivere.",
+    "Una radio che qualcuno ha lasciato accesa per allargare la mesh. Trasporta messaggi che non può leggere. Qui non c’è nessuno a cui scrivere.",
   "mesh.peer.send_dm": "Invia un messaggio diretto",
   "mesh.peer.message": "Messaggio",
   "mesh.peer.send_sats": "Invia ecash",
   "mesh.peer.amount_placeholder": "Importo in sats",
   "mesh.peer.amount_first": "Invia ecash, inserisci prima un importo",
-  "mesh.peer.cancel_send": "Annulla l'invio di ecash",
+  "mesh.peer.cancel_send": "Annulla l’invio di ecash",
   "mesh.peer.view_peer": "Vedi il peer {name}",
   "mesh.peer.view_peer_online": "Vedi il peer {name}, online",
   "mesh.peer.last_seen": "Visto {ago} fa",
@@ -911,7 +911,7 @@ export const strings: Strings = {
   "wallet.balance.unit_hint": "Alterna tra satoshi e bitcoin",
   "wallet.balance.a11y": "Saldo {value} {unit}",
   "wallet.balance.locked":
-    "L'archivio del portafoglio è bloccato. Le prove ecash sono conservate in un file cifrato la cui chiave sta nel portachiavi del dispositivo, e non è stato possibile aprirlo. Sblocca il dispositivo e riapri Airhop.",
+    "L’archivio del portafoglio è bloccato. Le prove ecash sono conservate in un file cifrato la cui chiave sta nel portachiavi del dispositivo, e non è stato possibile aprirlo. Sblocca il dispositivo e riapri Airhop.",
   "wallet.balance.tor_blocked":
     "Tor è attivo, quindi le richieste al mint sono bloccate: uscirebbero sulla rete in chiaro e collegherebbero il tuo IP alle tue prove. Inviare e ricevere sulla mesh continua a funzionare. Consenti il traffico verso il mint in Impostazioni, Sicurezza.",
   "wallet.balance.unconfirmed_note":
@@ -937,7 +937,7 @@ export const strings: Strings = {
   "wallet.send.body":
     "Costruito offline dalle prove che possiedi già. Nulla lascia il tuo saldo in via definitiva finché non confermi che il token è arrivato.",
   "wallet.send.stale_fee_note":
-    "Le commissioni sono state controllate {days} giorni fa. Se da allora questo mint ha alzato la sua, l'invio potrebbe costare un po' di più.",
+    "Le commissioni sono state controllate {days} giorni fa. Se da allora questo mint ha alzato la sua, l’invio potrebbe costare un po’ di più.",
   "wallet.send.fee_note":
     "{spend} {unit} lasciano il tuo saldo; i {fee} in più coprono la commissione del mint che altrimenti pagherebbero loro",
   "wallet.send.qr_too_big":
@@ -961,7 +961,7 @@ export const strings: Strings = {
   "wallet.send.send_amount": "Invia {amount}",
   "wallet.send.sent_to": "{amount} {unit} inviati a {name}",
   "wallet.send.sent_to_body":
-    "{route} Resta recuperabile in Sospesi finché non confermi che l'hanno ricevuto, o finché il mint non ci dice che le prove sono state riscosse.",
+    "{route} Resta recuperabile in Sospesi finché non confermi che l’hanno ricevuto, o finché il mint non ci dice che le prove sono state riscosse.",
   "wallet.send.copy_token": "Copia il token",
   "wallet.send.share_token": "Condividi il token",
   "wallet.send.open_in_wallet": "Apri questo token in un altro portafoglio",
@@ -969,7 +969,7 @@ export const strings: Strings = {
   "wallet.send.to_peer": "Invia il token a un peer vicino",
   "wallet.send.to_peer_short": "Invia a un peer",
   "wallet.send.mark_delivered": "Segna come consegnato e concludi",
-  "wallet.send.they_got_it": "L'hanno ricevuto",
+  "wallet.send.they_got_it": "L’hanno ricevuto",
   "wallet.send.keep_pending": "Lascia questo invio in sospeso",
   "wallet.send.decide_later": "Decidi più tardi",
   "wallet.send.no_peers": "Nessun peer nel raggio",
@@ -977,7 +977,7 @@ export const strings: Strings = {
   // ---- Wallet: receive ----
   "wallet.receive.own_payment": "Questo è il tuo stesso pagamento",
   "wallet.receive.own_payment_body":
-    "Queste monete sono ancora riservate per un invio che non hai chiuso, quindi non c'è nulla da riscuotere. Usa Recupera su quel pagamento per riportarle direttamente nel tuo saldo.",
+    "Queste monete sono ancora riservate per un invio che non hai chiuso, quindi non c’è nulla da riscuotere. Usa Recupera su quel pagamento per riportarle direttamente nel tuo saldo.",
   "wallet.receive.already_have": "È già nel tuo portafoglio",
   "wallet.receive.already_have_body":
     "Ogni prova di questo token è già conservata qui, quindi non è stato aggiunto nulla. I saldi non cambiano.",
@@ -1011,7 +1011,7 @@ export const strings: Strings = {
   "wallet.nutzap.received_title": "+{amount} {unit}",
   "wallet.nutzap.received_body":
     "Nutzap ricevuto da {from}… e riscosso nel tuo portafoglio.",
-  "wallet.zap.title": "Manda uno zap a un'identità Nostr",
+  "wallet.zap.title": "Manda uno zap a un’identità Nostr",
   "wallet.zap.not_npub": "non è un npub",
   "wallet.zap.bad_key": "chiave errata",
   "wallet.zap.invalid_pubkey": "Chiave pubblica non valida",
@@ -1020,7 +1020,7 @@ export const strings: Strings = {
   "wallet.zap.sent": "Nutzap inviato",
   "wallet.zap.failed": "Zap non riuscito",
   "wallet.zap.body":
-    "Se pubblicano le informazioni nutzap di NIP-61, l'ecash viene vincolato alla loro chiave così nessun altro può spenderlo, e non può essere ripreso. Altrimenti parte come token recuperabile. Ti diremo quale dei due è successo.",
+    "Se pubblicano le informazioni nutzap di NIP-61, l’ecash viene vincolato alla loro chiave così nessun altro può spenderlo, e non può essere ripreso. Altrimenti parte come token recuperabile. Ti diremo quale dei due è successo.",
   "wallet.zap.contact": "Manda uno zap a {name}",
   "wallet.zap.pubkey_placeholder": "npub1… o esadecimale di 64 caratteri",
   "wallet.zap.sending": "Invio…",
@@ -1044,7 +1044,7 @@ export const strings: Strings = {
     "Un mint emette e riscuote il tuo ecash. Aggiungine uno per depositare tramite Lightning, oppure ricevi un token e il suo mint viene aggiunto da solo.",
   "wallet.mint.add": "Aggiungi un mint",
   "wallet.mint.add_body":
-    "Un mint custodisce il Bitcoin che garantisce il tuo ecash, quindi scegline uno a cui affideresti il saldo che tieni lì. L'URL viene controllato prima del salvataggio. Se preferisci non fidarti di nessuno, gestiscine uno tuo con Nutshell.",
+    "Un mint custodisce il Bitcoin che garantisce il tuo ecash, quindi scegline uno a cui affideresti il saldo che tieni lì. L’URL viene controllato prima del salvataggio. Se preferisci non fidarti di nessuno, gestiscine uno tuo con Nutshell.",
   "wallet.mint.consolidate_body":
     "Un token può nominare un solo mint, quindi un saldo distribuito su più mint non può pagare una cifra maggiore di quella custodita dal più capiente. Airhop può spostarlo: ogni altro mint paga una fattura Lightning emessa da quello che scegli. Costa una piccola commissione di instradamento e richiede internet.",
   "wallet.mint.add_short": "Aggiungi",
@@ -1084,17 +1084,17 @@ export const strings: Strings = {
   "wallet.ln.payment_failed": "Pagamento non riuscito",
   "wallet.ln.title": "Lightning",
   "wallet.ln.body":
-    "Trasforma i sats su Lightning in ecash che puoi spendere offline, oppure incassa l'ecash su qualsiasi fattura Lightning. Entrambe le cose richiedono internet e un mint.",
+    "Trasforma i sats su Lightning in ecash che puoi spendere offline, oppure incassa l’ecash su qualsiasi fattura Lightning. Entrambe le cose richiedono internet e un mint.",
   "wallet.ln.deposit_body":
     "Il mint ti dà una fattura. Pagala da qualsiasi portafoglio Lightning e i sats tornano come ecash che puoi spendere offline.",
   "wallet.ln.pay_invoice_for":
     "Paga questa fattura da {amount} {unit}. Il portafoglio sta attendendo il pagamento ed emetterà il tuo ecash automaticamente.",
   "wallet.ln.expired_body":
-    "Questa fattura è scaduta. Se l'hai già pagata, il saldo viene accreditato automaticamente.",
+    "Questa fattura è scaduta. Se l’hai già pagata, il saldo viene accreditato automaticamente.",
   "wallet.ln.waiting_expires":
     "In attesa del pagamento · scade tra {countdown}",
   "wallet.ln.withdraw_body":
-    "Incolla una fattura bolt11 e il mint la paga con il tuo ecash. Prima ti viene indicata la riserva di instradamento; tutto ciò che l'instradamento non usa torna nel tuo saldo.",
+    "Incolla una fattura bolt11 e il mint la paga con il tuo ecash. Prima ti viene indicata la riserva di instradamento; tutto ciò che l’instradamento non usa torna nel tuo saldo.",
   "wallet.ln.up_to": "fino a {amount} {unit}",
   "wallet.ln.amount_unit": "{amount} {unit}",
   "wallet.ln.pay_amount": "Paga {amount} {unit}",
@@ -1132,13 +1132,13 @@ export const strings: Strings = {
     "Non è stato possibile leggere la frase di recupero dal portachiavi del dispositivo. Sbloccalo e riprova.",
   "wallet.backup.replace_title": "Sostituire la tua frase attuale?",
   "wallet.backup.replace_body":
-    "Hai già una frase di recupero. Ripristinarne un'altra la sostituisce. Le monete già coperte dalla vecchia frase restano spendibili su questo dispositivo, ma smettono di essere ripristinabili, quindi assicurati di aver annotato le vecchie parole prima di continuare.",
+    "Hai già una frase di recupero. Ripristinarne un’altra la sostituisce. Le monete già coperte dalla vecchia frase restano spendibili su questo dispositivo, ma smettono di essere ripristinabili, quindi assicurati di aver annotato le vecchie parole prima di continuare.",
   "wallet.backup.replace": "Sostituisci",
   "wallet.backup.invalid_phrase": "Quella frase non è valida",
   "wallet.backup.invalid_phrase_body":
     "La frase ha un codice di controllo incorporato e questa non lo supera. Cerca una parola scritta male, mancante o scambiata.",
   "wallet.backup.not_bip39":
-    "Queste non sono parole BIP-39: {words}. Controlla l'ortografia.",
+    "Queste non sono parole BIP-39: {words}. Controlla l’ortografia.",
   "wallet.backup.add_mint_first": "Aggiungi prima un mint",
   "wallet.backup.add_mint_first_body":
     "Il ripristino funziona chiedendo a un mint quali monete ha firmato per te, quindi deve sapere a quale rivolgersi. Aggiungi i mint che usavi, poi ripristina.",
@@ -1167,9 +1167,9 @@ export const strings: Strings = {
   "wallet.backup.about_to_see":
     "Stai per vedere dodici parole. Sono il denaro.",
   "wallet.backup.exact_order":
-    "Dodici parole, esattamente in quest'ordine. Chi le ha, ha il tuo saldo.",
+    "Dodici parole, esattamente in quest’ordine. Chi le ha, ha il tuo saldo.",
   "wallet.backup.verify_body":
-    "Una frase che nessuno ha annotato è peggio di nessuna frase, perché sembra una rete di sicurezza che non c'è. Due parole per confermare.",
+    "Una frase che nessuno ha annotato è peggio di nessuna frase, perché sembra una rete di sicurezza che non c’è. Due parole per confermare.",
   "wallet.backup.verify_mismatch":
     "Non corrisponde. Controlla la tua copia scritta.",
   "wallet.backup.restore_body":
@@ -1210,9 +1210,9 @@ export const strings: Strings = {
   "wallet.delivered.body":
     "Questo rilascia {amount} {unit} in via definitiva. Se in realtà non è mai arrivato, non potrai recuperarlo.",
   "wallet.delivered.body_generic":
-    "Questo rilascia in via definitiva l'importo riservato. Se in realtà non è mai arrivato, non potrai recuperarlo.",
+    "Questo rilascia in via definitiva l’importo riservato. Se in realtà non è mai arrivato, non potrai recuperarlo.",
   "wallet.delivered.cancel": "Non ancora",
-  "wallet.delivered.confirm": "L'hanno ricevuto",
+  "wallet.delivered.confirm": "L’hanno ricevuto",
   "wallet.reclaim.title": "Recuperare questo token?",
   "wallet.reclaim.body":
     "I {amount} {unit} tornano nel tuo saldo. Fallo solo se il token non è mai arrivato a nessuno: se hanno già la stringa, chi la riscuote per primo presso il mint tiene il denaro, e potrebbero essere loro.",
@@ -1232,7 +1232,7 @@ export const strings: Strings = {
   "wallet.refresh.secured":
     "{amount} {unit} ora sono coperti dalla tua frase di recupero.",
   "wallet.refresh.all_confirmed":
-    "Tutto quello che c'è qui era già confermato con il mint.",
+    "Tutto quello che c’è qui era già confermato con il mint.",
   "wallet.pending.title": "Sospesi",
   "wallet.pending.reserved_desc":
     "Costruito e riservato, consegna non confermata. Le prove sono tenute fuori dal tuo saldo così non possono essere spese due volte.",
@@ -1271,17 +1271,17 @@ export const strings: Strings = {
   // ---- Wallet: handing a token to a peer ----
   "wallet.mesh_offline": "Mesh offline",
   "wallet.mesh_offline_body":
-    "Il servizio mesh non è in funzione, quindi non c'è a chi consegnare il token. Resta riservato in Sospesi.",
+    "Il servizio mesh non è in funzione, quindi non c’è a chi consegnare il token. Resta riservato in Sospesi.",
   "wallet.xfer.route_mesh":
     "Consegnato direttamente al loro dispositivo sulla mesh.",
   "wallet.xfer.route_nostr":
     "Erano fuori dal raggio del Bluetooth, quindi è passato da internet.",
   "wallet.xfer.route_courier":
-    "Al momento non c'è un percorso fino a loro. Verrà trasportato da altri dispositivi e consegnato quando uno di essi li raggiungerà.",
+    "Al momento non c’è un percorso fino a loro. Verrà trasportato da altri dispositivi e consegnato quando uno di essi li raggiungerà.",
   "wallet.xfer.route_queued":
     "Non sono ancora raggiungibili. È in coda e partirà appena lo saranno.",
   "wallet.xfer.mesh_offline_body":
-    "Il servizio mesh non è in funzione, quindi non c'è modo di consegnare il token. Non è stato detratto nulla.",
+    "Il servizio mesh non è in funzione, quindi non c’è modo di consegnare il token. Non è stato detratto nulla.",
   "wallet.xfer.could_not_send": "Non è stato possibile inviare",
   "wallet.xfer.inexact_body":
     "Le tue prove non possono comporre esattamente {amount} {unit} offline. Il token più piccolo che puoi costruire è di {spend} {unit}, e i {extra} {unit} in più vanno a loro senza alcun modo di riaverli.\n\nAggiornare presso il mint quando sei online divide le tue prove in tagli che danno la cifra esatta.",
@@ -1292,7 +1292,7 @@ export const strings: Strings = {
   "wallet.pay.rail_nutzap":
     "Vincolato alla loro chiave e pubblicato su Nostr. È loro, che siano online o meno.",
   "wallet.pay.rail_nutzap_dm":
-    "Vincolato alla loro chiave. Il relay non l'ha accettato, quindi è arrivato loro come messaggio.",
+    "Vincolato alla loro chiave. Il relay non l’ha accettato, quindi è arrivato loro come messaggio.",
   "wallet.pay.rail_nutzap_undelivered":
     "Vincolato alla loro chiave, ma finora nulla è riuscito a trasportarlo. È in coda e il token è tra i Sospesi.",
   "wallet.pay.final":
@@ -1315,11 +1315,11 @@ export const strings: Strings = {
   "wallet.scan.camera_label": "Accesso alla fotocamera",
   "wallet.scan.camera_purpose": "scansionare un codice QR ecash",
   "wallet.scan.photo_label": "Accesso alle foto",
-  "wallet.scan.photo_purpose": "leggere un QR ecash da un'immagine",
-  "wallet.scan.no_token": "Nessun token ecash trovato in quell'immagine.",
+  "wallet.scan.photo_purpose": "leggere un QR ecash da un’immagine",
+  "wallet.scan.no_token": "Nessun token ecash trovato in quell’immagine.",
   "wallet.scan.no_invoice":
-    "Nessuna fattura Lightning trovata in quell'immagine.",
-  "wallet.scan.unreadable": "Non è stato possibile leggere quell'immagine.",
+    "Nessuna fattura Lightning trovata in quell’immagine.",
+  "wallet.scan.unreadable": "Non è stato possibile leggere quell’immagine.",
   "wallet.scan.camera_failed":
     "Non è stato possibile avviare la fotocamera. Chiudi le altre app che la usano e riprova.",
   "wallet.scan.close": "Chiudi lo scanner",
@@ -1335,11 +1335,11 @@ export const strings: Strings = {
     "Leggi una fattura Lightning per pagarla con il tuo saldo.",
   "wallet.scan.use_camera_a11y": "Scansiona con la fotocamera",
   "wallet.scan.use_camera": "Usa la fotocamera",
-  "wallet.scan.pick_image_a11y": "Leggi un codice QR da un'immagine salvata",
+  "wallet.scan.pick_image_a11y": "Leggi un codice QR da un’immagine salvata",
   "wallet.scan.pick_image": "Scegli dalle foto",
 
   // ---- Wallet: what is Cashu ----
-  "wallet.explain.title": "Che cos'è Cashu?",
+  "wallet.explain.title": "Che cos’è Cashu?",
   "wallet.explain.intro":
     "Cashu è ecash per Bitcoin. Un token è una stringa che vale denaro per chi la possiede, firmata alla cieca da un mint così che il mint non possa sapere chi ha speso cosa. Nessun account, nessun accesso.",
   "wallet.explain.send": "Invia",
@@ -1350,13 +1350,13 @@ export const strings: Strings = {
     "Incolla un token per aggiungerlo. Online viene scambiato subito presso il mint, il che lo rende tuo in modo dimostrabile. Offline viene conservato e segnato come non confermato finché non aggiorni.",
   "wallet.explain.zap": "Zap",
   "wallet.explain.zap_desc":
-    "Paga un'identità Nostr. Se pubblicano le informazioni nutzap di NIP-61, l'ecash viene vincolato alla loro chiave così solo loro possono spenderlo. Altrimenti si ripiega su un messaggio diretto cifrato. Richiede internet.",
+    "Paga un’identità Nostr. Se pubblicano le informazioni nutzap di NIP-61, l’ecash viene vincolato alla loro chiave così solo loro possono spenderlo. Altrimenti si ripiega su un messaggio diretto cifrato. Richiede internet.",
   "wallet.explain.add_mint": "Aggiungi un mint",
   "wallet.explain.add_mint_desc":
     "Salva il mint che emette e riscuote il tuo ecash, e conserva le sue chiavi pubbliche così i suoi token si possono verificare offline. Scegli un mint a cui affideresti il saldo che tieni lì.",
   "wallet.explain.phrase": "Frase di recupero",
   "wallet.explain.phrase_desc":
-    "Le tue monete derivano da dodici parole che il portafoglio genera all'inizio, così un telefono nuovo può ricostruire il saldo chiedendo ai tuoi mint quali monete hanno firmato. Finché non le guardi e non le annoti, esistono solo su questo telefono.",
+    "Le tue monete derivano da dodici parole che il portafoglio genera all’inizio, così un telefono nuovo può ricostruire il saldo chiedendo ai tuoi mint quali monete hanno firmato. Finché non le guardi e non le annoti, esistono solo su questo telefono.",
 
   // ---- Wallet: failures ----
   "wallet.err.locked": "Portafoglio bloccato",
@@ -1389,11 +1389,11 @@ export const strings: Strings = {
   "wallet.svc.need_mint_body":
     "Il ripristino funziona chiedendo a un mint quali monete ha firmato per te, quindi deve sapere a quale rivolgersi.",
   "wallet.svc.restored": "Ripristinato dalla frase di recupero",
-  "wallet.svc.storage_locked": "L'archivio del portafoglio è bloccato.",
+  "wallet.svc.storage_locked": "L’archivio del portafoglio è bloccato.",
   "wallet.svc.storage_locked_body":
-    "Airhop conserva le prove ecash in un file cifrato la cui chiave sta nel portachiavi del dispositivo. Sbloccalo e riapri l'app.",
+    "Airhop conserva le prove ecash in un file cifrato la cui chiave sta nel portachiavi del dispositivo. Sbloccalo e riapri l’app.",
   "wallet.svc.bad_url": "Non è un URL valido.",
-  "wallet.svc.needs_https": "L'URL di un mint deve iniziare con https://.",
+  "wallet.svc.needs_https": "L’URL di un mint deve iniziare con https://.",
   "wallet.svc.refuse_http": "Rifiutiamo di usare un mint su http in chiaro.",
   "wallet.svc.refuse_http_body":
     "Chiunque si trovi lungo il percorso di rete potrebbe leggere o alterare le tue prove. Usa un mint con https://.",
@@ -1405,7 +1405,7 @@ export const strings: Strings = {
     "Questo token non è stato firmato dal mint che dichiara.",
   "wallet.svc.already_spent": "Queste prove sono già state spese.",
   "wallet.svc.already_spent_body":
-    "Chi ha inviato questo token l'ha riscosso prima, oppure ha mandato lo stesso token a qualcun altro.",
+    "Chi ha inviato questo token l’ha riscosso prima, oppure ha mandato lo stesso token a qualcun altro.",
   "wallet.svc.receiving_offline": "ricezione offline",
   "wallet.svc.amount_positive": "Inserisci un importo maggiore di zero.",
   "wallet.svc.coins_raced":
@@ -1442,11 +1442,11 @@ export const strings: Strings = {
     "Non è stato detratto nulla e la fattura non è stata pagata. Riprova.",
   "wallet.svc.same_mint": "Scegli un mint di destinazione diverso.",
   "wallet.svc.same_mint_body":
-    "Origine e destinazione sono lo stesso mint, quindi non c'è nulla da spostare.",
+    "Origine e destinazione sono lo stesso mint, quindi non c’è nulla da spostare.",
   "wallet.svc.quote_failed_retried":
     "Preventivo non riuscito, consolidamento ritentato",
   "wallet.svc.amount_unfit_retried":
-    "L'importo non rientrava, consolidamento ritentato",
+    "L’importo non rientrava, consolidamento ritentato",
   "wallet.svc.cannot_size":
     "Non è stato possibile dimensionare questo trasferimento.",
   "wallet.svc.insufficient_at_mint": "Saldo insufficiente presso {mint}.",
@@ -1455,7 +1455,7 @@ export const strings: Strings = {
   "wallet.svc.inexact_detail":
     "Il token più piccolo che puoi inviare è di {spend} {unit}. Offline non esiste il resto, quindi i {extra} {unit} in più vanno al destinatario.",
   "wallet.svc.no_single_mint":
-    "Nessun singolo mint custodisce {amount} {unit}. L'ecash di mint diversi non si può unire in un solo token: consolida prima presso un mint, oppure invia in importi separati.",
+    "Nessun singolo mint custodisce {amount} {unit}. L’ecash di mint diversi non si può unire in un solo token: consolida prima presso un mint, oppure invia in importi separati.",
   "wallet.svc.have_tried_send":
     "Hai {total} {unit} e hai provato a inviare {amount}.",
   "wallet.svc.invoice_needs":
@@ -1498,9 +1498,9 @@ export const strings: Strings = {
   "contacts.qr.peer_id_placeholder": "Incolla un ID o un codice contatto",
   "contacts.qr.scan_camera_a11y": "Scansiona il codice QR con la fotocamera",
   "contacts.qr.scan_camera_desc": "Usa la fotocamera",
-  "contacts.qr.upload_a11y": "Carica un'immagine QR dalla galleria",
+  "contacts.qr.upload_a11y": "Carica un’immagine QR dalla galleria",
   "contacts.qr.upload": "Carica dalla galleria",
-  "contacts.qr.upload_desc": "Scegli un'immagine QR salvata",
+  "contacts.qr.upload_desc": "Scegli un’immagine QR salvata",
   "contacts.qr.scan_a11y": "Aggiungi un contatto scansionando un codice QR",
 
   // ---- Contacts: scanning a code ----
@@ -1509,17 +1509,17 @@ export const strings: Strings = {
   "contacts.scan.camera_label": "Accesso alla fotocamera",
   "contacts.scan.camera_purpose": "scansionare il codice QR di un contatto",
   "contacts.scan.camera_needed":
-    "Serve l'accesso alla fotocamera per scansionare. Puoi comunque aggiungerlo tramite ID peer.",
+    "Serve l’accesso alla fotocamera per scansionare. Puoi comunque aggiungerlo tramite ID peer.",
   "contacts.scan.camera_failed":
     "Non è stato possibile avviare la fotocamera. Chiudi le altre app che la usano e riprova.",
   "contacts.scan.photo_label": "Accesso alle foto",
   "contacts.scan.photo_purpose": "scansionare un codice QR che hai salvato",
   "contacts.scan.photo_needed":
-    "Serve l'accesso alle foto per scegliere un'immagine. Puoi comunque aggiungerlo tramite ID peer.",
+    "Serve l’accesso alle foto per scegliere un’immagine. Puoi comunque aggiungerlo tramite ID peer.",
   "contacts.scan.no_qr":
-    "Nessun codice QR di Airhop trovato in quell'immagine.",
+    "Nessun codice QR di Airhop trovato in quell’immagine.",
   "contacts.scan.unreadable":
-    "Non è stato possibile leggere un codice QR da quell'immagine.",
+    "Non è stato possibile leggere un codice QR da quell’immagine.",
   "contacts.scan.bitchat_expired":
     "Quel codice bitchat è scaduto. Chiedi loro di riaprire il proprio QR.",
   "contacts.scan.tampered":
@@ -1527,7 +1527,7 @@ export const strings: Strings = {
   "contacts.scan.already_added": "È già tra i tuoi contatti",
 
   // ---- Contacts: verifying by QR ----
-  "contacts.verify.waiting_camera": "In attesa dell'accesso alla fotocamera…",
+  "contacts.verify.waiting_camera": "In attesa dell’accesso alla fotocamera…",
   "contacts.verify.camera_off": "La fotocamera è disattivata",
   "contacts.verify.open_settings": "Apri le impostazioni",
   "contacts.verify.verified": "Verificato",
@@ -1538,11 +1538,11 @@ export const strings: Strings = {
   "contacts.verify.title": "Verifica {name}",
   "contacts.verify.aim": "Inquadra il loro codice QR con la fotocamera",
   "contacts.verify.camera_off_body":
-    "Attiva l'accesso alla fotocamera nelle impostazioni per verificare tramite QR.",
+    "Attiva l’accesso alla fotocamera nelle impostazioni per verificare tramite QR.",
   "contacts.verify.match_body":
     "La chiave di {name} corrisponde. Puoi fidarti di questo contatto.",
   "contacts.verify.different_body":
-    "Questo QR appartiene a un'altra persona. Chiedi a {name} di mostrare il proprio codice.",
+    "Questo QR appartiene a un’altra persona. Chiedi a {name} di mostrare il proprio codice.",
   "contacts.verify.tampered_body":
     "Questo QR sembra manomesso: il suo ID non corrisponde alla sua chiave.",
   "contacts.verify.choose_title": "Come vuoi controllare?",
@@ -1566,12 +1566,12 @@ export const strings: Strings = {
   // ---- Settings: shared chrome ----
   "settings.back": "Torna indietro",
   "settings.coming_soon": "In arrivo",
-  "settings.opens_externally": "{label}, si apre fuori dall'app",
+  "settings.opens_externally": "{label}, si apre fuori dall’app",
   "settings.peer_id": "ID peer",
   "settings.share_peer_id": "Condividi il tuo ID peer",
   "settings.share_id_short": "Condividi ID",
   "settings.peer_id_sheet.title": "Il tuo ID peer",
-  "settings.peer_id_sheet.copy": "Copia l'ID peer",
+  "settings.peer_id_sheet.copy": "Copia l’ID peer",
   "settings.peer_id_sheet.note":
     "Funziona solo quando siete entrambi nel raggio del Bluetooth. Per farti scrivere da ovunque, condividi invece il tuo codice QR.",
 
@@ -1794,27 +1794,27 @@ export const strings: Strings = {
   "settings.conn.tor_on_title": "Instradare il traffico Nostr su Tor?",
   "settings.conn.tor_on_body":
     "I relay smetteranno di vedere il tuo indirizzo IP. La connessione richiede più tempo e i messaggi arrivano più lentamente. Il Bluetooth non è toccato.",
-  "settings.conn.tor_off_title": "Disattivare l'instradamento su Tor?",
+  "settings.conn.tor_off_title": "Disattivare l’instradamento su Tor?",
   "settings.conn.tor_off_body":
     "Il traffico Nostr torna sulla tua connessione normale, quindi i relay rivedranno il tuo indirizzo IP. In ogni caso il Bluetooth non è toccato.",
   "settings.conn.tor_orbot_idle":
     "Orbot è installato ma non connesso. Apri Orbot, avvia la sua VPN e poi attiva questa opzione.",
   "settings.conn.tor_unavailable":
-    "L'instradamento su Tor non è disponibile in questa build.",
+    "L’instradamento su Tor non è disponibile in questa build.",
   "settings.conn.tor_timeout":
     "Tor sta impiegando più di un minuto a connettersi. Resta attivo e continua a provare; la scheda Mesh dirà quando sta instradando, o se questa rete lo sta bloccando.",
   "settings.conn.tor_failed":
-    "Non è stato possibile avviare Tor. Verifica che l'app abbia accesso alla rete.",
+    "Non è stato possibile avviare Tor. Verifica che l’app abbia accesso alla rete.",
   "settings.conn.mint_clearnet":
     "Consenti il traffico verso il mint sulla rete in chiaro",
   "settings.conn.mint_clearnet_desc":
-    "Su iOS Tor copre solo Nostr. Lascialo disattivato per bloccare le richieste al mint; in ogni caso l'ecash sulla mesh continua a funzionare.",
+    "Su iOS Tor copre solo Nostr. Lascialo disattivato per bloccare le richieste al mint; in ogni caso l’ecash sulla mesh continua a funzionare.",
   "settings.conn.gateway": "Gateway internet",
   "settings.conn.gateway_desc":
     "Presta la tua connessione a un telefono vicino senza rete perché possa comunque raggiungere i canali di posizione",
   "settings.conn.gateway_on_title": "Attivare il gateway internet?",
   "settings.conn.gateway_on_body":
-    "I telefoni vicini senza una connessione propria invieranno e riceveranno i messaggi dei canali di posizione tramite la tua. Consuma i tuoi dati mobili e la tua batteria, e i loro messaggi restano cifrati da un capo all'altro, quindi non puoi leggere ciò che passa.",
+    "I telefoni vicini senza una connessione propria invieranno e riceveranno i messaggi dei canali di posizione tramite la tua. Consuma i tuoi dati mobili e la tua batteria, e i loro messaggi restano cifrati da un capo all’altro, quindi non puoi leggere ciò che passa.",
   "settings.conn.gateway_off_title": "Disattivare il gateway internet?",
   "settings.conn.gateway_off_body":
     "I telefoni vicini senza rete smetteranno di raggiungere i canali di posizione tramite la tua. I tuoi messaggi non sono toccati.",
@@ -1869,7 +1869,7 @@ export const strings: Strings = {
 
   // ---- Settings: storage and data ----
   "settings.storage.network_usage": "Utilizzo della rete",
-  "settings.storage.storage_usage": "Utilizzo dell'archiviazione",
+  "settings.storage.storage_usage": "Utilizzo dell’archiviazione",
   "settings.storage.storage_usage_desc":
     "Messaggi, prove del portafoglio e allegati in cache",
   "settings.storage.session_usage":
@@ -1885,7 +1885,7 @@ export const strings: Strings = {
   "settings.storage.freed": "Liberati {size}.",
 
   // ---- Settings: appearance ----
-  "settings.theme.set_a11y": "Imposta l'aspetto su {value}",
+  "settings.theme.set_a11y": "Imposta l’aspetto su {value}",
   "settings.font.set_a11y":
     "Imposta il carattere a spaziatura fissa su {value}",
   "settings.font.system": "Sistema",
@@ -1937,7 +1937,7 @@ export const strings: Strings = {
     "{value}, si applica alla prossima apertura di Airhop",
   "settings.language.rtl_title": "Riapri Airhop per completare",
   "settings.language.rtl_body":
-    "{value} si legge da destra a sinistra, e Airhop può cambiare direzione solo all'avvio. Chiudila e riaprila per completare il passaggio. Non si perde nulla, e fino ad allora la tua mesh resta connessa.",
+    "{value} si legge da destra a sinistra, e Airhop può cambiare direzione solo all’avvio. Chiudila e riaprila per completare il passaggio. Non si perde nulla, e fino ad allora la tua mesh resta connessa.",
   "settings.theme.light": "Chiaro",
   "settings.theme.light_desc": "Usa sempre la tavolozza chiara",
   "settings.theme.dark": "Scuro",
@@ -1977,7 +1977,7 @@ export const strings: Strings = {
     "Non è stato possibile salvare il codice QR. Riprova.",
   "settings.qr.share_message": "Aggiungimi su Airhop",
   "settings.qr.share_body":
-    "Aggiungimi su Airhop — messaggistica mesh privata, pensata prima di tutto per l'offline.",
+    "Aggiungimi su Airhop — messaggistica mesh privata, pensata prima di tutto per l’offline.",
   "settings.qr.show_short": "Mostra QR",
   "settings.qr.title": "Il tuo codice QR",
   "settings.qr.note":
@@ -1989,18 +1989,18 @@ export const strings: Strings = {
   "settings.qr.download": "Scarica il codice QR",
   "settings.qr.download_short": "Scarica QR",
   "settings.qr.show": "Mostra il codice QR",
-  "settings.wipe.trigger": "Avvia la cancellazione d'emergenza",
+  "settings.wipe.trigger": "Avvia la cancellazione d’emergenza",
   "settings.wipe.trigger_desc":
     "Tocca tre volte per cancellare subito senza conferma",
-  "settings.wipe.title": "Cancellazione d'emergenza",
+  "settings.wipe.title": "Cancellazione d’emergenza",
   "settings.wipe.now": "Cancella ora",
   "settings.wipe.desc":
-    "Distrugge all'istante tutte le chiavi, i messaggi e le prove",
+    "Distrugge all’istante tutte le chiavi, i messaggi e le prove",
   "settings.wipe.body":
-    "Questo distruggerà all'istante tutte le tue chiavi, i messaggi e le prove del portafoglio. Non si può annullare.",
+    "Questo distruggerà all’istante tutte le tue chiavi, i messaggi e le prove del portafoglio. Non si può annullare.",
   "settings.wipe.in_progress": "Cancellazione in corso",
   "settings.wipe.in_progress_body":
-    "Distruzione di chiavi, messaggi e file. Richiede qualche secondo e si completa da sola anche se l'app viene chiusa.",
+    "Distruzione di chiavi, messaggi e file. Richiede qualche secondo e si completa da sola anche se l’app viene chiusa.",
   "settings.wipe.got_it": "Ho capito",
   "settings.wipe.keys_failed": "Non è stato possibile distruggere le chiavi",
   "settings.wipe.keys_failed_body":
@@ -2008,7 +2008,7 @@ export const strings: Strings = {
 
   // ---- Settings: help and feedback ----
   "settings.help.contact": "Scrivici",
-  "settings.help.contact_a11y": "Manda un'email a {address}",
+  "settings.help.contact_a11y": "Manda un’email a {address}",
   "settings.help.bug": "Segnala un problema",
   "settings.help.bug_desc": "Apri una segnalazione su GitHub",
   "settings.help.bug_a11y": "Segnala un problema su GitHub",
@@ -2018,7 +2018,7 @@ export const strings: Strings = {
   "settings.help.terms_desc": "Come si può usare Airhop",
   "settings.help.terms_a11y": "Apri i Termini di servizio",
   "settings.help.privacy_desc": "Quello che non raccogliamo",
-  "settings.help.privacy_a11y": "Apri l'Informativa sulla privacy",
+  "settings.help.privacy_a11y": "Apri l’Informativa sulla privacy",
 
   // ---- Settings: support ----
   "settings.support.card": "Carta o UPI",
@@ -2038,9 +2038,9 @@ export const strings: Strings = {
   "settings.about.version_a11y":
     "Vedi la versione e controlla gli aggiornamenti",
   "settings.about.release_notes": "Note di rilascio",
-  "settings.about.release_notes_desc": "Le novità dell'ultima versione",
+  "settings.about.release_notes_desc": "Le novità dell’ultima versione",
   "settings.about.release_notes_a11y":
-    "Apri le note dell'ultima versione su GitHub",
+    "Apri le note dell’ultima versione su GitHub",
   "settings.about.source": "Codice sorgente",
   "settings.about.source_a11y": "Apri il codice sorgente su GitHub",
   "settings.about.licenses": "Licenze open source",
@@ -2051,7 +2051,7 @@ export const strings: Strings = {
   "settings.version.checking": "Controllo in corso",
   "settings.version.check": "Cerca aggiornamenti",
   "settings.version.checking_title": "Ricerca di aggiornamenti",
-  "settings.version.up_to_date": "Stai usando l'ultima versione.",
+  "settings.version.up_to_date": "Stai usando l’ultima versione.",
   "settings.version.release_notes": "Vedi le note di rilascio",
   "settings.version.made_with": "Realizzato con",
   "settings.version.number": "Versione {version}",
@@ -2219,10 +2219,10 @@ export const plurals: Plurals = {
 
   // ---- Wallet: Lightning ----
   "wallet.ln.pending_deposits": {
-    one: "{count} deposito in attesa di pagamento. Viene ricontrollato a ogni apertura dell'app.",
-    many: "{count} depositi in attesa di pagamento. Vengono ricontrollati a ogni apertura dell'app.",
+    one: "{count} deposito in attesa di pagamento. Viene ricontrollato a ogni apertura dell’app.",
+    many: "{count} depositi in attesa di pagamento. Vengono ricontrollati a ogni apertura dell’app.",
     other:
-      "{count} depositi in attesa di pagamento. Vengono ricontrollati a ogni apertura dell'app.",
+      "{count} depositi in attesa di pagamento. Vengono ricontrollati a ogni apertura dell’app.",
   },
 
   // ---- Wallet: recovery phrase ----

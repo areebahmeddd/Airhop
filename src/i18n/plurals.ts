@@ -138,9 +138,15 @@ const RULES = {
   "qps-ploc": oneIsOne,
 } satisfies Record<string, Rule>;
 
-// The categories a language actually uses, derived, not declared, so the
-// two can never disagree. `catalog.test.ts` checks each locale's plural forms
-// against this.
+// The categories a language actually uses.
+//
+// Declared, not derived from the rules above: `plurals.test.ts` checks it
+// against `Intl.PluralRules` under Node's ICU instead. Deriving it would make
+// the two agree by construction, so a rule with a branch that never fires would
+// shrink its own expected set rather than fail.
+//
+// `catalog.test.ts` then holds every locale to this list, which is what stops a
+// Russian catalog shipping only `one` and `other`.
 export const PLURAL_CATEGORIES: Record<string, PluralCategory[]> = {
   am: ["one", "other"],
   ar: ["zero", "one", "two", "few", "many", "other"],
