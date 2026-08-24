@@ -19,7 +19,6 @@
 		6109022D312B46EA9633FD4F /* AirhopTorManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 120EE9C30B11446E9538C928 /* AirhopTorManager.swift */; };
 		E2C2EF5ECC804D08A15A15AF /* AirhopTorModule.mm in Resources */ = {isa = PBXBuildFile; fileRef = 39F97BD127164B6FA2FA731A /* AirhopTorModule.mm */; };
 		636AA42C669E43DCA266E1F3 /* AirhopTorModule.swift in Sources */ = {isa = PBXBuildFile; fileRef = 21FF1C52782B42ACAA2148D2 /* AirhopTorModule.swift */; };
-		B5328C3044234CF1A134059B /* AirhopTorSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1C10A7202334503AAECEEF5 /* AirhopTorSession.swift */; };
 		8C58E4B38D9145A688D15229 /* AirhopTorSocket.mm in Resources */ = {isa = PBXBuildFile; fileRef = 7C16D0E978324981A4FBA7CA /* AirhopTorSocket.mm */; };
 		BBBFF42043AE47019FA225ED /* AirhopTorSocket.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7AA9349762774591B6A61A72 /* AirhopTorSocket.swift */; };
 		04CD453DBC41469BB2CF2595 /* AirhopVoiceModule.mm in Resources */ = {isa = PBXBuildFile; fileRef = B5B7883FE2864809B556B722 /* AirhopVoiceModule.mm */; };
@@ -46,7 +45,6 @@
 		120EE9C30B11446E9538C928 /* AirhopTorManager.swift */ = {isa = PBXFileReference; name = "AirhopTorManager.swift"; path = "Airhop/AirhopTorManager.swift"; sourceTree = "<group>"; fileEncoding = 4; lastKnownFileType = sourcecode.swift; explicitFileType = undefined; includeInIndex = 0; };
 		39F97BD127164B6FA2FA731A /* AirhopTorModule.mm */ = {isa = PBXFileReference; name = "AirhopTorModule.mm"; path = "Airhop/AirhopTorModule.mm"; sourceTree = "<group>"; fileEncoding = undefined; lastKnownFileType = sourcecode.cpp.objcpp; explicitFileType = undefined; includeInIndex = 0; };
 		21FF1C52782B42ACAA2148D2 /* AirhopTorModule.swift */ = {isa = PBXFileReference; name = "AirhopTorModule.swift"; path = "Airhop/AirhopTorModule.swift"; sourceTree = "<group>"; fileEncoding = 4; lastKnownFileType = sourcecode.swift; explicitFileType = undefined; includeInIndex = 0; };
-		B1C10A7202334503AAECEEF5 /* AirhopTorSession.swift */ = {isa = PBXFileReference; name = "AirhopTorSession.swift"; path = "Airhop/AirhopTorSession.swift"; sourceTree = "<group>"; fileEncoding = 4; lastKnownFileType = sourcecode.swift; explicitFileType = undefined; includeInIndex = 0; };
 		7C16D0E978324981A4FBA7CA /* AirhopTorSocket.mm */ = {isa = PBXFileReference; name = "AirhopTorSocket.mm"; path = "Airhop/AirhopTorSocket.mm"; sourceTree = "<group>"; fileEncoding = undefined; lastKnownFileType = sourcecode.cpp.objcpp; explicitFileType = undefined; includeInIndex = 0; };
 		7AA9349762774591B6A61A72 /* AirhopTorSocket.swift */ = {isa = PBXFileReference; name = "AirhopTorSocket.swift"; path = "Airhop/AirhopTorSocket.swift"; sourceTree = "<group>"; fileEncoding = 4; lastKnownFileType = sourcecode.swift; explicitFileType = undefined; includeInIndex = 0; };
 		B5B7883FE2864809B556B722 /* AirhopVoiceModule.mm */ = {isa = PBXFileReference; name = "AirhopVoiceModule.mm"; path = "Airhop/AirhopVoiceModule.mm"; sourceTree = "<group>"; fileEncoding = undefined; lastKnownFileType = sourcecode.cpp.objcpp; explicitFileType = undefined; includeInIndex = 0; };
@@ -116,7 +114,6 @@
 				120EE9C30B11446E9538C928 /* AirhopTorManager.swift */,
 				39F97BD127164B6FA2FA731A /* AirhopTorModule.mm */,
 				21FF1C52782B42ACAA2148D2 /* AirhopTorModule.swift */,
-				B1C10A7202334503AAECEEF5 /* AirhopTorSession.swift */,
 				7C16D0E978324981A4FBA7CA /* AirhopTorSocket.mm */,
 				7AA9349762774591B6A61A72 /* AirhopTorSocket.swift */,
 				B5B7883FE2864809B556B722 /* AirhopVoiceModule.mm */,
@@ -444,7 +441,6 @@
 				6109022D312B46EA9633FD4F /* AirhopTorManager.swift in Sources */,
 				E2C2EF5ECC804D08A15A15AF /* AirhopTorModule.mm in Resources */,
 				636AA42C669E43DCA266E1F3 /* AirhopTorModule.swift in Sources */,
-				B5328C3044234CF1A134059B /* AirhopTorSession.swift in Sources */,
 				8C58E4B38D9145A688D15229 /* AirhopTorSocket.mm in Resources */,
 				BBBFF42043AE47019FA225ED /* AirhopTorSocket.swift in Sources */,
 				04CD453DBC41469BB2CF2595 /* AirhopVoiceModule.mm in Resources */,

@@ -2,9 +2,13 @@
 //
 // A WebSocket that rides Arti's SOCKS5 proxy so nostr-tools can route relay
 // connections through Tor. React Native's built-in WebSocket cannot speak
-// SOCKS5, so we expose URLSessionWebSocketTask over a session configured with
-// the same proxy dictionary AirhopTorSession uses, and bridge each socket's
-// lifecycle to JS as `TorSocketEvent`s keyed by a per-connection id.
+// SOCKS5, so this exposes URLSessionWebSocketTask over a proxied session and
+// bridges each socket's lifecycle to JS as `TorSocketEvent`s keyed by a
+// per-connection id.
+//
+// The only Tor-proxied path on iOS. Everything else is issued from TypeScript
+// and sits outside the tunnel, which is why the wallet mint gate and the update
+// check refuse rather than route while Tor is on.
 //
 // Bridge file: AirhopTorSocket.mm
 // TypeScript spec: src/bridge/NativeAirhopTorSocket.ts
