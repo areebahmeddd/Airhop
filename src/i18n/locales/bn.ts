@@ -1566,8 +1566,10 @@ export const strings: Strings = {
   // ---- Settings: diagnostics ----
   "settings.diag.ble_links": "ব্লুটুথ সংযোগ",
   "settings.diag.ble_links_desc": "এই ফোন সরাসরি যে ডিভাইসগুলোর সঙ্গে যুক্ত",
+  "settings.diag.lan": "স্থানীয় নেটওয়ার্ক",
+  "settings.diag.lan_desc": "একই Wi-Fi নেটওয়ার্কের ফোনগুলো",
   "settings.diag.wifi": "Wi-Fi Aware",
-  "settings.diag.wifi_about": "ফোন থেকে ফোন, রাউটার বা ইন্টারনেট ছাড়াই",
+  "settings.diag.wifi_about": "রাউটার ছাড়াই ফোন থেকে ফোনে",
   "settings.diag.wifi_active": "চলছে",
   "settings.diag.wifi_unsupported": "এই ডিভাইসে চলে না",
   "settings.diag.wifi_permission": "একটি অনুমতিতে আটকে আছে",

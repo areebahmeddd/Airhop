@@ -1570,8 +1570,10 @@ export const strings: Strings = {
   // ---- Settings: diagnostics ----
   "settings.diag.ble_links": "ब्लूटूथ लिंक",
   "settings.diag.ble_links_desc": "वे डिवाइस जिनसे यह फ़ोन सीधे जुड़ा है",
+  "settings.diag.lan": "स्थानीय नेटवर्क",
+  "settings.diag.lan_desc": "एक ही Wi-Fi नेटवर्क के फ़ोन",
   "settings.diag.wifi": "Wi-Fi Aware",
-  "settings.diag.wifi_about": "फ़ोन से फ़ोन, बिना राउटर या इंटरनेट",
+  "settings.diag.wifi_about": "बिना राउटर फ़ोन से फ़ोन",
   "settings.diag.wifi_active": "चल रहा है",
   "settings.diag.wifi_unsupported": "इस डिवाइस पर समर्थित नहीं",
   "settings.diag.wifi_permission": "एक अनुमति से रुका है",

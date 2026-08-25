@@ -1544,9 +1544,10 @@ export const strings: Strings = {
   "settings.diag.ble_links": "ลิงก์บลูทูธ",
   "settings.diag.ble_links_desc":
     "อุปกรณ์ที่โทรศัพท์เครื่องนี้เชื่อมต่ออยู่โดยตรง",
+  "settings.diag.lan": "เครือข่ายท้องถิ่น",
+  "settings.diag.lan_desc": "โทรศัพท์บนเครือข่าย Wi-Fi เดียวกัน",
   "settings.diag.wifi": "Wi-Fi Aware",
-  "settings.diag.wifi_about":
-    "จากโทรศัพท์ถึงโทรศัพท์ ไม่ต้องใช้เราเตอร์หรืออินเทอร์เน็ต",
+  "settings.diag.wifi_about": "จากโทรศัพท์ถึงโทรศัพท์ โดยไม่ต้องใช้เราเตอร์",
   "settings.diag.wifi_active": "กำลังทำงาน",
   "settings.diag.wifi_unsupported": "ไม่รองรับบนเครื่องนี้",
   "settings.diag.wifi_permission": "ถูกบล็อกด้วยสิทธิ์",

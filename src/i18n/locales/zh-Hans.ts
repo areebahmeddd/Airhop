@@ -1483,8 +1483,10 @@ export const strings: Strings = {
   // ---- Settings: diagnostics ----
   "settings.diag.ble_links": "蓝牙链路",
   "settings.diag.ble_links_desc": "这台手机直接连着的设备",
+  "settings.diag.lan": "局域网",
+  "settings.diag.lan_desc": "同一 Wi-Fi 网络下的手机",
   "settings.diag.wifi": "Wi-Fi Aware",
-  "settings.diag.wifi_about": "手机对手机，不需要路由器或互联网",
+  "settings.diag.wifi_about": "不需要路由器的手机对手机",
   "settings.diag.wifi_active": "运行中",
   "settings.diag.wifi_unsupported": "这台设备不支持",
   "settings.diag.wifi_permission": "被某项权限拦截",

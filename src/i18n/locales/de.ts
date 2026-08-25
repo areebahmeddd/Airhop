@@ -1620,8 +1620,10 @@ export const strings: Strings = {
   "settings.diag.ble_links": "Bluetooth-Verbindungen",
   "settings.diag.ble_links_desc":
     "Geräte, mit denen dieses Telefon direkt verbunden ist",
+  "settings.diag.lan": "Lokales Netzwerk",
+  "settings.diag.lan_desc": "Telefone im selben WLAN",
   "settings.diag.wifi": "Wi-Fi Aware",
-  "settings.diag.wifi_about": "Telefon zu Telefon, ohne Router oder Internet",
+  "settings.diag.wifi_about": "Telefon zu Telefon ohne Router",
   "settings.diag.wifi_active": "Läuft",
   "settings.diag.wifi_unsupported": "Auf diesem Gerät nicht unterstützt",
   "settings.diag.wifi_permission": "Durch eine Berechtigung blockiert",

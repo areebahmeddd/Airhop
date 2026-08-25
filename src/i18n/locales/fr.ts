@@ -1619,9 +1619,10 @@ export const strings: Strings = {
   "settings.diag.ble_links": "Liaisons Bluetooth",
   "settings.diag.ble_links_desc":
     "Appareils auxquels ce téléphone est connecté directement",
+  "settings.diag.lan": "Réseau local",
+  "settings.diag.lan_desc": "Téléphones sur un même réseau Wi-Fi",
   "settings.diag.wifi": "Wi-Fi Aware",
-  "settings.diag.wifi_about":
-    "De téléphone à téléphone, sans routeur ni internet",
+  "settings.diag.wifi_about": "De téléphone à téléphone sans routeur",
   "settings.diag.wifi_active": "En marche",
   "settings.diag.wifi_unsupported": "Non pris en charge sur cet appareil",
   "settings.diag.wifi_permission": "Bloqué par une autorisation",

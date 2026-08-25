@@ -1602,9 +1602,10 @@ export const strings: Strings = {
   "settings.diag.ble_links": "Pautan Bluetooth",
   "settings.diag.ble_links_desc":
     "Peranti yang bersambung terus dengan telefon ini",
+  "settings.diag.lan": "Rangkaian setempat",
+  "settings.diag.lan_desc": "Telefon dalam satu rangkaian Wi-Fi",
   "settings.diag.wifi": "Wi-Fi Aware",
-  "settings.diag.wifi_about":
-    "Telefon ke telefon, tanpa penghala atau internet",
+  "settings.diag.wifi_about": "Telefon ke telefon tanpa penghala",
   "settings.diag.wifi_active": "Sedang berjalan",
   "settings.diag.wifi_unsupported": "Tidak disokong pada peranti ini",
   "settings.diag.wifi_permission": "Disekat oleh satu kebenaran",

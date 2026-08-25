@@ -1603,8 +1603,10 @@ export const strings: Strings = {
   "settings.diag.ble_links": "Łącza Bluetooth",
   "settings.diag.ble_links_desc":
     "Urządzenia, z którymi ten telefon jest połączony bezpośrednio",
+  "settings.diag.lan": "Sieć lokalna",
+  "settings.diag.lan_desc": "Telefony w jednej sieci Wi-Fi",
   "settings.diag.wifi": "Wi-Fi Aware",
-  "settings.diag.wifi_about": "Telefon do telefonu, bez routera i internetu",
+  "settings.diag.wifi_about": "Telefon do telefonu bez routera",
   "settings.diag.wifi_active": "Działa",
   "settings.diag.wifi_unsupported": "Nieobsługiwane na tym urządzeniu",
   "settings.diag.wifi_permission": "Zablokowane przez uprawnienie",

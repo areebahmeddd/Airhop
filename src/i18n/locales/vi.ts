@@ -1586,9 +1586,11 @@ export const strings: Strings = {
   "settings.diag.ble_links": "Liên kết Bluetooth",
   "settings.diag.ble_links_desc":
     "Các thiết bị mà điện thoại này đang nối trực tiếp",
+  "settings.diag.lan": "Mạng nội bộ",
+  "settings.diag.lan_desc": "Điện thoại trong cùng mạng Wi-Fi",
   "settings.diag.wifi": "Wi-Fi Aware",
   "settings.diag.wifi_about":
-    "Điện thoại tới điện thoại, không cần bộ định tuyến hay Internet",
+    "Điện thoại tới điện thoại không cần bộ định tuyến",
   "settings.diag.wifi_active": "Đang chạy",
   "settings.diag.wifi_unsupported": "Không hỗ trợ trên thiết bị này",
   "settings.diag.wifi_permission": "Bị một quyền chặn lại",

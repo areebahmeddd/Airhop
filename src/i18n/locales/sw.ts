@@ -1610,8 +1610,10 @@ export const strings: Strings = {
   "settings.diag.ble_links": "Viungo vya Bluetooth",
   "settings.diag.ble_links_desc":
     "Vifaa ambavyo simu hii imeunganishwa navyo moja kwa moja",
+  "settings.diag.lan": "Mtandao wa ndani",
+  "settings.diag.lan_desc": "Simu kwenye mtandao mmoja wa Wi-Fi",
   "settings.diag.wifi": "Wi-Fi Aware",
-  "settings.diag.wifi_about": "Simu kwa simu, bila rauta au intaneti",
+  "settings.diag.wifi_about": "Simu kwa simu bila rauta",
   "settings.diag.wifi_active": "Inaendelea",
   "settings.diag.wifi_unsupported": "Haitumiki kwenye kifaa hiki",
   "settings.diag.wifi_permission": "Imezuiwa na ruhusa fulani",

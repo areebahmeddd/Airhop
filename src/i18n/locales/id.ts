@@ -1597,8 +1597,10 @@ export const strings: Strings = {
   "settings.diag.ble_links": "Tautan Bluetooth",
   "settings.diag.ble_links_desc":
     "Perangkat yang tersambung langsung dengan ponsel ini",
+  "settings.diag.lan": "Jaringan lokal",
+  "settings.diag.lan_desc": "Ponsel di satu jaringan Wi-Fi",
   "settings.diag.wifi": "Wi-Fi Aware",
-  "settings.diag.wifi_about": "Ponsel ke ponsel, tanpa perute atau internet",
+  "settings.diag.wifi_about": "Ponsel ke ponsel tanpa perute",
   "settings.diag.wifi_active": "Berjalan",
   "settings.diag.wifi_unsupported": "Tidak didukung di perangkat ini",
   "settings.diag.wifi_permission": "Diblokir oleh sebuah izin",

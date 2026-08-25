@@ -1581,9 +1581,10 @@ export const strings: Strings = {
   "settings.diag.ble_links": "Bluetooth-länkar",
   "settings.diag.ble_links_desc":
     "Enheter som telefonen är direkt ansluten till",
+  "settings.diag.lan": "Lokalt nätverk",
+  "settings.diag.lan_desc": "Telefoner i samma wifi-nätverk",
   "settings.diag.wifi": "Wi-Fi Aware",
-  "settings.diag.wifi_about":
-    "Telefon till telefon, utan router eller internet",
+  "settings.diag.wifi_about": "Telefon till telefon utan router",
   "settings.diag.wifi_active": "Igång",
   "settings.diag.wifi_unsupported": "Stöds inte på den här enheten",
   "settings.diag.wifi_permission": "Blockerat av en behörighet",

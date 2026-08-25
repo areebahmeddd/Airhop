@@ -1564,8 +1564,10 @@ export const strings: Strings = {
   // ---- Settings: diagnostics ----
   "settings.diag.ble_links": "ब्लुटुथ जडान",
   "settings.diag.ble_links_desc": "यो फोन सिधै जोडिएका यन्त्र",
+  "settings.diag.lan": "स्थानीय नेटवर्क",
+  "settings.diag.lan_desc": "एउटै Wi-Fi नेटवर्कका फोनहरू",
   "settings.diag.wifi": "Wi-Fi Aware",
-  "settings.diag.wifi_about": "फोनदेखि फोन, राउटर वा इन्टरनेटबिना",
+  "settings.diag.wifi_about": "राउटरबिना फोनदेखि फोन",
   "settings.diag.wifi_active": "चल्दै",
   "settings.diag.wifi_unsupported": "यो यन्त्रमा समर्थित छैन",
   "settings.diag.wifi_permission": "कुनै अनुमतिले रोकेको",

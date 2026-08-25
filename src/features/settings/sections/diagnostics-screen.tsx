@@ -122,6 +122,17 @@ export default function DiagnosticsScreen({
             />
             <GroupDivider />
             <SettingRow
+              icon="share-2"
+              label={T("settings.diag.lan")}
+              description={T("settings.diag.lan_desc")}
+              control={
+                <Text style={styles.comingSoon}>
+                  {T("settings.coming_soon")}
+                </Text>
+              }
+            />
+            <GroupDivider />
+            <SettingRow
               icon="wifi"
               label={T("settings.diag.wifi")}
               description={`${t("settings.diag.wifi_about")} · ${wifiLabel(

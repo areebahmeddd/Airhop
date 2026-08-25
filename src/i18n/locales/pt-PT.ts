@@ -1612,8 +1612,10 @@ export const strings: Strings = {
   "settings.diag.ble_links": "Ligações Bluetooth",
   "settings.diag.ble_links_desc":
     "Os dispositivos a que este telemóvel está ligado diretamente",
+  "settings.diag.lan": "Rede local",
+  "settings.diag.lan_desc": "Telemóveis na mesma rede Wi-Fi",
   "settings.diag.wifi": "Wi-Fi Aware",
-  "settings.diag.wifi_about": "Telemóvel a telemóvel, sem router nem Internet",
+  "settings.diag.wifi_about": "Telemóvel a telemóvel sem router",
   "settings.diag.wifi_active": "A funcionar",
   "settings.diag.wifi_unsupported": "Não suportado neste dispositivo",
   "settings.diag.wifi_permission": "Bloqueado por uma permissão",

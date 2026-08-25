@@ -1571,8 +1571,10 @@ export const strings: Strings = {
   // ---- Settings: diagnostics ----
   "settings.diag.ble_links": "بلوٹوتھ روابط",
   "settings.diag.ble_links_desc": "وہ آلات جن سے یہ فون براہ راست جڑا ہوا ہے",
+  "settings.diag.lan": "مقامی نیٹ ورک",
+  "settings.diag.lan_desc": "ایک ہی Wi-Fi نیٹ ورک پر موجود فون",
   "settings.diag.wifi": "Wi-Fi Aware",
-  "settings.diag.wifi_about": "فون سے فون، بغیر راؤٹر یا انٹرنیٹ کے",
+  "settings.diag.wifi_about": "راؤٹر کے بغیر فون سے فون",
   "settings.diag.wifi_active": "چل رہا ہے",
   "settings.diag.wifi_unsupported": "اس آلے پر معاون نہیں",
   "settings.diag.wifi_permission": "کسی اجازت کی وجہ سے مسدود",

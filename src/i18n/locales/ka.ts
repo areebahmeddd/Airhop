@@ -1595,9 +1595,10 @@ export const strings: Strings = {
   "settings.diag.ble_links": "ბლუთუზ-კავშირები",
   "settings.diag.ble_links_desc":
     "მოწყობილობები, რომლებთანაც ეს ტელეფონი პირდაპირაა დაკავშირებული",
+  "settings.diag.lan": "ლოკალური ქსელი",
+  "settings.diag.lan_desc": "ერთ Wi-Fi ქსელში მყოფი ტელეფონები",
   "settings.diag.wifi": "Wi-Fi Aware",
-  "settings.diag.wifi_about":
-    "ტელეფონიდან ტელეფონამდე, როუტერისა და ინტერნეტის გარეშე",
+  "settings.diag.wifi_about": "ტელეფონიდან ტელეფონამდე როუტერის გარეშე",
   "settings.diag.wifi_active": "მუშაობს",
   "settings.diag.wifi_unsupported": "ამ მოწყობილობაზე მხარდაჭერილი არ არის",
   "settings.diag.wifi_permission": "დაბლოკილია ნებართვით",

@@ -99,6 +99,17 @@ private const val EVT_AVAILABILITY_CHANGED = "AirhopWiFi.availabilityChanged"
 // anything else is from a build that does not exist yet and is ignored.
 private const val MSG_CONNECT_REQUEST: Byte = 0x01
 
+// Sent back by the publisher once its own requestNetwork() is outstanding, and
+// the subscriber's cue to make its own. The responder's request has to be in
+// flight before the initiator asks for the NDP, so discovery is not the cue and
+// this reply is. Android's documented data-path sequence, and bitchat's.
+private const val MSG_CONNECT_READY: Byte = 0x02
+
+// How long to wait for a data path before giving up on it. The two-argument
+// requestNetwork() leaves a failed request pending for the life of the process,
+// so onUnavailable() never fires and its callback is never handed back.
+private const val NETWORK_REQUEST_TIMEOUT_MS = 30_000
+
 // Maximum raw frame size for a single write. Matches the chunked file transfer
 // chunk size in file-transfer.ts (64 KiB) plus the 4-byte length prefix, with
 // room to spare.
@@ -191,6 +202,11 @@ class AirhopWiFiModule(
     // The same guard for the other direction. A connect request arrives as a
     // message from the peer, so how often it arrives is not ours to decide.
     private val respondedPeers = ConcurrentHashMap.newKeySet<PeerHandle>()
+
+    // The same guard again for the initiator's request, which hangs off an
+    // inbound MSG_CONNECT_READY: how many of those arrive is the publisher's
+    // business, and each would be another requestNetwork and another socket.
+    private val initiatedPeers = ConcurrentHashMap.newKeySet<PeerHandle>()
 
     // Responder side: one server socket for the whole session, on an ephemeral
     // port chosen by the OS and told to each peer through setPort().
@@ -346,6 +362,7 @@ class AirhopWiFiModule(
         networkCallbacks.clear()
         dialledPeers.clear()
         respondedPeers.clear()
+        initiatedPeers.clear()
 
         runCatching { publishSession?.close() }
         runCatching { subscribeSession?.close() }
@@ -570,6 +587,15 @@ class AirhopWiFiModule(
                     // Stand up our half. The subscriber connects to the port we
                     // advertise here; we accept it in the accept loop.
                     openResponderNetwork(active, peerHandle)
+                    // Our request is outstanding now, so the subscriber may make
+                    // its own. Unconditional: a repeated MSG_CONNECT_REQUEST is a
+                    // peer still waiting, openResponderNetwork is idempotent, and
+                    // initiatedPeers on the far side absorbs a duplicate reply.
+                    runCatching {
+                        active.sendMessage(peerHandle, 0, byteArrayOf(MSG_CONNECT_READY))
+                    }.onFailure {
+                        Log.e(TAG, "Could not send connect-ready: ${it.message}")
+                    }
                 }
             }, null)
             return true
@@ -614,14 +640,25 @@ class AirhopWiFiModule(
 
                     Log.d(TAG, "Dialling WiFi Aware peer $peerHandle")
                     try {
-                        // Tell the responder to stand up its side first. The
-                        // network request below cannot complete until it does.
+                        // Ask the responder to stand up its side, and stop there.
+                        // Requesting here would fire before the responder had
+                        // even read this, against a peer with nothing
+                        // outstanding. Its MSG_CONNECT_READY is the cue.
                         active.sendMessage(peerHandle, 0, byteArrayOf(MSG_CONNECT_REQUEST))
                     } catch (e: SecurityException) {
                         dialledPeers.remove(peerHandle)
                         Log.e(TAG, "sendMessage refused: ${e.message}")
                         return
                     }
+                }
+
+                // The responder saying its request is in flight. Sent from the
+                // publish session that received ours, so it lands here.
+                override fun onMessageReceived(peerHandle: PeerHandle, message: ByteArray) {
+                    if (message.isEmpty() || message[0] != MSG_CONNECT_READY) return
+                    val active = subscribeSession ?: return
+                    if (!initiatedPeers.add(peerHandle)) return
+                    Log.d(TAG, "Peer $peerHandle is ready, requesting data path")
                     openInitiatorNetwork(active, peerHandle)
                 }
 
@@ -629,6 +666,9 @@ class AirhopWiFiModule(
                     Log.d(TAG, "Subscribe session terminated")
                     subscribeSession = null
                     dialledPeers.clear()
+                    // Both hold handles from the session that just ended, and a
+                    // fresh one issues fresh handles for the same peers.
+                    initiatedPeers.clear()
                 }
             }, null)
             return true
@@ -715,13 +755,12 @@ class AirhopWiFiModule(
         requestAwareNetwork(specifier) { network, info ->
             val peerAddress = info.peerIpv6Addr
             val peerPort = info.port
-            // Both failure paths leave the peer in dialledPeers rather than
-            // clearing it for another attempt. A retry is a second
-            // requestNetwork while the first callback is still registered with
-            // no handle here to release it, so retrying on every rediscovery
-            // walks the app to the request ceiling and ends the transport. Not
-            // retrying costs this peer the accelerator until the next subscribe
-            // session; retrying costs everyone it, until the app restarts.
+            // Both failure paths leave the peer in dialledPeers and
+            // initiatedPeers rather than clearing them for another attempt. The
+            // timeout hands the callback back, so a retry would not walk toward
+            // the request ceiling, but it would re-dial on every rediscovery for
+            // as long as the peer stays in range. This costs one peer the
+            // accelerator until the next subscribe session; BLE carries it.
             if (peerAddress == null || peerPort <= 0) {
                 Log.w(TAG, "Aware network came up with no peer address or port")
                 return@requestAwareNetwork
@@ -783,7 +822,10 @@ class AirhopWiFiModule(
         }
 
         try {
-            connectivityManager.requestNetwork(request, callback)
+            // The timeout overload, so a path that never negotiates ends in
+            // onUnavailable() and releases its callback rather than pending
+            // forever and walking us toward the request ceiling.
+            connectivityManager.requestNetwork(request, callback, NETWORK_REQUEST_TIMEOUT_MS)
             networkCallbacks.add(callback)
         } catch (e: Exception) {
             // TooManyRequestsException, or the transport went away mid-request.

@@ -1558,8 +1558,10 @@ export const strings: Strings = {
   // ---- Settings: diagnostics ----
   "settings.diag.ble_links": "블루투스 링크",
   "settings.diag.ble_links_desc": "이 휴대폰이 직접 연결된 기기",
+  "settings.diag.lan": "로컬 네트워크",
+  "settings.diag.lan_desc": "같은 Wi-Fi에 연결된 휴대폰",
   "settings.diag.wifi": "Wi-Fi Aware",
-  "settings.diag.wifi_about": "휴대폰 대 휴대폰, 공유기나 인터넷 불필요",
+  "settings.diag.wifi_about": "공유기 없이 휴대폰 대 휴대폰",
   "settings.diag.wifi_active": "실행 중",
   "settings.diag.wifi_unsupported": "이 기기에서 지원되지 않음",
   "settings.diag.wifi_permission": "권한으로 차단됨",

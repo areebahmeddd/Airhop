@@ -1479,8 +1479,10 @@ export const strings: Strings = {
   // ---- Settings: diagnostics ----
   "settings.diag.ble_links": "የብሉቱዝ አገናኞች",
   "settings.diag.ble_links_desc": "ይህ ስልክ በቀጥታ የተገናኘባቸው መሣሪያዎች",
+  "settings.diag.lan": "የአካባቢ አውታረ መረብ",
+  "settings.diag.lan_desc": "በአንድ Wi-Fi አውታረ መረብ ላይ ያሉ ስልኮች",
   "settings.diag.wifi": "Wi-Fi Aware",
-  "settings.diag.wifi_about": "ከስልክ ወደ ስልክ፤ ራውተርም ኢንተርኔትም አያስፈልግም",
+  "settings.diag.wifi_about": "ከስልክ ወደ ስልክ ያለ ራውተር",
   "settings.diag.wifi_active": "እየሠራ ነው",
   "settings.diag.wifi_unsupported": "በዚህ መሣሪያ ላይ አይደገፍም",
   "settings.diag.wifi_permission": "በአንድ ፈቃድ ታግዷል",

@@ -1579,8 +1579,10 @@ export const strings: Strings = {
   "settings.diag.ble_links": "پیوندهای بلوتوث",
   "settings.diag.ble_links_desc":
     "دستگاه‌هایی که این گوشی مستقیم به آن‌ها وصل است",
+  "settings.diag.lan": "شبکه محلی",
+  "settings.diag.lan_desc": "گوشی‌های روی یک شبکه Wi-Fi",
   "settings.diag.wifi": "Wi-Fi Aware",
-  "settings.diag.wifi_about": "گوشی به گوشی، بدون روتر یا اینترنت",
+  "settings.diag.wifi_about": "گوشی به گوشی بدون روتر",
   "settings.diag.wifi_active": "در حال اجرا",
   "settings.diag.wifi_unsupported": "روی این دستگاه پشتیبانی نمی‌شود",
   "settings.diag.wifi_permission": "به سبب یک دسترسی مسدود است",

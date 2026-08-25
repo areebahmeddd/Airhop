@@ -1604,9 +1604,10 @@ export const strings: Strings = {
   "settings.diag.ble_links": "Bluetooth-verbindingen",
   "settings.diag.ble_links_desc":
     "Toestellen waarmee deze telefoon rechtstreeks verbonden is",
+  "settings.diag.lan": "Lokaal netwerk",
+  "settings.diag.lan_desc": "Telefoons op hetzelfde wifi-netwerk",
   "settings.diag.wifi": "Wi-Fi Aware",
-  "settings.diag.wifi_about":
-    "Van telefoon naar telefoon, zonder router of internet",
+  "settings.diag.wifi_about": "Van telefoon naar telefoon zonder router",
   "settings.diag.wifi_active": "Actief",
   "settings.diag.wifi_unsupported": "Niet ondersteund op dit toestel",
   "settings.diag.wifi_permission": "Geblokkeerd door een recht",

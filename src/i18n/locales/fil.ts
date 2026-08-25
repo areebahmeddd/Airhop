@@ -1637,8 +1637,10 @@ export const strings: Strings = {
   "settings.diag.ble_links": "Mga link ng Bluetooth",
   "settings.diag.ble_links_desc":
     "Mga device na direktang nakakonekta sa teleponong ito",
+  "settings.diag.lan": "Lokal na network",
+  "settings.diag.lan_desc": "Mga telepono sa iisang Wi-Fi network",
   "settings.diag.wifi": "Wi-Fi Aware",
-  "settings.diag.wifi_about": "Telepono sa telepono, walang router o internet",
+  "settings.diag.wifi_about": "Telepono sa telepono nang walang router",
   "settings.diag.wifi_active": "Gumagana",
   "settings.diag.wifi_unsupported": "Hindi suportado sa device na ito",
   "settings.diag.wifi_permission": "Hinarangan ng isang pahintulot",

@@ -1582,9 +1582,10 @@ export const strings: Strings = {
   // ---- Settings: diagnostics ----
   "settings.diag.ble_links": "Bluetooth接続",
   "settings.diag.ble_links_desc": "この端末が直接つながっている端末",
+  "settings.diag.lan": "ローカルネットワーク",
+  "settings.diag.lan_desc": "同じ Wi-Fi につながった端末同士",
   "settings.diag.wifi": "Wi-Fi Aware",
-  "settings.diag.wifi_about":
-    "ルーターもインターネットも使わない端末同士の通信",
+  "settings.diag.wifi_about": "ルーターを使わない端末同士の通信",
   "settings.diag.wifi_active": "動作中",
   "settings.diag.wifi_unsupported": "この端末では対応していません",
   "settings.diag.wifi_permission": "権限によりブロックされています",

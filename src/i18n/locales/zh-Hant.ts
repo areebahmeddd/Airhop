@@ -1485,8 +1485,10 @@ export const strings: Strings = {
   // ---- Settings: diagnostics ----
   "settings.diag.ble_links": "藍牙連線",
   "settings.diag.ble_links_desc": "這支手機直接連著的裝置",
+  "settings.diag.lan": "區域網路",
+  "settings.diag.lan_desc": "同一 Wi-Fi 網路下的手機",
   "settings.diag.wifi": "Wi-Fi Aware",
-  "settings.diag.wifi_about": "手機對手機，不需要路由器或網路",
+  "settings.diag.wifi_about": "不需要路由器的手機對手機",
   "settings.diag.wifi_active": "執行中",
   "settings.diag.wifi_unsupported": "這台裝置不支援",
   "settings.diag.wifi_permission": "被某項權限擋下",

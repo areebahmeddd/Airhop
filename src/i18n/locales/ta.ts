@@ -1632,9 +1632,10 @@ export const strings: Strings = {
   "settings.diag.ble_links": "புளூடூத் இணைப்புகள்",
   "settings.diag.ble_links_desc":
     "இந்தத் தொலைபேசி நேரடியாக இணைந்திருக்கும் சாதனங்கள்",
+  "settings.diag.lan": "உள்ளக நெட்வொர்க்",
+  "settings.diag.lan_desc": "ஒரே Wi-Fi நெட்வொர்க்கில் உள்ள தொலைபேசிகள்",
   "settings.diag.wifi": "Wi-Fi Aware",
-  "settings.diag.wifi_about":
-    "தொலைபேசியிலிருந்து தொலைபேசிக்கு, திசைவி அல்லது இணையம் இன்றி",
+  "settings.diag.wifi_about": "திசைவி இன்றி தொலைபேசியிலிருந்து தொலைபேசிக்கு",
   "settings.diag.wifi_active": "இயங்குகிறது",
   "settings.diag.wifi_unsupported": "இந்தச் சாதனத்தில் ஆதரிக்கப்படவில்லை",
   "settings.diag.wifi_permission": "ஓர் அனுமதியால் தடுக்கப்பட்டது",

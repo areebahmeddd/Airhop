@@ -1596,8 +1596,10 @@ export const strings = {
   // ---- Settings: diagnostics ----
   "settings.diag.ble_links": "Bluetooth links",
   "settings.diag.ble_links_desc": "Devices this phone is connected to directly",
+  "settings.diag.lan": "Local network",
+  "settings.diag.lan_desc": "Phones on one Wi-Fi network",
   "settings.diag.wifi": "Wi-Fi Aware",
-  "settings.diag.wifi_about": "Phone to phone, no router or internet",
+  "settings.diag.wifi_about": "Phone to phone with no router",
   "settings.diag.wifi_active": "Running",
   "settings.diag.wifi_unsupported": "Not supported on this device",
   "settings.diag.wifi_permission": "Blocked by a permission",

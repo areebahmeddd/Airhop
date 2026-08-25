@@ -1574,8 +1574,10 @@ export const strings: Strings = {
   "settings.diag.ble_links": "ਬਲੂਟੁੱਥ ਲਿੰਕ",
   "settings.diag.ble_links_desc":
     "ਉਹ ਡੀਵਾਈਸ ਜਿਨ੍ਹਾਂ ਨਾਲ ਇਹ ਫ਼ੋਨ ਸਿੱਧਾ ਜੁੜਿਆ ਹੋਇਆ ਹੈ",
+  "settings.diag.lan": "ਸਥਾਨਕ ਨੈੱਟਵਰਕ",
+  "settings.diag.lan_desc": "ਇੱਕੋ Wi-Fi ਨੈੱਟਵਰਕ ਵਾਲੇ ਫ਼ੋਨ",
   "settings.diag.wifi": "Wi-Fi Aware",
-  "settings.diag.wifi_about": "ਫ਼ੋਨ ਤੋਂ ਫ਼ੋਨ, ਨਾ ਰਾਊਟਰ ਨਾ ਇੰਟਰਨੈੱਟ",
+  "settings.diag.wifi_about": "ਬਿਨਾਂ ਰਾਊਟਰ ਫ਼ੋਨ ਤੋਂ ਫ਼ੋਨ",
   "settings.diag.wifi_active": "ਚੱਲ ਰਿਹਾ ਹੈ",
   "settings.diag.wifi_unsupported": "ਇਸ ਡੀਵਾਈਸ ’ਤੇ ਸਮਰਥਿਤ ਨਹੀਂ",
   "settings.diag.wifi_permission": "ਕਿਸੇ ਇਜਾਜ਼ਤ ਨੇ ਰੋਕਿਆ",

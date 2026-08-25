@@ -1593,9 +1593,10 @@ export const strings: Strings = {
   "settings.diag.ble_links": "Зв’язки Bluetooth",
   "settings.diag.ble_links_desc":
     "Пристрої, з якими цей телефон з’єднаний напряму",
+  "settings.diag.lan": "Локальна мережа",
+  "settings.diag.lan_desc": "Телефони в одній мережі Wi-Fi",
   "settings.diag.wifi": "Wi-Fi Aware",
-  "settings.diag.wifi_about":
-    "Телефон до телефона, без маршрутизатора чи інтернету",
+  "settings.diag.wifi_about": "Телефон до телефона без маршрутизатора",
   "settings.diag.wifi_active": "Працює",
   "settings.diag.wifi_unsupported": "Не підтримується на цьому пристрої",
   "settings.diag.wifi_permission": "Заблоковано дозволом",

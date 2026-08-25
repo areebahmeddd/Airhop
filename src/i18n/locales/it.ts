@@ -1612,9 +1612,10 @@ export const strings: Strings = {
   "settings.diag.ble_links": "Collegamenti Bluetooth",
   "settings.diag.ble_links_desc":
     "Dispositivi a cui questo telefono è connesso direttamente",
+  "settings.diag.lan": "Rete locale",
+  "settings.diag.lan_desc": "Telefoni sulla stessa rete Wi-Fi",
   "settings.diag.wifi": "Wi-Fi Aware",
-  "settings.diag.wifi_about":
-    "Da telefono a telefono, senza router né internet",
+  "settings.diag.wifi_about": "Da telefono a telefono senza router",
   "settings.diag.wifi_active": "In funzione",
   "settings.diag.wifi_unsupported": "Non supportato su questo dispositivo",
   "settings.diag.wifi_permission": "Bloccato da un permesso",

@@ -1532,8 +1532,10 @@ export const strings: Strings = {
   // ---- Settings: diagnostics ----
   "settings.diag.ble_links": "وصلات البلوتوث",
   "settings.diag.ble_links_desc": "الأجهزة المتصلة بهذا الهاتف مباشرة",
+  "settings.diag.lan": "الشبكة المحلية",
+  "settings.diag.lan_desc": "هواتف على شبكة Wi-Fi واحدة",
   "settings.diag.wifi": "Wi-Fi Aware",
-  "settings.diag.wifi_about": "من هاتف إلى هاتف، دون موجّه أو إنترنت",
+  "settings.diag.wifi_about": "من هاتف إلى هاتف دون موجّه",
   "settings.diag.wifi_active": "يعمل",
   "settings.diag.wifi_unsupported": "غير مدعوم على هذا الجهاز",
   "settings.diag.wifi_permission": "محظور بإذن",

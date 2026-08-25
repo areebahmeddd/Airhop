@@ -1631,9 +1631,10 @@ export const strings: Strings = {
   "settings.diag.ble_links": "Rohy Bluetooth",
   "settings.diag.ble_links_desc":
     "Ny fitaovana ifandraisan'ity findy ity mivantana",
+  "settings.diag.lan": "Tambajotra an-toerana",
+  "settings.diag.lan_desc": "Findy ao amin'ny tambajotra Wi-Fi iray",
   "settings.diag.wifi": "Wi-Fi Aware",
-  "settings.diag.wifi_about":
-    "Findy mankamin'ny findy, tsy misy router na Internet",
+  "settings.diag.wifi_about": "Findy mankamin'ny findy tsy misy router",
   "settings.diag.wifi_active": "Mandeha",
   "settings.diag.wifi_unsupported": "Tsy raisina eto amin'ity fitaovana ity",
   "settings.diag.wifi_permission": "Voasakan'ny alalana iray",

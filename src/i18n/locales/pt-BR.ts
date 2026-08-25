@@ -1608,9 +1608,10 @@ export const strings: Strings = {
   "settings.diag.ble_links": "Enlaces Bluetooth",
   "settings.diag.ble_links_desc":
     "Aparelhos aos quais este celular está conectado diretamente",
+  "settings.diag.lan": "Rede local",
+  "settings.diag.lan_desc": "Celulares na mesma rede Wi-Fi",
   "settings.diag.wifi": "Wi-Fi Aware",
-  "settings.diag.wifi_about":
-    "De celular para celular, sem roteador nem internet",
+  "settings.diag.wifi_about": "De celular para celular sem roteador",
   "settings.diag.wifi_active": "Em funcionamento",
   "settings.diag.wifi_unsupported": "Sem suporte neste aparelho",
   "settings.diag.wifi_permission": "Bloqueado por uma permissão",

@@ -1617,9 +1617,10 @@ export const strings: Strings = {
   // ---- Settings: diagnostics ----
   "settings.diag.ble_links": "ဘလူးတုသ် ချိတ်ဆက်မှုများ",
   "settings.diag.ble_links_desc": "ဤဖုန်း တိုက်ရိုက်ချိတ်ဆက်ထားသော စက်များ",
+  "settings.diag.lan": "စက်တွင်းကွန်ရက်",
+  "settings.diag.lan_desc": "တူညီသော Wi-Fi ကွန်ရက်ရှိ ဖုန်းများ",
   "settings.diag.wifi": "Wi-Fi Aware",
-  "settings.diag.wifi_about":
-    "ဖုန်းမှဖုန်းသို့၊ ရောက်တာ သို့မဟုတ် အင်တာနက် မလိုပါ",
+  "settings.diag.wifi_about": "ရောက်တာ မလိုဘဲ ဖုန်းမှဖုန်းသို့",
   "settings.diag.wifi_active": "အလုပ်လုပ်နေသည်",
   "settings.diag.wifi_unsupported": "ဤစက်တွင် မထောက်ပံ့ပါ",
   "settings.diag.wifi_permission": "ခွင့်ပြုချက်တစ်ခုကြောင့် ပိတ်ဆို့ထားသည်",

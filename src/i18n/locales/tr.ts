@@ -1587,9 +1587,10 @@ export const strings: Strings = {
   // ---- Settings: diagnostics ----
   "settings.diag.ble_links": "Bluetooth bağlantıları",
   "settings.diag.ble_links_desc": "Bu telefonun doğrudan bağlı olduğu cihazlar",
+  "settings.diag.lan": "Yerel ağ",
+  "settings.diag.lan_desc": "Aynı Wi-Fi ağındaki telefonlar",
   "settings.diag.wifi": "Wi-Fi Aware",
-  "settings.diag.wifi_about":
-    "Telefondan telefona, yönlendirici ya da internet olmadan",
+  "settings.diag.wifi_about": "Yönlendirici olmadan telefondan telefona",
   "settings.diag.wifi_active": "Çalışıyor",
   "settings.diag.wifi_unsupported": "Bu cihazda desteklenmiyor",
   "settings.diag.wifi_permission": "Bir izin tarafından engellendi",
