@@ -164,6 +164,25 @@ interface ContactsState {
   // as suspect, not authoritative). No-op when no contact exists for the peer,
   // so we never manufacture a contact for a stranger just because we heard them.
   setNostrPubkey: (peerID: string, nostrPubkeyHex: string) => void;
+  // Bind the mesh keys a peer PROVED, onto a contact saved without them.
+  //
+  // `saveIfAbsent` reaches only what the live registry held at that instant, so
+  // a messaged contact carries no signing key and often no Noise key either. A
+  // safety number needs both, which is why the two keys travel together here.
+  //
+  // Proof, never an announce: an announce carries the same two fields and
+  // establishes neither. AUTHENTICATED_PEER_STATE qualifies because it rides
+  // inside a completed Noise session, and a session completes only when the
+  // remote static key hashes to the claimed peer ID.
+  //
+  // Fills empty slots and nothing else, so it can never re-pin what a scan
+  // established, and grants no verification: holding somebody's keys is not
+  // having checked them.
+  setProvenKeys: (
+    peerID: string,
+    noisePubKeyHex: string,
+    signingPubKeyHex: string,
+  ) => void;
   // Record that the safety number was compared and matched. The other half of
   // verification, beside the camera scan.
   //
@@ -323,6 +342,41 @@ export const useContactsStore = create<ContactsState>()(
             contacts: {
               ...state.contacts,
               [peerID]: { ...existing, nostrPubkeyHex },
+            },
+          };
+        });
+      },
+
+      setProvenKeys(peerID, noisePubKeyHex, signingPubKeyHex) {
+        set((state) => {
+          const existing = state.contacts[peerID];
+          // Never manufacture a contact, matching setNostrPubkey: completing a
+          // session with somebody is not the user choosing to keep them.
+          if (!existing) return state;
+          const noise =
+            existing.noisePubKeyHex.length === 0
+              ? noisePubKeyHex
+              : existing.noisePubKeyHex;
+          const signing =
+            existing.signingPubKeyHex.length === 0
+              ? signingPubKeyHex
+              : existing.signingPubKeyHex;
+          // Same object when neither slot moved, so a peer re-proving itself on
+          // every reconnect does not re-render every screen watching this store.
+          if (
+            noise === existing.noisePubKeyHex &&
+            signing === existing.signingPubKeyHex
+          ) {
+            return state;
+          }
+          return {
+            contacts: {
+              ...state.contacts,
+              [peerID]: {
+                ...existing,
+                noisePubKeyHex: noise,
+                signingPubKeyHex: signing,
+              },
             },
           };
         });

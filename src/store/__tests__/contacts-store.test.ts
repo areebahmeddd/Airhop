@@ -373,3 +373,61 @@ describe("verification is separate from source", () => {
     expect(hasKeys(makeContact())).toBe(true);
   });
 });
+
+// The mesh keys a peer proves inside a Noise session, landing on a contact that
+// was saved by messaging and so has none. Without this the safety number stays
+// uncomputable for exactly the people "compare a code" is meant to serve.
+describe("setProvenKeys", () => {
+  const ID = "aabbccdd00112233";
+
+  it("fills the signing key a messaged contact was saved without", () => {
+    state().saveIfAbsent(ID, "swift", "aa".repeat(32));
+    expect(state().getContact(ID)?.signingPubKeyHex).toBe("");
+    state().setProvenKeys(ID, "aa".repeat(32), "bb".repeat(32));
+    expect(state().getContact(ID)?.signingPubKeyHex).toBe("bb".repeat(32));
+  });
+
+  it("fills both keys for a contact saved while the peer was unheard", () => {
+    state().saveIfAbsent(ID, "swift", "");
+    state().setProvenKeys(ID, "aa".repeat(32), "bb".repeat(32));
+    const c = state().getContact(ID);
+    expect(c?.noisePubKeyHex).toBe("aa".repeat(32));
+    expect(c?.signingPubKeyHex).toBe("bb".repeat(32));
+  });
+
+  it("never re-pins keys a scan established", () => {
+    state().addContact(makeContact({ source: "qr" }));
+    state().setProvenKeys(ID, "11".repeat(32), "22".repeat(32));
+    const c = state().getContact(ID);
+    expect(c?.noisePubKeyHex).toBe("aa".repeat(32));
+    expect(c?.signingPubKeyHex).toBe("bb".repeat(32));
+  });
+
+  it("is a no-op when no contact exists (never invents a stranger)", () => {
+    state().setProvenKeys(ID, "aa".repeat(32), "bb".repeat(32));
+    expect(state().getContact(ID)).toBeUndefined();
+  });
+
+  // Holding somebody's keys is not the same as having checked them.
+  it("grants no verification", () => {
+    state().saveIfAbsent(ID, "swift", "");
+    state().setProvenKeys(ID, "aa".repeat(32), "bb".repeat(32));
+    expect(isVerified(state().getContact(ID))).toBe(false);
+    expect(state().getContact(ID)?.verifiedAtMs).toBeUndefined();
+  });
+
+  it("leaves the record untouched when both slots are already full", () => {
+    state().addContact(makeContact({ source: "manual" }));
+    const before = state().getContact(ID);
+    state().setProvenKeys(ID, "aa".repeat(32), "bb".repeat(32));
+    expect(state().getContact(ID)).toBe(before);
+  });
+
+  it("keeps the name and source a messaged contact was saved with", () => {
+    state().saveIfAbsent(ID, "swift", "");
+    state().setProvenKeys(ID, "aa".repeat(32), "bb".repeat(32));
+    const c = state().getContact(ID);
+    expect(c?.nickname).toBe("swift");
+    expect(c?.source).toBe("manual");
+  });
+});

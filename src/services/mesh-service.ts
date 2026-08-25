@@ -965,6 +965,26 @@ export class MeshService {
         } else {
           this.nostrPubkeyToPeerID.set(c.nostrPubkeyHex, peerID);
         }
+        // The same race, for the mesh keys a safety number is built from. A
+        // peer that proved itself before the contact existed would otherwise
+        // hold its proof only in the registry, which does not survive the
+        // process, and the contact would sit keyless until the next handshake.
+        //
+        // signingKeyAuthenticated is the load-bearing part: an announce carries
+        // a signing key too, trusted on first use and forgeable by anyone who
+        // read the Noise key off the air. Only a 0x21 proof reaches storage.
+        if (c.signingPubKeyHex.length === 0) {
+          const e = this.registry.get(peerID);
+          if (e?.signingKeyAuthenticated === true) {
+            useContactsStore
+              .getState()
+              .setProvenKeys(
+                peerID,
+                bytesToHex(e.noisePubKey),
+                bytesToHex(e.signingPubKey),
+              );
+          }
+        }
       }
     });
     // Retry queued DMs over the internet on a slow cadence. flushOutbox routes
@@ -2297,6 +2317,26 @@ export class MeshService {
     // Two different proven keys for one peer ID cannot both be real. The first
     // stands; this session is talking to something that is not who it was.
     if (!accepted) return;
+
+    // Persist what was just proven, onto a contact saved without it.
+    //
+    // The registry copy dies with the process, and a contact saved by messaging
+    // carries no signing key, so the safety number stays uncomputable for
+    // everyone met that way. "Compare a code" exists for exactly those people.
+    //
+    // The Noise key travels with it because a contact saved while the peer was
+    // unheard holds neither and a safety number needs both. One fact proves the
+    // pair: this packet arrived inside a session bound to the peer ID.
+    const proven = this.registry.get(peerID);
+    if (proven !== undefined) {
+      useContactsStore
+        .getState()
+        .setProvenKeys(
+          peerID,
+          bytesToHex(proven.noisePubKey),
+          bytesToHex(state.signingPubKey),
+        );
+    }
 
     // Answer once, so a peer whose own proof crossed ours on a different link
     // still ends up holding ours. Bounded to one echo per peer: without that,
