@@ -5,6 +5,10 @@ All notable changes are documented here. The format follows [Keep a Changelog](h
 
 ## What's New
 
+- feat(contacts): add setProvenKeys to bind mesh keys to contacts (#39) (by @areebahmeddd) [9a00889]
+- fix(permissions): check optional grants in the fast path (by @areebahmeddd) [13bf94e]
+- fix(wifi): wait for the responder before requesting the Aware data path (by @areebahmeddd) [a497193]
+- refactor: remove unused landing project configuration (by @areebahmeddd) [59b2cb9]
 - fix: revert breaking deps (by @areebahmeddd) [6e25a01]
 - release: v1.0.2 (#48) (by @Areeb Ahmed) [c6efeb6]
 - feat: add unseen peers tracking and update Mesh screen behavior (by @areebahmeddd) [cb5fb41]
