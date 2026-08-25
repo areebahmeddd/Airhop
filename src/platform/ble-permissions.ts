@@ -1,35 +1,28 @@
 // Runtime BLE permission gate.
 //
-// On Android 12+ (API 31), BLUETOOTH_SCAN / BLUETOOTH_ADVERTISE /
-// BLUETOOTH_CONNECT are *runtime* permissions: declaring them in the manifest
-// is not enough, they must be requested with PermissionsAndroid before any BLE
-// call. Without the grant, the native module's startScanning / startAdvertising
-// throw SecurityException, which the mesh service swallows: the result is a
-// silent, total discovery failure (the app looks fine but never sees a peer).
+// Ungranted, startScanning / startAdvertising throw SecurityException and the
+// mesh service swallows it, so the app looks fine and never sees a peer. That
+// silence is why this gate is explicit rather than lazy.
 //
-// What this asks for, per API level:
-//   - API 31+ : BLUETOOTH_SCAN, BLUETOOTH_ADVERTISE, BLUETOOTH_CONNECT. No
-//     location. The manifest declares neverForLocation on BLUETOOTH_SCAN, which
-//     is accurate here (a scan result is read for its service UUID, peer ID and
-//     RSSI, none of which is a position) and releases scanning from both the
-//     location permission and the OS toggle.
+// What it asks for, per API level:
+//   - API 31+ : BLUETOOTH_SCAN, BLUETOOTH_ADVERTISE, BLUETOOTH_CONNECT, and no
+//     location. neverForLocation on BLUETOOTH_SCAN is accurate (a result is read
+//     for service UUID, peer ID and RSSI, none of them a position) and releases
+//     scanning from the location permission and the OS toggle both.
 //   - API <=30: ACCESS_FINE_LOCATION, since neverForLocation does not exist and
-//     Android withholds every result without it. BLUETOOTH and BLUETOOTH_ADMIN
-//     are install-time permissions.
+//     Android withholds every result without it.
 //
-// bitchat/android requires location at every API level and so also declares
-// ACCESS_BACKGROUND_LOCATION and a `location` foreground-service type. Airhop
-// takes the other route: the coupling meant a backgrounded phone got no scan
-// results at all, and anyone choosing "Approximate" got a mesh that found
-// nobody. Discovery, the advertisement and the wire protocol are unchanged, so
-// bitchat interop is unaffected.
+// Deliberately unlike bitchat/android, which requires location at every level
+// and so also needs ACCESS_BACKGROUND_LOCATION and a `location` service type:
+// that coupling costs a backgrounded phone every scan result, and anyone on
+// "Approximate" a mesh that finds nobody. The advertisement and the wire
+// protocol are untouched, so interop is unaffected.
 //
-// Location is still requested by services/location-service.ts when a location
-// channel is opened. Denying that costs geohash channels, not the mesh.
+// location-service.ts still requests location when a geohash channel opens.
+// Denying it costs channels, not the mesh.
 //
-// iOS needs no runtime request here: CoreBluetooth triggers its own system
-// prompt on first CBCentralManager / CBPeripheralManager use, backed by the
-// NSBluetooth*UsageDescription strings already present in Info.plist.
+// iOS needs nothing here: CoreBluetooth prompts on first manager use, backed by
+// the NSBluetooth*UsageDescription strings in Info.plist.
 
 import { PermissionsAndroid, Platform, type Permission } from "react-native";
 
@@ -41,13 +34,12 @@ export interface BlePermissionResult {
   granted: boolean;
   // Permissions the user denied. Empty when granted === true.
   denied: string[];
-  // True if the user checked "don't ask again" on any required permission, so
-  // a re-request will silently no-op and the caller should send them to
-  // Settings instead of asking again.
+  // "Don't ask again" on any required permission. A re-request silently no-ops
+  // from here, so the caller has to send them to Settings instead.
   blockedForever: boolean;
-  // True below API 31, where the mesh waits on location rather than Bluetooth.
-  // Lets the caller name the permission the user was actually shown, from the
-  // first frame rather than after the controller's first reconcile.
+  // True below API 31, where the mesh waits on location rather than Bluetooth,
+  // so the caller can name the permission the user actually saw from the first
+  // frame rather than after the controller's first reconcile.
   locationRequired: boolean;
 }
 
@@ -73,10 +65,14 @@ function requiredBlePermissions(): Permission[] {
   return [PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION];
 }
 
-// Read the current grant WITHOUT prompting. Used on app resume, where the user
-// may have just granted the permission in system Settings: re-requesting there
-// would either be a no-op or throw a prompt at someone who is not asking for
-// one, and both leave the mesh dead until a full restart.
+// Read the current grant WITHOUT prompting, for app resume, where the user may
+// have just granted in Settings. Re-requesting there is either a no-op or a
+// prompt thrown at someone who did not ask, and both leave the mesh dead until
+// a restart.
+//
+// Required permissions only, and never the optional ones: this answers whether
+// the mesh can run, and a missing accelerator grant must not shut down a
+// transport that does not depend on it.
 export async function hasBlePermissions(): Promise<boolean> {
   if (Platform.OS !== "android") return true;
   const checks = await Promise.all(
@@ -102,29 +98,39 @@ export async function ensureBlePermissions(): Promise<BlePermissionResult> {
   const apiLevel = androidApiLevel();
   const locationRequired = apiLevel < NEVER_FOR_LOCATION_MIN_API;
 
-  // Optional extras for the same-platform WiFi Aware fast path, requested in
-  // the same batch so the user answers one run of dialogs rather than two, but
-  // kept OUT of `required`: WiFi is an accelerator and the BLE mesh must work
-  // whether or not it is granted, so a denial here never fails the gate.
+  // Optional extras for the WiFi Aware fast path, batched here so the user
+  // answers one run of dialogs rather than two, but kept OUT of `required`:
+  // WiFi is an accelerator, the mesh must run without it, and a denial here
+  // never fails the gate.
   //
-  // NEARBY_WIFI_DEVICES is API 33+, for Aware discovery. On API <=32 the
-  // location permissions already cover it.
+  // NEARBY_WIFI_DEVICES is API 33+. Below that the location permissions cover
+  // Aware discovery already.
   //
   // ACCESS_LOCAL_NETWORK is deliberately not here yet. The manifest declares it
   // so the Aware socket keeps working later, but local network protection is
   // only enforced for apps targeting Android 17 and this one targets 36. Asking
   // now would show a dialog that unlocks nothing. Add it in the same commit
-  // that raises targetSdkVersion to 37.
+  // that raises targetSdkVersion to 37, and with the persisted marker the fast
+  // path below describes: it carries its own permission group, so a denial
+  // would otherwise be re-prompted on every launch.
   const optional: Permission[] = [];
   if (apiLevel >= 33) {
     optional.push("android.permission.NEARBY_WIFI_DEVICES" as Permission);
   }
 
-  // Fast path: skip the prompt if every REQUIRED permission is already granted.
-  // (Optional extras are not checked here, so a prior WiFi denial never
-  // re-prompts once BLE is settled.)
+  // Fast path: skip the prompt when there is nothing left to ask for.
+  //
+  // Both lists, because they move independently. A build that adds an optional
+  // permission reaches phones whose required grants are already settled, so a
+  // check reading only `required` returns early for the life of the install and
+  // the new permission is never requested at all. On API 33+ both lists sit in
+  // the NEARBY_DEVICES group, so the extra pass is granted without a dialog.
+  //
+  // That is what makes re-requesting safe here. An optional permission carrying
+  // its own group would re-prompt every launch once denied, and needs a
+  // persisted "already asked" marker instead.
   const alreadyGranted = await Promise.all(
-    required.map((p) => PermissionsAndroid.check(p)),
+    [...required, ...optional].map((p) => PermissionsAndroid.check(p)),
   );
   if (alreadyGranted.every(Boolean)) {
     return {
