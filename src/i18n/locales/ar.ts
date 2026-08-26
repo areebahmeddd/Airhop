@@ -1960,6 +1960,10 @@ export const strings: Strings = {
     "فحص التحديثات متوقف بينما Tor مفعّل، لئلا يكشف عنوان IP الخاص بك. راجع صفحة الإصدارات في متصفح.",
   "settings.version.check_failed":
     "تعذّر البحث عن تحديثات. تحقق من اتصالك وحاول مرة أخرى.",
+  "settings.version.downloading": "جارٍ التنزيل {percent}%",
+  "settings.version.install": "تثبيت",
+  "settings.version.download_failed":
+    "فشل التنزيل. تحقق من اتصالك وحاول مرة أخرى.",
 
   // ---- Transfers: attachment kinds and the floating badge ----
   "transfer.too_large": "{kind} حجمه {size} KiB، أي فوق حد {cap} KiB.",

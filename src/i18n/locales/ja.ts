@@ -2016,6 +2016,10 @@ export const strings: Strings = {
     "IPが漏れないよう、Torがオンの間は更新の確認を止めています。ブラウザでリリースのページをご覧ください。",
   "settings.version.check_failed":
     "更新を確認できませんでした。接続を確認してもう一度お試しください。",
+  "settings.version.downloading": "ダウンロード中 {percent}%",
+  "settings.version.install": "インストール",
+  "settings.version.download_failed":
+    "ダウンロードに失敗しました。接続を確認してもう一度お試しください。",
 
   // ---- Transfers: attachment kinds and the floating badge ----
   "transfer.too_large": "{kind}は{size}KiBで、{cap}KiBの上限を超えています。",

@@ -2009,6 +2009,10 @@ export const strings: Strings = {
     "Tor ਚਾਲੂ ਹੋਣ ’ਤੇ ਅੱਪਡੇਟ ਦੀ ਜਾਂਚ ਰੁਕੀ ਰਹਿੰਦੀ ਹੈ, ਤਾਂ ਜੋ ਇਹ ਤੁਹਾਡਾ IP ਲੀਕ ਨਾ ਕਰੇ। ਰਿਲੀਜ਼ ਪੰਨਾ ਬ੍ਰਾਊਜ਼ਰ ਵਿੱਚ ਦੇਖੋ।",
   "settings.version.check_failed":
     "ਅੱਪਡੇਟ ਨਹੀਂ ਦੇਖੇ ਜਾ ਸਕੇ। ਆਪਣਾ ਕਨੈਕਸ਼ਨ ਦੇਖੋ ਅਤੇ ਦੁਬਾਰਾ ਕੋਸ਼ਿਸ਼ ਕਰੋ।",
+  "settings.version.downloading": "ਡਾਊਨਲੋਡ ਹੋ ਰਿਹਾ ਹੈ {percent}%",
+  "settings.version.install": "ਇੰਸਟਾਲ ਕਰੋ",
+  "settings.version.download_failed":
+    "ਡਾਊਨਲੋਡ ਅਸਫਲ ਰਿਹਾ। ਆਪਣਾ ਕਨੈਕਸ਼ਨ ਜਾਂਚੋ ਅਤੇ ਦੁਬਾਰਾ ਕੋਸ਼ਿਸ਼ ਕਰੋ।",
 
   // ---- Transfers: attachment kinds and the floating badge ----
   "transfer.too_large": "{kind} {size} KiB ਦੀ ਹੈ, {cap} KiB ਦੀ ਹੱਦ ਤੋਂ ਵੱਧ।",

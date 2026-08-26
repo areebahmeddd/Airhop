@@ -2000,6 +2000,10 @@ export const strings: Strings = {
     "Tor खुला हुँदा अद्यावधिकको जाँच रोकिन्छ, ताकि यसले तपाईंको IP नखोलोस्। संस्करणको पृष्ठ ब्राउजरमा हेर्नुहोस्।",
   "settings.version.check_failed":
     "अद्यावधिक जाँच्न सकिएन। आफ्नो जडान जाँचेर फेरि प्रयास गर्नुहोस्।",
+  "settings.version.downloading": "डाउनलोड हुँदैछ {percent}%",
+  "settings.version.install": "इन्स्टल गर्नुहोस्",
+  "settings.version.download_failed":
+    "डाउनलोड असफल भयो। आफ्नो जडान जाँच गरी फेरि प्रयास गर्नुहोस्।",
 
   // ---- Transfers: attachment kinds and the floating badge ----
   "transfer.too_large":

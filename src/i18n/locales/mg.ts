@@ -2088,6 +2088,10 @@ export const strings: Strings = {
     "Miato ny fitadiavana fanavaozana raha mandeha ny Tor, mba tsy hitsoahan'ny IP-nao. Jereo ao amin'ny mpitety ny pejin'ny famoahana.",
   "settings.version.check_failed":
     "Tsy voatady ny fanavaozana. Jereo ny fifandraisanao ary andramo indray.",
+  "settings.version.downloading": "Misintona {percent}%",
+  "settings.version.install": "Apetraho",
+  "settings.version.download_failed":
+    "Tsy nahomby ny fisintomana. Jereo ny fifandraisanao ary andramo indray.",
 
   // ---- Transfers: attachment kinds and the floating badge ----
   "transfer.too_large": "{kind} dia {size} KiB, mihoatra ny fetra {cap} KiB.",

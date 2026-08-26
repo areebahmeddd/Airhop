@@ -2061,6 +2061,10 @@ export const strings: Strings = {
     "Ukaguzi wa masasisho umesitishwa Tor ikiwa imewashwa, ili usivujishe IP yako. Angalia ukurasa wa matoleo kwenye kivinjari.",
   "settings.version.check_failed":
     "Haikuweza kuangalia masasisho. Kagua muunganisho wako kisha ujaribu tena.",
+  "settings.version.downloading": "Inapakua {percent}%",
+  "settings.version.install": "Sakinisha",
+  "settings.version.download_failed":
+    "Upakuaji umeshindwa. Angalia muunganisho wako na ujaribu tena.",
 
   // ---- Transfers: attachment kinds and the floating badge ----
   "transfer.too_large": "{kind} ni {size} KiB, zaidi ya kikomo cha {cap} KiB.",

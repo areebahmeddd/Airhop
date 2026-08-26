@@ -2063,6 +2063,10 @@ export const strings: Strings = {
     "A procura de atualizações fica em pausa com o Tor ligado, para não expor o teu IP. Consulta a página de versões num navegador.",
   "settings.version.check_failed":
     "Não foi possível procurar atualizações. Verifica a tua ligação e tenta de novo.",
+  "settings.version.downloading": "A transferir {percent}%",
+  "settings.version.install": "Instalar",
+  "settings.version.download_failed":
+    "A transferência falhou. Verifique a sua ligação e tente novamente.",
 
   // ---- Transfers: attachment kinds and the floating badge ----
   "transfer.too_large": "{kind} tem {size} KiB e passa do limite de {cap} KiB.",

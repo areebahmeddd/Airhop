@@ -2034,6 +2034,10 @@ export const strings = {
     "Update check is paused while Tor is on, so it cannot leak your IP. Check the releases page in a browser.",
   "settings.version.check_failed":
     "Could not check for updates. Check your connection and try again.",
+  "settings.version.downloading": "Downloading {percent}%",
+  "settings.version.install": "Install",
+  "settings.version.download_failed":
+    "Download failed. Check your connection and try again.",
 
   // ---- Transfers: attachment kinds and the floating badge ----
   "transfer.too_large": "{kind} is {size} KiB, over the {cap} KiB limit.",

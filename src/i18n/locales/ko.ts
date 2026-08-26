@@ -1982,6 +1982,10 @@ export const strings: Strings = {
     "IP가 새지 않도록 Tor가 켜져 있는 동안에는 업데이트 확인이 중지됩니다. 브라우저에서 릴리스 페이지를 확인하세요.",
   "settings.version.check_failed":
     "업데이트를 확인하지 못했습니다. 연결을 확인하고 다시 시도하세요.",
+  "settings.version.downloading": "다운로드 중 {percent}%",
+  "settings.version.install": "설치",
+  "settings.version.download_failed":
+    "다운로드에 실패했습니다. 연결을 확인한 후 다시 시도하세요.",
 
   // ---- Transfers: attachment kinds and the floating badge ----
   "transfer.too_large": "{kind}이(가) {size} KiB로 {cap} KiB 제한을 넘습니다.",

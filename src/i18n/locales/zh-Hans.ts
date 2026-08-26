@@ -1895,6 +1895,9 @@ export const strings: Strings = {
   "settings.version.tor_paused":
     "Tor 开启期间会暂停检查更新，以免泄露你的 IP。请在浏览器里查看发行页面。",
   "settings.version.check_failed": "无法检查更新。请检查你的网络连接后重试。",
+  "settings.version.downloading": "正在下载 {percent}%",
+  "settings.version.install": "安装",
+  "settings.version.download_failed": "下载失败。请检查网络连接后重试。",
 
   // ---- Transfers: attachment kinds and the floating badge ----
   "transfer.too_large": "{kind}有 {size} KiB，超过了 {cap} KiB 的上限。",

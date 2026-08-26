@@ -1897,6 +1897,9 @@ export const strings: Strings = {
     "IP አድራሻህ እንዳይወጣ Tor በርቶ እያለ የዝመና ምርመራ ይቆማል። የልቀት ገጹን በአሳሽ ተመልከት።",
   "settings.version.check_failed":
     "ዝመናዎችን መመርመር አልተቻለም። ግንኙነትህን አረጋግጥና እንደገና ሞክር።",
+  "settings.version.downloading": "በማውረድ ላይ {percent}%",
+  "settings.version.install": "ጫን",
+  "settings.version.download_failed": "ማውረድ አልተሳካም። ግንኙነትዎን አረጋግጠው እንደገና ይሞክሩ።",
 
   // ---- Transfers: attachment kinds and the floating badge ----
   "transfer.too_large": "{kind} {size} KiB ነው፤ ከ{cap} KiB ገደብ በላይ።",

@@ -2038,6 +2038,10 @@ export const strings: Strings = {
     "განახლებების შემოწმება შეჩერებულია Tor-ის ჩართვისას, რომ შენი IP არ გაჟონოს. ნახე გამოშვებების გვერდი ბრაუზერში.",
   "settings.version.check_failed":
     "განახლებების შემოწმება ვერ მოხერხდა. შეამოწმე კავშირი და სცადე ხელახლა.",
+  "settings.version.downloading": "ჩამოტვირთვა {percent}%",
+  "settings.version.install": "დაყენება",
+  "settings.version.download_failed":
+    "ჩამოტვირთვა ვერ მოხერხდა. შეამოწმეთ კავშირი და სცადეთ ხელახლა.",
 
   // ---- Transfers: attachment kinds and the floating badge ----
   "transfer.too_large":

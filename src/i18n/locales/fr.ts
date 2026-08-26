@@ -2071,6 +2071,10 @@ export const strings: Strings = {
     "La recherche de mises à jour est suspendue tant que Tor est actif, pour ne pas exposer ton IP. Consulte la page des versions dans un navigateur.",
   "settings.version.check_failed":
     "Impossible de rechercher des mises à jour. Vérifie ta connexion et réessaie.",
+  "settings.version.downloading": "Téléchargement {percent} %",
+  "settings.version.install": "Installer",
+  "settings.version.download_failed":
+    "Échec du téléchargement. Vérifiez votre connexion et réessayez.",
 
   // ---- Transfers: attachment kinds and the floating badge ----
   "transfer.too_large":

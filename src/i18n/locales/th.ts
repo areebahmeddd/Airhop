@@ -1976,6 +1976,10 @@ export const strings: Strings = {
     "การตรวจหาการอัปเดตหยุดไว้ขณะที่ Tor เปิดอยู่ เพื่อไม่ให้ IP ของคุณรั่วไหล ดูหน้ารุ่นเผยแพร่ในเบราว์เซอร์แทน",
   "settings.version.check_failed":
     "ตรวจหาการอัปเดตไม่สำเร็จ ตรวจสอบการเชื่อมต่อแล้วลองอีกครั้ง",
+  "settings.version.downloading": "กำลังดาวน์โหลด {percent}%",
+  "settings.version.install": "ติดตั้ง",
+  "settings.version.download_failed":
+    "ดาวน์โหลดไม่สำเร็จ ตรวจสอบการเชื่อมต่อแล้วลองอีกครั้ง",
 
   // ---- Transfers: attachment kinds and the floating badge ----
   "transfer.too_large": "{kind} มีขนาด {size} KiB เกินขีดจำกัด {cap} KiB",

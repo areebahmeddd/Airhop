@@ -2060,6 +2060,10 @@ export const strings: Strings = {
     "La búsqueda de actualizaciones se pausa con Tor activado para no filtrar tu IP. Consulta la página de versiones en un navegador.",
   "settings.version.check_failed":
     "No se pudieron buscar actualizaciones. Comprueba tu conexión e inténtalo de nuevo.",
+  "settings.version.downloading": "Descargando {percent}%",
+  "settings.version.install": "Instalar",
+  "settings.version.download_failed":
+    "Error en la descarga. Comprueba tu conexión e inténtalo de nuevo.",
 
   // ---- Transfers: attachment kinds and the floating badge ----
   "transfer.too_large":

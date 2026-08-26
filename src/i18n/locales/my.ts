@@ -2072,6 +2072,10 @@ export const strings: Strings = {
     "သင့် IP မပေါက်ကြားစေရန် Tor ဖွင့်ထားစဉ် အပ်ဒိတ်စစ်ဆေးမှုကို ရပ်ထားသည်။ ထုတ်ဝေမှုစာမျက်နှာကို ဘရောက်ဇာတွင် ကြည့်ပါ။",
   "settings.version.check_failed":
     "အပ်ဒိတ်များ မစစ်ဆေးနိုင်ပါ။ သင့်ချိတ်ဆက်မှုကို စစ်ပြီး ထပ်စမ်းကြည့်ပါ။",
+  "settings.version.downloading": "ဒေါင်းလုဒ်လုပ်နေသည် {percent}%",
+  "settings.version.install": "ထည့်သွင်းရန်",
+  "settings.version.download_failed":
+    "ဒေါင်းလုဒ်မအောင်မြင်ပါ။ ချိတ်ဆက်မှုကို စစ်ဆေးပြီး ထပ်ကြိုးစားပါ။",
 
   // ---- Transfers: attachment kinds and the floating badge ----
   "transfer.too_large":

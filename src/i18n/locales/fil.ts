@@ -2086,6 +2086,10 @@ export const strings: Strings = {
     "Naka-pause ang paghahanap ng update habang naka-on ang Tor, para hindi nito mabunyag ang IP mo. Tingnan ang pahina ng mga release sa isang browser.",
   "settings.version.check_failed":
     "Hindi nakapaghanap ng update. Suriin ang koneksyon mo at subukan ulit.",
+  "settings.version.downloading": "Nagda-download {percent}%",
+  "settings.version.install": "I-install",
+  "settings.version.download_failed":
+    "Nabigo ang pag-download. Suriin ang iyong koneksyon at subukan ulit.",
 
   // ---- Transfers: attachment kinds and the floating badge ----
   "transfer.too_large":

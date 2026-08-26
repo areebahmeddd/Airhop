@@ -62,6 +62,7 @@
     "expo-haptics": "~57.0.1",
     "expo-image-manipulator": "~57.0.12",
     "expo-image-picker": "~57.0.12",
+    "expo-intent-launcher": "~57.0.1",
     "expo-location": "~57.0.12",
     "expo-media-library": "~57.0.4",
     "expo-navigation-bar": "~57.0.2",

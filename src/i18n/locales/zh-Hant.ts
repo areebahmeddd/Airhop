@@ -1900,6 +1900,9 @@ export const strings: Strings = {
     "Tor 開啟期間會暫停檢查更新，以免洩漏你的 IP。請在瀏覽器裡查看發行頁面。",
   "settings.version.check_failed":
     "無法檢查更新。請檢查你的網路連線後再試一次。",
+  "settings.version.downloading": "正在下載 {percent}%",
+  "settings.version.install": "安裝",
+  "settings.version.download_failed": "下載失敗。請檢查網路連線後再試一次。",
 
   // ---- Transfers: attachment kinds and the floating badge ----
   "transfer.too_large": "{kind}有 {size} KiB，超過了 {cap} KiB 的上限。",

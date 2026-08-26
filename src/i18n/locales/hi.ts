@@ -2003,6 +2003,10 @@ export const strings: Strings = {
     "Tor चालू रहते अपडेट जाँच रुकी रहती है, ताकि आपका IP लीक न हो। रिलीज़ पेज ब्राउज़र में देखें।",
   "settings.version.check_failed":
     "अपडेट नहीं जाँचे जा सके। अपना कनेक्शन जाँचकर फिर कोशिश करें।",
+  "settings.version.downloading": "डाउनलोड हो रहा है {percent}%",
+  "settings.version.install": "इंस्टॉल करें",
+  "settings.version.download_failed":
+    "डाउनलोड विफल रहा। अपना कनेक्शन जांचें और फिर से कोशिश करें।",
 
   // ---- Transfers: attachment kinds and the floating badge ----
   "transfer.too_large":

@@ -2065,6 +2065,10 @@ export const strings: Strings = {
     "Il controllo degli aggiornamenti è sospeso mentre Tor è attivo, per non esporre il tuo IP. Consulta la pagina delle versioni in un browser.",
   "settings.version.check_failed":
     "Non è stato possibile cercare aggiornamenti. Controlla la connessione e riprova.",
+  "settings.version.downloading": "Download in corso {percent}%",
+  "settings.version.install": "Installa",
+  "settings.version.download_failed":
+    "Download non riuscito. Controlla la connessione e riprova.",
 
   // ---- Transfers: attachment kinds and the floating badge ----
   "transfer.too_large":

@@ -2015,6 +2015,10 @@ export const strings: Strings = {
     "تا وقتی Tor روشن است بررسی به‌روزرسانی متوقف می‌ماند، تا نشانی IP شما درز نکند. صفحهٔ انتشارها را در مرورگر ببینید.",
   "settings.version.check_failed":
     "به‌روزرسانی بررسی نشد. اتصال خود را وارسی کنید و دوباره تلاش کنید.",
+  "settings.version.downloading": "در حال دانلود {percent}%",
+  "settings.version.install": "نصب",
+  "settings.version.download_failed":
+    "دانلود ناموفق بود. اتصال خود را بررسی کنید و دوباره تلاش کنید.",
 
   // ---- Transfers: attachment kinds and the floating badge ----
   "transfer.too_large": "{kind} برابر {size} KiB است، بیش از حد {cap} KiB.",

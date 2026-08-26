@@ -2047,6 +2047,10 @@ export const strings: Strings = {
     "De updatecontrole staat stil zolang Tor aanstaat, zodat je IP niet uitlekt. Bekijk de releasepagina in een browser.",
   "settings.version.check_failed":
     "Er kon niet op updates worden gecontroleerd. Controleer je verbinding en probeer het opnieuw.",
+  "settings.version.downloading": "Downloaden {percent}%",
+  "settings.version.install": "Installeren",
+  "settings.version.download_failed":
+    "Downloaden mislukt. Controleer je verbinding en probeer het opnieuw.",
 
   // ---- Transfers: attachment kinds and the floating badge ----
   "transfer.too_large":

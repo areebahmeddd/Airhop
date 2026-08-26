@@ -2026,6 +2026,10 @@ export const strings: Strings = {
     "IP adresini sızdırmasın diye, Tor açıkken güncelleme denetimi duraklatılır. Yayınlar sayfasına bir tarayıcıdan bak.",
   "settings.version.check_failed":
     "Güncellemeler denetlenemedi. Bağlantını denetleyip yeniden dene.",
+  "settings.version.downloading": "İndiriliyor {percent}%",
+  "settings.version.install": "Yükle",
+  "settings.version.download_failed":
+    "İndirme başarısız oldu. Bağlantınızı kontrol edip tekrar deneyin.",
 
   // ---- Transfers: attachment kinds and the floating badge ----
   "transfer.too_large": "{kind} {size} KiB, {cap} KiB sınırının üzerinde.",

@@ -2067,6 +2067,10 @@ export const strings: Strings = {
     "Die Update-Prüfung pausiert, solange Tor an ist, damit sie deine IP nicht preisgibt. Sieh dir die Releases-Seite in einem Browser an.",
   "settings.version.check_failed":
     "Es konnte nicht nach Updates gesucht werden. Prüfe deine Verbindung und versuche es erneut.",
+  "settings.version.downloading": "Wird heruntergeladen {percent}%",
+  "settings.version.install": "Installieren",
+  "settings.version.download_failed":
+    "Download fehlgeschlagen. Prüfe deine Verbindung und versuche es erneut.",
 
   // ---- Transfers: attachment kinds and the floating badge ----
   "transfer.too_large":

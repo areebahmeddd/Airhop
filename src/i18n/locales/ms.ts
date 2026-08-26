@@ -2048,6 +2048,10 @@ export const strings: Strings = {
     "Semakan kemas kini dijeda semasa Tor dihidupkan, supaya ia tidak membocorkan IP anda. Lihat halaman keluaran melalui pelayar.",
   "settings.version.check_failed":
     "Tidak dapat menyemak kemas kini. Periksa sambungan anda dan cuba lagi.",
+  "settings.version.downloading": "Memuat turun {percent}%",
+  "settings.version.install": "Pasang",
+  "settings.version.download_failed":
+    "Muat turun gagal. Semak sambungan anda dan cuba lagi.",
 
   // ---- Transfers: attachment kinds and the floating badge ----
   "transfer.too_large": "{kind} bersaiz {size} KiB, melebihi had {cap} KiB.",

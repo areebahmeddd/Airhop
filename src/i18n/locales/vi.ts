@@ -2024,6 +2024,10 @@ export const strings: Strings = {
     "Việc kiểm tra cập nhật tạm dừng khi Tor đang bật, để nó không lộ IP của bạn. Hãy xem trang phát hành trong trình duyệt.",
   "settings.version.check_failed":
     "Không kiểm tra được bản cập nhật. Hãy kiểm tra kết nối của bạn rồi thử lại.",
+  "settings.version.downloading": "Đang tải xuống {percent}%",
+  "settings.version.install": "Cài đặt",
+  "settings.version.download_failed":
+    "Tải xuống thất bại. Kiểm tra kết nối và thử lại.",
 
   // ---- Transfers: attachment kinds and the floating badge ----
   "transfer.too_large": "{kind} nặng {size} KiB, vượt giới hạn {cap} KiB.",

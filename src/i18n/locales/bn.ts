@@ -2000,6 +2000,10 @@ export const strings: Strings = {
     "Tor চালু থাকলে হালনাগাদ খোঁজা থামানো থাকে, যাতে আপনার IP ফাঁস না হয়। ব্রাউজারে প্রকাশের পাতাটি দেখুন।",
   "settings.version.check_failed":
     "হালনাগাদ খোঁজা গেল না। আপনার সংযোগ দেখে আবার চেষ্টা করুন।",
+  "settings.version.downloading": "ডাউনলোড হচ্ছে {percent}%",
+  "settings.version.install": "ইনস্টল করুন",
+  "settings.version.download_failed":
+    "ডাউনলোড ব্যর্থ হয়েছে। আপনার সংযোগ পরীক্ষা করে আবার চেষ্টা করুন।",
 
   // ---- Transfers: attachment kinds and the floating badge ----
   "transfer.too_large": "{kind} {size} KiB, যা {cap} KiB সীমার বেশি।",

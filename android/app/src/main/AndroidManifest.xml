@@ -56,6 +56,19 @@
   <uses-permission android:name="android.permission.ACCESS_LOCAL_NETWORK"/>
   <!-- Android 13+ runtime permission for local message notifications -->
   <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
+  <!-- Hands a downloaded release APK to the system installer, for the update
+       path on the Version screen. An offline-first app whose users may have no
+       reachable store cannot depend on one to ship a fix.
+
+       Buys nothing but the right to OPEN the installer. The user confirms in a
+       system dialog, Android wants "Install unknown apps" allowed for Airhop on
+       top of that, and it refuses any APK not signed by our release key, so
+       this cannot deliver a build that is not ours.
+
+       Strip it, and the screen's download path with it, in any Play-distributed
+       flavour: Play's Device and Network Abuse policy forbids an app shipped
+       there from updating itself by any route but Play. -->
+  <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES"/>
   <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" tools:replace="android:maxSdkVersion"/>
   <uses-permission android:name="android.permission.READ_MEDIA_AUDIO"/>
   <uses-permission android:name="android.permission.READ_MEDIA_IMAGES"/>

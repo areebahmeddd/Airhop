@@ -2021,6 +2021,10 @@ export const strings: Strings = {
     "Uppdateringskontrollen är pausad medan Tor är på, så den inte kan läcka din IP. Titta på utgåvesidan i en webbläsare.",
   "settings.version.check_failed":
     "Kunde inte söka efter uppdateringar. Kontrollera din uppkoppling och försök igen.",
+  "settings.version.downloading": "Laddar ner {percent}%",
+  "settings.version.install": "Installera",
+  "settings.version.download_failed":
+    "Nedladdningen misslyckades. Kontrollera din anslutning och försök igen.",
 
   // ---- Transfers: attachment kinds and the floating badge ----
   "transfer.too_large": "{kind} är {size} KiB, över gränsen på {cap} KiB.",

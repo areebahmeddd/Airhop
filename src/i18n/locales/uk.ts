@@ -2035,6 +2035,10 @@ export const strings: Strings = {
     "Перевірку оновлень призупинено, поки Tor увімкнено, щоб вона не розкрила вашу IP-адресу. Загляньте на сторінку випусків у браузері.",
   "settings.version.check_failed":
     "Не вдалося перевірити оновлення. Перевірте з’єднання та спробуйте ще раз.",
+  "settings.version.downloading": "Завантаження {percent}%",
+  "settings.version.install": "Встановити",
+  "settings.version.download_failed":
+    "Не вдалося завантажити. Перевірте з’єднання та повторіть спробу.",
 
   // ---- Transfers: attachment kinds and the floating badge ----
   "transfer.too_large": "{kind} має {size} KiB, це понад межу в {cap} KiB.",

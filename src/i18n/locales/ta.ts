@@ -2089,6 +2089,10 @@ export const strings: Strings = {
     "உங்கள் IP வெளிப்படாமல் இருக்க, Tor இயக்கத்தில் இருக்கும்போது புதுப்பிப்புச் சரிபார்ப்பு இடைநிறுத்தப்படுகிறது. வெளியீடுகள் பக்கத்தை உலாவியில் பாருங்கள்.",
   "settings.version.check_failed":
     "புதுப்பிப்புகளைச் சரிபார்க்க முடியவில்லை. உங்கள் இணைப்பைச் சரிபார்த்து மீண்டும் முயலுங்கள்.",
+  "settings.version.downloading": "பதிவிறக்குகிறது {percent}%",
+  "settings.version.install": "நிறுவு",
+  "settings.version.download_failed":
+    "பதிவிறக்கம் தோல்வியடைந்தது. உங்கள் இணைப்பைச் சரிபார்த்து மீண்டும் முயலவும்.",
 
   // ---- Transfers: attachment kinds and the floating badge ----
   "transfer.too_large":

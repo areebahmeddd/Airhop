@@ -2037,6 +2037,10 @@ export const strings: Strings = {
     "Pemeriksaan pembaruan dijeda selagi Tor menyala, supaya tidak membocorkan IP-mu. Lihat halaman rilis lewat peramban.",
   "settings.version.check_failed":
     "Tidak bisa memeriksa pembaruan. Periksa sambunganmu lalu coba lagi.",
+  "settings.version.downloading": "Mengunduh {percent}%",
+  "settings.version.install": "Pasang",
+  "settings.version.download_failed":
+    "Unduhan gagal. Periksa koneksi Anda dan coba lagi.",
 
   // ---- Transfers: attachment kinds and the floating badge ----
   "transfer.too_large":

@@ -2052,6 +2052,10 @@ export const strings: Strings = {
     "Sprawdzanie aktualizacji jest wstrzymane, gdy Tor jest włączony, żeby nie ujawniło twojego IP. Zajrzyj na stronę wydań w przeglądarce.",
   "settings.version.check_failed":
     "Nie udało się sprawdzić aktualizacji. Sprawdź połączenie i spróbuj ponownie.",
+  "settings.version.downloading": "Pobieranie {percent}%",
+  "settings.version.install": "Zainstaluj",
+  "settings.version.download_failed":
+    "Pobieranie nie powiodło się. Sprawdź połączenie i spróbuj ponownie.",
 
   // ---- Transfers: attachment kinds and the floating badge ----
   "transfer.too_large": "{kind} ma {size} KiB, ponad limit {cap} KiB.",

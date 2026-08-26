@@ -1,10 +1,15 @@
 // Version sub-screen: shows the running version, checks GitHub for a newer
-// release on demand, and credits the author at the foot of the page.
+// release on demand, carries the update onto the device, and credits the author
+// at the foot of the page.
 //
 // The check is manual, not automatic: Airhop is offline-first, so a silent
-// background request on every visit would be the wrong default. One button,
-// four honest outcomes (up to date, update available, offline, unexpected),
-// and never a spinner that hangs forever.
+// background request on every visit would be the wrong default. One button
+// through the whole path, an honest outcome at every step, and never a spinner
+// that hangs forever.
+//
+// Both platforms ask GitHub what the latest release is. What they do with the
+// answer differs, because only one of them may act on it: Android fetches the
+// APK and hands it to the system installer, iOS hands off to the App Store.
 
 import {
   APP_STORE_URL,
@@ -15,7 +20,6 @@ import {
   LATEST_RELEASE_PAGE,
   LICENSE_NAME,
   LICENSE_URL,
-  PLAY_STORE_URL,
 } from "@data/app-info";
 import { birdForVersion } from "@data/releases";
 import Feather from "@expo/vector-icons/Feather";
@@ -27,10 +31,14 @@ import PrimaryButton from "@ui/components/primary-button";
 import {
   FontSize,
   FontWeight,
+  Radius,
   Spacing,
   TAB_BAR_CLEARANCE,
   useThemeColors,
 } from "@ui/theme";
+import { File, Paths } from "expo-file-system";
+import { getContentUriAsync } from "expo-file-system/legacy";
+import * as IntentLauncher from "expo-intent-launcher";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
@@ -50,20 +58,39 @@ interface Props {
   onBack: () => void;
 }
 
-// Neither store allows an app to install its own update: the closest thing
-// to "automatic" that Apple/Google policy permits is handing off to the
-// platform store's own one-tap Update button, rather than a GitHub page the
-// user has to find an asset on and sideload by hand.
-const STORE_URL = Platform.OS === "ios" ? APP_STORE_URL : PLAY_STORE_URL;
+// iOS has no route but the App Store: an app may not install anything there, so
+// an update hands off to the store's own one-tap button.
+//
+// Android takes the GitHub release, and PLAY_STORE_URL is deliberately not read
+// here even once a listing exists. An offline-first app whose users may be
+// somewhere a store is blocked, absent, or has removed it cannot depend on that
+// store to deliver a fix.
+const IOS_STORE_URL = APP_STORE_URL;
+
+// The name the release workflow stages the APK under. Matched by name rather
+// than by position so a new asset in the release cannot shift what we fetch.
+const APK_ASSET_NAME = "airhop.apk";
 
 // The outcome of a check. "idle" is the resting state before the first tap.
+//
+// `apkUrl` is null on iOS and on a release carrying no APK, which is what sends
+// those two to a link rather than a download.
 type CheckState =
   | { status: "idle" }
   | { status: "checking" }
   | { status: "latest" }
-  | { status: "update"; version: string; url: string }
+  | { status: "update"; version: string; url: string; apkUrl: string | null }
   | { status: "tor-blocked" }
   | { status: "error" };
+
+// Where the downloaded APK is in its life. Separate from CheckState because a
+// failed download must not discard the check that found the update: the user
+// retries the download, not the lookup.
+type DownloadState =
+  | { status: "idle" }
+  | { status: "downloading"; percent: number }
+  | { status: "ready"; uri: string }
+  | { status: "failed" };
 
 // Compares two dotted version strings numerically. Returns a positive number
 // if a is newer than b, negative if older, zero if equal. Missing or
@@ -86,7 +113,84 @@ export default function VersionScreen({ onBack }: Props): React.JSX.Element {
   const shared = useSharedStyles();
   const styles = useMemo(() => createStyles(Colors), [Colors]);
   const [check, setCheck] = useState<CheckState>({ status: "idle" });
+  const [download, setDownload] = useState<DownloadState>({ status: "idle" });
   const bird = birdForVersion(APP_VERSION);
+
+  // Fetch the release APK, then hand it to the system installer.
+  //
+  // Into the cache directory, where the OS may reclaim it: the file is wanted
+  // only between the transfer finishing and the installer reading it, and tens
+  // of MiB should not outlive the update they carried.
+  //
+  // Progress is read from the transfer, never eased, because a bar moving on
+  // its own over a download this size lies the moment the connection stalls.
+  async function downloadAndInstall(apkUrl: string): Promise<void> {
+    setDownload({ status: "downloading", percent: 0 });
+    try {
+      const target = new File(Paths.cache, APK_ASSET_NAME);
+      // A part file from an abandoned attempt would otherwise be appended to.
+      if (target.exists) target.delete();
+      const task = File.createDownloadTask(apkUrl, target, {
+        onProgress: ({
+          bytesWritten,
+          totalBytes,
+        }: {
+          bytesWritten: number;
+          totalBytes: number;
+        }) => {
+          if (totalBytes <= 0) return;
+          setDownload({
+            status: "downloading",
+            percent: Math.min(
+              100,
+              Math.round((bytesWritten / totalBytes) * 100),
+            ),
+          });
+        },
+      });
+      const file = await task.downloadAsync();
+      if (file === null) {
+        setDownload({ status: "failed" });
+        return;
+      }
+      setDownload({ status: "ready", uri: file.uri });
+      // A device with no installer to open is the one case where the file
+      // arrived and still nothing can happen, so it reads as a failure.
+      if (!(await launchInstaller(file.uri))) {
+        setDownload({ status: "failed" });
+      }
+    } catch {
+      setDownload({ status: "failed" });
+    }
+  }
+
+  // Open the system installer on a downloaded APK.
+  //
+  // ACTION_VIEW with the archive type, not ACTION_INSTALL_PACKAGE: that one is
+  // deprecated from API 29, and this pair resolves to the package installer on
+  // every version from our minimum of 26 up.
+  //
+  // A content:// URI carrying the read grant, since a file:// one handed to
+  // another process is refused from Android 7. Everything past that point
+  // belongs to the OS: its own confirm dialog, and on 8+ a detour through
+  // "Install unknown apps" when that is not yet allowed for Airhop.
+  //
+  // Returns whether the installer opened, so a device that cannot show one says
+  // so rather than leaving a tap with nothing behind it. A cancelled install
+  // keeps the file, and the button stays on "Install".
+  async function launchInstaller(fileUri: string): Promise<boolean> {
+    try {
+      const contentUri = await getContentUriAsync(fileUri);
+      await IntentLauncher.startActivityAsync("android.intent.action.VIEW", {
+        data: contentUri,
+        type: "application/vnd.android.package-archive",
+        flags: 1, // FLAG_GRANT_READ_URI_PERMISSION
+      });
+      return true;
+    } catch {
+      return false;
+    }
+  }
 
   // One translated sentence with the license name substituted in as a tappable
   // node, so a translator can put it wherever their language needs it. The name
@@ -198,17 +302,30 @@ export default function VersionScreen({ onBack }: Props): React.JSX.Element {
         setCheck({ status: "error" });
         return;
       }
-      const data: { tag_name?: string; html_url?: string } = await res.json();
+      const data: {
+        tag_name?: string;
+        html_url?: string;
+        assets?: { name?: string; browser_download_url?: string }[];
+      } = await res.json();
       const latest = (data.tag_name ?? "").replace(/^v/, "");
       if (!latest) {
         setCheck({ status: "error" });
         return;
       }
       if (compareVersions(latest, APP_VERSION) > 0) {
+        const apk =
+          Platform.OS === "android"
+            ? (data.assets ?? []).find((a) => a.name === APK_ASSET_NAME)
+                ?.browser_download_url
+            : undefined;
+        // A fresh check invalidates whatever the last one downloaded: that file
+        // is the previous release, and installing it would be a downgrade.
+        setDownload({ status: "idle" });
         setCheck({
           status: "update",
           version: latest,
           url: data.html_url ?? LATEST_RELEASE_PAGE,
+          apkUrl: apk ?? null,
         });
       } else {
         setCheck({ status: "latest" });
@@ -225,6 +342,7 @@ export default function VersionScreen({ onBack }: Props): React.JSX.Element {
   // it opens the release page (notes + downloadable builds). The result line
   // below still links the notes. Reopening the screen resets to a fresh check.
   const update = check.status === "update" ? check : null;
+  const downloading = download.status === "downloading";
 
   return (
     <View style={shared.container}>
@@ -260,16 +378,48 @@ export default function VersionScreen({ onBack }: Props): React.JSX.Element {
         <View style={styles.actions}>
           <PrimaryButton
             label={
-              update
-                ? T("settings.version.update_to", { version: update.version })
-                : checking
-                  ? T("settings.version.checking")
-                  : T("settings.version.check")
+              downloading
+                ? T("settings.version.downloading", {
+                    percent: String(
+                      download.status === "downloading" ? download.percent : 0,
+                    ),
+                  })
+                : download.status === "ready"
+                  ? T("settings.version.install")
+                  : update
+                    ? T("settings.version.update_to", {
+                        version: update.version,
+                      })
+                    : checking
+                      ? T("settings.version.checking")
+                      : T("settings.version.check")
             }
-            onPress={() =>
-              update ? void Linking.openURL(STORE_URL) : void checkForUpdates()
-            }
-            disabled={checking}
+            onPress={() => {
+              if (downloading) return;
+              // A downloaded APK the user backed out of: straight back to the
+              // installer, no second download.
+              if (download.status === "ready") {
+                void launchInstaller(download.uri).then((opened) => {
+                  if (!opened) setDownload({ status: "failed" });
+                });
+                return;
+              }
+              if (!update) {
+                void checkForUpdates();
+                return;
+              }
+              // An APK to fetch means the whole update happens here. Without
+              // one, the best this button can do is open the place the user can
+              // finish it themselves.
+              if (update.apkUrl !== null) {
+                void downloadAndInstall(update.apkUrl);
+                return;
+              }
+              void Linking.openURL(
+                Platform.OS === "ios" ? IOS_STORE_URL : update.url,
+              );
+            }}
+            disabled={checking || downloading}
             accessibilityLabel={
               update
                 ? T("settings.version.update_to_a11y", {
@@ -278,7 +428,36 @@ export default function VersionScreen({ onBack }: Props): React.JSX.Element {
                 : T("settings.version.check")
             }
           />
-          <UpdateResult check={check} styles={styles} Colors={Colors} />
+          {downloading ? (
+            <View
+              style={styles.progressTrack}
+              accessibilityRole="progressbar"
+              accessibilityValue={{
+                now: download.status === "downloading" ? download.percent : 0,
+                min: 0,
+                max: 100,
+              }}
+            >
+              <View
+                style={[
+                  styles.progressFill,
+                  {
+                    width: `${download.status === "downloading" ? download.percent : 0}%`,
+                  },
+                ]}
+              />
+            </View>
+          ) : null}
+          {download.status === "failed" ? (
+            <View style={styles.result}>
+              <Feather name="wifi-off" size={16} color={Colors.textMuted} />
+              <Text style={styles.resultText}>
+                {T("settings.version.download_failed")}
+              </Text>
+            </View>
+          ) : (
+            <UpdateResult check={check} styles={styles} Colors={Colors} />
+          )}
         </View>
 
         <View style={styles.credit}>
@@ -534,6 +713,19 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       justifyContent: "center",
       gap: Spacing.sm,
       paddingHorizontal: Spacing.base,
+    },
+    progressTrack: {
+      height: Spacing.xs,
+      alignSelf: "stretch",
+      marginHorizontal: Spacing.base,
+      backgroundColor: Colors.border,
+      borderRadius: Radius.xs,
+      overflow: "hidden",
+    },
+    progressFill: {
+      height: "100%",
+      backgroundColor: Colors.textPrimary,
+      borderRadius: Radius.xs,
     },
     resultText: {
       flexShrink: 1,

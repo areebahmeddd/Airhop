@@ -2004,6 +2004,10 @@ export const strings: Strings = {
     "Tor چالو ہونے کے دوران اپ ڈیٹ کی جانچ روک دی جاتی ہے، تاکہ وہ آپ کا IP ظاہر نہ کرے۔ اجرا کا صفحہ براؤزر میں دیکھیں۔",
   "settings.version.check_failed":
     "اپ ڈیٹ نہیں جانچے جا سکے۔ اپنا تعلق جانچیں اور دوبارہ کوشش کریں۔",
+  "settings.version.downloading": "ڈاؤن لوڈ ہو رہا ہے {percent}%",
+  "settings.version.install": "انسٹال کریں",
+  "settings.version.download_failed":
+    "ڈاؤن لوڈ ناکام ہوا۔ اپنا کنکشن چیک کریں اور دوبارہ کوشش کریں۔",
 
   // ---- Transfers: attachment kinds and the floating badge ----
   "transfer.too_large":
