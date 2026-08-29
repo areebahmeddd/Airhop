@@ -1762,13 +1762,11 @@ export const strings: Strings = {
   "settings.network.relay_duplicate": "Ese relé ya está en tu lista.",
   "settings.network.relay_invalid":
     "Introduce un host de relé válido, por ejemplo relay.example.com. El puerto solo hace falta si el relé no usa el predeterminado. No se admiten direcciones IP ni nombres locales.",
-  "settings.network.wifi_pair": "Transferencias rápidas",
-  "settings.network.wifi_pair_desc":
-    "Envía fotos y archivos por Wi-Fi en lugar de Bluetooth. Funciona entre dos iPhone, ambos con iOS 26 o posterior, mientras Airhop está abierto. Vincula una vez y después ocurre solo.",
+  "settings.network.wifi_pair": "Vinculación",
   "settings.network.wifi_paired": "Dispositivos vinculados",
   "settings.network.wifi_pair_find": "Buscar un dispositivo",
   "settings.network.wifi_pair_find_desc":
-    "Buscar un iPhone cercano que se esté mostrando",
+    "Buscar un iPhone cercano que se esté mostrando. Ambos necesitan iOS 26 o posterior.",
   "settings.network.wifi_pair_show": "Mostrar este iPhone",
   "settings.network.wifi_pair_show_desc":
     "Deja que un iPhone cercano encuentre este. Uno busca y el otro se muestra, al mismo tiempo.",
@@ -1777,7 +1775,7 @@ export const strings: Strings = {
   "settings.network.wifi_pair_unavailable":
     "Wi-Fi Aware no está disponible ahora mismo",
   "settings.network.wifi_pair_forget":
-    "Para quitar una vinculación, abre la app Settings y mira en Privacy & Security. Airhop no puede deshacerla por ti.",
+    "Quita una vinculación en la app Settings",
   "settings.network.bitchat": "Compatibilidad con bitchat",
   "settings.network.bitchat_desc":
     "La misma malla BLE que bitchat, totalmente interoperable. Está siempre activa y no se puede desactivar.",

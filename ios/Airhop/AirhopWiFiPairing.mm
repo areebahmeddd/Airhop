@@ -13,9 +13,8 @@ RCT_EXTERN_METHOD(getPairingState:(RCTPromiseResolveBlock)resolve
                   rejecter:(RCTPromiseRejectBlock)reject)
 
 RCT_EXTERN_METHOD(presentPairing:(NSString *)mode
-                  actionLabel:(NSString *)actionLabel
-                  cancelLabel:(NSString *)cancelLabel
-                  unavailableLabel:(NSString *)unavailableLabel
+                  labels:(NSDictionary *)labels
+                  colors:(NSDictionary *)colors
                   resolver:(RCTPromiseResolveBlock)resolve
                   rejecter:(RCTPromiseRejectBlock)reject)
 

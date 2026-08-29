@@ -11,11 +11,16 @@
 // mesh-state-store for the Network screen.
 
 import NativeAirhopWiFiPairing, {
+  type PairingColors,
   type PairingState,
 } from "@bridge/NativeAirhopWiFiPairing";
 import { t } from "@i18n";
 import { useMeshStateStore } from "@store/mesh-state-store";
+import type { useThemeColors } from "@ui/theme";
 import { DeviceEventEmitter, type EmitterSubscription } from "react-native";
+
+// The palette object a screen holds, named the way settings-primitives does.
+type ThemeColors = ReturnType<typeof useThemeColors>;
 
 // Which half of the pairing this device is playing. Pairing is two-sided, the
 // way Bluetooth pairing is: one phone looks, the other is looked at, both at the
@@ -23,7 +28,7 @@ import { DeviceEventEmitter, type EmitterSubscription } from "react-native";
 export type PairingMode = "find" | "discoverable";
 
 // Whether this build has a pairing module at all. False on Android, where the
-// fast path needs no pairing, and the network screen hides the section rather
+// fast path needs no pairing, and the Network screen hides the section rather
 // than offering a control that could not do anything.
 export function hasWiFiPairing(): boolean {
   return (
@@ -31,26 +36,37 @@ export function hasWiFiPairing(): boolean {
   );
 }
 
-// The watcher MeshService is running, if any. Module-level so the function
-// below can re-read the list when the sheet closes, without the Network screen
+// The watcher MeshService is running, if any. Module-level so the function below
+// can re-read the list when the sheet closes, without the Network screen
 // reaching through MeshService for an object it has no other use for.
 let active: WiFiPairingWatcher | null = null;
 
 // Show Apple's pairing sheet.
 //
-// The labels are read here rather than in Swift because no user-facing string
-// may be written in native code. Resolves when the screen is dismissed, paired
-// or not: the result arrives through the watcher below.
-export async function presentWiFiPairing(mode: PairingMode): Promise<void> {
+// Copy and colours are read here rather than in Swift because native owns no
+// user-facing content and no visual value. `colors` comes from the caller, which
+// is a component holding `useThemeColors()`, so the launcher screen answers the
+// theme setting like every other surface.
+//
+// Resolves when the screen is dismissed, paired or not: the result arrives
+// through the watcher below.
+export async function presentWiFiPairing(
+  mode: PairingMode,
+  colors: ThemeColors,
+): Promise<void> {
   if (!hasWiFiPairing()) return;
   try {
     await NativeAirhopWiFiPairing?.presentPairing(
       mode,
-      mode === "find"
-        ? t("settings.network.wifi_pair_find_action")
-        : t("settings.network.wifi_pair_show_action"),
-      t("common.cancel"),
-      t("settings.network.wifi_pair_unavailable"),
+      {
+        action:
+          mode === "find"
+            ? t("settings.network.wifi_pair_find_action")
+            : t("settings.network.wifi_pair_show_action"),
+        cancel: t("common.cancel"),
+        unavailable: t("settings.network.wifi_pair_unavailable"),
+      },
+      palette(colors),
     );
   } catch {
     // Refused to present, which the screen already covers: the section is only
@@ -58,10 +74,22 @@ export async function presentWiFiPairing(mode: PairingMode): Promise<void> {
     // transient the user can answer by tapping again.
   }
   // Backstop for an event raised while the sheet was up. `devicesChanged` is the
-  // normal path and covers a pairing made anywhere, this app included, but it is
-  // dropped when no bridge is attached to receive it, and a modal is exactly
-  // when that is most likely.
+  // normal path, but it is dropped when no bridge is attached to receive it, and
+  // a modal is when that is most likely.
   await active?.refresh();
+}
+
+// Only the five tokens the launcher screen paints with, narrowed rather than
+// passed whole so the bridge payload cannot quietly become a second copy of the
+// palette.
+function palette(colors: ThemeColors): PairingColors {
+  return {
+    bg: colors.bg,
+    surface: colors.surface,
+    border: colors.border,
+    textPrimary: colors.textPrimary,
+    textMuted: colors.textMuted,
+  };
 }
 
 // The paired-device list, watched for the life of the mesh. Constructed with a

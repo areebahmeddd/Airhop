@@ -1726,13 +1726,11 @@ export const strings: Strings = {
   "settings.network.relay_duplicate": "آن رله از پیش در فهرست شماست.",
   "settings.network.relay_invalid":
     "یک میزبان رلهٔ معتبر وارد کنید، مثلاً relay.example.com. درگاه تنها وقتی لازم است که رله از مقدار پیش‌فرض استفاده نکند. نشانی‌های IP و نام‌های محلی مجاز نیستند.",
-  "settings.network.wifi_pair": "انتقال‌های سریع",
-  "settings.network.wifi_pair_desc":
-    "عکس‌ها و فایل‌ها را به‌جای Bluetooth با Wi-Fi بفرستید. بین دو iPhone کار می‌کند، هر دو با iOS 26 یا بالاتر، تا وقتی Airhop باز است. یک‌بار جفت کنید، پس از آن خودکار انجام می‌شود.",
+  "settings.network.wifi_pair": "جفت‌شدن",
   "settings.network.wifi_paired": "دستگاه‌های جفت‌شده",
   "settings.network.wifi_pair_find": "یافتن یک دستگاه",
   "settings.network.wifi_pair_find_desc":
-    "دنبال iPhone نزدیکی بگردید که خود را نشان می‌دهد",
+    "دنبال iPhone نزدیکی بگردید که خود را نشان می‌دهد. هر دو گوشی به iOS 26 یا بالاتر نیاز دارند.",
   "settings.network.wifi_pair_show": "نمایش این iPhone",
   "settings.network.wifi_pair_show_desc":
     "بگذارید یک iPhone نزدیک این یکی را پیدا کند. یکی می‌گردد و دیگری خود را نشان می‌دهد، هم‌زمان.",
@@ -1741,7 +1739,7 @@ export const strings: Strings = {
   "settings.network.wifi_pair_unavailable":
     "Wi-Fi Aware در حال حاضر در دسترس نیست",
   "settings.network.wifi_pair_forget":
-    "برای حذف یک جفت‌شدن، برنامه Settings را باز کنید و زیر Privacy & Security را ببینید. Airhop نمی‌تواند آن را برای شما لغو کند.",
+    "یک جفت‌شدن را در برنامه Settings حذف کنید",
   "settings.network.bitchat": "سازگاری با bitchat",
   "settings.network.bitchat_desc":
     "همان مش BLE که bitchat دارد، با هم‌کارکردی کامل. این همیشه روشن است و نمی‌توان خاموشش کرد.",

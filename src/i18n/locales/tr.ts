@@ -1734,13 +1734,11 @@ export const strings: Strings = {
   "settings.network.relay_duplicate": "O aktarıcı zaten listende.",
   "settings.network.relay_invalid":
     "Geçerli bir aktarıcı adresi gir, örneğin relay.example.com. Bağlantı noktası yalnızca aktarıcı varsayılanı kullanmıyorsa gerekir. IP adresleri ve yerel adlar kabul edilmez.",
-  "settings.network.wifi_pair": "Hızlı aktarımlar",
-  "settings.network.wifi_pair_desc":
-    "Fotoğrafları ve dosyaları Bluetooth yerine Wi-Fi üzerinden gönderin. İkisi de iOS 26 veya sonrasında olan iki iPhone arasında, Airhop açıkken çalışır. Bir kez eşleştirin, sonrasında kendiliğinden olur.",
+  "settings.network.wifi_pair": "Eşleştirme",
   "settings.network.wifi_paired": "Eşleştirilmiş cihazlar",
   "settings.network.wifi_pair_find": "Cihaz bul",
   "settings.network.wifi_pair_find_desc":
-    "Kendini gösteren yakındaki bir iPhone arayın",
+    "Kendini gösteren yakındaki bir iPhone arayın. İki telefon da iOS 26 veya sonrasını gerektirir.",
   "settings.network.wifi_pair_show": "Bu iPhone'u göster",
   "settings.network.wifi_pair_show_desc":
     "Yakındaki bir iPhone'un bunu bulmasına izin verin. Biriniz arar, diğeri kendini gösterir, aynı anda.",
@@ -1749,7 +1747,7 @@ export const strings: Strings = {
   "settings.network.wifi_pair_unavailable":
     "Wi-Fi Aware şu anda kullanılamıyor",
   "settings.network.wifi_pair_forget":
-    "Bir eşleştirmeyi kaldırmak için Settings uygulamasını açın ve Privacy & Security altına bakın. Airhop bunu sizin yerinize geri alamaz.",
+    "Settings uygulamasında bir eşleştirmeyi kaldırın",
   "settings.network.bitchat": "bitchat uyumluluğu",
   "settings.network.bitchat_desc":
     "bitchat ile aynı BLE mesh ağı, tümüyle birlikte çalışabilir. Bu her zaman açıktır ve kapatılamaz.",

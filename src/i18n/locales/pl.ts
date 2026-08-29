@@ -1753,13 +1753,11 @@ export const strings: Strings = {
     "Ten przekaźnik już jest na twojej liście.",
   "settings.network.relay_invalid":
     "Podaj prawidłowy adres przekaźnika, np. relay.example.com. Port jest potrzebny tylko wtedy, gdy przekaźnik nie używa domyślnego. Adresy IP i nazwy lokalne są niedozwolone.",
-  "settings.network.wifi_pair": "Szybkie przesyłanie",
-  "settings.network.wifi_pair_desc":
-    "Wysyłaj zdjęcia i pliki przez Wi-Fi zamiast przez Bluetooth. Działa między dwoma iPhone'ami, oba z iOS 26 lub nowszym, gdy Airhop jest otwarty. Sparuj raz, potem dzieje się to samo z siebie.",
+  "settings.network.wifi_pair": "Parowanie",
   "settings.network.wifi_paired": "Sparowane urządzenia",
   "settings.network.wifi_pair_find": "Znajdź urządzenie",
   "settings.network.wifi_pair_find_desc":
-    "Poszukaj pobliskiego iPhone'a, który się pokazuje",
+    "Poszukaj pobliskiego iPhone'a, który się pokazuje. Oba telefony potrzebują iOS 26 lub nowszego.",
   "settings.network.wifi_pair_show": "Pokaż tego iPhone'a",
   "settings.network.wifi_pair_show_desc":
     "Pozwól pobliskiemu iPhone'owi znaleźć ten. Jedna osoba szuka, druga się pokazuje, w tym samym czasie.",
@@ -1767,8 +1765,7 @@ export const strings: Strings = {
   "settings.network.wifi_pair_show_action": "Uczyń tego iPhone'a wykrywalnym",
   "settings.network.wifi_pair_unavailable":
     "Wi-Fi Aware jest teraz niedostępne",
-  "settings.network.wifi_pair_forget":
-    "Aby usunąć sparowanie, otwórz aplikację Settings i zajrzyj do Privacy & Security. Airhop nie może tego za Ciebie cofnąć.",
+  "settings.network.wifi_pair_forget": "Usuń sparowanie w aplikacji Settings",
   "settings.network.bitchat": "Zgodność z bitchat",
   "settings.network.bitchat_desc":
     "Ta sama sieć mesh BLE co w bitchat, w pełni współdziałająca. To jest zawsze włączone i nie da się tego wyłączyć.",

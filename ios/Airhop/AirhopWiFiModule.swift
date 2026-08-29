@@ -407,10 +407,18 @@ private actor WiFiAwareTransport {
             // populated once the connection is ready, and an inbound connection
             // has no endpoint to read a device from until then.
             if deviceID == nil {
-                // `try?`, not `try`: failing to name the device costs the redial
-                // guard a hint, not the link.
-                deviceID = (try? await connection.currentPath)?
-                    .wifiAware?.endpoint.device.id
+                // `try await` spans the whole chain rather than one hop of it.
+                // Network framework puts the effects on the Wi-Fi Aware accessor,
+                // not on `currentPath`, so parenthesising the first term leaves
+                // the rest unmarked and the file will not compile. Apple's own
+                // sample is written the same way.
+                //
+                // `try?` rather than `try`: failing to name the device costs the
+                // dial guard a hint, not the link. Identity comes from the
+                // ANNOUNCE either way, and every use of `deviceID` below is
+                // already optional.
+                deviceID =
+                    try? await connection.currentPath?.wifiAware?.endpoint.device.id
             }
 
             // Keep the connection whose initiator holds the lower token.

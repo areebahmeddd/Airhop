@@ -1754,13 +1754,11 @@ export const strings: Strings = {
     "Geganti itu sudah ada dalam senarai anda.",
   "settings.network.relay_invalid":
     "Masukkan hos geganti yang sah, contohnya relay.example.com. Port hanya diperlukan kalau geganti itu tidak menggunakan port lalai. Alamat IP dan nama setempat tidak dibenarkan.",
-  "settings.network.wifi_pair": "Pemindahan pantas",
-  "settings.network.wifi_pair_desc":
-    "Hantar foto dan fail melalui Wi-Fi dan bukannya Bluetooth. Berfungsi antara dua iPhone, kedua-duanya pada iOS 26 atau lebih baharu, semasa Airhop dibuka. Gandingkan sekali, selepas itu ia berlaku dengan sendirinya.",
+  "settings.network.wifi_pair": "Gandingan",
   "settings.network.wifi_paired": "Peranti bergandingan",
   "settings.network.wifi_pair_find": "Cari peranti",
   "settings.network.wifi_pair_find_desc":
-    "Cari iPhone berdekatan yang sedang menunjukkan dirinya",
+    "Cari iPhone berdekatan yang sedang menunjukkan dirinya. Kedua-dua telefon perlukan iOS 26 atau lebih baharu.",
   "settings.network.wifi_pair_show": "Tunjukkan iPhone ini",
   "settings.network.wifi_pair_show_desc":
     "Biarkan iPhone berdekatan menemui yang ini. Seorang mencari, seorang lagi menunjukkan, pada masa yang sama.",
@@ -1769,7 +1767,7 @@ export const strings: Strings = {
   "settings.network.wifi_pair_unavailable":
     "Wi-Fi Aware tidak tersedia buat masa ini",
   "settings.network.wifi_pair_forget":
-    "Untuk membuang gandingan, buka aplikasi Settings dan lihat di bawah Privacy & Security. Airhop tidak boleh membatalkannya untuk anda.",
+    "Buang gandingan dalam aplikasi Settings",
   "settings.network.bitchat": "Keserasian bitchat",
   "settings.network.bitchat_desc":
     "Mesh BLE yang sama dengan bitchat, saling beroperasi sepenuhnya. Ini sentiasa hidup dan tidak boleh dimatikan.",

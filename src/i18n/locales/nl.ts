@@ -1752,13 +1752,11 @@ export const strings: Strings = {
   "settings.network.relay_duplicate": "Die relay staat al in je lijst.",
   "settings.network.relay_invalid":
     "Vul een geldige relayhost in, bijvoorbeeld relay.example.com. Een poort is alleen nodig als de relay niet de standaardpoort gebruikt. IP-adressen en lokale namen zijn niet toegestaan.",
-  "settings.network.wifi_pair": "Snelle overdrachten",
-  "settings.network.wifi_pair_desc":
-    "Stuur foto’s en bestanden via Wi-Fi in plaats van Bluetooth. Werkt tussen twee iPhones, beide op iOS 26 of nieuwer, zolang Airhop open is. Koppel één keer, daarna gaat het vanzelf.",
+  "settings.network.wifi_pair": "Koppelen",
   "settings.network.wifi_paired": "Gekoppelde apparaten",
   "settings.network.wifi_pair_find": "Een apparaat zoeken",
   "settings.network.wifi_pair_find_desc":
-    "Zoek een iPhone in de buurt die zichzelf laat zien",
+    "Zoek een iPhone in de buurt die zichzelf laat zien. Beide hebben iOS 26 of nieuwer nodig.",
   "settings.network.wifi_pair_show": "Deze iPhone tonen",
   "settings.network.wifi_pair_show_desc":
     "Laat een iPhone in de buurt deze vinden. De een zoekt, de ander laat zich zien, op hetzelfde moment.",
@@ -1767,7 +1765,7 @@ export const strings: Strings = {
   "settings.network.wifi_pair_unavailable":
     "Wi-Fi Aware is nu niet beschikbaar",
   "settings.network.wifi_pair_forget":
-    "Open de app Settings en kijk onder Privacy & Security om een koppeling te verwijderen. Airhop kan dat niet voor je ongedaan maken.",
+    "Verwijder een koppeling in de app Settings",
   "settings.network.bitchat": "bitchat-compatibiliteit",
   "settings.network.bitchat_desc":
     "Dezelfde BLE-mesh als bitchat, volledig samenwerkend. Dit staat altijd aan en kan niet uit.",

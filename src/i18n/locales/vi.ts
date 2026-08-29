@@ -1737,13 +1737,11 @@ export const strings: Strings = {
     "Bộ chuyển tiếp đó đã có trong danh sách của bạn.",
   "settings.network.relay_invalid":
     "Hãy nhập một máy chủ chuyển tiếp hợp lệ, ví dụ relay.example.com. Chỉ cần ghi cổng nếu bộ chuyển tiếp không dùng cổng mặc định. Không cho phép địa chỉ IP và tên cục bộ.",
-  "settings.network.wifi_pair": "Truyền nhanh",
-  "settings.network.wifi_pair_desc":
-    "Gửi ảnh và tệp qua Wi-Fi thay vì Bluetooth. Hoạt động giữa hai iPhone, cả hai đều chạy iOS 26 trở lên, khi Airhop đang mở. Ghép đôi một lần, sau đó việc này diễn ra tự động.",
+  "settings.network.wifi_pair": "Ghép đôi",
   "settings.network.wifi_paired": "Thiết bị đã ghép đôi",
   "settings.network.wifi_pair_find": "Tìm một thiết bị",
   "settings.network.wifi_pair_find_desc":
-    "Tìm một iPhone gần đó đang tự hiển thị",
+    "Tìm một iPhone gần đó đang tự hiển thị. Cả hai máy đều cần iOS 26 trở lên.",
   "settings.network.wifi_pair_show": "Hiển thị iPhone này",
   "settings.network.wifi_pair_show_desc":
     "Để một iPhone gần đó tìm thấy máy này. Một người tìm, người kia hiển thị, cùng lúc.",
@@ -1751,7 +1749,7 @@ export const strings: Strings = {
   "settings.network.wifi_pair_show_action": "Cho phép tìm thấy iPhone này",
   "settings.network.wifi_pair_unavailable": "Wi-Fi Aware hiện không khả dụng",
   "settings.network.wifi_pair_forget":
-    "Để gỡ một liên kết ghép đôi, hãy mở ứng dụng Settings và xem trong Privacy & Security. Airhop không thể hoàn tác giúp bạn.",
+    "Gỡ một liên kết ghép đôi trong ứng dụng Settings",
   "settings.network.bitchat": "Tương thích bitchat",
   "settings.network.bitchat_desc":
     "Cùng một mạng lưới BLE với bitchat, tương thích hoàn toàn. Mục này luôn bật và không tắt được.",

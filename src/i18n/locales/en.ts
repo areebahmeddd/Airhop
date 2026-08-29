@@ -1739,13 +1739,11 @@ export const strings = {
   "settings.network.relay_duplicate": "That relay is already in your list.",
   "settings.network.relay_invalid":
     "Enter a valid relay host, e.g. relay.example.com. A port is only needed if the relay does not use the default. IP addresses and local names are not allowed.",
-  "settings.network.wifi_pair": "Fast transfers",
-  "settings.network.wifi_pair_desc":
-    "Send photos and files over Wi-Fi instead of Bluetooth. Works between two iPhones, both on iOS 26 or later, while Airhop is open. Pair once and it happens on its own after that.",
+  "settings.network.wifi_pair": "Pairing",
   "settings.network.wifi_paired": "Paired devices",
   "settings.network.wifi_pair_find": "Find a device",
   "settings.network.wifi_pair_find_desc":
-    "Look for a nearby iPhone that is showing itself",
+    "Look for a nearby iPhone that is showing itself. Both phones need iOS 26 or later.",
   "settings.network.wifi_pair_show": "Show this iPhone",
   "settings.network.wifi_pair_show_desc":
     "Let a nearby iPhone find this one. One of you finds, the other shows, at the same time.",
@@ -1753,8 +1751,7 @@ export const strings = {
   "settings.network.wifi_pair_show_action": "Make this iPhone discoverable",
   "settings.network.wifi_pair_unavailable":
     "Wi-Fi Aware is not available right now",
-  "settings.network.wifi_pair_forget":
-    "To remove a pairing, open the Settings app and look under Privacy & Security. Airhop cannot undo one for you.",
+  "settings.network.wifi_pair_forget": "Remove a pairing in the Settings app",
   "settings.network.bitchat": "bitchat compatibility",
   "settings.network.bitchat_desc":
     "Same BLE mesh as bitchat, fully interoperable. This is always on, and cannot be disabled.",

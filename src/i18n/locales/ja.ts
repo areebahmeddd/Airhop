@@ -1728,21 +1728,18 @@ export const strings: Strings = {
   "settings.network.relay_duplicate": "そのリレーはすでに一覧にあります。",
   "settings.network.relay_invalid":
     "relay.example.comのような有効なリレーのホスト名を入力してください。ポートは、リレーが既定のポートを使っていない場合にのみ必要です。IPアドレスやローカル名は使えません。",
-  "settings.network.wifi_pair": "高速転送",
-  "settings.network.wifi_pair_desc":
-    "写真やファイルをBluetoothではなくWi-Fiで送ります。iOS 26以降の2台のiPhone間で、Airhopを開いている間に動作します。一度ペアリングすれば、あとは自動で行われます。",
+  "settings.network.wifi_pair": "ペアリング",
   "settings.network.wifi_paired": "ペアリング済みデバイス",
   "settings.network.wifi_pair_find": "デバイスを探す",
   "settings.network.wifi_pair_find_desc":
-    "自分を表示している近くのiPhoneを探します",
+    "自分を表示している近くのiPhoneを探します。両方の端末にiOS 26以降が必要です。",
   "settings.network.wifi_pair_show": "このiPhoneを表示",
   "settings.network.wifi_pair_show_desc":
     "近くのiPhoneにこの端末を見つけてもらいます。どちらかが探し、もう一方が表示します。同時に行ってください。",
   "settings.network.wifi_pair_find_action": "近くのiPhoneを選ぶ",
   "settings.network.wifi_pair_show_action": "このiPhoneを検出可能にする",
   "settings.network.wifi_pair_unavailable": "Wi-Fi Awareは現在利用できません",
-  "settings.network.wifi_pair_forget":
-    "ペアリングを解除するには、Settingsアプリを開いてPrivacy & Securityの下を確認してください。Airhopが代わりに解除することはできません。",
+  "settings.network.wifi_pair_forget": "Settingsアプリでペアリングを解除",
   "settings.network.bitchat": "bitchatとの互換性",
   "settings.network.bitchat_desc":
     "bitchatと同じBLEメッシュで、完全に相互運用できます。これは常にオンで、無効にはできません。",

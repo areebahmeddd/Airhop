@@ -1718,21 +1718,18 @@ export const strings: Strings = {
   "settings.network.relay_duplicate": "وہ ریلے پہلے ہی آپ کی فہرست میں ہے۔",
   "settings.network.relay_invalid":
     "درست ریلے میزبان درج کریں، مثلاً relay.example.com۔ پورٹ صرف تب چاہیے جب ریلے طے شدہ پورٹ استعمال نہ کرتا ہو۔ IP پتے اور مقامی نام قابل قبول نہیں۔",
-  "settings.network.wifi_pair": "تیز منتقلی",
-  "settings.network.wifi_pair_desc":
-    "تصاویر اور فائلیں Bluetooth کے بجائے Wi-Fi سے بھیجیں۔ دو iPhone کے درمیان کام کرتا ہے، دونوں iOS 26 یا اس کے بعد پر، جب تک Airhop کھلا ہو۔ ایک بار جوڑا بنائیں، اس کے بعد یہ خود ہوتا ہے۔",
+  "settings.network.wifi_pair": "جوڑا بنانا",
   "settings.network.wifi_paired": "جوڑے گئے آلات",
   "settings.network.wifi_pair_find": "آلہ تلاش کریں",
   "settings.network.wifi_pair_find_desc":
-    "قریبی ایسا iPhone تلاش کریں جو خود کو دکھا رہا ہو",
+    "قریبی ایسا iPhone تلاش کریں جو خود کو دکھا رہا ہو۔ دونوں فونز کو iOS 26 یا بعد کا درکار ہے۔",
   "settings.network.wifi_pair_show": "یہ iPhone دکھائیں",
   "settings.network.wifi_pair_show_desc":
     "قریبی iPhone کو یہ تلاش کرنے دیں۔ ایک تلاش کرتا ہے، دوسرا دکھاتا ہے، ایک ہی وقت میں۔",
   "settings.network.wifi_pair_find_action": "قریبی iPhone منتخب کریں",
   "settings.network.wifi_pair_show_action": "اس iPhone کو قابل دریافت بنائیں",
   "settings.network.wifi_pair_unavailable": "Wi-Fi Aware اس وقت دستیاب نہیں ہے",
-  "settings.network.wifi_pair_forget":
-    "جوڑا ہٹانے کے لیے Settings ایپ کھولیں اور Privacy & Security کے نیچے دیکھیں۔ Airhop آپ کی جگہ اسے واپس نہیں لے سکتا۔",
+  "settings.network.wifi_pair_forget": "Settings ایپ میں جوڑا ہٹائیں",
   "settings.network.bitchat": "bitchat سے ہم آہنگی",
   "settings.network.bitchat_desc":
     "وہی BLE میش جو bitchat کی ہے، مکمل طور پر باہم کارگر۔ یہ ہمیشہ چالو رہتا ہے اور بند نہیں کیا جا سکتا۔",

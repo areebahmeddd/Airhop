@@ -1621,20 +1621,18 @@ export const strings: Strings = {
   "settings.network.relay_duplicate": "那个中继已经在你的列表里了。",
   "settings.network.relay_invalid":
     "请输入有效的中继主机名，例如 relay.example.com。只有当中继不使用默认端口时才需要写端口。不允许使用 IP 地址和本地名称。",
-  "settings.network.wifi_pair": "快速传输",
-  "settings.network.wifi_pair_desc":
-    "通过Wi-Fi而非Bluetooth发送照片和文件。在两台iPhone之间可用，两台都需为iOS 26或更新版本，且Airhop处于打开状态。配对一次，之后便会自动进行。",
+  "settings.network.wifi_pair": "配对",
   "settings.network.wifi_paired": "已配对的设备",
   "settings.network.wifi_pair_find": "查找设备",
-  "settings.network.wifi_pair_find_desc": "查找附近正在显示自己的iPhone",
+  "settings.network.wifi_pair_find_desc":
+    "查找附近正在显示自己的iPhone。两台设备都需为iOS 26或更新版本。",
   "settings.network.wifi_pair_show": "显示这台iPhone",
   "settings.network.wifi_pair_show_desc":
     "让附近的iPhone找到这台。一人查找，另一人显示，同时进行。",
   "settings.network.wifi_pair_find_action": "选择附近的iPhone",
   "settings.network.wifi_pair_show_action": "让这台iPhone可被发现",
   "settings.network.wifi_pair_unavailable": "Wi-Fi Aware目前不可用",
-  "settings.network.wifi_pair_forget":
-    "要移除配对，请打开Settings应用并在Privacy & Security下查看。Airhop无法替你撤销。",
+  "settings.network.wifi_pair_forget": "在Settings应用中移除配对",
   "settings.network.bitchat": "bitchat 兼容",
   "settings.network.bitchat_desc":
     "与 bitchat 使用同一套 BLE 网状网络，完全互通。这一项始终开启，无法关闭。",

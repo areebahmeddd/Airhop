@@ -1761,13 +1761,11 @@ export const strings: Strings = {
     "Relay hiyo tayari iko kwenye orodha yako.",
   "settings.network.relay_invalid":
     "Weka mwenyeji halali wa relay, mfano relay.example.com. Mlango unahitajika tu ikiwa relay haitumii ule wa kawaida. Anwani za IP na majina ya ndani hayaruhusiwi.",
-  "settings.network.wifi_pair": "Uhamishaji wa haraka",
-  "settings.network.wifi_pair_desc":
-    "Tuma picha na faili kwa Wi-Fi badala ya Bluetooth. Hufanya kazi kati ya iPhone mbili, zote zikiwa na iOS 26 au mpya zaidi, wakati Airhop imefunguliwa. Oanisha mara moja, baada ya hapo hufanyika yenyewe.",
+  "settings.network.wifi_pair": "Uoanishaji",
   "settings.network.wifi_paired": "Vifaa vilivyooanishwa",
   "settings.network.wifi_pair_find": "Tafuta kifaa",
   "settings.network.wifi_pair_find_desc":
-    "Tafuta iPhone iliyo karibu inayojionyesha",
+    "Tafuta iPhone iliyo karibu inayojionyesha. Simu zote mbili zinahitaji iOS 26 au mpya zaidi.",
   "settings.network.wifi_pair_show": "Onyesha iPhone hii",
   "settings.network.wifi_pair_show_desc":
     "Ruhusu iPhone iliyo karibu ipate hii. Mmoja hutafuta, mwingine hujionyesha, kwa wakati mmoja.",
@@ -1775,7 +1773,7 @@ export const strings: Strings = {
   "settings.network.wifi_pair_show_action": "Fanya iPhone hii ionekane",
   "settings.network.wifi_pair_unavailable": "Wi-Fi Aware haipatikani kwa sasa",
   "settings.network.wifi_pair_forget":
-    "Ili kuondoa uoanishaji, fungua programu ya Settings na uangalie chini ya Privacy & Security. Airhop haiwezi kuutengua kwa niaba yako.",
+    "Ondoa uoanishaji katika programu ya Settings",
   "settings.network.bitchat": "Uoanifu na bitchat",
   "settings.network.bitchat_desc":
     "Mesh ileile ya BLE kama bitchat, inayooana kikamilifu. Hii daima imewashwa, na haiwezi kuzimwa.",

@@ -31,6 +31,23 @@ export interface PairingState {
   count: number;
 }
 
+// The screen's own copy, already translated.
+export interface PairingLabels {
+  action: string;
+  cancel: string;
+  unavailable: string;
+}
+
+// The tokens the screen paints with, resolved from `useThemeColors()` so it
+// answers the theme setting like every other surface.
+export interface PairingColors {
+  bg: string;
+  surface: string;
+  border: string;
+  textPrimary: string;
+  textMuted: string;
+}
+
 export interface Spec extends TurboModule {
   // Both facts in one answer, matching getRadioState on the BLE side: they are
   // read together on every refresh, and two calls could return a pair of answers
@@ -43,17 +60,19 @@ export interface Spec extends TurboModule {
   // browse for a device that has made itself discoverable, or "discoverable" to
   // advertise so the other one can find this.
   //
-  // The labels are drawn on the screen that launches Apple's sheet, which is
-  // ours rather than the system's, and arrive translated because no user-facing
-  // string may be written in native code.
+  // `labels` and `colors` are the screen that launches Apple's sheet, which is
+  // ours rather than the system's. Both cross the bridge for the same reason:
+  // native owns no user-facing content and no visual value. The strings come
+  // from the catalog and the colours from `useThemeColors()`, so the screen
+  // follows the app's theme without Swift holding a second palette that would
+  // drift from src/ui/theme.ts.
   //
   // Resolves when the screen is dismissed, paired or not: the result arrives
   // through devicesChanged. Rejects with WIFI_AWARE_UNSUPPORTED or NO_PRESENTER.
   presentPairing(
     mode: string,
-    actionLabel: string,
-    cancelLabel: string,
-    unavailableLabel: string,
+    labels: PairingLabels,
+    colors: PairingColors,
   ): Promise<void>;
 
   // Required by the NativeEventEmitter contract.

@@ -15,9 +15,10 @@
 // way Bluetooth pairing is, which is why `presentPairing` takes a mode rather
 // than doing something clever. There is no single-tap version of this to build.
 //
-// The labels this file draws arrive already translated, because no user-facing
-// string may be written in native code. The sheet Apple presents carries system
-// copy; the screen that launches it is ours.
+// The copy and the palette both arrive from TypeScript, because native owns no
+// user-facing string and no visual value: src/i18n is the one catalog and
+// src/ui/theme.ts the one palette. The sheet Apple presents carries system copy
+// and system chrome; the screen that launches it is ours and looks it.
 //
 // Unpairing is not here because Apple exposes no API for it, only Settings.
 
@@ -37,21 +38,60 @@ private enum PairingEvent {
 
 // MARK: - SwiftUI hosts
 
+/// The palette this screen paints with, handed over by
+/// services/wifi-pairing-service.ts.
+///
+/// Native holds no colours of its own: `src/ui/theme.ts` is the one palette, and
+/// a second copy in Swift would drift the first time a token moved. Defaults
+/// exist only so a malformed payload renders something legible rather than a
+/// black screen.
+private struct PairingTheme {
+    let bg: Color
+    let surface: Color
+    let border: Color
+    let textPrimary: Color
+    let textMuted: Color
+
+    init(_ raw: [String: Any]) {
+        bg = Color(hex: raw["bg"] as? String, fallback: .init(white: 0.97))
+        surface = Color(hex: raw["surface"] as? String, fallback: .white)
+        border = Color(hex: raw["border"] as? String, fallback: .init(white: 0.89))
+        textPrimary = Color(hex: raw["textPrimary"] as? String, fallback: .black)
+        textMuted = Color(hex: raw["textMuted"] as? String, fallback: .gray)
+    }
+}
+
+private extension Color {
+    /// `#RRGGBB`, the only form src/ui/theme.ts writes.
+    init(hex: String?, fallback: Color) {
+        guard let hex, hex.hasPrefix("#"), hex.count == 7,
+            let value = UInt32(hex.dropFirst(), radix: 16)
+        else {
+            self = fallback
+            return
+        }
+        self = Color(
+            red: Double((value >> 16) & 0xff) / 255,
+            green: Double((value >> 8) & 0xff) / 255,
+            blue: Double(value & 0xff) / 255
+        )
+    }
+}
+
 /// The browse half: look for a nearby phone that has made itself discoverable.
 ///
 /// `DevicePicker` presents the system sheet when its label is tapped and cannot
-/// be triggered in code, so the label has to be on screen. Drawn as the whole
-/// content area rather than a button, so the tap target is the screen.
+/// be triggered in code, so the label has to be on screen. Drawn as a full-width
+/// card so the whole thing is the tap target.
 @available(iOS 26.0, *)
 private struct PairingPickerScreen: View {
     let service: WASubscribableService
-    let actionLabel: String
-    let cancelLabel: String
-    let unavailableLabel: String
+    let labels: PairingLabels
+    let theme: PairingTheme
     let onFinish: () -> Void
 
     var body: some View {
-        PairingChrome(cancelLabel: cancelLabel, onCancel: onFinish) {
+        PairingChrome(labels: labels, theme: theme, onCancel: onFinish) {
             DevicePicker(.wifiAware(.connecting(to: .userSpecifiedDevices, from: service))) { _ in
                 // The endpoint is not kept. Pairing is the whole point of this
                 // screen: once the device is in the paired list the transport's
@@ -59,9 +99,9 @@ private struct PairingPickerScreen: View {
                 // one the link registry never learned about.
                 onFinish()
             } label: {
-                PairingPrompt(text: actionLabel)
+                PairingCard(text: labels.action, theme: theme)
             } fallback: {
-                PairingPrompt(text: unavailableLabel)
+                PairingCard(text: labels.unavailable, theme: theme)
             }
         }
     }
@@ -74,26 +114,30 @@ private struct PairingPickerScreen: View {
 @available(iOS 26.0, *)
 private struct PairingListenerScreen: View {
     let service: WAPublishableService
-    let actionLabel: String
-    let cancelLabel: String
-    let unavailableLabel: String
+    let labels: PairingLabels
+    let theme: PairingTheme
     let onFinish: () -> Void
 
     var body: some View {
-        PairingChrome(cancelLabel: cancelLabel, onCancel: onFinish) {
+        PairingChrome(labels: labels, theme: theme, onCancel: onFinish) {
             DevicePairingView(.wifiAware(.connecting(to: service, from: .userSpecifiedDevices))) {
-                PairingPrompt(text: actionLabel)
+                PairingCard(text: labels.action, theme: theme)
             } fallback: {
-                PairingPrompt(text: unavailableLabel)
+                PairingCard(text: labels.unavailable, theme: theme)
             }
         }
     }
 }
 
 /// Shared frame: the control in the middle, one dismissal at the bottom.
+///
+/// Spacing and type follow src/ui/theme.ts: 16 around the content, 17pt for a
+/// dismiss action, and `textPrimary` for it rather than `textMuted`, which on a
+/// filled surface reads as disabled rather than as the quieter of two choices.
 @available(iOS 26.0, *)
 private struct PairingChrome<Content: View>: View {
-    let cancelLabel: String
+    let labels: PairingLabels
+    let theme: PairingTheme
     let onCancel: () -> Void
     @ViewBuilder let content: Content
 
@@ -101,23 +145,56 @@ private struct PairingChrome<Content: View>: View {
         VStack(spacing: 0) {
             Spacer()
             content
+                .padding(.horizontal, 16)
             Spacer()
-            Button(cancelLabel, action: onCancel)
-                .padding(.bottom, 32)
+            Button(action: onCancel) {
+                Text(labels.cancel)
+                    .font(.system(size: 17, weight: .medium))
+                    .foregroundStyle(theme.textPrimary)
+            }
+            .padding(.bottom, 32)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(theme.bg)
     }
 }
 
+/// The tappable label, drawn as a settings card: surface, Radius.lg, hairline
+/// border. Same shape as every group in the Settings stack.
 @available(iOS 26.0, *)
-private struct PairingPrompt: View {
+private struct PairingCard: View {
     let text: String
+    let theme: PairingTheme
 
     var body: some View {
         Text(text)
+            .font(.system(size: 17, weight: .medium))
+            .foregroundStyle(theme.textPrimary)
             .multilineTextAlignment(.center)
-            .padding(24)
             .frame(maxWidth: .infinity)
+            .padding(.vertical, 24)
+            .padding(.horizontal, 16)
+            .background(
+                RoundedRectangle(cornerRadius: 14)
+                    .fill(theme.surface)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 14)
+                            .stroke(theme.border, lineWidth: 1)
+                    )
+            )
+    }
+}
+
+/// The screen's own words, already translated. Native decides none of them.
+private struct PairingLabels {
+    let action: String
+    let cancel: String
+    let unavailable: String
+
+    init(_ raw: [String: Any]) {
+        action = raw["action"] as? String ?? ""
+        cancel = raw["cancel"] as? String ?? ""
+        unavailable = raw["unavailable"] as? String ?? ""
     }
 }
 
@@ -227,12 +304,11 @@ final class AirhopWiFiPairing: RCTEventEmitter {
     /// Resolves when the screen is dismissed, whether or not anything was
     /// paired: the result comes from the watcher, so there is nothing truthful
     /// to resolve with.
-    @objc(presentPairing:actionLabel:cancelLabel:unavailableLabel:resolver:rejecter:)
+    @objc(presentPairing:labels:colors:resolver:rejecter:)
     func presentPairing(
         mode: String,
-        actionLabel: String,
-        cancelLabel: String,
-        unavailableLabel: String,
+        labels: NSDictionary,
+        colors: NSDictionary,
         resolve: @escaping RCTPromiseResolveBlock,
         reject: @escaping RCTPromiseRejectBlock
     ) {
@@ -242,9 +318,8 @@ final class AirhopWiFiPairing: RCTEventEmitter {
         }
         present(
             mode: mode,
-            actionLabel: actionLabel,
-            cancelLabel: cancelLabel,
-            unavailableLabel: unavailableLabel,
+            labels: PairingLabels(labels as? [String: Any] ?? [:]),
+            theme: PairingTheme(colors as? [String: Any] ?? [:]),
             resolve: resolve,
             reject: reject
         )
@@ -256,9 +331,8 @@ final class AirhopWiFiPairing: RCTEventEmitter {
     @available(iOS 26.0, *)
     private func present(
         mode: String,
-        actionLabel: String,
-        cancelLabel: String,
-        unavailableLabel: String,
+        labels: PairingLabels,
+        theme: PairingTheme,
         resolve: @escaping RCTPromiseResolveBlock,
         reject: @escaping RCTPromiseRejectBlock
     ) {
@@ -299,18 +373,16 @@ final class AirhopWiFiPairing: RCTEventEmitter {
                 ? UIHostingController(
                     rootView: PairingListenerScreen(
                         service: publishable,
-                        actionLabel: actionLabel,
-                        cancelLabel: cancelLabel,
-                        unavailableLabel: unavailableLabel,
+                        labels: labels,
+                        theme: theme,
                         onFinish: finish
                     )
                 )
                 : UIHostingController(
                     rootView: PairingPickerScreen(
                         service: subscribable,
-                        actionLabel: actionLabel,
-                        cancelLabel: cancelLabel,
-                        unavailableLabel: unavailableLabel,
+                        labels: labels,
+                        theme: theme,
                         onFinish: finish
                     )
                 )

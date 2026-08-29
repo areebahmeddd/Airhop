@@ -1727,13 +1727,11 @@ export const strings: Strings = {
   "settings.network.relay_duplicate": "Det reläet finns redan i din lista.",
   "settings.network.relay_invalid":
     "Ange en giltig relävärd, t.ex. relay.example.com. En port behövs bara om reläet inte använder standardporten. IP-adresser och lokala namn är inte tillåtna.",
-  "settings.network.wifi_pair": "Snabba överföringar",
-  "settings.network.wifi_pair_desc":
-    "Skicka foton och filer över Wi-Fi i stället för Bluetooth. Fungerar mellan två iPhone, båda med iOS 26 eller senare, medan Airhop är öppet. Parkoppla en gång, sedan sker det av sig självt.",
+  "settings.network.wifi_pair": "Parkoppling",
   "settings.network.wifi_paired": "Parkopplade enheter",
   "settings.network.wifi_pair_find": "Hitta en enhet",
   "settings.network.wifi_pair_find_desc":
-    "Leta efter en iPhone i närheten som visar sig",
+    "Leta efter en iPhone i närheten som visar sig. Båda behöver iOS 26 eller senare.",
   "settings.network.wifi_pair_show": "Visa den här iPhone",
   "settings.network.wifi_pair_show_desc":
     "Låt en iPhone i närheten hitta den här. En letar, den andra visar sig, samtidigt.",
@@ -1742,7 +1740,7 @@ export const strings: Strings = {
   "settings.network.wifi_pair_unavailable":
     "Wi-Fi Aware är inte tillgängligt just nu",
   "settings.network.wifi_pair_forget":
-    "Öppna appen Settings och titta under Privacy & Security för att ta bort en parkoppling. Airhop kan inte ångra den åt dig.",
+    "Ta bort en parkoppling i appen Settings",
   "settings.network.bitchat": "bitchat-kompatibilitet",
   "settings.network.bitchat_desc":
     "Samma BLE-mesh som bitchat, fullt driftskompatibel. Detta är alltid på och går inte att stänga av.",

@@ -1764,13 +1764,11 @@ export const strings: Strings = {
   "settings.network.relay_duplicate": "Esse relay já está na tua lista.",
   "settings.network.relay_invalid":
     "Escreve um anfitrião de relay válido, por exemplo relay.example.com. Só é preciso uma porta se o relay não usar a predefinida. Não são permitidos endereços IP nem nomes locais.",
-  "settings.network.wifi_pair": "Transferências rápidas",
-  "settings.network.wifi_pair_desc":
-    "Envie fotografias e ficheiros por Wi-Fi em vez de Bluetooth. Funciona entre dois iPhones, ambos com iOS 26 ou posterior, enquanto o Airhop estiver aberto. Emparelhe uma vez e depois acontece sozinho.",
+  "settings.network.wifi_pair": "Emparelhamento",
   "settings.network.wifi_paired": "Dispositivos emparelhados",
   "settings.network.wifi_pair_find": "Encontrar um dispositivo",
   "settings.network.wifi_pair_find_desc":
-    "Procurar um iPhone por perto que se esteja a mostrar",
+    "Procurar um iPhone por perto que se esteja a mostrar. Ambos precisam de iOS 26 ou posterior.",
   "settings.network.wifi_pair_show": "Mostrar este iPhone",
   "settings.network.wifi_pair_show_desc":
     "Deixe um iPhone por perto encontrar este. Um procura e o outro mostra-se, ao mesmo tempo.",
@@ -1779,7 +1777,7 @@ export const strings: Strings = {
   "settings.network.wifi_pair_unavailable":
     "O Wi-Fi Aware não está disponível de momento",
   "settings.network.wifi_pair_forget":
-    "Para remover um emparelhamento, abra a app Settings e veja em Privacy & Security. O Airhop não o pode desfazer por si.",
+    "Remova um emparelhamento na app Settings",
   "settings.network.bitchat": "Compatibilidade com o bitchat",
   "settings.network.bitchat_desc":
     "A mesma malha BLE do bitchat, totalmente interoperável. Está sempre ligada e não pode ser desativada.",
