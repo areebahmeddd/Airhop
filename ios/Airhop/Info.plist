@@ -83,6 +83,17 @@
 	     iOS substitutes its own generic wording. -->
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>Airhop uses the local network to connect directly to nearby devices for high-bandwidth transfers (video, large files).</string>
+	<!-- The mDNS service the LAN transport browses for. Declaring it is what
+	     permits the browse; the prompt the string above fills fires on the first
+	     one, not on this key.
+
+	     Not Wi-Fi Aware's `_airhop-mesh-v1._tcp`. Two services, named apart so
+	     neither reads as a typo of the other: Aware is a radio protocol needing
+	     no network, this is mDNS over an ordinary one. -->
+	<key>NSBonjourServices</key>
+	<array>
+		<string>_airhop-lan-v1._tcp</string>
+	</array>
 	<!-- Camera, microphone, photo library and location. Every usage string below
 	     is also declared in app.json. This file is hand-maintained rather than
 	     regenerated, so adding a permission to app.json alone changes nothing

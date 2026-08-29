@@ -235,7 +235,7 @@ complete. So an iPhone and an Android sharing a WiFi network have no local path
 between them, which is the gap on a ship, in a hotel, at a conference, or
 anywhere with WiFi and no route out.
 
-mDNS discovery on `_airhop-mesh._tcp` plus TCP links closes it. The links carry
+mDNS discovery on `_airhop-lan-v1._tcp` plus TCP links closes it. The links carry
 the same packet frames BLE carries, so the mesh engine needs no new concept and
 the wire format does not move. Being ordinary IP, it is platform-neutral, and
 it carries the whole mesh rather than only the parts Nostr can express.
