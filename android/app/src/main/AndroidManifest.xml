@@ -32,6 +32,12 @@
        data is untouched, so discovery and bitchat interop are unaffected. -->
   <uses-permission android:name="android.permission.BLUETOOTH_SCAN" android:usesPermissionFlags="neverForLocation"/>
   <uses-permission android:name="android.permission.CAMERA"/>
+  <!-- ConnectivityManager.requestNetwork() throws SecurityException without
+       this or WRITE_SETTINGS, and it is the only way to stand up a WiFi Aware
+       data path. Everything before it works regardless, so the absence is
+       invisible until two peers try to open a socket. Normal protection level,
+       so it is granted on install with nothing for the user to answer. -->
+  <uses-permission android:name="android.permission.CHANGE_NETWORK_STATE"/>
   <uses-permission android:name="android.permission.CHANGE_WIFI_STATE"/>
   <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
   <!-- Required for Android 14+ to keep BLE active in a foreground service -->
