@@ -269,6 +269,7 @@ service name, same length-prefixed frames, one TypeScript contract
 - Android: [`WifiAwareManager`](https://developer.android.com/develop/connectivity/wifi/wifi-aware), 250 Mbps, no internet or router. Discovery is API 26, but the data path needs API 29: the peer's address is a link-local IPv6 delivered in `WifiAwareNetworkInfo`, which does not exist before then, so below API 29 the transport reports itself unavailable and BLE carries everything. Android 17 additionally gates the socket behind `ACCESS_LOCAL_NETWORK`, declared already
 - iOS: [`WiFiAware`](https://developer.apple.com/documentation/WiFiAware) on Network framework, iOS 26 and iPhone 12 or later. Needs the `com.apple.developer.wifi-aware` entitlement, which is a managed capability rather than a switch in Xcode, and the service declared in `Info.plist` under `WiFiAwareServices`
 - Same `Transport` interface as BLE, so the mesh engine does not know which radio it has
+- No power policy of its own. `src/services/power-policy.ts` scales the BLE radios and leaves this one alone on both platforms: Aware is withdrawn by the OS under battery saver rather than dialled down by the app, and both surface that through `availabilityChanged(false)` and the controller's retry ladder. iOS additionally costs nothing while nothing is paired, since it never attaches and is never retried
 - Carries what BLE cannot: a whole attachment in one write rather than hundreds of fragments the radio can drop
 
 Three things are true only on iOS, and each shapes the code:

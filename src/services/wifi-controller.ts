@@ -71,9 +71,8 @@ type WiFiFailure =
   // NEARBY_WIFI_DEVICES (or location, below API 33) is missing. Clears when the
   // user grants it, which we learn about on the next refresh.
   | "permission"
-  // iOS only. Nothing is paired, so there is nobody to reach. Unlike every other
-  // transient failure this one is NOT retried: only a pairing changes it, and
-  // the pairing module reports the moment one does.
+  // iOS only. Nobody to reach. NOT retried, unlike every other transient: only
+  // a pairing changes it, and the pairing module reports when one does.
   | "unpaired"
   // Attach or socket setup failed for some other reason. Treated as transient,
   // since we have nothing better to assume.
@@ -112,13 +111,10 @@ export class WiFiController {
   }
 
   private desiredRunning = false;
-  // Paired devices, or null on a platform with no pairing gate. null rather than
-  // a sentinel so Android carries no iOS concept: every comparison is `=== 0`,
-  // which null never satisfies.
-  //
-  // Null on iOS too until the pairing module's first report, which arrives
-  // within a tick of startup: attaching before the list is known would run a
-  // radio for devices we have not confirmed exist.
+  // Paired devices, or null where there is no gate. null rather than a sentinel
+  // so Android carries no iOS concept: every comparison is `=== 0`. Null on iOS
+  // too until the first report, since attaching earlier would run a radio for
+  // devices we have not confirmed exist.
   private pairedCount: number | null = null;
   // Whether native has confirmed the transport is up. Only ever set from a call
   // that resolved, so it cannot claim more than the device agreed to.
@@ -163,10 +159,9 @@ export class WiFiController {
     void this.reconcile();
   }
 
-  // Driven by services/wifi-pairing-service.ts. Both edges matter and neither
-  // has another signal: the first pairing is what lets the transport attach, and
-  // the last unpairing happens in the Settings app, where nothing else would
-  // tell us and a listener would keep running for a device that is gone.
+  // Both edges matter and neither has another signal: the first pairing lets the
+  // transport attach, and the last unpairing happens in the Settings app, where
+  // a listener would otherwise keep running for a device that is gone.
   setPairedCount(count: number): void {
     if (this.pairedCount === count) return;
     this.pairedCount = count;
@@ -291,9 +286,8 @@ export class WiFiController {
 
     if (this.unsupported) return;
 
-    // Nothing paired means nobody to reach. Ahead of the `started` guard rather
-    // than beside it, because this edge has to tear an attached transport back
-    // down when the last pairing is removed.
+    // Ahead of the `started` guard, not beside it: this edge has to tear an
+    // attached transport down when the last pairing goes.
     if (this.pairedCount === 0) {
       if (this.started) await this.releaseNative();
       this.report("unpaired");

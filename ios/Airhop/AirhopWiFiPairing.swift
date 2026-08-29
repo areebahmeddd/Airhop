@@ -1,30 +1,25 @@
 // AirhopWiFiPairing: the system pairing sheet the Wi-Fi Aware transport needs.
 //
-// iOS ONLY, and a module of its own rather than three more methods on
-// AirhopWiFiModule. That contract is the transport, and both platforms
-// implement all of it; pairing is a precondition to HAVING links on one
-// platform, not a property of a link. Folding it in would make the Kotlin module
-// answer three questions that mean nothing there.
+// iOS ONLY, and a module of its own rather than more methods on
+// AirhopWiFiModule: that contract is the transport, which both platforms
+// implement in full, and pairing is a precondition to HAVING links here rather
+// than a property of a link.
 //
 // Events emitted to TypeScript:
 //   AirhopWiFiPairing.devicesChanged { count }
 //
-// Apple's Wi-Fi Aware has no unpaired mode, and no programmatic pairing: a
+// Apple's Wi-Fi Aware has no unpaired mode and no programmatic pairing: a
 // listener or browser may only name devices already in the app's paired list,
-// and the only way into that list is a system sheet. It is also two-sided, the
-// way Bluetooth pairing is, which is why `presentPairing` takes a mode rather
-// than doing something clever. There is no single-tap version of this to build.
+// and the only way in is a system sheet. It is two-sided the way Bluetooth
+// pairing is, which is why `presentPairing` takes a mode.
 //
-// The copy and the palette both arrive from TypeScript, because native owns no
-// user-facing string and no visual value: src/i18n is the one catalog and
-// src/ui/theme.ts the one palette. The sheet Apple presents carries system copy
-// and system chrome; the screen that launches it is ours and looks it.
+// Labels and palette both arrive from TypeScript: native owns no user-facing
+// string and no visual value.
 //
-// Unpairing is not here because Apple exposes no API for it, only Settings.
+// Unpairing is absent because Apple exposes no API for it, only Settings.
 
-// DevicePicker, DevicePairingView and the `.wifiAware(...)` criteria they take
-// come from DeviceDiscoveryUI. WiFiAware only supplies the service types those
-// criteria name, so both imports are load-bearing.
+// DevicePicker and DevicePairingView come from DeviceDiscoveryUI; WiFiAware
+// supplies the service types their criteria name. Both imports are load-bearing.
 import DeviceDiscoveryUI
 import Foundation
 import React
@@ -38,13 +33,9 @@ private enum PairingEvent {
 
 // MARK: - SwiftUI hosts
 
-/// The palette this screen paints with, handed over by
-/// services/wifi-pairing-service.ts.
-///
-/// Native holds no colours of its own: `src/ui/theme.ts` is the one palette, and
-/// a second copy in Swift would drift the first time a token moved. Defaults
-/// exist only so a malformed payload renders something legible rather than a
-/// black screen.
+/// The palette, from services/wifi-pairing-service.ts. `src/ui/theme.ts` is the
+/// one source: a second copy here would drift the first time a token moved.
+/// Defaults only keep a malformed payload legible.
 private struct PairingTheme {
     let bg: Color
     let surface: Color
@@ -62,7 +53,7 @@ private struct PairingTheme {
 }
 
 private extension Color {
-    /// `#RRGGBB`, the only form src/ui/theme.ts writes.
+    /// `#RRGGBB`, the only form theme.ts writes.
     init(hex: String?, fallback: Color) {
         guard let hex, hex.hasPrefix("#"), hex.count == 7,
             let value = UInt32(hex.dropFirst(), radix: 16)
@@ -78,11 +69,8 @@ private extension Color {
     }
 }
 
-/// The browse half: look for a nearby phone that has made itself discoverable.
-///
-/// `DevicePicker` presents the system sheet when its label is tapped and cannot
-/// be triggered in code, so the label has to be on screen. Drawn as a full-width
-/// card so the whole thing is the tap target.
+/// The browse half. `DevicePicker` presents the system sheet when its label is
+/// tapped and cannot be triggered in code, so the label has to be on screen.
 @available(iOS 26.0, *)
 private struct PairingPickerScreen: View {
     let service: WASubscribableService
@@ -93,10 +81,9 @@ private struct PairingPickerScreen: View {
     var body: some View {
         PairingChrome(labels: labels, theme: theme, onCancel: onFinish) {
             DevicePicker(.wifiAware(.connecting(to: .userSpecifiedDevices, from: service))) { _ in
-                // The endpoint is not kept. Pairing is the whole point of this
-                // screen: once the device is in the paired list the transport's
-                // own browser finds it, and a connection opened here would be
-                // one the link registry never learned about.
+                // The endpoint is dropped: pairing is the point, and the
+                // transport's own browser finds the device from here on. A
+                // connection opened here would be one the registry never saw.
                 onFinish()
             } label: {
                 PairingCard(text: labels.action, theme: theme)
@@ -107,10 +94,8 @@ private struct PairingPickerScreen: View {
     }
 }
 
-/// The advertise half: become discoverable so the other phone can find this one.
-///
-/// `DevicePairingView` has no completion of its own, so the user dismisses this
-/// screen when they are done and the watcher below is what learns the result.
+/// The advertise half. `DevicePairingView` has no completion of its own, so the
+/// user dismisses this and the watcher below is what learns the result.
 @available(iOS 26.0, *)
 private struct PairingListenerScreen: View {
     let service: WAPublishableService
@@ -129,11 +114,8 @@ private struct PairingListenerScreen: View {
     }
 }
 
-/// Shared frame: the control in the middle, one dismissal at the bottom.
-///
-/// Spacing and type follow src/ui/theme.ts: 16 around the content, 17pt for a
-/// dismiss action, and `textPrimary` for it rather than `textMuted`, which on a
-/// filled surface reads as disabled rather than as the quieter of two choices.
+/// Shared frame. `textPrimary` on the dismiss rather than `textMuted`, which on
+/// a filled surface reads as disabled rather than as the quieter choice.
 @available(iOS 26.0, *)
 private struct PairingChrome<Content: View>: View {
     let labels: PairingLabels
@@ -159,8 +141,7 @@ private struct PairingChrome<Content: View>: View {
     }
 }
 
-/// The tappable label, drawn as a settings card: surface, Radius.lg, hairline
-/// border. Same shape as every group in the Settings stack.
+/// The tappable label, drawn as a settings card so the shape is familiar.
 @available(iOS 26.0, *)
 private struct PairingCard: View {
     let text: String
@@ -185,7 +166,7 @@ private struct PairingCard: View {
     }
 }
 
-/// The screen's own words, already translated. Native decides none of them.
+/// Already translated. Native decides none of it.
 private struct PairingLabels {
     let action: String
     let cancel: String
@@ -205,20 +186,21 @@ final class AirhopWiFiPairing: RCTEventEmitter {
 
     /// How many devices this app is paired with.
     ///
-    /// Read synchronously by AirhopWiFiModule's `startWiFi`, which refuses to
-    /// attach when it is zero. Cached rather than queried because
-    /// `WAPairedDevice.allDevices` is an async sequence and that guard runs on
-    /// the bridge queue.
-    ///
-    /// Zero until the watcher's first value, which is correct rather than
-    /// conservative: attaching before the list is known would run a radio for
-    /// devices we have not confirmed exist.
+    /// Read synchronously by the transport's `start`, which refuses to attach on
+    /// zero. Cached because `WAPairedDevice.allDevices` is an async sequence and
+    /// that guard runs on the bridge queue. Zero until the watcher's first value,
+    /// which is correct: attaching earlier would run a radio for devices we have
+    /// not confirmed exist.
     private(set) static var pairedDeviceCount = 0
 
     private var watchTask: Task<Void, Never>?
     /// Held so a second `presentPairing` while one is on screen resolves rather
     /// than stacking a second sheet over the first.
     private var presented: UIViewController?
+    /// The Cancel button's teardown, kept so a swipe can run it too. A
+    /// `formSheet` is pull-dismissible, and without this the guard above stayed
+    /// armed against a screen already gone: every later tap did nothing.
+    private var onDismiss: (() -> Void)?
 
     @objc override static func requiresMainQueueSetup() -> Bool { false }
 
@@ -231,11 +213,8 @@ final class AirhopWiFiPairing: RCTEventEmitter {
 
     // MARK: Watching the paired list
 
-    /// Track the paired-device list for the life of the module.
-    ///
     /// The only thing that changes `pairedDeviceCount`, and the only signal for
-    /// a pairing removed in the Settings app: without it the transport would
-    /// keep a listener running for a device that is gone.
+    /// a pairing removed in the Settings app.
     private func startWatching() {
         guard #available(iOS 26.0, *) else { return }
         watchPairedDevices()
@@ -251,10 +230,9 @@ final class AirhopWiFiPairing: RCTEventEmitter {
                     await self?.publish(count: devices.count)
                 }
             } catch {
-                // The sequence ends when the framework is unavailable, which on
-                // a device with no Wi-Fi Aware is its permanent state. Nothing
-                // to retry: the count stays zero, `startWiFi` keeps refusing,
-                // and the JS controller reports it once and stops asking.
+                // Ends when the framework is unavailable, which on a device
+                // without Wi-Fi Aware is permanent. The count stays zero and the
+                // controller reports it once.
             }
         }
     }
@@ -269,11 +247,8 @@ final class AirhopWiFiPairing: RCTEventEmitter {
 
     // MARK: Exported
 
-    /// Everything JS needs about pairing, in one answer.
-    ///
-    /// One call rather than three, matching `getRadioState` on the BLE side: the
-    /// three facts are read together on every refresh, and separate calls could
-    /// return a set of answers that never existed at one moment.
+    /// One call rather than two, matching `getRadioState` on the BLE side:
+    /// separate calls could return answers that never held at one moment.
     @objc(getPairingState:rejecter:)
     func getPairingState(
         resolve: @escaping RCTPromiseResolveBlock,
@@ -286,9 +261,8 @@ final class AirhopWiFiPairing: RCTEventEmitter {
         resolve(Self.pairingState())
     }
 
-    /// The same question AirhopWiFiModule asks before attaching, so the settings
-    /// screen and the transport cannot disagree about whether this device has
-    /// the hardware and the declaration to use it.
+    /// The same question the transport asks before attaching, so the screen and
+    /// it cannot disagree about this device.
     @available(iOS 26.0, *)
     private static func pairingState() -> [String: Any] {
         [
@@ -298,12 +272,9 @@ final class AirhopWiFiPairing: RCTEventEmitter {
         ]
     }
 
-    /// Show the pairing sheet. `mode` is "find" to browse, or "discoverable" to
-    /// advertise.
-    ///
-    /// Resolves when the screen is dismissed, whether or not anything was
-    /// paired: the result comes from the watcher, so there is nothing truthful
-    /// to resolve with.
+    /// `mode` is "find" to browse, or "discoverable" to advertise. Resolves on
+    /// dismissal either way: the result comes from the watcher, so there is
+    /// nothing truthful to resolve with.
     @objc(presentPairing:labels:colors:resolver:rejecter:)
     func presentPairing(
         mode: String,
@@ -339,9 +310,8 @@ final class AirhopWiFiPairing: RCTEventEmitter {
         DispatchQueue.main.async { [weak self] in
             guard let self else { return }
             guard self.presented == nil else {
-                // Already showing. Resolving rather than rejecting: a double tap
-                // is not an error, and the sheet the user is looking at is the
-                // one they asked for.
+                // Resolving rather than rejecting: a double tap is not an error,
+                // and the sheet on screen is the one they asked for.
                 resolve(nil)
                 return
             }
@@ -362,9 +332,13 @@ final class AirhopWiFiPairing: RCTEventEmitter {
             }
 
             var controller: UIViewController?
+            // Idempotent: Cancel, the picker's completion and a swipe all reach
+            // it, and resolving a promise twice traps.
             let finish: () -> Void = { [weak self] in
+                guard let self, self.presented != nil else { return }
+                self.presented = nil
+                self.onDismiss = nil
                 controller?.dismiss(animated: true)
-                self?.presented = nil
                 resolve(nil)
             }
 
@@ -388,26 +362,23 @@ final class AirhopWiFiPairing: RCTEventEmitter {
                 )
             controller = hosted
             self.presented = hosted
-            // A card the user can pull down, so the screen is dismissible even
-            // if the control inside it never becomes usable.
+            self.onDismiss = finish
+            // Pull-dismissible, so the screen closes even if the control inside
+            // never becomes usable. UIKit holds the delegate weakly.
             hosted.modalPresentationStyle = .formSheet
+            hosted.presentationController?.delegate = self
             host.present(hosted, animated: true)
         }
     }
 
     // MARK: Presentation
 
-    /// The controller currently on screen, which is what a modal has to be
-    /// presented from.
-    ///
-    /// Walked from the key window rather than taken from
-    /// `RCTPresentedViewController`, so this file needs nothing in the bridging
-    /// header and a screen Airhop has itself presented is found rather than
-    /// presented over.
+    /// Walked from the key window rather than `RCTPresentedViewController`, so
+    /// this file needs nothing in the bridging header and a screen Airhop has
+    /// itself presented is found rather than presented over.
     ///
     /// Not `@MainActor` despite touching UIKit: the one caller is already inside
-    /// a `DispatchQueue.main.async`, which the compiler cannot see as main-actor
-    /// isolation, so annotating it would make that call unrepresentable.
+    /// a `DispatchQueue.main.async`, which the compiler cannot see as isolation.
     private static func topViewController() -> UIViewController? {
         let scene = UIApplication.shared.connectedScenes
             .compactMap { $0 as? UIWindowScene }
@@ -430,5 +401,14 @@ final class AirhopWiFiPairing: RCTEventEmitter {
         }
         presented = nil
         super.invalidate()
+    }
+}
+
+// MARK: - Dismissal
+
+/// The one dismissal UIKit reports rather than routing through our own button.
+extension AirhopWiFiPairing: UIAdaptivePresentationControllerDelegate {
+    func presentationControllerDidDismiss(_ presentationController: UIPresentationController) {
+        onDismiss?()
     }
 }
