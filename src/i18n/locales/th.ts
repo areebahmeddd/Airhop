@@ -1552,6 +1552,7 @@ export const strings: Strings = {
   "settings.diag.wifi_unsupported": "ไม่รองรับบนเครื่องนี้",
   "settings.diag.wifi_permission": "ถูกบล็อกด้วยสิทธิ์",
   "settings.diag.wifi_unavailable": "ใช้ไม่ได้ในขณะนี้",
+  "settings.diag.wifi_unpaired": "ยังไม่ได้จับคู่",
   "settings.diag.wifi_unknown": "กำลังรอวิทยุ",
   "settings.diag.relays": "รีเลย์ Nostr",
   "settings.diag.relays_desc":
@@ -1688,6 +1689,22 @@ export const strings: Strings = {
   "settings.network.relay_duplicate": "รีเลย์นั้นอยู่ในรายการของคุณแล้ว",
   "settings.network.relay_invalid":
     "ใส่โฮสต์รีเลย์ที่ถูกต้อง เช่น relay.example.com พอร์ตจำเป็นเมื่อรีเลย์ไม่ได้ใช้ค่าเริ่มต้นเท่านั้น ไม่อนุญาตให้ใช้ที่อยู่ IP และชื่อภายในเครือข่าย",
+  "settings.network.wifi_pair": "การถ่ายโอนที่รวดเร็ว",
+  "settings.network.wifi_pair_desc":
+    "ส่งรูปภาพและไฟล์ผ่าน Wi-Fi แทน Bluetooth ใช้งานได้ระหว่าง iPhone สองเครื่อง ทั้งคู่ต้องอยู่บน iOS 26 ขึ้นไป ขณะที่ Airhop เปิดอยู่ จับคู่ครั้งเดียว หลังจากนั้นจะทำงานเอง",
+  "settings.network.wifi_paired": "อุปกรณ์ที่จับคู่แล้ว",
+  "settings.network.wifi_pair_find": "ค้นหาอุปกรณ์",
+  "settings.network.wifi_pair_find_desc":
+    "มองหา iPhone ที่อยู่ใกล้เคียงซึ่งกำลังแสดงตัว",
+  "settings.network.wifi_pair_show": "แสดง iPhone เครื่องนี้",
+  "settings.network.wifi_pair_show_desc":
+    "ให้ iPhone ที่อยู่ใกล้เคียงค้นหาเครื่องนี้ คนหนึ่งค้นหา อีกคนแสดงตัว ในเวลาเดียวกัน",
+  "settings.network.wifi_pair_find_action": "เลือก iPhone ที่อยู่ใกล้เคียง",
+  "settings.network.wifi_pair_show_action": "ทำให้ iPhone เครื่องนี้ค้นพบได้",
+  "settings.network.wifi_pair_unavailable":
+    "Wi-Fi Aware ไม่พร้อมใช้งานในขณะนี้",
+  "settings.network.wifi_pair_forget":
+    "หากต้องการลบการจับคู่ ให้เปิดแอป Settings แล้วดูภายใต้ Privacy & Security Airhop ไม่สามารถยกเลิกให้คุณได้",
   "settings.network.bitchat": "ความเข้ากันได้กับ bitchat",
   "settings.network.bitchat_desc":
     "เมช BLE เดียวกันกับ bitchat ทำงานร่วมกันได้อย่างสมบูรณ์ สิ่งนี้เปิดอยู่เสมอและปิดไม่ได้",

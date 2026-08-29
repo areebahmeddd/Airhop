@@ -1603,6 +1603,7 @@ export const strings: Strings = {
   "settings.diag.wifi_unsupported": "ამ მოწყობილობაზე მხარდაჭერილი არ არის",
   "settings.diag.wifi_permission": "დაბლოკილია ნებართვით",
   "settings.diag.wifi_unavailable": "ამჟამად მიუწვდომელია",
+  "settings.diag.wifi_unpaired": "არაფერია დაწყვილებული",
   "settings.diag.wifi_unknown": "ელოდება რადიოს",
   "settings.diag.relays": "Nostr რელეები",
   "settings.diag.relays_desc":
@@ -1743,6 +1744,21 @@ export const strings: Strings = {
   "settings.network.relay_duplicate": "ეს რელე უკვე შენს სიაშია.",
   "settings.network.relay_invalid":
     "შეიყვანე რელეს სწორი ჰოსტი, მაგალითად relay.example.com. პორტი მხოლოდ მაშინაა საჭირო, თუ რელე ნაგულისხმევს არ იყენებს. IP მისამართები და ლოკალური სახელები დაუშვებელია.",
+  "settings.network.wifi_pair": "სწრაფი გადაცემები",
+  "settings.network.wifi_pair_desc":
+    "გააგზავნეთ ფოტოები და ფაილები Wi-Fi-ით და არა Bluetooth-ით. მუშაობს ორ iPhone-ს შორის, ორივე iOS 26 ან უფრო ახალი, სანამ Airhop ღიაა. დააწყვილეთ ერთხელ და შემდეგ თავისით მოხდება.",
+  "settings.network.wifi_paired": "დაწყვილებული მოწყობილობები",
+  "settings.network.wifi_pair_find": "მოწყობილობის პოვნა",
+  "settings.network.wifi_pair_find_desc":
+    "მოძებნეთ ახლომდებარე iPhone, რომელიც თავს აჩვენებს",
+  "settings.network.wifi_pair_show": "ამ iPhone-ის ჩვენება",
+  "settings.network.wifi_pair_show_desc":
+    "მიეცით ახლომდებარე iPhone-ს საშუალება იპოვოს ეს. ერთი ეძებს, მეორე თავს აჩვენებს, ერთდროულად.",
+  "settings.network.wifi_pair_find_action": "აირჩიეთ ახლომდებარე iPhone",
+  "settings.network.wifi_pair_show_action": "გახადეთ ეს iPhone აღმოჩენადი",
+  "settings.network.wifi_pair_unavailable": "Wi-Fi Aware ამჟამად მიუწვდომელია",
+  "settings.network.wifi_pair_forget":
+    "დაწყვილების მოსაშორებლად გახსენით Settings აპი და იხილეთ Privacy & Security-ის ქვეშ. Airhop ამას თქვენ ნაცვლად ვერ გააუქმებს.",
   "settings.network.bitchat": "bitchat-თან თავსებადობა",
   "settings.network.bitchat_desc":
     "იგივე BLE მეში, რაც bitchat-ს, სრულად თავსებადი. ეს ყოველთვის ჩართულია და გამორთვა შეუძლებელია.",

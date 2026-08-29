@@ -75,6 +75,12 @@ const android = (id: string, seedByte: number): DeviceSpec => ({
   seedByte,
 });
 
+const iphone = (id: string, seedByte: number): DeviceSpec => ({
+  id,
+  platform: "ios",
+  seedByte,
+});
+
 const CHANNEL = "#bluetooth";
 
 test("W-F01 two phones meet over WiFi with no Bluetooth between them", async () => {
@@ -154,33 +160,34 @@ test("W-F01 two phones meet over WiFi with no Bluetooth between them", async () 
   s.assert(true);
 });
 
-test("W-F02 an iPhone never forms a WiFi link with anyone", async () => {
+test("W-F02 an iPhone and an Android never form a WiFi link", async () => {
   const s = (scenario = new Scenario({
     id: "W-F02",
-    title: "iOS has no fast path, so every iPhone hop stays on Bluetooth",
+    title: "same protocol, still not a cross-platform path",
     seed: 901,
   }));
   const radio = new RadioFabric(s.world);
   const wifi = new WifiFabric(s.world);
   const droid = SimDevice.create(s.world, android("droid", 11));
-  const iphone = SimDevice.create(s.world, {
-    id: "iphone",
-    platform: "ios",
-    seedByte: 22,
-  });
-  for (const d of [droid, iphone]) {
+  const phone = SimDevice.create(s.world, iphone("iphone", 22));
+  for (const d of [droid, phone]) {
     radio.add(d);
     wifi.add(d);
   }
   radio.setTopology([]);
-  s.track(droid, iphone);
+  s.track(droid, phone);
   droid.launch();
-  iphone.launch();
+  phone.launch();
 
-  // Airhop presents one transport behind one interface, which makes it easy to
-  // assume every device has it. iOS does not: MultipeerConnectivity was removed
-  // rather than repaired, so an iPhone registers no WiFi module at all and every
-  // hop it takes is Bluetooth, whoever is on the other end.
+  // Both platforms speak WiFi Aware now, which makes it tempting to assume a
+  // link between them. Apple requires a paired device for every data path and
+  // refuses an open one; Android cannot complete Apple's pairing. So the two
+  // implement the same protocol and still cannot reach each other, and every
+  // cross-platform hop stays on Bluetooth.
+  //
+  // Pairing them first, so the refusal is provably about the platforms rather
+  // than about the gate that stops two unpaired iPhones.
+  wifi.pair("droid", "iphone");
   const linked = wifi.link("droid", "iphone");
 
   s.check("the fabric refused the link", !linked);
@@ -192,17 +199,118 @@ test("W-F02 an iPhone never forms a WiFi link with anyone", async () => {
   s.check("no link exists", wifi.linkCount() === 0);
 
   droid.joinChannel(CHANNEL);
-  iphone.joinChannel(CHANNEL);
+  phone.joinChannel(CHANNEL);
   droid.send(CHANNEL, "should not arrive by wifi");
   await advanceFor(s.world, 3_000);
 
   s.check(
     "and nothing crossed",
-    !iphone.texts(CHANNEL).includes("should not arrive by wifi"),
-    `iphone saw ${iphone.texts(CHANNEL).length} messages`,
+    !phone.texts(CHANNEL).includes("should not arrive by wifi"),
+    `iphone saw ${phone.texts(CHANNEL).length} messages`,
   );
   s.check("no frames were carried", wifi.framesCarried === 0);
-  s.expectNone("process health", noCrashes([droid, iphone]));
+  s.expectNone("process health", noCrashes([droid, phone]));
+  s.assert(true);
+});
+
+test("W-F02b two iPhones that have not paired find nothing", async () => {
+  const s = (scenario = new Scenario({
+    id: "W-F02b",
+    title: "Apple's browser only ever names devices already paired",
+    seed: 903,
+  }));
+  const radio = new RadioFabric(s.world);
+  const wifi = new WifiFabric(s.world);
+  const a = SimDevice.create(s.world, iphone("a", 11));
+  const b = SimDevice.create(s.world, iphone("b", 22));
+  for (const d of [a, b]) {
+    radio.add(d);
+    wifi.add(d);
+  }
+  radio.setTopology([]);
+  s.track(a, b);
+  a.launch();
+  b.launch();
+
+  // The gate that shapes the whole iOS transport. Two iPhones side by side,
+  // same app, same service, both running: with no pairing there is nothing to
+  // discover, because every target Apple's API can name is drawn from the
+  // paired list. Bluetooth is what carries them until somebody pairs.
+  const linked = wifi.link("a", "b");
+
+  s.check("the fabric refused the link", !linked);
+  s.check(
+    "and named the reason",
+    wifi.refusedUnpaired === 1,
+    `refusals=${wifi.refusedUnpaired}`,
+  );
+  s.check("no link exists", wifi.linkCount() === 0);
+  s.check("no frames were carried", wifi.framesCarried === 0);
+  s.expectNone("process health", noCrashes([a, b]));
+  s.assert(true);
+});
+
+test("W-F02c two paired iPhones meet over WiFi with no Bluetooth between them", async () => {
+  const s = (scenario = new Scenario({
+    id: "W-F02c",
+    title: "the iOS fast path, end to end",
+    seed: 904,
+  }));
+  const radio = new RadioFabric(s.world);
+  const wifi = new WifiFabric(s.world);
+  const a = SimDevice.create(s.world, iphone("a", 11));
+  const b = SimDevice.create(s.world, iphone("b", 22));
+  for (const d of [a, b]) {
+    radio.add(d);
+    wifi.add(d);
+  }
+  radio.setTopology([]); // nobody is in Bluetooth range of anybody
+  s.track(a, b);
+  a.launch();
+  b.launch();
+
+  // The same assertion W-F01 makes for Android, on the platform that only just
+  // got the transport: once paired, an iPhone is a mesh node like any other and
+  // nothing above the link layer can tell which radio carried the packet.
+  wifi.pair("a", "b");
+  wifi.link("a", "b");
+
+  const met = await waitFor(
+    s.world,
+    () => a.peers().includes(b.peerID) && b.peers().includes(a.peerID),
+    30_000,
+  );
+  s.check(
+    "each iPhone discovered the other over WiFi",
+    met,
+    `a sees ${a.peers().length}, b sees ${b.peers().length}`,
+  );
+
+  a.joinChannel(CHANNEL);
+  b.joinChannel(CHANNEL);
+  await waitFor(
+    s.world,
+    () => a.channels().includes(CHANNEL) && b.channels().includes(CHANNEL),
+    10_000,
+  );
+  a.send(CHANNEL, "carried by wifi on ios");
+
+  const arrived = await waitFor(
+    s.world,
+    () => b.texts(CHANNEL).includes("carried by wifi on ios"),
+    30_000,
+  );
+  s.check(
+    "and the message crossed it",
+    arrived,
+    `b has ${b.texts(CHANNEL).length} messages`,
+  );
+  s.check(
+    "with Bluetooth still carrying nothing",
+    radio.bytesOnAir === 0,
+    `ble bytes=${radio.bytesOnAir}`,
+  );
+  s.expectNone("process health", noCrashes([a, b]));
   s.assert(true);
 });
 

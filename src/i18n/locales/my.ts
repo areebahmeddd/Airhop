@@ -1625,6 +1625,7 @@ export const strings: Strings = {
   "settings.diag.wifi_unsupported": "ဤစက်တွင် မထောက်ပံ့ပါ",
   "settings.diag.wifi_permission": "ခွင့်ပြုချက်တစ်ခုကြောင့် ပိတ်ဆို့ထားသည်",
   "settings.diag.wifi_unavailable": "ယခုအချိန် မရနိုင်ပါ",
+  "settings.diag.wifi_unpaired": "တွဲထားမှု မရှိပါ",
   "settings.diag.wifi_unknown": "ရေဒီယိုကို စောင့်နေသည်",
   "settings.diag.relays": "Nostr ထပ်ဆင့်လွှင့်စက်များ",
   "settings.diag.relays_desc":
@@ -1773,6 +1774,22 @@ export const strings: Strings = {
     "ထိုထပ်ဆင့်လွှင့်စက်သည် သင့်စာရင်းတွင် ရှိပြီးသားဖြစ်သည်။",
   "settings.network.relay_invalid":
     "မှန်ကန်သော ထပ်ဆင့်လွှင့်စက်လိပ်စာကို ထည့်ပါ၊ ဥပမာ relay.example.com။ ပို့တ်သည် စက်က မူလတန်ဖိုးကို မသုံးမှသာ လိုအပ်သည်။ IP လိပ်စာများနှင့် ဒေသတွင်းအမည်များကို ခွင့်မပြုပါ။",
+  "settings.network.wifi_pair": "မြန်ဆန်သော လွှဲပြောင်းမှုများ",
+  "settings.network.wifi_pair_desc":
+    "ဓာတ်ပုံများနှင့် ဖိုင်များကို Bluetooth အစား Wi-Fi ဖြင့် ပို့ပါ။ iOS 26 သို့မဟုတ် နောက်ပိုင်းဗားရှင်းရှိသော iPhone နှစ်လုံးကြားတွင် Airhop ဖွင့်ထားစဉ် အလုပ်လုပ်သည်။ တစ်ကြိမ်တွဲပါ၊ ထို့နောက် အလိုအလျောက် ဖြစ်သွားပါမည်။",
+  "settings.network.wifi_paired": "တွဲထားသော ကိရိယာများ",
+  "settings.network.wifi_pair_find": "ကိရိယာ ရှာပါ",
+  "settings.network.wifi_pair_find_desc":
+    "မိမိကိုယ်ကို ပြသနေသော အနီးအနားရှိ iPhone ကို ရှာပါ",
+  "settings.network.wifi_pair_show": "ဤ iPhone ကို ပြပါ",
+  "settings.network.wifi_pair_show_desc":
+    "အနီးအနားရှိ iPhone အား ဤကိရိယာကို ရှာတွေ့ခွင့်ပြုပါ။ တစ်ဦးက ရှာပြီး နောက်တစ်ဦးက ပြသည်၊ တစ်ချိန်တည်းတွင်။",
+  "settings.network.wifi_pair_find_action": "အနီးအနားရှိ iPhone ကို ရွေးပါ",
+  "settings.network.wifi_pair_show_action":
+    "ဤ iPhone ကို ရှာတွေ့နိုင်အောင် လုပ်ပါ",
+  "settings.network.wifi_pair_unavailable": "Wi-Fi Aware ကို ယခု မရနိုင်ပါ",
+  "settings.network.wifi_pair_forget":
+    "တွဲထားမှုကို ဖယ်ရှားရန် Settings အက်ပ်ကို ဖွင့်ပြီး Privacy & Security အောက်တွင် ကြည့်ပါ။ Airhop က သင့်အတွက် ပြန်ဖျက်၍ မရပါ။",
   "settings.network.bitchat": "bitchat ကိုက်ညီမှု",
   "settings.network.bitchat_desc":
     "bitchat နှင့် တူညီသော BLE မက်ရှ်ဖြစ်ပြီး အပြည့်အဝ အတူတကွ အလုပ်လုပ်နိုင်သည်။ ဤအရာကို အမြဲဖွင့်ထားပြီး ပိတ်၍ မရပါ။",

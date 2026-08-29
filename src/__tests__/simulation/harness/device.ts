@@ -291,6 +291,10 @@ interface MeshLike {
 export class SimDevice {
   readonly id: string;
   readonly platform: Platform;
+  // Devices this phone has paired with for WiFi Aware, which is the gate
+  // WifiFabric enforces on iOS. Owned here rather than in the fabric, so a
+  // device carries its own paired list the way a real one does.
+  readonly wifiPairedWith = new Set<string>();
   readonly nickname: string;
   readonly spec: DeviceSpec;
 

@@ -1605,6 +1605,7 @@ export const strings: Strings = {
   "settings.diag.wifi_unsupported": "Tidak didukung di perangkat ini",
   "settings.diag.wifi_permission": "Diblokir oleh sebuah izin",
   "settings.diag.wifi_unavailable": "Tidak tersedia saat ini",
+  "settings.diag.wifi_unpaired": "Belum ada yang disandingkan",
   "settings.diag.wifi_unknown": "Menunggu radio",
   "settings.diag.relays": "Relai Nostr",
   "settings.diag.relays_desc":
@@ -1744,6 +1745,23 @@ export const strings: Strings = {
   "settings.network.relay_duplicate": "Relai itu sudah ada di daftarmu.",
   "settings.network.relay_invalid":
     "Masukkan host relai yang sah, misalnya relay.example.com. Porta hanya perlu kalau relainya tidak memakai porta bawaan. Alamat IP dan nama lokal tidak diizinkan.",
+  "settings.network.wifi_pair": "Transfer cepat",
+  "settings.network.wifi_pair_desc":
+    "Kirim foto dan berkas lewat Wi-Fi alih-alih Bluetooth. Bekerja antara dua iPhone, keduanya di iOS 26 atau lebih baru, selama Airhop terbuka. Sandingkan sekali, setelah itu berjalan sendiri.",
+  "settings.network.wifi_paired": "Perangkat tersanding",
+  "settings.network.wifi_pair_find": "Cari perangkat",
+  "settings.network.wifi_pair_find_desc":
+    "Cari iPhone terdekat yang sedang menampilkan dirinya",
+  "settings.network.wifi_pair_show": "Tampilkan iPhone ini",
+  "settings.network.wifi_pair_show_desc":
+    "Biarkan iPhone terdekat menemukan yang ini. Salah satu mencari, yang lain menampilkan, pada saat yang sama.",
+  "settings.network.wifi_pair_find_action": "Pilih iPhone terdekat",
+  "settings.network.wifi_pair_show_action":
+    "Jadikan iPhone ini dapat ditemukan",
+  "settings.network.wifi_pair_unavailable":
+    "Wi-Fi Aware tidak tersedia saat ini",
+  "settings.network.wifi_pair_forget":
+    "Untuk menghapus penyandingan, buka aplikasi Settings dan lihat di bawah Privacy & Security. Airhop tidak dapat membatalkannya untuk Anda.",
   "settings.network.bitchat": "Kecocokan dengan bitchat",
   "settings.network.bitchat_desc":
     "Mesh BLE yang sama dengan bitchat, sepenuhnya bisa saling bekerja. Ini selalu menyala dan tidak bisa dimatikan.",

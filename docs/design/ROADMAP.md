@@ -14,7 +14,7 @@ bitchat is an excellent foundation. Airhop fills the gaps it left open.
 ### Gap 2: WiFi Direct / WiFi Aware Transport
 
 **bitchat problem:** BLE-only (~18 KiB/s). Android WiFi Aware support exists but is experimental/unshipped.  
-**Airhop:** Android WiFi Aware and iOS MultipeerConnectivity, selected automatically when available with BLE as fallback. Important limitation: these two protocols cannot talk to each other, so this only accelerates Android-to-Android or iPhone-to-iPhone transfers. Every cross-platform path stays on Bluetooth or Nostr.
+**Airhop:** WiFi Aware on both platforms, selected automatically when available with BLE as fallback. Important limitation: it only applies Android-to-Android or iPhone-to-iPhone, because Apple requires a paired data path and Android cannot complete Apple's pairing. Every cross-platform path stays on Bluetooth or Nostr.
 
 ### Gap 3: Tor on iOS and Android
 
@@ -34,7 +34,7 @@ bitchat is an excellent foundation. Airhop fills the gaps it left open.
 ### Gap 6: Video Support
 
 **bitchat problem:** No video packet type, no mechanism, no MIME type for video.  
-**Airhop:** videos are shared as files over the mesh and play inline on any platform. Live video streaming was dropped: Android WiFi Aware and iOS MultipeerConnectivity are different protocols that cannot interoperate, so cross-platform video calling is not achievable with these stacks.
+**Airhop:** videos are shared as files over the mesh and play inline on any platform. Live video streaming was dropped: the WiFi fast path does not cross platforms, so cross-platform video calling is not achievable with these stacks.
 
 ### Gap 7: Non-Technical UX
 
@@ -138,11 +138,11 @@ bitchat is an excellent foundation. Airhop fills the gaps it left open.
 
 - [x] `src/core/crypto/double-ratchet.ts`: Signal DR per-message forward secrecy
 - [~] X3DH: **dropped.** The Noise handshake already seeds the ratchet, so a separate key agreement was redundant. One-time prekey bundles (`src/core/mesh/wire/prekey-bundle.ts`) are gossiped over the mesh as `0x24`, never published to Nostr.
-- [x] WiFi Aware native module (Android) + MultipeerConnectivity (iOS)
+- [x] WiFi Aware native module (Android). The iOS MultipeerConnectivity counterpart was written, never worked on a device, and was removed; iOS got Apple's standards-based `WiFiAware` framework instead, in v1.1.0
 - [~] Chunked file transfer >1 MiB: **dropped, see Gap 4.** bitchat enforces the 1 MiB cap when it _decodes_ a packet, so anything larger is rejected outright and interop breaks in both directions. Airhop sends one `BitchatFilePacket` per file and lets the fragment layer split it
 - [~] Video frame capture (`react-native-vision-camera` was removed from `package.json` entirely) and `0x30: videoFrame`: **dropped, see Gap 2.** The removal is recorded in `packet-codec.ts` so the type is not reintroduced by accident
 
-**Milestone:** Double Ratchet passing test vectors. Same-platform WiFi transport for faster transfers. Offline video calling was **dropped**: WiFi Aware and MultipeerConnectivity cannot interoperate, so it could never work iOS ↔ Android.
+**Milestone:** Double Ratchet passing test vectors. Same-platform WiFi transport for attachments. Offline video calling was **dropped**: the WiFi fast path does not cross platforms, so it could never work iOS to Android.
 
 ### v0.9.0: Production Hardening ✅
 
@@ -344,7 +344,7 @@ macOS is the priority: CoreBluetooth has the same API surface as iOS, so the exi
 - [ ] `react-native-macos` target added to the project
 - [ ] `AirhopBLEModule.swift` audited and tested on macOS (CoreBluetooth is identical)
 - [ ] macOS-specific entitlements and sandbox config (`bitchat-macOS.entitlements` as reference)
-- [ ] MultipeerConnectivity enabled on macOS
+- [ ] WiFi Aware enabled on macOS (Mac Catalyst 26 carries the same framework)
 - [ ] Mac App Store submission
 - [ ] `react-native-windows` target scoped and scheduled
 - [ ] Windows BLE native module via WinRT Bluetooth APIs

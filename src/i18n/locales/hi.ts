@@ -1578,6 +1578,7 @@ export const strings: Strings = {
   "settings.diag.wifi_unsupported": "इस डिवाइस पर समर्थित नहीं",
   "settings.diag.wifi_permission": "एक अनुमति से रुका है",
   "settings.diag.wifi_unavailable": "अभी उपलब्ध नहीं",
+  "settings.diag.wifi_unpaired": "कुछ भी पेयर नहीं",
   "settings.diag.wifi_unknown": "रेडियो का इंतज़ार",
   "settings.diag.relays": "Nostr रिले",
   "settings.diag.relays_desc":
@@ -1716,6 +1717,21 @@ export const strings: Strings = {
   "settings.network.relay_duplicate": "वह रिले पहले से आपकी सूची में है।",
   "settings.network.relay_invalid":
     "कोई मान्य रिले होस्ट डालें, जैसे relay.example.com। पोर्ट तभी चाहिए जब रिले डिफ़ॉल्ट इस्तेमाल न करता हो। IP पते और स्थानीय नाम मान्य नहीं हैं।",
+  "settings.network.wifi_pair": "तेज़ ट्रांसफ़र",
+  "settings.network.wifi_pair_desc":
+    "Bluetooth के बजाय Wi-Fi से फ़ोटो और फ़ाइलें भेजें। दो iPhone के बीच काम करता है, दोनों iOS 26 या बाद के संस्करण पर, जब तक Airhop खुला हो। एक बार पेयर करें, उसके बाद यह अपने आप होता है।",
+  "settings.network.wifi_paired": "पेयर किए गए डिवाइस",
+  "settings.network.wifi_pair_find": "डिवाइस ढूँढें",
+  "settings.network.wifi_pair_find_desc":
+    "पास के ऐसे iPhone को ढूँढें जो खुद को दिखा रहा हो",
+  "settings.network.wifi_pair_show": "यह iPhone दिखाएँ",
+  "settings.network.wifi_pair_show_desc":
+    "पास के किसी iPhone को इसे ढूँढने दें। एक ढूँढता है, दूसरा दिखाता है, एक ही समय पर।",
+  "settings.network.wifi_pair_find_action": "पास का कोई iPhone चुनें",
+  "settings.network.wifi_pair_show_action": "इस iPhone को खोजने योग्य बनाएँ",
+  "settings.network.wifi_pair_unavailable": "Wi-Fi Aware अभी उपलब्ध नहीं है",
+  "settings.network.wifi_pair_forget":
+    "पेयरिंग हटाने के लिए Settings ऐप खोलें और Privacy & Security के नीचे देखें। Airhop आपके लिए इसे रद्द नहीं कर सकता।",
   "settings.network.bitchat": "bitchat अनुकूलता",
   "settings.network.bitchat_desc":
     "bitchat जैसा ही BLE मेश, पूरी तरह मिलकर चलने वाला। यह हमेशा चालू रहता है और बंद नहीं किया जा सकता।",

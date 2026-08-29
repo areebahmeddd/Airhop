@@ -23,6 +23,10 @@
 		BBBFF42043AE47019FA225ED /* AirhopTorSocket.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7AA9349762774591B6A61A72 /* AirhopTorSocket.swift */; };
 		04CD453DBC41469BB2CF2595 /* AirhopVoiceModule.mm in Resources */ = {isa = PBXBuildFile; fileRef = B5B7883FE2864809B556B722 /* AirhopVoiceModule.mm */; };
 		56B4EC76AA924F30BDF0032B /* AirhopVoiceModule.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66E175A8511747A080C246EA /* AirhopVoiceModule.swift */; };
+		7663466FA96548F1AA63AA78 /* AirhopWiFiModule.mm in Resources */ = {isa = PBXBuildFile; fileRef = 708D4EAC142B4B5F8FF71CF5 /* AirhopWiFiModule.mm */; };
+		6A37230833884F4497E0773D /* AirhopWiFiModule.swift in Sources */ = {isa = PBXBuildFile; fileRef = D5A2C8F11CF745C28428706A /* AirhopWiFiModule.swift */; };
+		012A2DC7FB6347ACB2C832E6 /* AirhopWiFiPairing.mm in Resources */ = {isa = PBXBuildFile; fileRef = C105DF90A0A74D54A7BDC67F /* AirhopWiFiPairing.mm */; };
+		8BBD9D4FF4E442FE94D3D9BA /* AirhopWiFiPairing.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B1C4EDECF004DA490E3BF35 /* AirhopWiFiPairing.swift */; };
 		A17H0P77B140A537DA25BDCF /* InfoPlist.strings in Resources */ = {isa = PBXBuildFile; fileRef = A17H0PF11FDBB12D087E7F60 /* InfoPlist.strings */; };
 /* End PBXBuildFile section */
 
@@ -49,6 +53,10 @@
 		7AA9349762774591B6A61A72 /* AirhopTorSocket.swift */ = {isa = PBXFileReference; name = "AirhopTorSocket.swift"; path = "Airhop/AirhopTorSocket.swift"; sourceTree = "<group>"; fileEncoding = 4; lastKnownFileType = sourcecode.swift; explicitFileType = undefined; includeInIndex = 0; };
 		B5B7883FE2864809B556B722 /* AirhopVoiceModule.mm */ = {isa = PBXFileReference; name = "AirhopVoiceModule.mm"; path = "Airhop/AirhopVoiceModule.mm"; sourceTree = "<group>"; fileEncoding = undefined; lastKnownFileType = sourcecode.cpp.objcpp; explicitFileType = undefined; includeInIndex = 0; };
 		66E175A8511747A080C246EA /* AirhopVoiceModule.swift */ = {isa = PBXFileReference; name = "AirhopVoiceModule.swift"; path = "Airhop/AirhopVoiceModule.swift"; sourceTree = "<group>"; fileEncoding = 4; lastKnownFileType = sourcecode.swift; explicitFileType = undefined; includeInIndex = 0; };
+		708D4EAC142B4B5F8FF71CF5 /* AirhopWiFiModule.mm */ = {isa = PBXFileReference; name = "AirhopWiFiModule.mm"; path = "Airhop/AirhopWiFiModule.mm"; sourceTree = "<group>"; fileEncoding = undefined; lastKnownFileType = sourcecode.cpp.objcpp; explicitFileType = undefined; includeInIndex = 0; };
+		D5A2C8F11CF745C28428706A /* AirhopWiFiModule.swift */ = {isa = PBXFileReference; name = "AirhopWiFiModule.swift"; path = "Airhop/AirhopWiFiModule.swift"; sourceTree = "<group>"; fileEncoding = 4; lastKnownFileType = sourcecode.swift; explicitFileType = undefined; includeInIndex = 0; };
+		C105DF90A0A74D54A7BDC67F /* AirhopWiFiPairing.mm */ = {isa = PBXFileReference; name = "AirhopWiFiPairing.mm"; path = "Airhop/AirhopWiFiPairing.mm"; sourceTree = "<group>"; fileEncoding = undefined; lastKnownFileType = sourcecode.cpp.objcpp; explicitFileType = undefined; includeInIndex = 0; };
+		8B1C4EDECF004DA490E3BF35 /* AirhopWiFiPairing.swift */ = {isa = PBXFileReference; name = "AirhopWiFiPairing.swift"; path = "Airhop/AirhopWiFiPairing.swift"; sourceTree = "<group>"; fileEncoding = 4; lastKnownFileType = sourcecode.swift; explicitFileType = undefined; includeInIndex = 0; };
 		A17H0P47665BAC34DD1F5D32 /* en */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.strings; name = en; path = "Airhop/en.lproj/InfoPlist.strings"; sourceTree = "<group>"; };
 		A17H0P32A0B2CD87D9DB2E9C /* am */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.strings; name = am; path = "Airhop/am.lproj/InfoPlist.strings"; sourceTree = "<group>"; };
 		A17H0P4BF81CFAB2E8C63E7E /* ar */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.strings; name = ar; path = "Airhop/ar.lproj/InfoPlist.strings"; sourceTree = "<group>"; };
@@ -118,6 +126,10 @@
 				7AA9349762774591B6A61A72 /* AirhopTorSocket.swift */,
 				B5B7883FE2864809B556B722 /* AirhopVoiceModule.mm */,
 				66E175A8511747A080C246EA /* AirhopVoiceModule.swift */,
+				708D4EAC142B4B5F8FF71CF5 /* AirhopWiFiModule.mm */,
+				D5A2C8F11CF745C28428706A /* AirhopWiFiModule.swift */,
+				C105DF90A0A74D54A7BDC67F /* AirhopWiFiPairing.mm */,
+				8B1C4EDECF004DA490E3BF35 /* AirhopWiFiPairing.swift */,
 			);
 			name = Airhop;
 			sourceTree = "<group>";
@@ -445,6 +457,10 @@
 				BBBFF42043AE47019FA225ED /* AirhopTorSocket.swift in Sources */,
 				04CD453DBC41469BB2CF2595 /* AirhopVoiceModule.mm in Resources */,
 				56B4EC76AA924F30BDF0032B /* AirhopVoiceModule.swift in Sources */,
+				7663466FA96548F1AA63AA78 /* AirhopWiFiModule.mm in Resources */,
+				6A37230833884F4497E0773D /* AirhopWiFiModule.swift in Sources */,
+				012A2DC7FB6347ACB2C832E6 /* AirhopWiFiPairing.mm in Resources */,
+				8BBD9D4FF4E442FE94D3D9BA /* AirhopWiFiPairing.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

@@ -112,10 +112,10 @@ checkable against the code rather than taken on trust.
       gossiped over the mesh as `0x24`. **X3DH is deliberately not used**: the
       handshake already seeds the ratchet, which made a separate key agreement
       redundant (see ARCHITECTURE.md section 5)
-- [x] WiFi Aware native module (Android). The iOS MultipeerConnectivity counterpart was written, never worked on a device, and was removed
+- [x] WiFi Aware native module (Android). The iOS MultipeerConnectivity counterpart was written, never worked on a device, and was removed. iOS got the fast path in v1.1.0 through Apple's standards-based `WiFiAware` framework, which is a different stack rather than a second attempt at MC
 - [x] Video and any other file type shared as attachments, played inline
 - [~] `0x30` videoFrame and offline video calling: **dropped.** WiFi Aware and
-  MultipeerConnectivity cannot interoperate, so the type described a feature
+  its iOS counterpart do not interoperate, so the type described a feature
   that could never work across platforms. `packet-codec.ts` records `0x30` as
   reserved-never-to-return, and VISION.md lists "a video call app" under what
   Airhop is not building

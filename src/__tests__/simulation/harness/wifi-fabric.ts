@@ -1,10 +1,9 @@
 // The same-platform fast path, as a fabric.
 //
-// WiFi Aware (Android) and MultipeerConnectivity (iOS) are two different
-// protocols behind one TypeScript interface. Airhop treats them as one optional
-// transport that beats BLE when it exists, which is the whole reason it is worth
-// simulating: the mesh engine is supposed to not care which radio carried a
-// packet, and that claim has never been exercised.
+// Both platforms run WiFi Aware, the same NAN protocol, behind one TypeScript
+// interface. Airhop treats it as one optional transport that beats BLE when it
+// exists, which is the whole reason it is worth simulating: the mesh engine is
+// supposed to not care which radio carried a packet.
 //
 // Deliberately far simpler than RadioFabric. A BLE link is the interesting one
 // to model badly-behaved: it has an MTU ceiling, RSSI, loss and jitter, and the
@@ -13,9 +12,16 @@
 // magnitude faster. Modelling loss and MTU here would be inventing failure modes
 // the transport does not have.
 //
-// The one rule it DOES model, because it is a real constraint and an easy thing
-// to get wrong: the two protocols cannot talk to each other. An Android phone
-// and an iPhone never form a WiFi link, however close they stand.
+// Two rules it DOES model, because both are real constraints and both are easy
+// things to get wrong:
+//
+//   1. An Android phone and an iPhone never form a WiFi link, however close they
+//      stand. Both speak NAN, but Apple requires a paired device for every data
+//      path and refuses an open one, and Android cannot complete Apple's
+//      pairing. Same protocol, still not a cross-platform path.
+//   2. Two iPhones only link once they are paired. Pairing is the whole shape of
+//      Apple's API, so a scenario that forgets it is asserting something the
+//      field will never do. Android has no such gate and needs none.
 
 import type { Platform } from "../../harness/os";
 import type { World } from "./world";
@@ -25,6 +31,9 @@ import type { World } from "./world";
 export interface WifiNode {
   readonly id: string;
   readonly platform: Platform;
+  // Ignored on Android. On iOS it is the paired-device gate: two iPhones form a
+  // link only once each has paired the other, the way Apple's framework works.
+  readonly wifiPairedWith?: Set<string>;
   // Install the fabric's native module into this device's sandbox, and hand
   // back a way to push events onto the emitter its mesh-service listens on.
   attachWifiPort(port: WifiPort): void;
@@ -54,6 +63,7 @@ export class WifiFabric {
   framesCarried = 0;
   bytesCarried = 0;
   refusedCrossPlatform = 0;
+  refusedUnpaired = 0;
 
   constructor(private readonly world: World) {
     world.onClose(() => {
@@ -73,28 +83,30 @@ export class WifiFabric {
     this.ports.set(node.id, port);
   }
 
+  // Pair two iPhones, as the system pairing sheet would.
+  //
+  // Symmetric because Apple's pairing is: each side ends up with the other in
+  // its own list, and a one-sided call would model a state the sheet cannot
+  // produce. A no-op for Android nodes, which have no pairing to record.
+  pair(aID: string, bID: string): void {
+    this.nodes.get(aID)?.wifiPairedWith?.add(bID);
+    this.nodes.get(bID)?.wifiPairedWith?.add(aID);
+    this.world.say("WIFI_PAIRED", `${aID} <-> ${bID}`);
+  }
+
   // Bring a link up between two devices, as discovery would.
   //
-  // Refuses and says so rather than failing quietly, in two cases. An iPhone has
-  // no fast path at all: MultipeerConnectivity was removed, so iOS registers no
-  // WiFi module and the controller latches "unsupported" on its first pass. And
-  // two different platforms cannot see each other even in principle. A scenario
-  // that expected either link is asserting something that cannot happen in the
-  // field.
+  // Refuses and says so rather than failing quietly, in two cases. Two different
+  // platforms cannot reach each other even though both speak NAN, because Apple
+  // demands a paired data path that Android cannot complete. And two iPhones
+  // that have not paired have nothing to discover, since Apple's browser only
+  // ever names devices already in the paired list. A scenario that expected
+  // either link is asserting something that cannot happen in the field.
   link(aID: string, bID: string): boolean {
     if (this.disposed) return false;
     const a = this.nodes.get(aID);
     const b = this.nodes.get(bID);
     if (a === undefined || b === undefined) return false;
-    const noFastPath = [a, b].find((n) => n.platform !== "android");
-    if (noFastPath !== undefined) {
-      this.refusedCrossPlatform++;
-      this.world.say(
-        "WIFI_NO_FAST_PATH",
-        `${noFastPath.platform} has no WiFi transport, so ${aID} <-> ${bID} stays on Bluetooth`,
-      );
-      return false;
-    }
     if (a.platform !== b.platform) {
       this.refusedCrossPlatform++;
       this.world.say(
@@ -102,6 +114,19 @@ export class WifiFabric {
         `${aID} (${a.platform}) and ${bID} (${b.platform}) cannot see each other`,
       );
       return false;
+    }
+    if (a.platform === "ios") {
+      const paired =
+        a.wifiPairedWith?.has(bID) === true &&
+        b.wifiPairedWith?.has(aID) === true;
+      if (!paired) {
+        this.refusedUnpaired++;
+        this.world.say(
+          "WIFI_UNPAIRED",
+          `${aID} and ${bID} are not paired, so there is nothing to discover`,
+        );
+        return false;
+      }
     }
     const key = pairKey(aID, bID);
     if (this.links.has(key)) return true;

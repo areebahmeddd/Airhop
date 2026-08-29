@@ -1601,6 +1601,7 @@ export const strings: Strings = {
   "settings.diag.wifi_unsupported": "Не підтримується на цьому пристрої",
   "settings.diag.wifi_permission": "Заблоковано дозволом",
   "settings.diag.wifi_unavailable": "Зараз недоступно",
+  "settings.diag.wifi_unpaired": "Нічого не з’єднано",
   "settings.diag.wifi_unknown": "Чекаємо на радіо",
   "settings.diag.relays": "Релеї Nostr",
   "settings.diag.relays_desc":
@@ -1739,6 +1740,21 @@ export const strings: Strings = {
   "settings.network.relay_duplicate": "Цей релей уже є у вашому списку.",
   "settings.network.relay_invalid":
     "Введіть дійсний хост релея, наприклад relay.example.com. Порт потрібен, лише якщо релей не використовує типовий. IP-адреси та локальні імена не дозволені.",
+  "settings.network.wifi_pair": "Швидка передача",
+  "settings.network.wifi_pair_desc":
+    "Надсилайте фото та файли через Wi-Fi замість Bluetooth. Працює між двома iPhone, обидва на iOS 26 або новішій, доки Airhop відкрито. З’єднайте один раз, далі все відбувається саме.",
+  "settings.network.wifi_paired": "З’єднані пристрої",
+  "settings.network.wifi_pair_find": "Знайти пристрій",
+  "settings.network.wifi_pair_find_desc":
+    "Шукати поблизу iPhone, який показує себе",
+  "settings.network.wifi_pair_show": "Показати цей iPhone",
+  "settings.network.wifi_pair_show_desc":
+    "Дозвольте iPhone поблизу знайти цей. Один шукає, інший показує себе, одночасно.",
+  "settings.network.wifi_pair_find_action": "Виберіть iPhone поблизу",
+  "settings.network.wifi_pair_show_action": "Зробити цей iPhone видимим",
+  "settings.network.wifi_pair_unavailable": "Wi-Fi Aware зараз недоступний",
+  "settings.network.wifi_pair_forget":
+    "Щоб видалити з’єднання, відкрийте програму Settings і подивіться в розділі Privacy & Security. Airhop не може скасувати його за вас.",
   "settings.network.bitchat": "Сумісність із bitchat",
   "settings.network.bitchat_desc":
     "Той самий BLE-mesh, що й у bitchat, цілком сумісний. Це завжди увімкнено й не вимикається.",

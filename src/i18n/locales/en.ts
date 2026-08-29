@@ -1604,6 +1604,7 @@ export const strings = {
   "settings.diag.wifi_unsupported": "Not supported on this device",
   "settings.diag.wifi_permission": "Blocked by a permission",
   "settings.diag.wifi_unavailable": "Not available right now",
+  "settings.diag.wifi_unpaired": "Nothing paired",
   "settings.diag.wifi_unknown": "Waiting for the radio",
   "settings.diag.relays": "Nostr relays",
   "settings.diag.relays_desc": "Used for location channels and internet reach",
@@ -1738,6 +1739,22 @@ export const strings = {
   "settings.network.relay_duplicate": "That relay is already in your list.",
   "settings.network.relay_invalid":
     "Enter a valid relay host, e.g. relay.example.com. A port is only needed if the relay does not use the default. IP addresses and local names are not allowed.",
+  "settings.network.wifi_pair": "Fast transfers",
+  "settings.network.wifi_pair_desc":
+    "Send photos and files over Wi-Fi instead of Bluetooth. Works between two iPhones, both on iOS 26 or later, while Airhop is open. Pair once and it happens on its own after that.",
+  "settings.network.wifi_paired": "Paired devices",
+  "settings.network.wifi_pair_find": "Find a device",
+  "settings.network.wifi_pair_find_desc":
+    "Look for a nearby iPhone that is showing itself",
+  "settings.network.wifi_pair_show": "Show this iPhone",
+  "settings.network.wifi_pair_show_desc":
+    "Let a nearby iPhone find this one. One of you finds, the other shows, at the same time.",
+  "settings.network.wifi_pair_find_action": "Choose a nearby iPhone",
+  "settings.network.wifi_pair_show_action": "Make this iPhone discoverable",
+  "settings.network.wifi_pair_unavailable":
+    "Wi-Fi Aware is not available right now",
+  "settings.network.wifi_pair_forget":
+    "To remove a pairing, open the Settings app and look under Privacy & Security. Airhop cannot undo one for you.",
   "settings.network.bitchat": "bitchat compatibility",
   "settings.network.bitchat_desc":
     "Same BLE mesh as bitchat, fully interoperable. This is always on, and cannot be disabled.",

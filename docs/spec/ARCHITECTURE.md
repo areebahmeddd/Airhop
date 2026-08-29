@@ -192,7 +192,7 @@ MessageRouter.ts - transport selection
 
 Local radios, used together:
   BLE Mesh          - recipient is nearby, confirmed by announce
-  WiFi Aware/Direct - both parties have it active and are in range (~30m, 250Mbps)
+  WiFi Aware        - both parties have it active and are in range (~30m), and on iOS are paired
 
 Ordered fallbacks, tried when no local radio reaches the recipient:
 1. Nostr Relay       - internet available, recipient confirmed offline
@@ -229,9 +229,10 @@ Identical to bitchat's design:
 ### LAN transport
 
 WiFi Aware is a radio protocol rather than a way of using a network: two phones
-on the same router cannot reach each other over it, and Apple does not
-implement it. So an iPhone and an Android sharing a WiFi network have no local
-path between them, which is the gap on a ship, in a hotel, at a conference, or
+on the same router cannot reach each other over it, and it cannot cross
+platforms, because Apple demands a paired data path that Android cannot
+complete. So an iPhone and an Android sharing a WiFi network have no local path
+between them, which is the gap on a ship, in a hotel, at a conference, or
 anywhere with WiFi and no route out.
 
 mDNS discovery on `_airhop-mesh._tcp` plus TCP links closes it. The links carry
@@ -248,21 +249,41 @@ which Aware cannot. Neither is a superset of the other.
 | ---------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Client isolation | Most guest and venue WiFi blocks peer-to-peer traffic at the access point, and it cannot be detected before trying. The UI has to say "no peers on this network" rather than spin |
 | mDNS filtering   | Common even where ordinary traffic works. A manual join by address covers it                                                                                                      |
-| iOS background   | A TCP socket has no equivalent of `bluetooth-central`, so a locked iPhone drops the link. A foreground accelerator, as WiFi Aware already is                                      |
+| iOS background   | A TCP socket has no equivalent of `bluetooth-central`, so a locked iPhone drops the link. A foreground accelerator, which WiFi Aware already is on iOS                            |
 
 ### Same-platform WiFi
 
+Both platforms run WiFi Aware, the Wi-Fi Alliance's NAN. Same protocol, same
+service name, same length-prefixed frames, one TypeScript contract
+(`src/bridge/NativeAirhopWiFi.ts`) and one reconciler
+(`src/services/wifi-controller.ts`).
+
 > [!IMPORTANT]
-> Android WiFi Aware and iOS MultipeerConnectivity are different protocols and
-> cannot talk to each other. This is an Android-to-Android or iPhone-to-iPhone
-> accelerator only; anything cross-platform uses Bluetooth or Nostr. Apple
-> shipped a standards-based Wi-Fi Aware framework in iOS 26 which could close
-> the gap, at the cost of making the feature iOS 26+ only.
+> It is still not a cross-platform path. Apple requires a paired device for
+> every data path and refuses an open one; Android cannot complete Apple's
+> pairing. So this is an Android-to-Android or iPhone-to-iPhone accelerator, and
+> anything crossing platforms uses Bluetooth or Nostr. The iOS module is not the
+> MultipeerConnectivity one that was written, never worked on a device and was
+> removed: that was proprietary AWDL, and it stays gone.
 
 - Android: [`WifiAwareManager`](https://developer.android.com/develop/connectivity/wifi/wifi-aware), 250 Mbps, no internet or router. Discovery is API 26, but the data path needs API 29: the peer's address is a link-local IPv6 delivered in `WifiAwareNetworkInfo`, which does not exist before then, so below API 29 the transport reports itself unavailable and BLE carries everything. Android 17 additionally gates the socket behind `ACCESS_LOCAL_NETWORK`, declared already
-- iOS: [`MultipeerConnectivity`](https://developer.apple.com/documentation/multipeerconnectivity), 30 to 100 Mbps between nearby iOS devices
+- iOS: [`WiFiAware`](https://developer.apple.com/documentation/WiFiAware) on Network framework, iOS 26 and iPhone 12 or later. Needs the `com.apple.developer.wifi-aware` entitlement, which is a managed capability rather than a switch in Xcode, and the service declared in `Info.plist` under `WiFiAwareServices`
 - Same `Transport` interface as BLE, so the mesh engine does not know which radio it has
-- Carries what BLE cannot: live video, large files, high-quality voice
+- Carries what BLE cannot: a whole attachment in one write rather than hundreds of fragments the radio can drop
+
+Three things are true only on iOS, and each shapes the code:
+
+| Constraint                                                                                                                                        | Consequence                                                                                                                                                                                                            |
+| ------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| No unpaired mode. Every target a listener or browser can name comes from the app's paired list, and the only way into that list is a system sheet | A pairing gate in the controller, a second native module for the sheet (`AirhopWiFiPairing`), and a `unpaired` state that is reported rather than retried, because only a pairing changes it                           |
+| Discovery is symmetric, and Apple exposes no `serviceSpecificInfo` to break a tie with before connecting                                          | An 8-byte token exchanged as the first frame of every connection. Both ends keep the one whose initiator holds the lower token, and the loser is closed before TypeScript is ever told a link existed                  |
+| `NetworkConnection` has no cancel. A connection ends when the last reference to it is dropped                                                     | One task per link owns its connection for the whole life of the link. Closing means cancelling that task, not calling a method, and the registry entry is removed on the way out or the connection outlives its reader |
+
+Pairing is also two-sided, the way Bluetooth pairing is: one phone browses and
+the other advertises, at the same moment. That is a user-visible cost with no
+one-tap version to build, so it lives on one screen (Settings, Network) that
+says which half each person is playing, rather than being hidden behind a button
+that would work half the time.
 
 ### Nostr
 
@@ -871,8 +892,8 @@ So there is one module per hardware capability and no more.
 | ------------------------------------ | -------- | -------------------------------------------------------- |
 | `AirhopBLEModule`                    | Both     | BLE GATT Peripheral and Central, radio state, power mode |
 | `AirhopVoiceModule`                  | Both     | AAC-LC capture and playback for voice notes and PTT      |
-| `AirhopWiFiModule`                   | Android  | WiFi Aware same-platform fast path                       |
-| `AirhopMCModule`                     | iOS      | MultipeerConnectivity same-platform fast path            |
+| `AirhopWiFiModule`                   | Both     | WiFi Aware same-platform fast path                       |
+| `AirhopWiFiPairing`                  | iOS      | The system pairing sheet that fast path needs            |
 | `AirhopTorModule`, `AirhopTorSocket` | iOS      | Embedded Arti and the SOCKS socket it fronts             |
 
 None of them knows anything about packets, routing or encryption.
@@ -902,8 +923,17 @@ two are unprefixed because JS subscribes to them by those exact names.
 
 `AirhopWiFiModule` mirrors the shape with four of its own: `packetReceived`,
 `linkConnected`, `linkDisconnected` and `availabilityChanged`. The last is what
-lets the fast path recover without a relaunch, and it carries both edges, from
-the framework's WiFi Aware state broadcast.
+lets the fast path recover without a relaunch. Android carries both edges, from
+the framework's WiFi Aware state broadcast; iOS has no such broadcast and
+reports only the falling edge, so the reconciler answers a drop with its retry
+ladder rather than by waiting to be told the radio came back.
+
+`AirhopWiFiPairing` is iOS-only and deliberately not part of that contract:
+pairing is a precondition to HAVING links on one platform, not a property of a
+link, so folding it in would make the Kotlin module answer three questions that
+mean nothing there. Two methods (`getPairingState`, `presentPairing`) and one
+event (`devicesChanged`), which is also how a pairing removed in the Settings app
+reaches the transport.
 
 Anything richer would put protocol knowledge on the native side, which this
 design exists to prevent.

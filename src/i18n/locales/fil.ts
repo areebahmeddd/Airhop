@@ -1645,6 +1645,7 @@ export const strings: Strings = {
   "settings.diag.wifi_unsupported": "Hindi suportado sa device na ito",
   "settings.diag.wifi_permission": "Hinarangan ng isang pahintulot",
   "settings.diag.wifi_unavailable": "Hindi available sa ngayon",
+  "settings.diag.wifi_unpaired": "Walang nakapares",
   "settings.diag.wifi_unknown": "Naghihintay sa radyo",
   "settings.diag.relays": "Mga relay ng Nostr",
   "settings.diag.relays_desc":
@@ -1787,6 +1788,23 @@ export const strings: Strings = {
   "settings.network.relay_duplicate": "Nasa listahan mo na ang relay na iyon.",
   "settings.network.relay_invalid":
     "Maglagay ng wastong host ng relay, hal. relay.example.com. Kailangan lang ng port kung hindi ginagamit ng relay ang default. Hindi pinapayagan ang mga IP address at lokal na pangalan.",
+  "settings.network.wifi_pair": "Mabilis na paglilipat",
+  "settings.network.wifi_pair_desc":
+    "Magpadala ng mga larawan at file sa Wi-Fi sa halip na Bluetooth. Gumagana sa pagitan ng dalawang iPhone, parehong nasa iOS 26 o mas bago, habang bukas ang Airhop. Magpares nang isang beses at kusa na itong mangyayari pagkatapos.",
+  "settings.network.wifi_paired": "Mga nakapares na device",
+  "settings.network.wifi_pair_find": "Maghanap ng device",
+  "settings.network.wifi_pair_find_desc":
+    "Maghanap ng malapit na iPhone na nagpapakita ng sarili",
+  "settings.network.wifi_pair_show": "Ipakita ang iPhone na ito",
+  "settings.network.wifi_pair_show_desc":
+    "Hayaang mahanap ito ng malapit na iPhone. Ang isa sa inyo ay maghahanap, ang isa ay magpapakita, nang sabay.",
+  "settings.network.wifi_pair_find_action": "Pumili ng malapit na iPhone",
+  "settings.network.wifi_pair_show_action":
+    "Gawing matutuklasan ang iPhone na ito",
+  "settings.network.wifi_pair_unavailable":
+    "Hindi available ang Wi-Fi Aware sa ngayon",
+  "settings.network.wifi_pair_forget":
+    "Upang mag-alis ng pares, buksan ang Settings app at tingnan sa ilalim ng Privacy & Security. Hindi ito maaaring bawiin ng Airhop para sa iyo.",
   "settings.network.bitchat": "Pagkatugma sa bitchat",
   "settings.network.bitchat_desc":
     "Kaparehong BLE mesh ng bitchat, ganap na magkatugma. Laging naka-on ito, at hindi ito maaaring i-off.",

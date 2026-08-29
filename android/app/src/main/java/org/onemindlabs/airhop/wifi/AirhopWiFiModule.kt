@@ -83,8 +83,26 @@ import java.util.concurrent.atomic.AtomicInteger
 
 private const val TAG = "AirhopWiFiModule"
 
-// Airhop WiFi Aware service name. Not a UUID; must be < 255 bytes ASCII.
-private const val SERVICE_NAME = "airhop-mesh-v1"
+// Airhop WiFi Aware service name. Not a UUID, and not free-form either.
+//
+// NAN derives the on-air service ID by hashing this exact string, so a
+// difference of one character means two devices never match. It therefore has to
+// be identical here, in AirhopWiFiModule.swift, and in the `WiFiAwareServices`
+// key of ios/Airhop/Info.plist.
+//
+// The DNS-SD wrapper is Apple's requirement rather than Android's: iOS accepts
+// only `_name._tcp` or `_name._udp`, with a name component of at most 15
+// characters from [A-Za-z0-9-]. Android accepts any ASCII string under 255
+// bytes, so it is the side that moves. "airhop-mesh-v1" is 14 characters and
+// legal, which is why the name itself did not have to change.
+//
+// This was "airhop-mesh-v1", so an Android build from before this change and one
+// from after it do not form an Aware link. That is deliberate and it is cheap:
+// they still meet over BLE, which is where every compatibility promise actually
+// lives, and doing the rename now rather than when iOS to Android becomes
+// possible avoids a flag day later. bitchat is unaffected either way, since it
+// publishes "bitchat" and never matched this service under any name.
+private const val SERVICE_NAME = "_airhop-mesh-v1._tcp"
 
 // Events emitted to TypeScript.
 private const val EVT_PACKET_RECEIVED   = "AirhopWiFi.packetReceived"

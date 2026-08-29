@@ -1610,6 +1610,7 @@ export const strings: Strings = {
   "settings.diag.wifi_unsupported": "Tidak disokong pada peranti ini",
   "settings.diag.wifi_permission": "Disekat oleh satu kebenaran",
   "settings.diag.wifi_unavailable": "Tidak tersedia buat masa ini",
+  "settings.diag.wifi_unpaired": "Tiada gandingan",
   "settings.diag.wifi_unknown": "Menunggu radio",
   "settings.diag.relays": "Geganti Nostr",
   "settings.diag.relays_desc":
@@ -1753,6 +1754,22 @@ export const strings: Strings = {
     "Geganti itu sudah ada dalam senarai anda.",
   "settings.network.relay_invalid":
     "Masukkan hos geganti yang sah, contohnya relay.example.com. Port hanya diperlukan kalau geganti itu tidak menggunakan port lalai. Alamat IP dan nama setempat tidak dibenarkan.",
+  "settings.network.wifi_pair": "Pemindahan pantas",
+  "settings.network.wifi_pair_desc":
+    "Hantar foto dan fail melalui Wi-Fi dan bukannya Bluetooth. Berfungsi antara dua iPhone, kedua-duanya pada iOS 26 atau lebih baharu, semasa Airhop dibuka. Gandingkan sekali, selepas itu ia berlaku dengan sendirinya.",
+  "settings.network.wifi_paired": "Peranti bergandingan",
+  "settings.network.wifi_pair_find": "Cari peranti",
+  "settings.network.wifi_pair_find_desc":
+    "Cari iPhone berdekatan yang sedang menunjukkan dirinya",
+  "settings.network.wifi_pair_show": "Tunjukkan iPhone ini",
+  "settings.network.wifi_pair_show_desc":
+    "Biarkan iPhone berdekatan menemui yang ini. Seorang mencari, seorang lagi menunjukkan, pada masa yang sama.",
+  "settings.network.wifi_pair_find_action": "Pilih iPhone berdekatan",
+  "settings.network.wifi_pair_show_action": "Jadikan iPhone ini boleh ditemui",
+  "settings.network.wifi_pair_unavailable":
+    "Wi-Fi Aware tidak tersedia buat masa ini",
+  "settings.network.wifi_pair_forget":
+    "Untuk membuang gandingan, buka aplikasi Settings dan lihat di bawah Privacy & Security. Airhop tidak boleh membatalkannya untuk anda.",
   "settings.network.bitchat": "Keserasian bitchat",
   "settings.network.bitchat_desc":
     "Mesh BLE yang sama dengan bitchat, saling beroperasi sepenuhnya. Ini sentiasa hidup dan tidak boleh dimatikan.",

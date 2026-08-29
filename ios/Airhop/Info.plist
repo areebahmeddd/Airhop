@@ -104,10 +104,6 @@
 	     device; only the truncated geohash is published. -->
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>Airhop uses your approximate location to place you in nearby area channels (block, city, region). Your exact position never leaves your device.</string>
-	<!-- No local-network keys. iOS has no same-platform fast path: the
-	     MultipeerConnectivity module was removed, so nothing here browses or
-	     advertises on the local network and asking for that permission would be
-	     a prompt with nothing behind it. -->
 	<key>RCTNewArchEnabled</key>
 	<true/>
 	<key>UIBackgroundModes</key>
@@ -137,5 +133,30 @@
 	<string>Automatic</string>
 	<key>UIViewControllerBasedStatusBarAppearance</key>
 	<false/>
+	<!-- The Wi-Fi Aware service the same-platform fast path publishes and
+	     subscribes to, backing AirhopWiFiModule.swift.
+
+	     Three copies of one string, and all three have to agree: this key,
+	     `WiFiConst.serviceName` in AirhopWiFiModule.swift, and `SERVICE_NAME`
+	     in AirhopWiFiModule.kt. NAN derives the on-air service ID by hashing the
+	     name, so one different character means two devices never match.
+
+	     Apple requires DNS-SD form with a name component of at most 15
+	     characters from [A-Za-z0-9-]; an invalid one traps the app on launch
+	     rather than failing at use, which is why it is worth stating that here.
+
+	     Both keys present because Airhop is symmetric: every device publishes so
+	     it can be found and subscribes so it can find, and the framework
+	     requires at least one of the two or it traps. -->
+	<key>WiFiAwareServices</key>
+	<dict>
+		<key>_airhop-mesh-v1._tcp</key>
+		<dict>
+			<key>Publishable</key>
+			<dict/>
+			<key>Subscribable</key>
+			<dict/>
+		</dict>
+	</dict>
 </dict>
 </plist>

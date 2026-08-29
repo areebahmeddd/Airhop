@@ -1628,6 +1628,7 @@ export const strings: Strings = {
   "settings.diag.wifi_unsupported": "Auf diesem Gerät nicht unterstützt",
   "settings.diag.wifi_permission": "Durch eine Berechtigung blockiert",
   "settings.diag.wifi_unavailable": "Gerade nicht verfügbar",
+  "settings.diag.wifi_unpaired": "Nichts gekoppelt",
   "settings.diag.wifi_unknown": "Warte auf das Funkmodul",
   "settings.diag.relays": "Nostr-Relays",
   "settings.diag.relays_desc":
@@ -1768,6 +1769,22 @@ export const strings: Strings = {
     "Dieses Relay steht bereits in deiner Liste.",
   "settings.network.relay_invalid":
     "Gib einen gültigen Relay-Host ein, z. B. relay.example.com. Ein Port ist nur nötig, wenn das Relay nicht den Standard verwendet. IP-Adressen und lokale Namen sind nicht erlaubt.",
+  "settings.network.wifi_pair": "Schnelle Übertragungen",
+  "settings.network.wifi_pair_desc":
+    "Sende Fotos und Dateien über Wi-Fi statt über Bluetooth. Funktioniert zwischen zwei iPhones, beide mit iOS 26 oder neuer, solange Airhop geöffnet ist. Einmal koppeln, danach geschieht es von selbst.",
+  "settings.network.wifi_paired": "Gekoppelte Geräte",
+  "settings.network.wifi_pair_find": "Gerät finden",
+  "settings.network.wifi_pair_find_desc":
+    "Nach einem iPhone in der Nähe suchen, das sich zeigt",
+  "settings.network.wifi_pair_show": "Dieses iPhone zeigen",
+  "settings.network.wifi_pair_show_desc":
+    "Ein iPhone in der Nähe dieses hier finden lassen. Einer sucht, der andere zeigt sich, zur gleichen Zeit.",
+  "settings.network.wifi_pair_find_action": "iPhone in der Nähe wählen",
+  "settings.network.wifi_pair_show_action": "Dieses iPhone sichtbar machen",
+  "settings.network.wifi_pair_unavailable":
+    "Wi-Fi Aware ist gerade nicht verfügbar",
+  "settings.network.wifi_pair_forget":
+    "Um eine Kopplung zu entfernen, öffne die App Settings und sieh unter Privacy & Security nach. Airhop kann sie nicht für dich aufheben.",
   "settings.network.bitchat": "bitchat-Kompatibilität",
   "settings.network.bitchat_desc":
     "Dasselbe BLE-Mesh wie bitchat, vollständig interoperabel. Das ist immer an und lässt sich nicht abschalten.",

@@ -76,7 +76,7 @@ You must read these four documents before making any code suggestions:
 
 - Swift lives in `ios/`. Kotlin lives in `android/`. They expose **raw bytes** to TypeScript.
 - **No protocol logic in native code.** No routing decisions. No crypto in Swift or Kotlin.
-- Native modules: `AirhopBLEModule` and `AirhopVoiceModule` (Swift + Kotlin), `AirhopForegroundService` and `AirhopWiFiModule` (Kotlin), `AirhopTorModule` and `AirhopTorSocket` (Swift).
+- Native modules: `AirhopBLEModule`, `AirhopVoiceModule` and `AirhopWiFiModule` (Swift + Kotlin), `AirhopForegroundService` (Kotlin), `AirhopTorModule`, `AirhopTorSocket` and `AirhopWiFiPairing` (Swift).
 
 ### Build Order
 

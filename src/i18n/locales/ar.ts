@@ -1540,6 +1540,7 @@ export const strings: Strings = {
   "settings.diag.wifi_unsupported": "غير مدعوم على هذا الجهاز",
   "settings.diag.wifi_permission": "محظور بإذن",
   "settings.diag.wifi_unavailable": "غير متاح الآن",
+  "settings.diag.wifi_unpaired": "لا يوجد اقتران",
   "settings.diag.wifi_unknown": "بانتظار وحدة الراديو",
   "settings.diag.relays": "مُرحِّلات Nostr",
   "settings.diag.relays_desc": "تُستخدم لقنوات الموقع والوصول عبر الإنترنت",
@@ -1675,6 +1676,21 @@ export const strings: Strings = {
   "settings.network.relay_duplicate": "هذا المُرحِّل موجود في قائمتك بالفعل.",
   "settings.network.relay_invalid":
     "أدخل مضيف مُرحِّل صالحًا، مثل relay.example.com. المنفذ مطلوب فقط إن كان المُرحِّل لا يستخدم الافتراضي. عناوين IP والأسماء المحلية غير مسموح بها.",
+  "settings.network.wifi_pair": "عمليات نقل سريعة",
+  "settings.network.wifi_pair_desc":
+    "أرسل الصور والملفات عبر Wi-Fi بدلاً من Bluetooth. يعمل بين هاتفي iPhone، وكلاهما على iOS 26 أو أحدث، أثناء فتح Airhop. اقترن مرة واحدة وبعدها يحدث ذلك تلقائياً.",
+  "settings.network.wifi_paired": "الأجهزة المقترنة",
+  "settings.network.wifi_pair_find": "ابحث عن جهاز",
+  "settings.network.wifi_pair_find_desc": "ابحث عن iPhone قريب يعرض نفسه",
+  "settings.network.wifi_pair_show": "أظهر هذا الـ iPhone",
+  "settings.network.wifi_pair_show_desc":
+    "اسمح لجهاز iPhone قريب بالعثور على هذا الجهاز. أحدكما يبحث والآخر يعرض، في الوقت نفسه.",
+  "settings.network.wifi_pair_find_action": "اختر جهاز iPhone قريباً",
+  "settings.network.wifi_pair_show_action":
+    "اجعل هذا الـ iPhone قابلاً للاكتشاف",
+  "settings.network.wifi_pair_unavailable": "Wi-Fi Aware غير متاح الآن",
+  "settings.network.wifi_pair_forget":
+    "لإزالة اقتران، افتح تطبيق Settings وانظر ضمن Privacy & Security. لا يستطيع Airhop التراجع عنه نيابة عنك.",
   "settings.network.bitchat": "التوافق مع bitchat",
   "settings.network.bitchat_desc":
     "نفس شبكة BLE التي يستخدمها bitchat، بتوافق كامل. هذا مفعّل دائمًا ولا يمكن تعطيله.",
