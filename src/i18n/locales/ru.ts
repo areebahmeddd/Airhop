@@ -1607,6 +1607,7 @@ export const strings: Strings = {
   "settings.diag.wifi_unsupported": "Не поддерживается на этом устройстве",
   "settings.diag.wifi_permission": "Заблокировано разрешением",
   "settings.diag.wifi_unavailable": "Сейчас недоступно",
+  "settings.diag.wifi_unpaired": "Ничего не связано",
   "settings.diag.wifi_unknown": "Ждём радиомодуль",
   "settings.diag.relays": "Ретрансляторы Nostr",
   "settings.diag.relays_desc":
@@ -1750,6 +1751,18 @@ export const strings: Strings = {
     "Этот ретранслятор уже есть в вашем списке.",
   "settings.network.relay_invalid":
     "Введите корректный хост ретранслятора, например relay.example.com. Порт нужен, только если ретранслятор не использует стандартный. IP-адреса и локальные имена не допускаются.",
+  "settings.network.wifi_pair": "Сопряжение",
+  "settings.network.wifi_paired": "Связанные устройства",
+  "settings.network.wifi_pair_find": "Найти устройство",
+  "settings.network.wifi_pair_find_desc":
+    "Искать ближайший iPhone, который показывает себя. Обоим нужна iOS 26 или новее.",
+  "settings.network.wifi_pair_show": "Показать этот iPhone",
+  "settings.network.wifi_pair_show_desc":
+    "Позвольте ближайшему iPhone найти этот. Один ищет, другой показывает себя, в одно и то же время.",
+  "settings.network.wifi_pair_find_action": "Выберите ближайший iPhone",
+  "settings.network.wifi_pair_show_action": "Сделать этот iPhone видимым",
+  "settings.network.wifi_pair_unavailable": "Wi-Fi Aware сейчас недоступен",
+  "settings.network.wifi_pair_forget": "Удалите связь в приложении Settings",
   "settings.network.bitchat": "Совместимость с bitchat",
   "settings.network.bitchat_desc":
     "Та же BLE-сеть, что и у bitchat, полностью совместима. Это всегда включено и не отключается.",

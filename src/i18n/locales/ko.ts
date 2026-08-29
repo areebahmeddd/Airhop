@@ -1566,6 +1566,7 @@ export const strings: Strings = {
   "settings.diag.wifi_unsupported": "이 기기에서 지원되지 않음",
   "settings.diag.wifi_permission": "권한으로 차단됨",
   "settings.diag.wifi_unavailable": "지금은 사용할 수 없음",
+  "settings.diag.wifi_unpaired": "페어링된 기기 없음",
   "settings.diag.wifi_unknown": "무선 장치를 기다리는 중",
   "settings.diag.relays": "Nostr 릴레이",
   "settings.diag.relays_desc": "위치 채널과 인터넷 도달에 사용됩니다",
@@ -1700,6 +1701,19 @@ export const strings: Strings = {
   "settings.network.relay_duplicate": "그 릴레이는 이미 목록에 있습니다.",
   "settings.network.relay_invalid":
     "relay.example.com 같은 올바른 릴레이 호스트를 입력하세요. 포트는 릴레이가 기본값을 쓰지 않을 때만 필요합니다. IP 주소와 로컬 이름은 허용되지 않습니다.",
+  "settings.network.wifi_pair": "페어링",
+  "settings.network.wifi_paired": "페어링된 기기",
+  "settings.network.wifi_pair_find": "기기 찾기",
+  "settings.network.wifi_pair_find_desc":
+    "자신을 표시하고 있는 근처 iPhone 찾기. 두 기기 모두 iOS 26 이상이 필요합니다.",
+  "settings.network.wifi_pair_show": "이 iPhone 표시",
+  "settings.network.wifi_pair_show_desc":
+    "근처 iPhone이 이 기기를 찾도록 합니다. 한 사람은 찾고 다른 사람은 표시하며, 동시에 진행합니다.",
+  "settings.network.wifi_pair_find_action": "근처 iPhone 선택",
+  "settings.network.wifi_pair_show_action": "이 iPhone을 검색 가능하게 하기",
+  "settings.network.wifi_pair_unavailable":
+    "Wi-Fi Aware를 지금은 사용할 수 없습니다",
+  "settings.network.wifi_pair_forget": "Settings 앱에서 페어링 제거",
   "settings.network.bitchat": "bitchat 호환성",
   "settings.network.bitchat_desc":
     "bitchat과 동일한 BLE 메시로 완전히 상호 운용됩니다. 항상 켜져 있으며 끌 수 없습니다.",

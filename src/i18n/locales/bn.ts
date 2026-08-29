@@ -1574,6 +1574,7 @@ export const strings: Strings = {
   "settings.diag.wifi_unsupported": "এই ডিভাইসে চলে না",
   "settings.diag.wifi_permission": "একটি অনুমতিতে আটকে আছে",
   "settings.diag.wifi_unavailable": "এখন পাওয়া যাচ্ছে না",
+  "settings.diag.wifi_unpaired": "কিছুই জোড়া লাগানো নেই",
   "settings.diag.wifi_unknown": "রেডিওর অপেক্ষায়",
   "settings.diag.relays": "Nostr রিলে",
   "settings.diag.relays_desc":
@@ -1713,6 +1714,18 @@ export const strings: Strings = {
     "সেই রিলেটি ইতিমধ্যেই আপনার তালিকায় আছে।",
   "settings.network.relay_invalid":
     "একটি কাজের রিলে হোস্ট লিখুন, যেমন relay.example.com। রিলে আদি পোর্ট ব্যবহার না করলেই কেবল পোর্ট লাগে। IP ঠিকানা ও স্থানীয় নাম চলবে না।",
+  "settings.network.wifi_pair": "জোড়া লাগানো",
+  "settings.network.wifi_paired": "জোড়া লাগানো ডিভাইস",
+  "settings.network.wifi_pair_find": "একটি ডিভাইস খুঁজুন",
+  "settings.network.wifi_pair_find_desc":
+    "কাছাকাছি এমন iPhone খুঁজুন যা নিজেকে দেখাচ্ছে। দুটি ফোনেই iOS 26 বা পরবর্তী প্রয়োজন।",
+  "settings.network.wifi_pair_show": "এই iPhone দেখান",
+  "settings.network.wifi_pair_show_desc":
+    "কাছাকাছি একটি iPhone-কে এটি খুঁজে পেতে দিন। একজন খোঁজেন, অন্যজন দেখান, একই সময়ে।",
+  "settings.network.wifi_pair_find_action": "কাছাকাছি একটি iPhone বেছে নিন",
+  "settings.network.wifi_pair_show_action": "এই iPhone আবিষ্কারযোগ্য করুন",
+  "settings.network.wifi_pair_unavailable": "Wi-Fi Aware এখন উপলব্ধ নয়",
+  "settings.network.wifi_pair_forget": "Settings অ্যাপে একটি জোড়া সরান",
   "settings.network.bitchat": "bitchat সামঞ্জস্য",
   "settings.network.bitchat_desc":
     "bitchat-এর মতো একই BLE মেশ, পুরোপুরি মিলিয়ে চলে। এটি সবসময় চালু আর বন্ধ করা যায় না।",

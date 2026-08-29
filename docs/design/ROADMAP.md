@@ -14,7 +14,7 @@ bitchat is an excellent foundation. Airhop fills the gaps it left open.
 ### Gap 2: WiFi Direct / WiFi Aware Transport
 
 **bitchat problem:** BLE-only (~18 KiB/s). Android WiFi Aware support exists but is experimental/unshipped.  
-**Airhop:** Android WiFi Aware and iOS MultipeerConnectivity, selected automatically when available with BLE as fallback. Important limitation: these two protocols cannot talk to each other, so this only accelerates Android-to-Android or iPhone-to-iPhone transfers. Every cross-platform path stays on Bluetooth or Nostr.
+**Airhop:** WiFi Aware on both platforms, selected automatically when available with BLE as fallback. Important limitation: it only applies Android-to-Android or iPhone-to-iPhone, because Apple requires a paired data path and Android cannot complete Apple's pairing. Every cross-platform path stays on Bluetooth or Nostr.
 
 ### Gap 3: Tor on iOS and Android
 
@@ -34,7 +34,7 @@ bitchat is an excellent foundation. Airhop fills the gaps it left open.
 ### Gap 6: Video Support
 
 **bitchat problem:** No video packet type, no mechanism, no MIME type for video.  
-**Airhop:** videos are shared as files over the mesh and play inline on any platform. Live video streaming was dropped: Android WiFi Aware and iOS MultipeerConnectivity are different protocols that cannot interoperate, so cross-platform video calling is not achievable with these stacks.
+**Airhop:** videos are shared as files over the mesh and play inline on any platform. Live video streaming was dropped: the WiFi fast path does not cross platforms, so cross-platform video calling is not achievable with these stacks.
 
 ### Gap 7: Non-Technical UX
 
@@ -137,12 +137,12 @@ bitchat is an excellent foundation. Airhop fills the gaps it left open.
 **Goal:** High-bandwidth transport and per-message forward secrecy.
 
 - [x] `src/core/crypto/double-ratchet.ts`: Signal DR per-message forward secrecy
-- [~] X3DH: **dropped.** The Noise handshake already seeds the ratchet, so a separate key agreement was redundant. One-time prekey bundles (`src/core/mesh/wire/prekey-bundle.ts`) are gossiped over the mesh as `0x24`, never published to Nostr.
-- [x] WiFi Aware native module (Android) + MultipeerConnectivity (iOS)
+- [~] X3DH: **dropped.** The Noise handshake already seeds the ratchet, so a separate key agreement was redundant. One-time prekey bundles (`src/core/mesh/wire/prekey-bundle.ts`) are gossiped over the mesh as `0x24`, never published to Nostr
+- [x] WiFi Aware native module (Android). The iOS MultipeerConnectivity counterpart was written, never worked on a device, and was removed; iOS got Apple's standards-based `WiFiAware` framework instead
 - [~] Chunked file transfer >1 MiB: **dropped, see Gap 4.** bitchat enforces the 1 MiB cap when it _decodes_ a packet, so anything larger is rejected outright and interop breaks in both directions. Airhop sends one `BitchatFilePacket` per file and lets the fragment layer split it
 - [~] Video frame capture (`react-native-vision-camera` was removed from `package.json` entirely) and `0x30: videoFrame`: **dropped, see Gap 2.** The removal is recorded in `packet-codec.ts` so the type is not reintroduced by accident
 
-**Milestone:** Double Ratchet passing test vectors. Same-platform WiFi transport for faster transfers. Offline video calling was **dropped**: WiFi Aware and MultipeerConnectivity cannot interoperate, so it could never work iOS ↔ Android.
+**Milestone:** Double Ratchet passing test vectors. Same-platform WiFi transport for attachments. Offline video calling was **dropped**: the WiFi fast path does not cross platforms, so it could never work iOS to Android.
 
 ### v0.9.0: Production Hardening ✅
 
@@ -158,7 +158,23 @@ bitchat is an excellent foundation. Airhop fills the gaps it left open.
 
 **Milestone:** Feature-complete. Every core service has passing tests. No known protocol bugs.
 
-### v0.9.5: Cashu Wallet ✅
+### v0.9.5: Localization ✅
+
+**Goal:** 35 languages, with the compiler enforcing completeness.
+
+- [x] Translation runtime with no library (`src/i18n/`): `t` / `useT` / `tPlural`, named-placeholder interpolation
+- [x] Completeness enforced by `tsc`: every locale is a `Record<TranslationKey, string>` derived from `en.ts`, so a partial locale does not compile and there is no runtime fallback
+- [x] Every user-facing string in the catalog, zero hardcoded, enforced in CI
+- [x] 35 catalogs, matching the set the landing site serves
+- [x] Locale store, in-app picker, and device language negotiation through `Intl`
+- [x] CLDR plurals for all 35 (`src/i18n/plurals.ts`), checked against Node's ICU
+- [x] Right to left for Arabic, Persian and Urdu: logical properties app-wide, mirrored chevrons, direction pinned at startup; `radar-view.tsx` exempt as a polar plot of physical space
+- [x] Terminal punctuation checked per script by `catalog.test.ts`
+- [x] CI guards: a hardcoded-string ceiling of zero, translations frozen at module load or in a memo, and physical style properties
+
+**Milestone:** Every screen reads from the catalogs, and CI cannot regress it.
+
+### v0.9.6: Cashu Wallet ✅
 
 **Goal:** A real wallet in the `Wallet` tab, not a token viewer.
 
@@ -179,22 +195,6 @@ Cashu is the primary rail because its tokens are plain strings, so value moves d
 - [x] QR display and scan for tokens, so a hand-off works without BLE and to Cashu wallets that are not Airhop
 
 **Milestone:** A user sends and receives Cashu ecash entirely offline over BLE, tops up and cashes out over Lightning, and can rebuild the balance on a new device from twelve words.
-
-### v0.9.6: Localization ✅
-
-**Goal:** 35 languages, with the compiler enforcing completeness.
-
-- [x] Translation runtime with no library (`src/i18n/`): `t` / `useT` / `tPlural`, named-placeholder interpolation
-- [x] Completeness enforced by `tsc`: every locale is a `Record<TranslationKey, string>` derived from `en.ts`, so a partial locale does not compile and there is no runtime fallback
-- [x] Every user-facing string in the catalog, zero hardcoded, enforced in CI
-- [x] 35 catalogs, matching the set the landing site serves
-- [x] Locale store, in-app picker, and device language negotiation through `Intl`
-- [x] CLDR plurals for all 35 (`src/i18n/plurals.ts`), checked against Node's ICU
-- [x] Right to left for Arabic, Persian and Urdu: logical properties app-wide, mirrored chevrons, direction pinned at startup; `radar-view.tsx` exempt as a polar plot of physical space
-- [x] Terminal punctuation checked per script by `catalog.test.ts`
-- [x] CI guards: a hardcoded-string ceiling of zero, translations frozen at module load or in a memo, and physical style properties
-
-**Milestone:** Every screen reads from the catalogs, and CI cannot regress it.
 
 ### v1.0.0: UI + App Store Release ✅
 
@@ -265,22 +265,17 @@ Airhop's identity model (Ed25519 keypairs, no accounts) maps onto both the [AT P
 
 **Milestone:** An Airhop identity linked to a Bluesky DID and a Mastodon actor, cross-posting to both. Indian users initiate UPI payments from a contact's profile when online.
 
-### v1.3.0: Stabilization and Relay Hardware
+### v1.3.0: Relay Hardware
 
-**Goal:** Harden the shipped release, and run the relay path against real nodes.
+**Goal:** Run the relay path against real nodes.
 
-No new features ship in this range. The mesh backend gets battle-tested across as many device and OS combinations as possible. Relay support is written and simulated but has never met hardware; see [`PROTOCOLS.md`](../spec/PROTOCOLS.md) section 10.
+Relay support is written and simulated but has never met hardware; see [`PROTOCOLS.md`](../spec/PROTOCOLS.md) section 10.
 
-- [ ] Production bugs found after launch
-- [ ] Race conditions in the BLE and crypto state machines
-- [ ] UI iteration from real user feedback
-- [ ] Extended cross-device battery and compatibility testing
-- [ ] Translated iOS permission dialogs and Android service notification
 - [ ] [Bitle](https://bitle.org) firmware on the mesh: Noise XX, courier mailbox, gossip sync, and the `0xB1` relay flag read off a real announce
 - [ ] The LoRa trunk carrying traffic between two nodes with no phone bridging the gap
 - [ ] The same runs against bitchat, so one deployed node serves both clients
 
-**Milestone:** Zero open P0/P1 bugs. BLE state machine stable across Pixel, Samsung, and Xiaomi device classes. A Bitle node relays between an Airhop phone and a bitchat phone. Ready to expand to new platforms.
+**Milestone:** A Bitle node relays between an Airhop phone and a bitchat phone, and the LoRa trunk carries traffic with no phone in between.
 
 ### v1.4.0: Web / Browser
 
@@ -344,7 +339,7 @@ macOS is the priority: CoreBluetooth has the same API surface as iOS, so the exi
 - [ ] `react-native-macos` target added to the project
 - [ ] `AirhopBLEModule.swift` audited and tested on macOS (CoreBluetooth is identical)
 - [ ] macOS-specific entitlements and sandbox config (`bitchat-macOS.entitlements` as reference)
-- [ ] MultipeerConnectivity enabled on macOS
+- [ ] WiFi Aware enabled on macOS (Mac Catalyst 26 carries the same framework)
 - [ ] Mac App Store submission
 - [ ] `react-native-windows` target scoped and scheduled
 - [ ] Windows BLE native module via WinRT Bluetooth APIs

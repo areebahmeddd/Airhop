@@ -1487,6 +1487,7 @@ export const strings: Strings = {
   "settings.diag.wifi_unsupported": "በዚህ መሣሪያ ላይ አይደገፍም",
   "settings.diag.wifi_permission": "በአንድ ፈቃድ ታግዷል",
   "settings.diag.wifi_unavailable": "አሁን አይገኝም",
+  "settings.diag.wifi_unpaired": "ምንም አልተጣመረም",
   "settings.diag.wifi_unknown": "ሬዲዮውን እየጠበቀ",
   "settings.diag.relays": "የNostr አስተላላፊዎች",
   "settings.diag.relays_desc": "ለአካባቢ ሰርጦችና ለኢንተርኔት ተደራሽነት ያገለግላሉ",
@@ -1619,6 +1620,18 @@ export const strings: Strings = {
   "settings.network.relay_duplicate": "ያ አስተላላፊ አስቀድሞ በዝርዝርህ ውስጥ ነው።",
   "settings.network.relay_invalid":
     "ትክክለኛ የአስተላላፊ አድራሻ አስገባ፤ ለምሳሌ relay.example.com። ወደብ የሚያስፈልገው አስተላላፊው ነባሪውን የማይጠቀም ከሆነ ብቻ ነው። የIP አድራሻዎችና የአካባቢ ስሞች አይፈቀዱም።",
+  "settings.network.wifi_pair": "ማጣመር",
+  "settings.network.wifi_paired": "የተጣመሩ መሣሪያዎች",
+  "settings.network.wifi_pair_find": "መሣሪያ ፈልግ",
+  "settings.network.wifi_pair_find_desc":
+    "ራሱን እያሳየ ያለ በአቅራቢያ ያለ iPhone ይፈልጉ። ሁለቱም ስልኮች iOS 26 ወይም ከዚያ በኋላ ያስፈልጋቸዋል።",
+  "settings.network.wifi_pair_show": "ይህን iPhone አሳይ",
+  "settings.network.wifi_pair_show_desc":
+    "በአቅራቢያ ያለ iPhone ይህን እንዲያገኘው ይፍቀዱ። አንዳችሁ ትፈልጋላችሁ፣ ሌላችሁ ታሳያላችሁ፣ በተመሳሳይ ጊዜ።",
+  "settings.network.wifi_pair_find_action": "በአቅራቢያ ያለ iPhone ይምረጡ",
+  "settings.network.wifi_pair_show_action": "ይህ iPhone እንዲገኝ ያድርጉ",
+  "settings.network.wifi_pair_unavailable": "Wi-Fi Aware አሁን አይገኝም",
+  "settings.network.wifi_pair_forget": "በSettings መተግበሪያ ውስጥ ማጣመርን ያስወግዱ",
   "settings.network.bitchat": "ከbitchat ጋር ተኳሃኝነት",
   "settings.network.bitchat_desc":
     "ከbitchat ጋር አንድ አይነት የBLE ሜሽ፤ ሙሉ በሙሉ አብሮ የሚሠራ። ይህ ሁልጊዜ በርቷል፤ ሊጠፋም አይችልም።",

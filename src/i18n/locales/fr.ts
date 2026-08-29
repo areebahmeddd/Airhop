@@ -1627,6 +1627,7 @@ export const strings: Strings = {
   "settings.diag.wifi_unsupported": "Non pris en charge sur cet appareil",
   "settings.diag.wifi_permission": "Bloqué par une autorisation",
   "settings.diag.wifi_unavailable": "Indisponible pour le moment",
+  "settings.diag.wifi_unpaired": "Rien de jumelé",
   "settings.diag.wifi_unknown": "En attente de la radio",
   "settings.diag.relays": "Relais Nostr",
   "settings.diag.relays_desc":
@@ -1768,6 +1769,20 @@ export const strings: Strings = {
   "settings.network.relay_duplicate": "Ce relais est déjà dans ta liste.",
   "settings.network.relay_invalid":
     "Saisis un hôte de relais valide, par exemple relay.example.com. Le port n’est nécessaire que si le relais n’utilise pas celui par défaut. Les adresses IP et les noms locaux ne sont pas acceptés.",
+  "settings.network.wifi_pair": "Jumelage",
+  "settings.network.wifi_paired": "Appareils jumelés",
+  "settings.network.wifi_pair_find": "Trouver un appareil",
+  "settings.network.wifi_pair_find_desc":
+    "Chercher un iPhone à proximité qui se montre. Les deux ont besoin d’iOS 26 ou version ultérieure.",
+  "settings.network.wifi_pair_show": "Montrer cet iPhone",
+  "settings.network.wifi_pair_show_desc":
+    "Laissez un iPhone à proximité trouver celui-ci. L’un cherche, l’autre se montre, en même temps.",
+  "settings.network.wifi_pair_find_action": "Choisir un iPhone à proximité",
+  "settings.network.wifi_pair_show_action": "Rendre cet iPhone détectable",
+  "settings.network.wifi_pair_unavailable":
+    "Wi-Fi Aware n’est pas disponible pour le moment",
+  "settings.network.wifi_pair_forget":
+    "Supprimez un jumelage dans l’app Settings",
   "settings.network.bitchat": "Compatibilité bitchat",
   "settings.network.bitchat_desc":
     "Le même maillage BLE que bitchat, pleinement interopérable. C’est toujours actif et impossible à désactiver.",

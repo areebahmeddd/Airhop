@@ -1589,6 +1589,7 @@ export const strings: Strings = {
   "settings.diag.wifi_unsupported": "Stöds inte på den här enheten",
   "settings.diag.wifi_permission": "Blockerat av en behörighet",
   "settings.diag.wifi_unavailable": "Inte tillgängligt just nu",
+  "settings.diag.wifi_unpaired": "Inget parkopplat",
   "settings.diag.wifi_unknown": "Väntar på radion",
   "settings.diag.relays": "Nostr-reläer",
   "settings.diag.relays_desc":
@@ -1726,6 +1727,20 @@ export const strings: Strings = {
   "settings.network.relay_duplicate": "Det reläet finns redan i din lista.",
   "settings.network.relay_invalid":
     "Ange en giltig relävärd, t.ex. relay.example.com. En port behövs bara om reläet inte använder standardporten. IP-adresser och lokala namn är inte tillåtna.",
+  "settings.network.wifi_pair": "Parkoppling",
+  "settings.network.wifi_paired": "Parkopplade enheter",
+  "settings.network.wifi_pair_find": "Hitta en enhet",
+  "settings.network.wifi_pair_find_desc":
+    "Leta efter en iPhone i närheten som visar sig. Båda behöver iOS 26 eller senare.",
+  "settings.network.wifi_pair_show": "Visa den här iPhone",
+  "settings.network.wifi_pair_show_desc":
+    "Låt en iPhone i närheten hitta den här. En letar, den andra visar sig, samtidigt.",
+  "settings.network.wifi_pair_find_action": "Välj en iPhone i närheten",
+  "settings.network.wifi_pair_show_action": "Gör den här iPhone upptäckbar",
+  "settings.network.wifi_pair_unavailable":
+    "Wi-Fi Aware är inte tillgängligt just nu",
+  "settings.network.wifi_pair_forget":
+    "Ta bort en parkoppling i appen Settings",
   "settings.network.bitchat": "bitchat-kompatibilitet",
   "settings.network.bitchat_desc":
     "Samma BLE-mesh som bitchat, fullt driftskompatibel. Detta är alltid på och går inte att stänga av.",

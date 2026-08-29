@@ -68,7 +68,10 @@
         "NSPhotoLibraryUsageDescription": "Airhop accesses your photo library to share images and videos over the mesh.",
         "NSPhotoLibraryAddUsageDescription": "Airhop saves photos and videos to your photo library when you choose to save one, and when you download your QR code.",
         "NSBonjourServices": ["_airhop-mesh._tcp"],
-        "UIBackgroundModes": ["bluetooth-central", "bluetooth-peripheral"]
+        "UIBackgroundModes": ["bluetooth-central", "bluetooth-peripheral"],
+        "WiFiAwareServices": {
+          "_airhop-mesh-v1._tcp": { "Publishable": {}, "Subscribable": {} }
+        }
       }
     },
     "android": {

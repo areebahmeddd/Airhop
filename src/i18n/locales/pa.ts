@@ -1582,6 +1582,7 @@ export const strings: Strings = {
   "settings.diag.wifi_unsupported": "ਇਸ ਡੀਵਾਈਸ ’ਤੇ ਸਮਰਥਿਤ ਨਹੀਂ",
   "settings.diag.wifi_permission": "ਕਿਸੇ ਇਜਾਜ਼ਤ ਨੇ ਰੋਕਿਆ",
   "settings.diag.wifi_unavailable": "ਇਸ ਵੇਲੇ ਉਪਲਬਧ ਨਹੀਂ",
+  "settings.diag.wifi_unpaired": "ਕੁਝ ਵੀ ਜੋੜਿਆ ਨਹੀਂ",
   "settings.diag.wifi_unknown": "ਰੇਡੀਓ ਦੀ ਉਡੀਕ",
   "settings.diag.relays": "Nostr ਰਿਲੇ",
   "settings.diag.relays_desc":
@@ -1721,6 +1722,18 @@ export const strings: Strings = {
   "settings.network.relay_duplicate": "ਉਹ ਰਿਲੇ ਪਹਿਲਾਂ ਹੀ ਤੁਹਾਡੀ ਸੂਚੀ ਵਿੱਚ ਹੈ।",
   "settings.network.relay_invalid":
     "ਸਹੀ ਰਿਲੇ ਹੋਸਟ ਭਰੋ, ਜਿਵੇਂ relay.example.com। ਪੋਰਟ ਸਿਰਫ਼ ਤਾਂ ਹੀ ਚਾਹੀਦਾ ਹੈ ਜੇ ਰਿਲੇ ਮੂਲ ਪੋਰਟ ਨਾ ਵਰਤਦਾ ਹੋਵੇ। IP ਪਤੇ ਅਤੇ ਸਥਾਨਕ ਨਾਂ ਮਨਜ਼ੂਰ ਨਹੀਂ ਹਨ।",
+  "settings.network.wifi_pair": "ਜੋੜਾ ਬਣਾਉਣਾ",
+  "settings.network.wifi_paired": "ਜੋੜੇ ਗਏ ਡਿਵਾਈਸ",
+  "settings.network.wifi_pair_find": "ਡਿਵਾਈਸ ਲੱਭੋ",
+  "settings.network.wifi_pair_find_desc":
+    "ਨੇੜਲਾ ਅਜਿਹਾ iPhone ਲੱਭੋ ਜੋ ਆਪਣੇ ਆਪ ਨੂੰ ਦਿਖਾ ਰਿਹਾ ਹੈ। ਦੋਵਾਂ ਫ਼ੋਨਾਂ ਨੂੰ iOS 26 ਜਾਂ ਬਾਅਦ ਵਾਲਾ ਚਾਹੀਦਾ ਹੈ।",
+  "settings.network.wifi_pair_show": "ਇਹ iPhone ਦਿਖਾਓ",
+  "settings.network.wifi_pair_show_desc":
+    "ਨੇੜਲੇ iPhone ਨੂੰ ਇਸਨੂੰ ਲੱਭਣ ਦਿਓ। ਇੱਕ ਲੱਭਦਾ ਹੈ, ਦੂਜਾ ਦਿਖਾਉਂਦਾ ਹੈ, ਇੱਕੋ ਸਮੇਂ।",
+  "settings.network.wifi_pair_find_action": "ਨੇੜਲਾ iPhone ਚੁਣੋ",
+  "settings.network.wifi_pair_show_action": "ਇਸ iPhone ਨੂੰ ਲੱਭਣਯੋਗ ਬਣਾਓ",
+  "settings.network.wifi_pair_unavailable": "Wi-Fi Aware ਇਸ ਵੇਲੇ ਉਪਲਬਧ ਨਹੀਂ ਹੈ",
+  "settings.network.wifi_pair_forget": "Settings ਐਪ ਵਿੱਚ ਜੋੜ ਹਟਾਓ",
   "settings.network.bitchat": "bitchat ਅਨੁਕੂਲਤਾ",
   "settings.network.bitchat_desc":
     "bitchat ਵਾਲਾ ਹੀ BLE ਮੈਸ਼, ਪੂਰੀ ਤਰ੍ਹਾਂ ਆਪਸ ਵਿੱਚ ਚੱਲਣ ਯੋਗ। ਇਹ ਹਮੇਸ਼ਾ ਚਾਲੂ ਰਹਿੰਦਾ ਹੈ, ਅਤੇ ਬੰਦ ਨਹੀਂ ਕੀਤਾ ਜਾ ਸਕਦਾ।",

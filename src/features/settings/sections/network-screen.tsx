@@ -1,5 +1,6 @@
-// Network sub-screen: the internet (Nostr) connectivity choices, plus the
-// always-on bitchat wire compatibility.
+// Network sub-screen: the internet (Nostr) connectivity choices, the Wi-Fi
+// Aware pairing that the same-platform fast path needs, and the always-on
+// bitchat wire compatibility.
 
 import {
   DEFAULT_DM_RELAYS,
@@ -11,13 +12,17 @@ import {
 import Feather from "@expo/vector-icons/Feather";
 import { useT } from "@i18n";
 import { getMeshService } from "@services/mesh-service";
+import { presentWiFiPairing } from "@services/wifi-pairing-service";
 import { showAlert } from "@store/alert-store";
+import { useMeshStateStore } from "@store/mesh-state-store";
 import { useSettingsStore } from "@store/settings-store";
 import { HIT_SLOP, useThemeColors } from "@ui/theme";
+import { formatNumber } from "@utils/format";
 import React, { useState } from "react";
 import { Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import {
   GroupDivider,
+  SettingLinkRow,
   SettingRow,
   SettingSwitch,
   SubHeader,
@@ -36,6 +41,10 @@ export default function NetworkScreen({ onBack }: Props): React.JSX.Element {
   const Colors = useThemeColors();
   const styles = useSharedStyles();
   const T = useT();
+  // False on Android, and on hardware or an iOS too old for the framework, so
+  // the section is absent rather than showing a control that cannot work.
+  const pairingSupported = useMeshStateStore((s) => s.wifiPairingSupported);
+  const pairedCount = useMeshStateStore((s) => s.wifiPairedCount);
   const internetEnabled = useSettingsStore((s) => s.internetEnabled);
   const setInternetEnabled = useSettingsStore((s) => s.setInternetEnabled);
   const geoRelayDiscovery = useSettingsStore((s) => s.geoRelayDiscovery);
@@ -389,6 +398,44 @@ export default function NetworkScreen({ onBack }: Props): React.JSX.Element {
             />
           </View>
         </View>
+
+        {/* Two actions because Apple's pairing is two-sided: one phone browses
+            and the other advertises, at the same moment. There is no one-tap
+            version to build, so the screen names each half rather than hiding it
+            behind a button that works half the time. */}
+        {pairingSupported && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>
+              {T("settings.network.wifi_pair")}
+            </Text>
+            <View style={styles.settingsGroup}>
+              <SettingRow
+                icon="link"
+                label={T("settings.network.wifi_paired")}
+                description={T("settings.network.wifi_pair_forget")}
+                control={
+                  <Text style={[styles.settingValue, styles.settingValueMono]}>
+                    {formatNumber(pairedCount)}
+                  </Text>
+                }
+              />
+              <GroupDivider />
+              <SettingLinkRow
+                icon="search"
+                label={T("settings.network.wifi_pair_find")}
+                description={T("settings.network.wifi_pair_find_desc")}
+                onPress={() => void presentWiFiPairing("find", Colors)}
+              />
+              <GroupDivider />
+              <SettingLinkRow
+                icon="radio"
+                label={T("settings.network.wifi_pair_show")}
+                description={T("settings.network.wifi_pair_show_desc")}
+                onPress={() => void presentWiFiPairing("discoverable", Colors)}
+              />
+            </View>
+          </View>
+        )}
       </ScrollView>
     </View>
   );

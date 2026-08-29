@@ -1640,6 +1640,7 @@ export const strings: Strings = {
   "settings.diag.wifi_unsupported": "இந்தச் சாதனத்தில் ஆதரிக்கப்படவில்லை",
   "settings.diag.wifi_permission": "ஓர் அனுமதியால் தடுக்கப்பட்டது",
   "settings.diag.wifi_unavailable": "இப்போது கிடைக்கவில்லை",
+  "settings.diag.wifi_unpaired": "எதுவும் இணைக்கப்படவில்லை",
   "settings.diag.wifi_unknown": "வானொலிக்குக் காத்திருக்கிறது",
   "settings.diag.relays": "Nostr ரிலேக்கள்",
   "settings.diag.relays_desc":
@@ -1784,6 +1785,21 @@ export const strings: Strings = {
     "அந்த ரிலே ஏற்கெனவே உங்கள் பட்டியலில் உள்ளது.",
   "settings.network.relay_invalid":
     "சரியான ரிலே புரவலனை உள்ளிடுங்கள், எடுத்துக்காட்டாக relay.example.com. ரிலே இயல்பு துறையைப் பயன்படுத்தாதபோது மட்டுமே துறை தேவை. IP முகவரிகளும் உள்ளூர்ப் பெயர்களும் அனுமதிக்கப்படவில்லை.",
+  "settings.network.wifi_pair": "இணைத்தல்",
+  "settings.network.wifi_paired": "இணைக்கப்பட்ட சாதனங்கள்",
+  "settings.network.wifi_pair_find": "ஒரு சாதனத்தைத் தேடு",
+  "settings.network.wifi_pair_find_desc":
+    "தன்னைக் காட்டிக்கொண்டிருக்கும் அருகிலுள்ள iPhone-ஐத் தேடுங்கள். இரண்டு தொலைபேசிகளுக்கும் iOS 26 அல்லது அதற்குப் பிந்தையது தேவை.",
+  "settings.network.wifi_pair_show": "இந்த iPhone-ஐக் காட்டு",
+  "settings.network.wifi_pair_show_desc":
+    "அருகிலுள்ள ஒரு iPhone இதைக் கண்டறியட்டும். ஒருவர் தேடுகிறார், மற்றொருவர் காட்டுகிறார், ஒரே நேரத்தில்.",
+  "settings.network.wifi_pair_find_action":
+    "அருகிலுள்ள ஒரு iPhone-ஐத் தேர்ந்தெடுங்கள்",
+  "settings.network.wifi_pair_show_action":
+    "இந்த iPhone-ஐக் கண்டறியக்கூடியதாக்குங்கள்",
+  "settings.network.wifi_pair_unavailable": "Wi-Fi Aware இப்போது கிடைக்கவில்லை",
+  "settings.network.wifi_pair_forget":
+    "Settings செயலியில் ஓர் இணைப்பை நீக்குங்கள்",
   "settings.network.bitchat": "bitchat உடன் இயைபு",
   "settings.network.bitchat_desc":
     "bitchat இன் அதே BLE மெஷ், முழுமையாக ஒன்றுடன் ஒன்று இயங்கக்கூடியது. இது எப்போதும் இயக்கத்தில் இருக்கும், முடக்க முடியாது.",

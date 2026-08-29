@@ -44,27 +44,37 @@ export type BannerTone =
 // How far along Airhop's own Tor bootstrap is. iOS only; see `torBootstrap`.
 export type TorBootstrapPhase = "idle" | "starting" | "blocked";
 
-// State of the WiFi Aware fast path, the Android-only high-bandwidth transport
-// that carries photos and files between two Android phones. BLE carries
+// State of the WiFi Aware fast path, the high-bandwidth transport that carries
+// photos and files between two phones on the same platform. BLE carries
 // everything without it, so none of this is ever a blocker.
 //
-//   unknown      not asked yet, iOS, or a failure we cannot name. Says nothing,
+//   unknown      not asked yet, or a failure we cannot name. Says nothing,
 //                which is the only honest thing to render for "no reading".
-//   unsupported  no Aware hardware, or an OS below the data-path floor.
+//   unsupported  no Aware hardware, or an OS below the floor (API 29 on
+//                Android, iOS 26 here).
 //   active       attached, publishing and subscribing.
 //   unavailable  the device has it, but not right now - WiFi switched off,
-//                tethering, battery saver. The only state worth a banner: it is
-//                the one the user can undo, and the difference it makes (a
-//                video that arrives in seconds rather than minutes) is otherwise
+//                tethering, battery saver. Android only, since iOS exposes no
+//                equivalent reading. The only state worth a banner: it is the
+//                one the user can undo, and the difference it makes (a video
+//                that arrives in seconds rather than minutes) is otherwise
 //                invisible.
-//   permission   NEARBY_WIFI_DEVICES missing. Not surfaced, but not because it
-//                could not be: from API 33 that permission shares a group with
-//                the BLUETOOTH_* ones, so the single dialog that grants
-//                Bluetooth grants it too and this state is close to
+//   unpaired     iOS only. Everything works and nothing is paired, so there is
+//                nobody to reach. A resting state rather than a fault, shown on
+//                the Network screen beside the control that answers it.
+//   permission   NEARBY_WIFI_DEVICES missing. Android only, and not surfaced,
+//                but not because it could not be: from API 33 that permission
+//                shares a group with the BLUETOOTH_* ones, so the single dialog
+//                that grants Bluetooth grants it too and this state is close to
 //                unreachable. A banner for it would carry more weight than the
 //                situation has.
 export type WifiFastPath =
-  "unknown" | "unsupported" | "active" | "unavailable" | "permission";
+  | "unknown"
+  | "unsupported"
+  | "active"
+  | "unavailable"
+  | "unpaired"
+  | "permission";
 
 // The single reason the BLE mesh cannot run right now, or "none".
 //
@@ -179,8 +189,13 @@ interface MeshStateStore {
   // nothing sent back reaches us - see publishLiveCells in
   // services/geohash-channel-service for why null is not the empty list.
   liveGeoCells: string[] | null;
-  // State of the Android WiFi Aware fast path (see services/wifi-controller).
+  // State of the WiFi Aware fast path (see services/wifi-controller).
   wifiFastPath: WifiFastPath;
+  // Wi-Fi Aware pairing, iOS only (see services/wifi-pairing-service). Both stay
+  // false and zero on Android, where the Network screen hides the section rather
+  // than showing a control that would do nothing.
+  wifiPairingSupported: boolean;
+  wifiPairedCount: number;
   // Whether the Nostr relay pool has at least one live connection.
   nostrConnected: boolean;
   // Whether Nostr traffic is currently routed through Tor (see tor-routing.ts).
@@ -252,6 +267,7 @@ interface MeshStateStore {
   setWipeIncomplete: (incomplete: boolean) => void;
   setLiveGeoCells: (cells: string[] | null) => void;
   setWifiFastPath: (state: WifiFastPath) => void;
+  setWifiPairing: (supported: boolean, count: number) => void;
   setNostrConnected: (connected: boolean) => void;
   setTorActive: (active: boolean) => void;
   setTorBootstrap: (phase: TorBootstrapPhase) => void;
@@ -269,6 +285,8 @@ export const useMeshStateStore = create<MeshStateStore>()((set) => ({
   wipeIncomplete: false,
   liveGeoCells: null,
   wifiFastPath: "unknown",
+  wifiPairingSupported: false,
+  wifiPairedCount: 0,
   nostrConnected: false,
   torActive: false,
   torBootstrap: "idle",
@@ -304,6 +322,9 @@ export const useMeshStateStore = create<MeshStateStore>()((set) => ({
   },
   setWifiFastPath(state) {
     set({ wifiFastPath: state });
+  },
+  setWifiPairing(supported, count) {
+    set({ wifiPairingSupported: supported, wifiPairedCount: count });
   },
   setNostrConnected(connected) {
     set({ nostrConnected: connected });
@@ -584,9 +605,12 @@ export function computeMeshBanners(inputs: MeshBannerInputs): MeshBanner[] {
   // would reasonably read as the app being bad at its job.
   //
   // Only "unavailable" says anything. "unsupported" is hardware that never had
-  // the fast path, and "permission" is near-unreachable, since the permission
-  // shares an OS group with the Bluetooth ones and is granted by the same
-  // dialog. Neither is a note the user can act on.
+  // the fast path; "permission" is near-unreachable, since the permission shares
+  // an OS group with the Bluetooth ones and is granted by the same dialog; and
+  // "unpaired" is the resting state of any iPhone whose owner has not paired
+  // anyone, so a banner would be nagging someone about a feature they never
+  // asked for. The Network screen carries that one, beside the control that
+  // answers it. None of the three is a note the user can act on here.
   if (inputs.wifiFastPath === "unavailable") {
     banners.push({
       key: "wifi-fast-path",

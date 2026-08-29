@@ -36,6 +36,35 @@ Neither platform advertises a `bitchat-` name prefix. A scanner that finds no
 peer ID in the advertisement still connects and learns the peer from its first
 `ANNOUNCE`, which is what happens on every iOS-to-Android link.
 
+## 1.1 WiFi Aware Identifiers
+
+The same-platform fast path is a second radio carrying the same packet frames.
+Its identifiers are protocol constants in the same sense the BLE UUIDs are: NAN
+derives the on-air service ID by hashing the service name, so one different
+character means two devices never match.
+
+| Identifier       | Value                    | Notes                                                      |
+| ---------------- | ------------------------ | ---------------------------------------------------------- |
+| **Service name** | `_airhop-mesh-v1._tcp`   | Airhop only. bitchat publishes `bitchat` and never matches |
+| **Frame**        | `[u32 BE length][bytes]` | Length excludes the prefix                                 |
+| **Max frame**    | `65544`                  | 64 KiB payload plus the prefix, with room to spare         |
+| **Link hello**   | 8 random bytes, iOS only | First frame of every connection, never surfaced to JS      |
+
+The DNS-SD wrapper is Apple's requirement rather than the Alliance's: iOS accepts
+only `_name._tcp` or `_name._udp`, with a name component of at most 15 characters
+from `[A-Za-z0-9-]`. Android accepts any ASCII string under 255 bytes, so it is
+the side that moved. The string appears in three places that must agree:
+`SERVICE_NAME` in `AirhopWiFiModule.kt`, `WiFiConst.serviceName` in
+`AirhopWiFiModule.swift`, and the `WiFiAwareServices` key in
+`ios/Airhop/Info.plist`.
+
+The link hello is the iOS dial tiebreak. Both devices publish and subscribe, so
+both discover each other and both dial; each end keeps the connection whose
+initiator holds the lower token and drops the other before reporting a link.
+Android needs none of it, because it breaks the same tie before connecting, using
+a token in the publish config's `serviceSpecificInfo`. The two platforms cannot
+form a link with each other in any case, so the asymmetry costs nothing.
+
 ## 2. Packet Frame Layout
 
 Every packet over BLE uses this exact binary format (bitchat v2):

@@ -1618,6 +1618,7 @@ export const strings: Strings = {
   "settings.diag.wifi_unsupported": "Haitumiki kwenye kifaa hiki",
   "settings.diag.wifi_permission": "Imezuiwa na ruhusa fulani",
   "settings.diag.wifi_unavailable": "Haipatikani kwa sasa",
+  "settings.diag.wifi_unpaired": "Hakuna kilichooanishwa",
   "settings.diag.wifi_unknown": "Inasubiri redio",
   "settings.diag.relays": "Relay za Nostr",
   "settings.diag.relays_desc":
@@ -1760,6 +1761,19 @@ export const strings: Strings = {
     "Relay hiyo tayari iko kwenye orodha yako.",
   "settings.network.relay_invalid":
     "Weka mwenyeji halali wa relay, mfano relay.example.com. Mlango unahitajika tu ikiwa relay haitumii ule wa kawaida. Anwani za IP na majina ya ndani hayaruhusiwi.",
+  "settings.network.wifi_pair": "Uoanishaji",
+  "settings.network.wifi_paired": "Vifaa vilivyooanishwa",
+  "settings.network.wifi_pair_find": "Tafuta kifaa",
+  "settings.network.wifi_pair_find_desc":
+    "Tafuta iPhone iliyo karibu inayojionyesha. Simu zote mbili zinahitaji iOS 26 au mpya zaidi.",
+  "settings.network.wifi_pair_show": "Onyesha iPhone hii",
+  "settings.network.wifi_pair_show_desc":
+    "Ruhusu iPhone iliyo karibu ipate hii. Mmoja hutafuta, mwingine hujionyesha, kwa wakati mmoja.",
+  "settings.network.wifi_pair_find_action": "Chagua iPhone iliyo karibu",
+  "settings.network.wifi_pair_show_action": "Fanya iPhone hii ionekane",
+  "settings.network.wifi_pair_unavailable": "Wi-Fi Aware haipatikani kwa sasa",
+  "settings.network.wifi_pair_forget":
+    "Ondoa uoanishaji katika programu ya Settings",
   "settings.network.bitchat": "Uoanifu na bitchat",
   "settings.network.bitchat_desc":
     "Mesh ileile ya BLE kama bitchat, inayooana kikamilifu. Hii daima imewashwa, na haiwezi kuzimwa.",

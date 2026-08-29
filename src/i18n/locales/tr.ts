@@ -1595,6 +1595,7 @@ export const strings: Strings = {
   "settings.diag.wifi_unsupported": "Bu cihazda desteklenmiyor",
   "settings.diag.wifi_permission": "Bir izin tarafından engellendi",
   "settings.diag.wifi_unavailable": "Şu anda kullanılamıyor",
+  "settings.diag.wifi_unpaired": "Hiçbir şey eşleştirilmedi",
   "settings.diag.wifi_unknown": "Telsiz bekleniyor",
   "settings.diag.relays": "Nostr aktarıcıları",
   "settings.diag.relays_desc":
@@ -1733,6 +1734,20 @@ export const strings: Strings = {
   "settings.network.relay_duplicate": "O aktarıcı zaten listende.",
   "settings.network.relay_invalid":
     "Geçerli bir aktarıcı adresi gir, örneğin relay.example.com. Bağlantı noktası yalnızca aktarıcı varsayılanı kullanmıyorsa gerekir. IP adresleri ve yerel adlar kabul edilmez.",
+  "settings.network.wifi_pair": "Eşleştirme",
+  "settings.network.wifi_paired": "Eşleştirilmiş cihazlar",
+  "settings.network.wifi_pair_find": "Cihaz bul",
+  "settings.network.wifi_pair_find_desc":
+    "Kendini gösteren yakındaki bir iPhone arayın. İki telefon da iOS 26 veya sonrasını gerektirir.",
+  "settings.network.wifi_pair_show": "Bu iPhone'u göster",
+  "settings.network.wifi_pair_show_desc":
+    "Yakındaki bir iPhone'un bunu bulmasına izin verin. Biriniz arar, diğeri kendini gösterir, aynı anda.",
+  "settings.network.wifi_pair_find_action": "Yakındaki bir iPhone seçin",
+  "settings.network.wifi_pair_show_action": "Bu iPhone'u bulunabilir yapın",
+  "settings.network.wifi_pair_unavailable":
+    "Wi-Fi Aware şu anda kullanılamıyor",
+  "settings.network.wifi_pair_forget":
+    "Settings uygulamasında bir eşleştirmeyi kaldırın",
   "settings.network.bitchat": "bitchat uyumluluğu",
   "settings.network.bitchat_desc":
     "bitchat ile aynı BLE mesh ağı, tümüyle birlikte çalışabilir. Bu her zaman açıktır ve kapatılamaz.",

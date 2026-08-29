@@ -226,6 +226,7 @@ import {
   NativeAudioPlayback,
 } from "./voice-audio-backend";
 import { WiFiController } from "./wifi-controller";
+import { WiFiPairingWatcher } from "./wifi-pairing-service";
 
 // ---- Constants ----
 
@@ -575,6 +576,17 @@ export class MeshService {
   // most, a neutral note. See wifi-controller.ts.
   private readonly wifi = new WiFiController((state) =>
     useMeshStateStore.getState().setWifiFastPath(state),
+  );
+
+  // Which devices the WiFi fast path is allowed to reach, iOS only.
+  //
+  // Apple's WiFi Aware has no unpaired mode, so a paired count of zero means the
+  // transport has nobody to talk to and must not attach. Feeding the controller
+  // from here rather than letting it ask keeps one reconciler driving both
+  // platforms: on Android nothing ever calls setPairedCount, the gate is never
+  // armed, and the controller behaves exactly as it did before this existed.
+  private readonly wifiPairing = new WiFiPairingWatcher((count) =>
+    this.wifi.setPairedCount(count),
   );
 
   // Cumulative bytes moved over BLE/WiFi this session, for the Storage &
@@ -1215,6 +1227,10 @@ export class MeshService {
     // router, which treats a WiFi link as one more link, and it degrades to
     // Bluetooth on its own when there is none. There is nothing here a user
     // could usefully decide.
+    // Before the transport, not after: the controller will not attach until it
+    // has a paired count on a platform that gates on one, and this is what
+    // delivers the first.
+    this.wifiPairing.start();
     this.wifi.start();
 
     // The radio controller reads the background preference during reconcile, so
@@ -5730,6 +5746,7 @@ export class MeshService {
     // diverge here, turning WiFi on and returning to the app fixes Bluetooth and
     // leaves the fast path dead until a relaunch.
     this.wifi.refresh();
+    void this.wifiPairing.refresh();
   }
 
   // The app moved between foreground and background. Passed straight through to
@@ -5765,6 +5782,10 @@ export class MeshService {
     usePeerStore.getState().evictStale();
     this.radio.refresh();
     this.wifi.refresh();
+    // Pull-to-refresh is also the recovery path for a pairing removed in the
+    // Settings app while Airhop was suspended, where the change event had no
+    // running listener to reach.
+    void this.wifiPairing.refresh();
     void this.geoChannels?.refresh();
   }
 
@@ -6299,6 +6320,7 @@ export class MeshService {
     // through the one path that also cancels retries and releases the background
     // service. Calling the native stops again here would race that.
     this.wifi.stop();
+    this.wifiPairing.stop();
     // And forget the links it just closed. Unlike a BLE central link, which
     // survives a stopped scan, a WiFi link is a socket stopWiFi() destroys, and
     // link IDs are never reissued. The native disconnect events cannot clean up
@@ -6349,6 +6371,7 @@ export class MeshService {
     // stops its retry ladder, so a pending attach cannot land after a panic wipe
     // and reopen a socket under an identity that no longer exists.
     this.wifi.dispose();
+    this.wifiPairing.stop();
   }
 }
 

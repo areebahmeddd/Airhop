@@ -1493,6 +1493,7 @@ export const strings: Strings = {
   "settings.diag.wifi_unsupported": "這台裝置不支援",
   "settings.diag.wifi_permission": "被某項權限擋下",
   "settings.diag.wifi_unavailable": "現在無法使用",
+  "settings.diag.wifi_unpaired": "未配對",
   "settings.diag.wifi_unknown": "等待無線模組",
   "settings.diag.relays": "Nostr 中繼",
   "settings.diag.relays_desc": "用於位置頻道和網路觸及",
@@ -1623,6 +1624,18 @@ export const strings: Strings = {
   "settings.network.relay_duplicate": "那個中繼已經在你的清單裡了。",
   "settings.network.relay_invalid":
     "請輸入有效的中繼主機名稱，例如 relay.example.com。只有當中繼不用預設連接埠時才需要寫連接埠。不允許使用 IP 位址和本機名稱。",
+  "settings.network.wifi_pair": "配對",
+  "settings.network.wifi_paired": "已配對的裝置",
+  "settings.network.wifi_pair_find": "尋找裝置",
+  "settings.network.wifi_pair_find_desc":
+    "尋找附近正在顯示自己的iPhone。兩台裝置都需為iOS 26或更新版本。",
+  "settings.network.wifi_pair_show": "顯示這台iPhone",
+  "settings.network.wifi_pair_show_desc":
+    "讓附近的iPhone找到這台。一人尋找，另一人顯示，同時進行。",
+  "settings.network.wifi_pair_find_action": "選擇附近的iPhone",
+  "settings.network.wifi_pair_show_action": "讓這台iPhone可被發現",
+  "settings.network.wifi_pair_unavailable": "Wi-Fi Aware目前無法使用",
+  "settings.network.wifi_pair_forget": "在Settings App中移除配對",
   "settings.network.bitchat": "bitchat 相容",
   "settings.network.bitchat_desc":
     "和 bitchat 用同一套 BLE 網狀網路，完全互通。這一項永遠開啟，無法關閉。",

@@ -12,7 +12,7 @@ It is a **spiritual fork of bitchat** ([permissionlesstech/bitchat](https://gith
 - Live PTT voice from day 1 (designed but never shipped in bitchat _at the time of writing_)
 - Cashu ecash payments that work offline over BLE
 - Double Ratchet forward secrecy for all stored messages
-- Same-platform WiFi transport for high-bandwidth use cases (large files). Android uses WiFi Aware, iOS uses MultipeerConnectivity. These are different protocols and do not interoperate, so this is a within-Android or within-iOS fast path only. Bluetooth remains the universal transport.
+- Same-platform WiFi transport for high-bandwidth use cases (large files). Both platforms use WiFi Aware, the same NAN protocol. It is still a within-Android or within-iOS fast path only, because Apple requires a paired data path that Android cannot complete. Bluetooth remains the universal transport.
 - Tor on both iOS and Android (bitchat iOS only _at the time of writing_)
 - Human-readable identities and QR contact exchange
 
@@ -64,7 +64,7 @@ What each feature is for, and when someone would actually reach for it.
 
 - Bluetooth mesh. The part that works when nothing else does. No towers, no router, no bill.
 - Multi-hop routing. Messages relay through up to seven phones, so two people who cannot see each other still connect through the strangers between them.
-- WiFi fast path. Two Androids, or two iPhones, move large files faster. It never crosses platforms, so Bluetooth stays the universal path.
+- WiFi fast path. Two Androids, or two iPhones, move large files over a direct WiFi link rather than Bluetooth, which is steadier and leaves the Bluetooth radio free. It never crosses platforms, so Bluetooth stays the universal path.
 - bitchat compatibility. An Airhop phone and a bitchat phone join the same mesh and talk with no setup. Airhop's own additions are ignored by bitchat rather than breaking it.
 
 ### Internet

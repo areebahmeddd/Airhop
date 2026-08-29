@@ -1620,6 +1620,7 @@ export const strings: Strings = {
   "settings.diag.wifi_unsupported": "Non supportato su questo dispositivo",
   "settings.diag.wifi_permission": "Bloccato da un permesso",
   "settings.diag.wifi_unavailable": "Non disponibile al momento",
+  "settings.diag.wifi_unpaired": "Nessun abbinamento",
   "settings.diag.wifi_unknown": "In attesa della radio",
   "settings.diag.relays": "Relay Nostr",
   "settings.diag.relays_desc":
@@ -1764,6 +1765,20 @@ export const strings: Strings = {
   "settings.network.relay_duplicate": "Quel relay è già nel tuo elenco.",
   "settings.network.relay_invalid":
     "Inserisci un host relay valido, ad esempio relay.example.com. La porta serve solo se il relay non usa quella predefinita. Gli indirizzi IP e i nomi locali non sono ammessi.",
+  "settings.network.wifi_pair": "Abbinamento",
+  "settings.network.wifi_paired": "Dispositivi abbinati",
+  "settings.network.wifi_pair_find": "Trova un dispositivo",
+  "settings.network.wifi_pair_find_desc":
+    "Cerca un iPhone vicino che si sta mostrando. Servono iOS 26 o successivo su entrambi.",
+  "settings.network.wifi_pair_show": "Mostra questo iPhone",
+  "settings.network.wifi_pair_show_desc":
+    "Lascia che un iPhone vicino trovi questo. Uno cerca, l’altro si mostra, nello stesso momento.",
+  "settings.network.wifi_pair_find_action": "Scegli un iPhone vicino",
+  "settings.network.wifi_pair_show_action": "Rendi rilevabile questo iPhone",
+  "settings.network.wifi_pair_unavailable":
+    "Wi-Fi Aware non è disponibile al momento",
+  "settings.network.wifi_pair_forget":
+    "Rimuovi un abbinamento nell’app Settings",
   "settings.network.bitchat": "Compatibilità con bitchat",
   "settings.network.bitchat_desc":
     "La stessa mesh BLE di bitchat, pienamente interoperabile. È sempre attiva e non si può disattivare.",

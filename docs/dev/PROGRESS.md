@@ -112,7 +112,7 @@ checkable against the code rather than taken on trust.
       gossiped over the mesh as `0x24`. **X3DH is deliberately not used**: the
       handshake already seeds the ratchet, which made a separate key agreement
       redundant (see ARCHITECTURE.md section 5)
-- [x] WiFi Aware native module (Android). The iOS MultipeerConnectivity counterpart was written, never worked on a device, and was removed
+- [x] WiFi Aware native module (Android). The iOS MultipeerConnectivity counterpart was written, never worked on a device, and was removed.
 - [x] Video and any other file type shared as attachments, played inline
 - [~] `0x30` videoFrame and offline video calling: **dropped.** WiFi Aware and
   MultipeerConnectivity cannot interoperate, so the type described a feature
@@ -134,23 +134,7 @@ checkable against the code rather than taken on trust.
 - [x] Georelays in-app relay map (`GeoRelayDirectory.nearestRelaysWithDistance()` added to geo-relay.ts)
 - [x] Full cross-platform compat test (`src/core/mesh/wire/__tests__/packet-frame-vectors.test.ts`: peer ID derivation, packet byte offsets, signature relay compat, ANNOUNCE TLV, fragment constants, BLE UUIDs)
 
-## v0.9.5: Cashu Wallet ✅
-
-- [x] `src/core/payments/cashu.ts`: detection (bitchat-identical), decoding, NUT-12 DLEQ verification, fee-aware proof selection
-- [x] `src/core/payments/nutzap.ts`: NIP-61 kind 9321 / 10019 construction and parsing
-- [x] `src/core/payments/wallet-seed.ts`: BIP-39 recovery phrase, kept in the keychain
-- [x] `src/store/wallet-store.ts`: AES-256 encrypted proofs, per (mint, unit) accounts, reserved bucket, history, NUT-13 counters
-- [x] `src/services/wallet-service.ts`: the only module that talks to a mint
-- [x] `src/services/payment-router.ts`: `payPerson`, one payment ladder (radio, nutzap, token, manual) shared by all four entry points: DM attach, contact sheet, Mesh peer sheet and Wallet Zap
-- [x] Send that reserves rather than deletes, so an undelivered token is reclaimable
-- [x] Lightning deposit and withdrawal (NUT-04 / NUT-05)
-- [x] Opt-in recovery phrase (NUT-13 / NUT-09), off by default
-- [x] Mint management: validated add, per-mint balances, consolidate over Lightning
-- [x] Nutzap send and receive, with honest fallback when the recipient publishes no NIP-61 info
-- [x] Tap the balance to read it in sats or bitcoin (display only, no price feed)
-- [x] QR display and scan for tokens
-
-## v0.9.6: Localization ✅
+## v0.9.5: Localization ✅
 
 - [x] Translation runtime, no library (`src/i18n/index.ts`: `t` / `useT` / `tPlural`, named-placeholder interpolation)
 - [x] Completeness enforced by `tsc` (`src/i18n/locales/types.ts`: every locale is `Record<TranslationKey, string>` derived from `en.ts`, so a partial locale does not compile and no runtime fallback exists)
@@ -167,6 +151,22 @@ checkable against the code rather than taken on trust.
 - [x] CI guards: hardcoded-string ceiling at zero, translations frozen at module load or in a memo, and physical style properties
 - [x] i18n tests (`src/i18n/__tests__/`: placeholder parity, plural categories, do-not-translate enforcement, terminal punctuation per script)
 - [x] Catalog ordered by screen (shell, onboarding, chats, mesh, wallet, contacts, settings), so one screen's copy is one contiguous block
+
+## v0.9.6: Cashu Wallet ✅
+
+- [x] `src/core/payments/cashu.ts`: detection (bitchat-identical), decoding, NUT-12 DLEQ verification, fee-aware proof selection
+- [x] `src/core/payments/nutzap.ts`: NIP-61 kind 9321 / 10019 construction and parsing
+- [x] `src/core/payments/wallet-seed.ts`: BIP-39 recovery phrase, kept in the keychain
+- [x] `src/store/wallet-store.ts`: AES-256 encrypted proofs, per (mint, unit) accounts, reserved bucket, history, NUT-13 counters
+- [x] `src/services/wallet-service.ts`: the only module that talks to a mint
+- [x] `src/services/payment-router.ts`: `payPerson`, one payment ladder (radio, nutzap, token, manual) shared by all four entry points: DM attach, contact sheet, Mesh peer sheet and Wallet Zap
+- [x] Send that reserves rather than deletes, so an undelivered token is reclaimable
+- [x] Lightning deposit and withdrawal (NUT-04 / NUT-05)
+- [x] Opt-in recovery phrase (NUT-13 / NUT-09), off by default
+- [x] Mint management: validated add, per-mint balances, consolidate over Lightning
+- [x] Nutzap send and receive, with honest fallback when the recipient publishes no NIP-61 info
+- [x] Tap the balance to read it in sats or bitcoin (display only, no price feed)
+- [x] QR display and scan for tokens
 
 ## v1.0.0: UI + App Store Release ✅
 
@@ -199,15 +199,8 @@ checkable against the code rather than taken on trust.
 - [ ] UPI Payment Plugin: deep link initiation, opt-in only, KYC disclosure required
 - [ ] Plugin registry, per-plugin opt-in, strict data boundary and capability model
 
-## v1.3.0: Stabilization and Relay Hardware
+## v1.3.0: Relay Hardware
 
-Relay support is written and simulated but has never met hardware (`docs/spec/PROTOCOLS.md` section 10).
-
-- [ ] Production bugs found after launch
-- [ ] Race conditions in the BLE and crypto state machines
-- [ ] UI iteration from user feedback
-- [ ] Extended cross-device battery and compatibility testing
-- [ ] Translated iOS permission dialogs and Android service notification
 - [ ] [Bitle](https://bitle.org) firmware on the mesh: Noise XX, courier mailbox, gossip sync, and the `0xB1` relay flag read off a real announce
 - [ ] The LoRa trunk carrying traffic between two nodes with no phone bridging the gap
 - [ ] The same runs against bitchat, so one deployed node serves both clients

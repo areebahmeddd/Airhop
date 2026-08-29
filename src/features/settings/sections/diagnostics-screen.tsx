@@ -54,6 +54,8 @@ function wifiLabel(state: string): string {
       return t("settings.diag.wifi_permission");
     case "unavailable":
       return t("settings.diag.wifi_unavailable");
+    case "unpaired":
+      return t("settings.diag.wifi_unpaired");
     default:
       return t("settings.diag.wifi_unknown");
   }

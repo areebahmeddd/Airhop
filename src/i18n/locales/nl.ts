@@ -1612,6 +1612,7 @@ export const strings: Strings = {
   "settings.diag.wifi_unsupported": "Niet ondersteund op dit toestel",
   "settings.diag.wifi_permission": "Geblokkeerd door een recht",
   "settings.diag.wifi_unavailable": "Op dit moment niet beschikbaar",
+  "settings.diag.wifi_unpaired": "Niets gekoppeld",
   "settings.diag.wifi_unknown": "Wachten op de radio",
   "settings.diag.relays": "Nostr-relays",
   "settings.diag.relays_desc":
@@ -1751,6 +1752,20 @@ export const strings: Strings = {
   "settings.network.relay_duplicate": "Die relay staat al in je lijst.",
   "settings.network.relay_invalid":
     "Vul een geldige relayhost in, bijvoorbeeld relay.example.com. Een poort is alleen nodig als de relay niet de standaardpoort gebruikt. IP-adressen en lokale namen zijn niet toegestaan.",
+  "settings.network.wifi_pair": "Koppelen",
+  "settings.network.wifi_paired": "Gekoppelde apparaten",
+  "settings.network.wifi_pair_find": "Een apparaat zoeken",
+  "settings.network.wifi_pair_find_desc":
+    "Zoek een iPhone in de buurt die zichzelf laat zien. Beide hebben iOS 26 of nieuwer nodig.",
+  "settings.network.wifi_pair_show": "Deze iPhone tonen",
+  "settings.network.wifi_pair_show_desc":
+    "Laat een iPhone in de buurt deze vinden. De een zoekt, de ander laat zich zien, op hetzelfde moment.",
+  "settings.network.wifi_pair_find_action": "Kies een iPhone in de buurt",
+  "settings.network.wifi_pair_show_action": "Deze iPhone vindbaar maken",
+  "settings.network.wifi_pair_unavailable":
+    "Wi-Fi Aware is nu niet beschikbaar",
+  "settings.network.wifi_pair_forget":
+    "Verwijder een koppeling in de app Settings",
   "settings.network.bitchat": "bitchat-compatibiliteit",
   "settings.network.bitchat_desc":
     "Dezelfde BLE-mesh als bitchat, volledig samenwerkend. Dit staat altijd aan en kan niet uit.",

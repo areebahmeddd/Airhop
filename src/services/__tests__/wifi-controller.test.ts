@@ -409,3 +409,92 @@ describe("reporting the fast path's state", () => {
     expect(seen).toEqual(["unsupported"]);
   });
 });
+
+// The pairing gate, which only iOS arms.
+//
+// Apple's WiFi Aware has no unpaired mode, so an attach with nothing paired
+// stands up a listener and a browser that can never find anybody. The gate is
+// also the only thing that can tear the transport back down when the user
+// removes their last pairing in the Settings app, which is a state change native
+// has no other way to report.
+describe("the pairing gate", () => {
+  test("does not exist until something reports a count, so Android is untouched", async () => {
+    mockStartWiFi.mockResolvedValue(undefined);
+    const wifi = new WiFiController();
+
+    wifi.start();
+    await settle();
+
+    // Nothing called setPairedCount, which is every Android build.
+    expect(wifi.isStarted).toBe(true);
+    expect(mockStartWiFi).toHaveBeenCalledTimes(1);
+  });
+
+  test("refuses to attach while nothing is paired", async () => {
+    mockStartWiFi.mockResolvedValue(undefined);
+    const seen: string[] = [];
+    const wifi = new WiFiController((state) => seen.push(state));
+
+    wifi.setPairedCount(0);
+    wifi.start();
+    await settle(60_000);
+
+    expect(mockStartWiFi).not.toHaveBeenCalled();
+    expect(wifi.isStarted).toBe(false);
+    // Reported once, and NOT retried on the ladder: no amount of asking again
+    // changes it, and the pairing module runs a pass the moment it does.
+    expect(seen).toEqual(["unpaired"]);
+  });
+
+  test("attaches as soon as the first device is paired", async () => {
+    mockStartWiFi.mockResolvedValue(undefined);
+    const seen: string[] = [];
+    const wifi = new WiFiController((state) => seen.push(state));
+
+    wifi.setPairedCount(0);
+    wifi.start();
+    await settle();
+    expect(mockStartWiFi).not.toHaveBeenCalled();
+
+    wifi.setPairedCount(1);
+    await settle();
+
+    expect(mockStartWiFi).toHaveBeenCalledTimes(1);
+    expect(wifi.isStarted).toBe(true);
+    expect(seen).toEqual(["unpaired", "active"]);
+  });
+
+  test("brings a running transport down when the last pairing is removed", async () => {
+    mockStartWiFi.mockResolvedValue(undefined);
+    const seen: string[] = [];
+    const wifi = new WiFiController((state) => seen.push(state));
+
+    wifi.setPairedCount(1);
+    wifi.start();
+    await settle();
+    expect(wifi.isStarted).toBe(true);
+
+    // Unpaired in Settings, which nothing else would ever tell us about.
+    wifi.setPairedCount(0);
+    await settle();
+
+    expect(mockStopWiFi).toHaveBeenCalled();
+    expect(wifi.isStarted).toBe(false);
+    expect(seen).toEqual(["active", "unpaired"]);
+  });
+
+  test("treats a native unpaired refusal the same way, without a retry ladder", async () => {
+    // Defence in depth: the gate above should have caught this, so reaching
+    // native at all means the two disagreed. The response is the same either
+    // way, and it must not become a poll.
+    mockStartWiFi.mockImplementation(() => rejectWith("WIFI_AWARE_UNPAIRED"));
+    const seen: string[] = [];
+    const wifi = new WiFiController((state) => seen.push(state));
+
+    wifi.start();
+    await settle(60_000);
+
+    expect(mockStartWiFi).toHaveBeenCalledTimes(1);
+    expect(seen).toEqual(["unpaired"]);
+  });
+});

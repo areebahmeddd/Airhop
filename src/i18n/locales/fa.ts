@@ -1587,6 +1587,7 @@ export const strings: Strings = {
   "settings.diag.wifi_unsupported": "روی این دستگاه پشتیبانی نمی‌شود",
   "settings.diag.wifi_permission": "به سبب یک دسترسی مسدود است",
   "settings.diag.wifi_unavailable": "همین حالا در دسترس نیست",
+  "settings.diag.wifi_unpaired": "چیزی جفت نشده",
   "settings.diag.wifi_unknown": "در انتظار رادیو",
   "settings.diag.relays": "رله‌های Nostr",
   "settings.diag.relays_desc":
@@ -1725,6 +1726,20 @@ export const strings: Strings = {
   "settings.network.relay_duplicate": "آن رله از پیش در فهرست شماست.",
   "settings.network.relay_invalid":
     "یک میزبان رلهٔ معتبر وارد کنید، مثلاً relay.example.com. درگاه تنها وقتی لازم است که رله از مقدار پیش‌فرض استفاده نکند. نشانی‌های IP و نام‌های محلی مجاز نیستند.",
+  "settings.network.wifi_pair": "جفت‌شدن",
+  "settings.network.wifi_paired": "دستگاه‌های جفت‌شده",
+  "settings.network.wifi_pair_find": "یافتن یک دستگاه",
+  "settings.network.wifi_pair_find_desc":
+    "دنبال iPhone نزدیکی بگردید که خود را نشان می‌دهد. هر دو گوشی به iOS 26 یا بالاتر نیاز دارند.",
+  "settings.network.wifi_pair_show": "نمایش این iPhone",
+  "settings.network.wifi_pair_show_desc":
+    "بگذارید یک iPhone نزدیک این یکی را پیدا کند. یکی می‌گردد و دیگری خود را نشان می‌دهد، هم‌زمان.",
+  "settings.network.wifi_pair_find_action": "یک iPhone نزدیک انتخاب کنید",
+  "settings.network.wifi_pair_show_action": "این iPhone را قابل کشف کنید",
+  "settings.network.wifi_pair_unavailable":
+    "Wi-Fi Aware در حال حاضر در دسترس نیست",
+  "settings.network.wifi_pair_forget":
+    "یک جفت‌شدن را در برنامه Settings حذف کنید",
   "settings.network.bitchat": "سازگاری با bitchat",
   "settings.network.bitchat_desc":
     "همان مش BLE که bitchat دارد، با هم‌کارکردی کامل. این همیشه روشن است و نمی‌توان خاموشش کرد.",

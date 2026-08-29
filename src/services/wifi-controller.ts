@@ -1,11 +1,13 @@
 // The one place that decides whether the WiFi Aware fast path should be
 // running, and makes reality match.
 //
-// ANDROID ONLY. iOS has no same-platform fast path: MultipeerConnectivity was
-// removed rather than repaired, matching bitchat/ios, which never had one. On
-// iOS `NativeAirhopWiFi` is null, this controller latches `unsupported` on its
-// first pass and never asks again, and BLE carries everything. See
-// NativeAirhopWiFi.ts for why.
+// Both platforms, one reconciler: nothing below asks which it is driving. What
+// differs is which failures each can report, and every one is a `code` rather
+// than a platform check.
+//
+// The one structural difference is the pairing gate: Apple's Wi-Fi Aware has no
+// unpaired mode, so on iOS this will not attach until a device is paired. See
+// `setPairedCount`.
 //
 // This is radio-controller.ts's counterpart, and it exists for the same reason
 // that one does. WiFi was started exactly once per MeshService.start(), like
@@ -36,16 +38,15 @@
 //
 // What is deliberately different from the BLE controller:
 //
-//   * No BLOCKER is published. WiFi Aware is an accelerator between two Android
-//     devices, and BLE carries everything either way. A user whose WiFi is off
-//     has not lost the mesh, and saying they have would be a false alarm on the
-//     one screen that must stay trustworthy.
+//   * No BLOCKER is published. WiFi Aware is an extra link between two phones on
+//     the same platform, and BLE carries everything either way. A user whose
+//     WiFi is off has not lost the mesh, and saying they have would be a false
+//     alarm on the one screen that must stay trustworthy.
 //
 //     What it does report, through `onState`, is which of those situations it is
 //     in, so the Mesh tab can say the fast path is off in the same neutral voice
-//     it uses for battery saver. Saying nothing at all was its own small lie:
-//     the same video takes seconds with Aware and minutes without it, and with
-//     no note the difference reads as the app being slow.
+//     it uses for battery saver. Worth saying at all because an attachment over
+//     BLE alone drops fragments and retries, which reads as the app being slow.
 //   * "Unsupported" is latched forever rather than retried. No hardware, or an
 //     API level below the data path, is not a state a device leaves.
 
@@ -70,6 +71,9 @@ type WiFiFailure =
   // NEARBY_WIFI_DEVICES (or location, below API 33) is missing. Clears when the
   // user grants it, which we learn about on the next refresh.
   | "permission"
+  // iOS only. Nobody to reach. NOT retried, unlike every other transient: only
+  // a pairing changes it, and the pairing module reports when one does.
+  | "unpaired"
   // Attach or socket setup failed for some other reason. Treated as transient,
   // since we have nothing better to assume.
   | "transient";
@@ -83,6 +87,8 @@ function classify(error: unknown): WiFiFailure {
       return "unavailable";
     case "PERMISSION_DENIED":
       return "permission";
+    case "WIFI_AWARE_UNPAIRED":
+      return "unpaired";
     default:
       return "transient";
   }
@@ -105,6 +111,11 @@ export class WiFiController {
   }
 
   private desiredRunning = false;
+  // Paired devices, or null where there is no gate. null rather than a sentinel
+  // so Android carries no iOS concept: every comparison is `=== 0`. Null on iOS
+  // too until the first report, since attaching earlier would run a radio for
+  // devices we have not confirmed exist.
+  private pairedCount: number | null = null;
   // Whether native has confirmed the transport is up. Only ever set from a call
   // that resolved, so it cannot claim more than the device agreed to.
   private started = false;
@@ -145,6 +156,16 @@ export class WiFiController {
     this.desiredRunning = false;
     this.generation += 1;
     this.clearTimer();
+    void this.reconcile();
+  }
+
+  // Both edges matter and neither has another signal: the first pairing lets the
+  // transport attach, and the last unpairing happens in the Settings app, where
+  // a listener would otherwise keep running for a device that is gone.
+  setPairedCount(count: number): void {
+    if (this.pairedCount === count) return;
+    this.pairedCount = count;
+    this.attempt = 0;
     void this.reconcile();
   }
 
@@ -263,7 +284,17 @@ export class WiFiController {
       return;
     }
 
-    if (this.unsupported || this.started) return;
+    if (this.unsupported) return;
+
+    // Ahead of the `started` guard, not beside it: this edge has to tear an
+    // attached transport down when the last pairing goes.
+    if (this.pairedCount === 0) {
+      if (this.started) await this.releaseNative();
+      this.report("unpaired");
+      return;
+    }
+
+    if (this.started) return;
 
     try {
       await NativeAirhopWiFi.startWiFi();
@@ -282,6 +313,12 @@ export class WiFiController {
       // tab shows: the radio exists and is switched off. A transient attach
       // failure is reported as no reading rather than as WiFi being off, since
       // saying so would send someone to a toggle that is already on.
+      // Nothing to retry: only a pairing changes this, and `setPairedCount`
+      // runs a pass the moment one does.
+      if (failure === "unpaired") {
+        this.report("unpaired");
+        return;
+      }
       this.report(
         failure === "unavailable"
           ? "unavailable"

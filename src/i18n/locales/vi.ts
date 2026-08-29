@@ -1595,6 +1595,7 @@ export const strings: Strings = {
   "settings.diag.wifi_unsupported": "Không hỗ trợ trên thiết bị này",
   "settings.diag.wifi_permission": "Bị một quyền chặn lại",
   "settings.diag.wifi_unavailable": "Hiện không dùng được",
+  "settings.diag.wifi_unpaired": "Chưa ghép đôi gì",
   "settings.diag.wifi_unknown": "Đang đợi bộ thu phát",
   "settings.diag.relays": "Bộ chuyển tiếp Nostr",
   "settings.diag.relays_desc": "Dùng cho kênh vị trí và tầm với qua Internet",
@@ -1736,6 +1737,19 @@ export const strings: Strings = {
     "Bộ chuyển tiếp đó đã có trong danh sách của bạn.",
   "settings.network.relay_invalid":
     "Hãy nhập một máy chủ chuyển tiếp hợp lệ, ví dụ relay.example.com. Chỉ cần ghi cổng nếu bộ chuyển tiếp không dùng cổng mặc định. Không cho phép địa chỉ IP và tên cục bộ.",
+  "settings.network.wifi_pair": "Ghép đôi",
+  "settings.network.wifi_paired": "Thiết bị đã ghép đôi",
+  "settings.network.wifi_pair_find": "Tìm một thiết bị",
+  "settings.network.wifi_pair_find_desc":
+    "Tìm một iPhone gần đó đang tự hiển thị. Cả hai máy đều cần iOS 26 trở lên.",
+  "settings.network.wifi_pair_show": "Hiển thị iPhone này",
+  "settings.network.wifi_pair_show_desc":
+    "Để một iPhone gần đó tìm thấy máy này. Một người tìm, người kia hiển thị, cùng lúc.",
+  "settings.network.wifi_pair_find_action": "Chọn một iPhone gần đó",
+  "settings.network.wifi_pair_show_action": "Cho phép tìm thấy iPhone này",
+  "settings.network.wifi_pair_unavailable": "Wi-Fi Aware hiện không khả dụng",
+  "settings.network.wifi_pair_forget":
+    "Gỡ một liên kết ghép đôi trong ứng dụng Settings",
   "settings.network.bitchat": "Tương thích bitchat",
   "settings.network.bitchat_desc":
     "Cùng một mạng lưới BLE với bitchat, tương thích hoàn toàn. Mục này luôn bật và không tắt được.",

@@ -1639,6 +1639,7 @@ export const strings: Strings = {
   "settings.diag.wifi_unsupported": "Tsy raisina eto amin'ity fitaovana ity",
   "settings.diag.wifi_permission": "Voasakan'ny alalana iray",
   "settings.diag.wifi_unavailable": "Tsy misy izao",
+  "settings.diag.wifi_unpaired": "Tsy misy nampifanarahana",
   "settings.diag.wifi_unknown": "Miandry ny radiô",
   "settings.diag.relays": "Mpanelanelana Nostr",
   "settings.diag.relays_desc":
@@ -1786,6 +1787,20 @@ export const strings: Strings = {
     "Efa ao amin'ny lisitrao io mpanelanelana io.",
   "settings.network.relay_invalid":
     "Soraty ny anaran'ny mpanelanelana mety, ohatra relay.example.com. Mila laharam-pidirana ihany raha tsy mampiasa ny mahazatra ny mpanelanelana. Tsy azo ampiasaina ny adiresy IP sy ny anarana eo an-toerana.",
+  "settings.network.wifi_pair": "Fampifanarahana",
+  "settings.network.wifi_paired": "Fitaovana nampifanarahana",
+  "settings.network.wifi_pair_find": "Hitady fitaovana",
+  "settings.network.wifi_pair_find_desc":
+    "Mitadiava iPhone akaiky izay maneho ny tenany. Mila iOS 26 na taty aoriana izy roa.",
+  "settings.network.wifi_pair_show": "Asehoy ity iPhone ity",
+  "settings.network.wifi_pair_show_desc":
+    "Avelao ny iPhone akaiky hahita ity. Ny iray mitady, ny iray maneho, miaraka amin'ny fotoana iray.",
+  "settings.network.wifi_pair_find_action": "Misafidiana iPhone akaiky",
+  "settings.network.wifi_pair_show_action": "Ataovy azo hita ity iPhone ity",
+  "settings.network.wifi_pair_unavailable":
+    "Tsy misy ny Wi-Fi Aware amin'izao fotoana izao",
+  "settings.network.wifi_pair_forget":
+    "Esory ao amin'ny app Settings ny fampifanarahana",
   "settings.network.bitchat": "Fifanarahana amin'ny bitchat",
   "settings.network.bitchat_desc":
     "Harato BLE mitovy amin'ny bitchat, mifanaraka tanteraka. Mandeha foana izy ary tsy azo vonoina.",
