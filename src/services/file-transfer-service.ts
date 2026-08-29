@@ -70,15 +70,6 @@ import * as FileSystem from "expo-file-system";
 const FRAGMENT_SPACING_DIRECTED_MS = 25;
 const FRAGMENT_SPACING_MS = 30;
 
-// Spacing owed to a DM on the WiFi Aware fast path, which is none. The two
-// above are a Bluetooth fact; an Aware link is a TCP socket whose native write
-// blocks until it is taken, so the await is the pacing. Zero still reaches the
-// radio through setTimeout, so a fragment always yields to the event loop.
-//
-// Never reached by a bitchat peer: Aware matches on service name, ours is
-// "airhop-mesh-v1" against its "bitchat", so it is Bluetooth-only to us.
-const FRAGMENT_SPACING_WIFI_MS = 0;
-
 // How long to wait after the radio REFUSES a fragment before offering it again.
 //
 // The spacing above assumes the link can always take the next write, and one-way
@@ -424,11 +415,6 @@ export class FileTransferService {
   private readonly broadcast: PacedBroadcastFn;
   private readonly unicast: PacedUnicastFn;
   private readonly resolveNickname?: (peerID: string) => string | undefined;
-  // Whether a DM to this peer leaves over WiFi Aware, asked of the mesh service
-  // because it owns the link maps `unicast` picks from. Per fragment, not per
-  // transfer: a peer can lose the fast path mid-file, and the pacing has to
-  // follow the link the next one will take.
-  private readonly isWifiPeer?: (peerID: string) => boolean;
 
   // Send-side progress accounting, keyed by the UI transfer id.
   private readonly outbound = new Map<
@@ -454,9 +440,6 @@ export class FileTransferService {
     weight?: number;
   }[] = [];
   private drainTimer: ReturnType<typeof setTimeout> | null = null;
-  // True while a fragment is with the radio. The timer alone cannot say: it is
-  // cleared when the drain starts, not when the write finishes.
-  private draining = false;
   // Monotonic, so back-to-back sends cannot collide on a transfer id.
   private transferSeq = 0;
 
@@ -471,14 +454,12 @@ export class FileTransferService {
     unicast: PacedUnicastFn,
     resolveNickname?: (peerID: string) => string | undefined,
     sealFile?: SealFileFn,
-    isWifiPeer?: (peerID: string) => boolean,
   ) {
     this.identity = identity;
     this.broadcast = broadcast;
     this.unicast = unicast;
     this.resolveNickname = resolveNickname;
     this.sealFile = sealFile;
-    this.isWifiPeer = isWifiPeer;
   }
 
   // Receive a fully reassembled FILE_TRANSFER packet from the fragment layer.
@@ -662,18 +643,13 @@ export class FileTransferService {
     this.scheduleDrain();
   }
 
-  // Spacing owed after handing over a fragment, by what carrying it cost. A
-  // broadcast keeps the Bluetooth number whatever else is connected: it goes out
-  // on every open link of both radios, so the slowest still sets the cost.
-  private spacingFor(isDM: boolean, recipientPeerID: string): number {
-    if (!isDM) return FRAGMENT_SPACING_MS;
-    return this.isWifiPeer?.(recipientPeerID) === true
-      ? FRAGMENT_SPACING_WIFI_MS
-      : FRAGMENT_SPACING_DIRECTED_MS;
+  // Spacing owed after handing over a fragment, by how many links it cost.
+  private static spacingFor(isDM: boolean): number {
+    return isDM ? FRAGMENT_SPACING_DIRECTED_MS : FRAGMENT_SPACING_MS;
   }
 
   private scheduleDrain(delayMs: number = FRAGMENT_SPACING_DIRECTED_MS): void {
-    if (this.drainTimer !== null || this.draining) return;
+    if (this.drainTimer !== null) return;
     this.drainTimer = setTimeout(() => {
       this.drainTimer = null;
       void this.drainOne();
@@ -690,59 +666,48 @@ export class FileTransferService {
   // on the wire, but retrying out of order would leave gaps behind), the pacing
   // eases off to let the stack drain, and nothing is counted as sent until it is.
   private async drainOne(): Promise<void> {
-    // One fragment in flight. The timer is cleared before this runs, so an
-    // enqueue landing mid-send would otherwise start a second drain beside it,
-    // and two writes crowding one link is the loss the spacing prevents.
-    if (this.draining) return;
     const next = this.outQueue.shift();
     if (next === undefined) return;
 
-    this.draining = true;
     let accepted = false;
     try {
-      try {
-        accepted = next.isDM
-          ? await this.unicast(next.recipientPeerID, next.pkt)
-          : await this.broadcast(next.pkt);
-      } catch {
-        // A transport that threw is a transport that did not take it.
-        accepted = false;
+      accepted = next.isDM
+        ? await this.unicast(next.recipientPeerID, next.pkt)
+        : await this.broadcast(next.pkt);
+    } catch {
+      // A transport that threw is a transport that did not take it.
+      accepted = false;
+    }
+
+    const tx =
+      next.transferId !== undefined
+        ? this.outbound.get(next.transferId)
+        : undefined;
+
+    if (accepted) {
+      if (tx !== undefined) tx.refusals = 0;
+      if (next.transferId !== undefined) {
+        this.reportSendProgress(next.transferId, next.weight ?? 0);
       }
-
-      const tx =
-        next.transferId !== undefined
-          ? this.outbound.get(next.transferId)
-          : undefined;
-
-      if (accepted) {
-        if (tx !== undefined) tx.refusals = 0;
-        if (next.transferId !== undefined) {
-          this.reportSendProgress(next.transferId, next.weight ?? 0);
-        }
-      } else if (next.transferId === undefined) {
-        // Not part of a tracked transfer, so there is no card to fail and nobody
-        // waiting on it. Drop it rather than retrying forever.
-      } else if (tx === undefined) {
-        // Cancelled while this fragment was in flight. Its accounting is already
-        // gone, so requeueing would resurrect a transfer the user stopped.
+    } else if (next.transferId === undefined) {
+      // Not part of a tracked transfer, so there is no card to fail and nobody
+      // waiting on it. Drop it rather than retrying forever.
+    } else if (tx === undefined) {
+      // Cancelled while this fragment was in flight. Its accounting is already
+      // gone, so requeueing would resurrect a transfer the user stopped.
+    } else {
+      tx.refusals += 1;
+      if (tx.refusals >= REFUSAL_LIMIT) {
+        this.failTransfer(next.transferId);
       } else {
-        tx.refusals += 1;
-        if (tx.refusals >= REFUSAL_LIMIT) {
-          this.failTransfer(next.transferId);
-        } else {
-          this.outQueue.unshift(next);
-        }
+        this.outQueue.unshift(next);
       }
-    } finally {
-      // In a finally, so a throw in the accounting cannot stall the queue for
-      // the life of the process.
-      this.draining = false;
     }
 
     if (this.outQueue.length > 0) {
       this.scheduleDrain(
         accepted
-          ? this.spacingFor(next.isDM, next.recipientPeerID)
+          ? FileTransferService.spacingFor(next.isDM)
           : REFUSED_BACKOFF_MS,
       );
     }

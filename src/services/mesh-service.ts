@@ -725,12 +725,6 @@ export class MeshService {
       (peerID) => this.registry.get(peerID)?.nickname,
       (recipientPeerID, fileTlv) =>
         this.sealFileForPeer(recipientPeerID, fileTlv),
-      // The same test unicastFn makes when it picks a transport, so the two
-      // cannot disagree about which link a fragment is paced for.
-      (peerID) => {
-        const link = this.wifiPeerToLink.get(peerID);
-        return link !== undefined && this.wifiConnectedLinks.has(link);
-      },
     );
 
     const nostrSendFn: NostrSendFn = async (

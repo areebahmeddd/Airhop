@@ -16,9 +16,9 @@ import {
 import { getMeshService } from "@services/mesh-service";
 import BottomSheet from "@ui/components/bottom-sheet";
 import {
+  BUTTON_HEIGHT,
   FontSize,
   FontWeight,
-  MIN_TOUCH,
   Radius,
   Spacing,
   useThemeColors,
@@ -203,10 +203,9 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
       lineHeight: FontSize.sm * 1.45,
     },
     primary: {
-      minWidth: 200,
-      minHeight: MIN_TOUCH,
+      alignSelf: "stretch",
+      minHeight: BUTTON_HEIGHT,
       marginTop: Spacing.xs,
-      paddingVertical: Spacing.md,
       paddingHorizontal: Spacing.xl,
       borderRadius: Radius.full,
       backgroundColor: Colors.accent,
@@ -215,7 +214,7 @@ function createStyles(Colors: ReturnType<typeof useThemeColors>) {
     },
     primaryText: {
       fontSize: FontSize.base,
-      fontWeight: FontWeight.medium,
+      fontWeight: FontWeight.semibold,
       color: Colors.textInverse,
     },
     secondary: {
