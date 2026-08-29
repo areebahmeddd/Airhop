@@ -20,6 +20,11 @@
 // copy; the screen that launches it is ours.
 //
 // Unpairing is not here because Apple exposes no API for it, only Settings.
+
+// DevicePicker, DevicePairingView and the `.wifiAware(...)` criteria they take
+// come from DeviceDiscoveryUI. WiFiAware only supplies the service types those
+// criteria name, so both imports are load-bearing.
+import DeviceDiscoveryUI
 import Foundation
 import React
 import SwiftUI

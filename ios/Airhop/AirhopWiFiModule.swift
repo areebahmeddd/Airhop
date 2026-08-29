@@ -294,7 +294,6 @@ private actor WiFiAwareTransport {
                 for endpoint in found {
                     Task { await self.considerDial(endpoint) }
                 }
-                return .continue
             }
         } catch {
             guard !Task.isCancelled else { return }
@@ -357,7 +356,10 @@ private actor WiFiAwareTransport {
     ) async {
         let handle = LinkHandle()
         let task = Task { [weak self] in
-            await self?.serve(
+            // Unwrapped, not chained: `self?.serve(...)` types the task
+            // `Task<()?, Never>` and the handle holds `Task<Void, Never>`.
+            guard let self else { return }
+            await self.serve(
                 connection,
                 endpoint: endpoint,
                 weInitiated: weInitiated,
@@ -405,7 +407,10 @@ private actor WiFiAwareTransport {
             // populated once the connection is ready, and an inbound connection
             // has no endpoint to read a device from until then.
             if deviceID == nil {
-                deviceID = connection.currentPath?.wifiAware?.endpoint.device.id
+                // `try?`, not `try`: failing to name the device costs the redial
+                // guard a hint, not the link.
+                deviceID = (try? await connection.currentPath)?
+                    .wifiAware?.endpoint.device.id
             }
 
             // Keep the connection whose initiator holds the lower token.

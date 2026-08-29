@@ -128,8 +128,7 @@ Notes on the numbers:
 - A channel attachment paces at 30 ms instead (**~15 KiB/s**), since each broadcast fragment requires one radio write per connected peer, increasing airtime usage as the room grows.
 - A 1 MiB file (the per-file cap) takes about 56 seconds to one peer. bitchat rejects anything larger as it decodes the packet, so the cap is not ours to raise and chunking above it was dropped. An Airhop-only path stays possible, but it cannot be the default without losing bitchat compatibility.
 - LAN needs no such pacing, since the 25 ms delay is a Bluetooth requirement rather than a protocol one. The 467-byte fragment size stays regardless: the receiver reassembles by index and a peer may be relaying to Bluetooth next.
-- WiFi currently shares that same paced queue, so it runs at the same speed as Bluetooth for now. [ Lifting the cap is planned ]
-Both use Wi-Fi Aware, but cross-platform connections don’t work. Apple requires pairing that Android can’t complete, so it only works Android-to-Android or iPhone-to-iPhone (iOS 26+).
+- Wi-Fi Aware doesn’t work across platforms. Apple requires pairing that Android can’t complete, so connections are limited to Android-to-Android or iPhone-to-iPhone (iOS 26+).
 - Nostr relays carry small signed events, not file bytes. Files can be shared over Nostr only by uploading them to a separate HTTP host and posting a link ([NIP-96](https://github.com/nostr-protocol/nips/blob/master/96.md)). Airhop does not do this: that host is a central server that can log, throttle, or take down your files, which is exactly what this app avoids. Attachments therefore travel only over Bluetooth, LAN or WiFi.
 - Courier is the fallback when no other transport can reach the recipient. The envelope is sealed to a one-time prekey before it leaves, so the carrier holding it cannot read it, and it is dropped after 24 hours if nobody meets the recipient. Text only: media is never couriered.
 
