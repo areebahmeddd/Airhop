@@ -75,7 +75,7 @@ Use these standard mappings:
 | `GossipSyncManager.swift`                            | `src/core/mesh/sync/gossip-sync.ts`                                        |
 | `CourierStore.swift` / `StoreForwardManager.kt`      | `src/core/mesh/courier/courier-store.ts`                                   |
 | `MessageDeduplicator.swift` / `SecurityManager.kt`   | `src/core/mesh/routing/deduplicator.ts`                                    |
-| `PacketEncoder.swift` / `PacketDecoder.swift`        | `src/core/mesh/wire/packet-codec.ts`                                       |
+| `BinaryProtocol.swift` / `BinaryProtocol.kt`         | `src/core/mesh/wire/packet-codec.ts`                                       |
 | `GeoRelayDirectory.swift`                            | `src/core/nostr/geo-relay.ts`                                              |
 | `GeohashPresenceService.swift`                       | `src/core/nostr/geohash-presence.ts`                                       |
 | `TransportConfig.swift`                              | `docs/spec/PROTOCOLS.md` (constants)                                       |

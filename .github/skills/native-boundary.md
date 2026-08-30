@@ -56,19 +56,22 @@ getTorProxyPort(): Promise<number>  // returns 9050 if Orbot/Arti reachable, 0 i
 | `AirhopBLE.linkDisconnected` | `{ linkID: string }`                                                |
 | `AirhopBLE.rssiUpdated`      | `{ linkID: string, rssi: number }`                                  |
 
-`linkID` is an opaque string assigned by the native layer. It identifies a BLE connection, not a peer. TypeScript derives the peer identity from the decoded packet's `senderID` field.
+`linkID` is an opaque string assigned by the native layer. It identifies a BLE connection, not a peer. TypeScript binds a peer to a link when that peer announces directly on it, and `LinkRegistry.peerOf` is what attributes later traffic. A packet's `senderID` header is plaintext and forgeable, so it is not used to decide who is on the far end of a link.
 
 ## Naming Convention
 
 TurboModule spec files must be named `Native<Name>.ts` (PascalCase) in `src/bridge/`. This is required by React Native Codegen for automatic module discovery. It is the only place in `src/` where PascalCase file names are used.
 
-The three modules:
+The modules:
 
-| File                  | Registered as  | Purpose                        |
-| --------------------- | -------------- | ------------------------------ |
-| `NativeAirhopBLE.ts`  | `"AirhopBLE"`  | BLE peripheral and central I/O |
-| `NativeAirhopTor.ts`  | `"AirhopTor"`  | Tor lifecycle (Arti / Orbot)   |
-| `NativeAirhopWiFi.ts` | `"AirhopWiFi"` | WiFi Aware / Multipeer I/O     |
+| File                         | Registered as         | Purpose                        |
+| ---------------------------- | --------------------- | ------------------------------ |
+| `NativeAirhopBLE.ts`         | `"AirhopBLE"`         | BLE peripheral and central I/O |
+| `NativeAirhopWiFi.ts`        | `"AirhopWiFi"`        | WiFi Aware fast path I/O       |
+| `NativeAirhopWiFiPairing.ts` | `"AirhopWiFiPairing"` | iOS Wi-Fi Aware pairing sheet  |
+| `NativeAirhopVoice.ts`       | `"AirhopVoice"`       | AAC-LC capture and playback    |
+| `NativeAirhopTor.ts`         | `"AirhopTor"`         | Tor lifecycle (Arti / Orbot)   |
+| `NativeAirhopTorSocket.ts`   | `"AirhopTorSocket"`   | The SOCKS socket Arti fronts   |
 
 ## BLE UUIDs
 

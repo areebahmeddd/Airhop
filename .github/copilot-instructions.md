@@ -33,16 +33,19 @@ src/
   i18n/         # translation runtime + the bundled English catalog
   core/
     crypto/     # identity, keychain, noise-xx, noise-x, double-ratchet, contact-exchange
-    mesh/       # packet-codec, flood-router, deduplicator, fragments, gossip, courier
+    mesh/       # wire/, routing/, links/, sync/, discovery/, rooms/, courier/, voice/
     nostr/      # nostr-client, courier-relay, gift-wrap, geo-relay, presence
     payments/   # cashu, nutzap
+    router/     # transport selection
+  services/     # long-lived runtime wiring, chiefly mesh-service
   features/     # screen-level logic (chat, contacts, wallet, discovery, settings)
   ui/           # shared components, theming
   store/        # Zustand slices + MMKV persistence
+  platform/     # thin wrappers over OS APIs
   utils/        # pure helpers
 
-android/        # Kotlin: AirhopBLEModule, AirhopForegroundService
-ios/            # Swift: AirhopBLEModule
+android/        # Kotlin: BLE, WiFi Aware, voice modules + AirhopForegroundService
+ios/            # Swift: BLE, WiFi Aware, pairing, voice, Tor modules
 
 assets/data/    # nostr_relays.csv (bundled from bitchat/georelays/, CI-refreshed)
 docs/
@@ -98,7 +101,7 @@ Full constant table: [`docs/spec/PROTOCOLS.md`](docs/spec/PROTOCOLS.md)
 - No `any` in `src/core/` or `src/bridge/`
 - Named exports only in `src/core/` and `src/bridge/`
 - File naming: `kebab-case.ts`
-- Max 400 lines per file. Split by responsibility if longer.
+- One concern per `src/core/` module, each independently testable. A file that needs "and" to describe it is two files. `src/services/mesh-service.ts` and several `src/features/` screens are far past that; they are known refactor targets, not precedent.
 - User-facing strings live in `src/i18n/locales/en.ts`, never inline in a component
 
 ## Code Style
