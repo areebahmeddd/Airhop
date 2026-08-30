@@ -5,6 +5,22 @@ All notable changes are documented here. The format follows [Keep a Changelog](h
 
 ## What's New
 
+- chore: minor fixes (by @areebahmeddd) [3936db6]
+- chore: update docs (by @areebahmeddd) [22f254a]
+- feat: add AirhopAppModule for process-level operations and RTL support (by @areebahmeddd) [27f9fc0]
+- refactor: mesh service to utilize LinkRegistry for managing links across radios (by @areebahmeddd) [1dee3ed]
+- feat: update Bonjour service name for LAN transport and add usage description (by @areebahmeddd) [1a1c646]
+- feat(ios): Wi-Fi Aware fast path (#51) (by @Areeb Ahmed) [99b000f]
+- refactor: update button styles and clean up file transfer service logic (by @areebahmeddd) [7169da2]
+- feat: add CHANGE_NETWORK_STATE permission for WiFi Aware functionality (by @areebahmeddd) [96d5c25]
+- feat: enhance file transfer pacing and add WiFi peer link check (by @areebahmeddd) [cb1fe43]
+- chore: update deps (by @areebahmeddd) [8aadf09]
+- feat: auto-updater for Android (by @areebahmeddd) [d576d16]
+
+**Full changelog:** [v1.0.2..v1.0.3](https://github.com/areebahmeddd/airhop/compare/v1.0.2..v1.0.3)
+
+## What's New
+
 - feat(contacts): add setProvenKeys to bind mesh keys to contacts (#39) (by @areebahmeddd) [9a00889]
 - fix(permissions): check optional grants in the fast path (by @areebahmeddd) [13bf94e]
 - fix(wifi): wait for the responder before requesting the Aware data path (by @areebahmeddd) [a497193]
