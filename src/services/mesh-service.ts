@@ -52,6 +52,7 @@ import {
   decodeAnnouncePayload,
   isAnnounceFresh,
 } from "@core/mesh/discovery/announce-manager";
+import { LinkRegistry } from "@core/mesh/links/link-registry";
 import {
   openChannelMessage,
   sealChannelMessage,
@@ -383,10 +384,8 @@ export class MeshService {
   // A remote peer's Nostr pubkey hex to their peerID, filled as ANNOUNCEs arrive.
   private readonly nostrPubkeyToPeerID = new Map<string, string>();
 
-  // Relay jitter adapts to how many peers we can hear (BLE + WiFi links).
-  private readonly floodRouter = new FloodRouter(
-    () => this.connectedLinks.size + this.wifiConnectedLinks.size,
-  );
+  // Relay jitter adapts to how many peers we can hear, over every radio.
+  private readonly floodRouter = new FloodRouter(() => this.links.size());
   private readonly registry = new PeerRegistry();
   private readonly announceManager = new AnnounceManager();
   private readonly router: MessageRouter;
@@ -464,12 +463,17 @@ export class MeshService {
   private outboxSweepTimer: ReturnType<typeof setInterval> | null = null;
   private lastOutboxRetryMs = 0;
 
-  // Currently connected BLE link IDs.
-  private readonly connectedLinks = new Set<string>();
-  // peerID (16 hex) -> linkID for unicast to direct neighbours.
-  private readonly peerToLink = new Map<string, string>();
-  // linkID to peerID (16 hex): used to clean up on disconnect.
-  private readonly linkToPeer = new Map<string, string>();
+  // Every link this device holds, over every radio, and the one place that
+  // writes bytes to one.
+  private readonly links = new LinkRegistry({
+    ble: (linkID, dataBase64) => AirhopBLE.writeToLink(linkID, dataBase64),
+    // A build with no WiFi module holds no WiFi links, so this is never
+    // reached; it resolves rather than throwing so that stays true if one ever
+    // is opened before the module is checked.
+    wifi: (linkID, dataBase64) =>
+      NativeAirhopWiFi?.writeToWiFiLink(linkID, dataBase64) ??
+      Promise.resolve(),
+  });
   // In-progress Noise XX handshakes keyed by remote peerID.
   private readonly pendingHandshakes = new Map<string, PendingHandshake>();
 
@@ -549,14 +553,8 @@ export class MeshService {
   // setLiveVoiceAudible.
   private audibleChannel: string | null = null;
 
-  // WiFi direct links (MC on iOS, WiFi Aware on Android). Separate maps
-  // because WiFi IDs must never collide with BLE link IDs.
-  private readonly wifiConnectedLinks = new Set<string>();
-  private readonly wifiPeerToLink = new Map<string, string>();
-  private readonly wifiLinkToPeer = new Map<string, string>();
-
   // Stored closure so sendDRMessage can unicast DR_ENCRYPTED packets without
-  // duplicating the WiFi-vs-BLE preference logic.
+  // duplicating the radio preference logic.
   private unicastFn!: (recipientPeerID: string, packet: Packet) => void;
 
   private subs: EventSubscription[] = [];
@@ -589,13 +587,13 @@ export class MeshService {
     this.wifi.setPairedCount(count),
   );
 
-  // Cumulative bytes moved over BLE/WiFi this session, for the Storage &
-  // Data screen's Network Usage row. Resets when the app restarts.
-  private bytesSent = 0;
+  // Cumulative bytes received over every radio this session, for the Storage &
+  // Data screen's Network Usage row. Resets when the app restarts. The sent
+  // half is counted by the link registry, which owns every write.
   private bytesReceived = 0;
 
   getByteCounters(): { sent: number; received: number } {
-    return { sent: this.bytesSent, received: this.bytesReceived };
+    return { sent: this.links.bytesSent, received: this.bytesReceived };
   }
 
   // Live radio links, split by transport, for the Diagnostics screen.
@@ -607,22 +605,9 @@ export class MeshService {
   // not connecting" distinguishable in a bug report.
   getLinkCounts(): { ble: number; wifi: number } {
     return {
-      ble: this.connectedLinks.size,
-      wifi: this.wifiConnectedLinks.size,
+      ble: this.links.size("ble"),
+      wifi: this.links.size("wifi"),
     };
-  }
-
-  // Every outgoing write goes through one of these two so bytesSent stays
-  // accurate no matter which transport carried the packet.
-  private sendBle(linkID: string, dataBase64: string): Promise<void> {
-    this.bytesSent += Math.ceil((dataBase64.length * 3) / 4);
-    return AirhopBLE.writeToLink(linkID, dataBase64);
-  }
-
-  private sendWifi(linkID: string, dataBase64: string): Promise<void> {
-    if (!NativeAirhopWiFi) return Promise.resolve();
-    this.bytesSent += Math.ceil((dataBase64.length * 3) / 4);
-    return NativeAirhopWiFi.writeToWiFiLink(linkID, dataBase64);
   }
 
   constructor(identity: Identity) {
@@ -645,36 +630,8 @@ export class MeshService {
       // Our own broadcasts are gossipable too: a peer who arrives later should
       // be able to catch up on messages we originated, not just relayed ones.
       this.gossip.track(packet);
-      const b64 = bytesToBase64(encodePacket(packet));
-      // Every open link, both radios.
-      //
-      // This iterated `connectedLinks` alone, so a broadcast reached Bluetooth
-      // peers and nobody on the WiFi fast path, while `unicastFn` just below
-      // correctly preferred WiFi. Two phones joined only over WiFi Aware
-      // discovered each other (announces are unicast on
-      // link-up) and then never saw one another's public messages, board posts
-      // or group traffic. The transport looked connected and carried nothing.
-      const results = await Promise.all([
-        ...[...this.connectedLinks].map((linkID) =>
-          this.sendBle(linkID, b64).then(
-            () => true,
-            () => {
-              // A link that refuses a write is not necessarily gone: the stack
-              // says the same thing when its queue is simply full. Dropping it
-              // from connectedLinks on the first refusal tore down healthy links
-              // mid-transfer. Link teardown belongs to the disconnect event.
-              return false;
-            },
-          ),
-        ),
-        ...[...this.wifiConnectedLinks].map((linkID) =>
-          this.sendWifi(linkID, b64).then(
-            () => true,
-            () => false,
-          ),
-        ),
-      ]);
-      return results.some(Boolean);
+      // Every open link, every radio.
+      return this.links.broadcast(bytesToBase64(encodePacket(packet)));
     };
     this.broadcastPacket = broadcastFn;
 
@@ -682,30 +639,25 @@ export class MeshService {
       recipientPeerID: string,
       packet: Packet,
     ): Promise<boolean> => {
-      // Prefer WiFi direct (higher throughput for large attachments).
-      const wifiLink = this.wifiPeerToLink.get(recipientPeerID);
-      if (wifiLink && this.wifiConnectedLinks.has(wifiLink)) {
-        return this.sendWifi(
-          wifiLink,
-          bytesToBase64(encodePacket(packet)),
-        ).then(
-          () => true,
-          () => {
-            this.wifiConnectedLinks.delete(wifiLink);
-            this.wifiPeerToLink.delete(recipientPeerID);
-            this.wifiLinkToPeer.delete(wifiLink);
-            return false;
-          },
-        );
-      }
-      // Fall back to a direct BLE link.
-      const linkID = this.peerToLink.get(recipientPeerID);
-      if (linkID) {
-        this.floodRouter.originate(packet);
-        return this.sendBle(linkID, bytesToBase64(encodePacket(packet))).then(
-          () => true,
-          () => false,
-        );
+      // Straight down the link we hold, preferring WiFi for its throughput on
+      // large attachments. Two things differ by radio:
+      //
+      //   * Only the BLE send originates into the flood router. A WiFi link is
+      //     point to point, so the packet is not entering the flood.
+      //   * Only a refused WiFi write closes the link. A refused BLE write
+      //     usually means a full queue on a healthy link.
+      const link = this.links.linkFor(recipientPeerID);
+      if (link !== undefined) {
+        if (link.kind === "ble") this.floodRouter.originate(packet);
+        return this.links
+          .send(link.id, bytesToBase64(encodePacket(packet)))
+          .then(
+            () => true,
+            () => {
+              if (link.kind === "wifi") this.links.close(link.id);
+              return false;
+            },
+          );
       }
       // No direct link: flood the recipient-addressed, TTL-bounded packet over
       // the mesh so an intermediate node relays it to the recipient. This is
@@ -715,7 +667,7 @@ export class MeshService {
       // they are far too large to flood and stay a direct-link feature. No-op
       // when we have no neighbour to relay through.
       if (
-        this.connectedLinks.size > 0 &&
+        this.links.size("ble") > 0 &&
         packet.type !== PacketType.FILE_TRANSFER &&
         packet.type !== PacketType.FRAGMENT
       ) {
@@ -788,29 +740,16 @@ export class MeshService {
 
     // Periodic ANNOUNCE so nearby peers learn our identity.
     const sendFn = (packet: Packet): void => {
-      const b64 = bytesToBase64(encodePacket(packet));
-      for (const linkID of this.connectedLinks) {
-        this.sendBle(linkID, b64).catch(() => {
-          // A refused write is NOT a disconnect, and must not be treated as
-          // one. The stack refuses for ordinary reasons - its queue is full,
-          // the GATT server is mid-setup, another transfer has the link busy -
-          // and the link is fine a moment later.
-          //
-          // Never `connectedLinks.delete(linkID)`, which is unrecoverable:
-          // nothing re-adds a link except a fresh linkConnected event, and that
-          // never comes for a link that stayed up. One transient refusal would
-          // remove a healthy neighbour permanently, leaving the phone believing
-          // it had no neighbours at all,
-          // so sendChannelMessage reported bleLinks: 0 and the composer marked
-          // every subsequent message FAILED - on a radio that was working, next
-          // to a peer that was listening. Found by a scenario where one phone
-          // panic-wiped and the two bystanders silently stopped being able to
-          // talk to each other.
-          //
-          // The disconnect event owns teardown. This is the same rule the
-          // fragment relay path already follows, for the same reason.
-        });
-      }
+      // BLE links only. A peer on the WiFi fast path is announced to when its
+      // link comes up instead.
+      //
+      // A refused write is NOT a disconnect. The stack refuses for ordinary
+      // reasons - its queue is full, the GATT server is mid-setup, another
+      // transfer has the link busy - and the link is fine a moment later.
+      // Teardown belongs to the disconnect event.
+      void this.links.broadcast(bytesToBase64(encodePacket(packet)), {
+        kind: "ble",
+      });
     };
     this.announceManager.start(
       this.identity,
@@ -818,7 +757,7 @@ export class MeshService {
       sendFn,
       undefined,
       hexToBytes(this.nostrPubKeyHex),
-      () => this.connectedLinks.size + this.wifiConnectedLinks.size,
+      () => this.links.size(),
       // Advertise the gateway capability while the user has it enabled, so
       // offline peers can find us as an uplink, and the bridge capability while
       // we are actively bridging a rendezvous cell (online with a known cell), so
@@ -926,12 +865,7 @@ export class MeshService {
         // Direct neighbours only. A peer reachable across three hops cannot
         // answer a link-local (ttl 0) request, so asking it wastes a write and
         // registers a pending request that can never be satisfied.
-        getPeers: () => [
-          ...new Set([
-            ...this.peerToLink.keys(),
-            ...this.wifiPeerToLink.keys(),
-          ]),
-        ],
+        getPeers: () => [...this.links.directPeers()],
         onRequest: (peerID) => {
           this.requestSync.registerRequest(peerID);
         },
@@ -1024,7 +958,7 @@ export class MeshService {
       DeviceEventEmitter.addListener(
         "AirhopBLE.linkConnected",
         ({ linkID }: { linkID: string; role: string; rssi: number }) => {
-          this.connectedLinks.add(linkID);
+          this.links.open("ble", linkID);
           // Immediately send our ANNOUNCE (with Nostr pubkey) to the newly
           // connected peer, throttling how often a NEW one is minted.
           //
@@ -1040,10 +974,12 @@ export class MeshService {
           // neighbour always learns us immediately - only the re-origination is
           // throttled. Inside the window the SAME bytes go out, so every relay's
           // deduplicator suppresses the flood instead of amplifying it.
-          this.sendBle(
-            linkID,
-            bytesToBase64(encodePacket(this.currentAnnouncePacket())),
-          ).catch(() => {});
+          this.links
+            .send(
+              linkID,
+              bytesToBase64(encodePacket(this.currentAnnouncePacket())),
+            )
+            .catch(() => {});
           // Publish our prekey bundle to the new peer so they can seal
           // forward-secret courier mail to us while we are offline.
           //
@@ -1060,9 +996,9 @@ export class MeshService {
           // re-originating it N times per peer.
           const bundle = this.currentPrekeyBundlePacket();
           if (bundle !== null) {
-            this.sendBle(linkID, bytesToBase64(encodePacket(bundle))).catch(
-              () => {},
-            );
+            this.links
+              .send(linkID, bytesToBase64(encodePacket(bundle)))
+              .catch(() => {});
           }
         },
       ),
@@ -1070,10 +1006,11 @@ export class MeshService {
       DeviceEventEmitter.addListener(
         "AirhopBLE.linkDisconnected",
         ({ linkID }: { linkID: string }) => {
-          this.connectedLinks.delete(linkID);
-          const peerID = this.linkToPeer.get(linkID);
+          // A peer comes back only when this was its last link. A phone we
+          // also hold a second link to has not left, so none of the departure
+          // work below is owed for it.
+          const peerID = this.links.close(linkID);
           if (peerID !== undefined) {
-            this.peerToLink.delete(peerID);
             this.registry.markIndirect(peerID);
             // The link is gone, so the peer is no longer a direct neighbour and
             // loses the protection that came with it.
@@ -1090,7 +1027,6 @@ export class MeshService {
             // this the set only ever grows.
             this.peerStateEchoed.delete(peerID);
           }
-          this.linkToPeer.delete(linkID);
         },
       ),
 
@@ -1135,7 +1071,7 @@ export class MeshService {
       DeviceEventEmitter.addListener(
         "AirhopBLE.rssiUpdated",
         ({ linkID, rssi }: { linkID: string; rssi: number }) => {
-          const peerID = this.linkToPeer.get(linkID);
+          const peerID = this.links.peerOf(linkID);
           if (peerID === undefined) return;
           usePeerStore.getState().updateRssi(peerID, rssi);
         },
@@ -1158,16 +1094,14 @@ export class MeshService {
             // discovering it one failed write at a time: the native disconnect
             // events cover an orderly close, not a radio pulled out from under
             // the transport.
-            this.wifiConnectedLinks.clear();
-            this.wifiPeerToLink.clear();
-            this.wifiLinkToPeer.clear();
+            this.links.closeAll("wifi");
           }
         },
       ),
       DeviceEventEmitter.addListener(
         "AirhopWiFi.linkConnected",
         ({ linkID }: { linkID: string }) => {
-          this.wifiConnectedLinks.add(linkID);
+          this.links.open("wifi", linkID);
           // Immediately announce ourselves over the new WiFi link.
           //
           // A FRESH packet, deliberately, unlike the BLE link-up beside it which
@@ -1190,20 +1124,18 @@ export class MeshService {
             this.localCapabilities(),
             this.bridgeService?.advertisedBridgeGeohash(),
           );
-          this.sendWifi(linkID, bytesToBase64(encodePacket(pkt))).catch(
-            () => {},
-          );
+          this.links
+            .send(linkID, bytesToBase64(encodePacket(pkt)))
+            .catch(() => {});
         },
       ),
       DeviceEventEmitter.addListener(
         "AirhopWiFi.linkDisconnected",
         ({ linkID }: { linkID: string }) => {
-          this.wifiConnectedLinks.delete(linkID);
-          const peerID = this.wifiLinkToPeer.get(linkID);
-          if (peerID !== undefined) {
-            this.wifiPeerToLink.delete(peerID);
-          }
-          this.wifiLinkToPeer.delete(linkID);
+          // Bookkeeping only. Unlike a BLE drop this owes the peer nothing
+          // elsewhere: BLE still carries the mesh, so the peer has not left and
+          // its session, presence and sync budgets stand.
+          this.links.close(linkID);
         },
       ),
       DeviceEventEmitter.addListener(
@@ -1297,9 +1229,7 @@ export class MeshService {
 
     const claimsSolicited = packet.isRSR === true || packet.ttl === 0;
     if (!claimsSolicited) {
-      this.noteStale(
-        this.linkToPeer.get(linkID) ?? this.wifiLinkToPeer.get(linkID),
-      );
+      this.noteStale(this.links.peerOf(linkID));
       return false;
     }
 
@@ -1307,8 +1237,7 @@ export class MeshService {
     // the packet's senderID header, which is plaintext and forgeable. A
     // solicited response can only come from the peer we asked, and that peer is
     // the one on the far end of this link.
-    const linkPeer =
-      this.linkToPeer.get(linkID) ?? this.wifiLinkToPeer.get(linkID);
+    const linkPeer = this.links.peerOf(linkID);
     if (linkPeer === undefined) return false;
 
     return this.requestSync.isValidResponse(linkPeer, true, now);
@@ -1332,14 +1261,12 @@ export class MeshService {
     // that has is owed the hop it asked for.
     const nextHop = nextHopFor(relay, this.identity.peerID);
     if (nextHop !== null) {
-      const wifiLink = this.wifiPeerToLink.get(nextHop);
-      if (wifiLink !== undefined && wifiLink !== ingressLinkID) {
-        void this.sendWifi(wifiLink, b64).catch(() => {});
-        return;
-      }
-      const bleLink = this.peerToLink.get(nextHop);
-      if (bleLink !== undefined && bleLink !== ingressLinkID) {
-        void this.sendBle(bleLink, b64).catch(() => {});
+      // Skipping the ingress link continues the search rather than ending it:
+      // a peer held on both radios is still reachable on the other one when the
+      // packet arrived over the first.
+      for (const link of this.links.linksFor(nextHop)) {
+        if (link.id === ingressLinkID) continue;
+        void this.links.send(link.id, b64).catch(() => {});
         return;
       }
       // Next hop is not reachable from here. Fall through to flooding rather
@@ -1348,14 +1275,7 @@ export class MeshService {
       // other implementations specify.
     }
 
-    for (const lid of this.connectedLinks) {
-      if (lid === ingressLinkID) continue;
-      void this.sendBle(lid, b64).catch(() => {});
-    }
-    for (const wlid of this.wifiConnectedLinks) {
-      if (wlid === ingressLinkID) continue;
-      void this.sendWifi(wlid, b64).catch(() => {});
-    }
+    this.links.relay(b64, ingressLinkID);
   }
 
   private handleRaw(linkID: string, dataBase64: string): void {
@@ -1693,11 +1613,11 @@ export class MeshService {
       const peerID = channel.slice(3);
       return (
         this.registry.get(peerID)?.session !== undefined &&
-        (this.peerToLink.has(peerID) || this.wifiPeerToLink.has(peerID))
+        this.links.hasPeer(peerID)
       );
     }
     // Public: somebody has to be in range, or the burst is shouted at nobody.
-    return this.connectedLinks.size + this.wifiConnectedLinks.size > 0;
+    return this.links.size() > 0;
   }
 
   // Which conversation the user is watching, or null when none is (the app is
@@ -2038,8 +1958,10 @@ export class MeshService {
   private ensureNoiseSession(peerID: string): void {
     if (this.registry.get(peerID)?.session !== undefined) return;
     if (this.activeHandshake(peerID) !== undefined) return;
-    const linkID = this.peerToLink.get(peerID);
-    if (linkID === undefined) return;
+    // BLE only. A neighbour held solely on the WiFi fast path reaches the
+    // handshake through trySendDm's flood instead of through here.
+    const link = this.links.linkFor(peerID, "ble");
+    if (link === undefined) return;
     try {
       const hs = NoiseHandshake.createInitiator(
         this.identity.noiseStaticPrivKey,
@@ -2052,7 +1974,9 @@ export class MeshService {
         startedAt: Date.now(),
       });
       const pkt = this.makeHandshakePacket(hexToBytes(peerID), msg1);
-      this.sendBle(linkID, bytesToBase64(encodePacket(pkt))).catch(() => {});
+      this.links
+        .send(link.id, bytesToBase64(encodePacket(pkt)))
+        .catch(() => {});
     } catch {
       this.pendingHandshakes.delete(peerID);
     }
@@ -2686,12 +2610,12 @@ export class MeshService {
     // more than one hop away. Only a packet still carrying the full TTL came
     // straight from its sender.
     //
-    // Binding a link to a relayed announce was actively harmful: linkToPeer is
-    // 1:1, so each relayed announce overwrote that link's real owner (breaking
-    // disconnect cleanup and mis-attributing RSSI), and peerToLink made sendDm
-    // take the "direct BLE, start a Noise handshake" branch for a peer that
-    // isn't on that link at all, so the handshake was unicast into the void and
-    // silently never completed. bitchat applies the same max-TTL rule before
+    // Binding a link to a relayed announce was actively harmful: a link binds
+    // to one peer, so each relayed announce overwrote that link's real owner
+    // (breaking disconnect cleanup and mis-attributing RSSI), and the reverse
+    // binding made sendDm take the "direct BLE, start a Noise handshake" branch
+    // for a peer that isn't on that link at all, so the handshake was unicast
+    // into the void and silently never completed. bitchat applies the same max-TTL rule before
     // binding an address to a peer.
     // A BLE link has exactly ONE remote peer, and that fact is the only thing
     // making "direct" mean anything.
@@ -2700,7 +2624,7 @@ export class MeshService {
     // is a plaintext header field an attacker sets to whatever it likes. Taking
     // it at face value meant one hostile peer, over one real link, could
     // announce unlimited identities that all looked directly connected. Each
-    // one overwrote `linkToPeer` for that link - breaking RSSI attribution and
+    // one overwrote the link's binding - breaking RSSI attribution and
     // disconnect handling for the genuine peer on it - and, because direct
     // peers are the ones worth protecting from eviction, every one of them was
     // also immune to being trimmed. 500 invented peers survived a flood that
@@ -2712,22 +2636,15 @@ export class MeshService {
     // BLEIngressRejection.directSenderMismatch(boundPeerID:claimedSenderID:).
     // Downgrading rather than dropping is the gentler equivalent - the announce
     // is still useful topology, it simply does not earn direct standing.
-    const boundPeer =
-      this.linkToPeer.get(linkID) ?? this.wifiLinkToPeer.get(linkID);
+    const boundPeer = this.links.peerOf(linkID);
     const isDirectAnnounce =
       packet.ttl === ANNOUNCE_TTL &&
       (boundPeer === undefined || boundPeer === peerID);
 
     if (isDirectAnnounce) {
-      // WiFi links are tracked separately so the unicast function can prefer
-      // the higher-throughput transport for attachments and DR messages.
-      if (this.wifiConnectedLinks.has(linkID)) {
-        this.wifiPeerToLink.set(peerID, linkID);
-        this.wifiLinkToPeer.set(linkID, peerID);
-      } else {
-        this.peerToLink.set(peerID, linkID);
-        this.linkToPeer.set(linkID, peerID);
-      }
+      // The binding is what lets a send prefer the higher-throughput radio for
+      // attachments and DR messages.
+      this.links.bind(linkID, peerID);
       // Direct standing follows the LINK, not the announce that revealed it.
       // Inferring it from packet.ttl alone made it depend on which announce
       // happened to arrive first, so a genuine neighbour could be recorded as
@@ -2837,8 +2754,7 @@ export class MeshService {
     // Attribute the request to the link's bound peer, not the claimed senderID:
     // the budget must be per physical neighbour, or one peer minting sender IDs
     // gets an unbounded number of budgets over a single link.
-    const linkPeer =
-      this.linkToPeer.get(linkID) ?? this.wifiLinkToPeer.get(linkID) ?? linkID;
+    const linkPeer = this.links.peerOf(linkID) ?? linkID;
 
     // Packets come back ttl 0 and IS_RSR-tagged (set by handleFilter), so they
     // stop at the requester instead of being re-flooded mesh-wide, and so the
@@ -2846,11 +2762,8 @@ export class MeshService {
     const missing = this.gossip.handleFilter(packet, linkPeer);
     if (missing.length === 0) return;
 
-    const isWifi = this.wifiConnectedLinks.has(linkID);
     for (const pkt of missing) {
-      const b64 = bytesToBase64(encodePacket(pkt));
-      if (isWifi) this.sendWifi(linkID, b64).catch(() => {});
-      else this.sendBle(linkID, b64).catch(() => {});
+      this.links.send(linkID, bytesToBase64(encodePacket(pkt))).catch(() => {});
     }
   }
 
@@ -3057,44 +2970,25 @@ export class MeshService {
 
     // Straight down the link when we hold one, so the common case is one write
     // rather than a flood.
-    const bleLink = this.peerToLink.get(peerID);
-    const wifiLink = this.wifiPeerToLink.get(peerID);
-    if (wifiLink !== undefined) {
-      return this.sendWifi(wifiLink, b64).then(
-        () => true,
-        () => false,
-      );
-    }
-    if (bleLink !== undefined) {
-      return this.sendBle(bleLink, b64).then(
+    const link = this.links.linkFor(peerID);
+    if (link !== undefined) {
+      return this.links.send(link.id, b64).then(
         () => true,
         () => false,
       );
     }
     // No direct link: let the flood carry it to them. Speculative, so it is
     // never reported as a handover however many links took the bytes.
-    for (const linkID of this.connectedLinks) {
-      this.sendBle(linkID, b64).catch(() => {});
-    }
-    for (const linkID of this.wifiConnectedLinks) {
-      this.sendWifi(linkID, b64).catch(() => {});
-    }
+    void this.links.broadcast(b64);
     return false;
   }
 
   // Peers that could carry mail for someone else right now: directly linked,
   // announced, and with a Noise key we can charge a deposit against.
   private courierCandidates(): string[] {
-    const peers: string[] = [];
-    for (const linkID of this.connectedLinks) {
-      const peerID = this.linkToPeer.get(linkID);
-      if (peerID !== undefined) peers.push(peerID);
-    }
-    for (const linkID of this.wifiConnectedLinks) {
-      const peerID = this.wifiLinkToPeer.get(linkID);
-      if (peerID !== undefined && !peers.includes(peerID)) peers.push(peerID);
-    }
-    return peers.filter((p) => this.registry.get(p)?.noisePubKey !== undefined);
+    return this.links
+      .directPeers()
+      .filter((p) => this.registry.get(p)?.noisePubKey !== undefined);
   }
 
   // An envelope arrived. Either it's addressed to us (open and deliver), or we
@@ -3370,9 +3264,9 @@ export class MeshService {
     if (!this.leaveIsAuthentic(packet)) return;
     const senderID = bytesToHex(packet.senderID);
 
-    const linkID = this.peerToLink.get(senderID);
-    if (linkID !== undefined) this.linkToPeer.delete(linkID);
-    this.peerToLink.delete(senderID);
+    // BLE only: a LEAVE clears the Bluetooth bindings and leaves any WiFi one
+    // for its own disconnect.
+    this.links.unbind(senderID, "ble");
     this.registry.markIndirect(senderID);
     usePeerStore.getState().removePeer(senderID);
 
@@ -3406,13 +3300,7 @@ export class MeshService {
     };
     packet.signature = signPacket(packet, this.identity.signingPrivKey);
 
-    const b64 = bytesToBase64(encodePacket(packet));
-    for (const linkID of this.connectedLinks) {
-      this.sendBle(linkID, b64).catch(() => {});
-    }
-    for (const linkID of this.wifiConnectedLinks) {
-      this.sendWifi(linkID, b64).catch(() => {});
-    }
+    void this.links.broadcast(bytesToBase64(encodePacket(packet)));
   }
 
   // Is this broadcast packet genuinely from the peer it claims to be from?
@@ -3594,7 +3482,7 @@ export class MeshService {
     // One ID shared by the local echo, the BLE packet and the Nostr event, so
     // a receiver on both transports sees one message rather than two.
     const msgId = newMessageId();
-    const bleLinks = this.connectedLinks.size + this.wifiConnectedLinks.size;
+    const bleLinks = this.links.size();
 
     // Private (custom) channel: seal with its key and broadcast encrypted over
     // BLE. There is no plaintext CHANNEL_MSG path, so the content never leaves
@@ -4567,7 +4455,7 @@ export class MeshService {
     // all) that tick was the only thing the user ever saw.
     return {
       sealed: true,
-      bleLinks: this.connectedLinks.size + this.wifiConnectedLinks.size,
+      bleLinks: this.links.size(),
     };
   }
 
@@ -5089,9 +4977,7 @@ export class MeshService {
     // Whether the mesh could deliver this without guessing. A flood has no
     // acknowledgement, so "we sent it into the mesh" and "they got it" are not
     // the same claim.
-    const hadDirectLink =
-      this.peerToLink.has(recipientPeerID) ||
-      this.wifiPeerToLink.has(recipientPeerID);
+    const hadDirectLink = this.links.hasPeer(recipientPeerID);
 
     const result = this.trySendDm(recipientPeerID, text, msgID);
 
@@ -5162,22 +5048,15 @@ export class MeshService {
     // its own envelope, Noise via the bitchat PrivateMessagePacket, and Nostr
     // via the bitchat1 envelope. DR is preferred purely for the extra secrecy.
     const drState = this.drStates.get(recipientPeerID);
-    const hasDirectLink =
-      this.peerToLink.has(recipientPeerID) ||
-      this.wifiPeerToLink.has(recipientPeerID);
+    const hasDirectLink = this.links.hasPeer(recipientPeerID);
     // A directed encrypted packet reaches the peer over the mesh either by a
     // direct link (unicast) or, lacking one, by flooding through a neighbour who
     // relays it on (multi-hop, bitchat-style). With no direct link AND no
     // neighbour to relay through, the mesh cannot help, so we fall to Nostr.
-    // Both radios. This counted the BLE set alone, so a phone whose only
-    // neighbours were on the WiFi fast path skipped all three mesh priorities:
-    // priority 3 spent the internet on a hop it could make itself, and priority
-    // 2 never started a Noise handshake, so a first-contact DM to a WiFi-only
-    // neighbour could not establish a session. Same shape as the bug recorded in
-    // broadcastFn; every other link test in this file sums the two.
-    const canReachMesh =
-      hasDirectLink ||
-      this.connectedLinks.size + this.wifiConnectedLinks.size > 0;
+    // Every radio, not Bluetooth alone: a neighbour reachable only on the WiFi
+    // fast path is still a neighbour to hand the packet to, and counting it out
+    // spends the internet on a hop this node can make itself.
+    const canReachMesh = hasDirectLink || this.links.size() > 0;
     // Same gate as the receipt path: a ratchet that has not yet been given a
     // sending chain cannot encrypt, and the Noise transport below is a fully
     // valid route in the meantime. Falling through costs this one message its
@@ -5378,9 +5257,8 @@ export class MeshService {
     onOutcome?: SendOutcome,
   ): boolean {
     const reached = channel.startsWith("dm:")
-      ? this.peerToLink.has(channel.slice(3)) ||
-        this.wifiPeerToLink.has(channel.slice(3))
-      : this.connectedLinks.size + this.wifiConnectedLinks.size > 0;
+      ? this.links.hasPeer(channel.slice(3))
+      : this.links.size() > 0;
     if (!reached) return false;
     this.fileXfer.sendBytes(bytes, meta, channel, onOutcome);
     return true;
@@ -5417,7 +5295,7 @@ export class MeshService {
 
   // Whether a radio link to this peer exists right now.
   //
-  // Deliberately the strict test (`peerToLink`/`wifiPeerToLink`), not the looser
+  // Deliberately the strict test (a link we actually hold), not the looser
   // `canReachMesh` that `trySendDm` uses to decide whether flooding is worth
   // attempting. A flood is a hope; a direct link is a route. The payment layer
   // uses this to decide whether the person is near enough that the radio is
@@ -5425,7 +5303,7 @@ export class MeshService {
   // narrow answer: a false positive would route money at a peer we cannot
   // actually reach, and a false negative only costs a mint round trip.
   hasDirectLink(peerID: string): boolean {
-    return this.peerToLink.has(peerID) || this.wifiPeerToLink.has(peerID);
+    return this.links.hasPeer(peerID);
   }
 
   // The local identity as a shareable contact card, for QR exchange.
@@ -5544,8 +5422,7 @@ export class MeshService {
     for (const msg of queued) {
       // Reuse the queued id so the retried send keeps the same message id, and
       // a delivery receipt still lands on the original bubble.
-      const hadDirectLink =
-        this.peerToLink.has(peerID) || this.wifiPeerToLink.has(peerID);
+      const hadDirectLink = this.links.hasPeer(peerID);
       const result = this.trySendDm(peerID, msg.text, msg.id);
       // A blind flood is not a delivery. Without a direct link the packet goes
       // out at TTL 7 with nothing to acknowledge it, so treat this exactly like
@@ -5704,12 +5581,7 @@ export class MeshService {
   forgetPeer(peerID: string): void {
     this.drStates.delete(peerID);
     this.pendingHandshakes.delete(peerID);
-    const linkID = this.peerToLink.get(peerID);
-    if (linkID !== undefined) this.linkToPeer.delete(linkID);
-    this.peerToLink.delete(peerID);
-    const wifiLink = this.wifiPeerToLink.get(peerID);
-    if (wifiLink !== undefined) this.wifiLinkToPeer.delete(wifiLink);
-    this.wifiPeerToLink.delete(peerID);
+    this.links.unbind(peerID);
     for (const [nostrPub, mapped] of this.nostrPubkeyToPeerID) {
       if (mapped === peerID) this.nostrPubkeyToPeerID.delete(nostrPub);
     }
@@ -6325,11 +6197,9 @@ export class MeshService {
     // survives a stopped scan, a WiFi link is a socket stopWiFi() destroys, and
     // link IDs are never reissued. The native disconnect events cannot clean up
     // either: the subscriptions were removed a few lines earlier. Left
-    // populated, `wifiPeerToLink` routed a peer down a dead socket after Away
-    // and back, and DMs failed silently until their next ANNOUNCE re-mapped it.
-    this.wifiConnectedLinks.clear();
-    this.wifiPeerToLink.clear();
-    this.wifiLinkToPeer.clear();
+    // populated, a peer was routed down a dead socket after Away and back, and
+    // DMs failed silently until their next ANNOUNCE re-mapped it.
+    this.links.closeAll("wifi");
     // A burst cannot outlive the radios carrying it: close the mic and the
     // speaker before the links go, so nothing is left recording into a mesh
     // that is no longer there.

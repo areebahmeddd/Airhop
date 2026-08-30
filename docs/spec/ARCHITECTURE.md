@@ -846,24 +846,36 @@ lives in `android/` or `ios/`.
 | `src/__tests__/` | Whole-app suites: the device harness, lifecycle, and the simulator       |
 | `assets/data/`   | Bundled relay list, refreshed by CI                                      |
 
+### Inside the mesh engine
+
 `src/core/mesh/` is the one subsystem large enough to be grouped further, into
-`wire/`, `routing/`, `sync/`, `discovery/`, `rooms/`, `courier/` and `voice/`.
-`wire/` is the byte layout this document's [section 4](#4-messaging-protocol)
-and [PROTOCOLS.md](PROTOCOLS.md) describe, so a diff that changes the wire
-format shows up under one directory.
+`wire/`, `routing/`, `links/`, `sync/`, `discovery/`, `rooms/`, `courier/` and
+`voice/`. Two of them carry rules worth stating here:
+
+- `wire/` is the byte layout [section 4](#4-messaging-protocol) and
+  [PROTOCOLS.md](PROTOCOLS.md) describe, so a diff that changes the wire format
+  shows up under one directory.
+- `links/` is the one table of links the device holds, over every transport, and
+  the only place bytes are written to one. It answers what is connected and
+  writes down a named link; every decision about what to send, and what a
+  refused write means, stays in `src/services/mesh-service.ts`.
+
+### Module boundaries
 
 A module specifier that leaves its top-level layer is written as a path alias
 (`@core/mesh/wire/packet-codec`); one that stays inside the layer stays
 relative. Aliases live in `tsconfig.json` and are mirrored in `package.json`
 for jest.
 
-`src/core/` has no native dependencies, so the whole protocol is testable in CI
-without a phone. The suite covers the wire format, the handshakes and the routing
-while the radios stay unproven until a field test.
+`src/core/` imports nothing native, so the whole protocol is testable in CI
+without a phone: the wire format, the handshakes and the routing. The radios
+stay unproven until a field test.
 
-Because every feature lives in `src/core/` and the native layer exposes an
-identical TypeScript interface on both platforms, a fix in gossip sync fixes iOS
-and Android at once and protocol changes ship together.
+The native layer exposes an identical TypeScript interface on both platforms, so
+a fix in gossip sync fixes iOS and Android at once and protocol changes ship
+together.
+
+### Builds and CI
 
 Gradle builds `android/` into an `.aab` and Xcode builds `ios/` into an `.ipa`,
 and the stores treat the result as a fully native app.
@@ -879,9 +891,8 @@ Android does. Distribution credentials do not exist yet, so the `ios-release` jo
 in `release.yaml` is a placeholder and the shipped `.ipa` is still produced by
 hand from Xcode.
 
-Neither platform uses EAS. There is no EAS configuration here and there is
-unlikely to be: its main draws are prebuild and managed credentials, and this
-project does not run prebuild.
+Neither platform uses EAS, and likely never will: its main draws are prebuild
+and managed credentials, and this project does not run prebuild.
 
 ## 12. Native Modules
 

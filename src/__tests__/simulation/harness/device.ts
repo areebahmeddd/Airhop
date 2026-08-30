@@ -25,6 +25,7 @@
 //     that is a finding about the app, not a gap in the harness.
 
 import type { Identity } from "@core/crypto/identity";
+import type { LinkRegistry } from "@core/mesh/links/link-registry";
 import type { AndroidBleModule, RadioPort } from "../../harness/android-native";
 import type { WifiNativeModule } from "../../harness/bridge-shim";
 import type { IosBleModule } from "../../harness/ios-native";
@@ -728,10 +729,9 @@ export class SimDevice {
   }
 
   bleLinkIDs(): string[] {
-    const links = (
-      this.mesh as unknown as { connectedLinks?: Set<string> } | null
-    )?.connectedLinks;
-    return links === undefined ? [] : [...links];
+    const links = (this.mesh as unknown as { links?: LinkRegistry } | null)
+      ?.links;
+    return links === undefined ? [] : [...links.linkIDs("ble")];
   }
 
   // The geohash cell a named location channel currently resolves to, or null

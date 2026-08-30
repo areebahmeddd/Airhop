@@ -30,6 +30,7 @@ You must read these four documents before making any code suggestions:
 | Crypto (Noise XX, identity, DR)                               | `src/core/crypto/`         |
 | Wire format: the packet frame and every payload               | `src/core/mesh/wire/`      |
 | Mesh routing, dedup, fragmentation, source routes             | `src/core/mesh/routing/`   |
+| Open links per radio, and the writes that go down them        | `src/core/mesh/links/`     |
 | GCS gossip sync                                               | `src/core/mesh/sync/`      |
 | Announces and nickname normalisation                          | `src/core/mesh/discovery/` |
 | Private-channel and private-group crypto                      | `src/core/mesh/rooms/`     |
