@@ -619,7 +619,7 @@ export const FAQ_SECTIONS: FaqSection[] = [
             <br />
             <br />
             The limits are deliberately small. At most 40 envelopes at a time, none larger than 16
-            KB, and every one is discarded after 24 hours whether or not it was ever delivered. How
+            KiB, and every one is discarded after 24 hours whether or not it was ever delivered. How
             much any one person can leave with you depends on whether you have verified them. It
             costs you a little storage, and it is the reason the network keeps working when people
             are not in the same place at the same time.
