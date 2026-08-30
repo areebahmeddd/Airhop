@@ -1971,6 +1971,7 @@ export const strings: Strings = {
   "settings.language.pending": "Sa susunod na pagbukas",
   "settings.language.pending_a11y":
     "{value}, iiral sa susunod mong pagbukas ng Airhop",
+  "settings.language.rtl_restart": "Buksang muli ngayon",
   "settings.language.rtl_title": "Buksang muli ang Airhop para matapos ito",
   "settings.language.rtl_body":
     "Mula kanan pakaliwa binabasa ang {value}, at kapag nagsisimula lang ito nakakapagpalit ng direksyon ang Airhop. Isara ito at buksang muli para matapos ang paglipat. Walang mawawala, at mananatiling konektado ang mesh mo hangga't hindi mo ito ginagawa.",

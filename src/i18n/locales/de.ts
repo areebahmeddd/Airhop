@@ -1952,6 +1952,7 @@ export const strings: Strings = {
   "settings.language.pending": "Beim nächsten Öffnen",
   "settings.language.pending_a11y":
     "{value}, gilt ab dem nächsten Öffnen von Airhop",
+  "settings.language.rtl_restart": "Jetzt neu öffnen",
   "settings.language.rtl_title": "Öffne Airhop neu, um abzuschließen",
   "settings.language.rtl_body":
     "{value} wird von rechts nach links gelesen, und Airhop kann die Richtung nur beim Start ändern. Schließe die App und öffne sie erneut, um den Wechsel abzuschließen. Nichts geht verloren, und dein Mesh bleibt bis dahin verbunden.",

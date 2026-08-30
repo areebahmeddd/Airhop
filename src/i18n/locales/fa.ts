@@ -1906,6 +1906,7 @@ export const strings: Strings = {
   "settings.language.pending": "در باز شدن بعدی",
   "settings.language.pending_a11y":
     "{value}، دفعهٔ بعد که Airhop را باز کنید اعمال می‌شود",
+  "settings.language.rtl_restart": "اکنون باز کنید",
   "settings.language.rtl_title": "برای پایان کار Airhop را دوباره باز کنید",
   "settings.language.rtl_body":
     "{value} از راست به چپ خوانده می‌شود، و Airhop تنها هنگام راه‌اندازی می‌تواند جهت را عوض کند. برای پایان جابه‌جایی آن را ببندید و دوباره باز کنید. چیزی از دست نمی‌رود، و تا آن وقت مش شما متصل می‌ماند.",

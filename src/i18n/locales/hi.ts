@@ -1895,6 +1895,7 @@ export const strings: Strings = {
   "settings.language.pending": "अगली बार खोलने पर",
   "settings.language.pending_a11y":
     "{value}, अगली बार Airhop खोलने पर लागू होगी",
+  "settings.language.rtl_restart": "अभी फिर से खोलें",
   "settings.language.rtl_title": "पूरा करने के लिए Airhop दोबारा खोलें",
   "settings.language.rtl_body":
     "{value} दाएँ से बाएँ पढ़ी जाती है, और Airhop दिशा सिर्फ़ शुरू होते समय बदल सकता है। बदलाव पूरा करने के लिए इसे बंद करके दोबारा खोलें। कुछ भी नहीं खोता, और तब तक आपका मेश जुड़ा रहता है।",

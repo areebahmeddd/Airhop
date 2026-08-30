@@ -1955,6 +1955,7 @@ export const strings: Strings = {
   "settings.language.pending": "À la prochaine ouverture",
   "settings.language.pending_a11y":
     "{value}, s’applique à la prochaine ouverture d’Airhop",
+  "settings.language.rtl_restart": "Rouvrir maintenant",
   "settings.language.rtl_title": "Rouvre Airhop pour terminer",
   "settings.language.rtl_body":
     "{value} se lit de droite à gauche, et Airhop ne peut changer de sens qu’au démarrage. Ferme-le et rouvre-le pour terminer le changement. Rien n’est perdu, et d’ici là ton maillage reste connecté.",

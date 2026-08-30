@@ -1943,6 +1943,7 @@ export const strings: Strings = {
   "settings.language.pending": "Wakati wa kufungua tena",
   "settings.language.pending_a11y":
     "{value}, itaanza kutumika utakapofungua Airhop tena",
+  "settings.language.rtl_restart": "Fungua tena sasa",
   "settings.language.rtl_title": "Fungua Airhop tena ili kumaliza",
   "settings.language.rtl_body":
     "{value} husomwa kutoka kulia kwenda kushoto, na Airhop inaweza kubadilisha mwelekeo tu inapoanza. Ifunge na uifungue tena ili kumaliza kubadili. Hakuna kinachopotea, na mesh yako inabaki imeunganishwa hadi ufanye hivyo.",

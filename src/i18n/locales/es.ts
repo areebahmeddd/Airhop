@@ -1947,6 +1947,7 @@ export const strings: Strings = {
   "settings.language.pending": "Al abrir de nuevo",
   "settings.language.pending_a11y":
     "{value}, se aplicará la próxima vez que abras Airhop",
+  "settings.language.rtl_restart": "Reabrir ahora",
   "settings.language.rtl_title": "Vuelve a abrir Airhop para terminar",
   "settings.language.rtl_body":
     "{value} se lee de derecha a izquierda, y Airhop solo puede cambiar de dirección al arrancar. Ciérrala y vuelve a abrirla para terminar el cambio. No se pierde nada, y hasta entonces tu malla sigue conectada.",

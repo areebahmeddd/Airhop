@@ -1941,6 +1941,7 @@ export const strings: Strings = {
   "settings.language.pending": "Na próxima abertura",
   "settings.language.pending_a11y":
     "{value}, vale a partir da próxima vez que você abrir o Airhop",
+  "settings.language.rtl_restart": "Reabrir agora",
   "settings.language.rtl_title": "Abra o Airhop de novo para concluir",
   "settings.language.rtl_body":
     "{value} se lê da direita para a esquerda, e o Airhop só consegue mudar de direção ao iniciar. Feche e abra de novo para concluir a troca. Nada se perde, e até lá sua malha continua conectada.",

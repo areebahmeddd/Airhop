@@ -1913,6 +1913,7 @@ export const strings: Strings = {
   "settings.language.pending": "Vào lần mở tới",
   "settings.language.pending_a11y":
     "{value}, áp dụng vào lần tới bạn mở Airhop",
+  "settings.language.rtl_restart": "Mở lại ngay",
   "settings.language.rtl_title": "Hãy mở lại Airhop để hoàn tất",
   "settings.language.rtl_body":
     "{value} đọc từ phải sang trái, và Airhop chỉ đổi được chiều lúc khởi động. Hãy đóng rồi mở lại để hoàn tất việc chuyển. Không mất gì cả, và mạng lưới của bạn vẫn kết nối cho tới lúc đó.",

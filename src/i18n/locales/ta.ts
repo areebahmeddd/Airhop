@@ -1971,6 +1971,7 @@ export const strings: Strings = {
   "settings.language.pending": "அடுத்த முறை திறக்கும்போது",
   "settings.language.pending_a11y":
     "{value}, நீங்கள் அடுத்த முறை Airhop ஐத் திறக்கும்போது பொருந்தும்",
+  "settings.language.rtl_restart": "இப்போது மீண்டும் திற",
   "settings.language.rtl_title": "முடிக்க Airhop ஐ மீண்டும் திறங்கள்",
   "settings.language.rtl_body":
     "{value} வலமிருந்து இடமாகப் படிக்கப்படுகிறது, Airhop தொடங்கும்போது மட்டுமே திசையை மாற்ற முடியும். மாற்றத்தை முடிக்க அதை மூடிவிட்டு மீண்டும் திறங்கள். எதுவும் இழக்கப்படாது, நீங்கள் அப்படிச் செய்யும் வரை உங்கள் மெஷ் இணைந்தே இருக்கும்.",

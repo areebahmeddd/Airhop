@@ -1908,6 +1908,7 @@ export const strings: Strings = {
   "settings.language.pending": "Vid nästa öppning",
   "settings.language.pending_a11y":
     "{value}, tillämpas nästa gång du öppnar Airhop",
+  "settings.language.rtl_restart": "Öppna igen nu",
   "settings.language.rtl_title": "Öppna Airhop igen för att slutföra",
   "settings.language.rtl_body":
     "{value} läses från höger till vänster, och Airhop kan bara byta riktning när appen startar. Stäng den och öppna den igen för att slutföra bytet. Inget går förlorat, och din mesh förblir ansluten tills du gör det.",

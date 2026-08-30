@@ -1796,6 +1796,7 @@ export const strings: Strings = {
   "settings.language.set_a11y": "把語言設為 {value}",
   "settings.language.pending": "下次開啟時生效",
   "settings.language.pending_a11y": "{value}，會在你下次開啟 Airhop 時生效",
+  "settings.language.rtl_restart": "立即重新開啟",
   "settings.language.rtl_title": "重新開啟 Airhop 以完成切換",
   "settings.language.rtl_body":
     "{value} 是從右往左讀的，而 Airhop 只能在啟動時改變方向。請關掉再開一次以完成切換。什麼都不會遺失，在那之前你的網狀網路也保持連線。",

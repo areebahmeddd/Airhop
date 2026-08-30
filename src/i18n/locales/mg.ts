@@ -1972,6 +1972,7 @@ export const strings: Strings = {
   "settings.language.pending": "Amin'ny fanokafana manaraka",
   "settings.language.pending_a11y":
     "{value}, mihatra amin'ny fotoana manaraka hanokafanao ny Airhop",
+  "settings.language.rtl_restart": "Sokafy indray izao",
   "settings.language.rtl_title": "Sokafy indray ny Airhop mba hamitana",
   "settings.language.rtl_body":
     "Vakiana avy any ankavanana miankavia ny {value}, ary rehefa manomboka ihany ny Airhop no afaka manova lalana. Akatony izy ary sokafy indray mba hamitana ny fiovana. Tsy misy very, ary mifandray hatrany ny haratonao mandra-pahatongan'izany.",

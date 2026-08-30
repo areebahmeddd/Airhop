@@ -1868,6 +1868,7 @@ export const strings: Strings = {
   "settings.language.pending": "เมื่อเปิดครั้งถัดไป",
   "settings.language.pending_a11y":
     "{value}, จะมีผลเมื่อคุณเปิด Airhop ครั้งถัดไป",
+  "settings.language.rtl_restart": "เปิดใหม่ตอนนี้",
   "settings.language.rtl_title": "เปิด Airhop ใหม่เพื่อให้เสร็จสมบูรณ์",
   "settings.language.rtl_body":
     "{value} อ่านจากขวาไปซ้าย และ Airhop เปลี่ยนทิศทางได้เฉพาะตอนเริ่มทำงานเท่านั้น ปิดแล้วเปิดใหม่เพื่อสลับให้เสร็จ ไม่มีอะไรสูญหาย และเมชของคุณยังเชื่อมต่ออยู่จนกว่าคุณจะทำ",

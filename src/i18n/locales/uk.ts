@@ -1922,6 +1922,7 @@ export const strings: Strings = {
   "settings.language.pending": "Під час наступного відкриття",
   "settings.language.pending_a11y":
     "{value}, застосується, коли ви наступного разу відкриєте Airhop",
+  "settings.language.rtl_restart": "Відкрити знову",
   "settings.language.rtl_title": "Відкрийте Airhop знову, щоб завершити",
   "settings.language.rtl_body":
     "{value} читається справа наліво, а Airhop може змінити напрям лише під час запуску. Закрийте його й відкрийте знову, щоб завершити перехід. Нічого не втрачається, і ваш mesh лишається з’єднаним, доки ви цього не зробите.",

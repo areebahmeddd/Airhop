@@ -1928,6 +1928,7 @@ export const strings: Strings = {
   "settings.language.pending": "Saat dibuka berikutnya",
   "settings.language.pending_a11y":
     "{value}, berlaku saat kamu membuka Airhop berikutnya",
+  "settings.language.rtl_restart": "Buka ulang sekarang",
   "settings.language.rtl_title": "Buka lagi Airhop untuk menuntaskannya",
   "settings.language.rtl_body":
     "{value} dibaca dari kanan ke kiri, dan Airhop hanya bisa mengubah arah saat mulai berjalan. Tutup lalu buka lagi untuk menuntaskan peralihannya. Tidak ada yang hilang, dan mesh-mu tetap tersambung sampai kamu melakukannya.",

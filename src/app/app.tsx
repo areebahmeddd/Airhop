@@ -1,6 +1,7 @@
 // Polyfill must be the first import. Required before any @noble/* usage.
 import "react-native-get-random-values";
 
+import NativeAirhopApp from "@bridge/NativeAirhopApp";
 import AirhopBLE from "@bridge/NativeAirhopBLE";
 import type { Identity } from "@core/crypto/identity";
 import { loadIdentity } from "@core/crypto/identity";
@@ -612,11 +613,29 @@ function AppContent(): React.JSX.Element {
     if (noticeShownFor.current === target) return;
     noticeShownFor.current = target;
     const inTarget = translatorFor(target);
+    // Offered where the platform allows it, not merely asked for: a warm start
+    // flips the frame while the JS context survives, so only a cold process gets
+    // both. iOS cannot relaunch itself, so there this stays a notice.
+    const canRestart =
+      NativeAirhopApp !== null && NativeAirhopApp !== undefined;
     showAlert(
       inTarget("settings.language.rtl_title"),
       inTarget("settings.language.rtl_body", {
         value: inTarget(LANGUAGES[target].nameKey),
       }),
+      canRestart
+        ? [
+            { text: inTarget("common.cancel"), style: "cancel" },
+            {
+              text: inTarget("settings.language.rtl_restart"),
+              onPress: () => {
+                // A refused restart leaves the app running and the notice
+                // already read, so the user does by hand what the body asks.
+                void NativeAirhopApp?.restart().catch(() => {});
+              },
+            },
+          ]
+        : undefined,
     );
   }, [languagePreference]);
 

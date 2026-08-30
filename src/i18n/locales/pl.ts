@@ -1936,6 +1936,7 @@ export const strings: Strings = {
   "settings.language.pending": "Po następnym otwarciu",
   "settings.language.pending_a11y":
     "{value}, zadziała przy następnym otwarciu Airhop",
+  "settings.language.rtl_restart": "Otwórz ponownie",
   "settings.language.rtl_title": "Otwórz Airhop ponownie, żeby dokończyć",
   "settings.language.rtl_body":
     "{value} czyta się od prawej do lewej, a Airhop może zmienić kierunek tylko przy starcie. Zamknij aplikację i otwórz ją ponownie, żeby dokończyć zmianę. Nic nie ginie, a twoja sieć mesh zostaje połączona, dopóki tego nie zrobisz.",

@@ -468,7 +468,11 @@ export function pluralTranslatorFor(code: LanguageCode): PluralTranslator {
 export function applyLayoutDirection(code: LanguageCode): void {
   const shouldBeRTL = isRTL(code);
   I18nManager.allowRTL(shouldBeRTL);
-  if (I18nManager.isRTL !== shouldBeRTL) I18nManager.forceRTL(shouldBeRTL);
+  // Unconditional: `I18nManager.isRTL` is a constant read at module load, so it
+  // answers with the direction this process BOOTED in and never moves. Guarded
+  // on it, only the first change per session takes effect. Setting the same
+  // value twice is free; the write below is what needs a guard.
+  I18nManager.forceRTL(shouldBeRTL);
   // Only on a change: a zustand `set` persists the whole store, and this runs at
   // every launch and every tap in the picker.
   const store = useSettingsStore.getState();

@@ -1951,6 +1951,7 @@ export const strings: Strings = {
   "settings.language.pending": "Alla prossima apertura",
   "settings.language.pending_a11y":
     "{value}, si applica alla prossima apertura di Airhop",
+  "settings.language.rtl_restart": "Riapri ora",
   "settings.language.rtl_title": "Riapri Airhop per completare",
   "settings.language.rtl_body":
     "{value} si legge da destra a sinistra, e Airhop può cambiare direzione solo all’avvio. Chiudila e riaprila per completare il passaggio. Non si perde nulla, e fino ad allora la tua mesh resta connessa.",

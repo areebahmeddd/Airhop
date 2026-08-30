@@ -1852,6 +1852,7 @@ export const strings: Strings = {
   "settings.language.pending": "عند الفتح القادم",
   "settings.language.pending_a11y":
     "{value}، تُطبَّق في المرة القادمة التي تفتح فيها Airhop",
+  "settings.language.rtl_restart": "إعادة الفتح الآن",
   "settings.language.rtl_title": "أعد فتح Airhop لإتمام التبديل",
   "settings.language.rtl_body":
     "تُقرأ {value} من اليمين إلى اليسار، ولا يستطيع Airhop تغيير الاتجاه إلا عند بدء تشغيله. أغلقه وافتحه من جديد لإتمام التبديل. لا يضيع شيء، وتبقى شبكتك متصلة حتى تفعل ذلك.",

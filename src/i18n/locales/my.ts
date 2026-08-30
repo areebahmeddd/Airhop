@@ -1957,6 +1957,7 @@ export const strings: Strings = {
   "settings.language.pending": "နောက်တစ်ကြိမ် ဖွင့်သည့်အခါ",
   "settings.language.pending_a11y":
     "{value}၊ နောက်တစ်ကြိမ် Airhop ဖွင့်သည့်အခါ အကျိုးသက်ရောက်မည်",
+  "settings.language.rtl_restart": "ယခုပြန်ဖွင့်ပါ",
   "settings.language.rtl_title": "ပြီးမြောက်စေရန် Airhop ကို ပြန်ဖွင့်ပါ",
   "settings.language.rtl_body":
     "{value} သည် ညာမှဘယ်သို့ ဖတ်ရပြီး Airhop သည် စတင်ချိန်တွင်သာ ဦးတည်ချက်ကို ပြောင်းနိုင်သည်။ ပြောင်းလဲမှုပြီးမြောက်စေရန် ပိတ်ပြီး ပြန်ဖွင့်ပါ။ ဘာမျှ ဆုံးရှုံးမည်မဟုတ်ဘဲ ထိုအချိန်အထိ သင့်မက်ရှ် ချိတ်ဆက်ထားဆဲ ဖြစ်ပါမည်။",

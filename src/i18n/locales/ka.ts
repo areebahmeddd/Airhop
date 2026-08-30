@@ -1923,6 +1923,7 @@ export const strings: Strings = {
   "settings.language.pending": "შემდეგი გახსნისას",
   "settings.language.pending_a11y":
     "{value}, ამოქმედდება Airhop-ის შემდეგი გახსნისას",
+  "settings.language.rtl_restart": "ხელახლა გახსნა",
   "settings.language.rtl_title": "დასასრულებლად ხელახლა გახსენი Airhop",
   "settings.language.rtl_body":
     "{value} მარჯვნიდან მარცხნივ იკითხება, Airhop-ს კი მიმართულების შეცვლა მხოლოდ გაშვებისას შეუძლია. დახურე და ხელახლა გახსენი, რომ გადართვა დასრულდეს. არაფერი იკარგება, და მანამდე შენი მეში დაკავშირებული რჩება.",

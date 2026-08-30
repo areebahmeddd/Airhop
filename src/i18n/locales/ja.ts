@@ -1906,6 +1906,7 @@ export const strings: Strings = {
   "settings.language.pending": "次回起動時",
   "settings.language.pending_a11y":
     "{value}、次にAirhopを開いたときに適用されます",
+  "settings.language.rtl_restart": "今すぐ開き直す",
   "settings.language.rtl_title": "Airhopを開き直すと完了します",
   "settings.language.rtl_body":
     "{value}は右から左へ読む言語で、Airhopが表示方向を変えられるのは起動時だけです。いったん閉じて開き直すと切り替えが完了します。失われるものはなく、それまでメッシュはつながったままです。",

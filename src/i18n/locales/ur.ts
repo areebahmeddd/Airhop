@@ -1895,6 +1895,7 @@ export const strings: Strings = {
   "settings.language.pending": "اگلی بار کھلنے پر",
   "settings.language.pending_a11y":
     "{value}، اگلی بار Airhop کھولنے پر لاگو ہو گا",
+  "settings.language.rtl_restart": "ابھی دوبارہ کھولیں",
   "settings.language.rtl_title": "مکمل کرنے کے لیے Airhop دوبارہ کھولیں",
   "settings.language.rtl_body":
     "{value} دائیں سے بائیں پڑھی جاتی ہے، اور Airhop رخ صرف شروع ہوتے وقت بدل سکتا ہے۔ تبدیلی مکمل کرنے کے لیے اسے بند کر کے دوبارہ کھولیں۔ کچھ ضائع نہیں ہوتا، اور جب تک آپ ایسا نہ کریں آپ کی میش جڑی رہتی ہے۔",

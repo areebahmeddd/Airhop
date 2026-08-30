@@ -1877,6 +1877,7 @@ export const strings: Strings = {
   "settings.language.set_a11y": "언어를 {value}(으)로 설정",
   "settings.language.pending": "다음에 열 때 적용",
   "settings.language.pending_a11y": "{value}, 다음에 Airhop을 열 때 적용됩니다",
+  "settings.language.rtl_restart": "지금 다시 열기",
   "settings.language.rtl_title": "Airhop을 다시 열어 마무리하세요",
   "settings.language.rtl_body":
     "{value}은(는) 오른쪽에서 왼쪽으로 읽으며, Airhop은 시작할 때만 방향을 바꿀 수 있습니다. 닫았다가 다시 열어 전환을 마치세요. 잃는 것은 없으며, 그때까지 메시 연결도 유지됩니다.",

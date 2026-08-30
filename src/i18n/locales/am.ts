@@ -1792,6 +1792,7 @@ export const strings: Strings = {
   "settings.language.set_a11y": "ቋንቋን ወደ {value} አዘጋጅ",
   "settings.language.pending": "በሚቀጥለው ክፍት ጊዜ",
   "settings.language.pending_a11y": "{value}፣ በሚቀጥለው ጊዜ Airhop ን ስትከፍት ይሠራል",
+  "settings.language.rtl_restart": "አሁን ክፈት",
   "settings.language.rtl_title": "ለማጠናቀቅ Airhop ን እንደገና ክፈት",
   "settings.language.rtl_body":
     "{value} ከቀኝ ወደ ግራ ይነበባል፤ Airhop ደግሞ አቅጣጫውን መቀየር የሚችለው ሲጀምር ብቻ ነው። መቀየሩን ለማጠናቀቅ ዝጋውና እንደገና ክፈተው። ምንም አይጠፋም፤ እስከዚያ ድረስም ሜሽህ ተገናኝቶ ይቆያል።",

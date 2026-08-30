@@ -13,6 +13,7 @@ import com.facebook.react.defaults.DefaultNewArchitectureEntryPoint
 
 import expo.modules.ApplicationLifecycleDispatcher
 import expo.modules.ExpoReactHostFactory
+import org.onemindlabs.airhop.app.AirhopAppPackage
 import org.onemindlabs.airhop.ble.AirhopBLEPackage
 import org.onemindlabs.airhop.voice.AirhopVoicePackage
 import org.onemindlabs.airhop.wifi.AirhopWiFiPackage
@@ -27,6 +28,7 @@ class MainApplication : Application(), ReactApplication {
           add(AirhopBLEPackage())
           add(AirhopWiFiPackage())
           add(AirhopVoicePackage())
+          add(AirhopAppPackage())
         }
     )
   }
