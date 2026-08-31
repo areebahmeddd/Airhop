@@ -39,6 +39,12 @@
        so it is granted on install with nothing for the user to answer. -->
   <uses-permission android:name="android.permission.CHANGE_NETWORK_STATE"/>
   <uses-permission android:name="android.permission.CHANGE_WIFI_STATE"/>
+  <!-- Lets the LAN transport hold a MulticastLock. WiFi power save drops
+       multicast when the screen goes off, and mDNS is multicast, so without
+       this the transport finds peers while somebody is looking at the phone and
+       silently stops finding them the moment it is pocketed. Normal protection
+       level, granted on install. -->
+  <uses-permission android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE"/>
   <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
   <!-- Required for Android 14+ to keep BLE active in a foreground service -->
   <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE"/>
