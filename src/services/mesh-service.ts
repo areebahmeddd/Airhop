@@ -691,6 +691,18 @@ export class MeshService {
       (peerID) => this.registry.get(peerID)?.nickname,
       (recipientPeerID, fileTlv) =>
         this.sealFileForPeer(recipientPeerID, fileTlv),
+      // Whether this transfer has to be paced for the Bluetooth radio.
+      //
+      // A DM rides one link, so the answer is that link's transport. A channel
+      // fragment goes down every link at once, so it is Bluetooth the moment we
+      // hold one Bluetooth link. Unknown recipient answers Bluetooth: a
+      // transfer paced slower than it needed to be is a nuisance, one paced
+      // faster than the radio can take never completes.
+      (recipientPeerID, isDM) => {
+        if (!isDM) return this.links.size("ble") > 0;
+        const link = this.links.linkFor(recipientPeerID);
+        return link === undefined || link.kind === "ble";
+      },
     );
 
     const nostrSendFn: NostrSendFn = async (
