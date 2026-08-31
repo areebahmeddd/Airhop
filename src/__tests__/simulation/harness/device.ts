@@ -27,10 +27,14 @@
 import type { Identity } from "@core/crypto/identity";
 import type { LinkRegistry } from "@core/mesh/links/link-registry";
 import type { AndroidBleModule, RadioPort } from "../../harness/android-native";
-import type { WifiNativeModule } from "../../harness/bridge-shim";
+import type {
+  LanNativeModule,
+  WifiNativeModule,
+} from "../../harness/bridge-shim";
 import type { IosBleModule } from "../../harness/ios-native";
 import type { AndroidPermission, DeviceOS, Platform } from "../../harness/os";
 import { eventRouter } from "./event-router";
+import type { LanPort } from "./lan-fabric";
 import type { VoiceRecord } from "./media-fabric";
 import type { RelayFabric } from "./relay-fabric";
 import type { WifiPort } from "./wifi-fabric";
@@ -93,6 +97,9 @@ export interface DeviceSpec {
   internetEnabled?: boolean;
   gatewayEnabled?: boolean;
   bridgeEnabled?: boolean;
+  // The LAN transport is off unless the user turns it on, so a scenario that
+  // wants it has to say so, the same way a person would.
+  lanEnabled?: boolean;
   liveVoiceEnabled?: boolean;
 }
 
@@ -147,6 +154,7 @@ interface Inner {
   // Captured inside the registry for the same reason everything else here is:
   // the shim holds a module-scope singleton, and each phone has its own copy.
   installWifi: (m: WifiNativeModule | null) => void;
+  installLan: (m: LanNativeModule | null) => void;
   // The event emitter this phone's native module and mesh-service share. Held
   // ONLY so the harness can prove, in a test, that two phones do not share one.
   // If they ever did, every scenario in this directory would be meaningless:
@@ -382,6 +390,36 @@ export class SimDevice {
       startWiFi: async () => undefined,
       stopWiFi: async () => undefined,
       writeToWiFiLink: async (linkID: string, dataBase64: string) => {
+        port.write(linkID, dataBase64);
+      },
+      addListener: () => undefined,
+      removeListeners: () => undefined,
+    });
+  }
+
+  // The LAN transport has one more direction than WiFi Aware: the app asks to
+  // publish under a name, and asks to dial a peer. Both are handed to the
+  // fabric, which is what knows who is on which network.
+  attachLanPort(port: LanPort): void {
+    const emitter = this.inner.emitter as {
+      emit: (event: string, body: Record<string, unknown>) => void;
+    };
+    port.emit = (event, body) => {
+      eventRouter().runAs(this.id, () => {
+        emitter.emit(event, body);
+      });
+    };
+    this.inner.installLan({
+      startLAN: async (instanceName: string) => {
+        port.start(instanceName);
+      },
+      stopLAN: async () => {
+        port.stop();
+      },
+      connectToPeer: async (serviceName: string) => {
+        port.connect(serviceName);
+      },
+      writeToLANLink: async (linkID: string, dataBase64: string) => {
         port.write(linkID, dataBase64);
       },
       addListener: () => undefined,
@@ -1514,6 +1552,13 @@ function buildSandbox(
         }
       ).installNativeWifi(m);
     };
+    const installLan = (m: LanNativeModule | null): void => {
+      (
+        shim as unknown as {
+          installNativeLan: (x: LanNativeModule | null) => void;
+        }
+      ).installNativeLan(m);
+    };
 
     const stores: Record<string, StoreLike> = {
       chatStore: require(P.chatStore).useChatStore,
@@ -1542,6 +1587,11 @@ function buildSandbox(
       stores.settingsStore,
       "setGatewayEnabled",
       spec.gatewayEnabled ?? false,
+    );
+    call(
+      stores.settingsStore,
+      "setLanTransportEnabled",
+      spec.lanEnabled ?? false,
     );
     call(stores.settingsStore, "setBridgeEnabled", spec.bridgeEnabled ?? false);
     call(
@@ -1640,6 +1690,7 @@ function buildSandbox(
       wallet,
       pay,
       installWifi,
+      installLan,
       selectAccounts,
       emitter,
     };

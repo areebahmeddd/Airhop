@@ -66,6 +66,45 @@ export const wifiBridge = {
   removeListeners: (n: number): void => currentWifi?.removeListeners(n),
 };
 
+// The LAN transport. Unlike WiFi Aware, discovery and dialling are separate:
+// mDNS finds everyone on the network and who to connect to is a decision, so
+// the module reports what it sees and opens the sockets it is told to.
+export interface LanNativeModule {
+  startLAN(instanceName: string): Promise<void>;
+  stopLAN(): Promise<void>;
+  connectToPeer(serviceName: string): Promise<void>;
+  writeToLANLink(linkID: string, dataBase64: string): Promise<void>;
+  addListener(eventName: string): void;
+  removeListeners(count: number): void;
+}
+
+let currentLan: LanNativeModule | null = null;
+
+export function installNativeLan(m: LanNativeModule | null): void {
+  currentLan = m;
+}
+
+export const lanBridge = {
+  startLAN: async (instanceName: string): Promise<void> =>
+    currentLan?.startLAN(instanceName),
+  stopLAN: async (): Promise<void> => currentLan?.stopLAN(),
+  connectToPeer: async (serviceName: string): Promise<void> =>
+    currentLan?.connectToPeer(serviceName),
+  writeToLANLink: async (linkID: string, dataBase64: string): Promise<void> =>
+    currentLan?.writeToLANLink(linkID, dataBase64),
+  addListener: (e: string): void => currentLan?.addListener(e),
+  removeListeners: (n: number): void => currentLan?.removeListeners(n),
+};
+
+export const inertLanBridge = {
+  startLAN: async (): Promise<void> => undefined,
+  stopLAN: async (): Promise<void> => undefined,
+  connectToPeer: async (): Promise<void> => undefined,
+  writeToLANLink: async (): Promise<void> => undefined,
+  addListener: (): void => undefined,
+  removeListeners: (): void => undefined,
+};
+
 // The original inert form, kept for suites that never install a module.
 export const inertWifiBridge = {
   startWiFi: async (): Promise<void> => undefined,
