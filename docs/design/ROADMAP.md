@@ -11,35 +11,25 @@ bitchat is an excellent foundation. Airhop fills the gaps it left open.
 **bitchat problem:** iOS and Android are separate native codebases that drift. The Android v0.7 fragment size mismatch (500B vs 150B) broke iOS-Android compatibility for months with no one noticing.  
 **Airhop:** Single TypeScript protocol stack. A protocol bug surfaces on both platforms simultaneously, and fixes apply simultaneously.
 
-### Gap 2: WiFi Direct / WiFi Aware Transport
+### Gap 2: Transports Beyond Bluetooth
 
-**bitchat problem:** BLE-only (~18 KiB/s). Android WiFi Aware support exists but is experimental/unshipped.  
-**Airhop:** WiFi Aware on both platforms, selected automatically when available with BLE as fallback. Important limitation: it only applies Android-to-Android or iPhone-to-iPhone, because Apple requires a paired data path and Android cannot complete Apple's pairing. Every cross-platform path stays on Bluetooth or Nostr.
+**bitchat problem:** Bluetooth only in practice, around 18 KiB/s. Android has WiFi Aware behind a debug flag that is off by default, iOS has none, and neither platform can use an ordinary WiFi network.  
+**Airhop:** Two transports beside Bluetooth, picked per link with Bluetooth as the fallback. WiFi Aware is the fast path between two Androids or two iPhones, and runs on both platforms. The LAN transport is mDNS discovery plus plain TCP links carrying the same packets the radio carries, so an iPhone and an Android on the same WiFi reach each other directly. It stays off until the user turns it on, because announcing yourself on a network is visible to everyone on it.
 
-### Gap 3: Tor on iOS and Android
+### Gap 3: Double Ratchet for Offline Mail
 
-**bitchat problem:** Tor was iOS-only (via Arti xcframework) when Airhop's design was set. bitchat-android has since added `ArtiTorManager.kt`, wired through `BitchatApplication` and `OkHttpProvider`, so both platforms now have it.  
-**Airhop:** iOS embeds `arti.xcframework` with a full `AirhopTorManager` (SOCKS5 on port 39050, bootstrap monitor, network path recovery). Android detects Orbot via a TCP probe on localhost:9050. Both platforms route Nostr traffic through the detected proxy.
+**bitchat problem:** Courier envelopes use Noise X, which is one-way. If the recipient's long-term key is ever compromised, every piece of mail still waiting for them is readable.  
+**Airhop:** Signal's Double Ratchet for Airhop-to-Airhop DMs, plus bitchat-compatible one-time prekeys for offline mail. Prekey bundles travel signed over the mesh and never touch Nostr, and an envelope seals to a one-time prekey, never the long-term key, so waiting mail survives that key being compromised later.
 
-### Gap 4: Double Ratchet for Offline Mail
+### Gap 4: Files and Video
 
-**bitchat problem:** Courier envelopes use Noise X (one-way). Compromise of recipient's static key exposes all undelivered mail.  
-**Airhop:** Full Signal Double Ratchet (DR) for Airhop-to-Airhop DMs, plus bitchat-compatible one-time prekeys for offline mail. Prekey bundles are signed and gossiped over the mesh as `0x24` (not published to Nostr), and a courier envelope seals to a one-time prekey rather than the recipient's static key, so undelivered mail stays protected if that static key is later compromised.
+**bitchat position:** Size caps per file type, checked as a packet is decoded: 1 MiB for files, 512 KiB for photos and voice notes. Video crosses the wire but neither platform plays it. Android shows a type badge, iOS shows nothing useful at all.  
+**Airhop:** Matches the caps and does not raise them. An earlier plan for chunked streaming with no ceiling was dropped, because bitchat rejects an oversized packet while decoding it, so raising the limit breaks interop in both directions. One packet per file, a MIME allow-list, magic bytes checked against the extension, and the fragment layer splits it for the radio. Video rides that same path and plays inline on both platforms, which a bitchat peer accepts and shows as an ordinary file. Live video calling was dropped: the fast WiFi path cannot cross platforms, so a call could never connect an iPhone to an Android.
 
-### Gap 5: File Transfers
+### Gap 5: Non-Technical UX
 
-**bitchat position:** Per-type caps in `FileTransferLimits`, enforced at the binary-protocol decode layer. 1 MiB is the ceiling for general files; photos and voice notes are capped at 512 KiB.  
-**Airhop:** Matches it. An earlier plan for 64 KiB chunked streaming with no protocol cap was dropped: the cap is enforced when bitchat _decodes_ a packet, so anything larger is rejected outright and would have broken interop in both directions. Airhop sends one `BitchatFilePacket` per file (512 KiB photos and voice, 1 MiB otherwise, MIME allow-list, magic-byte validation) and lets the fragment layer split it for the radio. A larger Airhop-only path remains possible later, but it cannot be the default without losing bitchat compatibility.
-
-### Gap 6: Video Support
-
-**bitchat problem:** No video packet type, no mechanism, no MIME type for video.  
-**Airhop:** videos are shared as files over the mesh and play inline on any platform. Live video streaming was dropped: the WiFi fast path does not cross platforms, so cross-platform video calling is not achievable with these stacks.
-
-### Gap 7: Non-Technical UX
-
-**bitchat problem:** No onboarding. Users see raw hex peer IDs. Contact verification is manual fingerprint comparison.  
-**Airhop:** Human-readable usernames (Adjective + Noun + 4-digit suffix, deterministic from pubkey). QR bootstrap.
+**bitchat problem:** The protocol work is excellent. The app around it is hard to use.  
+**Airhop:** This is priority one, and something we focused on from day 0. The interface follows the laws of UI/UX and the conventions Apple's Human Interface Guidelines and Material Design agree on, so it behaves the way people already expect a messaging app to.
 
 ## 2. System Architecture
 
@@ -140,7 +130,7 @@ bitchat is an excellent foundation. Airhop fills the gaps it left open.
 - [~] X3DH: **dropped.** The Noise handshake already seeds the ratchet, so a separate key agreement was redundant. One-time prekey bundles (`src/core/mesh/wire/prekey-bundle.ts`) are gossiped over the mesh as `0x24`, never published to Nostr
 - [x] WiFi Aware native module (Android). The iOS MultipeerConnectivity counterpart was written, never worked on a device, and was removed; iOS got Apple's standards-based `WiFiAware` framework instead
 - [~] Chunked file transfer >1 MiB: **dropped, see Gap 4.** bitchat enforces the 1 MiB cap when it _decodes_ a packet, so anything larger is rejected outright and interop breaks in both directions. Airhop sends one `BitchatFilePacket` per file and lets the fragment layer split it
-- [~] Video frame capture (`react-native-vision-camera` was removed from `package.json` entirely) and `0x30: videoFrame`: **dropped, see Gap 2.** The removal is recorded in `packet-codec.ts` so the type is not reintroduced by accident
+- [~] Video frame capture (`react-native-vision-camera` was removed from `package.json` entirely) and `0x30: videoFrame`: **dropped, see Gap 4.** The removal is recorded in `packet-codec.ts` so the type is not reintroduced by accident
 
 **Milestone:** Double Ratchet passing test vectors. Same-platform WiFi transport for attachments. Offline video calling was **dropped**: the WiFi fast path does not cross platforms, so it could never work iOS to Android.
 
@@ -227,7 +217,89 @@ It is built to Airhop's core constraint: no network dependency for the on-device
 
 **Milestone:** A user with zero connectivity downloads a model once, then asks it questions and gets answered fully offline, with no server round-trip of any kind.
 
-### v1.2.0: Plugin Integrations
+### v1.2.0: Relay Hardware
+
+**Goal:** Run the relay path against real nodes.
+
+Relay support is written and simulated but has never met hardware; see [`PROTOCOLS.md`](../spec/PROTOCOLS.md) section 10.
+
+- [ ] [Bitle](https://bitle.org) firmware on the mesh: Noise XX, courier mailbox, gossip sync, and the `0xB1` relay flag read off a real announce
+- [ ] The LoRa trunk carrying traffic between two nodes with no phone bridging the gap
+- [ ] The same runs against bitchat, so one deployed node serves both clients
+
+**Milestone:** A Bitle node relays between an Airhop phone and a bitchat phone, and the LoRa trunk carries traffic with no phone in between.
+
+### v1.3.0: Web / Browser
+
+**Goal:** A Nostr-only web companion that shares the TypeScript protocol core.
+
+Web Bluetooth cannot advertise as a GATT Peripheral, so a browser tab cannot join the BLE mesh. The web target is Nostr-only: private DMs, group channels, geo-relay discovery, Cashu payments, identity and crypto. A companion for desktop or remote use, not a mesh node. Chrome and Edge support Web Bluetooth; Firefox and Safari do not, and there is no polyfill path, so those get an explicit notice rather than a silent failure.
+
+- [ ] `react-native-web` build target
+- [ ] BLE-dependent code paths gated behind platform checks so the build does not fail
+- [ ] Nostr client, gift-wrap DMs, geo-relay, and payments working in browser
+- [ ] Progressive Web App manifest for offline caching
+- [ ] Hosted as a static bundle (no server required)
+- [ ] Unsupported browser notice for Firefox and Safari
+
+**Milestone:** A browser tab exchanges encrypted DMs with an Airhop mobile node over Nostr.
+
+### v1.4.0: Terminal / CLI
+
+**Goal:** A headless Node.js node for Linux, Raspberry Pi, or any server.
+
+The TypeScript protocol core runs in Node.js without React Native. A terminal node participates in the Nostr bridge, acts as a persistent store-and-forward courier, and can run BLE on Linux via BlueZ. Useful for fixed relay infrastructure in a space where phones are not always present.
+
+- [ ] Node.js build target for `src/core/` (strip React Native platform imports)
+- [ ] Linux BLE via `@abandonware/noble` (BlueZ wrapper for Node.js)
+- [ ] CLI interface: join channel, send message, peer list, relay stats
+- [ ] Daemonize support for always-on relay nodes
+- [ ] Docker image for straightforward deployment
+
+**Milestone:** A Raspberry Pi running Airhop CLI relays BLE packets between two mobile nodes.
+
+### v1.5.0: Smartwatch Companions
+
+**Goal:** Companion apps for Apple Watch and Wear OS, with no change to the core protocol.
+
+Neither watchOS nor Wear OS provides the background BLE execution primitives needed to relay mesh traffic, so both are companion interfaces to the phone app rather than standalone nodes.
+
+#### Apple Watch (watchOS)
+
+- [ ] SwiftUI app talking to the iOS app over WatchConnectivity
+- [ ] Incoming message notifications with sender name and channel
+- [ ] Quick reply from a set of short pre-defined responses
+- [ ] Panic wipe trigger: a gesture sends an immediate wipe command to the paired iPhone, destroying all keys and message content in under a second
+- [ ] Glanceable recent-messages complication
+
+#### Wear OS (Android)
+
+- [ ] Kotlin app on Compose for Wear, using the Wearable Data Layer API
+- [ ] Incoming message notifications mirrored from the Android app
+- [ ] Quick reply support
+- [ ] Panic wipe trigger matching the Apple Watch behaviour
+- [ ] Tile showing unread message count and last sender
+
+**Milestone:** A user can read incoming messages and trigger a full panic wipe from their wrist on both Apple Watch and Wear OS.
+
+### v1.6.0: Desktop (macOS + Windows)
+
+**Goal:** Native desktop apps, macOS first.
+
+macOS is the priority: CoreBluetooth has the same API surface as iOS, so the existing Swift `AirhopBLEModule` needs minimal change, and bitchat already ships a macOS target. Windows is secondary and ships as a point release after macOS stabilizes, since WinRT needs a new native module that the Swift code cannot provide.
+
+- [ ] `react-native-macos` target added to the project
+- [ ] `AirhopBLEModule.swift` audited and tested on macOS (CoreBluetooth is identical)
+- [ ] macOS-specific entitlements and sandbox config (`bitchat-macOS.entitlements` as reference)
+- [ ] WiFi Aware enabled on macOS (Mac Catalyst 26 carries the same framework)
+- [ ] Mac App Store submission
+- [ ] `react-native-windows` target scoped and scheduled
+- [ ] Windows BLE native module via WinRT Bluetooth APIs
+- [ ] Microsoft Store submission
+
+**Milestone:** A macOS node joins the BLE mesh alongside iOS and Android peers. Windows target scoped and in progress.
+
+### v1.7.0: Plugin Integrations
 
 **Goal:** Opt-in plugins for social federation and regional payments, without touching the core protocol.
 
@@ -264,88 +336,6 @@ Airhop's identity model (Ed25519 keypairs, no accounts) maps onto both the [AT P
 - [ ] Capability model: no key access or network call on the user's behalf without a per-action confirmation
 
 **Milestone:** An Airhop identity linked to a Bluesky DID and a Mastodon actor, cross-posting to both. Indian users initiate UPI payments from a contact's profile when online.
-
-### v1.3.0: Relay Hardware
-
-**Goal:** Run the relay path against real nodes.
-
-Relay support is written and simulated but has never met hardware; see [`PROTOCOLS.md`](../spec/PROTOCOLS.md) section 10.
-
-- [ ] [Bitle](https://bitle.org) firmware on the mesh: Noise XX, courier mailbox, gossip sync, and the `0xB1` relay flag read off a real announce
-- [ ] The LoRa trunk carrying traffic between two nodes with no phone bridging the gap
-- [ ] The same runs against bitchat, so one deployed node serves both clients
-
-**Milestone:** A Bitle node relays between an Airhop phone and a bitchat phone, and the LoRa trunk carries traffic with no phone in between.
-
-### v1.4.0: Web / Browser
-
-**Goal:** A Nostr-only web companion that shares the TypeScript protocol core.
-
-Web Bluetooth cannot advertise as a GATT Peripheral, so a browser tab cannot join the BLE mesh. The web target is Nostr-only: private DMs, group channels, geo-relay discovery, Cashu payments, identity and crypto. A companion for desktop or remote use, not a mesh node. Chrome and Edge support Web Bluetooth; Firefox and Safari do not, and there is no polyfill path, so those get an explicit notice rather than a silent failure.
-
-- [ ] `react-native-web` build target
-- [ ] BLE-dependent code paths gated behind platform checks so the build does not fail
-- [ ] Nostr client, gift-wrap DMs, geo-relay, and payments working in browser
-- [ ] Progressive Web App manifest for offline caching
-- [ ] Hosted as a static bundle (no server required)
-- [ ] Unsupported browser notice for Firefox and Safari
-
-**Milestone:** A browser tab exchanges encrypted DMs with an Airhop mobile node over Nostr.
-
-### v1.5.0: Terminal / CLI
-
-**Goal:** A headless Node.js node for Linux, Raspberry Pi, or any server.
-
-The TypeScript protocol core runs in Node.js without React Native. A terminal node participates in the Nostr bridge, acts as a persistent store-and-forward courier, and can run BLE on Linux via BlueZ. Useful for fixed relay infrastructure in a space where phones are not always present.
-
-- [ ] Node.js build target for `src/core/` (strip React Native platform imports)
-- [ ] Linux BLE via `@abandonware/noble` (BlueZ wrapper for Node.js)
-- [ ] CLI interface: join channel, send message, peer list, relay stats
-- [ ] Daemonize support for always-on relay nodes
-- [ ] Docker image for straightforward deployment
-
-**Milestone:** A Raspberry Pi running Airhop CLI relays BLE packets between two mobile nodes.
-
-### v1.6.0: Smartwatch Companions
-
-**Goal:** Companion apps for Apple Watch and Wear OS, with no change to the core protocol.
-
-Neither watchOS nor Wear OS provides the background BLE execution primitives needed to relay mesh traffic, so both are companion interfaces to the phone app rather than standalone nodes.
-
-#### Apple Watch (watchOS)
-
-- [ ] SwiftUI app talking to the iOS app over WatchConnectivity
-- [ ] Incoming message notifications with sender name and channel
-- [ ] Quick reply from a set of short pre-defined responses
-- [ ] Panic wipe trigger: a gesture sends an immediate wipe command to the paired iPhone, destroying all keys and message content in under a second
-- [ ] Glanceable recent-messages complication
-
-#### Wear OS (Android)
-
-- [ ] Kotlin app on Compose for Wear, using the Wearable Data Layer API
-- [ ] Incoming message notifications mirrored from the Android app
-- [ ] Quick reply support
-- [ ] Panic wipe trigger matching the Apple Watch behaviour
-- [ ] Tile showing unread message count and last sender
-
-**Milestone:** A user can read incoming messages and trigger a full panic wipe from their wrist on both Apple Watch and Wear OS.
-
-### v1.7.0: Desktop (macOS + Windows)
-
-**Goal:** Native desktop apps, macOS first.
-
-macOS is the priority: CoreBluetooth has the same API surface as iOS, so the existing Swift `AirhopBLEModule` needs minimal change, and bitchat already ships a macOS target. Windows is secondary and ships as a point release after macOS stabilizes, since WinRT needs a new native module that the Swift code cannot provide.
-
-- [ ] `react-native-macos` target added to the project
-- [ ] `AirhopBLEModule.swift` audited and tested on macOS (CoreBluetooth is identical)
-- [ ] macOS-specific entitlements and sandbox config (`bitchat-macOS.entitlements` as reference)
-- [ ] WiFi Aware enabled on macOS (Mac Catalyst 26 carries the same framework)
-- [ ] Mac App Store submission
-- [ ] `react-native-windows` target scoped and scheduled
-- [ ] Windows BLE native module via WinRT Bluetooth APIs
-- [ ] Microsoft Store submission
-
-**Milestone:** A macOS node joins the BLE mesh alongside iOS and Android peers. Windows target scoped and in progress.
 
 ### v1.8.0: SDK / Library
 

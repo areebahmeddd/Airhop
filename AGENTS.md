@@ -139,7 +139,6 @@ Comments here are dense on purpose. The bar for keeping one is that it says some
 - **Section banners** (`// ---- Name ----`) belong only in a long file or a flat data table, where they are the only navigation.
 - **Style blocks**: justify a number, a touch target or a platform quirk, or say nothing.
 - **Describe the system, not the authors.** The exception is protocol code, where "we" means _this node_ rather than the peer, a distinction the prose needs.
-- `landing/` takes **no** `//` comments at all.
 
 ## Common Mistakes to Avoid
 

@@ -689,18 +689,14 @@ export default function ArchitecturePage() {
               />
 
               <p>
-                The WiFi column needs two caveats. WiFi direct is Android{" "}
-                <TextLink href="https://wi-fi.org/discover-wi-fi/wi-fi-aware">WiFi Aware</TextLink>{" "}
-                on one side and iOS{" "}
-                <TextLink href="https://developer.apple.com/documentation/multipeerconnectivity">
-                  MultipeerConnectivity
-                </TextLink>{" "}
-                on the other.{" "}
+                The WiFi column needs two caveats. Both platforms run{" "}
+                <TextLink href="https://wi-fi.org/discover-wi-fi/wi-fi-aware">WiFi Aware</TextLink>,
+                the same protocol on the same radio, but{" "}
                 <strong className="text-ink">
-                  They are different protocols on different radios and cannot talk to each other,
+                  Apple requires a paired data path that Android cannot complete,
                 </strong>{" "}
-                so this path is Android-to-Android or iPhone-to-iPhone only, at least until a
-                standards-based option exists on both.
+                so this path is Android-to-Android or iPhone-to-iPhone only. The LAN transport is
+                what carries an iPhone to an Android over a shared network.
               </p>
               <p>
                 And WiFi currently shares the same paced send queue as Bluetooth, so it runs at

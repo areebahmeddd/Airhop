@@ -50,36 +50,36 @@ I built this at a 24-hour hackathon (July 2026) during my final year of undergra
 
 ## Built-in Features
 
-| Category          | Feature                   | Description                                                                                                                                     |
-| ----------------- | ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
-| 💬 **Messaging**  | Private DMs               | One-on-one end-to-end encrypted messaging                                                                                                       |
-|                   | Private groups            | Fixed-roster encrypted group chats. The creator signs the member list (up to 16) and shares the key over Noise; only listed members can read    |
-|                   | Private channels          | Invite-only encrypted rooms. A shared key travels in the invite link, so anyone with the link joins and reads; there is no member cap           |
-|                   | Public channels           | IRC-style group chat rooms anyone nearby can join                                                                                               |
-|                   | Location channels         | Public rooms scoped to a geohash cell, from a block to a region, bridged over the internet. Jump to any cell to read a place you are not in     |
-|                   | Bulletin board            | Signed notices that outlive chat: pin a post to your mesh or location for 1 to 7 days, with urgent flags                                        |
-| 📎 **Sharing**    | Photos & videos           | Send photos and videos over the mesh. Photos support PNG, JPEG, GIF and WebP up to 512 KiB; videos support MP4 and MOV up to 1 MiB              |
-|                   | Voice messages            | Send a recorded voice message over the mesh in AAC, 16 kHz mono, up to 512 KiB                                                                  |
-|                   | Live voice                | Hold the mic to talk to people in range, walkie-talkie style; recordings land in chat as voice messages                                         |
-|                   | File transfer             | Send any file format over the mesh, including documents and archives, up to 1 MiB per file                                                      |
-|                   | Store-and-forward courier | Messages are delivered automatically when a route becomes available, sealed to a one-time prekey for forward secrecy                            |
-| 🔒 **Identity**   | No-account identity       | Identity is an Ed25519 key pair stored only on your device                                                                                      |
-|                   | Human-readable names      | Deterministic usernames derived from your public key                                                                                            |
-|                   | QR contacts               | Add a contact by scanning their QR code; carries their public keys, not just an ID                                                              |
-|                   | End-to-end encryption     | Secure sessions using the Noise XX protocol                                                                                                     |
-|                   | Forward secrecy           | Double Ratchet protects past messages even if keys are later compromised                                                                        |
-|                   | Panic wipe                | Triple-tap instantly erases keys and local messages (nuke your account)                                                                         |
-| 🕸️ **Networking** | Bluetooth mesh            | Communicate with nearby devices without internet                                                                                                |
-|                   | LAN mesh                  | Run the whole mesh over a shared WiFi network, discovered by mDNS. Works iPhone to Android, unlike WiFi Aware                                   |
-|                   | Mesh bridge               | Link this area's public #bluetooth chat with another out-of-range Bluetooth crowd over the internet. Off by default                             |
-|                   | WiFi Aware                | Photos and files take a direct WiFi link instead of Bluetooth. Two Android devices, or two iPhones (iOS 26+, paired once). Not across platforms |
-|                   | Multi-hop routing         | Messages automatically relay across nearby devices (up to 7 hops)                                                                               |
-|                   | Relay nodes               | Third-party [Bitle](https://bitle.org) hardware extends the mesh where nobody stands. Requires an ESP32 board, plus LoRa to link nodes          |
-|                   | bitchat compatibility     | Airhop nodes communicate directly with bitchat on iOS and Android                                                                               |
-| 🌐 **Internet**   | Internet fallback         | DMs and channels keep flowing over Nostr relays when a user moves out of Bluetooth range                                                        |
-|                   | Geo-relay discovery       | Discover location-based channels across 300+ distributed Nostr relays                                                                           |
-|                   | Internet gateway          | Lend your connection to a nearby offline phone so it can still reach the location (geohash) channels. Off by default                            |
-|                   | Tor integration           | Route Nostr traffic through Tor (Arti on iOS, Orbot on Android)                                                                                 |
+| Category          | Feature                   | Description                                                                                                                                  |
+| ----------------- | ------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| 💬 **Messaging**  | Private DMs               | One-on-one end-to-end encrypted messaging                                                                                                    |
+|                   | Private groups            | Fixed-roster encrypted group chats. The creator signs the member list (up to 16) and shares the key over Noise; only listed members can read |
+|                   | Private channels          | Invite-only encrypted rooms. A shared key travels in the invite link, so anyone with the link joins and reads; there is no member cap        |
+|                   | Public channels           | IRC-style group chat rooms anyone nearby can join                                                                                            |
+|                   | Location channels         | Public rooms scoped to a geohash cell, from a block to a region, bridged over the internet. Jump to any cell to read a place you are not in  |
+|                   | Bulletin board            | Signed notices that outlive chat: pin a post to your mesh or location for 1 to 7 days, with urgent flags                                     |
+| 📎 **Sharing**    | Photos & videos           | Send photos and videos over the mesh. Photos support PNG, JPEG, GIF and WebP up to 512 KiB; videos support MP4 and MOV up to 1 MiB           |
+|                   | Voice messages            | Send a recorded voice message over the mesh in AAC, 16 kHz mono, up to 512 KiB                                                               |
+|                   | Live voice                | Hold the mic to talk to people in range, walkie-talkie style; recordings land in chat as voice messages                                      |
+|                   | File transfer             | Send any file format over the mesh, including documents and archives, up to 1 MiB per file                                                   |
+|                   | Store-and-forward courier | Messages are delivered automatically when a route becomes available, sealed to a one-time prekey for forward secrecy                         |
+| 🔒 **Identity**   | No-account identity       | Identity is an Ed25519 key pair stored only on your device                                                                                   |
+|                   | Human-readable names      | Deterministic usernames derived from your public key                                                                                         |
+|                   | QR contacts               | Add a contact by scanning their QR code; carries their public keys, not just an ID                                                           |
+|                   | End-to-end encryption     | Secure sessions using the Noise XX protocol                                                                                                  |
+|                   | Forward secrecy           | Double Ratchet protects past messages even if keys are later compromised                                                                     |
+|                   | Panic wipe                | Triple-tap instantly erases keys and local messages (nuke your account)                                                                      |
+| 🕸️ **Networking** | Bluetooth mesh            | Communicate with nearby devices without internet                                                                                             |
+|                   | LAN mesh                  | Run the whole mesh over a shared WiFi network, discovered by mDNS. Works iPhone to Android, unlike WiFi Aware                                |
+|                   | Mesh bridge               | Link this area's public #bluetooth chat with another out-of-range Bluetooth crowd over the internet. Off by default                          |
+|                   | WiFi Aware                | Faster file transfers between two Android devices, or two iPhones. Not across platforms                                                      |
+|                   | Multi-hop routing         | Messages automatically relay across nearby devices (up to 7 hops)                                                                            |
+|                   | Relay nodes               | Third-party [Bitle](https://bitle.org) hardware extends the mesh where nobody stands. Requires an ESP32 board, plus LoRa to link nodes       |
+|                   | bitchat compatibility     | Airhop nodes communicate directly with bitchat on iOS and Android                                                                            |
+| 🌐 **Internet**   | Internet fallback         | DMs and channels keep flowing over Nostr relays when a user moves out of Bluetooth range                                                     |
+|                   | Geo-relay discovery       | Discover location-based channels across 300+ distributed Nostr relays                                                                        |
+|                   | Internet gateway          | Lend your connection to a nearby offline phone so it can still reach the location (geohash) channels. Off by default                         |
+|                   | Tor integration           | Route Nostr traffic through Tor (Arti on iOS, Orbot on Android)                                                                              |
 
 ## Optional Features
 
@@ -128,7 +128,7 @@ Notes on the numbers:
 - A channel attachment paces at 30 ms instead (**~15 KiB/s**), since each broadcast fragment requires one radio write per connected peer, increasing airtime usage as the room grows.
 - A 1 MiB file (the per-file cap) takes about 56 seconds to one peer. bitchat rejects anything larger as it decodes the packet, so the cap is not ours to raise and chunking above it was dropped. An Airhop-only path stays possible, but it cannot be the default without losing bitchat compatibility.
 - LAN needs no such pacing, since the 25 ms delay is a Bluetooth requirement rather than a protocol one. The 467-byte fragment size stays regardless: the receiver reassembles by index and a peer may be relaying to Bluetooth next.
-- Wi-Fi Aware doesn’t work across platforms. Apple requires pairing that Android can’t complete, so connections are limited to Android-to-Android or iPhone-to-iPhone (iOS 26+).
+- Wi-Fi Aware doesn’t work across platforms. Apple requires pairing that Android can’t complete, so connections are limited to Android-to-Android (Android 10+) or iPhone-to-iPhone (iOS 26+, paired once).
 - Nostr relays carry small signed events, not file bytes. Files can be shared over Nostr only by uploading them to a separate HTTP host and posting a link ([NIP-96](https://github.com/nostr-protocol/nips/blob/master/96.md)). Airhop does not do this: that host is a central server that can log, throttle, or take down your files, which is exactly what this app avoids. Attachments therefore travel only over Bluetooth, LAN or WiFi.
 - Courier is the fallback when no other transport can reach the recipient. The envelope is sealed to a one-time prekey before it leaves, so the carrier holding it cannot read it, and it is dropped after 24 hours if nobody meets the recipient. Text only: media is never couriered.
 

@@ -362,7 +362,14 @@ class AirhopBLEModule(
             if (history.size >= errorLimit) {
                 blockedUntil[address] = now + blockDurationMs
                 history.clear()
-                Log.w(TAG, "Blocking $address: $errorLimit error disconnects in window")
+                // Tail only: this is the peer's Bluetooth address and the log is
+                // readable over adb on an unlocked phone, so writing it whole
+                // leaves a record of who was nearby. Five characters tell peers
+                // apart in one session and correlate with nothing after it.
+                Log.w(
+                    TAG,
+                    "Blocking …${address.takeLast(5)}: $errorLimit error disconnects in window",
+                )
             }
         }
     }
