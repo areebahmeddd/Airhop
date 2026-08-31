@@ -4,8 +4,6 @@
 
 ## 1. Where Airhop Fits: Gap Analysis vs bitchat
 
-bitchat is an excellent foundation. Airhop fills the gaps it left open.
-
 ### Gap 1: Unified Codebase
 
 **bitchat problem:** iOS and Android are separate native codebases that drift. The Android v0.7 fragment size mismatch (500B vs 150B) broke iOS-Android compatibility for months with no one noticing.  
@@ -44,7 +42,7 @@ bitchat is an excellent foundation. Airhop fills the gaps it left open.
 │                                                                             │
 │  ┌─────────────────────────────────────────────────────────────────────┐    │
 │  │              MESSAGE ROUTER (TypeScript)                            │    │
-│  │  canDeliverPromptly() -> both radios -> Nostr -> courier            │    │
+│  │  canDeliverPromptly() -> every link -> Nostr -> courier             │    │
 │  │  -> Courier envelope (store-and-forward) -> Double Ratchet step     │    │
 │  └──────────────────────────────┬──────────────────────────────────────┘    │
 │                                 │                                           │
@@ -54,16 +52,16 @@ bitchat is an excellent foundation. Airhop fills the gaps it left open.
 │  └──────────┬─────────────────────────────────────┬────────────────────┘    │
 │             │                                     │                         │
 │  ┌──────────▼──────────────────┐     ┌────────────▼───────────────────┐     │
-│  │   BLE MESH ENGINE (TS)      │     │   NOSTR TRANSPORT (TS)         │     │
+│  │   MESH ENGINE (TS)          │     │   NOSTR TRANSPORT (TS)         │     │
 │  │  PacketCodec, TTL flood     │     │  nostr-tools NIP-17/59         │     │
 │  │  GossipSync (GCS filter)    │     │  SimplePool -> 300+ relays     │     │
 │  │  CourierStore, Fragments    │     │  GeoRelayDirectory, Tor proxy  │     │
 │  └──────────┬──────────────────┘     └────────────────────────────────┘     │
 │             │ JSI TurboModule                                               │
 │  ┌──────────▼──────────────────────────────────────────────────────────┐    │
-│  │              AIRHOP NATIVE BLE MODULE                               │    │
-│  │  iOS: CBPeripheralManager + CBCentralManager (Swift)                │    │
-│  │  Android: BluetoothGattServer + BluetoothLeScanner (Kotlin)         │    │
+│  │           AIRHOP NATIVE TRANSPORT MODULES                           │    │
+│  │  BLE: CBCentral/CBPeripheral (Swift), BluetoothGatt (Kotlin)        │    │
+│  │  LAN: NWListener/NWBrowser (Swift), NsdManager (Kotlin)             │    │
 │  └─────────────────────────────────────────────────────────────────────┘    │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```

@@ -177,6 +177,38 @@ export default function PrivacyPage() {
           </section>
 
           <section className="border-line space-y-4 border-t pt-12 first:border-t-0 first:pt-0">
+            <h2 className="text-ink text-base font-semibold">Local network (optional)</h2>
+            <p className="text-[15px] leading-[1.75]">
+              Airhop can carry the mesh over a WiFi network you are already joined to, which is the
+              only way an iPhone and an Android phone reach each other without Bluetooth. Finding
+              other devices uses mDNS, the same mechanism a printer uses to appear on a network.
+            </p>
+            <p className="text-[15px] leading-[1.75]">
+              <strong>
+                An mDNS announcement is readable by every device on that network, and by whoever
+                runs it.
+              </strong>{" "}
+              Network equipment commonly logs it, so on a workplace, campus, hotel or venue network
+              this can tell the operator that a device there is running Airhop, with a timestamp.
+              Bluetooth reaches only as far as the radio does and is not recorded by infrastructure.
+            </p>
+            <p className="text-[15px] leading-[1.75]">
+              What the announcement contains is deliberately empty of history:{" "}
+              <strong>a random name, generated fresh each time the transport starts.</strong> It is
+              never your peer ID or any other lasting identifier, so records from two different
+              networks cannot be matched to show the same phone was on both. Your identity is proven
+              only after a connection is made, inside the same encryption every other transport
+              uses.
+            </p>
+            <p className="text-[15px] leading-[1.75]">
+              Message contents are unaffected: they stay end-to-end encrypted exactly as over
+              Bluetooth. What the network operator can observe is that connections exist, when, and
+              roughly how much data moves, in the way any network operator can. Local network is off
+              by default and stays off until you turn it on.
+            </p>
+          </section>
+
+          <section className="border-line space-y-4 border-t pt-12 first:border-t-0 first:pt-0">
             <h2 className="text-ink text-base font-semibold">Nostr and the internet (optional)</h2>
             <p className="text-[15px] leading-[1.75]">
               When Airhop uses the internet, it connects to public or user-selected Nostr relays to

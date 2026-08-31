@@ -66,6 +66,15 @@ const SECTIONS: LegalSection[] = [
     ],
   },
   {
+    heading: "Local network (optional)",
+    paragraphs: [
+      "Airhop can carry the mesh over a WiFi network you are already joined to, which is the only way an iPhone and an Android phone reach each other without Bluetooth. Finding other devices uses mDNS, the same mechanism a printer uses to appear on a network.",
+      "**An mDNS announcement is readable by every device on that network, and by whoever runs it.** Network equipment commonly logs it, so on a workplace, campus, hotel or venue network this can tell the operator that a device there is running Airhop, with a timestamp. Bluetooth reaches only as far as the radio does and is not recorded by infrastructure.",
+      "What the announcement contains is deliberately empty of history: **a random name, generated fresh each time the transport starts.** It is never your peer ID or any other lasting identifier, so records from two different networks cannot be matched to show the same phone was on both. Your identity is proven only after a connection is made, inside the same encryption every other transport uses.",
+      "Message contents are unaffected: they stay end-to-end encrypted exactly as over Bluetooth. What the network operator can observe is that connections exist, when, and roughly how much data moves, in the way any network operator can. Local network is off by default and stays off until you turn it on.",
+    ],
+  },
+  {
     heading: "Nostr and the internet (optional)",
     paragraphs: [
       "When Airhop uses the internet, it connects to public or user-selected Nostr relays to extend conversations beyond Bluetooth range.",
