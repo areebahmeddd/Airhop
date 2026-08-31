@@ -1575,10 +1575,12 @@ export const strings: Strings = {
 
   // ---- Settings: group headings ----
   "settings.group.transports": "Транспорти",
+  "settings.group.internet": "Інтернет",
   "settings.group.nearby": "Поблизу",
   "settings.group.sync": "Синхронізація",
   "settings.group.features": "Функції",
   "settings.group.messages": "Повідомлення",
+  "settings.group.local": "Локально",
   "settings.group.media": "Медіа",
   "settings.group.reset": "Скидання",
   "settings.group.always_on": "Завжди увімкнено",
@@ -1740,6 +1742,17 @@ export const strings: Strings = {
   "settings.network.relay_duplicate": "Цей релей уже є у вашому списку.",
   "settings.network.relay_invalid":
     "Введіть дійсний хост релея, наприклад relay.example.com. Порт потрібен, лише якщо релей не використовує типовий. IP-адреси та локальні імена не дозволені.",
+  "settings.network.lan": "Локальна мережа",
+  "settings.network.lan_desc":
+    "Зв’язуйтеся з людьми в тій самій мережі WiFi, зокрема між iPhone і Android. Інші пристрої в мережі бачать, що ви користуєтеся Airhop.",
+  "settings.network.lan_searching": "У цій мережі немає пристроїв Airhop",
+  "settings.network.lan_active": "Підключено в цій мережі",
+  "settings.network.lan_unavailable": "Ви не в мережі WiFi",
+  "settings.network.lan_permission":
+    "Доступ до локальної мережі для Airhop вимкнено",
+  "settings.network.lan_unsupported": "Недоступно на цьому пристрої",
+  "settings.network.lan_foreground":
+    "Зупиняється, коли Airhop у фоні. Bluetooth продовжує працювати.",
   "settings.network.wifi_pair": "Спарювання",
   "settings.network.wifi_paired": "З’єднані пристрої",
   "settings.network.wifi_pair_find": "Знайти пристрій",

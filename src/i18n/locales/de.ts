@@ -1601,10 +1601,12 @@ export const strings: Strings = {
 
   // ---- Settings: group headings ----
   "settings.group.transports": "Übertragungswege",
+  "settings.group.internet": "Internet",
   "settings.group.nearby": "In der Nähe",
   "settings.group.sync": "Sync",
   "settings.group.features": "Funktionen",
   "settings.group.messages": "Nachrichten",
+  "settings.group.local": "Lokal",
   "settings.group.media": "Medien",
   "settings.group.reset": "Zurücksetzen",
   "settings.group.always_on": "Immer an",
@@ -1769,6 +1771,17 @@ export const strings: Strings = {
     "Dieses Relay steht bereits in deiner Liste.",
   "settings.network.relay_invalid":
     "Gib einen gültigen Relay-Host ein, z. B. relay.example.com. Ein Port ist nur nötig, wenn das Relay nicht den Standard verwendet. IP-Adressen und lokale Namen sind nicht erlaubt.",
+  "settings.network.lan": "Lokales Netzwerk",
+  "settings.network.lan_desc":
+    "Erreiche Leute im selben WLAN, auch zwischen iPhone und Android. Andere Geräte im Netzwerk können sehen, dass du Airhop verwendest.",
+  "settings.network.lan_searching": "Keine Airhop-Geräte in diesem Netzwerk",
+  "settings.network.lan_active": "In diesem Netzwerk verbunden",
+  "settings.network.lan_unavailable": "In keinem WLAN",
+  "settings.network.lan_permission":
+    "Der Zugriff aufs lokale Netzwerk ist für Airhop deaktiviert",
+  "settings.network.lan_unsupported": "Auf diesem Gerät nicht verfügbar",
+  "settings.network.lan_foreground":
+    "Pausiert, wenn Airhop im Hintergrund ist. Bluetooth läuft weiter.",
   "settings.network.wifi_pair": "Kopplung",
   "settings.network.wifi_paired": "Gekoppelte Geräte",
   "settings.network.wifi_pair_find": "Gerät finden",

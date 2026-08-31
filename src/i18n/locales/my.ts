@@ -1599,10 +1599,12 @@ export const strings: Strings = {
 
   // ---- Settings: group headings ----
   "settings.group.transports": "သယ်ဆောင်ရေးလမ်းကြောင်းများ",
+  "settings.group.internet": "အင်တာနက်",
   "settings.group.nearby": "အနီးအနား",
   "settings.group.sync": "ထပ်တူညီစေခြင်း",
   "settings.group.features": "လုပ်ဆောင်ချက်များ",
   "settings.group.messages": "မက်ဆေ့ဂျ်များ",
+  "settings.group.local": "စက်တွင်း",
   "settings.group.media": "မီဒီယာ",
   "settings.group.reset": "ပြန်လည်သတ်မှတ်ခြင်း",
   "settings.group.always_on": "အမြဲဖွင့်ထား",
@@ -1774,6 +1776,17 @@ export const strings: Strings = {
     "ထိုထပ်ဆင့်လွှင့်စက်သည် သင့်စာရင်းတွင် ရှိပြီးသားဖြစ်သည်။",
   "settings.network.relay_invalid":
     "မှန်ကန်သော ထပ်ဆင့်လွှင့်စက်လိပ်စာကို ထည့်ပါ၊ ဥပမာ relay.example.com။ ပို့တ်သည် စက်က မူလတန်ဖိုးကို မသုံးမှသာ လိုအပ်သည်။ IP လိပ်စာများနှင့် ဒေသတွင်းအမည်များကို ခွင့်မပြုပါ။",
+  "settings.network.lan": "စက်တွင်းကွန်ရက်",
+  "settings.network.lan_desc":
+    "တူညီသော WiFi ပေါ်ရှိ လူများထံ ရောက်ရှိပါ၊ iPhone နှင့် Android ကြားတွင်လည်း ရပါသည်။ ကွန်ရက်ပေါ်ရှိ အခြားစက်များက သင် Airhop သုံးနေကြောင်း မြင်နိုင်ပါသည်။",
+  "settings.network.lan_searching": "ဤကွန်ရက်ပေါ်တွင် Airhop စက် မရှိပါ",
+  "settings.network.lan_active": "ဤကွန်ရက်တွင် ချိတ်ဆက်ထားသည်",
+  "settings.network.lan_unavailable": "WiFi ကွန်ရက်ပေါ်တွင် မရှိပါ",
+  "settings.network.lan_permission":
+    "Airhop အတွက် စက်တွင်းကွန်ရက် သုံးခွင့် ပိတ်ထားသည်",
+  "settings.network.lan_unsupported": "ဤစက်တွင် မရရှိနိုင်ပါ",
+  "settings.network.lan_foreground":
+    "Airhop နောက်ကွယ်သို့ ရောက်သောအခါ ရပ်သွားသည်။ ဘလူးတုသ်က ဆက်လက်အလုပ်လုပ်သည်။",
   "settings.network.wifi_pair": "တွဲချိတ်ခြင်း",
   "settings.network.wifi_paired": "တွဲထားသော ကိရိယာများ",
   "settings.network.wifi_pair_find": "ကိရိယာ ရှာပါ",

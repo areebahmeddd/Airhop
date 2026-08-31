@@ -1618,10 +1618,12 @@ export const strings: Strings = {
 
   // ---- Settings: group headings ----
   "settings.group.transports": "Mga Transport",
+  "settings.group.internet": "Internet",
   "settings.group.nearby": "Sa malapit",
   "settings.group.sync": "Sync",
   "settings.group.features": "Mga Feature",
   "settings.group.messages": "Mga Mensahe",
+  "settings.group.local": "Lokal",
   "settings.group.media": "Media",
   "settings.group.reset": "I-reset",
   "settings.group.always_on": "Laging naka-on",
@@ -1788,6 +1790,17 @@ export const strings: Strings = {
   "settings.network.relay_duplicate": "Nasa listahan mo na ang relay na iyon.",
   "settings.network.relay_invalid":
     "Maglagay ng wastong host ng relay, hal. relay.example.com. Kailangan lang ng port kung hindi ginagamit ng relay ang default. Hindi pinapayagan ang mga IP address at lokal na pangalan.",
+  "settings.network.lan": "Lokal na network",
+  "settings.network.lan_desc":
+    "Abutin ang mga tao sa iisang WiFi, kasama ang pagitan ng iPhone at Android. Makikita ng ibang device sa network na gumagamit ka ng Airhop.",
+  "settings.network.lan_searching": "Walang Airhop device sa network na ito",
+  "settings.network.lan_active": "Nakakonekta sa network na ito",
+  "settings.network.lan_unavailable": "Wala sa isang WiFi network",
+  "settings.network.lan_permission":
+    "Naka-off ang lokal na network access para sa Airhop",
+  "settings.network.lan_unsupported": "Hindi available sa device na ito",
+  "settings.network.lan_foreground":
+    "Humihinto kapag nasa background ang Airhop. Tuloy ang Bluetooth.",
   "settings.network.wifi_pair": "Pagpapares",
   "settings.network.wifi_paired": "Mga nakapares na device",
   "settings.network.wifi_pair_find": "Maghanap ng device",

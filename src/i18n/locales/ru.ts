@@ -1580,10 +1580,12 @@ export const strings: Strings = {
 
   // ---- Settings: group headings ----
   "settings.group.transports": "Транспорты",
+  "settings.group.internet": "Интернет",
   "settings.group.nearby": "Поблизости",
   "settings.group.sync": "Синхронизация",
   "settings.group.features": "Функции",
   "settings.group.messages": "Сообщения",
+  "settings.group.local": "Локально",
   "settings.group.media": "Медиа",
   "settings.group.reset": "Сброс",
   "settings.group.always_on": "Всегда включено",
@@ -1751,6 +1753,17 @@ export const strings: Strings = {
     "Этот ретранслятор уже есть в вашем списке.",
   "settings.network.relay_invalid":
     "Введите корректный хост ретранслятора, например relay.example.com. Порт нужен, только если ретранслятор не использует стандартный. IP-адреса и локальные имена не допускаются.",
+  "settings.network.lan": "Локальная сеть",
+  "settings.network.lan_desc":
+    "Связывайтесь с теми, кто в той же сети WiFi, в том числе между iPhone и Android. Другие устройства в сети видят, что вы используете Airhop.",
+  "settings.network.lan_searching": "В этой сети нет устройств Airhop",
+  "settings.network.lan_active": "Подключено в этой сети",
+  "settings.network.lan_unavailable": "Вы не в сети WiFi",
+  "settings.network.lan_permission":
+    "Доступ к локальной сети для Airhop выключен",
+  "settings.network.lan_unsupported": "Недоступно на этом устройстве",
+  "settings.network.lan_foreground":
+    "Останавливается, когда Airhop уходит в фон. Bluetooth продолжает работать.",
   "settings.network.wifi_pair": "Сопряжение",
   "settings.network.wifi_paired": "Связанные устройства",
   "settings.network.wifi_pair_find": "Найти устройство",

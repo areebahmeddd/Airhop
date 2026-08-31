@@ -1576,10 +1576,12 @@ export const strings: Strings = {
 
   // ---- Settings: group headings ----
   "settings.group.transports": "გადამზიდები",
+  "settings.group.internet": "ინტერნეტი",
   "settings.group.nearby": "ახლოს",
   "settings.group.sync": "სინქრონიზაცია",
   "settings.group.features": "ფუნქციები",
   "settings.group.messages": "შეტყობინებები",
+  "settings.group.local": "ლოკალური",
   "settings.group.media": "მედია",
   "settings.group.reset": "საწყისზე დაბრუნება",
   "settings.group.always_on": "ყოველთვის ჩართული",
@@ -1744,6 +1746,17 @@ export const strings: Strings = {
   "settings.network.relay_duplicate": "ეს რელე უკვე შენს სიაშია.",
   "settings.network.relay_invalid":
     "შეიყვანე რელეს სწორი ჰოსტი, მაგალითად relay.example.com. პორტი მხოლოდ მაშინაა საჭირო, თუ რელე ნაგულისხმევს არ იყენებს. IP მისამართები და ლოკალური სახელები დაუშვებელია.",
+  "settings.network.lan": "ლოკალური ქსელი",
+  "settings.network.lan_desc":
+    "მიაღწიე იმავე WiFi-ზე მყოფებს, iPhone-სა და Android-ს შორისაც. ქსელის სხვა მოწყობილობებს შეუძლიათ დაინახონ, რომ Airhop-ს იყენებ.",
+  "settings.network.lan_searching": "ამ ქსელში Airhop-ის მოწყობილობა არ არის",
+  "settings.network.lan_active": "დაკავშირებულია ამ ქსელში",
+  "settings.network.lan_unavailable": "არ ხარ WiFi ქსელში",
+  "settings.network.lan_permission":
+    "ლოკალურ ქსელზე წვდომა Airhop-ისთვის გამორთულია",
+  "settings.network.lan_unsupported": "ამ მოწყობილობაზე მიუწვდომელია",
+  "settings.network.lan_foreground":
+    "ჩერდება, როცა Airhop ფონურ რეჟიმშია. Bluetooth აგრძელებს მუშაობას.",
   "settings.network.wifi_pair": "დაწყვილება",
   "settings.network.wifi_paired": "დაწყვილებული მოწყობილობები",
   "settings.network.wifi_pair_find": "მოწყობილობის პოვნა",

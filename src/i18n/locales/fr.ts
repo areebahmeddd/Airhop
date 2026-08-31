@@ -1600,10 +1600,12 @@ export const strings: Strings = {
 
   // ---- Settings: group headings ----
   "settings.group.transports": "Transports",
+  "settings.group.internet": "Internet",
   "settings.group.nearby": "À proximité",
   "settings.group.sync": "Synchronisation",
   "settings.group.features": "Fonctions",
   "settings.group.messages": "Messages",
+  "settings.group.local": "Local",
   "settings.group.media": "Médias",
   "settings.group.reset": "Réinitialisation",
   "settings.group.always_on": "Toujours actif",
@@ -1769,6 +1771,17 @@ export const strings: Strings = {
   "settings.network.relay_duplicate": "Ce relais est déjà dans ta liste.",
   "settings.network.relay_invalid":
     "Saisis un hôte de relais valide, par exemple relay.example.com. Le port n’est nécessaire que si le relais n’utilise pas celui par défaut. Les adresses IP et les noms locaux ne sont pas acceptés.",
+  "settings.network.lan": "Réseau local",
+  "settings.network.lan_desc":
+    "Joignez les personnes sur le même WiFi, y compris entre iPhone et Android. Les autres appareils du réseau peuvent voir que vous utilisez Airhop.",
+  "settings.network.lan_searching": "Aucun appareil Airhop sur ce réseau",
+  "settings.network.lan_active": "Connecté sur ce réseau",
+  "settings.network.lan_unavailable": "Pas sur un réseau WiFi",
+  "settings.network.lan_permission":
+    "L’accès au réseau local est désactivé pour Airhop",
+  "settings.network.lan_unsupported": "Non disponible sur cet appareil",
+  "settings.network.lan_foreground":
+    "S’interrompt quand Airhop passe en arrière-plan. Le Bluetooth continue.",
   "settings.network.wifi_pair": "Jumelage",
   "settings.network.wifi_paired": "Appareils jumelés",
   "settings.network.wifi_pair_find": "Trouver un appareil",

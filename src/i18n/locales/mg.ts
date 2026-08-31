@@ -1612,10 +1612,12 @@ export const strings: Strings = {
 
   // ---- Settings: group headings ----
   "settings.group.transports": "Fitaterana",
+  "settings.group.internet": "Aterineto",
   "settings.group.nearby": "Akaiky",
   "settings.group.sync": "Fampifanarahana",
   "settings.group.features": "Fiasa",
   "settings.group.messages": "Hafatra",
+  "settings.group.local": "Eo an-toerana",
   "settings.group.media": "Media",
   "settings.group.reset": "Famerenana",
   "settings.group.always_on": "Mandeha foana",
@@ -1787,6 +1789,18 @@ export const strings: Strings = {
     "Efa ao amin'ny lisitrao io mpanelanelana io.",
   "settings.network.relay_invalid":
     "Soraty ny anaran'ny mpanelanelana mety, ohatra relay.example.com. Mila laharam-pidirana ihany raha tsy mampiasa ny mahazatra ny mpanelanelana. Tsy azo ampiasaina ny adiresy IP sy ny anarana eo an-toerana.",
+  "settings.network.lan": "Tambajotra eo an-toerana",
+  "settings.network.lan_desc":
+    "Tratraro ny olona ao amin'ny WiFi mitovy, na eo amin'ny iPhone sy Android aza. Hitan'ny fitaovana hafa ao amin'ny tambajotra fa mampiasa Airhop ianao.",
+  "settings.network.lan_searching":
+    "Tsy misy fitaovana Airhop amin'ity tambajotra ity",
+  "settings.network.lan_active": "Mifandray amin'ity tambajotra ity",
+  "settings.network.lan_unavailable": "Tsy ao amin'ny tambajotra WiFi",
+  "settings.network.lan_permission":
+    "Vonoina ho an'i Airhop ny fidirana amin'ny tambajotra eo an-toerana",
+  "settings.network.lan_unsupported": "Tsy misy amin'ity fitaovana ity",
+  "settings.network.lan_foreground":
+    "Mijanona rehefa any ambadika i Airhop. Mitohy ny Bluetooth.",
   "settings.network.wifi_pair": "Fampifanarahana",
   "settings.network.wifi_paired": "Fitaovana nampifanarahana",
   "settings.network.wifi_pair_find": "Hitady fitaovana",

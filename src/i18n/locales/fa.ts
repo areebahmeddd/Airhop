@@ -1561,10 +1561,12 @@ export const strings: Strings = {
 
   // ---- Settings: group headings ----
   "settings.group.transports": "بسترهای انتقال",
+  "settings.group.internet": "اینترنت",
   "settings.group.nearby": "نزدیک",
   "settings.group.sync": "همگام‌سازی",
   "settings.group.features": "قابلیت‌ها",
   "settings.group.messages": "پیام‌ها",
+  "settings.group.local": "محلی",
   "settings.group.media": "رسانه",
   "settings.group.reset": "بازنشانی",
   "settings.group.always_on": "همیشه روشن",
@@ -1726,6 +1728,17 @@ export const strings: Strings = {
   "settings.network.relay_duplicate": "آن رله از پیش در فهرست شماست.",
   "settings.network.relay_invalid":
     "یک میزبان رلهٔ معتبر وارد کنید، مثلاً relay.example.com. درگاه تنها وقتی لازم است که رله از مقدار پیش‌فرض استفاده نکند. نشانی‌های IP و نام‌های محلی مجاز نیستند.",
+  "settings.network.lan": "شبکه محلی",
+  "settings.network.lan_desc":
+    "به افرادی که روی همان WiFi هستند برس، حتی بین iPhone و Android. دستگاه‌های دیگر شبکه می‌توانند ببینند که Airhop را اجرا می‌کنی.",
+  "settings.network.lan_searching": "هیچ دستگاه Airhop روی این شبکه نیست",
+  "settings.network.lan_active": "در این شبکه متصل است",
+  "settings.network.lan_unavailable": "به هیچ شبکه WiFi وصل نیستی",
+  "settings.network.lan_permission":
+    "دسترسی به شبکه محلی برای Airhop خاموش است",
+  "settings.network.lan_unsupported": "روی این دستگاه در دسترس نیست",
+  "settings.network.lan_foreground":
+    "وقتی Airhop در پس‌زمینه باشد متوقف می‌شود. بلوتوث همچنان کار می‌کند.",
   "settings.network.wifi_pair": "جفت‌شدن",
   "settings.network.wifi_paired": "دستگاه‌های جفت‌شده",
   "settings.network.wifi_pair_find": "یافتن یک دستگاه",

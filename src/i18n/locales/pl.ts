@@ -1585,10 +1585,12 @@ export const strings: Strings = {
 
   // ---- Settings: group headings ----
   "settings.group.transports": "Transporty",
+  "settings.group.internet": "Internet",
   "settings.group.nearby": "W pobliżu",
   "settings.group.sync": "Synchronizacja",
   "settings.group.features": "Funkcje",
   "settings.group.messages": "Wiadomości",
+  "settings.group.local": "Lokalnie",
   "settings.group.media": "Multimedia",
   "settings.group.reset": "Reset",
   "settings.group.always_on": "Zawsze włączone",
@@ -1753,6 +1755,17 @@ export const strings: Strings = {
     "Ten przekaźnik już jest na twojej liście.",
   "settings.network.relay_invalid":
     "Podaj prawidłowy adres przekaźnika, np. relay.example.com. Port jest potrzebny tylko wtedy, gdy przekaźnik nie używa domyślnego. Adresy IP i nazwy lokalne są niedozwolone.",
+  "settings.network.lan": "Sieć lokalna",
+  "settings.network.lan_desc":
+    "Docieraj do osób w tej samej sieci WiFi, także między iPhone'em a Androidem. Inne urządzenia w sieci widzą, że używasz Airhop.",
+  "settings.network.lan_searching": "Brak urządzeń Airhop w tej sieci",
+  "settings.network.lan_active": "Połączono w tej sieci",
+  "settings.network.lan_unavailable": "Brak połączenia z siecią WiFi",
+  "settings.network.lan_permission":
+    "Dostęp do sieci lokalnej jest wyłączony dla Airhop",
+  "settings.network.lan_unsupported": "Niedostępne na tym urządzeniu",
+  "settings.network.lan_foreground":
+    "Zatrzymuje się, gdy Airhop działa w tle. Bluetooth działa dalej.",
   "settings.network.wifi_pair": "Parowanie",
   "settings.network.wifi_paired": "Sparowane urządzenia",
   "settings.network.wifi_pair_find": "Znajdź urządzenie",

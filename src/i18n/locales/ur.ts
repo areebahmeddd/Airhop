@@ -1554,10 +1554,12 @@ export const strings: Strings = {
 
   // ---- Settings: group headings ----
   "settings.group.transports": "ذرائع",
+  "settings.group.internet": "انٹرنیٹ",
   "settings.group.nearby": "قریب",
   "settings.group.sync": "ہم وقت سازی",
   "settings.group.features": "خصوصیات",
   "settings.group.messages": "پیغامات",
+  "settings.group.local": "مقامی",
   "settings.group.media": "میڈیا",
   "settings.group.reset": "دوبارہ ترتیب",
   "settings.group.always_on": "ہمیشہ چالو",
@@ -1718,6 +1720,17 @@ export const strings: Strings = {
   "settings.network.relay_duplicate": "وہ ریلے پہلے ہی آپ کی فہرست میں ہے۔",
   "settings.network.relay_invalid":
     "درست ریلے میزبان درج کریں، مثلاً relay.example.com۔ پورٹ صرف تب چاہیے جب ریلے طے شدہ پورٹ استعمال نہ کرتا ہو۔ IP پتے اور مقامی نام قابل قبول نہیں۔",
+  "settings.network.lan": "مقامی نیٹ ورک",
+  "settings.network.lan_desc":
+    "اسی WiFi پر موجود لوگوں تک پہنچیں، iPhone اور Android کے درمیان بھی۔ نیٹ ورک پر موجود دوسرے آلات دیکھ سکتے ہیں کہ آپ Airhop چلا رہے ہیں۔",
+  "settings.network.lan_searching": "اس نیٹ ورک پر کوئی Airhop آلہ نہیں",
+  "settings.network.lan_active": "اس نیٹ ورک پر منسلک",
+  "settings.network.lan_unavailable": "کسی WiFi نیٹ ورک پر نہیں",
+  "settings.network.lan_permission":
+    "Airhop کے لیے مقامی نیٹ ورک تک رسائی بند ہے",
+  "settings.network.lan_unsupported": "اس آلے پر دستیاب نہیں",
+  "settings.network.lan_foreground":
+    "Airhop کے پس منظر میں جانے پر رک جاتا ہے۔ بلوٹوتھ چلتا رہتا ہے۔",
   "settings.network.wifi_pair": "جوڑا بنانا",
   "settings.network.wifi_paired": "جوڑے گئے آلات",
   "settings.network.wifi_pair_find": "آلہ تلاش کریں",

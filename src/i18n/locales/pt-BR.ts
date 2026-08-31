@@ -1589,10 +1589,12 @@ export const strings: Strings = {
 
   // ---- Settings: group headings ----
   "settings.group.transports": "Transportes",
+  "settings.group.internet": "Internet",
   "settings.group.nearby": "Por perto",
   "settings.group.sync": "Sincronização",
   "settings.group.features": "Recursos",
   "settings.group.messages": "Mensagens",
+  "settings.group.local": "Local",
   "settings.group.media": "Mídia",
   "settings.group.reset": "Redefinição",
   "settings.group.always_on": "Sempre ligado",
@@ -1757,6 +1759,17 @@ export const strings: Strings = {
   "settings.network.relay_duplicate": "Esse relay já está na sua lista.",
   "settings.network.relay_invalid":
     "Digite um host de relay válido, por exemplo relay.example.com. A porta só é necessária se o relay não usar a padrão. Endereços IP e nomes locais não são aceitos.",
+  "settings.network.lan": "Rede local",
+  "settings.network.lan_desc":
+    "Alcance quem está no mesmo WiFi, inclusive entre iPhone e Android. Outros aparelhos na rede podem ver que você usa o Airhop.",
+  "settings.network.lan_searching": "Nenhum aparelho Airhop nesta rede",
+  "settings.network.lan_active": "Conectado nesta rede",
+  "settings.network.lan_unavailable": "Você não está em uma rede WiFi",
+  "settings.network.lan_permission":
+    "O acesso à rede local está desligado para o Airhop",
+  "settings.network.lan_unsupported": "Não disponível neste aparelho",
+  "settings.network.lan_foreground":
+    "Pausa quando o Airhop fica em segundo plano. O Bluetooth continua.",
   "settings.network.wifi_pair": "Pareamento",
   "settings.network.wifi_paired": "Dispositivos pareados",
   "settings.network.wifi_pair_find": "Encontrar um dispositivo",

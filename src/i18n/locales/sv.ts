@@ -1562,10 +1562,12 @@ export const strings: Strings = {
 
   // ---- Settings: group headings ----
   "settings.group.transports": "Transporter",
+  "settings.group.internet": "Internet",
   "settings.group.nearby": "I närheten",
   "settings.group.sync": "Synk",
   "settings.group.features": "Funktioner",
   "settings.group.messages": "Meddelanden",
+  "settings.group.local": "Lokalt",
   "settings.group.media": "Media",
   "settings.group.reset": "Återställning",
   "settings.group.always_on": "Alltid på",
@@ -1727,6 +1729,17 @@ export const strings: Strings = {
   "settings.network.relay_duplicate": "Det reläet finns redan i din lista.",
   "settings.network.relay_invalid":
     "Ange en giltig relävärd, t.ex. relay.example.com. En port behövs bara om reläet inte använder standardporten. IP-adresser och lokala namn är inte tillåtna.",
+  "settings.network.lan": "Lokalt nätverk",
+  "settings.network.lan_desc":
+    "Nå personer på samma WiFi, även mellan iPhone och Android. Andra enheter i nätverket kan se att du kör Airhop.",
+  "settings.network.lan_searching": "Inga Airhop-enheter i det här nätverket",
+  "settings.network.lan_active": "Ansluten i det här nätverket",
+  "settings.network.lan_unavailable": "Inte på ett WiFi-nätverk",
+  "settings.network.lan_permission":
+    "Åtkomst till lokalt nätverk är avstängd för Airhop",
+  "settings.network.lan_unsupported": "Inte tillgängligt på den här enheten",
+  "settings.network.lan_foreground":
+    "Pausar när Airhop är i bakgrunden. Bluetooth fortsätter.",
   "settings.network.wifi_pair": "Parkoppling",
   "settings.network.wifi_paired": "Parkopplade enheter",
   "settings.network.wifi_pair_find": "Hitta en enhet",
