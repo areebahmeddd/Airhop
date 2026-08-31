@@ -266,12 +266,58 @@ describe("LinkRegistry", () => {
       expect(links.directPeers()).toEqual(["peer-a", "peer-b"]);
     });
 
+    it("directPeers() with a kind lists only peers reachable on it", () => {
+      links.open("ble", "c:1");
+      links.open("wifi", "wifi-1");
+      links.bind("c:1", "peer-a");
+      links.bind("wifi-1", "peer-b");
+
+      expect(links.directPeers("ble")).toEqual(["peer-a"]);
+      expect(links.directPeers("wifi")).toEqual(["peer-b"]);
+      expect(links.directPeers()).toEqual(["peer-a", "peer-b"]);
+    });
+
     it("omits links nobody has announced on from direct peers", () => {
       links.open("ble", "c:1");
       links.open("ble", "c:2");
       links.bind("c:2", "peer-b");
 
       expect(links.directPeers()).toEqual(["peer-b"]);
+    });
+  });
+
+  // Matches bitchat's `peerRegistry.connectedCount`: how crowded the Bluetooth
+  // room is, which is what relay jitter and the time-critical TTL cap scale by.
+  describe("degree", () => {
+    it("counts a dual-role peer once, not once per link", () => {
+      links.open("ble", "c:1");
+      links.open("ble", "p:1");
+      links.bind("c:1", "peer-a");
+      links.bind("p:1", "peer-a");
+
+      expect(links.size("ble")).toBe(2);
+      expect(links.degree()).toBe(1);
+    });
+
+    it("ignores transports that do not share the Bluetooth radio", () => {
+      links.open("ble", "c:1");
+      links.open("wifi", "wifi-1");
+      links.bind("c:1", "peer-a");
+      links.bind("wifi-1", "peer-b");
+
+      expect(links.size()).toBe(2);
+      expect(links.degree()).toBe(1);
+    });
+
+    it("ignores a link nobody has announced on yet", () => {
+      links.open("ble", "c:1");
+
+      expect(links.size("ble")).toBe(1);
+      expect(links.degree()).toBe(0);
+    });
+
+    it("is zero with no links at all", () => {
+      expect(links.degree()).toBe(0);
     });
   });
 

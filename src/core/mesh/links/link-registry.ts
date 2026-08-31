@@ -211,14 +211,17 @@ export class LinkRegistry {
     return ids;
   }
 
-  // Peers we hold a link to, deduplicated, since a peer on two transports is
-  // still one peer. Order matters to both callers: a sync request is link-local, so
-  // asking a peer three hops away wastes a write, and couriers are the first few
-  // of these.
-  directPeers(): readonly string[] {
+  // Peers we hold a link to, deduplicated, since one peer reached over two
+  // transports, or over both Bluetooth roles, is still one peer. `kind` narrows
+  // to peers reachable on that transport.
+  //
+  // Order matters to both callers: a sync request is link-local, so asking a
+  // peer three hops away wastes a write, and couriers are the first few of
+  // these.
+  directPeers(kind?: TransportKind): readonly string[] {
     const peers: string[] = [];
     const seen = new Set<string>();
-    for (const linkID of this.linkIDs()) {
+    for (const linkID of this.linkIDs(kind)) {
       const peerID = this.peerByLink.get(linkID);
       if (peerID === undefined || seen.has(peerID)) continue;
       seen.add(peerID);
@@ -227,8 +230,26 @@ export class LinkRegistry {
     return peers;
   }
 
-  // The mesh's degree: the flood router scales relay jitter by it, and the
-  // announce reports it so a receiver can tell a crowded room from an empty one.
+  // How crowded the mesh looks. The flood router scales relay jitter and the
+  // time-critical TTL cap by it.
+  //
+  // Peers, not links, and Bluetooth only. Both halves matter and both match
+  // bitchat, whose degree is `peerRegistry.connectedCount`:
+  //
+  //   * Peers, because Bluetooth is dual-role. Two phones that meet each dial
+  //     the other, so one neighbour is two links, and counting links reads a
+  //     room as twice as crowded as it is.
+  //   * Bluetooth, because the delay exists for radio contention. Every phone
+  //     in earshot hears a packet at the same instant and rebroadcasting
+  //     together drowns the room out. A socket on another transport does not
+  //     compete for that airtime, so counting it slows the radio down for no
+  //     reason.
+  degree(): number {
+    return this.directPeers("ble").length;
+  }
+
+  // Open links. Distinct from `degree`: this counts sockets we hold, which is
+  // what the announce reports and what the diagnostics screen shows.
   size(kind?: TransportKind): number {
     if (kind === undefined) return this.kindByLink.size;
     let count = 0;

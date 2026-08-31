@@ -384,8 +384,10 @@ export class MeshService {
   // A remote peer's Nostr pubkey hex to their peerID, filled as ANNOUNCEs arrive.
   private readonly nostrPubkeyToPeerID = new Map<string, string>();
 
-  // Relay jitter adapts to how many peers we can hear, over every radio.
-  private readonly floodRouter = new FloodRouter(() => this.links.size());
+  // Relay jitter and the time-critical TTL cap adapt to how crowded the
+  // Bluetooth mesh is. See LinkRegistry.degree for why that is peers rather
+  // than links, and Bluetooth rather than every transport.
+  private readonly floodRouter = new FloodRouter(() => this.links.degree());
   private readonly registry = new PeerRegistry();
   private readonly announceManager = new AnnounceManager();
   private readonly router: MessageRouter;
