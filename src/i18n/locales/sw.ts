@@ -1591,10 +1591,12 @@ export const strings: Strings = {
 
   // ---- Settings: group headings ----
   "settings.group.transports": "Wasafirishaji",
+  "settings.group.internet": "Intaneti",
   "settings.group.nearby": "Karibu",
   "settings.group.sync": "Usawazishaji",
   "settings.group.features": "Vipengele",
   "settings.group.messages": "Jumbe",
+  "settings.group.local": "Ndani",
   "settings.group.media": "Midia",
   "settings.group.reset": "Weka upya",
   "settings.group.always_on": "Daima imewashwa",
@@ -1761,6 +1763,18 @@ export const strings: Strings = {
     "Relay hiyo tayari iko kwenye orodha yako.",
   "settings.network.relay_invalid":
     "Weka mwenyeji halali wa relay, mfano relay.example.com. Mlango unahitajika tu ikiwa relay haitumii ule wa kawaida. Anwani za IP na majina ya ndani hayaruhusiwi.",
+  "settings.network.lan": "Mtandao wa ndani",
+  "settings.network.lan_desc":
+    "Fikia watu walio kwenye WiFi ile ile, hata kati ya iPhone na Android. Vifaa vingine kwenye mtandao vinaweza kuona kuwa unatumia Airhop.",
+  "settings.network.lan_searching":
+    "Hakuna vifaa vya Airhop kwenye mtandao huu",
+  "settings.network.lan_active": "Imeunganishwa kwenye mtandao huu",
+  "settings.network.lan_unavailable": "Hauko kwenye mtandao wa WiFi",
+  "settings.network.lan_permission":
+    "Ufikiaji wa mtandao wa ndani umezimwa kwa Airhop",
+  "settings.network.lan_unsupported": "Haipatikani kwenye kifaa hiki",
+  "settings.network.lan_foreground":
+    "Husimama Airhop inapokuwa nyuma. Bluetooth inaendelea.",
   "settings.network.wifi_pair": "Uoanishaji",
   "settings.network.wifi_paired": "Vifaa vilivyooanishwa",
   "settings.network.wifi_pair_find": "Tafuta kifaa",

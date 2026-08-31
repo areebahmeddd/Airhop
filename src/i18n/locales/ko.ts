@@ -1541,10 +1541,12 @@ export const strings: Strings = {
 
   // ---- Settings: group headings ----
   "settings.group.transports": "전송 방식",
+  "settings.group.internet": "인터넷",
   "settings.group.nearby": "근처",
   "settings.group.sync": "동기화",
   "settings.group.features": "기능",
   "settings.group.messages": "메시지",
+  "settings.group.local": "로컬",
   "settings.group.media": "미디어",
   "settings.group.reset": "초기화",
   "settings.group.always_on": "항상 켜짐",
@@ -1701,6 +1703,17 @@ export const strings: Strings = {
   "settings.network.relay_duplicate": "그 릴레이는 이미 목록에 있습니다.",
   "settings.network.relay_invalid":
     "relay.example.com 같은 올바른 릴레이 호스트를 입력하세요. 포트는 릴레이가 기본값을 쓰지 않을 때만 필요합니다. IP 주소와 로컬 이름은 허용되지 않습니다.",
+  "settings.network.lan": "로컬 네트워크",
+  "settings.network.lan_desc":
+    "같은 WiFi에 있는 사람에게 연결합니다. iPhone과 Android 사이에서도 됩니다. 네트워크의 다른 기기는 당신이 Airhop을 쓰고 있다는 것을 볼 수 있습니다.",
+  "settings.network.lan_searching": "이 네트워크에 Airhop 기기가 없습니다",
+  "settings.network.lan_active": "이 네트워크에서 연결됨",
+  "settings.network.lan_unavailable": "WiFi 네트워크에 있지 않습니다",
+  "settings.network.lan_permission":
+    "Airhop의 로컬 네트워크 접근이 꺼져 있습니다",
+  "settings.network.lan_unsupported": "이 기기에서는 사용할 수 없습니다",
+  "settings.network.lan_foreground":
+    "Airhop이 백그라운드로 가면 멈춥니다. 블루투스는 계속 작동합니다.",
   "settings.network.wifi_pair": "페어링",
   "settings.network.wifi_paired": "페어링된 기기",
   "settings.network.wifi_pair_find": "기기 찾기",

@@ -21,14 +21,23 @@
 // The order every observable list is enumerated in. Distinct from
 // `SEND_PREFERENCE`: this is "what order do we list things in", that is "which
 // link do we use".
-export const TRANSPORT_KINDS = ["ble", "wifi"] as const;
+//
+// Bluetooth first, and LAN last, because the announce carries only the first
+// ten `directPeers()` as its neighbour list (TLV 0x04) and that list is the
+// mesh graph other clients draw. A phone on a busy network holds more LAN peers
+// than Bluetooth ones, and letting them crowd out the Bluetooth neighbours
+// would hand bitchat a graph full of edges it cannot use.
+export const TRANSPORT_KINDS = ["ble", "wifi", "lan"] as const;
 
 export type TransportKind = (typeof TRANSPORT_KINDS)[number];
 
-// Which link to take when a peer is reachable on more than one transport. WiFi
-// first: it exists to move an attachment BLE would split into hundreds of paced
-// writes, so whenever both are held the fast one is the point of having it.
-const SEND_PREFERENCE: readonly TransportKind[] = ["wifi", "ble"];
+// Which link to take when a peer is reachable on more than one transport,
+// fastest first.
+//
+// WiFi Aware leads: it is a direct radio link with no access point in the path.
+// LAN goes phone to router to phone, still far past Bluetooth's ~18 KiB/s.
+// Bluetooth is the floor and the fallback.
+const SEND_PREFERENCE: readonly TransportKind[] = ["wifi", "lan", "ble"];
 
 export interface Link {
   readonly id: string;
@@ -55,8 +64,8 @@ export class LinkRegistry {
   //
   // One table rather than one per transport because the native modules namespace
   // link IDs and they cannot collide: BLE issues `c:<id>` and `p:<id>` on both
-  // platforms, WiFi issues `wifi-<n>` on iOS and `wifi-in-<n>` / `wifi-out-<n>`
-  // on Android.
+  // platforms, WiFi issues `wifi-<n>` / `wifi-in-<n>` / `wifi-out-<n>`, and LAN
+  // issues `lan-in-<n>` / `lan-out-<n>`.
   private readonly kindByLink = new Map<string, TransportKind>();
 
   // linkID to the peer bound to it. Not every open link has one: a link is a
@@ -211,14 +220,17 @@ export class LinkRegistry {
     return ids;
   }
 
-  // Peers we hold a link to, deduplicated, since a peer on two transports is
-  // still one peer. Order matters to both callers: a sync request is link-local, so
-  // asking a peer three hops away wastes a write, and couriers are the first few
-  // of these.
-  directPeers(): readonly string[] {
+  // Peers we hold a link to, deduplicated, since one peer reached over two
+  // transports, or over both Bluetooth roles, is still one peer. `kind` narrows
+  // to peers reachable on that transport.
+  //
+  // Order matters to both callers: a sync request is link-local, so asking a
+  // peer three hops away wastes a write, and couriers are the first few of
+  // these.
+  directPeers(kind?: TransportKind): readonly string[] {
     const peers: string[] = [];
     const seen = new Set<string>();
-    for (const linkID of this.linkIDs()) {
+    for (const linkID of this.linkIDs(kind)) {
       const peerID = this.peerByLink.get(linkID);
       if (peerID === undefined || seen.has(peerID)) continue;
       seen.add(peerID);
@@ -227,8 +239,26 @@ export class LinkRegistry {
     return peers;
   }
 
-  // The mesh's degree: the flood router scales relay jitter by it, and the
-  // announce reports it so a receiver can tell a crowded room from an empty one.
+  // How crowded the mesh looks. The flood router scales relay jitter and the
+  // time-critical TTL cap by it.
+  //
+  // Peers, not links, and Bluetooth only. Both halves matter and both match
+  // bitchat, whose degree is `peerRegistry.connectedCount`:
+  //
+  //   * Peers, because Bluetooth is dual-role. Two phones that meet each dial
+  //     the other, so one neighbour is two links, and counting links reads a
+  //     room as twice as crowded as it is.
+  //   * Bluetooth, because the delay exists for radio contention. Every phone
+  //     in earshot hears a packet at the same instant and rebroadcasting
+  //     together drowns the room out. A socket on another transport does not
+  //     compete for that airtime, so counting it slows the radio down for no
+  //     reason.
+  degree(): number {
+    return this.directPeers("ble").length;
+  }
+
+  // Open links. Distinct from `degree`: this counts sockets we hold, which is
+  // what the announce reports and what the diagnostics screen shows.
   size(kind?: TransportKind): number {
     if (kind === undefined) return this.kindByLink.size;
     let count = 0;

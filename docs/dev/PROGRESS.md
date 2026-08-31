@@ -65,6 +65,7 @@ checkable against the code rather than taken on trust.
 - [x] `src/core/mesh/routing/flood-router.ts`: TTL flood, jitter, dedup
 - [x] `src/core/mesh/routing/deduplicator.ts`: LRU 1000-entry seen-set
 - [x] `src/core/mesh/links/link-registry.ts`: open links per radio, peer bindings, writes
+- [x] `src/services/lan-dial-policy.ts`: the ring that caps LAN at 8 links per phone
 - [x] `src/core/mesh/discovery/announce-manager.ts`: signed presence broadcasts
 - [x] `src/core/crypto/identity.ts`: key generation, Keychain storage, peer ID
 

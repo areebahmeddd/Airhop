@@ -1570,10 +1570,12 @@ export const strings: Strings = {
 
   // ---- Settings: group headings ----
   "settings.group.transports": "Taşıyıcılar",
+  "settings.group.internet": "İnternet",
   "settings.group.nearby": "Yakında",
   "settings.group.sync": "Eşitleme",
   "settings.group.features": "Özellikler",
   "settings.group.messages": "Mesajlar",
+  "settings.group.local": "Yerel",
   "settings.group.media": "Medya",
   "settings.group.reset": "Sıfırlama",
   "settings.group.always_on": "Her zaman açık",
@@ -1734,6 +1736,16 @@ export const strings: Strings = {
   "settings.network.relay_duplicate": "O aktarıcı zaten listende.",
   "settings.network.relay_invalid":
     "Geçerli bir aktarıcı adresi gir, örneğin relay.example.com. Bağlantı noktası yalnızca aktarıcı varsayılanı kullanmıyorsa gerekir. IP adresleri ve yerel adlar kabul edilmez.",
+  "settings.network.lan": "Yerel ağ",
+  "settings.network.lan_desc":
+    "Aynı WiFi'deki kişilere ulaşın, iPhone ile Android arasında da. Ağdaki diğer cihazlar Airhop kullandığınızı görebilir.",
+  "settings.network.lan_searching": "Bu ağda Airhop cihazı yok",
+  "settings.network.lan_active": "Bu ağda bağlı",
+  "settings.network.lan_unavailable": "Bir WiFi ağında değilsiniz",
+  "settings.network.lan_permission": "Airhop için yerel ağ erişimi kapalı",
+  "settings.network.lan_unsupported": "Bu cihazda kullanılamıyor",
+  "settings.network.lan_foreground":
+    "Airhop arka plana geçtiğinde durur. Bluetooth çalışmaya devam eder.",
   "settings.network.wifi_pair": "Eşleştirme",
   "settings.network.wifi_paired": "Eşleştirilmiş cihazlar",
   "settings.network.wifi_pair_find": "Cihaz bul",

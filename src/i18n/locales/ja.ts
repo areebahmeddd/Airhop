@@ -1565,10 +1565,12 @@ export const strings: Strings = {
 
   // ---- Settings: group headings ----
   "settings.group.transports": "通信経路",
+  "settings.group.internet": "インターネット",
   "settings.group.nearby": "近く",
   "settings.group.sync": "同期",
   "settings.group.features": "機能",
   "settings.group.messages": "メッセージ",
+  "settings.group.local": "ローカル",
   "settings.group.media": "メディア",
   "settings.group.reset": "リセット",
   "settings.group.always_on": "常時オン",
@@ -1728,6 +1730,18 @@ export const strings: Strings = {
   "settings.network.relay_duplicate": "そのリレーはすでに一覧にあります。",
   "settings.network.relay_invalid":
     "relay.example.comのような有効なリレーのホスト名を入力してください。ポートは、リレーが既定のポートを使っていない場合にのみ必要です。IPアドレスやローカル名は使えません。",
+  "settings.network.lan": "ローカルネットワーク",
+  "settings.network.lan_desc":
+    "同じWiFi上の相手に届きます。iPhoneとAndroidの間でも使えます。ネットワーク上の他の端末からは、Airhopを使っていることが見えます。",
+  "settings.network.lan_searching":
+    "このネットワークにAirhopの端末はありません",
+  "settings.network.lan_active": "このネットワークで接続中",
+  "settings.network.lan_unavailable": "WiFiネットワークに接続していません",
+  "settings.network.lan_permission":
+    "Airhopのローカルネットワークアクセスがオフです",
+  "settings.network.lan_unsupported": "この端末では利用できません",
+  "settings.network.lan_foreground":
+    "Airhopがバックグラウンドになると停止します。Bluetoothは動き続けます。",
   "settings.network.wifi_pair": "ペアリング",
   "settings.network.wifi_paired": "ペアリング済みデバイス",
   "settings.network.wifi_pair_find": "デバイスを探す",

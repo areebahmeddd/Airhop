@@ -15,6 +15,7 @@ import expo.modules.ApplicationLifecycleDispatcher
 import expo.modules.ExpoReactHostFactory
 import org.onemindlabs.airhop.app.AirhopAppPackage
 import org.onemindlabs.airhop.ble.AirhopBLEPackage
+import org.onemindlabs.airhop.lan.AirhopLANPackage
 import org.onemindlabs.airhop.voice.AirhopVoicePackage
 import org.onemindlabs.airhop.wifi.AirhopWiFiPackage
 
@@ -27,6 +28,7 @@ class MainApplication : Application(), ReactApplication {
         PackageList(this).packages.apply {
           add(AirhopBLEPackage())
           add(AirhopWiFiPackage())
+          add(AirhopLANPackage())
           add(AirhopVoicePackage())
           add(AirhopAppPackage())
         }

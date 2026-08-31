@@ -1556,10 +1556,12 @@ export const strings: Strings = {
 
   // ---- Settings: group headings ----
   "settings.group.transports": "ਟ੍ਰਾਂਸਪੋਰਟ",
+  "settings.group.internet": "ਇੰਟਰਨੈੱਟ",
   "settings.group.nearby": "ਨੇੜੇ",
   "settings.group.sync": "ਸਿੰਕ",
   "settings.group.features": "ਸਹੂਲਤਾਂ",
   "settings.group.messages": "ਸੁਨੇਹੇ",
+  "settings.group.local": "ਸਥਾਨਕ",
   "settings.group.media": "ਮੀਡੀਆ",
   "settings.group.reset": "ਮੁੜ-ਸੈੱਟ",
   "settings.group.always_on": "ਹਮੇਸ਼ਾ ਚਾਲੂ",
@@ -1722,6 +1724,16 @@ export const strings: Strings = {
   "settings.network.relay_duplicate": "ਉਹ ਰਿਲੇ ਪਹਿਲਾਂ ਹੀ ਤੁਹਾਡੀ ਸੂਚੀ ਵਿੱਚ ਹੈ।",
   "settings.network.relay_invalid":
     "ਸਹੀ ਰਿਲੇ ਹੋਸਟ ਭਰੋ, ਜਿਵੇਂ relay.example.com। ਪੋਰਟ ਸਿਰਫ਼ ਤਾਂ ਹੀ ਚਾਹੀਦਾ ਹੈ ਜੇ ਰਿਲੇ ਮੂਲ ਪੋਰਟ ਨਾ ਵਰਤਦਾ ਹੋਵੇ। IP ਪਤੇ ਅਤੇ ਸਥਾਨਕ ਨਾਂ ਮਨਜ਼ੂਰ ਨਹੀਂ ਹਨ।",
+  "settings.network.lan": "ਸਥਾਨਕ ਨੈੱਟਵਰਕ",
+  "settings.network.lan_desc":
+    "ਉਸੇ WiFi ਉੱਤੇ ਮੌਜੂਦ ਲੋਕਾਂ ਤੱਕ ਪਹੁੰਚੋ, iPhone ਅਤੇ Android ਵਿਚਕਾਰ ਵੀ। ਨੈੱਟਵਰਕ ਉੱਤੇ ਮੌਜੂਦ ਹੋਰ ਡਿਵਾਈਸ ਦੇਖ ਸਕਦੇ ਹਨ ਕਿ ਤੁਸੀਂ Airhop ਚਲਾ ਰਹੇ ਹੋ।",
+  "settings.network.lan_searching": "ਇਸ ਨੈੱਟਵਰਕ ਉੱਤੇ ਕੋਈ Airhop ਡਿਵਾਈਸ ਨਹੀਂ",
+  "settings.network.lan_active": "ਇਸ ਨੈੱਟਵਰਕ ਉੱਤੇ ਜੁੜਿਆ",
+  "settings.network.lan_unavailable": "ਕਿਸੇ WiFi ਨੈੱਟਵਰਕ ਉੱਤੇ ਨਹੀਂ",
+  "settings.network.lan_permission": "Airhop ਲਈ ਸਥਾਨਕ ਨੈੱਟਵਰਕ ਪਹੁੰਚ ਬੰਦ ਹੈ",
+  "settings.network.lan_unsupported": "ਇਸ ਡਿਵਾਈਸ ਉੱਤੇ ਉਪਲਬਧ ਨਹੀਂ",
+  "settings.network.lan_foreground":
+    "Airhop ਦੇ ਬੈਕਗਰਾਊਂਡ ਵਿੱਚ ਜਾਣ ਉੱਤੇ ਰੁਕ ਜਾਂਦਾ ਹੈ। ਬਲੂਟੁੱਥ ਚੱਲਦਾ ਰਹਿੰਦਾ ਹੈ।",
   "settings.network.wifi_pair": "ਜੋੜਾ ਬਣਾਉਣਾ",
   "settings.network.wifi_paired": "ਜੋੜੇ ਗਏ ਡਿਵਾਈਸ",
   "settings.network.wifi_pair_find": "ਡਿਵਾਈਸ ਲੱਭੋ",

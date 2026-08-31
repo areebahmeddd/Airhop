@@ -2,6 +2,29 @@
 // Aware pairing that the same-platform fast path needs, and the always-on
 // bitchat wire compatibility.
 
+// What the LAN row says, per state the controller can report.
+//
+// "searching" deliberately reads as an empty network rather than as a fault.
+// Most venue WiFi blocks peer-to-peer traffic at the access point, and nothing
+// in the app can tell that apart from nobody being there, so the copy must not
+// claim to know which it is.
+function lanStatusText(state: LanState): string {
+  switch (state) {
+    case "active":
+      return t("settings.network.lan_active");
+    case "searching":
+      return t("settings.network.lan_searching");
+    case "unavailable":
+      return t("settings.network.lan_unavailable");
+    case "permission":
+      return t("settings.network.lan_permission");
+    case "unsupported":
+      return t("settings.network.lan_unsupported");
+    case "off":
+      return t("common.off");
+  }
+}
+
 import {
   DEFAULT_DM_RELAYS,
   MAX_CUSTOM_RELAYS,
@@ -10,16 +33,23 @@ import {
   validateRelayUrl,
 } from "@core/nostr/geo-relay";
 import Feather from "@expo/vector-icons/Feather";
-import { useT } from "@i18n";
+import { t, useT } from "@i18n";
 import { getMeshService } from "@services/mesh-service";
 import { presentWiFiPairing } from "@services/wifi-pairing-service";
 import { showAlert } from "@store/alert-store";
-import { useMeshStateStore } from "@store/mesh-state-store";
+import { type LanState, useMeshStateStore } from "@store/mesh-state-store";
 import { useSettingsStore } from "@store/settings-store";
 import { HIT_SLOP, useThemeColors } from "@ui/theme";
 import { formatNumber } from "@utils/format";
 import React, { useState } from "react";
-import { Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import {
+  Platform,
+  Pressable,
+  ScrollView,
+  Text,
+  TextInput,
+  View,
+} from "react-native";
 import {
   GroupDivider,
   SettingLinkRow,
@@ -45,6 +75,9 @@ export default function NetworkScreen({ onBack }: Props): React.JSX.Element {
   // the section is absent rather than showing a control that cannot work.
   const pairingSupported = useMeshStateStore((s) => s.wifiPairingSupported);
   const pairedCount = useMeshStateStore((s) => s.wifiPairedCount);
+  const lanState = useMeshStateStore((s) => s.lanState);
+  const lanEnabled = useSettingsStore((s) => s.lanTransportEnabled);
+  const setLanEnabled = useSettingsStore((s) => s.setLanTransportEnabled);
   const internetEnabled = useSettingsStore((s) => s.internetEnabled);
   const setInternetEnabled = useSettingsStore((s) => s.setInternetEnabled);
   const geoRelayDiscovery = useSettingsStore((s) => s.geoRelayDiscovery);
@@ -178,6 +211,9 @@ export default function NetworkScreen({ onBack }: Props): React.JSX.Element {
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.section}>
+          <Text style={styles.sectionTitle}>
+            {T("settings.group.internet")}
+          </Text>
           <View style={styles.settingsGroup}>
             <SettingRow
               icon="cloud"
@@ -396,6 +432,47 @@ export default function NetworkScreen({ onBack }: Props): React.JSX.Element {
               description={T("settings.network.bitchat_desc")}
               control={<SettingSwitch value={true} disabled />}
             />
+          </View>
+        </View>
+
+        {/* The one transport that is off by default. Publishing an mDNS record
+            tells every device on the network, and whoever runs it, that this
+            phone is carrying Airhop, so the description says that rather than
+            selling the speed. */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>{T("settings.group.local")}</Text>
+          <View style={styles.settingsGroup}>
+            <SettingRow
+              icon="wifi"
+              label={T("settings.network.lan")}
+              description={T("settings.network.lan_desc")}
+              control={
+                <SettingSwitch
+                  value={lanEnabled}
+                  onValueChange={setLanEnabled}
+                  disabled={lanState === "unsupported"}
+                />
+              }
+            />
+            {lanEnabled && (
+              <>
+                <GroupDivider />
+                <SettingRow
+                  icon="activity"
+                  label={T("settings.status.title")}
+                  description={lanStatusText(lanState)}
+                />
+              </>
+            )}
+            {lanEnabled && Platform.OS === "ios" && (
+              <>
+                <GroupDivider />
+                <SettingRow
+                  icon="moon"
+                  label={T("settings.network.lan_foreground")}
+                />
+              </>
+            )}
           </View>
         </View>
 

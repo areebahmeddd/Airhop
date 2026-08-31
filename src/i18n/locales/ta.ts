@@ -1613,10 +1613,12 @@ export const strings: Strings = {
 
   // ---- Settings: group headings ----
   "settings.group.transports": "கடத்திகள்",
+  "settings.group.internet": "இணையம்",
   "settings.group.nearby": "அருகில்",
   "settings.group.sync": "ஒத்திசைவு",
   "settings.group.features": "அம்சங்கள்",
   "settings.group.messages": "செய்திகள்",
+  "settings.group.local": "உள்ளூர்",
   "settings.group.media": "ஊடகம்",
   "settings.group.reset": "மீட்டமைப்பு",
   "settings.group.always_on": "எப்போதும் இயக்கத்தில்",
@@ -1785,6 +1787,18 @@ export const strings: Strings = {
     "அந்த ரிலே ஏற்கெனவே உங்கள் பட்டியலில் உள்ளது.",
   "settings.network.relay_invalid":
     "சரியான ரிலே புரவலனை உள்ளிடுங்கள், எடுத்துக்காட்டாக relay.example.com. ரிலே இயல்பு துறையைப் பயன்படுத்தாதபோது மட்டுமே துறை தேவை. IP முகவரிகளும் உள்ளூர்ப் பெயர்களும் அனுமதிக்கப்படவில்லை.",
+  "settings.network.lan": "உள்ளூர் நெட்வொர்க்",
+  "settings.network.lan_desc":
+    "அதே WiFi-ல் உள்ளவர்களை அடையுங்கள், iPhone மற்றும் Android இடையேயும். நெட்வொர்க்கில் உள்ள மற்ற சாதனங்கள் நீங்கள் Airhop பயன்படுத்துவதைக் காண முடியும்.",
+  "settings.network.lan_searching":
+    "இந்த நெட்வொர்க்கில் Airhop சாதனங்கள் இல்லை",
+  "settings.network.lan_active": "இந்த நெட்வொர்க்கில் இணைக்கப்பட்டுள்ளது",
+  "settings.network.lan_unavailable": "எந்த WiFi நெட்வொர்க்கிலும் இல்லை",
+  "settings.network.lan_permission":
+    "Airhop-க்கான உள்ளூர் நெட்வொர்க் அணுகல் அணைக்கப்பட்டுள்ளது",
+  "settings.network.lan_unsupported": "இந்த சாதனத்தில் கிடைக்கவில்லை",
+  "settings.network.lan_foreground":
+    "Airhop பின்னணிக்குச் சென்றால் நிற்கும். புளூடூத் தொடர்ந்து இயங்கும்.",
   "settings.network.wifi_pair": "இணைத்தல்",
   "settings.network.wifi_paired": "இணைக்கப்பட்ட சாதனங்கள்",
   "settings.network.wifi_pair_find": "ஒரு சாதனத்தைத் தேடு",

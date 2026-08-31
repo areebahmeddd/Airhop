@@ -187,15 +187,39 @@ export const FAQ_SECTIONS: FaqSection[] = [
         q: "Does Airhop require internet?",
         a: (
           <>
-            Not for core offline messaging, since it relies on Bluetooth. Chatting, relaying across
-            the mesh, voice notes, images, file transfers, and store-and-forward delivery all work
-            with zero internet.
+            No. Chatting, relaying across the mesh, voice notes, images, file transfers, and
+            store-and-forward delivery all work with zero internet, over Bluetooth or over a WiFi
+            network nobody has to be online for, such as a phone hotspot.
             <br />
             <br />
             For communication beyond Bluetooth range, Airhop automatically uses the{" "}
             <TextLink href="https://fiatjaf.com/nostr.html">Nostr</TextLink> internet fallback to
             reach a contact who is online but out of range. Location channels also require a
             connection.
+          </>
+        ),
+      },
+      {
+        q: "Can Airhop work over WiFi instead of Bluetooth?",
+        a: (
+          <>
+            Yes. Turn on <strong>Local network</strong> in Settings, Network, and phones on the same
+            WiFi find each other and carry the whole mesh between them, iPhone and Android alike. No
+            internet is involved, so a phone hotspot works with no service at all, and a file moves
+            in about a second instead of the minute Bluetooth takes.
+            <br />
+            <br />
+            WiFi here means the network, not the internet behind it. The router only has to let two
+            phones talk to each other, and whether it can reach the internet makes no difference.
+            That is the opposite of the internet fallback above, which uses Nostr relays to reach
+            somebody who is not nearby at all.
+            <br />
+            <br />
+            It is off by default, because announcing yourself on a network is visible to every
+            device on it and to whoever runs it. It also depends on the network: many guest, hotel
+            and airport networks block devices from talking to each other, which cannot be detected
+            in advance, so Airhop simply reports that it found nobody. Home, office and hotspot
+            networks generally work.
           </>
         ),
       },
@@ -234,7 +258,7 @@ export const FAQ_SECTIONS: FaqSection[] = [
       },
       {
         q: "What media can I send?",
-        a: "Images, voice notes, videos, and any other file format, all over Bluetooth using chunked streaming. Large files are split into fragments, paced so the radio is not overrun, and reassembled on the other side. Videos are sent as files and play inline; they are not live streams. The 1 MiB ceiling is bitchat's, enforced the moment it decodes a packet, so raising it would mean every bitchat peer silently dropping the file; photos and voice notes are capped tighter at 512 KiB for the same reason. Bluetooth carries roughly 18 KiB/s, so a file near the 1 MiB limit takes about 56 seconds, but it works with no internet at all. On Android to Android or iPhone to iPhone, a faster direct WiFi link is used automatically when both devices support it.",
+        a: "Images, voice notes, videos, and any other file format, all over Bluetooth using chunked streaming. Large files are split into fragments, paced so the radio is not overrun, and reassembled on the other side. Videos are sent as files and play inline; they are not live streams. The 1 MiB ceiling is bitchat's, enforced the moment it decodes a packet, so raising it would mean every bitchat peer silently dropping the file; photos and voice notes are capped tighter at 512 KiB for the same reason. Bluetooth carries roughly 18 KiB/s, so a file near the 1 MiB limit takes about 56 seconds, but it works with no internet at all. Over WiFi the gap between fragments is dropped, since it exists for the Bluetooth radio rather than for the protocol, and the same file moves in about a second.",
       },
       {
         q: "Why is there no video or voice calling?",

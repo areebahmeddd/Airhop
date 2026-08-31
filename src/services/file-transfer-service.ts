@@ -70,6 +70,18 @@ import * as FileSystem from "expo-file-system";
 const FRAGMENT_SPACING_DIRECTED_MS = 25;
 const FRAGMENT_SPACING_MS = 30;
 
+// Spacing when nothing on the path touches the Bluetooth radio.
+//
+// The gap above is a Bluetooth requirement, not a protocol one: the stack drops
+// fragments handed over faster than it can write them. A socket has flow
+// control of its own and needs no help, so the only reason to keep a timer at
+// all is to yield between fragments and leave the UI responsive.
+//
+// Fragment SIZE does not change with it. The receiver reassembles by index, the
+// next hop may be Bluetooth, and bitchat refuses an over-size frame as it
+// decodes, so 467 bytes is protocol and stays whatever carries it.
+const FAST_LINK_SPACING_MS = 0;
+
 // How long to wait after the radio REFUSES a fragment before offering it again.
 //
 // The spacing above assumes the link can always take the next write, and one-way
@@ -371,6 +383,15 @@ export type SealFileFn = (
   fileTlv: Uint8Array,
 ) => Packet | null;
 
+// Whether a fragment for this recipient will put bytes on the Bluetooth radio,
+// which is the only thing fragment spacing exists for. A channel fragment goes
+// down every link at once, so it is Bluetooth as soon as one Bluetooth link is
+// held.
+export type UsesBleRadioFn = (
+  recipientPeerID: string,
+  isDM: boolean,
+) => boolean;
+
 // NOTE: naming lives in wireFileName(), which owns the extension and bitchat's
 // stable-ID shape together. Nothing here may put localized UI copy on the wire:
 // a display word is not a file name, and one without an extension arrives as a
@@ -440,10 +461,13 @@ export class FileTransferService {
     weight?: number;
   }[] = [];
   private drainTimer: ReturnType<typeof setTimeout> | null = null;
+  // Whether a fragment is with the transport right now. See drainOne.
+  private draining = false;
   // Monotonic, so back-to-back sends cannot collide on a transfer id.
   private transferSeq = 0;
 
   private readonly sealFile?: SealFileFn;
+  private readonly usesBleRadio?: UsesBleRadioFn;
 
   // Throttles the "that attachment didn't arrive" line, per sender.
   private readonly failureNotifier = new AttachmentFailureNotifier();
@@ -454,12 +478,14 @@ export class FileTransferService {
     unicast: PacedUnicastFn,
     resolveNickname?: (peerID: string) => string | undefined,
     sealFile?: SealFileFn,
+    usesBleRadio?: UsesBleRadioFn,
   ) {
     this.identity = identity;
     this.broadcast = broadcast;
     this.unicast = unicast;
     this.resolveNickname = resolveNickname;
     this.sealFile = sealFile;
+    this.usesBleRadio = usesBleRadio;
   }
 
   // Receive a fully reassembled FILE_TRANSFER packet from the fragment layer.
@@ -640,16 +666,30 @@ export class FileTransferService {
     weight?: number,
   ): void {
     this.outQueue.push({ pkt, isDM, recipientPeerID, transferId, weight });
-    this.scheduleDrain();
+    // Paced from the first fragment, not just between them. Scheduling this one
+    // on the Bluetooth gap and the rest on the real one costs a transfer its
+    // whole head start on a link that never needed the gap.
+    this.scheduleDrain(this.spacingFor(isDM, recipientPeerID));
   }
 
-  // Spacing owed after handing over a fragment, by how many links it cost.
-  private static spacingFor(isDM: boolean): number {
+  // Spacing owed after handing over a fragment.
+  //
+  // Bluetooth decides it: if any link on the path is a radio, the whole
+  // transfer is paced for the radio, since the queue that overflows is shared.
+  // Only when nothing on the path is Bluetooth can the gap go.
+  //
+  // Absent the caller's answer this stays on the Bluetooth timings. A transfer
+  // that is slower than it needed to be is a nuisance; one paced faster than
+  // the radio can take drops fragments and never completes.
+  private spacingFor(isDM: boolean, recipientPeerID: string): number {
+    if (this.usesBleRadio?.(recipientPeerID, isDM) === false) {
+      return FAST_LINK_SPACING_MS;
+    }
     return isDM ? FRAGMENT_SPACING_DIRECTED_MS : FRAGMENT_SPACING_MS;
   }
 
-  private scheduleDrain(delayMs: number = FRAGMENT_SPACING_DIRECTED_MS): void {
-    if (this.drainTimer !== null) return;
+  private scheduleDrain(delayMs: number): void {
+    if (this.draining || this.drainTimer !== null) return;
     this.drainTimer = setTimeout(() => {
       this.drainTimer = null;
       void this.drainOne();
@@ -670,6 +710,18 @@ export class FileTransferService {
     if (next === undefined) return;
 
     let accepted = false;
+    // Held across the await, and only the await.
+    //
+    // `drainTimer` is cleared before this runs, so without a second flag an
+    // enqueue landing while the transport is still answering starts a parallel
+    // drain: two loops shifting one queue, handing the radio fragments twice as
+    // fast as the spacing allows. That is the packet loss the spacing exists to
+    // prevent, and a second transfer beginning during a first is ordinary.
+    //
+    // Released before the tail re-schedules below, which is safe because
+    // everything after the await is synchronous and nothing can interleave with
+    // it. Releasing later would swallow that schedule and stall the queue.
+    this.draining = true;
     try {
       accepted = next.isDM
         ? await this.unicast(next.recipientPeerID, next.pkt)
@@ -677,6 +729,8 @@ export class FileTransferService {
     } catch {
       // A transport that threw is a transport that did not take it.
       accepted = false;
+    } finally {
+      this.draining = false;
     }
 
     const tx =
@@ -707,7 +761,7 @@ export class FileTransferService {
     if (this.outQueue.length > 0) {
       this.scheduleDrain(
         accepted
-          ? FileTransferService.spacingFor(next.isDM)
+          ? this.spacingFor(next.isDM, next.recipientPeerID)
           : REFUSED_BACKOFF_MS,
       );
     }

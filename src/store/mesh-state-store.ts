@@ -76,6 +76,19 @@ export type WifiFastPath =
   | "unpaired"
   | "permission";
 
+// What the LAN transport is doing, for the Mesh tab and the Network screen.
+//
+// "off" is the resting state, not a failure: this transport does not run until
+// the user turns it on, because publishing an mDNS record tells everyone on the
+// network, and whoever runs it, that this phone is carrying Airhop.
+//
+// "searching" covers both an empty network and one whose access point forbids
+// peer traffic. Client isolation is on by default at most venues and cannot be
+// detected before trying, so the two are indistinguishable from inside the app
+// and the copy must not claim to know which it is.
+export type LanState =
+  "off" | "unsupported" | "unavailable" | "permission" | "searching" | "active";
+
 // The single reason the BLE mesh cannot run right now, or "none".
 //
 // One value rather than three independent booleans (adapterEnabled,
@@ -191,6 +204,8 @@ interface MeshStateStore {
   liveGeoCells: string[] | null;
   // State of the WiFi Aware fast path (see services/wifi-controller).
   wifiFastPath: WifiFastPath;
+  // State of the LAN transport (see services/lan-controller).
+  lanState: LanState;
   // Wi-Fi Aware pairing, iOS only (see services/wifi-pairing-service). Both stay
   // false and zero on Android, where the Network screen hides the section rather
   // than showing a control that would do nothing.
@@ -267,6 +282,7 @@ interface MeshStateStore {
   setWipeIncomplete: (incomplete: boolean) => void;
   setLiveGeoCells: (cells: string[] | null) => void;
   setWifiFastPath: (state: WifiFastPath) => void;
+  setLanState: (state: LanState) => void;
   setWifiPairing: (supported: boolean, count: number) => void;
   setNostrConnected: (connected: boolean) => void;
   setTorActive: (active: boolean) => void;
@@ -285,6 +301,7 @@ export const useMeshStateStore = create<MeshStateStore>()((set) => ({
   wipeIncomplete: false,
   liveGeoCells: null,
   wifiFastPath: "unknown",
+  lanState: "off",
   wifiPairingSupported: false,
   wifiPairedCount: 0,
   nostrConnected: false,
@@ -322,6 +339,9 @@ export const useMeshStateStore = create<MeshStateStore>()((set) => ({
   },
   setWifiFastPath(state) {
     set({ wifiFastPath: state });
+  },
+  setLanState(state) {
+    set({ lanState: state });
   },
   setWifiPairing(supported, count) {
     set({ wifiPairingSupported: supported, wifiPairedCount: count });

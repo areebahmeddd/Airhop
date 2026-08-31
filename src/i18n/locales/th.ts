@@ -1526,10 +1526,12 @@ export const strings: Strings = {
 
   // ---- Settings: group headings ----
   "settings.group.transports": "ช่องทางรับส่ง",
+  "settings.group.internet": "อินเทอร์เน็ต",
   "settings.group.nearby": "ใกล้เคียง",
   "settings.group.sync": "ซิงค์",
   "settings.group.features": "ฟีเจอร์",
   "settings.group.messages": "ข้อความ",
+  "settings.group.local": "ภายใน",
   "settings.group.media": "สื่อ",
   "settings.group.reset": "รีเซ็ต",
   "settings.group.always_on": "เปิดอยู่เสมอ",
@@ -1689,6 +1691,17 @@ export const strings: Strings = {
   "settings.network.relay_duplicate": "รีเลย์นั้นอยู่ในรายการของคุณแล้ว",
   "settings.network.relay_invalid":
     "ใส่โฮสต์รีเลย์ที่ถูกต้อง เช่น relay.example.com พอร์ตจำเป็นเมื่อรีเลย์ไม่ได้ใช้ค่าเริ่มต้นเท่านั้น ไม่อนุญาตให้ใช้ที่อยู่ IP และชื่อภายในเครือข่าย",
+  "settings.network.lan": "เครือข่ายภายใน",
+  "settings.network.lan_desc":
+    "ติดต่อผู้คนบน WiFi เดียวกัน รวมถึงระหว่าง iPhone กับ Android อุปกรณ์อื่นบนเครือข่ายจะเห็นว่าคุณกำลังใช้ Airhop",
+  "settings.network.lan_searching": "ไม่มีอุปกรณ์ Airhop บนเครือข่ายนี้",
+  "settings.network.lan_active": "เชื่อมต่อบนเครือข่ายนี้",
+  "settings.network.lan_unavailable": "ไม่ได้อยู่บนเครือข่าย WiFi",
+  "settings.network.lan_permission":
+    "การเข้าถึงเครือข่ายภายในถูกปิดสำหรับ Airhop",
+  "settings.network.lan_unsupported": "ใช้ไม่ได้บนอุปกรณ์นี้",
+  "settings.network.lan_foreground":
+    "หยุดเมื่อ Airhop อยู่เบื้องหลัง บลูทูธยังทำงานต่อ",
   "settings.network.wifi_pair": "การจับคู่",
   "settings.network.wifi_paired": "อุปกรณ์ที่จับคู่แล้ว",
   "settings.network.wifi_pair_find": "ค้นหาอุปกรณ์",

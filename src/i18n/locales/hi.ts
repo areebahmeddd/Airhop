@@ -1553,10 +1553,12 @@ export const strings: Strings = {
 
   // ---- Settings: group headings ----
   "settings.group.transports": "ट्रांसपोर्ट",
+  "settings.group.internet": "इंटरनेट",
   "settings.group.nearby": "आस-पास",
   "settings.group.sync": "सिंक",
   "settings.group.features": "सुविधाएँ",
   "settings.group.messages": "संदेश",
+  "settings.group.local": "स्थानीय",
   "settings.group.media": "मीडिया",
   "settings.group.reset": "रीसेट",
   "settings.group.always_on": "हमेशा चालू",
@@ -1717,6 +1719,17 @@ export const strings: Strings = {
   "settings.network.relay_duplicate": "वह रिले पहले से आपकी सूची में है।",
   "settings.network.relay_invalid":
     "कोई मान्य रिले होस्ट डालें, जैसे relay.example.com। पोर्ट तभी चाहिए जब रिले डिफ़ॉल्ट इस्तेमाल न करता हो। IP पते और स्थानीय नाम मान्य नहीं हैं।",
+  "settings.network.lan": "स्थानीय नेटवर्क",
+  "settings.network.lan_desc":
+    "उसी WiFi पर मौजूद लोगों तक पहुँचें, iPhone और Android के बीच भी। नेटवर्क पर मौजूद दूसरे डिवाइस देख सकते हैं कि आप Airhop चला रहे हैं।",
+  "settings.network.lan_searching": "इस नेटवर्क पर कोई Airhop डिवाइस नहीं",
+  "settings.network.lan_active": "इस नेटवर्क पर जुड़ा हुआ",
+  "settings.network.lan_unavailable": "किसी WiFi नेटवर्क पर नहीं",
+  "settings.network.lan_permission":
+    "Airhop के लिए स्थानीय नेटवर्क एक्सेस बंद है",
+  "settings.network.lan_unsupported": "इस डिवाइस पर उपलब्ध नहीं",
+  "settings.network.lan_foreground":
+    "Airhop के बैकग्राउंड में जाने पर रुक जाता है। ब्लूटूथ चलता रहता है।",
   "settings.network.wifi_pair": "पेयरिंग",
   "settings.network.wifi_paired": "पेयर किए गए डिवाइस",
   "settings.network.wifi_pair_find": "डिवाइस ढूँढें",

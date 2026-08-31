@@ -1515,10 +1515,12 @@ export const strings: Strings = {
 
   // ---- Settings: group headings ----
   "settings.group.transports": "وسائل النقل",
+  "settings.group.internet": "الإنترنت",
   "settings.group.nearby": "بالجوار",
   "settings.group.sync": "المزامنة",
   "settings.group.features": "الميزات",
   "settings.group.messages": "الرسائل",
+  "settings.group.local": "محلي",
   "settings.group.media": "الوسائط",
   "settings.group.reset": "إعادة الضبط",
   "settings.group.always_on": "مفعّل دائمًا",
@@ -1676,6 +1678,17 @@ export const strings: Strings = {
   "settings.network.relay_duplicate": "هذا المُرحِّل موجود في قائمتك بالفعل.",
   "settings.network.relay_invalid":
     "أدخل مضيف مُرحِّل صالحًا، مثل relay.example.com. المنفذ مطلوب فقط إن كان المُرحِّل لا يستخدم الافتراضي. عناوين IP والأسماء المحلية غير مسموح بها.",
+  "settings.network.lan": "الشبكة المحلية",
+  "settings.network.lan_desc":
+    "تواصل مع من هم على شبكة WiFi نفسها، بما في ذلك بين iPhone وAndroid. يمكن للأجهزة الأخرى على الشبكة أن ترى أنك تشغّل Airhop.",
+  "settings.network.lan_searching": "لا توجد أجهزة Airhop على هذه الشبكة",
+  "settings.network.lan_active": "متصل على هذه الشبكة",
+  "settings.network.lan_unavailable": "لست على شبكة WiFi",
+  "settings.network.lan_permission":
+    "الوصول إلى الشبكة المحلية معطّل لتطبيق Airhop",
+  "settings.network.lan_unsupported": "غير متاح على هذا الجهاز",
+  "settings.network.lan_foreground":
+    "يتوقف عندما يكون Airhop في الخلفية. تبقى البلوتوث تعمل.",
   "settings.network.wifi_pair": "الاقتران",
   "settings.network.wifi_paired": "الأجهزة المقترنة",
   "settings.network.wifi_pair_find": "ابحث عن جهاز",

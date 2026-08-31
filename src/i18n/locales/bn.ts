@@ -1549,10 +1549,12 @@ export const strings: Strings = {
 
   // ---- Settings: group headings ----
   "settings.group.transports": "বাহন",
+  "settings.group.internet": "ইন্টারনেট",
   "settings.group.nearby": "কাছে",
   "settings.group.sync": "মিলকরণ",
   "settings.group.features": "সুবিধা",
   "settings.group.messages": "বার্তা",
+  "settings.group.local": "স্থানীয়",
   "settings.group.media": "মিডিয়া",
   "settings.group.reset": "রিসেট",
   "settings.group.always_on": "সবসময় চালু",
@@ -1714,6 +1716,17 @@ export const strings: Strings = {
     "সেই রিলেটি ইতিমধ্যেই আপনার তালিকায় আছে।",
   "settings.network.relay_invalid":
     "একটি কাজের রিলে হোস্ট লিখুন, যেমন relay.example.com। রিলে আদি পোর্ট ব্যবহার না করলেই কেবল পোর্ট লাগে। IP ঠিকানা ও স্থানীয় নাম চলবে না।",
+  "settings.network.lan": "স্থানীয় নেটওয়ার্ক",
+  "settings.network.lan_desc":
+    "একই WiFi-তে থাকা লোকদের কাছে পৌঁছান, iPhone ও Android-এর মধ্যেও। নেটওয়ার্কের অন্য ডিভাইসগুলো দেখতে পাবে যে আপনি Airhop চালাচ্ছেন।",
+  "settings.network.lan_searching": "এই নেটওয়ার্কে কোনো Airhop ডিভাইস নেই",
+  "settings.network.lan_active": "এই নেটওয়ার্কে সংযুক্ত",
+  "settings.network.lan_unavailable": "কোনো WiFi নেটওয়ার্কে নেই",
+  "settings.network.lan_permission":
+    "Airhop-এর জন্য স্থানীয় নেটওয়ার্ক অ্যাক্সেস বন্ধ",
+  "settings.network.lan_unsupported": "এই ডিভাইসে উপলব্ধ নয়",
+  "settings.network.lan_foreground":
+    "Airhop ব্যাকগ্রাউন্ডে গেলে থেমে যায়। ব্লুটুথ চলতে থাকে।",
   "settings.network.wifi_pair": "জোড়া লাগানো",
   "settings.network.wifi_paired": "জোড়া লাগানো ডিভাইস",
   "settings.network.wifi_pair_find": "একটি ডিভাইস খুঁজুন",

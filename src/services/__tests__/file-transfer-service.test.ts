@@ -39,10 +39,17 @@ const META = {
 // The transport now answers whether it ACCEPTED the packet, and the pacer waits
 // for that answer before offering the next fragment. `accepted` lets a test play
 // a radio that is refusing writes, which is the case that used to lose files.
-function makeService(accepted = true) {
+function makeService(accepted = true, usesBleRadio?: () => boolean) {
   const broadcast = jest.fn().mockResolvedValue(accepted);
   const unicast = jest.fn().mockResolvedValue(accepted);
-  const service = new FileTransferService(IDENTITY, broadcast, unicast);
+  const service = new FileTransferService(
+    IDENTITY,
+    broadcast,
+    unicast,
+    undefined,
+    undefined,
+    usesBleRadio,
+  );
   return { service, broadcast, unicast };
 }
 
@@ -78,6 +85,84 @@ describe("outbound pacing", () => {
     for (let i = 0; i < f.length; i++) f[i] = (i * 167 + 13) & 0xff;
     return f;
   })();
+
+  // Fragment spacing exists for the Bluetooth radio, which drops writes handed
+  // over faster than it can make them. A link that is not a radio needs no gap,
+  // and pacing one anyway was the whole reason the WiFi fast path moved a file
+  // no faster than Bluetooth did.
+  // A second transfer starting while the first is mid-write used to open a
+  // parallel drain loop: `drainTimer` is cleared before the transport is
+  // awaited, so nothing stopped a fresh timer being set in that window. Two
+  // loops on one queue hand the radio fragments at twice the spacing, which is
+  // exactly the loss the spacing prevents.
+  it("does not open a second drain while one is with the transport", async () => {
+    // Collected in an array rather than a single binding: TypeScript cannot see
+    // that a promise executor runs synchronously, so a plain `let` narrows to
+    // never at the call below.
+    const pending: ((accepted: boolean) => void)[] = [];
+    const unicast = jest.fn(
+      () =>
+        new Promise<boolean>((resolve) => {
+          pending.push(resolve);
+        }),
+    );
+    const broadcast = jest.fn().mockResolvedValue(true);
+    const service = new FileTransferService(IDENTITY, broadcast, unicast);
+
+    service.sendBytes(FILE, META, "dm:1111222233334444");
+    await tick();
+    expect(unicast).toHaveBeenCalledTimes(1);
+
+    // A second transfer arrives while the first fragment is still in flight.
+    service.sendBytes(FILE, META, "dm:5555666677778888");
+    await tick(3);
+
+    // Still exactly one write outstanding: the queue grew, the loop did not.
+    expect(unicast).toHaveBeenCalledTimes(1);
+
+    // And the queue resumes once the transport answers, so nothing stalls.
+    pending[0](true);
+    await tick(2);
+    expect(unicast.mock.calls.length).toBeGreaterThan(1);
+  });
+
+  describe("pacing by transport", () => {
+    it("waits the Bluetooth gap when the path is Bluetooth", async () => {
+      const { service, unicast } = makeService(true, () => true);
+
+      service.sendBytes(FILE, META, "dm:1111222233334444");
+
+      await tick(1, 24);
+      expect(unicast).not.toHaveBeenCalled();
+
+      await tick(1, 1);
+      expect(unicast).toHaveBeenCalledTimes(1);
+    });
+
+    it("waits no gap when nothing on the path is Bluetooth", async () => {
+      const { service, unicast } = makeService(true, () => false);
+
+      service.sendBytes(FILE, META, "dm:1111222233334444");
+
+      await tick(1, 0);
+      expect(unicast).toHaveBeenCalledTimes(1);
+
+      await tick(1, 0);
+      expect(unicast).toHaveBeenCalledTimes(2);
+    });
+
+    it("stays on the Bluetooth gap when the caller does not say", async () => {
+      const { service, unicast } = makeService();
+
+      service.sendBytes(FILE, META, "dm:1111222233334444");
+
+      await tick(1, 24);
+      expect(unicast).not.toHaveBeenCalled();
+
+      await tick(1, 1);
+      expect(unicast).toHaveBeenCalledTimes(1);
+    });
+  });
 
   it("does not dispatch the whole file synchronously", () => {
     const { service, broadcast } = makeService();

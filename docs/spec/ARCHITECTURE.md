@@ -237,19 +237,47 @@ anywhere with WiFi and no route out.
 
 mDNS discovery on `_airhop-lan-v1._tcp` plus TCP links closes it. The links carry
 the same packet frames BLE carries, so the mesh engine needs no new concept and
-the wire format does not move. Being ordinary IP, it is platform-neutral, and
-it carries the whole mesh rather than only the parts Nostr can express.
-Tracked in [#38](https://github.com/areebahmeddd/airhop/issues/38).
+the wire format does not move. It sits beside WiFi Aware rather than replacing
+it: Aware needs no network at all, which mDNS cannot do, and mDNS reaches
+everyone on a network, which Aware cannot. The service name is kept apart from
+Aware's `_airhop-mesh-v1._tcp` so neither reads as a typo of the other.
 
-It sits beside WiFi Aware rather than replacing it. Aware needs no network at
-all, which mDNS structurally cannot do; mDNS reaches everyone on a network,
-which Aware cannot. Neither is a superset of the other.
+Two decisions are unique to it.
 
-| Constraint       | Consequence                                                                                                                                                                       |
-| ---------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Client isolation | Most guest and venue WiFi blocks peer-to-peer traffic at the access point, and it cannot be detected before trying. The UI has to say "no peers on this network" rather than spin |
-| mDNS filtering   | Common even where ordinary traffic works. A manual join by address covers it                                                                                                      |
-| iOS background   | A TCP socket has no equivalent of `bluetooth-central`, so a locked iPhone drops the link. A foreground accelerator, which WiFi Aware already is on iOS                            |
+**Who to connect to.** Bluetooth answers this with physics: the radio holds six
+or so links and refuses more. mDNS returns the whole network, and taking all of
+it is quadratic. Thirty phones fully connected is 435 sockets, and one broadcast
+costs 841 writes instead of 29 because every phone relays to everyone it holds
+and the deduplicator discards the copies; a channel photo turns that into
+millions of writes for one file. The arithmetic is not LAN's. Bluetooth is saved
+from it only by the radio refusing the links.
+
+So LAN caps at 8, sized against bitchat's `bleMaxCentralLinks` of 6, which keeps
+a LAN room reading the way a Bluetooth room does to every constant tuned for
+Bluetooth density. Names are sorted into one ring and a device links to the four
+either side of it, dialling only those sorting after its own so no pair is
+dialled twice. Both ends compute the same ring, so they agree without
+negotiating, and below the cap the ring wraps and everyone is a neighbour, which
+is right for a hotspot. `src/services/lan-dial-policy.ts` holds the rule as a
+pure function; the native modules open the sockets they are told to.
+
+**What to publish.** The instance name is random and minted per publishing
+session, never the peer ID: an mDNS record is cleartext to the network and is
+logged by ordinary infrastructure, so a stable name would let anyone holding
+logs from two networks link them. The ring sorts on that random name, so
+discovery needs no durable identifier, and identity is proven in the ANNOUNCE
+once the link is up.
+
+This is the only transport off by default. Publishing tells every device on the
+network, and whoever runs it, that this phone is carrying Airhop, which on a
+workplace or venue network is an attendance list. The Settings copy says that
+rather than selling the speed.
+
+| Constraint       | Consequence                                                                                                                                                                                  |
+| ---------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Client isolation | Most guest and venue WiFi blocks peer-to-peer traffic at the access point, and it cannot be detected before trying. The UI has to say "No Airhop devices on this network" rather than spin   |
+| mDNS filtering   | Common even where ordinary traffic works. A manual join by address covers it                                                                                                                 |
+| iOS background   | A TCP socket has no equivalent of `bluetooth-central`, and a suspended app has its listener reclaimed without getting it back on resume. Foreground only, which WiFi Aware already is on iOS |
 
 ### Same-platform WiFi
 
@@ -270,7 +298,7 @@ service name, same length-prefixed frames, one TypeScript contract
 - iOS: [`WiFiAware`](https://developer.apple.com/documentation/WiFiAware) on Network framework, iOS 26 and iPhone 12 or later. Needs the `com.apple.developer.wifi-aware` entitlement, which is a managed capability rather than a switch in Xcode, and the service declared in `Info.plist` under `WiFiAwareServices`
 - Same `Transport` interface as BLE, so the mesh engine does not know which radio it has
 - No power policy of its own. `src/services/power-policy.ts` scales the BLE radios and leaves this one alone on both platforms: Aware is withdrawn by the OS under battery saver rather than dialled down by the app, and both surface that through `availabilityChanged(false)` and the controller's retry ladder. iOS additionally costs nothing while nothing is paired, since it never attaches and is never retried
-- Carries what BLE cannot: a whole attachment in one write rather than hundreds of fragments the radio can drop
+- Carries an attachment at link speed. The 467-byte fragments stay, since the receiver reassembles by index and the next hop may be Bluetooth, but the 25 ms gap between them goes: it exists because the BLE stack drops writes handed over faster than it can make them, and a socket has flow control of its own. `src/services/file-transfer-service.ts` paces on one question, whether anything on the path touches the Bluetooth radio
 
 Three things are true only on iOS, and each shapes the code:
 
@@ -905,6 +933,7 @@ So there is one module per hardware capability and no more.
 | `AirhopBLEModule`                    | Both     | BLE GATT Peripheral and Central, radio state, power mode |
 | `AirhopVoiceModule`                  | Both     | AAC-LC capture and playback for voice notes and PTT      |
 | `AirhopWiFiModule`                   | Both     | WiFi Aware same-platform fast path                       |
+| `AirhopLANModule`                    | Both     | mDNS discovery and the TCP links behind it               |
 | `AirhopWiFiPairing`                  | iOS      | The system pairing sheet that fast path needs            |
 | `AirhopTorModule`, `AirhopTorSocket` | iOS      | Embedded Arti and the SOCKS socket it fronts             |
 

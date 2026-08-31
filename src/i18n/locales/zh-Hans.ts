@@ -1466,10 +1466,12 @@ export const strings: Strings = {
 
   // ---- Settings: group headings ----
   "settings.group.transports": "传输方式",
+  "settings.group.internet": "互联网",
   "settings.group.nearby": "附近",
   "settings.group.sync": "同步",
   "settings.group.features": "功能",
   "settings.group.messages": "消息",
+  "settings.group.local": "本地",
   "settings.group.media": "媒体",
   "settings.group.reset": "重置",
   "settings.group.always_on": "始终开启",
@@ -1621,6 +1623,16 @@ export const strings: Strings = {
   "settings.network.relay_duplicate": "那个中继已经在你的列表里了。",
   "settings.network.relay_invalid":
     "请输入有效的中继主机名，例如 relay.example.com。只有当中继不使用默认端口时才需要写端口。不允许使用 IP 地址和本地名称。",
+  "settings.network.lan": "本地网络",
+  "settings.network.lan_desc":
+    "联系同一 WiFi 上的人，iPhone 和 Android 之间也可以。网络上的其他设备能看到你在运行 Airhop。",
+  "settings.network.lan_searching": "此网络上没有 Airhop 设备",
+  "settings.network.lan_active": "已在此网络上连接",
+  "settings.network.lan_unavailable": "未连接 WiFi 网络",
+  "settings.network.lan_permission": "Airhop 的本地网络访问已关闭",
+  "settings.network.lan_unsupported": "此设备不支持",
+  "settings.network.lan_foreground":
+    "Airhop 进入后台时会暂停。蓝牙会继续运行。",
   "settings.network.wifi_pair": "配对",
   "settings.network.wifi_paired": "已配对的设备",
   "settings.network.wifi_pair_find": "查找设备",

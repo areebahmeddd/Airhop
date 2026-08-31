@@ -246,6 +246,10 @@ export async function panicWipe(): Promise<PanicWipeResult> {
     // too. Left set, a wipe on a phone with WiFi off would open the fresh
     // install on a note about a transport it has not tried yet.
     wifiFastPath: "unknown",
+    // Same rule for the LAN transport, which a wipe has just switched off along
+    // with every other setting. Left set, the Network screen would keep
+    // describing a network this phone is no longer publishing on.
+    lanState: "off",
     // Which cells we were listening in is a record of where the user was. It
     // goes with the mesh that was just destroyed, and null is the honest value
     // for a device that is no longer listening anywhere.

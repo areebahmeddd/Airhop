@@ -16,6 +16,10 @@
 // Every number is live. Peers come from the same store the Mesh tab renders, so
 // what is shown here and what is shown there can never disagree.
 
+import {
+  TRANSPORT_KINDS,
+  type TransportKind,
+} from "@core/mesh/links/link-registry";
 import { GCS_MAX_BYTES, GCS_TARGET_FPR } from "@core/mesh/sync/gossip-sync";
 import { t, useT } from "@i18n";
 import { getMeshService } from "@services/mesh-service";
@@ -61,6 +65,10 @@ function wifiLabel(state: string): string {
   }
 }
 
+const EMPTY_LINK_COUNTS = Object.fromEntries(
+  TRANSPORT_KINDS.map((kind) => [kind, 0]),
+) as Record<TransportKind, number>;
+
 export default function DiagnosticsScreen({
   onBack,
 }: Props): React.JSX.Element {
@@ -71,6 +79,7 @@ export default function DiagnosticsScreen({
 
   const peers = usePeerStore((s) => s.peers);
   const wifiFastPath = useMeshStateStore((s) => s.wifiFastPath);
+  const lanState = useMeshStateStore((s) => s.lanState);
   const nostrConnected = useMeshStateStore((s) => s.nostrConnected);
 
   // Counters live on the service rather than in a store, so they are polled.
@@ -95,7 +104,7 @@ export default function DiagnosticsScreen({
       return (b.rssi ?? -999) - (a.rssi ?? -999);
     });
 
-  const links = counters.links.ble + counters.links.wifi;
+  const links = Object.values(counters.links).reduce((a, b) => a + b, 0);
 
   return (
     <View style={styles.container}>
@@ -124,17 +133,6 @@ export default function DiagnosticsScreen({
             />
             <GroupDivider />
             <SettingRow
-              icon="share-2"
-              label={T("settings.diag.lan")}
-              description={T("settings.diag.lan_desc")}
-              control={
-                <Text style={styles.comingSoon}>
-                  {T("settings.coming_soon")}
-                </Text>
-              }
-            />
-            <GroupDivider />
-            <SettingRow
               icon="wifi"
               label={T("settings.diag.wifi")}
               description={`${t("settings.diag.wifi_about")} · ${wifiLabel(
@@ -143,6 +141,25 @@ export default function DiagnosticsScreen({
               control={
                 <Text style={[styles.settingValue, styles.settingValueMono]}>
                   {formatNumber(counters.links.wifi)}
+                </Text>
+              }
+            />
+            <GroupDivider />
+            {/* Below Wi-Fi Aware, since that is the faster of the two local
+                paths and the one a reader checks first. "Off" is appended the
+                way the Wi-Fi row appends its state, so a count of zero is not
+                read as "nobody here" on a transport nobody switched on. */}
+            <SettingRow
+              icon="share-2"
+              label={T("settings.diag.lan")}
+              description={
+                lanState === "off"
+                  ? `${t("settings.diag.lan_desc")} · ${t("common.off")}`
+                  : T("settings.diag.lan_desc")
+              }
+              control={
+                <Text style={[styles.settingValue, styles.settingValueMono]}>
+                  {formatNumber(counters.links.lan)}
                 </Text>
               }
             />
@@ -272,12 +289,12 @@ export default function DiagnosticsScreen({
 
 function readSnapshot(): {
   now: number;
-  links: { ble: number; wifi: number };
+  links: Record<TransportKind, number>;
 } {
   const service = getMeshService();
   return {
     now: Date.now(),
-    links: service?.getLinkCounts() ?? { ble: 0, wifi: 0 },
+    links: service?.getLinkCounts() ?? EMPTY_LINK_COUNTS,
   };
 }
 

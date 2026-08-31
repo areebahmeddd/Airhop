@@ -699,9 +699,11 @@ export default function ArchitecturePage() {
                 what carries an iPhone to an Android over a shared network.
               </p>
               <p>
-                And WiFi currently shares the same paced send queue as Bluetooth, so it runs at
-                Bluetooth speed today. Lifting that cap is planned, and nothing in the protocol
-                stands in the way.
+                Fragments are paced apart on Bluetooth because the stack drops writes handed over
+                faster than it can make them. A socket has flow control of its own, so the gap is
+                applied only where a Bluetooth radio is actually carrying the file. The fragment
+                size itself never changes: the receiver reassembles by index, and the next hop may
+                well be Bluetooth.
               </p>
 
               <p>
@@ -714,11 +716,10 @@ export default function ArchitecturePage() {
               </p>
               <p>
                 <TextLink href="https://en.wikipedia.org/wiki/Multicast_DNS">mDNS</TextLink>{" "}
-                discovery, with ordinary TCP links behind it, covers that case. The links carry the
-                same packet frames Bluetooth carries, so nothing about the wire format moves, and
-                because it is plain IP it does not care which phone you own. That matters most where
-                Bluetooth struggles and a network already exists: a ship with steel between decks, a
-                hotel, a conference floor.
+                discovery, with ordinary TCP links behind it, closes that gap. Being plain IP, it
+                does not care which phone you own, and the links carry the same packet frames
+                Bluetooth carries. It earns its place where Bluetooth struggles but a network
+                already exists: a ship with steel between decks, a hotel, a conference floor.
               </p>
 
               <Note label="Why both WiFi paths stay">

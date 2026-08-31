@@ -1462,10 +1462,12 @@ export const strings: Strings = {
 
   // ---- Settings: group headings ----
   "settings.group.transports": "የመተላለፊያ መንገዶች",
+  "settings.group.internet": "ኢንተርኔት",
   "settings.group.nearby": "በአቅራቢያ",
   "settings.group.sync": "ማመሳሰል",
   "settings.group.features": "ባህሪያት",
   "settings.group.messages": "መልእክቶች",
+  "settings.group.local": "አካባቢያዊ",
   "settings.group.media": "ሚዲያ",
   "settings.group.reset": "ዳግም ማስጀመር",
   "settings.group.always_on": "ሁልጊዜ በርቷል",
@@ -1620,6 +1622,15 @@ export const strings: Strings = {
   "settings.network.relay_duplicate": "ያ አስተላላፊ አስቀድሞ በዝርዝርህ ውስጥ ነው።",
   "settings.network.relay_invalid":
     "ትክክለኛ የአስተላላፊ አድራሻ አስገባ፤ ለምሳሌ relay.example.com። ወደብ የሚያስፈልገው አስተላላፊው ነባሪውን የማይጠቀም ከሆነ ብቻ ነው። የIP አድራሻዎችና የአካባቢ ስሞች አይፈቀዱም።",
+  "settings.network.lan": "የአካባቢ አውታረ መረብ",
+  "settings.network.lan_desc":
+    "በተመሳሳይ WiFi ላይ ያሉ ሰዎችን ያግኙ፣ በiPhone እና Android መካከልም ጭምር። በአውታረ መረቡ ላይ ያሉ ሌሎች መሣሪያዎች Airhop እያሄዱ መሆንዎን ማየት ይችላሉ።",
+  "settings.network.lan_searching": "በዚህ አውታረ መረብ ላይ ምንም የAirhop መሣሪያ የለም",
+  "settings.network.lan_active": "በዚህ አውታረ መረብ ላይ ተገናኝቷል",
+  "settings.network.lan_unavailable": "በWiFi አውታረ መረብ ላይ አይደለም",
+  "settings.network.lan_permission": "የAirhop የአካባቢ አውታረ መረብ መዳረሻ ጠፍቷል",
+  "settings.network.lan_unsupported": "በዚህ መሣሪያ ላይ አይገኝም",
+  "settings.network.lan_foreground": "Airhop በጀርባ ሲሆን ይቆማል። ብሉቱዝ መስራቱን ይቀጥላል።",
   "settings.network.wifi_pair": "ማጣመር",
   "settings.network.wifi_paired": "የተጣመሩ መሣሪያዎች",
   "settings.network.wifi_pair_find": "መሣሪያ ፈልግ",

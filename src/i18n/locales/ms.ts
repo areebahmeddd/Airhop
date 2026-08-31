@@ -1583,10 +1583,12 @@ export const strings: Strings = {
 
   // ---- Settings: group headings ----
   "settings.group.transports": "Pengangkut",
+  "settings.group.internet": "Internet",
   "settings.group.nearby": "Berdekatan",
   "settings.group.sync": "Penyegerakan",
   "settings.group.features": "Ciri",
   "settings.group.messages": "Mesej",
+  "settings.group.local": "Setempat",
   "settings.group.media": "Media",
   "settings.group.reset": "Tetap semula",
   "settings.group.always_on": "Sentiasa hidup",
@@ -1754,6 +1756,17 @@ export const strings: Strings = {
     "Geganti itu sudah ada dalam senarai anda.",
   "settings.network.relay_invalid":
     "Masukkan hos geganti yang sah, contohnya relay.example.com. Port hanya diperlukan kalau geganti itu tidak menggunakan port lalai. Alamat IP dan nama setempat tidak dibenarkan.",
+  "settings.network.lan": "Rangkaian setempat",
+  "settings.network.lan_desc":
+    "Hubungi orang pada WiFi yang sama, termasuk antara iPhone dan Android. Peranti lain pada rangkaian boleh melihat bahawa anda menggunakan Airhop.",
+  "settings.network.lan_searching": "Tiada peranti Airhop pada rangkaian ini",
+  "settings.network.lan_active": "Bersambung pada rangkaian ini",
+  "settings.network.lan_unavailable": "Tiada pada rangkaian WiFi",
+  "settings.network.lan_permission":
+    "Akses rangkaian setempat dimatikan untuk Airhop",
+  "settings.network.lan_unsupported": "Tidak tersedia pada peranti ini",
+  "settings.network.lan_foreground":
+    "Berhenti apabila Airhop di latar belakang. Bluetooth terus berjalan.",
   "settings.network.wifi_pair": "Gandingan",
   "settings.network.wifi_paired": "Peranti bergandingan",
   "settings.network.wifi_pair_find": "Cari peranti",

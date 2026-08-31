@@ -1568,10 +1568,12 @@ export const strings: Strings = {
 
   // ---- Settings: group headings ----
   "settings.group.transports": "Kênh truyền",
+  "settings.group.internet": "Internet",
   "settings.group.nearby": "Ở gần",
   "settings.group.sync": "Đồng bộ",
   "settings.group.features": "Tính năng",
   "settings.group.messages": "Tin nhắn",
+  "settings.group.local": "Nội bộ",
   "settings.group.media": "Phương tiện",
   "settings.group.reset": "Đặt lại",
   "settings.group.always_on": "Luôn bật",
@@ -1737,6 +1739,18 @@ export const strings: Strings = {
     "Bộ chuyển tiếp đó đã có trong danh sách của bạn.",
   "settings.network.relay_invalid":
     "Hãy nhập một máy chủ chuyển tiếp hợp lệ, ví dụ relay.example.com. Chỉ cần ghi cổng nếu bộ chuyển tiếp không dùng cổng mặc định. Không cho phép địa chỉ IP và tên cục bộ.",
+  "settings.network.lan": "Mạng nội bộ",
+  "settings.network.lan_desc":
+    "Kết nối với những người trên cùng WiFi, kể cả giữa iPhone và Android. Các thiết bị khác trên mạng có thể thấy bạn đang chạy Airhop.",
+  "settings.network.lan_searching":
+    "Không có thiết bị Airhop nào trên mạng này",
+  "settings.network.lan_active": "Đã kết nối trên mạng này",
+  "settings.network.lan_unavailable": "Không ở trên mạng WiFi nào",
+  "settings.network.lan_permission":
+    "Quyền truy cập mạng nội bộ đang tắt cho Airhop",
+  "settings.network.lan_unsupported": "Không khả dụng trên thiết bị này",
+  "settings.network.lan_foreground":
+    "Tạm dừng khi Airhop chạy nền. Bluetooth vẫn tiếp tục.",
   "settings.network.wifi_pair": "Ghép đôi",
   "settings.network.wifi_paired": "Thiết bị đã ghép đôi",
   "settings.network.wifi_pair_find": "Tìm một thiết bị",

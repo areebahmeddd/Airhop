@@ -1468,10 +1468,12 @@ export const strings: Strings = {
 
   // ---- Settings: group headings ----
   "settings.group.transports": "傳輸方式",
+  "settings.group.internet": "網際網路",
   "settings.group.nearby": "附近",
   "settings.group.sync": "同步",
   "settings.group.features": "功能",
   "settings.group.messages": "訊息",
+  "settings.group.local": "本機",
   "settings.group.media": "媒體",
   "settings.group.reset": "重設",
   "settings.group.always_on": "永遠開啟",
@@ -1624,6 +1626,16 @@ export const strings: Strings = {
   "settings.network.relay_duplicate": "那個中繼已經在你的清單裡了。",
   "settings.network.relay_invalid":
     "請輸入有效的中繼主機名稱，例如 relay.example.com。只有當中繼不用預設連接埠時才需要寫連接埠。不允許使用 IP 位址和本機名稱。",
+  "settings.network.lan": "本機網路",
+  "settings.network.lan_desc":
+    "聯繫同一 WiFi 上的人，iPhone 與 Android 之間也可以。網路上的其他裝置能看到你正在執行 Airhop。",
+  "settings.network.lan_searching": "此網路上沒有 Airhop 裝置",
+  "settings.network.lan_active": "已在此網路上連線",
+  "settings.network.lan_unavailable": "未連上 WiFi 網路",
+  "settings.network.lan_permission": "Airhop 的本機網路存取已關閉",
+  "settings.network.lan_unsupported": "此裝置不支援",
+  "settings.network.lan_foreground":
+    "Airhop 進入背景時會暫停。藍牙會繼續運作。",
   "settings.network.wifi_pair": "配對",
   "settings.network.wifi_paired": "已配對的裝置",
   "settings.network.wifi_pair_find": "尋找裝置",

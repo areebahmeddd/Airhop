@@ -1578,10 +1578,12 @@ export const strings: Strings = {
 
   // ---- Settings: group headings ----
   "settings.group.transports": "Pengangkut",
+  "settings.group.internet": "Internet",
   "settings.group.nearby": "Di dekat sini",
   "settings.group.sync": "Sinkronisasi",
   "settings.group.features": "Fitur",
   "settings.group.messages": "Pesan",
+  "settings.group.local": "Lokal",
   "settings.group.media": "Media",
   "settings.group.reset": "Setel ulang",
   "settings.group.always_on": "Selalu menyala",
@@ -1745,6 +1747,18 @@ export const strings: Strings = {
   "settings.network.relay_duplicate": "Relai itu sudah ada di daftarmu.",
   "settings.network.relay_invalid":
     "Masukkan host relai yang sah, misalnya relay.example.com. Porta hanya perlu kalau relainya tidak memakai porta bawaan. Alamat IP dan nama lokal tidak diizinkan.",
+  "settings.network.lan": "Jaringan lokal",
+  "settings.network.lan_desc":
+    "Jangkau orang di WiFi yang sama, termasuk antara iPhone dan Android. Perangkat lain di jaringan dapat melihat bahwa kamu menjalankan Airhop.",
+  "settings.network.lan_searching":
+    "Tidak ada perangkat Airhop di jaringan ini",
+  "settings.network.lan_active": "Terhubung di jaringan ini",
+  "settings.network.lan_unavailable": "Tidak berada di jaringan WiFi",
+  "settings.network.lan_permission":
+    "Akses jaringan lokal nonaktif untuk Airhop",
+  "settings.network.lan_unsupported": "Tidak tersedia di perangkat ini",
+  "settings.network.lan_foreground":
+    "Berhenti saat Airhop di latar belakang. Bluetooth tetap berjalan.",
   "settings.network.wifi_pair": "Penyandingan",
   "settings.network.wifi_paired": "Perangkat tersanding",
   "settings.network.wifi_pair_find": "Cari perangkat",

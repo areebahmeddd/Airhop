@@ -25,31 +25,32 @@ You must read these four documents before making any code suggestions:
 
 ## Where Things Live
 
-| Thing                                                         | Location                   |
-| ------------------------------------------------------------- | -------------------------- |
-| Crypto (Noise XX, identity, DR)                               | `src/core/crypto/`         |
-| Wire format: the packet frame and every payload               | `src/core/mesh/wire/`      |
-| Mesh routing, dedup, fragmentation, source routes             | `src/core/mesh/routing/`   |
-| Open links per radio, and the writes that go down them        | `src/core/mesh/links/`     |
-| GCS gossip sync                                               | `src/core/mesh/sync/`      |
-| Announces and nickname normalisation                          | `src/core/mesh/discovery/` |
-| Private-channel and private-group crypto                      | `src/core/mesh/rooms/`     |
-| Store-and-forward envelopes and one-time prekeys              | `src/core/mesh/courier/`   |
-| Live push-to-talk capture and playback                        | `src/core/mesh/voice/`     |
-| Nostr (client, gift-wrap, geo-relay, presence, courier-relay) | `src/core/nostr/`          |
-| Payments: tokens, DLEQ, NIP-61, seed (pure)                   | `src/core/payments/`       |
-| Payments: anything touching a mint                            | `src/services/`            |
-| Screen logic                                                  | `src/features/`            |
-| UI components, hooks, theme tokens                            | `src/ui/`                  |
-| Thin wrappers over OS APIs (permissions, haptics)             | `src/platform/`            |
-| State management                                              | `src/store/`               |
-| UI copy: the catalog, the runtime, RTL helpers                | `src/i18n/`                |
-| TurboModule specs (Codegen input)                             | `src/bridge/`              |
-| Root component and tab state machine                          | `src/app/`                 |
-| Whole-app lifecycle and simulation suites                     | `src/__tests__/`           |
-| iOS native                                                    | `ios/`                     |
-| Android native                                                | `android/`                 |
-| All protocol constants                                        | `docs/spec/PROTOCOLS.md`   |
+| Thing                                                         | Location                          |
+| ------------------------------------------------------------- | --------------------------------- |
+| Crypto (Noise XX, identity, DR)                               | `src/core/crypto/`                |
+| Wire format: the packet frame and every payload               | `src/core/mesh/wire/`             |
+| Mesh routing, dedup, fragmentation, source routes             | `src/core/mesh/routing/`          |
+| Open links per radio, and the writes that go down them        | `src/core/mesh/links/`            |
+| Which peers the LAN transport dials, and the cap on it        | `src/services/lan-dial-policy.ts` |
+| GCS gossip sync                                               | `src/core/mesh/sync/`             |
+| Announces and nickname normalisation                          | `src/core/mesh/discovery/`        |
+| Private-channel and private-group crypto                      | `src/core/mesh/rooms/`            |
+| Store-and-forward envelopes and one-time prekeys              | `src/core/mesh/courier/`          |
+| Live push-to-talk capture and playback                        | `src/core/mesh/voice/`            |
+| Nostr (client, gift-wrap, geo-relay, presence, courier-relay) | `src/core/nostr/`                 |
+| Payments: tokens, DLEQ, NIP-61, seed (pure)                   | `src/core/payments/`              |
+| Payments: anything touching a mint                            | `src/services/`                   |
+| Screen logic                                                  | `src/features/`                   |
+| UI components, hooks, theme tokens                            | `src/ui/`                         |
+| Thin wrappers over OS APIs (permissions, haptics)             | `src/platform/`                   |
+| State management                                              | `src/store/`                      |
+| UI copy: the catalog, the runtime, RTL helpers                | `src/i18n/`                       |
+| TurboModule specs (Codegen input)                             | `src/bridge/`                     |
+| Root component and tab state machine                          | `src/app/`                        |
+| Whole-app lifecycle and simulation suites                     | `src/__tests__/`                  |
+| iOS native                                                    | `ios/`                            |
+| Android native                                                | `android/`                        |
+| All protocol constants                                        | `docs/spec/PROTOCOLS.md`          |
 
 ## Rules Every Agent Must Follow
 

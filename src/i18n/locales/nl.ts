@@ -1585,10 +1585,12 @@ export const strings: Strings = {
 
   // ---- Settings: group headings ----
   "settings.group.transports": "Transporten",
+  "settings.group.internet": "Internet",
   "settings.group.nearby": "In de buurt",
   "settings.group.sync": "Synchronisatie",
   "settings.group.features": "Functies",
   "settings.group.messages": "Berichten",
+  "settings.group.local": "Lokaal",
   "settings.group.media": "Media",
   "settings.group.reset": "Resetten",
   "settings.group.always_on": "Altijd aan",
@@ -1752,6 +1754,17 @@ export const strings: Strings = {
   "settings.network.relay_duplicate": "Die relay staat al in je lijst.",
   "settings.network.relay_invalid":
     "Vul een geldige relayhost in, bijvoorbeeld relay.example.com. Een poort is alleen nodig als de relay niet de standaardpoort gebruikt. IP-adressen en lokale namen zijn niet toegestaan.",
+  "settings.network.lan": "Lokaal netwerk",
+  "settings.network.lan_desc":
+    "Bereik mensen op dezelfde WiFi, ook tussen iPhone en Android. Andere apparaten op het netwerk kunnen zien dat je Airhop gebruikt.",
+  "settings.network.lan_searching": "Geen Airhop-apparaten op dit netwerk",
+  "settings.network.lan_active": "Verbonden op dit netwerk",
+  "settings.network.lan_unavailable": "Niet op een WiFi-netwerk",
+  "settings.network.lan_permission":
+    "Toegang tot het lokale netwerk staat uit voor Airhop",
+  "settings.network.lan_unsupported": "Niet beschikbaar op dit apparaat",
+  "settings.network.lan_foreground":
+    "Pauzeert wanneer Airhop op de achtergrond staat. Bluetooth blijft draaien.",
   "settings.network.wifi_pair": "Koppelen",
   "settings.network.wifi_paired": "Gekoppelde apparaten",
   "settings.network.wifi_pair_find": "Een apparaat zoeken",

@@ -71,14 +71,14 @@ I built this at a 24-hour hackathon (July 2026) during my final year of undergra
 |                   | Panic wipe                | Triple-tap instantly erases keys and local messages (nuke your account)                                                                      |
 | 🕸️ **Networking** | Bluetooth mesh            | Communicate with nearby devices without internet                                                                                             |
 |                   | LAN mesh                  | Run the whole mesh over a shared WiFi network, discovered by mDNS. Works iPhone to Android, unlike WiFi Aware                                |
-|                   | Mesh bridge               | Link this area's public #bluetooth chat with another out-of-range Bluetooth crowd over the internet. Off by default                          |
+|                   | Mesh bridge               | Link this area's public #bluetooth chat with another out-of-range Bluetooth crowd over the internet                                          |
 |                   | WiFi Aware                | Faster file transfers between two Android devices, or two iPhones. Not across platforms                                                      |
 |                   | Multi-hop routing         | Messages automatically relay across nearby devices (up to 7 hops)                                                                            |
 |                   | Relay nodes               | Third-party [Bitle](https://bitle.org) hardware extends the mesh where nobody stands. Requires an ESP32 board, plus LoRa to link nodes       |
 |                   | bitchat compatibility     | Airhop nodes communicate directly with bitchat on iOS and Android                                                                            |
 | 🌐 **Internet**   | Internet fallback         | DMs and channels keep flowing over Nostr relays when a user moves out of Bluetooth range                                                     |
 |                   | Geo-relay discovery       | Discover location-based channels across 300+ distributed Nostr relays                                                                        |
-|                   | Internet gateway          | Lend your connection to a nearby offline phone so it can still reach the location (geohash) channels. Off by default                         |
+|                   | Internet gateway          | Lend your connection to a nearby offline phone so it can still reach the location (geohash) channels                                         |
 |                   | Tor integration           | Route Nostr traffic through Tor (Arti on iOS, Orbot on Android)                                                                              |
 
 ## Optional Features

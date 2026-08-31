@@ -1547,10 +1547,12 @@ export const strings: Strings = {
 
   // ---- Settings: group headings ----
   "settings.group.transports": "वाहक",
+  "settings.group.internet": "इन्टरनेट",
   "settings.group.nearby": "नजिकै",
   "settings.group.sync": "समक्रमण",
   "settings.group.features": "सुविधा",
   "settings.group.messages": "सन्देश",
+  "settings.group.local": "स्थानीय",
   "settings.group.media": "मिडिया",
   "settings.group.reset": "रिसेट",
   "settings.group.always_on": "सधैँ खुला",
@@ -1712,6 +1714,17 @@ export const strings: Strings = {
   "settings.network.relay_duplicate": "त्यो रिले पहिल्यै तपाईंको सूचीमा छ।",
   "settings.network.relay_invalid":
     "मान्य रिले होस्ट हाल्नुहोस्, जस्तै relay.example.com। रिलेले पूर्वनिर्धारित पोर्ट नचलाएमा मात्र पोर्ट चाहिन्छ। IP ठेगाना र स्थानीय नाम मान्य छैनन्।",
+  "settings.network.lan": "स्थानीय नेटवर्क",
+  "settings.network.lan_desc":
+    "उही WiFi मा भएका मान्छेसम्म पुग्नुहोस्, iPhone र Android बीच पनि। नेटवर्कमा भएका अरू यन्त्रले तपाईं Airhop चलाइरहेको देख्न सक्छन्।",
+  "settings.network.lan_searching": "यो नेटवर्कमा कुनै Airhop यन्त्र छैन",
+  "settings.network.lan_active": "यो नेटवर्कमा जोडिएको",
+  "settings.network.lan_unavailable": "कुनै WiFi नेटवर्कमा छैन",
+  "settings.network.lan_permission":
+    "Airhop का लागि स्थानीय नेटवर्क पहुँच बन्द छ",
+  "settings.network.lan_unsupported": "यो यन्त्रमा उपलब्ध छैन",
+  "settings.network.lan_foreground":
+    "Airhop पृष्ठभूमिमा जाँदा रोकिन्छ। ब्लुटुथ चलिरहन्छ।",
   "settings.network.wifi_pair": "जोडा मिलाउने",
   "settings.network.wifi_paired": "जोडा मिलाइएका उपकरण",
   "settings.network.wifi_pair_find": "उपकरण खोज्नुहोस्",
