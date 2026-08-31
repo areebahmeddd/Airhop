@@ -11,7 +11,7 @@ architectural layer.
 | `bridge/`        | React Native TurboModule TypeScript specifications (Codegen input only)        |
 | `core/crypto/`   | Identity, Noise XX/X, Double Ratchet, and contact exchange                     |
 | `core/encoding/` | Binary and base64 encoding helpers shared across the protocol                  |
-| `core/mesh/`     | The BLE mesh protocol, split by concern (see below)                            |
+| `core/mesh/`     | The mesh protocol, split by concern (see below)                                |
 | `core/nostr/`    | Nostr client, NIP-59 gift-wrap, geohash relay discovery, and presence          |
 | `core/payments/` | Cashu tokens, DLEQ, proof selection, NIP-61 events, and BIP-39 seed handling   |
 | `core/router/`   | Transport selection through `PeerRegistry` and `MessageRouter`                 |
@@ -33,6 +33,7 @@ than kept flat:
 | ------------ | ----------------------------------------------------------------- |
 | `wire/`      | The packet frame and every payload that rides inside it           |
 | `routing/`   | TTL flood, deduplication, fragmentation, source routes            |
+| `links/`     | Open links per transport, and the writes that go down them        |
 | `sync/`      | GCS gossip sync and outgoing request tracking                     |
 | `discovery/` | Signed announces and nickname normalization                       |
 | `rooms/`     | Private-channel and private-group crypto                          |
@@ -151,7 +152,7 @@ provided through `jest.isolateModules()`.
 The simulated environment models:
 
 - Android and iOS lifecycle behavior
-- BLE communication
+- BLE, Wi-Fi Aware, and LAN communication
 - In-memory Nostr relays implementing NIP-01
 - A Cashu mint performing real BDHKE operations
 
@@ -180,6 +181,8 @@ Current scenarios cover:
 - **Security:** replay attacks, Sybil floods, stale signed packets, recorded
   voice replay, and sender impersonation across messages, attachments, and
   announcements.
+- **Transports:** the LAN dial cap, cross-platform delivery with no Bluetooth
+  between the phones, and client isolation.
 - **Payments:** offline Cashu transfers and double-spend prevention.
 - **Recovery:** panic wipe, crash recovery, and long-running seeded soak tests.
 - **Complex network behavior:** private groups, delayed bulletin delivery,
