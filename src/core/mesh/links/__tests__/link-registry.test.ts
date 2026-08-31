@@ -29,7 +29,7 @@ function recorder(): Recorder {
   };
   return {
     writes,
-    writers: { ble: write(), wifi: write() },
+    writers: { ble: write(), wifi: write(), lan: write() },
     fail: (linkID) => failing.add(linkID),
   };
 }
@@ -251,7 +251,7 @@ describe("LinkRegistry", () => {
       links.open("wifi", "wifi-2");
       links.open("ble", "c:2");
 
-      expect(TRANSPORT_KINDS).toEqual(["ble", "wifi"]);
+      expect(TRANSPORT_KINDS).toEqual(["ble", "wifi", "lan"]);
       expect(links.linkIDs()).toEqual(["c:1", "c:2", "wifi-1", "wifi-2"]);
     });
 

@@ -14,6 +14,7 @@
 //   - Expose sendChannelMessage(), sendDm(), sendAttachment() for feature layer
 
 import AirhopBLE from "@bridge/NativeAirhopBLE";
+import NativeAirhopLAN from "@bridge/NativeAirhopLAN";
 import NativeAirhopWiFi from "@bridge/NativeAirhopWiFi";
 import {
   decodeContactCard,
@@ -52,7 +53,11 @@ import {
   decodeAnnouncePayload,
   isAnnounceFresh,
 } from "@core/mesh/discovery/announce-manager";
-import { LinkRegistry } from "@core/mesh/links/link-registry";
+import {
+  LinkRegistry,
+  TRANSPORT_KINDS,
+  type TransportKind,
+} from "@core/mesh/links/link-registry";
 import {
   openChannelMessage,
   sealChannelMessage,
@@ -218,6 +223,7 @@ import {
   isGeoChannel,
   type GeoParticipant,
 } from "./geohash-channel-service";
+import { LANController, newInstanceName } from "./lan-controller";
 import { rebindNutzapWatcher } from "./nutzap-watcher-handle";
 import { PrivateChannelService } from "./private-channel-service";
 import { RadioController } from "./radio-controller";
@@ -471,10 +477,12 @@ export class MeshService {
     ble: (linkID, dataBase64) => AirhopBLE.writeToLink(linkID, dataBase64),
     // A build with no WiFi module holds no WiFi links, so this is never
     // reached; it resolves rather than throwing so that stays true if one ever
-    // is opened before the module is checked.
+    // is opened before the module is checked. Same for LAN.
     wifi: (linkID, dataBase64) =>
       NativeAirhopWiFi?.writeToWiFiLink(linkID, dataBase64) ??
       Promise.resolve(),
+    lan: (linkID, dataBase64) =>
+      NativeAirhopLAN?.writeToLANLink(linkID, dataBase64) ?? Promise.resolve(),
   });
   // In-progress Noise XX handshakes keyed by remote peerID.
   private readonly pendingHandshakes = new Map<string, PendingHandshake>();
@@ -578,6 +586,15 @@ export class MeshService {
     useMeshStateStore.getState().setWifiFastPath(state),
   );
 
+  // Owns the LAN transport: whether it should be publishing, who to dial out of
+  // everyone mDNS found, and what the Mesh tab says about it.
+  //
+  // A fresh instance name per session, never the peer ID. See newInstanceName.
+  private readonly lan = new LANController(newInstanceName, (state) =>
+    useMeshStateStore.getState().setLanState(state),
+  );
+  private lanPrefUnsub: (() => void) | null = null;
+
   // Which devices the WiFi fast path is allowed to reach, iOS only.
   //
   // Apple's WiFi Aware has no unpaired mode, so a paired count of zero means the
@@ -605,11 +622,10 @@ export class MeshService {
   // announce to may be several hops away with no link of ours anywhere near it.
   // Reporting them separately is what makes "nobody is nearby" and "the radio is
   // not connecting" distinguishable in a bug report.
-  getLinkCounts(): { ble: number; wifi: number } {
-    return {
-      ble: this.links.size("ble"),
-      wifi: this.links.size("wifi"),
-    };
+  getLinkCounts(): Record<TransportKind, number> {
+    return Object.fromEntries(
+      TRANSPORT_KINDS.map((kind) => [kind, this.links.size(kind)]),
+    ) as Record<TransportKind, number>;
   }
 
   constructor(identity: Identity) {
@@ -668,8 +684,15 @@ export class MeshService {
       // only the addressee's handler claims it. File transfers are excluded:
       // they are far too large to flood and stay a direct-link feature. No-op
       // when we have no neighbour to relay through.
+      //
+      // Any neighbour, on any transport. This counted Bluetooth links alone,
+      // which was the same thing back when Bluetooth was the only one that
+      // relayed. It stopped being the same thing once a phone could hold LAN
+      // links and no Bluetooth at all: past the LAN cap not everyone is a
+      // direct neighbour, so a DM to someone a hop away had a relay available
+      // and was never handed to it.
       if (
-        this.links.size("ble") > 0 &&
+        this.links.size() > 0 &&
         packet.type !== PacketType.FILE_TRANSFER &&
         packet.type !== PacketType.FRAGMENT
       ) {
@@ -1160,6 +1183,71 @@ export class MeshService {
       ),
     );
 
+    this.subs.push(
+      DeviceEventEmitter.addListener(
+        "AirhopLAN.availabilityChanged",
+        ({ available }: { available: boolean }) => {
+          this.lan.onAvailabilityChanged(available);
+          if (!available) {
+            // The sockets went with the network. Forget them here rather than
+            // finding out one failed write at a time: the disconnect events
+            // cover an orderly close, not an interface disappearing.
+            this.links.closeAll("lan");
+            this.lan.setLinkCount(0);
+          }
+        },
+      ),
+      DeviceEventEmitter.addListener(
+        "AirhopLAN.peerDiscovered",
+        ({ serviceName }: { serviceName: string }) => {
+          this.lan.onPeerDiscovered(serviceName);
+        },
+      ),
+      DeviceEventEmitter.addListener(
+        "AirhopLAN.peerLost",
+        ({ serviceName }: { serviceName: string }) => {
+          this.lan.onPeerLost(serviceName);
+        },
+      ),
+      DeviceEventEmitter.addListener(
+        "AirhopLAN.linkConnected",
+        ({ linkID }: { linkID: string }) => {
+          this.links.open("lan", linkID);
+          this.lan.setLinkCount(this.links.size("lan"));
+          // A fresh announce, for the reason the WiFi link-up gives: the held
+          // greeting would be deduplicated as a copy of the one that went out
+          // over another transport, and it is the second announce that binds
+          // the peer to THIS link.
+          const pkt = this.announceManager.buildPacket(
+            this.identity,
+            this.nickname,
+            [],
+            hexToBytes(this.nostrPubKeyHex),
+            this.localCapabilities(),
+            this.bridgeService?.advertisedBridgeGeohash(),
+          );
+          this.links
+            .send(linkID, bytesToBase64(encodePacket(pkt)))
+            .catch(() => {});
+        },
+      ),
+      DeviceEventEmitter.addListener(
+        "AirhopLAN.linkDisconnected",
+        ({ linkID }: { linkID: string }) => {
+          // Bookkeeping only, as with WiFi: Bluetooth still carries the mesh,
+          // so a closing LAN link does not mean the peer has left.
+          this.links.close(linkID);
+          this.lan.setLinkCount(this.links.size("lan"));
+        },
+      ),
+      DeviceEventEmitter.addListener(
+        "AirhopLAN.packetReceived",
+        ({ linkID, dataBase64 }: { linkID: string; dataBase64: string }) => {
+          this.handleRaw(linkID, dataBase64);
+        },
+      ),
+    );
+
     // Start WiFi Aware (Android only) through its reconciler, for the same
     // reasons the radios go through theirs:
     // one attempt with its error discarded could not survive WiFi being off at
@@ -1178,6 +1266,17 @@ export class MeshService {
     // delivers the first.
     this.wifiPairing.start();
     this.wifi.start();
+
+    // The LAN transport runs only when the user has asked for it, so its
+    // switch is read here and watched below. Unlike the radios, a mesh that is
+    // running is not on its own a reason to publish anything.
+    this.lan.setEnabled(useSettingsStore.getState().lanTransportEnabled);
+    this.lan.start();
+    this.lanPrefUnsub?.();
+    this.lanPrefUnsub = useSettingsStore.subscribe((state, prev) => {
+      if (state.lanTransportEnabled === prev.lanTransportEnabled) return;
+      this.lan.setEnabled(state.lanTransportEnabled);
+    });
 
     // The radio controller reads the background preference during reconcile, so
     // the switch has to ask for one. Without this the foreground service would
@@ -5632,6 +5731,7 @@ export class MeshService {
     // diverge here, turning WiFi on and returning to the app fixes Bluetooth and
     // leaves the fast path dead until a relaunch.
     this.wifi.refresh();
+    this.lan.refresh();
     void this.wifiPairing.refresh();
   }
 
@@ -5668,6 +5768,7 @@ export class MeshService {
     usePeerStore.getState().evictStale();
     this.radio.refresh();
     this.wifi.refresh();
+    this.lan.refresh();
     // Pull-to-refresh is also the recovery path for a pairing removed in the
     // Settings app while Airhop was suspended, where the change event had no
     // running listener to reach.
@@ -6207,6 +6308,13 @@ export class MeshService {
     // service. Calling the native stops again here would race that.
     this.wifi.stop();
     this.wifiPairing.stop();
+    this.lan.stop();
+    this.lanPrefUnsub?.();
+    this.lanPrefUnsub = null;
+    // Same reason the WiFi links are cleared below: a LAN link is a socket that
+    // stopLAN() destroys, and the disconnect events cannot clean up because the
+    // subscriptions are already gone.
+    this.links.closeAll("lan");
     // And forget the links it just closed. Unlike a BLE central link, which
     // survives a stopped scan, a WiFi link is a socket stopWiFi() destroys, and
     // link IDs are never reissued. The native disconnect events cannot clean up
@@ -6256,6 +6364,10 @@ export class MeshService {
     // and reopen a socket under an identity that no longer exists.
     this.wifi.dispose();
     this.wifiPairing.stop();
+    // Same reason, and the stakes are higher here: a pending start that landed
+    // after a panic wipe would publish an mDNS record on the network under an
+    // identity that no longer exists.
+    this.lan.dispose();
   }
 }
 

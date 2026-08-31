@@ -85,6 +85,14 @@ interface SettingsState {
   // Distinct from Away, which stops the mesh even in the foreground. The middle
   // state: run while I am using it, stop when I am not.
   backgroundMeshEnabled: boolean;
+  // Whether to run the mesh over the WiFi network this phone is joined to.
+  //
+  // Off by default, and the only transport that is. Publishing an mDNS record
+  // broadcasts to every device on the network, and to whoever runs it, that
+  // this phone is carrying Airhop. On a venue, campus or corporate network that
+  // is logged by ordinary infrastructure with no app installed, so it is the
+  // user's call rather than ours.
+  lanTransportEnabled: boolean;
   // Whether a system notification withholds the sender and the message body.
   //
   // ON by default, which is the deliberate part. The lock screen is rendered by
@@ -171,6 +179,7 @@ interface SettingsState {
   setAutoDownloadMedia: (enabled: boolean) => void;
   setLiveVoiceEnabled: (enabled: boolean) => void;
   setBackgroundMeshEnabled: (enabled: boolean) => void;
+  setLanTransportEnabled: (enabled: boolean) => void;
   setHideNotificationPreviews: (hide: boolean) => void;
   setUploadQuality: (quality: UploadQuality) => void;
   setMediaRetentionDays: (days: MediaRetentionDays) => void;
@@ -202,6 +211,7 @@ const DEFAULTS = {
   autoDownloadMedia: true,
   liveVoiceEnabled: true,
   backgroundMeshEnabled: true,
+  lanTransportEnabled: false,
   // Private by default; see the field comment above for why.
   hideNotificationPreviews: true,
   uploadQuality: "high",
@@ -253,6 +263,9 @@ export const useSettingsStore = create<SettingsState>()(
       },
       setBackgroundMeshEnabled(enabled) {
         set({ backgroundMeshEnabled: enabled });
+      },
+      setLanTransportEnabled(enabled) {
+        set({ lanTransportEnabled: enabled });
       },
       setLiveVoiceEnabled(enabled) {
         set({ liveVoiceEnabled: enabled });

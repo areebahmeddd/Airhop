@@ -21,14 +21,23 @@
 // The order every observable list is enumerated in. Distinct from
 // `SEND_PREFERENCE`: this is "what order do we list things in", that is "which
 // link do we use".
-export const TRANSPORT_KINDS = ["ble", "wifi"] as const;
+//
+// Bluetooth first, and LAN last, because the announce carries only the first
+// ten `directPeers()` as its neighbour list (TLV 0x04) and that list is the
+// mesh graph other clients draw. A phone on a busy network holds more LAN peers
+// than Bluetooth ones, and letting them crowd out the Bluetooth neighbours
+// would hand bitchat a graph full of edges it cannot use.
+export const TRANSPORT_KINDS = ["ble", "wifi", "lan"] as const;
 
 export type TransportKind = (typeof TRANSPORT_KINDS)[number];
 
-// Which link to take when a peer is reachable on more than one transport. WiFi
-// first: it exists to move an attachment BLE would split into hundreds of paced
-// writes, so whenever both are held the fast one is the point of having it.
-const SEND_PREFERENCE: readonly TransportKind[] = ["wifi", "ble"];
+// Which link to take when a peer is reachable on more than one transport,
+// fastest first.
+//
+// WiFi Aware leads: it is a direct radio link with no access point in the path.
+// LAN goes phone to router to phone, still far past Bluetooth's ~18 KiB/s.
+// Bluetooth is the floor and the fallback.
+const SEND_PREFERENCE: readonly TransportKind[] = ["wifi", "lan", "ble"];
 
 export interface Link {
   readonly id: string;
@@ -55,8 +64,8 @@ export class LinkRegistry {
   //
   // One table rather than one per transport because the native modules namespace
   // link IDs and they cannot collide: BLE issues `c:<id>` and `p:<id>` on both
-  // platforms, WiFi issues `wifi-<n>` on iOS and `wifi-in-<n>` / `wifi-out-<n>`
-  // on Android.
+  // platforms, WiFi issues `wifi-<n>` / `wifi-in-<n>` / `wifi-out-<n>`, and LAN
+  // issues `lan-in-<n>` / `lan-out-<n>`.
   private readonly kindByLink = new Map<string, TransportKind>();
 
   // linkID to the peer bound to it. Not every open link has one: a link is a
