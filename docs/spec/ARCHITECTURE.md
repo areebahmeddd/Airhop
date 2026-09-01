@@ -41,7 +41,7 @@ Every layer and the reasoning behind it. For what is being built and when, see
 | Contact verification      | Yes, QR or safety number | n/a                 | Two ways in: a camera scan, or reading a six-word safety number to each other. `source` records how keys arrived, `verification` whether a human checked. Only an in-person scan may re-pin keys |
 | Panic wipe                | Yes                      | Yes                 | Panic button on Profile. Destroys keys, messages, groups, board, prekeys                                                                                                                         |
 | Internet gateway          | Relays for others        | Yes                 | Off by default. Carries public location traffic for offline peers                                                                                                                                |
-| Tor routing               | n/a                      | Yes                 | Arti on iOS, Orbot on Android. BLE is local, so nothing to route                                                                                                                                 |
+| Tor routing               | n/a                      | Yes                 | Embedded Arti on both. BLE is local, so nothing to route                                                                                                                                         |
 | Relay discovery           | n/a                      | Yes                 | Bundled CSV, refreshed from the georelays repo                                                                                                                                                   |
 | bitchat compatibility     | Yes                      | Yes                 | Same wire format both directions. Airhop-only types are ignored by bitchat                                                                                                                       |
 
@@ -588,7 +588,7 @@ Two rules hold across the ladder:
 | Interrupted send    | Proofs move to a reserved bucket rather than being deleted, and the serialised token stays on the transaction. An abandoned sheet, a crash, or a DM that never routes leaves the value reclaimable                                                                |
 | Mint failure        | The user chooses which mints to trust. Balances are per (mint, unit) and never pooled, so one mint failing cannot take the rest                                                                                                                                   |
 | Proofs at rest      | The MMKV partition is AES-256 encrypted under a keychain-held key. If that key is unavailable the wallet locks rather than falling back to plaintext                                                                                                              |
-| IP linkage over Tor | On iOS, Arti wraps only Nostr WebSockets, so mint HTTP would bypass it. Mint calls are refused while Tor is on unless the user opts in. Android is covered by Orbot's VPN                                                                                         |
+| IP linkage over Tor | On iOS, Tor wraps only Nostr WebSockets, so mint HTTP would bypass it. Mint calls are refused while Tor is on unless the user opts in. Android routes every socket through the proxy, so nothing is left to refuse                                                |
 
 ### Recovery
 
@@ -662,19 +662,50 @@ fee arithmetic, blinding, and the mint HTTP surface.
 
 ### Tor
 
-| Platform | Integration                                                                                                                          | Default               |
-| -------- | ------------------------------------------------------------------------------------------------------------------------------------ | --------------------- |
-| iOS      | [Arti](https://gitlab.torproject.org/tpo/core/arti) Rust xcframework, as in bitchat-ios, embedded in the app binary                  | Off                   |
-| Android  | [Orbot](https://guardianproject.info/apps/org.torproject.android/) proxy detection: SOCKS5 on `localhost:9050` when Orbot is running | Optional, with prompt |
+Both platforms embed [Arti](https://gitlab.torproject.org/tpo/core/arti), the
+Tor Project's Rust client, built from `native/arti/`: one crate, one SOCKS5
+listener on `127.0.0.1:39050`, two thin FFI faces. There is no `tor` binary, no
+`torrc`, no control port and no third-party app. Off by default on both.
 
-Tor covers Nostr relay connections only. BLE traffic is radio-local and cannot be
-routed through it.
+| Platform | How it is linked                     | What it covers                               |
+| -------- | ------------------------------------ | -------------------------------------------- |
+| iOS      | Static library in `arti.xcframework` | Nostr relay WebSockets only                  |
+| Android  | `libarti_airhop.so` in `jniLibs`     | Every socket the app opens, `fetch` included |
+
+The coverage column is the one asymmetry, and it is a platform limit rather than
+a choice. React Native on Android is OkHttp end to end, so installing the proxy
+into `OkHttpClientProvider` at application start covers `fetch` and WebSocket at
+once. iOS has no equivalent hook, so nostr-tools is handed a WebSocket that
+speaks SOCKS5 and everything else stays outside the tunnel. That is why a Cashu
+mint call is refused on iOS while Tor is on, and needs no such refusal on
+Android. See [section 7](#7-payments).
+
+Both fail closed at the socket, and for the same reason: Arti has no clearnet
+path. A request made before a circuit exists fails rather than falling back, so
+protection starts when the user consents rather than when the circuit finishes
+forming.
+
+Tor covers internet traffic only. BLE, WiFi Aware and LAN are local radios and
+have nothing to route.
 
 Tor hides the device IP from the relay and DM metadata from the relay operator.
 It does not conceal that Tor is in use, since the first hop is a direct
-connection to the Tor network on both platforms. That is why it is off by
-default, which is a safety decision rather than a convenience one. Tracked in
+connection to a publicly listed relay on both platforms. That is why it is off
+by default, which is a safety decision rather than a convenience one. Bridges
+and pluggable transports would close it; the build already compiles
+`bridge-client` and `pt-client` in, so that is a configuration and UI change
+rather than another binary rebuild. Tracked in
 [PROGRESS.md](../dev/PROGRESS.md#known-issues).
+
+### Building the Tor client
+
+The binaries are committed, and both are built here rather than vendored.
+`native/arti/build-in-container.sh` produces the Android libraries inside a
+pinned container (Rust, NDK, Debian snapshot and `Cargo.lock` all fixed by
+`TOOLCHAIN.env`), and `native/arti/build-apple.sh` produces the xcframework on
+macOS. `scripts/verify-vendored.js` records every resulting file by hash and CI
+fails a build whose binaries moved without the source that claims to produce
+them moving too.
 
 ### Panic wipe
 
@@ -688,10 +719,10 @@ immediately.
    document, a sent video, an image small enough to send unmodified and the
    saved QR card all live under other names or in the pickers' own
    subdirectories, and every one of them used to survive
-4. Stop Arti and delete its data directory (iOS). It sits under Application
-   Support rather than the cache, and holds a cached consensus, chosen guard
-   nodes and timestamps, which is evidence that this device used Tor and roughly
-   when
+4. Stop Arti and delete its data directory, on both platforms. It sits outside
+   the media cache (Application Support on iOS, the files directory on Android)
+   and holds a cached consensus, chosen guard nodes and timestamps, which is
+   evidence that this device used Tor and roughly when
 5. Take every delivered notification out of the system tray. Each carries a
    sender name and a message preview, and they outlive the process
 
@@ -861,6 +892,7 @@ lives in `android/` or `ios/`.
 | ---------------- | ------------------------------------------------------------------------ |
 | `android/`       | Kotlin BLE module and the foreground service that keeps the mesh alive   |
 | `ios/`           | Swift BLE module built on CoreBluetooth                                  |
+| `native/arti/`   | The embedded Tor client in Rust, and the pinned build that produces it   |
 | `src/app/`       | The root component and the four-tab state machine                        |
 | `src/bridge/`    | TurboModule specs, the only place native and TypeScript meet             |
 | `src/core/`      | The protocol in pure TypeScript: crypto, mesh, nostr, payments, routing  |
@@ -928,14 +960,15 @@ Hardware requires native code. Routing, crypto, Nostr and payments do not, and
 native code is harder to test, keep consistent across platforms and reason about.
 So there is one module per hardware capability and no more.
 
-| Module                               | Platform | Capability                                               |
-| ------------------------------------ | -------- | -------------------------------------------------------- |
-| `AirhopBLEModule`                    | Both     | BLE GATT Peripheral and Central, radio state, power mode |
-| `AirhopVoiceModule`                  | Both     | AAC-LC capture and playback for voice notes and PTT      |
-| `AirhopWiFiModule`                   | Both     | WiFi Aware same-platform fast path                       |
-| `AirhopLANModule`                    | Both     | mDNS discovery and the TCP links behind it               |
-| `AirhopWiFiPairing`                  | iOS      | The system pairing sheet that fast path needs            |
-| `AirhopTorModule`, `AirhopTorSocket` | iOS      | Embedded Arti and the SOCKS socket it fronts             |
+| Module              | Platform | Capability                                               |
+| ------------------- | -------- | -------------------------------------------------------- |
+| `AirhopBLEModule`   | Both     | BLE GATT Peripheral and Central, radio state, power mode |
+| `AirhopVoiceModule` | Both     | AAC-LC capture and playback for voice notes and PTT      |
+| `AirhopWiFiModule`  | Both     | WiFi Aware same-platform fast path                       |
+| `AirhopLANModule`   | Both     | mDNS discovery and the TCP links behind it               |
+| `AirhopWiFiPairing` | iOS      | The system pairing sheet that fast path needs            |
+| `AirhopTorModule`   | Both     | Embedded Arti's lifecycle and bootstrap status           |
+| `AirhopTorSocket`   | iOS      | The SOCKS5 WebSocket that iOS needs and Android does not |
 
 None of them knows anything about packets, routing or encryption.
 
@@ -945,7 +978,7 @@ Bridge specs live in `src/bridge/`, and React Native Codegen turns them into the
 native bridge for both platforms. Bytes cross base64-encoded, the only
 representation both runtimes agree on safely.
 
-`src/bridge/NativeAirhopBLE.ts` is the largest, at fourteen methods:
+`src/bridge/NativeAirhopBLE.ts` is the largest, at ten methods:
 
 1. `startAdvertising` / `stopAdvertising`: GATT Peripheral
 2. `startScanning` / `stopScanning`: GATT Central
@@ -954,13 +987,16 @@ representation both runtimes agree on safely.
 5. `setPowerMode`: how hard to run the radios
 6. `requestEnableBluetooth` / `openLocationSettings`: one-tap fixes for the Mesh banner
 7. `setBackgroundServiceEnabled`: hold the process up, independent of advertising
-8. `getTorProxyPort` / `getTorAvailability`: whether a SOCKS proxy is routing
-9. `startVpnWatch` / `stopVpnWatch`: watch the VPN carrying Orbot, while Tor is on
 
-Native calls back with ten events: `packetReceived`, `linkConnected`,
+It used to carry four more, for probing Orbot's SOCKS port and watching the VPN
+transport that carried it. Owning the Tor process removed the need to infer any
+of it: `AirhopTorModule` is asked directly instead. A radio module answering
+questions about Tor was always a boundary violation, and it went with the
+inference.
+
+Native calls back with eight events: `packetReceived`, `linkConnected`,
 `linkDisconnected`, `rssiUpdated`, `adapterStateChanged`, `powerStateChanged`,
-`scanFailed`, `meshStopRequested`, `onVpnLost` and `onVpnAvailable`. The last
-two are unprefixed because JS subscribes to them by those exact names.
+`scanFailed` and `meshStopRequested`.
 
 `AirhopWiFiModule` mirrors the shape with four of its own: `packetReceived`,
 `linkConnected`, `linkDisconnected` and `availabilityChanged`. The last is what
