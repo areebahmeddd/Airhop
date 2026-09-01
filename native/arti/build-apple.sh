@@ -20,7 +20,7 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 FRAMEWORKS_DIR="$REPO_ROOT/ios/Frameworks"
 XCFRAMEWORK="$FRAMEWORKS_DIR/arti.xcframework"
 LIB_NAME="libarti_airhop.a"
-BUILD_DIR="$SCRIPT_DIR/target/apple"
+BUILD_DIR="$SCRIPT_DIR/target/xcframework-staging"
 
 # shellcheck disable=SC1091
 source "$SCRIPT_DIR/TOOLCHAIN.env"
@@ -120,7 +120,7 @@ EXPECTED_SYMBOLS=(
 # rather than the slice it ended up in.
 verify_target() {
   local target="$1" lib symbols
-  lib="$SCRIPT_DIR/target/$target/release/$LIB_NAME"
+  lib="$SCRIPT_DIR/target/$target/apple/$LIB_NAME"
   if ! symbols="$("$NM" --defined-only -g "$lib" 2>&1)"; then
     printf '%s\n' "$symbols" | head -5 >&2
     fail "$target: could not read $LIB_NAME with $NM"
@@ -137,16 +137,17 @@ verify_target() {
 
 # Strip an archive and rewrite it deterministically.
 #
-# Both halves are load-bearing, and leaving them out is what produced a 259 MB
-# slice where the implementation this replaces produced 15 MB. rustc emits one
-# object per crate carrying its LLVM bitcode and local symbols; nothing links
-# them here, so a staticlib keeps all 791 of them at full size. `strip -x` drops
-# what the app's linker will never need, and it cannot touch the exported entry
-# points because those are global.
+# Neither half is the reason these archives are a sane size; the `apple` profile
+# in Cargo.toml is, by not embedding bitcode. Stripping on its own took 167 MB to
+# 157 MB, because `strip -x` removes local symbols and leaves the __bitcode
+# section untouched.
 #
-# `libtool -D` is not about size. It rewrites the archive with zeroed timestamps
-# and uids, so building the same source twice gives the same bytes. Without it a
-# rebuild always looks like a change, and SHA256SUMS.apple is worth nothing.
+# They are still worth doing. `strip -x` drops symbols the app's linker will
+# never need and cannot touch the exported entry points, which are global.
+# `libtool -D` is not about size at all: it rewrites the archive with zeroed
+# timestamps and uids, so building the same source twice gives the same bytes.
+# Without it a rebuild always looks like a change and SHA256SUMS.apple is worth
+# nothing.
 normalize_archive() {
   local lib="$1"
   strip -x "$lib" 2>/dev/null || true
@@ -159,8 +160,8 @@ build_target() {
   local target="$1"
   info "Building $target"
   rustup target add "$target" >/dev/null 2>&1 || true
-  cargo build --release --locked --target "$target" --manifest-path "$SCRIPT_DIR/Cargo.toml"
-  local produced="$SCRIPT_DIR/target/$target/release/$LIB_NAME"
+  cargo build --profile apple --locked --target "$target" --manifest-path "$SCRIPT_DIR/Cargo.toml"
+  local produced="$SCRIPT_DIR/target/$target/apple/$LIB_NAME"
   [ -f "$produced" ] || fail "$target: no $LIB_NAME was produced"
   local before after
   before=$(du -m "$produced" | cut -f1)
@@ -185,7 +186,7 @@ info "Merging architectures"
 mkdir -p "$BUILD_DIR/ios" "$BUILD_DIR/ios-sim" "$BUILD_DIR/macos"
 
 # Where cargo leaves one target's static library.
-lib_for() { printf '%s/target/%s/release/%s' "$SCRIPT_DIR" "$1" "$LIB_NAME"; }
+lib_for() { printf '%s/target/%s/apple/%s' "$SCRIPT_DIR" "$1" "$LIB_NAME"; }
 
 # Merge every target in an array into one universal archive.
 merge_slice() {

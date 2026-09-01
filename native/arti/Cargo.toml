@@ -57,3 +57,27 @@ lto = "fat"
 codegen-units = 1
 panic = "abort"
 strip = "symbols"
+
+# Apple builds, and the one place they must differ from Android.
+#
+# Android links a cdylib, so rustc performs the fat LTO and emits a stripped 7.5
+# MiB shared object. Apple takes a staticlib, which rustc does not link: it
+# bundles every dependency's objects into an archive and leaves the real link to
+# Xcode. Fat LTO therefore never runs, and all it does is make cargo embed LLVM
+# bitcode in all 791 objects so that it could.
+#
+# Measured, not assumed. In one 11 MiB object from that archive:
+#
+#   __bitcode   8,773,456 bytes
+#   __text        479,652 bytes
+#
+# Four percent machine code, eighty percent bitcode for an optimization that
+# never happens. Three slices came to 645 MiB and GitHub refuses any file over
+# 100 MiB.
+#
+# Turning LTO off makes cargo pass `-C embed-bitcode=no`, which drops the
+# bitcode. Nothing is lost: Xcode still optimizes and dead-strips when it links
+# the app, which is where the only real link was happening anyway.
+[profile.apple]
+inherits = "release"
+lto = false
