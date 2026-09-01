@@ -225,7 +225,6 @@ Uses **Arti** (Rust implementation of Tor) bundled as an xcframework.
 - `TorURLSession` wraps all URL sessions; `TorManager` manages lifecycle.
 - `NostrRelayManager` and `GeoRelayDirectory` both await Tor readiness before starting.
 - **Fail-closed**: the app will not connect at all if Tor hasn't bootstrapped.
-- Android does **not** yet have Tor integration.
 
 ### 4.5 Relay Network
 

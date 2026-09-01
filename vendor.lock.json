@@ -1,11 +1,12 @@
 {
   "files": {
-    "ios/Frameworks/arti.xcframework/Info.plist": "cac99db408280bbef15cae8ce64c8ccdbf2e8863c205168d59f83fe8ab680f94",
-    "ios/Frameworks/arti.xcframework/ios-arm64/Headers/arti.h": "551655904834748c9dc36034fdbc9465e7533aef1e4a6514b4fcc75875b93058",
-    "ios/Frameworks/arti.xcframework/ios-arm64/libarti_bitchat.a": "5461a231a786812e91e7965290031ea3479fdc5c6459553e46988ecafbbc2a3d",
-    "ios/Frameworks/arti.xcframework/ios-arm64_x86_64-simulator/Headers/arti.h": "551655904834748c9dc36034fdbc9465e7533aef1e4a6514b4fcc75875b93058",
-    "ios/Frameworks/arti.xcframework/ios-arm64_x86_64-simulator/libarti_bitchat.a": "af8f5f636eb6affb309b3e44f13e48498eb2540c77af44ddcd7fdf9241b1e317",
-    "ios/Frameworks/arti.xcframework/macos-arm64_x86_64/Headers/arti.h": "551655904834748c9dc36034fdbc9465e7533aef1e4a6514b4fcc75875b93058",
-    "ios/Frameworks/arti.xcframework/macos-arm64_x86_64/libarti_bitchat.a": "7c9afe98227f1767567ddcd4e35d9dfffe70309c302c4dbc9a6c9d6aeefab007"
+    "android/app/src/main/jniLibs/arm64-v8a/libarti_airhop.so": "7d307fd1d93d11e931ec96e3061103d83016f0bae3b3f18449c949f800d29cc9",
+    "android/app/src/main/jniLibs/armeabi-v7a/libarti_airhop.so": "6dadada0d897873ee09008eb25cb396d2b635a3de6e247b95104af93a507ba32",
+    "android/app/src/main/jniLibs/x86_64/libarti_airhop.so": "c7ae7909b9ae0966d19647e46b0603912e268eaa6fcb64f2490e5a89041353f3",
+    "ios/Frameworks/arti.xcframework/Info.plist": "dffda6060c2558b678bc77956261f1c9b291ea3a7dcfcbab45db4c169c96d6b0",
+    "ios/Frameworks/arti.xcframework/ios-arm64/Headers/arti.h": "3394493a5f685c255dc1f5e9d8dfb921d75c3246c73cf4d27e26b31849d0c0ba",
+    "ios/Frameworks/arti.xcframework/ios-arm64/libarti_airhop.a": "ded7bffb0a82481a4532c40bff1c03ff99fa011157c579b113b1ce2d79e3a278",
+    "ios/Frameworks/arti.xcframework/ios-arm64_x86_64-simulator/Headers/arti.h": "3394493a5f685c255dc1f5e9d8dfb921d75c3246c73cf4d27e26b31849d0c0ba",
+    "ios/Frameworks/arti.xcframework/ios-arm64_x86_64-simulator/libarti_airhop.a": "a12017d5cecd068db447db577886dc4e555b6f2c637012291b0dea813236ceff"
   }
 }

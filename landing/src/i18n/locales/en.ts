@@ -67,7 +67,7 @@ export const strings = {
   "home.about.body.crypto":
     "Every session uses the {noise} protocol for an authenticated handshake. Stored messages use the {ratchet} algorithm, so even if your device is compromised later, your past messages stay unreadable. Panic wipe destroys all keys and messages in under one second.",
   "home.about.body.internet":
-    "When you and a contact are out of Bluetooth range, {nostr} relays serve as an internet bridge, using {nip17}-shaped gift-wrapped direct messages, so the mesh extends globally whenever both of you are online. {tor} support is also available on both iOS (via {arti}) and Android (via {orbot}).",
+    "When you and a contact are out of Bluetooth range, {nostr} relays serve as an internet bridge, using {nip17}-shaped gift-wrapped direct messages, so the mesh extends globally whenever both of you are online. {tor} support is available on both iOS and Android, using {arti}.",
   "home.about.optional.title": "Airhop has optional features you can enable:",
   "home.about.optional.payments.label": "Offline Payments:",
   "home.about.optional.payments.body":

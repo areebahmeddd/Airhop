@@ -21,7 +21,7 @@ Airhop's security guarantees (from `docs/design/VISION.md`):
 2. Every packet is Ed25519-signed and verified
 3. No private key material ever leaves the device's secure enclave (iOS Keychain / Android Keystore)
 4. No plaintext message content ever touches disk
-5. Network anonymity via Tor (iOS: Arti, Android: Orbot)
+5. Network anonymity via Tor (Arti, embedded on both platforms)
 
 A security regression in any of these is a critical bug that blocks the release.
 

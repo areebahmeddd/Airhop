@@ -1384,9 +1384,6 @@ export const strings: Strings = {
     "iOS ပေါ်တွင် မင့်တောင်းဆိုမှုများသည် Tor မှ မဖြတ်သန်းပါ။",
   "wallet.svc.tor_ios_body":
     "Arti သည် Nostr WebSocket များကိုသာ ဖုံးအုပ်ပေးသဖြင့် ဤတောင်းဆိုမှုသည် ပွင့်လင်းကွန်ရက်မှတစ်ဆင့် မင့်ထံရောက်ပြီး သင့် IP ကို ဤသက်သေများနှင့် ချိတ်ဆက်စေမည်။ ဆက်တင်များ > လုံခြုံရေးအောက်တွင် ခွင့်ပြုပါ၊ သို့မဟုတ် Tor ကို အရင်ပိတ်ပါ။ မက်ရှ်ပေါ်တွင် ecash ပို့ခြင်းနှင့် လက်ခံခြင်းမှာ ဆက်လုပ်နိုင်ဆဲဖြစ်သည်။",
-  "wallet.svc.tor_paused": "Tor ဖွင့်ထားသော်လည်း ချိတ်ဆက်မထားပါ။",
-  "wallet.svc.tor_paused_body":
-    "Orbot သည် လမ်းကြောင်းပေးပို့မှုကို ရပ်လိုက်သဖြင့် ဤတောင်းဆိုမှုသည် ပွင့်လင်းကွန်ရက်မှတစ်ဆင့် မင့်ထံရောက်ပြီး သင့် IP ကို ဤသက်သေများနှင့် ချိတ်ဆက်စေမည်။ Orbot ကို ပြန်ဖွင့်ပါ၊ သို့မဟုတ် Tor ကို ပိတ်ပါ။ မက်ရှ်ပေါ်တွင် ecash ပို့ခြင်းနှင့် လက်ခံခြင်းမှာ ဆက်လုပ်နိုင်ဆဲဖြစ်သည်။",
   "wallet.svc.keys_uncached": "ဤမင့်၏သော့များကို ဤစက်ပေါ်တွင် မသိမ်းထားပါ။",
   "wallet.svc.keys_uncached_body":
     "၎င်းတို့ကို ရယူရန် အွန်လိုင်းဖြစ်စဉ် ပိုက်ဆံအိတ်ကို တစ်ကြိမ် ဖွင့်ပါ။",
@@ -1834,8 +1831,6 @@ export const strings: Strings = {
   "settings.conn.tor_off_title": "Tor လမ်းကြောင်းကို ပိတ်မလား?",
   "settings.conn.tor_off_body":
     "Nostr အသွားအလာသည် သင့်ပုံမှန်ချိတ်ဆက်မှုသို့ ပြန်သွားမည်ဖြစ်၍ ထပ်ဆင့်လွှင့်စက်များက သင့် IP လိပ်စာကို ပြန်မြင်ပါမည်။ မည်သို့ပင်ဖြစ်စေ ဘလူးတုသ်ကို မထိခိုက်ပါ။",
-  "settings.conn.tor_orbot_idle":
-    "Orbot ကို ထည့်သွင်းထားသော်လည်း မချိတ်ဆက်ရသေးပါ။ Orbot ကို ဖွင့်ပြီး ၎င်း၏ VPN ကို စတင်ပါ၊ ထို့နောက် ဤအရာကို ဖွင့်ပါ။",
   "settings.conn.tor_unavailable":
     "ဤတည်ဆောက်မှုတွင် Tor လမ်းကြောင်း မရနိုင်ပါ။",
   "settings.conn.tor_timeout":
@@ -1869,16 +1864,11 @@ export const strings: Strings = {
     "တည်နေရာဖတ်ချက်မှ သင့်ရပ်ကွက်ကို ရှာသည်။ တံတားစတင်ရန် တည်နေရာခွင့်ပြုချက် ပေးပါ။",
   "settings.conn.grant_location": "တည်နေရာ ခွင့်ပြုချက် ပေးပါ",
   "settings.conn.grant_short": "ခွင့်ပြုပါ",
-  "settings.conn.orbot_body":
-    "Airhop သည် Tor အသွားအလာကို Orbot မှတစ်ဆင့် ပို့သည်။ Play Store မှ Orbot ကို ထည့်သွင်းပြီး ဖွင့်ပါ၊ ထို့နောက် ဤအရာကို ဖွင့်ပါ။",
   "settings.conn.internet_off": "အင်တာနက် ပိတ်ထားသည်",
   "settings.conn.internet_off_desc":
     "Tor၊ တံတားနှင့် ဝင်ပေါက် အားလုံးသည် အင်တာနက်ကို သုံးသည်။ ၎င်းတို့ကို သုံးရန် ကွန်ရက်အောက်ရှိ အင်တာနက်အရန်ကို ဖွင့်ပါ။",
   "settings.conn.turn_on": "ဖွင့်ပါ",
   "settings.conn.turn_off": "ပိတ်ပါ",
-  "settings.conn.orbot_title": "Android ပေါ်ရှိ Tor",
-  "settings.conn.get_orbot": "Orbot ရယူပါ",
-  "settings.conn.later": "နောက်မှ",
 
   // ---- Settings: permissions ----
   "settings.permissions.bluetooth": "ဘလူးတုသ်",

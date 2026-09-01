@@ -1373,9 +1373,6 @@ export const strings = {
   "wallet.svc.tor_ios": "Mint requests do not go through Tor on iOS.",
   "wallet.svc.tor_ios_body":
     "Arti only wraps Nostr WebSockets, so this request would reach the mint over the clear net and link your IP to these proofs. Allow it under Settings > Security, or turn Tor off first. Sending and receiving ecash over the mesh still works.",
-  "wallet.svc.tor_paused": "Tor is on but not connected.",
-  "wallet.svc.tor_paused_body":
-    "Orbot has stopped routing, so this request would reach the mint over the clear net and link your IP to these proofs. Start Orbot again, or turn Tor off. Sending and receiving ecash over the mesh still works.",
   "wallet.svc.keys_uncached": "This mint’s keys are not cached on this device.",
   "wallet.svc.keys_uncached_body":
     "Open the wallet once while online to fetch them.",
@@ -1795,8 +1792,6 @@ export const strings = {
   "settings.conn.tor_off_title": "Turn off Tor routing?",
   "settings.conn.tor_off_body":
     "Nostr traffic goes back over your ordinary connection, so relays see your IP address again. Bluetooth is unaffected either way.",
-  "settings.conn.tor_orbot_idle":
-    "Orbot is installed but not connected. Open Orbot, start its VPN, then turn this on.",
   "settings.conn.tor_unavailable":
     "Tor routing is not available in this build.",
   "settings.conn.tor_timeout":
@@ -1829,16 +1824,11 @@ export const strings = {
     "It finds your neighborhood from a location fix. Grant location to start bridging.",
   "settings.conn.grant_location": "Grant location permission",
   "settings.conn.grant_short": "Grant",
-  "settings.conn.orbot_body":
-    "Airhop routes Tor traffic through Orbot. Install and enable Orbot from the Play Store, then turn this on.",
   "settings.conn.internet_off": "Internet is off",
   "settings.conn.internet_off_desc":
     "Tor, the bridge, and the gateway all use the internet. Turn on Internet fallback under Network to use them.",
   "settings.conn.turn_on": "Turn on",
   "settings.conn.turn_off": "Turn off",
-  "settings.conn.orbot_title": "Tor on Android",
-  "settings.conn.get_orbot": "Get Orbot",
-  "settings.conn.later": "Later",
 
   // ---- Settings: permissions ----
   "settings.permissions.bluetooth": "Bluetooth",

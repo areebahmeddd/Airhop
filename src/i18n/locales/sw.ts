@@ -1376,9 +1376,6 @@ export const strings: Strings = {
   "wallet.svc.tor_ios": "Maombi ya mint hayapiti kwenye Tor kwenye iOS.",
   "wallet.svc.tor_ios_body":
     "Arti hufunika WebSocket za Nostr pekee, kwa hivyo ombi hili lingeifikia mint kupitia mtandao wazi na kuunganisha IP yako na thibitisho hizi. Liruhusu chini ya Mipangilio > Usalama, au zima Tor kwanza. Kutuma na kupokea ecash kupitia mesh bado kunafanya kazi.",
-  "wallet.svc.tor_paused": "Tor imewashwa lakini haijaunganishwa.",
-  "wallet.svc.tor_paused_body":
-    "Orbot imeacha kupitisha trafiki, kwa hivyo ombi hili lingeifikia mint kupitia mtandao wazi na kuunganisha IP yako na thibitisho hizi. Washa Orbot tena, au zima Tor. Kutuma na kupokea ecash kupitia mesh bado kunafanya kazi.",
   "wallet.svc.keys_uncached":
     "Funguo za mint hii hazijahifadhiwa kwenye kifaa hiki.",
   "wallet.svc.keys_uncached_body":
@@ -1821,8 +1818,6 @@ export const strings: Strings = {
   "settings.conn.tor_off_title": "Uzime uelekezaji wa Tor?",
   "settings.conn.tor_off_body":
     "Trafiki ya Nostr hurudi kwenye muunganisho wako wa kawaida, kwa hivyo relay huona anwani yako ya IP tena. Bluetooth haiathiriki vyovyote vile.",
-  "settings.conn.tor_orbot_idle":
-    "Orbot imesakinishwa lakini haijaunganishwa. Fungua Orbot, anzisha VPN yake, kisha washa hii.",
   "settings.conn.tor_unavailable":
     "Uelekezaji wa Tor haupatikani kwenye toleo hili.",
   "settings.conn.tor_timeout":
@@ -1855,16 +1850,11 @@ export const strings: Strings = {
     "Hutafuta mtaa wako kutokana na usomaji wa mahali. Toa ruhusa ya mahali ili kuanza kuvusha.",
   "settings.conn.grant_location": "Toa ruhusa ya mahali",
   "settings.conn.grant_short": "Toa",
-  "settings.conn.orbot_body":
-    "Airhop huelekeza trafiki ya Tor kupitia Orbot. Sakinisha na uwashe Orbot kutoka Play Store, kisha washa hii.",
   "settings.conn.internet_off": "Intaneti imezimwa",
   "settings.conn.internet_off_desc":
     "Tor, daraja na lango vyote hutumia intaneti. Washa Akiba ya intaneti chini ya Mtandao ili kuvitumia.",
   "settings.conn.turn_on": "Washa",
   "settings.conn.turn_off": "Zima",
-  "settings.conn.orbot_title": "Tor kwenye Android",
-  "settings.conn.get_orbot": "Pata Orbot",
-  "settings.conn.later": "Baadaye",
 
   // ---- Settings: permissions ----
   "settings.permissions.bluetooth": "Bluetooth",

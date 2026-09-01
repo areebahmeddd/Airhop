@@ -1317,27 +1317,21 @@ export default function ArchitecturePage() {
               id="tor"
               eyebrow="Beyond the mesh · 13"
               title="The onion router"
-              lede="Gift wrap hides who is talking to whom. It does not hide your IP address from the relay. Tor closes that gap, and the two platforms close it differently."
+              lede="Gift wrap hides who is talking to whom. It does not hide your IP address from the relay. Tor closes that gap. Both platforms run the same client; how much of the app it covers is what differs."
             >
+              <p>
+                <TextLink href="https://arti.torproject.org">Arti</TextLink>, the Tor Project's Rust
+                client, is compiled into the app binary on both platforms. There is nothing to
+                install and no separate app to keep running. Where they part is reach: on Android
+                the proxy sits in the HTTP client every socket is built from, and on iOS it fronts
+                the Nostr socket alone.
+              </p>
+
               <Table
                 head={["", "iOS", "Android"]}
                 rows={[
-                  [
-                    "Implementation",
-                    <>
-                      <TextLink href="https://arti.torproject.org">Arti</TextLink>, compiled into
-                      the app binary
-                    </>,
-                    <>
-                      <TextLink href="https://guardianproject.info/apps/org.torproject.android">
-                        Orbot
-                      </TextLink>
-                      , a separate app you install
-                    </>,
-                  ],
-                  ["Covers", "The Nostr WebSocket only", "Every connection, as a system VPN"],
+                  ["Covers", "The Nostr WebSocket only", "Every connection the app makes"],
                   ["Mint traffic", "Blocked while Tor is on, unless you opt in", "Covered"],
-                  ["Third-party app needed", "No", "Yes"],
                 ]}
               />
 
@@ -1513,7 +1507,7 @@ export default function ArchitecturePage() {
               <Table
                 head={["Feature", "State on a fresh install"]}
                 rows={[
-                  ["Tor", "Off. iOS has Arti built in, Android needs Orbot installed separately"],
+                  ["Tor", "Off. Arti is built into the app on both platforms"],
                   [
                     "Internet gateway",
                     "Off. Carries a nearby offline phone's public location traffic, never anyone's private messages",

@@ -21,7 +21,7 @@ Airhop speaks the same protocol as bitchat. Airhop and bitchat users automatical
 ## Optional internet mode
 
 - Enable internet bridging to reach people outside Bluetooth range when internet access is available.
-- Tor routing is also supported for users who want to route internet traffic through Tor.
+- Tor routing is built in for users who want to route internet traffic through Tor. No separate app to install.
 
 ## Privacy and security
 

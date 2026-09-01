@@ -440,13 +440,10 @@ export const FAQ_SECTIONS: FaqSection[] = [
           <>
             Yes, optionally, on both platforms.{" "}
             <TextLink href="https://torproject.org">Tor</TextLink> covers Nostr traffic
-            specifically. iOS uses <TextLink href="https://arti.torproject.org">Arti</TextLink>,
-            Android uses{" "}
-            <TextLink href="https://guardianproject.info/apps/org.torproject.android/">
-              Orbot
-            </TextLink>
-            . When enabled, all Nostr relay traffic is routed over Tor. It has no effect on the BLE
-            mesh itself, which never touches the internet either way.
+            specifically. Both iOS and Android embed{" "}
+            <TextLink href="https://arti.torproject.org">Arti</TextLink>, so there is no separate
+            app to install. When enabled, all Nostr relay traffic is routed over Tor. It has no
+            effect on the BLE mesh itself, which never touches the internet either way.
           </>
         ),
       },
@@ -1088,7 +1085,8 @@ export const FAQ_SECTIONS: FaqSection[] = [
         q: "Does Tor cover payments?",
         a: (
           <>
-            On Android, yes. Orbot runs as a VPN and covers every connection, mint traffic included.
+            On Android, yes. Tor sits in the HTTP client every connection is built from, so mint
+            traffic is covered along with everything else.
             <br />
             <br />
             On iPhone, not yet. Tor there only wraps the Nostr connection, so a mint request would

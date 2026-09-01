@@ -1334,9 +1334,6 @@ export const strings: Strings = {
   "wallet.svc.tor_ios": "iOS에서는 민트 요청이 Tor를 거치지 않습니다.",
   "wallet.svc.tor_ios_body":
     "Arti는 Nostr WebSocket만 감싸므로, 이 요청은 일반 네트워크로 민트에 닿아 IP와 이 증명들을 연결하게 됩니다. 설정 > 보안에서 허용하거나 Tor를 먼저 끄세요. 메시를 통한 ecash 송수신은 계속 작동합니다.",
-  "wallet.svc.tor_paused": "Tor는 켜져 있지만 연결되지 않았습니다.",
-  "wallet.svc.tor_paused_body":
-    "Orbot이 라우팅을 멈춰서, 이 요청은 일반 네트워크로 민트에 닿아 IP와 이 증명들을 연결하게 됩니다. Orbot을 다시 켜거나 Tor를 끄세요. 메시를 통한 ecash 송수신은 계속 작동합니다.",
   "wallet.svc.keys_uncached":
     "이 민트의 키가 이 기기에 캐시되어 있지 않습니다.",
   "wallet.svc.keys_uncached_body":
@@ -1759,8 +1756,6 @@ export const strings: Strings = {
   "settings.conn.tor_off_title": "Tor 경로 설정을 끌까요?",
   "settings.conn.tor_off_body":
     "Nostr 트래픽이 일반 연결로 돌아가므로 릴레이가 다시 내 IP 주소를 보게 됩니다. 어느 쪽이든 블루투스에는 영향이 없습니다.",
-  "settings.conn.tor_orbot_idle":
-    "Orbot이 설치되어 있지만 연결되지 않았습니다. Orbot을 열고 VPN을 시작한 다음 이 기능을 켜세요.",
   "settings.conn.tor_unavailable":
     "이 빌드에서는 Tor 경로 설정을 사용할 수 없습니다.",
   "settings.conn.tor_timeout":
@@ -1793,16 +1788,11 @@ export const strings: Strings = {
     "위치 측정으로 내 동네를 찾습니다. 브리지를 시작하려면 위치 권한을 허용하세요.",
   "settings.conn.grant_location": "위치 권한 허용",
   "settings.conn.grant_short": "허용",
-  "settings.conn.orbot_body":
-    "Airhop은 Tor 트래픽을 Orbot을 통해 보냅니다. Play 스토어에서 Orbot을 설치하고 활성화한 다음 이 기능을 켜세요.",
   "settings.conn.internet_off": "인터넷이 꺼져 있습니다",
   "settings.conn.internet_off_desc":
     "Tor, 브리지, 게이트웨이는 모두 인터넷을 사용합니다. 사용하려면 네트워크 항목에서 인터넷 대체 경로를 켜세요.",
   "settings.conn.turn_on": "켜기",
   "settings.conn.turn_off": "끄기",
-  "settings.conn.orbot_title": "Android의 Tor",
-  "settings.conn.get_orbot": "Orbot 받기",
-  "settings.conn.later": "나중에",
 
   // ---- Settings: permissions ----
   "settings.permissions.bluetooth": "블루투스",

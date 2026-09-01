@@ -229,7 +229,8 @@ export async function panicWipe(): Promise<PanicWipeResult> {
     // that over-claims is worse than none.
     torActive: false,
     torBootstrap: "idle",
-    // The gate holding the Nostr transport down while Android waits on Orbot.
+    // The gate holding the Nostr transport down while Tor is wanted and no
+    // circuit can carry it.
     // The wipe turns Tor off, so a gate left shut would leave a fresh install
     // with no internet half and a banner about a Tor nobody asked for.
     // teardownTorState clears it too; this covers either ordering.
@@ -297,15 +298,16 @@ export async function panicWipe(): Promise<PanicWipeResult> {
   setTimeout(() => {}, 1000);
   await settleOr(dismissAllNotifications(), BEST_EFFORT_TIMEOUT_MS, undefined);
 
-  // Stop Arti and destroy its data directory (iOS only; null elsewhere).
+  // Stop Arti and destroy its data directory, on both platforms.
   //
   //     Two things survived every wipe here. Arti kept running, holding live
   //     circuits for an identity that no longer existed. And its state lives
-  //     under Application Support rather than the cache, so the media sweep
-  //     below never reached it: a cached consensus, the guard nodes this device
-  //     chose, directory data and timestamps. That is on-disk evidence of the
-  //     shape "this device used Tor, around here, around then", which is
-  //     exactly the inference a panic wipe exists to destroy.
+  //     outside the media cache (Application Support on iOS, the files directory
+  //     on Android), so the media sweep below never reached it: a cached
+  //     consensus, the guard nodes this device chose, directory data and
+  //     timestamps. That is on-disk evidence of the shape "this device used
+  //     Tor, around here, around then", which is exactly the inference a panic
+  //     wipe exists to destroy.
   //
   //     The module rather than tor-routing, deliberately: tor-routing pulls in
   //     the BLE native module at import, and this file has to stay loadable
@@ -321,7 +323,8 @@ export async function panicWipe(): Promise<PanicWipeResult> {
       undefined,
     );
   } catch {
-    // Arti absent (Android), or the directory was already gone.
+    // The native module is absent from this build, or the directory was
+    // already gone.
   }
 
   // Module state with a 5-minute TTL, and the wipe does not restart the

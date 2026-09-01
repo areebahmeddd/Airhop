@@ -342,7 +342,7 @@ test("F03 a message for someone out of range is carried by a third phone", async
 test("F04 Tor refuses to turn on rather than quietly using the clear net", async () => {
   const s = (scenario = new Scenario({
     id: "F04",
-    title: "Android without Orbot: the toggle must fail closed",
+    title: "a Tor client that cannot bootstrap must fail closed",
     seed: 603,
   }));
   const radio = new RadioFabric(s.world);
@@ -367,13 +367,15 @@ test("F04 Tor refuses to turn on rather than quietly using the clear net", async
     `${relay.connectionCount("phone")} relay connections`,
   );
 
-  // The harness's native module reports no Orbot and no VPN, which is the
-  // ordinary state of an Android phone that has never installed it.
+  // The harness has no Tor client, which stands in for every way the real one
+  // can fail to carry traffic: an ABI the library was not packaged for, a
+  // network that blocks Tor, a bootstrap that never lands. The app cannot tell
+  // those apart from the outside and must not have to.
   phone.setSetting("torEnabled", true);
   await s.world.advance(5_000);
 
-  // The security property is that Tor never turns ON into the clear net. Either
-  // the toggle is refused, or it is genuinely routing - never "on" while
+  // The security property is that Tor never reports ON into the clear net.
+  // Either the claim stays down, or it is genuinely routing - never "on" while
   // traffic goes out unprotected.
   const torActive = phone.meshState().torActive === true;
   s.check(

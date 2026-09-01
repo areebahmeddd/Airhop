@@ -116,7 +116,7 @@
 - [x] `src/core/nostr/geohash-presence.ts`: kind 20001 geohash heartbeats (40–80s jitter, precision-5)
 - [x] `src/core/nostr/courier-relay.ts`: Nostr bridge courier drops (kind 1401, NIP-40 expiry)
 - [x] Georelay visibility: the channel info sheet lists the relays carrying a cell and marks the ones the user added (`GeoRelayDirectory.closestRelaysToGeohash()` via `MeshService.getGeohashRelays()`)
-- [x] Arti bundled on both platforms, no separate app to install: `AirhopTorManager` + `AirhopTorSession` + `AirhopTorModule` over a SOCKS5 proxy
+- [x] Arti embedded on both platforms, no separate app to install: one Rust crate in `native/arti/` behind `AirhopTorModule` (Swift and Kotlin), over a SOCKS5 proxy on 39050
 - [x] `src/services/tor-routing.ts`: the single choke point for the Tor decision. Every relay connection is dialled through the proxy, so Tor fails closed and never falls back to the clear. Bluetooth is untouched, so only the internet half pauses
 - [x] `src/core/mesh/voice/voice-capture.ts`: PTT frame encoder (VOICE_FRAME 0x29, AAC/Opus 16 kHz)
 - [x] `src/core/mesh/voice/voice-player.ts`: 350ms jitter buffer, ordered frame delivery

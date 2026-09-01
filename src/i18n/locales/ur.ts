@@ -1345,9 +1345,6 @@ export const strings: Strings = {
   "wallet.svc.tor_ios": "iOS پر ٹکسال کی درخواستیں Tor سے نہیں جاتیں۔",
   "wallet.svc.tor_ios_body":
     "Arti صرف Nostr کے WebSocket لپیٹتا ہے، سو یہ درخواست ٹکسال تک کھلے نیٹ سے پہنچتی اور آپ کا IP ان ثبوتوں سے جوڑ دیتی۔ ترتیبات > تحفظ کے تحت اس کی اجازت دیں، یا پہلے Tor بند کریں۔ میش پر ecash بھیجنا اور وصول کرنا پھر بھی کام کرتا ہے۔",
-  "wallet.svc.tor_paused": "Tor آن ہے مگر منسلک نہیں۔",
-  "wallet.svc.tor_paused_body":
-    "Orbot نے راستہ دینا بند کر دیا ہے، سو یہ درخواست ٹکسال تک کھلے نیٹ سے پہنچتی اور آپ کا IP ان ثبوتوں سے جوڑ دیتی۔ Orbot دوبارہ چلائیں، یا Tor بند کریں۔ میش پر ecash بھیجنا اور وصول کرنا پھر بھی کام کرتا ہے۔",
   "wallet.svc.keys_uncached": "اس ٹکسال کی کلیدیں اس آلے پر محفوظ نہیں۔",
   "wallet.svc.keys_uncached_body":
     "انہیں لانے کے لیے آن لائن رہتے ہوئے بٹوہ ایک بار کھولیں۔",
@@ -1774,8 +1771,6 @@ export const strings: Strings = {
   "settings.conn.tor_off_title": "Tor سے رخ بندی بند کریں؟",
   "settings.conn.tor_off_body":
     "Nostr ٹریفک آپ کے عام تعلق پر لوٹ آتا ہے، اس لیے ریلے آپ کا IP پتہ دوبارہ دیکھیں گے۔ بلوٹوتھ دونوں صورتوں میں متاثر نہیں ہوتا۔",
-  "settings.conn.tor_orbot_idle":
-    "Orbot نصب ہے مگر جڑا ہوا نہیں۔ Orbot کھولیں، اس کا VPN چلائیں، پھر یہ چالو کریں۔",
   "settings.conn.tor_unavailable": "اس نسخے میں Tor سے رخ بندی دستیاب نہیں۔",
   "settings.conn.tor_timeout":
     "Tor کو جڑنے میں ایک منٹ سے زیادہ لگ رہا ہے۔ وہ چالو رہتا ہے اور کوشش جاری رکھتا ہے؛ میش ٹیب بتا دے گا کہ وہ کب رخ بندی کر رہا ہے، یا اگر یہ نیٹ ورک اسے روک رہا ہو۔",
@@ -1807,16 +1802,11 @@ export const strings: Strings = {
     "وہ آپ کا محلہ مقام کی پیمائش سے معلوم کرتا ہے۔ پل بنانا شروع کرنے کے لیے مقام کی اجازت دیں۔",
   "settings.conn.grant_location": "مقام کی اجازت دیں",
   "settings.conn.grant_short": "اجازت دیں",
-  "settings.conn.orbot_body":
-    "Airhop Tor کی ٹریفک کا رخ Orbot سے کرتا ہے۔ Play Store سے Orbot نصب اور چالو کریں، پھر یہ چالو کریں۔",
   "settings.conn.internet_off": "انٹرنیٹ بند ہے",
   "settings.conn.internet_off_desc":
     "Tor، پل اور گیٹ وے سب انٹرنیٹ استعمال کرتے ہیں۔ انہیں استعمال کرنے کے لیے نیٹ ورک کے تحت انٹرنیٹ کا متبادل چالو کریں۔",
   "settings.conn.turn_on": "چالو کریں",
   "settings.conn.turn_off": "بند کریں",
-  "settings.conn.orbot_title": "Android پر Tor",
-  "settings.conn.get_orbot": "Orbot حاصل کریں",
-  "settings.conn.later": "بعد میں",
 
   // ---- Settings: permissions ----
   "settings.permissions.bluetooth": "بلوٹوتھ",

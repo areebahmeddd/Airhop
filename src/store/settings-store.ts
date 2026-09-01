@@ -121,18 +121,18 @@ interface SettingsState {
   // by an unlinkable per-cell key) so an out-of-range island can see them. A
   // per-message "nearby only" control keeps any single message radio-only.
   bridgeEnabled: boolean;
-  // Whether Nostr traffic is routed through Tor. On iOS this drives the in-app
-  // Arti SOCKS proxy; on Android it records that the user relies on Orbot's VPN.
+  // Whether internet traffic is routed through Tor. Both platforms run the same
+  // embedded Arti and drive it from this one preference.
   // Persisted so the choice is applied before the first relay connects at
   // startup (see tor-routing.ts), never leaking the clear net for a Tor user.
   torEnabled: boolean;
   // Whether Cashu mint HTTP calls may go out over the clear net while Tor is
-  // on. Tor only covers Nostr WebSockets on iOS (Arti is a per-socket SOCKS
-  // shim, and mint calls are plain fetch), so with Tor enabled a mint request
-  // would reveal this device's IP to the mint and link it to the proofs being
-  // swapped. Off by default: mint calls are refused instead, and the wallet
-  // stays fully usable offline. Android is unaffected, since Orbot's VPN routes
-  // every socket, so this flag is only consulted on iOS.
+  // on. Tor covers only Nostr WebSockets on iOS, and mint calls are plain fetch,
+  // so with Tor enabled a mint request would reveal this device's IP to the mint
+  // and link it to the proofs being swapped. Off by default: mint calls are
+  // refused instead, and the wallet stays fully usable offline. Android installs
+  // the proxy into the HTTP client every socket is built from, so a mint call is
+  // already covered there and this flag is only consulted on iOS.
   allowMintOverClearnet: boolean;
   // Master switch for all internet (Nostr) connectivity: DM/channel fallback,
   // location channels, courier drops, the gateway, and the mesh bridge. On by

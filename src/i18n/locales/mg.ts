@@ -1394,9 +1394,6 @@ export const strings: Strings = {
     "Amin'ny iOS dia tsy mandalo amin'ny Tor ny fangatahana any amin'ny mpamoaka.",
   "wallet.svc.tor_ios_body":
     "Ny WebSocket-n'ny Nostr ihany no fonosin'ny Arti, ka hahatratra ny mpamoaka amin'ny tambajotra misokatra ity fangatahana ity ary hampifandray ny IP-nao amin'ireo porofo ireo. Avelao ao amin'ny Fandrindrana > Fiarovana, na vonoy aloha ny Tor. Mbola mandeha ny fandefasana sy fandraisana ecash amin'ny harato.",
-  "wallet.svc.tor_paused": "Mandeha ny Tor, fa tsy mifandray.",
-  "wallet.svc.tor_paused_body":
-    "Nitsahatra tsy nanondro lalana i Orbot, ka hahatratra ny mpamoaka amin'ny tambajotra misokatra ity fangatahana ity ary hampifandray ny IP-nao amin'ireo porofo ireo. Sokafy indray i Orbot, na vonoy ny Tor. Mbola mandeha ny fandefasana sy fandraisana ecash amin'ny harato.",
   "wallet.svc.keys_uncached":
     "Tsy voatahiry eto amin'ity fitaovana ity ny lakilen'ity mpamoaka ity.",
   "wallet.svc.keys_uncached_body":
@@ -1849,8 +1846,6 @@ export const strings: Strings = {
   "settings.conn.tor_off_title": "Vonoina ny fitondrana amin'ny Tor?",
   "settings.conn.tor_off_body":
     "Miverina amin'ny fifandraisanao mahazatra ny fifamoivoizana Nostr, ka hahita ny adiresy IP-nao indray ny mpanelanelana. Na ahoana na ahoana, tsy voakasika ny Bluetooth.",
-  "settings.conn.tor_orbot_idle":
-    "Voapetraka i Orbot fa tsy mifandray. Sokafy i Orbot, alefaso ny VPN-ny, avy eo alefaso ity.",
   "settings.conn.tor_unavailable":
     "Tsy misy ny fitondrana amin'ny Tor amin'ity kinova ity.",
   "settings.conn.tor_timeout":
@@ -1884,16 +1879,11 @@ export const strings: Strings = {
     "Mahita ny fokontaninao avy amin'ny toerana izy. Avelao ny toerana mba hanombohana ny tetezana.",
   "settings.conn.grant_location": "Omeo ny alalana toerana",
   "settings.conn.grant_short": "Omeo",
-  "settings.conn.orbot_body":
-    "Ny Airhop dia mitondra ny fifamoivoizan'ny Tor amin'ny alalan'i Orbot. Apetraho sy alefaso i Orbot avy amin'ny Play Store, avy eo alefaso ity.",
   "settings.conn.internet_off": "Vonoina ny Internet",
   "settings.conn.internet_off_desc":
     "Samy mampiasa ny Internet ny Tor, ny tetezana ary ny vavahady. Alefaso ny Fialana amin'ny Internet ao amin'ny Tambajotra mba hampiasana azy ireo.",
   "settings.conn.turn_on": "Alefaso",
   "settings.conn.turn_off": "Vonoy",
-  "settings.conn.orbot_title": "Tor amin'ny Android",
-  "settings.conn.get_orbot": "Makà Orbot",
-  "settings.conn.later": "Any aoriana",
 
   // ---- Settings: permissions ----
   "settings.permissions.bluetooth": "Bluetooth",

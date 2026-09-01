@@ -69,7 +69,7 @@ const strings: Strings = {
   "home.about.body.crypto":
     "Każda sesja korzysta z protokołu {noise} do uwierzytelnionego uzgadniania. Zapisane wiadomości korzystają z algorytmu {ratchet}, czyli nawet jeśli twoje urządzenie zostanie później przejęte, dawne wiadomości pozostaną nieczytelne. Awaryjne czyszczenie niszczy wszystkie klucze i wiadomości w niecałą sekundę.",
   "home.about.body.internet":
-    "Kiedy ty i twój kontakt jesteście poza zasięgiem Bluetootha, przekaźniki {nostr} służą jako most przez internet, z wiadomościami bezpośrednimi zapakowanymi w formacie {nip17}, więc sieć mesh sięga całego świata, kiedy oboje jesteście online. Obsługa {tor} jest dostępna zarówno na iOS (przez {arti}), jak i na Androidzie (przez {orbot}).",
+    "Kiedy ty i twój kontakt jesteście poza zasięgiem Bluetootha, przekaźniki {nostr} służą jako most przez internet, z wiadomościami bezpośrednimi zapakowanymi w formacie {nip17}, więc sieć mesh sięga całego świata, kiedy oboje jesteście online. Obsługa {tor} jest dostępna na iOS i Androidzie, przez {arti}.",
   "home.about.optional.title": "Airhop ma opcjonalne funkcje, które możesz włączyć:",
   "home.about.optional.payments.label": "Płatności offline:",
   "home.about.optional.payments.body":

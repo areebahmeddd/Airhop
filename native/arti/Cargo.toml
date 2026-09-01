@@ -1,0 +1,62 @@
+[package]
+name = "arti-airhop"
+version = "1.0.0"
+edition = "2021"
+rust-version = "1.98"
+license = "MIT OR Apache-2.0"
+publish = false
+description = "Airhop's embedded Tor client. Wraps arti-client behind a SOCKS5 listener and one FFI surface shared by iOS and Android."
+
+[lib]
+name = "arti_airhop"
+# staticlib for the Apple xcframework; cdylib for Android jniLibs.
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[dependencies]
+# Use rustls instead of native-tls to avoid OpenSSL and the platform trust store.
+# Disable arti-client defaults and enable only the features needed by Airhop.
+#
+# Bridge support is compiled in but not configured yet. This keeps enabling
+# bridges a configuration change rather than a separate binary rebuild.
+arti-client = { version = "0.45", default-features = false, features = [
+    "tokio",
+    "rustls",
+    "compression",
+    "flowctl-cc",
+    "bridge-client",
+    "pt-client",
+    "onion-service-client",
+    "vanguards",
+    "static-sqlite",
+] }
+tor-rtcompat = { version = "0.45", default-features = false, features = [
+    "tokio",
+    "rustls",
+] }
+
+tokio = { version = "1", default-features = false, features = [
+    "rt-multi-thread",
+    "net",
+    "sync",
+    "time",
+    "io-util",
+    "macros",
+] }
+futures = "0.3"
+
+[target.'cfg(target_os = "android")'.dependencies]
+jni = "0.21"
+
+[profile.release]
+opt-level = "z"
+lto = "fat"
+codegen-units = 1
+panic = "abort"
+strip = "symbols"
+
+# Apple uses a staticlib, so rustc does not perform the final link or run LTO.
+# Disable LTO to avoid embedding LLVM bitcode in the archive; Xcode performs
+# optimization and dead stripping when it links the app.
+[profile.apple]
+inherits = "release"
+lto = false

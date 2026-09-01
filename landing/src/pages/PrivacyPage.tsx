@@ -281,8 +281,8 @@ export default function PrivacyPage() {
                 is severed by the maths rather than by policy.
               </li>
               <li>
-                <strong>Tor.</strong> On Android, Orbot covers mint traffic along with everything
-                else. On iOS, Tor only wraps Nostr connections, so{" "}
+                <strong>Tor.</strong> On Android, Tor covers mint traffic along with everything else
+                the app sends. On iOS, Tor only wraps Nostr connections, so{" "}
                 <strong>mint requests are blocked while Tor is on</strong> unless you opt in beside
                 the Tor switch in Settings. Mesh payments are unaffected either way.
               </li>
@@ -303,8 +303,8 @@ export default function PrivacyPage() {
           <section className="border-line space-y-4 border-t pt-12 first:border-t-0 first:pt-0">
             <h2 className="text-ink text-base font-semibold">Tor routing (optional)</h2>
             <p className="text-[15px] leading-[1.75]">
-              Airhop supports routing Nostr traffic through Tor using Arti on iOS or Orbot on
-              Android. When enabled,{" "}
+              Airhop supports routing Nostr traffic through Tor, using Arti embedded in the app on
+              both iOS and Android. When enabled,{" "}
               <strong>relay operators cannot observe your IP address.</strong> Tor is off by
               default.
             </p>

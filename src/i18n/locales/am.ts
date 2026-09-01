@@ -1273,9 +1273,6 @@ export const strings: Strings = {
   "wallet.svc.tor_ios": "በiOS ላይ የሚንት ጥያቄዎች በTor አያልፉም።",
   "wallet.svc.tor_ios_body":
     "Arti የሚሸፍነው የNostr WebSocket ን ብቻ ነው፤ ስለዚህ ይህ ጥያቄ በክፍት አውታረ መረብ ሚንቱ ላይ ደርሶ የIP አድራሻህን ከእነዚህ ማረጋገጫዎች ጋር ያገናኘዋል። በቅንብሮች > ደህንነት ስር ፍቀደው፣ ወይም መጀመሪያ Tor ን አጥፋ። በሜሽ ላይ ecash መላክና መቀበል አሁንም ይሠራል።",
-  "wallet.svc.tor_paused": "Tor በርቷል ግን አልተገናኘም።",
-  "wallet.svc.tor_paused_body":
-    "Orbot ማዘዋወሩን አቁሟል፤ ስለዚህ ይህ ጥያቄ በክፍት አውታረ መረብ ሚንቱ ላይ ደርሶ የIP አድራሻህን ከእነዚህ ማረጋገጫዎች ጋር ያገናኘዋል። Orbot ን እንደገና አስጀምር፣ ወይም Tor ን አጥፋ። በሜሽ ላይ ecash መላክና መቀበል አሁንም ይሠራል።",
   "wallet.svc.keys_uncached": "የዚህ ሚንት ቁልፎች በዚህ መሣሪያ ላይ አልተከማቹም።",
   "wallet.svc.keys_uncached_body": "እነሱን ለማምጣት በመስመር ላይ ሆነህ ቦርሳውን አንድ ጊዜ ክፈት።",
   "wallet.svc.phrase_invalid": "ያ የማገገሚያ ሐረግ ልክ አይደለም።",
@@ -1673,8 +1670,6 @@ export const strings: Strings = {
   "settings.conn.tor_off_title": "የTor አቅጣጫ ይጥፋ?",
   "settings.conn.tor_off_body":
     "የNostr ትራፊክ ወደ ተራው ግንኙነትህ ይመለሳል፤ ስለዚህ አስተላላፊዎች እንደገና የIP አድራሻህን ያያሉ። በሁለቱም መንገድ ብሉቱዝ አይነካም።",
-  "settings.conn.tor_orbot_idle":
-    "Orbot ተጭኗል ግን አልተገናኘም። Orbot ን ክፈት፣ VPN ን አስጀምር፣ ከዚያ ይህን አብራ።",
   "settings.conn.tor_unavailable": "በዚህ ስሪት ውስጥ የTor አቅጣጫ አይገኝም።",
   "settings.conn.tor_timeout":
     "Tor ለመገናኘት ከአንድ ደቂቃ በላይ እየወሰደ ነው። በርቶ ይቀጥላል፤ መሞከሩንም ይቀጥላል፤ የሜሽ ትሩ መቼ እያመራ እንደሆነ ወይም ይህ አውታረ መረብ እያገደው እንደሆነ ይነግርሃል።",
@@ -1706,16 +1701,11 @@ export const strings: Strings = {
     "ሰፈርህን ከአካባቢ ንባብ ያገኘዋል። ድልድዩን ለመጀመር የአካባቢ ፈቃድ ስጥ።",
   "settings.conn.grant_location": "የአካባቢ ፈቃድ ስጥ",
   "settings.conn.grant_short": "ፍቀድ",
-  "settings.conn.orbot_body":
-    "Airhop የTor ትራፊክን በOrbot በኩል ያሳልፋል። Orbot ን ከPlay Store ጫንና አንቃ፣ ከዚያ ይህን አብራ።",
   "settings.conn.internet_off": "ኢንተርኔት ጠፍቷል",
   "settings.conn.internet_off_desc":
     "Tor፣ ድልድዩና መተላለፊያው ሁሉም ኢንተርኔት ይጠቀማሉ። እነሱን ለመጠቀም በአውታረ መረብ ስር ያለውን የኢንተርኔት አማራጭ አብራ።",
   "settings.conn.turn_on": "አብራ",
   "settings.conn.turn_off": "አጥፋ",
-  "settings.conn.orbot_title": "Tor በAndroid ላይ",
-  "settings.conn.get_orbot": "Orbot አግኝ",
-  "settings.conn.later": "በኋላ",
 
   // ---- Settings: permissions ----
   "settings.permissions.bluetooth": "ብሉቱዝ",

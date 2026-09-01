@@ -1342,9 +1342,6 @@ export const strings: Strings = {
   "wallet.svc.tor_ios": "iOS पर मिंट अनुरोध Tor से नहीं जाते।",
   "wallet.svc.tor_ios_body":
     "Arti सिर्फ़ Nostr WebSocket को लपेटता है, इसलिए यह अनुरोध खुले नेट से मिंट तक पहुँचता और आपके IP को इन प्रूफ़ से जोड़ देता। सेटिंग्स > सुरक्षा के नीचे इसकी अनुमति दें, या पहले Tor बंद करें। मेश पर ecash भेजना और लेना अब भी चलता है।",
-  "wallet.svc.tor_paused": "Tor चालू है पर जुड़ा नहीं है।",
-  "wallet.svc.tor_paused_body":
-    "Orbot ने रूटिंग बंद कर दी है, इसलिए यह अनुरोध खुले नेट से मिंट तक पहुँचता और आपके IP को इन प्रूफ़ से जोड़ देता। Orbot फिर से चालू करें, या Tor बंद करें। मेश पर ecash भेजना और लेना अब भी चलता है।",
   "wallet.svc.keys_uncached": "इस मिंट की कुंजियाँ इस डिवाइस पर कैश नहीं हैं।",
   "wallet.svc.keys_uncached_body":
     "उन्हें लाने के लिए ऑनलाइन रहते वॉलेट एक बार खोलें।",
@@ -1774,8 +1771,6 @@ export const strings: Strings = {
   "settings.conn.tor_off_title": "Tor रूटिंग बंद करें?",
   "settings.conn.tor_off_body":
     "Nostr ट्रैफ़िक फिर आपके सामान्य कनेक्शन से जाएगा, तो रिले को आपका IP पता दोबारा दिखेगा। ब्लूटूथ पर दोनों ही हाल में कोई असर नहीं।",
-  "settings.conn.tor_orbot_idle":
-    "Orbot इंस्टॉल है पर जुड़ा नहीं। Orbot खोलें, उसका VPN चालू करें, फिर इसे चालू करें।",
   "settings.conn.tor_unavailable": "इस बिल्ड में Tor रूटिंग उपलब्ध नहीं है।",
   "settings.conn.tor_timeout":
     "Tor को जुड़ने में एक मिनट से ज़्यादा लग रहा है। यह चालू रहता है और कोशिश करता रहता है; मेश टैब बताएगा कि यह कब रूट कर रहा है, या यह नेटवर्क इसे रोक रहा है।",
@@ -1807,16 +1802,11 @@ export const strings: Strings = {
     "यह एक स्थान फ़िक्स से आपका मोहल्ला पहचानता है। ब्रिजिंग शुरू करने के लिए स्थान की अनुमति दें।",
   "settings.conn.grant_location": "स्थान की अनुमति दें",
   "settings.conn.grant_short": "अनुमति दें",
-  "settings.conn.orbot_body":
-    "Airhop, Tor ट्रैफ़िक Orbot के ज़रिए भेजता है। Play Store से Orbot इंस्टॉल करके चालू करें, फिर इसे चालू करें।",
   "settings.conn.internet_off": "इंटरनेट बंद है",
   "settings.conn.internet_off_desc":
     "Tor, ब्रिज और गेटवे सब इंटरनेट इस्तेमाल करते हैं। इन्हें चलाने के लिए नेटवर्क के नीचे इंटरनेट फ़ॉलबैक चालू करें।",
   "settings.conn.turn_on": "चालू करें",
   "settings.conn.turn_off": "बंद करें",
-  "settings.conn.orbot_title": "Android पर Tor",
-  "settings.conn.get_orbot": "Orbot लें",
-  "settings.conn.later": "बाद में",
 
   // ---- Settings: permissions ----
   "settings.permissions.bluetooth": "ब्लूटूथ",

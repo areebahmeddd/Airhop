@@ -1275,9 +1275,6 @@ export const strings: Strings = {
   "wallet.svc.tor_ios": "在 iOS 上，鑄幣廠請求不走 Tor。",
   "wallet.svc.tor_ios_body":
     "Arti 只包住 Nostr 的 WebSocket，所以這個請求會走明網到鑄幣廠，把你的 IP 和這些憑證連在一起。可以在設定 > 安全裡允許它，或者先把 Tor 關掉。透過網狀網路收付 ecash 仍然可用。",
-  "wallet.svc.tor_paused": "Tor 已開啟但沒有連上。",
-  "wallet.svc.tor_paused_body":
-    "Orbot 已經停止轉送，所以這個請求會走明網到鑄幣廠，把你的 IP 和這些憑證連在一起。可以重新啟動 Orbot，或者把 Tor 關掉。透過網狀網路收付 ecash 仍然可用。",
   "wallet.svc.keys_uncached": "這個鑄幣廠的金鑰沒有快取在這台裝置上。",
   "wallet.svc.keys_uncached_body": "連上網路時開啟一次錢包就能取回它們。",
   "wallet.svc.phrase_invalid": "那組復原助記詞無效。",
@@ -1678,8 +1675,6 @@ export const strings: Strings = {
   "settings.conn.tor_off_title": "要關閉 Tor 路由嗎？",
   "settings.conn.tor_off_body":
     "Nostr 流量會回到你原本的連線上，中繼又看得到你的 IP 位址了。不管哪一種，藍牙都不受影響。",
-  "settings.conn.tor_orbot_idle":
-    "已安裝 Orbot 但尚未連線。請開啟 Orbot，啟動它的 VPN，然後再打開這一項。",
   "settings.conn.tor_unavailable": "這個版本不支援 Tor 路由。",
   "settings.conn.tor_timeout":
     "Tor 連線已經花了一分多鐘。它會保持開啟並繼續嘗試；網狀網路分頁會告訴你它何時開始轉送，或者這個網路是不是在擋它。",
@@ -1710,16 +1705,11 @@ export const strings: Strings = {
     "它靠一次定位來確定你所在的鄰里。授予定位權限即可開始橋接。",
   "settings.conn.grant_location": "授予定位權限",
   "settings.conn.grant_short": "授予",
-  "settings.conn.orbot_body":
-    "Airhop 透過 Orbot 轉送 Tor 流量。請從 Play 商店安裝並啟用 Orbot，然後再打開這一項。",
   "settings.conn.internet_off": "網路已關閉",
   "settings.conn.internet_off_desc":
     "Tor、橋接和閘道都要用網路。請在網路裡開啟網路備援才能使用它們。",
   "settings.conn.turn_on": "開啟",
   "settings.conn.turn_off": "關閉",
-  "settings.conn.orbot_title": "Android 上的 Tor",
-  "settings.conn.get_orbot": "取得 Orbot",
-  "settings.conn.later": "稍後",
 
   // ---- Settings: permissions ----
   "settings.permissions.bluetooth": "藍牙",

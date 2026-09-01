@@ -80,9 +80,7 @@
 
 **[AAC (Advanced Audio Coding)](https://en.wikipedia.org/wiki/Advanced_Audio_Coding)**: A lossy audio compression format. Airhop encodes push-to-talk voice at 16 kHz mono using AAC before transmission as BLE `VOICE_FRAME` packets.
 
-**[Arti](https://gitlab.torproject.org/tpo/core/arti)**: The Tor Project's Rust implementation of the Tor client. Bundled as an xcframework in bitchat iOS; Airhop uses the same approach to route all Nostr traffic through Tor on iOS by default.
-
-**[Orbot](https://guardianproject.info/apps/org.torproject.android/)**: Guardian Project's Android app providing a Tor SOCKS5 proxy on `localhost:9050`. Airhop detects Orbot and routes all Nostr traffic through it when available.
+**[Arti](https://gitlab.torproject.org/tpo/core/arti)**: The Tor Project's Rust implementation of the Tor client. Airhop embeds it on both platforms, built from `native/arti/` and linked as an xcframework on iOS and a JNI library on Android. Off by default; when on, it exposes a SOCKS5 listener on loopback that the app points its sockets at.
 
 **[TurboModule](https://reactnative.dev/docs/the-new-architecture/what-are-turbo-native-modules)**: React Native's new architecture native module system. `src/bridge/NativeAirhopBLE.ts` is a TurboModule TypeScript spec (Codegen input) that provides a typed interface over the Swift and Kotlin BLE implementations.
 

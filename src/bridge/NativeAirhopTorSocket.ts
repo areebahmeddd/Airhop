@@ -7,7 +7,8 @@
 // TurboModule, so it is reached through NativeModules and its events through
 // NativeEventEmitter, mirroring NativeAirhopTor.
 //
-// Absent on Android, where Orbot's VPN routes transparently, and absent in any
+// Absent on Android, where the proxy is installed into the shared OkHttp client
+// instead and covers every socket without a shim. Absent too in any
 // build where the native file was not compiled in. Callers must gate on
 // isTorSocketNativeAvailable().
 import type { EventSubscription } from "react-native";

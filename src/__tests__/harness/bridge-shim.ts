@@ -31,8 +31,6 @@ export const bleBridge: BleNativeModule = {
   setBackgroundServiceEnabled: (enabled) =>
     req().setBackgroundServiceEnabled(enabled),
   setPowerMode: (mode) => req().setPowerMode(mode),
-  getTorProxyPort: () => req().getTorProxyPort(),
-  getTorAvailability: () => req().getTorAvailability(),
   addListener: (e) => req().addListener(e),
   removeListeners: (n) => req().removeListeners(n),
 };

@@ -1325,9 +1325,6 @@ export const strings: Strings = {
   "wallet.svc.tor_ios": "คำขอไปยังมินต์ไม่ได้ผ่าน Tor บน iOS",
   "wallet.svc.tor_ios_body":
     "Arti ห่อหุ้มเฉพาะ WebSocket ของ Nostr คำขอนี้จึงจะไปถึงมินต์ผ่านเครือข่ายเปิดและเชื่อม IP ของคุณเข้ากับพรูฟเหล่านี้ อนุญาตได้ที่การตั้งค่า > ความปลอดภัย หรือปิด Tor ก่อน การส่งและรับ ecash ผ่านเมชยังทำงานอยู่",
-  "wallet.svc.tor_paused": "Tor เปิดอยู่แต่ยังไม่เชื่อมต่อ",
-  "wallet.svc.tor_paused_body":
-    "Orbot หยุดส่งต่อทราฟฟิกแล้ว คำขอนี้จึงจะไปถึงมินต์ผ่านเครือข่ายเปิดและเชื่อม IP ของคุณเข้ากับพรูฟเหล่านี้ เปิด Orbot อีกครั้ง หรือปิด Tor การส่งและรับ ecash ผ่านเมชยังทำงานอยู่",
   "wallet.svc.keys_uncached": "กุญแจของมินต์นี้ไม่ได้แคชไว้บนเครื่องนี้",
   "wallet.svc.keys_uncached_body":
     "เปิดกระเป๋าเงินสักครั้งขณะออนไลน์เพื่อดึงกุญแจมา",
@@ -1746,8 +1743,6 @@ export const strings: Strings = {
   "settings.conn.tor_off_title": "ปิดการกำหนดเส้นทางผ่าน Tor หรือไม่",
   "settings.conn.tor_off_body":
     "การรับส่งข้อมูล Nostr จะกลับไปใช้การเชื่อมต่อปกติของคุณ รีเลย์จึงเห็นที่อยู่ IP ของคุณอีกครั้ง ไม่ว่าทางใดบลูทูธก็ไม่ได้รับผลกระทบ",
-  "settings.conn.tor_orbot_idle":
-    "ติดตั้ง Orbot แล้วแต่ยังไม่ได้เชื่อมต่อ เปิด Orbot เริ่ม VPN ของมัน แล้วจึงเปิดสิ่งนี้",
   "settings.conn.tor_unavailable":
     "การกำหนดเส้นทางผ่าน Tor ใช้ไม่ได้ในบิลด์นี้",
   "settings.conn.tor_timeout":
@@ -1781,16 +1776,11 @@ export const strings: Strings = {
     "มันหาย่านของคุณจากค่าพิกัดที่ได้ ให้สิทธิ์ตำแหน่งเพื่อเริ่มเชื่อมบริดจ์",
   "settings.conn.grant_location": "ให้สิทธิ์ตำแหน่ง",
   "settings.conn.grant_short": "ให้สิทธิ์",
-  "settings.conn.orbot_body":
-    "Airhop ส่งการรับส่งข้อมูล Tor ผ่าน Orbot ติดตั้งและเปิดใช้ Orbot จาก Play Store แล้วจึงเปิดสิ่งนี้",
   "settings.conn.internet_off": "อินเทอร์เน็ตปิดอยู่",
   "settings.conn.internet_off_desc":
     "Tor บริดจ์ และเกตเวย์ล้วนใช้อินเทอร์เน็ต เปิดอินเทอร์เน็ตสำรองใต้หัวข้อเครือข่ายเพื่อใช้งานสิ่งเหล่านี้",
   "settings.conn.turn_on": "เปิด",
   "settings.conn.turn_off": "ปิด",
-  "settings.conn.orbot_title": "Tor บน Android",
-  "settings.conn.get_orbot": "ดาวน์โหลด Orbot",
-  "settings.conn.later": "ไว้ทีหลัง",
 
   // ---- Settings: permissions ----
   "settings.permissions.bluetooth": "บลูทูธ",

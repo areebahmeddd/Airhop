@@ -69,7 +69,7 @@ const strings: Strings = {
   "home.about.body.crypto":
     "Varje session använder {noise}-protokollet för en autentiserad handskakning. Sparade meddelanden använder {ratchet}-algoritmen, det vill säga även om din enhet komprometteras senare förblir dina tidigare meddelanden oläsbara. Nödradering förstör alla nycklar och meddelanden på under en sekund.",
   "home.about.body.internet":
-    "När du och en kontakt är utanför Bluetooth-räckvidd fungerar {nostr}-reläer som en brygga över internet, med direktmeddelanden inslagna enligt {nip17}, så att meshet når hela världen så länge ni båda är uppkopplade. Stöd för {tor} finns också, både på iOS (via {arti}) och Android (via {orbot}).",
+    "När du och en kontakt är utanför Bluetooth-räckvidd fungerar {nostr}-reläer som en brygga över internet, med direktmeddelanden inslagna enligt {nip17}, så att meshet når hela världen så länge ni båda är uppkopplade. Stöd för {tor} finns på både iOS och Android, via {arti}.",
   "home.about.optional.title": "Airhop har valfria funktioner som du kan slå på:",
   "home.about.optional.payments.label": "Betalningar offline:",
   "home.about.optional.payments.body":

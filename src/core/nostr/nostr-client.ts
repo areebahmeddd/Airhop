@@ -10,7 +10,8 @@
 // Tor proxy: this client never touches the socket directly. Routing Nostr
 // through Tor is done one level up, by swapping nostr-tools' WebSocket
 // implementation (see tor-routing.ts): on iOS for TorWebSocket, which tunnels
-// over Arti's SOCKS5 proxy, and on Android by Orbot's transparent VPN. The pool
+// over Arti's SOCKS5 proxy, and on Android by the proxy installed into the
+// shared OkHttp client every socket is built from. The pool
 // is created with auto-reconnect so that when the transport is swapped (or a
 // relay drops) connections re-open on their own, and so a pool primed for Tor
 // before Arti has finished bootstrapping simply retries until the circuit is up

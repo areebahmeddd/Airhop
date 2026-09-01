@@ -37,8 +37,6 @@ import android.content.IntentFilter
 import android.app.Activity
 import android.content.pm.PackageManager
 import android.location.LocationManager
-import android.net.ConnectivityManager
-import android.net.NetworkCapabilities
 import android.os.BatteryManager
 import android.os.Build
 import android.os.Handler
@@ -84,17 +82,6 @@ private const val EVT_SCAN_FAILED       = "AirhopBLE.scanFailed"
 // The user tapped "Stop mesh" on the background notification. Handled in JS so
 // the shutdown is the same one the Status picker performs.
 private const val EVT_MESH_STOP_REQUESTED = "AirhopBLE.meshStopRequested"
-
-// The VPN transport went away, or came back. Emitted only while Tor is on (see
-// startVpnWatch). Unprefixed, unlike the events above, because JS subscribes to
-// them by these exact names.
-private const val EVT_VPN_LOST      = "onVpnLost"
-private const val EVT_VPN_AVAILABLE = "onVpnAvailable"
-
-// Orbot SOCKS5 proxy defaults (Tor via Orbot, per ARCHITECTURE.md section 9).
-// Phase 1: detect existing Orbot session. Phase 2: embedded tor binary.
-private const val ORBOT_SOCKS5_PORT       = 9050
-private const val ORBOT_PROBE_TIMEOUT_MS  = 500
 
 // Request code for the system "turn Bluetooth on?" dialog, so the Mesh banner
 // can offer a button rather than instructions.
@@ -745,9 +732,7 @@ class AirhopBLEModule(
         } catch (e: Exception) {
             // Context already torn down.
         }
-        // Otherwise the callback outlives the module and eventually trips the
-        // per-app callback limit.
-        stopVpnWatch()
+
         // Anyone still waiting on the enable dialog will never hear back
         // otherwise, and an unresolved promise is a UI stuck on a spinner.
         resolvePendingEnable(false)
@@ -1424,139 +1409,6 @@ class AirhopBLEModule(
     @ReactMethod
     fun removeListeners(count: Double) {
         listenerCount = maxOf(0, listenerCount - count.toInt())
-    }
-
-    // MARK: - Tor proxy detection (Orbot)
-
-    // Probe whether a SOCKS5 proxy is reachable at localhost:port (Orbot default: 9050).
-    // Runs a non-blocking TCP connect attempt on a background thread. The promise
-    // resolves with the port number if reachable, or 0 if not.
-    //
-    // This does NOT start Orbot; it only detects whether it is already running.
-    // TypeScript callers use the returned port to configure the Nostr WebSocket proxy.
-    @ReactMethod
-    fun getTorProxyPort(promise: Promise) {
-        Thread {
-            val port = ORBOT_SOCKS5_PORT
-            try {
-                java.net.Socket().use { socket ->
-                    socket.connect(java.net.InetSocketAddress("127.0.0.1", port), ORBOT_PROBE_TIMEOUT_MS)
-                    promise.resolve(port)
-                }
-            } catch (_: Exception) {
-                promise.resolve(0)
-            }
-        }.start()
-    }
-
-    // Watch the VPN transport while Tor is on, so a Tor claim cannot outlive the
-    // thing carrying it, and can be reinstated the moment that thing returns.
-    //
-    // getTorAvailability only answers when asked, and app foreground is its only
-    // other caller. A dropped VPN does not fail the app's sockets - they
-    // reconnect directly - so without these edges the relay pool comes back on
-    // the clear net while the UI still says Tor is on.
-    //
-    // BOTH edges matter. Loss is the safety edge. Arrival is the recovery edge,
-    // and load-bearing because JS holds the Nostr transport down until Tor
-    // routes again: someone who stops and restarts Orbot from its own
-    // notification shade never leaves Airhop, so nothing else would ever ask.
-    //
-    // Neither edge is a conclusion. Any VPN raises them - a corporate tunnel
-    // dropping is not Orbot stopping - so both say only "the VPN transport
-    // moved, ask again" and JS re-probes before changing anything.
-    //
-    // Registered only while Tor is on: a permanent callback watching a feature
-    // few enable is battery cost with no reader.
-    private var vpnCallback: ConnectivityManager.NetworkCallback? = null
-
-    private fun connectivityManager(): ConnectivityManager? =
-        try {
-            reactContext.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
-        } catch (_: Exception) {
-            null
-        }
-
-    @ReactMethod
-    fun startVpnWatch() {
-        if (vpnCallback != null) return
-        val cm = connectivityManager() ?: return
-        val callback = object : ConnectivityManager.NetworkCallback() {
-            override fun onLost(network: android.net.Network) {
-                emitEvent(EVT_VPN_LOST, WritableNativeMap())
-            }
-
-            // onAvailable fires for a transport already up when the callback
-            // registers, not only for one arriving afterwards. That replay is
-            // what re-opens the gate on a relaunch into the blocked state,
-            // without waiting for Orbot to be cycled.
-            override fun onAvailable(network: android.net.Network) {
-                emitEvent(EVT_VPN_AVAILABLE, WritableNativeMap())
-            }
-        }
-        try {
-            val request = android.net.NetworkRequest.Builder()
-                .addTransportType(NetworkCapabilities.TRANSPORT_VPN)
-                // Without this the default filter drops the very transport we
-                // are trying to watch.
-                .removeCapability(NetworkCapabilities.NET_CAPABILITY_NOT_VPN)
-                .build()
-            cm.registerNetworkCallback(request, callback)
-            vpnCallback = callback
-        } catch (e: Exception) {
-            // Keeps the old behaviour: the foreground re-check catches a drop
-            // later.
-            Log.w(TAG, "Could not watch the VPN transport: ${e.message}")
-        }
-    }
-
-    @ReactMethod
-    fun stopVpnWatch() {
-        val callback = vpnCallback ?: return
-        vpnCallback = null
-        try {
-            connectivityManager()?.unregisterNetworkCallback(callback)
-        } catch (_: Exception) {
-            // Already unregistered, or the service is gone with the context.
-        }
-    }
-
-    // Report whether Tor routing can actually work on this device, so the UI
-    // never flips the Tor toggle "on" when nothing is routing traffic. We cannot
-    // start Orbot ourselves, so we surface the two things we *can* observe:
-    //   - orbotInstalled: the Orbot package is present (PackageManager query;
-    //     needs the <package> entry in AndroidManifest's <queries> on API 30+).
-    //   - vpnActive: a VPN transport is currently up. Orbot's VPN mode captures
-    //     app traffic transparently, so an active VPN is our best signal that
-    //     traffic is being routed. It cannot prove the VPN is *Orbot* (only that
-    //     one exists), which is why we report it alongside orbotInstalled and let
-    //     the caller require both.
-    @ReactMethod
-    fun getTorAvailability(promise: Promise) {
-        val result = WritableNativeMap()
-
-        val orbotInstalled = try {
-            reactContext.packageManager.getPackageInfo("org.torproject.android", 0)
-            true
-        } catch (_: PackageManager.NameNotFoundException) {
-            false
-        } catch (_: Exception) {
-            false
-        }
-
-        val vpnActive = try {
-            val cm = reactContext.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
-            cm?.allNetworks?.any { network ->
-                cm.getNetworkCapabilities(network)
-                    ?.hasTransport(NetworkCapabilities.TRANSPORT_VPN) == true
-            } ?: false
-        } catch (_: Exception) {
-            false
-        }
-
-        result.putBoolean("orbotInstalled", orbotInstalled)
-        result.putBoolean("vpnActive", vpnActive)
-        promise.resolve(result)
     }
 
     // MARK: - GATT server setup

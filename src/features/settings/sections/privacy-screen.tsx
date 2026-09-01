@@ -110,7 +110,7 @@ const SECTIONS: LegalSection[] = [
         bullets: [
           "**What a mint can see.** Your IP address, the amounts you deposit and withdraw, and when. Mints are third parties whose retention and privacy practices are outside this project's control.",
           "**What a mint cannot see.** Who you are, who you paid, or which coins you deposited became which coins you spent. Cashu signs tokens blindly, so that link is severed by the maths rather than by policy.",
-          "**Tor.** On Android, Orbot covers mint traffic along with everything else. On iOS, Tor only wraps Nostr connections, so **mint requests are blocked while Tor is on** unless you opt in beside the Tor switch in Settings. Mesh payments are unaffected either way.",
+          "**Tor.** On Android, Tor covers mint traffic along with everything else. On iOS, Tor only wraps Nostr connections, so **mint requests are blocked while Tor is on** unless you opt in beside the Tor switch in Settings. Mesh payments are unaffected either way.",
           "**Nutzaps are public.** A NIP-61 nutzap is an unencrypted Nostr event. The ecash is locked to the recipient so nobody else can spend it, but relays and observers can see that one public key paid another, and the amount. The encrypted-message fallback does not have this property.",
           "**Recovery phrase.** Optional and off by default. It is stored only in your device's secure storage, is never transmitted, and is never shown to a mint. Anyone who obtains it can spend your balance.",
         ],
@@ -120,7 +120,7 @@ const SECTIONS: LegalSection[] = [
   {
     heading: "Tor routing (optional)",
     paragraphs: [
-      "Airhop supports routing Nostr traffic through Tor using Arti on iOS or Orbot on Android. When enabled, **relay operators cannot observe your IP address.** Tor is off by default.",
+      "Airhop routes internet traffic through Tor using Arti, embedded in the app on both platforms with no separate app to install. When enabled, **relay operators cannot observe your IP address.** Tor is off by default.",
     ],
   },
   {

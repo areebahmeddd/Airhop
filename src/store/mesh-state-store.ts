@@ -41,7 +41,7 @@ export type PresenceStatus = "online" | "away" | "invisible";
 export type BannerTone =
   "danger" | "caution" | "relay" | "tor" | "gateway" | "bridge" | "neutral";
 
-// How far along Airhop's own Tor bootstrap is. iOS only; see `torBootstrap`.
+// How far along Airhop's Tor bootstrap is; see `torBootstrap`.
 export type TorBootstrapPhase = "idle" | "starting" | "blocked";
 
 // State of the WiFi Aware fast path, the high-bandwidth transport that carries
@@ -219,39 +219,29 @@ interface MeshStateStore {
   // Why `torActive` is not true while the user has asked for Tor.
   //
   //   idle      nothing to say (Tor off, or Tor is routing)
-  //   starting  the route is being established and may yet succeed. On iOS,
-  //             Arti building a circuit. On Android, the first moments of a
-  //             launch, before the Orbot probe has answered - short, but the
-  //             gate is already shut behind it, so it needs a name that is not
-  //             a verdict.
-  //   blocked   Tor is wanted and is not carrying traffic. On iOS that is a
-  //             bootstrap that ran out its deadline, which is what a network
-  //             filtering Tor looks like. On Android it is Orbot stopped or
-  //             uninstalled.
+  //   starting  Arti is building a circuit and may yet succeed
+  //   blocked   Tor is wanted and Arti reports it cannot get there: either a
+  //             bootstrap that stopped making progress, which is what a network
+  //             filtering Tor looks like, or one that ran out its deadline
   //
   // Separate from `torActive` on purpose. That flag is a privacy claim and must
   // stay false while a circuit is only forming; this is the explanation for WHY
   // the claim is not yet true, which is the difference between a user who
   // thinks the app is broken and one who knows to wait or move network.
   torBootstrap: TorBootstrapPhase;
-  // Android: hold the Nostr transport DOWN, because Tor is on and nothing is
-  // routing through it. While this is true mesh-service refuses to build the
-  // transport and tears down any that exists; Bluetooth is untouched, so only
-  // the internet half pauses.
+  // Hold the Nostr transport DOWN, because Tor is wanted and no circuit can
+  // carry it. While this is true mesh-service refuses to build the transport and
+  // tears down any that exists; Bluetooth is untouched, so only the internet
+  // half pauses.
   //
-  // The two platforms fail closed in different places. iOS installs the Tor
-  // socket factory before any circuit exists, so a relay connection is dialled
-  // through Arti's SOCKS proxy and fails until it is up. Android has no
-  // per-socket shim - Orbot routes transparently at the OS level - so the same
-  // sockets keep working the instant its VPN goes, carrying geohash presence
-  // (a location), DM metadata and bridge events for someone who asked for none
-  // of it.
+  // Not a safety gate. Both platforms embed Arti, which has no clearnet path, so
+  // a relay dialled during a dead bootstrap fails rather than falling back and
+  // nothing leaks whether this is set or not. What it prevents is futility: a
+  // phone on a network that blocks Tor would otherwise spend the whole session
+  // reconnecting a relay pool through a proxy that will never answer, which on a
+  // censored network is exactly where battery is worth saving.
   //
-  // Set true BEFORE the answer is known: at launch with Tor on, Orbot has not
-  // been probed yet, and assuming it routes is a clear-net window in the one
-  // state that must not have one.
-  //
-  // Always false on iOS. services/tor-routing.ts is the only writer.
+  // services/tor-routing.ts is the only writer.
   nostrBlockedByTor: boolean;
   // Whether the mesh bridge is active (bridging with a known rendezvous cell)
   // and how many people are reachable across it. Mirrored here so the banner and

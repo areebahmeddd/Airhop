@@ -125,9 +125,6 @@
       <category android:name="android.intent.category.BROWSABLE"/>
       <data android:scheme="https"/>
     </intent>
-    <!-- Package visibility (Android 11+) so PackageManager can tell whether
-         Orbot is installed when the user enables Tor routing. -->
-    <package android:name="org.torproject.android"/>
   </queries>
   <!-- enableOnBackInvokedCallback stays FALSE, and is not an oversight.
 

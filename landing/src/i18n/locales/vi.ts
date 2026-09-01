@@ -69,7 +69,7 @@ const strings: Strings = {
   "home.about.body.crypto":
     "Mỗi phiên dùng giao thức {noise} cho bước bắt tay có xác thực. Tin nhắn đã lưu dùng thuật toán {ratchet}, tức là ngay cả khi thiết bị của bạn bị xâm nhập về sau, những tin nhắn cũ vẫn không đọc được. Xóa khẩn cấp hủy mọi khóa và tin nhắn trong chưa đầy một giây.",
   "home.about.body.internet":
-    "Khi bạn và người liên hệ ở ngoài tầm Bluetooth, các relay {nostr} đóng vai trò cầu nối qua internet, dùng tin nhắn trực tiếp được bọc theo định dạng {nip17}, nhờ vậy mạng mesh vươn ra toàn cầu mỗi khi cả hai đều trực tuyến. Hỗ trợ {tor} cũng có trên cả iOS (qua {arti}) và Android (qua {orbot}).",
+    "Khi bạn và người liên hệ ở ngoài tầm Bluetooth, các relay {nostr} đóng vai trò cầu nối qua internet, dùng tin nhắn trực tiếp được bọc theo định dạng {nip17}, nhờ vậy mạng mesh vươn ra toàn cầu mỗi khi cả hai đều trực tuyến. Hỗ trợ {tor} có trên cả iOS và Android, qua {arti}.",
   "home.about.optional.title": "Airhop có những tính năng tùy chọn mà bạn có thể bật:",
   "home.about.optional.payments.label": "Thanh toán ngoại tuyến:",
   "home.about.optional.payments.body":

@@ -1365,9 +1365,6 @@ export const strings: Strings = {
   "wallet.svc.tor_ios": "Permintaan ke mint tidak lewat Tor di iOS.",
   "wallet.svc.tor_ios_body":
     "Arti hanya membungkus WebSocket Nostr, jadi permintaan ini akan mencapai mint lewat jaringan terbuka dan mengaitkan IP-mu dengan bukti-bukti ini. Izinkan di Pengaturan > Keamanan, atau matikan Tor dulu. Mengirim dan menerima ecash lewat mesh tetap bekerja.",
-  "wallet.svc.tor_paused": "Tor menyala tapi tidak terhubung.",
-  "wallet.svc.tor_paused_body":
-    "Orbot berhenti merutekan, jadi permintaan ini akan mencapai mint lewat jaringan terbuka dan mengaitkan IP-mu dengan bukti-bukti ini. Nyalakan lagi Orbot, atau matikan Tor. Mengirim dan menerima ecash lewat mesh tetap bekerja.",
   "wallet.svc.keys_uncached":
     "Kunci mint ini tidak tersimpan di perangkat ini.",
   "wallet.svc.keys_uncached_body":
@@ -1806,8 +1803,6 @@ export const strings: Strings = {
   "settings.conn.tor_off_title": "Matikan perutean Tor?",
   "settings.conn.tor_off_body":
     "Lalu lintas Nostr kembali lewat sambungan biasamu, jadi relai melihat alamat IP-mu lagi. Bluetooth tetap tidak terpengaruh.",
-  "settings.conn.tor_orbot_idle":
-    "Orbot terpasang tetapi belum tersambung. Buka Orbot, nyalakan VPN-nya, lalu nyalakan ini.",
   "settings.conn.tor_unavailable":
     "Perutean Tor tidak tersedia di versi rakitan ini.",
   "settings.conn.tor_timeout":
@@ -1841,16 +1836,11 @@ export const strings: Strings = {
     "Ia menemukan lingkunganmu dari penentuan posisi. Beri izin lokasi untuk mulai menjembatani.",
   "settings.conn.grant_location": "Beri izin lokasi",
   "settings.conn.grant_short": "Beri izin",
-  "settings.conn.orbot_body":
-    "Airhop mengalirkan lalu lintas Tor lewat Orbot. Pasang dan aktifkan Orbot dari Play Store, lalu nyalakan ini.",
   "settings.conn.internet_off": "Internet mati",
   "settings.conn.internet_off_desc":
     "Tor, jembatan, dan gerbang sama-sama memakai internet. Nyalakan Cadangan internet di bagian Jaringan untuk memakainya.",
   "settings.conn.turn_on": "Nyalakan",
   "settings.conn.turn_off": "Matikan",
-  "settings.conn.orbot_title": "Tor di Android",
-  "settings.conn.get_orbot": "Dapatkan Orbot",
-  "settings.conn.later": "Nanti",
 
   // ---- Settings: permissions ----
   "settings.permissions.bluetooth": "Bluetooth",

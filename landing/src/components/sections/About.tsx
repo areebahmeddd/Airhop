@@ -83,9 +83,6 @@ function Internet() {
       ),
       tor: <TextLink href="https://torproject.org">Tor</TextLink>,
       arti: <TextLink href="https://gitlab.torproject.org/tpo/core/arti">Arti</TextLink>,
-      orbot: (
-        <TextLink href="https://guardianproject.info/apps/org.torproject.android">Orbot</TextLink>
-      ),
     }),
     [],
   );

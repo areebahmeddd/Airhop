@@ -2,10 +2,16 @@
 //
 // Hand-maintained, not Codegen input. See NativeAirhopBLE.ts for why.
 //
-// iOS ONLY, backed by ios/Airhop/AirhopTorModule.swift and the bundled
-// ios/Frameworks/arti.xcframework. Android routes Tor traffic through Orbot's
-// system-level VPN instead, and reports whether it can through
-// NativeAirhopBLE.getTorAvailability().
+// Both platforms, backed by one Rust crate in native/arti: iOS links it as a
+// static library behind ios/Airhop/AirhopTorModule.swift, Android loads it as a
+// shared object behind AirhopTorModule.kt. The two modules expose this identical
+// surface, so nothing above here branches on platform for Tor's lifecycle.
+//
+// One difference survives, and it is about coverage rather than lifecycle. On
+// Android the proxy is installed into React Native's shared OkHttp client, so
+// every socket the app opens is covered, `fetch` included. On iOS only the Nostr
+// WebSocket goes through Tor, which is why a mint request there has to be
+// refused rather than routed. See services/tor-routing.ts.
 import type { EventSubscription, TurboModule } from "react-native";
 import {
   NativeEventEmitter,
@@ -33,23 +39,27 @@ export interface Spec extends TurboModule {
 
   // Stop Arti and delete everything it has written to disk. Panic wipe only.
   //
-  // Arti's data directory sits under Application Support rather than the cache,
-  // so the wipe's cache sweep does not reach it. It holds a cached consensus,
-  // chosen guard nodes and directory state, which together are evidence on disk
-  // that this device used Tor and roughly when.
+  // Arti's data directory sits outside the media cache on both platforms
+  // (Application Support on iOS, the app's files directory on Android), so the
+  // wipe's cache sweep does not reach it. It holds a cached consensus, chosen
+  // guard nodes and directory state, which together are evidence on disk that
+  // this device used Tor and roughly when.
   wipeTorState(): Promise<void>;
 
-  // Tell Arti which side of the screen the app is on.
+  // Tell Arti which side of the screen the app is on, so it can sleep.
   //
-  // Not advisory. iOS suspends the process in the background, so circuits and
-  // guard connections do not survive it - while the bootstrap poll stops at
-  // 100% and the SOCKS probe never runs again, leaving `isReady` latched true.
-  // The background edge clears that latch; the foreground edge restarts against
-  // it. Without both, a resume reports Tor ready over dead circuits and nothing
-  // ever triggers a recovery.
+  // Not advisory, and it means the same thing on both platforms even though the
+  // pressure differs. iOS suspends the process, so circuits do not survive a
+  // long background spell either way; Android keeps it alive through the
+  // foreground service, so without this a backgrounded Airhop keeps a consensus
+  // fresh and guards warm all day on a battery.
   //
-  // Safe to call whatever the Tor preference says: the restart half gates on
-  // auto-start consent, which only `startTor` grants.
+  // Dormancy rather than a stop, deliberately. Stopping would drop the guards,
+  // cost the user a fresh bootstrap on every return to the app, and make the
+  // device look like a brand new client to a guard each time.
+  //
+  // Safe to call whatever the Tor preference says: with nothing running it is a
+  // no-op.
   setAppForeground(foreground: boolean): Promise<void>;
 
   getTorStatus(): Promise<TorStatus>;
@@ -68,8 +78,8 @@ export type TorStatusChangedEvent = TorStatus;
 let emitter: NativeEventEmitter | null = null;
 
 // Subscribe to Arti's bootstrap status. Returns null wherever the module is
-// absent, which is every Android build and any iOS build without Arti. Without a
-// subscriber, a stalled bootstrap is never reported.
+// absent, which is any build the native library was not packaged into. Without
+// a subscriber, a stalled bootstrap is never reported.
 export function subscribeTorStatus(
   listener: (status: TorStatusChangedEvent) => void,
 ): EventSubscription | null {
@@ -80,6 +90,7 @@ export function subscribeTorStatus(
   return emitter.addListener("TorStatusChanged", listener);
 }
 
-// Returns null on Android, where Orbot is detected through
-// NativeAirhopBLE.getTorAvailability() instead.
+// Optional rather than enforcing: an ABI the native library was not built for,
+// or a build that omitted it, must degrade to "Tor unavailable" rather than
+// taking the app down at import time. Callers null-check.
 export default TurboModuleRegistry.get<Spec>("AirhopTorModule");

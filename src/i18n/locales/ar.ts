@@ -1313,9 +1313,6 @@ export const strings: Strings = {
   "wallet.svc.tor_ios": "طلبات دار السك لا تمر عبر Tor على iOS.",
   "wallet.svc.tor_ios_body":
     "لا يغلّف Arti سوى مقابس Nostr، فسيصل هذا الطلب إلى دار السك عبر الشبكة المكشوفة ويربط عنوان IP الخاص بك بهذه الإثباتات. اسمح به من الإعدادات > الأمان، أو عطّل Tor أولًا. إرسال النقد الإلكتروني واستقباله عبر الشبكة ما زالا يعملان.",
-  "wallet.svc.tor_paused": "Tor مفعّل لكنه غير متصل.",
-  "wallet.svc.tor_paused_body":
-    "توقّف Orbot عن التوجيه، فسيصل هذا الطلب إلى دار السك عبر الشبكة المكشوفة ويربط عنوان IP الخاص بك بهذه الإثباتات. شغّل Orbot من جديد، أو عطّل Tor. إرسال النقد الإلكتروني واستقباله عبر الشبكة ما زالا يعملان.",
   "wallet.svc.keys_uncached": "مفاتيح دار السك هذه غير مخزّنة على هذا الجهاز.",
   "wallet.svc.keys_uncached_body": "افتح المحفظة مرة واحدة وأنت متصل لجلبها.",
   "wallet.svc.phrase_invalid": "عبارة الاستعادة هذه غير صالحة.",
@@ -1732,8 +1729,6 @@ export const strings: Strings = {
   "settings.conn.tor_off_title": "تعطيل توجيه Tor؟",
   "settings.conn.tor_off_body":
     "تعود حركة Nostr عبر اتصالك العادي، فترى المُرحِّلات عنوان IP الخاص بك مرة أخرى. والبلوتوث لا يتأثر في الحالتين.",
-  "settings.conn.tor_orbot_idle":
-    "Orbot مثبّت لكنه غير متصل. افتح Orbot، وشغّل شبكته الافتراضية الخاصة، ثم فعّل هذا.",
   "settings.conn.tor_unavailable": "توجيه Tor غير متاح في هذه النسخة.",
   "settings.conn.tor_timeout":
     "يستغرق Tor أكثر من دقيقة للاتصال. يبقى مفعّلًا ويواصل المحاولة؛ وسيخبرك تبويب الشبكة متى بدأ التوجيه، أو إن كانت هذه الشبكة تحجبه.",
@@ -1765,16 +1760,11 @@ export const strings: Strings = {
     "يحدد منطقتك من قراءة موقع. امنح إذن الموقع لبدء التجسير.",
   "settings.conn.grant_location": "منح إذن الموقع",
   "settings.conn.grant_short": "منح",
-  "settings.conn.orbot_body":
-    "يوجّه Airhop حركة Tor عبر Orbot. ثبّت Orbot وفعّله من متجر Play، ثم فعّل هذا.",
   "settings.conn.internet_off": "الإنترنت معطّل",
   "settings.conn.internet_off_desc":
     "يستخدم Tor والجسر والبوابة الإنترنت جميعًا. فعّل الرجوع إلى الإنترنت من قسم الشبكة لاستخدامها.",
   "settings.conn.turn_on": "تفعيل",
   "settings.conn.turn_off": "تعطيل",
-  "settings.conn.orbot_title": "Tor على Android",
-  "settings.conn.get_orbot": "احصل على Orbot",
-  "settings.conn.later": "لاحقًا",
 
   // ---- Settings: permissions ----
   "settings.permissions.bluetooth": "البلوتوث",

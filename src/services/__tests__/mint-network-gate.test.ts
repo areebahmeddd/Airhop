@@ -3,22 +3,20 @@
  */
 // When Airhop refuses to talk to a mint, and why it is platform-specific.
 //
-// Tor on iOS is Arti, which wraps WebSockets. It does NOT wrap `fetch`. Every
-// mint call is a fetch, so a deposit made while the user believes their traffic
-// is anonymised would leave the device in the clear, carrying their mint, their
+// Tor on iOS wraps nostr-tools' WebSockets. It does NOT wrap `fetch`. Every mint
+// call is a fetch, so a deposit made while the user believes their traffic is
+// anonymised would leave the device in the clear, carrying their mint, their
 // amounts and their IP. Refusing is the only honest answer, and the Wallet
 // screen greys its buttons off exactly this predicate.
 //
-// Tor on Android is Orbot, which takes the whole socket, so there is nothing to
-// leak and mint calls must keep working. Blocking there would break deposits and
-// withdrawals for every Android user running Orbot, which is a large fraction of
-// the people who care most about this app.
+// Android refuses nothing, and that is a stronger position rather than a laxer
+// one. The proxy is installed into the OkHttp client `fetch` is built from, so a
+// mint call is inside the tunnel whenever Tor is on, and simply fails when no
+// circuit exists yet. There is no state in which it can leak, so there is
+// nothing for a gate to catch.
 //
-// While Orbot is routing, though. When it stops, that socket is covered by
-// nothing and the request egresses in the clear with the real IP. tor-routing
-// publishes that state as `nostrBlockedByTor` and holds the Nostr transport
-// down for it; this gate answers to the same fact, or it protects the smaller
-// half of the traffic.
+// That distinction is the whole reason these tests exist: the gate has to fire
+// on iOS and must not fire anywhere else.
 //
 // The branch is a few lines in `assertMintNetworkAllowed` and it cannot be
 // covered in the simulator, where `Platform.OS` is a single global shared by
@@ -70,12 +68,12 @@ describe("mint network gate", () => {
     expect(isMintNetworkBlocked()).toBe(true);
   });
 
-  it("does NOT block on Android, because Orbot carries the whole socket", () => {
+  it("does NOT block on Android, where the proxy carries the whole socket", () => {
     setPlatform("android");
     useMeshStateStore.getState().setTorActive(true);
     // The regression this guards: a well-meaning "block mint traffic under Tor"
     // that forgets the platform check takes deposits and withdrawals away from
-    // every Android user running Orbot.
+    // every Android user, to prevent a leak that cannot happen there.
     expect(isMintNetworkBlocked()).toBe(false);
   });
 
@@ -90,63 +88,40 @@ describe("mint network gate", () => {
     expect(isMintNetworkBlocked()).toBe(false);
   });
 
-  // The preference stays on through a dropped Orbot and the banner says Tor
-  // could not connect, so the switch reads ON across a window this gate has to
-  // hold rather than wave mint traffic through.
-  it("blocks on Android once Orbot stops carrying the socket", () => {
+  // Tor wanted, no circuit yet. The request is pointed at a port that is either
+  // tunnelling or not answering, so it cannot reach the mint in the clear, and
+  // refusing it would only take the wallet away from someone whose Tor is slow
+  // to start.
+  it("does not block on Android while Tor is on but not yet connected", () => {
     setPlatform("android");
     useSettingsStore.getState().setTorEnabled(true);
-    useMeshStateStore.getState().setTorActive(true);
-    expect(isMintNetworkBlocked()).toBe(false);
-
-    // Orbot goes away: tor-routing stands the claim down and shuts the gate.
     useMeshStateStore.getState().setTorActive(false);
     useMeshStateStore.getState().setNostrBlockedByTor(true);
-    expect(isMintNetworkBlocked()).toBe(true);
-  });
 
-  it("unblocks on Android the moment Orbot is carrying it again", () => {
-    setPlatform("android");
-    useSettingsStore.getState().setTorEnabled(true);
-    useMeshStateStore.getState().setNostrBlockedByTor(true);
-    expect(isMintNetworkBlocked()).toBe(true);
-
-    useMeshStateStore.getState().setNostrBlockedByTor(false);
-    useMeshStateStore.getState().setTorActive(true);
     expect(isMintNetworkBlocked()).toBe(false);
   });
 
-  // Turning Tor off is the documented way out of the blocked state, and it has
-  // to release the wallet along with the transport. Otherwise a user whose
-  // Orbot is gone for good cannot deposit at all, whatever they do.
-  it("releases Android when the user turns Tor off", () => {
+  it("does not block on Android in any Tor state", () => {
+    // Swept rather than enumerated, because the invariant is about the platform
+    // and not about which combination of flags happens to be set.
     setPlatform("android");
-    useSettingsStore.getState().setTorEnabled(true);
-    useMeshStateStore.getState().setNostrBlockedByTor(true);
-    expect(isMintNetworkBlocked()).toBe(true);
-
-    useSettingsStore.getState().setTorEnabled(false);
-    useMeshStateStore.getState().setNostrBlockedByTor(false);
-    expect(isMintNetworkBlocked()).toBe(false);
-  });
-
-  // The same informed override iOS has. Whichever platform refuses, the
-  // preference means the same thing and is read before either refusal.
-  it("lets an Android user opt in while Orbot is down", () => {
-    setPlatform("android");
-    useSettingsStore.getState().setTorEnabled(true);
-    useMeshStateStore.getState().setNostrBlockedByTor(true);
-    expect(isMintNetworkBlocked()).toBe(true);
-
-    useSettingsStore.getState().setAllowMintOverClearnet(true);
-    expect(isMintNetworkBlocked()).toBe(false);
+    for (const torEnabled of [false, true]) {
+      for (const torActive of [false, true]) {
+        for (const blocked of [false, true]) {
+          useSettingsStore.getState().setTorEnabled(torEnabled);
+          useMeshStateStore.getState().setTorActive(torActive);
+          useMeshStateStore.getState().setNostrBlockedByTor(blocked);
+          expect(isMintNetworkBlocked()).toBe(false);
+        }
+      }
+    }
   });
 
   // The gate must not fire on a device that never asked for Tor. `nostrBlocked`
   // cannot be set without the preference, but reading only the flag would let a
   // stale value take the wallet offline for someone with Tor switched off.
-  it("stays open on Android when Tor was never asked for", () => {
-    setPlatform("android");
+  it("stays open on iOS when Tor was never asked for", () => {
+    setPlatform("ios");
     useMeshStateStore.getState().setNostrBlockedByTor(true);
     expect(isMintNetworkBlocked()).toBe(false);
   });

@@ -25,7 +25,7 @@ src/core/ -> Native modules -> src/features/ -> src/ui/
 
 - **Do not write `src/features/` code** until the `src/core/` service it depends on has passing unit tests.
 - **Do not write `src/ui/` code** until the feature logic in `src/features/` is proved functional.
-- **Native code** (`android/`, `ios/`) is written once during initial development and touched only to fix BLE hardware bugs. Protocol logic lives in TypeScript.
+- **Native code** (`android/`, `ios/`, `native/arti/`) is written once during initial development and touched only to fix hardware bugs or to bump the embedded Tor client. Protocol logic lives in TypeScript.
 
 ## 3. Coding Standards
 
@@ -39,9 +39,10 @@ src/core/ -> Native modules -> src/features/ -> src/ui/
 
 ### Native Code (Android + iOS)
 
-- Native code lives exclusively in `android/` and `ios/`.
-- Native modules expose **raw bytes** to TypeScript. They do not interpret packets, run routing logic, or make crypto decisions.
+- Platform code lives in `android/` and `ios/`. The one other native tree is `native/arti/`, the embedded Tor client, which both platforms compile from the same Rust crate.
+- Native modules expose **raw bytes** to TypeScript. They do not interpret packets, run routing logic, or make crypto decisions. `native/arti/` is the exception that proves it: it owns a SOCKS5 listener and its own lifecycle, and still knows nothing about packets, routing or encryption.
 - `AirhopBLEModule` is the one and only native module for BLE. Do not create additional BLE modules.
+- Rust is formatted with `cargo fmt` and linted with `cargo clippy -D warnings`. CI runs both.
 
 ## 4. Crypto Rules
 

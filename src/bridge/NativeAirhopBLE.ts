@@ -8,12 +8,8 @@
 // platforms stay honest about exposing the same surface.
 //
 // Raw I/O only. Protocol logic belongs in core/.
-import type { EventSubscription, TurboModule } from "react-native";
-import {
-  NativeEventEmitter,
-  NativeModules,
-  TurboModuleRegistry,
-} from "react-native";
+import type { TurboModule } from "react-native";
+import { TurboModuleRegistry } from "react-native";
 
 export interface Spec extends TurboModule {
   // Peripheral role: make this device visible to scanners.
@@ -96,35 +92,6 @@ export interface Spec extends TurboModule {
   // from UIBackgroundModes.
   setBackgroundServiceEnabled(enabled: boolean): Promise<void>;
 
-  // Probe localhost for a SOCKS5 proxy, returning its port or 0. Android only in
-  // practice: it looks for Orbot and returns 9050 when reachable. iOS resolves 0
-  // honestly rather than as a stub, since Orbot does not exist there and Airhop's
-  // own Tor is in-app Arti on another port, reported by NativeAirhopTor.
-  getTorProxyPort(): Promise<number>;
-
-  // Whether Tor routing can work right now. Android checks that Orbot is
-  // installed and a VPN transport is up, and the Tor toggle requires both, so it
-  // never reports on while nothing is routing. iOS resolves both false and never
-  // consults this.
-  getTorAvailability(): Promise<{
-    orbotInstalled: boolean;
-    vpnActive: boolean;
-  }>;
-
-  // Watch the VPN transport while Tor is on: 'onVpnLost' when it goes,
-  // 'onVpnAvailable' when one comes up. getTorAvailability only answers when
-  // asked, and app foreground is the only other caller, so these are what keep
-  // a Tor claim off clear-net traffic and what report Orbot coming back.
-  //
-  // Bound to the Tor PREFERENCE, not the claim: the window in which a VPN moving
-  // matters spans the blocked state, where the claim is already false. Binding
-  // to the claim tears the watch down at the drop it exists to recover from.
-  //
-  // Android only. iOS resolves immediately and emits nothing, since Arti is
-  // in-process and reports its own state.
-  startVpnWatch(): Promise<void>;
-  stopVpnWatch(): Promise<void>;
-
   // Required by the NativeEventEmitter contract.
   addListener(eventName: string): void;
   removeListeners(count: number): void;
@@ -140,8 +107,6 @@ export interface Spec extends TurboModule {
 //   AirhopBLE.scanFailed        { errorCode }         Android
 //   AirhopBLE.powerStateChanged { batteryPercent, charging }  Android
 //   AirhopBLE.meshStopRequested {}                    Android
-//   onVpnLost                   {}                    Android
-//   onVpnAvailable              {}                    Android
 //
 // Four of them carry a constraint worth stating:
 //
@@ -164,37 +129,5 @@ export interface Spec extends TurboModule {
 // notification. Native raises it rather than stopping the radios itself, so the
 // decision goes through the same presence path as the in-app control and the two
 // cannot disagree.
-
-let emitter: NativeEventEmitter | null = null;
-
-// Returns null on iOS and wherever the module is absent, so callers need no
-// platform branch.
-function subscribeVpnEdge(
-  event: "onVpnLost" | "onVpnAvailable",
-  listener: () => void,
-): EventSubscription | null {
-  const native = NativeModules.AirhopBLE as
-    ConstructorParameters<typeof NativeEventEmitter>[0] | undefined;
-  if (native == null) return null;
-  emitter ??= new NativeEventEmitter(native);
-  return emitter.addListener(event, listener);
-}
-
-// The VPN carrying Tor went away. The safety edge.
-export function subscribeVpnLost(
-  listener: () => void,
-): EventSubscription | null {
-  return subscribeVpnEdge("onVpnLost", listener);
-}
-
-// A VPN transport came up. The recovery edge, and evidence of nothing on its
-// own: any VPN raises it, so the listener re-probes rather than concluding
-// Orbot is back. A native binary that never emits it degrades to the foreground
-// re-check.
-export function subscribeVpnAvailable(
-  listener: () => void,
-): EventSubscription | null {
-  return subscribeVpnEdge("onVpnAvailable", listener);
-}
 
 export default TurboModuleRegistry.getEnforcing<Spec>("AirhopBLE");

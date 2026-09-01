@@ -11,7 +11,7 @@ Airhop is MIT-licensed and has no accounts, no ads, no telemetry, and no company
 - No accounts: identity is an Ed25519 key pair generated on the device and stored in the iOS Keychain or Android Keystore
 - Offline payments: Cashu ecash tokens sent device to device over Bluetooth with neither phone online
 - Offline AI: an on-device assistant that answers questions with zero network calls
-- Tor integration: Arti on iOS, Orbot on Android, so relays never see your IP
+- Tor integration: Arti embedded on iOS and Android, so relays never see your IP
 - bitchat compatible: Airhop and bitchat devices join the same mesh with no configuration
 - Panic wipe: triple-tap destroys every key and message in under one second
 - Platforms: iOS 16.0 and later, Android 8.0 and later; macOS and Windows planned

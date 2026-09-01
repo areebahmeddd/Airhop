@@ -596,54 +596,6 @@ final class AirhopBLEModule: RCTEventEmitter {
         }
     }
 
-    // MARK: Tor proxy detection
-
-    // Always 0 on iOS, and that is the correct answer rather than a stub.
-    //
-    // This used to open a real socket to 127.0.0.1:9050, which is ORBOT's port.
-    // Orbot does not exist on iOS, and Airhop's own Tor is Arti listening on
-    // 39050, so the probe could only ever time out and report "nothing there"
-    // after half a second of work. Its one caller (tor-routing's
-    // probeAndroidTorProxy) is Android-gated, so the wrong answer was never
-    // read - but a method that lies confidently when called is worse than one
-    // that is honestly unavailable.
-    //
-    // iOS asks NativeAirhopTor.getTorStatus() instead, which reports Arti's real
-    // bootstrap and SOCKS state. The method stays declared so the two platforms
-    // keep one bridge contract, alongside the other documented iOS no-ops.
-    @objc
-    func getTorProxyPort(_ resolve: @escaping RCTPromiseResolveBlock,
-                         rejecter reject: @escaping RCTPromiseRejectBlock) {
-        resolve(0)
-    }
-
-    // Android-only in practice: on Android the Tor toggle checks whether Orbot is
-    // installed and a VPN transport is up before turning on. iOS routes Nostr
-    // through in-app Arti (AirhopTorModule) and never consults this, so we resolve
-    // both false to keep the cross-platform bridge contract mirrored.
-    @objc
-    func getTorAvailability(_ resolve: @escaping RCTPromiseResolveBlock,
-                            rejecter reject: @escaping RCTPromiseRejectBlock) {
-        resolve(["orbotInstalled": false, "vpnActive": false])
-    }
-
-    // Android-only in practice, and no-ops here for a stronger reason than the
-    // pair above: there is no VPN to watch. Arti runs in-process, so iOS learns
-    // that Tor stopped from Arti itself (NativeAirhopTor.getTorStatus) rather
-    // than by inferring it from a transport disappearing. Declared so the bridge
-    // contract stays mirrored and JS needs no platform branch at the call site.
-    @objc
-    func startVpnWatch(_ resolve: @escaping RCTPromiseResolveBlock,
-                       rejecter reject: @escaping RCTPromiseRejectBlock) {
-        resolve(nil)
-    }
-
-    @objc
-    func stopVpnWatch(_ resolve: @escaping RCTPromiseResolveBlock,
-                      rejecter reject: @escaping RCTPromiseRejectBlock) {
-        resolve(nil)
-    }
-
     // Helper: find the cached characteristic for a connected peripheral
     private func discoverCharacteristic(on peripheral: CBPeripheral) -> CBCharacteristic? {
         return peripheral.services?

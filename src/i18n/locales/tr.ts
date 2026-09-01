@@ -1357,9 +1357,6 @@ export const strings: Strings = {
   "wallet.svc.tor_ios": "iOS'ta darphane istekleri Tor üzerinden gitmez.",
   "wallet.svc.tor_ios_body":
     "Arti yalnızca Nostr WebSocket'lerini sarar, bu yüzden bu istek darphaneye açık ağ üzerinden ulaşır ve IP adresini bu kanıtlarla ilişkilendirir. Ayarlar > Güvenlik altından izin ver ya da önce Tor'u kapat. Mesh üzerinden ecash gönderip almak çalışmayı sürdürür.",
-  "wallet.svc.tor_paused": "Tor açık ama bağlı değil.",
-  "wallet.svc.tor_paused_body":
-    "Orbot yönlendirmeyi bıraktı, bu yüzden bu istek darphaneye açık ağ üzerinden ulaşır ve IP adresini bu kanıtlarla ilişkilendirir. Orbot'u yeniden başlat ya da Tor'u kapat. Mesh üzerinden ecash gönderip almak çalışmayı sürdürür.",
   "wallet.svc.keys_uncached":
     "Bu darphanenin anahtarları bu cihazda saklı değil.",
   "wallet.svc.keys_uncached_body":
@@ -1792,8 +1789,6 @@ export const strings: Strings = {
   "settings.conn.tor_off_title": "Tor yönlendirmesi kapatılsın mı?",
   "settings.conn.tor_off_body":
     "Nostr trafiği olağan bağlantına döner, dolayısıyla aktarıcılar IP adresini yeniden görür. Bluetooth her iki durumda da etkilenmez.",
-  "settings.conn.tor_orbot_idle":
-    "Orbot kurulu ama bağlı değil. Orbot'u aç, VPN'ini başlat, sonra bunu aç.",
   "settings.conn.tor_unavailable": "Tor yönlendirmesi bu yapıda yok.",
   "settings.conn.tor_timeout":
     "Tor'un bağlanması bir dakikadan uzun sürüyor. Açık kalır ve denemeyi sürdürür; Mesh sekmesi yönlendirmenin başladığını ya da bu ağın engellediğini söyleyecek.",
@@ -1826,16 +1821,11 @@ export const strings: Strings = {
     "Mahalleni bir konum tespitinden bulur. Köprülemeyi başlatmak için konum izni ver.",
   "settings.conn.grant_location": "Konum izni ver",
   "settings.conn.grant_short": "İzin ver",
-  "settings.conn.orbot_body":
-    "Airhop, Tor trafiğini Orbot üzerinden yönlendirir. Orbot'u Play Store'dan kurup etkinleştir, sonra bunu aç.",
   "settings.conn.internet_off": "İnternet kapalı",
   "settings.conn.internet_off_desc":
     "Tor, köprü ve geçit interneti kullanır. Bunları kullanmak için Ağ altındaki İnternet yedeğini aç.",
   "settings.conn.turn_on": "Aç",
   "settings.conn.turn_off": "Kapat",
-  "settings.conn.orbot_title": "Android'de Tor",
-  "settings.conn.get_orbot": "Orbot'u indir",
-  "settings.conn.later": "Sonra",
 
   // ---- Settings: permissions ----
   "settings.permissions.bluetooth": "Bluetooth",

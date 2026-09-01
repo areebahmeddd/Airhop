@@ -1358,9 +1358,6 @@ export const strings: Strings = {
   "wallet.svc.tor_ios": "Trên iOS, các yêu cầu tới nhà đúc không đi qua Tor.",
   "wallet.svc.tor_ios_body":
     "Arti chỉ bọc WebSocket của Nostr, nên yêu cầu này sẽ tới nhà đúc qua mạng trần và gắn IP của bạn với những chứng từ này. Hãy cho phép nó trong Cài đặt > Bảo mật, hoặc tắt Tor trước. Gửi và nhận ecash qua mạng lưới vẫn chạy.",
-  "wallet.svc.tor_paused": "Tor đang bật nhưng chưa kết nối.",
-  "wallet.svc.tor_paused_body":
-    "Orbot đã ngừng định tuyến, nên yêu cầu này sẽ tới nhà đúc qua mạng trần và gắn IP của bạn với những chứng từ này. Hãy mở lại Orbot, hoặc tắt Tor. Gửi và nhận ecash qua mạng lưới vẫn chạy.",
   "wallet.svc.keys_uncached":
     "Khóa của nhà đúc này không được lưu sẵn trên thiết bị này.",
   "wallet.svc.keys_uncached_body":
@@ -1794,8 +1791,6 @@ export const strings: Strings = {
   "settings.conn.tor_off_title": "Tắt định tuyến qua Tor?",
   "settings.conn.tor_off_body":
     "Lưu lượng Nostr quay về đường kết nối thông thường của bạn, nên các bộ chuyển tiếp lại thấy địa chỉ IP của bạn. Dù thế nào Bluetooth cũng không bị ảnh hưởng.",
-  "settings.conn.tor_orbot_idle":
-    "Orbot đã cài nhưng chưa kết nối. Hãy mở Orbot, khởi động VPN của nó, rồi bật mục này.",
   "settings.conn.tor_unavailable": "Bản dựng này không có định tuyến qua Tor.",
   "settings.conn.tor_timeout":
     "Tor đang mất hơn một phút để kết nối. Nó vẫn bật và tiếp tục thử; thẻ Mạng lưới sẽ báo khi nó bắt đầu định tuyến, hoặc khi mạng này đang chặn nó.",
@@ -1827,16 +1822,11 @@ export const strings: Strings = {
     "Nó tìm ra khu dân cư của bạn từ một lần định vị. Hãy cấp quyền vị trí để bắt đầu bắc cầu.",
   "settings.conn.grant_location": "Cấp quyền vị trí",
   "settings.conn.grant_short": "Cấp",
-  "settings.conn.orbot_body":
-    "Airhop đưa lưu lượng Tor qua Orbot. Hãy cài và bật Orbot từ Play Store, rồi bật mục này.",
   "settings.conn.internet_off": "Internet đang tắt",
   "settings.conn.internet_off_desc":
     "Tor, cầu nối và cổng kết nối đều dùng Internet. Hãy bật Dự phòng Internet trong mục Mạng để dùng chúng.",
   "settings.conn.turn_on": "Bật",
   "settings.conn.turn_off": "Tắt",
-  "settings.conn.orbot_title": "Tor trên Android",
-  "settings.conn.get_orbot": "Tải Orbot",
-  "settings.conn.later": "Để sau",
 
   // ---- Settings: permissions ----
   "settings.permissions.bluetooth": "Bluetooth",

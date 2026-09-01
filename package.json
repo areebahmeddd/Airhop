@@ -108,6 +108,10 @@
     "testMatch": [
       "**/*.test.[jt]s?(x)"
     ],
+    "modulePathIgnorePatterns": [
+      "<rootDir>/native/arti/target/",
+      "<rootDir>/.native-build/"
+    ],
     "transformIgnorePatterns": [
       "node_modules/(?!(@noble|@scure|nostr-tools|@cashu|react-native|@react-native|expo|@expo|@unimodules|unimodules|react-native-reanimated))"
     ],

@@ -1346,9 +1346,6 @@ export const strings: Strings = {
   "wallet.svc.tor_ios": "iOS ’ਤੇ ਮਿੰਟ ਦੀਆਂ ਬੇਨਤੀਆਂ Tor ਰਾਹੀਂ ਨਹੀਂ ਜਾਂਦੀਆਂ।",
   "wallet.svc.tor_ios_body":
     "Arti ਸਿਰਫ਼ Nostr WebSockets ਨੂੰ ਲਪੇਟਦਾ ਹੈ, ਇਸ ਲਈ ਇਹ ਬੇਨਤੀ ਮਿੰਟ ਤੱਕ ਖੁੱਲ੍ਹੇ ਨੈੱਟ ’ਤੇ ਪਹੁੰਚੇਗੀ ਅਤੇ ਤੁਹਾਡੇ IP ਨੂੰ ਇਹਨਾਂ ਪਰੂਫ਼ਾਂ ਨਾਲ ਜੋੜ ਦੇਵੇਗੀ। ਸੈਟਿੰਗਾਂ > ਸੁਰੱਖਿਆ ਹੇਠੋਂ ਇਸ ਦੀ ਇਜਾਜ਼ਤ ਦਿਓ, ਜਾਂ ਪਹਿਲਾਂ Tor ਬੰਦ ਕਰੋ। ਮੈਸ਼ ’ਤੇ ecash ਭੇਜਣਾ ਅਤੇ ਲੈਣਾ ਫਿਰ ਵੀ ਚੱਲਦਾ ਹੈ।",
-  "wallet.svc.tor_paused": "Tor ਚਾਲੂ ਹੈ, ਪਰ ਜੁੜਿਆ ਨਹੀਂ।",
-  "wallet.svc.tor_paused_body":
-    "Orbot ਨੇ ਰਾਊਟ ਕਰਨਾ ਬੰਦ ਕਰ ਦਿੱਤਾ ਹੈ, ਇਸ ਲਈ ਇਹ ਬੇਨਤੀ ਮਿੰਟ ਤੱਕ ਖੁੱਲ੍ਹੇ ਨੈੱਟ ’ਤੇ ਪਹੁੰਚੇਗੀ ਅਤੇ ਤੁਹਾਡੇ IP ਨੂੰ ਇਹਨਾਂ ਪਰੂਫ਼ਾਂ ਨਾਲ ਜੋੜ ਦੇਵੇਗੀ। Orbot ਦੁਬਾਰਾ ਸ਼ੁਰੂ ਕਰੋ, ਜਾਂ Tor ਬੰਦ ਕਰੋ। ਮੈਸ਼ ’ਤੇ ecash ਭੇਜਣਾ ਅਤੇ ਲੈਣਾ ਫਿਰ ਵੀ ਚੱਲਦਾ ਹੈ।",
   "wallet.svc.keys_uncached":
     "ਇਸ ਮਿੰਟ ਦੀਆਂ ਕੁੰਜੀਆਂ ਇਸ ਡੀਵਾਈਸ ’ਤੇ ਕੈਸ਼ ਨਹੀਂ ਹਨ।",
   "wallet.svc.keys_uncached_body":
@@ -1776,8 +1773,6 @@ export const strings: Strings = {
   "settings.conn.tor_off_title": "Tor ਰਾਊਟਿੰਗ ਬੰਦ ਕਰਨੀ ਹੈ?",
   "settings.conn.tor_off_body":
     "Nostr ਦੀ ਆਵਾਜਾਈ ਵਾਪਸ ਤੁਹਾਡੇ ਆਮ ਕਨੈਕਸ਼ਨ ’ਤੇ ਚਲੀ ਜਾਂਦੀ ਹੈ, ਇਸ ਲਈ ਰਿਲੇ ਤੁਹਾਡਾ IP ਪਤਾ ਦੁਬਾਰਾ ਦੇਖਣ ਲੱਗਦੇ ਹਨ। ਬਲੂਟੁੱਥ ’ਤੇ ਕਿਸੇ ਵੀ ਹਾਲਤ ਵਿੱਚ ਅਸਰ ਨਹੀਂ ਪੈਂਦਾ।",
-  "settings.conn.tor_orbot_idle":
-    "Orbot ਸਥਾਪਤ ਹੈ ਪਰ ਜੁੜਿਆ ਨਹੀਂ। Orbot ਖੋਲ੍ਹੋ, ਇਸ ਦੀ VPN ਸ਼ੁਰੂ ਕਰੋ, ਫਿਰ ਇਹ ਚਾਲੂ ਕਰੋ।",
   "settings.conn.tor_unavailable": "ਇਸ ਬਿਲਡ ਵਿੱਚ Tor ਰਾਊਟਿੰਗ ਉਪਲਬਧ ਨਹੀਂ ਹੈ।",
   "settings.conn.tor_timeout":
     "Tor ਨੂੰ ਜੁੜਨ ਵਿੱਚ ਇੱਕ ਮਿੰਟ ਤੋਂ ਵੱਧ ਲੱਗ ਰਿਹਾ ਹੈ। ਇਹ ਚਾਲੂ ਰਹਿੰਦਾ ਹੈ ਅਤੇ ਕੋਸ਼ਿਸ਼ ਕਰਦਾ ਰਹਿੰਦਾ ਹੈ; ਮੈਸ਼ ਟੈਬ ਦੱਸ ਦੇਵੇਗਾ ਕਿ ਇਹ ਕਦੋਂ ਰਾਊਟ ਕਰ ਰਿਹਾ ਹੈ, ਜਾਂ ਜੇ ਇਹ ਨੈੱਟਵਰਕ ਇਸ ਨੂੰ ਰੋਕ ਰਿਹਾ ਹੈ।",
@@ -1809,16 +1804,11 @@ export const strings: Strings = {
     "ਇਹ ਟਿਕਾਣੇ ਤੋਂ ਤੁਹਾਡਾ ਮੁਹੱਲਾ ਲੱਭਦਾ ਹੈ। ਪੁਲ ਸ਼ੁਰੂ ਕਰਨ ਲਈ ਟਿਕਾਣੇ ਦੀ ਇਜਾਜ਼ਤ ਦਿਓ।",
   "settings.conn.grant_location": "ਟਿਕਾਣੇ ਦੀ ਇਜਾਜ਼ਤ ਦਿਓ",
   "settings.conn.grant_short": "ਇਜਾਜ਼ਤ ਦਿਓ",
-  "settings.conn.orbot_body":
-    "Airhop Tor ਦੀ ਆਵਾਜਾਈ Orbot ਰਾਹੀਂ ਭੇਜਦਾ ਹੈ। Play Store ਤੋਂ Orbot ਸਥਾਪਤ ਕਰ ਕੇ ਚਾਲੂ ਕਰੋ, ਫਿਰ ਇਹ ਚਾਲੂ ਕਰੋ।",
   "settings.conn.internet_off": "ਇੰਟਰਨੈੱਟ ਬੰਦ ਹੈ",
   "settings.conn.internet_off_desc":
     "Tor, ਪੁਲ ਅਤੇ ਗੇਟਵੇ ਸਭ ਇੰਟਰਨੈੱਟ ਵਰਤਦੇ ਹਨ। ਇਹ ਵਰਤਣ ਲਈ ਨੈੱਟਵਰਕ ਹੇਠੋਂ ਇੰਟਰਨੈੱਟ ਸਹਾਰਾ ਚਾਲੂ ਕਰੋ।",
   "settings.conn.turn_on": "ਚਾਲੂ ਕਰੋ",
   "settings.conn.turn_off": "ਬੰਦ ਕਰੋ",
-  "settings.conn.orbot_title": "Android ’ਤੇ Tor",
-  "settings.conn.get_orbot": "Orbot ਲਵੋ",
-  "settings.conn.later": "ਬਾਅਦ ਵਿੱਚ",
 
   // ---- Settings: permissions ----
   "settings.permissions.bluetooth": "ਬਲੂਟੁੱਥ",

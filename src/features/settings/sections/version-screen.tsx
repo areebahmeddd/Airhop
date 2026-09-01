@@ -25,7 +25,6 @@ import { birdForVersion } from "@data/releases";
 import Feather from "@expo/vector-icons/Feather";
 import { t, useT } from "@i18n";
 import { useRichText } from "@i18n/rich-text";
-import { useMeshStateStore } from "@store/mesh-state-store";
 import { useSettingsStore } from "@store/settings-store";
 import PrimaryButton from "@ui/components/primary-button";
 import {
@@ -280,16 +279,14 @@ export default function VersionScreen({ onBack }: Props): React.JSX.Element {
     // fail-closed choice, and predicate, as the wallet mint gate. (The relay
     // directory is vendored and avoids the question.)
     //
-    // Two conditions because the platforms differ: on iOS the tunnel only ever
-    // covers nostr-tools WebSockets, so a fetch is outside it whether or not a
-    // circuit is up; on Android Orbot's VPN covers every socket, but only while
-    // it routes, and `nostrBlockedByTor` is exactly when it does not.
-    const torEnabled = useSettingsStore.getState().torEnabled;
-    const outsideTor =
-      Platform.OS === "ios"
-        ? torEnabled
-        : torEnabled && useMeshStateStore.getState().nostrBlockedByTor;
-    if (outsideTor) {
+    // iOS only, because only there is a fetch outside the tunnel: Tor covers
+    // nostr-tools WebSockets and nothing else, so this request would carry the
+    // device's IP to GitHub whether or not a circuit is up.
+    //
+    // Android needs no refusal. The proxy is installed into the HTTP client
+    // this fetch is built from, so the check is either inside the tunnel or
+    // failing closed, exactly like a relay socket.
+    if (Platform.OS === "ios" && useSettingsStore.getState().torEnabled) {
       setCheck({ status: "tor-blocked" });
       return;
     }

@@ -35,6 +35,7 @@ import {
 import Feather from "@expo/vector-icons/Feather";
 import { t, useT } from "@i18n";
 import { getMeshService } from "@services/mesh-service";
+import { applyInternetAvailability } from "@services/tor-routing";
 import { presentWiFiPairing } from "@services/wifi-pairing-service";
 import { showAlert } from "@store/alert-store";
 import { type LanState, useMeshStateStore } from "@store/mesh-state-store";
@@ -105,6 +106,11 @@ export default function NetworkScreen({ onBack }: Props): React.JSX.Element {
   function setInternet(value: boolean): void {
     setInternetEnabled(value);
     getMeshService()?.applyInternetEnabled(value);
+    // Tor follows the master switch, because the sheet above says it does.
+    // Without this the relay pool went away and Arti kept running underneath
+    // it, holding guards and refreshing a consensus for nobody. The Tor
+    // preference is untouched, so switching the internet back on restores it.
+    applyInternetAvailability(value);
   }
   function handleInternetToggle(value: boolean): void {
     if (value) {

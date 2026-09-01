@@ -313,11 +313,8 @@ const CATALOG: {
       "Native code committed to this repo and shipped in the app, not installed from npm.",
     packages: [
       {
-        // ios/Frameworks/arti.xcframework. iOS only: on Android, Tor goes
-        // through Orbot, a separate app. Version read from the crate strings in
-        // the binary; re-check when it is re-recorded (verify-vendored.js).
         name: "arti",
-        version: "0.38.0",
+        version: "0.45.0",
         license: "MIT OR Apache-2.0",
         repo: "https://gitlab.torproject.org/tpo/core/arti",
       },

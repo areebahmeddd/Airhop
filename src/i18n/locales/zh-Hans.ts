@@ -1274,9 +1274,6 @@ export const strings: Strings = {
   "wallet.svc.tor_ios": "在 iOS 上，铸币厂请求不走 Tor。",
   "wallet.svc.tor_ios_body":
     "Arti 只包裹 Nostr 的 WebSocket，所以这个请求会走明网到达铸币厂，把你的 IP 和这些凭证关联起来。可以在设置 > 安全里允许它，或者先关掉 Tor。通过网状网络收发 ecash 仍然可用。",
-  "wallet.svc.tor_paused": "Tor 已开启但没有连上。",
-  "wallet.svc.tor_paused_body":
-    "Orbot 已经停止转发，所以这个请求会走明网到达铸币厂，把你的 IP 和这些凭证关联起来。可以重新启动 Orbot，或者关掉 Tor。通过网状网络收发 ecash 仍然可用。",
   "wallet.svc.keys_uncached": "这个铸币厂的密钥没有缓存在这台设备上。",
   "wallet.svc.keys_uncached_body": "联网时打开一次钱包即可取回它们。",
   "wallet.svc.phrase_invalid": "那组恢复助记词无效。",
@@ -1675,8 +1672,6 @@ export const strings: Strings = {
   "settings.conn.tor_off_title": "关闭 Tor 路由？",
   "settings.conn.tor_off_body":
     "Nostr 流量会回到你的普通连接上，中继又能看到你的 IP 地址了。无论哪种方式，蓝牙都不受影响。",
-  "settings.conn.tor_orbot_idle":
-    "已安装 Orbot 但尚未连接。请打开 Orbot，启动它的 VPN，然后再开启这一项。",
   "settings.conn.tor_unavailable": "这个版本不支持 Tor 路由。",
   "settings.conn.tor_timeout":
     "Tor 连接已经花了一分多钟。它会保持开启并继续尝试；网状网络标签页会告诉你它何时开始转发，或者这个网络是否在拦截它。",
@@ -1707,16 +1702,11 @@ export const strings: Strings = {
     "它靠一次定位来确定你所在的社区。授予定位权限即可开始桥接。",
   "settings.conn.grant_location": "授予定位权限",
   "settings.conn.grant_short": "授予",
-  "settings.conn.orbot_body":
-    "Airhop 通过 Orbot 转发 Tor 流量。请从 Play 商店安装并启用 Orbot，然后再开启这一项。",
   "settings.conn.internet_off": "互联网已关闭",
   "settings.conn.internet_off_desc":
     "Tor、桥接和网关都要用互联网。请在网络里开启互联网回退才能使用它们。",
   "settings.conn.turn_on": "开启",
   "settings.conn.turn_off": "关闭",
-  "settings.conn.orbot_title": "Android 上的 Tor",
-  "settings.conn.get_orbot": "获取 Orbot",
-  "settings.conn.later": "稍后",
 
   // ---- Settings: permissions ----
   "settings.permissions.bluetooth": "蓝牙",

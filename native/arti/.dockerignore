@@ -1,0 +1,3 @@
+# Build context only needs TOOLCHAIN.env.
+target/
+SHA256SUMS*

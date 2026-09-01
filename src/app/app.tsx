@@ -1066,8 +1066,8 @@ function AppContent(): React.JSX.Element {
       getMeshService()?.setAppForeground(next !== "background");
       // Arti needs the same signal, and needs it on the "background" boundary
       // rather than on "active": an app switcher or a permission dialog does not
-      // suspend the process, so treating those as a suspension would restart Tor
-      // for nothing. iOS only; a no-op everywhere else.
+      // suspend the process, so treating those as a suspension would put Tor to
+      // sleep for nothing. Both platforms, and a no-op when Tor is off.
       notifyTorAppForeground(next !== "background");
       if (next !== "active") {
         // Chat persistence is throttled, so leaving the foreground is the last
@@ -1084,9 +1084,9 @@ function AppContent(): React.JSX.Element {
         // The Mesh tab is a tap away now, so a "someone nearby" from earlier is
         // stale the moment the app is open.
         void dismissNearbyNotification();
-        // A trip away from Airhop is how Orbot gets stopped, so returning is
-        // when a "Tor on" claim is most likely to have gone stale. Cheap and
-        // Android-only; iOS owns Arti and hears about it directly.
+        // A resume is when a "Tor on" claim is most likely to have gone stale:
+        // the process may have been suspended, and the network may have changed
+        // under it. Cheap, and it corrects the claim rather than the routing.
         void revalidateTorRouting();
         // Leaving the app is also how a Lightning invoice gets paid: the user
         // switches to their Lightning wallet, pays, and comes back. Until this,

@@ -1380,9 +1380,6 @@ export const strings: Strings = {
   "wallet.svc.tor_ios": "Mint-Anfragen laufen unter iOS nicht über Tor.",
   "wallet.svc.tor_ios_body":
     "Arti umschließt nur Nostr-WebSockets, deshalb würde diese Anfrage den Mint über das offene Netz erreichen und deine IP mit diesen Proofs verknüpfen. Erlaube es unter Einstellungen > Sicherheit, oder schalte Tor zuerst aus. Ecash über das Mesh zu senden und zu empfangen funktioniert weiterhin.",
-  "wallet.svc.tor_paused": "Tor ist an, aber nicht verbunden.",
-  "wallet.svc.tor_paused_body":
-    "Orbot leitet nichts mehr weiter, deshalb würde diese Anfrage den Mint über das offene Netz erreichen und deine IP mit diesen Proofs verknüpfen. Starte Orbot wieder, oder schalte Tor aus. Ecash über das Mesh zu senden und zu empfangen funktioniert weiterhin.",
   "wallet.svc.keys_uncached":
     "Die Schlüssel dieses Mints sind auf diesem Gerät nicht zwischengespeichert.",
   "wallet.svc.keys_uncached_body":
@@ -1829,8 +1826,6 @@ export const strings: Strings = {
   "settings.conn.tor_off_title": "Tor-Routing ausschalten?",
   "settings.conn.tor_off_body":
     "Nostr-Verkehr läuft wieder über deine gewöhnliche Verbindung, sodass Relays deine IP-Adresse wieder sehen. Bluetooth ist so oder so nicht betroffen.",
-  "settings.conn.tor_orbot_idle":
-    "Orbot ist installiert, aber nicht verbunden. Öffne Orbot, starte sein VPN, und schalte das dann ein.",
   "settings.conn.tor_unavailable":
     "Tor-Routing ist in diesem Build nicht verfügbar.",
   "settings.conn.tor_timeout":
@@ -1863,16 +1858,11 @@ export const strings: Strings = {
     "Sie ermittelt dein Viertel aus einer Standortbestimmung. Erlaube den Standort, um zu brücken.",
   "settings.conn.grant_location": "Standortberechtigung erteilen",
   "settings.conn.grant_short": "Erteilen",
-  "settings.conn.orbot_body":
-    "Airhop leitet Tor-Verkehr über Orbot. Installiere und aktiviere Orbot aus dem Play Store, und schalte das dann ein.",
   "settings.conn.internet_off": "Internet ist aus",
   "settings.conn.internet_off_desc":
     "Tor, die Brücke und das Gateway nutzen alle das Internet. Schalte die Internet-Rückfallebene unter Netzwerk ein, um sie zu nutzen.",
   "settings.conn.turn_on": "Einschalten",
   "settings.conn.turn_off": "Ausschalten",
-  "settings.conn.orbot_title": "Tor unter Android",
-  "settings.conn.get_orbot": "Orbot holen",
-  "settings.conn.later": "Später",
 
   // ---- Settings: permissions ----
   "settings.permissions.bluetooth": "Bluetooth",
